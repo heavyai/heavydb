@@ -401,7 +401,7 @@ class SysCatalog : public Catalog {
   void grantPrivileges(const int32_t userid, const int32_t dbid, const Privileges& privs);
   bool checkPrivileges(UserMetadata& user, DBMetadata& db, const Privileges& wants_privs);
   void createDatabase(const std::string& dbname, int owner);
-  void dropDatabase(const int32_t dbid, const std::string& name);
+  void dropDatabase(const int32_t dbid, const std::string& name, Catalog& db_cat);
   bool getMetadataForUser(const std::string& name, UserMetadata& user);
   bool checkPasswordForUser(const std::string& passwd, UserMetadata& user);
   bool getMetadataForDB(const std::string& name, DBMetadata& db);
@@ -421,7 +421,9 @@ class SysCatalog : public Catalog {
   void revokeDBObjectPrivileges(const std::string& roleName,
                                 DBObject& object,
                                 const Catalog_Namespace::Catalog& catalog);
-  void revokeDBObjectPrivilegesFromAllRoles(const TableDescriptor* td);
+  void revokeDBObjectPrivilegesFromAllRoles(const std::string& objectName,
+                                            const DBObjectType& objectType,
+                                            Catalog* catalog = nullptr);
   void getDBObjectPrivileges(const std::string& roleName, DBObject& object, const Catalog_Namespace::Catalog& catalog);
   bool verifyDBObjectOwnership(const UserMetadata& user, DBObject object, const Catalog_Namespace::Catalog& catalog);
   void createRole(const std::string& roleName, const bool& userPrivateRole = false);
@@ -479,6 +481,8 @@ class SessionInfo {
   bool checkDBAccessPrivileges(std::vector<bool> privs) const;
   void setSysCatalog(Catalog_Namespace::SysCatalog* sys_cat);
   Catalog_Namespace::SysCatalog* getSysCatalog() const;
+  void setDatabaseCatalog(const std::string& dbName, Catalog* cat);
+  Catalog* getDatabaseCatalog(const std::string& dbName) const;
 
  private:
   std::shared_ptr<Catalog> catalog_;

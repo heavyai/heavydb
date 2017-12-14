@@ -53,6 +53,7 @@ namespace Catalog_Namespace {
 
 const std::string Catalog::physicalTableNameTag_("_shard_#");
 Catalog_Namespace::SysCatalog* mapd_sys_cat(nullptr);
+std::map<std::string, Catalog*> mapd_cat_map;
 
 SysCatalog::~SysCatalog() {
   std::lock_guard<std::mutex> lock(cat_mutex_);
@@ -245,7 +246,20 @@ void SysCatalog::createDatabase(const string& name, int owner) {
   dbConn.query("CREATE TABLE mapd_logical_to_physical(logical_table_id integer, physical_table_id integer)");
 }
 
-void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name) {
+void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name, Catalog& db_cat) {
+  /* revoke object privileges to all tables of the database being dropped */
+  const auto tables = db_cat.getAllTableMetadata();
+  for (const auto td : tables) {
+    if (td->shard >= 0) {
+      // skip shards, they're not standalone tables
+      continue;
+    }
+    revokeDBObjectPrivilegesFromAllRoles(td->tableName, TableDBObjectType, &db_cat);
+  }
+
+  /* revoke object privileges to the database being dropped */
+  revokeDBObjectPrivilegesFromAllRoles(name, DatabaseDBObjectType);
+
   std::lock_guard<std::mutex> lock(cat_mutex_);
   sqliteConnector_.query_with_text_param("DELETE FROM mapd_databases WHERE dbid = ?", std::to_string(dbid));
   boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + name);
@@ -562,18 +576,33 @@ void SysCatalog::revokeDBObjectPrivileges(const std::string& roleName,
   sqliteConnector_.query("END TRANSACTION");
 }
 
-void SysCatalog::revokeDBObjectPrivilegesFromAllRoles(const TableDescriptor* td) {
-  auto& catalog = static_cast<Catalog_Namespace::Catalog&>(*this);
-  DBObject dbObject(td->tableName, TableDBObjectType);
-  std::vector<bool> privs{true, true, false, true};
-  populateDBObjectKey(dbObject, catalog);
+void SysCatalog::revokeDBObjectPrivilegesFromAllRoles(const std::string& objectName,
+                                                      const DBObjectType& objectType,
+                                                      Catalog* catalog) {
+  if (!catalog) {
+    catalog = static_cast<Catalog_Namespace::Catalog*>(this);
+  }
+  DBObject dbObject(objectName, objectType);
+  populateDBObjectKey(dbObject, *catalog);
+  std::vector<bool> privs(4);
+  switch (objectType) {
+    case (DatabaseDBObjectType): {
+      privs = {true, true, true, true};
+      break;
+    }
+    case (TableDBObjectType): {
+      privs = {true, true, false, true};
+      break;
+    }
+    default: { CHECK(false); }
+  }
   std::vector<std::string> roles = getAllRoles(true, true, 0);
   for (size_t i = 0; i < roles.size(); i++) {
     Role* rl = mapd_sys_cat->getMetadataForRole(roles[i]);
     assert(rl);
     if (rl->findDbObject(dbObject.getObjectKey())) {
       dbObject.setPrivileges(privs);
-      revokeDBObjectPrivileges(roles[i], dbObject, catalog);
+      revokeDBObjectPrivileges(roles[i], dbObject, *catalog);
     }
   }
 }
@@ -2238,7 +2267,8 @@ void Catalog::doDropTable(const TableDescriptor* td) {
   }
   sqliteConnector_.query("END TRANSACTION");
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
-  static_cast<Catalog_Namespace::SysCatalog&>(*this).revokeDBObjectPrivilegesFromAllRoles(td);
+  static_cast<Catalog_Namespace::SysCatalog&>(*this).revokeDBObjectPrivilegesFromAllRoles(td->tableName,
+                                                                                          TableDBObjectType);
 }
 
 void Catalog::renamePhysicalTable(const TableDescriptor* td, const string& newTableName) {
@@ -2442,4 +2472,20 @@ Catalog_Namespace::SysCatalog* SessionInfo::getSysCatalog() const {
   return mapd_sys_cat;
 }
 
+void SessionInfo::setDatabaseCatalog(const std::string& dbName, Catalog* cat) {
+  if (mapd_cat_map.find(dbName) != mapd_cat_map.end()) {
+    mapd_cat_map[dbName] = cat;
+  } else {
+    mapd_cat_map.insert(std::pair<std::string, Catalog*>(dbName, cat));
+  }
+}
+
+Catalog* SessionInfo::getDatabaseCatalog(const std::string& dbName) const {
+  Catalog* cat(nullptr);
+  auto cat_it = mapd_cat_map.find(dbName);
+  if (cat_it != mapd_cat_map.end()) {
+    cat = cat_it->second;
+  }
+  return cat;
+}
 }  // Catalog_Namespace

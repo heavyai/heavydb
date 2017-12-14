@@ -305,6 +305,7 @@ void MapDHandler::connectImpl(TSessionId& session,
     cat_map_[dbname].reset(cat);
     sessions_[session].reset(
         new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta, executor_device_type_, session));
+    sessions_[session]->setDatabaseCatalog(dbname, cat);
     if (dbname == MAPD_SYSTEM_DB) {
       auto mapd_session_ptr = sessions_[session];
       mapd_session_ptr->setSysCatalog(static_cast<Catalog_Namespace::SysCatalog*>(cat));
