@@ -49,7 +49,7 @@
 #include "../QueryEngine/RelAlgExecutor.h"
 
 size_t g_leaf_count{0};
-bool g_fast_strcmp{true};
+bool g_fast_strcmp{false};
 
 namespace Parser {
 
@@ -199,8 +199,7 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(const SQLOps optype,
     else
       right_expr = right_expr->add_cast(new_right_type.get_array_type());
   }
-  auto check_compression =
-      (g_fast_strcmp) ? IS_COMPARISON(optype) : IS_EQUIVALENCE(optype) || optype == kNE;
+  auto check_compression = (g_fast_strcmp) ? IS_COMPARISON(optype) : IS_EQUIVALENCE(optype) || optype == kNE;
   if (check_compression) {
     if (new_left_type.get_compression() == kENCODING_DICT && new_right_type.get_compression() == kENCODING_DICT) {
       // do nothing
