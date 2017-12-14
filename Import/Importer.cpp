@@ -1541,11 +1541,25 @@ ImportStatus Detector::importDelimited(const std::string& file_path, const bool 
   auto end_time = std::chrono::steady_clock::now() + timeout;
   try {
     while (!feof(p_file)) {
-      int c, n = 0;
-      while (EOF != (c = fgetc(p_file)) && copy_params.line_delim != c)
+      int c;
+      size_t n = 0;
+      while (EOF != (c = fgetc(p_file)) && copy_params.line_delim != c) {
         line[n++] = c;
+        if (n >= sizeof(line))
+          break;
+      }
       if (0 == n)
         break;
+
+      // remember the first line, which is possibly a header line, to
+      // ignore identical header line(s) in 2nd+ files of a archive;
+      // otherwise, 2nd+ header may be mistaken as an all-string row
+      // and so be final column types.
+      if (line1.empty())
+        line1 = line;
+      else if (line == line1)
+        continue;
+
       raw_data += std::string(line, n);
       raw_data += copy_params.line_delim;
       if (std::chrono::steady_clock::now() > end_time) {
@@ -1554,6 +1568,10 @@ ImportStatus Detector::importDelimited(const std::string& file_path, const bool 
     }
   } catch (std::exception& e) {
   }
+
+  // as if load truncated
+  import_status.load_truncated = true;
+  load_failed = true;
 
   fclose(p_file);
   p_file = nullptr;

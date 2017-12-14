@@ -588,6 +588,7 @@ class Detector : public DataStreamSink {
   std::string raw_data;
   boost::filesystem::path file_path;
   std::chrono::duration<double> timeout{1};
+  std::string line1;
 };
 
 struct PolyData2d {
