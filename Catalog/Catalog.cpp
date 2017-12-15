@@ -246,19 +246,22 @@ void SysCatalog::createDatabase(const string& name, int owner) {
   dbConn.query("CREATE TABLE mapd_logical_to_physical(logical_table_id integer, physical_table_id integer)");
 }
 
-void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name, Catalog& db_cat) {
-  /* revoke object privileges to all tables of the database being dropped */
-  const auto tables = db_cat.getAllTableMetadata();
-  for (const auto td : tables) {
-    if (td->shard >= 0) {
-      // skip shards, they're not standalone tables
-      continue;
+void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name, Catalog* db_cat) {
+  if (isAccessPrivCheckEnabled()) {
+    /* revoke object privileges to all tables of the database being dropped */
+    if (db_cat) {
+      const auto tables = db_cat->getAllTableMetadata();
+      for (const auto td : tables) {
+        if (td->shard >= 0) {
+          // skip shards, they're not standalone tables
+          continue;
+        }
+        revokeDBObjectPrivilegesFromAllRoles(td->tableName, TableDBObjectType, db_cat);
+      }
     }
-    revokeDBObjectPrivilegesFromAllRoles(td->tableName, TableDBObjectType, &db_cat);
+    /* revoke object privileges to the database being dropped */
+    revokeDBObjectPrivilegesFromAllRoles(name, DatabaseDBObjectType);
   }
-
-  /* revoke object privileges to the database being dropped */
-  revokeDBObjectPrivilegesFromAllRoles(name, DatabaseDBObjectType);
 
   std::lock_guard<std::mutex> lock(cat_mutex_);
   sqliteConnector_.query_with_text_param("DELETE FROM mapd_databases WHERE dbid = ?", std::to_string(dbid));
@@ -2267,8 +2270,10 @@ void Catalog::doDropTable(const TableDescriptor* td) {
   }
   sqliteConnector_.query("END TRANSACTION");
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
-  static_cast<Catalog_Namespace::SysCatalog&>(*this).revokeDBObjectPrivilegesFromAllRoles(td->tableName,
-                                                                                          TableDBObjectType);
+  if (isAccessPrivCheckEnabled()) {
+    static_cast<Catalog_Namespace::SysCatalog&>(*this).revokeDBObjectPrivilegesFromAllRoles(td->tableName,
+                                                                                            TableDBObjectType);
+  }
 }
 
 void Catalog::renamePhysicalTable(const TableDescriptor* td, const string& newTableName) {

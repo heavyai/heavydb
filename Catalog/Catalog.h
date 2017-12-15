@@ -401,7 +401,7 @@ class SysCatalog : public Catalog {
   void grantPrivileges(const int32_t userid, const int32_t dbid, const Privileges& privs);
   bool checkPrivileges(UserMetadata& user, DBMetadata& db, const Privileges& wants_privs);
   void createDatabase(const std::string& dbname, int owner);
-  void dropDatabase(const int32_t dbid, const std::string& name, Catalog& db_cat);
+  void dropDatabase(const int32_t dbid, const std::string& name, Catalog* db_cat);
   bool getMetadataForUser(const std::string& name, UserMetadata& user);
   bool checkPasswordForUser(const std::string& passwd, UserMetadata& user);
   bool getMetadataForDB(const std::string& name, DBMetadata& db);
