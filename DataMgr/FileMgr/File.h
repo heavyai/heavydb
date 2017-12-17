@@ -33,6 +33,12 @@
 
 namespace File_Namespace {
 
+// this super page resides at front of a file and must
+// be big enough to hold 'headers' of maximum number of 'pages'.
+#define SUPER_PAGE_SIZE (1 << 18)
+#define SUPER_HEAD_SIZE (SUPER_PAGE_SIZE / MAX_FILE_N_METADATA_PAGES)
+
+
 FILE* create(const std::string& basePath, const int fileId, const size_t pageSize, const size_t npages);
 
 FILE* create(const std::string& fullPath, const size_t requestedFileSize);

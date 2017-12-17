@@ -19,6 +19,7 @@
 #include "Page.h"
 #include <glog/logging.h>
 #include <iostream>
+#include <memory>
 
 #include <utility>
 using namespace std;
@@ -27,6 +28,11 @@ namespace File_Namespace {
 
 FileInfo::FileInfo(const int fileId, FILE* f, const size_t pageSize, size_t numPages, bool init)
     : fileId(fileId), f(f), pageSize(pageSize), numPages(numPages) {
+
+	// reset to a bigger file buffer
+	fbuf = new char[BIGGER_FILE_BUFSIZE];
+	setvbuf(f, fbuf, fbuf ? _IOFBF : _IONBF, BIGGER_FILE_BUFSIZE);
+
   if (init) {
     initNewFile();
   }
@@ -36,6 +42,8 @@ FileInfo::~FileInfo() {
   // close file, if applicable
   if (f)
     close(f);
+
+	delete[] fbuf;
 }
 
 void FileInfo::initNewFile() {
@@ -45,19 +53,19 @@ void FileInfo::initNewFile() {
   int headerSize = 0;
   int8_t* headerSizePtr = (int8_t*)(&headerSize);
   for (size_t pageId = 0; pageId < numPages; ++pageId) {
-    File_Namespace::write(f, pageId * pageSize, sizeof(int), headerSizePtr);
+    File_Namespace::write(f, pageId * SUPER_HEAD_SIZE, sizeof(int), headerSizePtr);
     freePages.insert(pageId);
   }
 }
 
 size_t FileInfo::write(const size_t offset, const size_t size, int8_t* buf) {
   std::lock_guard<std::mutex> lock(readWriteMutex_);
-  return File_Namespace::write(f, offset, size, buf);
+  return File_Namespace::write(f, offset + SUPER_PAGE_SIZE, size, buf);
 }
 
 size_t FileInfo::read(const size_t offset, const size_t size, int8_t* buf) {
   std::lock_guard<std::mutex> lock(readWriteMutex_);
-  return File_Namespace::read(f, offset, size, buf);
+  return File_Namespace::read(f, offset + SUPER_PAGE_SIZE, size, buf);
 }
 
 void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec, const int fileMgrEpoch) {
@@ -66,11 +74,15 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec, const int fi
   int oldPageId = -99;
   int oldVersionEpoch = -99;
   int skipped = 0;
+
+  // read the whole super page to memory
+  std::unique_ptr<int8_t> spage(new int8_t[SUPER_PAGE_SIZE]);
+  size_t nread = pread(fileno(f), spage.get(), SUPER_PAGE_SIZE, 0);
+
   for (size_t pageNum = 0; pageNum < numPages; ++pageNum) {
-    int headerSize;
-    fseek(f, pageNum * pageSize, SEEK_SET);
-    fread((int8_t*)(&headerSize), sizeof(int), 1, f);
-    if (headerSize != 0) {
+    int* ip = (int*)(spage.get() + pageNum * SUPER_HEAD_SIZE);
+    int headerSize = *ip++;
+    if (headerSize != 0 && pageNum < nread / SUPER_HEAD_SIZE) {
       // headerSize doesn't include headerSize itself
       // We're tying ourself to headers of ints here
       size_t numHeaderElems = headerSize / sizeof(int);
@@ -83,11 +95,12 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec, const int fi
       // size_t chunkSize;
       // We don't want to read headerSize in our header - so start
       // reading 4 bytes past it
-      fread((int8_t*)(&chunkKey[0]), headerSize - 2 * sizeof(int), 1, f);
+      for (int i = 0; i < (int)((headerSize - 2 * sizeof(int)) / sizeof(int)); ++i)
+          chunkKey[i] = *ip++;
       // cout << "Chunk key: " << showChunk(chunkKey) << endl;
-      fread((int8_t*)(&pageId), sizeof(int), 1, f);
+      pageId = *ip++;
       // cout << "Page id: " << pageId << endl;
-      fread((int8_t*)(&versionEpoch), sizeof(int), 1, f);
+      versionEpoch = *ip++;
       if (chunkKey != oldChunkKey || oldPageId != pageId - (1 + skipped)) {
         if (skipped > 0) {
           VLOG(1) << "FId.PSz: " << fileId << "." << pageSize << " Chunk key: " << showChunk(oldChunkKey)
@@ -119,7 +132,7 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec, const int fi
         // First write 0 to first four bytes of
         // header to mark as free
         headerSize = 0;
-        File_Namespace::write(f, pageNum * pageSize, sizeof(int), (int8_t*)&headerSize);
+        File_Namespace::write(f, pageNum * SUPER_HEAD_SIZE, sizeof(int), (int8_t*)&headerSize);
         // Now add page to free list
         freePages.insert(pageNum);
         LOG(WARNING) << "Was not checkpointed: Chunk key: " << showChunk(chunkKey) << " Page id: " << pageId
@@ -149,7 +162,7 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec, const int fi
 void FileInfo::freePage(int pageId) {
   int zeroVal = 0;
   int8_t* zeroAddr = reinterpret_cast<int8_t*>(&zeroVal);
-  File_Namespace::write(f, pageId * pageSize, sizeof(int), zeroAddr);
+  File_Namespace::write(f, pageId * SUPER_HEAD_SIZE, sizeof(int), zeroAddr);
   std::lock_guard<std::mutex> lock(freePagesMutex_);
   freePages.insert(pageId);
 }

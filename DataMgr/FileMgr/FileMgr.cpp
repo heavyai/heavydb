@@ -147,8 +147,8 @@ void FileMgr::init(const size_t num_reader_threads) {
           size_t pageSize = boost::lexical_cast<size_t>(fileStem.substr(dotPos + 1, fileStem.size()));
           std::string filePath(fileIt->path().string());
           size_t fileSize = boost::filesystem::file_size(filePath);
-          assert(fileSize % pageSize == 0);  // should be no partial pages
-          size_t numPages = fileSize / pageSize;
+          assert((fileSize - SUPER_PAGE_SIZE) % pageSize == 0);  // should be no partial pages
+          size_t numPages = (fileSize - SUPER_PAGE_SIZE) / pageSize;
 
           VLOG(1) << "File id: " << fileId << " Page size: " << pageSize << " Num pages: " << numPages;
 
@@ -301,8 +301,8 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
           size_t pageSize = boost::lexical_cast<size_t>(fileStem.substr(dotPos + 1, fileStem.size()));
           std::string filePath(fileIt->path().string());
           size_t fileSize = boost::filesystem::file_size(filePath);
-          assert(fileSize % pageSize == 0);  // should be no partial pages
-          size_t numPages = fileSize / pageSize;
+          assert((fileSize - SUPER_PAGE_SIZE) % pageSize == 0);  // should be no partial pages
+          size_t numPages = (fileSize - SUPER_PAGE_SIZE) / pageSize;
 
           file_futures.emplace_back(std::async(std::launch::async, [filePath, fileId, pageSize, numPages, this] {
             std::vector<HeaderInfo> tempHeaderVec;

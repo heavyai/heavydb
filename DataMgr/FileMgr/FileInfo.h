@@ -54,6 +54,10 @@ struct FileInfo {
   std::mutex freePagesMutex_;
   std::mutex readWriteMutex_;
 
+  // use a bigger buffer to expedite the reading of metadata pages
+  #define BIGGER_FILE_BUFSIZE (1 << 16)
+  char* fbuf = 0;
+
   /// Constructor
   FileInfo(const int fileId, FILE* f, const size_t pageSize, const size_t numPages, const bool init = false);
 
