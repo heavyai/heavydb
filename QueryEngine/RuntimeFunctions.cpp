@@ -533,6 +533,23 @@ DEF_SKIP_AGG(agg_min_float)
 #undef DEF_SKIP_AGG_ADD
 #undef DEF_SKIP_AGG
 
+extern "C" ALWAYS_INLINE int64_t decimal_round(const int64_t x, const int32_t y0, const int32_t scale) {
+  int32_t y = y0 - scale;
+
+  if (y >= 0) {
+    return x;
+  }
+
+  int64_t p = pow((double)10L, std::abs(y));
+  int64_t p_half = p >> 1;
+
+
+  int64_t temp = x;
+  temp = temp >=0 ? temp + p_half : temp - p_half;
+  temp = temp / p;
+  return temp * p;
+}
+
 extern "C" ALWAYS_INLINE int64_t decimal_floor(const int64_t x, const int64_t scale) {
   if (x >= 0) {
     return x / scale * scale;

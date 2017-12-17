@@ -165,6 +165,34 @@ llvm::Value* Executor::codegenFunctionOperWithCustomTypeHandling(
       const auto result_lv =
           cgen_state_->ir_builder_.CreateSDiv(covar_result_lv, ll_int(exp_to_scale(arg_ti.get_scale())));
       return endArgsNullcheck(bbs, result_lv, function_oper);
+    } else if (function_oper->getName() == "ROUND" && function_oper->getArg(0)->get_type_info().is_decimal()) {
+      CHECK_EQ(size_t(2), function_oper->getArity());
+
+      const auto arg0 = function_oper->getArg(0);
+      const auto& arg0_ti = arg0->get_type_info();
+      const auto arg0_lvs = codegen(arg0, true, co);
+      CHECK_EQ(size_t(1), arg0_lvs.size());
+      const auto arg0_lv = arg0_lvs.front();
+      CHECK(arg0_lv->getType()->isIntegerTy(64));
+
+      const auto arg1 = function_oper->getArg(1);
+      const auto& arg1_ti = arg1->get_type_info();
+      CHECK(arg1_ti.is_integer());
+      const auto arg1_lvs = codegen(arg1, true, co);
+      auto arg1_lv = arg1_lvs.front();
+      if (arg1_ti.get_type()  != kINT) {
+        arg1_lv = codegenCast(arg1_lv, arg1_ti, SQLTypeInfo(kINT, true), false, co);
+      }
+
+      const auto bbs0 = beginArgsNullcheck(function_oper, {arg0_lvs});
+
+      const std::string func_name = "decimal_round";
+      const auto result_lv = cgen_state_->emitCall(func_name, {arg0_lv, arg1_lv, ll_int(arg0_ti.get_scale())});
+      const auto ret_ti = function_oper->get_type_info();
+      CHECK(ret_ti.is_decimal());
+
+      return endArgsNullcheck(bbs0, result_lv, function_oper);
+
     }
     throw std::runtime_error("Type combination not supported for function " + function_oper->getName());
   }
