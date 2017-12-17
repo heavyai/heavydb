@@ -1057,12 +1057,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
       throw std::runtime_error("Only integer 2nd operands are supported");
     }
 
-    // the 2nd operand does not need to be a constant
-    // it can happily reference another numeric column
-    if (!args[1]->get_type_info().is_number()) {
-      throw std::runtime_error("Only numeric 2nd operands are supported");
-    }
-    
 
     return makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(
         rex_function->getType(), rex_function->getName(), args);
