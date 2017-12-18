@@ -3848,7 +3848,53 @@ TEST(Truncate, Count) {
   run_ddl_statement("drop table trunc_test;");
 }
 
+TEST(Rounding, ROUND) {
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    LOG(INFO) << "ROUND: no 2nd operator\n";
+    // the cast is required. SQLite seems to only return FLOATs
+    std::string select = "SELECT CAST(ROUND(s16) AS SMALLINT) AS r_s16, CAST(ROUND(s32) AS INT) AS r_s32, CAST(ROUND(s64) AS BIGINT) AS r_s64, ROUND(f32) AS r_f32, ROUND(f64) AS r_f64, ROUND(n64) AS r_n64, ROUND(d64) AS r_d64 FROM test_rounding";
+    c(select, dt);
+
+    for (int n=0; n<10; n++) {
+      std::string i = std::to_string(n);
+      LOG(INFO) << "ROUND: 2nd operator: " << i << "\n";
+
+      // the cast is required. SQLite seems to only return FLOATs
+      select = "SELECT CAST(ROUND(s16, "+i+") AS SMALLINT) AS r_s16, CAST(ROUND(s32, "+i+") AS INT) AS r_s32, CAST(ROUND(s64, "+i+") AS BIGINT) AS r_s64, ROUND(f32, "+i+") AS r_f32, ROUND(f64, "+i+") AS r_f64, ROUND(n64, "+i+") AS r_n64, ROUND(d64, "+i+") AS r_d64 FROM test_rounding";
+      c(select, dt);
+    }
+  }
+}
+
 namespace {
+
+int create_and_populate_rounding_table() {
+  try {
+    const std::string drop_test_table{"DROP TABLE IF EXISTS test_rounding;"};
+    run_ddl_statement(drop_test_table);
+    g_sqlite_comparator.query(drop_test_table);
+
+    const std::string create_test_table{"CREATE TABLE test_rounding (s16 SMALLINT, s32 INTEGER, s64 BIGINT, f32 FLOAT, f64 DOUBLE, n64 NUMERIC(10,5), d64 DECIMAL(10,5));"};
+    run_ddl_statement(create_test_table);
+    g_sqlite_comparator.query(create_test_table);
+
+    const std::string inser_positive_test_data{"INSERT INTO test_rounding VALUES(3456, 234567, 3456789012, 3456.3456, 34567.23456, 34567.23456, 34567.23456);"};
+    run_multiple_agg(inser_positive_test_data, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(inser_positive_test_data);
+
+    const std::string inser_negative_test_data{"INSERT INTO test_rounding VALUES(-3456, -234567, -3456789012, -3456.3456, -34567.23456, -34567.23456, -34567.23456);"};
+    run_multiple_agg(inser_negative_test_data, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(inser_negative_test_data);
+
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_rounding'";
+    return -EEXIST;
+  }
+  return 0;
+}
 
 int create_and_populate_tables() {
   try {
@@ -4158,6 +4204,12 @@ int create_and_populate_tables() {
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
+
+  int rc = create_and_populate_rounding_table();
+  if (rc) {
+    return rc;
+  }
+
   return 0;
 }
 
@@ -4290,6 +4342,10 @@ void drop_tables() {
   const std::string drop_empty_ctas_test{"DROP TABLE empty_ctas_test;"};
   g_sqlite_comparator.query(drop_empty_ctas_test);
   run_ddl_statement(drop_empty_ctas_test);
+
+  const std::string drop_test_table_rounding{"DROP TABLE test_rounding;"};
+  run_ddl_statement(drop_test_table_rounding);
+  g_sqlite_comparator.query(drop_test_table_rounding);
 }
 
 void drop_views() {
@@ -4317,6 +4373,11 @@ int main(int argc, char** argv) {
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
+
+  // these two are here to allow passing correctly google testing parameters
+  desc.add_options()("gtest_list_tests", "list all test");
+  desc.add_options()("gtest_filter", "filters tests, use --help for details");
+
   desc.add_options()("disable-literal-hoisting", "Disable literal hoisting");
   desc.add_options()("with-sharding", "Create sharded tables");
   desc.add_options()("use-result-set",
