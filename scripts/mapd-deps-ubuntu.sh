@@ -52,6 +52,8 @@ sudo apt install -y \
     liblzma-dev \
     libbz2-dev \
     libarchive-dev \
+    libcurl4-openssl-dev \
+    uuid-dev \
     libsnappy-dev \
     zlib1g-dev \
     autoconf \
@@ -59,6 +61,9 @@ sudo apt install -y \
     automake \
     bison \
     flex-old
+
+# install AWS core and s3 sdk
+install_awscpp -j $(nproc)
 
 VERS=0.10.0
 wget --continue http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz

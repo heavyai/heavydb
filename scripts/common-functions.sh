@@ -58,3 +58,40 @@ function install_arrow() {
   popd
 
 }
+
+AWSCPP_VERSION=1.3.10
+
+function install_awscpp() {
+    # default c++ standard support
+    CPP_STANDARD=14
+    # check c++17 support
+    GNU_VERSION1=`g++ --version|head -n1|awk '{print $4}'|cut -d'.' -f1`
+    if [ "$GNU_VERSION1" = "7" ]; then
+        CPP_STANDARD=17
+    fi
+    rm -rf aws-sdk-cpp-${AWSCPP_VERSION}
+    download https://github.com/aws/aws-sdk-cpp/archive/${AWSCPP_VERSION}.tar.gz
+    tar xvfz ${AWSCPP_VERSION}.tar.gz
+    pushd aws-sdk-cpp-${AWSCPP_VERSION}
+    mkdir build
+    cd build
+    cmake \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=$PREFIX \
+        -DBUILD_ONLY="s3" \
+        -DBUILD_SHARED_LIBS=0 \
+        -DCUSTOM_MEMORY_MANAGEMENT=0 \
+        -DCPP_STANDARD=$CPP_STANDARD \
+        ..
+    make $*
+
+    # sudo is needed on osx
+    os=`uname`
+    if [ "$os" = "Darwin" ]; then
+        sudo make install
+    else
+        make install
+    fi
+
+    popd
+}

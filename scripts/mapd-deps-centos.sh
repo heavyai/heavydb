@@ -71,6 +71,7 @@ make install PREFIX=$PREFIX
 popd
 
 # libarchive
+download_make_install https://www.openssl.org/source/openssl-1.0.2n.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
 download_make_install https://tukaani.org/xz/xz-5.2.3.tar.gz "" "--disable-shared"
 download_make_install http://libarchive.org/downloads/libarchive-3.3.2.tar.gz "" "--without-openssl --disable-shared"
 
@@ -260,6 +261,9 @@ install_arrow
 download https://internal-dependencies.mapd.com/thirdparty/go1.8.1.linux-amd64.tar.gz
 extract go1.8.1.linux-amd64.tar.gz
 mv go $PREFIX
+
+# install AWS core and s3 sdk
+install_awscpp -j $(nproc)
 
 sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.modulefile.in > mapd-deps-$SUFFIX.modulefile
 sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.sh.in > mapd-deps-$SUFFIX.sh
