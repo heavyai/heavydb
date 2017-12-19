@@ -184,7 +184,7 @@ llvm::Value* Executor::codegenFunctionOperWithCustomTypeHandling(
         arg1_lv = codegenCast(arg1_lv, arg1_ti, SQLTypeInfo(kINT, true), false, co);
       }
 
-      const auto bbs0 = beginArgsNullcheck(function_oper, {arg0_lvs});
+      const auto bbs0 = beginArgsNullcheck(function_oper, {arg0_lv, arg1_lvs.front()});
 
       const std::string func_name = "decimal_round";
       const auto result_lv = cgen_state_->emitCall(func_name, {arg0_lv, arg1_lv, ll_int(arg0_ti.get_scale())});
