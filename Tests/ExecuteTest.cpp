@@ -3855,7 +3855,13 @@ TEST(Rounding, ROUND) {
 
     LOG(INFO) << "ROUND: no 2nd operator\n";
     // the cast is required. SQLite seems to only return FLOATs
-    std::string select = "SELECT CAST(ROUND(s16) AS SMALLINT) AS r_s16, CAST(ROUND(s32) AS INT) AS r_s32, CAST(ROUND(s64) AS BIGINT) AS r_s64, ROUND(f32) AS r_f32, ROUND(f64) AS r_f64, ROUND(n64) AS r_n64, ROUND(d64) AS r_d64 FROM test_rounding";
+    std::string select = "SELECT CAST(ROUND(s16) AS SMALLINT) AS r_s16, "
+        "CAST(ROUND(s32) AS INT) AS r_s32, "
+        "CAST(ROUND(s64) AS BIGINT) AS r_s64, "
+        "ROUND(f32) AS r_f32, "
+        "ROUND(f64) AS r_f64, "
+        "ROUND(n64) AS r_n64, "
+        "ROUND(d64) AS r_d64 FROM test_rounding";
     c(select, dt);
 
     for (int n=0; n<10; n++) {
@@ -3863,9 +3869,27 @@ TEST(Rounding, ROUND) {
       LOG(INFO) << "ROUND: 2nd operator: " << i << "\n";
 
       // the cast is required. SQLite seems to only return FLOATs
-      select = "SELECT CAST(ROUND(s16, "+i+") AS SMALLINT) AS r_s16, CAST(ROUND(s32, "+i+") AS INT) AS r_s32, CAST(ROUND(s64, "+i+") AS BIGINT) AS r_s64, ROUND(f32, "+i+") AS r_f32, ROUND(f64, "+i+") AS r_f64, ROUND(n64, "+i+") AS r_n64, ROUND(d64, "+i+") AS r_d64 FROM test_rounding";
+      select = "SELECT CAST(ROUND(s16, "+i+") AS SMALLINT) AS r_s16, "
+              "CAST(ROUND(s32, "+i+") AS INT) AS r_s32, "
+              "CAST(ROUND(s64, "+i+") AS BIGINT) AS r_s64, "
+              "ROUND(f32, "+i+") AS r_f32, "
+              "ROUND(f64, "+i+") AS r_f64, "
+              "ROUND(n64, "+i+") AS r_n64, "
+              "ROUND(d64, "+i+") AS r_d64 FROM test_rounding";
       c(select, dt);
     }
+
+    LOG(INFO) << "ROUND: null 2nd operator\n";
+    // the cast is required. SQLite seems to only return FLOATs
+    select = "SELECT CAST(ROUND(s16, (SELECT s16 FROM test_rounding WHERE s16 IS NULL)) AS SMALLINT) AS r_s16, "
+        "CAST(ROUND(s32, (SELECT s16 FROM test_rounding WHERE s16 IS NULL)) AS INT) AS r_s32, "
+        "CAST(ROUND(s64, (SELECT s16 FROM test_rounding WHERE s16 IS NULL)) AS BIGINT) AS r_s64, "
+        "ROUND(f32, (SELECT s16 FROM test_rounding WHERE s16 IS NULL)) AS r_f32, "
+        "ROUND(f64, (SELECT s16 FROM test_rounding WHERE s16 IS NULL)) AS r_f64, "
+        "ROUND(n64, (SELECT s16 FROM test_rounding WHERE s16 IS NULL)) AS r_n64, "
+        "ROUND(d64, (SELECT s16 FROM test_rounding WHERE s16 IS NULL)) AS r_d64 FROM test_rounding";
+    c(select, dt);
+
   }
 }
 
@@ -3888,6 +3912,10 @@ int create_and_populate_rounding_table() {
     const std::string inser_negative_test_data{"INSERT INTO test_rounding VALUES(-3456, -234567, -3456789012, -3456.3456, -34567.23456, -34567.23456, -34567.23456);"};
     run_multiple_agg(inser_negative_test_data, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(inser_negative_test_data);
+
+    const std::string inser_null_test_data{"INSERT INTO test_rounding VALUES(NULL, NULL, NULL, NULL, NULL, NULL, NULL);"};
+    run_multiple_agg(inser_null_test_data, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(inser_null_test_data);
 
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test_rounding'";
