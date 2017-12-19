@@ -33,10 +33,11 @@
 #ifndef SHAPES_H
 #define SHAPES_H
 
-#include <vector>
-#include <cstddef>
 #include <assert.h>
 #include <cmath>
+#include <cstddef>
+#include <string>
+#include <vector>
 
 namespace p2t {
 
@@ -115,6 +116,10 @@ struct Point {
     x /= len;
     y /= len;
     return len;
+  }
+
+  operator std::string() const {
+    return "[" + std::to_string(x) + ", " + std::to_string(y) + "]";
   }
 
 };

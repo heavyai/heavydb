@@ -48,6 +48,7 @@
 #include "../Shared/unreachable.h"
 #include "../Shared/geosupport.h"
 #include "../Shared/mapd_glob.h"
+#include "../Shared/scope.h"
 #include "Importer.h"
 #include "gen-cpp/MapD.h"
 #include <vector>
@@ -2155,57 +2156,351 @@ void GDALErrorHandler(CPLErr eErrClass, int err_no, const char* msg) {
   throw std::runtime_error("GDAL error: " + std::string(msg));
 }
 
-void Importer::readVerticesFromGDALGeometryZ(const std::string& fileName,
-                                             OGRPolygon* poPolygon,
-                                             PolyData2d& poly,
-                                             bool) {
-  std::vector<std::shared_ptr<p2t::Point>> vertexShPtrs;
-  std::vector<p2t::Point*> vertexPtrs;
-  std::vector<int> tris;
-  std::unordered_map<p2t::Point*, int> pointIndices;
-  OGRPoint ptTemp;
+namespace GeomConvexHull {
+// The code in this namespace is based on the code found here:
+// http://www.geeksforgeeks.org/convex-hull-set-2-graham-scan/
+// using Graham's scan algorithm: https://en.wikipedia.org/wiki/Graham_scan
 
-  OGRLinearRing* poExteriorRing = poPolygon->getExteriorRing();
-  if (!poExteriorRing->isClockwise()) {
-    poExteriorRing->reverseWindingOrder();
+// TODO(croot): add this to a geom utility library
+
+// squared distance between points p1 and p2
+double distSq(const p2t::Point* p1, const p2t::Point* p2) {
+  return (p1->x - p2->x) * (p1->x - p2->x) + (p1->y - p2->y) * (p1->y - p2->y);
+}
+
+// Finds the orientation of a triplet of points (p, q, r).
+// 0 --> All collinear
+// 1 --> Clockwise
+// 2 --> Counterclockwise
+int orientation(const p2t::Point* p, const p2t::Point* q, const p2t::Point* r) {
+  auto val = (q->y - p->y) * (r->x - q->x) - (q->x - p->x) * (r->y - q->y);
+
+  if (val == 0)
+    return 0;                // colinear
+  return (val > 0) ? 1 : 2;  // clock or counterclock wise
+}
+
+// Returns the convex hull of a set of points
+std::vector<p2t::Point*> buildConvexHull(const std::vector<p2t::Point*>& pts) {
+  // Find the bottommost point
+  std::vector<p2t::Point*> mypts = pts;
+
+  double ymin = mypts[0]->y;
+  int min = 0;
+  for (int i = 1; i < static_cast<int>(mypts.size()); i++) {
+    double y = mypts[i]->y;
+
+    // Pick the bottom-most or chose the left
+    // most point in case of tie
+    if ((y < ymin) || (ymin == y && mypts[i]->x < mypts[min]->x)) {
+      ymin = mypts[i]->y;
+      min = i;
+    }
   }
-  if (!poExteriorRing->isClockwise()) {
-    return;
+
+  // Place the bottom-most point at first position
+  if (min != 0) {
+    auto ptr = mypts[0];
+    mypts[0] = mypts[min];
+    mypts[min] = ptr;
   }
-  poExteriorRing->closeRings();
-  int nExtVerts = poExteriorRing->getNumPoints();
+
+  // Sort pts.
+  // A point p1 comes before p2 if p2
+  // has larger polar angle (in counterclockwise direction) than p1
+  auto p0 = mypts[0];
+  std::sort(mypts.begin() + 1, mypts.end(), [&p0](const p2t::Point* p1, const p2t::Point* p2) {
+    // Find orientation
+    auto o = orientation(p0, p1, p2);
+    if (o == 0) {
+      return (distSq(p0, p2) >= distSq(p0, p1)) ? true : false;
+    }
+
+    return (o == 2) ? true : false;
+  });
+
+  // If two or more pts make same angle with p0,
+  // Remove all but the one that is farthest from p0
+  int m = 1;  // Initialize size of modified array
+  int n = static_cast<int>(mypts.size());
+  for (int i = 1; i < n; i++) {
+    // Keep removing i while angle of i and i+1 is same
+    // with respect to p0
+    while (i < n - 1 && orientation(p0, mypts[i], mypts[i + 1]) == 0)
+      i++;
+
+    mypts[m] = mypts[i];
+    m++;  // Update size of modified array
+  }
+
+  // If modified array of pts has less than 3 pts,
+  // convex hull is not possible
+  if (m < 3) {
+    throw std::runtime_error("Cannot compute convex hull. All points are collinear.");
+  }
+
+  // Create an empty stack and push first three pts
+  // to it.
+  std::vector<p2t::Point*> hullPts;
+  hullPts.push_back(mypts[0]);
+  hullPts.push_back(mypts[1]);
+  hullPts.push_back(mypts[2]);
+
+  // Process remaining n-3 pts
+  for (int i = 3; i < m; i++) {
+    // Keep removing top while the angle formed by
+    // pts next-to-top, top, and pts[i] makes
+    // a non-left turn
+    while (orientation(hullPts.at(hullPts.size() - 2), hullPts.back(), mypts[i]) != 2) {
+      hullPts.pop_back();
+    }
+    hullPts.push_back(mypts[i]);
+  }
+
+  return hullPts;
+}
+
+}  // namespace GeomConvexHull
+
+namespace GeomSimplify {
+// This code in this namespace is taken from https://github.com/mourner/simplify-js, translated to C++
+// and re-purposed for poly simplification to handle problematic polys on import.
+// It makes use of the Douglas-Peuker algorithm for simplification:
+// https://en.wikipedia.org/wiki/Ramer-Douglas-Peucker_algorithm
+
+// TODO(croot): add this to a geom utility library
+
+// returns a value proportional to the distance
+// between the point p and the line joining the
+// points p1 and p2
+double lineDist(const p2t::Point* p1, const p2t::Point* p2, const p2t::Point* p) {
+  return std::abs((p->y - p1->y) * (p2->x - p1->x) - (p2->y - p1->y) * (p->x - p1->x));
+}
+
+// square distance between 2 points
+double getSqDist(const p2t::Point* p1, const p2t::Point* p2) {
+  auto dx = p1->x - p2->x;
+  auto dy = p1->y - p2->y;
+  return dx * dx + dy * dy;
+}
+
+// square distance from a point to a segment
+double getSqSegDist(const p2t::Point* p, const p2t::Point* p1, const p2t::Point* p2) {
+  auto x = p1->x, y = p1->y, dx = p2->x - x, dy = p2->y - y;
+
+  if (dx != 0 || dy != 0) {
+    auto t = ((p->x - x) * dx + (p->y - y) * dy) / (dx * dx + dy * dy);
+    if (t > 1) {
+      x = p2->x;
+      y = p2->y;
+    } else if (t > 0) {
+      x += dx * t;
+      y += dy * t;
+    }
+  }
+
+  dx = p->x - x;
+  dy = p->y - y;
+
+  return dx * dx + dy * dy;
+}
+
+// basic distance-based simplification
+std::vector<p2t::Point*> simplifyRadialDist(const std::vector<p2t::Point*>& points, const double sqTolerance) {
+  p2t::Point* prevPoint = points[0];
+  std::vector<p2t::Point*> newPoints = {prevPoint};
+  p2t::Point* point;
+
+  for (size_t i = 1; i < points.size(); ++i) {
+    point = points[i];
+    if (getSqDist(point, prevPoint) > sqTolerance) {
+      newPoints.push_back(points[i]);
+      prevPoint = point;
+    }
+  }
+
+  if (prevPoint != point) {
+    newPoints.push_back(point);
+  }
+
+  return newPoints;
+}
+
+void simplifyDPStep(const std::vector<p2t::Point*>& points,
+                    const int first,
+                    const int last,
+                    const double sqTolerance,
+                    std::vector<p2t::Point*>& simplified) {
+  double maxSqDist = sqTolerance;
+  int index = -1;
+
+  for (int i = first + 1; i < last; i++) {
+    auto sqDist = getSqSegDist(points[i], points[first], points[last]);
+    if (sqDist > maxSqDist) {
+      index = i;
+      maxSqDist = sqDist;
+    }
+  }
+
+  if (maxSqDist > sqTolerance) {
+    if (index - first > 1) {
+      simplifyDPStep(points, first, index, sqTolerance, simplified);
+    }
+    simplified.push_back(points[index]);
+    if (last - index > 1) {
+      simplifyDPStep(points, index, last, sqTolerance, simplified);
+    }
+  }
+}
+
+std::vector<p2t::Point*> simplifyDouglasPeucker(const std::vector<p2t::Point*>& points, const double sqTolerance) {
+  auto last = points.size() - 1;
+
+  std::vector<p2t::Point*> simplified = {points[0]};
+  simplifyDPStep(points, 0, last, sqTolerance, simplified);
+  simplified.push_back(points[last]);
+
+  if (simplified.size() == 2) {
+    double maxSqDist(0.0);
+    int index = -1;
+    for (int i = 1; i < static_cast<int>(points.size()) - 1; i++) {
+      auto sqDist = lineDist(simplified[0], simplified[1], points[i]);
+      if (sqDist > maxSqDist) {
+        index = i;
+        maxSqDist = sqDist;
+      }
+    }
+    if (index < 0) {
+      index = 1;
+    }
+    simplified.insert(simplified.begin() + 1, points[index]);
+  }
+
+  return simplified;
+}
+
+// Returns a simplified set of points from an input list of connected points.
+std::vector<p2t::Point*> simplify(const std::vector<p2t::Point*>& points,
+                                  const double tolerance = 1.0,
+                                  const bool highestQuality = false) {
+  if (points.size() <= 3) {
+    return points;
+  }
+
+  auto sqTolerance = tolerance * tolerance;
+  return simplifyDouglasPeucker((highestQuality ? points : simplifyRadialDist(points, sqTolerance)), sqTolerance);
+}
+}  // namespace GeomSimplify
+
+std::pair<double, double> buildRenderablePolyOutline(PolyData2d& poly,
+                                                     const std::vector<p2t::Point*>& vertexPtrs,
+                                                     std::unordered_map<p2t::Point*, int>& pointIndices,
+                                                     const std::unordered_map<p2t::Point*, int>& origPointIndices,
+                                                     const ssize_t featureIdx,
+                                                     const ssize_t multipolyIdx) {
+  if (vertexPtrs.size() < 3) {
+    throw std::runtime_error("Cannot import a polygon with " + std::to_string(vertexPtrs.size()) + " point" +
+                             (vertexPtrs.size() == 1 ? "." : "s."));
+  }
+
+  pointIndices.clear();
   std::set<std::pair<double, double>> dedupe;
-
   poly.beginLine();
-  for (int k = 0; k < nExtVerts - 1; k++) {
-    poExteriorRing->getPoint(k, &ptTemp);
-    auto xy = std::make_pair(ptTemp.getX(), ptTemp.getY());
-    if (k > 0 && vertexPtrs.back()->x == xy.first && vertexPtrs.back()->y == xy.second) {
-      continue;
-    }
-    auto a = dedupe.insert(std::make_pair(xy.first, xy.second));
+  ScopeGuard guard = [&poly]() { poly.endLine(); };
+  double mindist = std::numeric_limits<double>::max(), avgdist(0.0), sumdist(0.0);
+  for (size_t k = 0; k < vertexPtrs.size(); ++k) {
+    auto vert = vertexPtrs[k];
+    auto origitr = origPointIndices.find(vert);
+    CHECK(origitr != origPointIndices.end());
+    auto origxypair = std::make_pair(vert->x, vert->y);
+    auto a = dedupe.insert(origxypair);
     if (!a.second) {
-      throw std::runtime_error("invalid geometry: duplicate vertex found");
+      const auto& startpt = *vertexPtrs[k - 1];
+      const auto next = vertexPtrs[(k + 1) % vertexPtrs.size()];
+      p2t::Point nextpt(next->x, next->y);
+      std::array<double, 2> v({startpt.x - nextpt.x, startpt.y - nextpt.y});
+
+      v[0] *= 0.5;
+      v[1] *= 0.5;
+      nextpt.x += v[0];
+      nextpt.y += v[1];
+      v[0] = nextpt.x - vert->x;
+      v[1] = nextpt.y - vert->y;
+      if (!(v[0] * v[0] + v[1] * v[1])) {
+        v[0] = startpt.x - vert->x;
+        v[1] = startpt.y - vert->y;
+        CHECK_NE(v[0] * v[0] + v[1] * v[1], 0);
+      }
+      const auto stepsz = 0.01;
+      v[0] *= stepsz;
+      v[1] *= stepsz;
+      auto currstep = 0;
+      while (!a.second && currstep < 1.0) {
+        currstep += stepsz;
+        vert->x += v[0];
+        vert->y += v[1];
+        a = dedupe.insert(std::make_pair(vert->x, vert->y));
+      }
+
+      if (currstep >= 1.0) {
+        throw std::runtime_error(
+            "invalid geometry: polygon" +
+            (multipolyIdx < 0 ? "" : (" at multipolygon index " + std::to_string(multipolyIdx + 1))) + " in feature " +
+            std::to_string(featureIdx + 1) + " - duplicate vertex found at index " + std::to_string(origitr->second) +
+            " which cannot be properly transformed to avoid the duplication.");
+      }
+
+      LOG(WARNING) << "duplicate vertex at index " << origitr->second << " in polygon"
+                   << (multipolyIdx < 0 ? "" : (" at multipolygon index " + std::to_string(multipolyIdx + 1)))
+                   << " in feature " << (featureIdx + 1) << ". It has been transformed from [" << origxypair.first
+                   << ", " << origxypair.second << "] to " << std::string(*vert)
+                   << " in order to avoid overlap issues.";
     }
-    vertexShPtrs.emplace_back(new p2t::Point(xy.first, xy.second));
-    poly.addLinePoint(vertexShPtrs.back());
-    vertexPtrs.push_back(vertexShPtrs.back().get());
-    pointIndices.insert({vertexShPtrs.back().get(), vertexPtrs.size() - 1});
+    if (k > 0) {
+      const auto lastpt = vertexPtrs[k - 1];
+      const auto dx = vert->x - lastpt->x;
+      const auto dy = vert->y - lastpt->y;
+      const auto dist = std::sqrt(dx * dx + dy * dy);
+      sumdist += dist;
+      if (dist < mindist) {
+        mindist = dist;
+      }
+    }
+    vert->edge_list.clear();  // make sure to clear out the containers build up from a previous triangulation run
+    poly.addLinePoint(vert);
+    pointIndices.insert({vert, k});
   }
-  poly.endLine();
+  // already guaranteed to have a poly with at least 3 verts by the time we
+  // reach this point
+  const auto lastpt = vertexPtrs.back();
+  const auto firstpt = vertexPtrs.front();
+  const auto dx = firstpt->x - lastpt->x;
+  const auto dy = firstpt->y - lastpt->y;
+  const auto dist = std::sqrt(dx * dx + dy * dy);
+  sumdist += dist;
+  if (dist < mindist) {
+    mindist = dist;
+  }
+  avgdist = sumdist / vertexPtrs.size();
+  return std::make_pair(mindist, avgdist);
+}
 
+p2t::CDT triangulate(bool& triangulated, const std::vector<p2t::Point*>& vertexPtrs) {
+  triangulated = false;
   p2t::CDT triangulator(vertexPtrs);
-  try {
-    triangulator.Triangulate();
-  } catch (std::exception& err) {
-    throw std::runtime_error("failed to triangulate polygon. " + std::string(err.what()));
-  }
+  triangulator.Triangulate();
+  triangulated = true;
+  return triangulator;
+}
 
+void buildRenderablePolyAfterTriangulation(PolyData2d& poly,
+                                           p2t::CDT& triangulator,
+                                           const std::unordered_map<p2t::Point*, int>& pointIndices,
+                                           const std::unordered_map<p2t::Point*, int>& origPointIndices) {
   int idx0, idx1, idx2;
-
-  std::unordered_map<p2t::Point*, int>::iterator itr;
-
+  std::unordered_map<p2t::Point*, int>::const_iterator itr;
   poly.beginPoly();
+  ScopeGuard guard = [&poly]() { poly.endPoly(); };
   for (p2t::Triangle* tri : triangulator.GetTriangles()) {
     itr = pointIndices.find(tri->GetPoint(0));
     if (itr == pointIndices.end()) {
@@ -2227,7 +2522,99 @@ void Importer::readVerticesFromGDALGeometryZ(const std::string& fileName,
 
     poly.addTriangle(idx0, idx1, idx2);
   }
-  poly.endPoly();
+}
+
+void Importer::readVerticesFromGDALGeometryZ(const std::string& fileName,
+                                             OGRPolygon* poPolygon,
+                                             PolyData2d& poly,
+                                             const bool,
+                                             const ssize_t featureIdx,
+                                             const ssize_t multipolyIdx = -1) {
+  std::vector<std::shared_ptr<p2t::Point>> vertexShPtrs;
+  std::vector<p2t::Point*> vertexPtrs;
+  std::vector<int> tris;
+  std::unordered_map<p2t::Point*, int> origPointIndices;
+  std::unordered_map<p2t::Point*, int> pointIndices;
+  OGRPoint ptTemp;
+
+  OGRLinearRing* poExteriorRing = poPolygon->getExteriorRing();
+  if (!poExteriorRing->isClockwise()) {
+    poExteriorRing->reverseWindingOrder();
+  }
+  if (!poExteriorRing->isClockwise()) {
+    return;
+  }
+  poExteriorRing->closeRings();
+  int nExtVerts = poExteriorRing->getNumPoints();
+  if (nExtVerts < 3) {
+    throw std::runtime_error("invalid geometry: polygon" +
+                             (multipolyIdx < 0 ? "" : (" at multipolygon index " + std::to_string(multipolyIdx + 1))) +
+                             " in feature " + std::to_string(featureIdx + 1) + " needs at least 3 points. It has " +
+                             std::to_string(nExtVerts) + ".");
+  }
+
+  for (int k = 0; k < nExtVerts - 1; k++) {
+    poExteriorRing->getPoint(k, &ptTemp);
+    if (k > 0 && vertexPtrs.back()->x == ptTemp.getX() && vertexPtrs.back()->y == ptTemp.getY()) {
+      continue;
+    }
+    vertexShPtrs.emplace_back(new p2t::Point(ptTemp.getX(), ptTemp.getY()));
+    auto vertPtr = vertexShPtrs.back().get();
+    vertexPtrs.push_back(vertPtr);
+    origPointIndices.insert({vertPtr, k});
+  }
+  double mindist, avgdist;
+
+  std::tie(mindist, avgdist) =
+      buildRenderablePolyOutline(poly, vertexPtrs, pointIndices, origPointIndices, featureIdx, multipolyIdx);
+
+  bool triangulated = false;
+  try {
+    auto triangulator = triangulate(triangulated, vertexPtrs);
+    buildRenderablePolyAfterTriangulation(poly, triangulator, pointIndices, origPointIndices);
+  } catch (std::exception& err) {
+    if (triangulated) {
+      poly.popPoly();
+    }
+    poly.popLine();
+
+    // try a simplify with a modest tolerance to see if we can get the geom
+    // to be more poly2tri friendly
+    auto simplifyVertexPtrs = GeomSimplify::simplify(vertexPtrs, mindist + 0.1 * (avgdist - mindist), true);
+    buildRenderablePolyOutline(poly, simplifyVertexPtrs, pointIndices, origPointIndices, featureIdx, multipolyIdx);
+    try {
+      auto triangulator = triangulate(triangulated, simplifyVertexPtrs);
+      buildRenderablePolyAfterTriangulation(poly, triangulator, pointIndices, origPointIndices);
+      LOG(WARNING) << "Failed to triangulate original polygon "
+                   << (multipolyIdx < 0 ? "" : ("at multipolygon index " + std::to_string(multipolyIdx + 1)))
+                   << " in feature " << (featureIdx + 1)
+                   << ". A simplified geometry will be used as a proxy in its place. The simplified geometry has "
+                   << simplifyVertexPtrs.size() << " vertices. The original polygon had " << vertexPtrs.size() << ".";
+    } catch (std::exception& err) {
+      if (triangulated) {
+        poly.popPoly();
+      }
+      poly.popLine();
+      auto convexHullVertexPtrs = GeomConvexHull::buildConvexHull(vertexPtrs);
+      buildRenderablePolyOutline(poly, convexHullVertexPtrs, pointIndices, origPointIndices, featureIdx, multipolyIdx);
+      try {
+        auto triangulator = triangulate(triangulated, convexHullVertexPtrs);
+        buildRenderablePolyAfterTriangulation(poly, triangulator, pointIndices, origPointIndices);
+        LOG(WARNING)
+            << "Failed to triangulate original polygon"
+            << (multipolyIdx < 0 ? "" : (" at multipolygon index " + std::to_string(multipolyIdx + 1)))
+            << " in feature " << (featureIdx + 1)
+            << ". A convex hull of the original geometry will be used as a proxy in its place. The convex hull has "
+            << convexHullVertexPtrs.size() << " vertices. The original polygon had " << vertexPtrs.size() << ".";
+      } catch (std::exception& err) {
+        throw std::runtime_error(
+            "invalid geometry: polygon" +
+            (multipolyIdx < 0 ? "" : (" at multipolygon index " + std::to_string(multipolyIdx + 1))) + " in feature " +
+            std::to_string(featureIdx + 1) + "- " + err.what() +
+            ". Cannot build proxy geometry after trying a simplification and convex hull.");
+      }
+    }
+  }
 }
 
 void initGDAL() {
@@ -2352,7 +2739,7 @@ void Importer::readVerticesFromGDAL(
         switch (wkbFlatten(poGeometry->getGeometryType())) {
           case wkbPolygon: {
             OGRPolygon* poPolygon = (OGRPolygon*)poGeometry;
-            readVerticesFromGDALGeometryZ(fileName, poPolygon, polys.back(), false);
+            readVerticesFromGDALGeometryZ(fileName, poPolygon, polys.back(), false, iFeature);
             break;
           }
           case wkbMultiPolygon: {
@@ -2361,7 +2748,7 @@ void Importer::readVerticesFromGDAL(
             for (auto j = 0; j < NumberOfGeometries; j++) {
               OGRGeometry* poPolygonGeometry = poMultiPolygon->getGeometryRef(j);
               OGRPolygon* poPolygon = (OGRPolygon*)poPolygonGeometry;
-              readVerticesFromGDALGeometryZ(fileName, poPolygon, polys.back(), false);
+              readVerticesFromGDALGeometryZ(fileName, poPolygon, polys.back(), false, iFeature, j);
             }
             break;
           }

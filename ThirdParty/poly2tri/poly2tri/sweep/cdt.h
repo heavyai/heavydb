@@ -33,8 +33,8 @@
 #define CDT_H
 
 #include "advancing_front.h"
-#include "sweep_context.h"
 #include "sweep.h"
+#include "sweep_context.h"
 
 /**
  *
@@ -53,7 +53,7 @@ public:
    *
    * @param polyline
    */
-  CDT(std::vector<Point*> polyline);
+  CDT(const std::vector<Point*>& polyline);
 
    /**
    * Destructor - clean up memory
@@ -65,7 +65,7 @@ public:
    *
    * @param polyline
    */
-  void AddHole(std::vector<Point*> polyline);
+  void AddHole(const std::vector<Point*>& polyline);
 
   /**
    * Add a steiner point

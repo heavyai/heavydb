@@ -618,22 +618,45 @@ struct PolyData2d {
   unsigned int startIdx() const { return _startIdx; }
 
   void beginPoly() {
-    assert(_ended);
+    CHECK(_ended);
     _ended = false;
 
     if (!polyDrawInfo.size()) {
-      // polyDrawInfo.emplace_back(0, _startIdx + triangulation_indices.size(), lineDrawInfo.back().firstIndex);
       polyDrawInfo.emplace_back(0, _startIdx, _startVert);
     }
   }
 
+  void addTriangle(unsigned int idx0, unsigned int idx1, unsigned int idx2) {
+    triangulation_indices.push_back(_startLineIdx + idx0);
+    triangulation_indices.push_back(_startLineIdx + idx1);
+    triangulation_indices.push_back(_startLineIdx + idx2);
+
+    polyDrawInfo.back().count += 3;
+  }
+
   void endPoly() {
-    assert(!_ended);
+    CHECK(!_ended);
     _ended = true;
   }
 
+  void popPoly() {
+    CHECK(_ended);
+    CHECK(polyDrawInfo.size());
+    CHECK(triangulation_indices.size() && triangulation_indices.size() % 3 == 0);
+    auto itr = triangulation_indices.end() - 1;
+    for (; itr >= triangulation_indices.begin(); itr -= 3) {
+      if (*itr < _startLineIdx) {
+        break;
+      }
+    }
+    itr++;
+    auto count = triangulation_indices.end() - itr;
+    triangulation_indices.erase(itr, triangulation_indices.end());
+    polyDrawInfo.back().count -= count;
+  }
+
   void beginLine() {
-    assert(_ended);
+    CHECK(_ended);
     _ended = false;
 
     if (!lineDrawInfo.size()) {
@@ -650,7 +673,7 @@ struct PolyData2d {
     _startLineIdx = numVerts();
   }
 
-  void addLinePoint(const std::shared_ptr<p2t::Point>& vertPtr) {
+  void addLinePoint(const p2t::Point* vertPtr) {
     _addPoint(vertPtr->x, vertPtr->y);
     lineDrawInfo.back().count++;
   }
@@ -670,11 +693,15 @@ struct PolyData2d {
     _ended = true;
   }
 
-  void addTriangle(unsigned int idx0, unsigned int idx1, unsigned int idx2) {
-    triangulation_indices.push_back(_startLineIdx + idx0);
-    triangulation_indices.push_back(_startLineIdx + idx1);
-    triangulation_indices.push_back(_startLineIdx + idx2);
-    polyDrawInfo.back().count += 3;
+  void popLine() {
+    CHECK(_ended);
+    CHECK(lineDrawInfo.size());
+    auto count = lineDrawInfo.back().count;
+    CHECK_LE(count * 2, coords.size());
+    auto itr = coords.end();
+    itr -= count * 2;
+    coords.erase(itr, coords.end());
+    lineDrawInfo.pop_back();
   }
 
  private:
@@ -715,7 +742,12 @@ class Importer : public DataStreamSink {
   void readVerticesFromGDAL(const std::string& fileName,
                             std::vector<PolyData2d>& polys,
                             std::pair<std::map<std::string, size_t>, std::vector<std::vector<std::string>>>& metadata);
-  void readVerticesFromGDALGeometryZ(const std::string& fileName, OGRPolygon* poPolygon, PolyData2d& poly, bool hasZ);
+  void readVerticesFromGDALGeometryZ(const std::string& fileName,
+                                     OGRPolygon* poPolygon,
+                                     PolyData2d& poly,
+                                     const bool hasZ,
+                                     const ssize_t featureIdx,
+                                     const ssize_t multipolyIdx);
   void initGDAL();
   std::string import_id;
   size_t file_size;

@@ -92,7 +92,6 @@ void Sweep::EdgeEvent(SweepContext& tcx, Edge* edge, Node* node)
 {
   tcx.edge_event.constrained_edge = edge;
   tcx.edge_event.right = (edge->p->x > edge->q->x);
-
   if (IsEdgeSideOfTriangle(*node->triangle, *edge->p, *edge->q)) {
     return;
   }
@@ -106,11 +105,18 @@ void Sweep::EdgeEvent(SweepContext& tcx, Edge* edge, Node* node)
 
 void Sweep::EdgeEvent(SweepContext& tcx, Point& ep, Point& eq, Triangle* triangle, Point& point)
 {
+  if (!triangle) {
+    throw std::runtime_error("Undefined triangle");
+  }
+
   if (IsEdgeSideOfTriangle(*triangle, ep, eq)) {
     return;
   }
 
   Point* p1 = triangle->PointCCW(point);
+  if (!p1) {
+    throw std::runtime_error("Undefined CCW point");
+  }
   Orientation o1 = Orient2d(eq, *p1, ep);
   if (o1 == COLLINEAR) {
     if( triangle->Contains(&eq, p1)) {
@@ -119,6 +125,11 @@ void Sweep::EdgeEvent(SweepContext& tcx, Point& ep, Point& eq, Triangle* triangl
       // not change the given constraint and just keep a variable for the new constraint
       tcx.edge_event.constrained_edge->q = p1;
       triangle = &triangle->NeighborAcross(point);
+      if (!triangle) {
+        throw std::runtime_error("EdgeEvent - could not find a triangle neighbor across point " +
+                                 std::string(point) + " for a COLLINEAR orientation between points " +
+                                 std::string(eq) + ", " + std::string(*p1) + ", & " + std::string(ep));
+      }
       EdgeEvent( tcx, ep, *p1, triangle, *p1 );
     } else {
       throw std::runtime_error("EdgeEvent - collinear points not supported");
@@ -127,6 +138,9 @@ void Sweep::EdgeEvent(SweepContext& tcx, Point& ep, Point& eq, Triangle* triangl
   }
 
   Point* p2 = triangle->PointCW(point);
+  if (!p2) {
+    throw std::runtime_error("Undefined CW point");
+  }
   Orientation o2 = Orient2d(eq, *p2, ep);
   if (o2 == COLLINEAR) {
     if( triangle->Contains(&eq, p2)) {
@@ -135,6 +149,11 @@ void Sweep::EdgeEvent(SweepContext& tcx, Point& ep, Point& eq, Triangle* triangl
       // not change the given constraint and just keep a variable for the new constraint
       tcx.edge_event.constrained_edge->q = p2;
       triangle = &triangle->NeighborAcross(point);
+      if (!triangle) {
+        throw std::runtime_error("EdgeEvent - could not find a triangle neighbor across point " +
+                                 std::string(point) + " for a COLLINEAR orientation between points " +
+                                 std::string(eq) + ", " + std::string(*p2) + ", & " + std::string(ep));
+      }
       EdgeEvent( tcx, ep, *p2, triangle, *p2 );
     } else {
       throw std::runtime_error("EdgeEvent - collinear points not supported");
@@ -151,7 +170,10 @@ void Sweep::EdgeEvent(SweepContext& tcx, Point& ep, Point& eq, Triangle* triangl
       triangle = triangle->NeighborCW(point);
     }
     if (!triangle) {
-      throw std::runtime_error("EdgeEvent - invalid triangle neighbor");
+        throw std::runtime_error("EdgeEvent - could not find a triangle neighbor for point" +
+                                 std::string(point) + " for a " + (o1 == CW ? "CCW" : "CW") +
+                                 " orientation between points " + std::string(eq) + ", " +
+                                 std::string(*p2) + ", & " + std::string(ep));
     }
     EdgeEvent(tcx, ep, eq, triangle, point);
   } else {

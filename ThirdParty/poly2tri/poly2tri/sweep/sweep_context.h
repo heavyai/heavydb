@@ -32,9 +32,9 @@
 #ifndef SWEEP_CONTEXT_H
 #define SWEEP_CONTEXT_H
 
+#include <cstddef>
 #include <list>
 #include <vector>
-#include <cstddef>
 
 namespace p2t {
 
@@ -52,7 +52,7 @@ class SweepContext {
 public:
 
 /// Constructor
-SweepContext(std::vector<Point*> polyline);
+SweepContext(const std::vector<Point*>& polyline);
 /// Destructor
 ~SweepContext();
 
@@ -83,7 +83,7 @@ Point* GetPoints();
 
 void RemoveFromMap(Triangle* triangle);
 
-void AddHole(std::vector<Point*> polyline);
+void AddHole(const std::vector<Point*>& polyline);
 
 void AddPoint(Point* point);
 
@@ -147,7 +147,7 @@ Point* tail_;
 Node *af_head_, *af_middle_, *af_tail_;
 
 void InitTriangulation();
-void InitEdges(std::vector<Point*> polyline);
+void InitEdges(const std::vector<Point*>& polyline);
 
 };
 
