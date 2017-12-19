@@ -694,10 +694,7 @@ int32_t StringDictionary::getOrAddImpl(const std::string& str, bool recover) noe
 void StringDictionary::insertInSortedCache(std::string str, int32_t str_id) {
   auto idx = binary_search_cache(str);
   auto itr = sorted_cache.begin();
-  if (!idx->diff) {
-    // should never happen but better safe than sorry!
-    return;
-  }
+  CHECK(idx->diff != 0);
   if (idx->index == 0) {
     if (idx->diff > 0) {
       sorted_cache.emplace(itr, str_id);
