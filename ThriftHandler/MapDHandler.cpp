@@ -24,6 +24,7 @@
 #include "MapDHandler.h"
 #include "DistributedLoader.h"
 #include "MapDServer.h"
+#include "TokenCompletionHints.h"
 #ifdef HAVE_PROFILER
 #include <gperftools/heap-profiler.h>
 #endif  // HAVE_PROFILER
@@ -719,15 +720,44 @@ void MapDHandler::get_completion_hints(std::vector<TCompletionHint>& hints,
                                        const TSessionId& session,
                                        const std::string& sql,
                                        const int cursor) {
+  const auto last_word = find_last_word_from_cursor(sql, cursor < 0 ? sql.size() : cursor);
   const auto session_info = get_session(session);
+  // Get the whitelisted keywords from Calcite. We should probably stop going to Calcite
+  // for completions altogether, especially since we have to honor permissions.
   try {
-    hints = calcite_->getCompletionHints(session_info, sql, cursor);
+    hints = just_whitelisted_keyword_hints(calcite_->getCompletionHints(session_info, sql, cursor));
   } catch (const std::exception& e) {
     TMapDException ex;
     ex.error_msg = "Exception: " + std::string(e.what());
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
+  const auto column_names_by_table = fill_column_names_by_table(session);
+  // Trust the fully qualified columns the most.
+  if (get_qualified_column_hints(hints, last_word, column_names_by_table)) {
+    return;
+  }
+  // Not much information to use, just retrieve all table and column names which match the prefix.
+  get_column_hints(hints, last_word, column_names_by_table);
+  get_table_hints(hints, last_word, column_names_by_table);
+  if (hints.empty()) {
+    hints = get_keyword_hints(last_word);
+  }
+}
+
+std::unordered_map<std::string, std::unordered_set<std::string>> MapDHandler::fill_column_names_by_table(
+    const TSessionId& session) {
+  std::vector<std::string> table_names;
+  get_tables(table_names, session);
+  std::unordered_map<std::string, std::unordered_set<std::string>> column_names_by_table;
+  for (const auto& table_name : table_names) {
+    TTableDetails table_details;
+    get_table_details(table_details, session, table_name);
+    for (const auto& column_type : table_details.row_desc) {
+      column_names_by_table[table_name].emplace(column_type.col_name);
+    }
+  }
+  return column_names_by_table;
 }
 
 void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
