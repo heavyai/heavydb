@@ -543,6 +543,9 @@ int main(int argc, char** argv) {
   LOG(INFO) << " MapD Server Port  " << mapd_parameters.mapd_server_port;
   LOG(INFO) << " MapD Calcite Port  " << mapd_parameters.calcite_port;
 
+  boost::algorithm::trim_if(ldapMetadata.distinguishedName, boost::is_any_of("\"'"));
+  boost::algorithm::trim_if(ldapMetadata.uri, boost::is_any_of("\"'"));
+
   // rudimetary signal handling to try to guarantee the logging gets flushed to files
   // on shutdown
   register_signal_handler();
