@@ -20,6 +20,7 @@
 #include "GroupByAndAggregate.h"
 #include "Execute.h"
 #include "QueryPhysicalInputsCollector.h"
+#include "InputDescriptors.h"
 
 #include <cfenv>
 
@@ -63,6 +64,92 @@
 DEF_OPERATOR(ExpressionRange::operator+, +)
 DEF_OPERATOR(ExpressionRange::operator-, -)
 DEF_OPERATOR(ExpressionRange::operator*, *)
+
+void apply_fp_qual(const Datum const_datum,
+                   const SQLTypes const_type,
+                   const SQLOps sql_op,
+                   ExpressionRange& qual_range) {
+  double const_val = get_value_from_datum<double>(const_datum, const_type);
+  switch (sql_op) {
+    case kGT:
+    case kGE:
+      qual_range.setFpMin(MAX(qual_range.getFpMin(), const_val));
+      break;
+    case kLT:
+    case kLE:
+      qual_range.setFpMax(MIN(qual_range.getFpMax(), const_val));
+      break;
+    case kEQ:
+      qual_range.setFpMin(MAX(qual_range.getFpMin(), const_val));
+      qual_range.setFpMax(MIN(qual_range.getFpMax(), const_val));
+      break;
+    default:  // there may be other operators, but don't do anything with them
+      break;
+  }
+}
+void apply_int_qual(const Datum const_datum,
+                    const SQLTypes const_type,
+                    const SQLOps sql_op,
+                    ExpressionRange& qual_range) {
+  int64_t const_val = get_value_from_datum<int64_t>(const_datum, const_type);
+  switch (sql_op) {
+    case kGT:
+      qual_range.setIntMin(MAX(qual_range.getIntMin(), const_val + 1));
+      break;
+    case kGE:
+      qual_range.setIntMin(MAX(qual_range.getIntMin(), const_val));
+      break;
+    case kLT:
+      qual_range.setIntMax(MIN(qual_range.getIntMax(), const_val - 1));
+      break;
+    case kLE:
+      qual_range.setIntMax(MIN(qual_range.getIntMax(), const_val));
+      break;
+    case kEQ:
+      qual_range.setIntMin(MAX(qual_range.getIntMin(), const_val));
+      qual_range.setIntMax(MIN(qual_range.getIntMax(), const_val));
+      break;
+    default:  // there may be other operators, but don't do anything with them
+      break;
+  }
+}
+
+ExpressionRange apply_simple_quals(const Analyzer::ColumnVar* col_expr,
+                                   const ExpressionRange& col_range,
+                                   const boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
+  if (!simple_quals) {
+    return col_range;
+  }
+  ExpressionRange qual_range(col_range);
+  for (auto const& itr : simple_quals.get()) {
+    auto qual_bin_oper = dynamic_cast<Analyzer::BinOper*>(itr.get());
+    if (!qual_bin_oper) {
+      continue;
+    }
+    const Analyzer::Expr* left_operand = qual_bin_oper->get_left_operand();
+    auto qual_col = dynamic_cast<const Analyzer::ColumnVar*>(left_operand);
+    if (!qual_col) {
+      continue;
+    }
+    if (qual_col->get_table_id() != col_expr->get_table_id() ||
+        qual_col->get_column_id() != col_expr->get_column_id()) {
+      continue;
+    }
+    const Analyzer::Expr* right_operand = qual_bin_oper->get_right_operand();
+    auto qual_const = dynamic_cast<const Analyzer::Constant*>(right_operand);
+    if (!qual_const) {
+      continue;
+    }
+    if (qual_range.getType() == ExpressionRangeType::Float || qual_range.getType() == ExpressionRangeType::Double) {
+      apply_fp_qual(
+          qual_const->get_constval(), qual_const->get_type_info().get_type(), qual_bin_oper->get_optype(), qual_range);
+    } else {
+      apply_int_qual(
+          qual_const->get_constval(), qual_const->get_type_info().get_type(), qual_bin_oper->get_optype(), qual_range);
+    }
+  }
+  return qual_range;
+}
 
 ExpressionRange ExpressionRange::operator/(const ExpressionRange& other) const {
   if (type_ != ExpressionRangeType::Integer || other.type_ != ExpressionRangeType::Integer) {
@@ -134,13 +221,15 @@ bool ExpressionRange::operator==(const ExpressionRange& other) const {
 
 ExpressionRange getExpressionRange(const Analyzer::BinOper* expr,
                                    const std::vector<InputTableInfo>& query_infos,
-                                   const Executor*);
+                                   const Executor*,
+                                   boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals);
 
 ExpressionRange getExpressionRange(const Analyzer::Constant* expr);
 
 ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
                                    const std::vector<InputTableInfo>& query_infos,
-                                   const Executor* executor);
+                                   const Executor* executor,
+                                   boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals);
 
 ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr);
 
@@ -150,22 +239,26 @@ ExpressionRange getExpressionRange(const Analyzer::CaseExpr* case_expr,
 
 ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
                                    const std::vector<InputTableInfo>& query_infos,
-                                   const Executor*);
+                                   const Executor*,
+                                   boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals);
 
 ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
                                    const std::vector<InputTableInfo>& query_infos,
-                                   const Executor*);
+                                   const Executor*,
+                                   boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals);
 
 ExpressionRange getExpressionRange(const Analyzer::DatetruncExpr* datetrunc_expr,
                                    const std::vector<InputTableInfo>& query_infos,
-                                   const Executor* executor);
+                                   const Executor* executor,
+                                   boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals);
 
 ExpressionRange getExpressionRange(const Analyzer::Expr* expr,
                                    const std::vector<InputTableInfo>& query_infos,
-                                   const Executor* executor) {
+                                   const Executor* executor,
+                                   boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
   auto bin_oper_expr = dynamic_cast<const Analyzer::BinOper*>(expr);
   if (bin_oper_expr) {
-    return getExpressionRange(bin_oper_expr, query_infos, executor);
+    return getExpressionRange(bin_oper_expr, query_infos, executor, simple_quals);
   }
   auto constant_expr = dynamic_cast<const Analyzer::Constant*>(expr);
   if (constant_expr) {
@@ -173,7 +266,7 @@ ExpressionRange getExpressionRange(const Analyzer::Expr* expr,
   }
   auto column_var_expr = dynamic_cast<const Analyzer::ColumnVar*>(expr);
   if (column_var_expr) {
-    return getExpressionRange(column_var_expr, query_infos, executor);
+    return getExpressionRange(column_var_expr, query_infos, executor, simple_quals);
   }
   auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
   if (like_expr) {
@@ -185,15 +278,15 @@ ExpressionRange getExpressionRange(const Analyzer::Expr* expr,
   }
   auto u_expr = dynamic_cast<const Analyzer::UOper*>(expr);
   if (u_expr) {
-    return getExpressionRange(u_expr, query_infos, executor);
+    return getExpressionRange(u_expr, query_infos, executor, simple_quals);
   }
   auto extract_expr = dynamic_cast<const Analyzer::ExtractExpr*>(expr);
   if (extract_expr) {
-    return getExpressionRange(extract_expr, query_infos, executor);
+    return getExpressionRange(extract_expr, query_infos, executor, simple_quals);
   }
   auto datetrunc_expr = dynamic_cast<const Analyzer::DatetruncExpr*>(expr);
   if (datetrunc_expr) {
-    return getExpressionRange(datetrunc_expr, query_infos, executor);
+    return getExpressionRange(datetrunc_expr, query_infos, executor, simple_quals);
   }
   return ExpressionRange::makeInvalidRange();
 }
@@ -208,9 +301,10 @@ int64_t scale_up_interval_endpoint(const int64_t endpoint, const SQLTypeInfo& ti
 
 ExpressionRange getExpressionRange(const Analyzer::BinOper* expr,
                                    const std::vector<InputTableInfo>& query_infos,
-                                   const Executor* executor) {
-  const auto& lhs = getExpressionRange(expr->get_left_operand(), query_infos, executor);
-  const auto& rhs = getExpressionRange(expr->get_right_operand(), query_infos, executor);
+                                   const Executor* executor,
+                                   boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
+  const auto& lhs = getExpressionRange(expr->get_left_operand(), query_infos, executor, simple_quals);
+  const auto& rhs = getExpressionRange(expr->get_right_operand(), query_infos, executor, simple_quals);
   switch (expr->get_optype()) {
     case kPLUS:
       return lhs + rhs;
@@ -434,7 +528,8 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
 
 ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
                                    const std::vector<InputTableInfo>& query_infos,
-                                   const Executor* executor) {
+                                   const Executor* executor,
+                                   boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
   const int rte_idx = col_expr->get_rte_idx();
   CHECK_GE(rte_idx, 0);
   CHECK_LT(static_cast<size_t>(rte_idx), query_infos.size());
@@ -444,7 +539,7 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
     if (is_outer_join_proj) {
       col_range.setHasNulls();
     }
-    return col_range;
+    return apply_simple_quals(col_expr, col_range, simple_quals);
   }
   return getLeafColumnRange(col_expr, query_infos, executor, is_outer_join_proj);
 }
@@ -501,9 +596,10 @@ ExpressionRange fpRangeFromDecimal(const ExpressionRange& arg_range,
 
 ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
                                    const std::vector<InputTableInfo>& query_infos,
-                                   const Executor* executor) {
+                                   const Executor* executor,
+                                   boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
   if (u_expr->get_optype() == kUNNEST) {
-    return getExpressionRange(u_expr->get_operand(), query_infos, executor);
+    return getExpressionRange(u_expr->get_operand(), query_infos, executor, simple_quals);
   }
   if (u_expr->get_optype() != kCAST) {
     return ExpressionRange::makeInvalidRange();
@@ -518,12 +614,12 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
     const int64_t v = sdp->getIdOfString(*const_operand->get_constval().stringval);
     return ExpressionRange::makeIntRange(v, v, 0, false);
   }
-  const auto arg_range = getExpressionRange(u_expr->get_operand(), query_infos, executor);
+  const auto arg_range = getExpressionRange(u_expr->get_operand(), query_infos, executor, simple_quals);
   const auto& arg_ti = u_expr->get_operand()->get_type_info();
   // Timestamp to date cast is generated like a date trunc on day in the executor.
   if (arg_ti.get_type() == kTIMESTAMP && ti.get_type() == kDATE) {
     const auto dt_expr = makeExpr<Analyzer::DatetruncExpr>(arg_ti, false, dtDAY, u_expr->get_own_operand());
-    return getExpressionRange(dt_expr.get(), query_infos, executor);
+    return getExpressionRange(dt_expr.get(), query_infos, executor, simple_quals);
   }
   switch (arg_range.getType()) {
     case ExpressionRangeType::Float:
@@ -575,9 +671,10 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
 
 ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
                                    const std::vector<InputTableInfo>& query_infos,
-                                   const Executor* executor) {
+                                   const Executor* executor,
+                                   boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
   const int32_t extract_field{extract_expr->get_field()};
-  const auto arg_range = getExpressionRange(extract_expr->get_from_expr(), query_infos, executor);
+  const auto arg_range = getExpressionRange(extract_expr->get_from_expr(), query_infos, executor, simple_quals);
   const bool has_nulls = arg_range.getType() == ExpressionRangeType::Invalid || arg_range.hasNulls();
   switch (extract_field) {
     case kYEAR: {
@@ -620,8 +717,9 @@ ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
 
 ExpressionRange getExpressionRange(const Analyzer::DatetruncExpr* datetrunc_expr,
                                    const std::vector<InputTableInfo>& query_infos,
-                                   const Executor* executor) {
-  const auto arg_range = getExpressionRange(datetrunc_expr->get_from_expr(), query_infos, executor);
+                                   const Executor* executor,
+                                   boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
+  const auto arg_range = getExpressionRange(datetrunc_expr->get_from_expr(), query_infos, executor, simple_quals);
   if (arg_range.getType() == ExpressionRangeType::Invalid) {
     return ExpressionRange::makeInvalidRange();
   }

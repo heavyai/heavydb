@@ -1663,8 +1663,10 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const An
   }
   const int64_t guessed_range_max{255};  // TODO(alex): replace with educated guess
 
-  const auto expr_range =
-      getExpressionRange(redirect_expr(expr, ra_exe_unit_.input_col_descs).get(), query_infos_, executor_);
+  const auto expr_range = getExpressionRange(redirect_expr(expr, ra_exe_unit_.input_col_descs).get(),
+                                             query_infos_,
+                                             executor_,
+                                             boost::make_optional(ra_exe_unit_.simple_quals));
   switch (expr_range.getType()) {
     case ExpressionRangeType::Integer:
       return {GroupByColRangeType::OneColKnownRange,

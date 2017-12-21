@@ -1,5 +1,4 @@
-/*
- * Copyright 2017 MapD Technologies, Inc.
+/* * Copyright 2017 MapD Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +17,10 @@
 #define QUERYENGINE_EXPRESSIONRANGE_H
 
 #include "../Analyzer/Analyzer.h"
+#include "../Shared/unreachable.h"
 
-#include <boost/multiprecision/cpp_int.hpp>
-#include <deque>
+#include <boost/multiprecision/cpp_int.hpp>  //#include <boost/none.hpp>
+#include <boost/optional.hpp>
 
 typedef boost::multiprecision::number<
     boost::multiprecision::
@@ -31,11 +31,16 @@ enum class ExpressionRangeType { Invalid, Integer, Float, Double };
 
 class ExpressionRange;
 
+class InputColDescriptor;
+
 template <typename T>
 T getMin(const ExpressionRange& other);
 
 template <typename T>
 T getMax(const ExpressionRange& other);
+
+template <typename T>
+T get_value_from_datum(const Datum datum, const SQLTypes type_info) noexcept;
 
 class ExpressionRange {
  public:
@@ -74,6 +79,26 @@ class ExpressionRange {
   double getFpMax() const {
     CHECK(type_ == ExpressionRangeType::Float || type_ == ExpressionRangeType::Double);
     return fp_max_;
+  }
+
+  void setIntMin(const int64_t int_min) {
+    CHECK(ExpressionRangeType::Integer == type_);
+    int_min_ = int_min;
+  }
+
+  void setIntMax(const int64_t int_max) {
+    CHECK(ExpressionRangeType::Integer == type_);
+    int_max_ = int_max;
+  }
+
+  void setFpMin(const double fp_min) {
+    CHECK(type_ == ExpressionRangeType::Float || type_ == ExpressionRangeType::Double);
+    fp_min_ = fp_min;
+  }
+
+  void setFpMax(const double fp_max) {
+    CHECK(type_ == ExpressionRangeType::Float || type_ == ExpressionRangeType::Double);
+    fp_max_ = fp_max;
   }
 
   ExpressionRangeType getType() const { return type_; }
@@ -191,6 +216,56 @@ inline double getMax<double>(const ExpressionRange& e) {
   return e.getFpMax();
 }
 
+template <>
+inline int64_t get_value_from_datum(const Datum datum, const SQLTypes type_info) noexcept {
+  switch (type_info) {
+    case kSMALLINT:
+      return datum.smallintval;
+    case kINT:
+      return datum.intval;
+    case kBIGINT:
+      return datum.bigintval;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      return static_cast<int64_t>(datum.timeval);
+    case kNUMERIC:
+    case kDECIMAL: {
+      return datum.bigintval;
+      break;
+    }
+    default:
+      UNREACHABLE();
+  }
+  UNREACHABLE();
+}
+
+template <>
+inline double get_value_from_datum(const Datum datum, const SQLTypes type_info) noexcept {
+  switch (type_info) {
+    case kFLOAT:
+      return datum.floatval;
+    case kDOUBLE:
+      return datum.doubleval;
+    default:
+      UNREACHABLE();
+  }
+  UNREACHABLE();
+}
+
+void apply_int_qual(const Datum const_datum,
+                    const SQLTypes const_type,
+                    const SQLOps sql_op,
+                    ExpressionRange& qual_range);
+void apply_fp_qual(const Datum const_datum,
+                   const SQLTypes const_type,
+                   const SQLOps sql_op,
+                   ExpressionRange& qual_range);
+
+ExpressionRange apply_simple_quals(const Analyzer::ColumnVar*,
+                                   const ExpressionRange&,
+                                   const boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> = boost::none);
+
 class Executor;
 struct InputTableInfo;
 
@@ -199,6 +274,9 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar*,
                                    const Executor*,
                                    const bool is_outer_join_proj);
 
-ExpressionRange getExpressionRange(const Analyzer::Expr*, const std::vector<InputTableInfo>&, const Executor*);
+ExpressionRange getExpressionRange(const Analyzer::Expr*,
+                                   const std::vector<InputTableInfo>&,
+                                   const Executor*,
+                                   boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> = boost::none);
 
 #endif  // QUERYENGINE_EXPRESSIONRANGE_H
