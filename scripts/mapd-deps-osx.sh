@@ -3,6 +3,8 @@
 set -e
 set -x
 
+SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 # install homebrew
 if ! hash brew &> /dev/null; then
   ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
@@ -15,7 +17,16 @@ fi
 brew install cmake
 brew install gflags
 brew install glog
-brew install thrift
+
+#brew install thrift
+#! due to recent upgrade of thrift to 0.11.0 by homebrew
+# existing core java code fails build with 0.11.0
+# need to build thrift from the 0.10.0 source code that 
+# is found in brew cache. !! download from apache thrift
+# project is not accepted by homebrew so it doesnt work! 
+brew install -s $SCRIPTS_DIR/../ThirdParty/Thrift/thrift.rb
+brew switch thrift 0.10.0
+
 brew install cryptopp
 brew install llvm@4
 brew install folly
