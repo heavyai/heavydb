@@ -47,6 +47,8 @@
 #include <boost/archive/iterators/transform_width.hpp>
 #include <boost/algorithm/string.hpp>
 
+#include <boost/regex.hpp>
+
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "Shared/checked_alloc.h"
 #include "gen-cpp/MapD.h"
@@ -299,6 +301,37 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
   return true;
 }
 
+namespace {
+struct DoNothing {
+  template <typename... T>
+  void operator()(T&&... t) {}
+};
+}
+
+template <ThriftService THRIFT_SERVICE, typename ON_SUCCESS_LAMBDA = DoNothing>
+void thrift_op(ClientContext& context, ON_SUCCESS_LAMBDA success_op = ON_SUCCESS_LAMBDA(), int const try_count = 1) {
+  if (thrift_with_retry(THRIFT_SERVICE, context, nullptr, try_count))
+    success_op(context);
+}
+
+template <ThriftService THRIFT_SERVICE, typename ON_SUCCESS_LAMBDA = DoNothing>
+void thrift_op(ClientContext& context,
+               char const* arg,
+               ON_SUCCESS_LAMBDA success_op = ON_SUCCESS_LAMBDA(),
+               int const try_count = 1) {
+  if (thrift_with_retry(THRIFT_SERVICE, context, arg, try_count))
+    success_op(context);
+}
+
+template <ThriftService SERVICE_TYPE, typename DETAIL_PROCESSOR>
+void for_all_return_names(ClientContext& context, DETAIL_PROCESSOR detail_processor) {
+  thrift_op<SERVICE_TYPE>(context, [&](ClientContext& lambda_context) {
+    for (auto name_val : lambda_context.names_return) {
+      detail_processor(name_val, lambda_context);
+    }
+  });
+}
+
 #define LOAD_PATCH_SIZE 10000
 
 void copy_table(char* filepath, char* table, ClientContext& context) {
@@ -532,8 +565,8 @@ void export_dashboard(ClientContext& context, std::string dash_details) {
   std::string filename = split_result[1];
 
   if (thrift_with_retry(kEXPORT_DASHBOARD, context, nullptr)) {
-    std::cout << "Exporting dashboard " << context.view_name << " to file " << filename << std::endl;
-    // create file and dump string to it
+    std::cout << "Exporting dashboard " << context.view_name << " to file " << filename
+              << std::endl;  // create file and dump string to it
     std::ofstream dashfile;
     dashfile.open(filename);
     if (dashfile.is_open()) {
@@ -711,15 +744,52 @@ std::vector<std::string> unserialize_key_metainfo(const std::string key_metainfo
 
 }  // namespace
 
+namespace {
+
+template <typename COMMAND_TYPE, typename REGEX_PRESENT_LAMBDA>
+bool on_valid_regex_present(COMMAND_TYPE const& command_input,
+                            ClientContext& client_context,
+                            REGEX_PRESENT_LAMBDA on_present_op) {
+  std::string cmd_extraction, regex_extraction;
+  std::istringstream input_tokens(command_input);
+  input_tokens >> cmd_extraction >> regex_extraction;
+
+  try {
+    if (regex_extraction.size() > 0) {
+      boost::regex filter_expression(regex_extraction, boost::regex_constants::no_except);
+      if (filter_expression.status() == 0) {  // On successful regex
+        on_present_op(filter_expression, client_context);
+        return true;
+      } else {
+        std::cout << "Malformed regular expression: " << regex_extraction << std::endl;
+      }
+    }
+  } catch (
+      std::runtime_error& re) {  // Handles cases outlined in boost regex bad expressions test case, to avoid blow ups
+    std::cout << "Invalid regular expression: " << regex_extraction << std::endl;
+  }
+
+  return false;
+}
+
+auto yield_default_filter_function(boost::regex& filter_expression) {
+  return [&filter_expression](std::string const& input) -> bool {
+    boost::smatch results;
+    return !boost::regex_match(input, results, filter_expression);
+  };
+}
+}
+
 void process_backslash_commands(char* command, ClientContext& context) {
   switch (command[1]) {
     case 'h':
-      std::cout << "\\u List all users.\n";
+      std::cout << "\\u [regex] List all users, optionally matching regex.\n";
       std::cout << "\\l List all databases.\n";
-      std::cout << "\\t List all tables.\n";
-      std::cout << "\\v List all views.\n";
+      std::cout << "\\t [regex] List all tables, optionally matching regex.\n";
+      std::cout << "\\v [regex] List all views, optionally matching regex.\n";
       std::cout << "\\d <table> List all columns of a table or a view.\n";
       std::cout << "\\c <database> <user> <password>.\n";
+      std::cout << "\\o <table> Return a memory optimized schema based on current data distribution in table";
       std::cout << "\\gpu Execute in GPU mode's.\n";
       std::cout << "\\cpu Execute in CPU mode's.\n";
       std::cout << "\\multiline Set multi-line command line mode.\n";
@@ -730,7 +800,7 @@ void process_backslash_commands(char* command, ClientContext& context) {
       std::cout << "\\memory_summary Print memory usage summary.\n";
       std::cout << "\\version Print MapD Server version.\n";
       std::cout << "\\copy <file path> <table> Copy data from file to table.\n";
-      std::cout << "\\status get status of the server and the leaf nodes.\n";
+      std::cout << "\\status Get status of the server and the leaf nodes.\n";
       std::cout << "\\export_dashboard <dashboard name>,<filename> Exports a dashboard to a file\n";
       std::cout << "\\import_dashboard <dashboard name>,<filename> Imports a dashboard from a file\n";
       std::cout << "\\roles Reports all roles.\n";
@@ -771,14 +841,13 @@ void process_backslash_commands(char* command, ClientContext& context) {
         }
         std::string encoding;
         if (p.col_type.type == TDatumType::STR) {
-          encoding = (p.col_type.encoding == 0 ? " ENCODING NONE"
-                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                     std::to_string(p.col_type.comp_param) + ")");
+          encoding =
+              (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                                 std::to_string(p.col_type.comp_param) + ")");
 
         } else {
-          encoding = (p.col_type.encoding == 0 ? ""
-                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                     std::to_string(p.col_type.comp_param) + ")");
+          encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                          std::to_string(p.col_type.comp_param) + ")");
         }
         std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
                   << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
@@ -881,19 +950,45 @@ void process_backslash_commands(char* command, ClientContext& context) {
       return;
     }
     case 't': {
-      if (thrift_with_retry(kGET_PHYSICAL_TABLES, context, nullptr)) {
-        for (auto p : context.names_return) {
-          std::cout << p << std::endl;
-        }
+      auto did_execute =
+          on_valid_regex_present(command, context, [](boost::regex& filter_expression, ClientContext& context_param) {
+            auto filter_function = yield_default_filter_function(filter_expression);
+            auto result_processor = [filter_function](std::string const& element_name, ClientContext& context_param) {
+              if (!filter_function(element_name)) {
+                std::cout << element_name << '\n';
+              }
+            };
+
+            for_all_return_names<kGET_PHYSICAL_TABLES>(context_param, result_processor);
+          });
+
+      if (!did_execute) {  // Run classic mode instead
+        for_all_return_names<kGET_PHYSICAL_TABLES>(
+            context,
+            [](std::string const& element_name, ClientContext& context_param) { std::cout << element_name << '\n'; });
       }
+      std::cout.flush();
       return;
     }
     case 'v': {
-      if (thrift_with_retry(kGET_VIEWS, context, nullptr)) {
-        for (auto p : context.names_return) {
-          std::cout << p << std::endl;
-        }
+      auto did_execute =
+          on_valid_regex_present(command, context, [](boost::regex& filter_expression, ClientContext& context_param) {
+            auto filter_function = yield_default_filter_function(filter_expression);
+            auto result_processor = [filter_function](std::string const& element_name, ClientContext& context_param) {
+              if (!filter_function(element_name)) {
+                std::cout << element_name << '\n';
+              }
+            };
+
+            for_all_return_names<kGET_VIEWS>(context_param, result_processor);
+          });
+
+      if (!did_execute) {  // Run classic mode instead
+        for_all_return_names<kGET_VIEWS>(context, [](std::string const& element_name, ClientContext& context_param) {
+          std::cout << element_name << '\n';
+        });
       }
+      std::cout.flush();
       return;
     }
     case 'c': {
@@ -920,11 +1015,28 @@ void process_backslash_commands(char* command, ClientContext& context) {
       }
     } break;
     case 'u': {
-      if (thrift_with_retry(kGET_USERS, context, nullptr))
-        for (auto p : context.names_return)
-          std::cout << p << std::endl;
+      auto did_execute =
+          on_valid_regex_present(command, context, [](boost::regex& filter_expression, ClientContext& context_param) {
+            auto filter_function = yield_default_filter_function(filter_expression);
+            auto result_processor = [filter_function](std::string const& user_name, ClientContext& context_param) {
+              if (!filter_function(user_name)) {
+                std::cout << user_name << '\n';
+              }
+            };
+
+            for_all_return_names<kGET_USERS>(context_param, result_processor);
+          });
+
+      if (!did_execute) {
+        for_all_return_names<kGET_USERS>(context, [](std::string const& user_name, ClientContext& context_param) {
+          std::cout << user_name << '\n';
+        });
+      }
+
+      std::cout.flush();
       return;
     }
+
     case 'l': {
       if (thrift_with_retry(kGET_DATABASES, context, nullptr)) {
         std::cout << "Database | Owner" << std::endl;
