@@ -41,11 +41,8 @@ The config file lives at `/mapd-storage/mapd.conf`.
       -p 9092:9092 \
       --name mapd \
       -v /path/to/mapd-storage:/mapd-storage \
-      -v /usr/share/glvnd/egl_vendor.d:/usr/share/glvnd/egl_vendor.d \
       mapd/mapd:v3.0.0
 
 This starts the MapD Core Database inside a container named `mapd`, and exposes the Immerse visualization client on port 9092..
 
 Data will be persisted to the host directory `/path/to/mapd-storage`.
-
-The `/usr/share/glvnd/egl_vendor.d` directory is required for rendering support when using recent NVIDIA GPU drivers.
