@@ -1,5 +1,12 @@
+FROM ubuntu:16.04 AS extract
+
+WORKDIR /mapd/
+COPY mapd-latest-Linux-x86_64.tar.gz /mapd/
+RUN tar xvf mapd-latest-Linux-x86_64.tar.gz --strip-components=1 && \
+    rm -rf mapd-latest-Linux-x86_64.tar.gz
+
 FROM nvidia/cuda:8.0-runtime-ubuntu16.04
-MAINTAINER Andrew Seidl <andrew@mapd.com>
+LABEL maintainer "Andrew Seidl <andrew@mapd.com>"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libldap-2.4-2 \
@@ -10,8 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-get remove --purge -y && \
     rm -rf /var/lib/apt/lists/*
 
-ADD mapd-latest-Linux-x86_64.tar.gz /installs
-RUN rm -f /mapd && ln -s $(ls -dtr /installs/mapd* | head -n 1) /mapd
+COPY --from=extract /mapd /mapd
 
 WORKDIR /mapd
 
