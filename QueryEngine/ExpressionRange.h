@@ -237,7 +237,7 @@ inline int64_t get_value_from_datum(const Datum datum, const SQLTypes type_info)
     default:
       UNREACHABLE();
   }
-  UNREACHABLE();
+  return (int64_t)0;
 }
 
 template <>
@@ -250,7 +250,7 @@ inline double get_value_from_datum(const Datum datum, const SQLTypes type_info) 
     default:
       UNREACHABLE();
   }
-  UNREACHABLE();
+  return 0.0;
 }
 
 void apply_int_qual(const Datum const_datum,
