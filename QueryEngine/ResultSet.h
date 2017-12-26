@@ -288,7 +288,7 @@ class ResultSet {
 
   SQLTypeInfo getColType(const size_t col_idx) const;
 
-  size_t rowCount() const;
+  size_t rowCount(const bool force_parallel = false) const;
 
   void setCachedRowCount(const size_t row_count) const;
 

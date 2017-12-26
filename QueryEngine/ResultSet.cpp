@@ -271,7 +271,7 @@ SQLTypeInfo ResultSet::getColType(const size_t col_idx) const {
   return targets_[col_idx].agg_kind == kAVG ? SQLTypeInfo(kDOUBLE, false) : targets_[col_idx].sql_type;
 }
 
-size_t ResultSet::rowCount() const {
+size_t ResultSet::rowCount(const bool force_parallel) const {
   if (just_explain_) {
     return 1;
   }
@@ -285,7 +285,7 @@ size_t ResultSet::rowCount() const {
   if (!storage_) {
     return 0;
   }
-  if (entryCount() > 100000) {
+  if (force_parallel || entryCount() > 100000) {
     return parallelRowCount();
   }
   std::lock_guard<std::mutex> lock(row_iteration_mutex_);

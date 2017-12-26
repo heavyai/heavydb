@@ -29,11 +29,21 @@ struct IndirectDrawVertexData {
 
   IndirectDrawVertexData() : count(0), instanceCount(0), firstIndex(0), baseInstance(0) {}
 
-  IndirectDrawVertexData(unsigned int count,
-                         unsigned int firstIndex = 0,
-                         unsigned int instanceCount = 1,
-                         unsigned int baseInstance = 0)
+  IndirectDrawVertexData(const unsigned int count,
+                         const unsigned int firstIndex = 0,
+                         const unsigned int instanceCount = 1,
+                         const unsigned int baseInstance = 0)
       : count(count), instanceCount(instanceCount), firstIndex(firstIndex), baseInstance(baseInstance) {}
+
+  void set(const unsigned int inCount,
+           const unsigned int inFirstIndex = 0,
+           const unsigned int inInstanceCount = 1,
+           const unsigned int inBaseInstance = 0) {
+    count = inCount;
+    instanceCount = inInstanceCount;
+    firstIndex = inFirstIndex;
+    baseInstance = inBaseInstance;
+  }
 };
 
 struct IndirectDrawIndexData {
@@ -45,16 +55,28 @@ struct IndirectDrawIndexData {
 
   IndirectDrawIndexData() : count(0), instanceCount(0), firstIndex(0), baseVertex(0), baseInstance(0) {}
 
-  IndirectDrawIndexData(unsigned int count,
-                        unsigned int firstIndex = 0,
-                        unsigned int baseVertex = 0,
-                        unsigned int instanceCount = 1,
-                        unsigned int baseInstance = 0)
+  IndirectDrawIndexData(const unsigned int count,
+                        const unsigned int firstIndex = 0,
+                        const unsigned int baseVertex = 0,
+                        const unsigned int instanceCount = 1,
+                        const unsigned int baseInstance = 0)
       : count(count),
         instanceCount(instanceCount),
         firstIndex(firstIndex),
         baseVertex(baseVertex),
         baseInstance(baseInstance) {}
+
+  void set(const unsigned int inCount,
+           const unsigned int inFirstIndex = 0,
+           const unsigned int inBaseVertex = 0,
+           const unsigned int inInstanceCount = 1,
+           const unsigned int inBaseInstance = 0) {
+    count = inCount;
+    instanceCount = inInstanceCount;
+    firstIndex = inFirstIndex;
+    baseVertex = inBaseVertex;
+    baseInstance = inBaseInstance;
+  }
 };
 
 }  // namespace GL
