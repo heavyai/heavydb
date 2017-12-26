@@ -88,14 +88,17 @@ class StringDictionary {
       std::vector<std::future<std::vector<std::pair<unsigned int, unsigned int>>>>& dictionary_futures);
   bool fillRateIsHigh() const noexcept;
   void increaseCapacity() noexcept;
-  int32_t getOrAddImpl(const std::string& str, bool recover) noexcept;
+  int32_t getOrAddImpl(const std::string& str) noexcept;
   template <class T>
   void getOrAddBulkRemote(const std::vector<std::string>& string_vec, T* encoded_vec);
   int32_t getUnlocked(const std::string& str) const noexcept;
   std::string getStringUnlocked(int32_t string_id) const noexcept;
   std::string getStringChecked(const int string_id) const noexcept;
   std::pair<char*, size_t> getStringBytesChecked(const int string_id) const noexcept;
-  int32_t computeBucket(const std::string& str, const std::vector<int32_t>& data, const bool unique) const noexcept;
+  int32_t computeBucket(const size_t hash,
+                        const std::string str,
+                        const std::vector<int32_t>& data,
+                        const bool unique) const noexcept;
   int32_t computeUniqueBucketWithHash(const size_t hash, const std::vector<int32_t>& data) const noexcept;
   void appendToStorage(const std::string& str) noexcept;
   std::tuple<char*, size_t, bool> getStringFromStorage(const int string_id) const noexcept;
@@ -108,10 +111,6 @@ class StringDictionary {
   void insertInSortedCache(std::string str, int32_t str_id);
   void sortCache();
   compare_cache_value_t* binary_search_cache(const std::string& pattern) const;
-  // To be Deleted
-  void printSortedCache();
-  void printSortedCacheValues();
-  // To be Deleted
 
   size_t str_count_;
   std::vector<int32_t> str_ids_;

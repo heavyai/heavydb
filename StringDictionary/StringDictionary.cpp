@@ -95,18 +95,17 @@ const int32_t StringDictionary::INVALID_STR_ID{-1};
 StringDictionary::StringDictionary(const std::string& folder,
                                    const bool isTemp,
                                    const bool recover,
-                                   size_t initial_capacity) noexcept
-    : str_count_(0),
-      str_ids_(initial_capacity, INVALID_STR_ID),
-      isTemp_(isTemp),
-      payload_fd_(-1),
-      offset_fd_(-1),
-      offset_map_(nullptr),
-      payload_map_(nullptr),
-      offset_file_size_(0),
-      payload_file_size_(0),
-      payload_file_off_(0),
-      strings_cache_(nullptr) {
+                                   size_t initial_capacity) noexcept : str_count_(0),
+                                                                       str_ids_(initial_capacity, INVALID_STR_ID),
+                                                                       isTemp_(isTemp),
+                                                                       payload_fd_(-1),
+                                                                       offset_fd_(-1),
+                                                                       offset_map_(nullptr),
+                                                                       payload_map_(nullptr),
+                                                                       offset_file_size_(0),
+                                                                       payload_file_size_(0),
+                                                                       payload_file_off_(0),
+                                                                       strings_cache_(nullptr) {
   if (!isTemp && folder.empty()) {
     return;
   }
@@ -224,8 +223,7 @@ int32_t StringDictionary::getOrAdd(const std::string& str) noexcept {
     CHECK_EQ(size_t(1), string_ids.size());
     return string_ids.front();
   }
-  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
-  return getOrAddImpl(str, false);
+  return getOrAddImpl(str);
 }
 
 namespace {
@@ -244,10 +242,9 @@ void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, 
     getOrAddBulkRemote(string_vec, encoded_vec);
     return;
   }
-  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   size_t out_idx{0};
   for (const auto& str : string_vec) {
-    const auto string_id = getOrAddImpl(str, false);
+    const auto string_id = getOrAddImpl(str);
     const bool invalid = string_id > max_valid_int_value<T>();
     if (invalid || string_id == inline_int_null_value<int32_t>()) {
       if (invalid) {
@@ -297,7 +294,8 @@ int32_t StringDictionary::getIdOfString(const std::string& str) const {
 }
 
 int32_t StringDictionary::getUnlocked(const std::string& str) const noexcept {
-  auto str_id = str_ids_[computeBucket(str, str_ids_, false)];
+  const size_t hash = rk_hash(str);
+  auto str_id = str_ids_[computeBucket(hash, str, str_ids_, false)];
   return str_id;
 }
 
@@ -658,35 +656,44 @@ void StringDictionary::increaseCapacity() noexcept {
   std::vector<int32_t> new_str_ids(str_ids_.size() * 2, INVALID_STR_ID);
   for (size_t i = 0; i < str_count_; ++i) {
     const auto str = getStringChecked(i);
-    int32_t bucket = computeBucket(str, new_str_ids, true);
+    const size_t hash = rk_hash(str);
+    int32_t bucket = computeBucket(hash, str, new_str_ids, true);
     new_str_ids[bucket] = i;
   }
   str_ids_.swap(new_str_ids);
 }
 
-int32_t StringDictionary::getOrAddImpl(const std::string& str, bool recover) noexcept {
+int32_t StringDictionary::getOrAddImpl(const std::string& str) noexcept {
   // @TODO(wei) treat empty string as NULL for now
   if (str.size() == 0)
     return inline_int_null_value<int32_t>();
   CHECK(str.size() <= MAX_STRLEN);
-  int32_t bucket = computeBucket(str, str_ids_, recover);
+  int32_t bucket;
+  const size_t hash = rk_hash(str);
+  {
+    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+    bucket = computeBucket(hash, str, str_ids_, false);
+    if (str_ids_[bucket] != INVALID_STR_ID) {
+      return str_ids_[bucket];
+    }
+  }
+  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+  // need to recalculate the bucket in case it changed before
+  // we got the lock
+  bucket = computeBucket(hash, str, str_ids_, false);
   if (str_ids_[bucket] == INVALID_STR_ID) {
     if (fillRateIsHigh()) {
       // resize when more than 50% is full
       increaseCapacity();
-      bucket = computeBucket(str, str_ids_, recover);
+      bucket = computeBucket(hash, str, str_ids_, false);
     }
-    if (recover) {
-      payload_file_off_ += str.size();
-    } else {
-      appendToStorage(str);
-    }
+    appendToStorage(str);
     str_ids_[bucket] = static_cast<int32_t>(str_count_);
     ++str_count_;
     invalidateInvertedIndex();
-  }
-  if (!sorted_cache.empty()) {
-    insertInSortedCache(str, str_ids_[bucket]);
+    if (!sorted_cache.empty()) {
+      insertInSortedCache(str, str_ids_[bucket]);
+    }
   }
   return str_ids_[bucket];
 }
@@ -718,10 +725,11 @@ std::pair<char*, size_t> StringDictionary::getStringBytesChecked(const int strin
   return std::make_pair(std::get<0>(str_canary), std::get<1>(str_canary));
 }
 
-int32_t StringDictionary::computeBucket(const std::string& str,
+int32_t StringDictionary::computeBucket(const size_t hash,
+                                        const std::string str,
                                         const std::vector<int32_t>& data,
                                         const bool unique) const noexcept {
-  auto bucket = rk_hash(str) & (data.size() - 1);
+  auto bucket = hash & (data.size() - 1);
   while (true) {
     if (data[bucket] == INVALID_STR_ID) {  // In this case it means the slot is available for use
       break;
