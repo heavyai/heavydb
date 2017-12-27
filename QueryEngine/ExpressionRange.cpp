@@ -129,7 +129,17 @@ ExpressionRange apply_simple_quals(const Analyzer::ColumnVar* col_expr,
     const Analyzer::Expr* left_operand = qual_bin_oper->get_left_operand();
     auto qual_col = dynamic_cast<const Analyzer::ColumnVar*>(left_operand);
     if (!qual_col) {
-      continue;
+      // Check for possibility that column is wrapped in a cast
+      // Presumes that only simple casts (i.e. timestamp to timestamp or int to int) have
+      // been passed through by BinOper::normalize_simple_predicate
+      auto u_expr = dynamic_cast<const Analyzer::UOper*>(left_operand);
+      if (!u_expr) {
+        continue;
+      }
+      qual_col = dynamic_cast<const Analyzer::ColumnVar*>(u_expr->get_operand());
+      if (!qual_col) {
+        continue;
+      }
     }
     if (qual_col->get_table_id() != col_expr->get_table_id() ||
         qual_col->get_column_id() != col_expr->get_column_id()) {

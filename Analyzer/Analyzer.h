@@ -435,6 +435,8 @@ class BinOper : public Expr {
   virtual bool operator==(const Expr& rhs) const;
   virtual void print() const;
   virtual void find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const;
+  static bool simple_predicate_has_simple_cast(const std::shared_ptr<Analyzer::Expr> cast_operand,
+                                               const std::shared_ptr<Analyzer::Expr> const_operand);
 
  private:
   SQLOps optype;           // operator type, e.g., kLT, kAND, kPLUS, etc.

@@ -1027,11 +1027,54 @@ bool expr_is(const std::shared_ptr<Analyzer::Expr>& expr) {
 
 }  // namespace
 
+bool BinOper::simple_predicate_has_simple_cast(const std::shared_ptr<Analyzer::Expr> cast_operand,
+                                               const std::shared_ptr<Analyzer::Expr> const_operand) {
+  if (expr_is<UOper>(cast_operand) && expr_is<Constant>(const_operand)) {
+    auto u_expr = std::dynamic_pointer_cast<UOper>(cast_operand);
+    if (u_expr->get_optype() != kCAST) {
+      return false;
+    }
+    if (!(expr_is<Analyzer::ColumnVar>(u_expr->get_own_operand()) &&
+          !expr_is<Analyzer::Var>(u_expr->get_own_operand()))) {
+      return false;
+    }
+    const auto& ti = u_expr->get_type_info();
+    if (ti.is_time() && u_expr->get_operand()->get_type_info().is_time()) {
+      // Allow casts between time types to pass through
+      return true;
+    } else if (ti.is_integer() && u_expr->get_operand()->get_type_info().is_integer()) {
+      // Allow casts between integer types to pass through
+      return true;
+    }
+  }
+  return false;
+}
+
 std::shared_ptr<Analyzer::Expr> BinOper::normalize_simple_predicate(int& rte_idx) const {
   rte_idx = -1;
-  if (!IS_COMPARISON(optype) || qualifier != kONE)
+  if (!IS_COMPARISON(optype) || qualifier != kONE) {
     return nullptr;
-  if (expr_is<ColumnVar>(left_operand) && !expr_is<Var>(left_operand) && expr_is<Constant>(right_operand)) {
+  }
+  if (expr_is<UOper>(left_operand)) {
+    if (BinOper::simple_predicate_has_simple_cast(left_operand, right_operand)) {
+      auto uo = std::dynamic_pointer_cast<UOper>(left_operand);
+      auto cv = std::dynamic_pointer_cast<ColumnVar>(uo->get_own_operand());
+      rte_idx = cv->get_rte_idx();
+      return this->deep_copy();
+    }
+  } else if (expr_is<UOper>(right_operand)) {
+    if (BinOper::simple_predicate_has_simple_cast(right_operand, left_operand)) {
+      auto uo = std::dynamic_pointer_cast<UOper>(right_operand);
+      auto cv = std::dynamic_pointer_cast<ColumnVar>(uo->get_own_operand());
+      rte_idx = cv->get_rte_idx();
+      return makeExpr<BinOper>(type_info,
+                               contains_agg,
+                               COMMUTE_COMPARISON(optype),
+                               qualifier,
+                               right_operand->deep_copy(),
+                               left_operand->deep_copy());
+    }
+  } else if (expr_is<ColumnVar>(left_operand) && !expr_is<Var>(left_operand) && expr_is<Constant>(right_operand)) {
     auto cv = std::dynamic_pointer_cast<ColumnVar>(left_operand);
     rte_idx = cv->get_rte_idx();
     return this->deep_copy();
