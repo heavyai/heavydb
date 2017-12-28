@@ -706,9 +706,10 @@ std::unordered_set<int> get_available_gpus(const Catalog_Namespace::Catalog& cat
 }
 
 size_t get_context_count(const ExecutorDeviceType device_type, const size_t cpu_count, const size_t gpu_count) {
-  return device_type == ExecutorDeviceType::GPU ? gpu_count : device_type == ExecutorDeviceType::Hybrid
-                                                                  ? std::max(static_cast<size_t>(cpu_count), gpu_count)
-                                                                  : static_cast<size_t>(cpu_count);
+  return device_type == ExecutorDeviceType::GPU
+             ? gpu_count
+             : device_type == ExecutorDeviceType::Hybrid ? std::max(static_cast<size_t>(cpu_count), gpu_count)
+                                                         : static_cast<size_t>(cpu_count);
 }
 
 std::string get_table_name(const InputDescriptor& input_desc, const Catalog_Namespace::Catalog& cat) {
@@ -2595,9 +2596,19 @@ std::pair<bool, int64_t> Executor::skipFragment(const InputDescriptor& table_des
       return {false, -1};
     }
     const auto lhs = comp_expr->get_left_operand();
-    const auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(lhs);
+    auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(lhs);
     if (!lhs_col || !lhs_col->get_table_id() || lhs_col->get_rte_idx()) {
-      continue;
+      // See if lhs is a simple cast that was allowed through normalize_simple_predicate
+      auto lhs_uexpr = dynamic_cast<const Analyzer::UOper*>(lhs);
+      if (lhs_uexpr) {
+        CHECK(lhs_uexpr->get_optype() == kCAST);  // We should have only been passed a cast expression
+        lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(lhs_uexpr->get_operand());
+        if (!lhs_col || !lhs_col->get_table_id() || lhs_col->get_rte_idx()) {
+          continue;
+        }
+      } else {
+        continue;
+      }
     }
     const auto rhs = comp_expr->get_right_operand();
     const auto rhs_const = dynamic_cast<const Analyzer::Constant*>(rhs);
