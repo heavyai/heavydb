@@ -83,6 +83,18 @@ class WatchdogException : public std::runtime_error {
 
 class Executor;
 
+inline llvm::BasicBlock* find_BasicBlock_by_name(llvm::Function* function, std::string name) {
+  llvm::Function &func(*function);
+
+  for (llvm::BasicBlock& bb: func) {
+    if (bb.hasName() && bb.getName() == name) {
+      return &bb;
+    }
+  }
+
+  return nullptr;
+}
+
 inline llvm::Value* get_arg_by_name(llvm::Function* func, const std::string& name) {
   auto& arg_list = func->getArgumentList();
   for (auto& arg : arg_list) {
@@ -403,6 +415,17 @@ class Executor {
   std::vector<llvm::Value*> codegenHoistedConstants(const std::vector<const Analyzer::Constant*>&,
                                                     const EncodingType enc_type,
                                                     const int dict_id);
+  std::vector<llvm::Value*> codegenHoistedConstantsInPlace(int64_t offset,
+                                                    const SQLTypeInfo& type_info,
+                                                    llvm::IRBuilder<> *,
+                                                    const EncodingType enc_type,
+                                                    const int dict_id,
+                                                    bool inQueryFunction);
+  std::vector<llvm::Value*> codegenHoistedConstantsInBasicBlock(const Analyzer::Constant*,
+                                                    llvm::IRBuilder<> *,
+                                                    const EncodingType enc_type,
+                                                    const int dict_id,
+                                                    const CompilationOptions&);
   int deviceCount(const ExecutorDeviceType) const;
   std::vector<llvm::Value*> codegen(const Analyzer::CaseExpr*, const CompilationOptions&);
   llvm::Value* codegenCase(const Analyzer::CaseExpr*,
@@ -1234,6 +1257,9 @@ class Executor {
     std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
     const std::vector<InputTableInfo>& query_infos_;
     bool needs_error_check_;
+    int64_t literal_bytes_high_watermark(int device_id) {
+      return literal_bytes_[device_id];
+    }
 
    private:
     template <class T>
