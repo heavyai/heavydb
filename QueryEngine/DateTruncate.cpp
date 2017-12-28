@@ -21,6 +21,8 @@
 #include <glog/logging.h>
 #endif
 
+#include <iostream>
+
 extern "C" NEVER_INLINE DEVICE time_t create_epoch(int year) {
   // Note this is not general purpose
   // it has a final assumption that the year being passed can never be a leap
@@ -65,8 +67,13 @@ extern "C" NEVER_INLINE DEVICE time_t create_epoch(int year) {
  * @brief support the SQL DATE_TRUNC function
  */
 extern "C" NEVER_INLINE DEVICE time_t DateTruncate(DatetruncField field, time_t timeval) {
-  const int month_lengths[2][MONSPERYEAR] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
-                                             {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
+  static const int month_lengths[2][MONSPERYEAR] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
+                                                    {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
+
+  static const uint32_t cumulative_month_epoch_starts[MONSPERYEAR] = {
+      0, 2678400, 5270400, 7948800, 10540800, 13219200, 15897600, 18489600, 21168000, 23760000, 26438400, 29116800};
+  static const uint32_t cumulative_quarter_epoch_starts[4] = {0, 7776000, 15638400, 23587200};
+  static const uint32_t cumulative_quarter_epoch_starts_leap_year[4] = {0, 7862400, 15724800, 23673600};
   switch (field) {
     case dtMICROSECOND:
     case dtMILLISECOND:
@@ -107,6 +114,60 @@ extern "C" NEVER_INLINE DEVICE time_t DateTruncate(DatetruncField field, time_t 
         day -= SECSPERDAY;
       int dow = extract_dow(&day);
       return day - (dow * SECSPERDAY);
+    }
+    case dtMONTH: {
+      if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
+        uint32_t seconds_march_1900 = (int64_t)(timeval) + EPOCH_OFFSET_YEAR_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900;
+        uint32_t seconds_past_4year_period = seconds_march_1900 % SECONDS_PER_4_YEAR_CYCLE;
+        uint32_t four_year_period_seconds = (seconds_march_1900 / SECONDS_PER_4_YEAR_CYCLE) * SECONDS_PER_4_YEAR_CYCLE;
+        uint32_t year_seconds_past_4year_period =
+            (seconds_past_4year_period / SECONDS_PER_NON_LEAP_YEAR) * SECONDS_PER_NON_LEAP_YEAR;
+        if (seconds_past_4year_period >= SECONDS_PER_4_YEAR_CYCLE - SECONDS_PER_DAY) {  // if we are in Feb 29th
+          year_seconds_past_4year_period -= SECONDS_PER_NON_LEAP_YEAR;
+        }
+        uint32_t seconds_past_march = seconds_past_4year_period - year_seconds_past_4year_period;
+        uint32_t month =
+            seconds_past_march /
+            (30 * SECONDS_PER_DAY);  // Will make the correct month either be the guessed month or month before
+        month = month <= 11 ? month : 11;
+        if (cumulative_month_epoch_starts[month] > seconds_past_march) {
+          month--;
+        }
+        return four_year_period_seconds + year_seconds_past_4year_period + cumulative_month_epoch_starts[month] -
+               EPOCH_OFFSET_YEAR_1900 + SECONDS_FROM_JAN_1900_TO_MARCH_1900;
+      }
+      break;
+    }
+    case dtQUARTER: {
+      if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
+        uint32_t seconds_1900 = (int64_t)(timeval) + EPOCH_OFFSET_YEAR_1900;
+        uint32_t leap_years = (seconds_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900) / SECONDS_PER_4_YEAR_CYCLE;
+        uint32_t year = (seconds_1900 - leap_years * SECONDS_PER_DAY) / SECONDS_PER_NON_LEAP_YEAR;
+        uint32_t base_year_leap_years = (year - 1) / 4;
+        uint32_t base_year_seconds = year * SECONDS_PER_NON_LEAP_YEAR + base_year_leap_years * SECONDS_PER_DAY;
+        bool is_leap_year = year % 4 == 0 && year != 0;
+        const uint32_t* quarter_offsets =
+            is_leap_year ? cumulative_quarter_epoch_starts_leap_year : cumulative_quarter_epoch_starts;
+        uint32_t partial_year_seconds = seconds_1900 % base_year_seconds;
+        uint32_t quarter = partial_year_seconds / (90 * SECONDS_PER_DAY);
+        quarter = quarter <= 3 ? quarter : 3;
+        if (quarter_offsets[quarter] > partial_year_seconds) {
+          quarter--;
+        }
+        return (int64_t)base_year_seconds + quarter_offsets[quarter] - EPOCH_OFFSET_YEAR_1900;
+      }
+      break;
+    }
+    case dtYEAR: {
+      if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
+        uint32_t seconds_1900 = (int64_t)(timeval) + EPOCH_OFFSET_YEAR_1900;
+        uint32_t leap_years = (seconds_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900) / SECONDS_PER_4_YEAR_CYCLE;
+        uint32_t year = (seconds_1900 - leap_years * SECONDS_PER_DAY) / SECONDS_PER_NON_LEAP_YEAR;
+        uint32_t base_year_leap_years = (year - 1) / 4;
+        return (int64_t)year * SECONDS_PER_NON_LEAP_YEAR + base_year_leap_years * SECONDS_PER_DAY -
+               EPOCH_OFFSET_YEAR_1900;
+      }
+      break;
     }
     default:
       break;

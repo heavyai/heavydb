@@ -97,6 +97,68 @@ __device__
 #ifdef __CUDACC__
 __device__
 #endif
+    int
+    extract_month_fast(const time_t* tim_p) {
+  static const uint32_t cumulative_month_epoch_starts[MONSPERYEAR] = {
+      0, 2678400, 5270400, 7948800, 10540800, 13219200, 15897600, 18489600, 21168000, 23760000, 26438400, 29116800};
+  const time_t lcltime = *tim_p;
+  uint32_t seconds_march_1900 = (int64_t)(lcltime) + EPOCH_OFFSET_YEAR_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900;
+  uint32_t seconds_past_4year_period = seconds_march_1900 % SECONDS_PER_4_YEAR_CYCLE;
+  uint32_t year_seconds_past_4year_period =
+      (seconds_past_4year_period / SECONDS_PER_NON_LEAP_YEAR) * SECONDS_PER_NON_LEAP_YEAR;
+  if (seconds_past_4year_period >= SECONDS_PER_4_YEAR_CYCLE - SECONDS_PER_DAY) {  // if we are in Feb 29th
+    year_seconds_past_4year_period -= SECONDS_PER_NON_LEAP_YEAR;
+  }
+  uint32_t seconds_past_march = seconds_past_4year_period - year_seconds_past_4year_period;
+  uint32_t month = seconds_past_march /
+                   (30 * SECONDS_PER_DAY);  // Will make the correct month either be the guessed month or month before
+  month = month <= 11 ? month : 11;
+  if (cumulative_month_epoch_starts[month] > seconds_past_march) {
+    month--;
+  }
+  return (month + 2) % 12 + 1;
+}
+
+#ifdef __CUDACC__
+__device__
+#endif
+    int
+    extract_quarter_fast(const time_t* tim_p) {
+  static const uint32_t cumulative_quarter_epoch_starts[4] = {0, 7776000, 15638400, 23587200};
+  static const uint32_t cumulative_quarter_epoch_starts_leap_year[4] = {0, 7862400, 15724800, 23673600};
+  const time_t lcltime = *tim_p;
+  uint32_t seconds_1900 = (int64_t)(lcltime) + EPOCH_OFFSET_YEAR_1900;
+  uint32_t leap_years = (seconds_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900) / SECONDS_PER_4_YEAR_CYCLE;
+  uint32_t year = (seconds_1900 - leap_years * SECONDS_PER_DAY) / SECONDS_PER_NON_LEAP_YEAR;
+  uint32_t base_year_leap_years = (year - 1) / 4;
+  uint32_t base_year_seconds = year * SECONDS_PER_NON_LEAP_YEAR + base_year_leap_years * SECONDS_PER_DAY;
+  bool is_leap_year = year % 4 == 0 && year != 0;
+  const uint32_t* quarter_offsets =
+      is_leap_year ? cumulative_quarter_epoch_starts_leap_year : cumulative_quarter_epoch_starts;
+  uint32_t partial_year_seconds = seconds_1900 % base_year_seconds;
+  uint32_t quarter = partial_year_seconds / (90 * SECONDS_PER_DAY);
+  quarter = quarter <= 3 ? quarter : 3;
+  if (quarter_offsets[quarter] > partial_year_seconds) {
+    quarter--;
+  }
+  return quarter + 1;
+}
+
+#ifdef __CUDACC__
+__device__
+#endif
+    int
+    extract_year_fast(const time_t* tim_p) {
+  const time_t lcltime = *tim_p;
+  uint32_t seconds_1900 = (int64_t)(lcltime) + EPOCH_OFFSET_YEAR_1900;
+  uint32_t leap_years = (seconds_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900) / SECONDS_PER_4_YEAR_CYCLE;
+  uint32_t year = (seconds_1900 - leap_years * SECONDS_PER_DAY) / SECONDS_PER_NON_LEAP_YEAR + 1900;
+  return year;
+}
+
+#ifdef __CUDACC__
+__device__
+#endif
     tm*
     gmtime_r_newlib(const time_t* tim_p, tm* res) {
   const int month_lengths[2][MONSPERYEAR] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
@@ -214,6 +276,24 @@ __device__
     case kISODOW: {
       int64_t dow = extract_dow(&timeval);
       return (dow == 0 ? 7 : dow);
+    }
+    case kMONTH: {
+      if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
+        return extract_month_fast(&timeval);
+      }
+      break;
+    }
+    case kQUARTER: {
+      if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
+        return extract_quarter_fast(&timeval);
+      }
+      break;
+    }
+    case kYEAR: {
+      if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
+        return extract_year_fast(&timeval);
+      }
+      break;
     }
     default:
       break;
