@@ -1474,13 +1474,13 @@ TEST(Select, Time) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     // check DATE Formats
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(g_num_rows + g_num_rows / 2,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('1999-09-10' AS DATE) > o;", dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(g_num_rows + g_num_rows / 2,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('10/09/1999' AS DATE) > o;", dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(g_num_rows + g_num_rows / 2,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('10-Sep-99' AS DATE) > o;", dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(g_num_rows + g_num_rows / 2,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('31/Oct/2013' AS DATE) > o;", dt)));
     // check TIME FORMATS
     ASSERT_EQ(2 * g_num_rows,
@@ -1488,7 +1488,7 @@ TEST(Select, Time) {
     ASSERT_EQ(2 * g_num_rows,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('151315' AS TIME) > n;", dt)));
 
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(g_num_rows + g_num_rows / 2,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('1999-09-10' AS DATE) > o;", dt)));
     ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('1999-09-10' AS DATE) <= o;", dt)));
     ASSERT_EQ(2 * g_num_rows,
