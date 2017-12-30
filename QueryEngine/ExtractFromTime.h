@@ -19,6 +19,7 @@
 
 #include <stdint.h>
 #include <time.h>
+#include "../Shared/funcannotations.h"
 
 #define SECSPERMIN 60L
 #define MINSPERHOUR 60L

@@ -67,13 +67,13 @@ extern "C" NEVER_INLINE DEVICE time_t create_epoch(int year) {
  * @brief support the SQL DATE_TRUNC function
  */
 extern "C" NEVER_INLINE DEVICE time_t DateTruncate(DatetruncField field, time_t timeval) {
-  const int month_lengths[2][MONSPERYEAR] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
-                                             {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
+  STATIC_QUAL const int month_lengths[2][MONSPERYEAR] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
+                                                         {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
 
-  const uint32_t cumulative_month_epoch_starts[MONSPERYEAR] = {
+  STATIC_QUAL const uint32_t cumulative_month_epoch_starts[MONSPERYEAR] = {
       0, 2678400, 5270400, 7948800, 10540800, 13219200, 15897600, 18489600, 21168000, 23760000, 26438400, 29116800};
-  const uint32_t cumulative_quarter_epoch_starts[4] = {0, 7776000, 15638400, 23587200};
-  const uint32_t cumulative_quarter_epoch_starts_leap_year[4] = {0, 7862400, 15724800, 23673600};
+  STATIC_QUAL const uint32_t cumulative_quarter_epoch_starts[4] = {0, 7776000, 15638400, 23587200};
+  STATIC_QUAL const uint32_t cumulative_quarter_epoch_starts_leap_year[4] = {0, 7862400, 15724800, 23673600};
   switch (field) {
     case dtMICROSECOND:
     case dtMILLISECOND:
