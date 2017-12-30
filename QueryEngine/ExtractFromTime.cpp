@@ -15,17 +15,13 @@
  */
 
 #include "ExtractFromTime.h"
+#include "../Shared/funcannotations.h"
 
 #ifndef __CUDACC__
 #include <glog/logging.h>
 #endif
 
-extern "C" __attribute__((noinline))
-#ifdef __CUDACC__
-__device__
-#endif
-    int
-    extract_hour(const time_t* tim_p) {
+extern "C" NEVER_INLINE DEVICE int extract_hour(const time_t* tim_p) {
   long days, rem;
   const time_t lcltime = *tim_p;
   days = ((long)lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
@@ -37,11 +33,7 @@ __device__
   return (int)(rem / SECSPERHOUR);
 }
 
-#ifdef __CUDACC__
-__device__
-#endif
-    int
-    extract_minute(const time_t* tim_p) {
+DEVICE int extract_minute(const time_t* tim_p) {
   long days, rem;
   const time_t lcltime = *tim_p;
   days = ((long)lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
@@ -54,20 +46,12 @@ __device__
   return (int)(rem / SECSPERMIN);
 }
 
-#ifdef __CUDACC__
-__device__
-#endif
-    int
-    extract_second(const time_t* tim_p) {
+DEVICE int extract_second(const time_t* tim_p) {
   const time_t lcltime = *tim_p;
   return (int)((long)lcltime % SECSPERMIN);
 }
 
-#ifdef __CUDACC__
-__device__
-#endif
-    int
-    extract_dow(const time_t* tim_p) {
+DEVICE int extract_dow(const time_t* tim_p) {
   long days, rem;
   int weekday;
   const time_t lcltime = *tim_p;
@@ -83,22 +67,14 @@ __device__
   return weekday;
 }
 
-#ifdef __CUDACC__
-__device__
-#endif
-    int
-    extract_quarterday(const time_t* tim_p) {
+DEVICE int extract_quarterday(const time_t* tim_p) {
   long quarterdays;
   const time_t lcltime = *tim_p;
   quarterdays = ((long)lcltime) / SECSPERQUARTERDAY;
   return (int)(quarterdays % 4) + 1;
 }
 
-#ifdef __CUDACC__
-__device__
-#endif
-    int
-    extract_month_fast(const time_t* tim_p) {
+DEVICE int extract_month_fast(const time_t* tim_p) {
   const uint32_t cumulative_month_epoch_starts[MONSPERYEAR] = {
       0, 2678400, 5270400, 7948800, 10540800, 13219200, 15897600, 18489600, 21168000, 23760000, 26438400, 29116800};
   const time_t lcltime = *tim_p;
@@ -119,11 +95,7 @@ __device__
   return (month + 2) % 12 + 1;
 }
 
-#ifdef __CUDACC__
-__device__
-#endif
-    int
-    extract_quarter_fast(const time_t* tim_p) {
+DEVICE int extract_quarter_fast(const time_t* tim_p) {
   const uint32_t cumulative_quarter_epoch_starts[4] = {0, 7776000, 15638400, 23587200};
   const uint32_t cumulative_quarter_epoch_starts_leap_year[4] = {0, 7862400, 15724800, 23673600};
   const time_t lcltime = *tim_p;
@@ -144,11 +116,7 @@ __device__
   return quarter + 1;
 }
 
-#ifdef __CUDACC__
-__device__
-#endif
-    int
-    extract_year_fast(const time_t* tim_p) {
+DEVICE int extract_year_fast(const time_t* tim_p) {
   const time_t lcltime = *tim_p;
   uint32_t seconds_1900 = (int64_t)(lcltime) + EPOCH_OFFSET_YEAR_1900;
   uint32_t leap_years = (seconds_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900) / SECONDS_PER_4_YEAR_CYCLE;
@@ -156,11 +124,7 @@ __device__
   return year;
 }
 
-#ifdef __CUDACC__
-__device__
-#endif
-    tm*
-    gmtime_r_newlib(const time_t* tim_p, tm* res) {
+DEVICE tm* gmtime_r_newlib(const time_t* tim_p, tm* res) {
   const int month_lengths[2][MONSPERYEAR] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
                                              {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
   long days, rem;
@@ -252,13 +216,7 @@ __device__
 /*
  * @brief support the SQL EXTRACT function
  */
-extern "C" __attribute__((noinline))
-#ifdef __CUDACC__
-__device__
-#endif
-    int64_t
-    ExtractFromTime(ExtractField field, time_t timeval) {
-
+extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field, time_t timeval) {
   // We have fast paths for the 5 fields below - do not need to do full gmtime
   switch (field) {
     case kEPOCH:
@@ -337,12 +295,7 @@ __device__
   }
 }
 
-extern "C"
-#ifdef __CUDACC__
-    __device__
-#endif
-        int64_t
-        ExtractFromTimeNullable(ExtractField field, time_t timeval, const int64_t null_val) {
+extern "C" DEVICE int64_t ExtractFromTimeNullable(ExtractField field, time_t timeval, const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }
