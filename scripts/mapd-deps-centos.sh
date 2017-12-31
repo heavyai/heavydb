@@ -31,9 +31,9 @@ download_make_install ftp://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.xz # "" "
 download_make_install ftp://ftp.gnu.org/gnu/automake/automake-1.14.1.tar.xz
 
 # gcc
-VERS=4.9.4
-download ftp://ftp.gnu.org/gnu/gcc/gcc-$VERS/gcc-$VERS.tar.bz2
-extract gcc-$VERS.tar.bz2
+VERS=5.5.0
+download ftp://ftp.gnu.org/gnu/gcc/gcc-$VERS/gcc-$VERS.tar.xz
+extract gcc-$VERS.tar.xz
 pushd gcc-$VERS
 export CPPFLAGS="-I$PREFIX/include"
 ./configure \
