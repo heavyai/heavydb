@@ -99,7 +99,7 @@ __device__
 #endif
     int
     extract_month_fast(const time_t* tim_p) {
-  static const uint32_t cumulative_month_epoch_starts[MONSPERYEAR] = {
+  const uint32_t cumulative_month_epoch_starts[MONSPERYEAR] = {
       0, 2678400, 5270400, 7948800, 10540800, 13219200, 15897600, 18489600, 21168000, 23760000, 26438400, 29116800};
   const time_t lcltime = *tim_p;
   uint32_t seconds_march_1900 = (int64_t)(lcltime) + EPOCH_OFFSET_YEAR_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900;
@@ -124,8 +124,8 @@ __device__
 #endif
     int
     extract_quarter_fast(const time_t* tim_p) {
-  static const uint32_t cumulative_quarter_epoch_starts[4] = {0, 7776000, 15638400, 23587200};
-  static const uint32_t cumulative_quarter_epoch_starts_leap_year[4] = {0, 7862400, 15724800, 23673600};
+  const uint32_t cumulative_quarter_epoch_starts[4] = {0, 7776000, 15638400, 23587200};
+  const uint32_t cumulative_quarter_epoch_starts_leap_year[4] = {0, 7862400, 15724800, 23673600};
   const time_t lcltime = *tim_p;
   uint32_t seconds_1900 = (int64_t)(lcltime) + EPOCH_OFFSET_YEAR_1900;
   uint32_t leap_years = (seconds_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900) / SECONDS_PER_4_YEAR_CYCLE;
