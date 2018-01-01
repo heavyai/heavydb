@@ -24,13 +24,16 @@ JoinLoop::JoinLoop(const JoinLoopKind kind,
                    const JoinType type,
                    const std::function<JoinLoopDomain(const std::vector<llvm::Value*>&)>& iteration_domain_codegen,
                    const std::function<llvm::Value*(const std::vector<llvm::Value*>&)>& outer_condition_match,
+                   const std::function<void(llvm::Value*)>& found_outer_matches,
                    const std::string& name)
     : kind_(kind),
       type_(type),
       iteration_domain_codegen_(iteration_domain_codegen),
       outer_condition_match_(outer_condition_match),
+      found_outer_matches_(found_outer_matches),
       name_(name) {
   CHECK(outer_condition_match == nullptr || type == JoinType::LEFT);
+  CHECK_EQ(static_cast<bool>(found_outer_matches), (type == JoinType::LEFT));
 }
 
 llvm::BasicBlock* JoinLoop::codegen(
@@ -48,6 +51,7 @@ llvm::BasicBlock* JoinLoop::codegen(
   llvm::BasicBlock* entry{nullptr};
   std::vector<llvm::Value*> iterators;
   iterators.push_back(outer_iter);
+  JoinType prev_join_type{JoinType::INVALID};
   for (const auto& join_loop : join_loops) {
     switch (join_loop.kind_) {
       case JoinLoopKind::UpperBound:
@@ -58,12 +62,20 @@ llvm::BasicBlock* JoinLoop::codegen(
           entry = preheader_bb;
         }
         if (prev_comparison_result) {
-          builder.CreateCondBr(prev_comparison_result, preheader_bb, prev_exit_bb);
+          builder.CreateCondBr(prev_comparison_result,
+                               preheader_bb,
+                               prev_join_type == JoinType::LEFT ? prev_iter_advance_bb : prev_exit_bb);
         }
         prev_exit_bb = prev_iter_advance_bb ? prev_iter_advance_bb : exit_bb;
         builder.SetInsertPoint(preheader_bb);
         const auto iteration_counter_ptr =
             builder.CreateAlloca(get_int_type(64, context), nullptr, "ub_iter_counter_ptr_" + join_loop.name_);
+        llvm::Value* found_an_outer_match_ptr{nullptr};
+        if (join_loop.outer_condition_match_) {
+          CHECK(join_loop.type_ == JoinType::LEFT);
+          found_an_outer_match_ptr = builder.CreateAlloca(get_int_type(1, context), nullptr, "found_an_outer_match");
+          builder.CreateStore(ll_bool(false, context), found_an_outer_match_ptr);
+        }
         builder.CreateStore(ll_int(int64_t(0), context), iteration_counter_ptr);
         const auto iteration_domain = join_loop.iteration_domain_codegen_(iterators);
         const auto head_bb = llvm::BasicBlock::Create(context, "ub_iter_head_" + join_loop.name_, parent_func);
@@ -77,18 +89,56 @@ llvm::BasicBlock* JoinLoop::codegen(
           iteration_val = builder.CreateGEP(iteration_domain.values_buffer, iteration_counter);
         }
         iterators.push_back(iteration_val);
-        prev_comparison_result =
+        const auto have_more_inner_rows =
             builder.CreateICmpSLT(iteration_counter,
                                   join_loop.kind_ == JoinLoopKind::UpperBound ? iteration_domain.upper_bound
                                                                               : iteration_domain.element_count);
+        if (join_loop.outer_condition_match_) {
+          const auto current_condition_match_ptr =
+              builder.CreateAlloca(get_int_type(1, context), nullptr, "outer_condition_current_match");
+          builder.CreateStore(ll_bool(false, context), current_condition_match_ptr);
+          const auto evaluate_outer_condition_bb =
+              llvm::BasicBlock::Create(context, "eval_outer_cond_" + join_loop.name_, parent_func);
+          const auto after_evaluate_outer_condition_bb =
+              llvm::BasicBlock::Create(context, "after_eval_outer_cond_" + join_loop.name_, parent_func);
+          builder.CreateCondBr(have_more_inner_rows, evaluate_outer_condition_bb, after_evaluate_outer_condition_bb);
+          builder.SetInsertPoint(evaluate_outer_condition_bb);
+          const auto current_condition_match = join_loop.outer_condition_match_(iterators);
+          builder.CreateStore(current_condition_match, current_condition_match_ptr);
+          const auto updated_condition_match =
+              builder.CreateOr(current_condition_match, builder.CreateLoad(found_an_outer_match_ptr));
+          builder.CreateStore(updated_condition_match, found_an_outer_match_ptr);
+          builder.CreateBr(after_evaluate_outer_condition_bb);
+          builder.SetInsertPoint(after_evaluate_outer_condition_bb);
+          const auto no_matches_found = builder.CreateNot(builder.CreateLoad(found_an_outer_match_ptr));
+          const auto no_more_inner_rows =
+              builder.CreateICmpEQ(iteration_counter,
+                                   join_loop.kind_ == JoinLoopKind::UpperBound ? iteration_domain.upper_bound
+                                                                               : iteration_domain.element_count);
+          prev_comparison_result = builder.CreateOr(builder.CreateLoad(current_condition_match_ptr),
+                                                    builder.CreateAnd(no_matches_found, no_more_inner_rows));
+          join_loop.found_outer_matches_(builder.CreateLoad(current_condition_match_ptr));
+          last_head_bb = after_evaluate_outer_condition_bb;
+        } else {
+          prev_comparison_result = have_more_inner_rows;
+          last_head_bb = head_bb;
+        }
         const auto iter_advance_bb =
             llvm::BasicBlock::Create(context, "ub_iter_advance_" + join_loop.name_, parent_func);
         builder.SetInsertPoint(iter_advance_bb);
-        builder.CreateStore(builder.CreateAdd(iteration_counter, ll_int(int64_t(1), context)), iteration_counter_ptr);
-        builder.CreateBr(head_bb);
+        const auto iteration_counter_next_val = builder.CreateAdd(iteration_counter, ll_int(int64_t(1), context));
+        builder.CreateStore(iteration_counter_next_val, iteration_counter_ptr);
+        if (join_loop.outer_condition_match_) {
+          const auto no_more_inner_rows =
+              builder.CreateICmpSGT(iteration_counter_next_val,
+                                    join_loop.kind_ == JoinLoopKind::UpperBound ? iteration_domain.upper_bound
+                                                                                : iteration_domain.element_count);
+          builder.CreateCondBr(no_more_inner_rows, prev_exit_bb, head_bb);
+        } else {
+          builder.CreateBr(head_bb);
+        }
         builder.SetInsertPoint(head_bb);
         prev_iter_advance_bb = iter_advance_bb;
-        last_head_bb = head_bb;
         break;
       }
       case JoinLoopKind::Singleton: {
@@ -97,22 +147,25 @@ llvm::BasicBlock* JoinLoop::codegen(
           entry = true_bb;
         }
         if (prev_comparison_result) {
-          builder.CreateCondBr(prev_comparison_result, true_bb, prev_exit_bb);
+          builder.CreateCondBr(
+              prev_comparison_result, true_bb, prev_join_type == JoinType::LEFT ? prev_iter_advance_bb : prev_exit_bb);
         }
         prev_exit_bb = prev_iter_advance_bb ? prev_iter_advance_bb : exit_bb;
         builder.SetInsertPoint(true_bb);
         const auto iteration_domain = join_loop.iteration_domain_codegen_(iterators);
         CHECK(!iteration_domain.values_buffer);
         iterators.push_back(iteration_domain.slot_lookup_result);
+        const auto match_found =
+            builder.CreateICmpSGE(iteration_domain.slot_lookup_result, ll_int<int64_t>(0, context));
         switch (join_loop.type_) {
           case JoinType::INNER: {
-            prev_comparison_result =
-                builder.CreateICmpSGE(iteration_domain.slot_lookup_result, ll_int<int64_t>(0, context));
+            prev_comparison_result = match_found;
             break;
           }
           case JoinType::LEFT: {
+            join_loop.found_outer_matches_(match_found);
             // For outer joins, do the iteration regardless of the result of the match.
-            prev_comparison_result = llvm::ConstantInt::get(get_int_type(1, context), true);
+            prev_comparison_result = ll_bool(true, context);
             break;
           }
           default:
@@ -127,10 +180,12 @@ llvm::BasicBlock* JoinLoop::codegen(
       default:
         CHECK(false);
     }
+    prev_join_type = join_loop.type_;
   }
   const auto body_bb = body_codegen(iterators);
   builder.CreateBr(prev_iter_advance_bb);
   builder.SetInsertPoint(last_head_bb);
-  builder.CreateCondBr(prev_comparison_result, body_bb, prev_exit_bb);
+  builder.CreateCondBr(
+      prev_comparison_result, body_bb, prev_join_type == JoinType::LEFT ? prev_iter_advance_bb : prev_exit_bb);
   return entry;
 }

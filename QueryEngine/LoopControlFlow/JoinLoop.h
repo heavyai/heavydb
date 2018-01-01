@@ -55,6 +55,7 @@ class JoinLoop {
            const JoinType,
            const std::function<JoinLoopDomain(const std::vector<llvm::Value*>&)>&,
            const std::function<llvm::Value*(const std::vector<llvm::Value*>&)>&,
+           const std::function<void(llvm::Value*)>&,
            const std::string& name = "");
 
   static llvm::BasicBlock* codegen(
@@ -72,5 +73,8 @@ class JoinLoop {
   const std::function<JoinLoopDomain(const std::vector<llvm::Value*>&)> iteration_domain_codegen_;
   // Callback provided from the executor which generates true iff the outer condition evaluates to true.
   const std::function<llvm::Value*(const std::vector<llvm::Value*>&)> outer_condition_match_;
+  // Callback provided from the executor which receives the IR boolean value which tracks
+  // whether there are matches for the current iteration.
+  const std::function<void(llvm::Value*)> found_outer_matches_;
   const std::string name_;
 };
