@@ -299,7 +299,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(const RexInput*
       CHECK_EQ("rowid", cd->columnName);
       col_ti.set_size(8);
     }
-    if (rte_idx > 0 && join_type_ == JoinType::LEFT) {
+    CHECK_LE(rte_idx, join_types_.size());
+    if (rte_idx > 0 && join_types_[rte_idx - 1] == JoinType::LEFT) {
       col_ti.set_notnull(false);
     }
     return std::make_shared<Analyzer::ColumnVar>(col_ti, table_desc->tableId, cd->columnId, rte_idx);
@@ -309,7 +310,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(const RexInput*
   const size_t col_id = rex_input->getIndex();
   CHECK_LT(col_id, in_metainfo.size());
   auto col_ti = in_metainfo[col_id].get_type_info();
-  if (rte_idx > 0 && join_type_ == JoinType::LEFT) {
+  CHECK_LE(rte_idx, join_types_.size());
+  if (rte_idx > 0 && join_types_[rte_idx - 1] == JoinType::LEFT) {
     col_ti.set_notnull(false);
   }
   return std::make_shared<Analyzer::ColumnVar>(col_ti, -source->getId(), col_id, rte_idx);

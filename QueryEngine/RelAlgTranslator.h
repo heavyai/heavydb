@@ -42,13 +42,13 @@ class RelAlgTranslator {
   RelAlgTranslator(const Catalog_Namespace::Catalog& cat,
                    const Executor* executor,
                    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-                   const JoinType join_type,
+                   const std::vector<JoinType>& join_types,
                    const time_t now,
                    const bool just_explain)
       : cat_(cat),
         executor_(executor),
         input_to_nest_level_(input_to_nest_level),
-        join_type_(join_type),
+        join_types_(join_types),
         now_(now),
         just_explain_(just_explain) {}
 
@@ -113,7 +113,7 @@ class RelAlgTranslator {
   const Catalog_Namespace::Catalog& cat_;
   const Executor* executor_;
   const std::unordered_map<const RelAlgNode*, int> input_to_nest_level_;
-  const JoinType join_type_;
+  const std::vector<JoinType> join_types_;
   time_t now_;
   const bool just_explain_;
 };
