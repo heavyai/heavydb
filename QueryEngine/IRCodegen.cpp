@@ -328,7 +328,6 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
                 : nullptr);
       } else {
-        CHECK(current_level_join_conditions.type != JoinType::LEFT);
         join_loops.emplace_back(JoinLoopKind::Set,
                                 current_level_join_conditions.type,
                                 [this, current_hash_table_idx, level_idx, current_level_hash_table, &co](
@@ -342,7 +341,9 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
                                   return domain;
                                 },
                                 nullptr,
-                                nullptr);
+                                current_level_join_conditions.type == JoinType::LEFT
+                                    ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
+                                    : nullptr);
       }
       ++current_hash_table_idx;
     } else {
