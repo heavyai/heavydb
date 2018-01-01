@@ -48,3 +48,7 @@ template <class T>
 inline llvm::ConstantInt* ll_int(const T v, llvm::LLVMContext& context) {
   return static_cast<llvm::ConstantInt*>(llvm::ConstantInt::get(get_int_type(sizeof(v) * 8, context), v));
 }
+
+inline llvm::ConstantInt* ll_bool(const bool v, llvm::LLVMContext& context) {
+  return static_cast<llvm::ConstantInt*>(llvm::ConstantInt::get(get_int_type(1, context), v));
+}

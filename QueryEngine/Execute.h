@@ -382,9 +382,7 @@ class Executor {
   llvm::ConstantFP* ll_fp(const double v) const {
     return static_cast<llvm::ConstantFP*>(llvm::ConstantFP::get(llvm::Type::getDoubleTy(cgen_state_->context_), v));
   }
-  llvm::ConstantInt* ll_bool(const bool v) const {
-    return static_cast<llvm::ConstantInt*>(llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), v));
-  }
+  llvm::ConstantInt* ll_bool(const bool v) const { return ::ll_bool(v, cgen_state_->context_); }
 
   std::vector<llvm::Value*> codegen(const Analyzer::Expr*, const bool fetch_columns, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::BinOper*, const CompilationOptions&);
