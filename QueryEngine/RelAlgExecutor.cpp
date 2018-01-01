@@ -1984,8 +1984,11 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   CHECK_EQ(size_t(1), compound->inputCount());
   const auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(compound->getInput(0));
   JoinQualsPerNestingLevel left_deep_inner_joins;
+  const auto join_types =
+      left_deep_join ? left_deep_join_types(left_deep_join) : std::vector<JoinType>{get_join_type(compound)};
   if (left_deep_join) {
-    if (g_from_table_reordering) {
+    if (g_from_table_reordering &&
+        std::find(join_types.begin(), join_types.end(), JoinType::LEFT) == join_types.end()) {
       const auto input_permutation = get_node_input_permutation(query_infos);
       input_to_nest_level = get_input_nest_levels(compound, input_permutation);
       std::tie(input_descs, input_col_descs, std::ignore) =
@@ -1994,8 +1997,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
     left_deep_inner_joins = translateLeftDeepJoinFilter(left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
-  const auto join_types =
-      left_deep_join ? left_deep_join_types(left_deep_join) : std::vector<JoinType>{get_join_type(compound)};
   RelAlgTranslator translator(cat_, executor_, input_to_nest_level, join_types, now_, just_explain);
   const auto scalar_sources = translate_scalar_sources(compound, translator);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
@@ -2374,9 +2375,12 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
   const auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(project->getInput(0));
   JoinQualsPerNestingLevel left_deep_inner_joins;
+  const auto join_types =
+      left_deep_join ? left_deep_join_types(left_deep_join) : std::vector<JoinType>{get_join_type(project)};
   if (left_deep_join) {
     const auto query_infos = get_table_infos(input_descs, executor_);
-    if (g_from_table_reordering) {
+    if (g_from_table_reordering &&
+        std::find(join_types.begin(), join_types.end(), JoinType::LEFT) == join_types.end()) {
       const auto input_permutation = get_node_input_permutation(query_infos);
       input_to_nest_level = get_input_nest_levels(project, input_permutation);
       std::tie(input_descs, input_col_descs, std::ignore) =
@@ -2384,8 +2388,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
     }
     left_deep_inner_joins = translateLeftDeepJoinFilter(left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
-  const auto join_types =
-      left_deep_join ? left_deep_join_types(left_deep_join) : std::vector<JoinType>{get_join_type(project)};
   RelAlgTranslator translator(cat_, executor_, input_to_nest_level, join_types, now_, just_explain);
   const auto target_exprs_owned = translate_scalar_sources(project, translator);
   target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
