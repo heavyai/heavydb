@@ -922,7 +922,7 @@ double ST_Distance_Polygon_Polygon(double* poly1_coords,
           poly1, poly1_exterior_ring_num_coords, poly2_coords, poly2_exterior_ring_num_coords)) {
     // poly1 exterior ring contains poly2 exterior ring
     poly1 += poly1_exterior_ring_num_coords;
-    // Check if one of the polygon's holes contains that point
+    // Check if one of the poly1's holes contains that poly2 exterior ring
     for (auto r = 1; r < poly1_num_rings; r++) {
       int64_t poly1_interior_ring_num_coords = poly1_ring_sizes[r] * 2;
       if (contains_polygon_linestring(
@@ -941,7 +941,7 @@ double ST_Distance_Polygon_Polygon(double* poly1_coords,
           poly2, poly2_exterior_ring_num_coords, poly1_coords, poly1_exterior_ring_num_coords)) {
     // poly2 exterior ring contains poly1 exterior ring
     poly2 += poly2_exterior_ring_num_coords;
-    // Check if one of the polygon's holes contains that point
+    // Check if one of the poly2's holes contains that poly1 exterior ring
     for (auto r = 1; r < poly2_num_rings; r++) {
       int64_t poly2_interior_ring_num_coords = poly2_ring_sizes[r] * 2;
       if (contains_polygon_linestring(
@@ -955,8 +955,10 @@ double ST_Distance_Polygon_Polygon(double* poly1_coords,
     return 0.0;
   }
 
+  // poly1 shape does not contain poly2 shape, poly2 shape does not contain poly1 shape.
+  // Assuming disjoint or intersecting shapes: return distance between exterior rings.
   return ST_Distance_LineString_LineString(
-      poly1_coords, poly1_exterior_ring_num_coords, poly2_coords, poly2_num_coords);
+      poly1_coords, poly1_exterior_ring_num_coords, poly2_coords, poly2_exterior_ring_num_coords);
 }
 
 EXTENSION_NOINLINE
