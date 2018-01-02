@@ -505,7 +505,7 @@ int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch, const int8_t* byt
     }
   }
   CHECK(type_info.is_integer() || type_info.is_decimal() || type_info.is_time() || type_info.is_boolean() ||
-        type_info.is_string());
+        type_info.is_string() || type_info.is_array());
   size_t type_bitwidth = get_bit_width(type_info);
   if (type_info.get_compression() == kENCODING_FIXED) {
     type_bitwidth = type_info.get_comp_param();
@@ -624,6 +624,19 @@ TargetValue build_array_target_value(const SQLTypeInfo& array_ti,
   return TargetValue(nullptr);
 }
 
+TargetValue build_geo_target_value(const SQLTypeInfo& geo_ti,
+                                   const int8_t* coords,
+                                   const size_t coords_sz,
+                                   const int8_t* ring_sizes,
+                                   const size_t ring_sizes_sz,
+                                   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                   const Executor* executor) {
+  CHECK(geo_ti.is_geometry());
+  CHECK_EQ(kENCODING_NONE, geo_ti.get_compression());
+  // Return a simple array of coordinates. TODO(d): rings, multipolygon counts, etc.
+  return build_array_target_value<double>(coords, coords_sz, row_set_mem_owner);
+}
+
 }  // namespace
 
 const std::vector<const int8_t*>& ResultSet::getColumnFrag(const size_t storage_idx,
@@ -697,6 +710,27 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
         CHECK_GT(vd.length, 0);
         std::string fetched_str(reinterpret_cast<char*>(vd.pointer), vd.length);
         return fetched_str;
+      } else if (target_info.sql_type.is_geometry()) {
+        ArrayDatum coord_ad;
+        ArrayDatum ring_ad;
+        ChunkIter_get_nth(
+            reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(frag_col_buffers[col_lazy_fetch.local_col_id])),
+            varlen_ptr,
+            &coord_ad,
+            &is_end);
+        CHECK(!is_end);
+        if (coord_ad.is_null) {
+          std::vector<ScalarTargetValue> empty_array;
+          return TargetValue(empty_array);
+        }
+        // TODO(d): will also need to read poly ring size array, multipolygon counts, etc
+        return build_geo_target_value(target_info.sql_type,
+                                      coord_ad.pointer,
+                                      coord_ad.length,
+                                      ring_ad.pointer,
+                                      ring_ad.length,
+                                      row_set_mem_owner_,
+                                      executor_);
       } else {
         CHECK(target_info.sql_type.is_array());
         ArrayDatum ad;
@@ -880,6 +914,18 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(int8_t* rowwise_target_pt
       }
     }
     return int64_t(0);
+  }
+  if (target_info.sql_type.is_geometry()) {
+    auto ptr1 = rowwise_target_ptr;
+    CHECK_LT(slot_idx, query_mem_desc_.agg_col_widths.size());
+    auto compact_sz1 = query_mem_desc_.agg_col_widths[slot_idx].compact;
+    const auto ptr2 = rowwise_target_ptr + query_mem_desc_.agg_col_widths[slot_idx].compact;
+    const auto compact_sz2 = query_mem_desc_.agg_col_widths[slot_idx + 1].compact;
+    CHECK(ptr2);
+    // For now create target value out of the coords stored in the first physical column.
+    // TODO(d): also may have to pass ring sizes, multipoly counts, etc from other physical columns.
+    return makeVarlenTargetValue(ptr1, compact_sz1, ptr2, compact_sz2, target_info, target_logical_idx, entry_buff_idx);
+    ;
   }
   auto ptr1 = rowwise_target_ptr;
   CHECK_LT(slot_idx, query_mem_desc_.agg_col_widths.size());
