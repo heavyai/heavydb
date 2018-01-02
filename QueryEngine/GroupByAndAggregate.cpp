@@ -293,9 +293,27 @@ std::vector<ColumnLazyFetchInfo> QueryExecutionContext::getColLazyFetchInfo(
     } else {
       const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
       CHECK(col_var);
-      auto col_id = executor_->getLocalColumnId(col_var, false);
-      const auto& col_ti = col_var->get_type_info();
-      col_lazy_fetch_info.emplace_back(ColumnLazyFetchInfo{true, col_id, col_ti});
+      auto col_id = col_var->get_column_id();
+      auto rte_idx = (col_var->get_rte_idx() == -1) ? 0 : col_var->get_rte_idx();
+      auto cd = (col_var->get_table_id() > 0)
+                    ? get_column_descriptor(col_id, col_var->get_table_id(), *executor_->catalog_)
+                    : nullptr;
+      if (cd && cd->numPhysicalColumns > 0) {
+        for (auto i = 0; i < cd->numPhysicalColumns; i++) {
+          auto cd0 = get_column_descriptor(col_id + i + 1, col_var->get_table_id(), *executor_->catalog_);
+          auto col0_ti = cd0->columnType;
+          CHECK(cd0->isPhysicalCol);
+          CHECK(!cd0->isVirtualCol);
+          auto col0_var = makeExpr<Analyzer::ColumnVar>(col0_ti, col_var->get_table_id(), cd0->columnId, rte_idx);
+          auto local_col0_id = executor_->getLocalColumnId(col0_var.get(), false);
+          col_lazy_fetch_info.emplace_back(ColumnLazyFetchInfo{true, local_col0_id, col0_ti});
+          break;  // Just add lazy fetch info for the main column's first physical column.
+        }
+      } else {
+        auto local_col_id = executor_->getLocalColumnId(col_var, false);
+        const auto& col_ti = col_var->get_type_info();
+        col_lazy_fetch_info.emplace_back(ColumnLazyFetchInfo{true, local_col_id, col_ti});
+      }
     }
   }
   return col_lazy_fetch_info;
