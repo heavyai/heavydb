@@ -461,6 +461,33 @@ std::string datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
     }
     return "{" + boost::algorithm::join(elem_strs, ", ") + "}";
   }
+  if (type_info.type == TDatumType::POINT || type_info.type == TDatumType::LINESTRING ||
+      type_info.type == TDatumType::POLYGON) {
+    std::vector<std::string> elem_strs;
+    elem_strs.reserve(datum.val.arr_val.size());
+    TTypeInfo elem_type_info{type_info};
+    elem_type_info.type = TDatumType::DOUBLE;
+    elem_type_info.is_array = false;
+    std::string last_coord;
+    for (auto elem_datum_it = datum.val.arr_val.begin(); elem_datum_it != datum.val.arr_val.end(); ++elem_datum_it) {
+      if (std::distance(datum.val.arr_val.begin(), elem_datum_it) % 2 == 0) {
+        last_coord = scalar_datum_to_string(*elem_datum_it, elem_type_info);
+      } else {
+        elem_strs.push_back(last_coord + " " + scalar_datum_to_string(*elem_datum_it, elem_type_info));
+      }
+    }
+    std::string prefix, suffix{")"};
+    if (type_info.type == TDatumType::POINT) {
+      prefix = std::string("POINT(");
+    } else if (type_info.type == TDatumType::LINESTRING) {
+      prefix = std::string("LINESTRING(");
+    } else {
+      prefix = std::string("POLYGON((");
+      suffix = std::string("))");
+    }
+
+    return prefix + boost::algorithm::join(elem_strs, ", ") + suffix;
+  }
   return scalar_datum_to_string(datum, type_info);
 }
 
@@ -504,9 +531,19 @@ TDatum columnar_val_to_datum(const TColumn& col, const size_t row_idx, const TTy
     case TDatumType::POINT:
     case TDatumType::LINESTRING:
     case TDatumType::POLYGON: {
-      CHECK(false);
-      datum.val.str_val = col.data.str_col[row_idx];
-      break;
+      auto elem_type = col_type;
+      elem_type.type = TDatumType::DOUBLE;
+      elem_type.is_array = false;
+      datum.is_null = false;
+      CHECK_LT(row_idx, col.data.arr_col.size());
+      const auto& arr_col = col.data.arr_col[row_idx];
+      for (size_t elem_idx = 0; elem_idx < arr_col.nulls.size(); ++elem_idx) {
+        TColumn elem_col;
+        elem_col.data = arr_col.data;
+        elem_col.nulls = arr_col.nulls;
+        datum.val.arr_val.push_back(columnar_val_to_datum(elem_col, elem_idx, elem_type));
+      }
+      return datum;
     }
     default:
       CHECK(false);
@@ -1168,6 +1205,9 @@ int main(int argc, char** argv) {
           bool not_first = false;
           if (print_header) {
             for (auto p : context.query_return.row_set.row_desc) {
+              if (p.is_physical) {
+                // TODO(d): skip if we decide to suppress displaying physical columns
+              }
               if (not_first)
                 std::cout << delimiter;
               else
@@ -1179,6 +1219,9 @@ int main(int argc, char** argv) {
           for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
             const auto& col_desc = context.query_return.row_set.row_desc;
             for (size_t col_idx = 0; col_idx < col_desc.size(); ++col_idx) {
+              if (col_desc[col_idx].is_physical) {
+                // TODO(d): skip if we decide to suppress displaying physical columns
+              }
               if (col_idx) {
                 std::cout << delimiter;
               }

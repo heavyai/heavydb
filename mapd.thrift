@@ -78,7 +78,8 @@ struct TColumnType {
   2: TTypeInfo col_type,
   3: bool is_reserved_keyword,
   4: string src_name,
-  5: bool is_system
+  5: bool is_system,
+  6: bool is_physical
 }
 
 struct TRow {

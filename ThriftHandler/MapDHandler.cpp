@@ -416,18 +416,28 @@ void MapDHandler::get_hardware_info(TClusterHardwareInfo& _return, const TSessio
 }
 
 void MapDHandler::value_to_thrift_column(const TargetValue& tv, const SQLTypeInfo& ti, TColumn& column) {
-  const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
-  if (!scalar_tv) {
+  if (ti.is_array()) {
     const auto list_tv = boost::get<std::vector<ScalarTargetValue>>(&tv);
     CHECK(list_tv);
-    CHECK(ti.is_array());
     TColumn tColumn;
     for (const auto& elem_tv : *list_tv) {
       value_to_thrift_column(elem_tv, ti.get_elem_type(), tColumn);
     }
     column.data.arr_col.push_back(tColumn);
     column.nulls.push_back(list_tv->size() == 0);
+  } else if (ti.is_geometry()) {
+    const auto list_tv = boost::get<std::vector<ScalarTargetValue>>(&tv);
+    CHECK(list_tv);
+    auto elem_type = SQLTypeInfo(kDOUBLE, false);
+    TColumn tColumn;
+    for (const auto& elem_tv : *list_tv) {
+      value_to_thrift_column(elem_tv, elem_type, tColumn);
+    }
+    column.data.arr_col.push_back(tColumn);
+    column.nulls.push_back(list_tv->size() == 0);
   } else {
+    const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
+    CHECK(scalar_tv);
     if (boost::get<int64_t>(scalar_tv)) {
       int64_t data = *(boost::get<int64_t>(scalar_tv));
       column.data.int_col.push_back(data);
@@ -1061,6 +1071,7 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog* cat, const Colu
   col_type.col_type.precision = cd->columnType.get_precision();
   col_type.col_type.scale = cd->columnType.get_scale();
   col_type.is_system = cd->isSystemCol;
+  col_type.is_physical = cd->isPhysicalCol;
   if (cd->columnType.get_compression() == EncodingType::kENCODING_DICT && cat != nullptr) {
     // have to get the actual size of the encoding from the dictionary definition
     const int dict_id = cd->columnType.get_comp_param();

@@ -811,6 +811,7 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
     ct.col_type = colType;
     ct.is_reserved_keyword = irk;
     ct.is_system = false;
+    ct.is_physical = false;
     return ct;
   }
 
