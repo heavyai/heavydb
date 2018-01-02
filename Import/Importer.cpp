@@ -1319,12 +1319,17 @@ static ImportStatus import_thread(int thread_id,
         p = get_row(
             p, thread_buf_end, buf_end, copy_params, p == thread_buf, importer->get_is_array(), row, try_single_thread);
       int phys_cols = 0;
-      for (const auto cd : col_descs)
+      int point_cols = 0;
+      for (const auto cd : col_descs) {
         phys_cols += cd->numPhysicalColumns;
-      if (row.size() != col_descs.size() - phys_cols) {
+        if (cd->columnType.get_type() == kPOINT)
+          point_cols++;
+      }
+      auto num_cols = col_descs.size() - phys_cols;
+      // Each POINT could consume two separate coords instead of a single WKT
+      if (row.size() < num_cols || (num_cols + point_cols) < row.size()) {
         import_status.rows_rejected++;
-        LOG(ERROR) << "Incorrect Row (expected " << col_descs.size() - phys_cols << " columns, has " << row.size()
-                   << "): " << row;
+        LOG(ERROR) << "Incorrect Row (expected " << num_cols << " columns, has " << row.size() << "): " << row;
         if (import_status.rows_rejected > copy_params.max_reject)
           break;
         continue;
@@ -1348,12 +1353,34 @@ static ImportStatus import_thread(int thread_id,
               std::vector<double> coords;
               std::vector<int> ring_sizes;
               std::vector<int> polygon_sizes;
-              SQLTypes imported_type;
-              if (!importGeoFromWkt(wkt, imported_type, coords, ring_sizes, polygon_sizes)) {
-                throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
-              }
-              if (col_ti.get_type() != imported_type) {
-                throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
+              if (col_ti.get_type() == kPOINT && wkt.size() > 0 &&
+                  (wkt[0] == '.' || isdigit(wkt[0]) || wkt[0] == '-')) {
+                // Invalid WKT, looks more like a scalar.
+                // Try custom POINT import: from two separate scalars rather than WKT string
+                double coord = std::atof(wkt.c_str());
+                if (std::isinf(coord) || std::isnan(coord)) {
+                  throw std::runtime_error("Cannot read first coord of POINT geometry " + cd->columnName);
+                }
+                coords.push_back(coord);
+                coord = NAN;
+                std::string str2{row[import_idx]};
+                ++import_idx;
+                if (str2.size() > 0 && (str2[0] == '.' || isdigit(str2[0]) || str2[0] == '-')) {
+                  coord = std::atof(str2.c_str());
+                }
+                if (std::isinf(coord) || std::isnan(coord)) {
+                  throw std::runtime_error("Cannot read second coord of POINT geometry " + cd->columnName);
+                }
+                coords.push_back(coord);
+                // TODO(d): need to transform coords to the same SR used by importGeoFromWkt
+              } else {
+                SQLTypes imported_type;
+                if (!importGeoFromWkt(wkt, imported_type, coords, ring_sizes, polygon_sizes)) {
+                  throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
+                }
+                if (col_ti.get_type() != imported_type) {
+                  throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
+                }
               }
 
               ++cd_it;
