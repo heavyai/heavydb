@@ -36,7 +36,8 @@ inline std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targ
         agg_init_vals.push_back(0);
       }
       if (agg_info.sql_type.is_array() ||
-          (agg_info.sql_type.is_string() && agg_info.sql_type.get_compression() == kENCODING_NONE)) {
+          (agg_info.sql_type.is_string() && agg_info.sql_type.get_compression() == kENCODING_NONE) ||
+          agg_info.sql_type.is_geometry()) {
         agg_init_vals.push_back(0);
       }
       continue;

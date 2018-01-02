@@ -222,7 +222,7 @@ inline int64_t null_val_bit_pattern(const SQLTypeInfo& ti, const bool float_argu
     const auto double_null_val = inline_fp_null_val(ti);
     return *reinterpret_cast<const int64_t*>(may_alias_ptr(&double_null_val));
   }
-  if ((ti.is_string() && ti.get_compression() == kENCODING_NONE) || ti.is_array()) {
+  if ((ti.is_string() && ti.get_compression() == kENCODING_NONE) || ti.is_array() || ti.is_geometry()) {
     return 0;
   }
   return inline_int_null_val(ti);

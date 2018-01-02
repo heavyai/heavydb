@@ -1777,6 +1777,9 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
     if (groupby_ti.is_array()) {
       throw std::runtime_error("Group by array not supported");
     }
+    if (groupby_ti.is_geometry()) {
+      throw std::runtime_error("Group by geometry not supported");
+    }
   }
   const auto shard_count =
       device_type_ == ExecutorDeviceType::GPU ? shard_count_for_top_groups(ra_exe_unit_, *executor_->getCatalog()) : 0;
@@ -3078,7 +3081,8 @@ namespace {
 std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
   const auto& chosen_type = get_compact_type(target_info);
   if (!target_info.is_agg) {
-    if ((chosen_type.is_string() && chosen_type.get_compression() == kENCODING_NONE) || chosen_type.is_array()) {
+    if ((chosen_type.is_string() && chosen_type.get_compression() == kENCODING_NONE) || chosen_type.is_array() ||
+        chosen_type.is_geometry()) {
       return {"agg_id", "agg_id"};
     }
     return {"agg_id"};
