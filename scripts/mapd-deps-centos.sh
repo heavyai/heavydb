@@ -135,13 +135,14 @@ popd
 # llvm
 download_make_install http://thrysoee.dk/editline/libedit-20160903-3.1.tar.gz
 VERS=3.9.1
-download http://releases.llvm.org/$VERS/llvm-$VERS.src.tar.xz
-download http://releases.llvm.org/$VERS/cfe-$VERS.src.tar.xz
-download http://releases.llvm.org/$VERS/compiler-rt-$VERS.src.tar.xz
-download http://releases.llvm.org/$VERS/lldb-$VERS.src.tar.xz
-download http://releases.llvm.org/$VERS/lld-$VERS.src.tar.xz
-download http://releases.llvm.org/$VERS/libcxx-$VERS.src.tar.xz
-download http://releases.llvm.org/$VERS/libcxxabi-$VERS.src.tar.xz
+# http://releases.llvm.org
+download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/llvm-$VERS.src.tar.xz
+download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/cfe-$VERS.src.tar.xz
+download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/compiler-rt-$VERS.src.tar.xz
+download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/lldb-$VERS.src.tar.xz
+download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/lld-$VERS.src.tar.xz
+download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/libcxx-$VERS.src.tar.xz
+download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/libcxxabi-$VERS.src.tar.xz
 rm -rf llvm-$VERS.src
 extract llvm-$VERS.src.tar.xz
 extract cfe-$VERS.src.tar.xz
