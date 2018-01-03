@@ -115,7 +115,7 @@ typedef std::map<ColumnKey, ColumnDescriptor*> ColumnDescriptorMap;
 typedef std::tuple<int, int> ColumnIdKey;
 typedef std::map<ColumnIdKey, ColumnDescriptor*> ColumnDescriptorMapById;
 
-typedef std::map<int, std::unique_ptr<DictDescriptor>> DictDescriptorMapById;
+typedef std::map<DictRef, std::unique_ptr<DictDescriptor>> DictDescriptorMapById;
 
 /**
  * @type FrontendViewDescriptorMap
@@ -282,7 +282,7 @@ class Catalog {
   const std::string& get_basePath() const { return basePath_; }
   const bool isAccessPrivCheckEnabled() const { return access_priv_check_; }
 
-  const DictDescriptor* getMetadataForDict(int dictId, bool loadDict = true) const;
+  const DictDescriptor* getMetadataForDict(int dict_ref, bool loadDict = true) const;
 
   const std::vector<LeafHostInfo>& getStringDictionaryHosts() const;
 
@@ -290,6 +290,7 @@ class Catalog {
 
   int32_t getTableEpoch(const int32_t db_id, const int32_t table_id) const;
   void setTableEpoch(const int db_id, const int table_id, const int new_epoch);
+  int getDatabaseId() const { return currentDB_.dbId; }
 
  protected:
   void CheckAndExecuteMigrations();
@@ -339,7 +340,7 @@ class Catalog {
   TableDescriptorMapById tableDescriptorMapById_;
   ColumnDescriptorMap columnDescriptorMap_;
   ColumnDescriptorMapById columnDescriptorMapById_;
-  DictDescriptorMapById dictDescriptorMapById_;
+  DictDescriptorMapById dictDescriptorMapByRef_;
   FrontendViewDescriptorMap frontendViewDescriptorMap_;
   LinkDescriptorMap linkDescriptorMap_;
   LinkDescriptorMapById linkDescriptorMapById_;

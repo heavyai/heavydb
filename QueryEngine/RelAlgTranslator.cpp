@@ -548,15 +548,15 @@ void fill_dictionary_encoded_in_vals(std::vector<int64_t>& in_vals,
                                      const ResultSet* values_rowset,
                                      const std::pair<int64_t, int64_t> values_rowset_slice,
                                      const std::vector<LeafHostInfo>& leaf_hosts,
-                                     const int32_t source_dict_id,
-                                     const int32_t dest_dict_id,
+                                     const DictRef source_dict_ref,
+                                     const DictRef dest_dict_ref,
                                      const int32_t dest_generation,
                                      const int64_t needle_null_val) {
   CHECK(in_vals.empty());
   std::vector<int32_t> source_ids;
   source_ids.reserve(values_rowset->entryCount());
   bool has_nulls = false;
-  if (source_dict_id == dest_dict_id) {
+  if (source_dict_ref == dest_dict_ref) {
     in_vals.reserve(values_rowset_slice.second - values_rowset_slice.first + 1);  // Add 1 to cover interval
     for (auto index = values_rowset_slice.first; index < values_rowset_slice.second; ++index) {
       const auto row = values_rowset->getOneColRow(index);
@@ -591,7 +591,7 @@ void fill_dictionary_encoded_in_vals(std::vector<int64_t>& in_vals,
     }
   }
   std::vector<int32_t> dest_ids;
-  translate_string_ids(dest_ids, leaf_hosts.front(), dest_dict_id, source_ids, source_dict_id, dest_generation);
+  translate_string_ids(dest_ids, leaf_hosts.front(), dest_dict_ref, source_ids, source_dict_ref, dest_generation);
   CHECK_EQ(dest_ids.size(), source_ids.size());
   in_vals.reserve(dest_ids.size() + (has_nulls ? 1 : 0));
   if (has_nulls) {
@@ -641,15 +641,17 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(std::share
     const auto end_entry = std::min(start_entry + stride, entry_count);
     if (arg_type.is_string()) {
       CHECK_EQ(kENCODING_DICT, arg_type.get_compression());
-      const int32_t dest_dict_id = arg_type.get_comp_param();
-      const int32_t source_dict_id = col_type.get_comp_param();
+      // const int32_t dest_dict_id = arg_type.get_comp_param();
+      // const int32_t source_dict_id = col_type.get_comp_param();
+      const DictRef dest_dict_ref(arg_type.get_comp_param(), cat_.getDatabaseId());
+      const DictRef source_dict_ref(col_type.get_comp_param(), cat_.getDatabaseId());
       const auto dd = executor_->getStringDictionaryProxy(arg_type.get_comp_param(), val_set.getRowSetMemOwner(), true);
       const auto sd = executor_->getStringDictionaryProxy(col_type.get_comp_param(), val_set.getRowSetMemOwner(), true);
       CHECK(sd);
       const auto needle_null_val = inline_int_null_val(arg_type);
       fetcher_threads.push_back(
           std::async(std::launch::async,
-                     [this, &val_set, &total_in_vals_count, sd, dd, source_dict_id, dest_dict_id, needle_null_val](
+                     [this, &val_set, &total_in_vals_count, sd, dd, source_dict_ref, dest_dict_ref, needle_null_val](
                          std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
                        if (g_cluster) {
                          CHECK_GE(dd->getGeneration(), 0);
@@ -658,8 +660,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(std::share
                                                          &val_set,
                                                          {start, end},
                                                          cat_.getStringDictionaryHosts(),
-                                                         source_dict_id,
-                                                         dest_dict_id,
+                                                         source_dict_ref,
+                                                         dest_dict_ref,
                                                          dd->getGeneration(),
                                                          needle_null_val);
                        } else {

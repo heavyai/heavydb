@@ -16,6 +16,11 @@ add_library(calciteserver_thrift
     ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
 )
+
+get_target_property(StringDictionary_BINARY_DIR StringDictionary BINARY_DIR)
+include_directories(${StringDictionary_BINARY_DIR}
+${StringDictionary_BINARY_DIR}/gen-cpp)
+
 target_link_libraries(calciteserver_thrift ${Thrift_LIBRARIES})
 
 add_library(Calcite Calcite.cpp Calcite.h ${CMAKE_SOURCE_DIR}/Shared/ConfigResolve.h )

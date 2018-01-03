@@ -23,15 +23,21 @@
  **/
 
 #include "Catalog.h"
-#include <boost/filesystem.hpp>
-#include <boost/uuid/sha1.hpp>
 #include <cassert>
 #include <exception>
 #include <list>
 #include <memory>
 #include <random>
 
+#include <boost/filesystem.hpp>
+#include <boost/uuid/sha1.hpp>
+#include "SharedDictionaryValidator.h"
+
 #include "DataMgr/LockMgr.h"
+#include "SharedDictionaryValidator.h"
+
+#include <boost/filesystem.hpp>
+#include <boost/uuid/sha1.hpp>
 
 #include "../Fragmenter/Fragmenter.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
@@ -1361,8 +1367,9 @@ void Catalog::buildMaps() {
     int refcount = sqliteConnector_.getData<int>(r, 4);
     std::string fname =
         basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) + "_DICT_" + std::to_string(dictId);
-    DictDescriptor* dd = new DictDescriptor(dictId, dictName, dictNBits, is_shared, refcount, fname, false);
-    dictDescriptorMapById_[dd->dictId].reset(dd);
+    DictRef dict_ref(currentDB_.dbId, dictId);
+    DictDescriptor* dd = new DictDescriptor(dict_ref, dictName, dictNBits, is_shared, refcount, fname, false);
+    dictDescriptorMapByRef_[dict_ref].reset(dd);
   }
 
   string tableQuery(
@@ -1514,19 +1521,21 @@ void Catalog::addTableToMap(TableDescriptor& td,
     columnDescriptorMapById_[columnIdKey] = new_cd;
   }
   std::unique_ptr<StringDictionaryClient> client;
+  DictRef dict_ref(currentDB_.dbId, -1);
   if (!string_dict_hosts_.empty()) {
-    client.reset(new StringDictionaryClient(string_dict_hosts_.front(), -1, true));
+    client.reset(new StringDictionaryClient(string_dict_hosts_.front(), dict_ref, true));
   }
   for (auto dd : dicts) {
-    if (!dd.dictId) {
+    if (!dd.dictRef.dictId) {
       // Dummy entry created for a shard of a logical table, nothing to do.
       continue;
     }
+    dict_ref.dictId = dd.dictRef.dictId;
     if (client) {
-      client->create(dd.dictId, currentDB_.dbId, dd.dictIsTemp);
+      client->create(dict_ref, dd.dictIsTemp);
     }
     DictDescriptor* new_dd = new DictDescriptor(dd);
-    dictDescriptorMapById_[dd.dictId].reset(new_dd);
+    dictDescriptorMapByRef_[dict_ref].reset(new_dd);
     if (!dd.dictIsTemp)
       boost::filesystem::create_directory(new_dd->dictFolderPath);
   }
@@ -1549,7 +1558,8 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
   std::unique_ptr<StringDictionaryClient> client;
   if (g_aggregator) {
     CHECK(!string_dict_hosts_.empty());
-    client.reset(new StringDictionaryClient(string_dict_hosts_.front(), -1, true));
+    DictRef dict_ref(currentDB_.dbId, -1);
+    client.reset(new StringDictionaryClient(string_dict_hosts_.front(), dict_ref, true));
   }
 
   // delete all column descriptors for the table
@@ -1563,8 +1573,9 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
     const int dictId = cd->columnType.get_comp_param();
     // Dummy dictionaries created for a shard of a logical table have the id set to zero.
     if (cd->columnType.get_compression() == kENCODING_DICT && dictId) {
-      const auto dictIt = dictDescriptorMapById_.find(dictId);
-      CHECK(dictIt != dictDescriptorMapById_.end());
+      DictRef dict_ref(currentDB_.dbId, dictId);
+      const auto dictIt = dictDescriptorMapByRef_.find(dict_ref);
+      CHECK(dictIt != dictDescriptorMapByRef_.end());
       const auto& dd = dictIt->second;
       CHECK_GE(dd->refcount, 1);
       --dd->refcount;
@@ -1572,9 +1583,9 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
         if (!isTemp)
           boost::filesystem::remove_all(dd->dictFolderPath);
         if (client) {
-          client->drop(dd->dictId, currentDB_.dbId);
+          client->drop(dict_ref);
         }
-        dictDescriptorMapById_.erase(dictIt);
+        dictDescriptorMapByRef_.erase(dictIt);
       }
     }
     delete cd;
@@ -1646,9 +1657,10 @@ const TableDescriptor* Catalog::getMetadataForTable(int tableId) const {
   return td;  // returns pointer to table descriptor
 }
 
-const DictDescriptor* Catalog::getMetadataForDict(int dictId, bool loadDict) const {
-  auto dictDescIt = dictDescriptorMapById_.find(dictId);
-  if (dictDescIt == dictDescriptorMapById_.end()) {  // check to make sure dictionary exists
+const DictDescriptor* Catalog::getMetadataForDict(const int dictId, const bool loadDict) const {
+  const DictRef dictRef(currentDB_.dbId, dictId);
+  auto dictDescIt = dictDescriptorMapByRef_.find(dictRef);
+  if (dictDescIt == dictDescriptorMapByRef_.end()) {  // check to make sure dictionary exists
     return nullptr;
   }
   const auto& dd = dictDescIt->second;
@@ -1662,10 +1674,11 @@ const DictDescriptor* Catalog::getMetadataForDict(int dictId, bool loadDict) con
           else
             dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath, false, true);
         } else {
-          dd->stringDict = std::make_shared<StringDictionary>(string_dict_hosts_.front(), dd->dictId);
+          dd->stringDict = std::make_shared<StringDictionary>(string_dict_hosts_.front(), dd->dictRef);
         }
       });
-      LOG(INFO) << "Time to load Dictionary " << dictId << " was " << time_ms << "ms";
+      LOG(INFO) << "Time to load Dictionary " << dd->dictRef.dbId << "_" << dd->dictRef.dictId << " was " << time_ms
+                << "ms";
     }
   }
   return dd.get();
@@ -1882,8 +1895,9 @@ void Catalog::createTable(TableDescriptor& td,
         // TODO(vraj) : create shared dictionary for temp table if needed
         std::string fileName("");
         std::string folderPath("");
-        int dictId = nextTempDictId_++;
-        DictDescriptor dd(dictId,
+        DictRef dict_ref(currentDB_.dbId, nextTempDictId_);
+        nextTempDictId_++;
+        DictDescriptor dd(dict_ref,
                           fileName,
                           cd.columnType.get_comp_param(),
                           false,
@@ -1894,7 +1908,7 @@ void Catalog::createTable(TableDescriptor& td,
         if (!cd.columnType.is_array()) {
           cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
         }
-        cd.columnType.set_comp_param(dictId);
+        cd.columnType.set_comp_param(dict_ref.dictId);
       }
       cd.tableId = td.tableId;
       cd.columnId = colId++;
@@ -1982,8 +1996,9 @@ void Catalog::addReferenceToForeignDict(ColumnDescriptor& referencing_column,
   CHECK(foreign_ref_col);
   referencing_column.columnType = foreign_ref_col->columnType;
   const int dict_id = referencing_column.columnType.get_comp_param();
-  const auto dictIt = dictDescriptorMapById_.find(dict_id);
-  CHECK(dictIt != dictDescriptorMapById_.end());
+  const DictRef dict_ref(currentDB_.dbId, dict_id);
+  const auto dictIt = dictDescriptorMapByRef_.find(dict_ref);
+  CHECK(dictIt != dictDescriptorMapByRef_.end());
   const auto& dd = dictIt->second;
   CHECK_GE(dd->refcount, 1);
   ++dd->refcount;
@@ -2019,8 +2034,9 @@ bool Catalog::setColumnSharedDictionary(ColumnDescriptor& cd,
             std::vector<std::string>{
                 std::to_string(kENCODING_DICT), std::to_string(td.tableId), std::to_string(colIt->columnId)});
         const auto dict_id = sqliteConnector_.getData<int>(0, 0);
-        auto dictIt =
-            std::find_if(dds.begin(), dds.end(), [dict_id](const DictDescriptor it) { return it.dictId == dict_id; });
+        auto dictIt = std::find_if(dds.begin(), dds.end(), [this, dict_id](const DictDescriptor it) {
+          return it.dictRef.dbId == this->currentDB_.dbId && it.dictRef.dictId == dict_id;
+        });
         if (dictIt != dds.end()) {
           // There exists dictionary definition of a dictionary column
           CHECK_GE(dictIt->refcount, 1);
@@ -2059,7 +2075,7 @@ void Catalog::setColumnDictionary(ColumnDescriptor& cd,
                                            dictName);
     folderPath = basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) + "_DICT_" + std::to_string(dictId);
   }
-  DictDescriptor dd(dictId, dictName, cd.columnType.get_comp_param(), false, 1, folderPath, false);
+  DictDescriptor dd(currentDB_.dbId, dictId, dictName, cd.columnType.get_comp_param(), false, 1, folderPath, false);
   dds.push_back(dd);
   if (!cd.columnType.is_array()) {
     cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
@@ -2138,7 +2154,8 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
   std::unique_ptr<StringDictionaryClient> client;
   if (g_aggregator) {
     CHECK(!string_dict_hosts_.empty());
-    client.reset(new StringDictionaryClient(string_dict_hosts_.front(), -1, true));
+    DictRef dict_ref(currentDB_.dbId, -1);
+    client.reset(new StringDictionaryClient(string_dict_hosts_.front(), dict_ref, true));
   }
   // clean up any dictionaries
   // delete all column descriptors for the table
@@ -2146,32 +2163,33 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
     ColumnIdKey cidKey(tableId, i);
     ColumnDescriptorMapById::iterator colDescIt = columnDescriptorMapById_.find(cidKey);
     ColumnDescriptor* cd = colDescIt->second;
-    const int dictId = cd->columnType.get_comp_param();
+    const int dict_id = cd->columnType.get_comp_param();
     // Dummy dictionaries created for a shard of a logical table have the id set to zero.
-    if (cd->columnType.get_compression() == kENCODING_DICT && dictId) {
-      const auto dictIt = dictDescriptorMapById_.find(dictId);
-      CHECK(dictIt != dictDescriptorMapById_.end());
+    if (cd->columnType.get_compression() == kENCODING_DICT && dict_id) {
+      const DictRef dict_ref(currentDB_.dbId, dict_id);
+      const auto dictIt = dictDescriptorMapByRef_.find(dict_ref);
+      CHECK(dictIt != dictDescriptorMapByRef_.end());
       const auto& dd = dictIt->second;
       CHECK_GE(dd->refcount, 1);
       // if this is the only table using this dict reset the dict
       if (dd->refcount == 1) {
         boost::filesystem::remove_all(dd->dictFolderPath);
         if (client) {
-          client->drop(dd->dictId, currentDB_.dbId);
+          client->drop(dd->dictRef);
         }
         if (!dd->dictIsTemp)
           boost::filesystem::create_directory(dd->dictFolderPath);
       }
 
       DictDescriptor* new_dd = new DictDescriptor(
-          dd->dictId, dd->dictName, dd->dictNBits, dd->dictIsShared, dd->refcount, dd->dictFolderPath, dd->dictIsTemp);
-      dictDescriptorMapById_.erase(dictIt);
+          dd->dictRef, dd->dictName, dd->dictNBits, dd->dictIsShared, dd->refcount, dd->dictFolderPath, dd->dictIsTemp);
+      dictDescriptorMapByRef_.erase(dictIt);
       // now create new Dict -- need to figure out what to do here for temp tables
       if (client) {
-        client->create(new_dd->dictId, currentDB_.dbId, new_dd->dictIsTemp);
+        client->create(new_dd->dictRef, new_dd->dictIsTemp);
       }
-      dictDescriptorMapById_[dictId].reset(new_dd);
-      getMetadataForDict(dictId);
+      dictDescriptorMapByRef_[new_dd->dictRef].reset(new_dd);
+      getMetadataForDict(new_dd->dictRef.dictId);
     }
   }
 }

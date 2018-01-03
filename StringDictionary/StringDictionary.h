@@ -18,6 +18,7 @@
 #define STRINGDICTIONARY_STRINGDICTIONARY_H
 
 #include "../Shared/mapd_shared_mutex.h"
+#include "DictRef.h"
 #include "DictionaryCache.hpp"
 #include "LeafHostInfo.h"
 
@@ -43,16 +44,11 @@ class DictPayloadUnavailable : public std::runtime_error {
 
 class StringDictionary {
  public:
-  // In the compare_cache_value_t index represents the index of the sorted cache.
-  // The diff component represents whether the index the cache is pointing to is equal to the pattern it is cached for.
-  // We want to use diff so we don't have compare string again when we are retrieving it from the cache.
-  typedef struct {
-    int index;
-    int32_t diff;
-  } compare_cache_value_t;
-
-  StringDictionary(const std::string& folder, const bool isTemp, const bool recover, size_t initial_capacity = 256);
-  StringDictionary(const LeafHostInfo& host, const int dict_id);
+  StringDictionary(const std::string& folder,
+                   const bool isTemp,
+                   const bool recover,
+                   size_t initial_capacity = 256);
+  StringDictionary(const LeafHostInfo& host, const DictRef dict_ref);
   ~StringDictionary() noexcept;
 
   int32_t getOrAdd(const std::string& str) noexcept;
@@ -87,6 +83,14 @@ class StringDictionary {
     uint64_t off : 48;
     uint64_t size : 16;
   };
+
+  // In the compare_cache_value_t index represents the index of the sorted cache.
+  // The diff component represents whether the index the cache is pointing to is equal to the pattern it is cached for.
+  // We want to use diff so we don't have compare string again when we are retrieving it from the cache.
+  typedef struct {
+    int32_t index;
+    int32_t diff;
+  } compare_cache_value_t;
 
   void processDictionaryFutures(
       std::vector<std::future<std::vector<std::pair<unsigned int, unsigned int>>>>& dictionary_futures);
@@ -144,9 +148,9 @@ int32_t truncate_to_generation(const int32_t id, const size_t generation);
 
 void translate_string_ids(std::vector<int32_t>& dest_ids,
                           const LeafHostInfo& dict_server_host,
-                          const int32_t dest_dict_id,
+                          const DictRef dest_dict_ref,
                           const std::vector<int32_t>& source_ids,
-                          const int32_t source_dict_id,
+                          const DictRef source_dict_ref,
                           const int32_t dest_generation);
 
 #endif  // STRINGDICTIONARY_STRINGDICTIONARY_H

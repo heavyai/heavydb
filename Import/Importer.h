@@ -42,7 +42,6 @@
 #include "../Catalog/Catalog.h"
 #include "../Fragmenter/Fragmenter.h"
 #include "../Shared/checked_alloc.h"
-#include "../StringDictionary/StringDictionary.h"
 
 class TDatum;
 class TColumn;

@@ -193,10 +193,10 @@ void StringDictionary::processDictionaryFutures(
   dictionary_futures.clear();
 }
 
-StringDictionary::StringDictionary(const LeafHostInfo& host, const int dict_id)
+StringDictionary::StringDictionary(const LeafHostInfo& host, const DictRef dict_ref)
     : strings_cache_(nullptr),
-      client_(new StringDictionaryClient(host, dict_id, true)),
-      client_no_timeout_(new StringDictionaryClient(host, dict_id, false)) {}
+      client_(new StringDictionaryClient(host, dict_ref, true)),
+      client_no_timeout_(new StringDictionaryClient(host, dict_ref, false)) {}
 
 StringDictionary::~StringDictionary() noexcept {
   if (client_) {
@@ -934,10 +934,11 @@ void StringDictionary::mergeSortedCache(std::vector<int32_t>& temp_sorted_cache)
 
 void translate_string_ids(std::vector<int32_t>& dest_ids,
                           const LeafHostInfo& dict_server_host,
-                          const int32_t dest_dict_id,
+                          const DictRef dest_dict_ref,
                           const std::vector<int32_t>& source_ids,
-                          const int32_t source_dict_id,
+                          const DictRef source_dict_ref,
                           const int32_t dest_generation) {
-  StringDictionaryClient string_client(dict_server_host, -1, true);
-  string_client.translate_string_ids(dest_ids, dest_dict_id, source_ids, source_dict_id, dest_generation);
+  DictRef temp_dict_ref(-1, -1);
+  StringDictionaryClient string_client(dict_server_host, temp_dict_ref, true);
+  string_client.translate_string_ids(dest_ids, dest_dict_ref, source_ids, source_dict_ref, dest_generation);
 }

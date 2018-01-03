@@ -40,7 +40,6 @@ set(query_engine_source_files
     InputMetadata.cpp
     IteratorTable.cpp
     LegacyExecute.cpp
-    LikeIR.cpp
     LogicalIR.cpp
     LLVMGlobalContext.cpp
     MaxwellCodegenPatch.cpp
@@ -72,6 +71,7 @@ set(query_engine_source_files
     StringDictionaryGenerations.cpp
     TableGenerations.cpp
     StringFunctions.cpp
+    StringOpsIR.cpp
     RegexpFunctions.cpp
     JoinHashTable.cpp
     HashJoinRuntime.cpp
