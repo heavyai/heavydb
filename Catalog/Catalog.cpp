@@ -2158,7 +2158,7 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
       dictDescriptorMapById_.erase(dictIt);
       // now create new Dict -- need to figure out what to do here for temp tables
       if (client) {
-        client->create(new_dd->dictId, currentDB_.dbId, dd->dictIsTemp);
+        client->create(new_dd->dictId, currentDB_.dbId, new_dd->dictIsTemp);
       }
       dictDescriptorMapById_[dictId].reset(new_dd);
       getMetadataForDict(dictId);
