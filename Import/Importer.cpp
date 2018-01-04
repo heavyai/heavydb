@@ -1277,6 +1277,25 @@ bool importGeoFromWkt(std::string& wkt,
   return status;
 }
 
+bool importGeoFromLatLon(double lat,
+                         double lon,
+                         std::vector<double>& coords) {
+  if (std::isinf(lat) || std::isnan(lat) || std::isinf(lon) || std::isnan(lon))
+    return false;
+  auto point = new OGRPoint(lat, lon);
+  //auto poSR0 = new OGRSpatialReference();
+  //poSR0->importFromEPSG(4326);
+  //point->assignSpatialReference(poSR0);
+
+  auto poSR = new OGRSpatialReference();
+  poSR->importFromEPSG(3857);
+  point->transformTo(poSR);
+
+  coords.push_back(point->getX());
+  coords.push_back(point->getY());
+  return true;
+}
+
 static ImportStatus import_thread(int thread_id,
                                   Importer* importer,
                                   std::shared_ptr<const char> sbuffer,
@@ -1353,26 +1372,22 @@ static ImportStatus import_thread(int thread_id,
               std::vector<double> coords;
               std::vector<int> ring_sizes;
               std::vector<int> polygon_sizes;
-              if (col_ti.get_type() == kPOINT && wkt.size() > 0 &&
+              if (col_ti.get_type() == kPOINT &&
+                  wkt.size() > 0 &&
                   (wkt[0] == '.' || isdigit(wkt[0]) || wkt[0] == '-')) {
                 // Invalid WKT, looks more like a scalar.
                 // Try custom POINT import: from two separate scalars rather than WKT string
-                double coord = std::atof(wkt.c_str());
-                if (std::isinf(coord) || std::isnan(coord)) {
-                  throw std::runtime_error("Cannot read first coord of POINT geometry " + cd->columnName);
-                }
-                coords.push_back(coord);
-                coord = NAN;
-                std::string str2{row[import_idx]};
+                double lat = std::atof(wkt.c_str());
+                double lon = NAN;
+                std::string lon_str{row[import_idx]};
                 ++import_idx;
-                if (str2.size() > 0 && (str2[0] == '.' || isdigit(str2[0]) || str2[0] == '-')) {
-                  coord = std::atof(str2.c_str());
+                if (lon_str.size() > 0 &&
+                    (lon_str[0] == '.' || isdigit(lon_str[0]) || lon_str[0] == '-')) {
+                  lon = std::atof(lon_str.c_str());
                 }
-                if (std::isinf(coord) || std::isnan(coord)) {
-                  throw std::runtime_error("Cannot read second coord of POINT geometry " + cd->columnName);
+                if (!importGeoFromLatLon(lat, lon, coords)) {
+                  throw std::runtime_error("Cannot read lat/lon to insert into POINT column " + cd->columnName);
                 }
-                coords.push_back(coord);
-                // TODO(d): need to transform coords to the same SR used by importGeoFromWkt
               } else {
                 SQLTypes imported_type;
                 if (!importGeoFromWkt(wkt, imported_type, coords, ring_sizes, polygon_sizes)) {
