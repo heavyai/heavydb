@@ -863,11 +863,11 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
     std::condition_variable scheduler_cv;
     std::mutex scheduler_mutex;
     auto dispatch = [&execution_dispatch, &available_cpus, &available_gpus, &options, &scheduler_mutex, &scheduler_cv](
-        const ExecutorDeviceType chosen_device_type,
-        int chosen_device_id,
-        const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
-        const size_t ctx_idx,
-        const int64_t rowid_lookup_key) {
+                        const ExecutorDeviceType chosen_device_type,
+                        int chosen_device_id,
+                        const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
+                        const size_t ctx_idx,
+                        const int64_t rowid_lookup_key) {
       execution_dispatch.run(chosen_device_type, chosen_device_id, options, frag_ids, ctx_idx, rowid_lookup_key);
       if (execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid) {
         std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
@@ -2635,7 +2635,7 @@ std::pair<bool, int64_t> Executor::skipFragment(const InputDescriptor& table_des
       chunk_max = all_frag_row_offsets[frag_idx + 1] - 1 + start_rowid;
       is_rowid = true;
     } else {
-      const auto& chunk_type = lhs->get_type_info();
+      const auto& chunk_type = lhs_col->get_type_info();
       chunk_min = extract_min_stat(chunk_meta_it->second.chunkStats, chunk_type);
       chunk_max = extract_max_stat(chunk_meta_it->second.chunkStats, chunk_type);
     }
