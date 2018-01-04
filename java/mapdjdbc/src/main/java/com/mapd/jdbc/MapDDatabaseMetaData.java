@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2018 MapD Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,14 +43,33 @@ import org.slf4j.LoggerFactory;
  *
  * @author michael
  */
+
 class MapDDatabaseMetaData implements DatabaseMetaData {
+    final static Logger logger = LoggerFactory.getLogger(MapDDatabaseMetaData.class);
 
-  final static Logger logger = LoggerFactory.getLogger(MapDDatabaseMetaData.class);
+    MapDConnection con = null;
+    int driverMajorVersion = 1;
+    int driverMinorVersion = 1;
+    int databaseMajorVersion = 0;
+    int databaseMinorVersion = 0;
+    String databaseVersion = null;
 
-  MapDConnection con = null;
+    public MapDDatabaseMetaData(MapDConnection connection) throws SQLException {
+      this.con = connection;
 
-  public MapDDatabaseMetaData(MapDConnection connection) {
-    this.con = connection;
+      try {
+        databaseVersion = con.client.get_version();
+      } catch (TException ex) {
+        throw new SQLException("Failed to get DB version " + ex.toString());
+      }
+      String vers[] = databaseVersion.split("\\.");
+      try {
+        databaseMajorVersion = Integer.parseInt(vers[0]);
+        databaseMinorVersion = Integer.parseInt(vers[1]);
+      } catch (NumberFormatException ex) {
+        throw new SQLException(
+            "Non-numeric version returned from MapD server: " + ex.getMessage());
+     }
   }
 
   @Override
@@ -105,11 +124,7 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public String getDatabaseProductVersion() throws SQLException { //logger.debug("Entered");
-    try {
-      return con.client.get_version();
-    } catch (TException ex) {
-      throw new SQLException("Failed to get DB version " + ex.toString());
-    }
+    return this.databaseVersion;
   }
 
   @Override
@@ -119,17 +134,17 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public String getDriverVersion() throws SQLException { //logger.debug("Entered");
-    return "0.1";
+    return Integer.toString(this.driverMajorVersion) + "." + Integer.toString(this.driverMinorVersion);
   }
 
   @Override
   public int getDriverMajorVersion() {
-    return 0;
+    return this.driverMajorVersion;
   }
 
   @Override
   public int getDriverMinorVersion() {
-    return 1;
+    return this.driverMinorVersion;
   }
 
   @Override
@@ -1379,12 +1394,12 @@ SQLException - if a database access error occurs
 
   @Override
   public int getDatabaseMajorVersion() throws SQLException { //logger.debug("Entered");
-    return 0;
+    return this.databaseMajorVersion;
   }
 
   @Override
   public int getDatabaseMinorVersion() throws SQLException { //logger.debug("Entered");
-    return 1;
+    return this.databaseMinorVersion;
   }
 
   @Override
@@ -1394,7 +1409,7 @@ SQLException - if a database access error occurs
 
   @Override
   public int getJDBCMinorVersion() throws SQLException { //logger.debug("Entered");
-    return 1;
+    return 0;
   }
 
   @Override
