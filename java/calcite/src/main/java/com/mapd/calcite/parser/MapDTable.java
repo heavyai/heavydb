@@ -113,11 +113,14 @@ public class MapDTable implements Table {
       case INTERVAL_YEAR_MONTH:
         return typeFactory.createSqlType(SqlTypeName.INTERVAL_YEAR_MONTH);
       case POINT:
-        return new PointSqlType();
+        return typeFactory.createSqlType(SqlTypeName.ANY);
+        //return new PointSqlType();
       case LINESTRING:
-        return new LinestringSqlType();
+        return typeFactory.createSqlType(SqlTypeName.ANY);
+        //return new LinestringSqlType();
       case POLYGON:
-        return new PolygonSqlType();
+        return typeFactory.createSqlType(SqlTypeName.ANY);
+        //return new PolygonSqlType();
       default:
         throw new AssertionError(dType.name());
     }
