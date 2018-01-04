@@ -840,7 +840,7 @@ TEST(Select, CountDistinct) {
     c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, COUNT(distinct x + 1) FROM test GROUP BY y ORDER BY n;",
       dt);
     c("SELECT COUNT(distinct dd) AS n FROM test GROUP BY y ORDER BY n;", dt);
-    c("SELECT z, str, AVG(z), COUNT(distinct z) FROM test GROUP BY z, str;", dt);
+    c("SELECT z, str, AVG(z), COUNT(distinct z) FROM test GROUP BY z, str ORDER BY z, str;", dt);
     c("SELECT AVG(z), COUNT(distinct x) AS dx FROM test GROUP BY y HAVING dx > 1;", dt);
     c("SELECT z, str, COUNT(distinct f) FROM test GROUP BY z, str ORDER BY str DESC;", dt);
     c("SELECT COUNT(distinct x * (50000 - 1)) FROM test;", dt);
@@ -870,8 +870,8 @@ TEST(Select, ApproxCountDistinct) {
     c("SELECT APPROX_COUNT_DISTINCT(dd) AS n FROM test GROUP BY y ORDER BY n;",
       "SELECT COUNT(distinct dd) AS n FROM test GROUP BY y ORDER BY n;",
       dt);
-    c("SELECT z, str, AVG(z), APPROX_COUNT_DISTINCT(z) FROM test GROUP BY z, str;",
-      "SELECT z, str, AVG(z), COUNT(distinct z) FROM test GROUP BY z, str;",
+    c("SELECT z, str, AVG(z), APPROX_COUNT_DISTINCT(z) FROM test GROUP BY z, str ORDER BY z;",
+      "SELECT z, str, AVG(z), COUNT(distinct z) FROM test GROUP BY z, str ORDER BY z;",
       dt);
     c("SELECT APPROX_COUNT_DISTINCT(null_str) AS n FROM test GROUP BY x ORDER BY n;",
       "SELECT COUNT(distinct null_str) AS n FROM test GROUP BY x ORDER BY n;",
@@ -1034,14 +1034,14 @@ TEST(Select, ComplexQueries) {
     {
       auto crt_row = rows->getNextRow(true, true);
       CHECK_EQ(size_t(2), crt_row.size());
-      ASSERT_EQ(v<int64_t>(crt_row[0]), 51);
-      ASSERT_EQ(v<int64_t>(crt_row[1]), -59 * g_num_rows / 2);
+      ASSERT_EQ(v<int64_t>(crt_row[0]), 50);
+      ASSERT_EQ(v<int64_t>(crt_row[1]), -295);
     }
     {
       auto crt_row = rows->getNextRow(true, true);
       CHECK_EQ(size_t(2), crt_row.size());
-      ASSERT_EQ(v<int64_t>(crt_row[0]), 50);
-      ASSERT_EQ(v<int64_t>(crt_row[1]), -59 * g_num_rows / 2);
+      ASSERT_EQ(v<int64_t>(crt_row[0]), 49);
+      ASSERT_EQ(v<int64_t>(crt_row[1]), -590);
     }
     auto empty_row = rows->getNextRow(true, true);
     CHECK(empty_row.empty());
@@ -2362,6 +2362,7 @@ TEST(Select, CastFromLiteral) {
     c("SELECT CAST(2.3 AS NUMERIC(2, 1)) FROM test;", dt);
     c("SELECT CAST(CAST(10 AS float) / CAST(3600 as float) AS float) FROM test LIMIT 1;", dt);
     c("SELECT CAST(CAST(10 AS double) / CAST(3600 as double) AS double) FROM test LIMIT 1;", dt);
+    c("SELECT z from test where z = -78;", dt);
   }
 }
 
@@ -3951,7 +3952,7 @@ int create_and_populate_tables() {
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
-        "INSERT INTO test VALUES(8, 43, 102, 1002, 'f', 1.2, 101.2, -101.2, 2.4, -2002.4, 'bar', null, 'bar', null, "
+        "INSERT INTO test VALUES(8, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, 2.4, -2002.4, 'bar', null, 'bar', null, "
         "'real_bar', NULL, '2014-12-13 22:23:15', '15:13:14', NULL, NULL, NULL, 222.2, 222.2, null, null, null, "
         "-2147483647, "
         "9223372036854775807, -9223372036854775808);"};
