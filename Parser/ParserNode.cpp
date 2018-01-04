@@ -201,7 +201,8 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(const SQLOps optype,
   }
   auto check_compression = (g_fast_strcmp) ? IS_COMPARISON(optype) : IS_EQUIVALENCE(optype) || optype == kNE;
   if (check_compression) {
-    if (new_left_type.get_compression() == kENCODING_DICT && new_right_type.get_compression() == kENCODING_DICT) {
+    if (new_left_type.get_compression() == kENCODING_DICT && new_right_type.get_compression() == kENCODING_DICT &&
+        new_left_type.get_comp_param() == new_right_type.get_comp_param()) {
       // do nothing
     } else if (new_left_type.get_compression() == kENCODING_DICT &&
                new_right_type.get_compression() == kENCODING_NONE) {

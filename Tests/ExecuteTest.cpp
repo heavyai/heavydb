@@ -1183,6 +1183,8 @@ TEST(Select, Strings) {
     c("SELECT COUNT(*) FROM test WHERE str = 'foo' OR str = 'bar';", dt);
     c("SELECT COUNT(*) FROM test WHERE str = real_str;", dt);
     c("SELECT COUNT(*) FROM test WHERE str <> str;", dt);
+    c("SELECT COUNT(*) FROM test WHERE ss <> str;", dt);
+    c("SELECT COUNT(*) FROM test WHERE ss = str;", dt);
     c("SELECT COUNT(*) FROM test WHERE LENGTH(str) = 3;", dt);
     c("SELECT fixed_str, COUNT(*) FROM test GROUP BY fixed_str HAVING COUNT(*) > 5 ORDER BY fixed_str;", dt);
     c("SELECT fixed_str, COUNT(*) FROM test WHERE fixed_str = 'bar' GROUP BY fixed_str HAVING COUNT(*) > 4 ORDER BY "
