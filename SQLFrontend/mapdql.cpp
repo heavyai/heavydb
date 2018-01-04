@@ -142,6 +142,8 @@ enum ThriftService {
   kDISCONNECT,
   kSQL,
   kGET_TABLES,
+  kGET_PHYSICAL_TABLES,
+  kGET_VIEWS,
   kGET_DATABASES,
   kGET_USERS,
   kSET_EXECUTION_MODE,
@@ -191,6 +193,12 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         break;
       case kGET_TABLES:
         context.client.get_tables(context.names_return, context.session);
+        break;
+      case kGET_PHYSICAL_TABLES:
+        context.client.get_physical_tables(context.names_return, context.session);
+        break;
+      case kGET_VIEWS:
+        context.client.get_views(context.names_return, context.session);
         break;
       case kGET_DATABASES:
         context.client.get_databases(context.dbinfos_return, context.session);
@@ -686,13 +694,14 @@ void process_backslash_commands(char* command, ClientContext& context) {
         }
         std::string encoding;
         if (p.col_type.type == TDatumType::STR) {
-          encoding =
-              (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                                 std::to_string(p.col_type.comp_param) + ")");
+          encoding = (p.col_type.encoding == 0 ? " ENCODING NONE"
+                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                     std::to_string(p.col_type.comp_param) + ")");
 
         } else {
-          encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                          std::to_string(p.col_type.comp_param) + ")");
+          encoding = (p.col_type.encoding == 0 ? ""
+                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                     std::to_string(p.col_type.comp_param) + ")");
         }
         std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
                   << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
@@ -795,23 +804,19 @@ void process_backslash_commands(char* command, ClientContext& context) {
       return;
     }
     case 't': {
-      if (thrift_with_retry(kGET_TABLES, context, nullptr))
-        for (auto p : context.names_return)
-          if (thrift_with_retry(kGET_TABLE_DETAILS, context, p.c_str()))
-            if (context.table_details.view_sql.empty()) {
-              std::cout << p << std::endl;
-            }
-
+      if (thrift_with_retry(kGET_PHYSICAL_TABLES, context, nullptr)) {
+        for (auto p : context.names_return) {
+          std::cout << p << std::endl;
+        }
+      }
       return;
     }
     case 'v': {
-      if (thrift_with_retry(kGET_TABLES, context, nullptr))
-        for (auto p : context.names_return)
-          if (thrift_with_retry(kGET_TABLE_DETAILS, context, p.c_str()))
-            if (!context.table_details.view_sql.empty()) {
-              std::cout << p << std::endl;
-            }
-
+      if (thrift_with_retry(kGET_VIEWS, context, nullptr)) {
+        for (auto p : context.names_return) {
+          std::cout << p << std::endl;
+        }
+      }
       return;
     }
     case 'c': {
