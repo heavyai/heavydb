@@ -377,6 +377,8 @@ service MapD {
   list<TServerStatus> get_status(1: TSessionId session) throws (1: TMapDException e)
   TClusterHardwareInfo get_hardware_info(1: TSessionId session) throws (1: TMapDException e)
   list<string> get_tables(1: TSessionId session) throws (1: TMapDException e)
+  list<string> get_physical_tables(1: TSessionId session) throws (1: TMapDException e)
+  list<string> get_views(1: TSessionId session) throws (1: TMapDException e)
   TTableDetails get_table_details(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
   TTableDetails get_internal_table_details(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
   list<string> get_users(1: TSessionId session) throws (1: TMapDException e)

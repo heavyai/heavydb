@@ -93,6 +93,8 @@ class MapDRenderHandler;
 class MapDAggHandler;
 class MapDLeafHandler;
 
+enum GetTablesType { GET_PHYSICAL_TABLES_AND_VIEWS, GET_PHYSICAL_TABLES, GET_VIEWS };
+
 typedef std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> SessionMap;
 
 class MapDHandler : public MapDIf {
@@ -135,6 +137,8 @@ class MapDHandler : public MapDIf {
   bool isUserAuthorized(const Catalog_Namespace::SessionInfo& session_info, const std::string command_name);
   bool hasTableAccessPrivileges(const TableDescriptor* td, const TSessionId& session);
   void get_tables(std::vector<std::string>& _return, const TSessionId& session);
+  void get_physical_tables(std::vector<std::string>& _return, const TSessionId& session);
+  void get_views(std::vector<std::string>& _return, const TSessionId& session);
   void get_table_details(TTableDetails& _return, const TSessionId& session, const std::string& table_name);
   void get_internal_table_details(TTableDetails& _return, const TSessionId& session, const std::string& table_name);
   void get_users(std::vector<std::string>& _return, const TSessionId& session);
@@ -328,6 +332,9 @@ class MapDHandler : public MapDIf {
 
  private:
   void check_table_load_privileges(const TSessionId& session, const std::string& table_name);
+  void get_tables_impl(std::vector<std::string>& table_names,
+                       const TSessionId& session,
+                       const GetTablesType get_tables_type);
   void get_table_details_impl(TTableDetails& _return,
                               const TSessionId& session,
                               const std::string& table_name,

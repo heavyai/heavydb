@@ -1077,7 +1077,9 @@ bool MapDHandler::hasTableAccessPrivileges(const TableDescriptor* td, const TSes
   return hasAccessPrivs;
 }
 
-void MapDHandler::get_tables(std::vector<std::string>& table_names, const TSessionId& session) {
+void MapDHandler::get_tables_impl(std::vector<std::string>& table_names,
+                                  const TSessionId& session,
+                                  const GetTablesType get_tables_type) {
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
   const auto tables = cat.getAllTableMetadata();
@@ -1086,12 +1088,38 @@ void MapDHandler::get_tables(std::vector<std::string>& table_names, const TSessi
       // skip shards, they're not standalone tables
       continue;
     }
+    switch (get_tables_type) {
+      case GET_PHYSICAL_TABLES: {
+        if (td->isView) {
+          continue;
+        }
+        break;
+      }
+      case GET_VIEWS: {
+        if (!td->isView) {
+          continue;
+        }
+      }
+      default: { break; }
+    }
     if (cat.isAccessPrivCheckEnabled() && !hasTableAccessPrivileges(td, session)) {
       // skip table, as there are no privileges to access it
       continue;
     }
     table_names.push_back(td->tableName);
   }
+}
+
+void MapDHandler::get_tables(std::vector<std::string>& table_names, const TSessionId& session) {
+  get_tables_impl(table_names, session, GET_PHYSICAL_TABLES_AND_VIEWS);
+}
+
+void MapDHandler::get_physical_tables(std::vector<std::string>& table_names, const TSessionId& session) {
+  get_tables_impl(table_names, session, GET_PHYSICAL_TABLES);
+}
+
+void MapDHandler::get_views(std::vector<std::string>& table_names, const TSessionId& session) {
+  get_tables_impl(table_names, session, GET_VIEWS);
 }
 
 void MapDHandler::get_users(std::vector<std::string>& user_names, const TSessionId& session) {
