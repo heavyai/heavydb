@@ -924,7 +924,7 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog_Namespace::Catal
   if (cd->columnType.get_compression() == EncodingType::kENCODING_DICT && cat != nullptr) {
     // have to get the actual size of the encoding from the dictionary definition
     const int dict_id = cd->columnType.get_comp_param();
-    if (!cat->getMetadataForDict(dict_id)) {
+    if (!cat->getMetadataForDict(dict_id, false)) {
       col_type.col_type.comp_param = 0;
       return col_type;
     }
