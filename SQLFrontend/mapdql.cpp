@@ -157,6 +157,7 @@ enum ThriftService {
   kIMPORT_GEO_TABLE,
   kINTERRUPT,
   kSET_TABLE_EPOCH,
+  kSET_TABLE_EPOCH_BY_NAME,
   kGET_TABLE_EPOCH,
   kGET_TABLE_EPOCH_BY_NAME,
   kGET_SERVER_STATUS,
@@ -241,6 +242,9 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         break;
       case kSET_TABLE_EPOCH:
         context.client.set_table_epoch(context.session, context.db_id, context.table_id, context.epoch_value);
+        break;
+      case kSET_TABLE_EPOCH_BY_NAME:
+        context.client.set_table_epoch_by_name(context.session, context.table_name, context.epoch_value);
         break;
       case kGET_TABLE_EPOCH:
         context.epoch_value = context.client.get_table_epoch(context.session, context.db_id, context.table_id);
@@ -398,7 +402,7 @@ int run_query(ClientContext& context, std::string query) {
   // return 4;
 }
 
-void get_table_epoch(ClientContext& context, std::string table_specifier) {
+void get_table_epoch(ClientContext& context, const std::string& table_specifier) {
   if (table_specifier.size() == 0) {
     std::cerr << "get table epoch requires table to be specified by name or by db_id:table_id" << std::endl;
     return;
@@ -545,51 +549,94 @@ void export_dashboard(ClientContext& context, std::string dash_details) {
   }
 }
 
-void set_table_epoch(ClientContext& context, std::string table_details) {
-  std::vector<std::string> split_result;
-
-  boost::split(split_result,
-               table_details,
-               boost::is_any_of(":"),
-               boost::token_compress_on);  // SplitVec == { "hello abc","ABC","aBc goodbye" }
-
-  if (split_result.size() != 3) {
-    std::cerr << "Set table epoch does not contain db_id:table_id:epoch " << table_details << std::endl;
+void set_table_epoch(ClientContext& context, const std::string& table_details) {
+  if (table_details.size() == 0) {
+    std::cerr << "set table epoch requires table and epoch to be specified by name epoch or by db_id:table_id:epoch"
+              << std::endl;
     return;
   }
+  if (isdigit(table_details.at(0))) {
+    std::vector<std::string> split_result;
 
-  // validate db identifier is a number
-  try {
-    context.db_id = std::stoi(split_result[0]);
-  } catch (std::exception& e) {
-    std::cerr << "non numeric db number: " << table_details << std::endl;
-    return;
-  }
+    boost::split(split_result,
+                 table_details,
+                 boost::is_any_of(":"),
+                 boost::token_compress_on);  // SplitVec == { "hello abc","ABC","aBc goodbye" }
 
-  // validate table identifier is a number
-  try {
-    context.table_id = std::stoi(split_result[1]);
-  } catch (std::exception& e) {
-    std::cerr << "non-numeric table number: " << table_details << std::endl;
-    return;
-  }
+    if (split_result.size() != 3) {
+      std::cerr << "Set table epoch does not contain db_id:table_id:epoch " << table_details << std::endl;
+      return;
+    }
 
-  // validate epoch value
-  try {
-    context.epoch_value = std::stoi(split_result[2]);
-  } catch (std::exception& e) {
-    std::cerr << "non-numeric epoch number: " << table_details << std::endl;
-    return;
-  }
-  if (context.epoch_value < 0) {
-    std::cerr << "Epoch value can not be negative: " << table_details << std::endl;
-    return;
-  }
+    // validate db identifier is a number
+    try {
+      context.db_id = std::stoi(split_result[0]);
+    } catch (std::exception& e) {
+      std::cerr << "non numeric db number: " << table_details << std::endl;
+      return;
+    }
 
-  if (thrift_with_retry(kSET_TABLE_EPOCH, context, nullptr)) {
-    std::cout << "table epoch set" << std::endl;
+    // validate table identifier is a number
+    try {
+      context.table_id = std::stoi(split_result[1]);
+    } catch (std::exception& e) {
+      std::cerr << "non-numeric table number: " << table_details << std::endl;
+      return;
+    }
+
+    // validate epoch value
+    try {
+      context.epoch_value = std::stoi(split_result[2]);
+    } catch (std::exception& e) {
+      std::cerr << "non-numeric epoch number: " << table_details << std::endl;
+      return;
+    }
+    if (context.epoch_value < 0) {
+      std::cerr << "Epoch value can not be negative: " << table_details << std::endl;
+      return;
+    }
+
+    if (thrift_with_retry(kSET_TABLE_EPOCH, context, nullptr)) {
+      std::cout << "table epoch set" << std::endl;
+    } else {
+      std::cout << "Cannot connect to MapD Server." << std::endl;
+    }
   } else {
-    std::cout << "Cannot connect to MapD Server." << std::endl;
+    std::vector<std::string> split_result;
+    boost::split(split_result, table_details, boost::is_any_of(" "), boost::token_compress_on);
+
+    if (split_result.size() < 2) {
+      std::cerr << "Set table epoch does not contain table_name epoch " << std::endl;
+      return;
+    }
+
+    if (thrift_with_retry(kGET_PHYSICAL_TABLES, context, nullptr)) {
+      if (std::find(context.names_return.begin(), context.names_return.end(), split_result[0]) ==
+          context.names_return.end()) {
+        std::cerr << "table " << split_result[0] << " not found" << std::endl;
+        return;
+      }
+    } else {
+      std::cerr << "Cannot connect to MapD Server." << std::endl;
+      return;
+    }
+    context.table_name = split_result[0];
+    // validate epoch value
+    try {
+      context.epoch_value = std::stoi(split_result[1]);
+    } catch (std::exception& e) {
+      std::cerr << "non-numeric epoch number: " << table_details << std::endl;
+      return;
+    }
+    if (context.epoch_value < 0) {
+      std::cerr << "Epoch value can not be negative: " << table_details << std::endl;
+      return;
+    }
+    if (thrift_with_retry(kSET_TABLE_EPOCH_BY_NAME, context, nullptr)) {
+      std::cout << "table epoch set" << std::endl;
+    } else {
+      std::cout << "Cannot connect to MapD Server." << std::endl;
+    }
   }
 }
 
@@ -1784,7 +1831,8 @@ int main(int argc, char** argv) {
       context.table_name = strtok(nullptr, " ");
       (void)thrift_with_retry(kIMPORT_GEO_TABLE, context, nullptr);
     } else if (!strncmp(line, "\\ste", 4)) {
-      std::string table_details = strtok(line + 5, " ");
+      std::string table_details = line + 5;
+      table_details.erase(table_details.find_last_not_of(" \n\r\t") + 1);
       set_table_epoch(context, table_details);
     } else if (!strncmp(line, "\\gte", 4)) {
       std::string table_details = strtok(line + 5, " ");

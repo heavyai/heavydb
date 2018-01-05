@@ -391,6 +391,7 @@ service MapD {
   void clear_cpu_memory(1: TSessionId session) throws (1: TMapDException e)
   void clear_gpu_memory(1: TSessionId session) throws (1: TMapDException e)
   void set_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id 4: i32 new_epoch) throws (1: TMapDException e)
+  void set_table_epoch_by_name (1: TSessionId session 2: string table_name 3: i32 new_epoch) throws (1: TMapDException e)
   i32 get_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id);
   i32 get_table_epoch_by_name (1: TSessionId session 2: string table_name);
   # query, render

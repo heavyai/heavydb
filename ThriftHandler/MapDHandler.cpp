@@ -2689,6 +2689,24 @@ void MapDHandler::set_table_epoch(const TSessionId& session, const int db_id, co
   cat.setTableEpoch(db_id, table_id, new_epoch);
 }
 
+// check and reset epoch if a request has been made
+void MapDHandler::set_table_epoch_by_name(const TSessionId& session,
+                                          const std::string& table_name,
+                                          const int new_epoch) {
+  const auto session_info = get_session(session);
+  if (!session_info.get_currentUser().isSuper) {
+    throw std::runtime_error("Only superuser can set_table_epoch");
+  }
+  auto& cat = session_info.get_catalog();
+  auto td =
+      cat.getMetadataForTable(table_name, false);  // don't populate fragmenter on this call since we only want metadata
+  int32_t db_id = cat.get_currentDB().dbId;
+  if (leaf_aggregator_.leafCount() > 0) {
+    return leaf_aggregator_.set_table_epochLeaf(session_info, db_id, td->tableId, new_epoch);
+  }
+  cat.setTableEpoch(db_id, td->tableId, new_epoch);
+}
+
 int32_t MapDHandler::get_table_epoch(const TSessionId& session, const int32_t db_id, const int32_t table_id) {
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
