@@ -245,7 +245,7 @@ class Catalog {
    * @return pointer to const TableDescriptor object queried for or nullptr if it does not exist.
    */
 
-  const TableDescriptor* getMetadataForTable(const std::string& tableName) const;
+  const TableDescriptor* getMetadataForTable(const std::string& tableName, const bool populateFragmenter = true) const;
   const TableDescriptor* getMetadataForTable(int tableId) const;
 
   const ColumnDescriptor* getMetadataForColumn(int tableId, const std::string& colName) const;

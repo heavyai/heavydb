@@ -962,7 +962,8 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
                                          const bool get_system) {
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
-  auto td = cat.getMetadataForTable(table_name);
+  auto td =
+      cat.getMetadataForTable(table_name, false);  // don't populate fragmenter on this call since we only want metadata
   if (!td) {
     THROW_MAPD_EXCEPTION("Table " + table_name + " doesn't exist");
   }

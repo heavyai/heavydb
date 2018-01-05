@@ -1616,15 +1616,17 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
   LOG(INFO) << "Instantiating Fragmenter for table " << td->tableName << " took " << time_ms << "ms";
 }
 
-const TableDescriptor* Catalog::getMetadataForTable(const string& tableName) const {
+const TableDescriptor* Catalog::getMetadataForTable(const string& tableName, const bool populateFragmenter) const {
+  // we give option not to populate fragmenter (default true/yes) as it can be heavy for pure metadata calls
   std::lock_guard<std::mutex> lock(cat_mutex_);
   auto tableDescIt = tableDescriptorMap_.find(to_upper(tableName));
   if (tableDescIt == tableDescriptorMap_.end()) {  // check to make sure table exists
     return nullptr;
   }
   TableDescriptor* td = tableDescIt->second;
-  if (td->fragmenter == nullptr && !td->isView)
+  if (populateFragmenter && td->fragmenter == nullptr && !td->isView) {
     instantiateFragmenter(td);
+  }
   return td;  // returns pointer to table descriptor
 }
 
