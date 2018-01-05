@@ -153,6 +153,7 @@ class MapDHandler : public MapDIf {
   void clear_gpu_memory(const TSessionId& session);
   void set_table_epoch(const TSessionId& session, const int db_id, const int table_id, const int new_epoch);
   int32_t get_table_epoch(const TSessionId& session, const int32_t db_id, const int32_t table_id);
+  int32_t get_table_epoch_by_name(const TSessionId& session, const std::string& table_name);
   // query, render
   void sql_execute(TQueryResult& _return,
                    const TSessionId& session,

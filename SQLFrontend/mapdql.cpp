@@ -158,6 +158,7 @@ enum ThriftService {
   kINTERRUPT,
   kSET_TABLE_EPOCH,
   kGET_TABLE_EPOCH,
+  kGET_TABLE_EPOCH_BY_NAME,
   kGET_SERVER_STATUS,
   kIMPORT_DASHBOARD,
   kEXPORT_DASHBOARD,
@@ -243,6 +244,9 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         break;
       case kGET_TABLE_EPOCH:
         context.epoch_value = context.client.get_table_epoch(context.session, context.db_id, context.table_id);
+        break;
+      case kGET_TABLE_EPOCH_BY_NAME:
+        context.epoch_value = context.client.get_table_epoch_by_name(context.session, context.table_name);
         break;
       case kGET_SERVER_STATUS:
         context.client.get_status(context.cluster_status, context.session);
@@ -394,39 +398,65 @@ int run_query(ClientContext& context, std::string query) {
   // return 4;
 }
 
-void get_table_epoch(ClientContext& context, std::string table_details) {
-  std::vector<std::string> split_result;
-
-  boost::split(split_result,
-               table_details,
-               boost::is_any_of(":"),
-               boost::token_compress_on);  // SplitVec == { "hello abc","ABC","aBc goodbye" }
-
-  if (split_result.size() != 2) {
-    std::cerr << "set table epoch does not contain db_id:table_id " << table_details << std::endl;
+void get_table_epoch(ClientContext& context, std::string table_specifier) {
+  if (table_specifier.size() == 0) {
+    std::cerr << "get table epoch requires table to be specified by name or by db_id:table_id" << std::endl;
     return;
   }
 
-  // validate db identifier is a number
-  try {
-    context.db_id = std::stoi(split_result[0]);
-  } catch (std::exception& e) {
-    std::cerr << "non numeric db number: " << table_details << std::endl;
-    return;
-  }
+  if (isdigit(table_specifier.at(0))) {
+    std::vector<std::string> split_result;
 
-  // validate table identifier is a number
-  try {
-    context.table_id = std::stoi(split_result[1]);
-  } catch (std::exception& e) {
-    std::cerr << "non-numeric table number: " << table_details << std::endl;
-    return;
-  }
+    boost::split(split_result,
+                 table_specifier,
+                 boost::is_any_of(":"),
+                 boost::token_compress_on);  // SplitVec == { "hello abc","ABC","aBc goodbye" }
 
-  if (thrift_with_retry(kGET_TABLE_EPOCH, context, nullptr)) {
-    std::cout << "table epoch is " << context.epoch_value << std::endl;
+    if (split_result.size() != 2) {
+      std::cerr << "get table epoch does not contain db_id:table_id " << table_specifier << std::endl;
+      return;
+    }
+
+    // validate db identifier is a number
+    try {
+      context.db_id = std::stoi(split_result[0]);
+    } catch (std::exception& e) {
+      std::cerr << "non numeric db number: " << table_specifier << std::endl;
+      return;
+    }
+    // validate table identifier is a number
+    try {
+      context.table_id = std::stoi(split_result[1]);
+    } catch (std::exception& e) {
+      std::cerr << "non-numeric table number: " << table_specifier << std::endl;
+      return;
+    }
+
+    if (thrift_with_retry(kGET_TABLE_EPOCH, context, nullptr)) {
+      std::cout << "table epoch is " << context.epoch_value << std::endl;
+    } else {
+      std::cerr << "Cannot connect to MapD Server." << std::endl;
+    }
   } else {
-    std::cout << "Cannot connect to MapD Server." << std::endl;
+    // presume we have a table name
+    // get the db_id and table_id from the table metadata
+    if (thrift_with_retry(kGET_PHYSICAL_TABLES, context, nullptr)) {
+      if (std::find(context.names_return.begin(), context.names_return.end(), table_specifier) ==
+          context.names_return.end()) {
+        std::cerr << "table " << table_specifier << " not found" << std::endl;
+        return;
+      }
+    } else {
+      std::cerr << "Cannot connect to MapD Server." << std::endl;
+      return;
+    }
+    context.table_name = table_specifier;
+
+    if (thrift_with_retry(kGET_TABLE_EPOCH_BY_NAME, context, nullptr)) {
+      std::cout << "table epoch is " << context.epoch_value << std::endl;
+    } else {
+      std::cerr << "Cannot connect to MapD Server." << std::endl;
+    }
   }
 }
 

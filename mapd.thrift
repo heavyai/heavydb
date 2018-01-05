@@ -392,6 +392,7 @@ service MapD {
   void clear_gpu_memory(1: TSessionId session) throws (1: TMapDException e)
   void set_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id 4: i32 new_epoch) throws (1: TMapDException e)
   i32 get_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id);
+  i32 get_table_epoch_by_name (1: TSessionId session 2: string table_name);
   # query, render
   TQueryResult sql_execute(1: TSessionId session, 2: string query 3: bool column_format, 4: string nonce, 5: i32 first_n = -1, 6: i32 at_most_n = -1) throws (1: TMapDException e)
   TDataFrame sql_execute_df(1: TSessionId session, 2: string query 3: TDeviceType device_type 4: i32 device_id = 0 5: i32 first_n = -1) throws (1: TMapDException e)

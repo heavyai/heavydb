@@ -2698,3 +2698,15 @@ int32_t MapDHandler::get_table_epoch(const TSessionId& session, const int32_t db
   }
   return cat.getTableEpoch(db_id, table_id);
 }
+
+int32_t MapDHandler::get_table_epoch_by_name(const TSessionId& session, const std::string& table_name) {
+  const auto session_info = get_session(session);
+  auto& cat = session_info.get_catalog();
+  auto td =
+      cat.getMetadataForTable(table_name, false);  // don't populate fragmenter on this call since we only want metadata
+  int32_t db_id = cat.get_currentDB().dbId;
+  if (leaf_aggregator_.leafCount() > 0) {
+    return leaf_aggregator_.get_table_epochLeaf(session_info, db_id, td->tableId);
+  }
+  return cat.getTableEpoch(db_id, td->tableId);
+}
