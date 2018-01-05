@@ -278,9 +278,20 @@ int main(int argc, char** argv) {
   desc.add_options()("null-div-by-zero",
                      po::value<bool>(&g_null_div_by_zero)->default_value(g_null_div_by_zero)->implicit_value(true),
                      "Return null on division by zero instead of throwing an exception");
+  desc.add_options()("left-deep-join-optimization",
+                     po::value<bool>(&g_left_deep_join_optimization)
+                         ->default_value(g_left_deep_join_optimization)
+                         ->implicit_value(true),
+                     "Enable left-deep join optimization");
+  desc.add_options()(
+      "from-table-reordering",
+      po::value<bool>(&g_from_table_reordering)->default_value(g_from_table_reordering)->implicit_value(true),
+      "Enable automatic table reordering in FROM clause");
+  desc.add_options()(
+      "help-advanced",
+      "Print advanced and experimental options. These options should not normally be used in production.");
 
   po::options_description desc_adv("Advanced options");
-  desc_adv.add_options()("help-advanced", "Print advanced help messages");
   desc_adv.add_options()("jit-debug",
                          po::value<bool>(&jit_debug)->default_value(jit_debug)->implicit_value(true),
                          "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery");
@@ -321,15 +332,6 @@ int main(int argc, char** argv) {
           ->default_value(g_trivial_loop_join_threshold)
           ->implicit_value(1000),
       "The maximum number of rows in the inner table of a loop join considered to be trivially small");
-  desc.add_options()("left-deep-join-optimization",
-                     po::value<bool>(&g_left_deep_join_optimization)
-                         ->default_value(g_left_deep_join_optimization)
-                         ->implicit_value(true),
-                     "Enable left-deep join optimization");
-  desc.add_options()(
-      "from-table-reordering",
-      po::value<bool>(&g_from_table_reordering)->default_value(g_from_table_reordering)->implicit_value(true),
-      "Enable automatic table reordering in FROM clause");
   desc_adv.add_options()(
       "cuda-block-size",
       po::value<size_t>(&mapd_parameters.cuda_block_size)->default_value(mapd_parameters.cuda_block_size),
