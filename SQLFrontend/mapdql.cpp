@@ -789,7 +789,7 @@ void process_backslash_commands(char* command, ClientContext& context) {
       std::cout << "\\v [regex] List all views, optionally matching regex.\n";
       std::cout << "\\d <table> List all columns of a table or a view.\n";
       std::cout << "\\c <database> <user> <password>.\n";
-      std::cout << "\\o <table> Return a memory optimized schema based on current data distribution in table";
+      std::cout << "\\o <table> Return a memory optimized schema based on current data distribution in table.\n";
       std::cout << "\\gpu Execute in GPU mode's.\n";
       std::cout << "\\cpu Execute in CPU mode's.\n";
       std::cout << "\\multiline Set multi-line command line mode.\n";
