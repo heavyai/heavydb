@@ -772,7 +772,7 @@ bool on_valid_regex_present(COMMAND_TYPE const& command_input,
   return false;
 }
 
-auto yield_default_filter_function(boost::regex& filter_expression) {
+std::function<bool(std::string const&)> yield_default_filter_function(boost::regex& filter_expression) {
   return [&filter_expression](std::string const& input) -> bool {
     boost::smatch results;
     return !boost::regex_match(input, results, filter_expression);
