@@ -3479,6 +3479,48 @@ TEST(Select, Joins_LeftOuterJoin) {
     c("SELECT a.x FROM test a LEFT OUTER JOIN test_inner b ON TRUE ORDER BY a.x ASC;",
       "SELECT a.x FROM test a LEFT OUTER JOIN test_inner b ON 1 ORDER BY a.x ASC;",
       dt);
+    c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON test.x > test_inner.x LEFT "
+      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
+      "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON test.x > test_inner.x LEFT "
+      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC, hash_join_test.x ASC;",
+      dt);
+    c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON test.x = test_inner.x LEFT "
+      "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
+      "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON test.x = test_inner.x LEFT "
+      "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC, hash_join_test.x ASC;",
+      dt);
+    c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON test.x > test_inner.x INNER "
+      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
+      "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON test.x > test_inner.x INNER "
+      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC, hash_join_test.x ASC;",
+      dt);
+    c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON test.x = test_inner.x INNER "
+      "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
+      "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON test.x = test_inner.x INNER "
+      "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC, hash_join_test.x ASC;",
+      dt);
+    c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test INNER JOIN test_inner ON test.x > test_inner.x LEFT "
+      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
+      "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test INNER JOIN test_inner ON test.x > test_inner.x LEFT "
+      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC, hash_join_test.x ASC;",
+      dt);
+    c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test INNER JOIN test_inner ON test.x = test_inner.x LEFT "
+      "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
+      "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test INNER JOIN test_inner ON test.x = test_inner.x LEFT "
+      "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC, hash_join_test.x ASC;",
+      dt);
   }
 }
 
