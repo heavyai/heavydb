@@ -93,32 +93,13 @@ llvm::BasicBlock* JoinLoop::codegen(
                                   join_loop.kind_ == JoinLoopKind::UpperBound ? iteration_domain.upper_bound
                                                                               : iteration_domain.element_count);
         if (join_loop.type_ == JoinType::LEFT) {
-          const auto current_condition_match_ptr =
-              builder.CreateAlloca(get_int_type(1, context), nullptr, "outer_condition_current_match");
-          builder.CreateStore(ll_bool(false, context), current_condition_match_ptr);
-          const auto evaluate_outer_condition_bb =
-              llvm::BasicBlock::Create(context, "eval_outer_cond_" + join_loop.name_, parent_func);
-          const auto after_evaluate_outer_condition_bb =
-              llvm::BasicBlock::Create(context, "after_eval_outer_cond_" + join_loop.name_, parent_func);
-          builder.CreateCondBr(have_more_inner_rows, evaluate_outer_condition_bb, after_evaluate_outer_condition_bb);
-          builder.SetInsertPoint(evaluate_outer_condition_bb);
-          const auto current_condition_match =
-              join_loop.outer_condition_match_ ? join_loop.outer_condition_match_(iterators) : ll_bool(true, context);
-          builder.CreateStore(current_condition_match, current_condition_match_ptr);
-          const auto updated_condition_match =
-              builder.CreateOr(current_condition_match, builder.CreateLoad(found_an_outer_match_ptr));
-          builder.CreateStore(updated_condition_match, found_an_outer_match_ptr);
-          builder.CreateBr(after_evaluate_outer_condition_bb);
-          builder.SetInsertPoint(after_evaluate_outer_condition_bb);
-          const auto no_matches_found = builder.CreateNot(builder.CreateLoad(found_an_outer_match_ptr));
-          const auto no_more_inner_rows =
-              builder.CreateICmpEQ(iteration_counter,
-                                   join_loop.kind_ == JoinLoopKind::UpperBound ? iteration_domain.upper_bound
-                                                                               : iteration_domain.element_count);
-          prev_comparison_result = builder.CreateOr(builder.CreateLoad(current_condition_match_ptr),
-                                                    builder.CreateAnd(no_matches_found, no_more_inner_rows));
-          join_loop.found_outer_matches_(builder.CreateLoad(current_condition_match_ptr));
-          last_head_bb = after_evaluate_outer_condition_bb;
+          std::tie(last_head_bb, prev_comparison_result) = evaluateOuterJoinCondition(join_loop,
+                                                                                      iteration_domain,
+                                                                                      iterators,
+                                                                                      iteration_counter,
+                                                                                      have_more_inner_rows,
+                                                                                      found_an_outer_match_ptr,
+                                                                                      builder);
         } else {
           prev_comparison_result = have_more_inner_rows;
           last_head_bb = head_bb;
@@ -188,4 +169,42 @@ llvm::BasicBlock* JoinLoop::codegen(
   builder.CreateCondBr(
       prev_comparison_result, body_bb, prev_join_type == JoinType::LEFT ? prev_iter_advance_bb : prev_exit_bb);
   return entry;
+}
+
+std::pair<llvm::BasicBlock*, llvm::Value*> JoinLoop::evaluateOuterJoinCondition(
+    const JoinLoop& join_loop,
+    const JoinLoopDomain& iteration_domain,
+    const std::vector<llvm::Value*>& iterators,
+    llvm::Value* iteration_counter,
+    llvm::Value* have_more_inner_rows,
+    llvm::Value* found_an_outer_match_ptr,
+    llvm::IRBuilder<>& builder) {
+  auto& context = builder.getContext();
+  const auto parent_func = builder.GetInsertBlock()->getParent();
+  const auto current_condition_match_ptr =
+      builder.CreateAlloca(get_int_type(1, context), nullptr, "outer_condition_current_match");
+  builder.CreateStore(ll_bool(false, context), current_condition_match_ptr);
+  const auto evaluate_outer_condition_bb =
+      llvm::BasicBlock::Create(context, "eval_outer_cond_" + join_loop.name_, parent_func);
+  const auto after_evaluate_outer_condition_bb =
+      llvm::BasicBlock::Create(context, "after_eval_outer_cond_" + join_loop.name_, parent_func);
+  builder.CreateCondBr(have_more_inner_rows, evaluate_outer_condition_bb, after_evaluate_outer_condition_bb);
+  builder.SetInsertPoint(evaluate_outer_condition_bb);
+  const auto current_condition_match =
+      join_loop.outer_condition_match_ ? join_loop.outer_condition_match_(iterators) : ll_bool(true, context);
+  builder.CreateStore(current_condition_match, current_condition_match_ptr);
+  const auto updated_condition_match =
+      builder.CreateOr(current_condition_match, builder.CreateLoad(found_an_outer_match_ptr));
+  builder.CreateStore(updated_condition_match, found_an_outer_match_ptr);
+  builder.CreateBr(after_evaluate_outer_condition_bb);
+  builder.SetInsertPoint(after_evaluate_outer_condition_bb);
+  const auto no_matches_found = builder.CreateNot(builder.CreateLoad(found_an_outer_match_ptr));
+  const auto no_more_inner_rows = builder.CreateICmpEQ(
+      iteration_counter,
+      join_loop.kind_ == JoinLoopKind::UpperBound ? iteration_domain.upper_bound : iteration_domain.element_count);
+  // Do the iteration if the outer condition is true or it's the last iteration and no matches have been found.
+  const auto do_iteration = builder.CreateOr(builder.CreateLoad(current_condition_match_ptr),
+                                             builder.CreateAnd(no_matches_found, no_more_inner_rows));
+  join_loop.found_outer_matches_(builder.CreateLoad(current_condition_match_ptr));
+  return {after_evaluate_outer_condition_bb, do_iteration};
 }
