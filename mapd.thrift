@@ -369,6 +369,10 @@ struct TDBObject {
   3: list<bool> privs
 }
 
+struct TLicenseInfo {
+  1: list<string> claims
+}
+
 service MapD {
   # connection, admin
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e)
@@ -441,4 +445,7 @@ service MapD {
   list<string> get_all_roles_for_user(1: TSessionId session 2: string userName) throws (1: TMapDException e)
   list<TAccessPrivileges> get_db_object_privileges_for_user(1: TSessionId session 2: string userName 3: i16 objectType 4: string objectName) throws (1: TMapDException e)
   list<TDBObject> get_db_objects_for_user(1: TSessionId session 2: string userName) throws (1: TMapDException e)
+  # licensing
+  TLicenseInfo set_license_key(1: TSessionId session, 2: string key, 3: string nonce = "") throws (1: TMapDException e)
+  TLicenseInfo get_license_claims(1: TSessionId session, 2: string nonce = "") throws (1: TMapDException e)
 }

@@ -293,6 +293,12 @@ class MapDHandler : public MapDIf {
                                          const int16_t objectType,
                                          const std::string& objectName);
   void get_db_objects_for_user(std::vector<TDBObject>& _return, const TSessionId& session, const std::string& userName);
+  // licensing
+  void set_license_key(TLicenseInfo& _return,
+                       const TSessionId& session,
+                       const std::string& key,
+                       const std::string& nonce);
+  void get_license_claims(TLicenseInfo& _return, const TSessionId& session, const std::string& nonce);
   // end of sync block for HAHandler and mapd.thrift
 
   TSessionId getInvalidSessionId() const;

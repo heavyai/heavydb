@@ -134,6 +134,8 @@ struct ClientContext {
   std::vector<std::string> role_names;
   std::vector<TAccessPrivileges> object_privileges;
   std::vector<TDBObject> db_objects;
+  std::string license_key;
+  TLicenseInfo license_info;
 
   ClientContext(TTransport& t, MapDClient& c)
       : transport(t), client(c), session(INVALID_SESSION_ID), execution_mode(TExecuteMode::GPU) {}
@@ -170,7 +172,9 @@ enum ThriftService {
   kGET_OBJECTS_FOR_ROLE,
   kGET_OBJECT_PRIVS,
   kGET_ROLES_FOR_USER,
-  kGET_HARDWARE_INFO
+  kGET_HARDWARE_INFO,
+  kSET_LICENSE_KEY,
+  kGET_LICENSE_CLAIMS
 };
 
 namespace {
@@ -278,6 +282,13 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         break;
       case kGET_ROLES_FOR_USER:
         context.client.get_all_roles_for_user(context.role_names, context.session, context.privs_user_name);
+        break;
+      case kSET_LICENSE_KEY:
+        context.client.set_license_key(context.license_info, context.session, context.license_key, "");
+        break;
+      case kGET_LICENSE_CLAIMS:
+        context.client.get_license_claims(context.license_info, context.session, "");
+        break;
     }
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
@@ -1640,6 +1651,33 @@ void get_all_roles_for_user(ClientContext context) {
     }
   }
 }
+
+void set_license_key(ClientContext context, const std::string& token) {
+  context.license_key = token;
+  if (thrift_with_retry(kSET_LICENSE_KEY, context, nullptr)) {
+    for (auto claims : context.license_info.claims) {
+      std::vector<std::string> jwt;
+      boost::split(jwt, claims, boost::is_any_of("."));
+      if (jwt.size() > 1) {
+        std::cout << decode64(jwt[1]) << std::endl;
+      }
+    }
+  }
+}
+
+void get_license_claims(ClientContext context) {
+  if (thrift_with_retry(kGET_LICENSE_CLAIMS, context, nullptr)) {
+    for (auto claims : context.license_info.claims) {
+      std::vector<std::string> jwt;
+      boost::split(jwt, claims, boost::is_any_of("."));
+      if (jwt.size() > 1) {
+        std::cout << decode64(jwt[1]) << std::endl;
+      }
+    }
+  } else {
+    std::cout << "Cannot connect to MapD Server." << std::endl;
+  }
+}
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -2025,9 +2063,14 @@ int main(int argc, char** argv) {
       } else {
         std::cout << "Command role_list failed because parameter user name is missing." << std::endl;
       }
-    } else if (line[0] == '\\' && line[1] == 'q')
+    } else if (line[0] == '\\' && line[1] == 'q') {
       break;
-    else if (line[0] == '\\') {
+    } else if (!strncmp(line, "\\set_license", 11)) {
+      std::string license = line + 13;
+      set_license_key(context, license);
+    } else if (!strncmp(line, "\\get_license", 11)) {
+      get_license_claims(context);
+    } else if (line[0] == '\\') {
       process_backslash_commands(line, context);
     }
     linenoiseHistoryAdd(line);                  /* Add to the history. */

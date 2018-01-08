@@ -2728,3 +2728,17 @@ int32_t MapDHandler::get_table_epoch_by_name(const TSessionId& session, const st
   }
   return cat.getTableEpoch(db_id, td->tableId);
 }
+
+void MapDHandler::set_license_key(TLicenseInfo& _return,
+                                  const TSessionId& session,
+                                  const std::string& key,
+                                  const std::string& nonce) {
+  check_read_only("set_license_key");
+  const auto session_info = get_session(session);
+  THROW_MAPD_EXCEPTION(std::string("Licensing not supported."));
+}
+
+void MapDHandler::get_license_claims(TLicenseInfo& _return, const TSessionId& session, const std::string& nonce) {
+  const auto session_info = get_session(session);
+  _return.claims.push_back("");
+}
