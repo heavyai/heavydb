@@ -753,6 +753,11 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
   if (!varlen_ptr) {
     return TargetValue(nullptr);
   }
+  if (target_info.sql_type.is_geometry()) {
+    // TODO(d): handle the non-lazy geometry case
+    std::vector<ScalarTargetValue> empty_array;
+    return TargetValue(empty_array);
+  }
   auto length = read_int_from_buff(ptr2, compact_sz2);
   if (target_info.sql_type.is_array()) {
     const auto& elem_ti = target_info.sql_type.get_elem_type();
