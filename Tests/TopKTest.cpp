@@ -52,14 +52,6 @@ std::shared_ptr<ResultSet> run_multiple_agg(
     return run_multiple_agg(query_str, device_type, true);
 }
 
-TargetValue run_simple_agg(const string& query_str, const ExecutorDeviceType device_type)
-{
-    auto rows = run_multiple_agg(query_str, device_type);
-    auto crt_row = rows->getNextRow(true, true);
-    CHECK_EQ(size_t(1), crt_row.size());
-    return crt_row[0];
-}
-
 template <class T>
 T v(const TargetValue& r)
 {
@@ -375,11 +367,6 @@ private:
 
 const ssize_t g_num_rows{ 10 };
 SQLiteComparator g_sqlite_comparator;
-
-void c(const std::string& query_string, const ExecutorDeviceType device_type)
-{
-    g_sqlite_comparator.compare(query_string, device_type);
-}
 
 void c(const std::string& query_string, const std::string& sqlite_query_string,
     const ExecutorDeviceType device_type)
