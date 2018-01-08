@@ -66,6 +66,15 @@ class JoinLoop {
       llvm::IRBuilder<>& builder);
 
  private:
+  static std::pair<llvm::BasicBlock*, llvm::Value*> evaluateOuterJoinCondition(
+      const JoinLoop& join_loop,
+      const JoinLoopDomain& iteration_domain,
+      const std::vector<llvm::Value*>& iterators,
+      llvm::Value* iteration_counter,
+      llvm::Value* have_more_inner_rows,
+      llvm::Value* found_an_outer_match_ptr,
+      llvm::IRBuilder<>& builder);
+
   const JoinLoopKind kind_;
   // SQL type of the join.
   const JoinType type_;
