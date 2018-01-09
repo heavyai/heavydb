@@ -26,6 +26,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/program_options.hpp>
 #include <sstream>
+#include <cmath>
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -3864,6 +3865,31 @@ TEST(Rounding, ROUND) {
         "ROUND(d64) AS r_d64 FROM test_rounding";
     c(select, dt);
 
+    for (int n=-9; n<0; n++) {
+      std::string i = std::to_string(n);
+      std::string rounding_base = std::to_string((int) pow(10, std::abs(n))) + ".0";
+
+
+      LOG(INFO) << "ROUND: negative 2nd operator: " << i << "\n";
+
+      std::string sqlLite_select = "SELECT CAST(ROUND((s16/"+rounding_base+")) * "+rounding_base+" AS SMALLINT) AS r_s16, "
+              "CAST(ROUND((s32/"+rounding_base+")) * "+rounding_base+" AS INT) AS r_s32, "
+              "CAST(ROUND((s64/"+rounding_base+")) * "+rounding_base+" AS BIGINT) AS r_s64, "
+              "ROUND((f32/"+rounding_base+")) * "+rounding_base+" AS r_f32, "
+              "ROUND((f64/"+rounding_base+")) * "+rounding_base+" AS r_f64, "
+              "ROUND((n64/"+rounding_base+")) * "+rounding_base+" AS r_n64, "
+              "ROUND((d64/"+rounding_base+")) * "+rounding_base+" AS r_d64 FROM test_rounding";
+
+      select = "SELECT ROUND(s16, "+i+") AS r_s16, "
+              "ROUND(s32, "+i+") AS r_s32, "
+              "ROUND(s64, "+i+") AS r_s64, "
+              "ROUND(f32, "+i+") AS r_f32, "
+              "ROUND(f64, "+i+") AS r_f64, "
+              "ROUND(n64, "+i+") AS r_n64, "
+              "ROUND(d64, "+i+") AS r_d64 FROM test_rounding";
+      c(select, sqlLite_select, dt);
+    }
+
     for (int n=0; n<10; n++) {
       std::string i = std::to_string(n);
       LOG(INFO) << "ROUND: 2nd operator: " << i << "\n";
@@ -3890,6 +3916,32 @@ TEST(Rounding, ROUND) {
         "ROUND(d64, (SELECT s16 FROM test_rounding WHERE s16 IS NULL)) AS r_d64 FROM test_rounding";
     c(select, dt);
 
+
+    LOG(INFO) << "ROUND: checking negative zero\n";
+    TargetValue val_s16 = run_simple_agg("SELECT ROUND(CAST(-1.7 as SMALLINT), -1) as r_val FROM test_rounding WHERE s16 IS NULL;", dt);
+    TargetValue val_s32 = run_simple_agg("SELECT ROUND(CAST(-1.7 as INT), -1) as r_val FROM test_rounding WHERE s16 IS NULL;", dt);
+    TargetValue val_s64 = run_simple_agg("SELECT ROUND(CAST(-1.7 as BIGINT), -1) as r_val FROM test_rounding WHERE s16 IS NULL;", dt);
+    TargetValue val_f32 = run_simple_agg("SELECT ROUND(CAST(-1.7 as FLOAT), -1) as r_val FROM test_rounding WHERE s16 IS NULL;", dt);
+    TargetValue val_f64 = run_simple_agg("SELECT ROUND(CAST(-1.7 as DOUBLE), -1) as r_val FROM test_rounding WHERE s16 IS NULL;", dt);
+    TargetValue val_n64 = run_simple_agg("SELECT ROUND(CAST(-1.7 as NUMERIC(10,5)), -1) as r_val FROM test_rounding WHERE s16 IS NULL;", dt);
+    TargetValue val_d64 = run_simple_agg("SELECT ROUND(CAST(-1.7 as DECIMAL(10,5)), -1) as r_val FROM test_rounding WHERE s16 IS NULL;", dt);
+
+
+    ASSERT_TRUE(0 == boost::get<int64_t>(boost::get<ScalarTargetValue>(val_s16)));
+    ASSERT_TRUE(0 == boost::get<int64_t>(boost::get<ScalarTargetValue>(val_s32)));
+    ASSERT_TRUE(0 == boost::get<int64_t>(boost::get<ScalarTargetValue>(val_s64)));
+
+    ASSERT_FLOAT_EQ(0.0f, boost::get<float>(boost::get<ScalarTargetValue>(val_f32)));
+    ASSERT_FALSE(std::signbit(boost::get<float>(boost::get<ScalarTargetValue>(val_f32))));
+
+    ASSERT_DOUBLE_EQ(0.0, boost::get<double>(boost::get<ScalarTargetValue>(val_f64)));
+    ASSERT_FALSE(std::signbit(boost::get<double>(boost::get<ScalarTargetValue>(val_f64))));
+
+    ASSERT_DOUBLE_EQ(0.0, boost::get<double>(boost::get<ScalarTargetValue>(val_n64)));
+    ASSERT_FALSE(std::signbit(boost::get<double>(boost::get<ScalarTargetValue>(val_f64))));
+
+    ASSERT_DOUBLE_EQ(0.0, boost::get<double>(boost::get<ScalarTargetValue>(val_d64)));
+    ASSERT_FALSE(std::signbit(boost::get<double>(boost::get<ScalarTargetValue>(val_f64))));
   }
 }
 

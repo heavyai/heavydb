@@ -171,21 +171,21 @@ double radians(const double x) {
 EXTENSION_NOINLINE
 double Round(const double x, const int32_t y) {
   if (y==0) {
-    return round(x);
+    return round(x) + 0.0;
   }
 
   double exp = pow(10, y);
-  return round(x * exp) / exp;
+  return (round(x * exp) / exp) + 0.0;
 }
 
 EXTENSION_NOINLINE
 float Round__(const float x, const int32_t y) {
   if (y==0) {
-    return roundf(x);
+    return roundf(x) + 0.0f;
   }
 
   float exp = powf((float)10L, y);
-  return roundf(x * exp) / exp;
+  return roundf(x * exp) / exp + 0.0f;
 }
 
 EXTENSION_NOINLINE
