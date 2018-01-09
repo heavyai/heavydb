@@ -437,6 +437,9 @@ class MapDHandler : public MapDIf {
                                           const Catalog_Namespace::SessionInfo& session_info,
                                           const std::string& action /* render or validate */);
 
+  std::unordered_map<std::string, std::unordered_set<std::string>> fill_column_names_by_table(
+      const TSessionId& session);
+
   bool super_user_rights_;  // default is "false"; setting to "true" ignores passwd checks in "connect(..)" method
   const bool access_priv_check_;
 
