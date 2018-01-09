@@ -1688,7 +1688,6 @@ int main(int argc, char** argv) {
   bool print_connection = true;
   bool print_timing = false;
   bool http = false;
-  char* line;
   TQueryResult _return;
   std::string db_name{"mapd"};
   std::string user_name{"mapd"};
@@ -1806,9 +1805,19 @@ int main(int argc, char** argv) {
    * The call to linenoise() will block as long as the user types something
    * and presses enter.
    *
-   * The typed string is returned as a malloc() allocated string by
-   * linenoise, so the user needs to free() it. */
-  while ((line = linenoise(prompt.c_str())) != NULL) {
+   * The typed string that is malloc() allocated by linenoise() is managed by a smart pointer
+   * with a custom free() deleter; no need to free this memory explicitly. */
+
+  while (true) {
+    using LineType = std::remove_pointer<__decltype(linenoise(prompt.c_str()))>::type;
+    using LineTypePtr = LineType*;
+
+    std::unique_ptr<LineType, std::function<void(LineTypePtr)>> smart_line(linenoise(prompt.c_str()),
+                                                                           [](LineTypePtr l) { free((l)); });
+    if (smart_line == nullptr)
+      break;
+    LineType* line = smart_line.get();  // Alias to make the C stuff work
+
     {
       TQueryResult empty;
       swap(_return, empty);
@@ -1884,7 +1893,6 @@ int main(int argc, char** argv) {
         // change the prommpt
         prompt.assign("..> ");
       }
-      free(line);
       continue;
     } else if (!strncmp(line, "\\interrupt", 10)) {
       (void)thrift_with_retry(kINTERRUPT, context, nullptr);
@@ -2075,7 +2083,6 @@ int main(int argc, char** argv) {
     }
     linenoiseHistoryAdd(line);                  /* Add to the history. */
     linenoiseHistorySave("mapdql_history.txt"); /* Save the history on disk. */
-    free(line);
   }
 
   if (context.session != INVALID_SESSION_ID) {
