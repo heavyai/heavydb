@@ -1125,7 +1125,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const std::vector<InputTab
       }
 
       CHECK_NE(kENCODING_DICT, constant->get_type_info().get_compression());
-      _executor->codegenHoistedConstantsInBasicBlock(
+      _executor->codegenHoistedConstantsInEntryBlock(
           constant, _ir_builder, constant->get_type_info().get_compression(), 0, _co);
       return defaultResult();
     }
@@ -1150,7 +1150,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const std::vector<InputTab
         const auto operand_as_const = dynamic_cast<const Analyzer::Constant*>(operand);
 
         if (operand_as_const) {
-          _executor->codegenHoistedConstantsInBasicBlock(
+          _executor->codegenHoistedConstantsInEntryBlock(
               operand_as_const, _ir_builder, ti.get_compression(), ti.get_comp_param(), _co);
           return defaultResult();
         }
