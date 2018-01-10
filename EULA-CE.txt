@@ -1,5 +1,5 @@
 MapD Community Edition End User License Agreement
-Last Updated: 21-Sept-2017
+Last Updated: 16-January-2018
 
 	This End User License Agreement ("Agreement") is a legal agreement
 	between you or the company or legal entity you represent ("you", "your"
@@ -195,21 +195,20 @@ similar nature, but in no event less than a reasonable degree of care.
 5. TERM AND TERMINATION
 
        5.1 Term. This Agreement will commence upon your first Use of the
-       Software and continue until terminated in accordance with this Section
-       6.
+       Software and continue until terminated in accordance with this Section.
 
        5.2 Termination. Either party will have the right to terminate this
        Agreement upon written notice to the other party, in the event that the
        other party (a) breaches any material terms or obligations under this
-       Agreement and fails to cure such breach within thirty (30) days after
-       notice thereof, or (b) dissolves, is declared insolvent or bankrupt,
-       makes an assignment for the benefit of creditors, has a receiver
-       appointed, or is the subject of any proceeding under any bankruptcy or
-       insolvency laws, which proceeding, if initiated against such party, is
-       not dismissed within thirty (30) days. This Agreement will automatically
-       terminate in the event that you violate Sections 2.1, 2.2, 2.6, or 4.
-       You may terminate this Agreement and your Use of the Software at any
-       time for convenience with or without notice to MapD.
+       Agreement and fails to cure such breach within 30 days after notice
+       thereof, or (b) dissolves, is declared insolvent or bankrupt, makes an
+       assignment for the benefit of creditors, has a receiver appointed, or is
+       the subject of any proceeding under any bankruptcy or insolvency laws,
+       which proceeding, if initiated against such party, is not dismissed
+       within 30 days. This Agreement will automatically terminate in the event
+       that you violate Sections 2.1, 2.2, 2.6, or 4.  You may terminate this
+       Agreement and your Use of the Software at any time for convenience with
+       or without notice to MapD.
 
        5.3 Termination by Your Cloud Provider. You acknowledge that your Cloud
        Provider may have the right to suspend or terminate your Cloud Services
@@ -220,9 +219,9 @@ similar nature, but in no event less than a reasonable degree of care.
        will (a) immediately cease all Use of the Software and Documentation,
        (b) return to MapD, destroy or erase all copies (electronic or
        otherwise) of the Software, Documentation, and any Confidential
-       Information you may have received from MapD, and (c) within ten (10)
-       days of such termination, furnish written notice of such return,
-       destruction or erasure to MapD.
+       Information you may have received from MapD, and (c) within 10 days of
+       such termination, furnish written notice of such return, destruction or
+       erasure to MapD.
 
        5.5 Survival. The following sections will survive any termination of
        this Agreement: 1, 2.2, 2.7, 4, 5.4, 5.5, 6, 7, 8, and 9.
@@ -330,7 +329,7 @@ POSSIBILITY OF SUCH DAMAGES.
        Association ("AAA"). You and MapD will select a single, mutually
        acceptable arbitrator knowledgeable about issues relating to the subject
        matter of this Agreement. In the event that you and MapD are unable to
-       agree to such a selection, AA will appoint a single neutral arbitrator
+       agree to such a selection, AAA will appoint a single neutral arbitrator
        knowledgeable about issues relating to the subject matter of this
        Agreement to preside over the matter. The seat of arbitration will be
        San Francisco, California. The arbitration will be conducted in the
@@ -358,7 +357,7 @@ POSSIBILITY OF SUCH DAMAGES.
        only by a court of competent jurisdiction and not by an arbitrator. In
        no event will any Claim, or any other action or proceeding by you
        (including arbitration under this Section 10.7) be instituted more than
-       one (1) year after the cause of action arose. Any judgment on the award
+       1 year after the cause of action arose. Any judgment on the award
        rendered by the arbitrator may be entered in any court of competent
        jurisdiction. If a court of competent jurisdiction finds the foregoing
        arbitration provisions invalid or inapplicable, you and MapD each agree
