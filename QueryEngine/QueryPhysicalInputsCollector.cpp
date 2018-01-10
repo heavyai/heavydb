@@ -139,8 +139,8 @@ PhysicalInputSet RelAlgPhysicalInputsVisitor::visitLeftDeepInnerJoin(
     result = visitor.visit(condition);
   }
   CHECK_GE(left_deep_inner_join->inputCount(), size_t(2));
-  for (size_t i = 0; i < left_deep_inner_join->inputCount() - 1; ++i) {
-    const auto outer_condition = left_deep_inner_join->getOuterCondition(i);
+  for (size_t nesting_level = 1; nesting_level <= left_deep_inner_join->inputCount() - 1; ++nesting_level) {
+    const auto outer_condition = left_deep_inner_join->getOuterCondition(nesting_level);
     if (outer_condition) {
       const auto outer_result = visitor.visit(outer_condition);
       result.insert(outer_result.begin(), outer_result.end());
