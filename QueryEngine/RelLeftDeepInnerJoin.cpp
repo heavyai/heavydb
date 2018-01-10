@@ -86,10 +86,11 @@ const RexScalar* RelLeftDeepInnerJoin::getInnerCondition() const {
 }
 
 const RexScalar* RelLeftDeepInnerJoin::getOuterCondition(const size_t nesting_level) const {
-  CHECK_LT(nesting_level, outer_conditions_per_level_.size());
+  CHECK_GE(nesting_level, size_t(1));
+  CHECK_LE(nesting_level, outer_conditions_per_level_.size());
   // Outer join conditions are collected depth-first while the returned condition
   // must be consistent with the order of the loops (which is reverse depth-first).
-  return outer_conditions_per_level_[outer_conditions_per_level_.size() - (nesting_level + 1)].get();
+  return outer_conditions_per_level_[outer_conditions_per_level_.size() - nesting_level].get();
 }
 
 std::string RelLeftDeepInnerJoin::toString() const {
@@ -251,8 +252,8 @@ void create_left_deep_join(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
       continue;
     }
     CHECK_GE(left_deep_join->inputCount(), size_t(2));
-    for (size_t i = 0; i < left_deep_join->inputCount() - 1; ++i) {
-      const auto outer_condition = left_deep_join->getOuterCondition(i);
+    for (size_t nesting_level = 1; nesting_level <= left_deep_join->inputCount() - 1; ++nesting_level) {
+      const auto outer_condition = left_deep_join->getOuterCondition(nesting_level);
       if (outer_condition) {
         rebind_inputs_from_left_deep_join(outer_condition, left_deep_join.get());
       }

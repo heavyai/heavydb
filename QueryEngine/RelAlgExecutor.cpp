@@ -689,8 +689,8 @@ std::unordered_set<const RexInput*> get_join_source_used_inputs(const RelAlgNode
     const auto condition = left_deep_join->getInnerCondition();
     RexUsedInputsVisitor visitor;
     auto result = visitor.visit(condition);
-    for (size_t i = 0; i < left_deep_join->inputCount() - 1; ++i) {
-      const auto outer_condition = left_deep_join->getOuterCondition(i);
+    for (size_t nesting_level = 1; nesting_level <= left_deep_join->inputCount() - 1; ++nesting_level) {
+      const auto outer_condition = left_deep_join->getOuterCondition(nesting_level);
       if (outer_condition) {
         const auto outer_result = visitor.visit(outer_condition);
         result.insert(outer_result.begin(), outer_result.end());
@@ -1963,9 +1963,9 @@ std::vector<size_t> get_node_input_permutation(const std::vector<InputTableInfo>
 std::vector<JoinType> left_deep_join_types(const RelLeftDeepInnerJoin* left_deep_join) {
   CHECK_GE(left_deep_join->inputCount(), size_t(2));
   std::vector<JoinType> join_types(left_deep_join->inputCount() - 1, JoinType::INNER);
-  for (size_t i = 0; i < left_deep_join->inputCount() - 1; ++i) {
-    if (left_deep_join->getOuterCondition(i)) {
-      join_types[i] = JoinType::LEFT;
+  for (size_t nesting_level = 1; nesting_level <= left_deep_join->inputCount() - 1; ++nesting_level) {
+    if (left_deep_join->getOuterCondition(nesting_level)) {
+      join_types[nesting_level - 1] = JoinType::LEFT;
     }
   }
   return join_types;
@@ -2162,7 +2162,7 @@ JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
   JoinQualsPerNestingLevel result(input_descs.size() - 1);
   std::unordered_set<std::shared_ptr<Analyzer::Expr>> visited_quals;
   for (size_t rte_idx = 1; rte_idx < input_descs.size(); ++rte_idx) {
-    const auto outer_condition = join->getOuterCondition(rte_idx - 1);
+    const auto outer_condition = join->getOuterCondition(rte_idx);
     if (outer_condition) {
       result[rte_idx - 1].quals = makeJoinQuals(outer_condition, join_types, input_to_nest_level, just_explain);
       CHECK_LE(rte_idx, join_types.size());
