@@ -182,7 +182,7 @@ llvm::Function* query_template(llvm::Module* mod,
                                const bool is_nested,
                                const bool hoist_literals,
                                const bool is_estimate_query,
-                               HoistedVariablesCodeGenerator* hoisted_variables_code_generator) {
+                               HoistedLiteralsCodeGenerator* hoisted_variables_code_generator) {
   using namespace llvm;
 
   auto func_pos_start = pos_start(mod);
@@ -302,24 +302,14 @@ llvm::Function* query_template(llvm::Module* mod,
   Value* error_code = &*(++query_arg_it);
   error_code->setName("error_code");
 
-  // WARNING: this does not work with the LICM optimizer... the generated IR seems correct, but it SIGSEGVs during peephole optimisation
-  // BasicBlock* bb_hoisted = BasicBlock::Create(mod->getContext(), ".hoisted_variables", query_func_ptr, 0);
   auto bb_entry = BasicBlock::Create(mod->getContext(), ".entry", query_func_ptr, 0);
-  BasicBlock* bb_hoisted = bb_entry;
   auto bb_preheader = BasicBlock::Create(mod->getContext(), ".loop.preheader", query_func_ptr, 0);
   auto bb_forbody = BasicBlock::Create(mod->getContext(), ".for.body", query_func_ptr, 0);
   auto bb_crit_edge = BasicBlock::Create(mod->getContext(), "._crit_edge", query_func_ptr, 0);
   auto bb_exit = BasicBlock::Create(mod->getContext(), ".exit", query_func_ptr, 0);
 
-  if (NULL != bb_hoisted) {
-    if (NULL != hoisted_variables_code_generator) {
-      // Block (.hoisted_varialbes)
-      hoisted_variables_code_generator->gen_hoisted_variable_code(bb_hoisted);
-    }
-
-    if (bb_hoisted != bb_entry) {
-      BranchInst::Create(bb_entry, bb_hoisted);
-    }
+  if (NULL != hoisted_variables_code_generator) {
+    hoisted_variables_code_generator->gen_hoisted_literals_code(bb_entry);
   }
 
   // Block  (.entry)
@@ -462,7 +452,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
                                         const QueryMemoryDescriptor& query_mem_desc,
                                         const ExecutorDeviceType device_type,
                                         const bool check_scan_limit,
-                                        HoistedVariablesCodeGenerator* hoisted_variables_code_generator) {
+                                        HoistedLiteralsCodeGenerator* hoisted_variables_code_generator) {
   using namespace llvm;
 
   auto func_pos_start = pos_start(mod);
@@ -600,24 +590,14 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   Value* error_code = &*(++query_arg_it);
   error_code->setName("error_code");
 
-  // WARNING: this does not work with the LICM optimizer... the generated IR seems correct, but it SIGSEGVs during peephole optimisation
-  // BasicBlock* bb_hoisted = BasicBlock::Create(mod->getContext(), ".hoisted_variables", query_func_ptr, 0);
   auto bb_entry = BasicBlock::Create(mod->getContext(), ".entry", query_func_ptr, 0);
-  BasicBlock* bb_hoisted = bb_entry;
   auto bb_preheader = BasicBlock::Create(mod->getContext(), ".loop.preheader", query_func_ptr, 0);
   auto bb_forbody = BasicBlock::Create(mod->getContext(), ".forbody", query_func_ptr, 0);
   auto bb_crit_edge = BasicBlock::Create(mod->getContext(), "._crit_edge", query_func_ptr, 0);
   auto bb_exit = BasicBlock::Create(mod->getContext(), ".exit", query_func_ptr, 0);
 
-  if (NULL != bb_hoisted) {
-    if (NULL != hoisted_variables_code_generator) {
-      // Block  .hoisted_variables
-      hoisted_variables_code_generator->gen_hoisted_variable_code(bb_hoisted);
-    }
-
-    if (bb_hoisted != bb_entry) {
-      BranchInst::Create(bb_entry, bb_hoisted);
-    }
+  if (NULL != hoisted_variables_code_generator) {
+    hoisted_variables_code_generator->gen_hoisted_literals_code(bb_entry);
   }
 
   // Block  .entry

@@ -24,9 +24,9 @@
 
 #include <string>
 
-class HoistedVariablesCodeGenerator {
-public:
-  virtual void gen_hoisted_variable_code(llvm::BasicBlock*) = 0;
+class HoistedLiteralsCodeGenerator {
+ public:
+  virtual void gen_hoisted_literals_code(llvm::BasicBlock*) = 0;
 };
 
 std::string unique_name(const char* base_name, const bool is_nested);
@@ -35,13 +35,13 @@ llvm::Function* query_template(llvm::Module*,
                                const bool is_nested,
                                const bool hoist_literals,
                                const bool is_estimate_query,
-                               HoistedVariablesCodeGenerator* hoistedVariablesCodeCodeGenerator);
+                               HoistedLiteralsCodeGenerator* hoistedVariablesCodeCodeGenerator);
 llvm::Function* query_group_by_template(llvm::Module*,
                                         const bool is_nested,
                                         const bool hoist_literals,
                                         const QueryMemoryDescriptor& query_mem_desc,
                                         const ExecutorDeviceType,
                                         const bool check_scan_limit,
-                                        HoistedVariablesCodeGenerator* hoistedVariablesCodeCodeGenerator);
+                                        HoistedLiteralsCodeGenerator* hoistedVariablesCodeCodeGenerator);
 
 #endif  // QUERYENGINE_QUERYTEMPLATEGENERATOR_H
