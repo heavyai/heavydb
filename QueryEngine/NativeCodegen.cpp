@@ -658,8 +658,7 @@ std::vector<llvm::Value*> generate_column_heads_load(const int num_columns,
                                                      llvm::Function* query_func,
                                                      llvm::LLVMContext& context) {
   auto max_col_local_id = num_columns - 1;
-  llvm::BasicBlock* entryBlock = query_func->front();
-  llvm::BasicBlock& fetch_bb(*entryBlock);
+  llvm::BasicBlock& fetch_bb = query_func->front();
   llvm::IRBuilder<> fetch_ir_builder(&fetch_bb);
   fetch_ir_builder.SetInsertPoint(&*fetch_bb.begin());
   auto& in_arg_list = query_func->getArgumentList();
@@ -725,7 +724,7 @@ void set_row_func_argnames(llvm::Function* row_func,
   arg_it->setName("join_hash_tables");
 
   {
-    llvm::BasicBlock& bb(*query_func->front());
+    llvm::BasicBlock& bb = query_func->front();
 
     for (auto& inst : bb) {
       if (!inst.hasName()) {
@@ -798,7 +797,7 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(const 
   row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
 
   {
-    llvm::BasicBlock& bb(*query_func->front());
+    llvm::BasicBlock& bb = query_func->front();
 
     for (auto& inst : bb) {
       if (!inst.hasName()) {
@@ -1245,7 +1244,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const std::vector<InputTab
   // find the hoisted literals
   std::vector<llvm::Value*> hoisted_args;
   {
-    llvm::BasicBlock& bb(*query_func->front());
+    llvm::BasicBlock& bb = query_func->front();
 
     for (auto& inst : bb) {
       if (!inst.hasName()) {
