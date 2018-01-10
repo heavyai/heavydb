@@ -1711,6 +1711,8 @@ std::string RelAlgExecutor::getErrorMessageFromCode(const int32_t error_code) {
       return "Columnar conversion not supported for variable length types";
     case Executor::ERR_TOO_MANY_LITERALS:
       return "Too many literals in the query";
+    case Executor::ERR_STRING_CONST_IN_RESULTSET:
+      return "NONE ENCODED String types are not supported as input result set.";
   }
   return "Other error: code " + std::to_string(error_code);
 }

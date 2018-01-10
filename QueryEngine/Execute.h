@@ -226,6 +226,11 @@ class QueryMustRunOnCpu : public std::runtime_error {
   QueryMustRunOnCpu() : std::runtime_error("QueryMustRunOnCpu") {}
 };
 
+class SringConstInResultSet : public std::runtime_error {
+ public:
+  SringConstInResultSet() : std::runtime_error("NONE ENCODED String types are not supported as input result set.") {}
+};
+
 class ExtensionFunction;
 
 namespace std {
@@ -241,7 +246,7 @@ struct hash<std::pair<int, int>> {
   size_t operator()(const std::pair<int, int>& p) const { return boost::hash<std::pair<int, int>>()(p); }
 };
 
-}  // std
+}  // namespace std
 
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
@@ -1394,6 +1399,7 @@ class Executor {
   static const int32_t ERR_INTERRUPTED{10};
   static const int32_t ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED{11};
   static const int32_t ERR_TOO_MANY_LITERALS{12};
+  static const int32_t ERR_STRING_CONST_IN_RESULTSET{13};
   friend class BaselineJoinHashTable;
   friend class GroupByAndAggregate;
   friend struct QueryMemoryDescriptor;

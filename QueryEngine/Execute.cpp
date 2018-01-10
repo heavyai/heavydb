@@ -1590,7 +1590,10 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
       const auto col_type = get_column_type(col_id.get(), cd, temporary_tables_);
       const bool is_real_string = col_type.is_string() && col_type.get_compression() == kENCODING_NONE;
       if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
-        CHECK(!is_real_string && !col_type.is_array());
+        if (is_real_string) {
+          throw SringConstInResultSet();
+        }
+        CHECK(!col_type.is_array());
         frag_col_buffers[it->second] = execution_dispatch.getColumn(col_id.get(),
                                                                     frag_id,
                                                                     all_tables_fragments,
