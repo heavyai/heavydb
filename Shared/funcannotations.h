@@ -32,7 +32,7 @@
 #define GLOBAL
 #endif
 
-#if defined(__CUDACC__) && CUDA_VERSION < 8000
+#if defined(__CUDACC__) && __CUDACC_VER_MAJOR__ < 8
 #define STATIC_QUAL
 #else
 #define STATIC_QUAL static
