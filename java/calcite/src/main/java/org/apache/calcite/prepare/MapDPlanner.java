@@ -39,7 +39,6 @@ import org.apache.calcite.rex.RexExecutor;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperatorTable;
-import org.apache.calcite.sql.advise.SqlAdvisorValidator;
 import org.apache.calcite.sql.advise.SqlAdvisor;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
@@ -182,15 +181,18 @@ public class MapDPlanner implements Planner {
     }
   }
 
-  public CompletionResult getCompletionHints(final String sql, final int cursor) {
+  public CompletionResult getCompletionHints(
+      final String sql,
+      final int cursor,
+      final List<String> visibleTables) {
     switch (state) {
     case STATE_0_CLOSED:
     case STATE_1_RESET:
       ready();
     }
-    SqlAdvisorValidator advisor_validator = new SqlAdvisorValidator(
+    MapDSqlAdvisorValidator advisor_validator = new MapDSqlAdvisorValidator(visibleTables,
       config.getOperatorTable(), createCatalogReader(), getTypeFactory(), SqlConformanceEnum.LENIENT);
-    SqlAdvisor advisor = new SqlAdvisor(advisor_validator);
+    SqlAdvisor advisor = new MapDSqlAdvisor(advisor_validator);
     String[] replaced = new String[1];
     int adjusted_cursor = cursor < 0 ? sql.length() : cursor;
     java.util.List<SqlMoniker> hints = advisor.getCompletionHints(sql, adjusted_cursor, replaced);

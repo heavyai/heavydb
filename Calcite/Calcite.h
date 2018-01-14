@@ -43,6 +43,7 @@ class Calcite {
                       const bool legacy_syntax,
                       const bool is_explain);
   std::vector<TCompletionHint> getCompletionHints(const Catalog_Namespace::SessionInfo& session_info,
+                                                  const std::vector<std::string>& visible_tables,
                                                   const std::string sql_string,
                                                   const int cursor);
   std::string getExtensionFunctionWhitelist();

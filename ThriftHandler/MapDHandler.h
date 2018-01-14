@@ -432,12 +432,22 @@ class MapDHandler : public MapDIf {
 
   TRowDescriptor convert_target_metainfo(const std::vector<TargetMetaInfo>& targets) const;
 
+  void get_completion_hints_unsorted(std::vector<TCompletionHint>& hints,
+                                     const TSessionId& session,
+                                     const std::string& sql,
+                                     const int cursor);
+  void get_token_based_completions(std::vector<TCompletionHint>& hints,
+                                   const TSessionId& session,
+                                   const std::vector<std::string>& visible_tables,
+                                   const std::string& sql,
+                                   const int cursor);
   Planner::RootPlan* parse_to_plan(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info);
   Planner::RootPlan* parse_to_plan_legacy(const std::string& query_str,
                                           const Catalog_Namespace::SessionInfo& session_info,
                                           const std::string& action /* render or validate */);
 
   std::unordered_map<std::string, std::unordered_set<std::string>> fill_column_names_by_table(
+      const std::vector<std::string>& table_names,
       const TSessionId& session);
 
   bool super_user_rights_;  // default is "false"; setting to "true" ignores passwd checks in "connect(..)" method

@@ -720,35 +720,79 @@ void MapDHandler::get_completion_hints(std::vector<TCompletionHint>& hints,
                                        const TSessionId& session,
                                        const std::string& sql,
                                        const int cursor) {
-  const auto last_word = find_last_word_from_cursor(sql, cursor < 0 ? sql.size() : cursor);
+  get_completion_hints_unsorted(hints, session, sql, cursor);
+  // Sort the hints by category, from COLUMN (most specific) to KEYWORD.
+  std::sort(hints.begin(), hints.end(), [](const TCompletionHint& lhs, const TCompletionHint& rhs) {
+    return lhs.type < rhs.type;
+  });
+}
+
+void MapDHandler::get_completion_hints_unsorted(std::vector<TCompletionHint>& hints,
+                                                const TSessionId& session,
+                                                const std::string& sql,
+                                                const int cursor) {
   const auto session_info = get_session(session);
-  // Get the whitelisted keywords from Calcite. We should probably stop going to Calcite
-  // for completions altogether, especially since we have to honor permissions.
+  std::vector<std::string> visible_tables;  // Tables allowed for the given session.
   try {
-    hints = just_whitelisted_keyword_hints(calcite_->getCompletionHints(session_info, sql, cursor));
+    get_tables(visible_tables, session);
+    // Filter out keywords suggested by Calcite which we don't support.
+    hints = just_whitelisted_keyword_hints(calcite_->getCompletionHints(session_info, visible_tables, sql, cursor));
   } catch (const std::exception& e) {
     TMapDException ex;
     ex.error_msg = "Exception: " + std::string(e.what());
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
-  const auto column_names_by_table = fill_column_names_by_table(session);
-  // Trust the fully qualified columns the most.
-  if (get_qualified_column_hints(hints, last_word, column_names_by_table)) {
+  boost::regex from_expr{R"(\s+from\s+)", boost::regex::extended | boost::regex::icase};
+  const size_t length_to_cursor = cursor < 0 ? sql.size() : std::min(sql.size(), static_cast<size_t>(cursor));
+  // Trust hints from Calcite after the FROM keyword.
+  if (boost::regex_search(sql.cbegin(), sql.cbegin() + length_to_cursor, from_expr)) {
     return;
   }
-  // Not much information to use, just retrieve all table and column names which match the prefix.
-  get_column_hints(hints, last_word, column_names_by_table);
-  get_table_hints(hints, last_word, column_names_by_table);
-  if (hints.empty()) {
-    hints = get_keyword_hints(last_word);
+  // Before FROM, the query is too incomplete for context-sensitive completions.
+  get_token_based_completions(hints, session, visible_tables, sql, cursor);
+}
+
+void MapDHandler::get_token_based_completions(std::vector<TCompletionHint>& hints,
+                                              const TSessionId& session,
+                                              const std::vector<std::string>& visible_tables,
+                                              const std::string& sql,
+                                              const int cursor) {
+  const auto last_word = find_last_word_from_cursor(sql, cursor < 0 ? sql.size() : cursor);
+  boost::regex select_expr{R"(\s*select\s+)", boost::regex::extended | boost::regex::icase};
+  const size_t length_to_cursor = cursor < 0 ? sql.size() : std::min(sql.size(), static_cast<size_t>(cursor));
+  // After SELECT but before FROM, look for all columns in all tables which match the prefix.
+  if (boost::regex_search(sql.cbegin(), sql.cbegin() + length_to_cursor, select_expr)) {
+    const auto column_names_by_table = fill_column_names_by_table(visible_tables, session);
+    // Trust the fully qualified columns the most.
+    if (get_qualified_column_hints(hints, last_word, column_names_by_table)) {
+      return;
+    }
+    // Not much information to use, just retrieve column names which match the prefix.
+    get_column_hints(hints, last_word, column_names_by_table);
+    const std::string kFromKeyword{"FROM"};
+    if (boost::istarts_with(kFromKeyword, last_word)) {
+      TCompletionHint keyword_hint;
+      keyword_hint.type = TCompletionHintType::KEYWORD;
+      keyword_hint.replaced = last_word;
+      keyword_hint.hints.emplace_back(kFromKeyword);
+      hints.push_back(keyword_hint);
+    }
+  } else {
+    const std::string kSelectKeyword{"SELECT"};
+    if (boost::istarts_with(kSelectKeyword, last_word)) {
+      TCompletionHint keyword_hint;
+      keyword_hint.type = TCompletionHintType::KEYWORD;
+      keyword_hint.replaced = last_word;
+      keyword_hint.hints.emplace_back(kSelectKeyword);
+      hints.push_back(keyword_hint);
+    }
   }
 }
 
 std::unordered_map<std::string, std::unordered_set<std::string>> MapDHandler::fill_column_names_by_table(
+    const std::vector<std::string>& table_names,
     const TSessionId& session) {
-  std::vector<std::string> table_names;
-  get_tables(table_names, session);
   std::unordered_map<std::string, std::unordered_set<std::string>> column_names_by_table;
   for (const auto& table_name : table_names) {
     TTableDetails table_details;
