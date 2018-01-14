@@ -67,7 +67,7 @@ TEST(Completion, QualifiedColumnName) {
     ASSERT_EQ(size_t(1), completion_hints.size());
     ASSERT_TRUE(TCompletionHintType::COLUMN == completion_hints.front().type);
     ASSERT_EQ(last_word, completion_hints.front().replaced);
-    assert_set_equals({"x"}, completion_hints.front().hints);
+    assert_set_equals({"test.x"}, completion_hints.front().hints);
   }
   {
     std::vector<TCompletionHint> completion_hints;
@@ -76,7 +76,7 @@ TEST(Completion, QualifiedColumnName) {
     ASSERT_EQ(size_t(1), completion_hints.size());
     ASSERT_TRUE(TCompletionHintType::COLUMN == completion_hints.front().type);
     ASSERT_EQ(last_word, completion_hints.front().replaced);
-    assert_set_equals({"ss", "str"}, completion_hints.front().hints);
+    assert_set_equals({"test.ss", "test.str"}, completion_hints.front().hints);
   }
   {
     std::vector<TCompletionHint> completion_hints;
@@ -85,7 +85,7 @@ TEST(Completion, QualifiedColumnName) {
     ASSERT_EQ(size_t(1), completion_hints.size());
     ASSERT_TRUE(TCompletionHintType::COLUMN == completion_hints.front().type);
     ASSERT_EQ(last_word, completion_hints.front().replaced);
-    assert_set_equals({"x", "ss", "str"}, completion_hints.front().hints);
+    assert_set_equals({"test.x", "test.ss", "test.str"}, completion_hints.front().hints);
   }
   {
     std::vector<TCompletionHint> completion_hints;
@@ -123,26 +123,6 @@ TEST(Completion, ColumnName) {
   }
 }
 
-TEST(Completion, TableName) {
-  std::unordered_map<std::string, std::unordered_set<std::string>> column_names_by_table;
-  column_names_by_table["test"] = {"x", "ss", "str"};
-  column_names_by_table["test_inner"] = {"x"};
-  {
-    std::vector<TCompletionHint> completion_hints;
-    std::string last_word{"t"};
-    get_table_hints(completion_hints, last_word, column_names_by_table);
-    ASSERT_EQ(size_t(1), completion_hints.size());
-    ASSERT_TRUE(TCompletionHintType::TABLE == completion_hints.front().type);
-    ASSERT_EQ(last_word, completion_hints.front().replaced);
-    assert_set_equals({"test", "test_inner"}, completion_hints.front().hints);
-  }
-  {
-    std::vector<TCompletionHint> completion_hints;
-    get_table_hints(completion_hints, "tt", column_names_by_table);
-    ASSERT_TRUE(completion_hints.empty());
-  }
-}
-
 TEST(Completion, FilterKeywords) {
   std::vector<TCompletionHint> original_hints;
   std::vector<TCompletionHint> expected_filtered_hints;
@@ -151,6 +131,7 @@ TEST(Completion, FilterKeywords) {
     hint.type = TCompletionHintType::COLUMN;
     hint.hints.emplace_back("foo");
     original_hints.push_back(hint);
+    expected_filtered_hints.push_back(hint);
   }
   {
     TCompletionHint hint;
@@ -167,21 +148,6 @@ TEST(Completion, FilterKeywords) {
   }
   const auto filtered_hints = just_whitelisted_keyword_hints(original_hints);
   ASSERT_EQ(expected_filtered_hints, filtered_hints);
-}
-
-TEST(Completion, Keywords) {
-  {
-    const std::string keyword_prefix{"sel"};
-    const auto completion_hints = get_keyword_hints(keyword_prefix);
-    ASSERT_EQ(keyword_prefix, completion_hints.front().replaced);
-    assert_set_equals({"SELECT"}, completion_hints.front().hints);
-  }
-  {
-    const std::string keyword_prefix{"fr"};
-    const auto completion_hints = get_keyword_hints(keyword_prefix);
-    ASSERT_EQ(keyword_prefix, completion_hints.front().replaced);
-    assert_set_equals({"FROM"}, completion_hints.front().hints);
-  }
 }
 
 int main(int argc, char** argv) {

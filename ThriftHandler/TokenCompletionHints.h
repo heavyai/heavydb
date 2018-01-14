@@ -41,12 +41,4 @@ void get_column_hints(std::vector<TCompletionHint>& hints,
                       const std::string& last_word,
                       const std::unordered_map<std::string, std::unordered_set<std::string>>& column_names_by_table);
 
-// Returns table hints for all keys which start with `last_word` from `column_names_by_table`.
-void get_table_hints(std::vector<TCompletionHint>& hints,
-                     const std::string& last_word,
-                     const std::unordered_map<std::string, std::unordered_set<std::string>>& column_names_by_table);
-
-// Returns keyword hints which start with "keyword_prefix".
-std::vector<TCompletionHint> get_keyword_hints(const std::string& keyword_prefix);
-
 #endif  // THRIFTHANDLER_TOKENCOMPLETIONHINTS_H

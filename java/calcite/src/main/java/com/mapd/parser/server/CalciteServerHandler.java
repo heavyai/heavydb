@@ -173,8 +173,8 @@ class CalciteServerHandler implements CalciteServer.Iface {
   }
 
   @Override
-  public List<TCompletionHint> getCompletionHints(String user, String session,
-      String catalog, String sql, int cursor) throws TException {
+  public List<TCompletionHint> getCompletionHints(String user, String session, String catalog,
+      List<String> visible_tables, String sql, int cursor) throws TException {
     callCount++;
     MapDParser parser;
     try {
@@ -190,7 +190,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
 
     MapDPlanner.CompletionResult completion_result;
     try {
-      completion_result = parser.getCompletionHints(sql, cursor);
+      completion_result = parser.getCompletionHints(sql, cursor, visible_tables);
     } catch (Exception ex) {
       String msg = "Could not retrieve completion hints: " + ex.getMessage();
       MAPDLOGGER.error(msg);

@@ -62,10 +62,12 @@ std::string find_last_word_from_cursor(const std::string& sql, const ssize_t cur
 
 std::vector<TCompletionHint> just_whitelisted_keyword_hints(const std::vector<TCompletionHint>& hints) {
   static const std::unordered_set<std::string> whitelisted_keywords{
-      "WHERE", "GROUP", "BY", "COUNT", "AVG", "MAX", "MIN", "SUM", "STDDEV_POP", "STDDEV_SAMP"};
+      "WHERE", "GROUP", "BY",   "COUNT", "AVG",    "MAX",   "MIN", "SUM", "STDDEV_POP", "STDDEV_SAMP", "AS",   "HAVING",
+      "INNER", "JOIN",  "LEFT", "LIMIT", "OFFSET", "ORDER", "IN",  "IS",  "NULL",       "NOT",         "LIKE", "*"};
   std::vector<TCompletionHint> filtered;
   for (const auto& original_hint : hints) {
     if (original_hint.type != TCompletionHintType::KEYWORD) {
+      filtered.push_back(original_hint);
       continue;
     }
     auto filtered_hint = original_hint;
@@ -101,7 +103,9 @@ bool get_qualified_column_hints(
   column_hint.replaced = last_word;
   for (const auto& col_name : col_names_it->second) {
     if (boost::istarts_with(col_name, last_word_tokens.back())) {
-      column_hint.hints.push_back(col_name);
+      auto qualified_name = last_word_tokens;
+      qualified_name.back() = col_name;
+      column_hint.hints.push_back(boost::algorithm::join(qualified_name, "."));
     }
   }
   if (!column_hint.hints.empty()) {
@@ -128,39 +132,4 @@ void get_column_hints(std::vector<TCompletionHint>& hints,
   if (!column_hint.hints.empty()) {
     hints.push_back(column_hint);
   }
-}
-
-void get_table_hints(std::vector<TCompletionHint>& hints,
-                     const std::string& last_word,
-                     const std::unordered_map<std::string, std::unordered_set<std::string>>& column_names_by_table) {
-  TCompletionHint table_hint;
-  table_hint.type = TCompletionHintType::TABLE;
-  table_hint.replaced = last_word;
-  for (const auto& kv : column_names_by_table) {
-    if (boost::istarts_with(kv.first, last_word)) {
-      table_hint.hints.emplace_back(kv.first);
-    }
-  }
-  if (!table_hint.hints.empty()) {
-    hints.push_back(table_hint);
-  }
-}
-
-std::vector<TCompletionHint> get_keyword_hints(const std::string& keyword_prefix) {
-  std::vector<TCompletionHint> keywords;
-  auto make_keyword_hint = [&keyword_prefix](const std::string& keyword) {
-    TCompletionHint keyword_hint;
-    keyword_hint.type = TCompletionHintType::KEYWORD;
-    keyword_hint.replaced = keyword_prefix;
-    keyword_hint.hints.emplace_back(keyword);
-    return keyword_hint;
-  };
-  const std::string kSelectKeyword{"SELECT"};
-  const std::string kFromKeyword{"FROM"};
-  if (boost::istarts_with(kSelectKeyword, keyword_prefix)) {
-    keywords.push_back(make_keyword_hint(kSelectKeyword));
-  } else if (boost::istarts_with(kFromKeyword, keyword_prefix)) {
-    keywords.push_back(make_keyword_hint(kFromKeyword));
-  }
-  return keywords;
 }
