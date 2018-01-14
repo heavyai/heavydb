@@ -1429,15 +1429,6 @@ const ColumnDescriptor* try_get_column_descriptor(const InputColDescriptor* col_
   return get_column_descriptor_maybe(ref_col_id, ref_table_id, cat);
 }
 
-const SQLTypeInfo get_column_type(const InputColDescriptor* col_desc,
-                                  const ColumnDescriptor* cd,
-                                  const TemporaryTables* temporary_tables) {
-  const auto ind_col = dynamic_cast<const IndirectInputColDescriptor*>(col_desc);
-  const int ref_table_id = ind_col ? ind_col->getIndirectDesc().getTableId() : col_desc->getScanDesc().getTableId();
-  const int ref_col_id = ind_col ? ind_col->getRefColIndex() : col_desc->getColId();
-  return get_column_type(ref_col_id, ref_table_id, cd, temporary_tables);
-}
-
 }  // namespace
 
 std::map<size_t, std::vector<uint64_t>> get_table_id_to_frag_offsets(
@@ -1587,13 +1578,7 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
           plan_state_->columns_to_fetch_.end()) {
         memory_level_for_column = Data_Namespace::CPU_LEVEL;
       }
-      const auto col_type = get_column_type(col_id.get(), cd, temporary_tables_);
-      const bool is_real_string = col_type.is_string() && col_type.get_compression() == kENCODING_NONE;
       if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
-        if (is_real_string) {
-          throw SringConstInResultSet();
-        }
-        CHECK(!col_type.is_array());
         frag_col_buffers[it->second] = execution_dispatch.getColumn(col_id.get(),
                                                                     frag_id,
                                                                     all_tables_fragments,
