@@ -271,6 +271,10 @@ endif()
 if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
   option(ENABLE_RENDERING "Build backend renderer" OFF)
   if(ENABLE_RENDERING)
+    # muparserx - currently render-only
+    include_directories(ThirdParty/muparserx)
+    add_subdirectory(ThirdParty/muparserx)
+
     add_definitions("-DHAVE_RENDERING")
     add_subdirectory(Rendering)
     add_subdirectory(QueryRenderer)
