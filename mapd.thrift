@@ -212,6 +212,7 @@ struct TRenderResult {
   3: i64 execution_time_ms
   4: i64 render_time_ms
   5: i64 total_time_ms
+  6: string vega_metadata
 }
 
 struct TGpuSpecification {
