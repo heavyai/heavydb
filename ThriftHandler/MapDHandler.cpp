@@ -716,23 +716,68 @@ void MapDHandler::sql_validate(TTableDescriptor& _return, const TSessionId& sess
   MapDHandler::validate_rel_alg(_return, query_str, session_info);
 }
 
+namespace {
+
+struct ProjectionTokensForCompletion {
+  std::unordered_set<std::string> uc_column_names;
+  std::unordered_set<std::string> uc_column_table_qualifiers;
+};
+
+// Extract what looks like a (qualified) identifier from the partial query.
+// The results will be used to rank the auto-completion results: tables which
+// contain at least one of the identifiers first.
+ProjectionTokensForCompletion extract_projection_tokens_for_completion(const std::string& sql) {
+  boost::regex id_regex{R"(([[:alnum:]]|_|\.)+)", boost::regex::extended | boost::regex::icase};
+  boost::sregex_token_iterator tok_it(sql.begin(), sql.end(), id_regex, 0);
+  boost::sregex_token_iterator end;
+  std::unordered_set<std::string> uc_column_names;
+  std::unordered_set<std::string> uc_column_table_qualifiers;
+  for (; tok_it != end; ++tok_it) {
+    std::string column_name = *tok_it;
+    std::vector<std::string> column_tokens;
+    boost::split(column_tokens, column_name, boost::is_any_of("."));
+    if (column_tokens.size() == 2) {
+      // If the column name is qualified, take user's word.
+      uc_column_table_qualifiers.insert(to_upper(column_tokens.front()));
+    } else {
+      uc_column_names.insert(to_upper(column_name));
+    }
+  }
+  return {uc_column_names, uc_column_table_qualifiers};
+}
+
+}  // namespace
+
 void MapDHandler::get_completion_hints(std::vector<TCompletionHint>& hints,
                                        const TSessionId& session,
                                        const std::string& sql,
                                        const int cursor) {
-  get_completion_hints_unsorted(hints, session, sql, cursor);
+  std::vector<std::string> visible_tables;  // Tables allowed for the given session.
+  get_completion_hints_unsorted(hints, visible_tables, session, sql, cursor);
+  const auto proj_tokens = extract_projection_tokens_for_completion(sql);
+  auto compatible_table_names =
+      get_uc_compatible_table_names_by_column(proj_tokens.uc_column_names, visible_tables, session);
+  // Add the table qualifiers explicitly specified by the user.
+  compatible_table_names.insert(proj_tokens.uc_column_table_qualifiers.begin(),
+                                proj_tokens.uc_column_table_qualifiers.end());
   // Sort the hints by category, from COLUMN (most specific) to KEYWORD.
-  std::sort(hints.begin(), hints.end(), [](const TCompletionHint& lhs, const TCompletionHint& rhs) {
-    return lhs.type < rhs.type;
-  });
+  std::sort(
+      hints.begin(), hints.end(), [&compatible_table_names](const TCompletionHint& lhs, const TCompletionHint& rhs) {
+        if (lhs.type == TCompletionHintType::TABLE && rhs.type == TCompletionHintType::TABLE) {
+          if (compatible_table_names.find(to_upper(lhs.hints.back())) != compatible_table_names.end()) {
+            return true;
+          }
+        }
+        return lhs.type < rhs.type;
+      });
 }
 
 void MapDHandler::get_completion_hints_unsorted(std::vector<TCompletionHint>& hints,
+                                                std::vector<std::string>& visible_tables,
                                                 const TSessionId& session,
                                                 const std::string& sql,
                                                 const int cursor) {
   const auto session_info = get_session(session);
-  std::vector<std::string> visible_tables;  // Tables allowed for the given session.
   try {
     get_tables(visible_tables, session);
     // Filter out keywords suggested by Calcite which we don't support.
@@ -802,6 +847,24 @@ std::unordered_map<std::string, std::unordered_set<std::string>> MapDHandler::fi
     }
   }
   return column_names_by_table;
+}
+
+std::unordered_set<std::string> MapDHandler::get_uc_compatible_table_names_by_column(
+    const std::unordered_set<std::string>& uc_column_names,
+    const std::vector<std::string>& table_names,
+    const TSessionId& session) {
+  std::unordered_set<std::string> compatible_table_names_by_column;
+  for (const auto& table_name : table_names) {
+    TTableDetails table_details;
+    get_table_details(table_details, session, table_name);
+    for (const auto& column_type : table_details.row_desc) {
+      if (uc_column_names.find(to_upper(column_type.col_name)) != uc_column_names.end()) {
+        compatible_table_names_by_column.emplace(to_upper(table_name));
+        break;
+      }
+    }
+  }
+  return compatible_table_names_by_column;
 }
 
 void MapDHandler::validate_rel_alg(TTableDescriptor& _return,

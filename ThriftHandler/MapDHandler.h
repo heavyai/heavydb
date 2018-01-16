@@ -433,6 +433,7 @@ class MapDHandler : public MapDIf {
   TRowDescriptor convert_target_metainfo(const std::vector<TargetMetaInfo>& targets) const;
 
   void get_completion_hints_unsorted(std::vector<TCompletionHint>& hints,
+                                     std::vector<std::string>& visible_tables,
                                      const TSessionId& session,
                                      const std::string& sql,
                                      const int cursor);
@@ -447,6 +448,14 @@ class MapDHandler : public MapDIf {
                                           const std::string& action /* render or validate */);
 
   std::unordered_map<std::string, std::unordered_set<std::string>> fill_column_names_by_table(
+      const std::vector<std::string>& table_names,
+      const TSessionId& session);
+
+  // For the provided upper case column names `uc_column_names`, return the tables
+  // from `table_names` which contain at least one of them. Used to rank the TABLE
+  // auto-completion hints by the columns specified in the projection.
+  std::unordered_set<std::string> get_uc_compatible_table_names_by_column(
+      const std::unordered_set<std::string>& uc_column_names,
       const std::vector<std::string>& table_names,
       const TSessionId& session);
 
