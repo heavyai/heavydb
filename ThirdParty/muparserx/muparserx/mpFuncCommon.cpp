@@ -40,6 +40,7 @@
 
 #include "mpValue.h"
 #include "mpParserBase.h"
+#include <glog/logging.h>
 
 
 MUP_NAMESPACE_START
@@ -253,7 +254,7 @@ MUP_NAMESPACE_START
   /** \brief Returns the number of elements stored in the first parameter. */
   void FunSizeOf::Eval(ptr_val_type &ret, const ptr_val_type *a_pArg, int a_iArgc)
   {
-    assert(a_iArgc==1);
+    CHECK_EQ(a_iArgc, 1);
     *ret = (float_type)a_pArg[0]->GetArray().GetRows();
   }
 

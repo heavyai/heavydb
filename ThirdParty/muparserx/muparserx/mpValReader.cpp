@@ -289,7 +289,7 @@ string_type StrValReader::Unescape(const char_type *szExpr, int &nPos)
                 bEscape = true;
                 break;
             }
-            // fall throught!
+            /* FALLTHRU */
 
         case '"':
             if (!bEscape)
@@ -297,7 +297,7 @@ string_type StrValReader::Unescape(const char_type *szExpr, int &nPos)
                 ++nPos;
                 return out;
             }
-            // fall through!
+            /* FALLTHRU */
 
         default:
             if (bEscape)

@@ -62,7 +62,7 @@ MUP_NAMESPACE_START
   public:
       OprtCreateArray();
 	  virtual void Eval(ptr_val_type& ret, const ptr_val_type *arg, int argc) override;
-	  virtual const char_type* GetDesc() const;
+	  virtual const char_type* GetDesc() const override;
 	  virtual IToken* Clone() const override;
   };
 

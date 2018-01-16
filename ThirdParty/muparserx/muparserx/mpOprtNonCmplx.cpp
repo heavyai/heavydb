@@ -33,6 +33,7 @@
   POSSIBILITY OF SUCH DAMAGE.
 */
 #include "mpOprtNonCmplx.h"
+#include <glog/logging.h>
 
 MUP_NAMESPACE_START
 
@@ -149,7 +150,7 @@ MUP_NAMESPACE_START
   //-----------------------------------------------------------
   void OprtAdd::Eval(ptr_val_type& ret, const ptr_val_type *a_pArg, int num)
   { 
-    assert(num==2);
+    CHECK_EQ(num, 2);
 
     const IValue *arg1 = a_pArg[0].Get();
     const IValue *arg2 = a_pArg[1].Get();
@@ -212,7 +213,7 @@ MUP_NAMESPACE_START
   //-----------------------------------------------------------
   void OprtSub::Eval(ptr_val_type &ret, const ptr_val_type *a_pArg, int num)
   { 
-    assert(num==2);
+    CHECK_EQ(num, 2);
 
     if (a_pArg[0]->GetType()=='m' && a_pArg[1]->GetType()=='m')
     {
@@ -273,7 +274,7 @@ MUP_NAMESPACE_START
   //-----------------------------------------------------------
   void OprtMul::Eval(ptr_val_type &ret, const ptr_val_type *a_pArg, int num)
   { 
-    assert(num==2);
+    CHECK_EQ(num, 2);
     IValue *arg1 = a_pArg[0].Get();
     IValue *arg2 = a_pArg[1].Get();
     if (arg1->GetType()=='m' && arg2->GetType()=='m')
@@ -352,7 +353,7 @@ MUP_NAMESPACE_START
   */
   void OprtDiv::Eval(ptr_val_type &ret, const ptr_val_type *a_pArg, int num)
   { 
-    assert(num==2);
+    CHECK_EQ(num, 2);
 
     if (!a_pArg[0]->IsNonComplexScalar())
       throw ParserError( ErrorContext(ecTYPE_CONFLICT_FUN, -1, GetIdent(), a_pArg[0]->GetType(), 'f', 1)); 
@@ -388,7 +389,7 @@ MUP_NAMESPACE_START
   //-----------------------------------------------------------
   void OprtPow::Eval(ptr_val_type& ret, const ptr_val_type *arg, int argc)
   {
-    assert(argc==2);
+    CHECK_EQ(argc, 2);
     float_type a = arg[0]->GetFloat();
     float_type b = arg[1]->GetFloat();
     

@@ -550,7 +550,7 @@ IValue& Value::operator*=(const IValue &val)
     {
         *m_pvVal *= val;
     }
-    else if (IsScalar() * val.IsMatrix())
+    else if (IsScalar() && val.IsMatrix())
     {
         // transform this into a matrix and multiply with rhs
         Value prod = val * (*this);

@@ -29,6 +29,7 @@
   POSSIBILITY OF SUCH DAMAGE.
 */
 #include "mpOprtMatrix.h"
+#include <glog/logging.h>
 
 
 MUP_NAMESPACE_START
@@ -146,7 +147,7 @@ MUP_NAMESPACE_START
   //-----------------------------------------------------------
   void OprtColon::Eval(ptr_val_type& ret, const ptr_val_type *a_pArg, int num)
   { 
-    assert(num==2);
+    CHECK_EQ(num, 2);
 
     const IValue *argMin = a_pArg[0].Get();
     const IValue *argMax = a_pArg[1].Get();

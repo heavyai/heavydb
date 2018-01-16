@@ -38,6 +38,7 @@
 
 #include "mpValue.h"
 #include "mpError.h"
+#include <glog/logging.h>
 
 
 MUP_NAMESPACE_START
@@ -150,7 +151,7 @@ MUP_NAMESPACE_START
   //------------------------------------------------------------------------------
   void FunStrToDbl::Eval(ptr_val_type &ret, const ptr_val_type *a_pArg, int a_iArgc)
   {
-    assert(a_iArgc==1);
+    CHECK_EQ(a_iArgc, 1);
     string_type in;
     double out;   // <- Ich will hier wirklich double, auch wenn der Type long double
                   // ist. sscanf und long double geht nicht mit GCC!
