@@ -314,13 +314,6 @@ void c(const std::string& query_string, const std::string& sqlite_query_string, 
 
 namespace {
 
-bool validate_statement_syntax(const std::string& stmt) {
-  SQLParser parser;
-  list<std::unique_ptr<Parser::Stmt>> parse_trees;
-  std::string last_parsed;
-  return parser.parse(stmt, parse_trees, last_parsed) == 0;
-}
-
 int create_and_populate_tables() {
   try {
     // Drop old table
@@ -375,16 +368,6 @@ void drop_tables() {
   g_sqlite_comparator.query(drop_test_inner);
 }
 }  // namespace
-
-TEST(Select, TopK_LIMIT_Errors) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    ASSERT_EQ(validate_statement_syntax("SELECT i FROM tdata LIMIT null;"), false);
-    ASSERT_EQ(validate_statement_syntax("SELECT i FROM tdata LIMIT;"), false);
-    EXPECT_THROW(run_ddl_statement("SELECT i FROM tdata LIMIT 0;"), std::runtime_error);
-    EXPECT_THROW(run_ddl_statement("SELECT i FROM tdata LIMIT -1;"), std::runtime_error);
-  }
-}
 
 TEST(Select, TopK_LIMIT_AscendSort) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -450,15 +433,6 @@ TEST(Select, TopK_LIMIT_GreaterThan_TotalOfDataRows_DescendSort) {
       "SELECT ts FROM tdata ORDER BY ts DESC LIMIT 11;",
       dt);
     c("SELECT d FROM tdata ORDER BY d DESC NULLS LAST LIMIT 11;", "SELECT d FROM tdata ORDER BY d DESC LIMIT 11;", dt);
-  }
-}
-
-TEST(Select, TopK_LIMIT_OFFSET_Errors) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    ASSERT_EQ(validate_statement_syntax("SELECT i FROM tdata LIMIT 5 OFFSET null;"), false);
-    ASSERT_EQ(validate_statement_syntax("SELECT i FROM tdata LIMIT 5 OFFSET;"), false);
-    ASSERT_EQ(validate_statement_syntax("SELECT i FROM tdata LIMIT 5 OFFSET -1;"), true);
   }
 }
 
