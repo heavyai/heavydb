@@ -3774,6 +3774,14 @@ TEST(Select, UnsupportedExtensions) {
   }
 }
 
+TEST(Select, UnsupportedSortOfIntermediateResult) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_THROW(run_multiple_agg("SELECT 'foo' FROM test ORDER BY x;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT real_str FROM test ORDER BY x;", dt), std::runtime_error);
+  }
+}
+
 TEST(Select, Views) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
