@@ -148,11 +148,6 @@ exception TMapDException {
   1: string error_msg
 }
 
-struct TRenderProperty {
-  1: TDatumType property_type
-  2: TDatumVal property_value
-}
-
 struct TCopyParams {
   1: string delimiter
   2: string null_str
@@ -196,9 +191,6 @@ struct TServerStatus {
   5: string edition
   6: string host_name
 }
-
-typedef map<string, TRenderProperty> TRenderPropertyMap
-typedef map<string, TRenderPropertyMap> TColumnRenderMap
 
 struct TPixel {
   1: i64 x
@@ -328,6 +320,18 @@ struct TInsertData {
   5: i64 num_rows
 }
 
+struct TPendingRenderQuery {
+  1: TQueryId id
+}
+
+struct TRenderParseResult {
+  1: TMergeType merge_type
+  2: i32 node_id
+  3: i64 execution_time_ms
+  4: i64 render_time_ms
+  5: i64 total_time_ms
+}
+
 struct TRawRenderPassDataResult {
   1: i32 num_channels
   2: binary pixels
@@ -339,13 +343,26 @@ struct TRawRenderPassDataResult {
 
 typedef map<i32, TRawRenderPassDataResult> TRenderPassMap
 
-struct TRawPixelDataResult {
+struct TRawPixelData {
   1: i32 width
   2: i32 height
   3: TRenderPassMap render_pass_map
-  8: i64 execution_time_ms
-  9: i64 render_time_ms
-  10: i64 total_time_ms
+}
+
+struct TRenderDatum {
+  1: TDatumType type
+  2: bool is_array
+  3: TDatumVal value
+}
+
+typedef map<string, map<string, map<string, map<i32, TRenderDatum>>>> TRenderDataAggMap
+
+struct TRenderStepResult {
+  1: TRenderDataAggMap merge_data
+  2: TRawPixelData raw_pixel_data
+  3: i64 execution_time_ms
+  4: i64 render_time_ms
+  5: i64 total_time_ms
 }
 
 struct TAccessPrivileges {
@@ -430,7 +447,8 @@ service MapD {
   TPendingQuery start_query(1: TSessionId session, 2: string query_ra, 3: bool just_explain) throws (1: TMapDException e)
   TStepResult execute_first_step(1: TPendingQuery pending_query) throws (1: TMapDException e)
   void broadcast_serialized_rows(1: string serialized_rows, 2: TRowDescriptor row_desc, 3: TQueryId query_id) throws (1: TMapDException e)
-  TRawPixelDataResult render_vega_raw_pixels(1: TSessionId session, 2: i64 widget_id, 3: i16 node_idx 4: string vega_json 5: string nonce) throws (1: TMapDException e)
+  TPendingRenderQuery start_render_query(1: TSessionId session, 2: i64 widget_id, 3: i16 node_idx, 4: string vega_json) throws (1: TMapDException e)
+  TRenderStepResult execute_next_render_step(1: TPendingRenderQuery pending_render, 2: TRenderDataAggMap merged_data) throws (1: TMapDException e)
   void insert_data(1: TSessionId session, 2: TInsertData insert_data) throws (1: TMapDException e)
   void checkpoint(1: TSessionId session, 2: i32 db_id, 3: i32 table_id) throws (1: TMapDException e)
   # deprecated

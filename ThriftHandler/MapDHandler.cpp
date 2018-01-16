@@ -2865,31 +2865,43 @@ void MapDHandler::insert_data(const TSessionId& session, const TInsertData& thri
   }
 }
 
-void MapDHandler::render_vega_raw_pixels(TRawPixelDataResult& _return,
-                                         const TSessionId& session,
-                                         const int64_t widget_id,
-                                         const int16_t node_idx,
-                                         const std::string& vega_json,
-                                         const std::string& nonce) {
+void MapDHandler::start_render_query(TPendingRenderQuery& _return,
+                                     const TSessionId& session,
+                                     const int64_t widget_id,
+                                     const int16_t node_idx,
+                                     const std::string& vega_json) {
   if (!render_handler_) {
     THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
   }
 
-  const auto session_info = MapDHandler::get_session(session);
-  LOG(INFO) << "RENDER_VEGA_RAW_PIXELS :" << session << ":widget_id:" << widget_id << ":node_idx:" << node_idx
-            << ":vega_json:" << vega_json << ":nonce:" << nonce;
-
-  _return.total_time_ms = measure<>::execution([&]() {
+  LOG(INFO) << "start_render_query :" << session << ":widget_id:" << widget_id << ":vega_json:" << vega_json;
+  auto time_ms = measure<>::execution([&]() {
     try {
-      render_handler_->render_vega_raw_pixels(_return, session_info, widget_id, node_idx, vega_json);
+      render_handler_->start_render_query(_return, session, widget_id, node_idx, vega_json);
     } catch (std::exception& e) {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
   });
+  LOG(INFO) << "start_render_query-COMPLETED " << time_ms << "ms "
+            << "id is " << _return.id;
+}
 
-  LOG(INFO) << "RENDER_VEGA_RAW_PIXELS COMPLETED nonce: " << nonce << " Total: " << _return.total_time_ms
-            << " (ms), Total Execution: " << _return.execution_time_ms
-            << " (ms), Total Render: " << _return.render_time_ms << " (ms)";
+void MapDHandler::execute_next_render_step(TRenderStepResult& _return,
+                                           const TPendingRenderQuery& pending_render,
+                                           const TRenderDataAggMap& merged_data) {
+  if (!render_handler_) {
+    THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
+  }
+
+  LOG(INFO) << "execute_next_render_step: id:" << pending_render.id;
+  auto time_ms = measure<>::execution([&]() {
+    try {
+      render_handler_->execute_next_render_step(_return, pending_render, merged_data);
+    } catch (std::exception& e) {
+      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    }
+  });
+  LOG(INFO) << "execute_next_render_step-COMPLETED id: " << pending_render.id << ", time: " << time_ms << "ms ";
 }
 
 void MapDHandler::checkpoint(const TSessionId& session, const int32_t db_id, const int32_t table_id) {

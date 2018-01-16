@@ -259,12 +259,14 @@ class MapDHandler : public MapDIf {
                                  const TRowDescriptor& row_desc,
                                  const TQueryId query_id);
 
-  void render_vega_raw_pixels(TRawPixelDataResult& _return,
-                              const TSessionId& session,
-                              const int64_t widget_id,
-                              const int16_t node_idx,
-                              const std::string& vega_json,
-                              const std::string& nonce);
+  void start_render_query(TPendingRenderQuery& _return,
+                          const TSessionId& session,
+                          const int64_t widget_id,
+                          const int16_t node_idx,
+                          const std::string& vega_json);
+  void execute_next_render_step(TRenderStepResult& _return,
+                                const TPendingRenderQuery& pending_render,
+                                const TRenderDataAggMap& merged_data);
 
   void insert_data(const TSessionId& session, const TInsertData& insert_data);
   void checkpoint(const TSessionId& session, const int32_t db_id, const int32_t table_id);
