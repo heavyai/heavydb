@@ -43,13 +43,13 @@
 #include "FrontendViewDescriptor.h"
 #include "LdapServer.h"
 #include "LinkDescriptor.h"
-#include "TableDescriptor.h"
 #include "Role.h"
+#include "TableDescriptor.h"
 
 #include "../DataMgr/DataMgr.h"
-#include "LeafHostInfo.h"
 #include "../QueryEngine/CompilationOptions.h"
 #include "../SqliteConnector/SqliteConnector.h"
+#include "LeafHostInfo.h"
 
 #include "../Calcite/Calcite.h"
 
@@ -63,7 +63,7 @@ namespace Parser {
 
 class SharedDictionaryDef;
 
-}  // Parser
+}  // namespace Parser
 
 namespace Catalog_Namespace {
 
@@ -192,8 +192,8 @@ class Catalog {
    * @brief Constructor - takes basePath to already extant
    * data directory for writing
    * @param basePath directory path for writing catalog
-                           * @param dbName name of the database
-                           * @param fragmenter Fragmenter object
+   * @param dbName name of the database
+   * @param fragmenter Fragmenter object
    * metadata - expects for this directory to already exist
    */
 
@@ -481,8 +481,8 @@ class SessionInfo {
   bool checkDBAccessPrivileges(const AccessPrivileges& privs) const;
   void setSysCatalog(Catalog_Namespace::SysCatalog* sys_cat);
   Catalog_Namespace::SysCatalog* getSysCatalog() const;
-  void setDatabaseCatalog(const std::string& dbName, Catalog* cat);
-  Catalog* getDatabaseCatalog(const std::string& dbName) const;
+  void setDatabaseCatalog(const std::string& dbName, std::shared_ptr<Catalog> cat);
+  std::shared_ptr<Catalog> getDatabaseCatalog(const std::string& dbName) const;
 
  private:
   std::shared_ptr<Catalog> catalog_;
@@ -492,6 +492,6 @@ class SessionInfo {
   std::atomic<time_t> last_used_time;  // for cleaning up SessionInfo after client dies
 };
 
-}  // Catalog_Namespace
+}  // namespace Catalog_Namespace
 
 #endif  // CATALOG_H

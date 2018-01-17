@@ -46,6 +46,8 @@
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Import/Importer.h"
+#include "MapDDistributedHandler.h"
+#include "MapDRenderHandler.h"
 #include "Parser/ParserWrapper.h"
 #include "Parser/ReservedKeywords.h"
 #include "Parser/parser.h"
@@ -55,14 +57,12 @@
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/JsonAccessors.h"
+#include "Shared/MapDParameters.h"
+#include "Shared/StringTransform.h"
 #include "Shared/geosupport.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
-#include "Shared/StringTransform.h"
-#include "Shared/MapDParameters.h"
-#include "MapDRenderHandler.h"
-#include "MapDDistributedHandler.h"
 
 #include <fcntl.h>
 #include <glog/logging.h>
@@ -301,21 +301,20 @@ void MapDHandler::connectImpl(TSessionId& session,
     if (session_it == sessions_.end())
       break;
   }
-  auto cat_it = cat_map_.find(dbname);
-  if (cat_it == cat_map_.end()) {
-    Catalog_Namespace::Catalog* cat = new Catalog_Namespace::Catalog(
+  auto session_info_ptr = sessions_[session];
+  auto cat_it = session_info_ptr->getDatabaseCatalog(dbname);
+  if (cat_it == nullptr) {
+    auto cat_ptr = std::make_shared<Catalog_Namespace::Catalog>(
         base_data_path_, db_meta, data_mgr_, string_leaves_, calcite_, access_priv_check_);
-    cat_map_[dbname].reset(cat);
-    sessions_[session].reset(
-        new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta, executor_device_type_, session));
-    sessions_[session]->setDatabaseCatalog(dbname, cat);
+    session_info_ptr->setDatabaseCatalog(dbname, cat_ptr);
+
+    sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_ptr, user_meta, executor_device_type_, session));
     if (dbname == MAPD_SYSTEM_DB) {
       auto mapd_session_ptr = sessions_[session];
-      mapd_session_ptr->setSysCatalog(static_cast<Catalog_Namespace::SysCatalog*>(cat));
+      mapd_session_ptr->setSysCatalog(static_cast<Catalog_Namespace::SysCatalog*>(cat_ptr.get()));
     }
   } else {
-    sessions_[session].reset(
-        new Catalog_Namespace::SessionInfo(cat_it->second, user_meta, executor_device_type_, session));
+    sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_it, user_meta, executor_device_type_, session));
   }
   if (!super_user_rights_) {  // no need to connect to leaf_aggregator_ at this time while doing warmup
     if (leaf_aggregator_.leafCount() > 0) {

@@ -313,7 +313,6 @@ class MapDHandler : public MapDIf {
   std::unique_ptr<Catalog_Namespace::SysCatalog> sys_cat_;
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
   std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> sessions_;
-  std::map<std::string, std::shared_ptr<Catalog_Namespace::Catalog>> cat_map_;
 
   LeafAggregator leaf_aggregator_;
   const std::vector<LeafHostInfo> string_leaves_;
