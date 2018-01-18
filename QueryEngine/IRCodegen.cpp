@@ -369,7 +369,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
       join_loops.emplace_back(
           JoinLoopKind::UpperBound,
           current_level_join_conditions.type,
-          [this, level_idx, &co](const std::vector<llvm::Value*>& prev_iters) {
+          [this, level_idx](const std::vector<llvm::Value*>& prev_iters) {
             addJoinLoopIterator(prev_iters, level_idx);
             JoinLoopDomain domain{0};
             const auto rows_per_scan_ptr = cgen_state_->ir_builder_.CreateGEP(

@@ -319,6 +319,7 @@ std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const Analyz
   const auto phi_bb = llvm::BasicBlock::Create(cgen_state_->context_, "outer_join_phi", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(bb);
   const auto outer_join_match_lv = foundOuterJoinMatch(col_var->get_rte_idx());
+  CHECK(outer_join_match_lv);
   cgen_state_->ir_builder_.CreateCondBr(outer_join_match_lv, outer_join_args_bb, outer_join_nulls_bb);
   const auto back_from_outer_join_bb =
       llvm::BasicBlock::Create(cgen_state_->context_, "back_from_outer_join", cgen_state_->row_func_);
