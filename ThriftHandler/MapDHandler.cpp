@@ -824,7 +824,10 @@ void MapDHandler::get_token_based_completions(std::vector<TCompletionHint>& hint
       return;
     }
     // Not much information to use, just retrieve column names which match the prefix.
-    get_column_hints(hints, last_word, column_names_by_table);
+    if (should_suggest_column_hints(sql)) {
+      get_column_hints(hints, last_word, column_names_by_table);
+      return;
+    }
     const std::string kFromKeyword{"FROM"};
     if (boost::istarts_with(kFromKeyword, last_word)) {
       TCompletionHint keyword_hint;

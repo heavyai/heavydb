@@ -41,4 +41,8 @@ void get_column_hints(std::vector<TCompletionHint>& hints,
                       const std::string& last_word,
                       const std::unordered_map<std::string, std::unordered_set<std::string>>& column_names_by_table);
 
+// Returns true iff it should suggest columns or just the FROM keyword,
+// should be called for partial queries after SELECT but before FROM.
+bool should_suggest_column_hints(const std::string& partial_query);
+
 #endif  // THRIFTHANDLER_TOKENCOMPLETIONHINTS_H
