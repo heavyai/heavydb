@@ -150,6 +150,14 @@ TEST(Completion, FilterKeywords) {
   ASSERT_EQ(expected_filtered_hints, filtered_hints);
 }
 
+TEST(Completion, ShouldSuggestColumnHints) {
+  ASSERT_FALSE(should_suggest_column_hints("SELECT x"));
+  ASSERT_FALSE(should_suggest_column_hints("SELECT x "));
+  ASSERT_TRUE(should_suggest_column_hints("SELECT x,"));
+  ASSERT_TRUE(should_suggest_column_hints("SELECT x , "));
+  ASSERT_TRUE(should_suggest_column_hints("SELECT "));
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

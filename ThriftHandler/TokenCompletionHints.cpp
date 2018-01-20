@@ -19,6 +19,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/tokenizer.hpp>
 
 namespace {
 
@@ -133,4 +134,18 @@ void get_column_hints(std::vector<TCompletionHint>& hints,
   if (!column_hint.hints.empty()) {
     hints.push_back(column_hint);
   }
+}
+
+bool should_suggest_column_hints(const std::string& partial_query) {
+  boost::char_separator<char> sep(" \t\n", ",");
+  boost::tokenizer<boost::char_separator<char>> tokens(partial_query, sep);
+  const auto token_count = std::distance(tokens.begin(), tokens.end());
+  if (token_count == 1) {
+    return true;
+  }
+  std::string last_token;
+  for (const auto& token : tokens) {
+    last_token = token;
+  }
+  return last_token == ",";
 }
