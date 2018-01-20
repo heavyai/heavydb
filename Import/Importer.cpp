@@ -50,6 +50,7 @@
 #include "../Shared/mapd_glob.h"
 #include "../Shared/scope.h"
 #include "Importer.h"
+#include "DataMgr/LockMgr.h"
 #include "gen-cpp/MapD.h"
 #include <vector>
 #include <iostream>
@@ -301,9 +302,9 @@ void parseStringArray(const std::string& s, const CopyParams& copy_params, std::
   }
   if (s.size() - 1 > last) {  // if not empty string - disallow empty strings for now
     if (s.substr(last, s.size() - 1 - last).length() > StringDictionary::MAX_STRLEN)
-      throw std::runtime_error(
-          "Array String too long : " + std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
-          std::to_string(StringDictionary::MAX_STRLEN));
+      throw std::runtime_error("Array String too long : " +
+                               std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
+                               std::to_string(StringDictionary::MAX_STRLEN));
 
     string_vec.push_back(s.substr(last, s.size() - 1 - last));
   }
@@ -2017,9 +2018,6 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
     std::stack<int> stack_thread_ids;
     for (int i = 0; i < max_threads; i++)
       stack_thread_ids.push(i);
-    // Lock table for write for the period of the whole load
-    mapd_unique_lock<mapd_shared_mutex> tableLevelWriteLock(*loader->get_catalog().get_dataMgr().getMutexForChunkPrefix(
-        chunkKey));  // prevent two threads from trying to insert into the same table simultaneously
     auto start_epoch = loader->getTableEpoch();
     while (size > 0) {
       if (eof_reached)

@@ -43,13 +43,15 @@
 #include "../Shared/measure.h"
 #include "ReservedKeywords.h"
 #include "parser.h"
-
+#include "DataMgr/LockMgr.h"
 #include "../QueryEngine/CalciteAdapter.h"
 #include "../QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "../QueryEngine/RelAlgExecutor.h"
 
 size_t g_leaf_count{0};
 bool g_fast_strcmp{false};
+
+using namespace Lock_Namespace;
 
 namespace Parser {
 
@@ -2010,6 +2012,14 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   if (catalog.getMetadataForTable(table_name_) != nullptr) {
     throw std::runtime_error("Table " + table_name_ + " already exists.");
   }
+
+  // get read UpdateDeleteLock on tables involved in SELECT subquery
+  const auto query_ra = parse_to_ra(catalog, select_query_, session);
+  std::vector<std::shared_ptr<mapd_shared_lock<mapd_shared_mutex>>> readUpdateDeleteLocks;
+  Lock_Namespace::getTableReadLocks<mapd_shared_mutex>(
+      session.get_catalog(), query_ra, readUpdateDeleteLocks, Lock_Namespace::LockType::UpdateDeleteLock);
+  // [ write UpdateDeleteLocks ] lock is deferred in InsertOrderFragmenter::deleteFragments
+
   std::vector<TargetMetaInfo> target_metainfos;
   const auto result_rows = getResultRows(session, select_query_, target_metainfos);
   std::list<ColumnDescriptor> column_descriptors;
@@ -2089,6 +2099,11 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
       insert_data.data.push_back(p);
       ++col_idx;
     }
+    // get CheckpointLock+UpdateDeleteLock locks on the table before trying to create its 1st fragment
+    ChunkKey chunkKey = {catalog.get_currentDB().dbId, created_td->tableId};
+    mapd_unique_lock<mapd_shared_mutex> chkptlLock(*Lock_Namespace::LockMgr<mapd_shared_mutex, ChunkKey>::getMutex(
+        Lock_Namespace::LockType::CheckpointLock, chunkKey));
+    // [ write UpdateDeleteLocks ] lock is deferred in InsertOrderFragmenter::deleteFragments
     insert_data.columnIds = column_ids;
     insert_data.numRows = columnar_results.size();
     created_td->fragmenter->insertData(insert_data);

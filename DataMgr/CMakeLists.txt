@@ -17,6 +17,7 @@ set(datamgr_source_files
     BufferMgr/CpuBufferMgr/CpuBuffer.cpp
     BufferMgr/BufferMgr.cpp
     BufferMgr/Buffer.cpp
+    LockMgr.cpp
 )
 
 add_library(DataMgr ${datamgr_source_files})

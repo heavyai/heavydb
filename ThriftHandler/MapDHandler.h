@@ -40,7 +40,7 @@
 #include "MapDRelease.h"
 
 #include "Calcite/Calcite.h"
-
+#include "DataMgr/LockMgr.h"
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Import/Importer.h"

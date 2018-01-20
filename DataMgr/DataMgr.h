@@ -84,8 +84,6 @@ class DataMgr {
                                  const size_t numBytes = 0);
   void deleteChunksWithPrefix(const ChunkKey& keyPrefix);
   void deleteChunksWithPrefix(const ChunkKey& keyPrefix, const MemoryLevel memLevel);
-  std::shared_ptr<mapd_shared_mutex> getMutexForChunkPrefix(
-      const ChunkKey& keyPrefix);  // used to manage locks at higher level
   AbstractBuffer* alloc(const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes);
   void free(AbstractBuffer* buffer);
   void freeAllBuffers();
