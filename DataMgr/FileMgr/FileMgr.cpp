@@ -530,6 +530,11 @@ void FileMgr::checkpoint() {
   }
 
   writeAndSyncEpochToDisk();
+
+  mapd_unique_lock<mapd_shared_mutex> freePagesWriteLock(mutex_free_page);
+  for (auto& free_page : free_pages)
+    free_page.first->freePageDeferred(free_page.second);
+  free_pages.clear();
 }
 
 AbstractBuffer* FileMgr::createBuffer(const ChunkKey& key, const size_t pageSize, const size_t numBytes) {
@@ -767,7 +772,7 @@ FileInfo* FileMgr::openExistingFile(const std::string& path,
                                     const size_t numPages,
                                     std::vector<HeaderInfo>& headerVec) {
   FILE* f = open(path);
-  FileInfo* fInfo = new FileInfo(fileId, f, pageSize, numPages, false);  // false means don't init file
+  FileInfo* fInfo = new FileInfo(this, fileId, f, pageSize, numPages, false);  // false means don't init file
 
   fInfo->openExistingFile(headerVec, epoch_);
   mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
@@ -794,7 +799,7 @@ FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
 
   // instantiate a new FileInfo for the newly created file
   int fileId = nextFileId_++;
-  FileInfo* fInfo = new FileInfo(fileId, f, pageSize, numPages, true);  // true means init file
+  FileInfo* fInfo = new FileInfo(this, fileId, f, pageSize, numPages, true);  // true means init file
   assert(fInfo);
 
   mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
@@ -880,6 +885,11 @@ void FileMgr::createTopLevelMetadata() {
 void FileMgr::setEpoch(int epoch) {
   epoch_ = epoch;
   writeAndSyncEpochToDisk();
+}
+
+void FileMgr::free_page(std::pair<FileInfo*, int>&& page) {
+  std::unique_lock<mapd_shared_mutex> lock(mutex_free_page);
+  free_pages.push_back(page);
 }
 
 }  // File_Namespace

@@ -44,7 +44,11 @@ struct Page;
  *
  * Helper functions are provided: size(), available(), and used().
  */
+#define DELETE_CONTINGENT (-1)
+
+class FileMgr;
 struct FileInfo {
+  FileMgr* fileMgr;
   int fileId;       /// unique file identifier (i.e., used for a file name)
   FILE* f;          /// file stream object for the represented file
   size_t pageSize;  /// the fixed size of each page in the file
@@ -55,7 +59,12 @@ struct FileInfo {
   std::mutex readWriteMutex_;
 
   /// Constructor
-  FileInfo(const int fileId, FILE* f, const size_t pageSize, const size_t numPages, const bool init = false);
+  FileInfo(FileMgr* fileMgr,
+           const int fileId,
+           FILE* f,
+           const size_t pageSize,
+           const size_t numPages,
+           const bool init = false);
 
   /// Destructor
   ~FileInfo();
@@ -64,6 +73,7 @@ struct FileInfo {
   // for each apge
   void initNewFile();
 
+  void freePageDeferred(int pageId);
   void freePage(int pageId);
   int getFreePage();
   size_t write(const size_t offset, const size_t size, int8_t* buf);

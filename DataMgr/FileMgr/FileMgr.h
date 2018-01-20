@@ -212,6 +212,9 @@ class FileMgr : public AbstractBufferMgr {  // implements
   void createTopLevelMetadata();  // create metadata shared by all tables of all DBs
   std::string getFileMgrBasePath() const { return fileMgrBasePath_; }
 
+  void free_page(std::pair<FileInfo*, int>&& page);
+  const std::pair<const int, const int> get_fileMgrKey() const { return fileMgrKey_; }
+
  private:
   GlobalFileMgr* gfm_;  /// Global FileMgr
   std::pair<const int, const int> fileMgrKey_;
@@ -229,6 +232,9 @@ class FileMgr : public AbstractBufferMgr {  // implements
   std::mutex getPageMutex_;
   mutable mapd_shared_mutex chunkIndexMutex_;
   mutable mapd_shared_mutex files_rw_mutex_;
+
+  mutable mapd_shared_mutex mutex_free_page;
+  std::vector<std::pair<FileInfo*, int>> free_pages;
 
   /**
    * @brief Adds a file to the file manager repository.
