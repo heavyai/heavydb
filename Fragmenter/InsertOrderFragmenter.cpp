@@ -353,22 +353,43 @@ TableInfo InsertOrderFragmenter::getFragmentsForQuery() {
   TableInfo queryInfo;
   queryInfo.chunkKeyPrefix = chunkKeyPrefix_;
   // right now we don't test predicate, so just return (copy of) all fragments
-  queryInfo.fragments = fragmentInfoVec_;  // makes a copy
+  bool fragmentsExist = false;
+  if (fragmentInfoVec_.empty()) {
+    // If we have no fragments add a dummy empty fragment to make the executor
+    // not have separate logic for 0-row tables
+    int maxFragmentId = 0;
+    FragmentInfo emptyFragmentInfo;
+    emptyFragmentInfo.fragmentId = maxFragmentId;
+    emptyFragmentInfo.shadowNumTuples = 0;
+    emptyFragmentInfo.setPhysicalNumTuples(0);
+    emptyFragmentInfo.deviceIds.resize(dataMgr_->levelSizes_.size());
+    emptyFragmentInfo.physicalTableId = physicalTableId_;
+    emptyFragmentInfo.shard = shard_;
+    queryInfo.fragments.push_back(emptyFragmentInfo);
+  } else {
+    fragmentsExist = true;
+    queryInfo.fragments = fragmentInfoVec_;  // makes a copy
+  }
   readLock.unlock();
   queryInfo.setPhysicalNumTuples(0);
   auto partIt = queryInfo.fragments.begin();
-  while (partIt != queryInfo.fragments.end()) {
-    if (partIt->getPhysicalNumTuples() == 0) {
-      // this means that a concurrent insert query inserted tuples into a new fragment but when the query came in we
-      // didn't have this fragment.
-      // To make sure we don't mess up the executor we delete this
-      // fragment from the metadatamap (fixes earlier bug found
-      // 2015-05-08)
-      partIt = queryInfo.fragments.erase(partIt);
-    } else {
-      queryInfo.setPhysicalNumTuples(queryInfo.getPhysicalNumTuples() + partIt->getPhysicalNumTuples());
-      ++partIt;
+  if (fragmentsExist) {
+    while (partIt != queryInfo.fragments.end()) {
+      if (partIt->getPhysicalNumTuples() == 0) {
+        // this means that a concurrent insert query inserted tuples into a new fragment but when the query came in we
+        // didn't have this fragment.
+        // To make sure we don't mess up the executor we delete this
+        // fragment from the metadatamap (fixes earlier bug found
+        // 2015-05-08)
+        partIt = queryInfo.fragments.erase(partIt);
+      } else {
+        queryInfo.setPhysicalNumTuples(queryInfo.getPhysicalNumTuples() + partIt->getPhysicalNumTuples());
+        ++partIt;
+      }
     }
+  } else {
+    // We added a dummy fragment and know the table is empty
+    queryInfo.setPhysicalNumTuples(0);
   }
   return queryInfo;
 }
