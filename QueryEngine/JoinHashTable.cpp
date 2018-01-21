@@ -173,7 +173,7 @@ bool shard_count_less_or_equal_device_count(const int outer_table_id, const Exec
 size_t get_shard_count(std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> equi_pair,
                        const RelAlgExecutionUnit& ra_exe_unit,
                        const Executor* executor) {
-  if (executor->isOuterJoin()) {
+  if (executor->isOuterJoin() || executor->containsLeftDeepOuterJoin()) {
     return 0;
   }
   const auto lhs_col = equi_pair.first;

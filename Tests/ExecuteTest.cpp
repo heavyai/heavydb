@@ -3521,6 +3521,7 @@ TEST(Select, Joins_LeftOuterJoin) {
       "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
       "test_inner.y ASC, hash_join_test.x ASC;",
       dt);
+    c("SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test.str = test_inner.str AND test.x = test_inner.x;", dt);
   }
 }
 
