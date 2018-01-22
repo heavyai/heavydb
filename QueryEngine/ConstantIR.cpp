@@ -153,7 +153,7 @@ std::vector<llvm::Value*> Executor::codegenHoistedConstants(const std::vector<co
   return codegenHoistedConstantsInPlace(lit_off, type_info, &cgen_state_->ir_builder_, enc_type, dict_id, false);
 }
 
-std::vector<llvm::Value*> Executor::codegenHoistedConstantsInEntryBlock(const Analyzer::Constant* constant,
+std::vector<llvm::Value*> Executor::codegenHoistedConstantsInBasicBlock(const Analyzer::Constant* constant,
                                                                         llvm::IRBuilder<>* ir_builder,
                                                                         const EncodingType enc_type,
                                                                         const int dict_id,

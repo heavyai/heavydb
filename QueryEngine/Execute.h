@@ -409,7 +409,7 @@ class Executor {
                                                            const EncodingType enc_type,
                                                            const int dict_id,
                                                            bool inQueryFunction);
-  std::vector<llvm::Value*> codegenHoistedConstantsInEntryBlock(const Analyzer::Constant*,
+  std::vector<llvm::Value*> codegenHoistedConstantsInBasicBlock(const Analyzer::Constant*,
                                                                 llvm::IRBuilder<>*,
                                                                 const EncodingType enc_type,
                                                                 const int dict_id,
