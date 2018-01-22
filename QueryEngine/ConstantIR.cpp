@@ -107,7 +107,7 @@ llvm::Value* find_arg_by_name(llvm::Function* func, const std::string& name) {
 }
 
 llvm::Value* findHoistedValueInEntryBlock(llvm::Function* function, std::string name) {
-  llvm::BasicBlock& bb = function->front();
+  llvm::BasicBlock& bb(*function->front());
   // do a linear search for now
   // should be changed to a binary search
   for (llvm::Value& inst : bb) {
