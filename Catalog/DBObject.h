@@ -55,6 +55,8 @@ struct DBObjectKey {
     int32_t ids_b[N_COLUMNS] = {key.dbObjectType, key.dbId, key.tableId, key.columnId};
     return memcmp(ids_a, ids_b, N_COLUMNS * sizeof(int32_t)) < 0;
   }
+
+  static DBObjectKey fromString(const std::vector<std::string>& key, const DBObjectType& type);
 };
 
 // Access privileges currently supported
@@ -106,6 +108,7 @@ class DBObject {
   void setOwningUserId(int32_t userId) { owningUserId_ = userId; }
   bool privsValid() const { return privsValid_; }
   void unvalidate() { privsValid_ = false; }
+  std::vector<std::string> toString() const;
 
  private:
   std::string objectName_;

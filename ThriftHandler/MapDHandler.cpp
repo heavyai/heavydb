@@ -907,7 +907,7 @@ void MapDHandler::get_role(std::vector<std::string>& roles,
   auto session_info_ptr = session_it->second.get();
   auto& cat = session_info_ptr->get_catalog();
   auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
-  if (sys_cat.getRole(roleName, userPrivateRole)) {
+  if (sys_cat.hasRole(roleName, userPrivateRole)) {
     if ((session_info_ptr->get_currentUser().isSuper) ||
         (!session_info_ptr->get_currentUser().isSuper &&
          sys_cat.isRoleGrantedToUser(session_info_ptr->get_currentUser().userId, roleName))) {
@@ -922,7 +922,7 @@ void MapDHandler::get_all_roles(std::vector<std::string>& roles, const TSessionI
   auto session_info_ptr = session_it->second.get();
   auto& cat = session_info_ptr->get_catalog();
   auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
-  roles = sys_cat.getAllRoles(
+  roles = sys_cat.getRoles(
       userPrivateRole, session_info_ptr->get_currentUser().isSuper, session_info_ptr->get_currentUser().userId);
 }
 
@@ -996,7 +996,7 @@ void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
       }
     }
     if (get_roles) {
-      roles = sys_cat.getAllRolesForUser(user_meta.userId);
+      roles = sys_cat.getUserRoles(user_meta.userId);
     }
   } else {
     TMapDException ex;

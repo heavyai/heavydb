@@ -394,7 +394,6 @@ class SysCatalog : public Catalog {
   }
   virtual ~SysCatalog();
   void initDB();
-  void migrateSysCatalogSchema();
   void initObjectPrivileges();
   void createUser(const std::string& name, const std::string& passwd, bool issuper);
   void dropUser(const std::string& name);
@@ -408,11 +407,7 @@ class SysCatalog : public Catalog {
   bool getMetadataForDB(const std::string& name, DBMetadata& db);
   std::list<DBMetadata> getAllDBMetadata();
   std::list<UserMetadata> getAllUserMetadata();
-  void createDefaultMapdRoles();
-  void grantDefaultPrivilegesToRole(const std::string& name, bool issuper);
-  std::vector<std::string> convertObjectKeyToString(const DBObject& object);
-  DBObjectKey convertObjectKeyFromString(const std::vector<std::string>& key, const DBObjectType& type);
-  void populateDBObjectKey(DBObject& object, const Catalog_Namespace::Catalog& catalog);
+  void populateDBObjectKey(DBObject& object, const Catalog_Namespace::Catalog& catalog) const;
   void createDBObject(const UserMetadata& user,
                       const std::string& objectName,
                       const Catalog_Namespace::Catalog& catalog);
@@ -425,35 +420,39 @@ class SysCatalog : public Catalog {
   void revokeDBObjectPrivilegesFromAllRoles(const std::string& objectName,
                                             const DBObjectType& objectType,
                                             Catalog* catalog = nullptr);
-  void getDBObjectPrivileges(const std::string& roleName, DBObject& object, const Catalog_Namespace::Catalog& catalog);
+  void getDBObjectPrivileges(const std::string& roleName, DBObject& object, const Catalog_Namespace::Catalog& catalog) const;
   bool verifyDBObjectOwnership(const UserMetadata& user, DBObject object, const Catalog_Namespace::Catalog& catalog);
   void createRole(const std::string& roleName, const bool& userPrivateRole = false);
   void dropRole(const std::string& roleName);
   void grantRole(const std::string& roleName, const std::string& userName);
   void revokeRole(const std::string& roleName, const std::string& userName);
-  void dropUserRole(const std::string& userName);
   bool checkPrivileges(const UserMetadata& user, std::vector<DBObject>& privObjects);
   bool checkPrivileges(const std::string& userName, std::vector<DBObject>& privObjects);
   Role* getMetadataForRole(const std::string& roleName) const;
   Role* getMetadataForUserRole(int32_t userId) const;
   bool isRoleGrantedToUser(const int32_t userId, const std::string& roleName) const;
-  bool getRole(const std::string& roleName, bool userPrivateRole) const;  // true - role exists, false - otherwise
-  std::vector<std::string> getAllRoles(bool userPrivateRole,
-                                       bool isSuper,
-                                       const int32_t userId);  // result is empty if no roles exist
-  std::vector<DBObject*> getDBObjectPrivilegesForRole(
-      const std::string& roleName) const;  // result is empty if no privs granted to role
-  AccessPrivileges getDBObjectPrivilegesForRole(
-      const std::string& roleName,  // result is empty if no privs granted to object
+  bool hasRole(const std::string& roleName, bool userPrivateRole) const;  // true - role exists, false - otherwise
+  std::vector<std::string> getRoles(bool userPrivateRole,
+                                    bool isSuper,
+                                    const int32_t userId);
+  std::vector<std::string> getUserRoles(const int32_t userId);
+
+private:
+  void migrateSysCatalogSchema();
+  void createDefaultMapdRoles();
+  void grantDefaultPrivilegesToRole(const std::string& name, bool issuper);
+  void dropUserRole(const std::string& userName);
+  std::vector<DBObject*> getRoleObjects(const std::string& roleName) const;
+  AccessPrivileges getRoleObjects(
+      const std::string& roleName,
       const DBObjectType& objectType,
-      const std::string& objectName);
-  std::vector<std::string> getAllRolesForUser(const int32_t userId);  // result is empty if no roles exist
-  std::vector<DBObject*> getDBObjectPrivilegesForUser(
-      const std::string& userName) const;  // result is empty if no privs granted to user
-  AccessPrivileges getDBObjectPrivilegesForUser(
-      const std::string& userName,  // result is empty if no privs granted to object
+      const std::string& objectName) const;
+  std::vector<DBObject*> getUserObjects(
+      const std::string& userName) const;
+  AccessPrivileges getUserObjects(
+      const std::string& userName,
       const DBObjectType& objectType,
-      const std::string& objectName);
+      const std::string& objectName) const;
 };
 
 /*
@@ -472,7 +471,7 @@ class SessionInfo {
         currentUser_(s.currentUser_),
         executor_device_type_(static_cast<ExecutorDeviceType>(s.executor_device_type_)),
         session_id(s.session_id) {}
-  Catalog& get_catalog() const { return *catalog_; };
+  Catalog& get_catalog() const { return *catalog_; }
   const UserMetadata& get_currentUser() const { return currentUser_; }
   const ExecutorDeviceType get_executor_device_type() const { return executor_device_type_; }
   void set_executor_device_type(ExecutorDeviceType t) { executor_device_type_ = t; }

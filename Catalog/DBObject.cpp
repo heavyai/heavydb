@@ -50,3 +50,60 @@ void DBObject::revokePrivileges(const DBObject& object) {
   objectPrivs_.truncate &= !object.objectPrivs_.truncate;
   privsValid_ = true;
 }
+
+std::vector<std::string> DBObject::toString() const {
+  std::vector<std::string> objectKey;
+  switch (objectType_) {
+    case (DatabaseDBObjectType): {
+      objectKey.push_back(std::to_string(objectKey_.dbObjectType));
+      objectKey.push_back(std::to_string(objectKey_.dbId));
+      objectKey.push_back(std::to_string(-1));
+      objectKey.push_back(std::to_string(-1));
+      break;
+    }
+    case (TableDBObjectType): {
+      objectKey.push_back(std::to_string(objectKey_.dbObjectType));
+      objectKey.push_back(std::to_string(objectKey_.dbId));
+      objectKey.push_back(std::to_string(objectKey_.tableId));
+      objectKey.push_back(std::to_string(-1));
+      break;
+    }
+    case (ColumnDBObjectType): {
+      throw std::runtime_error("Privileges for columns are not supported in current release.");
+      break;
+    }
+    case (DashboardDBObjectType): {
+      throw std::runtime_error("Privileges for dashboards are not supported in current release.");
+      break;
+    }
+    default: { CHECK(false); }
+  }
+  return objectKey;
+}
+
+DBObjectKey DBObjectKey::fromString(const std::vector<std::string>& key, const DBObjectType& type) {
+  DBObjectKey objectKey;
+  switch (type) {
+    case (DatabaseDBObjectType): {
+      objectKey.dbObjectType = std::stoi(key[0]);
+      objectKey.dbId = std::stoi(key[1]);
+      break;
+    }
+    case (TableDBObjectType): {
+      objectKey.dbObjectType = std::stoi(key[0]);
+      objectKey.dbId = std::stoi(key[1]);
+      objectKey.tableId = std::stoi(key[2]);
+      break;
+    }
+    case (ColumnDBObjectType): {
+      throw std::runtime_error("Privileges for columns are not supported in current release.");
+      break;
+    }
+    case (DashboardDBObjectType): {
+      throw std::runtime_error("Privileges for dashboards are not supported in current release.");
+      break;
+    }
+    default: { CHECK(false); }
+  }
+  return objectKey;
+}
