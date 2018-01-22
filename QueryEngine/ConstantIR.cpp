@@ -96,168 +96,38 @@ llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant)
   }
 }
 
-llvm::Value* find_arg_by_name(llvm::Function* func, const std::string& name) {
-  auto& arg_list = func->getArgumentList();
-  for (auto& arg : arg_list) {
-    if (arg.hasName() && arg.getName() == name) {
-      return &arg;
-    }
-  }
-  return nullptr;
-}
-
-
-llvm::Value* findHoistedValueInBlock(llvm::Function* function, std::string name) {
-  // WARNING: this does not work with the LICM optimizer... the generated IR seems correct, but it SIGSEGVs during peephole optimisation
-//  llvm::BasicBlock* hoistedVariablesBlock = find_BasicBlock_by_name(function, ".hoisted_variables");
-  llvm::BasicBlock* hoistedVariablesBlock = find_BasicBlock_by_name(function, ".entry");
-  CHECK(hoistedVariablesBlock);
-
-  llvm::BasicBlock& bb(*hoistedVariablesBlock);
-  // do a linear search for now
-  // should be changed to a binary search
-  for (llvm::Value& inst: bb) {
-    if (inst.hasName() && inst.getName() == name) {
-      return &inst;
-    }
-  }
-
-  return nullptr;
-}
-
 std::vector<llvm::Value*> Executor::codegenHoistedConstants(const std::vector<const Analyzer::Constant*>& constants,
                                                             const EncodingType enc_type,
                                                             const int dict_id) {
   CHECK(!constants.empty());
   const auto& type_info = constants.front()->get_type_info();
-  int64_t lit_off{-1};
+  auto lit_buff_lv = get_arg_by_name(cgen_state_->row_func_, "literals");
+  int16_t lit_off{-1};
   for (size_t device_id = 0; device_id < constants.size(); ++device_id) {
     const auto constant = constants[device_id];
     const auto& crt_type_info = constant->get_type_info();
     CHECK(type_info == crt_type_info);
-
-    // TODO: casting from
-    const int64_t dev_lit_off = cgen_state_->getOrAddLiteral(constant, enc_type, dict_id, device_id);
+    const int16_t dev_lit_off = cgen_state_->getOrAddLiteral(constant, enc_type, dict_id, device_id);
     if (device_id) {
       CHECK_EQ(lit_off, dev_lit_off);
     } else {
       lit_off = dev_lit_off;
     }
   }
-
-
-  std::string name = "arg_hoisted_var_"+std::to_string(lit_off);
-  llvm::Function* parentFunction = cgen_state_->row_func_;
-  auto arg_value = find_arg_by_name(parentFunction, name);
-
-  if (arg_value) {
-    if (type_info.is_boolean() && type_info.get_notnull()) {
-      return { toBool(arg_value) };
-    }
-    return { arg_value };
-  }
-
-  return codegenHoistedConstantsInPlace(lit_off, type_info, &cgen_state_->ir_builder_, enc_type, dict_id, false);
-}
-
-
-std::vector<llvm::Value*> Executor::codegenHoistedConstantsInBasicBlock(const Analyzer::Constant* constant,
-                                                            llvm::IRBuilder<>* ir_builder,
-                                                            const EncodingType enc_type,
-                                                            const int dict_id,
-                                                            const CompilationOptions& co) {
-
-  std::vector<const Analyzer::Constant*> constants(deviceCount(co.device_type_), constant);
-
-  int64_t currentWatermark = cgen_state_->literal_bytes_high_watermark(0);
-
-  CHECK(!constants.empty());
-  const auto& type_info = constants.front()->get_type_info();
-  int64_t lit_off{-1};
-  for (size_t device_id = 0; device_id < constants.size(); ++device_id) {
-    const auto constant = constants[device_id];
-    const auto& crt_type_info = constant->get_type_info();
-    CHECK(type_info == crt_type_info);
-    const int64_t dev_lit_off = cgen_state_->getOrAddLiteral(constant, enc_type, dict_id, device_id);
-    if (device_id) {
-      CHECK_EQ(lit_off, dev_lit_off);
-    } else {
-      lit_off = dev_lit_off;
-    }
-  }
-
-  CHECK_GE(lit_off, int64_t(0));
-
-  std::string name = "hoisted_var_"+std::to_string(lit_off);
-  llvm::Function* parentFunction = ir_builder->GetInsertBlock()->getParent();
-
+  CHECK_GE(lit_off, int16_t(0));
+  const auto lit_buf_start = cgen_state_->ir_builder_.CreateGEP(lit_buff_lv, ll_int(lit_off));
   if (type_info.is_string() && enc_type != kENCODING_DICT) {
     CHECK_EQ(kENCODING_NONE, type_info.get_compression());
     CHECK_EQ(size_t(4), literalBytes(LiteralValue(std::string(""))));
-
-    // special case for strings
-    llvm::Value* var_b = findHoistedValueInBlock(parentFunction, name+"_b");
-    llvm::Value* var_c = findHoistedValueInBlock(parentFunction, name+"_c");
-
-    if (var_b != NULL && var_c != NULL) {
-      auto var_a = ll_int(int64_t(0));
-      return {var_a, var_b, var_c};
-    }
-  }
-
-  bool is_new_entry = currentWatermark <= lit_off;
-
-  if (!is_new_entry) {
-    llvm::Value* value = findHoistedValueInBlock(parentFunction, name);
-    CHECK(value);
-    return { value };
-  }
-
-  return codegenHoistedConstantsInPlace(lit_off, type_info, ir_builder, enc_type, dict_id, true);
-}
-
-
-std::vector<llvm::Value*> Executor::codegenHoistedConstantsInPlace(int64_t offset,
-                                                            const SQLTypeInfo& type_info,
-                                                            llvm::IRBuilder<>* ir_builder,
-                                                            const EncodingType enc_type,
-                                                            const int dict_id,
-                                                            bool inQueryFuncBasicBlock) {
-
-  int64_t lit_off{offset};
-  CHECK_GE(lit_off, int64_t(0));
-
-  llvm::Function* parentFunction = ir_builder->GetInsertBlock()->getParent();
-  std::string name = "hoisted_var_"+std::to_string(lit_off);
-
-  auto lit_buff_lv = get_arg_by_name(parentFunction, "literals");
-  const auto lit_buf_start = ir_builder->CreateGEP(lit_buff_lv, ll_int(lit_off));
-
-  if (type_info.is_string() && enc_type != kENCODING_DICT) {
-    CHECK_EQ(kENCODING_NONE, type_info.get_compression());
-    CHECK_EQ(size_t(4), literalBytes(LiteralValue(std::string(""))));
-    auto off_and_len_ptr = ir_builder->CreateBitCast(
+    auto off_and_len_ptr = cgen_state_->ir_builder_.CreateBitCast(
         lit_buf_start, llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0));
     // packed offset + length, 16 bits each
-    auto off_and_len = ir_builder->CreateLoad(off_and_len_ptr);
-    auto off_lv = ir_builder->CreateLShr(
-        ir_builder->CreateAnd(off_and_len, ll_int(int32_t(0xffff0000))), ll_int(int32_t(16)));
-    auto len_lv = ir_builder->CreateAnd(off_and_len, ll_int(int32_t(0x0000ffff)));
-
-
-    auto var_a = ll_int(int64_t(0));
-    auto var_b = ir_builder->CreateGEP(lit_buff_lv, off_lv);
-    auto var_c = len_lv;
-
-    if (inQueryFuncBasicBlock){
-      var_a->setName(name + "_a");
-      var_b->setName(name + "_b");
-      var_c->setName(name + "_c");
-    }
-
-    return {var_a, var_b, var_c};
+    auto off_and_len = cgen_state_->ir_builder_.CreateLoad(off_and_len_ptr);
+    auto off_lv = cgen_state_->ir_builder_.CreateLShr(
+        cgen_state_->ir_builder_.CreateAnd(off_and_len, ll_int(int32_t(0xffff0000))), ll_int(int32_t(16)));
+    auto len_lv = cgen_state_->ir_builder_.CreateAnd(off_and_len, ll_int(int32_t(0x0000ffff)));
+    return {ll_int(int64_t(0)), cgen_state_->ir_builder_.CreateGEP(lit_buff_lv, off_lv), len_lv};
   }
-
   llvm::Type* val_ptr_type{nullptr};
   const auto val_bits = get_bit_width(type_info);
   CHECK_EQ(size_t(0), val_bits % 8);
@@ -270,17 +140,9 @@ std::vector<llvm::Value*> Executor::codegenHoistedConstantsInPlace(int64_t offse
                                                     : llvm::Type::getDoublePtrTy(cgen_state_->context_);
   }
   auto lit_lv =
-      ir_builder->CreateLoad(ir_builder->CreateBitCast(lit_buf_start, val_ptr_type));
-
-  if (inQueryFuncBasicBlock) {
-    lit_lv->setName(name);
+      cgen_state_->ir_builder_.CreateLoad(cgen_state_->ir_builder_.CreateBitCast(lit_buf_start, val_ptr_type));
+  if (type_info.is_boolean() && type_info.get_notnull()) {
+    return {toBool(lit_lv)};
   }
-
-  if (!inQueryFuncBasicBlock) {
-    if (type_info.is_boolean() && type_info.get_notnull()) {
-      return { toBool(lit_lv) };
-    }
-  }
-
-  return { lit_lv };
+  return {lit_lv};
 }

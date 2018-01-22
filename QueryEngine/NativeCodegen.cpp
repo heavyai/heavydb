@@ -17,7 +17,6 @@
 #include "Execute.h"
 #include "ExtensionFunctionsWhitelist.h"
 #include "QueryTemplateGenerator.h"
-#include "ScalarExprVisitor.h"
 
 #include "Shared/mapdpath.h"
 
@@ -658,8 +657,7 @@ std::vector<llvm::Value*> generate_column_heads_load(const int num_columns,
                                                      llvm::Function* query_func,
                                                      llvm::LLVMContext& context) {
   auto max_col_local_id = num_columns - 1;
-  llvm::BasicBlock * entryBlock = find_BasicBlock_by_name(query_func, ".entry");
-  llvm::BasicBlock& fetch_bb(*entryBlock);
+  auto& fetch_bb = query_func->front();
   llvm::IRBuilder<> fetch_ir_builder(&fetch_bb);
   fetch_ir_builder.SetInsertPoint(&*fetch_bb.begin());
   auto& in_arg_list = query_func->getArgumentList();
@@ -667,9 +665,8 @@ std::vector<llvm::Value*> generate_column_heads_load(const int num_columns,
   auto& byte_stream_arg = in_arg_list.front();
   std::vector<llvm::Value*> col_heads;
   for (int col_id = 0; col_id <= max_col_local_id; ++col_id) {
-    std::string name = "loaded_column_"+std::to_string(col_id);
     col_heads.emplace_back(fetch_ir_builder.CreateLoad(
-        fetch_ir_builder.CreateGEP(&byte_stream_arg, llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), col_id)), name));
+        fetch_ir_builder.CreateGEP(&byte_stream_arg, llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), col_id))));
   }
   return col_heads;
 }
@@ -677,8 +674,7 @@ std::vector<llvm::Value*> generate_column_heads_load(const int num_columns,
 void set_row_func_argnames(llvm::Function* row_func,
                            const size_t in_col_count,
                            const size_t agg_col_count,
-                           const bool hoist_literals,
-                           llvm::Function* query_func) {
+                           const bool hoist_literals) {
   auto arg_it = row_func->arg_begin();
 
   if (agg_col_count) {
@@ -722,31 +718,6 @@ void set_row_func_argnames(llvm::Function* row_func,
   }
 
   arg_it->setName("join_hash_tables");
-
-
-  {
-    // WARNING: this does not work with the LICM optimizer... the generated IR seems correct, but it SIGSEGVs during peephole optimisation
-//    llvm::BasicBlock* hoistedVarsBlock = find_BasicBlock_by_name(query_func, ".hoisted_variables");
-    llvm::BasicBlock* hoistedVarsBlock = find_BasicBlock_by_name(query_func, ".entry");
-
-    if (NULL != hoistedVarsBlock) {
-      llvm::BasicBlock& bb(*hoistedVarsBlock);
-
-      for (auto &inst:bb) {
-        if (!inst.hasName()) {
-          continue;
-        }
-        std::string name = inst.getName();
-        std::string prefix = "hoisted_var";
-        if (name.substr(0, prefix.length()) == prefix) {
-          ++arg_it;
-          std::string argName = "arg_" + name;
-          arg_it->setName(argName);
-        }
-      }
-    }
-  }
-
 }
 
 std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(const size_t in_col_count,
@@ -805,35 +776,13 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(const 
   // join hash table argument
   row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
 
-  {
-    // WARNING: this does not work with the LICM optimizer... the generated IR seems correct, but it SIGSEGVs during peephole optimisation
-//    llvm::BasicBlock* hoistedVarsBlock = find_BasicBlock_by_name(query_func, ".hoisted_variables");
-    llvm::BasicBlock* hoistedVarsBlock = find_BasicBlock_by_name(query_func, ".entry");
-
-    if (NULL != hoistedVarsBlock ) {
-      llvm::BasicBlock& bb(*hoistedVarsBlock);
-
-      for (auto &inst:bb) {
-        if (!inst.hasName()) {
-          continue;
-        }
-        std::string name = inst.getName();
-        std::string prefix = "hoisted_var";
-        if (name.substr(0, prefix.length()) == prefix) {
-          row_process_arg_types.push_back(inst.getType());
-        }
-      }
-    }
-  }
-
-
   // generate the function
   auto ft = llvm::FunctionType::get(get_int_type(32, context), row_process_arg_types, false);
 
   auto row_func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "row_func", module);
 
   // set the row function argument names; for debugging purposes only
-  set_row_func_argnames(row_func, in_col_count, agg_col_count, hoist_literals, query_func);
+  set_row_func_argnames(row_func, in_col_count, agg_col_count, hoist_literals);
 
   return std::make_pair(row_func, col_heads);
 }
@@ -1084,138 +1033,6 @@ Executor::CompilationResult Executor::compileWorkUnit(const std::vector<InputTab
   auto agg_fnames = get_agg_fnames(ra_exe_unit.target_exprs, !ra_exe_unit.groupby_exprs.empty());
   const auto agg_slot_count = ra_exe_unit.estimator ? size_t(1) : agg_fnames.size();
 
-  class ConstantHoistingVisitor :
-      public HoistedVariablesCodeGenerator,
-      public ScalarExprVisitor<bool> {
-  public:
-
-    ConstantHoistingVisitor(Executor* executor, const RelAlgExecutionUnit* ra_unit, const CompilationOptions& co):
-      _executor(executor), _ra_unit(ra_unit), _co(co), _ir_builder(NULL), _count(0) {};
-    virtual ~ConstantHoistingVisitor() {
-      _ir_builder = NULL;
-    }
-
-    int getCount() {
-      return _count;
-    }
-
-    virtual void gen_hoisted_variable_code(llvm::BasicBlock* hoistedVarsBlock) {
-      llvm::IRBuilder<> ir_builder(_executor->cgen_state_->context_);
-      ir_builder.SetInsertPoint(hoistedVarsBlock);
-      _ir_builder = &ir_builder;
-
-      gen_hoisted_variable_code(_ra_unit->simple_quals);
-      gen_hoisted_variable_code(_ra_unit->quals);
-      gen_hoisted_variable_code(_ra_unit->inner_join_quals);
-      gen_hoisted_variable_code(_ra_unit->groupby_exprs);
-      gen_hoisted_variable_code(_ra_unit->target_exprs);
-
-      _ir_builder = NULL;
-    }
-
-
-    virtual void gen_hoisted_variable_code(const std::list<std::shared_ptr<Analyzer::Expr>>& rootNodes) {
-      for (auto rootNode: rootNodes) {
-        if (rootNode.get()) {
-          visit(rootNode.get());
-        }
-      }
-    }
-
-    virtual void gen_hoisted_variable_code(const std::vector<Analyzer::Expr*>& rootNodes) {
-      for (auto rootNode: rootNodes) {
-        if (rootNode) {
-          visit(rootNode);
-        }
-      }
-    }
-
-
-  protected:
-    virtual bool visitAggExpr(const Analyzer::AggExpr* agg) const {
-      // TODO: find out why argument can be null
-      if (agg->get_arg()) {
-        return ScalarExprVisitor::visitAggExpr(agg);
-      }
-      return defaultResult();
-    }
-    virtual bool visitConstant(const Analyzer::Constant* constant) const {
-      if (constant->get_is_null()) {
-        defaultResult();
-      }
-
-      if (kENCODING_DICT == constant->get_type_info().get_compression()) {
-        // bail out for now
-        return defaultResult();
-      }
-
-      CHECK_NE(kENCODING_DICT, constant->get_type_info().get_compression());
-      _executor->codegenHoistedConstantsInBasicBlock(constant, _ir_builder, constant->get_type_info().get_compression(), 0, _co);
-      return defaultResult();
-    }
-
-    virtual bool visitCaseExpr(const Analyzer::CaseExpr* case_) const {
-      const auto& expr_pair_list = case_->get_expr_pair_list();
-      for (const auto& expr_pair : expr_pair_list) {
-        if (! dynamic_cast<const Analyzer::Constant*>(expr_pair.first.get()))
-          visit(expr_pair.first.get());
-        if (! dynamic_cast<const Analyzer::Constant*>(expr_pair.second.get()))
-          visit(expr_pair.second.get());
-      }
-      if (! dynamic_cast<const Analyzer::Constant*>(case_->get_else_expr()))
-        visit(case_->get_else_expr());
-      return defaultResult();
-    }
-
-    virtual bool visitUOper(const Analyzer::UOper* uoper) const {
-      if (uoper->get_optype() == kCAST) {
-        const auto& ti = uoper->get_type_info();
-        const auto operand = uoper->get_operand();
-        const auto operand_as_const = dynamic_cast<const Analyzer::Constant*>(operand);
-
-        if (operand_as_const) {
-          _executor->codegenHoistedConstantsInBasicBlock(operand_as_const, _ir_builder, ti.get_compression(), ti.get_comp_param(), _co);
-          return defaultResult();
-        }
-      } else if (uoper->get_optype() == kISNULL) {
-        const auto operand = uoper->get_operand();
-        const auto operand_as_const = dynamic_cast<const Analyzer::Constant*>(operand);
-        if (operand_as_const) {
-          if (operand_as_const->get_is_null()) {
-            // for null constants, short-circuit to true
-            return defaultResult();
-          }
-
-          const auto& ti = operand_as_const->get_type_info();
-          CHECK(ti.is_integer() || ti.is_boolean() || ti.is_decimal() || ti.is_time() || ti.is_string() || ti.is_fp() ||
-                ti.is_array());
-          // if the type is inferred as non null, short-circuit to false
-          if (ti.get_notnull() && !ti.is_array()) {
-            return defaultResult();
-          }
-        }
-      }
-
-      return ScalarExprVisitor::visitUOper(uoper);
-    }
-  private:
-    Executor* _executor;
-    const RelAlgExecutionUnit* _ra_unit;
-    const CompilationOptions& _co;
-    llvm::IRBuilder<>* _ir_builder;
-    int _count;
-  };
-
-
-  ConstantHoistingVisitor hoistingVisitor(this, &ra_exe_unit, co);
-
-  // maybe introduce a NOOP visitor ?
-  ConstantHoistingVisitor* visitor_to_use = NULL;
-
-  if (co.hoist_literals_) {
-    visitor_to_use = &hoistingVisitor;
-  }
-
   const bool is_group_by{!query_mem_desc.group_col_widths.empty()};
   auto query_func =
       is_group_by ? query_group_by_template(cgen_state_->module_,
@@ -1223,9 +1040,9 @@ Executor::CompilationResult Executor::compileWorkUnit(const std::vector<InputTab
                                             co.hoist_literals_,
                                             query_mem_desc,
                                             co.device_type_,
-                                            ra_exe_unit.scan_limit, visitor_to_use)
+                                            ra_exe_unit.scan_limit)
                   : query_template(
-                        cgen_state_->module_, agg_slot_count, is_nested_, co.hoist_literals_, !!ra_exe_unit.estimator, visitor_to_use);
+                        cgen_state_->module_, agg_slot_count, is_nested_, co.hoist_literals_, !!ra_exe_unit.estimator);
   bind_pos_placeholders("pos_start", true, query_func, cgen_state_->module_);
   bind_pos_placeholders("group_buff_idx", false, query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", false, query_func, cgen_state_->module_);
@@ -1260,30 +1077,6 @@ Executor::CompilationResult Executor::compileWorkUnit(const std::vector<InputTab
     }
   }
 
-  // find the hoisted vars
-  std::vector<llvm::Value*> hoisted_args;
-  {
-    // WARNING: this does not work with the LICM optimizer... the generated IR seems correct, but it SIGSEGVs during peephole optimisation
-//    llvm::BasicBlock* hoistedVarsBlock = find_BasicBlock_by_name(query_func, ".hoisted_variables");
-    llvm::BasicBlock* hoistedVarsBlock = find_BasicBlock_by_name(query_func, ".entry");
-
-    if (NULL != hoistedVarsBlock) {
-      llvm::BasicBlock& bb(*hoistedVarsBlock);
-
-      for (auto &inst:bb) {
-        if (!inst.hasName()) {
-          continue;
-        }
-        std::string name = inst.getName();
-        std::string prefix = "hoisted_var";
-        if (name.substr(0, prefix.length()) == prefix) {
-          hoisted_args.push_back(&inst);
-        }
-      }
-    }
-  }
-
-
   // iterate through all the instruction in the query template function and
   // replace the call to the filter placeholder with the call to the actual filter
   for (auto it = llvm::inst_begin(query_func), e = llvm::inst_end(query_func); it != e; ++it) {
@@ -1298,7 +1091,6 @@ Executor::CompilationResult Executor::compileWorkUnit(const std::vector<InputTab
       }
       args.insert(args.end(), col_heads.begin(), col_heads.end());
       args.push_back(get_arg_by_name(query_func, "join_hash_tables"));
-      args.insert(args.end(), hoisted_args.begin(), hoisted_args.end());
       llvm::ReplaceInstWithInst(&filter_call, llvm::CallInst::Create(cgen_state_->row_func_, args, ""));
       break;
     }
