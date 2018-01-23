@@ -50,15 +50,8 @@ void getTableNames(std::set<std::string>& tableNames, const Value& value) {
     const auto& relop = json_str(rel["relOp"]);
     if ("EnumerableTableScan" != relop)
       continue;
-    const auto& tablea = rel["table"];
-    CHECK(tablea.IsArray());
-    for (SizeType i = 0; i < tablea.Size(); ++i) {
-      const auto& tablev = tablea[i];
-      CHECK(tablev.IsString());
-      const auto& table = std::string(tablev.GetString());
-      if ("mapd" != table)
-        tableNames.insert(table);
-    }
+    auto t = rel["table"].GetArray();
+    tableNames.insert(t[1].GetString());
   }
 }
 

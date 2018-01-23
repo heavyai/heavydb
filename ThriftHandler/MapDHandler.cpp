@@ -2569,18 +2569,18 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       std::string query_ra;
       _return.execution_time_ms += measure<>::execution([&]() { query_ra = parse_to_ra(query_str, session_info); });
 
+      if (pw.is_select_calcite_explain) {
+        // return the ra as the result
+        convert_explain(_return, ResultSet(query_ra), true);
+        return;
+      }
+
       // COPY_TO/SELECT: read ExecutorOuterLock >> read UpdateDeleteLock locks
       executeReadLock =
           mapd_shared_lock<mapd_shared_mutex>(*LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
       getTableReadLocks<mapd_shared_mutex>(
           session_info.get_catalog(), query_ra, readUpdateDeleteLocks, LockType::UpdateDeleteLock);
       // todo(ppan): need WRITE locks on UPDATE/DELETE
-
-      if (pw.is_select_calcite_explain) {
-        // return the ra as the result
-        convert_explain(_return, ResultSet(query_ra), true);
-        return;
-      }
       execute_rel_alg(_return,
                       query_ra,
                       column_format,
