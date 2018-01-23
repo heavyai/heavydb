@@ -44,8 +44,12 @@ inline std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targ
     CHECK_GT(query_mem_desc.agg_col_widths[agg_col_idx].compact, 0);
     const bool float_argument_input = takes_float_argument(agg_info);
     const auto chosen_bytes = query_mem_desc.getCompactByteWidth();
+    auto init_ti = get_compact_type(agg_info);
+    if (!is_group_by) {
+      init_ti.set_notnull(false);
+    }
     agg_init_vals.push_back(get_agg_initial_val(agg_info.agg_kind,
-                                                get_compact_type(agg_info),
+                                                init_ti,
                                                 is_group_by || float_argument_input,
                                                 (float_argument_input ? sizeof(float) : chosen_bytes)));
     if (kAVG == agg_info.agg_kind) {

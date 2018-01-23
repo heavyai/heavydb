@@ -342,6 +342,7 @@ inline std::vector<TargetInfo> target_exprs_to_infos(const std::vector<Analyzer:
     auto target = target_info(target_expr);
     if (query_mem_desc.hash_type == GroupByColRangeType::Scan) {
       set_notnull(target, false);
+      target.sql_type.set_notnull(false);
     }
     target_infos.push_back(target);
   }
