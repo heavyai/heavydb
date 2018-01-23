@@ -2,9 +2,9 @@ LIBRDKAFKA
 
 https://github.com/edenhill/librdkafka
 
-included 18th Apr 
+included 18th Apr
 
-git repo cloned 
+git repo cloned
 
 branch 0.9.5.x
 
@@ -28,3 +28,5 @@ Modified CMAKE to not make demo or tests
 option(RDKAFKA_BUILD_EXAMPLES "Build examples" OFF)
 option(RDKAFKA_BUILD_TESTS "Build tests" OFF)
 
+CMakeLists.txt also modified to not `install()` any files. Libraries are static
+linked in and license is included under `ThirdParty/licenses`.
