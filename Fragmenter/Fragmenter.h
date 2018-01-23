@@ -96,6 +96,8 @@ class FragmentInfo {
 
   size_t getPhysicalNumTuples() const { return numTuples; }
 
+  bool isEmptyPhysicalFragment() const { return physicalTableId >= 0 && !numTuples; }
+
   void setPhysicalNumTuples(const size_t physNumTuples) { numTuples = physNumTuples; }
 
   int fragmentId;

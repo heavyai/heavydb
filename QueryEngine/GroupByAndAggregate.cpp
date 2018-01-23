@@ -2040,7 +2040,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
       bool keyless =
           (!sort_on_gpu_hint || !many_entries(col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
           !col_range_info.bucket && !must_use_baseline_sort && keyless_info.keyless;
-      size_t bin_count = getBucketedCardinality(col_range_info);
+      size_t bin_count = std::max(getBucketedCardinality(col_range_info), int64_t(1));
       const size_t interleaved_max_threshold{512};
       bool interleaved_bins = keyless && (bin_count <= interleaved_max_threshold) &&
                               countDescriptorsLogicallyEmpty(count_distinct_descriptors);

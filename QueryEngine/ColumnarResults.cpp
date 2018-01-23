@@ -252,13 +252,22 @@ std::unique_ptr<ColumnarResults> ColumnarResults::mergeResults(
       [](const size_t init, const std::unique_ptr<ColumnarResults>& result) { return init + result->size(); });
   std::unique_ptr<ColumnarResults> merged_results(new ColumnarResults(total_row_count, sub_results[0]->target_types_));
   const auto col_count = sub_results[0]->column_buffers_.size();
+  const auto nonempty_it = std::find_if(sub_results.begin(),
+                                        sub_results.end(),
+                                        [](const std::unique_ptr<ColumnarResults>& needle) { return needle->size(); });
+  if (nonempty_it == sub_results.end()) {
+    return nullptr;
+  }
   for (size_t col_idx = 0; col_idx < col_count; ++col_idx) {
-    const auto byte_width = sub_results[0]->getColumnType(col_idx).get_size();
+    const auto byte_width = (*nonempty_it)->getColumnType(col_idx).get_size();
     auto write_ptr = reinterpret_cast<int8_t*>(checked_malloc(byte_width * total_row_count));
     merged_results->column_buffers_.push_back(write_ptr);
     row_set_mem_owner->addColBuffer(write_ptr);
     for (auto& rs : sub_results) {
       CHECK_EQ(col_count, rs->column_buffers_.size());
+      if (!rs->size()) {
+        continue;
+      }
       CHECK_EQ(byte_width, rs->getColumnType(col_idx).get_size());
       memcpy(write_ptr, rs->column_buffers_[col_idx], rs->size() * byte_width);
       write_ptr += rs->size() * byte_width;

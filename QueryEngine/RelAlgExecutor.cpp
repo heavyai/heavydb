@@ -1405,7 +1405,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
   if (!eo.just_explain && can_use_scan_limit(ra_exe_unit) && !isRowidLookup(work_unit)) {
     const auto filter_count_all = getFilteredCountAll(work_unit, true, co, eo);
     if (filter_count_all >= 0) {
-      ra_exe_unit.scan_limit = filter_count_all;
+      ra_exe_unit.scan_limit = std::max(filter_count_all, ssize_t(1));
     }
   }
 

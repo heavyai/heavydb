@@ -384,11 +384,12 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
 }
 
 #define FIND_STAT_FRAG(stat_name)                                                                   \
-  const auto stat_name##_frag = std::stat_name##_element(                                           \
-      fragments.begin(),                                                                            \
-      fragments.end(),                                                                              \
-      [&has_nulls, col_id, col_ti](const Fragmenter_Namespace::FragmentInfo& lhs,                   \
-                                   const Fragmenter_Namespace::FragmentInfo& rhs) {                 \
+  const auto stat_name##_frag_index = std::stat_name##_element(                                     \
+      nonempty_fragment_indices.begin(),                                                            \
+      nonempty_fragment_indices.end(),                                                              \
+      [&fragments, &has_nulls, col_id, col_ti](const size_t lhs_idx, const size_t rhs_idx) {        \
+        const auto& lhs = fragments[lhs_idx];                                                       \
+        const auto& rhs = fragments[rhs_idx];                                                       \
         auto lhs_meta_it = lhs.getChunkMetadataMap().find(col_id);                                  \
         if (lhs_meta_it == lhs.getChunkMetadataMap().end()) {                                       \
           return false;                                                                             \
@@ -405,7 +406,7 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
         return extract_##stat_name##_stat(lhs_meta_it->second.chunkStats, col_ti) <                 \
                extract_##stat_name##_stat(rhs_meta_it->second.chunkStats, col_ti);                  \
       });                                                                                           \
-  if (stat_name##_frag == fragments.end()) {                                                        \
+  if (stat_name##_frag_index == nonempty_fragment_indices.end()) {                                  \
     return ExpressionRange::makeInvalidRange();                                                     \
   }
 
@@ -502,14 +503,23 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
         }
         return ExpressionRange::makeIntRange(0, -1, 0, false);
       }
+      std::vector<size_t> nonempty_fragment_indices;
+      for (size_t i = 0; i < fragments.size(); ++i) {
+        const auto& fragment = fragments[i];
+        if (!fragment.isEmptyPhysicalFragment()) {
+          nonempty_fragment_indices.push_back(i);
+        }
+      }
       FIND_STAT_FRAG(min);
       FIND_STAT_FRAG(max);
-      const auto min_it = min_frag->getChunkMetadataMap().find(col_id);
-      if (min_it == min_frag->getChunkMetadataMap().end()) {
+      const auto& min_frag = fragments[*min_frag_index];
+      const auto min_it = min_frag.getChunkMetadataMap().find(col_id);
+      if (min_it == min_frag.getChunkMetadataMap().end()) {
         return ExpressionRange::makeInvalidRange();
       }
-      const auto max_it = max_frag->getChunkMetadataMap().find(col_id);
-      CHECK(max_it != max_frag->getChunkMetadataMap().end());
+      const auto& max_frag = fragments[*max_frag_index];
+      const auto max_it = max_frag.getChunkMetadataMap().find(col_id);
+      CHECK(max_it != max_frag.getChunkMetadataMap().end());
       for (const auto& fragment : fragments) {
         const auto it = fragment.getChunkMetadataMap().find(col_id);
         if (it != fragment.getChunkMetadataMap().end()) {
@@ -540,6 +550,8 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
   return ExpressionRange::makeInvalidRange();
 }
 
+#undef FIND_STAT_FRAG
+
 ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
                                    const std::vector<InputTableInfo>& query_infos,
                                    const Executor* executor,
@@ -557,8 +569,6 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
   }
   return getLeafColumnRange(col_expr, query_infos, executor, is_outer_join_proj);
 }
-
-#undef FIND_STAT_FRAG
 
 ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr) {
   const auto& ti = like_expr->get_type_info();

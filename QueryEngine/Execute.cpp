@@ -2633,13 +2633,15 @@ std::pair<bool, int64_t> Executor::skipFragment(const InputDescriptor& table_des
     size_t start_rowid{0};
     if (chunk_meta_it == fragment.getChunkMetadataMap().end()) {
       auto cd = get_column_descriptor(col_id, table_id, *catalog_);
-      CHECK(cd->isVirtualCol && cd->columnName == "rowid");
-      const auto& table_generation = getTableGeneration(table_id);
-      start_rowid = table_generation.start_rowid;
-      const auto& all_frag_row_offsets = execution_dispatch.getFragOffsets();
-      chunk_min = all_frag_row_offsets[frag_idx] + start_rowid;
-      chunk_max = all_frag_row_offsets[frag_idx + 1] - 1 + start_rowid;
-      is_rowid = true;
+      if (cd->isVirtualCol) {
+        CHECK(cd->columnName == "rowid");
+        const auto& table_generation = getTableGeneration(table_id);
+        start_rowid = table_generation.start_rowid;
+        const auto& all_frag_row_offsets = execution_dispatch.getFragOffsets();
+        chunk_min = all_frag_row_offsets[frag_idx] + start_rowid;
+        chunk_max = all_frag_row_offsets[frag_idx + 1] - 1 + start_rowid;
+        is_rowid = true;
+      }
     } else {
       const auto& chunk_type = lhs_col->get_type_info();
       chunk_min = extract_min_stat(chunk_meta_it->second.chunkStats, chunk_type);
