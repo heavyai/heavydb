@@ -417,10 +417,12 @@ class SysCatalog : public Catalog {
   void revokeDBObjectPrivileges(const std::string& roleName,
                                 DBObject& object,
                                 const Catalog_Namespace::Catalog& catalog);
-  void revokeDBObjectPrivilegesFromAllRoles(const std::string& objectName,
-                                            const DBObjectType& objectType,
-                                            Catalog* catalog = nullptr);
-  void getDBObjectPrivileges(const std::string& roleName, DBObject& object, const Catalog_Namespace::Catalog& catalog) const;
+  void revokeDBObjectPrivilegesFromAllRoles_unsafe(const std::string& objectName,
+                                                   const DBObjectType& objectType,
+                                                   Catalog* catalog = nullptr);
+  void getDBObjectPrivileges(const std::string& roleName,
+                             DBObject& object,
+                             const Catalog_Namespace::Catalog& catalog) const;
   bool verifyDBObjectOwnership(const UserMetadata& user, DBObject object, const Catalog_Namespace::Catalog& catalog);
   void createRole(const std::string& roleName, const bool& userPrivateRole = false);
   void dropRole(const std::string& roleName);
@@ -432,27 +434,46 @@ class SysCatalog : public Catalog {
   Role* getMetadataForUserRole(int32_t userId) const;
   bool isRoleGrantedToUser(const int32_t userId, const std::string& roleName) const;
   bool hasRole(const std::string& roleName, bool userPrivateRole) const;  // true - role exists, false - otherwise
-  std::vector<std::string> getRoles(bool userPrivateRole,
-                                    bool isSuper,
-                                    const int32_t userId);
+  std::vector<std::string> getRoles(bool userPrivateRole, bool isSuper, const int32_t userId);
   std::vector<std::string> getUserRoles(const int32_t userId);
 
-private:
-  void migrateSysCatalogSchema();
-  void createDefaultMapdRoles();
-  void grantDefaultPrivilegesToRole(const std::string& name, bool issuper);
+ private:
+  void migrateSysCatalogSchema();  
   void dropUserRole(const std::string& userName);
   std::vector<DBObject*> getRoleObjects(const std::string& roleName) const;
-  AccessPrivileges getRoleObjects(
-      const std::string& roleName,
-      const DBObjectType& objectType,
-      const std::string& objectName) const;
-  std::vector<DBObject*> getUserObjects(
-      const std::string& userName) const;
-  AccessPrivileges getUserObjects(
-      const std::string& userName,
-      const DBObjectType& objectType,
-      const std::string& objectName) const;
+  AccessPrivileges getRoleObjects(const std::string& roleName,
+                                  const DBObjectType& objectType,
+                                  const std::string& objectName) const;
+  std::vector<DBObject*> getUserObjects(const std::string& userName) const;
+  AccessPrivileges getUserObjects(const std::string& userName,
+                                  const DBObjectType& objectType,
+                                  const std::string& objectName) const;
+
+  // Here go functions not wrapped into transactions (necessary for nested calls)
+  void grantDefaultPrivilegesToRole_unsafe(const std::string& name, bool issuper);
+  void createDefaultMapdRoles_unsafe();
+  void createRole_unsafe(const std::string& roleName, const bool& userPrivateRole = false);
+  void dropRole_unsafe(const std::string& roleName);
+  void grantRole_unsafe(const std::string& roleName, const std::string& userName);
+  void revokeRole_unsafe(const std::string& roleName, const std::string& userName);
+  void grantDBObjectPrivileges_unsafe(const std::string& roleName,
+                                      DBObject& object,
+                                      const Catalog_Namespace::Catalog& catalog);
+  void revokeDBObjectPrivileges_unsafe(const std::string& roleName,
+                                       DBObject& object,
+                                       const Catalog_Namespace::Catalog& catalog);
+
+  template <typename F, typename... Args>
+  void execInTransaction(F&& f, Args&&... args) {
+    sqliteConnector_.query("BEGIN TRANSACTION");
+    try {
+      (this->*f)(std::forward<Args>(args)...);
+    } catch (std::exception&) {
+      sqliteConnector_.query("ROLLBACK TRANSACTION");
+      throw;
+    }
+    sqliteConnector_.query("END TRANSACTION");
+  }
 };
 
 /*
