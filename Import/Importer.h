@@ -602,14 +602,14 @@ struct PolyData2d {
   ~PolyData2d() {}
 
   size_t numVerts() const {
-      size_t s = coords.size();
-      CHECK(s % 2 == 0);
-      return s / 2;
+    size_t s = coords.size();
+    CHECK(s % 2 == 0);
+    return s / 2;
   }
   size_t numTris() const {
-      size_t s = triangulation_indices.size();
-      CHECK(s % 3 == 0);
-      return s / 3;
+    size_t s = triangulation_indices.size();
+    CHECK_EQ(s % 3, 0);
+    return s / 3;
   }
   size_t numLineLoops() const { return lineDrawInfo.size(); }
   size_t numIndices() const { return triangulation_indices.size(); }
@@ -642,7 +642,10 @@ struct PolyData2d {
   void popPoly() {
     CHECK(_ended);
     CHECK(polyDrawInfo.size());
-    CHECK(triangulation_indices.size() && triangulation_indices.size() % 3 == 0);
+    if (triangulation_indices.empty()) {
+      return;
+    }
+    CHECK_EQ(triangulation_indices.size() % 3, 0);
     auto itr = triangulation_indices.end() - 1;
     for (; itr >= triangulation_indices.begin(); itr -= 3) {
       if (*itr < _startLineIdx) {

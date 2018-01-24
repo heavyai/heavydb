@@ -302,9 +302,9 @@ void parseStringArray(const std::string& s, const CopyParams& copy_params, std::
   }
   if (s.size() - 1 > last) {  // if not empty string - disallow empty strings for now
     if (s.substr(last, s.size() - 1 - last).length() > StringDictionary::MAX_STRLEN)
-      throw std::runtime_error("Array String too long : " +
-                               std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
-                               std::to_string(StringDictionary::MAX_STRLEN));
+      throw std::runtime_error(
+          "Array String too long : " + std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
+          std::to_string(StringDictionary::MAX_STRLEN));
 
     string_vec.push_back(s.substr(last, s.size() - 1 - last));
   }
@@ -2502,19 +2502,22 @@ void buildRenderablePolyAfterTriangulation(PolyData2d& poly,
   for (p2t::Triangle* tri : triangulator.GetTriangles()) {
     itr = pointIndices.find(tri->GetPoint(0));
     if (itr == pointIndices.end()) {
-      throw std::runtime_error("failed to triangulate polygon");
+      throw std::runtime_error("failed to triangulate polygon due to invalid triangle - triidx: " +
+                               std::to_string(poly.numTris()) + ", pointidx: 0");
     }
     idx0 = itr->second;
 
     itr = pointIndices.find(tri->GetPoint(1));
     if (itr == pointIndices.end()) {
-      throw std::runtime_error("failed to triangulate polygon");
+      throw std::runtime_error("failed to triangulate polygon due to invalid triangle - triidx: " +
+                               std::to_string(poly.numTris()) + ", pointidx: 1");
     }
     idx1 = itr->second;
 
     itr = pointIndices.find(tri->GetPoint(2));
     if (itr == pointIndices.end()) {
-      throw std::runtime_error("failed to triangulate polygon");
+      throw std::runtime_error("failed to triangulate polygon due to invalid triangle - triidx: " +
+                               std::to_string(poly.numTris()) + ", pointidx: 2");
     }
     idx2 = itr->second;
 
