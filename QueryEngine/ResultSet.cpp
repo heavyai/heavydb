@@ -228,6 +228,13 @@ const ResultSetStorage* ResultSet::allocateStorage(const std::vector<int64_t>& t
   return storage_.get();
 }
 
+size_t ResultSet::getCurrentRowBufferIndex() const {
+  if (crt_row_buff_idx_ == 0) {
+    throw std::runtime_error("current row buffer iteration index is undefined");
+  }
+  return crt_row_buff_idx_ - 1;
+}
+
 void ResultSet::append(ResultSet& that) {
   CHECK_EQ(-1, cached_row_count_);
   CHECK(!query_mem_desc_.output_columnar);  // TODO(miyu)
