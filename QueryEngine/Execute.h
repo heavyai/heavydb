@@ -298,7 +298,6 @@ class Executor {
                                             const rapidjson::Value& data_desc,
                                             RenderInfo* render_query_data,
                                             const std::string* render_config_json = nullptr,
-                                            const bool is_projection_query = true,
                                             const std::string& poly_table_name = "");
 
   std::shared_ptr<ResultSet> renderNonInSituData(const std::string& queryStr,
@@ -314,8 +313,7 @@ class Executor {
                                          const Catalog_Namespace::SessionInfo& session,
                                          const int render_widget_id,
                                          const rapidjson::Value& data_desc,
-                                         RenderInfo* render_query_data,
-                                         const bool is_projection_query = true);
+                                         RenderInfo* render_query_data);
 
   std::vector<int32_t> getStringIds(const std::string& col_name,
                                     const std::vector<std::string>& col_vals,
