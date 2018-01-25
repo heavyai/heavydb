@@ -1,6 +1,7 @@
 #ifndef THRIFTWITHRETRY_H
 #define THRIFTWITHRETRY_H
 
+#include <iostream>
 #include <cmath>
 #include "gen-cpp/mapd_types.h"
 
