@@ -87,17 +87,30 @@ if("${S3CLIENT_CONF}" MATCHES "AWS_REGION=([^\n]+)")
   set(AWS_REGION "${CMAKE_MATCH_1}")
 endif()
 
+set(SANITY_TESTS
+  PlanTest
+  ExecuteTest
+  ResultSetTest
+  ResultSetBaselineRadixSortTest
+  StorageTest
+  ImportTest
+  TopKTest
+  TokenCompletionHintsTest
+  MapDQLCommandTest
+)
+set_tests_properties(${SANITY_TESTS} PROPERTIES LABELS "sanity")
+
 add_custom_target(sanity_tests
     COMMAND mkdir -p ${TEST_BASE_PATH}
     COMMAND initdb -f ${TEST_BASE_PATH}
-    COMMAND env AWS_REGION=${AWS_REGION} AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} ${CMAKE_CTEST_COMMAND} --verbose --tests-regex "\"(PlanTest|ExecuteTest|ResultSetTest|ResultSetBaselineRadixSortTest|StorageTest|ImportTest|TopKTest|TokenCompletionHintsTest|MapDQLCommandTest)\""
-    DEPENDS MapDQLCommandTest PlanTest ExecuteTest ResultSetTest ResultSetBaselineRadixSortTest StorageTest ImportTest TopKTest TokenCompletionHintsTest)
+    COMMAND env AWS_REGION=${AWS_REGION} AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} ${CMAKE_CTEST_COMMAND} --verbose --label-regex sanity
+    DEPENDS ${SANITY_TESTS})
 
 add_custom_target(all_tests
     COMMAND mkdir -p ${TEST_BASE_PATH}
     COMMAND initdb -f ${TEST_BASE_PATH}
     COMMAND env AWS_REGION=${AWS_REGION} AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS MapDQLCommandTest PlanTest ProfileTest UtilTest ExecuteTest ResultSetTest ResultSetBaselineRadixSortTest RunQueryLoop StringDictionaryTest StorageTest StoragePerfTest ImportTest TopKTest TokenCompletionHintsTest)
+    DEPENDS ${SANITY_TESTS} ProfileTest UtilTest RunQueryLoop StringDictionaryTest StoragePerfTest)
 
 add_custom_target(storage_perf_tests
     COMMAND mkdir -p ${TEST_BASE_PATH}
