@@ -297,7 +297,6 @@ class SQLiteComparator {
   SqliteConnector connector_;
 };
 
-const ssize_t g_num_rows{10};
 SQLiteComparator g_sqlite_comparator;
 
 void c(const std::string& query_string, const std::string& sqlite_query_string, const ExecutorDeviceType device_type) {
