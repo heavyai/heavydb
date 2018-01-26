@@ -302,9 +302,9 @@ void parseStringArray(const std::string& s, const CopyParams& copy_params, std::
   }
   if (s.size() - 1 > last) {  // if not empty string - disallow empty strings for now
     if (s.substr(last, s.size() - 1 - last).length() > StringDictionary::MAX_STRLEN)
-      throw std::runtime_error(
-          "Array String too long : " + std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
-          std::to_string(StringDictionary::MAX_STRLEN));
+      throw std::runtime_error("Array String too long : " +
+                               std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
+                               std::to_string(StringDictionary::MAX_STRLEN));
 
     string_vec.push_back(s.substr(last, s.size() - 1 - last));
   }
@@ -2390,15 +2390,37 @@ std::vector<p2t::Point*> simplify(const std::vector<p2t::Point*>& points,
 }
 }  // namespace GeomSimplify
 
-std::pair<double, double> buildRenderablePolyOutline(PolyData2d& poly,
-                                                     const std::vector<p2t::Point*>& vertexPtrs,
-                                                     std::unordered_map<p2t::Point*, int>& pointIndices,
-                                                     const std::unordered_map<p2t::Point*, int>& origPointIndices,
-                                                     const ssize_t featureIdx,
-                                                     const ssize_t multipolyIdx) {
-  if (vertexPtrs.size() < 3) {
-    throw std::runtime_error("Cannot import a polygon with " + std::to_string(vertexPtrs.size()) + " point" +
-                             (vertexPtrs.size() == 1 ? "." : "s."));
+std::tuple<bool, double, double> buildRenderablePolyOutline(
+    PolyData2d& poly,
+    const std::vector<p2t::Point*>& vertexPtrs,
+    std::unordered_map<p2t::Point*, int>& pointIndices,
+    const std::unordered_map<p2t::Point*, int>& origPointIndices,
+    const ssize_t featureIdx,
+    const ssize_t multipolyIdx) {
+  if (vertexPtrs.size() < 2) {
+    throw std::runtime_error("invalid geometry: polygon" +
+                             (multipolyIdx < 0 ? "" : (" at multipolygon index " + std::to_string(multipolyIdx + 1))) +
+                             " in feature " + std::to_string(featureIdx + 1) + " - Cannot import a polygon with " +
+                             std::to_string(vertexPtrs.size()) + " point" + (vertexPtrs.size() == 1 ? "." : "s."));
+  } else if (vertexPtrs.size() == 2) {
+    LOG(WARNING)
+        << "invalid geometry: polygon"
+        << (multipolyIdx < 0 ? "" : (" at multipolygon index " + std::to_string(multipolyIdx + 1))) << " in feature "
+        << (featureIdx + 1) << " has only " << std::to_string(vertexPtrs.size()) << " point"
+        << (vertexPtrs.size() == 1
+                ? "."
+                : "s. The geom will be imported, but it might not be visible unless you have stroking enabled.");
+
+    poly.beginLine();
+    poly.addLinePoint(vertexPtrs[0]);
+    poly.addLinePoint(vertexPtrs[0]);
+    poly.addLinePoint(vertexPtrs[1]);
+    poly.addLinePoint(vertexPtrs[1]);
+    poly.endLine(false);
+    poly.beginPoly();
+    poly.addTriangle(0, 2, 1);
+    poly.endPoly();
+    return std::make_tuple(true, 0.0, 0.0);
   }
 
   pointIndices.clear();
@@ -2480,7 +2502,7 @@ std::pair<double, double> buildRenderablePolyOutline(PolyData2d& poly,
     mindist = dist;
   }
   avgdist = sumdist / vertexPtrs.size();
-  return std::make_pair(mindist, avgdist);
+  return std::make_tuple(false, mindist, avgdist);
 }
 
 p2t::CDT triangulate(bool& triangulated, const std::vector<p2t::Point*>& vertexPtrs) {
@@ -2564,10 +2586,14 @@ void Importer::readVerticesFromGDALGeometryZ(const std::string& fileName,
     vertexPtrs.push_back(vertPtr);
     origPointIndices.insert({vertPtr, k});
   }
-  double mindist, avgdist;
 
-  std::tie(mindist, avgdist) =
+  bool finished;
+  double mindist, avgdist;
+  std::tie(finished, mindist, avgdist) =
       buildRenderablePolyOutline(poly, vertexPtrs, pointIndices, origPointIndices, featureIdx, multipolyIdx);
+  if (finished) {
+    return;
+  }
 
   bool triangulated = false;
   try {
@@ -2582,10 +2608,13 @@ void Importer::readVerticesFromGDALGeometryZ(const std::string& fileName,
     // try a simplify with a modest tolerance to see if we can get the geom
     // to be more poly2tri friendly
     auto simplifyVertexPtrs = GeomSimplify::simplify(vertexPtrs, mindist + 0.1 * (avgdist - mindist), true);
-    buildRenderablePolyOutline(poly, simplifyVertexPtrs, pointIndices, origPointIndices, featureIdx, multipolyIdx);
+    std::tie(finished, mindist, avgdist) =
+        buildRenderablePolyOutline(poly, simplifyVertexPtrs, pointIndices, origPointIndices, featureIdx, multipolyIdx);
     try {
-      auto triangulator = triangulate(triangulated, simplifyVertexPtrs);
-      buildRenderablePolyAfterTriangulation(poly, triangulator, pointIndices, origPointIndices);
+      if (!finished) {
+        auto triangulator = triangulate(triangulated, simplifyVertexPtrs);
+        buildRenderablePolyAfterTriangulation(poly, triangulator, pointIndices, origPointIndices);
+      }
       LOG(WARNING) << "Failed to triangulate original polygon "
                    << (multipolyIdx < 0 ? "" : ("at multipolygon index " + std::to_string(multipolyIdx + 1)))
                    << " in feature " << (featureIdx + 1)
@@ -2597,10 +2626,13 @@ void Importer::readVerticesFromGDALGeometryZ(const std::string& fileName,
       }
       poly.popLine();
       auto convexHullVertexPtrs = GeomConvexHull::buildConvexHull(vertexPtrs);
-      buildRenderablePolyOutline(poly, convexHullVertexPtrs, pointIndices, origPointIndices, featureIdx, multipolyIdx);
+      std::tie(finished, mindist, avgdist) = buildRenderablePolyOutline(
+          poly, convexHullVertexPtrs, pointIndices, origPointIndices, featureIdx, multipolyIdx);
       try {
-        auto triangulator = triangulate(triangulated, convexHullVertexPtrs);
-        buildRenderablePolyAfterTriangulation(poly, triangulator, pointIndices, origPointIndices);
+        if (!finished) {
+          auto triangulator = triangulate(triangulated, convexHullVertexPtrs);
+          buildRenderablePolyAfterTriangulation(poly, triangulator, pointIndices, origPointIndices);
+        }
         LOG(WARNING)
             << "Failed to triangulate original polygon"
             << (multipolyIdx < 0 ? "" : (" at multipolygon index " + std::to_string(multipolyIdx + 1)))

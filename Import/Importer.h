@@ -681,17 +681,19 @@ struct PolyData2d {
     lineDrawInfo.back().count++;
   }
 
-  void endLine() {
-    // repeat the first 3 vertices to fully create the "loop"
-    // since it will be drawn using the GL_LINE_STRIP_ADJACENCY
-    // primitive type
-    int numPointsThisLine = numVerts() - _startLineIdx;
-    for (int i = 0; i < 3; ++i) {
-      int idx = (_startLineIdx + (i % numPointsThisLine)) * 2;
-      coords.push_back(coords[idx]);
-      coords.push_back(coords[idx + 1]);
+  void endLine(const bool add_extra_verts = true) {
+    if (add_extra_verts) {
+      // repeat the first 3 vertices to fully create the "loop"
+      // since it will be drawn using the GL_LINE_STRIP_ADJACENCY
+      // primitive type
+      int numPointsThisLine = numVerts() - _startLineIdx;
+      for (int i = 0; i < 3; ++i) {
+        int idx = (_startLineIdx + (i % numPointsThisLine)) * 2;
+        coords.push_back(coords[idx]);
+        coords.push_back(coords[idx + 1]);
+      }
+      lineDrawInfo.back().count += 3;
     }
-    lineDrawInfo.back().count += 3;
 
     _ended = true;
   }
