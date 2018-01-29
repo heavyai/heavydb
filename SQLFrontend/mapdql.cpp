@@ -22,45 +22,45 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
-#include <cstring>
-#include <cstdio>
-#include <cstdlib>
-#include <string>
-#include <iostream>
-#include <iomanip>
-#include <fstream>
-#include <limits>
-#include <cmath>
 #include <glog/logging.h>
-#include <termios.h>
+#include <rapidjson/document.h>
 #include <signal.h>
+#include <termios.h>
+#include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/trim.hpp>
-#include <boost/algorithm/string.hpp>
-#include <boost/program_options.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/tokenizer.hpp>
-#include <rapidjson/document.h>
-#include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/base64_from_binary.hpp>
+#include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
-#include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/program_options.hpp>
+#include <boost/tokenizer.hpp>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <limits>
+#include <string>
 
-#include <boost/regex.hpp>
-
-#include "../Fragmenter/InsertOrderFragmenter.h"
-#include "Shared/checked_alloc.h"
-#include "gen-cpp/MapD.h"
-#include "MapDServer.h"
-#include "MapDRelease.h"
-#include <thrift/transport/TSocket.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/protocol/TJSONProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/THttpClient.h>
+#include <thrift/transport/TSocket.h>
+#include "../Fragmenter/InsertOrderFragmenter.h"
+#include "MapDRelease.h"
+#include "MapDServer.h"
+#include "Shared/checked_alloc.h"
+#include "gen-cpp/MapD.h"
 
 #include "linenoise.h"
+
+#include "ClientContext.h"
+#include "CommandFunctors.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -75,10 +75,6 @@ void completion(const char* buf, linenoiseCompletions* lc) {
     linenoiseAddCompletion(lc, "SELECT ");
   }
 }
-
-#define INVALID_SESSION_ID ""
-#define MAPD_ROOT_USER "mapd"
-#define MAPD_DEFAULT_ROOT_USER_ROLE "mapd_default_suser_role"
 
 // code from https://stackoverflow.com/questions/7053538/how-do-i-encode-a-string-to-base64-using-only-boost
 
@@ -96,256 +92,11 @@ std::string encode64(const std::string& val) {
   return tmp.append((3 - val.size() % 3) % 3, '=');
 }
 
-struct ClientContext {
-  std::string user_name;
-  std::string passwd;
-  std::string db_name;
-  std::string server_host;
-  int port;
-  bool http;
-  TTransport& transport;
-  MapDClient& client;
-  TSessionId session;
-  TQueryResult query_return;
-  std::vector<std::string> names_return;
-  std::vector<TDBInfo> dbinfos_return;
-  TExecuteMode::type execution_mode;
-  std::string version;
-  std::vector<TNodeMemoryInfo> gpu_memory;
-  std::vector<TNodeMemoryInfo> cpu_memory;
-  TTableDetails table_details;
-  std::string table_name;
-  std::string file_name;
-  TCopyParams copy_params;
-  int db_id;
-  int table_id;
-  int epoch_value;
-  TServerStatus server_status;
-  TClusterHardwareInfo cluster_hardware_info;
-  std::vector<TServerStatus> cluster_status;
-  std::string view_name;
-  std::string view_state;
-  std::string view_metadata;
-  TFrontendView view_return;
-  std::string privs_role_name;
-  std::string privs_user_name;
-  std::string privs_object_name;
-  bool userPrivateRole;
-  std::vector<std::string> role_names;
-  std::vector<TAccessPrivileges> object_privileges;
-  std::vector<TDBObject> db_objects;
-  std::string license_key;
-  TLicenseInfo license_info;
-
-  ClientContext(TTransport& t, MapDClient& c)
-      : transport(t), client(c), session(INVALID_SESSION_ID), execution_mode(TExecuteMode::GPU) {}
-};
-
-enum ThriftService {
-  kCONNECT,
-  kDISCONNECT,
-  kSQL,
-  kGET_TABLES,
-  kGET_PHYSICAL_TABLES,
-  kGET_VIEWS,
-  kGET_DATABASES,
-  kGET_USERS,
-  kSET_EXECUTION_MODE,
-  kGET_VERSION,
-  kGET_MEMORY_GPU,
-  kGET_MEMORY_CPU,
-  kGET_MEMORY_SUMMARY,
-  kGET_TABLE_DETAILS,
-  kCLEAR_MEMORY_GPU,
-  kCLEAR_MEMORY_CPU,
-  kIMPORT_GEO_TABLE,
-  kINTERRUPT,
-  kSET_TABLE_EPOCH,
-  kSET_TABLE_EPOCH_BY_NAME,
-  kGET_TABLE_EPOCH,
-  kGET_TABLE_EPOCH_BY_NAME,
-  kGET_SERVER_STATUS,
-  kIMPORT_DASHBOARD,
-  kEXPORT_DASHBOARD,
-  kGET_ROLE,
-  kGET_ALL_ROLES,
-  kGET_OBJECTS_FOR_ROLE,
-  kGET_OBJECT_PRIVS,
-  kGET_ROLES_FOR_USER,
-  kGET_HARDWARE_INFO,
-  kSET_LICENSE_KEY,
-  kGET_LICENSE_CLAIMS
-};
-
 namespace {
-
-bool thrift_with_retry(ThriftService which_service, ClientContext& context, const char* arg, const int try_count = 1) {
-  int max_reconnect = 4;
-  int con_timeout_base = 1;
-  if (try_count > max_reconnect) {
-    return false;
-  }
-  try {
-    switch (which_service) {
-      case kCONNECT:
-        context.client.connect(context.session, context.user_name, context.passwd, context.db_name);
-        break;
-      case kDISCONNECT:
-        context.client.disconnect(context.session);
-        break;
-      case kINTERRUPT:
-        context.client.interrupt(context.session);
-        break;
-      case kSQL:
-        context.client.sql_execute(context.query_return, context.session, arg, true, "", -1, -1);
-        break;
-      case kGET_TABLES:
-        context.client.get_tables(context.names_return, context.session);
-        break;
-      case kGET_PHYSICAL_TABLES:
-        context.client.get_physical_tables(context.names_return, context.session);
-        break;
-      case kGET_VIEWS:
-        context.client.get_views(context.names_return, context.session);
-        break;
-      case kGET_DATABASES:
-        context.client.get_databases(context.dbinfos_return, context.session);
-        break;
-      case kGET_USERS:
-        context.client.get_users(context.names_return, context.session);
-        break;
-      case kSET_EXECUTION_MODE:
-        context.client.set_execution_mode(context.session, context.execution_mode);
-        break;
-      case kGET_VERSION:
-        context.client.get_version(context.version);
-        break;
-      case kGET_MEMORY_GPU:
-        context.client.get_memory(context.gpu_memory, context.session, "gpu");
-        break;
-      case kGET_MEMORY_CPU:
-        context.client.get_memory(context.cpu_memory, context.session, "cpu");
-        break;
-      case kGET_MEMORY_SUMMARY:
-        context.client.get_memory(context.gpu_memory, context.session, "gpu");
-        context.client.get_memory(context.cpu_memory, context.session, "cpu");
-        break;
-      case kGET_TABLE_DETAILS:
-        context.client.get_table_details(context.table_details, context.session, arg);
-        break;
-      case kCLEAR_MEMORY_GPU:
-        context.client.clear_gpu_memory(context.session);
-        break;
-      case kCLEAR_MEMORY_CPU:
-        context.client.clear_cpu_memory(context.session);
-        break;
-      case kGET_HARDWARE_INFO:
-        context.client.get_hardware_info(context.cluster_hardware_info, context.session);
-        break;
-      case kIMPORT_GEO_TABLE:
-        context.client.import_geo_table(
-            context.session, context.table_name, context.file_name, context.copy_params, TRowDescriptor());
-        break;
-      case kSET_TABLE_EPOCH:
-        context.client.set_table_epoch(context.session, context.db_id, context.table_id, context.epoch_value);
-        break;
-      case kSET_TABLE_EPOCH_BY_NAME:
-        context.client.set_table_epoch_by_name(context.session, context.table_name, context.epoch_value);
-        break;
-      case kGET_TABLE_EPOCH:
-        context.epoch_value = context.client.get_table_epoch(context.session, context.db_id, context.table_id);
-        break;
-      case kGET_TABLE_EPOCH_BY_NAME:
-        context.epoch_value = context.client.get_table_epoch_by_name(context.session, context.table_name);
-        break;
-      case kGET_SERVER_STATUS:
-        context.client.get_status(context.cluster_status, context.session);
-        break;
-      case kIMPORT_DASHBOARD:
-        context.client.create_frontend_view(
-            context.session, context.view_name, context.view_state, "", context.view_metadata);
-        break;
-      case kEXPORT_DASHBOARD:
-        context.client.get_frontend_view(context.view_return, context.session, context.view_name);
-        break;
-      case kGET_ROLE:
-        context.client.get_role(context.role_names, context.session, context.privs_role_name, context.userPrivateRole);
-        break;
-      case kGET_ALL_ROLES:
-        context.client.get_all_roles(context.role_names, context.session, context.userPrivateRole);
-        break;
-      case kGET_OBJECTS_FOR_ROLE:
-        context.client.get_db_objects_for_role(context.db_objects, context.session, context.privs_role_name);
-        break;
-      case kGET_OBJECT_PRIVS:
-        context.client.get_db_object_privs(context.db_objects, context.session, context.privs_object_name);
-        break;
-      case kGET_ROLES_FOR_USER:
-        context.client.get_all_roles_for_user(context.role_names, context.session, context.privs_user_name);
-        break;
-      case kSET_LICENSE_KEY:
-        context.client.set_license_key(context.license_info, context.session, context.license_key, "");
-        break;
-      case kGET_LICENSE_CLAIMS:
-        context.client.get_license_claims(context.license_info, context.session, "");
-        break;
-    }
-  } catch (TMapDException& e) {
-    std::cerr << e.error_msg << std::endl;
-    return false;
-  } catch (TException& te) {
-    try {
-      context.transport.open();
-      if (which_service == kDISCONNECT)
-        return false;
-      sleep(con_timeout_base * pow(2, try_count));
-      if (which_service != kCONNECT) {
-        if (!thrift_with_retry(kCONNECT, context, nullptr, try_count + 1))
-          return false;
-      }
-      return thrift_with_retry(which_service, context, arg, try_count + 1);
-    } catch (TException& te1) {
-      std::cerr << "Thrift error: " << te1.what() << std::endl;
-      return false;
-    }
-  }
-  return true;
-}
-
-namespace {
-struct DoNothing {
-  template <typename... T>
-  void operator()(T&&... t) {}
-};
-}
-
-template <ThriftService THRIFT_SERVICE, typename ON_SUCCESS_LAMBDA = DoNothing>
-void thrift_op(ClientContext& context, ON_SUCCESS_LAMBDA success_op = ON_SUCCESS_LAMBDA(), int const try_count = 1) {
-  if (thrift_with_retry(THRIFT_SERVICE, context, nullptr, try_count))
-    success_op(context);
-}
-
-template <ThriftService THRIFT_SERVICE, typename ON_SUCCESS_LAMBDA = DoNothing>
-void thrift_op(ClientContext& context,
-               char const* arg,
-               ON_SUCCESS_LAMBDA success_op = ON_SUCCESS_LAMBDA(),
-               int const try_count = 1) {
-  if (thrift_with_retry(THRIFT_SERVICE, context, arg, try_count))
-    success_op(context);
-}
-
-template <ThriftService SERVICE_TYPE, typename DETAIL_PROCESSOR>
-void for_all_return_names(ClientContext& context, DETAIL_PROCESSOR detail_processor) {
-  thrift_op<SERVICE_TYPE>(context, [&](ClientContext& lambda_context) {
-    for (auto name_val : lambda_context.names_return) {
-      detail_processor(name_val, lambda_context);
-    }
-  });
-}
 
 #define LOAD_PATCH_SIZE 10000
 
-void copy_table(char* filepath, char* table, ClientContext& context) {
+void copy_table(char const* filepath, char const* table, ClientContext& context) {
   if (context.session == INVALID_SESSION_ID) {
     std::cerr << "Not connected to any databases." << std::endl;
     return;
@@ -436,15 +187,6 @@ size_t get_row_count(const TQueryResult& query_result) {
   return query_result.row_set.columns.front().nulls.size();
 }
 
-// runs a simple single integer value query and returns that single int value returned
-int run_query(ClientContext& context, std::string query) {
-  thrift_with_retry(kSQL, context, query.c_str());
-  CHECK(get_row_count(context.query_return));
-  // std::cerr << "return value is " <<  context.query_return.row_set.columns[0].data.int_col[0];
-  return context.query_return.row_set.columns[0].data.int_col[0];
-  // col.data.int_col[row_idx];
-  // return 4;
-}
 
 void get_table_epoch(ClientContext& context, const std::string& table_specifier) {
   if (table_specifier.size() == 0) {
@@ -684,381 +426,22 @@ void set_table_epoch(ClientContext& context, const std::string& table_details) {
   }
 }
 
-int get_optimal_size(ClientContext& context, std::string table_name, std::string col_name, int col_type) {
-  switch (col_type) {
-    case TDatumType::STR: {
-      int strings = run_query(context, "select count(distinct " + col_name + ") from " + table_name + ";");
-      if (strings < pow(2, 8)) {
-        return 8;
-      } else {
-        if (strings < pow(2, 16)) {
-          return 16;
-        } else {
-          return 32;
-        }
-      }
-    }
-    case TDatumType::TIME: {
-      return 32;
-    }
-    case TDatumType::DATE:
-    case TDatumType::TIMESTAMP: {
-      return run_query(context,
-                       "select case when (extract( epoch from mn)  > -2147483648 and extract (epoch from mx) < "
-                       "2147483647) then 32 else 0 end from (select min(" +
-                           col_name + ") mn, max(" + col_name + ") mx from " + table_name + " );");
-    }
-    case TDatumType::BIGINT: {
-      return run_query(context,
-                       "select  case when (mn > -128 and mx < 127) then 8 else case when (mn > -32768 and mx < 32767) "
-                       "then 16 else case when (mn  > -2147483648 and mx < 2147483647) then 32 else 0 end end end from "
-                       "(select min(" +
-                           col_name + ") mn, max(" + col_name + ") mx from " + table_name + " );");
-    }
-    case TDatumType::INT: {
-      return run_query(context,
-                       "select  case when (mn > -128 and mx < 127) then 8 else case when (mn > -32768 and mx < 32767) "
-                       "then 16 else 0 end end from "
-                       "(select min(" +
-                           col_name + ") mn, max(" + col_name + ") mx from " + table_name + " );");
-    }
-  }
-  return 0;
-}
-
-namespace {
-
-std::vector<std::string> unserialize_key_metainfo(const std::string key_metainfo) {
-  std::vector<std::string> keys_with_spec;
-  rapidjson::Document document;
-  document.Parse(key_metainfo.c_str());
-  CHECK(!document.HasParseError());
-  CHECK(document.IsArray());
-  for (auto it = document.Begin(); it != document.End(); ++it) {
-    const auto& key_with_spec_json = *it;
-    CHECK(key_with_spec_json.IsObject());
-    const std::string type = key_with_spec_json["type"].GetString();
-    const std::string name = key_with_spec_json["name"].GetString();
-    auto key_with_spec = type + " (" + name + ")";
-    if (type == "SHARED DICTIONARY") {
-      key_with_spec += " REFERENCES ";
-      const std::string foreign_table = key_with_spec_json["foreign_table"].GetString();
-      const std::string foreign_column = key_with_spec_json["foreign_column"].GetString();
-      key_with_spec += foreign_table + "(" + foreign_column + ")";
-    } else {
-      CHECK(type == "SHARD KEY");
-    }
-    keys_with_spec.push_back(key_with_spec);
-  }
-  return keys_with_spec;
-}
-
-}  // namespace
-
-namespace {
-
-template <typename COMMAND_TYPE, typename REGEX_PRESENT_LAMBDA>
-bool on_valid_regex_present(COMMAND_TYPE const& command_input,
-                            ClientContext& client_context,
-                            REGEX_PRESENT_LAMBDA on_present_op) {
-  std::string cmd_extraction, regex_extraction;
-  std::istringstream input_tokens(command_input);
-  input_tokens >> cmd_extraction >> regex_extraction;
-
-  try {
-    if (regex_extraction.size() > 0) {
-      boost::regex filter_expression(regex_extraction, boost::regex_constants::no_except);
-      if (filter_expression.status() == 0) {  // On successful regex
-        on_present_op(filter_expression, client_context);
-        return true;
-      } else {
-        std::cout << "Malformed regular expression: " << regex_extraction << std::endl;
-      }
-    }
-  } catch (
-      std::runtime_error& re) {  // Handles cases outlined in boost regex bad expressions test case, to avoid blow ups
-    std::cout << "Invalid regular expression: " << regex_extraction << std::endl;
-  }
-
-  return false;
-}
-
-std::function<bool(std::string const&)> yield_default_filter_function(boost::regex& filter_expression) {
-  return [&filter_expression](std::string const& input) -> bool {
-    boost::smatch results;
-    return !boost::regex_match(input, results, filter_expression);
-  };
-}
-}
-
 void process_backslash_commands(char* command, ClientContext& context) {
-  switch (command[1]) {
-    case 'h':
-      std::cout << "\\u [regex] List all users, optionally matching regex.\n";
-      std::cout << "\\l List all databases.\n";
-      std::cout << "\\t [regex] List all tables, optionally matching regex.\n";
-      std::cout << "\\v [regex] List all views, optionally matching regex.\n";
-      std::cout << "\\d <table> List all columns of a table or a view.\n";
-      std::cout << "\\c <database> <user> <password>.\n";
-      std::cout << "\\o <table> Return a memory optimized schema based on current data distribution in table.\n";
-      std::cout << "\\gpu Execute in GPU mode's.\n";
-      std::cout << "\\cpu Execute in CPU mode's.\n";
-      std::cout << "\\multiline Set multi-line command line mode.\n";
-      std::cout << "\\singleline Set single-line command line mode.\n";
-      std::cout << "\\historylen <number> Set history buffer size (default 100).\n";
-      std::cout << "\\timing Print timing information.\n";
-      std::cout << "\\notiming Do not print timing information.\n";
-      std::cout << "\\memory_summary Print memory usage summary.\n";
-      std::cout << "\\version Print MapD Server version.\n";
-      std::cout << "\\copy <file path> <table> Copy data from file to table.\n";
-      std::cout << "\\status Get status of the server and the leaf nodes.\n";
-      std::cout << "\\export_dashboard <dashboard name>,<filename> Exports a dashboard to a file\n";
-      std::cout << "\\import_dashboard <dashboard name>,<filename> Imports a dashboard from a file\n";
-      std::cout << "\\roles Reports all roles.\n";
-      std::cout << "\\role_check <roleName> Verifies whether role exists.\n";
-      std::cout << "\\role_list <userName> Reports all roles granted to user.\n";
-      std::cout << "\\privileges {<roleName>|<userName>} Reports all database objects privileges granted to role or "
-                   "user.\n";
-      std::cout
-          << "\\object_privileges <object_name> Reports all privileges granted to an object for all roles and users.\n";
-      std::cout << "\\q Quit.\n";
-      return;
-    case 'd': {
-      if (command[2] != ' ') {
-        std::cerr << "Invalid \\d command usage.  Do \\d <table name>" << std::endl;
-        return;
-      }
-      std::string table_name(command + 3);
-      if (!thrift_with_retry(kGET_TABLE_DETAILS, context, command + 3)) {
-        return;
-      }
-      const auto table_details = context.table_details;
-      if (table_details.view_sql.empty()) {
-        std::string temp_holder(" ");
-        if (table_details.is_temporary) {
-          temp_holder = " TEMPORARY ";
-        }
-        std::cout << "CREATE" + temp_holder + "TABLE " + table_name + " (\n";
-      } else {
-        std::cout << "CREATE VIEW " + table_name + " AS " + table_details.view_sql << "\n";
-        std::cout << "\n"
-                  << "View columns:"
-                  << "\n\n";
-      }
-      std::string comma_or_blank("");
-      for (TColumnType p : table_details.row_desc) {
-        if (p.is_system) {
-          continue;
-        }
-        std::string encoding;
-        if (p.col_type.type == TDatumType::STR) {
-          encoding =
-              (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                                 std::to_string(p.col_type.comp_param) + ")");
+  // clang-format off
+  auto resolution_status = CommandResolutionChain<>( command, "\\h", 1, HelpCmd<>( context ) )
+  ( "\\d", 2, ListColumnsCmd<>( context ), "Usage: \\d <table>" )
+  ( "\\o", 2, GetOptimizedSchemaCmd<>( context ), "Usage: \\o <table>" )
+  ( "\\t", 1, ListTablesCmd<>( context ) )
+  ( "\\v", 1, ListViewsCmd<>( context ) )
+  ( "\\c", 4, ConnectToDBCmd<>( context ), "Usage: \\c <database> <user> <password>." )
+  ( "\\u", 1, ListUsersCmd<>( context ) )
+  ( "\\l", 1, ListDatabasesCmd<>( context ) )
+  .is_resolved();
 
-        } else {
-          encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                          std::to_string(p.col_type.comp_param) + ")");
-        }
-        std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
-                  << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
-        comma_or_blank = ",\n";
-      }
-      if (table_details.view_sql.empty()) {
-        const auto keys_with_spec = unserialize_key_metainfo(table_details.key_metainfo);
-        for (const auto& key_with_spec : keys_with_spec) {
-          std::cout << ",\n" << key_with_spec;
-        }
-        // push final ")\n";
-        std::cout << ")\n";
-        comma_or_blank = "";
-        std::string frag = "";
-        std::string page = "";
-        std::string row = "";
-        if (DEFAULT_FRAGMENT_ROWS != table_details.fragment_size) {
-          frag = "FRAGMENT_SIZE = " + std::to_string(table_details.fragment_size);
-          comma_or_blank = ", ";
-        }
-        if (table_details.shard_count) {
-          frag += comma_or_blank + "SHARD_COUNT = " + std::to_string(table_details.shard_count);
-          comma_or_blank = ", ";
-        }
-        if (DEFAULT_PAGE_SIZE != table_details.page_size) {
-          page = comma_or_blank + "PAGE_SIZE = " + std::to_string(table_details.page_size);
-          comma_or_blank = ", ";
-        }
-        if (DEFAULT_MAX_ROWS != table_details.max_rows) {
-          row = comma_or_blank + "MAX_ROWS = " + std::to_string(table_details.max_rows);
-        }
-        std::string with = frag + page + row;
-        if (with.length() > 0) {
-          std::cout << "WITH (" << with << ")\n";
-        }
-      } else {
-        std::cout << "\n";
-      }
-      return;
-    }
-    case 'o': {
-      if (command[2] != ' ') {
-        std::cerr << "Invalid \\o command usage.  Do \\o <table name>" << std::endl;
-        return;
-      }
-      std::string table_name(command + 3);
-      if (!thrift_with_retry(kGET_TABLE_DETAILS, context, command + 3)) {
-        return;
-      }
-      const auto table_details = context.table_details;
-      if (table_details.view_sql.empty()) {
-        std::cout << "CREATE TABLE " + table_name + " (\n";
-      } else {
-        std::cerr << "Can't optimize a view, only the underlying tables\n";
-        return;
-      }
-      std::string comma_or_blank("");
-      for (TColumnType p : table_details.row_desc) {
-        std::string encoding;
-        if (p.col_type.type == TDatumType::STR) {
-          encoding =
-              (p.col_type.encoding == 0
-                   ? " ENCODING NONE"
-                   : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                         std::to_string(get_optimal_size(context, table_name, p.col_name, p.col_type.type)) + ")");
-
-        } else {
-          int opt_size = get_optimal_size(context, table_name, p.col_name, p.col_type.type);
-          encoding = (opt_size == 0 ? "" : " ENCODING FIXED(" + std::to_string(opt_size) + ")");
-        }
-        std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
-                  << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
-        comma_or_blank = ",\n";
-      }
-      // push final "\n";
-      if (table_details.view_sql.empty()) {
-        std::cout << ")\n";
-        comma_or_blank = "";
-        std::string frag = "";
-        std::string page = "";
-        std::string row = "";
-        if (DEFAULT_FRAGMENT_ROWS != table_details.fragment_size) {
-          frag = " FRAGMENT_SIZE = " + std::to_string(table_details.fragment_size);
-          comma_or_blank = ",";
-        }
-        if (DEFAULT_PAGE_SIZE != table_details.page_size) {
-          page = comma_or_blank + " PAGE_SIZE = " + std::to_string(table_details.page_size);
-          comma_or_blank = ",";
-        }
-        if (DEFAULT_MAX_ROWS != table_details.max_rows) {
-          row = comma_or_blank + " MAX_ROWS = " + std::to_string(table_details.max_rows);
-        }
-        std::string with = frag + page + row;
-        if (with.length() > 0) {
-          std::cout << "WITH (" << with << ")\n";
-        }
-      } else {
-        std::cout << "\n";
-      }
-      return;
-    }
-    case 't': {
-      auto did_execute =
-          on_valid_regex_present(command, context, [](boost::regex& filter_expression, ClientContext& context_param) {
-            auto filter_function = yield_default_filter_function(filter_expression);
-            auto result_processor = [filter_function](std::string const& element_name, ClientContext& context_param) {
-              if (!filter_function(element_name)) {
-                std::cout << element_name << '\n';
-              }
-            };
-
-            for_all_return_names<kGET_PHYSICAL_TABLES>(context_param, result_processor);
-          });
-
-      if (!did_execute) {  // Run classic mode instead
-        for_all_return_names<kGET_PHYSICAL_TABLES>(
-            context,
-            [](std::string const& element_name, ClientContext& context_param) { std::cout << element_name << '\n'; });
-      }
-      std::cout.flush();
-      return;
-    }
-    case 'v': {
-      auto did_execute =
-          on_valid_regex_present(command, context, [](boost::regex& filter_expression, ClientContext& context_param) {
-            auto filter_function = yield_default_filter_function(filter_expression);
-            auto result_processor = [filter_function](std::string const& element_name, ClientContext& context_param) {
-              if (!filter_function(element_name)) {
-                std::cout << element_name << '\n';
-              }
-            };
-
-            for_all_return_names<kGET_VIEWS>(context_param, result_processor);
-          });
-
-      if (!did_execute) {  // Run classic mode instead
-        for_all_return_names<kGET_VIEWS>(context, [](std::string const& element_name, ClientContext& context_param) {
-          std::cout << element_name << '\n';
-        });
-      }
-      std::cout.flush();
-      return;
-    }
-    case 'c': {
-      if (command[2] != ' ') {
-        std::cerr << "Invalid \\c command usage.  Do \\c <database> <user> <password>" << std::endl;
-        return;
-      }
-      char* db = strtok(command + 3, " ");
-      char* user = strtok(NULL, " ");
-      char* passwd = strtok(NULL, " ");
-      if (db == NULL || user == NULL || passwd == NULL) {
-        std::cerr << "Invalid \\c command usage.  Do \\c <database> <user> <password>" << std::endl;
-        return;
-      }
-      if (context.session != INVALID_SESSION_ID) {
-        if (thrift_with_retry(kDISCONNECT, context, nullptr))
-          std::cout << "Disconnected from database " << context.db_name << std::endl;
-      }
-      context.db_name = db;
-      context.user_name = user;
-      context.passwd = passwd;
-      if (thrift_with_retry(kCONNECT, context, nullptr)) {
-        std::cout << "User " << context.user_name << " connected to database " << context.db_name << std::endl;
-      }
-    } break;
-    case 'u': {
-      auto did_execute =
-          on_valid_regex_present(command, context, [](boost::regex& filter_expression, ClientContext& context_param) {
-            auto filter_function = yield_default_filter_function(filter_expression);
-            auto result_processor = [filter_function](std::string const& user_name, ClientContext& context_param) {
-              if (!filter_function(user_name)) {
-                std::cout << user_name << '\n';
-              }
-            };
-
-            for_all_return_names<kGET_USERS>(context_param, result_processor);
-          });
-
-      if (!did_execute) {
-        for_all_return_names<kGET_USERS>(context, [](std::string const& user_name, ClientContext& context_param) {
-          std::cout << user_name << '\n';
-        });
-      }
-
-      std::cout.flush();
-      return;
-    }
-
-    case 'l': {
-      if (thrift_with_retry(kGET_DATABASES, context, nullptr)) {
-        std::cout << "Database | Owner" << std::endl;
-        for (auto p : context.dbinfos_return)
-          std::cout << p.db_name << " | " << p.db_owner << std::endl;
-      }
-      return;
-    }
-    default:
+  if( !resolution_status ) {
       std::cerr << "Invalid backslash command: " << command << std::endl;
   }
+  // clang-format on
 }
 
 std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
@@ -1485,18 +868,6 @@ void get_role(ClientContext context) {
   }
 }
 
-void get_all_roles(ClientContext context) {
-  context.role_names.clear();
-  context.userPrivateRole = false;
-  if (thrift_with_retry(kGET_ALL_ROLES, context, nullptr)) {
-    for (size_t i = 0; i < context.role_names.size(); i++) {
-      std::cout << context.role_names[i].c_str() << std::endl;
-    }
-  } else {
-    std::cout << "Cannot connect to MapD Server." << std::endl;
-  }
-}
-
 void get_db_objects_for_role(ClientContext context) {
   context.role_names.clear();
   context.userPrivateRole = true;
@@ -1639,19 +1010,6 @@ void get_db_object_privs(ClientContext context) {
   }
 }
 
-void get_all_roles_for_user(ClientContext context) {
-  context.role_names.clear();
-  if (thrift_with_retry(kGET_ROLES_FOR_USER, context, context.privs_user_name.c_str())) {
-    if (context.role_names.size() == 0) {
-      std::cout << "No roles are granted to user " << context.privs_user_name.c_str() << std::endl;
-    } else {
-      for (size_t i = 0; i < context.role_names.size(); i++) {
-        std::cout << context.role_names[i].c_str() << std::endl;
-      }
-    }
-  }
-}
-
 void set_license_key(ClientContext context, const std::string& token) {
   context.license_key = token;
   if (thrift_with_retry(kSET_LICENSE_KEY, context, nullptr)) {
@@ -1678,6 +1036,7 @@ void get_license_claims(ClientContext context) {
     std::cout << "Cannot connect to MapD Server." << std::endl;
   }
 }
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1822,6 +1181,7 @@ int main(int argc, char** argv) {
       TQueryResult empty;
       swap(_return, empty);
     }
+
     /* Do something with the string. */
     if (line[0] != '\0' && line[0] != '\\') {
       // printf("echo: '%s'\n", line);
@@ -1984,27 +1344,6 @@ int main(int argc, char** argv) {
       } else {
         std::cout << "Cannot connect to MapD Server." << std::endl;
       }
-    } else if (!strncmp(line, "\\copygeo", 8)) {
-      context.file_name = strtok(line + 9, " ");
-      context.table_name = strtok(nullptr, " ");
-      (void)thrift_with_retry(kIMPORT_GEO_TABLE, context, nullptr);
-    } else if (!strncmp(line, "\\ste", 4)) {
-      std::string table_details = line + 5;
-      table_details.erase(table_details.find_last_not_of(" \n\r\t") + 1);
-      set_table_epoch(context, table_details);
-    } else if (!strncmp(line, "\\gte", 4)) {
-      std::string table_details = strtok(line + 5, " ");
-      get_table_epoch(context, table_details);
-    } else if (!strncmp(line, "\\export_dashboard", 17)) {
-      std::string dash_details = line + 18;
-      export_dashboard(context, dash_details);
-    } else if (!strncmp(line, "\\import_dashboard", 17)) {
-      std::string dash_details = line + 18;
-      import_dashboard(context, dash_details);
-    } else if (!strncmp(line, "\\copy", 5)) {
-      char* filepath = strtok(line + 6, " ");
-      char* table = strtok(NULL, " ");
-      copy_table(filepath, table, context);
     } else if (!strncmp(line, "\\detect", 7)) {
       char* filepath = strtok(line + 8, " ");
       TCopyParams copy_params;
@@ -2034,8 +1373,6 @@ int main(int argc, char** argv) {
       } else {
         std::cout << "Command role_check failed because parameter role name is missing." << std::endl;
       }
-    } else if (!strncmp(line, "\\roles", 6)) {
-      get_all_roles(context);
     } else if (!strncmp(line, "\\privileges", 11)) {
       std::string temp_line(line);
       boost::algorithm::trim(temp_line);
@@ -2061,26 +1398,37 @@ int main(int argc, char** argv) {
       } else {
         std::cout << "Command object_privileges failed because parameter object name is missing." << std::endl;
       }
-    } else if (!strncmp(line, "\\role_list", 10)) {
-      std::string temp_line(line);
-      boost::algorithm::trim(temp_line);
-      if (temp_line.size() > 10) {
-        context.privs_user_name.clear();
-        context.privs_user_name = strtok(line + 11, " ");
-        get_all_roles_for_user(context);
-      } else {
-        std::cout << "Command role_list failed because parameter user name is missing." << std::endl;
-      }
     } else if (line[0] == '\\' && line[1] == 'q') {
       break;
-    } else if (!strncmp(line, "\\set_license", 11)) {
-      std::string license = line + 13;
-      set_license_key(context, license);
-    } else if (!strncmp(line, "\\get_license", 11)) {
-      get_license_claims(context);
-    } else if (line[0] == '\\') {
-      process_backslash_commands(line, context);
+    } else {  // Experimental Cleanup
+      using Params = CommandResolutionChain<>::CommandTokenList;
+
+      auto resolution_status =
+          CommandResolutionChain<>(
+              line, "\\copygeo", 3, CopyGeoCmd<>(context), "Usage: \\copygeo <serverGeoFileName> <tableName>")(
+              "\\copy",
+              3,
+              [&](Params const& p) { copy_table(p[1].c_str() /* filepath */, p[2].c_str() /* table */, context); })(
+              "\\ste", 2, [&](Params const& p) { set_table_epoch(context, p[1] /* table_details */); })(
+              "\\gte", 2, [&](Params const& p) { get_table_epoch(context, p[1] /* table_details */); })(
+              "\\export_dashboard", 2, [&](Params const& p) { export_dashboard(context, p[1] /* dash_details */); })(
+              "\\import_dashboard", 2, [&](Params const& p) { import_dashboard(context, p[1] /*dash_details */); })(
+              "\\role_list", 2, RoleListCmd<>(context), "Usage: \\role_list <userName>")(
+              "\\roles", 1, RolesCmd<>(context))("\\set_license", 2, [&](Params const& p) {
+            set_license_key(context, p[1]);
+          })("\\get_license", 1, [&](Params const&) {
+            get_license_claims(context);
+          }).is_resolved();
+
+      if (resolution_status == false) {
+        if (line[0] == '\\' && line[1] == 'q') {
+          break;
+        } else if (line[0] == '\\') {
+          process_backslash_commands(line, context);
+        }
+      }
     }
+
     linenoiseHistoryAdd(line);                  /* Add to the history. */
     linenoiseHistorySave("mapdql_history.txt"); /* Save the history on disk. */
   }

@@ -41,6 +41,7 @@ add_executable(StoragePerfTest StoragePerfTest.cpp PopulateTableRandom.cpp ScanT
 add_executable(ImportTest ImportTest.cpp QueryRunner.cpp)
 add_executable(TopKTest TopKTest.cpp QueryRunner.cpp)
 add_executable(TokenCompletionHintsTest TokenCompletionHintsTest.cpp)
+add_executable(MapDQLCommandTest MapDQLCommandTest.cpp)
 
 target_link_libraries(PlanTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
 target_link_libraries(ProfileTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROF_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
@@ -57,6 +58,7 @@ target_link_libraries(StringDictionaryTest StringDictionary gtest ${Boost_LIBRAR
 target_link_libraries(ImportTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TopKTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd_thrift ${Boost_LIBRARIES})
+target_link_libraries(MapDQLCommandTest gtest ${EXECUTE_TEST_LIBS} ${Boost_LIBRARIES})
 
 set(TEST_ARGS "--gtest_output=xml:../")
 add_test(PlanTest PlanTest ${TEST_ARGS})
@@ -71,18 +73,19 @@ add_test(StorageTest StorageTest ${TEST_ARGS})
 add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 add_test(TopKTest TopKTest ${TEST_ARGS})
 add_test(TokenCompletionHintsTest TokenCompletionHintsTest ${TEST_ARGS})
+add_test(MapDQLCommandTest MapDQLCommandTest ${TEST_ARGS})
 
 add_custom_target(sanity_tests
     COMMAND mkdir -p ${TEST_BASE_PATH}
     COMMAND initdb -f ${TEST_BASE_PATH}
-    COMMAND ${CMAKE_CTEST_COMMAND} --verbose --tests-regex "\"(PlanTest|ExecuteTest|ResultSetTest|ResultSetBaselineRadixSortTest|StorageTest|ImportTest|TopKTest|TokenCompletionHintsTest)\""
-    DEPENDS PlanTest ExecuteTest ResultSetTest ResultSetBaselineRadixSortTest StorageTest ImportTest TopKTest TokenCompletionHintsTest)
+    COMMAND ${CMAKE_CTEST_COMMAND} --verbose --tests-regex "\"(PlanTest|ExecuteTest|ResultSetTest|ResultSetBaselineRadixSortTest|StorageTest|ImportTest|TopKTest|TokenCompletionHintsTest|MapDQLCommandTest)\""
+    DEPENDS MapDQLCommandTest PlanTest ExecuteTest ResultSetTest ResultSetBaselineRadixSortTest StorageTest ImportTest TopKTest TokenCompletionHintsTest)
 
 add_custom_target(all_tests
     COMMAND mkdir -p ${TEST_BASE_PATH}
     COMMAND initdb -f ${TEST_BASE_PATH}
     COMMAND ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS PlanTest ProfileTest UtilTest ExecuteTest ResultSetTest ResultSetBaselineRadixSortTest RunQueryLoop StringDictionaryTest StorageTest StoragePerfTest ImportTest TopKTest TokenCompletionHintsTest)
+    DEPENDS MapDQLCommandTest PlanTest ProfileTest UtilTest ExecuteTest ResultSetTest ResultSetBaselineRadixSortTest RunQueryLoop StringDictionaryTest StorageTest StoragePerfTest ImportTest TopKTest TokenCompletionHintsTest)
 
 add_custom_target(storage_perf_tests
     COMMAND mkdir -p ${TEST_BASE_PATH}
