@@ -72,6 +72,11 @@ struct CopyParams {
   size_t max_reject;  // maximum number of records that can be rejected before copy is failed
   TableType table_type;
   bool plain_text = false;
+  // s3/parquet related params
+  bool is_parquet;
+  std::string s3_access_key;  // per-query credentials to override the
+  std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
+  std::string s3_region;
 
   CopyParams()
       : delimiter(','),
@@ -86,7 +91,8 @@ struct CopyParams {
         array_end('}'),
         threads(0),
         max_reject(100000),
-        table_type(TableType::DELIMITED) {}
+        table_type(TableType::DELIMITED),
+        is_parquet(false) {}
 };
 
 class TypedImportBuffer : boost::noncopyable {
@@ -537,6 +543,9 @@ class DataStreamSink {
   virtual ~DataStreamSink() {}
   virtual ImportStatus importDelimited(const std::string& file_path, const bool decompressed) = 0;
   const CopyParams& get_copy_params() const { return copy_params; }
+  void import_local_parquet(const std::string& file_path);
+  void import_parquet(std::vector<std::string>& file_paths);
+  void import_compressed(std::vector<std::string>& file_paths);
 
  protected:
   ImportStatus archivePlumber();

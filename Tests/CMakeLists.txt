@@ -75,16 +75,28 @@ add_test(TopKTest TopKTest ${TEST_ARGS})
 add_test(TokenCompletionHintsTest TokenCompletionHintsTest ${TEST_ARGS})
 add_test(MapDQLCommandTest MapDQLCommandTest ${TEST_ARGS})
 
+# parse s3 credentials
+file(READ aws/s3client.conf S3CLIENT_CONF)
+if("${S3CLIENT_CONF}" MATCHES "AWS_ACCESS_KEY_ID=([^\n]+)")
+  set(AWS_ACCESS_KEY_ID "${CMAKE_MATCH_1}")
+endif()
+if("${S3CLIENT_CONF}" MATCHES "AWS_SECRET_ACCESS_KEY=([^\n]+)")
+  set(AWS_SECRET_ACCESS_KEY "${CMAKE_MATCH_1}")
+endif()
+if("${S3CLIENT_CONF}" MATCHES "AWS_REGION=([^\n]+)")
+  set(AWS_REGION "${CMAKE_MATCH_1}")
+endif()
+
 add_custom_target(sanity_tests
     COMMAND mkdir -p ${TEST_BASE_PATH}
     COMMAND initdb -f ${TEST_BASE_PATH}
-    COMMAND ${CMAKE_CTEST_COMMAND} --verbose --tests-regex "\"(PlanTest|ExecuteTest|ResultSetTest|ResultSetBaselineRadixSortTest|StorageTest|ImportTest|TopKTest|TokenCompletionHintsTest|MapDQLCommandTest)\""
+    COMMAND env AWS_REGION=${AWS_REGION} AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} ${CMAKE_CTEST_COMMAND} --verbose --tests-regex "\"(PlanTest|ExecuteTest|ResultSetTest|ResultSetBaselineRadixSortTest|StorageTest|ImportTest|TopKTest|TokenCompletionHintsTest|MapDQLCommandTest)\""
     DEPENDS MapDQLCommandTest PlanTest ExecuteTest ResultSetTest ResultSetBaselineRadixSortTest StorageTest ImportTest TopKTest TokenCompletionHintsTest)
 
 add_custom_target(all_tests
     COMMAND mkdir -p ${TEST_BASE_PATH}
     COMMAND initdb -f ${TEST_BASE_PATH}
-    COMMAND ${CMAKE_CTEST_COMMAND} --verbose
+    COMMAND env AWS_REGION=${AWS_REGION} AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} ${CMAKE_CTEST_COMMAND} --verbose
     DEPENDS MapDQLCommandTest PlanTest ProfileTest UtilTest ExecuteTest ResultSetTest ResultSetBaselineRadixSortTest RunQueryLoop StringDictionaryTest StorageTest StoragePerfTest ImportTest TopKTest TokenCompletionHintsTest)
 
 add_custom_target(storage_perf_tests

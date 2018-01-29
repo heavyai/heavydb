@@ -2277,6 +2277,34 @@ void CopyTableStmt::execute(
           copy_params.has_header = false;
         else
           throw std::runtime_error("Invalid string for boolean " + *s);
+#ifdef ENABLE_IMPORT_PARQUET  // for now skeleton only
+      } else if (boost::iequals(*p->get_name(), "parquet")) {
+        const StringLiteral* str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr)
+          throw std::runtime_error("Parquet option must be a boolean.");
+        const std::string* s = str_literal->get_stringval();
+        if (*s == "t" || *s == "true" || *s == "T" || *s == "True")
+          copy_params.is_parquet = true;
+        else if (*s == "f" || *s == "false" || *s == "F" || *s == "False")
+          copy_params.is_parquet = false;
+        else
+          throw std::runtime_error("Invalid string for boolean " + *s);
+#endif  // ENABLE_IMPORT_PARQUET
+      } else if (boost::iequals(*p->get_name(), "s3_access_key")) {
+        const StringLiteral* str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr)
+          throw std::runtime_error("Option s3_access_key must be a string.");
+        copy_params.s3_access_key = *str_literal->get_stringval();
+      } else if (boost::iequals(*p->get_name(), "s3_secret_key")) {
+        const StringLiteral* str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr)
+          throw std::runtime_error("Option s3_secret_key must be a string.");
+        copy_params.s3_secret_key = *str_literal->get_stringval();
+      } else if (boost::iequals(*p->get_name(), "s3_region")) {
+        const StringLiteral* str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr)
+          throw std::runtime_error("Option s3_region must be a string.");
+        copy_params.s3_region = *str_literal->get_stringval();
       } else if (boost::iequals(*p->get_name(), "quote")) {
         const StringLiteral* str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr)

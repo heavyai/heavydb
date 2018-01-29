@@ -76,10 +76,7 @@ bool compare_agg(const int64_t cnt, const double avg) {
   return r_cnt == cnt && fabs(r_avg - avg) < 1E-9;
 }
 
-bool import_test(const string& filename, const int64_t cnt, const double avg) {
-  std::string query_str =
-      string("COPY trips FROM '") + "../../Tests/Import/datafiles/" + filename + "' WITH (header='true');";
-
+bool import_test_common(const string& query_str, const int64_t cnt, const double avg) {
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;
@@ -95,6 +92,43 @@ bool import_test(const string& filename, const int64_t cnt, const double avg) {
   return compare_agg(cnt, avg);
 }
 
+bool import_test_local(const string& filename, const int64_t cnt, const double avg) {
+  return import_test_common(
+      string("COPY trips FROM '") + "../../Tests/Import/datafiles/" + filename + "' WITH (header='true');", cnt, avg);
+}
+
+bool import_test_s3(const string& prefix, const string& filename, const int64_t cnt, const double avg) {
+  // unlikely we will expose any credentials in clear text here.
+  // likely credentials will be passed as the "tester"'s env.
+  // though s3 sdk should by default access the env, if any,
+  // we still read them out to test coverage of the code
+  // that passes credentials on per user basis.
+  char* env;
+  std::string s3_region, s3_access_key, s3_secret_key;
+  if (0 != (env = getenv("AWS_REGION")))
+    s3_region = env;
+  if (0 != (env = getenv("AWS_ACCESS_KEY_ID")))
+    s3_access_key = env;
+  if (0 != (env = getenv("AWS_SECRET_ACCESS_KEY")))
+    s3_secret_key = env;
+
+  return import_test_common(string("COPY trips FROM '") + "s3://mapd-parquet-testdata/" + prefix + "/" + filename +
+                                "' WITH (header='true'" +
+                                (s3_access_key.size() ? ",s3_access_key='" + s3_access_key + "'" : "") +
+                                (s3_secret_key.size() ? ",s3_secret_key='" + s3_secret_key + "'" : "") +
+                                (s3_region.size() ? ",s3_region='" + s3_region + "'" : "") + ");",
+                            cnt,
+                            avg);
+}
+
+bool import_test_s3_compressed(const string& filename, const int64_t cnt, const double avg) {
+  return import_test_s3("trip.compressed", filename, cnt, avg);
+}
+#if 0
+bool import_test_s3_parquet(const string& filename, const int64_t cnt, const double avg) {
+  return import_test_s3("trip.parquet", filename, cnt, avg);
+}
+#endif
 class SQLTestEnv : public ::testing::Environment {
  public:
   virtual void SetUp() {
@@ -189,67 +223,87 @@ const char* create_table_trips =
     "			dropoff_latitude        DECIMAL(14,2)		"
     "			) WITH (FRAGMENT_SIZE=75000000);				";
 
-TEST(Import, One_csv_file) {
-  ASSERT_NO_THROW(run_ddl("drop table if exists trips;"););
-  ASSERT_NO_THROW(run_ddl(create_table_trips););
-  EXPECT_TRUE(import_test("trip_data_9.csv", 100, 1.0));
-  ASSERT_NO_THROW(run_ddl("drop table trips;"););
+class ImportTest : public ::testing::Test {
+ protected:
+  virtual void SetUp() {
+    ASSERT_NO_THROW(run_ddl("drop table if exists trips;"););
+    ASSERT_NO_THROW(run_ddl(create_table_trips););
+  }
+
+  virtual void TearDown() { ASSERT_NO_THROW(run_ddl("drop table trips;");); }
+};
+
+TEST_F(ImportTest, One_csv_file) {
+  EXPECT_TRUE(import_test_local("trip_data_9.csv", 100, 1.0));
 }
 
-TEST(Import, One_gz_file) {
-  ASSERT_NO_THROW(run_ddl("drop table if exists trips;"););
-  ASSERT_NO_THROW(run_ddl(create_table_trips););
-  EXPECT_TRUE(import_test("trip_data_9.gz", 100, 1.0));
-  ASSERT_NO_THROW(run_ddl("drop table trips;"););
+TEST_F(ImportTest, One_gz_file) {
+  EXPECT_TRUE(import_test_local("trip_data_9.gz", 100, 1.0));
 }
 
-TEST(Import, One_bz2_file) {
-  ASSERT_NO_THROW(run_ddl("drop table if exists trips;"););
-  ASSERT_NO_THROW(run_ddl(create_table_trips););
-  EXPECT_TRUE(import_test("trip_data_9.bz2", 100, 1.0));
-  ASSERT_NO_THROW(run_ddl("drop table trips;"););
+TEST_F(ImportTest, One_bz2_file) {
+  EXPECT_TRUE(import_test_local("trip_data_9.bz2", 100, 1.0));
 }
 
-TEST(Import, Many_csv_file) {
-  ASSERT_NO_THROW(run_ddl("drop table if exists trips;"););
-  ASSERT_NO_THROW(run_ddl(create_table_trips););
-  EXPECT_TRUE(import_test("trip_data_*.csv", 1000, 1.0));
-  ASSERT_NO_THROW(run_ddl("drop table trips;"););
+TEST_F(ImportTest, Many_csv_file) {
+  EXPECT_TRUE(import_test_local("trip_data_*.csv", 1000, 1.0));
 }
 
-TEST(Import, One_tar_with_many_csv_files) {
-  ASSERT_NO_THROW(run_ddl("drop table if exists trips;"););
-  ASSERT_NO_THROW(run_ddl(create_table_trips););
-  EXPECT_TRUE(import_test("trip_data.tar", 1000, 1.0));
-  ASSERT_NO_THROW(run_ddl("drop table trips;"););
+TEST_F(ImportTest, One_tar_with_many_csv_files) {
+  EXPECT_TRUE(import_test_local("trip_data.tar", 1000, 1.0));
 }
 
-TEST(Import, One_tgz_with_many_csv_files) {
-  ASSERT_NO_THROW(run_ddl("drop table if exists trips;"););
-  ASSERT_NO_THROW(run_ddl(create_table_trips););
-  EXPECT_TRUE(import_test("trip_data.tgz", 100000, 1.0));
-  ASSERT_NO_THROW(run_ddl("drop table trips;"););
+TEST_F(ImportTest, One_tgz_with_many_csv_files) {
+  EXPECT_TRUE(import_test_local("trip_data.tgz", 100000, 1.0));
 }
 
-TEST(Import, One_rar_with_many_csv_files) {
-  ASSERT_NO_THROW(run_ddl("drop table if exists trips;"););
-  ASSERT_NO_THROW(run_ddl(create_table_trips););
-  EXPECT_TRUE(import_test("trip_data.rar", 1000, 1.0));
-  ASSERT_NO_THROW(run_ddl("drop table trips;"););
+TEST_F(ImportTest, One_rar_with_many_csv_files) {
+  EXPECT_TRUE(import_test_local("trip_data.rar", 1000, 1.0));
 }
 
-TEST(Import, One_zip_with_many_csv_files) {
-  ASSERT_NO_THROW(run_ddl("drop table if exists trips;"););
-  ASSERT_NO_THROW(run_ddl(create_table_trips););
-  EXPECT_TRUE(import_test("trip_data.zip", 1000, 1.0));
-  ASSERT_NO_THROW(run_ddl("drop table trips;"););
+TEST_F(ImportTest, One_zip_with_many_csv_files) {
+  EXPECT_TRUE(import_test_local("trip_data.zip", 1000, 1.0));
 }
 
-TEST(Import, One_7z_with_many_csv_files) {
-  ASSERT_NO_THROW(run_ddl("drop table if exists trips;"););
-  ASSERT_NO_THROW(run_ddl(create_table_trips););
-  EXPECT_TRUE(import_test("trip_data.7z", 1000, 1.0));
-  ASSERT_NO_THROW(run_ddl("drop table trips;"););
+TEST_F(ImportTest, One_7z_with_many_csv_files) {
+  EXPECT_TRUE(import_test_local("trip_data.7z", 1000, 1.0));
+}
+
+// s3 compressed (non-parquet) test cases
+TEST_F(ImportTest, S3_One_csv_file) {
+  EXPECT_TRUE(import_test_s3_compressed("trip_data_9.csv", 100, 1.0));
+}
+
+TEST_F(ImportTest, S3_One_gz_file) {
+  EXPECT_TRUE(import_test_s3_compressed("trip_data_9.gz", 100, 1.0));
+}
+
+TEST_F(ImportTest, S3_One_bz2_file) {
+  EXPECT_TRUE(import_test_s3_compressed("trip_data_9.bz2", 100, 1.0));
+}
+
+TEST_F(ImportTest, S3_One_tar_with_many_csv_files) {
+  EXPECT_TRUE(import_test_s3_compressed("trip_data.tar", 1000, 1.0));
+}
+
+TEST_F(ImportTest, S3_One_tgz_with_many_csv_files) {
+  EXPECT_TRUE(import_test_s3_compressed("trip_data.tgz", 100000, 1.0));
+}
+
+TEST_F(ImportTest, S3_One_rar_with_many_csv_files) {
+  EXPECT_TRUE(import_test_s3_compressed("trip_data.rar", 1000, 1.0));
+}
+
+TEST_F(ImportTest, S3_One_zip_with_many_csv_files) {
+  EXPECT_TRUE(import_test_s3_compressed("trip_data.zip", 1000, 1.0));
+}
+
+TEST_F(ImportTest, S3_One_7z_with_many_csv_files) {
+  EXPECT_TRUE(import_test_s3_compressed("trip_data.7z", 1000, 1.0));
+}
+
+TEST_F(ImportTest, S3_All_files) {
+  EXPECT_TRUE(import_test_s3_compressed("", 105200, 1.0));
 }
 }
 

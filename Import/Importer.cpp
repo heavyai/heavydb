@@ -59,6 +59,8 @@
 
 #include "../Archive/PosixFileArchive.h"
 
+#include "../Archive/S3Archive.h"
+
 using std::ostream;
 
 namespace Importer_NS {
@@ -1552,7 +1554,7 @@ ImportStatus Detector::importDelimited(const std::string& file_path, const bool 
       }
       if (0 == n)
         break;
-
+      line[n] = 0;
       // remember the first line, which is possibly a header line, to
       // ignore identical header line(s) in 2nd+ files of a archive;
       // otherwise, 2nd+ header may be mistaken as an all-string row
@@ -1849,6 +1851,67 @@ ImportStatus DataStreamSink::archivePlumber() {
   if (file_paths.size() == 0)
     file_paths.push_back(file_path);
 
+  // s3 parquet goes different route because the files do not use libarchive
+  // but parquet api, and they need to landed like .7z files.
+  //
+  // note: parquet must be explicitly specified by a WITH parameter "parquet='true'".
+  //       without the parameter, it means plain or compressed csv files.
+  // note: .ORC and AVRO files should follow a similar path to Parquet?
+  if (copy_params.is_parquet)
+    import_parquet(file_paths);
+  else
+    import_compressed(file_paths);
+  return import_status;
+}
+
+void DataStreamSink::import_local_parquet(const std::string& file_path) {
+  // TODO: for now, this is skeleton only
+  // note: for 'early-stop' purpose like that of Detector, this function
+  // needs extra parameters, eg. timeout or maximum rows to scan, ...
+}
+void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {
+  std::exception_ptr teptr;
+  // file_paths may contain one local file path, a list of local file paths
+  // or a s3/hdfs/... url that may translate to 1 or 1+ remote object keys.
+  for (auto const& file_path : file_paths) {
+    std::map<int, std::string> url_parts;
+    Archive::parse_url(file_path, url_parts);
+
+    // for a s3 url we need to know the obj keys that it comprises
+    std::vector<std::string> objkeys;
+    std::unique_ptr<S3ParquetArchive> us3arch;
+    if ("s3" == url_parts[2]) {
+      us3arch.reset(new S3ParquetArchive(file_path,
+                                         copy_params.s3_access_key,
+                                         copy_params.s3_secret_key,
+                                         copy_params.s3_region,
+                                         copy_params.plain_text));
+      us3arch->init_for_read();
+      objkeys = us3arch->get_objkeys();
+    } else
+      objkeys.emplace_back(file_path);
+
+    // for each obj key of a s3 url we need to land it before
+    // importing it like doing with a 'local file'.
+    for (auto const& objkey : objkeys)
+      try {
+        auto file_path = us3arch ? us3arch->land(objkey, teptr) : objkey;
+        if (boost::filesystem::exists(file_path))
+          import_local_parquet(file_path);
+        if (us3arch)
+          us3arch->vacuum(objkey);
+      } catch (...) {
+        if (us3arch)
+          us3arch->vacuum(objkey);
+        throw;
+      }
+  }
+  // rethrow any exception happened herebefore
+  if (teptr)
+    std::rethrow_exception(teptr);
+}
+
+void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
   // a new requirement is to have one single input stream into
   // Importer::importDelimited, so need to move pipe related
   // stuff to the outmost block.
@@ -1871,7 +1934,8 @@ ImportStatus DataStreamSink::archivePlumber() {
       // it can be feed into other function such like importParquet, etc
       ret = importDelimited(file_path, true);
     } catch (...) {
-      teptr = std::current_exception();
+      if (!teptr)  // no replace
+        teptr = std::current_exception();
     }
 
     if (p_file)
@@ -1883,26 +1947,48 @@ ImportStatus DataStreamSink::archivePlumber() {
   // forward the uncompressed byte stream to fd[1] which is
   // then feed into importDelimited, importParquet, and etc.
   auto th_pipe_writer = std::thread([&]() {
-    for (auto const& file_path : file_paths)
+    std::unique_ptr<S3Archive> us3arch;
+    for (size_t fi = 0; fi < file_paths.size(); fi++) {
       try {
-        std::unique_ptr<Archive> sarch;
+        auto file_path = file_paths[fi];
+        std::unique_ptr<Archive> uarch;
         std::map<int, std::string> url_parts;
         Archive::parse_url(file_path, url_parts);
+        const std::string S3_objkey_url_scheme = "s3ok";
         if ("file" == url_parts[2] || "" == url_parts[2])
-          sarch.reset(new PosixFileArchive(file_path, copy_params.plain_text));
+          uarch.reset(new PosixFileArchive(file_path, copy_params.plain_text));
+        else if ("s3" == url_parts[2]) {
+          // new a S3Archive with a shared s3client.
+          // should be safe b/c no wildcard with s3 url
+          us3arch.reset(new S3Archive(file_path,
+                                      copy_params.s3_access_key,
+                                      copy_params.s3_secret_key,
+                                      copy_params.s3_region,
+                                      copy_params.plain_text));
+          us3arch->init_for_read();
+          // not land all files here but one by one in following iterations
+          for (const auto& objkey : us3arch->get_objkeys())
+            file_paths.emplace_back(std::string(S3_objkey_url_scheme) + "://" + objkey);
+          continue;
+        } else if (S3_objkey_url_scheme == url_parts[2]) {
+          auto objkey = file_path.substr(3 + S3_objkey_url_scheme.size());
+          auto file_path = us3arch->land(objkey, teptr);
+          if (0 == file_path.size())
+            throw std::runtime_error(std::string("failed to land s3 object: ") + objkey);
+          uarch.reset(new PosixFileArchive(file_path, copy_params.plain_text));
+          // file not removed until file closed
+          us3arch->vacuum(objkey);
+        }
 #if 0  // TODO(ppan): implement and enable any other archive class
         else
-        if ("s3" == url_parts[2])
-          sarch.reset(new S3Archive(file_path));
-        else
         if ("hdfs" == url_parts[2])
-          sarch.reset(new HdfsArchive(file_path));
+          uarch.reset(new HdfsArchive(file_path));
 #endif
         else
           throw std::runtime_error(std::string("unsupported archive url: ") + file_path);
 
         // init the archive for read
-        auto& arch = *sarch;
+        auto& arch = *uarch;
 
         // coming here, the archive of url should be ready to be read, unarchived
         // and uncompressed by libarchive into a byte stream (in csv) for the pipe
@@ -1931,22 +2017,31 @@ ImportStatus DataStreamSink::archivePlumber() {
                 LOG(WARNING) << "No line delimiter in block." << std::endl;
               just_saw_header = false;
             }
+            // In very rare occasions the write pipe somehow operates in a mode similar to non-blocking
+            // while pipe(fds) should behave like pipe2(fds, 0) which means blocking mode. On such a
+            // unreliable blocking mode, a possible fix is to loop reading till no bytes left, otherwise
+            // the annoying `failed to write pipe: Success`...
             if (size2 > 0)
-              if (size2 != write(fd[1], buf2, size2)) {
+              for (int nread = 0, nleft = size2; nleft > 0; nleft -= (nread > 0 ? nread : 0)) {
+                nread = write(fd[1], buf2, nleft);
+                if (nread == nleft)
+                  break;  // done
                 // no exception when too many rejected
-                if (size2 >= 0 && import_status.load_truncated) {
+                if (import_status.load_truncated) {
                   stop = true;
-                  continue;
+                  break;
                 }
                 // not to overwrite original error
-                if (!load_failed)
+                if (nread < 0 && !(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK))
                   throw std::runtime_error(std::string("failed or interrupted write to pipe: ") + strerror(errno));
               }
           }
       } catch (...) {
-        teptr = std::current_exception();
+        if (!teptr)  // no replace
+          teptr = std::current_exception();
         break;
       }
+    }
     // close writer end
     close(fd[1]);
   });
@@ -1957,8 +2052,6 @@ ImportStatus DataStreamSink::archivePlumber() {
   // rethrow any exception happened herebefore
   if (teptr)
     std::rethrow_exception(teptr);
-
-  return ret;
 }
 
 ImportStatus Importer::import() {
