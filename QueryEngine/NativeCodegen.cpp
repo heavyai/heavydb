@@ -1047,6 +1047,10 @@ Executor::CompilationResult Executor::compileWorkUnit(const std::vector<InputTab
   bind_pos_placeholders("group_buff_idx", false, query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", false, query_func, cgen_state_->module_);
 
+  cgen_state_->query_func_ = query_func;
+  cgen_state_->query_func_entry_ir_builder_.SetInsertPoint(&query_func->front(),
+                                                           query_func->front().getInstList().begin());
+
   std::vector<llvm::Value*> col_heads;
   std::tie(cgen_state_->row_func_, col_heads) = create_row_function(ra_exe_unit.input_col_descs.size(),
                                                                     is_group_by ? 0 : agg_slot_count,
