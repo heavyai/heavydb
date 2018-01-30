@@ -1117,7 +1117,9 @@ class Executor {
           outer_join_match_found_(nullptr),
           outer_join_nomatch_(nullptr),
           query_infos_(query_infos),
-          needs_error_check_(false) {}
+          needs_error_check_(false),
+          query_func_(nullptr),
+          query_func_entry_ir_builder_(context_) {};
 
     size_t getOrAddLiteral(const Analyzer::Constant* constant,
                            const EncodingType enc_type,
@@ -1212,6 +1214,7 @@ class Executor {
       CHECK(f);
       return ir_builder_.CreateCall(f, args);
     }
+    size_t literal_bytes_high_watermark(int device_id) { return literal_bytes_[device_id]; }
 
     llvm::Module* module_;
     llvm::Function* row_func_;
@@ -1235,6 +1238,10 @@ class Executor {
     const std::vector<InputTableInfo>& query_infos_;
     bool needs_error_check_;
 
+    llvm::Function* query_func_;
+    llvm::IRBuilder<> query_func_entry_ir_builder_;
+    std::unordered_map<int, std::vector<llvm::Value*>> defined_literals_;
+
    private:
     template <class T>
     size_t getOrAddLiteral(const T& val, const int device_id) {
@@ -1256,6 +1263,7 @@ class Executor {
 
     std::unordered_map<int, LiteralValues> literals_;
     std::unordered_map<int, size_t> literal_bytes_;
+
   };
   std::unique_ptr<CgenState> cgen_state_;
 
