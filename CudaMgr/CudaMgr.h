@@ -80,6 +80,7 @@ class CudaMgr {
   }
   inline bool isArchMaxwell() const { return (getDeviceCount() > 0 && deviceProperties[0].computeMajor == 5); }
   inline bool isArchPascal() const { return (getDeviceCount() > 0 && deviceProperties[0].computeMajor == 6); }
+  inline bool isArchPascalOrLater() const { return (getDeviceCount() > 0 && deviceProperties[0].computeMajor >= 6); }
   std::vector<DeviceProperties> deviceProperties;
 
   const std::vector<CUcontext>& getDeviceContexts() const { return deviceContexts; }

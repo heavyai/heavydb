@@ -863,11 +863,11 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
     std::condition_variable scheduler_cv;
     std::mutex scheduler_mutex;
     auto dispatch = [&execution_dispatch, &available_cpus, &available_gpus, &options, &scheduler_mutex, &scheduler_cv](
-                        const ExecutorDeviceType chosen_device_type,
-                        int chosen_device_id,
-                        const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
-                        const size_t ctx_idx,
-                        const int64_t rowid_lookup_key) {
+        const ExecutorDeviceType chosen_device_type,
+        int chosen_device_id,
+        const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
+        const size_t ctx_idx,
+        const int64_t rowid_lookup_key) {
       execution_dispatch.run(chosen_device_type, chosen_device_id, options, frag_ids, ctx_idx, rowid_lookup_key);
       if (execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid) {
         std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
@@ -964,7 +964,7 @@ ExecutorDeviceType Executor::getDeviceTypeForTargets(const RelAlgExecutionUnit& 
                                                      const ExecutorDeviceType requested_device_type) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     const auto agg_info = target_info(target_expr);
-    if (!ra_exe_unit.groupby_exprs.empty() && !isArchPascal(requested_device_type)) {
+    if (!ra_exe_unit.groupby_exprs.empty() && !isArchPascalOrLater(requested_device_type)) {
       if ((agg_info.agg_kind == kAVG || agg_info.agg_kind == kSUM) && agg_info.agg_arg_type.get_type() == kDOUBLE) {
         return ExecutorDeviceType::CPU;
       }

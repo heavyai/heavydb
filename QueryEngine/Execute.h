@@ -585,8 +585,8 @@ class Executor {
     std::string llvm_ir;
   };
 
-  bool isArchPascal(const ExecutorDeviceType dt) const {
-    return dt == ExecutorDeviceType::GPU && catalog_->get_dataMgr().cudaMgr_->isArchPascal();
+  bool isArchPascalOrLater(const ExecutorDeviceType dt) const {
+    return dt == ExecutorDeviceType::GPU && catalog_->get_dataMgr().cudaMgr_->isArchPascalOrLater();
   }
 
   enum class JoinImplType { Invalid, Loop, HashOneToOne, HashOneToMany, HashPlusLoop };
