@@ -100,120 +100,34 @@ std::vector<llvm::Value*> Executor::codegenHoistedConstants(const std::vector<co
                                                             const EncodingType enc_type,
                                                             const int dict_id) {
   CHECK(!constants.empty());
-
-  int64_t initial_watermark = cgen_state_->literal_bytes_high_watermark(0);
-
   const auto& type_info = constants.front()->get_type_info();
-  int64_t lit_off{-1};
+  auto lit_buff_lv = get_arg_by_name(cgen_state_->row_func_, "literals");
+  int16_t lit_off{-1};
   for (size_t device_id = 0; device_id < constants.size(); ++device_id) {
     const auto constant = constants[device_id];
     const auto& crt_type_info = constant->get_type_info();
     CHECK(type_info == crt_type_info);
-    const int64_t dev_lit_off = cgen_state_->getOrAddLiteral(constant, enc_type, dict_id, device_id);
+    const int16_t dev_lit_off = cgen_state_->getOrAddLiteral(constant, enc_type, dict_id, device_id);
     if (device_id) {
       CHECK_EQ(lit_off, dev_lit_off);
     } else {
       lit_off = dev_lit_off;
     }
   }
-  CHECK_GE(lit_off, int64_t(0));
-
-  int64_t allocated_watermark = cgen_state_->literal_bytes_high_watermark(0);
-  std::string literal_name = "literal_" + std::to_string(lit_off);
-
-  if (allocated_watermark == initial_watermark) {
-    // no new entry was created in the literals buffer
-    // assuming that it was already hoisted !
-
-    if (type_info.is_string() && enc_type != kENCODING_DICT) {
-      auto gv_var_start = cgen_state_->query_func_->getParent()->getGlobalVariable("global_" + literal_name + "_start");
-      auto gv_var_start_address =
-          cgen_state_->query_func_->getParent()->getGlobalVariable("global_" + literal_name + "_start_address");
-      auto gv_var_length =
-          cgen_state_->query_func_->getParent()->getGlobalVariable("global_" + literal_name + "_length");
-
-      CHECK_NOTNULL(gv_var_start);
-      CHECK_NOTNULL(gv_var_start_address);
-      CHECK_NOTNULL(gv_var_length);
-
-      auto gv_load_start = cgen_state_->ir_builder_.CreateLoad(gv_var_start);
-      auto gv_load_start_address = cgen_state_->ir_builder_.CreateLoad(gv_var_start_address);
-      auto gv_load_length = cgen_state_->ir_builder_.CreateLoad(gv_var_length);
-
-      return {gv_load_start, gv_load_start_address, gv_load_length};
-    }
-
-    llvm::GlobalVariable* global_literal =
-        cgen_state_->query_func_->getParent()->getGlobalVariable("global_" + literal_name);
-    CHECK_NOTNULL(global_literal);
-
-    auto gv_load = cgen_state_->ir_builder_.CreateLoad(global_literal);
-    return {gv_load};
-  }
-
-  auto lit_buff_lv = get_arg_by_name(cgen_state_->query_func_, "literals");
-  const auto lit_buf_start = cgen_state_->query_func_entry_ir_builder_.CreateGEP(lit_buff_lv, ll_int(lit_off));
+  CHECK_GE(lit_off, int16_t(0));
+  const auto lit_buf_start = cgen_state_->ir_builder_.CreateGEP(lit_buff_lv, ll_int(lit_off));
   if (type_info.is_string() && enc_type != kENCODING_DICT) {
     CHECK_EQ(kENCODING_NONE, type_info.get_compression());
     CHECK_EQ(size_t(4), literalBytes(LiteralValue(std::string(""))));
-    auto off_and_len_ptr = cgen_state_->query_func_entry_ir_builder_.CreateBitCast(
+    auto off_and_len_ptr = cgen_state_->ir_builder_.CreateBitCast(
         lit_buf_start, llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0));
     // packed offset + length, 16 bits each
-    auto off_and_len = cgen_state_->query_func_entry_ir_builder_.CreateLoad(off_and_len_ptr);
-    auto off_lv = cgen_state_->query_func_entry_ir_builder_.CreateLShr(
+    auto off_and_len = cgen_state_->ir_builder_.CreateLoad(off_and_len_ptr);
+    auto off_lv = cgen_state_->ir_builder_.CreateLShr(
         cgen_state_->ir_builder_.CreateAnd(off_and_len, ll_int(int32_t(0xffff0000))), ll_int(int32_t(16)));
-    auto len_lv = cgen_state_->query_func_entry_ir_builder_.CreateAnd(off_and_len, ll_int(int32_t(0x0000ffff)));
-
-    auto var_start = ll_int(int64_t(0));
-    auto var_start_address = cgen_state_->query_func_entry_ir_builder_.CreateGEP(lit_buff_lv, off_lv);
-    auto var_length = len_lv;
-
-    var_start->setName(literal_name + "_start");
-    var_start_address->setName(literal_name + "_start_address");
-    var_length->setName(literal_name + "_length");
-
-    auto gv_var_start = new llvm::GlobalVariable(*cgen_state_->query_func_->getParent(),
-                                                 var_start->getType(),
-                                                 false,
-                                                 llvm::GlobalVariable::InternalLinkage,
-                                                 nullptr,
-                                                 "global_" + literal_name + "_start",
-                                                 nullptr,
-                                                 llvm::GlobalVariable::NotThreadLocal,
-                                                 0,
-                                                 false);
-    auto gv_var_start_address = new llvm::GlobalVariable(*cgen_state_->query_func_->getParent(),
-                                                         var_start_address->getType(),
-                                                         false,
-                                                         llvm::GlobalVariable::InternalLinkage,
-                                                         nullptr,
-                                                         "global_" + literal_name + "_start_address",
-                                                         nullptr,
-                                                         llvm::GlobalVariable::NotThreadLocal,
-                                                         0,
-                                                         false);
-    auto gv_var_length = new llvm::GlobalVariable(*cgen_state_->query_func_->getParent(),
-                                                  var_length->getType(),
-                                                  false,
-                                                  llvm::GlobalVariable::InternalLinkage,
-                                                  nullptr,
-                                                  "global_" + literal_name + "_length",
-                                                  nullptr,
-                                                  llvm::GlobalVariable::NotThreadLocal,
-                                                  0,
-                                                  false);
-
-    cgen_state_->query_func_entry_ir_builder_.CreateStore(var_start, gv_var_start, false);
-    cgen_state_->query_func_entry_ir_builder_.CreateStore(var_start_address, gv_var_start_address, false);
-    cgen_state_->query_func_entry_ir_builder_.CreateStore(var_length, gv_var_length, false);
-
-    auto gv_load_start = cgen_state_->ir_builder_.CreateLoad(gv_var_start);
-    auto gv_load_start_address = cgen_state_->ir_builder_.CreateLoad(gv_var_start_address);
-    auto gv_load_length = cgen_state_->ir_builder_.CreateLoad(gv_var_length);
-
-    return {gv_load_start, gv_load_start_address, gv_load_length};
+    auto len_lv = cgen_state_->ir_builder_.CreateAnd(off_and_len, ll_int(int32_t(0x0000ffff)));
+    return {ll_int(int64_t(0)), cgen_state_->ir_builder_.CreateGEP(lit_buff_lv, off_lv), len_lv};
   }
-
   llvm::Type* val_ptr_type{nullptr};
   const auto val_bits = get_bit_width(type_info);
   CHECK_EQ(size_t(0), val_bits % 8);
@@ -225,33 +139,10 @@ std::vector<llvm::Value*> Executor::codegenHoistedConstants(const std::vector<co
     val_ptr_type = (type_info.get_type() == kFLOAT) ? llvm::Type::getFloatPtrTy(cgen_state_->context_)
                                                     : llvm::Type::getDoublePtrTy(cgen_state_->context_);
   }
-  auto lit_lv = cgen_state_->query_func_entry_ir_builder_.CreateLoad(
-      cgen_state_->query_func_entry_ir_builder_.CreateBitCast(lit_buf_start, val_ptr_type));
-
-  llvm::Value* to_return_lv = lit_lv;
-
+  auto lit_lv =
+      cgen_state_->ir_builder_.CreateLoad(cgen_state_->ir_builder_.CreateBitCast(lit_buf_start, val_ptr_type));
   if (type_info.is_boolean() && type_info.get_notnull()) {
-    if (static_cast<llvm::IntegerType*>(lit_lv->getType())->getBitWidth() > 1) {
-      to_return_lv = cgen_state_->query_func_entry_ir_builder_.CreateICmp(
-          llvm::ICmpInst::ICMP_SGT, lit_lv, llvm::ConstantInt::get(lit_lv->getType(), 0));
-    }
+    return {toBool(lit_lv)};
   }
-
-  to_return_lv->setName(literal_name);
-
-  auto gv_to_return_lv = new llvm::GlobalVariable(*cgen_state_->query_func_->getParent(),
-                                                  to_return_lv->getType(),
-                                                  false,
-                                                  llvm::GlobalVariable::InternalLinkage,
-                                                  nullptr,
-                                                  "global_" + literal_name,
-                                                  nullptr,
-                                                  llvm::GlobalVariable::NotThreadLocal,
-                                                  0,
-                                                  false);
-
-  cgen_state_->query_func_entry_ir_builder_.CreateStore(to_return_lv, gv_to_return_lv, false);
-  auto gv_load = cgen_state_->ir_builder_.CreateLoad(gv_to_return_lv);
-
-  return {gv_load};
+  return {lit_lv};
 }
