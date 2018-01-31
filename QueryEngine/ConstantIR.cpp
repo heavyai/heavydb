@@ -101,8 +101,6 @@ std::vector<llvm::Value*> Executor::codegenHoistedConstants(const std::vector<co
                                                             const int dict_id) {
   CHECK(!constants.empty());
 
-  int64_t initial_watermark = cgen_state_->literal_bytes_high_watermark(0);
-
   const auto& type_info = constants.front()->get_type_info();
   int16_t lit_off{-1};
   for (size_t device_id = 0; device_id < constants.size(); ++device_id) {
@@ -118,15 +116,15 @@ std::vector<llvm::Value*> Executor::codegenHoistedConstants(const std::vector<co
   }
   CHECK_GE(lit_off, int16_t(0));
 
-  int64_t allocated_watermark = cgen_state_->literal_bytes_high_watermark(0);
   std::string literal_name = "literal_" + std::to_string(lit_off);
+  auto entry = cgen_state_->defined_literals_.find(lit_off);
 
-  if (allocated_watermark == initial_watermark) {
+  if (entry != cgen_state_->defined_literals_.end()) {
     // no new entry was created in the literals buffer
     // assuming that it was already hoisted !
 
     if (type_info.is_string() && enc_type != kENCODING_DICT) {
-      std::vector<llvm::Value*>& values = cgen_state_->defined_literals_[lit_off];
+      std::vector<llvm::Value*>& values = entry->second;
 
       llvm::Value* var_start = values[0];
       llvm::Value* var_start_address = values[1];
@@ -148,7 +146,7 @@ std::vector<llvm::Value*> Executor::codegenHoistedConstants(const std::vector<co
       return {placeholder0, placeholder1, placeholder2};
     }
 
-    llvm::Value* to_return_lv = cgen_state_->defined_literals_[lit_off][0];
+    llvm::Value* to_return_lv = entry->second[0];
 
     auto placeholder = cgen_state_->ir_builder_.CreateLoad(
         cgen_state_->ir_builder_.CreateIntToPtr(ll_int((lit_off << 8) | 0),

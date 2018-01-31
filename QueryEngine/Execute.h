@@ -1214,7 +1214,6 @@ class Executor {
       CHECK(f);
       return ir_builder_.CreateCall(f, args);
     }
-    size_t literal_bytes_high_watermark(int device_id) { return literal_bytes_[device_id]; }
 
     llvm::Module* module_;
     llvm::Function* row_func_;
