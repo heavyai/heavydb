@@ -34,6 +34,13 @@
 
 class StringDictionaryClient;
 
+class DictPayloadUnavailable : public std::runtime_error {
+ public:
+  DictPayloadUnavailable() : std::runtime_error("DictPayloadUnavailable") {}
+
+  DictPayloadUnavailable(const std::string& err) : std::runtime_error(err) {}
+};
+
 class StringDictionary {
  public:
   // In the compare_cache_value_t index represents the index of the sorted cache.
@@ -44,10 +51,7 @@ class StringDictionary {
     int32_t diff;
   } compare_cache_value_t;
 
-  StringDictionary(const std::string& folder,
-                   const bool isTemp,
-                   const bool recover,
-                   size_t initial_capacity = 256) noexcept;
+  StringDictionary(const std::string& folder, const bool isTemp, const bool recover, size_t initial_capacity = 256);
   StringDictionary(const LeafHostInfo& host, const int dict_id);
   ~StringDictionary() noexcept;
 

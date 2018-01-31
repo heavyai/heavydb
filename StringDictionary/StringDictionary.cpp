@@ -42,8 +42,11 @@ size_t file_size(const int fd) {
 
 int checked_open(const char* path, const bool recover) {
   auto fd = open(path, O_RDWR | O_CREAT | (recover ? O_APPEND : O_TRUNC), 0644);
-  CHECK_GE(fd, 0);
-  return fd;
+  if (fd > 0)
+    return fd;
+  auto err = std::string("Dictionary path ") + std::string(path) + std::string(" does not exist.");
+  LOG(ERROR) << err;
+  throw DictPayloadUnavailable(err);
 }
 
 void* checked_mmap(const int fd, const size_t sz) {
@@ -58,7 +61,6 @@ void* checked_mmap(const int fd, const size_t sz) {
 #endif
   return ptr;
 }
-
 void checked_munmap(void* addr, size_t length) {
   CHECK_EQ(0, munmap(addr, length));
 }
@@ -95,17 +97,18 @@ const int32_t StringDictionary::INVALID_STR_ID{-1};
 StringDictionary::StringDictionary(const std::string& folder,
                                    const bool isTemp,
                                    const bool recover,
-                                   size_t initial_capacity) noexcept : str_count_(0),
-                                                                       str_ids_(initial_capacity, INVALID_STR_ID),
-                                                                       isTemp_(isTemp),
-                                                                       payload_fd_(-1),
-                                                                       offset_fd_(-1),
-                                                                       offset_map_(nullptr),
-                                                                       payload_map_(nullptr),
-                                                                       offset_file_size_(0),
-                                                                       payload_file_size_(0),
-                                                                       payload_file_off_(0),
-                                                                       strings_cache_(nullptr) {
+                                   size_t initial_capacity)
+    : str_count_(0),
+      str_ids_(initial_capacity, INVALID_STR_ID),
+      isTemp_(isTemp),
+      payload_fd_(-1),
+      offset_fd_(-1),
+      offset_map_(nullptr),
+      payload_map_(nullptr),
+      offset_file_size_(0),
+      payload_file_size_(0),
+      payload_file_off_(0),
+      strings_cache_(nullptr) {
   if (!isTemp && folder.empty()) {
     return;
   }

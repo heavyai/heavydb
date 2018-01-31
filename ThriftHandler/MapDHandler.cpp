@@ -1126,13 +1126,18 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
   } else {
-    if (!cat.isAccessPrivCheckEnabled() || (cat.isAccessPrivCheckEnabled() && hasTableAccessPrivileges(td, session))) {
-      const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, get_system, true);
-      for (const auto cd : col_descriptors) {
-        _return.row_desc.push_back(populateThriftColumnType(&cat, cd));
+    try {
+      if (!cat.isAccessPrivCheckEnabled() ||
+          (cat.isAccessPrivCheckEnabled() && hasTableAccessPrivileges(td, session))) {
+        const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, get_system, true);
+        for (const auto cd : col_descriptors) {
+          _return.row_desc.push_back(populateThriftColumnType(&cat, cd));
+        }
+      } else {
+        THROW_MAPD_EXCEPTION("User has no access privileges to table " + table_name);
       }
-    } else {
-      THROW_MAPD_EXCEPTION("User has no access privileges to table " + table_name);
+    } catch (std::runtime_error e) {
+      THROW_MAPD_EXCEPTION(e.what());
     }
   }
   _return.fragment_size = td->maxFragRows;
