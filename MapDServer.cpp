@@ -447,6 +447,13 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
+  const auto data_path = boost::filesystem::path(base_path) / "mapd_data";
+  if (!boost::filesystem::exists(data_path)) {
+    std::cerr << "MapD data directory does not exist at '" << base_path << "'. Run initdb " << base_path << std::endl;
+    return 1;
+  }
+
   const auto lock_file = boost::filesystem::path(base_path) / "mapd_server_pid.lck";
   auto pid = std::to_string(getpid());
   int pid_fd = open(lock_file.c_str(), O_RDWR | O_CREAT, 0644);
@@ -494,19 +501,9 @@ int main(int argc, char** argv) {
     LOG(ERROR) << "Data conversion source directory " << db_convert_dir << " does not exist.";
     return 1;
   }
-  boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
-  if (!boost::filesystem::exists(base_path)) {
-    LOG(ERROR) << "Data directory " << base_path << " does not exist.";
-    return 1;
-  }
   const auto system_db_file = boost::filesystem::path(base_path) / "mapd_catalogs" / "mapd";
   if (!boost::filesystem::exists(system_db_file)) {
     LOG(ERROR) << "MapD system catalogs does not exist at " << system_db_file;
-    return 1;
-  }
-  const auto data_path = boost::filesystem::path(base_path) / "mapd_data";
-  if (!boost::filesystem::exists(data_path)) {
-    LOG(ERROR) << "MapD data directory does not exist at " << base_path << ". Run initdb";
     return 1;
   }
   const auto db_file = boost::filesystem::path(base_path) / "mapd_catalogs" / MAPD_SYSTEM_DB;
