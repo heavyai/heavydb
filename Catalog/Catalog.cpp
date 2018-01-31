@@ -61,8 +61,11 @@ bool g_aggregator{false};
 namespace Catalog_Namespace {
 
 const std::string Catalog::physicalTableNameTag_("_shard_#");
-Catalog_Namespace::SysCatalog* mapd_sys_cat(nullptr);
-std::map<std::string, std::shared_ptr<Catalog>> mapd_cat_map;
+std::map<std::string, std::shared_ptr<Catalog>> Catalog::mapd_cat_map_;
+// TODO: as soon as SysCatalog is a singleton and is being used purely for accessing
+// metadata (not running queries on system database) it won't be needed in mapd_cat_map_.
+// Hence, we can make it a simple pointer again.
+std::shared_ptr<SysCatalog> SysCatalog::mapd_sys_cat_(nullptr);
 
 SysCatalog::~SysCatalog() {
   std::lock_guard<std::mutex> lock(cat_mutex_);
@@ -277,7 +280,7 @@ void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name, Catal
           revokeDBObjectPrivilegesFromAllRoles_unsafe(td->tableName, TableDBObjectType, db_cat);
         }
       }
-      mapd_cat_map.erase(name);
+      Catalog::remove(name);
       /* revoke object privileges to the database being dropped */
       revokeDBObjectPrivilegesFromAllRoles_unsafe(name, DatabaseDBObjectType);
     }
@@ -366,12 +369,12 @@ void SysCatalog::createDefaultMapdRoles_unsafe() {
   populateDBObjectKey(dbObject, *this);
 
   // create default non suser role
-  if (!mapd_sys_cat->getMetadataForRole(MAPD_DEFAULT_USER_ROLE)) {
+  if (!mapd_sys_cat_->getMetadataForRole(MAPD_DEFAULT_USER_ROLE)) {
     createRole_unsafe(MAPD_DEFAULT_USER_ROLE);
     grantDBObjectPrivileges_unsafe(MAPD_DEFAULT_USER_ROLE, dbObject, *this);
   }
   // create default suser role
-  if (!mapd_sys_cat->getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
+  if (!mapd_sys_cat_->getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
     createRole_unsafe(MAPD_DEFAULT_ROOT_USER_ROLE);
     dbObject.setPrivileges(AccessPrivileges::ALL);
     grantDBObjectPrivileges_unsafe(MAPD_DEFAULT_ROOT_USER_ROLE, dbObject, *this);
@@ -393,7 +396,7 @@ void SysCatalog::populateDBObjectKey(DBObject& object, const Catalog_Namespace::
   switch (object.getType()) {
     case (DatabaseDBObjectType): {
       Catalog_Namespace::DBMetadata db;
-      if (!mapd_sys_cat->getMetadataForDB(object.getName(), db)) {
+      if (!mapd_sys_cat_->getMetadataForDB(object.getName(), db)) {
         throw std::runtime_error("Failure generating DB object key. Database " + object.getName() + " does not exist.");
       }
       objectKey.dbObjectType = static_cast<int32_t>(DatabaseDBObjectType);
@@ -433,9 +436,9 @@ void SysCatalog::createDBObject(const UserMetadata& user,
     if (user.userName.compare(MAPD_ROOT_USER)) {  // no need to grant to suser, has all privs by default
       grantDBObjectPrivileges_unsafe(user.userName, *object, static_cast<Catalog_Namespace::Catalog&>(*this));
     }
-    Role* user_rl = mapd_sys_cat->getMetadataForUserRole(user.userId);
+    Role* user_rl = mapd_sys_cat_->getMetadataForUserRole(user.userId);
     if (!user_rl) {
-      if (!mapd_sys_cat->getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
+      if (!mapd_sys_cat_->getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
         createDefaultMapdRoles_unsafe();
       }
       if (user.isSuper) {
@@ -443,7 +446,7 @@ void SysCatalog::createDBObject(const UserMetadata& user,
       } else {
         grantRole_unsafe(MAPD_DEFAULT_USER_ROLE, user.userName);
       }
-      user_rl = mapd_sys_cat->getMetadataForUserRole(user.userId);
+      user_rl = mapd_sys_cat_->getMetadataForUserRole(user.userId);
     }
     user_rl->grantPrivileges(*object);
   } catch (std::exception&) {
@@ -461,7 +464,7 @@ void SysCatalog::grantDBObjectPrivileges_unsafe(const std::string& roleName,
     throw runtime_error("Request to grant privileges to " + roleName +
                         " failed because mapd root user has all privileges by default.");
   }
-  Role* rl = mapd_sys_cat->getMetadataForRole(roleName);
+  Role* rl = mapd_sys_cat_->getMetadataForRole(roleName);
   if (!rl) {
     throw runtime_error("Request to grant privileges to " + roleName +
                         " failed because role or user with this name does not exist.");
@@ -504,7 +507,7 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
     throw runtime_error("Request to revoke privileges from " + roleName +
                         " failed because privileges can not be revoked from mapd root user.");
   }
-  Role* rl = mapd_sys_cat->getMetadataForRole(roleName);
+  Role* rl = mapd_sys_cat_->getMetadataForRole(roleName);
   if (!rl) {
     throw runtime_error("Request to revoke privileges from " + roleName +
                         " failed because role or user with this name does not exist.");
@@ -551,7 +554,7 @@ void SysCatalog::revokeDBObjectPrivilegesFromAllRoles_unsafe(const std::string& 
   dbObject.setPrivileges(privs);
   std::vector<std::string> roles = getRoles(true, true, 0);
   for (size_t i = 0; i < roles.size(); i++) {
-    Role* rl = mapd_sys_cat->getMetadataForRole(roles[i]);
+    Role* rl = mapd_sys_cat_->getMetadataForRole(roles[i]);
     assert(rl);
     if (rl->findDbObject(dbObject.getObjectKey())) {
       revokeDBObjectPrivileges_unsafe(roles[i], dbObject, *catalog);
@@ -563,7 +566,7 @@ bool SysCatalog::verifyDBObjectOwnership(const UserMetadata& user,
                                          DBObject object,
                                          const Catalog_Namespace::Catalog& catalog) {
   if (object.getType() == TableDBObjectType) {
-    Role* rl = mapd_sys_cat->getMetadataForUserRole(user.userId);
+    Role* rl = mapd_sys_cat_->getMetadataForUserRole(user.userId);
     if (rl) {
       populateDBObjectKey(object, catalog);
       if (rl->findDbObject(object.getObjectKey()) &&
@@ -582,7 +585,7 @@ void SysCatalog::getDBObjectPrivileges(const std::string& roleName,
     throw runtime_error("Request to show privileges from " + roleName +
                         " failed because mapd root user has all privileges by default.");
   }
-  Role* rl = mapd_sys_cat->getMetadataForRole(roleName);
+  Role* rl = mapd_sys_cat_->getMetadataForRole(roleName);
   if (!rl) {
     throw runtime_error("Request to show privileges for " + roleName +
                         " failed because role or user with this name does not exist.");
@@ -723,11 +726,11 @@ bool SysCatalog::checkPrivileges(const UserMetadata& user, std::vector<DBObject>
   if (user.isSuper) {
     return true;
   }
-  Role* user_rl = mapd_sys_cat->getMetadataForUserRole(user.userId);
+  Role* user_rl = mapd_sys_cat_->getMetadataForUserRole(user.userId);
   if (!user_rl) {
     sqliteConnector_.query("BEGIN TRANSACTION");
     try {
-      if (!mapd_sys_cat->getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
+      if (!mapd_sys_cat_->getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
         createDefaultMapdRoles_unsafe();
       }
       if (user.isSuper) {
@@ -735,7 +738,7 @@ bool SysCatalog::checkPrivileges(const UserMetadata& user, std::vector<DBObject>
       } else {
         grantRole_unsafe(MAPD_DEFAULT_USER_ROLE, user.userName);
       }
-      user_rl = mapd_sys_cat->getMetadataForUserRole(user.userId);
+      user_rl = mapd_sys_cat_->getMetadataForUserRole(user.userId);
     } catch (std::exception&) {
       sqliteConnector_.query("ROLLBACK TRANSACTION");
       throw;
@@ -752,7 +755,7 @@ bool SysCatalog::checkPrivileges(const UserMetadata& user, std::vector<DBObject>
 
 bool SysCatalog::checkPrivileges(const std::string& userName, std::vector<DBObject>& privObjects) {
   UserMetadata user;
-  if (!mapd_sys_cat->getMetadataForUser(userName, user)) {
+  if (!mapd_sys_cat_->getMetadataForUser(userName, user)) {
     throw runtime_error("Request to check privileges for user " + userName +
                         " failed because user with this name does not exist.");
   }
@@ -779,9 +782,9 @@ Role* SysCatalog::getMetadataForUserRole(int32_t userId) const {
 
 bool SysCatalog::isRoleGrantedToUser(const int32_t userId, const std::string& roleName) const {
   bool rc = false;
-  auto user_rl = mapd_sys_cat->getMetadataForUserRole(userId);
+  auto user_rl = mapd_sys_cat_->getMetadataForUserRole(userId);
   if (user_rl) {
-    auto rl = mapd_sys_cat->getMetadataForRole(roleName);
+    auto rl = mapd_sys_cat_->getMetadataForRole(roleName);
     if (rl && user_rl->hasRole(rl)) {
       rc = true;
     }
@@ -790,7 +793,7 @@ bool SysCatalog::isRoleGrantedToUser(const int32_t userId, const std::string& ro
 }
 
 bool SysCatalog::hasRole(const std::string& roleName, bool userPrivateRole) const {
-  Role* rl = mapd_sys_cat->getMetadataForRole(roleName);
+  Role* rl = mapd_sys_cat_->getMetadataForRole(roleName);
   return rl && (userPrivateRole == rl->isUserPrivateRole());
 }
 
@@ -812,7 +815,7 @@ std::vector<std::string> SysCatalog::getRoles(bool userPrivateRole, bool isSuper
 
 std::vector<DBObject*> SysCatalog::getRoleObjects(const std::string& roleName) const {
   std::vector<DBObject*> db_objects;
-  Role* rl = mapd_sys_cat->getMetadataForRole(roleName);
+  Role* rl = mapd_sys_cat_->getMetadataForRole(roleName);
   if (rl) {
     for (auto dbObjectIt = rl->getDbObject()->begin(); dbObjectIt != rl->getDbObject()->end(); ++dbObjectIt) {
       db_objects.push_back(dbObjectIt->second);
@@ -841,8 +844,8 @@ std::vector<std::string> SysCatalog::getUserRoles(const int32_t userId) {
 std::vector<DBObject*> SysCatalog::getUserObjects(const std::string& userName) const {
   std::vector<DBObject*> db_objects;
   UserMetadata user;
-  if (mapd_sys_cat->getMetadataForUser(userName, user)) {
-    Role* role = mapd_sys_cat->getMetadataForUserRole(user.userId);
+  if (mapd_sys_cat_->getMetadataForUser(userName, user)) {
+    Role* role = mapd_sys_cat_->getMetadataForUserRole(user.userId);
     if (role) {
       for (auto dbObjectIt = role->getDbObject()->begin(); dbObjectIt != role->getDbObject()->end(); ++dbObjectIt) {
         db_objects.push_back(dbObjectIt->second);
@@ -857,8 +860,8 @@ AccessPrivileges SysCatalog::getUserObjects(const std::string& userName,
                                             const std::string& objectName) const {
   AccessPrivileges dbObjectPrivs;
   UserMetadata user;
-  if (mapd_sys_cat->getMetadataForUser(userName, user)) {
-    Role* role = mapd_sys_cat->getMetadataForUserRole(user.userId);
+  if (mapd_sys_cat_->getMetadataForUser(userName, user)) {
+    Role* role = mapd_sys_cat_->getMetadataForUserRole(user.userId);
     if (role) {
       DBObject object(objectName, objectType);
       populateDBObjectKey(object, static_cast<const Catalog_Namespace::Catalog&>(*this));
@@ -874,6 +877,7 @@ AccessPrivileges SysCatalog::getUserObjects(const std::string& userName,
 Catalog::Catalog(const string& basePath,
                  const string& dbname,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+                 const std::vector<LeafHostInfo>& string_dict_hosts,
                  LdapMetadata ldapMetadata,
                  bool is_initdb,
                  std::shared_ptr<Calcite> calcite,
@@ -881,6 +885,7 @@ Catalog::Catalog(const string& basePath,
     : basePath_(basePath),
       sqliteConnector_(dbname, basePath + "/mapd_catalogs/"),
       dataMgr_(dataMgr),
+      string_dict_hosts_(string_dict_hosts),
       calciteMgr_(calcite),
       nextTempTableId_(MAPD_TEMP_TABLE_START_ID),
       nextTempDictId_(MAPD_TEMP_DICT_START_ID),
@@ -2392,24 +2397,20 @@ bool SessionInfo::checkDBAccessPrivileges(const AccessPrivileges& privs) const {
   }
 }
 
-void SessionInfo::setSysCatalog(Catalog_Namespace::SysCatalog* sys_cat) {
-  mapd_sys_cat = sys_cat;
+void Catalog::set(const std::string& dbName, std::shared_ptr<Catalog> cat) {
+  mapd_cat_map_[dbName] = cat;
 }
 
-Catalog_Namespace::SysCatalog* SessionInfo::getSysCatalog() const {
-  return mapd_sys_cat;
-}
-
-void SessionInfo::setDatabaseCatalog(const std::string& dbName, std::shared_ptr<Catalog> cat) {
-  mapd_cat_map[dbName] = cat;
-}
-
-std::shared_ptr<Catalog> SessionInfo::getDatabaseCatalog(const std::string& dbName) const {
-  auto cat_it = mapd_cat_map.find(dbName);
-  if (cat_it != mapd_cat_map.end()) {
+std::shared_ptr<Catalog> Catalog::get(const std::string& dbName) {
+  auto cat_it = mapd_cat_map_.find(dbName);
+  if (cat_it != mapd_cat_map_.end()) {
     return cat_it->second;
   }
   return nullptr;
+}
+
+void Catalog::remove(const std::string& dbName) {
+  mapd_cat_map_.erase(dbName);
 }
 
 void SysCatalog::createRole(const std::string& roleName, const bool& userPrivateRole) {
@@ -2441,4 +2442,3 @@ void SysCatalog::revokeDBObjectPrivileges(const std::string& roleName,
 }
 
 }  // Catalog_Namespace
-

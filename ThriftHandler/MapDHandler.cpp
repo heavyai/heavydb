@@ -96,6 +96,8 @@
 
 #include "QueryEngine/ArrowUtil.h"
 
+using Catalog_Namespace::SysCatalog;
+using Catalog_Namespace::Catalog;
 using namespace Lock_Namespace;
 
 #define INVALID_SESSION_ID ""
@@ -193,8 +195,12 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       LOG(INFO) << "Started in Hybrid mode" << std::endl;
   }
 
-  sys_cat_.reset(
-      new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_, ldapMetadata, calcite_, false, access_priv_check_));
+  auto sys_cat = std::make_shared<SysCatalog>(base_data_path_, data_mgr_, string_leaves_, ldapMetadata, calcite_, false, access_priv_check_);
+  // NOTE (max): use system catalog for simple queries on system database as well.
+  // As soon as SysCatalog is refactored into a singleton and is being used everywhere to access
+  // metadata, this should be unnecessary.
+  Catalog::set(MAPD_SYSTEM_DB, sys_cat);
+  SysCatalog::set(sys_cat);
   import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   start_time_ = std::time(nullptr);
 
@@ -252,7 +258,7 @@ std::string generate_random_string(const size_t len) {
 void MapDHandler::internal_connect(TSessionId& session, const std::string& user, const std::string& dbname) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   Catalog_Namespace::UserMetadata user_meta;
-  if (!sys_cat_->getMetadataForUser(user, user_meta)) {
+  if (!SysCatalog::get()->getMetadataForUser(user, user_meta)) {
     THROW_MAPD_EXCEPTION(std::string("User ") + user + " does not exist.");
   }
   connectImpl(session, user, std::string(""), dbname, user_meta);
@@ -264,11 +270,11 @@ void MapDHandler::connect(TSessionId& session,
                           const std::string& dbname) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   Catalog_Namespace::UserMetadata user_meta;
-  if (!sys_cat_->getMetadataForUser(user, user_meta)) {
+  if (!SysCatalog::get()->getMetadataForUser(user, user_meta)) {
     THROW_MAPD_EXCEPTION(std::string("User ") + user + " does not exist.");
   }
   if (!super_user_rights_) {
-    if (!sys_cat_->checkPasswordForUser(passwd, user_meta)) {
+    if (!SysCatalog::get()->checkPasswordForUser(passwd, user_meta)) {
       THROW_MAPD_EXCEPTION(std::string("Password for User ") + user + " is incorrect.");
     }
   }
@@ -281,16 +287,16 @@ void MapDHandler::connectImpl(TSessionId& session,
                               const std::string& dbname,
                               Catalog_Namespace::UserMetadata& user_meta) {
   Catalog_Namespace::DBMetadata db_meta;
-  if (!sys_cat_->getMetadataForDB(dbname, db_meta)) {
+  if (!SysCatalog::get()->getMetadataForDB(dbname, db_meta)) {
     THROW_MAPD_EXCEPTION(std::string("Database ") + dbname + " does not exist.");
   }
-  if (!sys_cat_->isAccessPrivCheckEnabled()) {
+  if (!SysCatalog::get()->isAccessPrivCheckEnabled()) {
     // insert privilege is being treated as access allowed for now
     Privileges privs;
     privs.insert_ = true;
     privs.select_ = false;
     // use old style check for DB object level privs code only to check user access to the database
-    if (!sys_cat_->checkPrivileges(user_meta, db_meta, privs)) {
+    if (!SysCatalog::get()->checkPrivileges(user_meta, db_meta, privs)) {
       THROW_MAPD_EXCEPTION(std::string("User ") + user + " is not authorized to access database " + dbname);
     }
   }
@@ -301,18 +307,12 @@ void MapDHandler::connectImpl(TSessionId& session,
     if (session_it == sessions_.end())
       break;
   }
-  auto session_info_ptr = sessions_[session];
-  auto cat_it = session_info_ptr->getDatabaseCatalog(dbname);
+  auto cat_it = Catalog::get(dbname);
   if (cat_it == nullptr) {
-    auto cat_ptr = std::make_shared<Catalog_Namespace::Catalog>(
-        base_data_path_, db_meta, data_mgr_, string_leaves_, calcite_, access_priv_check_);
-    session_info_ptr->setDatabaseCatalog(dbname, cat_ptr);
-
+    auto cat_ptr =
+        std::make_shared<Catalog>(base_data_path_, db_meta, data_mgr_, string_leaves_, calcite_, access_priv_check_);
+    Catalog::set(dbname, cat_ptr);
     sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_ptr, user_meta, executor_device_type_, session));
-    if (dbname == MAPD_SYSTEM_DB) {
-      auto mapd_session_ptr = sessions_[session];
-      mapd_session_ptr->setSysCatalog(static_cast<Catalog_Namespace::SysCatalog*>(cat_ptr.get()));
-    }
   } else {
     sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_it, user_meta, executor_device_type_, session));
   }
@@ -906,7 +906,7 @@ void MapDHandler::get_role(std::vector<std::string>& roles,
   auto session_it = get_session_it(session);
   auto session_info_ptr = session_it->second.get();
   auto& cat = session_info_ptr->get_catalog();
-  auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
+  auto& sys_cat = static_cast<SysCatalog&>(cat);
   if (sys_cat.hasRole(roleName, userPrivateRole)) {
     if ((session_info_ptr->get_currentUser().isSuper) ||
         (!session_info_ptr->get_currentUser().isSuper &&
@@ -921,7 +921,7 @@ void MapDHandler::get_all_roles(std::vector<std::string>& roles, const TSessionI
   auto session_it = get_session_it(session);
   auto session_info_ptr = session_it->second.get();
   auto& cat = session_info_ptr->get_catalog();
-  auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
+  auto& sys_cat = static_cast<SysCatalog&>(cat);
   roles = sys_cat.getRoles(
       userPrivateRole, session_info_ptr->get_currentUser().isSuper, session_info_ptr->get_currentUser().userId);
 }
@@ -941,7 +941,7 @@ void MapDHandler::get_db_objects_for_role(std::vector<TDBObject>& TDBObjectsForR
   auto session_it = get_session_it(session);
   auto session_info_ptr = session_it->second.get();
   auto& cat = session_info_ptr->get_catalog();
-  auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
+  auto& sys_cat = static_cast<SysCatalog&>(cat);
   Role* rl = sys_cat.getMetadataForRole(roleName);
   if (rl) {
     for (auto dbObjectIt = rl->getDbObject()->begin(); dbObjectIt != rl->getDbObject()->end(); ++dbObjectIt) {
@@ -979,7 +979,7 @@ void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
   auto session_it = get_session_it(session);
   auto session_info_ptr = session_it->second.get();
   auto& cat = session_info_ptr->get_catalog();
-  auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
+  auto& sys_cat = static_cast<SysCatalog&>(cat);
   Catalog_Namespace::UserMetadata user_meta;
   if (sys_cat.getMetadataForUser(userName, user_meta)) {
     bool get_roles = false;
@@ -1062,7 +1062,7 @@ void MapDHandler::get_result_row_for_pixel(TPixelTableRowResult& _return,
   LOG(INFO) << "get_result_row_for_pixel-COMPLETED nonce: " << nonce << ", Execute Time: " << time_ms << " (ms)";
 }
 
-TColumnType MapDHandler::populateThriftColumnType(const Catalog_Namespace::Catalog* cat, const ColumnDescriptor* cd) {
+TColumnType MapDHandler::populateThriftColumnType(const Catalog* cat, const ColumnDescriptor* cd) {
   TColumnType col_type;
   col_type.col_name = cd->columnName;
   col_type.src_name = cd->sourceName;
@@ -1205,14 +1205,14 @@ bool MapDHandler::hasTableAccessPrivileges(const TableDescriptor* td, const TSes
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
   auto user_metadata = session_info.get_currentUser();
-  auto& sys_cat = *session_info.getSysCatalog();
+  auto sys_cat = SysCatalog::get();
   DBObject dbObject(td->tableName, TableDBObjectType);
-  sys_cat.populateDBObjectKey(dbObject, cat);
+  sys_cat->populateDBObjectKey(dbObject, cat);
   std::vector<DBObject> privObjects;
   dbObject.setPrivileges(AccessPrivileges::SELECT);
   privObjects.push_back(dbObject);
   for (size_t i = 0; i < 4; i++) {
-    if (sys_cat.checkPrivileges(user_metadata, privObjects)) {
+    if (sys_cat->checkPrivileges(user_metadata, privObjects)) {
       hasAccessPrivs = true;
       break;
     }
@@ -1287,7 +1287,7 @@ void MapDHandler::get_users(std::vector<std::string>& user_names, const TSession
   if (!isUserAuthorized(session_info, std::string("get_users"))) {
     return;
   }
-  std::list<Catalog_Namespace::UserMetadata> user_list = sys_cat_->getAllUserMetadata();
+  std::list<Catalog_Namespace::UserMetadata> user_list = SysCatalog::get()->getAllUserMetadata();
   for (auto u : user_list) {
     user_names.push_back(u.userName);
   }
@@ -1300,13 +1300,13 @@ void MapDHandler::get_version(std::string& version) {
 // TODO This need to be corrected for distributed they are only hitting aggr
 void MapDHandler::clear_gpu_memory(const TSessionId& session) {
   const auto session_info = get_session(session);
-  sys_cat_->get_dataMgr().clearMemory(MemoryLevel::GPU_LEVEL);
+  SysCatalog::get()->get_dataMgr().clearMemory(MemoryLevel::GPU_LEVEL);
 }
 
 // TODO This need to be corrected for distributed they are only hitting aggr
 void MapDHandler::clear_cpu_memory(const TSessionId& session) {
   const auto session_info = get_session(session);
-  sys_cat_->get_dataMgr().clearMemory(MemoryLevel::CPU_LEVEL);
+  SysCatalog::get()->get_dataMgr().clearMemory(MemoryLevel::CPU_LEVEL);
 }
 
 TSessionId MapDHandler::getInvalidSessionId() const {
@@ -1321,10 +1321,10 @@ void MapDHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
   Data_Namespace::MemoryLevel mem_level;
   if (!memory_level.compare("gpu")) {
     mem_level = Data_Namespace::MemoryLevel::GPU_LEVEL;
-    internal_memory = sys_cat_->get_dataMgr().getMemoryInfo(MemoryLevel::GPU_LEVEL);
+    internal_memory = SysCatalog::get()->get_dataMgr().getMemoryInfo(MemoryLevel::GPU_LEVEL);
   } else {
     mem_level = Data_Namespace::MemoryLevel::CPU_LEVEL;
-    internal_memory = sys_cat_->get_dataMgr().getMemoryInfo(MemoryLevel::CPU_LEVEL);
+    internal_memory = SysCatalog::get()->get_dataMgr().getMemoryInfo(MemoryLevel::CPU_LEVEL);
   }
 
   for (auto memInfo : internal_memory) {
@@ -1359,8 +1359,8 @@ void MapDHandler::get_databases(std::vector<TDBInfo>& dbinfos, const TSessionId&
   if (!isUserAuthorized(session_info, std::string("get_databases"))) {
     return;
   }
-  std::list<Catalog_Namespace::DBMetadata> db_list = sys_cat_->getAllDBMetadata();
-  std::list<Catalog_Namespace::UserMetadata> user_list = sys_cat_->getAllUserMetadata();
+  std::list<Catalog_Namespace::DBMetadata> db_list = SysCatalog::get()->getAllDBMetadata();
+  std::list<Catalog_Namespace::UserMetadata> user_list = SysCatalog::get()->getAllUserMetadata();
   for (auto d : db_list) {
     TDBInfo dbinfo;
     dbinfo.db_name = d.dbName;
@@ -1407,7 +1407,7 @@ void MapDHandler::set_execution_mode(const TSessionId& session, const TExecuteMo
 
 namespace {
 
-void check_table_not_sharded(const Catalog_Namespace::Catalog& cat, const std::string& table_name) {
+void check_table_not_sharded(const Catalog& cat, const std::string& table_name) {
   const auto td = cat.getMetadataForTable(table_name);
   if (td && td->nShards) {
     throw std::runtime_error("Cannot import a sharded table directly to a leaf");
@@ -2216,7 +2216,7 @@ void MapDHandler::check_table_load_privileges(const Catalog_Namespace::SessionIn
   auto user_metadata = session_info.get_currentUser();
   auto& cat = session_info.get_catalog();
   if (cat.isAccessPrivCheckEnabled()) {
-    auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
+    auto& sys_cat = static_cast<SysCatalog&>(cat);
     DBObject dbObject(table_name, TableDBObjectType);
     sys_cat.populateDBObjectKey(dbObject, cat);
     dbObject.setPrivileges(AccessPrivileges::INSERT);
@@ -2472,8 +2472,7 @@ void MapDHandler::convert_rows(TQueryResult& _return,
   }
 }
 
-TRowDescriptor MapDHandler::fixup_row_descriptor(const TRowDescriptor& row_desc,
-                                                 const Catalog_Namespace::Catalog& cat) {
+TRowDescriptor MapDHandler::fixup_row_descriptor(const TRowDescriptor& row_desc, const Catalog& cat) {
   TRowDescriptor fixedup_row_desc;
   for (const TColumnType& col_desc : row_desc) {
     auto fixedup_col_desc = col_desc;
@@ -2534,7 +2533,7 @@ void MapDHandler::convert_result(TQueryResult& _return, const ResultSet& results
 
 namespace {
 
-void check_table_not_sharded(const Catalog_Namespace::Catalog& cat, const int table_id) {
+void check_table_not_sharded(const Catalog& cat, const int table_id) {
   const auto td = cat.getMetadataForTable(table_id);
   CHECK(td);
   if (td->nShards) {
@@ -2721,7 +2720,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
 
 void MapDHandler::execute_distributed_copy_statement(Parser::CopyTableStmt* copy_stmt,
                                                      const Catalog_Namespace::SessionInfo& session_info) {
-  auto importer_factory = [&session_info, this](const Catalog_Namespace::Catalog& catalog,
+  auto importer_factory = [&session_info, this](const Catalog& catalog,
                                                 const TableDescriptor* td,
                                                 const std::string& file_path,
                                                 const Importer_NS::CopyParams& copy_params) {

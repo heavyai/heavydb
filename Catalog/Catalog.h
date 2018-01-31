@@ -183,6 +183,7 @@ class Catalog {
   Catalog(const std::string& basePath,
           const std::string& dbname,
           std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+          const std::vector<LeafHostInfo>& string_dict_hosts,
           LdapMetadata ldapMetadata,
           bool is_initdb,
           std::shared_ptr<Calcite> calcite,
@@ -292,6 +293,10 @@ class Catalog {
   void setTableEpoch(const int db_id, const int table_id, const int new_epoch);
   int getDatabaseId() const { return currentDB_.dbId; }
 
+  static void set(const std::string& dbName, std::shared_ptr<Catalog> cat);
+  static std::shared_ptr<Catalog> get(const std::string& dbName);
+  static void remove(const std::string& dbName);
+
  protected:
   void CheckAndExecuteMigrations();
   void updateDictionaryNames();
@@ -359,6 +364,9 @@ class Catalog {
   int nextTempTableId_;
   int nextTempDictId_;
   const bool access_priv_check_;  // if true, verify user access privileges to DB objects
+
+ private:
+  static std::map<std::string, std::shared_ptr<Catalog>> mapd_cat_map_;
 };
 
 /*
@@ -369,13 +377,26 @@ class SysCatalog : public Catalog {
  public:
   SysCatalog(const std::string& basePath,
              std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+             const std::vector<LeafHostInfo>& string_dict_hosts,
              LdapMetadata ldapMetadata,
              std::shared_ptr<Calcite> calcite,
              bool is_initdb = false,
              const bool access_priv_check = false)
-      : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, ldapMetadata, is_initdb, calcite, access_priv_check) {
+      : Catalog(basePath,
+                MAPD_SYSTEM_DB,
+                dataMgr,
+                string_dict_hosts,
+                ldapMetadata,
+                is_initdb,
+                calcite,
+                access_priv_check) {
     if (access_priv_check) {
       initObjectPrivileges();
+    }
+    if (!is_initdb) {
+      Catalog_Namespace::DBMetadata db_meta;
+      CHECK(getMetadataForDB(MAPD_SYSTEM_DB, db_meta));
+      set_currentDB(db_meta);
     }
   }
 
@@ -384,14 +405,12 @@ class SysCatalog : public Catalog {
              std::shared_ptr<Calcite> calcite,
              bool is_initdb = false,
              const bool access_priv_check = false)
-      : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, LdapMetadata(), is_initdb, calcite, access_priv_check) {
+      : SysCatalog(basePath, dataMgr, {}, LdapMetadata(), calcite, is_initdb, access_priv_check) {
     if (!is_initdb) {
       migrateSysCatalogSchema();
     }
-    if (access_priv_check) {
-      initObjectPrivileges();
-    }
   }
+
   virtual ~SysCatalog();
   void initDB();
   void initObjectPrivileges();
@@ -437,8 +456,14 @@ class SysCatalog : public Catalog {
   std::vector<std::string> getRoles(bool userPrivateRole, bool isSuper, const int32_t userId);
   std::vector<std::string> getUserRoles(const int32_t userId);
 
+  static void set(std::shared_ptr<SysCatalog> sys_cat) {
+    CHECK(mapd_sys_cat_ == nullptr);
+    mapd_sys_cat_ = sys_cat;
+  }
+  static std::shared_ptr<SysCatalog> get() { return mapd_sys_cat_; }
+
  private:
-  void migrateSysCatalogSchema();  
+  void migrateSysCatalogSchema();
   void dropUserRole(const std::string& userName);
   std::vector<DBObject*> getRoleObjects(const std::string& roleName) const;
   AccessPrivileges getRoleObjects(const std::string& roleName,
@@ -474,6 +499,8 @@ class SysCatalog : public Catalog {
     }
     sqliteConnector_.query("END TRANSACTION");
   }
+
+  static std::shared_ptr<SysCatalog> mapd_sys_cat_;
 };
 
 /*
@@ -500,10 +527,6 @@ class SessionInfo {
   time_t get_last_used_time() const { return last_used_time; }
   void update_time() { last_used_time = time(0); }
   bool checkDBAccessPrivileges(const AccessPrivileges& privs) const;
-  void setSysCatalog(Catalog_Namespace::SysCatalog* sys_cat);
-  Catalog_Namespace::SysCatalog* getSysCatalog() const;
-  void setDatabaseCatalog(const std::string& dbName, std::shared_ptr<Catalog> cat);
-  std::shared_ptr<Catalog> getDatabaseCatalog(const std::string& dbName) const;
 
  private:
   std::shared_ptr<Catalog> catalog_;

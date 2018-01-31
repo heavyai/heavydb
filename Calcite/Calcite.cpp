@@ -222,15 +222,10 @@ string Calcite::process(const Catalog_Namespace::SessionInfo& session_info,
         dbObject.setPrivileges(AccessPrivileges::SELECT);
         privObjects.push_back(dbObject);
       }
-      if (!session_info.getSysCatalog()) {
-        throw std::runtime_error(
-            "After starting mapd server please login as mapd root user to mapd system DB prior to any other logins.");
-      } else {
-        if (!(static_cast<Catalog_Namespace::SysCatalog&>(catalog))
-                 .checkPrivileges(session_info.get_currentUser(), privObjects)) {
-          throw std::runtime_error("Violation of access privileges: user " + session_info.get_currentUser().userName +
-                                   " has no proper select privileges.");
-        }
+      if (!(static_cast<Catalog_Namespace::SysCatalog&>(catalog))
+               .checkPrivileges(session_info.get_currentUser(), privObjects)) {
+        throw std::runtime_error("Violation of access privileges: user " + session_info.get_currentUser().userName +
+                                 " has no proper select privileges.");
       }
     }
   }

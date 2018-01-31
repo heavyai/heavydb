@@ -312,7 +312,6 @@ class MapDHandler : public MapDIf {
                    const std::string& dbname,
                    Catalog_Namespace::UserMetadata& user_meta);
 
-  std::unique_ptr<Catalog_Namespace::SysCatalog> sys_cat_;
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
   std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> sessions_;
 
