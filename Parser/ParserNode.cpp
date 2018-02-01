@@ -2135,6 +2135,9 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   if (td->isView)
     throw std::runtime_error(*table + " is a view.  Use DROP VIEW.");
+
+  auto chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(catalog, *table, LockType::CheckpointLock);
+  auto upddelLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(catalog, *table, LockType::UpdateDeleteLock);
   catalog.dropTable(td);
 }
 

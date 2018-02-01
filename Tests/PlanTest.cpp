@@ -304,6 +304,8 @@ void drop_views_and_tables() {
   EXPECT_NO_THROW(run_ddl("drop table if exists skinny;"));
   EXPECT_NO_THROW(run_ddl("drop table if exists smallfrag;"));
   EXPECT_NO_THROW(run_ddl("drop table if exists testdict;"));
+  // non-existent table shouldn't throw either (for PR# 1030 to fix issue #1029)
+  EXPECT_NO_THROW(run_ddl("drop table if exists foxoxoxo;"));
 }
 
 int main(int argc, char* argv[]) {

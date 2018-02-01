@@ -2632,11 +2632,6 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
           chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
               session_info.get_catalog(), stmtp->get_table(), LockType::CheckpointLock);
           // [ write UpdateDeleteLocks ] lock is deferred in InsertOrderFragmenter::deleteFragments
-        } else if (auto stmtp = dynamic_cast<Parser::DropTableStmt*>(stmt.get())) {
-          chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-              session_info.get_catalog(), *stmtp->get_table(), LockType::CheckpointLock);
-          upddelLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-              session_info.get_catalog(), *stmtp->get_table(), LockType::UpdateDeleteLock);
         } else if (auto stmtp = dynamic_cast<Parser::TruncateTableStmt*>(stmt.get())) {
           chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
               session_info.get_catalog(), *stmtp->get_table(), LockType::CheckpointLock);
