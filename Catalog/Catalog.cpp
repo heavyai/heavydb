@@ -30,7 +30,9 @@
 #include <list>
 #include <memory>
 #include <random>
+
 #include "DataMgr/LockMgr.h"
+
 #include "../Fragmenter/Fragmenter.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "../Parser/ParserNode.h"
@@ -1805,9 +1807,8 @@ void Catalog::createTable(TableDescriptor& td,
   columns.push_back(cd);
 
   td.nColumns = columns.size();
-
+  sqliteConnector_.query("BEGIN TRANSACTION");
   if (td.persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
-    sqliteConnector_.query("BEGIN TRANSACTION");
     try {
       sqliteConnector_.query_with_text_params(
           "INSERT INTO mapd_tables (name, ncolumns, isview, fragments, frag_type, max_frag_rows, max_chunk_size, "
@@ -1870,9 +1871,9 @@ void Catalog::createTable(TableDescriptor& td,
       }
     } catch (std::exception& e) {
       sqliteConnector_.query("ROLLBACK TRANSACTION");
-      throw;
+      throw e;
     }
-    sqliteConnector_.query("END TRANSACTION");
+
   } else {  // Temporary table
     td.tableId = nextTempTableId_++;
     int colId = 1;
@@ -1900,8 +1901,16 @@ void Catalog::createTable(TableDescriptor& td,
       cds.push_back(cd);
     }
   }
-  addTableToMap(td, cds, dds);
-  calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
+  try {
+    addTableToMap(td, cds, dds);
+    calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    removeTableFromMap(td.tableName, td.tableId);
+    throw e;
+  }
+
+  sqliteConnector_.query("END TRANSACTION");
 }
 
 // returns the table epoch or -1 if there is something wrong with the shared epoch
@@ -2340,7 +2349,8 @@ void Catalog::createFrontendView(FrontendViewDescriptor& vd) {
               vd.viewState, vd.imageHash, vd.viewMetadata, vd.viewName, std::to_string(vd.userId)});
     } else {
       sqliteConnector_.query_with_text_params(
-          "INSERT INTO mapd_frontend_views (name, view_state, image_hash, view_metadata, update_time, userid) VALUES "
+          "INSERT INTO mapd_frontend_views (name, view_state, image_hash, view_metadata, update_time, userid) "
+          "VALUES "
           "(?,?,?,?, "
           "datetime('now'), ?)",
           std::vector<std::string>{
