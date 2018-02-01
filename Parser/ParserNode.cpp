@@ -49,7 +49,7 @@
 #include "../QueryEngine/RelAlgExecutor.h"
 
 size_t g_leaf_count{0};
-bool g_fast_strcmp{false};
+bool g_fast_strcmp{true};
 
 using namespace Lock_Namespace;
 

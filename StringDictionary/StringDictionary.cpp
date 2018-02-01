@@ -246,6 +246,7 @@ void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, 
     return;
   }
   size_t out_idx{0};
+
   for (const auto& str : string_vec) {
     const auto string_id = getOrAddImpl(str);
     const bool invalid = string_id > max_valid_int_value<T>();
@@ -445,7 +446,7 @@ std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
   if (str_count_ == 0) {
     return ret;
   }
-  if (sorted_cache.empty()) {
+  if (sorted_cache.size() < str_count_) {
     buildSortedCache();
   }
   StringDictionary::compare_cache_value_t* cache_index = compare_cache_.get(pattern);
@@ -694,13 +695,11 @@ int32_t StringDictionary::getOrAddImpl(const std::string& str) noexcept {
     str_ids_[bucket] = static_cast<int32_t>(str_count_);
     ++str_count_;
     invalidateInvertedIndex();
-    if (!sorted_cache.empty()) {
-      insertInSortedCache(str, str_ids_[bucket]);
-    }
   }
   return str_ids_[bucket];
 }
 
+/* TO BE DELETED
 void StringDictionary::insertInSortedCache(std::string str, int32_t str_id) {
   auto idx = binary_search_cache(str);
   auto itr = sorted_cache.begin();
@@ -715,6 +714,7 @@ void StringDictionary::insertInSortedCache(std::string str, int32_t str_id) {
     sorted_cache.emplace(itr + idx->index, str_id);
   }
 }
+*/
 
 std::string StringDictionary::getStringChecked(const int string_id) const noexcept {
   const auto str_canary = getStringFromStorage(string_id);
@@ -886,40 +886,44 @@ bool StringDictionary::checkpoint() noexcept {
 
 void StringDictionary::buildSortedCache() {
   // This method is not thread-safe.
-  if (!sorted_cache.empty()) {
-    sorted_cache.clear();
+  const auto cur_cache_size = sorted_cache.size();
+  std::vector<int32_t> temp_sorted_cache;
+  for (size_t i = cur_cache_size; i < str_count_; i++) {
+    temp_sorted_cache.push_back(i);
   }
-  sorted_cache.reserve(str_count_);
-  for (size_t i = 0; i < str_count_; i++) {
-    sorted_cache.push_back(i);
-  }
-  sortCache();
-}
-/*
-namespace {
-  struct lessthan {
-  inline bool operator()(const int32_t &x, const int32_t &y) const {
-    return x.a < y.a;
-  }
-};
-
-struct bracket {
-  inline unsigned char operator()(const int32_t &x, size_t offset) const {
-    return x.a[offset];
-  }
-};
-
-struct getsize {
-  inline size_t operator()(const int32_t &x) const{ return x.a.size(); }
-};
+  sortCache(&temp_sorted_cache);
+  mergeSortedCache(temp_sorted_cache);
 }
 
-*/
-void StringDictionary::sortCache() {
+void StringDictionary::mergeSortedCache(std::vector<int32_t> temp_sorted_cache) {
+  // this method is not thread safe
+  std::vector<int32_t> updated_cache(temp_sorted_cache.size() + sorted_cache.size());
+  size_t t_idx = 0, s_idx = 0, idx = 0;
+  for (; t_idx < temp_sorted_cache.size() && s_idx < sorted_cache.size(); idx++) {
+    auto t_string = getStringFromStorage(temp_sorted_cache[t_idx]);
+    auto s_string = getStringFromStorage(sorted_cache[s_idx]);
+    const auto insert_from_temp_cache =
+        string_lt(std::get<0>(t_string), std::get<1>(t_string), std::get<0>(s_string), std::get<1>(s_string));
+    if (insert_from_temp_cache) {
+      updated_cache[idx] = temp_sorted_cache[t_idx++];
+    } else {
+      updated_cache[idx] = sorted_cache[s_idx++];
+    }
+  }
+  while (t_idx < temp_sorted_cache.size()) {
+    updated_cache[idx++] = temp_sorted_cache[t_idx++];
+  }
+  while (s_idx < sorted_cache.size()) {
+    updated_cache[idx++] = sorted_cache[s_idx++];
+  }
+  sorted_cache.swap(updated_cache);
+}
+
+void StringDictionary::sortCache(std::vector<int32_t>* cache) {
   // This method is not thread-safe.
   boost::sort::spreadsort::string_sort(
-      sorted_cache.begin(),
-      sorted_cache.end(),
+      cache->begin(),
+      cache->end(),
       [this](int32_t a, size_t offset) {
         auto a_str = this->getStringFromStorage(a);
         return (std::get<0>(a_str))[offset];

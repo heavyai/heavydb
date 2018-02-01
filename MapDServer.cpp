@@ -301,7 +301,7 @@ int main(int argc, char** argv) {
   desc_adv.add_options()("allow-loop-joins",
                          po::value<bool>(&allow_loop_joins)->default_value(allow_loop_joins)->implicit_value(true),
                          "Enable loop joins");
-  desc_adv.add_options()("disable-fast-strcmp",
+  desc_adv.add_options()("fast-strcmp",
                          po::value<bool>(&g_fast_strcmp)->default_value(g_fast_strcmp)->implicit_value(false),
                          "Disable fast string comparison");
   desc_adv.add_options()("res-gpu-mem",
