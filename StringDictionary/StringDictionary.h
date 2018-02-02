@@ -113,8 +113,8 @@ class StringDictionary {
   void invalidateInvertedIndex() noexcept;
   void buildSortedCache();
   void insertInSortedCache(std::string str, int32_t str_id);
-  void sortCache(std::vector<int32_t>* cache);
-  void mergeSortedCache(std::vector<int32_t> temp_sorted_cache);
+  void sortCache(std::vector<int32_t>& cache);
+  void mergeSortedCache(std::vector<int32_t>& temp_sorted_cache);
   compare_cache_value_t* binary_search_cache(const std::string& pattern) const;
 
   size_t str_count_;

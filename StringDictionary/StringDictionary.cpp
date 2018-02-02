@@ -891,11 +891,24 @@ void StringDictionary::buildSortedCache() {
   for (size_t i = cur_cache_size; i < str_count_; i++) {
     temp_sorted_cache.push_back(i);
   }
-  sortCache(&temp_sorted_cache);
+  sortCache(temp_sorted_cache);
   mergeSortedCache(temp_sorted_cache);
 }
 
-void StringDictionary::mergeSortedCache(std::vector<int32_t> temp_sorted_cache) {
+void StringDictionary::sortCache(std::vector<int32_t>& cache) {
+  // This method is not thread-safe.
+
+  // this boost sort is creating some problems when we use UTF-8 encoded strings.
+  // TODO (vraj): investigate What is wrong with boost sort and try to mitigate it.
+
+  std::sort(cache.begin(), cache.end(), [this](int32_t a, int32_t b) {
+    auto a_str = this->getStringFromStorage(a);
+    auto b_str = this->getStringFromStorage(b);
+    return string_lt(std::get<0>(a_str), std::get<1>(a_str), std::get<0>(b_str), std::get<1>(b_str));
+  });
+}
+
+void StringDictionary::mergeSortedCache(std::vector<int32_t>& temp_sorted_cache) {
   // this method is not thread safe
   std::vector<int32_t> updated_cache(temp_sorted_cache.size() + sorted_cache.size());
   size_t t_idx = 0, s_idx = 0, idx = 0;
@@ -917,26 +930,6 @@ void StringDictionary::mergeSortedCache(std::vector<int32_t> temp_sorted_cache) 
     updated_cache[idx++] = sorted_cache[s_idx++];
   }
   sorted_cache.swap(updated_cache);
-}
-
-void StringDictionary::sortCache(std::vector<int32_t>* cache) {
-  // This method is not thread-safe.
-  boost::sort::spreadsort::string_sort(
-      cache->begin(),
-      cache->end(),
-      [this](int32_t a, size_t offset) {
-        auto a_str = this->getStringFromStorage(a);
-        return (std::get<0>(a_str))[offset];
-      },
-      [this](int32_t a) {
-        auto a_str = this->getStringFromStorage(a);
-        return std::get<1>(a_str);
-      },
-      [this](int32_t a, int32_t b) {
-        auto a_str = this->getStringFromStorage(a);
-        auto b_str = this->getStringFromStorage(b);
-        return string_lt(std::get<0>(a_str), std::get<1>(a_str), std::get<0>(b_str), std::get<1>(b_str));
-      });
 }
 
 void translate_string_ids(std::vector<int32_t>& dest_ids,

@@ -1367,6 +1367,8 @@ TEST(Select, StringCompare) {
       c("SELECT COUNT(*) FROM test WHERE real_str >= 'foo';", dt);
       c("SELECT COUNT(*) FROM test WHERE real_str >= 'foon';", dt);
 
+      c("SELECT COUNT(*) FROM test WHERE real_str <= 'äâ';", dt);
+
       c("SELECT COUNT(*) FROM test WHERE 'ba' < shared_dict;", dt);
       c("SELECT COUNT(*) FROM test WHERE 'bar' < shared_dict;", dt);
       c("SELECT COUNT(*) FROM test WHERE 'ba' > shared_dict;", dt);
