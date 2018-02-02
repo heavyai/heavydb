@@ -38,18 +38,18 @@
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "../Import/Importer.h"
 #include "../Planner/Planner.h"
-#include "../QueryEngine/Execute.h"
-#include "../Shared/mapd_glob.h"
-#include "../Shared/measure.h"
-#include "ReservedKeywords.h"
-#include "parser.h"
-#include "DataMgr/LockMgr.h"
 #include "../QueryEngine/CalciteAdapter.h"
+#include "../QueryEngine/Execute.h"
 #include "../QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "../QueryEngine/RelAlgExecutor.h"
+#include "../Shared/mapd_glob.h"
+#include "../Shared/measure.h"
+#include "DataMgr/LockMgr.h"
+#include "ReservedKeywords.h"
+#include "parser.h"
 
 size_t g_leaf_count{0};
-bool g_fast_strcmp{true};
+bool g_fast_strcmp{false};
 
 using namespace Lock_Namespace;
 
