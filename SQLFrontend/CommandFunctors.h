@@ -1,14 +1,16 @@
 #ifndef COMMANDFUNCTORS_H
 #define COMMANDFUNCTORS_H
 
-#include "ThriftOps.h"
 #include "CommandResolutionChain.h"
+#include "ThriftOps.h"
+
 #include "gen-cpp/MapD.h"
+
 #include "ClientContext.h"  // Provides us with default class
 #include "RegexSupport.h"
 
-#include <iostream>
 #include <rapidjson/document.h>
+#include <iostream>
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "MapDServer.h"
 
@@ -171,35 +173,33 @@ StandardCommand(ConnectToDB, {
   });
 });
 
-namespace {
-std::vector<std::string> unserialize_key_metainfo(const std::string key_metainfo) {
-  std::vector<std::string> keys_with_spec;
-  rapidjson::Document document;
-  document.Parse(key_metainfo.c_str());
-  CHECK(!document.HasParseError());
-  CHECK(document.IsArray());
-  for (auto it = document.Begin(); it != document.End(); ++it) {
-    const auto& key_with_spec_json = *it;
-    CHECK(key_with_spec_json.IsObject());
-    const std::string type = key_with_spec_json["type"].GetString();
-    const std::string name = key_with_spec_json["name"].GetString();
-    auto key_with_spec = type + " (" + name + ")";
-    if (type == "SHARED DICTIONARY") {
-      key_with_spec += " REFERENCES ";
-      const std::string foreign_table = key_with_spec_json["foreign_table"].GetString();
-      const std::string foreign_column = key_with_spec_json["foreign_column"].GetString();
-      key_with_spec += foreign_table + "(" + foreign_column + ")";
-    } else {
-      CHECK(type == "SHARD KEY");
-    }
-    keys_with_spec.push_back(key_with_spec);
-  }
-  return keys_with_spec;
-}
-}
-
 StandardCommand(ListColumns, {
   decltype(p[1])& table_name(p[1]);
+
+  auto unserialize_key_metainfo = [](const std::string key_metainfo) -> std::vector<std::string> {
+    std::vector<std::string> keys_with_spec;
+    rapidjson::Document document;
+    document.Parse(key_metainfo.c_str());
+    CHECK(!document.HasParseError());
+    CHECK(document.IsArray());
+    for (auto it = document.Begin(); it != document.End(); ++it) {
+      const auto& key_with_spec_json = *it;
+      CHECK(key_with_spec_json.IsObject());
+      const std::string type = key_with_spec_json["type"].GetString();
+      const std::string name = key_with_spec_json["name"].GetString();
+      auto key_with_spec = type + " (" + name + ")";
+      if (type == "SHARED DICTIONARY") {
+        key_with_spec += " REFERENCES ";
+        const std::string foreign_table = key_with_spec_json["foreign_table"].GetString();
+        const std::string foreign_column = key_with_spec_json["foreign_column"].GetString();
+        key_with_spec += foreign_table + "(" + foreign_column + ")";
+      } else {
+        CHECK(type == "SHARD KEY");
+      }
+      keys_with_spec.push_back(key_with_spec);
+    }
+    return keys_with_spec;
+  };
 
   auto on_success_lambda = [&](ContextType& context) {
     const auto table_details = context.table_details;
@@ -222,13 +222,14 @@ StandardCommand(ListColumns, {
       }
       std::string encoding;
       if (p.col_type.type == TDatumType::STR) {
-        encoding =
-            (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                               std::to_string(p.col_type.comp_param) + ")");
+        encoding = (p.col_type.encoding == 0 ? " ENCODING NONE"
+                                             : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                   std::to_string(p.col_type.comp_param) + ")");
 
       } else {
-        encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                        std::to_string(p.col_type.comp_param) + ")");
+        encoding = (p.col_type.encoding == 0 ? ""
+                                             : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                   std::to_string(p.col_type.comp_param) + ")");
       }
       output_stream << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
                     << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
@@ -292,8 +293,8 @@ StandardCommand(GetOptimizedSchema, {
     return context.query_return.row_set.columns[0].data.int_col[0];
   };
 
-  auto get_optimal_size = [run_query](
-      ClientContext& context, std::string table_name, std::string col_name, int col_type) -> int {
+  auto get_optimal_size =
+      [run_query](ClientContext& context, std::string table_name, std::string col_name, int col_type) -> int {
     switch (col_type) {
       case TDatumType::STR: {
         int strings = run_query(context, "select count(distinct " + col_name + ") from " + table_name + ";");
