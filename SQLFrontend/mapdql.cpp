@@ -70,9 +70,20 @@ const std::string MapDQLRelease(MAPD_RELEASE);
 
 using boost::shared_ptr;
 
+namespace {
+
+ClientContext* g_client_context_ptr{nullptr};
+
 void completion(const char* buf, linenoiseCompletions* lc) {
-  if (toupper(buf[0]) == 'S') {
-    linenoiseAddCompletion(lc, "SELECT ");
+  CHECK(g_client_context_ptr);
+  thrift_with_retry(kGET_COMPLETION_HINTS, *g_client_context_ptr, buf);
+  for (const auto& completion_hint : g_client_context_ptr->completion_hints) {
+    for (const auto& hint_str : completion_hint.hints) {
+      CHECK_LE(completion_hint.replaced.size(), strlen(buf));
+      std::string partial_query(buf, buf + strlen(buf) - completion_hint.replaced.size());
+      partial_query += hint_str;
+      linenoiseAddCompletion(lc, partial_query.c_str());
+    }
   }
 }
 
@@ -91,8 +102,6 @@ std::string encode64(const std::string& val) {
   auto tmp = std::string(It(std::begin(val)), It(std::end(val)));
   return tmp.append((3 - val.size() % 3) % 3, '=');
 }
-
-namespace {
 
 #define LOAD_PATCH_SIZE 10000
 
@@ -1121,6 +1130,7 @@ int main(int argc, char** argv) {
   }
   MapDClient c(protocol);
   ClientContext context(*transport, c);
+  g_client_context_ptr = &context;
 
   context.db_name = db_name;
   context.user_name = user_name;
