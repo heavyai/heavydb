@@ -1852,6 +1852,7 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {
     std::vector<std::string> objkeys;
     std::unique_ptr<S3ParquetArchive> us3arch;
     if ("s3" == url_parts[2]) {
+#ifdef HAVE_AWS_S3
       us3arch.reset(new S3ParquetArchive(file_path,
                                          copy_params.s3_access_key,
                                          copy_params.s3_secret_key,
@@ -1859,6 +1860,9 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {
                                          copy_params.plain_text));
       us3arch->init_for_read();
       objkeys = us3arch->get_objkeys();
+#else
+      throw std::runtime_error("AWS S3 support not available");
+#endif  // HAVE_AWS_S3
     } else
       objkeys.emplace_back(file_path);
 
@@ -1929,6 +1933,7 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
         if ("file" == url_parts[2] || "" == url_parts[2])
           uarch.reset(new PosixFileArchive(file_path, copy_params.plain_text));
         else if ("s3" == url_parts[2]) {
+#ifdef HAVE_AWS_S3
           // new a S3Archive with a shared s3client.
           // should be safe b/c no wildcard with s3 url
           us3arch.reset(new S3Archive(file_path,
@@ -1941,7 +1946,11 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
           for (const auto& objkey : us3arch->get_objkeys())
             file_paths.emplace_back(std::string(S3_objkey_url_scheme) + "://" + objkey);
           continue;
+#else
+          throw std::runtime_error("AWS S3 support not available");
+#endif  // HAVE_AWS_S3
         } else if (S3_objkey_url_scheme == url_parts[2]) {
+#ifdef HAVE_AWS_S3
           auto objkey = file_path.substr(3 + S3_objkey_url_scheme.size());
           auto file_path = us3arch->land(objkey, teptr);
           if (0 == file_path.size())
@@ -1949,6 +1958,9 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
           uarch.reset(new PosixFileArchive(file_path, copy_params.plain_text));
           // file not removed until file closed
           us3arch->vacuum(objkey);
+#else
+          throw std::runtime_error("AWS S3 support not available");
+#endif  // HAVE_AWS_S3
         }
 #if 0  // TODO(ppan): implement and enable any other archive class
         else

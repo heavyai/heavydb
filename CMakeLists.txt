@@ -228,6 +228,18 @@ add_subdirectory(ThirdParty/sqlite3)
 include_directories(ThirdParty/librdkafka/src-cpp)
 add_subdirectory(ThirdParty/librdkafka)
 
+# aws-sdk
+option(ENABLE_AWS_S3 "Enable AWS S3 support" ON)
+if(ENABLE_AWS_S3)
+  find_package(LibAwsS3)
+  if(NOT LibAwsS3_FOUND)
+    set(ENABLE_AWS_S3 OFF CACHE BOOL "Enable AWS S3 support" FORCE)
+    message(STATUS "AWS SDK not found. Disabling AWS S3 support.")
+  else()
+    add_definitions("-DHAVE_AWS_S3")
+  endif()
+endif()
+
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
     OUTPUT

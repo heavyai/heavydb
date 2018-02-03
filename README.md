@@ -54,6 +54,7 @@ The following `cmake`/`ccmake` options can enable/disable different features:
 - `-DMAPD_IMMERSE_DOWNLOAD=on` download the latest master build of Immerse / `mapd2-frontend`. Default `on`.
 - `-DMAPD_DOCS_DOWNLOAD=on` download the latest master build of the documentation / `docs.mapd.com`. Default `off`. Note: this is a >50MB download.
 - `-DPREFER_STATIC_LIBS=on` static link dependencies, if available. Default `off`.
+- `-DENABLE_AWS_S3=on` enable AWS S3 support, if available. Default `on`.
 - `-DENABLE_TESTS=on` build unit tests. Default `on`.
 
 # Testing

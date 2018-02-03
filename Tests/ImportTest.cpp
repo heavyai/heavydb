@@ -97,6 +97,7 @@ bool import_test_local(const string& filename, const int64_t cnt, const double a
       string("COPY trips FROM '") + "../../Tests/Import/datafiles/" + filename + "' WITH (header='true');", cnt, avg);
 }
 
+#ifdef HAVE_AWS_S3
 bool import_test_s3(const string& prefix, const string& filename, const int64_t cnt, const double avg) {
   // unlikely we will expose any credentials in clear text here.
   // likely credentials will be passed as the "tester"'s env.
@@ -129,6 +130,7 @@ bool import_test_s3_parquet(const string& filename, const int64_t cnt, const dou
   return import_test_s3("trip.parquet", filename, cnt, avg);
 }
 #endif
+#endif  // HAVE_AWS_S3
 class SQLTestEnv : public ::testing::Environment {
  public:
   virtual void SetUp() {
@@ -269,6 +271,7 @@ TEST_F(ImportTest, One_7z_with_many_csv_files) {
   EXPECT_TRUE(import_test_local("trip_data.7z", 1000, 1.0));
 }
 
+#ifdef HAVE_AWS_S3
 // s3 compressed (non-parquet) test cases
 TEST_F(ImportTest, S3_One_csv_file) {
   EXPECT_TRUE(import_test_s3_compressed("trip_data_9.csv", 100, 1.0));
@@ -305,6 +308,7 @@ TEST_F(ImportTest, S3_One_7z_with_many_csv_files) {
 TEST_F(ImportTest, S3_All_files) {
   EXPECT_TRUE(import_test_s3_compressed("", 105200, 1.0));
 }
+#endif  // HAVE_AWS_S3
 }
 
 int main(int argc, char** argv) {

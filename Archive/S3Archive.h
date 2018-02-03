@@ -21,8 +21,11 @@
 #include <map>
 #include <exception>
 #include "Archive.h"
+
+#ifdef HAVE_AWS_S3
 #include <aws/core/Aws.h>
 #include <aws/s3/S3Client.h>
+#endif  // HAVE_AWS_S3
 
 // this is the based archive class for files hosted on AWS S3.
 // known variants:
@@ -35,11 +38,13 @@ class S3Archive : public Archive {
     // init aws api should be singleton because because
     // it's bad to call Aws::InitAPI and Aws::ShutdownAPI
     // multiple times.
+#ifdef HAVE_AWS_S3
     {
       std::unique_lock<std::mutex> lck(awsapi_mtx);
       if (0 == awsapi_count++)
         Aws::InitAPI(awsapi_options);
     }
+#endif  // HAVE_AWS_S3
 
     // these envs are on server side so are global settings
     // which make few senses in case of private s3 resources
@@ -69,22 +74,35 @@ class S3Archive : public Archive {
   }
 
   virtual ~S3Archive() {
+#ifdef HAVE_AWS_S3
     std::unique_lock<std::mutex> lck(awsapi_mtx);
     if (0 == --awsapi_count)
       Aws::ShutdownAPI(awsapi_options);
+#endif  // HAVE_AWS_S3
   }
 
   virtual void init_for_read();
   const std::vector<std::string>& get_objkeys() { return objkeys; }
+#ifdef HAVE_AWS_S3
   const std::string land(const std::string& objkey, std::exception_ptr& teptr);
   void vacuum(const std::string& objkey);
+#else
+  const std::string land(const std::string& objkey, std::exception_ptr& teptr) {
+    throw std::runtime_error("AWS S3 support not available");
+  }
+  void vacuum(const std::string& objkey) {
+    throw std::runtime_error("AWS S3 support not available");
+  }
+#endif  // HAVE_AWS_S3
 
  private:
+#ifdef HAVE_AWS_S3
   static int awsapi_count;
   static std::mutex awsapi_mtx;
   static Aws::SDKOptions awsapi_options;
 
   std::unique_ptr<Aws::S3::S3Client> s3_client;
+#endif  // HAVE_AWS_S3
   std::string s3_access_key;  // per-query credentials to override the
   std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
   std::string s3_region;
