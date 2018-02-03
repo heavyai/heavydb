@@ -224,11 +224,9 @@ add_subdirectory(ThirdParty/linenoise)
 include_directories(ThirdParty/sqlite3)
 add_subdirectory(ThirdParty/sqlite3)
 
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
 #rdkafka
-  include_directories(ThirdParty/librdkafka/src-cpp)
-  add_subdirectory(ThirdParty/librdkafka)
-endif()
+include_directories(ThirdParty/librdkafka/src-cpp)
+add_subdirectory(ThirdParty/librdkafka)
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift

@@ -77,6 +77,10 @@ struct CopyParams {
   std::string s3_access_key;  // per-query credentials to override the
   std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
   std::string s3_region;
+  // kafka related params
+  size_t retry_count;
+  size_t retry_wait;
+  size_t batch_size;
 
   CopyParams()
       : delimiter(','),
@@ -92,7 +96,28 @@ struct CopyParams {
         threads(0),
         max_reject(100000),
         table_type(TableType::DELIMITED),
-        is_parquet(false) {}
+        is_parquet(false),
+        retry_count(100),
+        retry_wait(5),
+        batch_size(1000) {}
+
+  CopyParams(char d, const std::string& n, char l, size_t b, size_t retries, size_t wait)
+      : delimiter(d),
+        null_str(n),
+        has_header(true),
+        quoted(true),
+        quote('"'),
+        escape('"'),
+        line_delim(l),
+        array_delim(','),
+        array_begin('{'),
+        array_end('}'),
+        threads(0),
+        max_reject(100000),
+        table_type(TableType::DELIMITED),
+        retry_count(retries),
+        retry_wait(wait),
+        batch_size(b) {}
 };
 
 class TypedImportBuffer : boost::noncopyable {
@@ -727,6 +752,40 @@ struct PolyData2d {
   void _addPoint(double x, double y) {
     coords.push_back(x);
     coords.push_back(y);
+  }
+};
+
+class ImporterUtils {
+ public:
+  static void parseStringArray(const std::string& s,
+                               const CopyParams& copy_params,
+                               std::vector<std::string>& string_vec) {
+    if (s == copy_params.null_str || s.size() < 1) {
+      return;
+    }
+    if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
+      throw std::runtime_error("Malformed Array :" + s);
+    }
+    size_t last = 1;
+    for (size_t i = s.find(copy_params.array_delim, 1); i != std::string::npos;
+         i = s.find(copy_params.array_delim, last)) {
+      if (i > last) {  // if not empty string - disallow empty strings for now
+        if (s.substr(last, i - last).length() > StringDictionary::MAX_STRLEN)
+          throw std::runtime_error("Array String too long : " + std::to_string(s.substr(last, i - last).length()) +
+                                   " max is " + std::to_string(StringDictionary::MAX_STRLEN));
+
+        string_vec.push_back(s.substr(last, i - last));
+      }
+      last = i + 1;
+    }
+    if (s.size() - 1 > last) {  // if not empty string - disallow empty strings for now
+      if (s.substr(last, s.size() - 1 - last).length() > StringDictionary::MAX_STRLEN)
+        throw std::runtime_error("Array String too long : " +
+                                 std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
+                                 std::to_string(StringDictionary::MAX_STRLEN));
+
+      string_vec.push_back(s.substr(last, s.size() - 1 - last));
+    }
   }
 };
 

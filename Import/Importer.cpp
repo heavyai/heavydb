@@ -283,35 +283,6 @@ ArrayDatum StringToArray(const std::string& s, const SQLTypeInfo& ti, const Copy
   return ArrayDatum(0, NULL, true);
 }
 
-void parseStringArray(const std::string& s, const CopyParams& copy_params, std::vector<std::string>& string_vec) {
-  if (s == copy_params.null_str || s.size() < 1) {
-    return;
-  }
-  if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
-    throw std::runtime_error("Malformed Array :" + s);
-  }
-  size_t last = 1;
-  for (size_t i = s.find(copy_params.array_delim, 1); i != std::string::npos;
-       i = s.find(copy_params.array_delim, last)) {
-    if (i > last) {  // if not empty string - disallow empty strings for now
-      if (s.substr(last, i - last).length() > StringDictionary::MAX_STRLEN)
-        throw std::runtime_error("Array String too long : " + std::to_string(s.substr(last, i - last).length()) +
-                                 " max is " + std::to_string(StringDictionary::MAX_STRLEN));
-
-      string_vec.push_back(s.substr(last, i - last));
-    }
-    last = i + 1;
-  }
-  if (s.size() - 1 > last) {  // if not empty string - disallow empty strings for now
-    if (s.substr(last, s.size() - 1 - last).length() > StringDictionary::MAX_STRLEN)
-      throw std::runtime_error("Array String too long : " +
-                               std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
-                               std::to_string(StringDictionary::MAX_STRLEN));
-
-    string_vec.push_back(s.substr(last, s.size() - 1 - last));
-  }
-}
-
 void addBinaryStringArray(const TDatum& datum, std::vector<std::string>& string_vec) {
   const auto& arr = datum.val.arr_val;
   for (const auto& elem_datum : arr) {
@@ -498,7 +469,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       }
       if (IS_STRING(cd->columnType.get_subtype())) {
         std::vector<std::string>& string_vec = addStringArray();
-        parseStringArray(val, copy_params, string_vec);
+        ImporterUtils::parseStringArray(val, copy_params, string_vec);
       } else {
         if (!is_null) {
           ArrayDatum d = StringToArray(val, cd->columnType, copy_params);

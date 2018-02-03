@@ -1514,8 +1514,8 @@ void MapDHandler::load_table_binary_columnar(const TSessionId& session,
       } else {
         if (colRows != numRows) {
           std::ostringstream oss;
-          oss << "load_table_binary_columnar: Inconsistent number of rows in request,  was " << numRows << " column "
-              << col_idx << " has " << colRows;
+          oss << "load_table_binary_columnar: Inconsistent number of rows in request,  expecting " << numRows << " row, column "
+              << col_idx << " has " << colRows << " rows";
           THROW_MAPD_EXCEPTION(oss.str());
         }
       }
