@@ -52,6 +52,7 @@ class CoreMockClient {
   MockMethod(get_all_roles_for_user)
   MockMethod(set_license_key)
   MockMethod(get_license_claims)
+  MockMethod(get_completion_hints)
 };
 // clang-format on
 

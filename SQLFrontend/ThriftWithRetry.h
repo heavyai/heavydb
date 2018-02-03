@@ -118,6 +118,9 @@ bool thrift_with_retry(SERVICE_ENUM which_service, CLIENT_CONTEXT& context, char
       case kGET_LICENSE_CLAIMS:
         context.client.get_license_claims(context.license_info, context.session, "");
         break;
+      case kGET_COMPLETION_HINTS:
+        context.client.get_completion_hints(context.completion_hints, context.session, arg, -1);
+        break;
     }
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
