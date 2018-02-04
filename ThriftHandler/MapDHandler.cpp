@@ -773,7 +773,10 @@ void MapDHandler::get_completion_hints(std::vector<TCompletionHint>& hints,
   std::sort(
       hints.begin(), hints.end(), [&compatible_table_names](const TCompletionHint& lhs, const TCompletionHint& rhs) {
         if (lhs.type == TCompletionHintType::TABLE && rhs.type == TCompletionHintType::TABLE) {
-          if (compatible_table_names.find(to_upper(lhs.hints.back())) != compatible_table_names.end()) {
+          // Between two tables, one which is compatible with the specified projections
+          // and one which isn't, pick the one which is compatible.
+          if (compatible_table_names.find(to_upper(lhs.hints.back())) != compatible_table_names.end() &&
+              compatible_table_names.find(to_upper(rhs.hints.back())) == compatible_table_names.end()) {
             return true;
           }
         }
