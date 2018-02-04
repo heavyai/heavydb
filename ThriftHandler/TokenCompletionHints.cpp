@@ -144,8 +144,12 @@ bool should_suggest_column_hints(const std::string& partial_query) {
     return true;
   }
   std::string last_token;
+  std::string prev_to_last_token;
   for (const auto& token : tokens) {
+    prev_to_last_token = last_token;
     last_token = token;
   }
-  return last_token == ",";
+  return last_token == "," ||
+         (!partial_query.empty() && !isspace(partial_query.back()) &&
+          (prev_to_last_token.empty() || prev_to_last_token == "," || to_upper(prev_to_last_token) == "SELECT"));
 }
