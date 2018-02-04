@@ -146,6 +146,20 @@ TEST(Completion, FilterKeywords) {
     original_hints.push_back(hint);
     expected_filtered_hints.push_back(hint);
   }
+  {
+    TCompletionHint hint;
+    hint.type = TCompletionHintType::KEYWORD;
+    hint.hints.emplace_back("ON");
+    original_hints.push_back(hint);
+    expected_filtered_hints.push_back(hint);
+  }
+  {
+    TCompletionHint hint;
+    hint.type = TCompletionHintType::KEYWORD;
+    hint.hints.emplace_back("OUTER");
+    original_hints.push_back(hint);
+    expected_filtered_hints.push_back(hint);
+  }
   const auto filtered_hints = just_whitelisted_keyword_hints(original_hints);
   ASSERT_EQ(expected_filtered_hints, filtered_hints);
 }
