@@ -63,9 +63,9 @@ std::string find_last_word_from_cursor(const std::string& sql, const ssize_t cur
 
 std::vector<TCompletionHint> just_whitelisted_keyword_hints(const std::vector<TCompletionHint>& hints) {
   static const std::unordered_set<std::string> whitelisted_keywords{
-      "WHERE",  "GROUP", "BY",   "COUNT", "AVG",   "MAX",    "MIN",   "SUM", "STDDEV_POP", "STDDEV_SAMP", "AS",
-      "HAVING", "INNER", "JOIN", "LEFT",  "LIMIT", "OFFSET", "ORDER", "ASC", "DESC",       "DISTINCT",    "IN",
-      "IS",     "NULL",  "NOT",  "AND",   "OR",    "LIKE",   "*",     "(",   ")"};
+      "WHERE",    "GROUP", "BY",   "COUNT", "AVG",   "MAX",    "MIN", "SUM",   "STDDEV_POP", "STDDEV_SAMP", "AS",
+      "HAVING",   "INNER", "JOIN", "LEFT",  "LIMIT", "OFFSET", "ON",  "ORDER", "OUTER",      "ASC",         "DESC",
+      "DISTINCT", "IN",    "IS",   "NULL",  "NOT",   "AND",    "OR",  "LIKE",  "*",          "(",           ")"};
   std::vector<TCompletionHint> filtered;
   for (const auto& original_hint : hints) {
     if (original_hint.type != TCompletionHintType::KEYWORD) {
