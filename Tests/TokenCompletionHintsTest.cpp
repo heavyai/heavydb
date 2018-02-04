@@ -151,10 +151,14 @@ TEST(Completion, FilterKeywords) {
 }
 
 TEST(Completion, ShouldSuggestColumnHints) {
-  ASSERT_FALSE(should_suggest_column_hints("SELECT x"));
+  ASSERT_TRUE(should_suggest_column_hints("SELECT x"));
   ASSERT_FALSE(should_suggest_column_hints("SELECT x "));
   ASSERT_TRUE(should_suggest_column_hints("SELECT x,"));
   ASSERT_TRUE(should_suggest_column_hints("SELECT x , "));
+  ASSERT_TRUE(should_suggest_column_hints("SELECT x, y"));
+  ASSERT_FALSE(should_suggest_column_hints("SELECT x, y "));
+  ASSERT_TRUE(should_suggest_column_hints("SELECT x, y,"));
+  ASSERT_TRUE(should_suggest_column_hints("SELECT x, y , "));
   ASSERT_TRUE(should_suggest_column_hints("SELECT "));
 }
 
