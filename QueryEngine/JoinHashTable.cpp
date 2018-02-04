@@ -130,7 +130,7 @@ std::mutex JoinHashTable::join_hash_table_cache_mutex_;
 size_t get_shard_count(const Analyzer::BinOper* join_condition,
                        const RelAlgExecutionUnit& ra_exe_unit,
                        const Executor* executor) {
-  if (executor->isOuterJoin() || executor->containsLeftDeepOuterJoin()) {
+  if (executor->isOuterJoin()) {
     return 0;
   }
   const Analyzer::ColumnVar* lhs_col{nullptr};
@@ -173,7 +173,7 @@ bool shard_count_less_or_equal_device_count(const int outer_table_id, const Exec
 size_t get_shard_count(std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> equi_pair,
                        const RelAlgExecutionUnit& ra_exe_unit,
                        const Executor* executor) {
-  if (executor->isOuterJoin() || executor->containsLeftDeepOuterJoin()) {
+  if (executor->isOuterJoin()) {
     return 0;
   }
   const auto lhs_col = equi_pair.first;
