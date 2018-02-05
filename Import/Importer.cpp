@@ -1351,10 +1351,10 @@ bool importGeoFromWkt(std::string& wkt,
   return status;
 }
 
-bool importGeoFromLonLat(double lat, double lon, std::vector<double>& coords) {
+bool importGeoFromLonLat(double lon, double lat, std::vector<double>& coords) {
   if (std::isinf(lat) || std::isnan(lat) || std::isinf(lon) || std::isnan(lon))
     return false;
-  auto point = new OGRPoint(lat, lon);
+  auto point = new OGRPoint(lon, lat);
   //auto poSR0 = new OGRSpatialReference();
   //poSR0->importFromEPSG(4326);
   //point->assignSpatialReference(poSR0);
@@ -1449,16 +1449,17 @@ static ImportStatus import_thread(int thread_id,
                   (wkt[0] == '.' || isdigit(wkt[0]) || wkt[0] == '-')) {
                 // Invalid WKT, looks more like a scalar.
                 // Try custom POINT import: from two separate scalars rather than WKT string
-                double lat = std::atof(wkt.c_str());
-                double lon = NAN;
-                std::string lon_str{row[import_idx]};
+                double lon = std::atof(wkt.c_str());
+                double lat = NAN;
+                std::string lat_str{row[import_idx]};
                 ++import_idx;
-                if (lon_str.size() > 0 &&
-                    (lon_str[0] == '.' || isdigit(lon_str[0]) || lon_str[0] == '-')) {
-                  lon = std::atof(lon_str.c_str());
+                if (lat_str.size() > 0 && (lat_str[0] == '.' || isdigit(lat_str[0]) || lat_str[0] == '-')) {
+                  lat = std::atof(lat_str.c_str());
                 }
-                if (!importGeoFromLatLon(lat, lon, coords)) {
-                  throw std::runtime_error("Cannot read lat/lon to insert into POINT column " + cd->columnName);
+                // TODO: Add option to accept the reversed order
+                // TODO: Check if column SRID is WGS 84: col_ti.get_dimension() == 4326
+                if (!importGeoFromLonLat(lon, lat, coords)) {
+                  throw std::runtime_error("Cannot read lon/lat to insert into POINT column " + cd->columnName);
                 }
               } else {
                 SQLTypeInfo import_ti;
