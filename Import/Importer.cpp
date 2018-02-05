@@ -1203,23 +1203,42 @@ bool importGeoFromWkt(std::string& wkt,
                       std::vector<double>& coords,
                       std::vector<int>& ring_sizes,
                       std::vector<int>& poly_rings) {
+  bool status = true;
   auto data = (char*)wkt.c_str();
   OGRGeometryFactory geom_factory;
   OGRGeometry* geom = nullptr;
   OGRErr ogr_status = geom_factory.createFromWkt(&data, NULL, &geom);
   if (ogr_status != OGRERR_NONE)
     status = false;
+  if (status && geom) {
+    int srid = 0;
+    auto sr = geom->getSpatialReference();
+
+    if (!sr) {
+      srid = 0;
+    } else if (sr->IsGeographic()) {
+      srid = 0;
+      // Need to transform all geographic objects to WGS 84, EPSG 4236 ?
+      // ti.set_dimension(4326);
+      // auto poSR = new OGRSpatialReference();
+      // poSR->importFromEPSG(4326);
+      // geom->transformTo(poSR);
+    } else {
+      srid = 0;
+      // Try to guess srid?
+      // srid = sr->GetEPSGGeogCS();
+      // if (srid != -1)
+      //  srid = 0;
+    }
+    // TODO: Store SRID in ti
+    ti.set_dimension(srid);
+  }
   if (status == false) {
     if (geom)
       geom_factory.destroyGeometry(geom);
     return false;
   }
 
-  auto poSR = new OGRSpatialReference();
-  poSR->importFromEPSG(3857);
-  geom->transformTo(poSR);
-
-  bool status = true;
   switch (wkbFlatten(geom->getGeometryType())) {
     case wkbPoint: {
       ti.set_type(kPOINT);
@@ -1449,6 +1468,7 @@ static ImportStatus import_thread(int thread_id,
                 if (col_ti.get_type() != import_ti.get_type()) {
                   throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
                 }
+                // TODO: Check if column and wkt SRIDs match. Transform to column SRID: col_ti.get_dimension()
               }
 
               ++cd_it;

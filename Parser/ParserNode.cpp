@@ -1598,13 +1598,13 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
       std::vector<int> ring_sizes;
       std::vector<int> poly_rings;
       SQLTypeInfo import_ti;
-      if (!Importer_NS::importGeoFromWkt(
-              *c->get_constval().stringval, import_ti, coords, ring_sizes, poly_rings)) {
+      if (!Importer_NS::importGeoFromWkt(*c->get_constval().stringval, import_ti, coords, ring_sizes, poly_rings)) {
         throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
       }
       if (cd->columnType.get_type() != import_ti.get_type()) {
         throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
       }
+      // TODO: check if import SRID matches columns SRID, may need to transform before inserting
 
       const ColumnDescriptor* cd_coords = catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + 1);
       CHECK(cd_coords && cd_coords->isPhysicalCol);
@@ -1657,7 +1657,6 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
               "", makeExpr<Analyzer::Constant>(cd_poly_rings->columnType, false, value_exprs), false));
           ++it;
         }
-
       }
     }
   }
@@ -1702,6 +1701,12 @@ void SQLType::check_type() {
         else
           throw std::runtime_error("Only TIME(0) is supported now.");
       }
+      break;
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+    case kMULTIPOLYGON:
+      // Storing SRID in param1
       break;
     default:
       param1 = 0;

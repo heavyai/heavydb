@@ -1164,6 +1164,7 @@ data_type:
 	| TIMESTAMP { $<nodeval>$ = new SQLType(kTIMESTAMP); }
 	| TIMESTAMP '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kTIMESTAMP, $<intval>3); }
 	| geo_type { $<nodeval>$ = $<nodeval>1; }
+	| geography_type { $<nodeval>$ = $<nodeval>1; }
   | data_type '[' ']'
   { $<nodeval>$ = $<nodeval>1;
     if (dynamic_cast<SQLType*>($<nodeval>$)->get_is_array())
@@ -1176,6 +1177,11 @@ geo_type:	POINT { $<nodeval>$ = new SQLType(kPOINT); }
 	|	POLYGON { $<nodeval>$ = new SQLType(kPOLYGON); }
 	|	MULTIPOLYGON { $<nodeval>$ = new SQLType(kMULTIPOLYGON); }
 	;
+
+geography_type:	GEOGRAPHY '(' geo_type ')'
+	{ $<nodeval>$ = new SQLType(dynamic_cast<SQLType*>($<nodeval>3)->get_type(), 4326, 0, false); }
+	|	GEOGRAPHY '(' geo_type ',' INTNUM ')'
+	{ $<nodeval>$ = new SQLType(dynamic_cast<SQLType*>($<nodeval>3)->get_type(), $<intval>5, 0, false); }
 
 	/* the various things you can name */
 

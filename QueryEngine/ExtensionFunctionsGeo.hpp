@@ -147,6 +147,11 @@ double ST_Distance_Point_Point(double* p1, int64_t p1num, double* p2, int64_t p2
   return distance_point_point(p1[0], p1[1], p2[0], p2[1]);
 }
 
+EXTENSION_INLINE
+double ST_Distance_Point_Point_Geography(double* p1, int64_t p1num, double* p2, int64_t p2num) {
+  return distance_in_meters(p1[0], p1[1], p2[0], p2[1]);
+}
+
 EXTENSION_NOINLINE
 double ST_Distance_Point_LineString(double* p, int64_t pnum, double* l, int64_t lnum) {
   double* line = l;

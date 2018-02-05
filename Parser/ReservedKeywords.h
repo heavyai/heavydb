@@ -168,6 +168,7 @@ static std::set<std::string> reserved_keywords{
     "FULL",
     "FUNCTION",
     "FUSION",
+    "GEOGRAPHY",
     "GET",
     "GLOBAL",
     "GRANT",

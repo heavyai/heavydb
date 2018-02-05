@@ -183,5 +183,13 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoFunction(const Rex
   geoargs.insert(geoargs.end(), geoargs1.begin(), geoargs1.end());
 
   std::string specialized_geofunc{rex_function->getName() + suffix(arg0_ti.get_type()) + suffix(arg1_ti.get_type())};
+  if (arg0_ti.get_dimension() == 4326 || arg1_ti.get_dimension() == 4326) {
+    if (rex_function->getName() == std::string("ST_Distance") && arg0_ti.get_type() == kPOINT &&
+        arg1_ti.get_type() == kPOINT) {
+      specialized_geofunc += std::string("_Geography");
+    } else {
+      throw QueryNotSupported(rex_function->getName() + " does not currently support geography arguments");
+    }
+  }
   return makeExpr<Analyzer::FunctionOper>(rex_function->getType(), specialized_geofunc, geoargs);
 }
