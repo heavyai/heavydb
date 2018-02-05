@@ -1265,8 +1265,6 @@ bool importGeoFromWkt(std::string& wkt,
       if (!exteriorRing->isClockwise()) {
         exteriorRing->reverseWindingOrder();
       }
-      exteriorRing->closeRings();
-      // Exterior ring is CW, closed.
       for (int i = 0; i < exteriorRing->getNumPoints(); i++) {
         OGRPoint point;
         exteriorRing->getPoint(i, &point);
@@ -1282,8 +1280,6 @@ bool importGeoFromWkt(std::string& wkt,
         if (interiorRing->isClockwise()) {
           interiorRing->reverseWindingOrder();
         }
-        interiorRing->closeRings();
-        // Interior rings are CCW, closed.
         ring_sizes.push_back(interiorRing->getNumPoints());
         for (int i = 0; i < interiorRing->getNumPoints(); i++) {
           OGRPoint point;
@@ -1309,8 +1305,6 @@ bool importGeoFromWkt(std::string& wkt,
         if (!exteriorRing->isClockwise()) {
           exteriorRing->reverseWindingOrder();
         }
-        exteriorRing->closeRings();
-        // Exterior ring is CW, closed.
         for (int i = 0; i < exteriorRing->getNumPoints(); i++) {
           OGRPoint point;
           exteriorRing->getPoint(i, &point);
@@ -1325,8 +1319,6 @@ bool importGeoFromWkt(std::string& wkt,
           if (interiorRing->isClockwise()) {
             interiorRing->reverseWindingOrder();
           }
-          interiorRing->closeRings();
-          // Interior rings are CCW, closed.
           ring_sizes.push_back(interiorRing->getNumPoints());
           for (int i = 0; i < interiorRing->getNumPoints(); i++) {
             OGRPoint point;
