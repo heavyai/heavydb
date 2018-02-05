@@ -2260,6 +2260,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
       case kPOINT:
       case kLINESTRING:
       case kPOLYGON:
+      case kMULTIPOLYGON:
         str_col_buffers[col_ids[col_idx]].push_back(col_datum.stringval ? *col_datum.stringval : "");
         break;
       default:

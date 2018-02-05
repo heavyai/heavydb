@@ -59,7 +59,8 @@ enum SQLTypes {
   kPOINT = 18,
   kLINESTRING = 19,
   kPOLYGON = 20,
-  kSQLTYPE_LAST = 21
+  kMULTIPOLYGON = 21,
+  kSQLTYPE_LAST = 22
 };
 
 struct VarlenDatum {
@@ -129,7 +130,7 @@ enum EncodingType {
    ((T) == kNUMERIC) || ((T) == kDECIMAL))
 #define IS_STRING(T) (((T) == kTEXT) || ((T) == kVARCHAR) || ((T) == kCHAR))
 #define IS_TIME(T) (((T) == kTIME) || ((T) == kTIMESTAMP) || ((T) == kDATE))
-#define IS_GEO(T) (((T) == kPOINT) || ((T) == kLINESTRING) || ((T) == kPOLYGON))
+#define IS_GEO(T) (((T) == kPOINT) || ((T) == kLINESTRING) || ((T) == kPOLYGON) || ((T) == kMULTIPOLYGON))
 
 #define NULL_BOOLEAN INT8_MIN
 #define NULL_TINYINT INT8_MIN
@@ -488,6 +489,7 @@ class SQLTypeInfo {
       case kPOINT:
       case kLINESTRING:
       case kPOLYGON:
+      case kMULTIPOLYGON:
         break;
       default:
         break;

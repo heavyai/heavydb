@@ -64,6 +64,7 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer, const SQLTypeIn
         case kPOINT:
         case kLINESTRING:
         case kPOLYGON:
+        case kMULTIPOLYGON:
           return new StringNoneEncoder(buffer);
         default: { return 0; }
       }

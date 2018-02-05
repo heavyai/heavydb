@@ -18,7 +18,8 @@ enum TDatumType {
   INTERVAL_YEAR_MONTH,
   POINT,
   LINESTRING,
-  POLYGON
+  POLYGON,
+  MULTIPOLYGON
 }
 
 enum TEncodingType {

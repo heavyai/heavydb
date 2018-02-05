@@ -1730,6 +1730,36 @@ void Catalog::createTable(TableDescriptor& td,
 
           break;
         }
+        case kMULTIPOLYGON: {
+          cd.numPhysicalColumns = 3;
+          columns.push_back(cd);
+
+          ColumnDescriptor physical_cd_coords;
+          physical_cd_coords.columnName = cd.columnName + "_coords";
+          SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, true);
+          coords_ti.set_subtype(kDOUBLE);
+          physical_cd_coords.columnType = coords_ti;
+          physical_cd_coords.isPhysicalCol = true;
+          columns.push_back(physical_cd_coords);
+
+          ColumnDescriptor physical_cd_ring_sizes;
+          physical_cd_ring_sizes.columnName = cd.columnName + "_ring_sizes";
+          SQLTypeInfo ring_sizes_ti = SQLTypeInfo(kARRAY, true);
+          ring_sizes_ti.set_subtype(kINT);
+          physical_cd_ring_sizes.columnType = ring_sizes_ti;
+          physical_cd_ring_sizes.isPhysicalCol = true;
+          columns.push_back(physical_cd_ring_sizes);
+
+          ColumnDescriptor physical_cd_poly_rings;
+          physical_cd_poly_rings.columnName = cd.columnName + "_poly_rings";
+          SQLTypeInfo poly_rings_ti = SQLTypeInfo(kARRAY, true);
+          poly_rings_ti.set_subtype(kINT);
+          physical_cd_poly_rings.columnType = poly_rings_ti;
+          physical_cd_poly_rings.isPhysicalCol = true;
+          columns.push_back(physical_cd_poly_rings);
+
+          break;
+        }
         default:
           throw runtime_error("Unrecognized geometry type.");
           break;

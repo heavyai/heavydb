@@ -168,8 +168,8 @@ using namespace Parser;
 %token CASE CAST CHAR_LENGTH CHARACTER CHECK CLOSE COLUMN COMMIT CONTINUE COPY CREATE CURRENT
 %token CURSOR DATABASE DATE DATETIME DATE_TRUNC DECIMAL DECLARE DEFAULT DELETE DESC DICTIONARY DISTINCT DOUBLE DROP
 %token ELSE END EXISTS EXPLAIN EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM
-%token GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
-%token IS LANGUAGE LAST LENGTH LIKE LIMIT LINESTRING MOD NOW NULLX NUMERIC OF OFFSET ON OPEN OPTION
+%token GEOGRAPHY GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
+%token IS LANGUAGE LAST LENGTH LIKE LIMIT LINESTRING MOD MULTIPOLYGON NOW NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER POINT POLYGON PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token SMALLINT SOME TABLE TEMPORARY TEXT THEN TIME TIMESTAMP TO TRUNCATE UNION
 %token PUBLIC REAL REFERENCES RENAME REVOKE ROLE ROLLBACK SCHEMA SELECT SET SHARD SHARED SHOW
@@ -1163,14 +1163,18 @@ data_type:
 	| TIME '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kTIME, $<intval>3); }
 	| TIMESTAMP { $<nodeval>$ = new SQLType(kTIMESTAMP); }
 	| TIMESTAMP '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kTIMESTAMP, $<intval>3); }
-	| POINT { $<nodeval>$ = new SQLType(kPOINT); }
-	| LINESTRING { $<nodeval>$ = new SQLType(kLINESTRING); }
-	| POLYGON { $<nodeval>$ = new SQLType(kPOLYGON); }
+	| geo_type { $<nodeval>$ = $<nodeval>1; }
   | data_type '[' ']'
   { $<nodeval>$ = $<nodeval>1;
     if (dynamic_cast<SQLType*>($<nodeval>$)->get_is_array())
       throw std::runtime_error("array of array not supported.");
     dynamic_cast<SQLType*>($<nodeval>$)->set_is_array(true); }
+	;
+
+geo_type:	POINT { $<nodeval>$ = new SQLType(kPOINT); }
+	|	LINESTRING { $<nodeval>$ = new SQLType(kLINESTRING); }
+	|	POLYGON { $<nodeval>$ = new SQLType(kPOLYGON); }
+	|	MULTIPOLYGON { $<nodeval>$ = new SQLType(kMULTIPOLYGON); }
 	;
 
 	/* the various things you can name */

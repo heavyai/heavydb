@@ -217,6 +217,7 @@ static std::set<std::string> reserved_keywords{
     "MODIFIES",
     "MODULE",
     "MONTH",
+    "MULTIPOLYGON",
     "MULTISET",
     "NATIONAL",
     "NATURAL",

@@ -462,7 +462,7 @@ std::string datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
     return "{" + boost::algorithm::join(elem_strs, ", ") + "}";
   }
   if (type_info.type == TDatumType::POINT || type_info.type == TDatumType::LINESTRING ||
-      type_info.type == TDatumType::POLYGON) {
+      type_info.type == TDatumType::POLYGON || type_info.type == TDatumType::MULTIPOLYGON) {
     std::vector<std::string> elem_strs;
     elem_strs.reserve(datum.val.arr_val.size());
     TTypeInfo elem_type_info{type_info};
@@ -481,11 +481,14 @@ std::string datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
       prefix = std::string("POINT(");
     } else if (type_info.type == TDatumType::LINESTRING) {
       prefix = std::string("LINESTRING(");
-    } else {
+    } else if (type_info.type == TDatumType::POLYGON) {
       prefix = std::string("POLYGON((");
       suffix = std::string("))");
+    } else {
+      prefix = std::string("MULTIPOLYGON(((");
+      suffix = std::string(")))");
     }
-
+    // TODO: need to break coord list into rings (POLYGON) and polys/rings (MULTIPOLYGON) 
     return prefix + boost::algorithm::join(elem_strs, ", ") + suffix;
   }
   return scalar_datum_to_string(datum, type_info);
@@ -530,7 +533,8 @@ TDatum columnar_val_to_datum(const TColumn& col, const size_t row_idx, const TTy
     }
     case TDatumType::POINT:
     case TDatumType::LINESTRING:
-    case TDatumType::POLYGON: {
+    case TDatumType::POLYGON:
+    case TDatumType::MULTIPOLYGON: {
       auto elem_type = col_type;
       elem_type.type = TDatumType::DOUBLE;
       elem_type.is_array = false;

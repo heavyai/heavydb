@@ -629,11 +629,13 @@ TargetValue build_geo_target_value(const SQLTypeInfo& geo_ti,
                                    const size_t coords_sz,
                                    const int8_t* ring_sizes,
                                    const size_t ring_sizes_sz,
+                                   const int8_t* poly_rings,
+                                   const size_t poly_rings_sz,
                                    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                    const Executor* executor) {
   CHECK(geo_ti.is_geometry());
   CHECK_EQ(kENCODING_NONE, geo_ti.get_compression());
-  // Return a simple array of coordinates. TODO(d): rings, multipolygon counts, etc.
+  // Return a simple array of coordinates. TODO(d): ring sizes, multipolygon ring counts, etc.
   return build_array_target_value<double>(coords, coords_sz, row_set_mem_owner);
 }
 
@@ -711,24 +713,27 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
         std::string fetched_str(reinterpret_cast<char*>(vd.pointer), vd.length);
         return fetched_str;
       } else if (target_info.sql_type.is_geometry()) {
-        ArrayDatum coord_ad;
-        ArrayDatum ring_ad;
+        ArrayDatum coords_ad;
+        ArrayDatum ring_sizes_ad;
+        ArrayDatum poly_rings_ad;
         ChunkIter_get_nth(
             reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(frag_col_buffers[col_lazy_fetch.local_col_id])),
             varlen_ptr,
-            &coord_ad,
+            &coords_ad,
             &is_end);
         CHECK(!is_end);
-        if (coord_ad.is_null) {
+        if (coords_ad.is_null) {
           std::vector<ScalarTargetValue> empty_array;
           return TargetValue(empty_array);
         }
-        // TODO(d): will also need to read poly ring size array, multipolygon counts, etc
+        // TODO(d): will also need to read poly ring size array, multipolygon ring counts, etc
         return build_geo_target_value(target_info.sql_type,
-                                      coord_ad.pointer,
-                                      coord_ad.length,
-                                      ring_ad.pointer,
-                                      ring_ad.length,
+                                      coords_ad.pointer,
+                                      coords_ad.length,
+                                      ring_sizes_ad.pointer,
+                                      ring_sizes_ad.length,
+                                      poly_rings_ad.pointer,
+                                      poly_rings_ad.length,
                                       row_set_mem_owner_,
                                       executor_);
       } else {

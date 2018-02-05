@@ -186,6 +186,7 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
     case kPOINT:
     case kLINESTRING:
     case kPOLYGON:
+    case kMULTIPOLYGON:
       return 32;
     default:
       abort();

@@ -57,10 +57,10 @@ using Catalog_Namespace::SysCatalog;
 namespace Importer_NS {
 
 bool importGeoFromWkt(std::string& wkt,
-                      SQLTypes& type,
+                      SQLTypeInfo& ti,
                       std::vector<double>& coords,
                       std::vector<int>& ring_sizes,
-                      std::vector<int>& polygon_sizes);
+                      std::vector<int>& poly_rings);
 
 }  // Importer_NS
 
@@ -1596,13 +1596,13 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
       CHECK(c);
       std::vector<double> coords;
       std::vector<int> ring_sizes;
-      std::vector<int> polygon_sizes;
-      SQLTypes imported_type;
+      std::vector<int> poly_rings;
+      SQLTypeInfo import_ti;
       if (!Importer_NS::importGeoFromWkt(
-              *c->get_constval().stringval, imported_type, coords, ring_sizes, polygon_sizes)) {
+              *c->get_constval().stringval, import_ti, coords, ring_sizes, poly_rings)) {
         throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
       }
-      if (cd->columnType.get_type() != imported_type) {
+      if (cd->columnType.get_type() != import_ti.get_type()) {
         throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
       }
 
@@ -1621,7 +1621,7 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
           "", makeExpr<Analyzer::Constant>(cd_coords->columnType, false, value_exprs), false));
       ++it;
 
-      if (cd->columnType.get_type() == kPOLYGON) {
+      if (cd->columnType.get_type() == kPOLYGON || cd->columnType.get_type() == kMULTIPOLYGON) {
         // Put ring sizes array into separate physical column
         const ColumnDescriptor* cd_ring_sizes =
             catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + 2);
@@ -1638,6 +1638,26 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
         tlist.emplace_back(new Analyzer::TargetEntry(
             "", makeExpr<Analyzer::Constant>(cd_ring_sizes->columnType, false, value_exprs), false));
         ++it;
+
+        if (cd->columnType.get_type() == kMULTIPOLYGON) {
+          // Put poly_rings array into separate physical column
+          const ColumnDescriptor* cd_poly_rings =
+              catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + 3);
+          CHECK(cd_poly_rings && cd_poly_rings->isPhysicalCol);
+          CHECK_EQ(cd_poly_rings->columnType.get_type(), kARRAY);
+          CHECK_EQ(cd_poly_rings->columnType.get_subtype(), kINT);
+          std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
+          for (auto c : poly_rings) {
+            Datum d;
+            d.intval = c;
+            auto e = makeExpr<Analyzer::Constant>(kINT, false, d);
+            value_exprs.push_back(e);
+          }
+          tlist.emplace_back(new Analyzer::TargetEntry(
+              "", makeExpr<Analyzer::Constant>(cd_poly_rings->columnType, false, value_exprs), false));
+          ++it;
+        }
+
       }
     }
   }

@@ -121,6 +121,8 @@ public class MapDTable implements Table {
       case POLYGON:
         return typeFactory.createSqlType(SqlTypeName.ANY);
         //return new PolygonSqlType();
+      case MULTIPOLYGON:
+        return typeFactory.createSqlType(SqlTypeName.ANY);
       default:
         throw new AssertionError(dType.name());
     }

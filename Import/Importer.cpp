@@ -320,6 +320,7 @@ Datum TDatumToDatum(const TDatum& datum, SQLTypeInfo& ti) {
     case kPOINT:
     case kLINESTRING:
     case kPOLYGON:
+    case kMULTIPOLYGON:
       throw std::runtime_error("Internal error: geometry type in TDatumToDatum.");
     default:
       throw std::runtime_error("Internal error: invalid type in TDatumToDatum.");
@@ -486,6 +487,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     case kPOINT:
     case kLINESTRING:
     case kPOLYGON:
+    case kMULTIPOLYGON:
       addGeoString(val);
       break;
     default:
@@ -535,6 +537,7 @@ void TypedImportBuffer::pop_value() {
     case kPOINT:
     case kLINESTRING:
     case kPOLYGON:
+    case kMULTIPOLYGON:
       geo_string_buffer_->pop_back();
       break;
     default:
@@ -1169,6 +1172,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
     case kPOINT:
     case kLINESTRING:
     case kPOLYGON:
+    case kMULTIPOLYGON:
       if (is_null) {
         if (cd->columnType.get_notnull())
           throw std::runtime_error("NULL for column " + cd->columnName);
@@ -1195,15 +1199,17 @@ ostream& operator<<(ostream& out, const std::vector<T>& v) {
 }
 
 bool importGeoFromWkt(std::string& wkt,
-                      SQLTypes& type,
+                      SQLTypeInfo& ti,
                       std::vector<double>& coords,
                       std::vector<int>& ring_sizes,
-                      std::vector<int>& polygon_sizes) {
+                      std::vector<int>& poly_rings) {
   auto data = (char*)wkt.c_str();
   OGRGeometryFactory geom_factory;
   OGRGeometry* geom = nullptr;
   OGRErr ogr_status = geom_factory.createFromWkt(&data, NULL, &geom);
-  if (ogr_status != OGRERR_NONE) {
+  if (ogr_status != OGRERR_NONE)
+    status = false;
+  if (status == false) {
     if (geom)
       geom_factory.destroyGeometry(geom);
     return false;
@@ -1216,14 +1222,14 @@ bool importGeoFromWkt(std::string& wkt,
   bool status = true;
   switch (wkbFlatten(geom->getGeometryType())) {
     case wkbPoint: {
-      type = kPOINT;
+      ti.set_type(kPOINT);
       OGRPoint* point = static_cast<OGRPoint*>(geom);
       coords.push_back(point->getX());
       coords.push_back(point->getY());
       break;
     }
     case wkbLineString: {
-      type = kLINESTRING;
+      ti.set_type(kLINESTRING);
       OGRLineString* linestring = static_cast<OGRLineString*>(geom);
       for (int i = 0; i < linestring->getNumPoints(); i++) {
         OGRPoint point;
@@ -1234,13 +1240,14 @@ bool importGeoFromWkt(std::string& wkt,
       break;
     }
     case wkbPolygon: {
-      type = kPOLYGON;
+      ti.set_type(kPOLYGON);
       OGRPolygon* polygon = static_cast<OGRPolygon*>(geom);
       OGRLinearRing* exteriorRing = polygon->getExteriorRing();
       if (!exteriorRing->isClockwise()) {
         exteriorRing->reverseWindingOrder();
       }
       exteriorRing->closeRings();
+      // Exterior ring is CW, closed.
       for (int i = 0; i < exteriorRing->getNumPoints(); i++) {
         OGRPoint point;
         exteriorRing->getPoint(i, &point);
@@ -1253,6 +1260,11 @@ bool importGeoFromWkt(std::string& wkt,
       // Add sizes and coords of the interior rings
       for (int r = 0; r < polygon->getNumInteriorRings(); r++) {
         OGRLinearRing* interiorRing = polygon->getInteriorRing(r);
+        if (interiorRing->isClockwise()) {
+          interiorRing->reverseWindingOrder();
+        }
+        interiorRing->closeRings();
+        // Interior rings are CCW, closed.
         ring_sizes.push_back(interiorRing->getNumPoints());
         for (int i = 0; i < interiorRing->getNumPoints(); i++) {
           OGRPoint point;
@@ -1264,7 +1276,50 @@ bool importGeoFromWkt(std::string& wkt,
       break;
     }
     case wkbMultiPolygon: {
-      status = false;
+      ti.set_type(kMULTIPOLYGON);
+      OGRMultiPolygon* mpolygon = static_cast<OGRMultiPolygon*>(geom);
+
+      for (int p = 0; p < mpolygon->getNumGeometries(); p++) {
+        OGRGeometry* mpgeom = mpolygon->getGeometryRef(p);
+        OGRPolygon* polygon = dynamic_cast<OGRPolygon*>(mpgeom);
+        if (!polygon) {
+          status = false;
+          break;
+        }
+        OGRLinearRing* exteriorRing = polygon->getExteriorRing();
+        if (!exteriorRing->isClockwise()) {
+          exteriorRing->reverseWindingOrder();
+        }
+        exteriorRing->closeRings();
+        // Exterior ring is CW, closed.
+        for (int i = 0; i < exteriorRing->getNumPoints(); i++) {
+          OGRPoint point;
+          exteriorRing->getPoint(i, &point);
+          coords.push_back(point.getX());
+          coords.push_back(point.getY());
+        }
+        // First add exterior ring size.
+        ring_sizes.push_back(exteriorRing->getNumPoints());
+        // Add sizes and coords of the interior rings
+        for (int r = 0; r < polygon->getNumInteriorRings(); r++) {
+          OGRLinearRing* interiorRing = polygon->getInteriorRing(r);
+          if (interiorRing->isClockwise()) {
+            interiorRing->reverseWindingOrder();
+          }
+          interiorRing->closeRings();
+          // Interior rings are CCW, closed.
+          ring_sizes.push_back(interiorRing->getNumPoints());
+          for (int i = 0; i < interiorRing->getNumPoints(); i++) {
+            OGRPoint point;
+            interiorRing->getPoint(i, &point);
+            coords.push_back(point.getX());
+            coords.push_back(point.getY());
+          }
+        }
+      }
+      if (status) {
+        poly_rings.push_back(mpolygon->getNumGeometries());
+      }
       break;
     }
     default:
@@ -1277,9 +1332,7 @@ bool importGeoFromWkt(std::string& wkt,
   return status;
 }
 
-bool importGeoFromLatLon(double lat,
-                         double lon,
-                         std::vector<double>& coords) {
+bool importGeoFromLonLat(double lat, double lon, std::vector<double>& coords) {
   if (std::isinf(lat) || std::isnan(lat) || std::isinf(lon) || std::isnan(lon))
     return false;
   auto point = new OGRPoint(lat, lon);
@@ -1371,7 +1424,7 @@ static ImportStatus import_thread(int thread_id,
               CHECK(IS_GEO(col_ti.get_type()));
               std::vector<double> coords;
               std::vector<int> ring_sizes;
-              std::vector<int> polygon_sizes;
+              std::vector<int> poly_rings;
               if (col_ti.get_type() == kPOINT &&
                   wkt.size() > 0 &&
                   (wkt[0] == '.' || isdigit(wkt[0]) || wkt[0] == '-')) {
@@ -1389,11 +1442,11 @@ static ImportStatus import_thread(int thread_id,
                   throw std::runtime_error("Cannot read lat/lon to insert into POINT column " + cd->columnName);
                 }
               } else {
-                SQLTypes imported_type;
-                if (!importGeoFromWkt(wkt, imported_type, coords, ring_sizes, polygon_sizes)) {
+                SQLTypeInfo import_ti;
+                if (!importGeoFromWkt(wkt, import_ti, coords, ring_sizes, poly_rings)) {
                   throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
                 }
-                if (col_ti.get_type() != imported_type) {
+                if (col_ti.get_type() != import_ti.get_type()) {
                   throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
                 }
               }
@@ -1412,7 +1465,7 @@ static ImportStatus import_thread(int thread_id,
               import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false);
               ++col_idx;
 
-              if (col_ti.get_type() == kPOLYGON) {
+              if (col_ti.get_type() == kPOLYGON || col_ti.get_type() == kMULTIPOLYGON) {
                 // Create ring_sizes array value and add it to the physical column
                 ++cd_it;
                 auto cd_ring_sizes = *cd_it;
@@ -1426,6 +1479,23 @@ static ImportStatus import_thread(int thread_id,
                 tdd_ring_sizes.val.arr_val = td_ring_sizes;
                 tdd_ring_sizes.is_null = false;
                 import_buffers[col_idx]->add_value(cd_ring_sizes, tdd_ring_sizes, false);
+                ++col_idx;
+              }
+
+              if (col_ti.get_type() == kMULTIPOLYGON) {
+                // Create poly_rings array value and add it to the physical column
+                ++cd_it;
+                auto cd_poly_rings = *cd_it;
+                std::vector<TDatum> td_poly_rings;
+                for (auto num_rings : poly_rings) {
+                  TDatum td_num_rings;
+                  td_num_rings.val.int_val = num_rings;
+                  td_poly_rings.push_back(td_num_rings);
+                }
+                TDatum tdd_poly_rings;
+                tdd_poly_rings.val.arr_val = td_poly_rings;
+                tdd_poly_rings.is_null = false;
+                import_buffers[col_idx]->add_value(cd_poly_rings, tdd_poly_rings, false);
                 ++col_idx;
               }
             }

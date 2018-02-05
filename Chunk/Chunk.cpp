@@ -84,7 +84,8 @@ void Chunk::getChunkBuffer(DataMgr* data_mgr,
       }
       case kPOINT:
       case kLINESTRING:
-      case kPOLYGON: {
+      case kPOLYGON:
+      case kMULTIPOLYGON: {
         StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
         str_encoder->set_index_buf(index_buf);
         break;
@@ -133,7 +134,8 @@ size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
     }
     case kPOINT:
     case kLINESTRING:
-    case kPOLYGON: {
+    case kPOLYGON:
+    case kMULTIPOLYGON: {
       StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
       return str_encoder->getNumElemsForBytesInsertData(src_data.stringsPtr, start_idx, num_elems, byte_limit);
     }
@@ -159,7 +161,8 @@ ChunkMetadata Chunk::appendData(DataBlockPtr& src_data, const size_t num_elems, 
       }
       case kPOINT:
       case kLINESTRING:
-      case kPOLYGON: {
+      case kPOLYGON:
+      case kMULTIPOLYGON: {
         StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
         return str_encoder->appendData(src_data.stringsPtr, start_idx, num_elems);
       }
@@ -196,7 +199,8 @@ void Chunk::init_encoder() {
       }
       case kPOINT:
       case kLINESTRING:
-      case kPOLYGON: {
+      case kPOLYGON:
+      case kMULTIPOLYGON: {
         StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
         str_encoder->set_index_buf(index_buf);
         break;
