@@ -23,7 +23,7 @@ double hypotenuse(double x, double y) {
   return x * sqrt(1.0 + (y * y) / (x * x));
 }
 
-ALWAYS_INLINE DEVICE double distance_point_point(double p1x, double p1y, double p2x, double p2y) {
+DEVICE ALWAYS_INLINE double distance_point_point(double p1x, double p1y, double p2x, double p2y) {
   return hypotenuse(p1x - p2x, p1y - p2y);
 }
 
@@ -191,6 +191,44 @@ double ST_Distance_Point_Polygon(double* p,
   return 0.0;
 }
 
+EXTENSION_NOINLINE
+double ST_Distance_Point_MultiPolygon(double* p,
+                                      int64_t pnum,
+                                      double* mpoly_coords,
+                                      int64_t mpoly_num_coords,
+                                      int32_t* mpoly_ring_sizes,
+                                      int64_t mpoly_num_rings,
+                                      int32_t* mpoly_poly_sizes,
+                                      int64_t mpoly_num_polys) {
+  if (mpoly_num_polys <= 0)
+    return 0.0;
+  double min_distance = 0.0;
+
+  // Set specific poly pointers as we move through the coords/ringsizes/polyrings arrays.
+  auto next_poly_coords = mpoly_coords;
+  auto next_poly_ring_sizes = mpoly_ring_sizes;
+
+  for (auto poly = 0; poly < mpoly_num_polys; poly++) {
+    auto poly_coords = next_poly_coords;
+    auto poly_ring_sizes = next_poly_ring_sizes;
+    auto poly_num_rings = mpoly_poly_sizes[poly];
+    // Count number of coords in all of poly's rings, advance ring size pointer.
+    int32_t poly_num_coords = 0;
+    for (auto ring = 0; ring < poly_num_rings; ring++) {
+      poly_num_coords += 2 * *next_poly_ring_sizes++;
+    }
+    next_poly_coords += poly_num_coords;
+    double distance = ST_Distance_Point_Polygon(p, pnum, poly_coords, poly_num_coords, poly_ring_sizes, poly_num_rings);
+    if (poly == 0 || min_distance > distance) {
+      min_distance = distance;
+      if (min_distance == 0.0)
+        break;
+    }
+  }
+
+  return min_distance;
+}
+
 EXTENSION_INLINE
 double ST_Distance_LineString_Point(double* l, int64_t lnum, double* p, int64_t pnum) {
   return ST_Distance_Point_LineString(p, pnum, l, lnum);
@@ -324,6 +362,19 @@ double ST_Distance_Polygon_Polygon(double* poly1_coords,
   // Assuming disjoint or intersecting shapes: return distance between exterior rings.
   return ST_Distance_LineString_LineString(
       poly1_coords, poly1_exterior_ring_num_coords, poly2_coords, poly2_exterior_ring_num_coords);
+}
+
+EXTENSION_INLINE
+double ST_Distance_MultiPolygon_Point(double* mpoly_coords,
+                                      int64_t mpoly_num_coords,
+                                      int32_t* mpoly_ring_sizes,
+                                      int64_t mpoly_num_rings,
+                                      int32_t* mpoly_poly_sizes,
+                                      int64_t mpoly_num_polys,
+                                      double* p,
+                                      int64_t pnum) {
+  return ST_Distance_Point_MultiPolygon(
+      p, pnum, mpoly_coords, mpoly_num_coords, mpoly_ring_sizes, mpoly_num_rings, mpoly_poly_sizes, mpoly_num_polys);
 }
 
 EXTENSION_NOINLINE

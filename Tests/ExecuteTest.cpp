@@ -2880,13 +2880,19 @@ void import_dept_table() {
 void import_geospatial_test() {
   const std::string geospatial_test("DROP TABLE IF EXISTS geospatial_test;");
   run_ddl_statement(geospatial_test);
-  run_ddl_statement("CREATE TABLE geospatial_test (p POINT, l LINESTRING, poly POLYGON) WITH (fragment_size=2);");
+  run_ddl_statement(
+      "CREATE TABLE geospatial_test (p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON) "
+      "WITH (fragment_size=2);");
   for (ssize_t i = 0; i < g_num_rows; ++i) {
-    const std::string insert_query{
-        "INSERT INTO geospatial_test VALUES('POINT(" + std::to_string(i) + " " + std::to_string(i) +
-        ")', 'LINESTRING(" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " + std::to_string(2 * i) +
-        ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1)) : "") + ")', 'POLYGON((0 0, " +
-        std::to_string(i + 1) + " 0, 0 " + std::to_string(i + 1) + ", 0 0))');"};
+    const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) + ")'"};
+    const std::string linestring{
+        "'LINESTRING(" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " + std::to_string(2 * i) +
+        ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1)) : "") + ")'"};
+    const std::string poly{"'POLYGON((0 0, " + std::to_string(i + 1) + " 0, 0 " + std::to_string(i + 1) + ", 0 0))'"};
+    const std::string mpoly{"'MULTIPOLYGON(((0 0, " + std::to_string(i + 1) + " 0, 0 " + std::to_string(i + 1) +
+                            ", 0 0)))'"};
+    const std::string insert_query{"INSERT INTO geospatial_test VALUES(" + point + ", " + linestring + ", " + poly +
+                                   ", " + mpoly + ");"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
   }
 }
@@ -4046,6 +4052,14 @@ TEST(Select, GeoSpatial) {
                                          "from geospatial_test limit 1;",
                                          dt)),
                 static_cast<double>(0.01));
+    ASSERT_NEAR(
+        static_cast<double>(2.0),
+        v<double>(run_simple_agg("SELECT ST_Distance("
+                                 "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2), (1 1, -1 1, -1 -1, 1 -1, 1 1)))', "
+                                 "'POINT(4 2)') "
+                                 "from geospatial_test limit 1;",
+                                 dt)),
+        static_cast<double>(0.01));
 
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(p,p);", dt)));
