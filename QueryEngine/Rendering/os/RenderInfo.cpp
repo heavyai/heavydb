@@ -24,6 +24,15 @@ RenderInfo::RenderInfo(const std::string& session_id,
   CHECK(false);
 }
 
+void RenderInfo::setForceNonInSituData() {
+  CHECK(false);
+}
+
+bool RenderInfo::queryRanWithInSituData() const {
+  CHECK(false);
+  return false;
+}
+
 bool RenderInfo::hasInSituData() const {
   CHECK(false);
   return false;
