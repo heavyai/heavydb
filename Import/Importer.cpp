@@ -1448,8 +1448,13 @@ static ImportStatus import_thread(int thread_id,
                 if (lat_str.size() > 0 && (lat_str[0] == '.' || isdigit(lat_str[0]) || lat_str[0] == '-')) {
                   lat = std::atof(lat_str.c_str());
                 }
-                // TODO: Add option to accept the reversed order
-                // TODO: Check if column SRID is WGS 84: col_ti.get_dimension() == 4326
+                // Swap coordinates if this table uses a reverse order: lat/lon
+                if (!copy_params.lonlat)
+                  std::swap(lat, lon);
+                // TODO: should check if POINT column should have been declared with SRID WGS 84, EPSG 4326 ?
+                // if (col_ti.get_dimension() != 4326) {
+                //  throw std::runtime_error("POINT column " + cd->columnName + " is not WGS84, cannot insert lon/lat");
+                // }
                 if (!importGeoFromLonLat(lon, lat, coords)) {
                   throw std::runtime_error("Cannot read lon/lat to insert into POINT column " + cd->columnName);
                 }

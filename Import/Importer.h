@@ -80,6 +80,8 @@ struct CopyParams {
   size_t retry_count;
   size_t retry_wait;
   size_t batch_size;
+  // geospatial params
+  bool lonlat;
 
   CopyParams()
       : delimiter(','),
@@ -98,7 +100,8 @@ struct CopyParams {
         is_parquet(false),
         retry_count(100),
         retry_wait(5),
-        batch_size(1000) {}
+        batch_size(1000),
+        lonlat(true) {}
 
   CopyParams(char d, const std::string& n, char l, size_t b, size_t retries, size_t wait)
       : delimiter(d),
@@ -116,7 +119,8 @@ struct CopyParams {
         table_type(TableType::DELIMITED),
         retry_count(retries),
         retry_wait(wait),
-        batch_size(b) {}
+        batch_size(b),
+        lonlat(true) {}
 };
 
 class TypedImportBuffer : boost::noncopyable {
