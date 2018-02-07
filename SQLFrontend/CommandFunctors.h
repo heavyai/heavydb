@@ -10,9 +10,21 @@
 #include "RegexSupport.h"
 
 #include <rapidjson/document.h>
+#include <fstream>
 #include <iostream>
+#include <type_traits>
+
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "MapDServer.h"
+
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/join.hpp>
+#include <boost/algorithm/string/predicate.hpp>
+#include <boost/algorithm/string/trim.hpp>
+#include <boost/archive/iterators/base64_from_binary.hpp>
+#include <boost/archive/iterators/binary_from_base64.hpp>
+#include <boost/archive/iterators/transform_width.hpp>
+#include <boost/preprocessor/facilities/overload.hpp>
 
 template <typename CONTEXT_OP_POLICY>
 class ContextOperations {
@@ -57,9 +69,11 @@ struct DefaultContextOpPolicy {
   using ContextType = ClientContext;
 };
 
-template <typename CONTEXT_OPS_TYPE>
-class CmdBase : public CmdDeterminant {
+template <typename CONTEXT_OPS_TYPE, typename TAG_TYPE = CmdDeterminant>
+class CmdBase : public TAG_TYPE {
  public:
+  static_assert(std::is_base_of<CmdDeterminant, TAG_TYPE>::value, "TAG_TYPE must be derived from CmdDeterminant");
+
   using ContextOps = CONTEXT_OPS_TYPE;
   using ContextType = typename ContextOps::ContextType;
 
@@ -71,27 +85,58 @@ class CmdBase : public CmdDeterminant {
   ContextType& m_stashed_context_ref;
 };
 
+class CmdStringUtilities {
+ public:
+  static inline std::string decode64(const std::string& val) {
+    using namespace boost::archive::iterators;
+    using It = transform_width<binary_from_base64<std::string::const_iterator>, 8, 6>;
+    return boost::algorithm::trim_right_copy_if(std::string(It(std::begin(val)), It(std::end(val))),
+                                                [](char c) { return c == '\0'; });
+  }
+
+  static inline std::string encode64(const std::string& val) {
+    using namespace boost::archive::iterators;
+    using It = base64_from_binary<transform_width<std::string::const_iterator, 6, 8>>;
+    auto tmp = std::string(It(std::begin(val)), It(std::end(val)));
+    return tmp.append((3 - val.size() % 3) % 3, '=');
+  }
+
+  static bool replace(std::string& str, const std::string& from, const std::string& to) {
+    size_t start_pos = str.find(from);
+    if (start_pos == std::string::npos)
+      return false;
+    str.replace(start_pos, from.length(), to);
+    return true;
+  }
+};
+
 // The StandardCommand macro removes boilerplate that needs to be written
 // for creating functors that perform commands (usually operations on a client
 // context)
 
-#define StandardCommand(CommandName, CommandOperations)                             \
-  template <typename CONTEXT_OP_POLICY = DefaultContextOpPolicy,                    \
-            template <typename> class CONTEXT_OPS_TYPE = ContextOperations>         \
-  class CommandName##Cmd : public CmdBase<CONTEXT_OPS_TYPE<CONTEXT_OP_POLICY>> {    \
-   public:                                                                          \
-    using Super = CmdBase<CONTEXT_OPS_TYPE<CONTEXT_OP_POLICY>>;                     \
-    using ContextOps = typename Super::ContextOps;                                  \
-    using ContextType = typename Super::ContextType;                                \
-    CommandName##Cmd(typename Super::ContextType& c) : Super(c) {}                  \
-    using Super::cmdContext;                                                        \
-    template <typename PARAMETERS>                                                  \
-    void operator()(PARAMETERS const& p, std::ostream& output_stream = std::cout) { \
-      do {                                                                          \
-        CommandOperations;                                                          \
-      } while (0);                                                                  \
-    }                                                                               \
+#define StandardCommand_3(CommandName, CommandOperations, CommandTag)                             \
+  template <typename CONTEXT_OP_POLICY = DefaultContextOpPolicy,                                  \
+            template <typename> class CONTEXT_OPS_TYPE = ContextOperations,                       \
+            typename COMMAND_TAG_TYPE = CommandTag>                                               \
+  class CommandName##Cmd : public CmdBase<CONTEXT_OPS_TYPE<CONTEXT_OP_POLICY>, COMMAND_TAG_TYPE>, \
+                           public CmdStringUtilities {                                            \
+   public:                                                                                        \
+    using Super = CmdBase<CONTEXT_OPS_TYPE<CONTEXT_OP_POLICY>, COMMAND_TAG_TYPE>;                 \
+    using ContextOps = typename Super::ContextOps;                                                \
+    using ContextType = typename Super::ContextType;                                              \
+    CommandName##Cmd(typename Super::ContextType& c) : Super(c) {}                                \
+    using Super::cmdContext;                                                                      \
+    template <typename PARAMETERS>                                                                \
+    void operator()(PARAMETERS const& p, std::ostream& output_stream = std::cout) {               \
+      do {                                                                                        \
+        CommandOperations;                                                                        \
+      } while (0);                                                                                \
+    }                                                                                             \
   }
+
+#define StandardCommand_2(CommandName, CommandOperations) \
+  StandardCommand_3(CommandName, CommandOperations, CmdDeterminant)
+#define StandardCommand(...) BOOST_PP_OVERLOAD(StandardCommand_, __VA_ARGS__)(__VA_ARGS__)
 
 //
 // Standard Command Definitions
@@ -111,9 +156,11 @@ StandardCommand(RoleList, {
 
 StandardCommand(Roles, ContextOps::get_all_roles(cmdContext()));
 
-StandardCommand(ListUsers, returned_list_regex<kGET_USERS>(p, cmdContext(), output_stream););
-StandardCommand(ListTables, returned_list_regex<kGET_PHYSICAL_TABLES>(p, cmdContext(), output_stream));
-StandardCommand(ListViews, returned_list_regex<kGET_VIEWS>(p, cmdContext(), output_stream));
+StandardCommand(ListUsers, { returned_list_regex<kGET_USERS>(p, cmdContext(), output_stream); }, RegexCmdDeterminant);
+StandardCommand(ListTables,
+                { returned_list_regex<kGET_PHYSICAL_TABLES>(p, cmdContext(), output_stream); },
+                RegexCmdDeterminant);
+StandardCommand(ListViews, { returned_list_regex<kGET_VIEWS>(p, cmdContext(), output_stream); }, RegexCmdDeterminant);
 
 StandardCommand(Help, {
   std::cout << "\\u [regex] List all users, optionally matching regex.\n";
@@ -134,8 +181,8 @@ StandardCommand(Help, {
   std::cout << "\\version Print MapD Server version.\n";
   std::cout << "\\copy <file path> <table> Copy data from file to table.\n";
   std::cout << "\\status Get status of the server and the leaf nodes.\n";
-  std::cout << "\\export_dashboard <dashboard name>,<filename> Exports a dashboard to a file\n";
-  std::cout << "\\import_dashboard <dashboard name>,<filename> Imports a dashboard from a file\n";
+  std::cout << "\\export_dashboard <dashboard name> <filename> Exports a dashboard to a file.\n";
+  std::cout << "\\import_dashboard <dashboard name> <filename> Imports a dashboard from a file\n";
   std::cout << "\\roles Reports all roles.\n";
   std::cout << "\\role_check <roleName> Verifies whether role exists.\n";
   std::cout << "\\role_list <userName> Reports all roles granted to user.\n";
@@ -271,6 +318,67 @@ StandardCommand(ListColumns, {
   };
 
   thrift_op<kGET_TABLE_DETAILS>(cmdContext(), table_name.c_str(), on_success_lambda);
+});
+
+StandardCommand(ExportDashboard, {
+  decltype(p[1])& dashboard_name(p[1]);
+  decltype(p[2])& filename(p[2]);
+
+  cmdContext().view_name = dashboard_name;
+
+  thrift_op<kEXPORT_DASHBOARD>(cmdContext(),
+                               [&](ContextType& lambda_context) {
+                                 output_stream << "Exporting dashboard " << lambda_context.view_name << " to file "
+                                               << filename << std::endl;  // create file and dump string to it
+                                 std::ofstream dashfile;
+                                 dashfile.open(filename);
+                                 if (dashfile.is_open()) {
+                                   dashfile << lambda_context.view_name << std::endl;
+                                   dashfile << lambda_context.view_return.view_metadata << std::endl;
+                                   dashfile << decode64(lambda_context.view_return.view_state);
+                                   dashfile.close();
+                                 } else {
+                                   output_stream << "Could not open file " << filename << std::endl;
+                                 }
+                               },
+                               [&](ContextType&) { output_stream << "Failed to export dashboard." << std::endl; });
+});
+
+StandardCommand(ImportDashboard, {
+  decltype(p[1])& dashboard_name(p[1]);
+  decltype(p[2])& filename(p[2]);
+
+  cmdContext().view_name = dashboard_name;
+  // context.view_metadata = std::string("{\"table\":\"") + table_name + std::string("\",\"version\":\"v2\"}");
+  cmdContext().view_state = "";
+  cmdContext().view_metadata = "";
+  // read file to get view state
+  std::ifstream dashfile;
+  std::string state;
+  std::string old_name;
+  dashfile.open(filename);
+  if (dashfile.is_open()) {
+    std::getline(dashfile, old_name);
+    std::getline(dashfile, cmdContext().view_metadata);
+    std::getline(dashfile, state);
+    dashfile.close();
+  } else {
+    output_stream << "Could not open file " << filename << std::endl;
+    return;
+  }
+
+  if (!replace(state,
+               std::string("\"title\":\"" + old_name + "\","),
+               std::string("\"title\":\"" + cmdContext().view_name + "\","))) {
+    output_stream << "Failed to update title." << std::endl;
+    return;
+  }
+
+  cmdContext().view_state = encode64(state);
+
+  output_stream << "Importing dashboard " << cmdContext().view_name << " from file " << filename << std::endl;
+  thrift_op<kIMPORT_DASHBOARD>(
+      cmdContext(), DoNothing(), [&](ContextType&) { output_stream << "Failed to import dashboard." << std::endl; });
 });
 
 StandardCommand(GetOptimizedSchema, {

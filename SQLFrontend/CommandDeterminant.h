@@ -2,5 +2,6 @@
 #define COMMANDDETERMINANT_H
 
 struct CmdDeterminant {};
+struct RegexCmdDeterminant : public CmdDeterminant {};
 
 #endif

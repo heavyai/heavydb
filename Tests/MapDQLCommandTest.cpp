@@ -5,6 +5,10 @@
 #include "../gen-cpp/mapd_types.h"
 #include "gtest/gtest.h"
 
+#include <boost/interprocess/sync/file_lock.hpp>
+#include <cstring>
+#include <fstream>
+
 #define MockMethod(method_name) \
   template <typename... ARGS>   \
   void method_name(ARGS&&... args) {}
@@ -120,8 +124,8 @@ TEST(MapDQLTest, CommandResolutionChain_ThreeSet_SecondHit) {
 
   auto resolution =
       CommandResolutionChain<>(
-          "\\fake_command2 token1 token2", "\\fake_command1", 3, [&](Params const& p) { first_hit = true; })(
-          "\\fake_command2", 1, [&](Params const& p) { second_hit = true; })(
+          "\\fake_command2 token1 token2", "\\fake_command1", 1, [&](Params const& p) { first_hit = true; })(
+          "\\fake_command2", 3, [&](Params const& p) { second_hit = true; })(
           "\\fake_command3", 1, [&](Params const& p) { third_hit = true; })
           .is_resolved();
 
@@ -140,9 +144,9 @@ TEST(MapDQLTest, CommandResolutionChain_ThreeSet_ThirdHit) {
 
   auto resolution =
       CommandResolutionChain<>(
-          "\\fake_command3 token1 token2", "\\fake_command1", 3, [&](Params const& p) { first_hit = true; })(
+          "\\fake_command3 token1 token2", "\\fake_command1", 1, [&](Params const& p) { first_hit = true; })(
           "\\fake_command2", 1, [&](Params const& p) { second_hit = true; })(
-          "\\fake_command3", 1, [&](Params const& p) { third_hit = true; })
+          "\\fake_command3", 3, [&](Params const& p) { third_hit = true; })
           .is_resolved();
 
   EXPECT_TRUE(resolution);
@@ -335,8 +339,9 @@ using ListUsersCommandMockupContextOperations = RegexCommandsMockupContextOperat
 
 TEST(MapDQLTest, ListUsersCommandTest_ListAll) {
   using Params = CommandResolutionChain<>::CommandTokenList;
-  using UnitTestListUsersCmd = ListUsersCmd<ListUsersCommandContextOpsPolicy, ListUsersCommandMockupContextOperations>;
-  using TokenExtractor = CommandResolutionChain<>::TokenExtractor;
+  using UnitTestListUsersCmd =
+      ListUsersCmd<ListUsersCommandContextOpsPolicy, ListUsersCommandMockupContextOperations, RegexCmdDeterminant>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
 
   // Run the test for \u
   std::ostringstream test_capture_stream1;
@@ -347,6 +352,7 @@ TEST(MapDQLTest, ListUsersCommandTest_ListAll) {
   EXPECT_TRUE(resolution1);
 
   std::string output_back_to_input(test_capture_stream1.str());
+
   auto extractedTokens = TokenExtractor().extract_tokens(output_back_to_input);
   EXPECT_EQ(extractedTokens.size(), (decltype(extractedTokens)::size_type)7);
   EXPECT_EQ(extractedTokens[0], "mapd");
@@ -360,8 +366,9 @@ TEST(MapDQLTest, ListUsersCommandTest_ListAll) {
 
 TEST(MapDQLTest, ListUsersCommandTest_OnlyLisa) {
   using Params = CommandResolutionChain<>::CommandTokenList;
-  using UnitTestListUsersCmd = ListUsersCmd<ListUsersCommandContextOpsPolicy, ListUsersCommandMockupContextOperations>;
-  using TokenExtractor = CommandResolutionChain<>::TokenExtractor;
+  using UnitTestListUsersCmd =
+      ListUsersCmd<ListUsersCommandContextOpsPolicy, ListUsersCommandMockupContextOperations, RegexCmdDeterminant>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
 
   std::ostringstream test_capture_stream2;
   ListUsersCommandMockupContext unit_test_context_only_lisa;
@@ -378,8 +385,9 @@ TEST(MapDQLTest, ListUsersCommandTest_OnlyLisa) {
 
 TEST(MapDQLTest, ListUsersCommandTest_StartsWithLisa) {
   using Params = CommandResolutionChain<>::CommandTokenList;
-  using UnitTestListUsersCmd = ListUsersCmd<ListUsersCommandContextOpsPolicy, ListUsersCommandMockupContextOperations>;
-  using TokenExtractor = CommandResolutionChain<>::TokenExtractor;
+  using UnitTestListUsersCmd =
+      ListUsersCmd<ListUsersCommandContextOpsPolicy, ListUsersCommandMockupContextOperations, RegexCmdDeterminant>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
 
   std::ostringstream test_capture_stream3;
   ListUsersCommandMockupContext unit_test_context_starts_with_lisa;
@@ -418,8 +426,8 @@ using ListTablesCommandMockupContextOperations = RegexCommandsMockupContextOpera
 TEST(MapDQLTest, ListTablesCommandTest_ListAll) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestListTablesCmd =
-      ListTablesCmd<ListTablesCommandContextOpsPolicy, ListTablesCommandMockupContextOperations>;
-  using TokenExtractor = CommandResolutionChain<>::TokenExtractor;
+      ListTablesCmd<ListTablesCommandContextOpsPolicy, ListTablesCommandMockupContextOperations, RegexCmdDeterminant>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
 
   std::ostringstream test_capture_stream;
   ListTablesCommandMockupContext unit_test_context;
@@ -443,8 +451,8 @@ TEST(MapDQLTest, ListTablesCommandTest_ListAll) {
 TEST(MapDQLTest, ListTablesCommandTest_EndsWithNoMatch) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestListTablesCmd =
-      ListTablesCmd<ListTablesCommandContextOpsPolicy, ListTablesCommandMockupContextOperations>;
-  using TokenExtractor = CommandResolutionChain<>::TokenExtractor;
+      ListTablesCmd<ListTablesCommandContextOpsPolicy, ListTablesCommandMockupContextOperations, RegexCmdDeterminant>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
 
   std::ostringstream test_capture_stream;
   ListTablesCommandMockupContext unit_test_context;
@@ -463,8 +471,8 @@ TEST(MapDQLTest, ListTablesCommandTest_EndsWithNoMatch) {
 TEST(MapDQLTest, ListTablesCommandTest_EndsWithMatch) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestListTablesCmd =
-      ListTablesCmd<ListTablesCommandContextOpsPolicy, ListTablesCommandMockupContextOperations>;
-  using TokenExtractor = CommandResolutionChain<>::TokenExtractor;
+      ListTablesCmd<ListTablesCommandContextOpsPolicy, ListTablesCommandMockupContextOperations, RegexCmdDeterminant>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
 
   std::ostringstream test_capture_stream;
   ListTablesCommandMockupContext unit_test_context;
@@ -484,8 +492,8 @@ TEST(MapDQLTest, ListTablesCommandTest_EndsWithMatch) {
 TEST(MapDQLTest, ListTablesCommandTest_InnerNoMatch) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestListTablesCmd =
-      ListTablesCmd<ListTablesCommandContextOpsPolicy, ListTablesCommandMockupContextOperations>;
-  using TokenExtractor = CommandResolutionChain<>::TokenExtractor;
+      ListTablesCmd<ListTablesCommandContextOpsPolicy, ListTablesCommandMockupContextOperations, RegexCmdDeterminant>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
 
   std::ostringstream test_capture_stream;
   ListTablesCommandMockupContext unit_test_context;
@@ -503,8 +511,8 @@ TEST(MapDQLTest, ListTablesCommandTest_InnerNoMatch) {
 TEST(MapDQLTest, ListTablesCommandTest_InnerMatch) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestListTablesCmd =
-      ListTablesCmd<ListTablesCommandContextOpsPolicy, ListTablesCommandMockupContextOperations>;
-  using TokenExtractor = CommandResolutionChain<>::TokenExtractor;
+      ListTablesCmd<ListTablesCommandContextOpsPolicy, ListTablesCommandMockupContextOperations, RegexCmdDeterminant>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
 
   std::ostringstream test_capture_stream;
   ListTablesCommandMockupContext unit_test_context;
@@ -538,8 +546,9 @@ using ListViewsCommandMockupContextOperations = RegexCommandsMockupContextOperat
 
 TEST(MapDQLTest, ViewListCommandTest_ListAll) {
   using Params = CommandResolutionChain<>::CommandTokenList;
-  using UnitTestListViewsCmd = ListViewsCmd<ListViewsCommandContextOpsPolicy, ListViewsCommandMockupContextOperations>;
-  using TokenExtractor = CommandResolutionChain<>::TokenExtractor;
+  using UnitTestListViewsCmd =
+      ListViewsCmd<ListViewsCommandContextOpsPolicy, ListViewsCommandMockupContextOperations, RegexCmdDeterminant>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
 
   std::ostringstream test_capture_stream;
   ListViewsCommandMockupContext unit_test_context;
@@ -561,8 +570,9 @@ TEST(MapDQLTest, ViewListCommandTest_ListAll) {
 
 TEST(MapDQLTest, ViewListCommandTest_EndsWith4Digits) {
   using Params = CommandResolutionChain<>::CommandTokenList;
-  using UnitTestListViewsCmd = ListViewsCmd<ListViewsCommandContextOpsPolicy, ListViewsCommandMockupContextOperations>;
-  using TokenExtractor = CommandResolutionChain<>::TokenExtractor;
+  using UnitTestListViewsCmd =
+      ListViewsCmd<ListViewsCommandContextOpsPolicy, ListViewsCommandMockupContextOperations, RegexCmdDeterminant>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
 
   std::ostringstream test_capture_stream;
   ListViewsCommandMockupContext unit_test_context;
@@ -576,6 +586,273 @@ TEST(MapDQLTest, ViewListCommandTest_EndsWith4Digits) {
   using TokenCount = decltype(extractedTokens)::size_type;
   EXPECT_EQ(extractedTokens.size(), (TokenCount)1);
   EXPECT_EQ(extractedTokens[0], "marge1025");
+}
+
+//
+// \\import_dashboard Command Unit Test and Support Mockups
+//
+
+using ImportDashboardCommandMockupContext = MetaClientContext<CoreMockClient, CoreMockTransport>;
+
+struct ImportDashboardCommandContextOpsPolicy {
+  using ThriftServiceType = ThriftService;
+  using ContextType = ImportDashboardCommandMockupContext;
+};
+
+template <typename CONTEXT_OP_POLICY>
+class ImportDashboardCommandMockupContextOperations {
+ public:
+  using ThriftService = typename CONTEXT_OP_POLICY::ThriftServiceType;
+  using ContextType = typename CONTEXT_OP_POLICY::ContextType;
+};
+
+TEST(MapDQLTest, ImportDashboardCommandTest_SimpleDashSimpleFilename) {
+  using Params = CommandResolutionChain<>::CommandTokenList;
+  using UnitTestImportDashboardCmd =
+      ImportDashboardCmd<ImportDashboardCommandContextOpsPolicy, ImportDashboardCommandMockupContextOperations>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
+
+  std::ostringstream test_capture_stream;
+  ImportDashboardCommandMockupContext unit_test_context;
+  auto resolution = CommandResolutionChain<>("\\import_dashboard simpledash unlikely_file_to_over_be_opened_1234.txt",
+                                             "\\import_dashboard",
+                                             3,
+                                             UnitTestImportDashboardCmd(unit_test_context),
+                                             test_capture_stream)
+                        .is_resolved();
+  EXPECT_TRUE(resolution);
+  EXPECT_EQ(unit_test_context.view_name, "simpledash");
+  EXPECT_EQ(unit_test_context.view_state, "");
+  EXPECT_EQ(unit_test_context.view_metadata, "");
+
+  // We are relying on the behavior of not being able to open the file to capture the filename passed in
+  std::string output_back_to_input(test_capture_stream.str());
+  auto extracted_tokens = TokenExtractor().extract_tokens(output_back_to_input);
+  using TokenCount = decltype(extracted_tokens)::size_type;
+  EXPECT_EQ(extracted_tokens.size(), 5u);
+  EXPECT_EQ(extracted_tokens[4], "unlikely_file_to_over_be_opened_1234.txt");
+}
+
+TEST(MapDQLTest, ImportDashboardCommandTest_SimpleDashComplexFilename) {
+  using Params = CommandResolutionChain<>::CommandTokenList;
+  using UnitTestImportDashboardCmd =
+      ImportDashboardCmd<ImportDashboardCommandContextOpsPolicy, ImportDashboardCommandMockupContextOperations>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
+
+  std::ostringstream test_capture_stream;
+  ImportDashboardCommandMockupContext unit_test_context;
+  auto resolution = CommandResolutionChain<>("\\import_dashboard simpledash \"C:\\\\Windows is Terrible\\\\lol.txt\"",
+                                             "\\import_dashboard",
+                                             3,
+                                             UnitTestImportDashboardCmd(unit_test_context),
+                                             test_capture_stream)
+                        .is_resolved();
+  EXPECT_TRUE(resolution);
+  EXPECT_EQ(unit_test_context.view_name, "simpledash");
+  EXPECT_EQ(unit_test_context.view_state, "");
+  EXPECT_EQ(unit_test_context.view_metadata, "");
+
+  // We are relying on the behavior of not being able to open the file to capture the filename passed in
+  std::string output_back_to_input(test_capture_stream.str());
+  auto extracted_tokens = TokenExtractor().extract_tokens(output_back_to_input);
+  using TokenCount = decltype(extracted_tokens)::size_type;
+  EXPECT_EQ(extracted_tokens.size(), 7u);  // Inflated because of spaces in standard output
+  EXPECT_EQ(extracted_tokens[4], "C:\\Windows");
+  EXPECT_EQ(extracted_tokens[5], "is");
+  EXPECT_EQ(extracted_tokens[6], "Terrible\\lol.txt");
+}
+
+TEST(MapDQLTest, ImportDashboardCommandTest_ComplexDashSimpleFilename) {
+  using Params = CommandResolutionChain<>::CommandTokenList;
+  using UnitTestImportDashboardCmd =
+      ImportDashboardCmd<ImportDashboardCommandContextOpsPolicy, ImportDashboardCommandMockupContextOperations>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
+
+  std::ostringstream test_capture_stream;
+  ImportDashboardCommandMockupContext unit_test_context;
+  auto resolution = CommandResolutionChain<>("\\import_dashboard \"\\\"Who uses spaces anyway?\\\"\" simpledash.txt",
+                                             "\\import_dashboard",
+                                             3,
+                                             UnitTestImportDashboardCmd(unit_test_context),
+                                             test_capture_stream)
+                        .is_resolved();
+  EXPECT_TRUE(resolution);
+  EXPECT_EQ(unit_test_context.view_name, "\"Who uses spaces anyway?\"");
+  EXPECT_EQ(unit_test_context.view_state, "");
+  EXPECT_EQ(unit_test_context.view_metadata, "");
+
+  // We are relying on the behavior of not being able to open the file to capture the filename passed in
+  std::string output_back_to_input(test_capture_stream.str());
+  auto extracted_tokens = TokenExtractor().extract_tokens(output_back_to_input);
+  using TokenCount = decltype(extracted_tokens)::size_type;
+  EXPECT_EQ(extracted_tokens.size(), 5u);  // Inflated because of spaces in standard output
+  EXPECT_EQ(extracted_tokens[4], "simpledash.txt");
+}
+
+TEST(MapDQLTest, ImportDashboardCommandTest_ComplexDashComplexFilename) {
+  using Params = CommandResolutionChain<>::CommandTokenList;
+  using UnitTestImportDashboardCmd =
+      ImportDashboardCmd<ImportDashboardCommandContextOpsPolicy, ImportDashboardCommandMockupContextOperations>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
+
+  std::ostringstream test_capture_stream;
+  ImportDashboardCommandMockupContext unit_test_context;
+  auto resolution =
+      CommandResolutionChain<>(
+          "\\import_dashboard \"\\\"Who uses spaces anyway?\\\"\" \"C:\\\\Windows is Terrible\\\\lol.txt\"",
+          "\\import_dashboard",
+          3,
+          UnitTestImportDashboardCmd(unit_test_context),
+          test_capture_stream)
+          .is_resolved();
+  EXPECT_TRUE(resolution);
+  EXPECT_EQ(unit_test_context.view_name, "\"Who uses spaces anyway?\"");
+  EXPECT_EQ(unit_test_context.view_state, "");
+  EXPECT_EQ(unit_test_context.view_metadata, "");
+
+  // We are relying on the behavior of not being able to open the file to capture the filename passed in
+  std::string output_back_to_input(test_capture_stream.str());
+  auto extracted_tokens = TokenExtractor().extract_tokens(output_back_to_input);
+  using TokenCount = decltype(extracted_tokens)::size_type;
+  EXPECT_EQ(extracted_tokens.size(), 7u);  // Inflated because of spaces in standard output
+  EXPECT_EQ(extracted_tokens[4], "C:\\Windows");
+  EXPECT_EQ(extracted_tokens[5], "is");
+  EXPECT_EQ(extracted_tokens[6], "Terrible\\lol.txt");
+}
+
+//
+// \\export_dashboard Command Unit Test and Support Mockups
+//
+
+using ExportDashboardCommandMockupContext = MetaClientContext<CoreMockClient, CoreMockTransport>;
+
+struct ExportDashboardCommandContextOpsPolicy {
+  using ThriftServiceType = ThriftService;
+  using ContextType = ExportDashboardCommandMockupContext;
+};
+
+template <typename CONTEXT_OP_POLICY>
+class ExportDashboardCommandMockupContextOperations {
+ public:
+  using ThriftService = typename CONTEXT_OP_POLICY::ThriftServiceType;
+  using ContextType = typename CONTEXT_OP_POLICY::ContextType;
+};
+
+TEST(MapDQLTest, ExportDashboardCommandTest_SimpleDashSimpleFilename) {
+  using Params = CommandResolutionChain<>::CommandTokenList;
+  using UnitTestExportDashboardCmd =
+      ExportDashboardCmd<ExportDashboardCommandContextOpsPolicy, ExportDashboardCommandMockupContextOperations>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
+
+  // Create a directory to force file open to fail
+  static const char* test_filename = "export_unlikely_file_to_over_be_opened_1234.txt";
+  std::string fake_input = std::string("\\export_dashboard simpledash ") + test_filename;
+
+  auto result = mkdir(test_filename, 0700);
+  EXPECT_EQ(result, 0);
+
+  std::ostringstream test_capture_stream;
+  ExportDashboardCommandMockupContext unit_test_context;
+  auto resolution = CommandResolutionChain<>(fake_input.c_str(),
+                                             "\\export_dashboard",
+                                             3,
+                                             UnitTestExportDashboardCmd(unit_test_context),
+                                             test_capture_stream)
+                        .is_resolved();
+
+  result = rmdir(test_filename);
+  EXPECT_EQ(result, 0);
+
+  EXPECT_TRUE(resolution);
+  EXPECT_EQ(unit_test_context.view_name, "simpledash");
+  EXPECT_EQ(unit_test_context.view_state, "");
+  EXPECT_EQ(unit_test_context.view_metadata, "");
+
+  // Whether call succeeds or fails, the file name is in the output
+  EXPECT_NE(std::strstr(test_capture_stream.str().c_str(), test_filename), nullptr);
+
+  unlink(test_filename);
+}
+
+TEST(MapDQLTest, ExportDashboardCommandTest_SimpleDashComplexFilename) {
+  using Params = CommandResolutionChain<>::CommandTokenList;
+  using UnitTestExportDashboardCmd =
+      ExportDashboardCmd<ExportDashboardCommandContextOpsPolicy, ExportDashboardCommandMockupContextOperations>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
+
+  static const char* test_filename = "Windows is Terrible.txt";
+  std::string fake_input = std::string("\\export_dashboard simpledash \"") + test_filename + "\"";
+
+  std::ostringstream test_capture_stream;
+  ExportDashboardCommandMockupContext unit_test_context;
+  auto resolution = CommandResolutionChain<>(fake_input.c_str(),
+                                             "\\export_dashboard",
+                                             3,
+                                             UnitTestExportDashboardCmd(unit_test_context),
+                                             test_capture_stream)
+                        .is_resolved();
+
+  EXPECT_TRUE(resolution);
+  EXPECT_EQ(unit_test_context.view_name, "simpledash");
+  EXPECT_EQ(unit_test_context.view_state, "");
+  EXPECT_EQ(unit_test_context.view_metadata, "");
+
+  // Whether call succeeds or fails, the file name is in the output
+  EXPECT_NE(std::strstr(test_capture_stream.str().c_str(), test_filename), nullptr);
+  unlink(test_filename);
+}
+
+TEST(MapDQLTest, ExportDashboardCommandTest_ComplexDashSimpleFilename) {
+  using Params = CommandResolutionChain<>::CommandTokenList;
+  using UnitTestExportDashboardCmd =
+      ExportDashboardCmd<ExportDashboardCommandContextOpsPolicy, ExportDashboardCommandMockupContextOperations>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
+
+  static const char* test_filename = "export_simpledash.txt";
+  std::string fake_input = std::string("\\export_dashboard \"\\\"Who uses spaces anyway?\\\"\" ") + test_filename;
+
+  std::ostringstream test_capture_stream;
+  ExportDashboardCommandMockupContext unit_test_context;
+  auto resolution = CommandResolutionChain<>(fake_input.c_str(),
+                                             "\\export_dashboard",
+                                             3,
+                                             UnitTestExportDashboardCmd(unit_test_context),
+                                             test_capture_stream)
+                        .is_resolved();
+  EXPECT_TRUE(resolution);
+  EXPECT_EQ(unit_test_context.view_name, "\"Who uses spaces anyway?\"");
+  EXPECT_EQ(unit_test_context.view_state, "");
+  EXPECT_EQ(unit_test_context.view_metadata, "");
+
+  EXPECT_NE(std::strstr(test_capture_stream.str().c_str(), test_filename), nullptr);
+  unlink(test_filename);
+}
+
+TEST(MapDQLTest, ExportDashboardCommandTest_ComplexDashComplexFilename) {
+  using Params = CommandResolutionChain<>::CommandTokenList;
+  using UnitTestExportDashboardCmd =
+      ExportDashboardCmd<ExportDashboardCommandContextOpsPolicy, ExportDashboardCommandMockupContextOperations>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
+
+  static const char* test_filename = "Windows is Terrible.txt";
+  std::string fake_input =
+      std::string("\\export_dashboard \"\\\"Who uses spaces anyway?\\\"\" \"") + test_filename + "\"";
+
+  std::ostringstream test_capture_stream;
+  ExportDashboardCommandMockupContext unit_test_context;
+  auto resolution = CommandResolutionChain<>(fake_input.c_str(),
+                                             "\\export_dashboard",
+                                             3,
+                                             UnitTestExportDashboardCmd(unit_test_context),
+                                             test_capture_stream)
+                        .is_resolved();
+  EXPECT_TRUE(resolution);
+  EXPECT_EQ(unit_test_context.view_name, "\"Who uses spaces anyway?\"");
+  EXPECT_EQ(unit_test_context.view_state, "");
+  EXPECT_EQ(unit_test_context.view_metadata, "");
+
+  EXPECT_NE(std::strstr(test_capture_stream.str().c_str(), test_filename), nullptr);
+  unlink(test_filename);
 }
 
 int main(int argc, char* argv[]) {

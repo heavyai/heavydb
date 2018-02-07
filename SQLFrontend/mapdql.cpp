@@ -35,12 +35,10 @@
 #include <boost/archive/iterators/transform_width.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
-#include <boost/tokenizer.hpp>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -89,18 +87,11 @@ void completion(const char* buf, linenoiseCompletions* lc) {
 
 // code from https://stackoverflow.com/questions/7053538/how-do-i-encode-a-string-to-base64-using-only-boost
 
-std::string decode64(const std::string& val) {
+static inline std::string decode64(const std::string& val) {
   using namespace boost::archive::iterators;
   using It = transform_width<binary_from_base64<std::string::const_iterator>, 8, 6>;
   return boost::algorithm::trim_right_copy_if(std::string(It(std::begin(val)), It(std::end(val))),
                                               [](char c) { return c == '\0'; });
-}
-
-std::string encode64(const std::string& val) {
-  using namespace boost::archive::iterators;
-  using It = base64_from_binary<transform_width<std::string::const_iterator, 6, 8>>;
-  auto tmp = std::string(It(std::begin(val)), It(std::end(val)));
-  return tmp.append((3 - val.size() % 3) % 3, '=');
 }
 
 #define LOAD_PATCH_SIZE 10000
@@ -255,91 +246,6 @@ void get_table_epoch(ClientContext& context, const std::string& table_specifier)
     } else {
       std::cerr << "Cannot connect to MapD Server." << std::endl;
     }
-  }
-}
-
-bool replace(std::string& str, const std::string& from, const std::string& to) {
-  size_t start_pos = str.find(from);
-  if (start_pos == std::string::npos)
-    return false;
-  str.replace(start_pos, from.length(), to);
-  return true;
-}
-
-void import_dashboard(ClientContext& context, std::string dash_details) {
-  std::vector<std::string> split_result;
-
-  boost::split(split_result, dash_details, boost::is_any_of(","), boost::token_compress_on);
-
-  if (split_result.size() != 2) {
-    std::cerr << "import_dashboard requires a dashboard name and a filename eg:dash1,/tmp/dash.out " << dash_details
-              << std::endl;
-    return;
-  }
-
-  context.view_name = split_result[0];
-  std::string filename = split_result[1];
-  // context.view_metadata = std::string("{\"table\":\"") + table_name + std::string("\",\"version\":\"v2\"}");
-  context.view_state = "";
-  context.view_metadata = "";
-  // read file to get view state
-  std::ifstream dashfile;
-  std::string state;
-  std::string old_name;
-  dashfile.open(filename);
-  if (dashfile.is_open()) {
-    std::getline(dashfile, old_name);
-    std::getline(dashfile, context.view_metadata);
-    std::getline(dashfile, state);
-    dashfile.close();
-  } else {
-    std::cout << "Could not open file " << filename << std::endl;
-    return;
-  }
-
-  if (!replace(state,
-               std::string("\"title\":\"" + old_name + "\","),
-               std::string("\"title\":\"" + context.view_name + "\","))) {
-    std::cout << "Failed to update title." << std::endl;
-    return;
-  }
-
-  context.view_state = encode64(state);
-
-  std::cout << "Importing dashboard " << context.view_name << " from file " << filename << std::endl;
-  if (!thrift_with_retry(kIMPORT_DASHBOARD, context, nullptr)) {
-    std::cout << "Failed to import dashboard." << std::endl;
-  }
-}
-
-void export_dashboard(ClientContext& context, std::string dash_details) {
-  std::vector<std::string> split_result;
-
-  boost::split(split_result, dash_details, boost::is_any_of(","), boost::token_compress_on);
-
-  if (split_result.size() != 2) {
-    std::cerr << "export_dashboard requires a dashboard name and a filename eg:dash1,/tmp/dash.out " << dash_details
-              << std::endl;
-    return;
-  }
-  context.view_name = split_result[0];
-  std::string filename = split_result[1];
-
-  if (thrift_with_retry(kEXPORT_DASHBOARD, context, nullptr)) {
-    std::cout << "Exporting dashboard " << context.view_name << " to file " << filename
-              << std::endl;  // create file and dump string to it
-    std::ofstream dashfile;
-    dashfile.open(filename);
-    if (dashfile.is_open()) {
-      dashfile << context.view_name << std::endl;
-      dashfile << context.view_return.view_metadata << std::endl;
-      dashfile << decode64(context.view_return.view_state);
-      dashfile.close();
-    } else {
-      std::cout << "Could not open file " << filename << std::endl;
-    }
-  } else {
-    std::cout << "Failed to export dashboard." << std::endl;
   }
 }
 
@@ -1409,22 +1315,17 @@ int main(int argc, char** argv) {
     } else {  // Experimental Cleanup
       using Params = CommandResolutionChain<>::CommandTokenList;
 
-      auto resolution_status =
-          CommandResolutionChain<>(
-              line, "\\copygeo", 3, CopyGeoCmd<>(context), "Usage: \\copygeo <serverGeoFileName> <tableName>")(
-              "\\copy",
-              3,
-              [&](Params const& p) { copy_table(p[1].c_str() /* filepath */, p[2].c_str() /* table */, context); })(
-              "\\ste", 2, [&](Params const& p) { set_table_epoch(context, p[1] /* table_details */); })(
-              "\\gte", 2, [&](Params const& p) { get_table_epoch(context, p[1] /* table_details */); })(
-              "\\export_dashboard", 2, [&](Params const& p) { export_dashboard(context, p[1] /* dash_details */); })(
-              "\\import_dashboard", 2, [&](Params const& p) { import_dashboard(context, p[1] /*dash_details */); })(
-              "\\role_list", 2, RoleListCmd<>(context), "Usage: \\role_list <userName>")(
-              "\\roles", 1, RolesCmd<>(context))("\\set_license", 2, [&](Params const& p) {
-            set_license_key(context, p[1]);
-          })("\\get_license", 1, [&](Params const&) {
-            get_license_claims(context);
-          }).is_resolved();
+      // clang-format off
+      auto resolution_status = CommandResolutionChain<>( line, "\\copygeo", 3, CopyGeoCmd<>(context), "Usage: \\copygeo <serverGeoFileName> <tableName>")
+	( "\\copy", 3, [&](Params const& p) { copy_table(p[1].c_str() /* filepath */, p[2].c_str() /* table */, context); } )
+	( "\\ste", 2, [&](Params const& p) { set_table_epoch(context, p[1] /* table_details */); } )
+	( "\\gte", 2, [&](Params const& p) { get_table_epoch(context, p[1] /* table_details */); } )
+	( "\\export_dashboard", 3, ExportDashboardCmd<>( context ), "Usage \\export_dashboard <dash name> <file name>" )
+	( "\\import_dashboard", 3, ImportDashboardCmd<>( context ), "Usage \\import_dashboard <dash name> <file name>"  )
+	( "\\role_list", 2, RoleListCmd<>(context), "Usage: \\role_list <userName>")
+	( "\\roles", 1, RolesCmd<>(context))("\\set_license", 2, [&](Params const& p ) { set_license_key(context, p[1]); })
+	( "\\get_license", 1, [&](Params const&) { get_license_claims(context); })
+	.is_resolved();
 
       if (resolution_status == false) {
         if (line[0] == '\\' && line[1] == 'q') {
@@ -1433,6 +1334,7 @@ int main(int argc, char** argv) {
           process_backslash_commands(line, context);
         }
       }
+      // clang-format on
     }
 
     linenoiseHistoryAdd(line);                  /* Add to the history. */
