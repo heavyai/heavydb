@@ -30,3 +30,6 @@ option(RDKAFKA_BUILD_TESTS "Build tests" OFF)
 
 CMakeLists.txt also modified to not `install()` any files. Libraries are static
 linked in and license is included under `ThirdParty/licenses`.
+
+src/CMakeLists.txt changed to link against librt if `clock_gettime` does not
+exist in libc but does exist in librt (required for glibc < 2.17 on CentOS 6).

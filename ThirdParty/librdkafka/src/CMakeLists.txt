@@ -104,6 +104,13 @@ if(WITH_SASL)
   target_link_libraries(rdkafka PUBLIC ${SASL_LIBRARIES})
 endif()
 
+include(CheckLibraryExists)
+CHECK_LIBRARY_EXISTS(c clock_gettime "time.h" HAVE_CLOCK_GETTIME_C)
+CHECK_LIBRARY_EXISTS(rt clock_gettime "time.h" HAVE_CLOCK_GETTIME_RT)
+if ((NOT HAVE_CLOCK_GETTIME_C) AND HAVE_CLOCK_GETTIME_RT)
+  target_link_libraries(rdkafka PUBLIC rt)
+endif()
+
 # install(
 #     TARGETS rdkafka
 #     EXPORT "${targets_export_name}"
