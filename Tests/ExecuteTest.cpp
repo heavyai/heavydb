@@ -789,6 +789,10 @@ TEST(Select, FilterAndGroupBy) {
     c("SELECT x, COUNT(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt);
     c("SELECT str, SUM(y - y) FROM test GROUP BY str ORDER BY str ASC;", dt);
     c("SELECT str, SUM(y - y) FROM test WHERE y - y IS NOT NULL GROUP BY str ORDER BY str ASC;", dt);
+    c("select shared_dict,m from test where (m >= CAST('2014-12-13 22:23:15' AS TIMESTAMP(0)) and m <= "
+      "CAST('2014-12-14 22:23:15' AS TIMESTAMP(0)))  and CAST(m AS TIMESTAMP(0)) BETWEEN '2014-12-14 22:23:15' AND "
+      "'2014-12-13 22:23:15' group by shared_dict,m;",
+      dt);
     EXPECT_THROW(run_multiple_agg("SELECT x, MIN(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT x, MAX(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
@@ -4013,7 +4017,7 @@ int create_and_populate_tables() {
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
         "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 1000.3, -1000.3, 2.6, -220.6, 'baz', null, null, null, "
-        "'real_baz', 'baz', '2014-12-13 22:23:15', '15:13:14', '1999-09-09', '1999-09-09', 11, 333.3, 333.3, "
+        "'real_baz', 'baz', '2014-12-14 22:23:15', '15:13:14', '1999-09-09', '1999-09-09', 11, 333.3, 333.3, "
         "'boat', null, 1, "
         "-1, 1, -9223372036854775808);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
