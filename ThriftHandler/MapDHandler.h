@@ -217,7 +217,7 @@ class MapDHandler : public MapDIf {
   // import
   void load_table_binary(const TSessionId& session, const std::string& table_name, const std::vector<TRow>& rows);
 
-  void prepare_columnar_loader(const TSessionId& session,
+  void prepare_columnar_loader(const Catalog_Namespace::SessionInfo& session_info,
                                const std::string& table_name,
                                size_t num_cols,
                                std::unique_ptr<Importer_NS::Loader>* loader,
@@ -341,6 +341,7 @@ class MapDHandler : public MapDIf {
 
  private:
   void check_table_load_privileges(const TSessionId& session, const std::string& table_name);
+  void check_table_load_privileges(const Catalog_Namespace::SessionInfo& session_info, const std::string& table_name);
   void get_tables_impl(std::vector<std::string>& table_names,
                        const TSessionId& session,
                        const GetTablesType get_tables_type);

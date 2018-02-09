@@ -1428,7 +1428,7 @@ void MapDHandler::load_table_binary(const TSessionId& session,
   if (td == nullptr) {
     THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
   }
-  check_table_load_privileges(session, table_name);
+  check_table_load_privileges(session_info, table_name);
   std::unique_ptr<Importer_NS::Loader> loader;
   if (leaf_aggregator_.leafCount() > 0) {
     loader.reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
@@ -1465,12 +1465,11 @@ void MapDHandler::load_table_binary(const TSessionId& session,
 }
 
 void MapDHandler::prepare_columnar_loader(
-    const TSessionId& session,
+    const Catalog_Namespace::SessionInfo& session_info,
     const std::string& table_name,
     size_t num_cols,
     std::unique_ptr<Importer_NS::Loader>* loader,
     std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>* import_buffers) {
-  const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
   if (g_cluster && !leaf_aggregator_.leafCount()) {
     // Sharded table rows need to be routed to the leaf by an aggregator.
@@ -1480,7 +1479,7 @@ void MapDHandler::prepare_columnar_loader(
   if (td == nullptr) {
     THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
   }
-  check_table_load_privileges(session, table_name);
+  check_table_load_privileges(session_info, table_name);
   if (leaf_aggregator_.leafCount() > 0) {
     loader->reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
   } else {
@@ -1505,7 +1504,8 @@ void MapDHandler::load_table_binary_columnar(const TSessionId& session,
 
   std::unique_ptr<Importer_NS::Loader> loader;
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
-  prepare_columnar_loader(session, table_name, cols.size(), &loader, &import_buffers);
+  const auto session_info = get_session(session);
+  prepare_columnar_loader(session_info, table_name, cols.size(), &loader, &import_buffers);
 
   size_t numRows = 0;
   size_t col_idx = 0;
@@ -1517,8 +1517,8 @@ void MapDHandler::load_table_binary_columnar(const TSessionId& session,
       } else {
         if (colRows != numRows) {
           std::ostringstream oss;
-          oss << "load_table_binary_columnar: Inconsistent number of rows in request,  expecting " << numRows << " row, column "
-              << col_idx << " has " << colRows << " rows";
+          oss << "load_table_binary_columnar: Inconsistent number of rows in request,  expecting " << numRows
+              << " row, column " << col_idx << " has " << colRows << " rows";
           THROW_MAPD_EXCEPTION(oss.str());
         }
       }
@@ -1592,7 +1592,9 @@ void MapDHandler::load_table_binary_arrow(const TSessionId& session,
 
   std::unique_ptr<Importer_NS::Loader> loader;
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
-  prepare_columnar_loader(session, table_name, static_cast<size_t>(batch->num_columns()), &loader, &import_buffers);
+  const auto session_info = get_session(session);
+  prepare_columnar_loader(
+      session_info, table_name, static_cast<size_t>(batch->num_columns()), &loader, &import_buffers);
 
   size_t numRows = 0;
   size_t col_idx = 0;
@@ -1624,7 +1626,7 @@ void MapDHandler::load_table(const TSessionId& session,
   if (td == nullptr) {
     THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
   }
-  check_table_load_privileges(session, table_name);
+  check_table_load_privileges(session_info, table_name);
   std::unique_ptr<Importer_NS::Loader> loader;
   if (leaf_aggregator_.leafCount() > 0) {
     loader.reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
@@ -2043,7 +2045,7 @@ void MapDHandler::import_table(const TSessionId& session,
   if (td == nullptr) {
     THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
   }
-  check_table_load_privileges(session, table_name);
+  check_table_load_privileges(session_info, table_name);
 
   auto file_path = import_path_ / session / boost::filesystem::path(file_name).filename();
   if (!boost::filesystem::exists(file_path)) {
@@ -2127,7 +2129,7 @@ void MapDHandler::import_geo_table(const TSessionId& session,
   if (td == nullptr) {
     THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
   }
-  check_table_load_privileges(session, table_name);
+  check_table_load_privileges(session_info, table_name);
 
   Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
 
@@ -2207,20 +2209,27 @@ Catalog_Namespace::SessionInfo MapDHandler::get_session(const TSessionId& sessio
   return *get_session_it(session)->second;
 }
 
-void MapDHandler::check_table_load_privileges(const TSessionId& session, const std::string& table_name) {
-  const auto session_info = MapDHandler::get_session(session);
+void MapDHandler::check_table_load_privileges(const Catalog_Namespace::SessionInfo& session_info,
+                                              const std::string& table_name) {
   auto user_metadata = session_info.get_currentUser();
   auto& cat = session_info.get_catalog();
-  auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
-  DBObject dbObject(table_name, TableDBObjectType);
-  sys_cat.populateDBObjectKey(dbObject, cat);
-  dbObject.setPrivileges(AccessPrivileges::INSERT);
-  std::vector<DBObject> privObjects;
-  privObjects.push_back(dbObject);
-  if (cat.isAccessPrivCheckEnabled() && !sys_cat.checkPrivileges(user_metadata, privObjects)) {
-    THROW_MAPD_EXCEPTION("Violation of access privileges: user " + user_metadata.userName +
-                         " has no insert privileges for table " + table_name + ".");
+  if (cat.isAccessPrivCheckEnabled()) {
+    auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
+    DBObject dbObject(table_name, TableDBObjectType);
+    sys_cat.populateDBObjectKey(dbObject, cat);
+    dbObject.setPrivileges(AccessPrivileges::INSERT);
+    std::vector<DBObject> privObjects;
+    privObjects.push_back(dbObject);
+    if (!sys_cat.checkPrivileges(user_metadata, privObjects)) {
+      THROW_MAPD_EXCEPTION("Violation of access privileges: user " + user_metadata.userName +
+                           " has no insert privileges for table " + table_name + ".");
+    }
   }
+}
+
+void MapDHandler::check_table_load_privileges(const TSessionId& session, const std::string& table_name) {
+  const auto session_info = MapDHandler::get_session(session);
+  check_table_load_privileges(session_info, table_name);
 }
 
 void MapDHandler::set_execution_mode_nolock(Catalog_Namespace::SessionInfo* session_ptr,
