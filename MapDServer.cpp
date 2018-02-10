@@ -539,7 +539,7 @@ int main(int argc, char** argv) {
       LOG(ERROR) << "Starting server in HA mode --ha-shared-data must be set ";
       return 7;
     } else {
-      LOG(INFO) << " HA shared data is " << mapd_parameters.ha_unique_server_id;
+      LOG(INFO) << " HA shared data is " << mapd_parameters.ha_shared_data;
     }
   }
   LOG(INFO) << " cuda block size " << mapd_parameters.cuda_block_size;
