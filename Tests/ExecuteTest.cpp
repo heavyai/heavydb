@@ -1514,12 +1514,12 @@ TEST(Select, Time) {
     ASSERT_EQ(14185957950L, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(EPOCH FROM m) * 10) FROM test;", dt)));
     ASSERT_EQ(20140, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(YEAR FROM m) * 10) FROM test;", dt)));
     ASSERT_EQ(120, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(MONTH FROM m) * 10) FROM test;", dt)));
-    ASSERT_EQ(130, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(DAY FROM m) * 10) FROM test;", dt)));
+    ASSERT_EQ(140, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(DAY FROM m) * 10) FROM test;", dt)));
     ASSERT_EQ(22, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(HOUR FROM m)) FROM test;", dt)));
     ASSERT_EQ(23, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(MINUTE FROM m)) FROM test;", dt)));
     ASSERT_EQ(15, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(SECOND FROM m)) FROM test;", dt)));
     ASSERT_EQ(6, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(DOW FROM m)) FROM test;", dt)));
-    ASSERT_EQ(347, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(DOY FROM m)) FROM test;", dt)));
+    ASSERT_EQ(348, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(DOY FROM m)) FROM test;", dt)));
     ASSERT_EQ(15, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(HOUR FROM n)) FROM test;", dt)));
     ASSERT_EQ(13, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(MINUTE FROM n)) FROM test;", dt)));
     ASSERT_EQ(14, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(SECOND FROM n)) FROM test;", dt)));
@@ -2162,7 +2162,7 @@ TEST(Select, Time) {
     ASSERT_EQ(1336435200L,
               v<int64_t>(run_simple_agg(
                   "SELECT CAST(CAST('2012-05-08 20:15:12' AS TIMESTAMP) AS DATE) FROM test LIMIT 1;", dt)));
-    ASSERT_EQ(g_num_rows * 2, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test GROUP BY CAST(m AS date);", dt)));
+    ASSERT_EQ(15, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test GROUP BY CAST(m AS date);", dt)));
     const auto rows = run_multiple_agg(
         "SELECT DATE_TRUNC(month, CAST(o AS TIMESTAMP(0))) AS key0, str AS key1, COUNT(*) AS val FROM test GROUP BY "
         "key0, key1 ORDER BY val DESC, key1;",
