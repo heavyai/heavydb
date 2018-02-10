@@ -158,15 +158,10 @@ ExpressionRange apply_simple_quals(const Analyzer::ColumnVar* col_expr,
           qual_const->get_constval(), qual_const->get_type_info().get_type(), qual_bin_oper->get_optype(), qual_range);
     }
   }
-  if (qual_range.getType() == ExpressionRangeType::Float || qual_range.getType() == ExpressionRangeType::Double) {
-    if (qual_range.getFpMin() > qual_range.getFpMax()) {
-      qual_range.setFpMax(qual_range.getFpMin());
-    }
-  } else {
+  if (qual_range.getType() == ExpressionRangeType::Integer)
     if (qual_range.getIntMin() > qual_range.getIntMax()) {
-      qual_range.setIntMax(qual_range.getIntMin());
+      return ExpressionRange::makeIntRange(0, -1, 0, qual_range.hasNulls());
     }
-  }
   return qual_range;
 }
 

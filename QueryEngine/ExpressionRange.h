@@ -91,6 +91,12 @@ class ExpressionRange {
     int_max_ = int_max;
   }
 
+  void setIntInvalidRange() {
+    CHECK(ExpressionRangeType::Integer == type_);
+    int_max_ = -1;
+    int_min_ = 0;
+  }
+
   void setFpMin(const double fp_min) {
     CHECK(type_ == ExpressionRangeType::Float || type_ == ExpressionRangeType::Double);
     fp_min_ = fp_min;
