@@ -1511,7 +1511,7 @@ TEST(Select, Time) {
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE CAST(o AS TIMESTAMP) > timestamp(0) '1999-09-10T160000';", dt)));
-    ASSERT_EQ(14185093950L, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(EPOCH FROM m) * 10) FROM test;", dt)));
+    ASSERT_EQ(14185957950L, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(EPOCH FROM m) * 10) FROM test;", dt)));
     ASSERT_EQ(20140, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(YEAR FROM m) * 10) FROM test;", dt)));
     ASSERT_EQ(120, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(MONTH FROM m) * 10) FROM test;", dt)));
     ASSERT_EQ(130, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(DAY FROM m) * 10) FROM test;", dt)));
