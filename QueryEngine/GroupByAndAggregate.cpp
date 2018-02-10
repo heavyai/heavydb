@@ -1624,11 +1624,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
           return {GroupByColRangeType::MultiCol, 0, 0, 0, false};
         }
         auto crt_col_cardinality = getBucketedCardinality(col_range_info);
-        if (crt_col_cardinality < 0) {
-          cardinality = 0;
-          break;
-        }
-
+        CHECK_GE(crt_col_cardinality, 0);
         cardinality *= crt_col_cardinality;
         if (col_range_info.has_nulls) {
           has_nulls = true;

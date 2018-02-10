@@ -15,12 +15,12 @@
  */
 
 #include "ExpressionRange.h"
-#include "ExtractFromTime.h"
 #include "DateTruncate.h"
-#include "GroupByAndAggregate.h"
 #include "Execute.h"
-#include "QueryPhysicalInputsCollector.h"
+#include "ExtractFromTime.h"
+#include "GroupByAndAggregate.h"
 #include "InputDescriptors.h"
+#include "QueryPhysicalInputsCollector.h"
 
 #include <cfenv>
 
@@ -156,6 +156,15 @@ ExpressionRange apply_simple_quals(const Analyzer::ColumnVar* col_expr,
     } else {
       apply_int_qual(
           qual_const->get_constval(), qual_const->get_type_info().get_type(), qual_bin_oper->get_optype(), qual_range);
+    }
+  }
+  if (qual_range.getType() == ExpressionRangeType::Float || qual_range.getType() == ExpressionRangeType::Double) {
+    if (qual_range.getFpMin() > qual_range.getFpMax()) {
+      qual_range.setFpMax(qual_range.getFpMin());
+    }
+  } else {
+    if (qual_range.getIntMin() > qual_range.getIntMax()) {
+      qual_range.setIntMax(qual_range.getIntMin());
     }
   }
   return qual_range;
