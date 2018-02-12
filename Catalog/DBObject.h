@@ -33,6 +33,10 @@
 #include <string>
 #include <glog/logging.h>
 
+namespace Catalog_Namespace {
+class Catalog;
+}
+
 // DB objects for which privileges are currently supported
 enum DBObjectType {
   AbstractDBObjectType = 0,
@@ -109,6 +113,7 @@ class DBObject {
   bool privsValid() const { return privsValid_; }
   void unvalidate() { privsValid_ = false; }
   std::vector<std::string> toString() const;
+  void loadKey(const Catalog_Namespace::Catalog& catalog);
 
  private:
   std::string objectName_;

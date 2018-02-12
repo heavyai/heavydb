@@ -76,11 +76,13 @@ class SQLTestEnv : public ::testing::Environment {
     auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, data_dir.string(), 1024);
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
     // if no catalog create one
+    auto& sys_cat = SysCatalog::instance();
     if (!boost::filesystem::exists(system_db_file)) {
-      SysCatalog sys_cat(base_path.string(), dataMgr, calcite, true);
+      sys_cat.init(base_path.string(), dataMgr, {}, calcite, true, false);
       sys_cat.initDB();
+    } else {
+      sys_cat.init(base_path.string(), dataMgr, {}, calcite, false, false);
     }
-    SysCatalog sys_cat(base_path.string(), dataMgr, calcite);
     CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
     // if no user create one
     if (!sys_cat.getMetadataForUser("gtest", user)) {

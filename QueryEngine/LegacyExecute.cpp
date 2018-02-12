@@ -695,17 +695,18 @@ std::shared_ptr<ResultSet> Executor::execute(const Planner::RootPlan* root_plan,
         explanation_rs->setQueueTime(queue_time_ms);
         return explanation_rs;
       }
-      Catalog_Namespace::Catalog& cat = session.get_catalog();
-      Catalog_Namespace::SysCatalog& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
+      auto& cat = session.get_catalog();
+      auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
       auto user_metadata = session.get_currentUser();
       const int table_id = root_plan->get_result_table_id();
       auto td = cat.getMetadataForTable(table_id);
       DBObject dbObject(td->tableName, TableDBObjectType);
-      sys_cat.populateDBObjectKey(dbObject, cat);
+      dbObject.loadKey(cat);
       dbObject.setPrivileges(AccessPrivileges::INSERT);
       std::vector<DBObject> privObjects;
       privObjects.push_back(dbObject);
-      if (cat.isAccessPrivCheckEnabled() && !sys_cat.checkPrivileges(user_metadata, privObjects)) {
+      if (Catalog_Namespace::SysCatalog::instance().arePrivilegesOn() &&
+          !sys_cat.checkPrivileges(user_metadata, privObjects)) {
         throw std::runtime_error("Violation of access privileges: user " + user_metadata.userName +
                                  " has no insert privileges for table " + td->tableName + ".");
         break;

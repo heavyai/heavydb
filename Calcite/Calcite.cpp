@@ -213,17 +213,16 @@ string Calcite::process(const Catalog_Namespace::SessionInfo& session_info,
     // security requires explains to be restricted in real life
 
     Catalog_Namespace::Catalog& catalog = session_info.get_catalog();
-    if (catalog.isAccessPrivCheckEnabled()) {
+    if (Catalog_Namespace::SysCatalog::instance().arePrivilegesOn()) {
       std::vector<DBObject> privObjects;
       std::vector<std::string> v_db_obj = get_db_objects(ra);
       for (size_t i = 0; i < v_db_obj.size(); i++) {
         DBObject dbObject(v_db_obj[i], TableDBObjectType);
-        static_cast<Catalog_Namespace::SysCatalog&>(catalog).populateDBObjectKey(dbObject, catalog);
+        dbObject.loadKey(catalog);
         dbObject.setPrivileges(AccessPrivileges::SELECT);
         privObjects.push_back(dbObject);
       }
-      if (!(static_cast<Catalog_Namespace::SysCatalog&>(catalog))
-               .checkPrivileges(session_info.get_currentUser(), privObjects)) {
+      if (!Catalog_Namespace::SysCatalog::instance().checkPrivileges(session_info.get_currentUser(), privObjects)) {
         throw std::runtime_error("Violation of access privileges: user " + session_info.get_currentUser().userName +
                                  " has no proper select privileges.");
       }

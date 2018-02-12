@@ -186,8 +186,7 @@ class Catalog {
           const std::vector<LeafHostInfo>& string_dict_hosts,
           LdapMetadata ldapMetadata,
           bool is_initdb,
-          std::shared_ptr<Calcite> calcite,
-          const bool access_priv_check = false);
+          std::shared_ptr<Calcite> calcite);
 
   /**
    * @brief Constructor - takes basePath to already extant
@@ -202,8 +201,7 @@ class Catalog {
           const DBMetadata& curDB,
           std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
           const std::vector<LeafHostInfo>& string_dict_hosts,
-          std::shared_ptr<Calcite> calcite,
-          const bool access_priv_check = false);
+          std::shared_ptr<Calcite> calcite);
 
   /*
    builds a catalog that uses an ldap server
@@ -212,8 +210,7 @@ class Catalog {
           const DBMetadata& curDB,
           std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
           LdapMetadata ldapMetadata,
-          std::shared_ptr<Calcite> calcite,
-          const bool access_priv_check = false);
+          std::shared_ptr<Calcite> calcite);
 
   /**
    * @brief Destructor - deletes all
@@ -281,7 +278,6 @@ class Catalog {
   Data_Namespace::DataMgr& get_dataMgr() const { return *dataMgr_; }
   Calcite& get_calciteMgr() const { return *calciteMgr_; }
   const std::string& get_basePath() const { return basePath_; }
-  const bool isAccessPrivCheckEnabled() const { return access_priv_check_; }
 
   const DictDescriptor* getMetadataForDict(int dict_ref, bool loadDict = true) const;
 
@@ -308,8 +304,6 @@ class Catalog {
   void updateLogicalToPhysicalTableMap(const int32_t logical_tb_id);
   void updateDictionarySchema();
   void updatePageSize();
-  void buildRoleMap();
-  void buildUserRoleMap();
   void buildMaps();
   void addTableToMap(TableDescriptor& td,
                      const std::list<ColumnDescriptor>& columns,
@@ -338,9 +332,7 @@ class Catalog {
   std::string calculateSHA1(const std::string& data);
   std::string generatePhysicalTableName(const std::string& logicalTableName, const int32_t& shardNumber);
 
-  std::string basePath_; /**< The OS file system path containing the catalog files. */
-  RoleMap roleMap_;
-  UserRoleMap userRoleMap_;
+  std::string basePath_;
   TableDescriptorMap tableDescriptorMap_;
   TableDescriptorMapById tableDescriptorMapById_;
   ColumnDescriptorMap columnDescriptorMap_;
@@ -363,7 +355,6 @@ class Catalog {
   static const std::string physicalTableNameTag_;  // extra component added to the name of each physical table
   int nextTempTableId_;
   int nextTempDictId_;
-  const bool access_priv_check_;  // if true, verify user access privileges to DB objects
 
  private:
   static std::map<std::string, std::shared_ptr<Catalog>> mapd_cat_map_;
@@ -373,45 +364,14 @@ class Catalog {
  * @type SysCatalog
  * @brief class for the system-wide catalog, currently containing user and database metadata
  */
-class SysCatalog : public Catalog {
+class SysCatalog {
  public:
-  SysCatalog(const std::string& basePath,
-             std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-             const std::vector<LeafHostInfo>& string_dict_hosts,
-             LdapMetadata ldapMetadata,
-             std::shared_ptr<Calcite> calcite,
-             bool is_initdb = false,
-             const bool access_priv_check = false)
-      : Catalog(basePath,
-                MAPD_SYSTEM_DB,
-                dataMgr,
-                string_dict_hosts,
-                ldapMetadata,
-                is_initdb,
-                calcite,
-                access_priv_check) {
-    if (access_priv_check) {
-      initObjectPrivileges();
-    }
-    if (!is_initdb) {
-      Catalog_Namespace::DBMetadata db_meta;
-      CHECK(getMetadataForDB(MAPD_SYSTEM_DB, db_meta));
-      set_currentDB(db_meta);
-    }
-  }
-
-  SysCatalog(const std::string& basePath,
-             std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-             std::shared_ptr<Calcite> calcite,
-             bool is_initdb = false,
-             const bool access_priv_check = false)
-      : SysCatalog(basePath, dataMgr, {}, LdapMetadata(), calcite, is_initdb, access_priv_check) {
-    if (!is_initdb) {
-      migrateSysCatalogSchema();
-    }
-  }
-
-  virtual ~SysCatalog();
+  void init(const std::string& basePath,
+            std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+            LdapMetadata ldapMetadata,
+            std::shared_ptr<Calcite> calcite,
+            bool is_new_db,
+            bool check_privileges);
   void initDB();
   void initObjectPrivileges();
   void createUser(const std::string& name, const std::string& passwd, bool issuper);
@@ -424,9 +384,12 @@ class SysCatalog : public Catalog {
   bool getMetadataForUser(const std::string& name, UserMetadata& user);
   bool checkPasswordForUser(const std::string& passwd, UserMetadata& user);
   bool getMetadataForDB(const std::string& name, DBMetadata& db);
+  const DBMetadata& get_currentDB() const { return currentDB_; }
+  Data_Namespace::DataMgr& get_dataMgr() const { return *dataMgr_; }
+  Calcite& get_calciteMgr() const { return *calciteMgr_; }
+  const std::string& get_basePath() const { return basePath_; }
   std::list<DBMetadata> getAllDBMetadata();
   std::list<UserMetadata> getAllUserMetadata();
-  void populateDBObjectKey(DBObject& object, const Catalog_Namespace::Catalog& catalog) const;
   void createDBObject(const UserMetadata& user,
                       const std::string& objectName,
                       const Catalog_Namespace::Catalog& catalog);
@@ -455,24 +418,21 @@ class SysCatalog : public Catalog {
   bool hasRole(const std::string& roleName, bool userPrivateRole) const;  // true - role exists, false - otherwise
   std::vector<std::string> getRoles(bool userPrivateRole, bool isSuper, const int32_t userId);
   std::vector<std::string> getUserRoles(const int32_t userId);
+  bool arePrivilegesOn() const { return check_privileges_; }
 
-  static void set(std::shared_ptr<SysCatalog> sys_cat) {
-    CHECK(mapd_sys_cat_ == nullptr);
-    mapd_sys_cat_ = sys_cat;
+  static SysCatalog& instance() {
+    static SysCatalog sys_cat;
+    return sys_cat;
   }
-  static std::shared_ptr<SysCatalog> get() { return mapd_sys_cat_; }
 
  private:
+  SysCatalog() {}
+  virtual ~SysCatalog();
+
+  void buildRoleMap();
+  void buildUserRoleMap();
   void migrateSysCatalogSchema();
   void dropUserRole(const std::string& userName);
-  std::vector<DBObject*> getRoleObjects(const std::string& roleName) const;
-  AccessPrivileges getRoleObjects(const std::string& roleName,
-                                  const DBObjectType& objectType,
-                                  const std::string& objectName) const;
-  std::vector<DBObject*> getUserObjects(const std::string& userName) const;
-  AccessPrivileges getUserObjects(const std::string& userName,
-                                  const DBObjectType& objectType,
-                                  const std::string& objectName) const;
 
   // Here go functions not wrapped into transactions (necessary for nested calls)
   void grantDefaultPrivilegesToRole_unsafe(const std::string& name, bool issuper);
@@ -490,17 +450,26 @@ class SysCatalog : public Catalog {
 
   template <typename F, typename... Args>
   void execInTransaction(F&& f, Args&&... args) {
-    sqliteConnector_.query("BEGIN TRANSACTION");
+    sqliteConnector_->query("BEGIN TRANSACTION");
     try {
       (this->*f)(std::forward<Args>(args)...);
     } catch (std::exception&) {
-      sqliteConnector_.query("ROLLBACK TRANSACTION");
+      sqliteConnector_->query("ROLLBACK TRANSACTION");
       throw;
     }
-    sqliteConnector_.query("END TRANSACTION");
+    sqliteConnector_->query("END TRANSACTION");
   }
 
-  static std::shared_ptr<SysCatalog> mapd_sys_cat_;
+  bool check_privileges_;
+  std::string basePath_;
+  RoleMap roleMap_;
+  UserRoleMap userRoleMap_;
+  DBMetadata currentDB_;
+  std::unique_ptr<SqliteConnector> sqliteConnector_;
+  std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
+  std::unique_ptr<LdapServer> ldap_server_;
+  std::shared_ptr<Calcite> calciteMgr_;
+  mutable std::mutex cat_mutex_;
 };
 
 /*

@@ -48,7 +48,8 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
 #endif
   {
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, useGpus, -1);
-    Catalog_Namespace::SysCatalog sys_cat(base_path.string(), dataMgr, calcite);
+    auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
+    sys_cat.init(base_path.string(), dataMgr, {}, calcite, false, false);
     CHECK(sys_cat.getMetadataForUser(user_name, user));
     CHECK_EQ(user.passwd, passwd);
     CHECK(sys_cat.getMetadataForDB(db_name, db));

@@ -6,6 +6,7 @@
  */
 
 #include "DBObject.h"
+#include "Catalog.h"
 
 const AccessPrivileges AccessPrivileges::ALL = AccessPrivileges(true, true, true, true);
 const AccessPrivileges AccessPrivileges::ALL_NO_DB = AccessPrivileges(true, true, false, true);
@@ -79,6 +80,38 @@ std::vector<std::string> DBObject::toString() const {
     default: { CHECK(false); }
   }
   return objectKey;
+}
+
+void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
+  DBObjectKey objectKey;
+  switch (getType()) {
+    case (DatabaseDBObjectType): {
+      Catalog_Namespace::DBMetadata db;
+      if (!Catalog_Namespace::SysCatalog::instance().getMetadataForDB(getName(), db)) {
+        throw std::runtime_error("Failure generating DB object key. Database " + getName() + " does not exist.");
+      }
+      objectKey.dbObjectType = static_cast<int32_t>(DatabaseDBObjectType);
+      objectKey.dbId = db.dbId;
+      break;
+    }
+    case (TableDBObjectType): {
+      if (!catalog.getMetadataForTable(getName())) {
+        throw std::runtime_error("Failure generating DB object key. Table " + getName() + " does not exist.");
+      }
+      objectKey.dbObjectType = static_cast<int32_t>(TableDBObjectType);
+      objectKey.dbId = catalog.get_currentDB().dbId;
+      objectKey.tableId = catalog.getMetadataForTable(getName())->tableId;
+      break;
+    }
+    case (ColumnDBObjectType): {
+      break;
+    }
+    case (DashboardDBObjectType): {
+      break;
+    }
+    default: { CHECK(false); }
+  }
+  setObjectKey(objectKey);
 }
 
 DBObjectKey DBObjectKey::fromString(const std::vector<std::string>& key, const DBObjectType& type) {

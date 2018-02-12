@@ -194,13 +194,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     case ExecutorDeviceType::Hybrid:
       LOG(INFO) << "Started in Hybrid mode" << std::endl;
   }
-
-  auto sys_cat = std::make_shared<SysCatalog>(base_data_path_, data_mgr_, string_leaves_, ldapMetadata, calcite_, false, access_priv_check_);
-  // NOTE (max): use system catalog for simple queries on system database as well.
-  // As soon as SysCatalog is refactored into a singleton and is being used everywhere to access
-  // metadata, this should be unnecessary.
-  Catalog::set(MAPD_SYSTEM_DB, sys_cat);
-  SysCatalog::set(sys_cat);
+  SysCatalog::instance().init(base_data_path_, data_mgr_, ldapMetadata, calcite_, false, access_priv_check);
   import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   start_time_ = std::time(nullptr);
 
@@ -258,7 +252,7 @@ std::string generate_random_string(const size_t len) {
 void MapDHandler::internal_connect(TSessionId& session, const std::string& user, const std::string& dbname) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   Catalog_Namespace::UserMetadata user_meta;
-  if (!SysCatalog::get()->getMetadataForUser(user, user_meta)) {
+  if (!SysCatalog::instance().getMetadataForUser(user, user_meta)) {
     THROW_MAPD_EXCEPTION(std::string("User ") + user + " does not exist.");
   }
   connectImpl(session, user, std::string(""), dbname, user_meta);
@@ -270,11 +264,11 @@ void MapDHandler::connect(TSessionId& session,
                           const std::string& dbname) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   Catalog_Namespace::UserMetadata user_meta;
-  if (!SysCatalog::get()->getMetadataForUser(user, user_meta)) {
+  if (!SysCatalog::instance().getMetadataForUser(user, user_meta)) {
     THROW_MAPD_EXCEPTION(std::string("User ") + user + " does not exist.");
   }
   if (!super_user_rights_) {
-    if (!SysCatalog::get()->checkPasswordForUser(passwd, user_meta)) {
+    if (!SysCatalog::instance().checkPasswordForUser(passwd, user_meta)) {
       THROW_MAPD_EXCEPTION(std::string("Password for User ") + user + " is incorrect.");
     }
   }
@@ -287,16 +281,16 @@ void MapDHandler::connectImpl(TSessionId& session,
                               const std::string& dbname,
                               Catalog_Namespace::UserMetadata& user_meta) {
   Catalog_Namespace::DBMetadata db_meta;
-  if (!SysCatalog::get()->getMetadataForDB(dbname, db_meta)) {
+  if (!SysCatalog::instance().getMetadataForDB(dbname, db_meta)) {
     THROW_MAPD_EXCEPTION(std::string("Database ") + dbname + " does not exist.");
   }
-  if (!SysCatalog::get()->isAccessPrivCheckEnabled()) {
+  if (!SysCatalog::instance().arePrivilegesOn()) {
     // insert privilege is being treated as access allowed for now
     Privileges privs;
     privs.insert_ = true;
     privs.select_ = false;
     // use old style check for DB object level privs code only to check user access to the database
-    if (!SysCatalog::get()->checkPrivileges(user_meta, db_meta, privs)) {
+    if (!SysCatalog::instance().checkPrivileges(user_meta, db_meta, privs)) {
       THROW_MAPD_EXCEPTION(std::string("User ") + user + " is not authorized to access database " + dbname);
     }
   }
@@ -307,15 +301,12 @@ void MapDHandler::connectImpl(TSessionId& session,
     if (session_it == sessions_.end())
       break;
   }
-  auto cat_it = Catalog::get(dbname);
-  if (cat_it == nullptr) {
-    auto cat_ptr =
-        std::make_shared<Catalog>(base_data_path_, db_meta, data_mgr_, string_leaves_, calcite_, access_priv_check_);
-    Catalog::set(dbname, cat_ptr);
-    sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_ptr, user_meta, executor_device_type_, session));
-  } else {
-    sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_it, user_meta, executor_device_type_, session));
+  auto cat = Catalog::get(dbname);
+  if (cat == nullptr) {
+    cat = std::make_shared<Catalog>(base_data_path_, db_meta, data_mgr_, string_leaves_, calcite_);
+    Catalog::set(dbname, cat);
   }
+  sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat, user_meta, executor_device_type_, session));
   if (!super_user_rights_) {  // no need to connect to leaf_aggregator_ at this time while doing warmup
     if (leaf_aggregator_.leafCount() > 0) {
       const auto parent_session_info_ptr = sessions_[session];
@@ -905,12 +896,10 @@ void MapDHandler::get_role(std::vector<std::string>& roles,
                            bool userPrivateRole) {
   auto session_it = get_session_it(session);
   auto session_info_ptr = session_it->second.get();
-  auto& cat = session_info_ptr->get_catalog();
-  auto& sys_cat = static_cast<SysCatalog&>(cat);
-  if (sys_cat.hasRole(roleName, userPrivateRole)) {
+  if (SysCatalog::instance().hasRole(roleName, userPrivateRole)) {
     if ((session_info_ptr->get_currentUser().isSuper) ||
         (!session_info_ptr->get_currentUser().isSuper &&
-         sys_cat.isRoleGrantedToUser(session_info_ptr->get_currentUser().userId, roleName))) {
+         SysCatalog::instance().isRoleGrantedToUser(session_info_ptr->get_currentUser().userId, roleName))) {
       roles.push_back(roleName);
     }
   }
@@ -920,9 +909,7 @@ void MapDHandler::get_role(std::vector<std::string>& roles,
 void MapDHandler::get_all_roles(std::vector<std::string>& roles, const TSessionId& session, bool userPrivateRole) {
   auto session_it = get_session_it(session);
   auto session_info_ptr = session_it->second.get();
-  auto& cat = session_info_ptr->get_catalog();
-  auto& sys_cat = static_cast<SysCatalog&>(cat);
-  roles = sys_cat.getRoles(
+  roles = SysCatalog::instance().getRoles(
       userPrivateRole, session_info_ptr->get_currentUser().isSuper, session_info_ptr->get_currentUser().userId);
 }
 
@@ -938,13 +925,16 @@ void MapDHandler::get_db_object_privileges_for_role(std::vector<TAccessPrivilege
 void MapDHandler::get_db_objects_for_role(std::vector<TDBObject>& TDBObjectsForRole,
                                           const TSessionId& session,
                                           const std::string& roleName) {
-  auto session_it = get_session_it(session);
-  auto session_info_ptr = session_it->second.get();
-  auto& cat = session_info_ptr->get_catalog();
-  auto& sys_cat = static_cast<SysCatalog&>(cat);
-  Role* rl = sys_cat.getMetadataForRole(roleName);
+  Role* rl = SysCatalog::instance().getMetadataForRole(roleName);
   if (rl) {
+    auto session_it = get_session_it(session);
+    auto session_info_ptr = session_it->second.get();
+    auto dbId = session_info_ptr->get_catalog().get_currentDB().dbId;
     for (auto dbObjectIt = rl->getDbObject()->begin(); dbObjectIt != rl->getDbObject()->end(); ++dbObjectIt) {
+      if (dbObjectIt->first.dbId != dbId) {
+        // TODO (max): it doesn't scale well in case we have many DBs (not a typical usecase for now, though)
+        continue;
+      }
       TDBObject tdbObject;
       tdbObject.objectName = dbObjectIt->second->getName();
       switch (dbObjectIt->second->getType()) {
@@ -978,10 +968,8 @@ void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
                                          const std::string& userName) {
   auto session_it = get_session_it(session);
   auto session_info_ptr = session_it->second.get();
-  auto& cat = session_info_ptr->get_catalog();
-  auto& sys_cat = static_cast<SysCatalog&>(cat);
   Catalog_Namespace::UserMetadata user_meta;
-  if (sys_cat.getMetadataForUser(userName, user_meta)) {
+  if (SysCatalog::instance().getMetadataForUser(userName, user_meta)) {
     bool get_roles = false;
     if (session_info_ptr->get_currentUser().isSuper) {
       get_roles = true;
@@ -996,7 +984,7 @@ void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
       }
     }
     if (get_roles) {
-      roles = sys_cat.getUserRoles(user_meta.userId);
+      roles = SysCatalog::instance().getUserRoles(user_meta.userId);
     }
   } else {
     TMapDException ex;
@@ -1132,8 +1120,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
     }
   } else {
     try {
-      if (!cat.isAccessPrivCheckEnabled() ||
-          (cat.isAccessPrivCheckEnabled() && hasTableAccessPrivileges(td, session))) {
+      if (!SysCatalog::instance().arePrivilegesOn() || hasTableAccessPrivileges(td, session)) {
         const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, get_system, true);
         for (const auto cd : col_descriptors) {
           _return.row_desc.push_back(populateThriftColumnType(&cat, cd));
@@ -1190,7 +1177,7 @@ void MapDHandler::get_link_view(TFrontendView& _return, const TSessionId& sessio
 
 bool MapDHandler::isUserAuthorized(const Catalog_Namespace::SessionInfo& session_info, const std::string command_name) {
   bool is_user_authorized = true;
-  if (session_info.get_catalog().isAccessPrivCheckEnabled() && !session_info.get_currentUser().isSuper) {
+  if (SysCatalog::instance().arePrivilegesOn() && !session_info.get_currentUser().isSuper) {
     is_user_authorized = false;
     TMapDException ex;
     ex.error_msg = "Only superuser is authorized to run command " + command_name;
@@ -1205,14 +1192,13 @@ bool MapDHandler::hasTableAccessPrivileges(const TableDescriptor* td, const TSes
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
   auto user_metadata = session_info.get_currentUser();
-  auto sys_cat = SysCatalog::get();
   DBObject dbObject(td->tableName, TableDBObjectType);
-  sys_cat->populateDBObjectKey(dbObject, cat);
+  dbObject.loadKey(cat);
   std::vector<DBObject> privObjects;
   dbObject.setPrivileges(AccessPrivileges::SELECT);
   privObjects.push_back(dbObject);
   for (size_t i = 0; i < 4; i++) {
-    if (sys_cat->checkPrivileges(user_metadata, privObjects)) {
+    if (SysCatalog::instance().checkPrivileges(user_metadata, privObjects)) {
       hasAccessPrivs = true;
       break;
     }
@@ -1262,7 +1248,7 @@ void MapDHandler::get_tables_impl(std::vector<std::string>& table_names,
       }
       default: { break; }
     }
-    if (cat.isAccessPrivCheckEnabled() && !hasTableAccessPrivileges(td, session)) {
+    if (SysCatalog::instance().arePrivilegesOn() && !hasTableAccessPrivileges(td, session)) {
       // skip table, as there are no privileges to access it
       continue;
     }
@@ -1287,7 +1273,7 @@ void MapDHandler::get_users(std::vector<std::string>& user_names, const TSession
   if (!isUserAuthorized(session_info, std::string("get_users"))) {
     return;
   }
-  std::list<Catalog_Namespace::UserMetadata> user_list = SysCatalog::get()->getAllUserMetadata();
+  std::list<Catalog_Namespace::UserMetadata> user_list = SysCatalog::instance().getAllUserMetadata();
   for (auto u : user_list) {
     user_names.push_back(u.userName);
   }
@@ -1300,13 +1286,13 @@ void MapDHandler::get_version(std::string& version) {
 // TODO This need to be corrected for distributed they are only hitting aggr
 void MapDHandler::clear_gpu_memory(const TSessionId& session) {
   const auto session_info = get_session(session);
-  SysCatalog::get()->get_dataMgr().clearMemory(MemoryLevel::GPU_LEVEL);
+  SysCatalog::instance().get_dataMgr().clearMemory(MemoryLevel::GPU_LEVEL);
 }
 
 // TODO This need to be corrected for distributed they are only hitting aggr
 void MapDHandler::clear_cpu_memory(const TSessionId& session) {
   const auto session_info = get_session(session);
-  SysCatalog::get()->get_dataMgr().clearMemory(MemoryLevel::CPU_LEVEL);
+  SysCatalog::instance().get_dataMgr().clearMemory(MemoryLevel::CPU_LEVEL);
 }
 
 TSessionId MapDHandler::getInvalidSessionId() const {
@@ -1321,10 +1307,10 @@ void MapDHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
   Data_Namespace::MemoryLevel mem_level;
   if (!memory_level.compare("gpu")) {
     mem_level = Data_Namespace::MemoryLevel::GPU_LEVEL;
-    internal_memory = SysCatalog::get()->get_dataMgr().getMemoryInfo(MemoryLevel::GPU_LEVEL);
+    internal_memory = SysCatalog::instance().get_dataMgr().getMemoryInfo(MemoryLevel::GPU_LEVEL);
   } else {
     mem_level = Data_Namespace::MemoryLevel::CPU_LEVEL;
-    internal_memory = SysCatalog::get()->get_dataMgr().getMemoryInfo(MemoryLevel::CPU_LEVEL);
+    internal_memory = SysCatalog::instance().get_dataMgr().getMemoryInfo(MemoryLevel::CPU_LEVEL);
   }
 
   for (auto memInfo : internal_memory) {
@@ -1359,8 +1345,8 @@ void MapDHandler::get_databases(std::vector<TDBInfo>& dbinfos, const TSessionId&
   if (!isUserAuthorized(session_info, std::string("get_databases"))) {
     return;
   }
-  std::list<Catalog_Namespace::DBMetadata> db_list = SysCatalog::get()->getAllDBMetadata();
-  std::list<Catalog_Namespace::UserMetadata> user_list = SysCatalog::get()->getAllUserMetadata();
+  std::list<Catalog_Namespace::DBMetadata> db_list = SysCatalog::instance().getAllDBMetadata();
+  std::list<Catalog_Namespace::UserMetadata> user_list = SysCatalog::instance().getAllUserMetadata();
   for (auto d : db_list) {
     TDBInfo dbinfo;
     dbinfo.db_name = d.dbName;
@@ -2215,14 +2201,13 @@ void MapDHandler::check_table_load_privileges(const Catalog_Namespace::SessionIn
                                               const std::string& table_name) {
   auto user_metadata = session_info.get_currentUser();
   auto& cat = session_info.get_catalog();
-  if (cat.isAccessPrivCheckEnabled()) {
-    auto& sys_cat = static_cast<SysCatalog&>(cat);
+  if (SysCatalog::instance().arePrivilegesOn()) {
     DBObject dbObject(table_name, TableDBObjectType);
-    sys_cat.populateDBObjectKey(dbObject, cat);
+    dbObject.loadKey(cat);
     dbObject.setPrivileges(AccessPrivileges::INSERT);
     std::vector<DBObject> privObjects;
     privObjects.push_back(dbObject);
-    if (!sys_cat.checkPrivileges(user_metadata, privObjects)) {
+    if (!SysCatalog::instance().checkPrivileges(user_metadata, privObjects)) {
       THROW_MAPD_EXCEPTION("Violation of access privileges: user " + user_metadata.userName +
                            " has no insert privileges for table " + table_name + ".");
     }

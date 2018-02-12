@@ -52,6 +52,7 @@ size_t g_leaf_count{0};
 bool g_fast_strcmp{true};
 
 using namespace Lock_Namespace;
+using Catalog_Namespace::SysCatalog;
 
 namespace Parser {
 
@@ -1901,10 +1902,9 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   td.keyMetainfo = serialize_key_metainfo(shard_key_def, shared_dict_defs);
   catalog.createShardedTable(td, columns, shared_dict_defs);
-
-  if (catalog.isAccessPrivCheckEnabled()) {
-    auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
-    syscat.createDBObject(session.get_currentUser(), td.tableName, catalog);
+  if (SysCatalog::instance().arePrivilegesOn()) {
+    // TODO (max): It's transactionally unsafe, should be fixed: we may create object w/o privileges
+    SysCatalog::instance().createDBObject(session.get_currentUser(), td.tableName, catalog);
   }
 }
 
@@ -2113,9 +2113,9 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
     }
     throw;
   }
-  if (catalog.isAccessPrivCheckEnabled()) {
-    auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
-    syscat.createDBObject(session.get_currentUser(), td.tableName, catalog);
+  if (SysCatalog::instance().arePrivilegesOn()) {
+    // TODO (max): It's transactionally unsafe, should be fixed: we may create object w/o privileges
+    SysCatalog::instance().createDBObject(session.get_currentUser(), td.tableName, catalog);
   }
 }
 
@@ -2149,14 +2149,13 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
 
   // check access privileges
-  if (catalog.isAccessPrivCheckEnabled()) {
+  if (SysCatalog::instance().arePrivilegesOn()) {
     std::vector<DBObject> privObjects;
     DBObject dbObject(*table, TableDBObjectType);
-    static_cast<Catalog_Namespace::SysCatalog&>(catalog).populateDBObjectKey(dbObject, catalog);
+    dbObject.loadKey(catalog);
     dbObject.setPrivileges(AccessPrivileges::TRUNCATE);
     privObjects.push_back(dbObject);
-    if (!(static_cast<Catalog_Namespace::SysCatalog&>(catalog))
-             .checkPrivileges(session.get_currentUser(), privObjects)) {
+    if (!SysCatalog::instance().checkPrivileges(session.get_currentUser(), privObjects)) {
       throw std::runtime_error("Table " + *table + " will not be trancated. User " +
                                session.get_currentUser().userName + " has no proper privileges.");
     }
@@ -2226,14 +2225,13 @@ void CopyTableStmt::execute(
     throw std::runtime_error("Table " + *table + " does not exist.");
 
   // check access privileges
-  if (catalog.isAccessPrivCheckEnabled()) {
+  if (SysCatalog::instance().arePrivilegesOn()) {
     std::vector<DBObject> privObjects;
     DBObject dbObject(*table, TableDBObjectType);
-    static_cast<Catalog_Namespace::SysCatalog&>(catalog).populateDBObjectKey(dbObject, catalog);
+    dbObject.loadKey(catalog);
     dbObject.setPrivileges(AccessPrivileges::INSERT);
     privObjects.push_back(dbObject);
-    if (!(static_cast<Catalog_Namespace::SysCatalog&>(catalog))
-             .checkPrivileges(session.get_currentUser(), privObjects)) {
+    if (!SysCatalog::instance().checkPrivileges(session.get_currentUser(), privObjects)) {
       throw std::runtime_error("Violation of access privileges: user " + session.get_currentUser().userName +
                                " has no insert privileges for table " + *table + ".");
     }
@@ -2400,13 +2398,13 @@ void CopyTableStmt::execute(
 
 // CREATE ROLE payroll_dept_role;
 void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
-  if (!catalog.isAccessPrivCheckEnabled()) {
+  if (!SysCatalog::instance().arePrivilegesOn()) {
     throw std::runtime_error(
         "CREATE ROLE " + get_role() +
         " failed. This command may be executed only when DB object level access privileges check turned on.");
   }
 
+  auto& catalog = session.get_catalog();
   if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB) {
     throw std::runtime_error("CREATE ROLE " + get_role() + " failed. Must be in the system database ('" +
                              std::string(MAPD_SYSTEM_DB) + "') to create roles.");
@@ -2420,20 +2418,17 @@ void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("CREATE ROLE " + get_role() +
                              " failed because this role name is reserved and can't be used.");
   }
-
-  auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
-  syscat.createRole(get_role());
+  SysCatalog::instance().createRole(get_role());
 }
 
 // DROP ROLE payroll_dept_role;
 void DropRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
-  if (!catalog.isAccessPrivCheckEnabled()) {
+  if (!SysCatalog::instance().arePrivilegesOn()) {
     throw std::runtime_error(
         "DROP ROLE " + get_role() +
         " failed. This command may be executed only when DB object level access privileges check turned on.");
   }
-
+  auto& catalog = session.get_catalog();
   if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB) {
     throw std::runtime_error("DROP ROLE " + get_role() + " failed. Must be in the system database ('" +
                              std::string(MAPD_SYSTEM_DB) + "') to drop roles.");
@@ -2442,12 +2437,10 @@ void DropRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!currentUser.isSuper) {
     throw std::runtime_error("DROP ROLE " + get_role() + "failed. It can only be executed by super user.");
   }
-
-  auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
-  if (syscat.getMetadataForRole(get_role()) == nullptr) {
+  if (SysCatalog::instance().getMetadataForRole(get_role()) == nullptr) {
     throw std::runtime_error("DROP ROLE " + get_role() + " failed because role with this name does not exist.");
   }
-  syscat.dropRole(get_role());
+  SysCatalog::instance().dropRole(get_role());
 }
 
 std::vector<std::string> splitObjectHierName(const std::string& hierName) {
@@ -2489,15 +2482,13 @@ std::string extractObjectNameFromHierName(const std::string& objectHierName,
 
 // GRANT SELECT/INSERT/CREATE ON TABLE payroll_table TO payroll_dept_role;
 void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
-  if (!catalog.isAccessPrivCheckEnabled()) {
+  if (!SysCatalog::instance().arePrivilegesOn()) {
     throw std::runtime_error(
         "GRANT " + get_priv() +
         " failed. This command may be executed only when DB object level access privileges check turned on.");
   }
-
+  auto& catalog = session.get_catalog();
   const auto& currentUser = session.get_currentUser();
-  auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
   const auto objectName = extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
   DBObjectType objectType = TableDBObjectType;
@@ -2512,7 +2503,7 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
 
   /* verify object ownership if not suser */
   if (!currentUser.isSuper) {
-    if (!syscat.verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
+    if (!SysCatalog::instance().verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
       throw std::runtime_error("GRANT " + get_priv() +
                                " failed. It can only be executed by super user or owner of the object.");
     }
@@ -2536,20 +2527,18 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
                              " are not correct.");
   }
   dbObject.setPrivileges(privs);
-  syscat.grantDBObjectPrivileges(get_role(), dbObject, catalog);
+  SysCatalog::instance().grantDBObjectPrivileges(get_role(), dbObject, catalog);
 }
 
 // REVOKE SELECT/INSERT/CREATE ON TABLE payroll_table FROM payroll_dept_role;
 void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
-  if (!catalog.isAccessPrivCheckEnabled()) {
+  if (!SysCatalog::instance().arePrivilegesOn()) {
     throw std::runtime_error(
         "REVOKE " + get_priv() +
         " failed. This command may be executed only when DB object level access privileges check turned on.");
   }
-
+  auto& catalog = session.get_catalog();
   const auto& currentUser = session.get_currentUser();
-  auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
   const auto objectName = extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
   DBObjectType objectType = TableDBObjectType;
@@ -2564,7 +2553,7 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
 
   /* verify object ownership if not suser */
   if (!currentUser.isSuper) {
-    if (!syscat.verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
+    if (!SysCatalog::instance().verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
       throw std::runtime_error("REVOKE " + get_priv() +
                                " failed. It can only be executed by super user or owner of the object.");
     }
@@ -2588,20 +2577,18 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
                              " are not correct.");
   }
   dbObject.setPrivileges(privs);
-  syscat.revokeDBObjectPrivileges(get_role(), dbObject, catalog);
+  SysCatalog::instance().revokeDBObjectPrivileges(get_role(), dbObject, catalog);
 }
 
 // SHOW ON TABLE payroll_table FOR payroll_dept_role;
 void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
-  if (!catalog.isAccessPrivCheckEnabled()) {
+  if (!SysCatalog::instance().arePrivilegesOn()) {
     throw std::runtime_error(
         "SHOW ON " + get_object() + " FOR " + get_role() +
         " failed. This command may be executed only when DB object level access privileges check turned on.");
   }
-
+  auto& catalog = session.get_catalog();
   const auto& currentUser = session.get_currentUser();
-  auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
   const auto objectName = extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
   DBObjectType objectType = TableDBObjectType;
@@ -2616,14 +2603,14 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) 
 
   /* verify object ownership if not suser */
   if (!currentUser.isSuper) {
-    if (!syscat.verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
+    if (!SysCatalog::instance().verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
       throw std::runtime_error("SHOW ON " + get_object() + " FOR " + get_role() +
                                " failed. It can only be executed by super user or owner of the object.");
     }
   }
 
   /* get values of privileges for the object and report them */
-  syscat.getDBObjectPrivileges(get_role(), dbObject, catalog);
+  SysCatalog::instance().getDBObjectPrivileges(get_role(), dbObject, catalog);
   AccessPrivileges privs = dbObject.getPrivileges();
   printf("\nPRIVILEGES ON %s FOR %s ARE SET AS FOLLOWING: ", get_object().c_str(), get_role().c_str());
   if (privs.select) {
@@ -2643,13 +2630,12 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) 
 
 // GRANT payroll_dept_role TO joe;
 void GrantRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
-  if (!catalog.isAccessPrivCheckEnabled()) {
+  if (!SysCatalog::instance().arePrivilegesOn()) {
     throw std::runtime_error(
         "GRANT " + get_role() + " TO " + get_user() +
         " failed. This command may be executed only when DB object level access privileges check turned on.");
   }
-
+  auto& catalog = session.get_catalog();
   if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB) {
     throw std::runtime_error("GRANT " + get_role() + " TO " + get_user() +
                              "; failed. Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) +
@@ -2660,23 +2646,21 @@ void GrantRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("GRANT " + get_role() + " TO " + get_user() +
                              "; failed, because it can only be executed by super user.");
   }
-  auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   if (!get_user().compare(MAPD_ROOT_USER)) {
     throw std::runtime_error("Request to grant role " + get_role() +
                              " failed because mapd root user has all privileges by default.");
   }
-  syscat.grantRole(get_role(), get_user());
+  SysCatalog::instance().grantRole(get_role(), get_user());
 }
 
 // REVOKE payroll_dept_role FROM joe;
 void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
-  if (!catalog.isAccessPrivCheckEnabled()) {
+  if (!SysCatalog::instance().arePrivilegesOn()) {
     throw std::runtime_error(
         "REVOKE " + get_role() + " FROM " + get_user() +
         " failed. This command may be executed only when DB object level access privileges check turned on.");
   }
-
+  auto& catalog = session.get_catalog();
   if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB) {
     throw std::runtime_error("REVOKE " + get_role() + " TO " + get_user() +
                              "; failed. Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) +
@@ -2687,12 +2671,11 @@ void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("REVOKE " + get_role() + " FROM " + get_user() +
                              "; failed, because it can only be executed by super user.");
   }
-  auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   if (!get_user().compare(MAPD_ROOT_USER)) {
     throw std::runtime_error("Request to revoke role " + get_role() +
                              " failed because privileges can not be revoked from mapd root user.");
   }
-  syscat.revokeRole(get_role(), get_user());
+  SysCatalog::instance().revokeRole(get_role(), get_user());
 }
 
 typedef std::numeric_limits<double> dbl;
@@ -2969,10 +2952,9 @@ void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
     throw std::runtime_error("Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) +
                              "') to create databases.");
-  if (catalog.isAccessPrivCheckEnabled() && !session.get_currentUser().isSuper) {
+  if (SysCatalog::instance().arePrivilegesOn() && !session.get_currentUser().isSuper) {
     throw std::runtime_error("CREATE DATABASE command can only be executed by super user.");
   }
-  Catalog_Namespace::SysCatalog& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   int ownerId = session.get_currentUser().userId;
   if (!name_value_list.empty()) {
     for (auto& p : name_value_list) {
@@ -2981,14 +2963,14 @@ void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           throw std::runtime_error("Owner name must be a string literal.");
         const std::string* str = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
         Catalog_Namespace::UserMetadata user;
-        if (!syscat.getMetadataForUser(*str, user))
+        if (!SysCatalog::instance().getMetadataForUser(*str, user))
           throw std::runtime_error("User " + *str + " does not exist.");
         ownerId = user.userId;
       } else
         throw std::runtime_error("Invalid CREATE DATABASE option " + *p->get_name() + ". Only OWNER supported.");
     }
   }
-  syscat.createDatabase(*db_name, ownerId);
+  SysCatalog::instance().createDatabase(*db_name, ownerId);
 }
 
 void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -2996,19 +2978,18 @@ void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
     throw std::runtime_error("Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) +
                              "') to drop databases.");
-  if (catalog.isAccessPrivCheckEnabled() && !session.get_currentUser().isSuper) {
+  if (SysCatalog::instance().arePrivilegesOn() && !session.get_currentUser().isSuper) {
     throw std::runtime_error("DROP DATABASE command can only be executed by super user.");
   }
-  Catalog_Namespace::SysCatalog& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   Catalog_Namespace::DBMetadata db;
-  if (!syscat.getMetadataForDB(*db_name, db))
+  if (!SysCatalog::instance().getMetadataForDB(*db_name, db))
     throw std::runtime_error("Database " + *db_name + " does not exist.");
 
   if (!session.get_currentUser().isSuper && session.get_currentUser().userId != db.dbOwner)
     throw std::runtime_error("Only the super user or the owner can drop database.");
 
   auto db_cat = Catalog_Namespace::Catalog::get(*db_name);
-  syscat.dropDatabase(db.dbId, *db_name, db_cat.get());
+  SysCatalog::instance().dropDatabase(db.dbId, *db_name, db_cat.get());
 }
 
 void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -3039,13 +3020,12 @@ void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) + "') to create users.");
   if (!session.get_currentUser().isSuper)
     throw std::runtime_error("Only super user can create new users.");
-  Catalog_Namespace::SysCatalog& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
-  syscat.createUser(*user_name, passwd, is_super);
+  SysCatalog::instance().createUser(*user_name, passwd, is_super);
 }
 
 void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
-  if (catalog.isAccessPrivCheckEnabled() && !session.get_currentUser().isSuper) {
+  if (SysCatalog::instance().arePrivilegesOn() && !session.get_currentUser().isSuper) {
     throw std::runtime_error("ALTER USER command failed. It can only be executed by super user.");
   }
   const std::string* passwd = nullptr;
@@ -3079,24 +3059,23 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
     throw std::runtime_error("Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) + "') to alter users.");
-  Catalog_Namespace::SysCatalog& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   Catalog_Namespace::UserMetadata user;
-  if (!syscat.getMetadataForUser(*user_name, user))
+  if (!SysCatalog::instance().getMetadataForUser(*user_name, user))
     throw std::runtime_error("User " + *user_name + " does not exist.");
   if (!session.get_currentUser().isSuper && session.get_currentUser().userId != user.userId)
     throw std::runtime_error("Only user super can change another user's attributes.");
   if (insertaccessDB) {
     LOG(INFO) << " InsertAccess being given to user " << user.userId << " for db " << *insertaccessDB;
     Catalog_Namespace::DBMetadata db;
-    if (!syscat.getMetadataForDB(*insertaccessDB, db))
+    if (!SysCatalog::instance().getMetadataForDB(*insertaccessDB, db))
       throw std::runtime_error("Database " + *insertaccessDB + " does not exist.");
     Privileges privs;
     privs.insert_ = true;
     privs.select_ = true;
-    syscat.grantPrivileges(user.userId, db.dbId, privs);
+    SysCatalog::instance().grantPrivileges(user.userId, db.dbId, privs);
   }
   if (passwd || is_superp) {
-    syscat.alterUser(user.userId, passwd, is_superp);
+    SysCatalog::instance().alterUser(user.userId, passwd, is_superp);
   }
 }
 
@@ -3106,7 +3085,6 @@ void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) + "') to drop users.");
   if (!session.get_currentUser().isSuper)
     throw std::runtime_error("Only super user can drop users.");
-  Catalog_Namespace::SysCatalog& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
-  syscat.dropUser(*user_name);
+  SysCatalog::instance().dropUser(*user_name);
 }
 }  // namespace Parser
