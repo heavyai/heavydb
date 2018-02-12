@@ -56,6 +56,7 @@ class JoinLoop {
            const std::function<JoinLoopDomain(const std::vector<llvm::Value*>&)>&,
            const std::function<llvm::Value*(const std::vector<llvm::Value*>&)>&,
            const std::function<void(llvm::Value*)>&,
+           const std::function<llvm::Value*(const std::vector<llvm::Value*>& prev_iters, llvm::Value*)>&,
            const std::string& name = "");
 
   static llvm::BasicBlock* codegen(
@@ -85,5 +86,9 @@ class JoinLoop {
   // Callback provided from the executor which receives the IR boolean value which tracks
   // whether there are matches for the current iteration.
   const std::function<void(llvm::Value*)> found_outer_matches_;
+  // Callback provided from the executor which returns if the current row (given by position) is deleted.
+  // The second argument is true iff the iteration isn't done yet. Useful for UpperBound and Set, which
+  // need to avoid fetching the deleted column from a past-the-end position. It's null for Singleton.
+  const std::function<llvm::Value*(const std::vector<llvm::Value*>& prev_iters, llvm::Value*)> is_deleted_;
   const std::string name_;
 };

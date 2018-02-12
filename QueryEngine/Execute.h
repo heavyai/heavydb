@@ -959,11 +959,17 @@ class Executor {
                                     const bool has_cardinality_estimation,
                                     ColumnCacheMap& column_cache,
                                     RenderInfo* render_info = nullptr);
+  // Generate code to skip the deleted rows in the outermost table.
+  llvm::BasicBlock* codegenSkipDeletedOuterTableRow(const RelAlgExecutionUnit& ra_exe_unit,
+                                                    const CompilationOptions& co);
   std::vector<JoinLoop> buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
                                        const CompilationOptions& co,
                                        const ExecutionOptions& eo,
                                        const std::vector<InputTableInfo>& query_infos,
                                        ColumnCacheMap& column_cache);
+  // Create a callback which generates code which returns true iff the row on the given level is deleted.
+  std::function<llvm::Value*(const std::vector<llvm::Value*>&, llvm::Value*)>
+  buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit, const size_t level_idx, const CompilationOptions& co);
   // Builds a join hash table for the provided conditions on the current level.
   // Returns null iff on failure and provides the reasons in `fail_reasons`.
   std::shared_ptr<JoinHashTableInterface> buildCurrentLevelHashTable(const JoinCondition& current_level_join_conditions,
@@ -972,7 +978,7 @@ class Executor {
                                                                      const std::vector<InputTableInfo>& query_infos,
                                                                      ColumnCacheMap& column_cache,
                                                                      std::vector<std::string>& fail_reasons);
-  void addJoinLoopIterator(const std::vector<llvm::Value*>& prev_iters, const size_t level_idx);
+  llvm::Value* addJoinLoopIterator(const std::vector<llvm::Value*>& prev_iters, const size_t level_idx);
   void codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
                         const RelAlgExecutionUnit& ra_exe_unit,
                         GroupByAndAggregate& group_by_and_aggregate,
@@ -1065,6 +1071,7 @@ class Executor {
   llvm::Value* castToTypeIn(llvm::Value* val, const size_t bit_width);
   llvm::Value* castToIntPtrTyIn(llvm::Value* val, const size_t bit_width);
 
+  RelAlgExecutionUnit addDeletedColumn(const RelAlgExecutionUnit& ra_exe_unit);
   void allocateLocalColumnIds(const std::list<std::shared_ptr<const InputColDescriptor>>& global_col_ids);
   int getLocalColumnId(const Analyzer::ColumnVar* col_var, const bool fetch_column) const;
 

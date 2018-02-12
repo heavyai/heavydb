@@ -150,6 +150,7 @@ std::vector<JoinLoop> generate_descriptors(const unsigned mask,
                               },
                               nullptr,
                               nullptr,
+                              nullptr,
                               "i" + std::to_string(i));
       ++cond_idx;
     } else {
@@ -163,6 +164,7 @@ std::vector<JoinLoop> generate_descriptors(const unsigned mask,
                                 domain.upper_bound = ll_int<int64_t>(upper_bound, g_global_context);
                                 return domain;
                               },
+                              nullptr,
                               nullptr,
                               nullptr,
                               "i" + std::to_string(i));

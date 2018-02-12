@@ -1068,6 +1068,10 @@ Executor::CompilationResult Executor::compileWorkUnit(const std::vector<InputTab
   const auto join_loops = buildJoinLoops(body_execution_unit, co, eo, query_infos, column_cache);
 
   allocateLocalColumnIds(ra_exe_unit.input_col_descs);
+  const auto is_not_deleted_bb = codegenSkipDeletedOuterTableRow(ra_exe_unit, co);
+  if (is_not_deleted_bb) {
+    bb = is_not_deleted_bb;
+  }
   if (!join_loops.empty()) {
     codegenJoinLoops(join_loops, body_execution_unit, group_by_and_aggregate, query_func, bb, co, eo);
   } else {
@@ -1131,6 +1135,32 @@ Executor::CompilationResult Executor::compileWorkUnit(const std::vector<InputTab
       query_mem_desc,
       output_columnar,
       llvm_ir};
+}
+
+llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(const RelAlgExecutionUnit& ra_exe_unit,
+                                                            const CompilationOptions& co) {
+  CHECK(!ra_exe_unit.input_descs.empty());
+  const auto& outer_input_desc = ra_exe_unit.input_descs[0];
+  if (outer_input_desc.getSourceType() != InputSourceType::TABLE) {
+    return nullptr;
+  }
+  const auto td = catalog_->getMetadataForTable(outer_input_desc.getTableId());
+  CHECK(td);
+  const auto deleted_cd = catalog_->getDeletedColumn(td);
+  if (!deleted_cd) {
+    return nullptr;
+  }
+  CHECK(deleted_cd->columnType.is_boolean());
+  const auto deleted_expr = makeExpr<Analyzer::ColumnVar>(
+      deleted_cd->columnType, outer_input_desc.getTableId(), deleted_cd->columnId, outer_input_desc.getNestLevel());
+  const auto is_deleted = toBool(codegen(deleted_expr.get(), true, co).front());
+  const auto is_deleted_bb = llvm::BasicBlock::Create(cgen_state_->context_, "is_deleted", cgen_state_->row_func_);
+  llvm::BasicBlock* bb = llvm::BasicBlock::Create(cgen_state_->context_, "is_not_deleted", cgen_state_->row_func_);
+  cgen_state_->ir_builder_.CreateCondBr(is_deleted, is_deleted_bb, bb);
+  cgen_state_->ir_builder_.SetInsertPoint(is_deleted_bb);
+  cgen_state_->ir_builder_.CreateRet(ll_int<int32_t>(0));
+  cgen_state_->ir_builder_.SetInsertPoint(bb);
+  return bb;
 }
 
 bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
