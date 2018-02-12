@@ -1831,6 +1831,18 @@ void Catalog::setTableEpoch(const int db_id, const int table_id, int new_epoch) 
   }
 }
 
+const ColumnDescriptor* Catalog::getDeletedColumn(const TableDescriptor* td) const {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  const auto it = deletedColumnPerTable_.find(td);
+  return it != deletedColumnPerTable_.end() ? it->second : nullptr;
+}
+
+void Catalog::setDeletedColumn(const TableDescriptor* td, const ColumnDescriptor* cd) {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  const auto it_ok = deletedColumnPerTable_.emplace(td, cd);
+  CHECK(it_ok.second);
+}
+
 namespace {
 
 const ColumnDescriptor* get_foreign_col(const Catalog& cat, const Parser::SharedDictionaryDef& shared_dict_def) {

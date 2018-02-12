@@ -218,6 +218,10 @@ class Catalog {
   static std::shared_ptr<Catalog> get(const std::string& dbName);
   static void remove(const std::string& dbName);
 
+  const ColumnDescriptor* getDeletedColumn(const TableDescriptor* td) const;
+
+  void setDeletedColumn(const TableDescriptor* td, const ColumnDescriptor* cd);
+
  protected:
   typedef std::map<std::string, TableDescriptor*> TableDescriptorMap;
   typedef std::map<int, TableDescriptor*> TableDescriptorMapById;
@@ -296,6 +300,7 @@ class Catalog {
 
  private:
   static std::map<std::string, std::shared_ptr<Catalog>> mapd_cat_map_;
+  std::unordered_map<const TableDescriptor*, const ColumnDescriptor*> deletedColumnPerTable_;
 };
 
 /*
