@@ -25,12 +25,14 @@ JoinLoop::JoinLoop(const JoinLoopKind kind,
                    const std::function<JoinLoopDomain(const std::vector<llvm::Value*>&)>& iteration_domain_codegen,
                    const std::function<llvm::Value*(const std::vector<llvm::Value*>&)>& outer_condition_match,
                    const std::function<void(llvm::Value*)>& found_outer_matches,
+                   const std::function<llvm::Value*(const std::vector<llvm::Value*>&, llvm::Value*)>& is_deleted,
                    const std::string& name)
     : kind_(kind),
       type_(type),
       iteration_domain_codegen_(iteration_domain_codegen),
       outer_condition_match_(outer_condition_match),
       found_outer_matches_(found_outer_matches),
+      is_deleted_(is_deleted),
       name_(name) {
   CHECK(outer_condition_match == nullptr || type == JoinType::LEFT);
   CHECK_EQ(static_cast<bool>(found_outer_matches), (type == JoinType::LEFT));
@@ -92,6 +94,15 @@ llvm::BasicBlock* JoinLoop::codegen(
             builder.CreateICmpSLT(iteration_counter,
                                   join_loop.kind_ == JoinLoopKind::UpperBound ? iteration_domain.upper_bound
                                                                               : iteration_domain.element_count);
+        const auto iter_advance_bb =
+            llvm::BasicBlock::Create(context, "ub_iter_advance_" + join_loop.name_, parent_func);
+        llvm::BasicBlock* row_not_deleted_bb{nullptr};
+        if (join_loop.is_deleted_) {
+          row_not_deleted_bb = llvm::BasicBlock::Create(context, "row_not_deleted_" + join_loop.name_, parent_func);
+          const auto row_is_deleted = join_loop.is_deleted_(iterators, have_more_inner_rows);
+          builder.CreateCondBr(row_is_deleted, iter_advance_bb, row_not_deleted_bb);
+          builder.SetInsertPoint(row_not_deleted_bb);
+        }
         if (join_loop.type_ == JoinType::LEFT) {
           std::tie(last_head_bb, prev_comparison_result) = evaluateOuterJoinCondition(join_loop,
                                                                                       iteration_domain,
@@ -102,10 +113,8 @@ llvm::BasicBlock* JoinLoop::codegen(
                                                                                       builder);
         } else {
           prev_comparison_result = have_more_inner_rows;
-          last_head_bb = head_bb;
+          last_head_bb = row_not_deleted_bb ? row_not_deleted_bb : head_bb;
         }
-        const auto iter_advance_bb =
-            llvm::BasicBlock::Create(context, "ub_iter_advance_" + join_loop.name_, parent_func);
         builder.SetInsertPoint(iter_advance_bb);
         const auto iteration_counter_next_val = builder.CreateAdd(iteration_counter, ll_int(int64_t(1), context));
         builder.CreateStore(iteration_counter_next_val, iteration_counter_ptr);
@@ -136,8 +145,10 @@ llvm::BasicBlock* JoinLoop::codegen(
         const auto iteration_domain = join_loop.iteration_domain_codegen_(iterators);
         CHECK(!iteration_domain.values_buffer);
         iterators.push_back(iteration_domain.slot_lookup_result);
-        const auto match_found =
-            builder.CreateICmpSGE(iteration_domain.slot_lookup_result, ll_int<int64_t>(0, context));
+        auto match_found = builder.CreateICmpSGE(iteration_domain.slot_lookup_result, ll_int<int64_t>(0, context));
+        if (join_loop.is_deleted_) {
+          match_found = builder.CreateAnd(match_found, builder.CreateNot(join_loop.is_deleted_(iterators, nullptr)));
+        }
         switch (join_loop.type_) {
           case JoinType::INNER: {
             prev_comparison_result = match_found;
@@ -155,7 +166,7 @@ llvm::BasicBlock* JoinLoop::codegen(
         if (!prev_iter_advance_bb) {
           prev_iter_advance_bb = prev_exit_bb;
         }
-        last_head_bb = true_bb;
+        last_head_bb = llvm::cast<llvm::Instruction>(match_found)->getParent();
         break;
       }
       default:

@@ -784,13 +784,14 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                                     size_t& max_groups_buffer_entry_guess,
                                     const bool is_agg,
                                     const std::vector<InputTableInfo>& query_infos,
-                                    const RelAlgExecutionUnit& ra_exe_unit,
+                                    const RelAlgExecutionUnit& ra_exe_unit_in,
                                     const CompilationOptions& co,
                                     const ExecutionOptions& options,
                                     const Catalog_Namespace::Catalog& cat,
                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                     RenderInfo* render_info,
                                     const bool has_cardinality_estimation) {
+  const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in);
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type_);
   CHECK(!query_infos.empty());
   if (!max_groups_buffer_entry_guess) {
@@ -2561,6 +2562,25 @@ llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth)
 #include "DateAdd.cpp"
 #include "StringFunctions.cpp"
 #undef EXECUTE_INCLUDE
+
+RelAlgExecutionUnit Executor::addDeletedColumn(const RelAlgExecutionUnit& ra_exe_unit) {
+  auto ra_exe_unit_with_deleted = ra_exe_unit;
+  for (const auto& input_table : ra_exe_unit_with_deleted.input_descs) {
+    if (input_table.getSourceType() != InputSourceType::TABLE) {
+      continue;
+    }
+    const auto td = catalog_->getMetadataForTable(input_table.getTableId());
+    CHECK(td);
+    const auto deleted_cd = catalog_->getDeletedColumn(td);
+    if (!deleted_cd) {
+      continue;
+    }
+    CHECK(deleted_cd->columnType.is_boolean());
+    ra_exe_unit_with_deleted.input_col_descs.emplace_back(
+        new InputColDescriptor(deleted_cd->columnId, deleted_cd->tableId, input_table.getNestLevel()));
+  }
+  return ra_exe_unit_with_deleted;
+}
 
 void Executor::allocateLocalColumnIds(const std::list<std::shared_ptr<const InputColDescriptor>>& global_col_ids) {
   for (const auto& col_id : global_col_ids) {

@@ -311,6 +311,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
       CHECK(!cgen_state_->outer_join_match_found_per_level_[level_idx]);
       cgen_state_->outer_join_match_found_per_level_[level_idx] = found_outer_join_matches;
     };
+    const auto is_deleted_cb = buildIsDeletedCb(ra_exe_unit, level_idx, co);
     if (current_level_hash_table) {
       if (current_level_hash_table->getHashType() == JoinHashTable::HashType::OneToOne) {
         join_loops.emplace_back(
@@ -326,7 +327,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
             nullptr,
             current_level_join_conditions.type == JoinType::LEFT
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
-                : nullptr);
+                : nullptr,
+            is_deleted_cb);
       } else {
         join_loops.emplace_back(JoinLoopKind::Set,
                                 current_level_join_conditions.type,
@@ -343,7 +345,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
                                 nullptr,
                                 current_level_join_conditions.type == JoinType::LEFT
                                     ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
-                                    : nullptr);
+                                    : nullptr,
+                                is_deleted_cb);
       }
       ++current_hash_table_idx;
     } else {
@@ -382,10 +385,60 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
               : nullptr,
           current_level_join_conditions.type == JoinType::LEFT
               ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
-              : nullptr);
+              : nullptr,
+          is_deleted_cb);
     }
   }
   return join_loops;
+}
+
+std::function<llvm::Value*(const std::vector<llvm::Value*>&, llvm::Value*)> Executor::buildIsDeletedCb(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const size_t level_idx,
+    const CompilationOptions& co) {
+  CHECK_LT(level_idx + 1, ra_exe_unit.input_descs.size());
+  const auto input_desc = ra_exe_unit.input_descs[level_idx + 1];
+  if (input_desc.getSourceType() != InputSourceType::TABLE) {
+    return nullptr;
+  }
+  const auto td = catalog_->getMetadataForTable(input_desc.getTableId());
+  CHECK(td);
+  const auto deleted_cd = catalog_->getDeletedColumn(td);
+  if (!deleted_cd) {
+    return nullptr;
+  }
+  CHECK(deleted_cd->columnType.is_boolean());
+  const auto deleted_expr = makeExpr<Analyzer::ColumnVar>(
+      deleted_cd->columnType, input_desc.getTableId(), deleted_cd->columnId, input_desc.getNestLevel());
+  return [this, deleted_expr, level_idx, &co](const std::vector<llvm::Value*>& prev_iters,
+                                              llvm::Value* have_more_inner_rows) {
+    const auto matching_row_index = addJoinLoopIterator(prev_iters, level_idx + 1);
+    // Avoid fetching the deleted column from a position which is not valid.
+    // An invalid position can be returned by a one to one hash lookup (negative)
+    // or at the end of iteration over a set of matching values.
+    auto is_valid_it =
+        cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGE, matching_row_index, ll_int<int64_t>(0));
+    if (have_more_inner_rows) {
+      is_valid_it = cgen_state_->ir_builder_.CreateAnd(is_valid_it, have_more_inner_rows);
+    }
+    const auto it_valid_bb = llvm::BasicBlock::Create(cgen_state_->context_, "it_valid", cgen_state_->row_func_);
+    const auto it_not_valid_bb =
+        llvm::BasicBlock::Create(cgen_state_->context_, "it_not_valid", cgen_state_->row_func_);
+    cgen_state_->ir_builder_.CreateCondBr(is_valid_it, it_valid_bb, it_not_valid_bb);
+    const auto row_is_deleted_bb =
+        llvm::BasicBlock::Create(cgen_state_->context_, "row_is_deleted", cgen_state_->row_func_);
+    cgen_state_->ir_builder_.SetInsertPoint(it_valid_bb);
+    const auto row_is_deleted = toBool(codegen(deleted_expr.get(), true, co).front());
+    cgen_state_->ir_builder_.CreateBr(row_is_deleted_bb);
+    cgen_state_->ir_builder_.SetInsertPoint(it_not_valid_bb);
+    const auto row_is_deleted_default = ll_bool(false);
+    cgen_state_->ir_builder_.CreateBr(row_is_deleted_bb);
+    cgen_state_->ir_builder_.SetInsertPoint(row_is_deleted_bb);
+    auto row_is_deleted_or_default = cgen_state_->ir_builder_.CreatePHI(row_is_deleted->getType(), 2);
+    row_is_deleted_or_default->addIncoming(row_is_deleted, it_valid_bb);
+    row_is_deleted_or_default->addIncoming(row_is_deleted_default, it_not_valid_bb);
+    return row_is_deleted_or_default;
+  };
 }
 
 std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
@@ -433,7 +486,14 @@ std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
   return current_level_hash_table;
 }
 
-void Executor::addJoinLoopIterator(const std::vector<llvm::Value*>& prev_iters, const size_t level_idx) {
+llvm::Value* Executor::addJoinLoopIterator(const std::vector<llvm::Value*>& prev_iters, const size_t level_idx) {
+  // Iterators are added for loop-outer joins when the head of the loop is generated,
+  // then once again when the body if generated. Allow this instead of special handling
+  // of call sites.
+  const auto it = cgen_state_->scan_idx_to_hash_pos_.find(level_idx);
+  if (it != cgen_state_->scan_idx_to_hash_pos_.end()) {
+    return it->second;
+  }
   CHECK(!prev_iters.empty());
   llvm::Value* matching_row_index{nullptr};
   if (prev_iters.back()->getType()->isPointerTy()) {
@@ -446,12 +506,8 @@ void Executor::addJoinLoopIterator(const std::vector<llvm::Value*>& prev_iters, 
   }
   CHECK(matching_row_index->getType()->isIntegerTy(64));
   const auto it_ok = cgen_state_->scan_idx_to_hash_pos_.emplace(level_idx, matching_row_index);
-  if (!it_ok.second) {
-    // Iterators are added for loop-outer joins when the head of the loop is generated,
-    // then once again when the body if generated. Allow this instead of special handling
-    // of call sites.
-    CHECK_EQ(it_ok.first->second, matching_row_index);
-  }
+  CHECK(it_ok.second);
+  return matching_row_index;
 }
 
 void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,

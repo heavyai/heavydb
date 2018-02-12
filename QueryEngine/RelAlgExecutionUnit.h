@@ -60,7 +60,7 @@ typedef std::vector<JoinCondition> JoinQualsPerNestingLevel;
 struct RelAlgExecutionUnit {
   const std::vector<InputDescriptor> input_descs;
   const std::vector<InputDescriptor> extra_input_descs;
-  const std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
+  std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
   std::list<std::shared_ptr<Analyzer::Expr>> quals;
   const JoinType join_type;
