@@ -1126,7 +1126,9 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
       execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, -1, -1, false, true);
       _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
     } catch (std::exception& e) {
-      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+      TColumnType tColumnType;
+      tColumnType.col_name = "BROKEN_VIEW_PLEASE_FIX";
+      _return.row_desc.push_back(tColumnType);
     }
   } else {
     try {
@@ -2610,7 +2612,11 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     }
     LOG(INFO) << "passing query to legacy processor";
   } catch (std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    if (strstr(e.what(), "java.lang.NullPointerException")) {
+      THROW_MAPD_EXCEPTION(std::string("Exception: ") + "query failed from broken view or other schema related issue");
+    } else {
+      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    }
   }
   try {
     // check for COPY TO stmt replace as required parser expects #~# markers
