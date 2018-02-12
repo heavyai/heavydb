@@ -1122,7 +1122,11 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
     try {
       if (!SysCatalog::instance().arePrivilegesOn() || hasTableAccessPrivileges(td, session)) {
         const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, get_system, true);
+        const auto deleted_cd = cat.getDeletedColumn(td);
         for (const auto cd : col_descriptors) {
+          if (cd == deleted_cd) {
+            continue;
+          }
           _return.row_desc.push_back(populateThriftColumnType(&cat, cd));
         }
       } else {
