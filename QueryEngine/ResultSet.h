@@ -258,6 +258,8 @@ class ResultSet {
 
   std::vector<TargetValue> getNextRow(const bool translate_strings, const bool decimal_to_double) const;
 
+  size_t getCurrentRowBufferIndex() const;
+
   std::vector<TargetValue> getRowAt(const size_t index) const;
 
   TargetValue getRowAt(const size_t row_idx,

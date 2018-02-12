@@ -23,29 +23,30 @@
  **/
 
 #include "Catalog.h"
-#include <list>
-#include <exception>
-#include <cassert>
-#include <memory>
-#include <random>
 #include <boost/filesystem.hpp>
 #include <boost/uuid/sha1.hpp>
-#include "SharedDictionaryValidator.h"
+#include <cassert>
+#include <exception>
+#include <list>
+#include <memory>
+#include <random>
+#include "DataMgr/LockMgr.h"
 #include "../Fragmenter/Fragmenter.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "../Parser/ParserNode.h"
 #include "../Shared/StringTransform.h"
 #include "../Shared/measure.h"
 #include "../StringDictionary/StringDictionaryClient.h"
+#include "SharedDictionaryValidator.h"
 
-using std::runtime_error;
-using std::string;
-using std::map;
-using std::list;
-using std::pair;
-using std::vector;
 using Chunk_NS::Chunk;
 using Fragmenter_Namespace::InsertOrderFragmenter;
+using std::list;
+using std::map;
+using std::pair;
+using std::runtime_error;
+using std::string;
+using std::vector;
 
 bool g_aggregator{false};
 
@@ -53,7 +54,7 @@ namespace Catalog_Namespace {
 
 const std::string Catalog::physicalTableNameTag_("_shard_#");
 Catalog_Namespace::SysCatalog* mapd_sys_cat(nullptr);
-std::map<std::string, Catalog*> mapd_cat_map;
+std::map<std::string, std::shared_ptr<Catalog>> mapd_cat_map;
 
 SysCatalog::~SysCatalog() {
   std::lock_guard<std::mutex> lock(cat_mutex_);
@@ -259,6 +260,7 @@ void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name, Catal
         revokeDBObjectPrivilegesFromAllRoles(td->tableName, TableDBObjectType, db_cat);
       }
     }
+    mapd_cat_map.erase(name);
     /* revoke object privileges to the database being dropped */
     revokeDBObjectPrivilegesFromAllRoles(name, DatabaseDBObjectType);
   }
@@ -2110,9 +2112,6 @@ void Catalog::truncateTable(const TableDescriptor* td) {
 
 void Catalog::doTruncateTable(const TableDescriptor* td) {
   const int tableId = td->tableId;
-  // get a write lock on the table before trying to remove it
-  ChunkKey chunkKey = {currentDB_.dbId, tableId};
-  mapd_unique_lock<mapd_shared_mutex> tableLevelWriteLock(*dataMgr_->getMutexForChunkPrefix(chunkKey));
   // must destroy fragmenter before deleteChunks is called.
   if (td->fragmenter != nullptr) {
     auto tableDescIt = tableDescriptorMapById_.find(tableId);
@@ -2218,9 +2217,6 @@ void Catalog::dropTable(const TableDescriptor* td) {
 
 void Catalog::doDropTable(const TableDescriptor* td) {
   const int tableId = td->tableId;
-  // get a write lock on the table before trying to remove it
-  ChunkKey chunkKey = {currentDB_.dbId, tableId};
-  mapd_unique_lock<mapd_shared_mutex> tableLevelWriteLock(*dataMgr_->getMutexForChunkPrefix(chunkKey));
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query_with_text_param("DELETE FROM mapd_tables WHERE tableid = ?", std::to_string(tableId));
@@ -2469,20 +2465,15 @@ Catalog_Namespace::SysCatalog* SessionInfo::getSysCatalog() const {
   return mapd_sys_cat;
 }
 
-void SessionInfo::setDatabaseCatalog(const std::string& dbName, Catalog* cat) {
-  if (mapd_cat_map.find(dbName) != mapd_cat_map.end()) {
-    mapd_cat_map[dbName] = cat;
-  } else {
-    mapd_cat_map.insert(std::pair<std::string, Catalog*>(dbName, cat));
-  }
+void SessionInfo::setDatabaseCatalog(const std::string& dbName, std::shared_ptr<Catalog> cat) {
+  mapd_cat_map[dbName] = cat;
 }
 
-Catalog* SessionInfo::getDatabaseCatalog(const std::string& dbName) const {
-  Catalog* cat(nullptr);
+std::shared_ptr<Catalog> SessionInfo::getDatabaseCatalog(const std::string& dbName) const {
   auto cat_it = mapd_cat_map.find(dbName);
   if (cat_it != mapd_cat_map.end()) {
-    cat = cat_it->second;
+    return cat_it->second;
   }
-  return cat;
+  return nullptr;
 }
-}  // Catalog_Namespace
+}  // namespace Catalog_Namespace

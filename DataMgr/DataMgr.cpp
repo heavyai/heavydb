@@ -351,24 +351,6 @@ void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix, const MemoryLeve
   }
 }
 
-std::shared_ptr<mapd_shared_mutex> DataMgr::getMutexForChunkPrefix(const ChunkKey& keyPrefix) {
-  std::map<ChunkKey, std::shared_ptr<mapd_shared_mutex>>::iterator mapMutexIt = chunkMutexMap_.find(keyPrefix);
-  if (mapMutexIt == chunkMutexMap_.end()) {
-    // lock it
-    mapd_unique_lock<mapd_shared_mutex> chunkMutexMapWriteLock(chunkMutexMapMutex_);
-    // make sure no one beat me here
-    mapMutexIt = chunkMutexMap_.find(keyPrefix);
-    if (mapMutexIt != chunkMutexMap_.end()) {
-      return mapMutexIt->second;
-    }
-    // make new mutex
-    std::shared_ptr<mapd_shared_mutex> tMutex = std::make_shared<mapd_shared_mutex>();
-    chunkMutexMap_[keyPrefix] = tMutex;
-    return tMutex;
-  }
-  return mapMutexIt->second;
-}
-
 AbstractBuffer* DataMgr::alloc(const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes) {
   int level = static_cast<int>(memoryLevel);
   assert(deviceId < levelSizes_[level]);

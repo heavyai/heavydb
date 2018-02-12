@@ -50,6 +50,7 @@
 #include "../Shared/mapd_glob.h"
 #include "../Shared/scope.h"
 #include "Importer.h"
+#include "DataMgr/LockMgr.h"
 #include "gen-cpp/MapD.h"
 #include <vector>
 #include <iostream>
@@ -57,6 +58,8 @@
 #include <arrow/api.h>
 
 #include "../Archive/PosixFileArchive.h"
+
+#include "../Archive/S3Archive.h"
 
 using std::ostream;
 
@@ -280,35 +283,6 @@ ArrayDatum StringToArray(const std::string& s, const SQLTypeInfo& ti, const Copy
   return ArrayDatum(0, NULL, true);
 }
 
-void parseStringArray(const std::string& s, const CopyParams& copy_params, std::vector<std::string>& string_vec) {
-  if (s == copy_params.null_str || s.size() < 1) {
-    return;
-  }
-  if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
-    throw std::runtime_error("Malformed Array :" + s);
-  }
-  size_t last = 1;
-  for (size_t i = s.find(copy_params.array_delim, 1); i != std::string::npos;
-       i = s.find(copy_params.array_delim, last)) {
-    if (i > last) {  // if not empty string - disallow empty strings for now
-      if (s.substr(last, i - last).length() > StringDictionary::MAX_STRLEN)
-        throw std::runtime_error("Array String too long : " + std::to_string(s.substr(last, i - last).length()) +
-                                 " max is " + std::to_string(StringDictionary::MAX_STRLEN));
-
-      string_vec.push_back(s.substr(last, i - last));
-    }
-    last = i + 1;
-  }
-  if (s.size() - 1 > last) {  // if not empty string - disallow empty strings for now
-    if (s.substr(last, s.size() - 1 - last).length() > StringDictionary::MAX_STRLEN)
-      throw std::runtime_error(
-          "Array String too long : " + std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
-          std::to_string(StringDictionary::MAX_STRLEN));
-
-    string_vec.push_back(s.substr(last, s.size() - 1 - last));
-  }
-}
-
 void addBinaryStringArray(const TDatum& datum, std::vector<std::string>& string_vec) {
   const auto& arr = datum.val.arr_val;
   for (const auto& elem_datum : arr) {
@@ -495,7 +469,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       }
       if (IS_STRING(cd->columnType.get_subtype())) {
         std::vector<std::string>& string_vec = addStringArray();
-        parseStringArray(val, copy_params, string_vec);
+        ImporterUtils::parseStringArray(val, copy_params, string_vec);
       } else {
         if (!is_null) {
           ArrayDatum d = StringToArray(val, cd->columnType, copy_params);
@@ -1551,7 +1525,7 @@ ImportStatus Detector::importDelimited(const std::string& file_path, const bool 
       }
       if (0 == n)
         break;
-
+      line[n] = 0;
       // remember the first line, which is possibly a header line, to
       // ignore identical header line(s) in 2nd+ files of a archive;
       // otherwise, 2nd+ header may be mistaken as an all-string row
@@ -1848,6 +1822,71 @@ ImportStatus DataStreamSink::archivePlumber() {
   if (file_paths.size() == 0)
     file_paths.push_back(file_path);
 
+  // s3 parquet goes different route because the files do not use libarchive
+  // but parquet api, and they need to landed like .7z files.
+  //
+  // note: parquet must be explicitly specified by a WITH parameter "parquet='true'".
+  //       without the parameter, it means plain or compressed csv files.
+  // note: .ORC and AVRO files should follow a similar path to Parquet?
+  if (copy_params.is_parquet)
+    import_parquet(file_paths);
+  else
+    import_compressed(file_paths);
+  return import_status;
+}
+
+void DataStreamSink::import_local_parquet(const std::string& file_path) {
+  // TODO: for now, this is skeleton only
+  // note: for 'early-stop' purpose like that of Detector, this function
+  // needs extra parameters, eg. timeout or maximum rows to scan, ...
+}
+void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {
+  std::exception_ptr teptr;
+  // file_paths may contain one local file path, a list of local file paths
+  // or a s3/hdfs/... url that may translate to 1 or 1+ remote object keys.
+  for (auto const& file_path : file_paths) {
+    std::map<int, std::string> url_parts;
+    Archive::parse_url(file_path, url_parts);
+
+    // for a s3 url we need to know the obj keys that it comprises
+    std::vector<std::string> objkeys;
+    std::unique_ptr<S3ParquetArchive> us3arch;
+    if ("s3" == url_parts[2]) {
+#ifdef HAVE_AWS_S3
+      us3arch.reset(new S3ParquetArchive(file_path,
+                                         copy_params.s3_access_key,
+                                         copy_params.s3_secret_key,
+                                         copy_params.s3_region,
+                                         copy_params.plain_text));
+      us3arch->init_for_read();
+      objkeys = us3arch->get_objkeys();
+#else
+      throw std::runtime_error("AWS S3 support not available");
+#endif  // HAVE_AWS_S3
+    } else
+      objkeys.emplace_back(file_path);
+
+    // for each obj key of a s3 url we need to land it before
+    // importing it like doing with a 'local file'.
+    for (auto const& objkey : objkeys)
+      try {
+        auto file_path = us3arch ? us3arch->land(objkey, teptr) : objkey;
+        if (boost::filesystem::exists(file_path))
+          import_local_parquet(file_path);
+        if (us3arch)
+          us3arch->vacuum(objkey);
+      } catch (...) {
+        if (us3arch)
+          us3arch->vacuum(objkey);
+        throw;
+      }
+  }
+  // rethrow any exception happened herebefore
+  if (teptr)
+    std::rethrow_exception(teptr);
+}
+
+void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
   // a new requirement is to have one single input stream into
   // Importer::importDelimited, so need to move pipe related
   // stuff to the outmost block.
@@ -1870,7 +1909,8 @@ ImportStatus DataStreamSink::archivePlumber() {
       // it can be feed into other function such like importParquet, etc
       ret = importDelimited(file_path, true);
     } catch (...) {
-      teptr = std::current_exception();
+      if (!teptr)  // no replace
+        teptr = std::current_exception();
     }
 
     if (p_file)
@@ -1882,26 +1922,56 @@ ImportStatus DataStreamSink::archivePlumber() {
   // forward the uncompressed byte stream to fd[1] which is
   // then feed into importDelimited, importParquet, and etc.
   auto th_pipe_writer = std::thread([&]() {
-    for (auto const& file_path : file_paths)
+    std::unique_ptr<S3Archive> us3arch;
+    for (size_t fi = 0; fi < file_paths.size(); fi++) {
       try {
-        std::unique_ptr<Archive> sarch;
+        auto file_path = file_paths[fi];
+        std::unique_ptr<Archive> uarch;
         std::map<int, std::string> url_parts;
         Archive::parse_url(file_path, url_parts);
+        const std::string S3_objkey_url_scheme = "s3ok";
         if ("file" == url_parts[2] || "" == url_parts[2])
-          sarch.reset(new PosixFileArchive(file_path, copy_params.plain_text));
+          uarch.reset(new PosixFileArchive(file_path, copy_params.plain_text));
+        else if ("s3" == url_parts[2]) {
+#ifdef HAVE_AWS_S3
+          // new a S3Archive with a shared s3client.
+          // should be safe b/c no wildcard with s3 url
+          us3arch.reset(new S3Archive(file_path,
+                                      copy_params.s3_access_key,
+                                      copy_params.s3_secret_key,
+                                      copy_params.s3_region,
+                                      copy_params.plain_text));
+          us3arch->init_for_read();
+          // not land all files here but one by one in following iterations
+          for (const auto& objkey : us3arch->get_objkeys())
+            file_paths.emplace_back(std::string(S3_objkey_url_scheme) + "://" + objkey);
+          continue;
+#else
+          throw std::runtime_error("AWS S3 support not available");
+#endif  // HAVE_AWS_S3
+        } else if (S3_objkey_url_scheme == url_parts[2]) {
+#ifdef HAVE_AWS_S3
+          auto objkey = file_path.substr(3 + S3_objkey_url_scheme.size());
+          auto file_path = us3arch->land(objkey, teptr);
+          if (0 == file_path.size())
+            throw std::runtime_error(std::string("failed to land s3 object: ") + objkey);
+          uarch.reset(new PosixFileArchive(file_path, copy_params.plain_text));
+          // file not removed until file closed
+          us3arch->vacuum(objkey);
+#else
+          throw std::runtime_error("AWS S3 support not available");
+#endif  // HAVE_AWS_S3
+        }
 #if 0  // TODO(ppan): implement and enable any other archive class
         else
-        if ("s3" == url_parts[2])
-          sarch.reset(new S3Archive(file_path));
-        else
         if ("hdfs" == url_parts[2])
-          sarch.reset(new HdfsArchive(file_path));
+          uarch.reset(new HdfsArchive(file_path));
 #endif
         else
           throw std::runtime_error(std::string("unsupported archive url: ") + file_path);
 
         // init the archive for read
-        auto& arch = *sarch;
+        auto& arch = *uarch;
 
         // coming here, the archive of url should be ready to be read, unarchived
         // and uncompressed by libarchive into a byte stream (in csv) for the pipe
@@ -1930,22 +2000,31 @@ ImportStatus DataStreamSink::archivePlumber() {
                 LOG(WARNING) << "No line delimiter in block." << std::endl;
               just_saw_header = false;
             }
+            // In very rare occasions the write pipe somehow operates in a mode similar to non-blocking
+            // while pipe(fds) should behave like pipe2(fds, 0) which means blocking mode. On such a
+            // unreliable blocking mode, a possible fix is to loop reading till no bytes left, otherwise
+            // the annoying `failed to write pipe: Success`...
             if (size2 > 0)
-              if (size2 != write(fd[1], buf2, size2)) {
+              for (int nread = 0, nleft = size2; nleft > 0; nleft -= (nread > 0 ? nread : 0)) {
+                nread = write(fd[1], buf2, nleft);
+                if (nread == nleft)
+                  break;  // done
                 // no exception when too many rejected
-                if (size2 >= 0 && import_status.load_truncated) {
+                if (import_status.load_truncated) {
                   stop = true;
-                  continue;
+                  break;
                 }
                 // not to overwrite original error
-                if (!load_failed)
+                if (nread < 0 && !(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK))
                   throw std::runtime_error(std::string("failed or interrupted write to pipe: ") + strerror(errno));
               }
           }
       } catch (...) {
-        teptr = std::current_exception();
+        if (!teptr)  // no replace
+          teptr = std::current_exception();
         break;
       }
+    }
     // close writer end
     close(fd[1]);
   });
@@ -1956,8 +2035,6 @@ ImportStatus DataStreamSink::archivePlumber() {
   // rethrow any exception happened herebefore
   if (teptr)
     std::rethrow_exception(teptr);
-
-  return ret;
 }
 
 ImportStatus Importer::import() {
@@ -2017,9 +2094,6 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
     std::stack<int> stack_thread_ids;
     for (int i = 0; i < max_threads; i++)
       stack_thread_ids.push(i);
-    // Lock table for write for the period of the whole load
-    mapd_unique_lock<mapd_shared_mutex> tableLevelWriteLock(*loader->get_catalog().get_dataMgr().getMutexForChunkPrefix(
-        chunkKey));  // prevent two threads from trying to insert into the same table simultaneously
     auto start_epoch = loader->getTableEpoch();
     while (size > 0) {
       if (eof_reached)
@@ -2392,15 +2466,37 @@ std::vector<p2t::Point*> simplify(const std::vector<p2t::Point*>& points,
 }
 }  // namespace GeomSimplify
 
-std::pair<double, double> buildRenderablePolyOutline(PolyData2d& poly,
-                                                     const std::vector<p2t::Point*>& vertexPtrs,
-                                                     std::unordered_map<p2t::Point*, int>& pointIndices,
-                                                     const std::unordered_map<p2t::Point*, int>& origPointIndices,
-                                                     const ssize_t featureIdx,
-                                                     const ssize_t multipolyIdx) {
-  if (vertexPtrs.size() < 3) {
-    throw std::runtime_error("Cannot import a polygon with " + std::to_string(vertexPtrs.size()) + " point" +
-                             (vertexPtrs.size() == 1 ? "." : "s."));
+std::tuple<bool, double, double> buildRenderablePolyOutline(
+    PolyData2d& poly,
+    const std::vector<p2t::Point*>& vertexPtrs,
+    std::unordered_map<p2t::Point*, int>& pointIndices,
+    const std::unordered_map<p2t::Point*, int>& origPointIndices,
+    const ssize_t featureIdx,
+    const ssize_t multipolyIdx) {
+  if (vertexPtrs.size() < 2) {
+    throw std::runtime_error("invalid geometry: polygon" +
+                             (multipolyIdx < 0 ? "" : (" at multipolygon index " + std::to_string(multipolyIdx + 1))) +
+                             " in feature " + std::to_string(featureIdx + 1) + " - Cannot import a polygon with " +
+                             std::to_string(vertexPtrs.size()) + " point" + (vertexPtrs.size() == 1 ? "." : "s."));
+  } else if (vertexPtrs.size() == 2) {
+    LOG(WARNING)
+        << "invalid geometry: polygon"
+        << (multipolyIdx < 0 ? "" : (" at multipolygon index " + std::to_string(multipolyIdx + 1))) << " in feature "
+        << (featureIdx + 1) << " has only " << std::to_string(vertexPtrs.size()) << " point"
+        << (vertexPtrs.size() == 1
+                ? "."
+                : "s. The geom will be imported, but it might not be visible unless you have stroking enabled.");
+
+    poly.beginLine();
+    poly.addLinePoint(vertexPtrs[0]);
+    poly.addLinePoint(vertexPtrs[0]);
+    poly.addLinePoint(vertexPtrs[1]);
+    poly.addLinePoint(vertexPtrs[1]);
+    poly.endLine(false);
+    poly.beginPoly();
+    poly.addTriangle(0, 2, 1);
+    poly.endPoly();
+    return std::make_tuple(true, 0.0, 0.0);
   }
 
   pointIndices.clear();
@@ -2482,7 +2578,7 @@ std::pair<double, double> buildRenderablePolyOutline(PolyData2d& poly,
     mindist = dist;
   }
   avgdist = sumdist / vertexPtrs.size();
-  return std::make_pair(mindist, avgdist);
+  return std::make_tuple(false, mindist, avgdist);
 }
 
 p2t::CDT triangulate(bool& triangulated, const std::vector<p2t::Point*>& vertexPtrs) {
@@ -2504,19 +2600,22 @@ void buildRenderablePolyAfterTriangulation(PolyData2d& poly,
   for (p2t::Triangle* tri : triangulator.GetTriangles()) {
     itr = pointIndices.find(tri->GetPoint(0));
     if (itr == pointIndices.end()) {
-      throw std::runtime_error("failed to triangulate polygon");
+      throw std::runtime_error("failed to triangulate polygon due to invalid triangle - triidx: " +
+                               std::to_string(poly.numTris()) + ", pointidx: 0");
     }
     idx0 = itr->second;
 
     itr = pointIndices.find(tri->GetPoint(1));
     if (itr == pointIndices.end()) {
-      throw std::runtime_error("failed to triangulate polygon");
+      throw std::runtime_error("failed to triangulate polygon due to invalid triangle - triidx: " +
+                               std::to_string(poly.numTris()) + ", pointidx: 1");
     }
     idx1 = itr->second;
 
     itr = pointIndices.find(tri->GetPoint(2));
     if (itr == pointIndices.end()) {
-      throw std::runtime_error("failed to triangulate polygon");
+      throw std::runtime_error("failed to triangulate polygon due to invalid triangle - triidx: " +
+                               std::to_string(poly.numTris()) + ", pointidx: 2");
     }
     idx2 = itr->second;
 
@@ -2563,10 +2662,14 @@ void Importer::readVerticesFromGDALGeometryZ(const std::string& fileName,
     vertexPtrs.push_back(vertPtr);
     origPointIndices.insert({vertPtr, k});
   }
-  double mindist, avgdist;
 
-  std::tie(mindist, avgdist) =
+  bool finished;
+  double mindist, avgdist;
+  std::tie(finished, mindist, avgdist) =
       buildRenderablePolyOutline(poly, vertexPtrs, pointIndices, origPointIndices, featureIdx, multipolyIdx);
+  if (finished) {
+    return;
+  }
 
   bool triangulated = false;
   try {
@@ -2581,10 +2684,13 @@ void Importer::readVerticesFromGDALGeometryZ(const std::string& fileName,
     // try a simplify with a modest tolerance to see if we can get the geom
     // to be more poly2tri friendly
     auto simplifyVertexPtrs = GeomSimplify::simplify(vertexPtrs, mindist + 0.1 * (avgdist - mindist), true);
-    buildRenderablePolyOutline(poly, simplifyVertexPtrs, pointIndices, origPointIndices, featureIdx, multipolyIdx);
+    std::tie(finished, mindist, avgdist) =
+        buildRenderablePolyOutline(poly, simplifyVertexPtrs, pointIndices, origPointIndices, featureIdx, multipolyIdx);
     try {
-      auto triangulator = triangulate(triangulated, simplifyVertexPtrs);
-      buildRenderablePolyAfterTriangulation(poly, triangulator, pointIndices, origPointIndices);
+      if (!finished) {
+        auto triangulator = triangulate(triangulated, simplifyVertexPtrs);
+        buildRenderablePolyAfterTriangulation(poly, triangulator, pointIndices, origPointIndices);
+      }
       LOG(WARNING) << "Failed to triangulate original polygon "
                    << (multipolyIdx < 0 ? "" : ("at multipolygon index " + std::to_string(multipolyIdx + 1)))
                    << " in feature " << (featureIdx + 1)
@@ -2596,10 +2702,13 @@ void Importer::readVerticesFromGDALGeometryZ(const std::string& fileName,
       }
       poly.popLine();
       auto convexHullVertexPtrs = GeomConvexHull::buildConvexHull(vertexPtrs);
-      buildRenderablePolyOutline(poly, convexHullVertexPtrs, pointIndices, origPointIndices, featureIdx, multipolyIdx);
+      std::tie(finished, mindist, avgdist) = buildRenderablePolyOutline(
+          poly, convexHullVertexPtrs, pointIndices, origPointIndices, featureIdx, multipolyIdx);
       try {
-        auto triangulator = triangulate(triangulated, convexHullVertexPtrs);
-        buildRenderablePolyAfterTriangulation(poly, triangulator, pointIndices, origPointIndices);
+        if (!finished) {
+          auto triangulator = triangulate(triangulated, convexHullVertexPtrs);
+          buildRenderablePolyAfterTriangulation(poly, triangulator, pointIndices, origPointIndices);
+        }
         LOG(WARNING)
             << "Failed to triangulate original polygon"
             << (multipolyIdx < 0 ? "" : (" at multipolygon index " + std::to_string(multipolyIdx + 1)))

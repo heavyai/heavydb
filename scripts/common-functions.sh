@@ -89,7 +89,7 @@ function install_awscpp() {
     os=`uname`
     if [ "$os" = "Darwin" ]; then
         sudo make install
-    else
+    else 
         make install
     fi
 

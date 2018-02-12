@@ -36,8 +36,7 @@ std::shared_ptr<ResultSet> Executor::renderLines(const std::string& queryStr,
                                                  const Catalog_Namespace::SessionInfo& session,
                                                  const int render_widget_id,
                                                  const rapidjson::Value& data_desc,
-                                                 RenderInfo* render_query_data,
-                                                 const bool is_projection_query) {
+                                                 RenderInfo* render_query_data) {
   CHECK(false);
   return nullptr;
 }
@@ -49,7 +48,6 @@ std::shared_ptr<ResultSet> Executor::renderPolygons(const std::string& queryStr,
                                                     const rapidjson::Value& data_desc,
                                                     RenderInfo* render_query_data,
                                                     const std::string* render_config_json,
-                                                    const bool is_projection_query,
                                                     const std::string& poly_table_name) {
   CHECK(false);
   return nullptr;

@@ -69,7 +69,7 @@ Executor::Executor(const int db_id,
                    const std::string& debug_dir,
                    const std::string& debug_file,
                    ::QueryRenderer::QueryRenderManager* render_manager)
-    : cgen_state_(new CgenState({}, false)),
+    : cgen_state_(new CgenState({}, false, false)),
       is_nested_(false),
       gpu_active_modules_device_mask_(0x0),
       interrupted_(false),
@@ -863,11 +863,11 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
     std::condition_variable scheduler_cv;
     std::mutex scheduler_mutex;
     auto dispatch = [&execution_dispatch, &available_cpus, &available_gpus, &options, &scheduler_mutex, &scheduler_cv](
-                        const ExecutorDeviceType chosen_device_type,
-                        int chosen_device_id,
-                        const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
-                        const size_t ctx_idx,
-                        const int64_t rowid_lookup_key) {
+        const ExecutorDeviceType chosen_device_type,
+        int chosen_device_id,
+        const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
+        const size_t ctx_idx,
+        const int64_t rowid_lookup_key) {
       execution_dispatch.run(chosen_device_type, chosen_device_id, options, frag_ids, ctx_idx, rowid_lookup_key);
       if (execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid) {
         std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
@@ -964,7 +964,7 @@ ExecutorDeviceType Executor::getDeviceTypeForTargets(const RelAlgExecutionUnit& 
                                                      const ExecutorDeviceType requested_device_type) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     const auto agg_info = target_info(target_expr);
-    if (!ra_exe_unit.groupby_exprs.empty() && !isArchPascal(requested_device_type)) {
+    if (!ra_exe_unit.groupby_exprs.empty() && !isArchPascalOrLater(requested_device_type)) {
       if ((agg_info.agg_kind == kAVG || agg_info.agg_kind == kSUM) && agg_info.agg_arg_type.get_type() == kDOUBLE) {
         return ExecutorDeviceType::CPU;
       }
@@ -1429,15 +1429,6 @@ const ColumnDescriptor* try_get_column_descriptor(const InputColDescriptor* col_
   return get_column_descriptor_maybe(ref_col_id, ref_table_id, cat);
 }
 
-const SQLTypeInfo get_column_type(const InputColDescriptor* col_desc,
-                                  const ColumnDescriptor* cd,
-                                  const TemporaryTables* temporary_tables) {
-  const auto ind_col = dynamic_cast<const IndirectInputColDescriptor*>(col_desc);
-  const int ref_table_id = ind_col ? ind_col->getIndirectDesc().getTableId() : col_desc->getScanDesc().getTableId();
-  const int ref_col_id = ind_col ? ind_col->getRefColIndex() : col_desc->getColId();
-  return get_column_type(ref_col_id, ref_table_id, cd, temporary_tables);
-}
-
 }  // namespace
 
 std::map<size_t, std::vector<uint64_t>> get_table_id_to_frag_offsets(
@@ -1587,10 +1578,7 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
           plan_state_->columns_to_fetch_.end()) {
         memory_level_for_column = Data_Namespace::CPU_LEVEL;
       }
-      const auto col_type = get_column_type(col_id.get(), cd, temporary_tables_);
-      const bool is_real_string = col_type.is_string() && col_type.get_compression() == kENCODING_NONE;
       if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
-        CHECK(!is_real_string && !col_type.is_array());
         frag_col_buffers[it->second] = execution_dispatch.getColumn(col_id.get(),
                                                                     frag_id,
                                                                     all_tables_fragments,
@@ -2171,9 +2159,15 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
 void Executor::nukeOldState(const bool allow_lazy_fetch,
                             const JoinInfo& join_info,
                             const std::vector<InputTableInfo>& query_infos,
-                            const std::list<std::shared_ptr<Analyzer::Expr>>& outer_join_quals) {
-  cgen_state_.reset(new CgenState(query_infos, !outer_join_quals.empty()));
-  plan_state_.reset(new PlanState(allow_lazy_fetch && outer_join_quals.empty(), join_info, this));
+                            const RelAlgExecutionUnit& ra_exe_unit) {
+  const bool contains_left_deep_outer_join =
+      std::find_if(
+          ra_exe_unit.inner_joins.begin(), ra_exe_unit.inner_joins.end(), [](const JoinCondition& join_condition) {
+            return join_condition.type == JoinType::LEFT;
+          }) != ra_exe_unit.inner_joins.end();
+  const bool has_outer_joins = !ra_exe_unit.outer_join_quals.empty() || contains_left_deep_outer_join;
+  cgen_state_.reset(new CgenState(query_infos, !ra_exe_unit.outer_join_quals.empty(), contains_left_deep_outer_join));
+  plan_state_.reset(new PlanState(allow_lazy_fetch && !has_outer_joins, join_info, this));
 }
 
 void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_descs,

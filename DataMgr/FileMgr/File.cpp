@@ -54,10 +54,6 @@ FILE* create(const std::string& basePath, const int fileId, const size_t pageSiz
 }
 
 FILE* create(const std::string& fullPath, const size_t requestedFileSize) {
-  if (requestedFileSize < size_t(0)) {
-    LOG(FATAL) << "Error trying to create file '" << fullPath << "' Requested file size " << requestedFileSize
-               << " was less than 0";
-  }
   FILE* f = fopen(fullPath.c_str(), "w+b");
   if (f == nullptr) {
     LOG(FATAL) << "Error trying to create file '" << fullPath << "', the errno is " << errno;

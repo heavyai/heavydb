@@ -125,9 +125,7 @@ class FragmentInfo {
 
 class TableInfo {
  public:
-  TableInfo() : tableMutex(nullptr), numTuples(0) {}
-
-  TableInfo(mapd_shared_mutex* tableMutexIn) : tableMutex(tableMutexIn), tableLock(*tableMutex), numTuples(0) {}
+  TableInfo() : numTuples(0) {}
 
   size_t getNumTuples() const;
 
@@ -139,8 +137,6 @@ class TableInfo {
 
   std::vector<int> chunkKeyPrefix;
   std::deque<FragmentInfo> fragments;
-  mapd_shared_mutex* tableMutex;
-  mapd_shared_lock<mapd_shared_mutex> tableLock;
 
  private:
   mutable size_t numTuples;

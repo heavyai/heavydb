@@ -301,7 +301,7 @@ int main(int argc, char** argv) {
   desc_adv.add_options()("allow-loop-joins",
                          po::value<bool>(&allow_loop_joins)->default_value(allow_loop_joins)->implicit_value(true),
                          "Enable loop joins");
-  desc_adv.add_options()("disable-fast-strcmp",
+  desc_adv.add_options()("fast-strcmp",
                          po::value<bool>(&g_fast_strcmp)->default_value(g_fast_strcmp)->implicit_value(false),
                          "Disable fast string comparison");
   desc_adv.add_options()("res-gpu-mem",
@@ -446,34 +446,11 @@ int main(int argc, char** argv) {
     std::cerr << "hll-precision-bits must be between 1 and 16." << std::endl;
     return 1;
   }
-  boost::algorithm::trim_if(db_query_file, boost::is_any_of("\"'"));
-  if (db_query_file.length() > 0 && !boost::filesystem::exists(db_query_file)) {
-    std::cerr << "File containing DB queries " << db_query_file << " does not exist." << std::endl;
-    return 1;
-  }
-  boost::algorithm::trim_if(db_convert_dir, boost::is_any_of("\"'"));
-  if (db_convert_dir.length() > 0 && !boost::filesystem::exists(db_convert_dir)) {
-    std::cerr << "Data conversion source directory " << db_convert_dir << " does not exist." << std::endl;
-    return 1;
-  }
+
   boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
-  if (!boost::filesystem::exists(base_path)) {
-    std::cerr << "Data directory " << base_path << " does not exist." << std::endl;
-    return 1;
-  }
-  const auto system_db_file = boost::filesystem::path(base_path) / "mapd_catalogs" / "mapd";
-  if (!boost::filesystem::exists(system_db_file)) {
-    std::cerr << "MapD system catalogs does not exist at " << system_db_file << ". Run initdb" << std::endl;
-    return 1;
-  }
   const auto data_path = boost::filesystem::path(base_path) / "mapd_data";
   if (!boost::filesystem::exists(data_path)) {
-    std::cerr << "MapD data directory does not exist at " << base_path << ". Run initdb" << std::endl;
-    return 1;
-  }
-  const auto db_file = boost::filesystem::path(base_path) / "mapd_catalogs" / MAPD_SYSTEM_DB;
-  if (!boost::filesystem::exists(db_file)) {
-    std::cerr << "MapD database " << MAPD_SYSTEM_DB << " does not exist." << std::endl;
+    std::cerr << "MapD data directory does not exist at '" << base_path << "'. Run initdb " << base_path << std::endl;
     return 1;
   }
 
@@ -481,22 +458,27 @@ int main(int argc, char** argv) {
   auto pid = std::to_string(getpid());
   int pid_fd = open(lock_file.c_str(), O_RDWR | O_CREAT, 0644);
   if (pid_fd == -1) {
-    std::cerr << "Failed to open PID file " << lock_file << ". " << strerror(errno) << "." << std::endl;
+    auto err = std::string("Failed to open PID file ") + std::string(lock_file.c_str()) + std::string(". ") +
+               strerror(errno) + ".";
+    std::cerr << err << std::endl;
     return 1;
   }
   if (lockf(pid_fd, F_TLOCK, 0) == -1) {
-    std::cerr << "Another MapD Server is using data directory " << boost::filesystem::path(base_path) << "."
-              << std::endl;
+    auto err = std::string("Another MapD Server is using data directory ") + base_path + std::string(".");
+    std::cerr << err << std::endl;
     close(pid_fd);
     return 1;
   }
   if (ftruncate(pid_fd, 0) == -1) {
-    std::cerr << "Failed to truncate PID file " << lock_file << ". " << strerror(errno) << "." << std::endl;
+    auto err = std::string("Failed to truncate PID file ") + std::string(lock_file.c_str()) + std::string(". ") +
+               strerror(errno) + std::string(".");
+    std::cerr << err << std::endl;
     close(pid_fd);
     return 1;
   }
   if (write(pid_fd, pid.c_str(), pid.length()) == -1) {
-    std::cerr << "Failed to write PID file " << lock_file << ". " << strerror(errno) << "." << std::endl;
+    auto err = std::string("Failed to write PID file ") + std::string(lock_file.c_str()) + ". " + strerror(errno) + ".";
+    std::cerr << err << std::endl;
     close(pid_fd);
     return 1;
   }
@@ -508,6 +490,27 @@ int main(int argc, char** argv) {
     FLAGS_logbuflevel = -1;
   // Initialize Google's logging library.
   google::InitGoogleLogging(argv[0]);
+
+  boost::algorithm::trim_if(db_query_file, boost::is_any_of("\"'"));
+  if (db_query_file.length() > 0 && !boost::filesystem::exists(db_query_file)) {
+    LOG(ERROR) << "File containing DB queries " << db_query_file << " does not exist.";
+    return 1;
+  }
+  boost::algorithm::trim_if(db_convert_dir, boost::is_any_of("\"'"));
+  if (db_convert_dir.length() > 0 && !boost::filesystem::exists(db_convert_dir)) {
+    LOG(ERROR) << "Data conversion source directory " << db_convert_dir << " does not exist.";
+    return 1;
+  }
+  const auto system_db_file = boost::filesystem::path(base_path) / "mapd_catalogs" / "mapd";
+  if (!boost::filesystem::exists(system_db_file)) {
+    LOG(ERROR) << "MapD system catalogs does not exist at " << system_db_file;
+    return 1;
+  }
+  const auto db_file = boost::filesystem::path(base_path) / "mapd_catalogs" / MAPD_SYSTEM_DB;
+  if (!boost::filesystem::exists(db_file)) {
+    LOG(ERROR) << "MapD database " << MAPD_SYSTEM_DB << " does not exist.";
+    return 1;
+  }
 
   // add all parameters to be displayed on startup
   LOG(INFO) << "MapD started with data directory at '" << base_path << "'";

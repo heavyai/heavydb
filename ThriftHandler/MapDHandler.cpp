@@ -24,6 +24,7 @@
 #include "MapDHandler.h"
 #include "DistributedLoader.h"
 #include "MapDServer.h"
+#include "TokenCompletionHints.h"
 #ifdef HAVE_PROFILER
 #include <gperftools/heap-profiler.h>
 #endif  // HAVE_PROFILER
@@ -45,6 +46,8 @@
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Import/Importer.h"
+#include "MapDDistributedHandler.h"
+#include "MapDRenderHandler.h"
 #include "Parser/ParserWrapper.h"
 #include "Parser/ReservedKeywords.h"
 #include "Parser/parser.h"
@@ -54,14 +57,12 @@
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/JsonAccessors.h"
+#include "Shared/MapDParameters.h"
+#include "Shared/StringTransform.h"
 #include "Shared/geosupport.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
-#include "Shared/StringTransform.h"
-#include "Shared/MapDParameters.h"
-#include "MapDRenderHandler.h"
-#include "MapDDistributedHandler.h"
 
 #include <fcntl.h>
 #include <glog/logging.h>
@@ -94,6 +95,8 @@
 #include <arrow/ipc/api.h>
 
 #include "QueryEngine/ArrowUtil.h"
+
+using namespace Lock_Namespace;
 
 #define INVALID_SESSION_ID ""
 
@@ -298,21 +301,20 @@ void MapDHandler::connectImpl(TSessionId& session,
     if (session_it == sessions_.end())
       break;
   }
-  auto cat_it = cat_map_.find(dbname);
-  if (cat_it == cat_map_.end()) {
-    Catalog_Namespace::Catalog* cat = new Catalog_Namespace::Catalog(
+  auto session_info_ptr = sessions_[session];
+  auto cat_it = session_info_ptr->getDatabaseCatalog(dbname);
+  if (cat_it == nullptr) {
+    auto cat_ptr = std::make_shared<Catalog_Namespace::Catalog>(
         base_data_path_, db_meta, data_mgr_, string_leaves_, calcite_, access_priv_check_);
-    cat_map_[dbname].reset(cat);
-    sessions_[session].reset(
-        new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta, executor_device_type_, session));
-    sessions_[session]->setDatabaseCatalog(dbname, cat);
+    session_info_ptr->setDatabaseCatalog(dbname, cat_ptr);
+
+    sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_ptr, user_meta, executor_device_type_, session));
     if (dbname == MAPD_SYSTEM_DB) {
       auto mapd_session_ptr = sessions_[session];
-      mapd_session_ptr->setSysCatalog(static_cast<Catalog_Namespace::SysCatalog*>(cat));
+      mapd_session_ptr->setSysCatalog(static_cast<Catalog_Namespace::SysCatalog*>(cat_ptr.get()));
     }
   } else {
-    sessions_[session].reset(
-        new Catalog_Namespace::SessionInfo(cat_it->second, user_meta, executor_device_type_, session));
+    sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_it, user_meta, executor_device_type_, session));
   }
   if (!super_user_rights_) {  // no need to connect to leaf_aggregator_ at this time while doing warmup
     if (leaf_aggregator_.leafCount() > 0) {
@@ -635,6 +637,14 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
       if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
         std::string query_ra;
         execution_time_ms += measure<>::execution([&]() { query_ra = parse_to_ra(query_str, session_info); });
+
+        // COPY_TO/SELECT: get read ExecutorOuterLock >> read UpdateDeleteLock locks
+        mapd_shared_lock<mapd_shared_mutex> executeReadLock(
+            *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
+        std::vector<std::shared_ptr<mapd_shared_lock<mapd_shared_mutex>>> readUpdateDeleteLocks;
+        getTableReadLocks<mapd_shared_mutex>(
+            session_info.get_catalog(), query_ra, readUpdateDeleteLocks, LockType::UpdateDeleteLock);
+
         if (pw.is_select_calcite_explain) {
           throw std::runtime_error("explain is not unsupported by current thrift API");
         }
@@ -715,19 +725,161 @@ void MapDHandler::sql_validate(TTableDescriptor& _return, const TSessionId& sess
   MapDHandler::validate_rel_alg(_return, query_str, session_info);
 }
 
+namespace {
+
+struct ProjectionTokensForCompletion {
+  std::unordered_set<std::string> uc_column_names;
+  std::unordered_set<std::string> uc_column_table_qualifiers;
+};
+
+// Extract what looks like a (qualified) identifier from the partial query.
+// The results will be used to rank the auto-completion results: tables which
+// contain at least one of the identifiers first.
+ProjectionTokensForCompletion extract_projection_tokens_for_completion(const std::string& sql) {
+  boost::regex id_regex{R"(([[:alnum:]]|_|\.)+)", boost::regex::extended | boost::regex::icase};
+  boost::sregex_token_iterator tok_it(sql.begin(), sql.end(), id_regex, 0);
+  boost::sregex_token_iterator end;
+  std::unordered_set<std::string> uc_column_names;
+  std::unordered_set<std::string> uc_column_table_qualifiers;
+  for (; tok_it != end; ++tok_it) {
+    std::string column_name = *tok_it;
+    std::vector<std::string> column_tokens;
+    boost::split(column_tokens, column_name, boost::is_any_of("."));
+    if (column_tokens.size() == 2) {
+      // If the column name is qualified, take user's word.
+      uc_column_table_qualifiers.insert(to_upper(column_tokens.front()));
+    } else {
+      uc_column_names.insert(to_upper(column_name));
+    }
+  }
+  return {uc_column_names, uc_column_table_qualifiers};
+}
+
+}  // namespace
+
 void MapDHandler::get_completion_hints(std::vector<TCompletionHint>& hints,
                                        const TSessionId& session,
                                        const std::string& sql,
                                        const int cursor) {
+  std::vector<std::string> visible_tables;  // Tables allowed for the given session.
+  get_completion_hints_unsorted(hints, visible_tables, session, sql, cursor);
+  const auto proj_tokens = extract_projection_tokens_for_completion(sql);
+  auto compatible_table_names =
+      get_uc_compatible_table_names_by_column(proj_tokens.uc_column_names, visible_tables, session);
+  // Add the table qualifiers explicitly specified by the user.
+  compatible_table_names.insert(proj_tokens.uc_column_table_qualifiers.begin(),
+                                proj_tokens.uc_column_table_qualifiers.end());
+  // Sort the hints by category, from COLUMN (most specific) to KEYWORD.
+  std::sort(
+      hints.begin(), hints.end(), [&compatible_table_names](const TCompletionHint& lhs, const TCompletionHint& rhs) {
+        if (lhs.type == TCompletionHintType::TABLE && rhs.type == TCompletionHintType::TABLE) {
+          // Between two tables, one which is compatible with the specified projections
+          // and one which isn't, pick the one which is compatible.
+          if (compatible_table_names.find(to_upper(lhs.hints.back())) != compatible_table_names.end() &&
+              compatible_table_names.find(to_upper(rhs.hints.back())) == compatible_table_names.end()) {
+            return true;
+          }
+        }
+        return lhs.type < rhs.type;
+      });
+}
+
+void MapDHandler::get_completion_hints_unsorted(std::vector<TCompletionHint>& hints,
+                                                std::vector<std::string>& visible_tables,
+                                                const TSessionId& session,
+                                                const std::string& sql,
+                                                const int cursor) {
   const auto session_info = get_session(session);
   try {
-    hints = calcite_->getCompletionHints(session_info, sql, cursor);
+    get_tables(visible_tables, session);
+    // Filter out keywords suggested by Calcite which we don't support.
+    hints = just_whitelisted_keyword_hints(calcite_->getCompletionHints(session_info, visible_tables, sql, cursor));
   } catch (const std::exception& e) {
     TMapDException ex;
     ex.error_msg = "Exception: " + std::string(e.what());
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
+  boost::regex from_expr{R"(\s+from\s+)", boost::regex::extended | boost::regex::icase};
+  const size_t length_to_cursor = cursor < 0 ? sql.size() : std::min(sql.size(), static_cast<size_t>(cursor));
+  // Trust hints from Calcite after the FROM keyword.
+  if (boost::regex_search(sql.cbegin(), sql.cbegin() + length_to_cursor, from_expr)) {
+    return;
+  }
+  // Before FROM, the query is too incomplete for context-sensitive completions.
+  get_token_based_completions(hints, session, visible_tables, sql, cursor);
+}
+
+void MapDHandler::get_token_based_completions(std::vector<TCompletionHint>& hints,
+                                              const TSessionId& session,
+                                              const std::vector<std::string>& visible_tables,
+                                              const std::string& sql,
+                                              const int cursor) {
+  const auto last_word = find_last_word_from_cursor(sql, cursor < 0 ? sql.size() : cursor);
+  boost::regex select_expr{R"(\s*select\s+)", boost::regex::extended | boost::regex::icase};
+  const size_t length_to_cursor = cursor < 0 ? sql.size() : std::min(sql.size(), static_cast<size_t>(cursor));
+  // After SELECT but before FROM, look for all columns in all tables which match the prefix.
+  if (boost::regex_search(sql.cbegin(), sql.cbegin() + length_to_cursor, select_expr)) {
+    const auto column_names_by_table = fill_column_names_by_table(visible_tables, session);
+    // Trust the fully qualified columns the most.
+    if (get_qualified_column_hints(hints, last_word, column_names_by_table)) {
+      return;
+    }
+    // Not much information to use, just retrieve column names which match the prefix.
+    if (should_suggest_column_hints(sql)) {
+      get_column_hints(hints, last_word, column_names_by_table);
+      return;
+    }
+    const std::string kFromKeyword{"FROM"};
+    if (boost::istarts_with(kFromKeyword, last_word)) {
+      TCompletionHint keyword_hint;
+      keyword_hint.type = TCompletionHintType::KEYWORD;
+      keyword_hint.replaced = last_word;
+      keyword_hint.hints.emplace_back(kFromKeyword);
+      hints.push_back(keyword_hint);
+    }
+  } else {
+    const std::string kSelectKeyword{"SELECT"};
+    if (boost::istarts_with(kSelectKeyword, last_word)) {
+      TCompletionHint keyword_hint;
+      keyword_hint.type = TCompletionHintType::KEYWORD;
+      keyword_hint.replaced = last_word;
+      keyword_hint.hints.emplace_back(kSelectKeyword);
+      hints.push_back(keyword_hint);
+    }
+  }
+}
+
+std::unordered_map<std::string, std::unordered_set<std::string>> MapDHandler::fill_column_names_by_table(
+    const std::vector<std::string>& table_names,
+    const TSessionId& session) {
+  std::unordered_map<std::string, std::unordered_set<std::string>> column_names_by_table;
+  for (const auto& table_name : table_names) {
+    TTableDetails table_details;
+    get_table_details(table_details, session, table_name);
+    for (const auto& column_type : table_details.row_desc) {
+      column_names_by_table[table_name].emplace(column_type.col_name);
+    }
+  }
+  return column_names_by_table;
+}
+
+std::unordered_set<std::string> MapDHandler::get_uc_compatible_table_names_by_column(
+    const std::unordered_set<std::string>& uc_column_names,
+    const std::vector<std::string>& table_names,
+    const TSessionId& session) {
+  std::unordered_set<std::string> compatible_table_names_by_column;
+  for (const auto& table_name : table_names) {
+    TTableDetails table_details;
+    get_table_details(table_details, session, table_name);
+    for (const auto& column_type : table_details.row_desc) {
+      if (uc_column_names.find(to_upper(column_type.col_name)) != uc_column_names.end()) {
+        compatible_table_names_by_column.emplace(to_upper(table_name));
+        break;
+      }
+    }
+  }
+  return compatible_table_names_by_column;
 }
 
 void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
@@ -977,13 +1129,18 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
   } else {
-    if (!cat.isAccessPrivCheckEnabled() || (cat.isAccessPrivCheckEnabled() && hasTableAccessPrivileges(td, session))) {
-      const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, get_system, true);
-      for (const auto cd : col_descriptors) {
-        _return.row_desc.push_back(populateThriftColumnType(&cat, cd));
+    try {
+      if (!cat.isAccessPrivCheckEnabled() ||
+          (cat.isAccessPrivCheckEnabled() && hasTableAccessPrivileges(td, session))) {
+        const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, get_system, true);
+        for (const auto cd : col_descriptors) {
+          _return.row_desc.push_back(populateThriftColumnType(&cat, cd));
+        }
+      } else {
+        THROW_MAPD_EXCEPTION("User has no access privileges to table " + table_name);
       }
-    } else {
-      THROW_MAPD_EXCEPTION("User has no access privileges to table " + table_name);
+    } catch (std::runtime_error e) {
+      THROW_MAPD_EXCEPTION(e.what());
     }
   }
   _return.fragment_size = td->maxFragRows;
@@ -1360,8 +1517,8 @@ void MapDHandler::load_table_binary_columnar(const TSessionId& session,
       } else {
         if (colRows != numRows) {
           std::ostringstream oss;
-          oss << "load_table_binary_columnar: Inconsistent number of rows in request,  was " << numRows << " column "
-              << col_idx << " has " << colRows;
+          oss << "load_table_binary_columnar: Inconsistent number of rows in request,  expecting " << numRows << " row, column "
+              << col_idx << " has " << colRows << " rows";
           THROW_MAPD_EXCEPTION(oss.str());
         }
       }
@@ -2397,16 +2554,40 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
   std::string last_parsed;
   int num_parse_errors = 0;
   Planner::RootPlan* root_plan{nullptr};
+
+  /*
+     Use this seq to simplify locking:
+                  INSERT_VALUES: CheckpointLock [ >> write UpdateDeleteLock ]
+                  INSERT_SELECT: CheckpointLock >> read UpdateDeleteLock [ >> write UpdateDeleteLock ]
+                  COPY_TO/SELECT: read UpdateDeleteLock
+                  COPY_FROM:  CheckpointLock [ >> write UpdateDeleteLock ]
+                  DROP/TRUNC: CheckpointLock >> write UpdateDeleteLock
+                  DELETE/UPDATE: CheckpointLock >> write UpdateDeleteLock
+  */
+  mapd_unique_lock<mapd_shared_mutex> chkptlLock;
+  mapd_unique_lock<mapd_shared_mutex> upddelLock;
+  mapd_unique_lock<mapd_shared_mutex> executeWriteLock;
+  mapd_shared_lock<mapd_shared_mutex> executeReadLock;
+  std::vector<std::shared_ptr<mapd_shared_lock<mapd_shared_mutex>>> readUpdateDeleteLocks;
+
   try {
     ParserWrapper pw{query_str};
     if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
       std::string query_ra;
       _return.execution_time_ms += measure<>::execution([&]() { query_ra = parse_to_ra(query_str, session_info); });
+
       if (pw.is_select_calcite_explain) {
         // return the ra as the result
         convert_explain(_return, ResultSet(query_ra), true);
         return;
       }
+
+      // COPY_TO/SELECT: read ExecutorOuterLock >> read UpdateDeleteLock locks
+      executeReadLock =
+          mapd_shared_lock<mapd_shared_mutex>(*LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
+      getTableReadLocks<mapd_shared_mutex>(
+          session_info.get_catalog(), query_ra, readUpdateDeleteLocks, LockType::UpdateDeleteLock);
+      // todo(ppan): need WRITE locks on UPDATE/DELETE
       execute_rel_alg(_return,
                       query_ra,
                       column_format,
@@ -2444,6 +2625,22 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         explain_stmt = dynamic_cast<Parser::ExplainStmt*>(ddl);
       if (ddl != nullptr && explain_stmt == nullptr) {
         const auto copy_stmt = dynamic_cast<Parser::CopyTableStmt*>(ddl);
+        if (auto stmtp = dynamic_cast<Parser::ExportQueryStmt*>(stmt.get())) {
+          const auto query_string = stmtp->get_select_stmt();
+          const auto query_ra = parse_to_ra(query_string, session_info);
+          getTableReadLocks<mapd_shared_mutex>(
+              session_info.get_catalog(), query_ra, readUpdateDeleteLocks, LockType::UpdateDeleteLock);
+        } else if (auto stmtp = dynamic_cast<Parser::CopyTableStmt*>(stmt.get())) {
+          // COPY_FROM: CheckpointLock [ >> write UpdateDeleteLocks ]
+          chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+              session_info.get_catalog(), stmtp->get_table(), LockType::CheckpointLock);
+          // [ write UpdateDeleteLocks ] lock is deferred in InsertOrderFragmenter::deleteFragments
+        } else if (auto stmtp = dynamic_cast<Parser::TruncateTableStmt*>(stmt.get())) {
+          chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+              session_info.get_catalog(), *stmtp->get_table(), LockType::CheckpointLock);
+          upddelLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+              session_info.get_catalog(), *stmtp->get_table(), LockType::UpdateDeleteLock);
+        }
         if (g_cluster && copy_stmt && !leaf_aggregator_.leafCount()) {
           // Sharded table rows need to be routed to the leaf by an aggregator.
           check_table_not_sharded(cat, copy_stmt->get_table());
@@ -2470,6 +2667,29 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         root_plan = optimizer.optimize();
         CHECK(root_plan);
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
+
+        if (auto stmtp = dynamic_cast<Parser::InsertQueryStmt*>(stmt.get())) {
+          // INSERT_SELECT: CheckpointLock >> read UpdateDeleteLocks [ >> write UpdateDeleteLocks ]
+          chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+              session_info.get_catalog(), *stmtp->get_table(), LockType::CheckpointLock);
+          // >> read UpdateDeleteLock locks
+          const auto query_string = stmtp->get_query()->to_string();
+          const auto query_ra = parse_to_ra(query_str, session_info);
+          getTableReadLocks<mapd_shared_mutex>(
+              session_info.get_catalog(), query_ra, readUpdateDeleteLocks, LockType::UpdateDeleteLock);
+          // [ write UpdateDeleteLocks ] lock is deferred in InsertOrderFragmenter::deleteFragments
+          // TODO: this statement is not supported. once supported, it must not go thru
+          // InsertOrderFragmenter::insertData, or deadlock will occur w/o moving the
+          // following lock back to here!!!
+        } else if (auto stmtp = dynamic_cast<Parser::InsertValuesStmt*>(stmt.get())) {
+          // INSERT_VALUES: CheckpointLock >> write ExecutorOuterLock [ >> write UpdateDeleteLocks ]
+          chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+              session_info.get_catalog(), *stmtp->get_table(), LockType::CheckpointLock);
+          executeWriteLock =
+              mapd_unique_lock<mapd_shared_mutex>(*LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
+          // [ write UpdateDeleteLocks ] lock is deferred in InsertOrderFragmenter::deleteFragments
+        }
+
         if (g_cluster && plan_ptr->get_stmt_type() == kINSERT) {
           check_table_not_sharded(session_info.get_catalog(), plan_ptr->get_result_table_id());
         }
@@ -2636,37 +2856,55 @@ void MapDHandler::insert_data(const TSessionId& session, const TInsertData& thri
   insert_data.numRows = thrift_insert_data.num_rows;
   const auto td = cat.getMetadataForTable(insert_data.tableId);
   try {
+    // this should have the same lock seq as COPY FROM
+    ChunkKey chunkKey = {insert_data.databaseId, insert_data.tableId};
+    mapd_unique_lock<mapd_shared_mutex> tableLevelWriteLock(
+        *Lock_Namespace::LockMgr<mapd_shared_mutex, ChunkKey>::getMutex(Lock_Namespace::LockType::CheckpointLock,
+                                                                        chunkKey));
+    // [ write UpdateDeleteLocks ] lock is deferred in InsertOrderFragmenter::deleteFragments
     td->fragmenter->insertDataNoCheckpoint(insert_data);
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
 }
 
-void MapDHandler::render_vega_raw_pixels(TRawPixelDataResult& _return,
-                                         const TSessionId& session,
-                                         const int64_t widget_id,
-                                         const int16_t node_idx,
-                                         const std::string& vega_json,
-                                         const std::string& nonce) {
+void MapDHandler::start_render_query(TPendingRenderQuery& _return,
+                                     const TSessionId& session,
+                                     const int64_t widget_id,
+                                     const int16_t node_idx,
+                                     const std::string& vega_json) {
   if (!render_handler_) {
     THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
   }
 
-  const auto session_info = MapDHandler::get_session(session);
-  LOG(INFO) << "RENDER_VEGA_RAW_PIXELS :" << session << ":widget_id:" << widget_id << ":node_idx:" << node_idx
-            << ":vega_json:" << vega_json << ":nonce:" << nonce;
-
-  _return.total_time_ms = measure<>::execution([&]() {
+  LOG(INFO) << "start_render_query :" << session << ":widget_id:" << widget_id << ":vega_json:" << vega_json;
+  auto time_ms = measure<>::execution([&]() {
     try {
-      render_handler_->render_vega_raw_pixels(_return, session_info, widget_id, node_idx, vega_json);
+      render_handler_->start_render_query(_return, session, widget_id, node_idx, vega_json);
     } catch (std::exception& e) {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
   });
+  LOG(INFO) << "start_render_query-COMPLETED " << time_ms << "ms "
+            << "id is " << _return.id;
+}
 
-  LOG(INFO) << "RENDER_VEGA_RAW_PIXELS COMPLETED nonce: " << nonce << " Total: " << _return.total_time_ms
-            << " (ms), Total Execution: " << _return.execution_time_ms
-            << " (ms), Total Render: " << _return.render_time_ms << " (ms)";
+void MapDHandler::execute_next_render_step(TRenderStepResult& _return,
+                                           const TPendingRenderQuery& pending_render,
+                                           const TRenderDataAggMap& merged_data) {
+  if (!render_handler_) {
+    THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
+  }
+
+  LOG(INFO) << "execute_next_render_step: id:" << pending_render.id;
+  auto time_ms = measure<>::execution([&]() {
+    try {
+      render_handler_->execute_next_render_step(_return, pending_render, merged_data);
+    } catch (std::exception& e) {
+      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    }
+  });
+  LOG(INFO) << "execute_next_render_step-COMPLETED id: " << pending_render.id << ", time: " << time_ms << "ms ";
 }
 
 void MapDHandler::checkpoint(const TSessionId& session, const int32_t db_id, const int32_t table_id) {

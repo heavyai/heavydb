@@ -18,6 +18,7 @@
   libpng                 [libpng](http://libpng.org/pub/png/src/libpng-LICENSE.txt)                         Render encoding / transport
   linenoise              [BSD](https://github.com/antirez/linenoise/blob/master/LICENSE)                    CLI
   LLVM                   [LLVM](http://llvm.org/releases/3.9.1/LICENSE.TXT)                                 JIT
+  muparserx              [BSD](https://github.com/beltoforion/muparserx/blob/master/License.txt)            Expression string parsing
   ncurses                [X11](http://invisible-island.net/ncurses/ncurses.faq.html#who_owns_it)            CLI/password entry
   rapidjson              [MIT](https://github.com/miloyip/rapidjson/blob/master/license.txt)                JSON parsing
   SQLite                 [Public Domain](https://www.sqlite.org/copyright.html)                             Catalog management

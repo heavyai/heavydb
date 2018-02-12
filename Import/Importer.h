@@ -72,6 +72,15 @@ struct CopyParams {
   size_t max_reject;  // maximum number of records that can be rejected before copy is failed
   TableType table_type;
   bool plain_text = false;
+  // s3/parquet related params
+  bool is_parquet;
+  std::string s3_access_key;  // per-query credentials to override the
+  std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
+  std::string s3_region;
+  // kafka related params
+  size_t retry_count;
+  size_t retry_wait;
+  size_t batch_size;
 
   CopyParams()
       : delimiter(','),
@@ -86,7 +95,29 @@ struct CopyParams {
         array_end('}'),
         threads(0),
         max_reject(100000),
-        table_type(TableType::DELIMITED) {}
+        table_type(TableType::DELIMITED),
+        is_parquet(false),
+        retry_count(100),
+        retry_wait(5),
+        batch_size(1000) {}
+
+  CopyParams(char d, const std::string& n, char l, size_t b, size_t retries, size_t wait)
+      : delimiter(d),
+        null_str(n),
+        has_header(true),
+        quoted(true),
+        quote('"'),
+        escape('"'),
+        line_delim(l),
+        array_delim(','),
+        array_begin('{'),
+        array_end('}'),
+        threads(0),
+        max_reject(100000),
+        table_type(TableType::DELIMITED),
+        retry_count(retries),
+        retry_wait(wait),
+        batch_size(b) {}
 };
 
 class TypedImportBuffer : boost::noncopyable {
@@ -537,6 +568,9 @@ class DataStreamSink {
   virtual ~DataStreamSink() {}
   virtual ImportStatus importDelimited(const std::string& file_path, const bool decompressed) = 0;
   const CopyParams& get_copy_params() const { return copy_params; }
+  void import_local_parquet(const std::string& file_path);
+  void import_parquet(std::vector<std::string>& file_paths);
+  void import_compressed(std::vector<std::string>& file_paths);
 
  protected:
   ImportStatus archivePlumber();
@@ -602,14 +636,14 @@ struct PolyData2d {
   ~PolyData2d() {}
 
   size_t numVerts() const {
-      size_t s = coords.size();
-      CHECK(s % 2 == 0);
-      return s / 2;
+    size_t s = coords.size();
+    CHECK(s % 2 == 0);
+    return s / 2;
   }
   size_t numTris() const {
-      size_t s = triangulation_indices.size();
-      CHECK(s % 3 == 0);
-      return s / 3;
+    size_t s = triangulation_indices.size();
+    CHECK_EQ(s % 3, 0);
+    return s / 3;
   }
   size_t numLineLoops() const { return lineDrawInfo.size(); }
   size_t numIndices() const { return triangulation_indices.size(); }
@@ -642,7 +676,10 @@ struct PolyData2d {
   void popPoly() {
     CHECK(_ended);
     CHECK(polyDrawInfo.size());
-    CHECK(triangulation_indices.size() && triangulation_indices.size() % 3 == 0);
+    if (triangulation_indices.empty()) {
+      return;
+    }
+    CHECK_EQ(triangulation_indices.size() % 3, 0);
     auto itr = triangulation_indices.end() - 1;
     for (; itr >= triangulation_indices.begin(); itr -= 3) {
       if (*itr < _startLineIdx) {
@@ -678,17 +715,19 @@ struct PolyData2d {
     lineDrawInfo.back().count++;
   }
 
-  void endLine() {
-    // repeat the first 3 vertices to fully create the "loop"
-    // since it will be drawn using the GL_LINE_STRIP_ADJACENCY
-    // primitive type
-    int numPointsThisLine = numVerts() - _startLineIdx;
-    for (int i = 0; i < 3; ++i) {
-      int idx = (_startLineIdx + (i % numPointsThisLine)) * 2;
-      coords.push_back(coords[idx]);
-      coords.push_back(coords[idx + 1]);
+  void endLine(const bool add_extra_verts = true) {
+    if (add_extra_verts) {
+      // repeat the first 3 vertices to fully create the "loop"
+      // since it will be drawn using the GL_LINE_STRIP_ADJACENCY
+      // primitive type
+      int numPointsThisLine = numVerts() - _startLineIdx;
+      for (int i = 0; i < 3; ++i) {
+        int idx = (_startLineIdx + (i % numPointsThisLine)) * 2;
+        coords.push_back(coords[idx]);
+        coords.push_back(coords[idx + 1]);
+      }
+      lineDrawInfo.back().count += 3;
     }
-    lineDrawInfo.back().count += 3;
 
     _ended = true;
   }
@@ -713,6 +752,40 @@ struct PolyData2d {
   void _addPoint(double x, double y) {
     coords.push_back(x);
     coords.push_back(y);
+  }
+};
+
+class ImporterUtils {
+ public:
+  static void parseStringArray(const std::string& s,
+                               const CopyParams& copy_params,
+                               std::vector<std::string>& string_vec) {
+    if (s == copy_params.null_str || s.size() < 1) {
+      return;
+    }
+    if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
+      throw std::runtime_error("Malformed Array :" + s);
+    }
+    size_t last = 1;
+    for (size_t i = s.find(copy_params.array_delim, 1); i != std::string::npos;
+         i = s.find(copy_params.array_delim, last)) {
+      if (i > last) {  // if not empty string - disallow empty strings for now
+        if (s.substr(last, i - last).length() > StringDictionary::MAX_STRLEN)
+          throw std::runtime_error("Array String too long : " + std::to_string(s.substr(last, i - last).length()) +
+                                   " max is " + std::to_string(StringDictionary::MAX_STRLEN));
+
+        string_vec.push_back(s.substr(last, i - last));
+      }
+      last = i + 1;
+    }
+    if (s.size() - 1 > last) {  // if not empty string - disallow empty strings for now
+      if (s.substr(last, s.size() - 1 - last).length() > StringDictionary::MAX_STRLEN)
+        throw std::runtime_error("Array String too long : " +
+                                 std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
+                                 std::to_string(StringDictionary::MAX_STRLEN));
+
+      string_vec.push_back(s.substr(last, s.size() - 1 - last));
+    }
   }
 };
 

@@ -40,6 +40,8 @@ class RenderInfo {
              const std::string& render_vega = "",
              const bool force_non_in_situ_data = false);
 
+  void setForceNonInSituData();
+  bool queryRanWithInSituData() const;
   bool hasInSituData() const;
   bool isInSituDataFlagUnset() const;
   bool isPotentialInSituRender() const;
@@ -56,12 +58,14 @@ class RenderInfo {
 
  private:
   enum class InSituState { UNSET, IS_IN_SITU, IS_NOT_IN_SITU };
-  InSituState in_situ_data;  // Should be set to true if query results are written directly
+  InSituState in_situ_data;  // Should be set to true if query results can be written directly
                              // to CUDA-mapped opengl buffers for rendering. Should be set
                              // to false otherwise, meaning results are written to CPU first,
                              // and buffered back to GPU for rendering.
-                             // Can also be set to false to force non-in-situ rendering
+                             // An alternative meaning is that when false, you've encountered
+                             // a non-projection query.
                              // Can only be set once for the lifetime of the object.
+  bool force_non_in_situ_data;
 
   std::shared_ptr<QueryRenderer::QueryDataLayout> query_vbo_layout;
   std::shared_ptr<QueryRenderer::QueryDataLayout> query_ssbo_layout;

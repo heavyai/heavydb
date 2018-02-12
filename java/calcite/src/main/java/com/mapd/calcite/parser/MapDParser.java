@@ -16,6 +16,7 @@
 package com.mapd.calcite.parser;
 
 import com.mapd.parser.server.ExtensionFunction;
+import java.util.List;
 import java.util.Map;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.plan.RelOptUtil;
@@ -113,8 +114,8 @@ public final class MapDParser {
     return res;
   }
 
-  public MapDPlanner.CompletionResult getCompletionHints(String sql, int cursor) {
-    return ((MapDPlanner) getPlanner()).getCompletionHints(sql, cursor);
+  public MapDPlanner.CompletionResult getCompletionHints(String sql, int cursor, List<String> visible_tables) {
+    return ((MapDPlanner) getPlanner()).getCompletionHints(sql, cursor, visible_tables);
   }
 
   RelRoot queryToSqlNode(final String sql, final boolean legacy_syntax) throws SqlParseException, ValidationException, RelConversionException {

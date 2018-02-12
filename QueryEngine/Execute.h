@@ -226,6 +226,11 @@ class QueryMustRunOnCpu : public std::runtime_error {
   QueryMustRunOnCpu() : std::runtime_error("QueryMustRunOnCpu") {}
 };
 
+class SringConstInResultSet : public std::runtime_error {
+ public:
+  SringConstInResultSet() : std::runtime_error("NONE ENCODED String types are not supported as input result set.") {}
+};
+
 class ExtensionFunction;
 
 namespace std {
@@ -241,7 +246,7 @@ struct hash<std::pair<int, int>> {
   size_t operator()(const std::pair<int, int>& p) const { return boost::hash<std::pair<int, int>>()(p); }
 };
 
-}  // std
+}  // namespace std
 
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
@@ -293,7 +298,6 @@ class Executor {
                                             const rapidjson::Value& data_desc,
                                             RenderInfo* render_query_data,
                                             const std::string* render_config_json = nullptr,
-                                            const bool is_projection_query = true,
                                             const std::string& poly_table_name = "");
 
   std::shared_ptr<ResultSet> renderNonInSituData(const std::string& queryStr,
@@ -309,8 +313,7 @@ class Executor {
                                          const Catalog_Namespace::SessionInfo& session,
                                          const int render_widget_id,
                                          const rapidjson::Value& data_desc,
-                                         RenderInfo* render_query_data,
-                                         const bool is_projection_query = true);
+                                         RenderInfo* render_query_data);
 
   std::vector<int32_t> getStringIds(const std::string& col_name,
                                     const std::vector<std::string>& col_vals,
@@ -328,6 +331,8 @@ class Executor {
   bool isArchMaxwell(const ExecutorDeviceType dt) const;
 
   bool isOuterJoin() const { return cgen_state_->is_outer_join_; }
+
+  bool containsLeftDeepOuterJoin() const { return cgen_state_->contains_left_deep_outer_join_; }
 
   bool isOuterLoopJoin() const {
     return isOuterJoin() && plan_state_->join_info_.join_impl_type_ == JoinImplType::Loop;
@@ -375,9 +380,7 @@ class Executor {
   llvm::ConstantFP* ll_fp(const double v) const {
     return static_cast<llvm::ConstantFP*>(llvm::ConstantFP::get(llvm::Type::getDoubleTy(cgen_state_->context_), v));
   }
-  llvm::ConstantInt* ll_bool(const bool v) const {
-    return static_cast<llvm::ConstantInt*>(llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), v));
-  }
+  llvm::ConstantInt* ll_bool(const bool v) const { return ::ll_bool(v, cgen_state_->context_); }
 
   std::vector<llvm::Value*> codegen(const Analyzer::Expr*, const bool fetch_columns, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::BinOper*, const CompilationOptions&);
@@ -395,6 +398,9 @@ class Executor {
   std::vector<llvm::Value*> codegenOuterJoinNullPlaceholder(const Analyzer::ColumnVar* col_var,
                                                             const bool fetch_column,
                                                             const CompilationOptions& co);
+  // Returns the IR value which holds true iff at least one match has been found for outer join,
+  // null if there's no outer join condition on the given nesting level.
+  llvm::Value* foundOuterJoinMatch(const ssize_t nesting_level) const;
   llvm::Value* resolveGroupedColumnReference(const Analyzer::ColumnVar*);
   std::vector<llvm::Value*> codegen(const Analyzer::Constant*,
                                     const EncodingType enc_type,
@@ -579,8 +585,8 @@ class Executor {
     std::string llvm_ir;
   };
 
-  bool isArchPascal(const ExecutorDeviceType dt) const {
-    return dt == ExecutorDeviceType::GPU && catalog_->get_dataMgr().cudaMgr_->isArchPascal();
+  bool isArchPascalOrLater(const ExecutorDeviceType dt) const {
+    return dt == ExecutorDeviceType::GPU && catalog_->get_dataMgr().cudaMgr_->isArchPascalOrLater();
   }
 
   enum class JoinImplType { Invalid, Loop, HashOneToOne, HashOneToMany, HashPlusLoop };
@@ -958,6 +964,14 @@ class Executor {
                                        const ExecutionOptions& eo,
                                        const std::vector<InputTableInfo>& query_infos,
                                        ColumnCacheMap& column_cache);
+  // Builds a join hash table for the provided conditions on the current level.
+  // Returns null iff on failure and provides the reasons in `fail_reasons`.
+  std::shared_ptr<JoinHashTableInterface> buildCurrentLevelHashTable(const JoinCondition& current_level_join_conditions,
+                                                                     RelAlgExecutionUnit& ra_exe_unit,
+                                                                     const CompilationOptions& co,
+                                                                     const std::vector<InputTableInfo>& query_infos,
+                                                                     ColumnCacheMap& column_cache,
+                                                                     std::vector<std::string>& fail_reasons);
   void addJoinLoopIterator(const std::vector<llvm::Value*>& prev_iters, const size_t level_idx);
   void codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
                         const RelAlgExecutionUnit& ra_exe_unit,
@@ -1011,7 +1025,7 @@ class Executor {
   void nukeOldState(const bool allow_lazy_fetch,
                     const JoinInfo& join_info,
                     const std::vector<InputTableInfo>& query_infos,
-                    const std::list<std::shared_ptr<Analyzer::Expr>>& outer_join_quals);
+                    const RelAlgExecutionUnit& ra_exe_unit);
   std::vector<std::pair<void*, void*>> optimizeAndCodegenCPU(llvm::Function*,
                                                              llvm::Function*,
                                                              std::unordered_set<llvm::Function*>&,
@@ -1107,15 +1121,19 @@ class Executor {
 
   struct CgenState {
    public:
-    CgenState(const std::vector<InputTableInfo>& query_infos, const bool is_outer_join)
+    CgenState(const std::vector<InputTableInfo>& query_infos,
+              const bool is_outer_join,
+              const bool contains_left_deep_outer_join)
         : module_(nullptr),
           row_func_(nullptr),
           context_(getGlobalLLVMContext()),
           ir_builder_(context_),
           is_outer_join_(is_outer_join),
+          contains_left_deep_outer_join_(contains_left_deep_outer_join),
           outer_join_cond_lv_(nullptr),
           outer_join_match_found_(nullptr),
           outer_join_nomatch_(nullptr),
+          outer_join_match_found_per_level_(std::max(query_infos.size(), size_t(1)) - 1),
           query_infos_(query_infos),
           needs_error_check_(false) {}
 
@@ -1225,9 +1243,11 @@ class Executor {
     std::unordered_map<InputDescriptor, std::pair<llvm::Value*, llvm::Value*>> scan_to_iterator_;
     std::vector<std::pair<llvm::Value*, llvm::Value*>> match_iterators_;
     const bool is_outer_join_;
+    const bool contains_left_deep_outer_join_;
     llvm::Value* outer_join_cond_lv_;
     llvm::Value* outer_join_match_found_;
     llvm::Value* outer_join_nomatch_;
+    std::vector<llvm::Value*> outer_join_match_found_per_level_;
     std::vector<llvm::BasicBlock*> inner_scan_labels_;
     std::vector<llvm::BasicBlock*> match_scan_labels_;
     std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
@@ -1394,6 +1414,7 @@ class Executor {
   static const int32_t ERR_INTERRUPTED{10};
   static const int32_t ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED{11};
   static const int32_t ERR_TOO_MANY_LITERALS{12};
+  static const int32_t ERR_STRING_CONST_IN_RESULTSET{13};
   friend class BaselineJoinHashTable;
   friend class GroupByAndAggregate;
   friend struct QueryMemoryDescriptor;

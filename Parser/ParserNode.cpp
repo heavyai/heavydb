@@ -38,18 +38,20 @@
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "../Import/Importer.h"
 #include "../Planner/Planner.h"
+#include "../QueryEngine/CalciteAdapter.h"
 #include "../QueryEngine/Execute.h"
+#include "../QueryEngine/ExtensionFunctionsWhitelist.h"
+#include "../QueryEngine/RelAlgExecutor.h"
 #include "../Shared/mapd_glob.h"
 #include "../Shared/measure.h"
+#include "DataMgr/LockMgr.h"
 #include "ReservedKeywords.h"
 #include "parser.h"
 
-#include "../QueryEngine/CalciteAdapter.h"
-#include "../QueryEngine/ExtensionFunctionsWhitelist.h"
-#include "../QueryEngine/RelAlgExecutor.h"
-
 size_t g_leaf_count{0};
 bool g_fast_strcmp{false};
+
+using namespace Lock_Namespace;
 
 namespace Parser {
 
@@ -2010,6 +2012,14 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   if (catalog.getMetadataForTable(table_name_) != nullptr) {
     throw std::runtime_error("Table " + table_name_ + " already exists.");
   }
+
+  // get read UpdateDeleteLock on tables involved in SELECT subquery
+  const auto query_ra = parse_to_ra(catalog, select_query_, session);
+  std::vector<std::shared_ptr<mapd_shared_lock<mapd_shared_mutex>>> readUpdateDeleteLocks;
+  Lock_Namespace::getTableReadLocks<mapd_shared_mutex>(
+      session.get_catalog(), query_ra, readUpdateDeleteLocks, Lock_Namespace::LockType::UpdateDeleteLock);
+  // [ write UpdateDeleteLocks ] lock is deferred in InsertOrderFragmenter::deleteFragments
+
   std::vector<TargetMetaInfo> target_metainfos;
   const auto result_rows = getResultRows(session, select_query_, target_metainfos);
   std::list<ColumnDescriptor> column_descriptors;
@@ -2089,6 +2099,11 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
       insert_data.data.push_back(p);
       ++col_idx;
     }
+    // get CheckpointLock+UpdateDeleteLock locks on the table before trying to create its 1st fragment
+    ChunkKey chunkKey = {catalog.get_currentDB().dbId, created_td->tableId};
+    mapd_unique_lock<mapd_shared_mutex> chkptlLock(*Lock_Namespace::LockMgr<mapd_shared_mutex, ChunkKey>::getMutex(
+        Lock_Namespace::LockType::CheckpointLock, chunkKey));
+    // [ write UpdateDeleteLocks ] lock is deferred in InsertOrderFragmenter::deleteFragments
     insert_data.columnIds = column_ids;
     insert_data.numRows = columnar_results.size();
     created_td->fragmenter->insertData(insert_data);
@@ -2120,6 +2135,9 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   if (td->isView)
     throw std::runtime_error(*table + " is a view.  Use DROP VIEW.");
+
+  auto chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(catalog, *table, LockType::CheckpointLock);
+  auto upddelLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(catalog, *table, LockType::UpdateDeleteLock);
   catalog.dropTable(td);
 }
 
@@ -2262,6 +2280,34 @@ void CopyTableStmt::execute(
           copy_params.has_header = false;
         else
           throw std::runtime_error("Invalid string for boolean " + *s);
+#ifdef ENABLE_IMPORT_PARQUET  // for now skeleton only
+      } else if (boost::iequals(*p->get_name(), "parquet")) {
+        const StringLiteral* str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr)
+          throw std::runtime_error("Parquet option must be a boolean.");
+        const std::string* s = str_literal->get_stringval();
+        if (*s == "t" || *s == "true" || *s == "T" || *s == "True")
+          copy_params.is_parquet = true;
+        else if (*s == "f" || *s == "false" || *s == "F" || *s == "False")
+          copy_params.is_parquet = false;
+        else
+          throw std::runtime_error("Invalid string for boolean " + *s);
+#endif  // ENABLE_IMPORT_PARQUET
+      } else if (boost::iequals(*p->get_name(), "s3_access_key")) {
+        const StringLiteral* str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr)
+          throw std::runtime_error("Option s3_access_key must be a string.");
+        copy_params.s3_access_key = *str_literal->get_stringval();
+      } else if (boost::iequals(*p->get_name(), "s3_secret_key")) {
+        const StringLiteral* str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr)
+          throw std::runtime_error("Option s3_secret_key must be a string.");
+        copy_params.s3_secret_key = *str_literal->get_stringval();
+      } else if (boost::iequals(*p->get_name(), "s3_region")) {
+        const StringLiteral* str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr)
+          throw std::runtime_error("Option s3_region must be a string.");
+        copy_params.s3_region = *str_literal->get_stringval();
       } else if (boost::iequals(*p->get_name(), "quote")) {
         const StringLiteral* str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr)
@@ -2961,8 +3007,8 @@ void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!session.get_currentUser().isSuper && session.get_currentUser().userId != db.dbOwner)
     throw std::runtime_error("Only the super user or the owner can drop database.");
 
-  auto* db_cat = session.getDatabaseCatalog(*db_name);
-  syscat.dropDatabase(db.dbId, *db_name, db_cat);
+  auto db_cat = session.getDatabaseCatalog(*db_name);
+  syscat.dropDatabase(db.dbId, *db_name, db_cat.get());
 }
 
 void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {

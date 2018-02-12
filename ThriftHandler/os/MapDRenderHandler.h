@@ -44,11 +44,17 @@ class MapDRenderHandler {
     CHECK(false);
   }
 
-  void render_vega_raw_pixels(TRawPixelDataResult& _return,
-                              const Catalog_Namespace::SessionInfo& session_info,
-                              const int64_t widget_id,
-                              const int16_t node_idx,
-                              const std::string& vega_json) {
+  void start_render_query(TPendingRenderQuery& _return,
+                          const TSessionId& session,
+                          const int64_t widget_id,
+                          const int16_t node_idx,
+                          const std::string& vega_json) {
+    CHECK(false);
+  }
+
+  void execute_next_render_step(TRenderStepResult& _return,
+                                const TPendingRenderQuery& pending_render,
+                                const TRenderDataAggMap& merged_data) {
     CHECK(false);
   }
 

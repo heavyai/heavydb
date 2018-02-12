@@ -139,6 +139,7 @@ std::vector<JoinLoop> generate_descriptors(const unsigned mask,
     if (mask & (1 << i)) {
       const bool cond_is_true = cond_mask & (1 << cond_idx);
       join_loops.emplace_back(JoinLoopKind::Singleton,
+                              JoinType::INNER,
                               [i, cond_is_true](const std::vector<llvm::Value*>& v) {
                                 CHECK_EQ(i + 1, v.size());
                                 CHECK(!v.front());
@@ -147,11 +148,14 @@ std::vector<JoinLoop> generate_descriptors(const unsigned mask,
                                                                          : ll_int(int64_t(-1), g_global_context);
                                 return domain;
                               },
+                              nullptr,
+                              nullptr,
                               "i" + std::to_string(i));
       ++cond_idx;
     } else {
       const auto upper_bound = upper_bounds[i];
       join_loops.emplace_back(JoinLoopKind::UpperBound,
+                              JoinType::INNER,
                               [i, upper_bound](const std::vector<llvm::Value*>& v) {
                                 CHECK_EQ(i + 1, v.size());
                                 CHECK(!v.front());
@@ -159,6 +163,8 @@ std::vector<JoinLoop> generate_descriptors(const unsigned mask,
                                 domain.upper_bound = ll_int<int64_t>(upper_bound, g_global_context);
                                 return domain;
                               },
+                              nullptr,
+                              nullptr,
                               "i" + std::to_string(i));
     }
   }

@@ -1,5 +1,5 @@
-MapD Community Edition End User License Agreement
-Last Updated: 10-January-2018
+Last Updated: 16-January-2018
+
 
 	This End User License Agreement ("Agreement") is a legal agreement
 	between you or the company or legal entity you represent ("you", "your"

@@ -26,9 +26,9 @@ add_definitions("-DMAPD_EDITION_${MAPD_EDITION}")
 string(TOLOWER "${MAPD_EDITION}" MAPD_EDITION_LOWER)
 
 set(MAPD_VERSION_MAJOR "3")
-set(MAPD_VERSION_MINOR "4")
-set(MAPD_VERSION_PATCH "0")
-set(MAPD_VERSION_EXTRA "")
+set(MAPD_VERSION_MINOR "5")
+set(MAPD_VERSION_PATCH "1")
+set(MAPD_VERSION_EXTRA "dev")
 set(MAPD_VERSION_RAW "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}${MAPD_VERSION_EXTRA}")
 set(MAPD_IMMERSE_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v2-82-release-prod.zip")
 set(MAPD_DOCS_URL "http://docs.builds.mapd.com/1547/docs-1547-v3.4.0.zip")
@@ -224,10 +224,20 @@ add_subdirectory(ThirdParty/linenoise)
 include_directories(ThirdParty/sqlite3)
 add_subdirectory(ThirdParty/sqlite3)
 
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
 #rdkafka
-  include_directories(ThirdParty/librdkafka/src-cpp)
-  add_subdirectory(ThirdParty/librdkafka)
+include_directories(ThirdParty/librdkafka/src-cpp)
+add_subdirectory(ThirdParty/librdkafka)
+
+# aws-sdk
+option(ENABLE_AWS_S3 "Enable AWS S3 support" ON)
+if(ENABLE_AWS_S3)
+  find_package(LibAwsS3)
+  if(NOT LibAwsS3_FOUND)
+    set(ENABLE_AWS_S3 OFF CACHE BOOL "Enable AWS S3 support" FORCE)
+    message(STATUS "AWS SDK not found. Disabling AWS S3 support.")
+  else()
+    add_definitions("-DHAVE_AWS_S3")
+  endif()
 endif()
 
 add_custom_command(
@@ -240,7 +250,7 @@ add_custom_command(
         ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
         ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
     COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen cpp -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
+    ARGS -gen cpp -r -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
 
 add_library(mapd_thrift
@@ -261,6 +271,10 @@ endif()
 if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
   option(ENABLE_RENDERING "Build backend renderer" OFF)
   if(ENABLE_RENDERING)
+    # muparserx - currently render-only
+    include_directories(ThirdParty/muparserx)
+    add_subdirectory(ThirdParty/muparserx)
+
     add_definitions("-DHAVE_RENDERING")
     add_subdirectory(Rendering)
     add_subdirectory(QueryRenderer)
@@ -387,7 +401,7 @@ add_custom_command(
     COMMAND mkdir
     ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen java -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/mapd.thrift)
+    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/mapd.thrift)
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift ${CMAKE_SOURCE_DIR}/completion_hints.thrift

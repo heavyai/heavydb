@@ -1304,6 +1304,7 @@ class ExportQueryStmt : public DDLStmt {
     }
   }
   virtual void execute(const Catalog_Namespace::SessionInfo& session);
+  const std::string get_select_stmt() const { return *select_stmt; }
 
  private:
   std::unique_ptr<std::string> select_stmt;

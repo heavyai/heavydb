@@ -40,7 +40,7 @@
 #include "MapDRelease.h"
 
 #include "Calcite/Calcite.h"
-
+#include "DataMgr/LockMgr.h"
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Import/Importer.h"
@@ -259,12 +259,14 @@ class MapDHandler : public MapDIf {
                                  const TRowDescriptor& row_desc,
                                  const TQueryId query_id);
 
-  void render_vega_raw_pixels(TRawPixelDataResult& _return,
-                              const TSessionId& session,
-                              const int64_t widget_id,
-                              const int16_t node_idx,
-                              const std::string& vega_json,
-                              const std::string& nonce);
+  void start_render_query(TPendingRenderQuery& _return,
+                          const TSessionId& session,
+                          const int64_t widget_id,
+                          const int16_t node_idx,
+                          const std::string& vega_json);
+  void execute_next_render_step(TRenderStepResult& _return,
+                                const TPendingRenderQuery& pending_render,
+                                const TRenderDataAggMap& merged_data);
 
   void insert_data(const TSessionId& session, const TInsertData& insert_data);
   void checkpoint(const TSessionId& session, const int32_t db_id, const int32_t table_id);
@@ -313,7 +315,6 @@ class MapDHandler : public MapDIf {
   std::unique_ptr<Catalog_Namespace::SysCatalog> sys_cat_;
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
   std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> sessions_;
-  std::map<std::string, std::shared_ptr<Catalog_Namespace::Catalog>> cat_map_;
 
   LeafAggregator leaf_aggregator_;
   const std::vector<LeafHostInfo> string_leaves_;
@@ -432,10 +433,32 @@ class MapDHandler : public MapDIf {
 
   TRowDescriptor convert_target_metainfo(const std::vector<TargetMetaInfo>& targets) const;
 
+  void get_completion_hints_unsorted(std::vector<TCompletionHint>& hints,
+                                     std::vector<std::string>& visible_tables,
+                                     const TSessionId& session,
+                                     const std::string& sql,
+                                     const int cursor);
+  void get_token_based_completions(std::vector<TCompletionHint>& hints,
+                                   const TSessionId& session,
+                                   const std::vector<std::string>& visible_tables,
+                                   const std::string& sql,
+                                   const int cursor);
   Planner::RootPlan* parse_to_plan(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info);
   Planner::RootPlan* parse_to_plan_legacy(const std::string& query_str,
                                           const Catalog_Namespace::SessionInfo& session_info,
                                           const std::string& action /* render or validate */);
+
+  std::unordered_map<std::string, std::unordered_set<std::string>> fill_column_names_by_table(
+      const std::vector<std::string>& table_names,
+      const TSessionId& session);
+
+  // For the provided upper case column names `uc_column_names`, return the tables
+  // from `table_names` which contain at least one of them. Used to rank the TABLE
+  // auto-completion hints by the columns specified in the projection.
+  std::unordered_set<std::string> get_uc_compatible_table_names_by_column(
+      const std::unordered_set<std::string>& uc_column_names,
+      const std::vector<std::string>& table_names,
+      const TSessionId& session);
 
   bool super_user_rights_;  // default is "false"; setting to "true" ignores passwd checks in "connect(..)" method
   const bool access_priv_check_;

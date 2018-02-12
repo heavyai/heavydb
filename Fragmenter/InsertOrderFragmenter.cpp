@@ -15,6 +15,7 @@
  */
 
 #include "InsertOrderFragmenter.h"
+#include "../DataMgr/LockMgr.h"
 #include "../DataMgr/DataMgr.h"
 #include "../DataMgr/AbstractBuffer.h"
 #include <glog/logging.h>
@@ -171,7 +172,13 @@ void InsertOrderFragmenter::dropFragmentsToSize(const size_t maxRows) {
 }
 
 void InsertOrderFragmenter::deleteFragments(const vector<int>& dropFragIds) {
-  mapd_unique_lock<mapd_shared_mutex> tableLock(tableMutex_);
+  // need to keep lock seq as UpdateDeleteLock >> fragmentInfoMutex_ or
+  // SELECT and COPY may enter a deadlock
+  using namespace Lock_Namespace;
+  mapd_unique_lock<mapd_shared_mutex> deleteLock(
+      *LockMgr<mapd_shared_mutex, ChunkKey>::getMutex(LockType::UpdateDeleteLock, chunkKeyPrefix_));
+  mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
+
   for (const auto fragId : dropFragIds) {
     for (const auto& col : columnMap_) {
       int colId = col.first;
@@ -184,9 +191,6 @@ void InsertOrderFragmenter::deleteFragments(const vector<int>& dropFragIds) {
 }
 
 void InsertOrderFragmenter::insertData(const InsertData& insertDataStruct) {
-  mapd_unique_lock<mapd_shared_mutex> tableLevelWriteLock(*dataMgr_->getMutexForChunkPrefix(
-      chunkKeyPrefix_));  // prevent two threads from trying to insert into the same table simultaneously
-                          // mutex comes from datamgr so that lock can span more than a single component
   insertDataImpl(insertDataStruct);
   if (defaultInsertLevel_ == Data_Namespace::DISK_LEVEL) {  // only checkpoint if data is resident on disk
     dataMgr_->checkpoint(chunkKeyPrefix_[0],
@@ -199,6 +203,9 @@ void InsertOrderFragmenter::insertDataNoCheckpoint(const InsertData& insertDataS
 }
 
 void InsertOrderFragmenter::insertDataImpl(const InsertData& insertDataStruct) {
+  // mutex comes from datamgr so that lock can span more than a single component
+  // TODO: this local lock will need to be centralized when ALTER COLUMN is added, bc
+  // ALTER modifies or add chunks via the same fragmenter...
   mapd_unique_lock<mapd_shared_mutex> insertLock(
       insertMutex_);  // prevent two threads from trying to insert into the same table simultaneously
   std::unordered_map<int, int> inverseInsertDataColIdMap;
@@ -298,10 +305,15 @@ void InsertOrderFragmenter::insertDataImpl(const InsertData& insertDataStruct) {
     numRowsLeft -= numRowsToInsert;
     numRowsInserted += numRowsToInsert;
   }
-  mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
-  for (auto partIt = fragmentInfoVec_.begin() + startFragment; partIt != fragmentInfoVec_.end(); ++partIt) {
-    partIt->setPhysicalNumTuples(partIt->shadowNumTuples);
-    partIt->setChunkMetadataMap(partIt->shadowChunkMetadataMap);
+  {  // Need to narrow scope of this lock, or SELECT and COPY_FROM enters a dead lock
+    // after SELECT has locked UpdateDeleteLock and COPY_FROM has locked fragmentInfoMutex_
+    // while SELECT waits for fragmentInfoMutex_ and COPY_FROM waits for UpdateDeleteLock
+
+    mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
+    for (auto partIt = fragmentInfoVec_.begin() + startFragment; partIt != fragmentInfoVec_.end(); ++partIt) {
+      partIt->setPhysicalNumTuples(partIt->shadowNumTuples);
+      partIt->setChunkMetadataMap(partIt->shadowChunkMetadataMap);
+    }
   }
   numTuples_ += insertDataStruct.numRows;
   dropFragmentsToSize(maxRows_);
@@ -338,7 +350,7 @@ FragmentInfo* InsertOrderFragmenter::createNewFragment(const Data_Namespace::Mem
 
 TableInfo InsertOrderFragmenter::getFragmentsForQuery() {
   mapd_shared_lock<mapd_shared_mutex> readLock(fragmentInfoMutex_);
-  TableInfo queryInfo(&tableMutex_);
+  TableInfo queryInfo;
   queryInfo.chunkKeyPrefix = chunkKeyPrefix_;
   // right now we don't test predicate, so just return (copy of) all fragments
   queryInfo.fragments = fragmentInfoVec_;  // makes a copy
