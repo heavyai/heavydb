@@ -114,7 +114,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
       throw new InvalidParseRequest(-3, msg);
     } catch (Exception ex) {
       String msg = "Exception occurred: " + ex.getMessage();
-      MAPDLOGGER.error(msg);
+      MAPDLOGGER.error(msg, ex);
       throw new InvalidParseRequest(-4, msg);
     } finally {
       try {

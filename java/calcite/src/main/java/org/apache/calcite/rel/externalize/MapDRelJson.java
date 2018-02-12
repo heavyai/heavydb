@@ -50,6 +50,7 @@ import org.apache.calcite.util.JsonBuilder;
 import org.apache.calcite.util.Util;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -248,6 +249,12 @@ public class MapDRelJson {
       final List<Object> list = jsonBuilder.list();
       for (Integer integer : (ImmutableBitSet) value) {
         list.add(toJson(integer));
+      }
+      return list;
+    } else if (value instanceof ImmutableSet) {
+      final List<Object> list = jsonBuilder.list();
+      for (Object o  :  ((ImmutableSet)value).asList()) {
+        list.add(toJson(o));
       }
       return list;
     } else if (value instanceof AggregateCall) {

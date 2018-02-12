@@ -20,6 +20,7 @@
  *
  * Created on November 23, 2015, 9:33 AM
  */
+#include <stdlib.h>
 
 #include "Calcite.h"
 #include "Shared/measure.h"
@@ -52,10 +53,15 @@ void start_calcite_server_as_daemon(const int mapd_port,
   std::string localPortD = std::to_string(port);
   std::string mapdPortP = "-m";
   std::string mapdPortD = std::to_string(mapd_port);
+  std::string debugStr = "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=29876";
+//  std::string debugStr =  "-Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=8087";
+			 
 
   int pid = fork();
   if (pid == 0) {
+	  /*
     int i = execl("/usr/bin/java",
+                  debugStr.c_str(),
                   xmxP.c_str(),
                   jarP.c_str(),
                   jarD.c_str(),
@@ -68,6 +74,15 @@ void start_calcite_server_as_daemon(const int mapd_port,
                   mapdPortP.c_str(),
                   mapdPortD.c_str(),
                   (char*)0);
+       */
+    std::string commandStr = "/usr/bin/java " +  debugStr +  " " + xmxP + " "
+    		+ jarP + " " + jarD + " " + extensionsP + " " + extensionsD + " " + dataP + " "
+            + dataD + " " + localPortP + " " + localPortD + " " + mapdPortP + " " + mapdPortD;
+
+    LOG(INFO) << commandStr;
+
+    int i = system(commandStr.c_str());
+
     LOG(INFO) << " Calcite server running after exe, return " << i;
   }
 }
