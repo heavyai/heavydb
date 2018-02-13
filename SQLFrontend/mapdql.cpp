@@ -540,10 +540,7 @@ TDatum columnar_val_to_datum(const TColumn& col, const size_t row_idx, const TTy
     CHECK_LT(row_idx, col.data.arr_col.size());
     const auto& arr_col = col.data.arr_col[row_idx];
     for (size_t elem_idx = 0; elem_idx < arr_col.nulls.size(); ++elem_idx) {
-      TColumn elem_col;
-      elem_col.data = arr_col.data;
-      elem_col.nulls = arr_col.nulls;
-      datum.val.arr_val.push_back(columnar_val_to_datum(elem_col, elem_idx, elem_type));
+      datum.val.arr_val.push_back(columnar_val_to_datum(arr_col, elem_idx, elem_type));
     }
     return datum;
   }
