@@ -183,6 +183,12 @@ struct CopyGeoCommandMockupContext {
   std::string file_name;
   std::string table_name;
   bool import_geo_table_invoked = false;
+  // minimal TCopyParams
+  struct {
+    std::string s3_region;
+    std::string s3_access_key;
+    std::string s3_secret_key;
+  } copy_params;
 };
 
 struct CopyGeoCommandContextOpsPolicy {

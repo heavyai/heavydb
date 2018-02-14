@@ -718,14 +718,19 @@ class Importer : public DataStreamSink {
   static ImportStatus get_import_status(const std::string& id);
   static void set_import_status(const std::string& id, const ImportStatus is);
   static const std::list<ColumnDescriptor> gdalToColumnDescriptors(const std::string& fileName,
-                                                                   const std::string& geoColumnName);
+                                                                   const std::string& geoColumnName,
+                                                                   const CopyParams& copy_params);
   static void readMetadataSampleGDAL(const std::string& fileName,
                                      const std::string& geoColumnName,
                                      std::map<std::string, std::vector<std::string>>& metadata,
-                                     int rowLimit);
+                                     int rowLimit,
+                                     const CopyParams& copy_params);
+  static bool gdalFileExists(const std::string& fileName, const CopyParams& copy_params);
 
  private:
-  void initGDAL();
+  static void initGDAL();
+  static OGRDataSource* openGDALDataset(const std::string& fileName, const CopyParams& copy_params);
+  static void setGDALAuthorizationTokens(const CopyParams& copy_params);
   std::string import_id;
   size_t file_size;
   int max_threads;

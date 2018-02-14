@@ -1773,8 +1773,16 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
       file_name = file_path.string();
     }
 
-    if (!boost::filesystem::exists(file_path)) {
-      THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
+    if (copy_params.table_type == Importer_NS::TableType::POLYGON) {
+      // check for geo file
+      if (!Importer_NS::Importer::gdalFileExists(file_name, copy_params)) {
+        THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
+      }
+    } else {
+      // check for regular file
+      if (!boost::filesystem::exists(file_path)) {
+        THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
+      }
     }
   }
   try {
@@ -1817,15 +1825,15 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
       // @TODO simon.eves get this from somewhere!
       const std::string geoColumnName(MAPD_GEO_PREFIX);
 
-      check_geospatial_files(file_path);
+      check_geospatial_files(file_path, copy_params);
       std::list<ColumnDescriptor> cds =
-          Importer_NS::Importer::gdalToColumnDescriptors(file_path.string(), geoColumnName);
+          Importer_NS::Importer::gdalToColumnDescriptors(file_path.string(), geoColumnName, copy_params);
       for (auto cd : cds) {
         cd.columnName = sanitize_name(cd.columnName);
         _return.row_set.row_desc.push_back(populateThriftColumnType(nullptr, &cd));
       }
       std::map<std::string, std::vector<std::string>> sample_data;
-      Importer_NS::Importer::readMetadataSampleGDAL(file_path.string(), geoColumnName, sample_data, 100);
+      Importer_NS::Importer::readMetadataSampleGDAL(file_path.string(), geoColumnName, sample_data, 100, copy_params);
       if (sample_data.size() > 0) {
         for (size_t i = 0; i < sample_data.begin()->second.size(); i++) {
           TRow sample_row;
@@ -1977,14 +1985,16 @@ TColumnType MapDHandler::create_geo_column(const TDatumType::type type, const st
   return ct;
 }
 
-void MapDHandler::check_geospatial_files(const boost::filesystem::path file_path) {
+void MapDHandler::check_geospatial_files(const boost::filesystem::path file_path,
+                                         const Importer_NS::CopyParams& copy_params) {
   const std::list<std::string> shp_ext{".shp", ".shx", ".dbf"};
   if (std::find(shp_ext.begin(), shp_ext.end(), boost::algorithm::to_lower_copy(file_path.extension().string())) !=
       shp_ext.end()) {
     for (auto ext : shp_ext) {
       auto aux_file = file_path;
-      if (!boost::filesystem::exists(aux_file.replace_extension(boost::algorithm::to_upper_copy(ext))) &&
-          !boost::filesystem::exists(aux_file.replace_extension(ext))) {
+      if (!Importer_NS::Importer::gdalFileExists(
+              aux_file.replace_extension(boost::algorithm::to_upper_copy(ext)).string(), copy_params) &&
+          !Importer_NS::Importer::gdalFileExists(aux_file.replace_extension(ext).string(), copy_params)) {
         throw std::runtime_error("required file for shapefile does not exist: " + aux_file.filename().string());
       }
     }
@@ -2106,6 +2116,8 @@ void MapDHandler::import_geo_table(const TSessionId& session,
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
 
+  Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
+
   // Assume relative paths are relative to data_path / mapd_import / <session>
   std::string file_name{file_name_in};
   if (!boost::filesystem::path(file_name).is_absolute()) {
@@ -2116,11 +2128,11 @@ void MapDHandler::import_geo_table(const TSessionId& session,
   LOG(INFO) << "import_geo_table " << table_name << " from " << file_name;
 
   auto file_path = boost::filesystem::path(file_name);
-  if (!boost::filesystem::exists(file_path)) {
+  if (!Importer_NS::Importer::gdalFileExists(file_name, copy_params)) {
     THROW_MAPD_EXCEPTION("File does not exist: " + file_path.filename().string());
   }
   try {
-    check_geospatial_files(file_path);
+    check_geospatial_files(file_path, copy_params);
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION("import_geo_table error: " + std::string(e.what()));
   }
@@ -2128,9 +2140,10 @@ void MapDHandler::import_geo_table(const TSessionId& session,
   TRowDescriptor rd;
   if (cat.getMetadataForTable(table_name) == nullptr) {
     TDetectResult cds;
-    TCopyParams cp;
-    cp.table_type = TTableType::POLYGON;
-    detect_column_types(cds, session, file_name_in, cp);
+    // copy input CopyParams in order to retain S3 auth tokens
+    TCopyParams cp_copy = cp;
+    cp_copy.table_type = TTableType::POLYGON;
+    detect_column_types(cds, session, file_name_in, cp_copy);
     create_table(session, table_name, cds.row_set.row_desc, TTableType::POLYGON);
     rd = cds.row_set.row_desc;
   } else if (row_desc.size() > 0) {
@@ -2150,8 +2163,6 @@ void MapDHandler::import_geo_table(const TSessionId& session,
     THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
   }
   check_table_load_privileges(session_info, table_name);
-
-  Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
 
   try {
     std::unique_ptr<Importer_NS::Importer> importer;

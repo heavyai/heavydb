@@ -392,7 +392,7 @@ class MapDHandler : public MapDIf {
   char unescape_char(std::string str);
   Importer_NS::CopyParams thrift_to_copyparams(const TCopyParams& cp);
   TCopyParams copyparams_to_thrift(const Importer_NS::CopyParams& cp);
-  void check_geospatial_files(const boost::filesystem::path file_path);
+  void check_geospatial_files(const boost::filesystem::path file_path, const Importer_NS::CopyParams& copy_params);
   std::string sanitize_name(const std::string& name);
   void render_rel_alg(TRenderResult& _return,
                       const std::string& query_ra,

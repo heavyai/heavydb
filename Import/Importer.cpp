@@ -75,6 +75,7 @@ using GeometryPtrVector = std::vector<OGRGeometry*>;
 
 #define DEBUG_TIMING false
 #define DEBUG_RENDER_GROUP_ANALYZER 0
+#define DEBUG_AWS_AUTHENTICATION 0
 
 #define DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT 0
 #define PROMOTE_POLYGON_TO_MULTIPOLYGON 1
@@ -2965,20 +2966,69 @@ void GDALErrorHandler(CPLErr eErrClass, int err_no, const char* msg) {
   throw std::runtime_error("GDAL error: " + std::string(msg));
 }
 
-void initGDAL() {
+/* static */
+void Importer::initGDAL() {
   static bool gdal_initialized = false;
   if (!gdal_initialized) {
     // FIXME(andrewseidl): investigate if CPLPushFinderLocation can be public
     setenv("GDAL_DATA", std::string(mapd_root_abs_path() + "/ThirdParty/gdal-data").c_str(), true);
     GDALAllRegister();
     OGRRegisterAll();
+    CPLSetErrorHandler(*GDALErrorHandler);
     gdal_initialized = true;
   }
 }
 
-static OGRDataSource* openGDALDataset(const std::string& fileName) {
+/* static */
+void Importer::setGDALAuthorizationTokens(const CopyParams& copy_params) {
+  // for now we only support S3
+  // @TODO generalize CopyParams to have a dictionary of GDAL tokens
+  // only set if non-empty to allow GDAL defaults to persist
+  // explicitly clear if empty to revert to default and not reuse a previous session's keys
+  if (copy_params.s3_region.size()) {
+#if DEBUG_AWS_AUTHENTICATION
+    LOG(INFO) << "GDAL: Setting AWS_REGION to '" << copy_params.s3_region << "'";
+#endif
+    CPLSetConfigOption("AWS_REGION", copy_params.s3_region.c_str());
+  } else {
+#if DEBUG_AWS_AUTHENTICATION
+    LOG(INFO) << "GDAL: Clearing AWS_REGION";
+#endif
+    CPLSetConfigOption("AWS_REGION", nullptr);
+  }
+  if (copy_params.s3_access_key.size()) {
+#if DEBUG_AWS_AUTHENTICATION
+    LOG(INFO) << "GDAL: Setting AWS_ACCESS_KEY_ID to '" << copy_params.s3_access_key << "'";
+#endif
+    CPLSetConfigOption("AWS_ACCESS_KEY_ID", copy_params.s3_access_key.c_str());
+  } else {
+#if DEBUG_AWS_AUTHENTICATION
+    LOG(INFO) << "GDAL: Clearing AWS_ACCESS_KEY_ID";
+#endif
+    CPLSetConfigOption("AWS_ACCESS_KEY_ID", nullptr);
+  }
+  if (copy_params.s3_secret_key.size()) {
+#if DEBUG_AWS_AUTHENTICATION
+    LOG(INFO) << "GDAL: Setting AWS_SECRET_ACCESS_KEY to '" << copy_params.s3_secret_key << "'";
+#endif
+    CPLSetConfigOption("AWS_SECRET_ACCESS_KEY", copy_params.s3_secret_key.c_str());
+  } else {
+#if DEBUG_AWS_AUTHENTICATION
+    LOG(INFO) << "GDAL: Clearing AWS_SECRET_ACCESS_KEY";
+#endif
+    CPLSetConfigOption("AWS_SECRET_ACCESS_KEY", nullptr);
+  }
+}
+
+/* static */
+OGRDataSource* Importer::openGDALDataset(const std::string& fileName, const CopyParams& copy_params) {
+  // lazy init GDAL
   initGDAL();
-  CPLSetErrorHandler(*GDALErrorHandler);
+
+  // set authorization tokens
+  setGDALAuthorizationTokens(copy_params);
+
+  // open the file
   OGRDataSource* poDS;
 #if GDAL_VERSION_MAJOR == 1
   poDS = (OGRDataSource*)OGRSFDriverRegistrar::Open(fileName.c_str(), false);
@@ -2991,13 +3041,15 @@ static OGRDataSource* openGDALDataset(const std::string& fileName) {
   return poDS;
 }
 
+/* static */
 void Importer::readMetadataSampleGDAL(const std::string& fileName,
                                       const std::string& geoColumnName,
                                       std::map<std::string, std::vector<std::string>>& metadata,
-                                      int rowLimit) {
+                                      int rowLimit,
+                                      const CopyParams& copy_params) {
   OGRDataSource* poDS = nullptr;
   try {
-    poDS = openGDALDataset(fileName);
+    poDS = openGDALDataset(fileName, copy_params);
     if (poDS == nullptr) {
       throw std::runtime_error("Unable to open geo file " + fileName);
     }
@@ -3115,12 +3167,14 @@ SQLTypes ogr_to_type(const OGRwkbGeometryType& ogr_type) {
   throw std::runtime_error("Unknown OGR geom type: " + std::to_string(ogr_type));
 }
 
+/* static */
 const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::string& fileName,
-                                                                    const std::string& geoColumnName) {
+                                                                    const std::string& geoColumnName,
+                                                                    const CopyParams& copy_params) {
   std::list<ColumnDescriptor> cds;
   OGRDataSource* poDS = nullptr;
   try {
-    poDS = openGDALDataset(fileName);
+    poDS = openGDALDataset(fileName, copy_params);
     if (poDS == nullptr) {
       throw std::runtime_error("Unable to open geo file " + fileName + " : " + CPLGetLastErrorMsg());
     }
@@ -3190,6 +3244,22 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::s
   return cds;
 }
 
+/* static */
+bool Importer::gdalFileExists(const std::string& fileName, const CopyParams& copy_params) {
+  // lazy init GDAL
+  initGDAL();
+
+  // set authorization tokens
+  setGDALAuthorizationTokens(copy_params);
+
+  // stat file
+  VSIStatBufL sb;
+  int result = VSIStatExL(fileName.c_str(), &sb, VSI_STAT_EXISTS_FLAG);
+  if (result < 0)
+    return false;
+  return VSI_ISREG(sb.st_mode);
+}
+
 ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSourceNameMap) {
   OGRDataSource* poDS = nullptr;
   try {
@@ -3198,7 +3268,7 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
     set_import_status(import_id, import_status);
 
     // open the data set
-    poDS = openGDALDataset(file_path);
+    poDS = openGDALDataset(file_path, copy_params);
     if (poDS == nullptr) {
       throw std::runtime_error("Unable to open geo file " + file_path);
     }

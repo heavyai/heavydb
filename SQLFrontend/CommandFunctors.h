@@ -187,6 +187,16 @@ StandardCommand(Status, { ContextOps::get_status(cmdContext(), output_stream); }
 StandardCommand(CopyGeo, {
   cmdContext().file_name = p[1];   // File name is the first parameter
   cmdContext().table_name = p[2];  // Table name is the second parameter
+
+  // populate S3 authentication tokens from environment
+  char* env = nullptr;
+  if (nullptr != (env = getenv("AWS_REGION")))
+    cmdContext().copy_params.s3_region = env;
+  if (nullptr != (env = getenv("AWS_ACCESS_KEY_ID")))
+    cmdContext().copy_params.s3_access_key = env;
+  if (nullptr != (env = getenv("AWS_SECRET_ACCESS_KEY")))
+    cmdContext().copy_params.s3_secret_key = env;
+
   ContextOps::import_geo_table(cmdContext());
 });
 
@@ -311,13 +321,14 @@ StandardCommand(ListColumns, {
       }
       std::string encoding;
       if (p.col_type.type == TDatumType::STR) {
-        encoding =
-            (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                               std::to_string(p.col_type.comp_param) + ")");
+        encoding = (p.col_type.encoding == 0 ? " ENCODING NONE"
+                                             : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                   std::to_string(p.col_type.comp_param) + ")");
 
       } else {
-        encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                        std::to_string(p.col_type.comp_param) + ")");
+        encoding = (p.col_type.encoding == 0 ? ""
+                                             : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                   std::to_string(p.col_type.comp_param) + ")");
       }
       output_stream << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
                     << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
