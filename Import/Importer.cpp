@@ -1327,9 +1327,10 @@ bool importGeoFromWkt(std::string& wkt,
             coords.push_back(point.getY());
           }
         }
+        poly_rings.push_back(1 + polygon->getNumInteriorRings());
       }
       if (status) {
-        poly_rings.push_back(mpolygon->getNumGeometries());
+        status = (poly_rings.size() == mpolygon->getNumGeometries());
       }
       break;
     }

@@ -184,6 +184,7 @@ class TypedImportBuffer : boost::noncopyable {
       case kPOINT:
       case kLINESTRING:
       case kPOLYGON:
+      case kMULTIPOLYGON:
         geo_string_buffer_ = new std::vector<std::string>();
         break;
       default:
@@ -246,6 +247,7 @@ class TypedImportBuffer : boost::noncopyable {
       case kPOINT:
       case kLINESTRING:
       case kPOLYGON:
+      case kMULTIPOLYGON:
         delete geo_string_buffer_;
         break;
       default:
@@ -471,6 +473,7 @@ class TypedImportBuffer : boost::noncopyable {
       case kPOINT:
       case kLINESTRING:
       case kPOLYGON:
+      case kMULTIPOLYGON:
         geo_string_buffer_->clear();
         break;
       default:
