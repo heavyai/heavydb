@@ -170,7 +170,7 @@ void FileMgr::init(const size_t num_reader_threads) {
     }
     int64_t queue_time_ms = timer_stop(clock_begin);
 
-    LOG(INFO) << "Completed Reading table's file metadata, Elasped time : " << queue_time_ms << "ms Epoch: " << epoch_
+    LOG(INFO) << "Completed Reading table's file metadata, Elapsed time : " << queue_time_ms << "ms Epoch: " << epoch_
               << " files read: " << fileCount << " table location: '" << fileMgrBasePath_ << "'";
 
     /* Sort headerVec so that all HeaderInfos
