@@ -214,6 +214,20 @@ class SQLTypeInfo {
     }
     return get_size();
   }
+  inline int get_physical_cols() const {
+    switch (type) {
+      case kPOINT:
+      case kLINESTRING:
+        return 1;
+      case kPOLYGON:
+        return 2;
+      case kMULTIPOLYGON:
+        return 3;
+      default:
+        break;
+    }
+    return 0;
+  }
   inline void set_type(SQLTypes t) { type = t; }
   inline void set_subtype(SQLTypes st) { subtype = st; }
   inline void set_dimension(int d) { dimension = d; }

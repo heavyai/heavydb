@@ -1404,7 +1404,8 @@ static ImportStatus import_thread(int thread_id,
       int phys_cols = 0;
       int point_cols = 0;
       for (const auto cd : col_descs) {
-        phys_cols += cd->numPhysicalColumns;
+        const auto& col_ti = cd->columnType;
+        phys_cols += col_ti.get_physical_cols();
         if (cd->columnType.get_type() == kPOINT)
           point_cols++;
       }
@@ -1430,8 +1431,8 @@ static ImportStatus import_thread(int thread_id,
             std::string wkt{row[import_idx]};
             ++import_idx;
             ++col_idx;
-            if (cd->numPhysicalColumns > 0) {
-              auto col_ti = cd->columnType;
+            const auto& col_ti = cd->columnType;
+            if (col_ti.get_physical_cols() > 0) {
               CHECK(IS_GEO(col_ti.get_type()));
               std::vector<double> coords;
               std::vector<int> ring_sizes;

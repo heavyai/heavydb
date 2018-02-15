@@ -1071,7 +1071,6 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog* cat, const Colu
   col_type.col_type.precision = cd->columnType.get_precision();
   col_type.col_type.scale = cd->columnType.get_scale();
   col_type.is_system = cd->isSystemCol;
-  col_type.is_physical = cd->isPhysicalCol;
   if (cd->columnType.get_compression() == EncodingType::kENCODING_DICT && cat != nullptr) {
     // have to get the actual size of the encoding from the dictionary definition
     const int dict_id = cd->columnType.get_comp_param();

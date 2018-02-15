@@ -298,11 +298,10 @@ std::vector<ColumnLazyFetchInfo> QueryExecutionContext::getColLazyFetchInfo(
       auto cd = (col_var->get_table_id() > 0)
                     ? get_column_descriptor(col_id, col_var->get_table_id(), *executor_->catalog_)
                     : nullptr;
-      if (cd && cd->numPhysicalColumns > 0) {
-        for (auto i = 0; i < cd->numPhysicalColumns; i++) {
+      if (cd && IS_GEO(cd->columnType.get_type())) {
+        for (auto i = 0; i < cd->columnType.get_physical_cols(); i++) {
           auto cd0 = get_column_descriptor(col_id + i + 1, col_var->get_table_id(), *executor_->catalog_);
           auto col0_ti = cd0->columnType;
-          CHECK(cd0->isPhysicalCol);
           CHECK(!cd0->isVirtualCol);
           auto col0_var = makeExpr<Analyzer::ColumnVar>(col0_ti, col_var->get_table_id(), cd0->columnId, rte_idx);
           auto local_col0_id = executor_->getLocalColumnId(col0_var.get(), false);

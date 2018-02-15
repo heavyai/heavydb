@@ -32,16 +32,12 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
   const auto table_desc = scan_source->getTableDescriptor();
   const auto gcd = cat_.getMetadataForColumn(table_desc->tableId, rex_input->getIndex() + 1);
   CHECK(gcd);
-  CHECK(!gcd->isPhysicalCol);
-  CHECK_GT(gcd->numPhysicalColumns, 0);
   ti = gcd->columnType;
   CHECK(IS_GEO(ti.get_type()));
   // Translate geo column reference to a list of physical column refs
-  for (auto i = 0; i < gcd->numPhysicalColumns; i++) {
+  for (auto i = 0; i < ti.get_physical_cols(); i++) {
     const auto pcd = cat_.getMetadataForColumn(table_desc->tableId, rex_input->getIndex() + 1 + i + 1);
     auto pcol_ti = pcd->columnType;
-    CHECK(pcd->isPhysicalCol);
-    CHECK(!pcd->isVirtualCol);
     args.push_back(std::make_shared<Analyzer::ColumnVar>(pcol_ti, table_desc->tableId, pcd->columnId, rte_idx));
   }
   return args;

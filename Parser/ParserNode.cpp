@@ -1590,7 +1590,8 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
     tlist.emplace_back(new Analyzer::TargetEntry("", e, false));
     ++it;
 
-    if (cd->numPhysicalColumns > 0) {
+    const auto& col_ti = cd->columnType;
+    if (col_ti.get_physical_cols() > 0) {
       CHECK(cd->columnType.is_geometry());
       auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
       CHECK(c);
@@ -1607,7 +1608,7 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
       // TODO: check if import SRID matches columns SRID, may need to transform before inserting
 
       const ColumnDescriptor* cd_coords = catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + 1);
-      CHECK(cd_coords && cd_coords->isPhysicalCol);
+      CHECK(cd_coords);
       CHECK_EQ(cd_coords->columnType.get_type(), kARRAY);
       CHECK_EQ(cd_coords->columnType.get_subtype(), kDOUBLE);
       std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
@@ -1625,7 +1626,7 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
         // Put ring sizes array into separate physical column
         const ColumnDescriptor* cd_ring_sizes =
             catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + 2);
-        CHECK(cd_ring_sizes && cd_ring_sizes->isPhysicalCol);
+        CHECK(cd_ring_sizes);
         CHECK_EQ(cd_ring_sizes->columnType.get_type(), kARRAY);
         CHECK_EQ(cd_ring_sizes->columnType.get_subtype(), kINT);
         std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
@@ -1643,7 +1644,7 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
           // Put poly_rings array into separate physical column
           const ColumnDescriptor* cd_poly_rings =
               catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + 3);
-          CHECK(cd_poly_rings && cd_poly_rings->isPhysicalCol);
+          CHECK(cd_poly_rings);
           CHECK_EQ(cd_poly_rings->columnType.get_type(), kARRAY);
           CHECK_EQ(cd_poly_rings->columnType.get_subtype(), kINT);
           std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;

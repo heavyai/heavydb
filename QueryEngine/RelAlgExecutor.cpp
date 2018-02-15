@@ -526,11 +526,10 @@ class RexUsedInputsVisitor : public RexVisitor<std::unordered_set<const RexInput
       if (td) {
         const auto col_id = rex_input->getIndex();
         const auto cd = cat_.getMetadataForColumn(td->tableId, col_id + 1);
-        if (cd && cd->numPhysicalColumns) {
-          auto col_ti = cd->columnType;
-          CHECK(IS_GEO(col_ti.get_type()));
+        if (cd && cd->columnType.get_physical_cols() > 0) {
+          CHECK(IS_GEO(cd->columnType.get_type()));
           std::unordered_set<const RexInput*> synthesized_physical_inputs;
-          for (auto i = 0; i < cd->numPhysicalColumns; i++) {
+          for (auto i = 0; i < cd->columnType.get_physical_cols(); i++) {
             auto physical_input = new RexInput(scan_ra, col_id + 1 + i);
             synthesized_physical_inputs.insert(physical_input);
           }

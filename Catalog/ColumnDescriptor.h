@@ -37,10 +37,8 @@ struct ColumnDescriptor {
   bool isSystemCol;
   bool isVirtualCol;
   std::string virtualExpr;
-  bool isPhysicalCol;
-  int numPhysicalColumns;
 
-  ColumnDescriptor() : isSystemCol(false), isVirtualCol(false), isPhysicalCol(false), numPhysicalColumns(0) {}
+  ColumnDescriptor() : isSystemCol(false), isVirtualCol(false) {}
   ColumnDescriptor(const int tableId, const int columnId, const std::string& columnName, const SQLTypeInfo columnType)
       : tableId(tableId),
         columnId(columnId),
@@ -48,9 +46,7 @@ struct ColumnDescriptor {
         sourceName(columnName),
         columnType(columnType),
         isSystemCol(false),
-        isVirtualCol(false),
-        isPhysicalCol(false),
-        numPhysicalColumns(0) {}
+        isVirtualCol(false) {}
 };
 
 #endif  // COLUMN_DESCRIPTOR

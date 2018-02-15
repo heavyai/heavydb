@@ -279,7 +279,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
       "CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype "
       "integer, colsubtype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, "
       "comp_param integer, size integer, chunks text, is_systemcol boolean, is_virtualcol boolean, virtual_expr text, "
-      "is_physicalcol boolean, phys_columns integer, primary key(tableid, columnid), unique(tableid, name))");
+      "primary key(tableid, columnid), unique(tableid, name))");
   dbConn.query("CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text)");
   dbConn.query(
       "CREATE TABLE mapd_frontend_views (viewid integer primary key, name text unique, userid integer references "
@@ -1265,7 +1265,7 @@ void Catalog::buildMaps() {
   }
   string columnQuery(
       "SELECT tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, compression, comp_param, "
-      "size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_physicalcol, phys_columns from mapd_columns");
+      "size, chunks, is_systemcol, is_virtualcol, virtual_expr from mapd_columns");
   sqliteConnector_.query(columnQuery);
   numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
@@ -1285,8 +1285,6 @@ void Catalog::buildMaps() {
     cd->isSystemCol = sqliteConnector_.getData<bool>(r, 12);
     cd->isVirtualCol = sqliteConnector_.getData<bool>(r, 13);
     cd->virtualExpr = sqliteConnector_.getData<string>(r, 14);
-    cd->isPhysicalCol = sqliteConnector_.getData<bool>(r, 15);
-    cd->numPhysicalColumns = sqliteConnector_.getData<int>(r, 16);
     ColumnKey columnKey(cd->tableId, to_upper(cd->columnName));
     columnDescriptorMap_[columnKey] = cd;
     ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
@@ -1616,15 +1614,22 @@ void Catalog::getAllColumnMetadataForTable(const TableDescriptor* td,
                                            const bool fetchSystemColumns,
                                            const bool fetchVirtualColumns,
                                            const bool fetchPhysicalColumns) const {
+  int32_t skip_physical_cols = 0;
   for (int i = 1; i <= td->nColumns; i++) {
+    if (!fetchPhysicalColumns && skip_physical_cols > 0) {
+      --skip_physical_cols;
+      continue;
+    }
     const ColumnDescriptor* cd = getMetadataForColumn(td->tableId, i);
     assert(cd != nullptr);
     if (!fetchSystemColumns && cd->isSystemCol)
       continue;
     if (!fetchVirtualColumns && cd->isVirtualCol)
       continue;
-    if (!fetchPhysicalColumns && cd->isPhysicalCol)
-      continue;
+    if (!fetchPhysicalColumns) {
+      const auto& col_ti = cd->columnType;
+      skip_physical_cols = col_ti.get_physical_cols();
+    }
     columnDescriptors.push_back(cd);
   }
 }
@@ -1676,11 +1681,10 @@ void Catalog::createTable(TableDescriptor& td,
     if (cd.columnName == "rowid") {
       throw std::runtime_error("Cannot create column with name rowid. rowid is a system defined column.");
     }
-    auto col_ti = cd.columnType;
+    const auto& col_ti = cd.columnType;
     if (IS_GEO(col_ti.get_type())) {
       switch (col_ti.get_type()) {
         case kPOINT: {
-          cd.numPhysicalColumns = 1;
           columns.push_back(cd);
 
           ColumnDescriptor physical_cd_coords;
@@ -1689,13 +1693,13 @@ void Catalog::createTable(TableDescriptor& td,
           ti.set_subtype(kDOUBLE);
           ti.set_size(2 * sizeof(double));
           physical_cd_coords.columnType = ti;
-          physical_cd_coords.isPhysicalCol = true;
           columns.push_back(physical_cd_coords);
+
+          // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
 
           break;
         }
         case kLINESTRING: {
-          cd.numPhysicalColumns = 1;
           columns.push_back(cd);
 
           ColumnDescriptor physical_cd_coords;
@@ -1703,13 +1707,13 @@ void Catalog::createTable(TableDescriptor& td,
           SQLTypeInfo ti = SQLTypeInfo(kARRAY, true);
           ti.set_subtype(kDOUBLE);
           physical_cd_coords.columnType = ti;
-          physical_cd_coords.isPhysicalCol = true;
           columns.push_back(physical_cd_coords);
+
+          // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
 
           break;
         }
         case kPOLYGON: {
-          cd.numPhysicalColumns = 2;
           columns.push_back(cd);
 
           ColumnDescriptor physical_cd_coords;
@@ -1717,7 +1721,6 @@ void Catalog::createTable(TableDescriptor& td,
           SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, true);
           coords_ti.set_subtype(kDOUBLE);
           physical_cd_coords.columnType = coords_ti;
-          physical_cd_coords.isPhysicalCol = true;
           columns.push_back(physical_cd_coords);
 
           ColumnDescriptor physical_cd_ring_sizes;
@@ -1725,13 +1728,13 @@ void Catalog::createTable(TableDescriptor& td,
           SQLTypeInfo ring_sizes_ti = SQLTypeInfo(kARRAY, true);
           ring_sizes_ti.set_subtype(kINT);
           physical_cd_ring_sizes.columnType = ring_sizes_ti;
-          physical_cd_ring_sizes.isPhysicalCol = true;
           columns.push_back(physical_cd_ring_sizes);
+
+          // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
 
           break;
         }
         case kMULTIPOLYGON: {
-          cd.numPhysicalColumns = 3;
           columns.push_back(cd);
 
           ColumnDescriptor physical_cd_coords;
@@ -1739,7 +1742,6 @@ void Catalog::createTable(TableDescriptor& td,
           SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, true);
           coords_ti.set_subtype(kDOUBLE);
           physical_cd_coords.columnType = coords_ti;
-          physical_cd_coords.isPhysicalCol = true;
           columns.push_back(physical_cd_coords);
 
           ColumnDescriptor physical_cd_ring_sizes;
@@ -1747,7 +1749,6 @@ void Catalog::createTable(TableDescriptor& td,
           SQLTypeInfo ring_sizes_ti = SQLTypeInfo(kARRAY, true);
           ring_sizes_ti.set_subtype(kINT);
           physical_cd_ring_sizes.columnType = ring_sizes_ti;
-          physical_cd_ring_sizes.isPhysicalCol = true;
           columns.push_back(physical_cd_ring_sizes);
 
           ColumnDescriptor physical_cd_poly_rings;
@@ -1755,8 +1756,9 @@ void Catalog::createTable(TableDescriptor& td,
           SQLTypeInfo poly_rings_ti = SQLTypeInfo(kARRAY, true);
           poly_rings_ti.set_subtype(kINT);
           physical_cd_poly_rings.columnType = poly_rings_ti;
-          physical_cd_poly_rings.isPhysicalCol = true;
           columns.push_back(physical_cd_poly_rings);
+
+          // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
 
           break;
         }
@@ -1820,12 +1822,10 @@ void Catalog::createTable(TableDescriptor& td,
         }
         sqliteConnector_.query_with_text_params(
             "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, "
-            "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_physicalcol, "
-            "phys_columns) "
+            "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr) "
             "VALUES (?, ?, ?, ?, ?, "
             "?, "
-            "?, ?, ?, ?, ?, ?, ?, ?, ?, "
-            "?, ?)",
+            "?, ?, ?, ?, ?, ?, ?, ?, ?)",
             std::vector<std::string>{std::to_string(td.tableId),
                                      std::to_string(colId),
                                      cd.columnName,
@@ -1840,9 +1840,7 @@ void Catalog::createTable(TableDescriptor& td,
                                      "",
                                      std::to_string(cd.isSystemCol),
                                      std::to_string(cd.isVirtualCol),
-                                     cd.virtualExpr,
-                                     std::to_string(cd.isPhysicalCol),
-                                     std::to_string(cd.numPhysicalColumns)});
+                                     cd.virtualExpr});
         cd.tableId = td.tableId;
         cd.columnId = colId++;
         cds.push_back(cd);
