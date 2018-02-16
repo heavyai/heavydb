@@ -706,10 +706,9 @@ std::unordered_set<int> get_available_gpus(const Catalog_Namespace::Catalog& cat
 }
 
 size_t get_context_count(const ExecutorDeviceType device_type, const size_t cpu_count, const size_t gpu_count) {
-  return device_type == ExecutorDeviceType::GPU
-             ? gpu_count
-             : device_type == ExecutorDeviceType::Hybrid ? std::max(static_cast<size_t>(cpu_count), gpu_count)
-                                                         : static_cast<size_t>(cpu_count);
+  return device_type == ExecutorDeviceType::GPU ? gpu_count : device_type == ExecutorDeviceType::Hybrid
+                                                                  ? std::max(static_cast<size_t>(cpu_count), gpu_count)
+                                                                  : static_cast<size_t>(cpu_count);
 }
 
 std::string get_table_name(const InputDescriptor& input_desc, const Catalog_Namespace::Catalog& cat) {
@@ -805,9 +804,11 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
   ColumnCacheMap column_cache;
   auto join_info = JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}, "");
   if (ra_exe_unit.input_descs.size() > 1 && ra_exe_unit.inner_joins.empty()) {
+    OOM_TRACE_PUSH();
     join_info = chooseJoinType(ra_exe_unit.inner_join_quals, query_infos, ra_exe_unit, device_type, column_cache);
   }
   if (join_info.join_impl_type_ == JoinImplType::Loop && !ra_exe_unit.outer_join_quals.empty()) {
+    OOM_TRACE_PUSH();
     join_info = chooseJoinType(ra_exe_unit.outer_join_quals, query_infos, ra_exe_unit, device_type, column_cache);
   }
 
@@ -920,6 +921,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
     }
     if (is_agg) {
       try {
+        OOM_TRACE_PUSH();
         return collectAllDeviceResults(execution_dispatch, ra_exe_unit.target_exprs, query_mem_desc, row_set_mem_owner);
       } catch (ReductionRanOutOfSlots&) {
         *error_code = ERR_OUT_OF_SLOTS;
@@ -933,6 +935,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
         continue;
       }
     }
+    OOM_TRACE_PUSH();
     return resultsUnion(execution_dispatch);
 
   } while (static_cast<size_t>(crt_min_byte_width) <= sizeof(int64_t));
@@ -1712,6 +1715,7 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
     return ERR_INTERRUPTED;
   }
   if (device_type == ExecutorDeviceType::CPU) {
+    OOM_TRACE_PUSH();
     out_vec = query_exe_context->launchCpuCode(ra_exe_unit,
                                                compilation_result.native_functions,
                                                hoist_literals,
@@ -1728,6 +1732,7 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
     output_memory_scope.reset(new OutVecOwner(out_vec));
   } else {
     try {
+      OOM_TRACE_PUSH();
       out_vec = query_exe_context->launchGpuCode(ra_exe_unit,
                                                  compilation_result.native_functions,
                                                  hoist_literals,
@@ -2339,13 +2344,16 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
   CHECK_GT(device_count, 0);
   try {
     if (dynamic_cast<const Analyzer::ExpressionTuple*>(qual_bin_oper->get_left_operand())) {
+      OOM_TRACE_PUSH();
       join_hash_table = BaselineJoinHashTable::getInstance(
           qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, column_cache, this);
     } else {
       try {
+        OOM_TRACE_PUSH();
         join_hash_table = JoinHashTable::getInstance(
             qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, column_cache, this);
       } catch (TooManyHashEntries&) {
+        OOM_TRACE_PUSH();
         join_hash_table = BaselineJoinHashTable::getInstance(coalesce_singleton_equi_join(qual_bin_oper),
                                                              query_infos,
                                                              ra_exe_unit,

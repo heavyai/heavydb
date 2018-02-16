@@ -984,6 +984,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const std::vector<InputTab
                                                       ColumnCacheMap& column_cache,
                                                       RenderInfo* render_info) {
   nukeOldState(allow_lazy_fetch, join_info, query_infos, ra_exe_unit);
+  OOM_TRACE_PUSH(+": " + (co.device_type_ == ExecutorDeviceType::GPU ? "gpu" : "cpu"));
 
   GroupByAndAggregate group_by_and_aggregate(this,
                                              co.device_type_,

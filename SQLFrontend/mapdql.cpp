@@ -196,7 +196,6 @@ size_t get_row_count(const TQueryResult& query_result) {
   return query_result.row_set.columns.front().nulls.size();
 }
 
-
 void get_table_epoch(ClientContext& context, const std::string& table_specifier) {
   if (table_specifier.size() == 0) {
     std::cerr << "get table epoch requires table to be specified by name or by db_id:table_id" << std::endl;
@@ -1451,3 +1450,5 @@ int main(int argc, char** argv) {
 
   return 0;
 }
+
+void oom_trace_dump() {}

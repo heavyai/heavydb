@@ -125,6 +125,7 @@ BufferFragment IteratorTable::transformGroupByBuffer(const int64_t* group_by_buf
     return {nullptr, size_t(0)};
   }
   CHECK(row_set_mem_owner_);
+  OOM_TRACE_PUSH(+": scratch_buffer " + std::to_string(scratch_buffer.size() * sizeof(int64_t)));
   auto table_frag = reinterpret_cast<int64_t*>(checked_malloc(scratch_buffer.size() * sizeof(int64_t)));
   memcpy(table_frag, &scratch_buffer[0], scratch_buffer.size() * sizeof(int64_t));
   // TODO(miyu): free old buffer held by row_set_mem_owner_ if proved safe.
@@ -194,6 +195,8 @@ void IteratorTable::fuse(const IteratorTable& that) {
   }
 
   const auto col_count = query_mem_desc_.agg_col_widths.size();
+  OOM_TRACE_PUSH(+": fused_buffer " +
+                 std::to_string(((this_entry_count + that_entry_count) * col_count) * sizeof(int64_t)));
   auto fused_buffer =
       reinterpret_cast<int64_t*>(checked_malloc(((this_entry_count + that_entry_count) * col_count) * sizeof(int64_t)));
   auto write_ptr = fused_buffer;

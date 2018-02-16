@@ -932,6 +932,7 @@ void JoinHashTable::initOneToManyHashTable(const ChunkKey& chunk_key,
   auto& data_mgr = executor_->getCatalog()->get_dataMgr();
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
     const size_t total_count = 2 * hash_entry_count + num_elements;
+    OOM_TRACE_PUSH(+": total_count " + std::to_string(total_count));
     gpu_hash_table_buff_[device_id] = alloc_gpu_mem(&data_mgr, total_count * sizeof(int32_t), device_id, nullptr);
   }
 #endif

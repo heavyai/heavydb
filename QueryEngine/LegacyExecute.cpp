@@ -439,6 +439,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                        {},
                                        false};
   ColumnCacheMap column_cache;
+  OOM_TRACE_PUSH();
   auto compilation_result =
       compileWorkUnit({},
                       res_ra_unit,

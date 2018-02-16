@@ -30,6 +30,7 @@ CUdeviceptr alloc_gpu_mem(Data_Namespace::DataMgr* data_mgr,
   if (render_allocator) {
     return reinterpret_cast<CUdeviceptr>(render_allocator->alloc(num_bytes));
   }
+  OOM_TRACE_PUSH(+": device_id " + std::to_string(device_id) + ", num_bytes " + std::to_string(num_bytes));
   auto ab = alloc_gpu_abstract_buffer(data_mgr, num_bytes, device_id);
   return reinterpret_cast<CUdeviceptr>(ab->getMemoryPtr());
 }
@@ -278,6 +279,7 @@ int8_t* ThrustAllocator::allocate(std::ptrdiff_t num_bytes) {
     return reinterpret_cast<int8_t*>(ptr);
   }
 #endif  // HAVE_CUDA
+  OOM_TRACE_PUSH(+": device_id " + std::to_string(device_id_) + ", num_bytes " + std::to_string(num_bytes));
   Data_Namespace::AbstractBuffer* ab = alloc_gpu_abstract_buffer(data_mgr_, num_bytes, device_id_);
   int8_t* raw_ptr = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
   CHECK(!raw_to_ab_ptr_.count(raw_ptr));
@@ -309,6 +311,7 @@ int8_t* ThrustAllocator::allocateScopedBuffer(std::ptrdiff_t num_bytes) {
     return reinterpret_cast<int8_t*>(ptr);
   }
 #endif  // HAVE_CUDA
+  OOM_TRACE_PUSH(+": device_id " + std::to_string(device_id_) + ", num_bytes " + std::to_string(num_bytes));
   Data_Namespace::AbstractBuffer* ab = alloc_gpu_abstract_buffer(data_mgr_, num_bytes, device_id_);
   scoped_buffers_.push_back(ab);
   return reinterpret_cast<int8_t*>(ab->getMemoryPtr());

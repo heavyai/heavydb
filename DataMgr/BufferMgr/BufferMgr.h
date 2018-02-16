@@ -28,6 +28,7 @@
 #include <iostream>
 #include <map>
 #include <list>
+#include "../Shared/types.h"
 #include "../AbstractBuffer.h"
 #include "../AbstractBufferMgr.h"
 #include "BufferSeg.h"
@@ -35,9 +36,9 @@
 
 class OutOfMemory : public std::runtime_error {
  public:
-  OutOfMemory() : std::runtime_error("OutOfMemory") {}
+  OutOfMemory() : std::runtime_error("OutOfMemory") { OOM_TRACE_DUMP; }
 
-  OutOfMemory(const std::string& err) : std::runtime_error(err) {}
+  OutOfMemory(const std::string& err) : std::runtime_error(err) { OOM_TRACE_DUMP; }
 };
 
 class FailedToCreateFirstSlab : public OutOfMemory {

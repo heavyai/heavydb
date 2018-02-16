@@ -20,11 +20,14 @@
 #include <cstdlib>
 #include <string>
 #include <stdexcept>
+#include "../Shared/types.h"
 
 class OutOfHostMemory : public std::runtime_error {
  public:
   OutOfHostMemory(const size_t size)
-      : std::runtime_error("Failed to allocate " + std::to_string(size) + " bytes of memory") {}
+      : std::runtime_error("Failed to allocate " + std::to_string(size) + " bytes of memory") {
+    OOM_TRACE_DUMP;
+  }
 };
 
 inline void* checked_malloc(const size_t size) {

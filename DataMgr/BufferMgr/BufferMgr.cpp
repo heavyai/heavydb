@@ -30,6 +30,23 @@
 
 using namespace std;
 
+static thread_local std::vector<std::string> oom_trace;
+
+void oom_trace_dump() {
+  std::ostringstream oss;
+  for (const auto& t : oom_trace)
+    oss << t << std::endl;
+  LOG(INFO) << "OOM trace:" << std::endl << oss.str();
+}
+
+void oom_trace_push(const std::string& trace) {
+  oom_trace.push_back(trace);
+}
+
+void oom_trace_pop() {
+  oom_trace.pop_back();
+}
+
 namespace Buffer_Namespace {
 
 std::string BufferMgr::keyToString(const ChunkKey& key) {

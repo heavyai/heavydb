@@ -150,6 +150,7 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
 
   const auto thread_count = device_type == ExecutorDeviceType::GPU ? executor->blockSize() * executor->gridSize() : 1;
   const auto group_buffer_size = query_mem_desc_.getBufferSizeBytes(ra_exe_unit, thread_count, device_type);
+  OOM_TRACE_PUSH(+": group_buffer_size " + std::to_string(group_buffer_size));
   std::unique_ptr<int64_t, CheckedAllocDeleter> group_by_buffer_template(
       static_cast<int64_t*>(checked_malloc(group_buffer_size)));
   if (!query_mem_desc_.lazyInitGroups(device_type)) {
@@ -185,6 +186,7 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
   std::unique_ptr<int64_t, CheckedAllocDeleter> group_by_small_buffer_template;
   if (query_mem_desc_.getSmallBufferSizeBytes()) {
     CHECK(!output_columnar_ && !query_mem_desc_.keyless_hash);
+    OOM_TRACE_PUSH(+": getSmallBufferSizeBytes " + std::to_string(query_mem_desc_.getSmallBufferSizeBytes()));
     group_by_small_buffer_template.reset(
         static_cast<int64_t*>(checked_malloc(query_mem_desc_.getSmallBufferSizeBytes())));
     initGroups(group_by_small_buffer_template.get(), &init_agg_vals[0], query_mem_desc_.entry_count_small, false, 1);
@@ -201,9 +203,9 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
   const auto actual_small_buffer_size = query_mem_desc_.getSmallBufferSizeBytes();
   const auto group_buffers_count = query_mem_desc_.group_col_widths.empty() ? 1 : num_buffers_;
   for (size_t i = 0; i < group_buffers_count; i += step) {
+    OOM_TRACE_PUSH(+": group_by_buffer " + std::to_string(actual_group_buffer_size + actual_small_buffer_size));
     auto group_by_buffer =
         alloc_group_by_buffer(actual_group_buffer_size + actual_small_buffer_size, render_allocator_map);
-
     if (!query_mem_desc_.lazyInitGroups(device_type)) {
       memcpy(group_by_buffer + index_buffer_qw, group_by_buffer_template.get(), group_buffer_size);
     }
@@ -276,6 +278,7 @@ void QueryExecutionContext::allocateCountDistinctGpuMem() {
   count_distinct_bitmap_mem_ = alloc_gpu_mem(data_mgr, count_distinct_bitmap_mem_bytes_, device_id_, nullptr);
   data_mgr->cudaMgr_->zeroDeviceMem(
       reinterpret_cast<int8_t*>(count_distinct_bitmap_mem_), count_distinct_bitmap_mem_bytes_, device_id_);
+  OOM_TRACE_PUSH(+": count_distinct_bitmap_mem_bytes_ " + std::to_string(count_distinct_bitmap_mem_bytes_));
   count_distinct_bitmap_crt_ptr_ = count_distinct_bitmap_host_mem_ =
       static_cast<int8_t*>(checked_malloc(count_distinct_bitmap_mem_bytes_));
   row_set_mem_owner_->addCountDistinctBuffer(count_distinct_bitmap_host_mem_, count_distinct_bitmap_mem_bytes_, true);
@@ -472,6 +475,7 @@ int64_t QueryExecutionContext::allocateCountDistinctBitmap(const size_t bitmap_b
     row_set_mem_owner_->addCountDistinctBuffer(ptr, bitmap_byte_sz, false);
     return reinterpret_cast<int64_t>(ptr);
   }
+  OOM_TRACE_PUSH(+": count_distinct_buffer " + std::to_string(bitmap_byte_sz));
   auto count_distinct_buffer = static_cast<int8_t*>(checked_calloc(bitmap_byte_sz, 1));
   row_set_mem_owner_->addCountDistinctBuffer(count_distinct_buffer, bitmap_byte_sz, true);
   return reinterpret_cast<int64_t>(count_distinct_buffer);
@@ -696,6 +700,7 @@ std::pair<CUdeviceptr, CUdeviceptr> QueryExecutionContext::prepareTopNHeapsDevBu
     const unsigned grid_size_x) const {
   const auto thread_count = block_size_x * grid_size_x;
   const auto total_buff_size = streaming_top_n::get_heap_size(query_mem_desc_.getRowSize(), n, thread_count);
+  OOM_TRACE_PUSH();
   CUdeviceptr dev_buffer = alloc_gpu_mem(data_mgr, total_buff_size, device_id, nullptr);
 
   std::vector<CUdeviceptr> dev_buffers(thread_count);
@@ -774,6 +779,7 @@ GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(Data_Namespace::Da
       copy_to_gpu(data_mgr, col_widths_dev_ptr, &compact_col_widths[0], col_count * sizeof(int8_t), device_id);
     }
     const int8_t warp_count = query_mem_desc_.interleavedBins(ExecutorDeviceType::GPU) ? executor_->warpSize() : 1;
+    OOM_TRACE_PUSH();
     for (size_t i = 0; i < group_by_buffers_.size(); i += step) {
       if (output_columnar_) {
         init_columnar_group_by_buffer_on_device(reinterpret_cast<int64_t*>(group_by_dev_buffer),
@@ -931,6 +937,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
     }
 
     if (hoist_literals) {
+      OOM_TRACE_PUSH();
       checkCudaErrors(cuLaunchKernel(cu_func,
                                      grid_size_x,
                                      grid_size_y,
@@ -943,6 +950,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
                                      &param_ptrs[0],
                                      nullptr));
     } else {
+      OOM_TRACE_PUSH();
       param_ptrs.erase(param_ptrs.begin() + LITERALS);  // TODO(alex): remove
       checkCudaErrors(cuLaunchKernel(cu_func,
                                      grid_size_x,
@@ -1010,6 +1018,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
       estimator_result_set_.reset(new ResultSet(ra_exe_unit.estimator, ExecutorDeviceType::GPU, device_id, data_mgr));
       out_vec_dev_buffers.push_back(reinterpret_cast<CUdeviceptr>(estimator_result_set_->getDeviceEstimatorBuffer()));
     } else {
+      OOM_TRACE_PUSH();
       for (size_t i = 0; i < agg_col_count; ++i) {
         auto out_vec_dev_buffer =
             num_out_frags
@@ -1161,6 +1170,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
 
   CHECK_EQ(num_rows.size(), col_buffers.size());
   std::vector<int64_t> flatened_num_rows;
+  OOM_TRACE_PUSH();
   for (auto& nums : num_rows) {
     flatened_num_rows.insert(flatened_num_rows.end(), nums.begin(), nums.end());
   }
@@ -1197,6 +1207,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
                               const uint32_t* num_tables,
                               const int64_t* join_hash_tables_ptr);
     if (is_group_by) {
+      OOM_TRACE_PUSH();
       reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
                                                     &num_fragments,
                                                     &frag_stride,
@@ -1212,6 +1223,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
                                                     &num_tables,
                                                     join_hash_tables_ptr);
     } else {
+      OOM_TRACE_PUSH();
       reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
                                                     &num_fragments,
                                                     &frag_stride,
@@ -1242,6 +1254,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
                               const uint32_t* num_tables,
                               const int64_t* join_hash_tables_ptr);
     if (is_group_by) {
+      OOM_TRACE_PUSH();
       reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
                                                     &num_fragments,
                                                     &frag_stride,
@@ -1256,6 +1269,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
                                                     &num_tables,
                                                     join_hash_tables_ptr);
     } else {
+      OOM_TRACE_PUSH();
       reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
                                                     &num_fragments,
                                                     &frag_stride,
