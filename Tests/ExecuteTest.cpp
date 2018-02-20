@@ -3913,6 +3913,25 @@ TEST(Truncate, Count) {
   run_ddl_statement("drop table trunc_test;");
 }
 
+TEST(Select, Deleted) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test_inner_deleted;", dt);
+    c("SELECT test.x, test_inner_deleted.x FROM test LEFT JOIN test_inner_deleted ON test.x <> test_inner_deleted.x "
+      "ORDER BY test.x ASC;",
+      dt);
+    c("SELECT test.x, test_inner_deleted.x FROM test JOIN test_inner_deleted ON test.x <> test_inner_deleted.x ORDER "
+      "BY test.x ASC;",
+      dt);
+    c("SELECT test.x, test_inner_deleted.x FROM test LEFT JOIN test_inner_deleted ON test.x = test_inner_deleted.x "
+      "ORDER BY test.x ASC;",
+      dt);
+    c("SELECT test.x, test_inner_deleted.x FROM test JOIN test_inner_deleted ON test.x = test_inner_deleted.x ORDER BY "
+      "test.x ASC;",
+      dt);
+  }
+}
+
 namespace {
 
 int create_and_populate_tables() {
@@ -3933,6 +3952,29 @@ int create_and_populate_tables() {
     const std::string insert_query{"INSERT INTO test_inner VALUES(7, 43, 'foo');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
+  }
+  try {
+    const std::string drop_old_test_inner_deleted{"DROP TABLE IF EXISTS test_inner_deleted;"};
+    run_ddl_statement(drop_old_test_inner_deleted);
+    g_sqlite_comparator.query(drop_old_test_inner_deleted);
+    std::string columns_definition{"x int not null, y int, str text encoding dict, deleted boolean"};
+    const auto create_test_inner_deleted =
+        build_create_table_statement(columns_definition, "test_inner_deleted", {"", 0}, {}, 2);
+    run_ddl_statement(create_test_inner_deleted);
+    auto& cat = g_session->get_catalog();
+    const auto td = cat.getMetadataForTable("test_inner_deleted");
+    CHECK(td);
+    const auto cd = cat.getMetadataForColumn(td->tableId, "deleted");
+    CHECK(cd);
+    cat.setDeletedColumn(td, cd);
+    g_sqlite_comparator.query("CREATE TABLE test_inner_deleted(x int not null, y int, str text);");
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_inner_deleted'";
+    return -EEXIST;
+  }
+  {
+    const std::string insert_query{"INSERT INTO test_inner_deleted VALUES(7, 43, 'foo', 't');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
   }
   try {
     const std::string drop_old_test{"DROP TABLE IF EXISTS test_inner_x;"};
@@ -4306,6 +4348,9 @@ void drop_tables() {
   const std::string drop_test_inner_x{"DROP TABLE test_inner_x;"};
   run_ddl_statement(drop_test_inner_x);
   g_sqlite_comparator.query(drop_test_inner_x);
+  const std::string drop_test_inner_deleted{"DROP TABLE test_inner_deleted;"};
+  run_ddl_statement(drop_test_inner_deleted);
+  g_sqlite_comparator.query(drop_test_inner_deleted);
   const std::string drop_bar{"DROP TABLE bar;"};
   run_ddl_statement(drop_bar);
   g_sqlite_comparator.query(drop_bar);
