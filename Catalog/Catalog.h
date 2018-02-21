@@ -67,75 +67,6 @@ class SharedDictionaryDef;
 
 namespace Catalog_Namespace {
 
-/**
- * @type RoleMap
- * @brief Maps role names to pointers to GroupRole class objects allocated on the heap
- */
-
-typedef std::map<std::string, Role*> RoleMap;
-
-/**
- * @type UserRoleMap
- * @brief Maps user IDs to pointers to UserRole class objects allocated on the heap
- */
-
-typedef std::map<int32_t, Role*> UserRoleMap;
-
-/**
- * @type TableDescriptorMap
- * @brief Maps table names to pointers to table descriptors allocated on the
- * heap
- */
-
-typedef std::map<std::string, TableDescriptor*> TableDescriptorMap;
-
-typedef std::map<int, TableDescriptor*> TableDescriptorMapById;
-
-/**
- * &type LogicalToPhysicalTableMap
- * @brief Maps logical to physical tables by table IDs
- */
-
-typedef std::map<int32_t, std::vector<int32_t>> LogicalToPhysicalTableMapById;
-
-/**
- * @type ColumnKey
- * @brief ColumnKey is composed of the integer tableId and the string name of the column
- */
-
-typedef std::tuple<int, std::string> ColumnKey;
-
-/**
- * @type ColumnDescriptorMap
- * @brief Maps a Column Key to column descriptors allocated on the heap
- */
-
-typedef std::map<ColumnKey, ColumnDescriptor*> ColumnDescriptorMap;
-
-typedef std::tuple<int, int> ColumnIdKey;
-typedef std::map<ColumnIdKey, ColumnDescriptor*> ColumnDescriptorMapById;
-
-typedef std::map<DictRef, std::unique_ptr<DictDescriptor>> DictDescriptorMapById;
-
-/**
- * @type FrontendViewDescriptorMap
- * @brief Maps frontend view names to pointers to frontend view descriptors allocated on the
- * heap
- */
-
-typedef std::map<std::string, FrontendViewDescriptor*> FrontendViewDescriptorMap;
-
-typedef std::map<int, FrontendViewDescriptor*> FrontendViewDescriptorMapById;
-
-/**
- * @type LinkDescriptorMap
- * @brief Maps links to pointers to link descriptors allocated on the heap
- */
-
-typedef std::map<std::string, LinkDescriptor*> LinkDescriptorMap;
-
-typedef std::map<int, LinkDescriptor*> LinkDescriptorMapById;
-
 /*
  * @type UserMetadata
  * @brief metadata for a mapd user
@@ -165,12 +96,6 @@ struct DBMetadata {
 #define MAPD_SYSTEM_DB "mapd"
 /* the mapd root user */
 #define MAPD_ROOT_USER "mapd"
-#define MAPD_ROOT_USER_ID 0
-#define MAPD_ROOT_USER_ID_STR "0"
-#define MAPD_ROOT_PASSWD_DEFAULT "HyperInteractive"
-#define DEFAULT_INITIAL_VERSION 1            // start at version 1
-#define MAPD_TEMP_TABLE_START_ID 1073741824  // 2^30, give room for over a billion non-temp tables
-#define MAPD_TEMP_DICT_START_ID 1073741824   // 2^30, give room for over a billion non-temp dictionaries
 
 /**
  * @type Catalog
@@ -294,6 +219,19 @@ class Catalog {
   static void remove(const std::string& dbName);
 
  protected:
+  typedef std::map<std::string, TableDescriptor*> TableDescriptorMap;
+  typedef std::map<int, TableDescriptor*> TableDescriptorMapById;
+  typedef std::map<int32_t, std::vector<int32_t>> LogicalToPhysicalTableMapById;
+  typedef std::tuple<int, std::string> ColumnKey;
+  typedef std::map<ColumnKey, ColumnDescriptor*> ColumnDescriptorMap;
+  typedef std::tuple<int, int> ColumnIdKey;
+  typedef std::map<ColumnIdKey, ColumnDescriptor*> ColumnDescriptorMapById;
+  typedef std::map<DictRef, std::unique_ptr<DictDescriptor>> DictDescriptorMapById;
+  typedef std::map<std::string, FrontendViewDescriptor*> FrontendViewDescriptorMap;
+  typedef std::map<int, FrontendViewDescriptor*> FrontendViewDescriptorMapById;
+  typedef std::map<std::string, LinkDescriptor*> LinkDescriptorMap;
+  typedef std::map<int, LinkDescriptor*> LinkDescriptorMapById;
+
   void CheckAndExecuteMigrations();
   void updateDictionaryNames();
   void updateTableDescriptorSchema();
@@ -426,6 +364,9 @@ class SysCatalog {
   }
 
  private:
+  typedef std::map<std::string, Role*> RoleMap;
+  typedef std::map<int32_t, Role*> UserRoleMap;
+
   SysCatalog() {}
   virtual ~SysCatalog();
 

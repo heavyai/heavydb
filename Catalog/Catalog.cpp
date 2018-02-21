@@ -60,6 +60,13 @@ bool g_aggregator{false};
 
 namespace Catalog_Namespace {
 
+const int MAPD_ROOT_USER_ID = 0;
+const std::string MAPD_ROOT_USER_ID_STR = "0";
+const std::string MAPD_ROOT_PASSWD_DEFAULT = "HyperInteractive";
+const int DEFAULT_INITIAL_VERSION = 1;            // start at version 1
+const int MAPD_TEMP_TABLE_START_ID = 1073741824;  // 2^30, give room for over a billion non-temp tables
+const int MAPD_TEMP_DICT_START_ID = 1073741824;   // 2^30, give room for over a billion non-temp dictionaries
+
 const std::string Catalog::physicalTableNameTag_("_shard_#");
 std::map<std::string, std::shared_ptr<Catalog>> Catalog::mapd_cat_map_;
 
@@ -405,6 +412,7 @@ void SysCatalog::createDefaultMapdRoles_unsafe() {
   }
 }
 
+// Note (max): I wonder why this one is necessary
 void SysCatalog::grantDefaultPrivilegesToRole_unsafe(const std::string& name, bool issuper) {
   DBObject dbObject(get_currentDB().dbName, DatabaseDBObjectType);
   auto* catalog = Catalog::get(get_currentDB().dbName).get();
@@ -563,8 +571,8 @@ bool SysCatalog::verifyDBObjectOwnership(const UserMetadata& user,
     Role* rl = instance().getMetadataForUserRole(user.userId);
     if (rl) {
       object.loadKey(catalog);
-      if (rl->findDbObject(object.getObjectKey()) &&
-          (rl->findDbObject(object.getObjectKey())->getOwningUserId() == user.userId)) {
+      auto* found_object = rl->findDbObject(object.getObjectKey());
+      if (found_object && found_object->getOwningUserId() == user.userId) {
         return true;
       }
     }
@@ -604,6 +612,7 @@ void SysCatalog::createRole_unsafe(const std::string& roleName, const bool& user
   rl = new GroupRole(to_upper(roleName), userPrivateRole);
   roleMap_[to_upper(roleName)] = rl;
 
+  // NOTE (max): Why create an empty privileges record for a role?
   /* grant none privileges to this role and add it to sqlite DB */
   DBObject dbObject(get_currentDB().dbName, DatabaseDBObjectType);
   auto* catalog = Catalog::get(get_currentDB().dbName).get();
