@@ -163,7 +163,7 @@ func init() {
 		viper.SetConfigFile(viper.GetString("config"))
 		err := viper.ReadInConfig()
 		if err != nil {
-			log.Fatal(err)
+			log.Warn("Error reading config file: " + err.Error())
 		}
 	}
 
