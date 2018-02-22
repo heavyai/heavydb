@@ -37,7 +37,12 @@ while (( $# )); do
             HTTPS_KEY="--key $1" ;;
         --config)
             shift
-            CONFIG="--config $1" ;;
+            if [ -e "$1" ]; then
+                CONFIG="--config $1"
+            else
+                echo "WARN: config file does not exist, ignoring: --config $1" >&2
+            fi
+            ;;
         --non-interactive)
             NON_INTERACTIVE=true ;;
         --verbose)
