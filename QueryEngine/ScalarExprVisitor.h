@@ -104,6 +104,10 @@ class ScalarExprVisitor {
     if (likelihood) {
       return visitLikelihood(likelihood);
     }
+    const auto offset_in_fragment = dynamic_cast<const Analyzer::OffsetInFragment*>(expr);
+    if (offset_in_fragment) {
+      return visitOffsetInFragment(offset_in_fragment);
+    }
     const auto agg = dynamic_cast<const Analyzer::AggExpr*>(expr);
     if (agg) {
       return visitAggExpr(agg);
@@ -225,6 +229,8 @@ class ScalarExprVisitor {
   }
 
   virtual T visitLikelihood(const Analyzer::LikelihoodExpr* likelihood) const { return visit(likelihood->get_arg()); }
+
+  virtual T visitOffsetInFragment(const Analyzer::OffsetInFragment*) const { return defaultResult(); }
 
   virtual T visitAggExpr(const Analyzer::AggExpr* agg) const {
     T result = defaultResult();

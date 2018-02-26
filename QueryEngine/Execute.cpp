@@ -759,22 +759,6 @@ RowSetPtr Executor::reduceSpeculativeTopN(const RelAlgExecutionUnit& ra_exe_unit
   return m.asRows(ra_exe_unit, row_set_mem_owner, query_mem_desc, this, top_n, desc);
 }
 
-namespace {
-
-size_t compute_buffer_entry_guess(const std::vector<InputTableInfo>& query_infos) {
-  using Fragmenter_Namespace::FragmentInfo;
-  size_t max_groups_buffer_entry_guess = 1;
-  for (const auto& query_info : query_infos) {
-    CHECK(!query_info.info.fragments.empty());
-    auto it = std::max_element(
-        query_info.info.fragments.begin(),
-        query_info.info.fragments.end(),
-        [](const FragmentInfo& f1, const FragmentInfo& f2) { return f1.getNumTuples() < f2.getNumTuples(); });
-    max_groups_buffer_entry_guess *= it->getNumTuples();
-  }
-  return max_groups_buffer_entry_guess;
-}
-
 std::unordered_set<int> get_available_gpus(const Catalog_Namespace::Catalog& cat) {
   std::unordered_set<int> available_gpus;
   if (cat.get_dataMgr().gpusPresent()) {
@@ -791,6 +775,22 @@ size_t get_context_count(const ExecutorDeviceType device_type, const size_t cpu_
   return device_type == ExecutorDeviceType::GPU ? gpu_count : device_type == ExecutorDeviceType::Hybrid
                                                                   ? std::max(static_cast<size_t>(cpu_count), gpu_count)
                                                                   : static_cast<size_t>(cpu_count);
+}
+
+namespace {
+
+size_t compute_buffer_entry_guess(const std::vector<InputTableInfo>& query_infos) {
+  using Fragmenter_Namespace::FragmentInfo;
+  size_t max_groups_buffer_entry_guess = 1;
+  for (const auto& query_info : query_infos) {
+    CHECK(!query_info.info.fragments.empty());
+    auto it = std::max_element(
+        query_info.info.fragments.begin(),
+        query_info.info.fragments.end(),
+        [](const FragmentInfo& f1, const FragmentInfo& f2) { return f1.getNumTuples() < f2.getNumTuples(); });
+    max_groups_buffer_entry_guess *= it->getNumTuples();
+  }
+  return max_groups_buffer_entry_guess;
 }
 
 std::string get_table_name(const InputDescriptor& input_desc, const Catalog_Namespace::Catalog& cat) {

@@ -106,6 +106,8 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateSign(const RexFunctionOperator*) const;
 
+  std::shared_ptr<Analyzer::Expr> translateOffsetInFragment() const;
+
   std::shared_ptr<Analyzer::Expr> translateFunction(const RexFunctionOperator*) const;
 
   std::vector<std::shared_ptr<Analyzer::Expr>> translateFunctionArgs(const RexFunctionOperator*) const;

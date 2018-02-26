@@ -248,6 +248,25 @@ struct hash<std::pair<int, int>> {
 
 }  // namespace std
 
+class UpdateLogForFragment {
+ public:
+  UpdateLogForFragment(const size_t fragment_index, const std::shared_ptr<ResultSet>& rs);
+
+  std::vector<TargetValue> getEntryAt(const size_t index) const;
+
+  size_t getEntryCount() const;
+
+  size_t getFragmentIndex() const;
+
+  SQLTypeInfo getColumnType(const size_t col_idx) const;
+
+  using Callback = std::function<void(const UpdateLogForFragment&)>;
+
+ private:
+  size_t fragment_index_;
+  std::shared_ptr<ResultSet> rs_;
+};
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
@@ -792,6 +811,14 @@ class Executor {
                             std::shared_ptr<RowSetMemoryOwner>,
                             RenderInfo* render_info,
                             const bool has_cardinality_estimation);
+
+  void executeUpdate(const RelAlgExecutionUnit& ra_exe_unit,
+                     const InputTableInfo& table_info,
+                     const CompilationOptions& co,
+                     const ExecutionOptions& eo,
+                     const Catalog_Namespace::Catalog& cat,
+                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                     const UpdateLogForFragment::Callback& cb);
 
   RowSetPtr executeExplain(const ExecutionDispatch&);
 
@@ -1508,5 +1535,9 @@ inline bool is_unnest(const Analyzer::Expr* expr) {
 }
 
 bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos, const RelAlgExecutionUnit& ra_exe_unit);
+
+std::unordered_set<int> get_available_gpus(const Catalog_Namespace::Catalog& cat);
+
+size_t get_context_count(const ExecutorDeviceType device_type, const size_t cpu_count, const size_t gpu_count);
 
 #endif  // QUERYENGINE_EXECUTE_H

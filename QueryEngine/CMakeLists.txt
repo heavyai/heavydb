@@ -23,6 +23,7 @@ set(query_engine_source_files
     DateTimePlusRewrite.cpp
     EquiJoinCondition.cpp
     Execute.cpp
+    ExecuteUpdate.cpp
     ExecutionDispatch.cpp
     ExpressionRange.cpp
     ExpressionRewrite.cpp

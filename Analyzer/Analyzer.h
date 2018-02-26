@@ -1069,6 +1069,21 @@ class IterExpr final : public Expr {
 };
 
 /*
+ * @type OffsetInFragment
+ * @brief The offset of a row in the current fragment. To be used by updates.
+ */
+class OffsetInFragment : public Expr {
+ public:
+  OffsetInFragment() : Expr(SQLTypeInfo(kINT, true)){};
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  void print() const override;
+
+  bool operator==(const Expr& rhs) const override;
+};
+
+/*
  * @type TargetEntry
  * @brief Target list defines a relational projection.  It is a list of TargetEntry's.
  */

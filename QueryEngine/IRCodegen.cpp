@@ -117,6 +117,9 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (function_oper_expr) {
     return {codegenFunctionOper(function_oper_expr, co)};
   }
+  if (dynamic_cast<const Analyzer::OffsetInFragment*>(expr)) {
+    return {posArg(nullptr)};
+  }
   abort();
 }
 

@@ -222,6 +222,10 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
     return makeExpr<Analyzer::LikelihoodExpr>(visit(likelihood->get_arg()), likelihood->get_likelihood());
   }
 
+  RetType visitOffsetInFragment(const Analyzer::OffsetInFragment*) const override {
+    return makeExpr<Analyzer::OffsetInFragment>();
+  }
+
   RetType visitAggExpr(const Analyzer::AggExpr* agg) const override {
     RetType arg = agg->get_arg() ? visit(agg->get_arg()) : nullptr;
     return makeExpr<Analyzer::AggExpr>(

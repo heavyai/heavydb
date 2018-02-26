@@ -161,6 +161,10 @@ std::shared_ptr<Analyzer::Expr> IterExpr::deep_copy() const {
   return makeExpr<IterExpr>(type_info, table_id, rte_idx);
 }
 
+std::shared_ptr<Analyzer::Expr> OffsetInFragment::deep_copy() const {
+  return makeExpr<OffsetInFragment>();
+}
+
 SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
                                        const SQLTypeInfo& left_type,
                                        const SQLTypeInfo& right_type,
@@ -1789,6 +1793,10 @@ bool IterExpr::operator==(const Expr& rhs) const {
   return get_table_id() == rhs_ie.get_table_id() && get_rte_idx() == rhs_ie.get_rte_idx();
 }
 
+bool OffsetInFragment::operator==(const Expr& rhs) const {
+  return typeid(rhs) == typeid(OffsetInFragment);
+}
+
 void ColumnVar::print() const {
   std::cout << "(ColumnVar table: " << table_id << " column: " << column_id << " rte: " << rte_idx << ") ";
 }
@@ -2056,6 +2064,10 @@ void DatetruncExpr::print() const {
 
 void IterExpr::print() const {
   std::cout << "(Iterator on rte: " << rte_idx << ") ";
+}
+
+void OffsetInFragment::print() const {
+  std::cout << "(OffsetInFragment) ";
 }
 
 void TargetEntry::print() const {
