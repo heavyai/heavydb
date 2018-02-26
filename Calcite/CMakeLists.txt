@@ -18,6 +18,6 @@ add_library(calciteserver_thrift
 )
 target_link_libraries(calciteserver_thrift ${Thrift_LIBRARIES})
 
-add_library(Calcite Calcite.cpp Calcite.h)
+add_library(Calcite Calcite.cpp Calcite.h ${CMAKE_SOURCE_DIR}/Shared/ConfigResolve.h )
 
 target_link_libraries(Calcite Catalog calciteserver_thrift ${JAVA_JVM_LIBRARY})

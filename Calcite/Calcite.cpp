@@ -22,8 +22,9 @@
  */
 
 #include "Calcite.h"
-#include "Shared/measure.h"
 #include "../Shared/mapdpath.h"
+#include "Shared/ConfigResolve.h"
+#include "Shared/measure.h"
 
 #include <glog/logging.h>
 #include <thread>
@@ -36,11 +37,26 @@ using namespace apache::thrift;
 using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
 
-void start_calcite_server_as_daemon(const int mapd_port,
-                                    const int port,
-                                    const std::string& data_dir,
-                                    const size_t calcite_max_mem) {
+namespace {
+template <typename XDEBUG_OPTION, typename REMOTE_DEBUG_OPTION, typename... REMAINING_ARGS>
+int wrapped_execl(char const* path,
+                  XDEBUG_OPTION&& x_debug,
+                  REMOTE_DEBUG_OPTION&& remote_debug,
+                  REMAINING_ARGS&&... standard_args) {
+  if (std::is_same<JVMRemoteDebugSelector, PreprocessorTrue>::value) {
+    return execl(path, x_debug, remote_debug, std::forward<REMAINING_ARGS>(standard_args)...);
+  }
+  return execl(path, std::forward<REMAINING_ARGS>(standard_args)...);
+}
+}  // namespace
+
+static void start_calcite_server_as_daemon(const int mapd_port,
+                                           const int port,
+                                           const std::string& data_dir,
+                                           const size_t calcite_max_mem) {
   // todo MAT all platforms seem to respect /usr/bin/java - this could be a gotcha on some weird thing
+  std::string const xDebug = "-Xdebug";
+  std::string const remoteDebug = "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005";
   std::string xmxP = "-Xmx" + std::to_string(calcite_max_mem) + "m";
   std::string jarP = "-jar";
   std::string jarD = mapd_root_abs_path() + "/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar";
@@ -55,19 +71,21 @@ void start_calcite_server_as_daemon(const int mapd_port,
 
   int pid = fork();
   if (pid == 0) {
-    int i = execl("/usr/bin/java",
-                  xmxP.c_str(),
-                  jarP.c_str(),
-                  jarD.c_str(),
-                  extensionsP.c_str(),
-                  extensionsD.c_str(),
-                  dataP.c_str(),
-                  dataD.c_str(),
-                  localPortP.c_str(),
-                  localPortD.c_str(),
-                  mapdPortP.c_str(),
-                  mapdPortD.c_str(),
-                  (char*)0);
+    int i = wrapped_execl("/usr/bin/java",
+                          xDebug.c_str(),
+                          remoteDebug.c_str(),
+                          xmxP.c_str(),
+                          jarP.c_str(),
+                          jarD.c_str(),
+                          extensionsP.c_str(),
+                          extensionsD.c_str(),
+                          dataP.c_str(),
+                          dataD.c_str(),
+                          localPortP.c_str(),
+                          localPortD.c_str(),
+                          mapdPortP.c_str(),
+                          mapdPortD.c_str(),
+                          (char*)0);
     LOG(INFO) << " Calcite server running after exe, return " << i;
   }
 }
