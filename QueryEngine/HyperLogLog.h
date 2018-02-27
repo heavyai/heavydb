@@ -57,7 +57,7 @@ template <typename T>
 inline double get_harmonic_mean_denominator(T* M, uint32_t m) {
   double accumulator = 0.0;
 
-  for (int i = 0; i < m; i++) {
+  for (unsigned i = 0; i < m; i++) {
     accumulator += (1.0 / (1ULL << M[i]));
   }
   return accumulator;
