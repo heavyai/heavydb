@@ -49,7 +49,7 @@ inline size_t hll_size(const T* M, const size_t bitmap_sz_bits) {
   size_t m = 1 << bitmap_sz_bits;
   double sum{0};
   for (size_t i = 0; i < m; i++) {
-    sum += 1.0 / (1 << M[i]);
+    sum += 1.0 / (1ULL << M[i]);
   }
   auto estimate = hll_alpha(m) / sum;
   if (estimate <= 2.5 * m) {
