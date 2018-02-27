@@ -561,10 +561,10 @@ int main(int argc, char** argv) {
     }
     if (line_delim_str[1] == 't')
       line_delim = '\t';
-    else if (delim_str[1] == 'n')
+    else if (line_delim_str[1] == 'n')
       line_delim = '\n';
     else {
-      std::string d(delim_str);
+      std::string d(line_delim_str);
       d[0] = '0';
       line_delim = (char)std::stoi(d, nullptr, 16);
     }
