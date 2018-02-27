@@ -1520,7 +1520,7 @@ ImportStatus Detector::importDelimited(const std::string& file_path, const bool 
       size_t n = 0;
       while (EOF != (c = fgetc(p_file)) && copy_params.line_delim != c) {
         line[n++] = c;
-        if (n >= sizeof(line))
+        if (n >= sizeof(line) - 1)
           break;
       }
       if (0 == n)
