@@ -29,38 +29,74 @@
 
 #include <cmath>
 
-inline double hll_alpha(const size_t m) {
-  double m_square = m * m;
+inline double get_alpha(const size_t m) {
   switch (m) {
     case 16:
-      return 0.673 * m_square;
+      return 0.673;
     case 32:
-      return 0.697 * m_square;
+      return 0.697;
     case 64:
-      return 0.709 * m_square;
+      return 0.709;
     default:
       break;
   }
-  return (0.7213 / (1.0 + 1.079 / m)) * m_square;
+  double alpha = 0.7213 / (1 + 1.079 / m);
+  return alpha;
+}
+
+inline double get_beta(const uint32_t zeros) {
+  // Using polynomial regression terms found in LogLog-Beta paper and Redis
+  double zl = log(zeros + 1);
+  double beta = -0.370393911 * zeros + 0.070471823 * zl + 0.17393686 * pow(zl, 2) + 0.16339839 * pow(zl, 3) +
+                -0.09237745 * pow(zl, 4) + 0.03738027 * pow(zl, 5) + -0.005384159 * pow(zl, 6) +
+                0.00042419 * pow(zl, 7);
+  return beta;
+}
+
+template <typename T>
+inline double get_harmonic_mean_denominator(T* M, uint32_t m) {
+  double accumulator = 0.0;
+
+  for (int i = 0; i < m; i++) {
+    accumulator += (1.0 / (1ULL << M[i]));
+  }
+  return accumulator;
+}
+
+template <typename T>
+inline double get_beta_adjusted_estimate(const size_t m, const uint32_t z, T* M) {
+  return (get_alpha(m) * m * (m - z) * (1 / (get_beta(z) + get_harmonic_mean_denominator(M, m))));
+}
+
+template <typename T>
+inline double get_alpha_adjusted_estimate(const size_t m, T* M) {
+  return (get_alpha(m) * m * m) * (1 / get_harmonic_mean_denominator(M, m));
+};
+
+template <typename T>
+inline uint32_t count_zeros(T* M, size_t m) {
+  uint32_t zeros = 0;
+  for (uint32_t i = 0; i < m; i++) {
+    if (M[i] == 0) {
+      zeros++;
+    }
+  }
+  return zeros;
 }
 
 template <class T>
 inline size_t hll_size(const T* M, const size_t bitmap_sz_bits) {
   size_t m = 1 << bitmap_sz_bits;
-  double sum{0};
-  for (size_t i = 0; i < m; i++) {
-    sum += 1.0 / (1ULL << M[i]);
-  }
-  auto estimate = hll_alpha(m) / sum;
+
+  uint32_t zeros = count_zeros(M, m);
+  double estimate = get_alpha_adjusted_estimate(m, M);
   if (estimate <= 2.5 * m) {
-    uint32_t zeros = 0;
-    for (uint32_t i = 0; i < m; i++) {
-      if (M[i] == 0) {
-        zeros++;
-      }
-    }
     if (zeros != 0) {
       estimate = m * log(static_cast<double>(m) / zeros);
+    }
+  } else {
+    if (bitmap_sz_bits == 14) {  // Apply LogLog-Beta adjustment only when p=14
+      estimate = get_beta_adjusted_estimate(m, zeros, M);
     }
   }
   // No correction for large estimates since we're using 64-bit hashes.
@@ -77,7 +113,8 @@ inline void hll_unify(T1* lhs, T2* rhs, const size_t m) {
 inline int hll_size_for_rate(const int err_percent) {
   double err_rate{static_cast<double>(err_percent) / 100.0};
   double k = ceil(2 * log2(1.04 / err_rate));
-  return std::min(16, std::max(static_cast<int>(k), 1));
+  // On the next line, 4 is the minimum for which we have an alpha adjustment factor in get_alpha()
+  return std::min(16, std::max(static_cast<int>(k), 4));
 }
 
 extern int g_hll_precision_bits;
