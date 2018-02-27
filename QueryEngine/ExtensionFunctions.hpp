@@ -167,6 +167,82 @@ double radians(const double x) {
   return x * (M_PI / 180.0);
 }
 
+
+EXTENSION_NOINLINE
+double Round(const double x, const int32_t y) {
+  if (y==0) {
+    return round(x) + 0.0;
+  }
+
+  double exp = pow(10, y);
+  return (round(x * exp) / exp) + 0.0;
+}
+
+EXTENSION_NOINLINE
+float Round__(const float x, const int32_t y) {
+  if (y==0) {
+    return roundf(x) + 0.0f;
+  }
+
+  float exp = powf((float)10L, y);
+  return roundf(x * exp) / exp + 0.0f;
+}
+
+EXTENSION_NOINLINE
+int16_t Round__1(const int16_t x, const int32_t y) {
+  if (y >= 0) {
+    return x;
+  }
+
+  int32_t p = pow((float)10L, std::abs(y));
+  int32_t p_half = p >> 1;
+
+  int64_t temp = x;
+  temp = temp >=0 ? temp + p_half : temp - p_half;
+  temp = temp / p;
+  return temp * p;
+}
+
+EXTENSION_NOINLINE
+int32_t Round__2(const int32_t x, const int32_t y) {
+  if (y >= 0) {
+    return x;
+  }
+
+  int32_t p = pow((float)10L, std::abs(y));
+  int32_t p_half = p >> 1;
+
+  int64_t temp = x;
+  temp = temp >=0 ? temp + p_half : temp - p_half;
+  temp = temp / p;
+  return temp * p;
+}
+
+EXTENSION_NOINLINE
+int64_t Round__3(const int64_t x, const int32_t y) {
+  if (y >= 0) {
+    return x;
+  }
+
+  int64_t p = pow((double)10L, std::abs(y));
+  int64_t p_half = p >> 1;
+
+
+  int64_t temp = x;
+  temp = temp >=0 ? temp + p_half : temp - p_half;
+  temp = temp / p;
+  return temp * p;
+}
+
+
+
+EXTENSION_NOINLINE
+double Round2_to_digit(const double x, const int32_t y) {
+  double exp = pow(10, y);
+  return round(x * exp) / exp;
+}
+
+
 EXTENSION_NOINLINE
 double round_to_digit(const double x, const int32_t y) {
   double exp = pow(10, y);
