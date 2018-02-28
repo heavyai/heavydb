@@ -435,6 +435,60 @@ StringDictionary::compare_cache_value_t* StringDictionary::binary_search_cache(c
   return ret;
 }
 
+std::vector<int32_t> StringDictionary::getEquals(std::string pattern, std::string comp_operator, size_t generation) {
+  std::vector<int32_t> result;
+  auto eq_id_itr = equal_cache_.find(pattern);
+  int32_t eq_id = MAX_STRLEN + 1;
+  int32_t cur_size = str_count_;
+  if (eq_id_itr != equal_cache_.end()) {
+    auto eq_id = eq_id_itr->second;
+    if (comp_operator == "=") {
+      result.push_back(eq_id);
+    } else {
+      for (int32_t idx = 0; idx <= cur_size; idx++) {
+        if (idx == eq_id)
+          continue;
+        result.push_back(idx);
+      }
+    }
+  } else {
+    std::vector<std::thread> workers;
+    int worker_count = cpu_threads();
+    CHECK_GT(worker_count, 0);
+    std::vector<std::vector<int32_t>> worker_results(worker_count);
+    CHECK_LE(generation, str_count_);
+    for (int worker_idx = 0; worker_idx < worker_count; ++worker_idx) {
+      workers.emplace_back([&worker_results, &pattern, generation, worker_idx, worker_count, this]() {
+        for (size_t string_id = worker_idx; string_id < generation; string_id += worker_count) {
+          const auto str = getStringUnlocked(string_id);
+          if (str == pattern) {
+            worker_results[worker_idx].push_back(string_id);
+          }
+        }
+      });
+    }
+    for (auto& worker : workers) {
+      worker.join();
+    }
+    for (const auto& worker_result : worker_results) {
+      result.insert(result.end(), worker_result.begin(), worker_result.end());
+    }
+    if (result.size() > 0) {
+      const auto it_ok = equal_cache_.insert(std::make_pair(pattern, result[0]));
+      CHECK(it_ok.second);
+      eq_id = result[0];
+    }
+    if (comp_operator == "<>") {
+      for (int32_t idx = 0; idx <= cur_size; idx++) {
+        if (idx == eq_id)
+          continue;
+        result.push_back(idx);
+      }
+    }
+  }
+  return result;
+}
+
 std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
                                                   const std::string& comp_operator,
                                                   const size_t generation) {
@@ -447,6 +501,10 @@ std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
     return ret;
   }
   if (sorted_cache.size() < str_count_) {
+    if (comp_operator == "=" || comp_operator == "<>") {
+      return getEquals(pattern, comp_operator, generation);
+    }
+
     buildSortedCache();
   }
   StringDictionary::compare_cache_value_t* cache_index = compare_cache_.get(pattern);
@@ -861,6 +919,9 @@ void StringDictionary::invalidateInvertedIndex() noexcept {
   }
   if (!regex_cache_.empty()) {
     decltype(regex_cache_)().swap(regex_cache_);
+  }
+  if (!equal_cache_.empty()) {
+    decltype(equal_cache_)().swap(equal_cache_);
   }
   compare_cache_.invalidateInvertedIndex();
 }

@@ -1262,12 +1262,6 @@ TEST(Select, SharedDictionary) {
     c("SELECT COUNT(*) FROM test WHERE shared_dict LIKE 'ba_' or shared_dict LIKE 'fo_';", dt);
     c("SELECT COUNT(*) FROM test WHERE shared_dict IS NULL;", dt);
     c("SELECT COUNT(*) FROM test WHERE shared_dict IS NOT NULL;", dt);
-    c("SELECT COUNT(*) FROM test WHERE shared_dict > 'bar';", dt);
-    c("SELECT COUNT(*) FROM test WHERE shared_dict > 'fo';", dt);
-    c("SELECT COUNT(*) FROM test WHERE shared_dict >= 'bar';", dt);
-    c("SELECT COUNT(*) FROM test WHERE 'bar' < shared_dict;", dt);
-    c("SELECT COUNT(*) FROM test WHERE 'fo' < shared_dict;", dt);
-    c("SELECT COUNT(*) FROM test WHERE 'bar' <= shared_dict;", dt);
     c("SELECT COUNT(*) FROM test WHERE shared_dict = 'bar';", dt);
     c("SELECT COUNT(*) FROM test WHERE 'bar' = shared_dict;", dt);
     c("SELECT COUNT(*) FROM test WHERE shared_dict <> 'bar';", dt);
@@ -1275,6 +1269,12 @@ TEST(Select, SharedDictionary) {
     c("SELECT COUNT(*) FROM test WHERE shared_dict = 'foo' OR shared_dict = 'bar';", dt);
     c("SELECT COUNT(*) FROM test WHERE shared_dict = real_str;", dt);
     c("SELECT COUNT(*) FROM test WHERE shared_dict <> shared_dict;", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict > 'bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict > 'fo';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict >= 'bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'bar' < shared_dict;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'fo' < shared_dict;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'bar' <= shared_dict;", dt);
     c("SELECT COUNT(*) FROM test WHERE LENGTH(shared_dict) = 3;", dt);
 
     EXPECT_THROW(run_ddl_statement("CREATE TABLE t1(a text, b text, SHARED DICTIONARY (b) REFERENCES t1(a), SHARED "
@@ -1335,6 +1335,9 @@ TEST(Select, StringCompare) {
   if (g_fast_strcmp) {
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
       SKIP_NO_GPU();
+      c("SELECT COUNT(*) FROM test WHERE str = 'ba';", dt);
+      c("SELECT COUNT(*) FROM test WHERE str <> 'ba';", dt);
+
       c("SELECT COUNT(*) FROM test WHERE shared_dict < 'ba';", dt);
       c("SELECT COUNT(*) FROM test WHERE shared_dict < 'bar';", dt);
       c("SELECT COUNT(*) FROM test WHERE shared_dict < 'baf';", dt);
@@ -1374,8 +1377,6 @@ TEST(Select, StringCompare) {
       c("SELECT COUNT(*) FROM test WHERE 'ba' > shared_dict;", dt);
       c("SELECT COUNT(*) FROM test WHERE 'bar' > shared_dict;", dt);
 
-      c("SELECT COUNT(*) FROM test WHERE str = 'ba';", dt);
-      c("SELECT COUNT(*) FROM test WHERE str <> 'ba';", dt);
       EXPECT_THROW(
           run_multiple_agg("SELECT COUNT(*) FROM test, test_inner WHERE test.shared_dict < test_inner.str", dt),
           std::runtime_error);
