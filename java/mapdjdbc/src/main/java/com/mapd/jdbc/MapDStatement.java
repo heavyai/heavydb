@@ -78,9 +78,9 @@ public class MapDStatement implements java.sql.Statement {
   @Override
   public int executeUpdate(String sql) throws SQLException { //logger.debug("Entered");
     try {
-       // remove " characters if it is a CREATE statement
-      if (sql.trim().substring(0, 6).compareToIgnoreCase("CREATE") == 0){
-          sql = sql.replace('"', ' ');
+      // remove " characters if it is a CREATE statement
+      if (sql.trim().substring(0, 6).compareToIgnoreCase("CREATE") == 0) {
+        sql = sql.replace('"', ' ');
       }
       sqlResult = client.sql_execute(session, sql + ";", true, null, -1, -1);
     } catch (TMapDException ex) {
@@ -129,7 +129,11 @@ public class MapDStatement implements java.sql.Statement {
 
   @Override
   public int getQueryTimeout() throws SQLException { //logger.debug("Entered");
-    //TODO MAT have overloaded this option to allow for internal time comparisson
+    return (int) sqlResult.execution_time_ms;
+  }
+
+  //used by benchmarking to get internal execution times
+  public int getQueryInternalExecuteTime() throws SQLException { //logger.debug("Entered");
     return (int) sqlResult.execution_time_ms;
   }
 

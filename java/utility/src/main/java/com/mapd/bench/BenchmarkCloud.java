@@ -13,10 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.mapd.bench;
 
 //STEP 1. Import required packages
+import com.mapd.jdbc.MapDStatement;
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -62,7 +62,7 @@ public class BenchmarkCloud {
 
   private String headDescriptor = "%3s, %8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s";
   private String header2 = String.format(headDescriptor, "QRY", "T-Avg", "T-Min", "T-Max", "T-85%",
-          "E-Avg", "E-Min", "E-Max", "E-85%","E-25%", "E-StdD",
+          "E-Avg", "E-Min", "E-Max", "E-85%", "E-25%", "E-StdD",
           "J-Avg", "J-Min", "J-Max", "J-85%",
           "I-Avg", "I-Min", "I-Max", "I-85%",
           "F-Exec", "F-jdbc", "F-iter", "ITER", "Total", "Account");
@@ -142,7 +142,7 @@ public class BenchmarkCloud {
       System.exit(3);
     }
 
-    bencherCon = getConnection("jdbc:mapd:"+queryResultMachine+":9091:mapd", "mapd", "HyperInteractive");
+    bencherCon = getConnection("jdbc:mapd:" + queryResultMachine + ":9091:mapd", "mapd", "HyperInteractive");
 
     getQueries(queryIDMap, bencherCon, tableName);
 
@@ -200,7 +200,7 @@ public class BenchmarkCloud {
         stmt = conn.createStatement();
 
         long timer = System.currentTimeMillis();
-        if (loop == 0){
+        if (loop == 0) {
           System.out.println(String.format("Query Id is %s : query is '%s'", qid, sql));
         }
         ResultSet rs = stmt.executeQuery(sql);
@@ -210,7 +210,7 @@ public class BenchmarkCloud {
 
         // gather internal execute time for MapD as we are interested in that
         if (driver.equals(JDBC_DRIVER)) {
-          executeTime = stmt.getQueryTimeout();
+          executeTime = ((MapDStatement) stmt).getQueryInternalExecuteTime();
           jdbcTime = (System.currentTimeMillis() - timer) - executeTime;
         } else {
           jdbcTime = (System.currentTimeMillis() - timer);
