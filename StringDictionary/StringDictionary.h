@@ -44,10 +44,7 @@ class DictPayloadUnavailable : public std::runtime_error {
 
 class StringDictionary {
  public:
-  StringDictionary(const std::string& folder,
-                   const bool isTemp,
-                   const bool recover,
-                   size_t initial_capacity = 256);
+  StringDictionary(const std::string& folder, const bool isTemp, const bool recover, size_t initial_capacity = 256);
   StringDictionary(const LeafHostInfo& host, const DictRef dict_ref);
   ~StringDictionary() noexcept;
 
@@ -115,6 +112,7 @@ class StringDictionary {
   size_t addStorageCapacity(int fd) noexcept;
   void* addMemoryCapacity(void* addr, size_t& mem_size) noexcept;
   void invalidateInvertedIndex() noexcept;
+  std::vector<int32_t> getEquals(std::string pattern, std::string comp_operator, size_t generation);
   void buildSortedCache();
   void insertInSortedCache(std::string str, int32_t str_id);
   void sortCache(std::vector<int32_t>& cache);
@@ -136,6 +134,7 @@ class StringDictionary {
   mutable mapd_shared_mutex rw_mutex_;
   mutable std::map<std::tuple<std::string, bool, bool, char>, std::vector<int32_t>> like_cache_;
   mutable std::map<std::pair<std::string, char>, std::vector<int32_t>> regex_cache_;
+  mutable std::map<std::string, int32_t> equal_cache_;
   mutable DictionaryCache<std::string, compare_cache_value_t> compare_cache_;
   mutable std::shared_ptr<std::vector<std::string>> strings_cache_;
   std::unique_ptr<StringDictionaryClient> client_;
