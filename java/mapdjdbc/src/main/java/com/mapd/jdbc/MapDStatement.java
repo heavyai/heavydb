@@ -141,10 +141,11 @@ public class MapDStatement implements java.sql.Statement {
   @Override
   public void setQueryTimeout(int seconds) throws SQLException { //logger.debug("Entered");
     SQLWarning warning = new SQLWarning("Query timeouts are not supported.  Substituting a value of zero.");
-    if (rootWarning == null)
+    if (rootWarning == null) {
       rootWarning = warning;
-    else
+    } else {
       rootWarning.setNextWarning(warning);
+    }
   }
 
   @Override
@@ -156,7 +157,7 @@ public class MapDStatement implements java.sql.Statement {
 
   @Override
   public SQLWarning getWarnings() throws SQLException { //logger.debug("Entered");
-     return( rootWarning );
+    return (rootWarning);
   }
 
   @Override
