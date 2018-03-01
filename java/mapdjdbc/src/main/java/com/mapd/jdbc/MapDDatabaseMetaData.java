@@ -15,11 +15,14 @@
  */
 package com.mapd.jdbc;
 
+import com.mapd.thrift.server.TAccessPrivileges;
 import com.mapd.thrift.server.TColumn;
 import com.mapd.thrift.server.TColumnData;
 import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TDBInfo;
 import com.mapd.thrift.server.TDatumType;
+import com.mapd.thrift.server.TDBObject;
+import com.mapd.thrift.server.TDBObjectType;
 import com.mapd.thrift.server.TEncodingType;
 import com.mapd.thrift.server.TQueryResult;
 import com.mapd.thrift.server.TRowSet;
@@ -1218,9 +1221,136 @@ SQLException - if a database access error occurs
   @Override
   public ResultSet getTablePrivileges(String catalog, String schemaPattern, String tableNamePattern) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    MAPDLOGGER.debug("TablePattern " + tableNamePattern + " tableNamePattern " + tableNamePattern);
+    String modifiedTablePattern = tableNamePattern.replaceAll("%", ".*");
+  
+    // declare the columns in the result set
+    TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
+    TColumnType columns[] = {
+      createTColumnType("TABLE_CAT", new TTypeInfo(strTTI)),
+      createTColumnType("TABLE_SCHEM", new TTypeInfo(strTTI)),
+      createTColumnType("TABLE_NAME", new TTypeInfo(strTTI)),
+      createTColumnType("GRANTOR", new TTypeInfo(strTTI)),
+      createTColumnType("GRANTEE", new TTypeInfo(strTTI)),
+      createTColumnType("PRIVILEGE", new TTypeInfo(strTTI)),
+      createTColumnType("IS_GRANTABLE", new TTypeInfo(strTTI)),
+    };
+  
+    Map<String, MapDData> dataMap = new HashMap(columns.length);
+  
+    // create component to contain the meta data for the rows
+    // and create  a container to store the data and the nul indicators
+    List<TColumnType> rowDesc = new ArrayList(columns.length);
+    for (TColumnType col : columns) {
+      rowDesc.add(col);
+      dataMap.put(col.col_name, new MapDData(col.col_type.type));
+    }
+    List<String> users;
+    List<String> roles;
+    List<TDBObject> db_objects = new ArrayList();
+    try {
+      users = con.client.get_users(con.session);
+      for (String user : users) {
+        db_objects = con.client.get_db_objects_for_role(con.session, user); 
+        // check if the table matches the input pattern
+        for (TDBObject db_object : db_objects) {
+          if (db_object.objectType == TDBObjectType.TableDBObjectType) {
+            String tableName = db_object.objectName;
+            if (tableNamePattern == null || tableNamePattern.equals(tableName)) {
+              List<Boolean> privs = db_object.getPrivs();
+              Boolean priv[] = privs.toArray(new Boolean[privs.size()]);
+              TAccessPrivileges ta = new TAccessPrivileges(priv[0],priv[1], priv[2], priv[3]);
+              int ordinal = 1;
+              for (Boolean prv : privs) {
+                if (prv == true) {
+                  switch (ta.fieldForId(ordinal)) {
+                  case SELECT_:
+                    dataMap.get("PRIVILEGE").add("SELECT");
+                    break;
+                  case INSERT_:
+                    dataMap.get("PRIVILEGE").add("INSERT");
+                    break;
+                  case CREATE_:
+                    dataMap.get("PRIVILEGE").add("CREATE");
+                    break;
+                  case TRUNCATE_:
+                    dataMap.get("PRIVILEGE").add("TRUNCATE");
+                    break;
+                  }
+                  dataMap.get("TABLE_CAT").setNull(true);
+                  dataMap.get("TABLE_SCHEM").setNull(true);
+                  dataMap.get("TABLE_NAME").add(tableName);
+                  dataMap.get("GRANTOR").setNull(true);
+                  dataMap.get("GRANTEE").add(user);
+                  dataMap.get("IS_GRANTABLE").add("NO");
+                }
+                ordinal++;
+              }
+            }   
+          }
+        }  
+      }
+     roles = con.client.get_all_roles(con.session, false);
+      for (String role : roles) {
+        db_objects = con.client.get_db_objects_for_role(con.session, role); 
+        // check if the table matches the input pattern
+        for (TDBObject db_object : db_objects) {
+          if (db_object.objectType == TDBObjectType.TableDBObjectType) {
+            String tableName = db_object.objectName;
+            if (tableNamePattern == null || tableNamePattern.equals(tableName)) {
+              List<Boolean> privs = db_object.getPrivs();
+              Boolean priv[] = privs.toArray(new Boolean[privs.size()]);
+              TAccessPrivileges ta = new TAccessPrivileges(priv[0],priv[1], priv[2], priv[3]);
+              int ordinal = 1;
+              for (Boolean prv : privs) {
+                if (prv == true) {
+                  switch (ta.fieldForId(ordinal)) {
+                  case SELECT_:
+                    dataMap.get("PRIVILEGE").add("SELECT");
+                    break;
+                  case INSERT_:
+                    dataMap.get("PRIVILEGE").add("INSERT");
+                    break;
+                  case CREATE_:
+                    dataMap.get("PRIVILEGE").add("CREATE");
+                    break;
+                  case TRUNCATE_:
+                    dataMap.get("PRIVILEGE").add("TRUNCATE");
+                    break;
+                  }
+                  dataMap.get("TABLE_CAT").setNull(true);
+                  dataMap.get("TABLE_SCHEM").setNull(true);
+                  dataMap.get("TABLE_NAME").add(tableName);
+                  dataMap.get("GRANTOR").setNull(true);
+                  dataMap.get("GRANTEE").add(role);
+                  dataMap.get("IS_GRANTABLE").add("NO");
+                }
+                ordinal++;
+              }
+            }   
+          }
+        }  
+      }
+    }
+    catch (TException ex) {
+      throw new SQLException("get_privileges failed " + ex.toString());
+    } 
+  
+    List<TColumn> columnsList = new ArrayList(columns.length);
+  
+    for (TColumnType col : columns){
+      TColumn schemaCol = dataMap.get(col.col_name).getTColumn();
+    //logger.info("Tcolumn is "+ schemaCol.toString());
+      columnsList.add(schemaCol);
+    }
+  
+    // create a rowset for the result
+    TRowSet rowSet = new TRowSet(rowDesc, null, columnsList, true);
+  
+    TQueryResult result = new TQueryResult(rowSet, 0, 0, null);
+  
+    MapDResultSet cols = new MapDResultSet(result, "getPrivileges");
+    return cols;
   }
 
   @Override
