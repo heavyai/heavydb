@@ -33,13 +33,14 @@ import org.slf4j.LoggerFactory;
 public class MapDStatement implements java.sql.Statement {
 
   final static org.slf4j.Logger logger = LoggerFactory.getLogger(MapDStatement.class);
+  public SQLWarning rootWarning = null;
+
   private String session;
   private MapD.Client client;
   private ResultSet currentRS = null;
   private TQueryResult sqlResult = null;
   private int maxRows = 100000; // add limit to unlimited queries
   private boolean escapeProcessing = false;
-  private int queryTimeout;
 
   MapDStatement(String tsession, MapD.Client tclient) {
     session = tsession;
@@ -129,7 +130,7 @@ public class MapDStatement implements java.sql.Statement {
 
   @Override
   public int getQueryTimeout() throws SQLException { //logger.debug("Entered");
-    return (int) sqlResult.execution_time_ms;
+    return 0;
   }
 
   //used by benchmarking to get internal execution times
@@ -139,7 +140,11 @@ public class MapDStatement implements java.sql.Statement {
 
   @Override
   public void setQueryTimeout(int seconds) throws SQLException { //logger.debug("Entered");
-    queryTimeout = seconds;
+    SQLWarning warning = new SQLWarning("Query timeouts are not supported.  Substituting a value of zero.");
+    if (rootWarning == null)
+      rootWarning = warning;
+    else
+      rootWarning.setNextWarning(warning);
   }
 
   @Override
@@ -151,16 +156,12 @@ public class MapDStatement implements java.sql.Statement {
 
   @Override
   public SQLWarning getWarnings() throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+     return( rootWarning );
   }
 
   @Override
   public void clearWarnings() throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    rootWarning = null;
   }
 
   @Override

@@ -49,7 +49,7 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
     MapDConnection con = null;
     int driverMajorVersion = 1;
-    int driverMinorVersion = 1;
+    int driverMinorVersion = 2;
     int databaseMajorVersion = 0;
     int databaseMinorVersion = 0;
     String databaseVersion = null;

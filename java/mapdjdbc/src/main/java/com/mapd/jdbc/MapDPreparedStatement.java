@@ -56,6 +56,7 @@ import org.slf4j.LoggerFactory;
 class MapDPreparedStatement implements PreparedStatement {
 
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDPreparedStatement.class);
+  public SQLWarning rootWarning = null;
 
   private String currentSQL;
   private String insertTableName;
@@ -71,7 +72,6 @@ class MapDPreparedStatement implements PreparedStatement {
   private boolean isNewBatch = true;
   private boolean isParmString[] = null;
   private List<TStringRow> rows = null;
-  private String warnings = null;
   private static final Pattern REGEX_PATTERN = Pattern.compile("(?i)\\s+INTO\\s+(\\w+)");
 
   MapDPreparedStatement(String sql, String session, MapD.Client client) {
@@ -585,13 +585,16 @@ class MapDPreparedStatement implements PreparedStatement {
 
   @Override
   public int getQueryTimeout() throws SQLException { //logger.debug("Entered");
-    return stmt.getQueryTimeout();
+    return 0;
   }
 
   @Override
   public void setQueryTimeout(int seconds) throws SQLException { //logger.debug("Entered");
-    MAPDLOGGER.debug("SetQueryTimeout to " + seconds);
-    stmt.setQueryTimeout(seconds);
+    SQLWarning warning = new SQLWarning("Query timeouts are not supported.  Substituting a value of zero.");
+    if (rootWarning == null)
+      rootWarning = warning;
+    else
+      rootWarning.setNextWarning(warning);
   }
 
   @Override
@@ -603,14 +606,12 @@ class MapDPreparedStatement implements PreparedStatement {
 
   @Override
   public SQLWarning getWarnings() throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    return rootWarning;
   }
 
   @Override
   public void clearWarnings() throws SQLException { //logger.debug("Entered");
-    warnings = null;
+      rootWarning = null;
   }
 
   @Override
