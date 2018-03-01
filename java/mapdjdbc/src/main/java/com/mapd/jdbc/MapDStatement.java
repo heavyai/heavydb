@@ -215,9 +215,12 @@ public class MapDStatement implements java.sql.Statement {
 
   @Override
   public void setFetchSize(int rows) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    SQLWarning warning = new SQLWarning("Query FetchSize are not supported.  Substituting a value of zero.");
+    if (rootWarning == null) {
+      rootWarning = warning;
+    } else {
+      rootWarning.setNextWarning(warning);
+    }
   }
 
   @Override

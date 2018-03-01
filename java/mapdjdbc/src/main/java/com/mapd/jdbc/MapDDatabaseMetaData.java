@@ -42,34 +42,33 @@ import org.slf4j.LoggerFactory;
  *
  * @author michael
  */
-
 class MapDDatabaseMetaData implements DatabaseMetaData {
 
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDDatabaseMetaData.class);
 
-    MapDConnection con = null;
-    int driverMajorVersion = 1;
-    int driverMinorVersion = 2;
-    int databaseMajorVersion = 0;
-    int databaseMinorVersion = 0;
-    String databaseVersion = null;
+  MapDConnection con = null;
+  int driverMajorVersion = 1;
+  int driverMinorVersion = 2;
+  int databaseMajorVersion = 0;
+  int databaseMinorVersion = 0;
+  String databaseVersion = null;
 
-    public MapDDatabaseMetaData(MapDConnection connection) throws SQLException {
-      this.con = connection;
+  public MapDDatabaseMetaData(MapDConnection connection) throws SQLException {
+    this.con = connection;
 
-      try {
-        databaseVersion = con.client.get_version();
-      } catch (TException ex) {
-        throw new SQLException("Failed to get DB version " + ex.toString());
-      }
-      String vers[] = databaseVersion.split("\\.");
-      try {
-        databaseMajorVersion = Integer.parseInt(vers[0]);
-        databaseMinorVersion = Integer.parseInt(vers[1]);
-      } catch (NumberFormatException ex) {
-        throw new SQLException(
-            "Non-numeric version returned from MapD server: " + ex.getMessage());
-     }
+    try {
+      databaseVersion = con.client.get_version();
+    } catch (TException ex) {
+      throw new SQLException("Failed to get DB version " + ex.toString());
+    }
+    String vers[] = databaseVersion.split("\\.");
+    try {
+      databaseMajorVersion = Integer.parseInt(vers[0]);
+      databaseMinorVersion = Integer.parseInt(vers[1]);
+    } catch (NumberFormatException ex) {
+      throw new SQLException(
+              "Non-numeric version returned from MapD server: " + ex.getMessage());
+    }
   }
 
   @Override
@@ -134,7 +133,7 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public String getDatabaseProductVersion() throws SQLException { //logger.debug("Entered");
-        MAPDLOGGER.debug("Entered");
+    MAPDLOGGER.debug("Entered");
     return this.databaseVersion;
   }
 
@@ -1558,7 +1557,7 @@ SQLException - if a database access error occurs
   }
 
   @Override
-  public int getDatabaseMinorVersion() throws SQLException { 
+  public int getDatabaseMinorVersion() throws SQLException {
     MAPDLOGGER.debug("Entered");
     return this.databaseMinorVersion;
   }
