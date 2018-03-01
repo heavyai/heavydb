@@ -865,7 +865,19 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(int8_t* rowwise_target_pt
     auto count_distinct_ptr_ptr = reinterpret_cast<int64_t*>(rowwise_target_ptr);
     const auto remote_ptr = *count_distinct_ptr_ptr;
     if (remote_ptr) {
-      *count_distinct_ptr_ptr = storage_->mappedPtr(remote_ptr);
+      const auto ptr = storage_->mappedPtr(remote_ptr);
+      if (ptr) {
+        *count_distinct_ptr_ptr = ptr;
+      } else {
+        // need to create a zero filled buffer for this remote_ptr
+        const auto& count_distinct_desc = query_mem_desc_.count_distinct_descriptors_[target_logical_idx];
+        const auto bitmap_byte_sz = count_distinct_desc.bitmapSizeBytes();
+
+        auto count_distinct_buffer = static_cast<int8_t*>(checked_malloc(bitmap_byte_sz));
+        memset(count_distinct_buffer, 0, bitmap_byte_sz);
+        row_set_mem_owner_->addCountDistinctBuffer(count_distinct_buffer, bitmap_byte_sz, true);
+        *count_distinct_ptr_ptr = reinterpret_cast<int64_t>(count_distinct_buffer);
+      }
     }
     return int64_t(0);
   }

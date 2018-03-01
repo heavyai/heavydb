@@ -798,6 +798,10 @@ void ResultSetStorage::addCountDistinctSetPointerMapping(const int64_t remote_pt
 
 int64_t ResultSetStorage::mappedPtr(const int64_t remote_ptr) const {
   const auto it = count_distinct_sets_mapping_.find(remote_ptr);
-  CHECK(it != count_distinct_sets_mapping_.end());
+  // Due to the removal of completely zero bitmaps in a distributed transfer there will be
+  // remote ptr that do not not exists. Return 0 if no pointer found
+  if (it == count_distinct_sets_mapping_.end()) {
+    return int64_t(0);
+  }
   return it->second;
 }
