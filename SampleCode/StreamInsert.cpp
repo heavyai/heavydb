@@ -44,8 +44,19 @@ using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
 
-// Thrift uses boost::shared_ptr instead of std::shared_ptr
+#ifdef HAVE_THRIFT_STD_SHAREDPTR
+#include <memory>
+namespace mapd {
+using std::shared_ptr;
+using std::make_shared;
+}
+#else
+#include <boost/make_shared.hpp>
+namespace mapd {
 using boost::shared_ptr;
+using boost::make_shared;
+}
+#endif  // HAVE_THRIFT_STD_SHAREDPTR
 
 struct CopyParams {
   char delimiter;
@@ -75,9 +86,9 @@ struct ConnectionDetails {
 bool print_error_data = false;
 bool print_transformation = false;
 
-shared_ptr<MapDClient> client;
+mapd::shared_ptr<MapDClient> client;
 TSessionId session;
-shared_ptr<apache::thrift::transport::TTransport> mytransport;
+mapd::shared_ptr<apache::thrift::transport::TTransport> mytransport;
 
 namespace {
 // anonymous namespace for private functions
@@ -85,9 +96,9 @@ namespace {
 #define MAX_FIELD_LEN 20000
 
 void createConnection(ConnectionDetails con) {
-  shared_ptr<TTransport> socket(new TSocket(con.server_host, con.port));
+  mapd::shared_ptr<TTransport> socket(new TSocket(con.server_host, con.port));
   mytransport.reset(new TBufferedTransport(socket));
-  shared_ptr<TProtocol> protocol(new TBinaryProtocol(mytransport));
+  mapd::shared_ptr<TProtocol> protocol(new TBinaryProtocol(mytransport));
   client.reset(new MapDClient(protocol));
   try {
     mytransport->open();                                               // open transport

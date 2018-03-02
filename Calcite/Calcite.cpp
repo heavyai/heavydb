@@ -22,8 +22,9 @@
  */
 
 #include "Calcite.h"
-#include "../Shared/mapdpath.h"
 #include "Shared/ConfigResolve.h"
+#include "Shared/mapd_shared_ptr.h"
+#include "Shared/mapdpath.h"
 #include "Shared/measure.h"
 
 #include <glog/logging.h>
@@ -35,8 +36,6 @@ using namespace rapidjson;
 using namespace apache::thrift;
 using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
-
-using boost::shared_ptr;
 
 namespace {
 template <typename XDEBUG_OPTION, typename REMOTE_DEBUG_OPTION, typename... REMAINING_ARGS>
@@ -91,19 +90,19 @@ static void start_calcite_server_as_daemon(const int mapd_port,
   }
 }
 
-std::pair<shared_ptr<CalciteServerClient>, shared_ptr<TTransport>> get_client(int port) {
-  shared_ptr<TTransport> socket(new TSocket("localhost", port));
-  shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> get_client(int port) {
+  mapd::shared_ptr<TTransport> socket(new TSocket("localhost", port));
+  mapd::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
   try {
     transport->open();
 
   } catch (TException& tx) {
     throw tx;
   }
-  shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-  shared_ptr<CalciteServerClient> client;
+  mapd::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+  mapd::shared_ptr<CalciteServerClient> client;
   client.reset(new CalciteServerClient(protocol));
-  std::pair<shared_ptr<CalciteServerClient>, shared_ptr<TTransport>> ret;
+  std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> ret;
   return std::make_pair(client, transport);
 }
 
@@ -121,7 +120,8 @@ void Calcite::runServer(const int mapd_port,
     LOG(ERROR) << "Please check that you are not trying to run two servers on same port";
     LOG(ERROR) << "Attempting to shutdown orphaned Calcite server";
     try {
-      std::pair<shared_ptr<CalciteServerClient>, shared_ptr<TTransport>> clientP = get_client(remote_calcite_port_);
+      std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> clientP =
+          get_client(remote_calcite_port_);
       clientP.first->shutdown();
       clientP.second->close();
       LOG(ERROR) << "orphaned Calcite server shutdown";
@@ -157,7 +157,8 @@ void Calcite::runServer(const int mapd_port,
 int Calcite::ping() {
   try {
     auto ms = measure<>::execution([&]() {
-      std::pair<shared_ptr<CalciteServerClient>, shared_ptr<TTransport>> clientP = get_client(remote_calcite_port_);
+      std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> clientP =
+          get_client(remote_calcite_port_);
       clientP.first->ping();
       clientP.second->close();
     });
@@ -188,7 +189,8 @@ Calcite::Calcite(const int mapd_port, const int port, const std::string& data_di
 void Calcite::updateMetadata(std::string catalog, std::string table) {
   if (server_available_) {
     auto ms = measure<>::execution([&]() {
-      std::pair<shared_ptr<CalciteServerClient>, shared_ptr<TTransport>> clientP = get_client(remote_calcite_port_);
+      std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> clientP =
+          get_client(remote_calcite_port_);
       clientP.first->updateMetadata(catalog, table);
       clientP.second->close();
     });
@@ -278,7 +280,8 @@ std::string Calcite::processImpl(const Catalog_Namespace::SessionInfo& session_i
     try {
       auto ms = measure<>::execution([&]() {
 
-        std::pair<shared_ptr<CalciteServerClient>, shared_ptr<TTransport>> clientP = get_client(remote_calcite_port_);
+        std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> clientP =
+            get_client(remote_calcite_port_);
         clientP.first->process(ret, user, session, catalog, sql_string, legacy_syntax, is_explain);
         clientP.second->close();
       });
@@ -301,7 +304,8 @@ std::string Calcite::getExtensionFunctionWhitelist() {
     TPlanResult ret;
     std::string whitelist;
 
-    std::pair<shared_ptr<CalciteServerClient>, shared_ptr<TTransport>> clientP = get_client(remote_calcite_port_);
+    std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> clientP =
+        get_client(remote_calcite_port_);
     clientP.first->getExtensionFunctionWhitelist(whitelist);
     clientP.second->close();
     LOG(INFO) << whitelist;
@@ -318,7 +322,8 @@ Calcite::~Calcite() {
   LOG(INFO) << "Destroy Calcite Class";
   if (server_available_) {
     // running server
-    std::pair<shared_ptr<CalciteServerClient>, shared_ptr<TTransport>> clientP = get_client(remote_calcite_port_);
+    std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> clientP =
+        get_client(remote_calcite_port_);
     clientP.first->shutdown();
     clientP.second->close();
   }

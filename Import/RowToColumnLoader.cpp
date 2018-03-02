@@ -32,7 +32,8 @@
 #include <boost/algorithm/string.hpp>
 #include <glog/logging.h>
 
-#include "../Shared/sqltypes.h"
+#include "Shared/mapd_shared_ptr.h"
+#include "Shared/sqltypes.h"
 
 #include <thread>
 #include <chrono>
@@ -51,9 +52,6 @@
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
-
-// Thrift uses boost::shared_ptr instead of std::shared_ptr
-using boost::shared_ptr;
 
 SQLTypes get_sql_types(const TColumnType& ct) {
   switch (ct.col_type.type) {
@@ -353,9 +351,9 @@ RowToColumnLoader::~RowToColumnLoader() {
 }
 
 void RowToColumnLoader::createConnection(ConnectionDetails con) {
-  shared_ptr<TTransport> socket(new TSocket(con.server_host, con.port));
+  mapd::shared_ptr<TTransport> socket(new TSocket(con.server_host, con.port));
   mytransport_.reset(new TBufferedTransport(socket));
-  shared_ptr<TProtocol> protocol(new TBinaryProtocol(mytransport_));
+  mapd::shared_ptr<TProtocol> protocol(new TBinaryProtocol(mytransport_));
   client_.reset(new MapDClient(protocol));
   try {
     mytransport_->open();                                                // open transport

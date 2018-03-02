@@ -49,8 +49,19 @@ using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
 
-// Thrift uses boost::shared_ptr instead of std::shared_ptr
+#ifdef HAVE_THRIFT_STD_SHAREDPTR
+#include <memory>
+namespace mapd {
+using std::shared_ptr;
+using std::make_shared;
+}
+#else
+#include <boost/make_shared.hpp>
+namespace mapd {
 using boost::shared_ptr;
+using boost::make_shared;
+}
+#endif  // HAVE_THRIFT_STD_SHAREDPTR
 
 namespace {
 // anonymous namespace for private functions
@@ -194,14 +205,14 @@ int main(int argc, char** argv) {
     }
   }
 
-  shared_ptr<TTransport> socket(new TSocket(server_host, port));
-  shared_ptr<TTransport> transport(new TBufferedTransport(socket));
-  shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+  mapd::shared_ptr<TTransport> socket(new TSocket(server_host, port));
+  mapd::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+  mapd::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
   MapDClient client(protocol);
   TSessionId session;
   try {
-    transport->open();                                     // open transport
-    client.connect(session, user_name, passwd, db_name);   // connect to mapd_server
+    transport->open();                                    // open transport
+    client.connect(session, user_name, passwd, db_name);  // connect to mapd_server
     TTableDetails table_details;
     client.get_table_details(table_details, session, table_name);
     data_gen(table_details.row_desc, delimiter, num_rows);

@@ -58,6 +58,7 @@
 #include "Shared/StringTransform.h"
 #include "Shared/geosupport.h"
 #include "Shared/mapd_shared_mutex.h"
+#include "Shared/mapd_shared_ptr.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
 
@@ -468,7 +469,7 @@ class MapDHandler : public MapDIf {
   mutable std::mutex handle_to_dev_ptr_mutex_;
   mutable std::unordered_map<std::string, int8_t*> ipc_handle_to_dev_ptr_;
 
-  friend void run_warmup_queries(boost::shared_ptr<MapDHandler> handler,
+  friend void run_warmup_queries(mapd::shared_ptr<MapDHandler> handler,
                                  std::string base_path,
                                  std::string query_file_path);
 

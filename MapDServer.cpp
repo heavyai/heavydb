@@ -29,6 +29,7 @@
 #include "MapDRelease.h"
 
 #include "Shared/MapDParameters.h"
+#include "Shared/mapd_shared_ptr.h"
 #include "Shared/scope.h"
 
 #include <glog/logging.h>
@@ -46,9 +47,6 @@ using namespace ::apache::thrift::concurrency;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::server;
 using namespace ::apache::thrift::transport;
-
-using boost::make_shared;
-using boost::shared_ptr;
 
 extern bool g_aggregator;
 extern size_t g_leaf_count;
@@ -148,8 +146,8 @@ void start_server(TThreadedServer& server) {
   }
 }
 
-shared_ptr<MapDHandler> warmup_handler = 0;  // global "warmup_handler" needed to avoid circular dependency
-                                             // between "MapDHandler" & function "run_warmup_queries"
+mapd::shared_ptr<MapDHandler> warmup_handler = 0;  // global "warmup_handler" needed to avoid circular dependency
+                                                   // between "MapDHandler" & function "run_warmup_queries"
 
 void releaseWarmupSession(TSessionId& sessionId, std::ifstream& query_file) {
   query_file.close();
@@ -158,7 +156,7 @@ void releaseWarmupSession(TSessionId& sessionId, std::ifstream& query_file) {
   }
 }
 
-void run_warmup_queries(boost::shared_ptr<MapDHandler> handler, std::string base_path, std::string query_file_path) {
+void run_warmup_queries(mapd::shared_ptr<MapDHandler> handler, std::string base_path, std::string query_file_path) {
   // run warmup queries to load cache if requested
   if (query_file_path.empty()) {
     return;
@@ -555,39 +553,39 @@ int main(int argc, char** argv) {
   // on shutdown
   register_signal_handler();
 
-  shared_ptr<MapDHandler> handler(new MapDHandler(db_leaves,
-                                                  string_leaves,
-                                                  base_path,
-                                                  device,
-                                                  allow_multifrag,
-                                                  jit_debug,
-                                                  read_only,
-                                                  allow_loop_joins,
-                                                  enable_rendering,
-                                                  cpu_buffer_mem_bytes,
-                                                  render_mem_bytes,
-                                                  num_gpus,
-                                                  start_gpu,
-                                                  reserved_gpu_mem,
-                                                  num_reader_threads,
-                                                  ldapMetadata,
-                                                  mapd_parameters,
-                                                  db_convert_dir,
-                                                  enable_legacy_syntax,
-                                                  enable_access_priv_check));
+  mapd::shared_ptr<MapDHandler> handler(new MapDHandler(db_leaves,
+                                                        string_leaves,
+                                                        base_path,
+                                                        device,
+                                                        allow_multifrag,
+                                                        jit_debug,
+                                                        read_only,
+                                                        allow_loop_joins,
+                                                        enable_rendering,
+                                                        cpu_buffer_mem_bytes,
+                                                        render_mem_bytes,
+                                                        num_gpus,
+                                                        start_gpu,
+                                                        reserved_gpu_mem,
+                                                        num_reader_threads,
+                                                        ldapMetadata,
+                                                        mapd_parameters,
+                                                        db_convert_dir,
+                                                        enable_legacy_syntax,
+                                                        enable_access_priv_check));
 
   if (mapd_parameters.ha_group_id.empty()) {
-    shared_ptr<TProcessor> processor(new MapDProcessor(handler));
+    mapd::shared_ptr<TProcessor> processor(new MapDProcessor(handler));
 
-    shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(mapd_parameters.mapd_server_port));
+    mapd::shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(mapd_parameters.mapd_server_port));
 
-    shared_ptr<TTransportFactory> bufTransportFactory(new TBufferedTransportFactory());
-    shared_ptr<TProtocolFactory> bufProtocolFactory(new TBinaryProtocolFactory());
+    mapd::shared_ptr<TTransportFactory> bufTransportFactory(new TBufferedTransportFactory());
+    mapd::shared_ptr<TProtocolFactory> bufProtocolFactory(new TBinaryProtocolFactory());
     TThreadedServer bufServer(processor, bufServerTransport, bufTransportFactory, bufProtocolFactory);
 
-    shared_ptr<TServerTransport> httpServerTransport(new TServerSocket(http_port));
-    shared_ptr<TTransportFactory> httpTransportFactory(new THttpServerTransportFactory());
-    shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());
+    mapd::shared_ptr<TServerTransport> httpServerTransport(new TServerSocket(http_port));
+    mapd::shared_ptr<TTransportFactory> httpTransportFactory(new THttpServerTransportFactory());
+    mapd::shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());
     TThreadedServer httpServer(processor, httpServerTransport, httpTransportFactory, httpProtocolFactory);
 
     std::thread bufThread(start_server, std::ref(bufServer));

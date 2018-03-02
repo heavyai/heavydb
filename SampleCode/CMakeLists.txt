@@ -3,6 +3,12 @@ set(RUNTIME_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
 
 find_package(Boost COMPONENTS system program_options regex REQUIRED QUIET)
 find_package(Thrift REQUIRED)
+include_directories(${Thrift_INCLUDE_DIRS})
+if("${Thrift_version}" VERSION_LESS "0.11.0")
+  add_definitions("-DHAVE_THRIFT_BOOST_SHAREDPTR")
+else()
+  add_definitions("-DHAVE_THRIFT_STD_SHAREDPTR")
+endif()
 
 add_executable(StreamInsertSimple StreamInsertSimple.cpp)
 add_executable(DataGen DataGen.cpp)

@@ -54,6 +54,7 @@
 #include "MapDRelease.h"
 #include "MapDServer.h"
 #include "Shared/checked_alloc.h"
+#include "Shared/mapd_shared_ptr.h"
 #include "Shared/ThriftTypesConvert.h"
 #include "gen-cpp/MapD.h"
 
@@ -67,8 +68,6 @@ using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
 
 const std::string MapDQLRelease(MAPD_RELEASE);
-
-using boost::shared_ptr;
 
 namespace {
 
@@ -597,16 +596,16 @@ bool backchannel(int action, ClientContext* cc) {
   }
   if (state == INTERRUPTIBLE && action == INTERRUPT) {
     CHECK(context);
-    shared_ptr<TTransport> transport2;
-    shared_ptr<TProtocol> protocol2;
-    shared_ptr<TTransport> socket2;
+    mapd::shared_ptr<TTransport> transport2;
+    mapd::shared_ptr<TProtocol> protocol2;
+    mapd::shared_ptr<TTransport> socket2;
     if (context->http) {
-      transport2 = shared_ptr<TTransport>(new THttpClient(context->server_host, context->port, "/"));
-      protocol2 = shared_ptr<TProtocol>(new TJSONProtocol(transport2));
+      transport2 = mapd::shared_ptr<TTransport>(new THttpClient(context->server_host, context->port, "/"));
+      protocol2 = mapd::shared_ptr<TProtocol>(new TJSONProtocol(transport2));
     } else {
-      socket2 = shared_ptr<TTransport>(new TSocket(context->server_host, context->port));
-      transport2 = shared_ptr<TTransport>(new TBufferedTransport(socket2));
-      protocol2 = shared_ptr<TProtocol>(new TBinaryProtocol(transport2));
+      socket2 = mapd::shared_ptr<TTransport>(new TSocket(context->server_host, context->port));
+      transport2 = mapd::shared_ptr<TTransport>(new TBufferedTransport(socket2));
+      protocol2 = mapd::shared_ptr<TProtocol>(new TBinaryProtocol(transport2));
     }
     MapDClient c2(protocol2);
     ClientContext context2(*transport2, c2);
@@ -1092,16 +1091,16 @@ int main(int argc, char** argv) {
     passwd = mapd_getpass();
   }
 
-  shared_ptr<TTransport> transport;
-  shared_ptr<TProtocol> protocol;
-  shared_ptr<TTransport> socket;
+  mapd::shared_ptr<TTransport> transport;
+  mapd::shared_ptr<TProtocol> protocol;
+  mapd::shared_ptr<TTransport> socket;
   if (http) {
-    transport = shared_ptr<TTransport>(new THttpClient(server_host, port, "/"));
-    protocol = shared_ptr<TProtocol>(new TJSONProtocol(transport));
+    transport = mapd::shared_ptr<TTransport>(new THttpClient(server_host, port, "/"));
+    protocol = mapd::shared_ptr<TProtocol>(new TJSONProtocol(transport));
   } else {
-    socket = shared_ptr<TTransport>(new TSocket(server_host, port));
-    transport = shared_ptr<TTransport>(new TBufferedTransport(socket));
-    protocol = shared_ptr<TProtocol>(new TBinaryProtocol(transport));
+    socket = mapd::shared_ptr<TTransport>(new TSocket(server_host, port));
+    transport = mapd::shared_ptr<TTransport>(new TBufferedTransport(socket));
+    protocol = mapd::shared_ptr<TProtocol>(new TBinaryProtocol(transport));
   }
   MapDClient c(protocol);
   ClientContext context(*transport, c);

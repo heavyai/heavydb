@@ -34,7 +34,8 @@
 #include <boost/algorithm/string.hpp>
 #include <glog/logging.h>
 
-#include "../Shared/sqltypes.h"
+#include "Shared/mapd_shared_ptr.h"
+#include "Shared/sqltypes.h"
 
 #include <thread>
 #include <chrono>
@@ -52,9 +53,6 @@
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
-
-// Thrift uses boost::shared_ptr instead of std::shared_ptr
-using boost::shared_ptr;
 
 struct ConnectionDetails {
   std::string server_host;
@@ -97,9 +95,9 @@ class RowToColumnLoader {
 
   ConnectionDetails conn_details_;
 
-  shared_ptr<MapDClient> client_;
+  mapd::shared_ptr<MapDClient> client_;
   TSessionId session_;
-  shared_ptr<apache::thrift::transport::TTransport> mytransport_;
+  mapd::shared_ptr<apache::thrift::transport::TTransport> mytransport_;
 
   void createConnection(ConnectionDetails con);
   void closeConnection();
