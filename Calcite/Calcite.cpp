@@ -31,11 +31,12 @@
 #include <utility>
 #include "Catalog/Catalog.h"
 
-using namespace std;
 using namespace rapidjson;
 using namespace apache::thrift;
 using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
+
+using boost::shared_ptr;
 
 namespace {
 template <typename XDEBUG_OPTION, typename REMOTE_DEBUG_OPTION, typename... REMAINING_ARGS>
@@ -90,19 +91,19 @@ static void start_calcite_server_as_daemon(const int mapd_port,
   }
 }
 
-std::pair<boost::shared_ptr<CalciteServerClient>, boost::shared_ptr<TTransport>> get_client(int port) {
-  boost::shared_ptr<TTransport> socket(new TSocket("localhost", port));
-  boost::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+std::pair<shared_ptr<CalciteServerClient>, shared_ptr<TTransport>> get_client(int port) {
+  shared_ptr<TTransport> socket(new TSocket("localhost", port));
+  shared_ptr<TTransport> transport(new TBufferedTransport(socket));
   try {
     transport->open();
 
   } catch (TException& tx) {
     throw tx;
   }
-  boost::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-  boost::shared_ptr<CalciteServerClient> client;
+  shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+  shared_ptr<CalciteServerClient> client;
   client.reset(new CalciteServerClient(protocol));
-  std::pair<boost::shared_ptr<CalciteServerClient>, boost::shared_ptr<TTransport>> ret;
+  std::pair<shared_ptr<CalciteServerClient>, shared_ptr<TTransport>> ret;
   return std::make_pair(client, transport);
 }
 
@@ -120,8 +121,7 @@ void Calcite::runServer(const int mapd_port,
     LOG(ERROR) << "Please check that you are not trying to run two servers on same port";
     LOG(ERROR) << "Attempting to shutdown orphaned Calcite server";
     try {
-      std::pair<boost::shared_ptr<CalciteServerClient>, boost::shared_ptr<TTransport>> clientP =
-          get_client(remote_calcite_port_);
+      std::pair<shared_ptr<CalciteServerClient>, shared_ptr<TTransport>> clientP = get_client(remote_calcite_port_);
       clientP.first->shutdown();
       clientP.second->close();
       LOG(ERROR) << "orphaned Calcite server shutdown";
@@ -139,8 +139,8 @@ void Calcite::runServer(const int mapd_port,
   for (int i = 2; i < 50; i++) {
     int ping_time = ping();
     if (ping_time > -1) {
-      LOG(INFO) << "Calcite server start took " << i * 100 << " ms " << endl;
-      LOG(INFO) << "ping took " << ping_time << " ms " << endl;
+      LOG(INFO) << "Calcite server start took " << i * 100 << " ms ";
+      LOG(INFO) << "ping took " << ping_time << " ms ";
       server_available_ = true;
       return;
     } else {
@@ -157,8 +157,7 @@ void Calcite::runServer(const int mapd_port,
 int Calcite::ping() {
   try {
     auto ms = measure<>::execution([&]() {
-      std::pair<boost::shared_ptr<CalciteServerClient>, boost::shared_ptr<TTransport>> clientP =
-          get_client(remote_calcite_port_);
+      std::pair<shared_ptr<CalciteServerClient>, shared_ptr<TTransport>> clientP = get_client(remote_calcite_port_);
       clientP.first->ping();
       clientP.second->close();
     });
@@ -186,24 +185,23 @@ Calcite::Calcite(const int mapd_port, const int port, const std::string& data_di
   }
 }
 
-void Calcite::updateMetadata(string catalog, string table) {
+void Calcite::updateMetadata(std::string catalog, std::string table) {
   if (server_available_) {
     auto ms = measure<>::execution([&]() {
-      std::pair<boost::shared_ptr<CalciteServerClient>, boost::shared_ptr<TTransport>> clientP =
-          get_client(remote_calcite_port_);
+      std::pair<shared_ptr<CalciteServerClient>, shared_ptr<TTransport>> clientP = get_client(remote_calcite_port_);
       clientP.first->updateMetadata(catalog, table);
       clientP.second->close();
     });
-    LOG(INFO) << "Time to updateMetadata " << ms << " (ms)" << endl;
+    LOG(INFO) << "Time to updateMetadata " << ms << " (ms)";
   } else {
-    LOG(INFO) << "Not routing to Calcite, server is not up" << endl;
+    LOG(INFO) << "Not routing to Calcite, server is not up";
   }
 }
 
-string Calcite::process(const Catalog_Namespace::SessionInfo& session_info,
-                        const string sql_string,
-                        const bool legacy_syntax,
-                        const bool is_explain) {
+std::string Calcite::process(const Catalog_Namespace::SessionInfo& session_info,
+                             const std::string sql_string,
+                             const bool legacy_syntax,
+                             const bool is_explain) {
   std::string ra = processImpl(session_info, sql_string, legacy_syntax, is_explain);
 
   // gather tables used in this query
@@ -246,8 +244,8 @@ std::vector<TCompletionHint> Calcite::getCompletionHints(const Catalog_Namespace
   return hints;
 }
 
-std::vector<string> Calcite::get_db_objects(const std::string ra) {
-  std::vector<string> v_db_obj;
+std::vector<std::string> Calcite::get_db_objects(const std::string ra) {
+  std::vector<std::string> v_db_obj;
   Document document;
   document.Parse(ra.c_str());
   const Value& rels = document["rels"];
@@ -265,14 +263,14 @@ std::vector<string> Calcite::get_db_objects(const std::string ra) {
   return v_db_obj;
 }
 
-string Calcite::processImpl(const Catalog_Namespace::SessionInfo& session_info,
-                            const string sql_string,
-                            const bool legacy_syntax,
-                            const bool is_explain) {
+std::string Calcite::processImpl(const Catalog_Namespace::SessionInfo& session_info,
+                                 const std::string sql_string,
+                                 const bool legacy_syntax,
+                                 const bool is_explain) {
   auto& cat = session_info.get_catalog();
-  string user = session_info.get_currentUser().userName;
-  string session = session_info.get_session_id();
-  string catalog = cat.get_currentDB().dbName;
+  std::string user = session_info.get_currentUser().userName;
+  std::string session = session_info.get_session_id();
+  std::string catalog = cat.get_currentDB().dbName;
 
   LOG(INFO) << "User " << user << " catalog " << catalog << " sql '" << sql_string << "'";
   if (server_available_) {
@@ -280,38 +278,36 @@ string Calcite::processImpl(const Catalog_Namespace::SessionInfo& session_info,
     try {
       auto ms = measure<>::execution([&]() {
 
-        std::pair<boost::shared_ptr<CalciteServerClient>, boost::shared_ptr<TTransport>> clientP =
-            get_client(remote_calcite_port_);
+        std::pair<shared_ptr<CalciteServerClient>, shared_ptr<TTransport>> clientP = get_client(remote_calcite_port_);
         clientP.first->process(ret, user, session, catalog, sql_string, legacy_syntax, is_explain);
         clientP.second->close();
       });
 
-      // LOG(INFO) << ret.plan_result << endl;
+      // LOG(INFO) << ret.plan_result;
       LOG(INFO) << "Time in Thrift " << (ms > ret.execution_time_ms ? ms - ret.execution_time_ms : 0)
-                << " (ms), Time in Java Calcite server " << ret.execution_time_ms << " (ms)" << endl;
+                << " (ms), Time in Java Calcite server " << ret.execution_time_ms << " (ms)";
       return ret.plan_result;
     } catch (InvalidParseRequest& e) {
       throw std::invalid_argument(e.whyUp);
     }
   } else {
-    LOG(INFO) << "Not routing to Calcite, server is not up" << endl;
+    LOG(INFO) << "Not routing to Calcite, server is not up";
     return "";
   }
 }
 
-string Calcite::getExtensionFunctionWhitelist() {
+std::string Calcite::getExtensionFunctionWhitelist() {
   if (server_available_) {
     TPlanResult ret;
-    string whitelist;
+    std::string whitelist;
 
-    std::pair<boost::shared_ptr<CalciteServerClient>, boost::shared_ptr<TTransport>> clientP =
-        get_client(remote_calcite_port_);
+    std::pair<shared_ptr<CalciteServerClient>, shared_ptr<TTransport>> clientP = get_client(remote_calcite_port_);
     clientP.first->getExtensionFunctionWhitelist(whitelist);
     clientP.second->close();
-    LOG(INFO) << whitelist << endl;
+    LOG(INFO) << whitelist;
     return whitelist;
   } else {
-    LOG(INFO) << "Not routing to Calcite, server is not up" << endl;
+    LOG(INFO) << "Not routing to Calcite, server is not up";
     return "";
   }
   CHECK(false);
@@ -319,11 +315,10 @@ string Calcite::getExtensionFunctionWhitelist() {
 }
 
 Calcite::~Calcite() {
-  LOG(INFO) << "Destroy Calcite Class" << std::endl;
+  LOG(INFO) << "Destroy Calcite Class";
   if (server_available_) {
     // running server
-    std::pair<boost::shared_ptr<CalciteServerClient>, boost::shared_ptr<TTransport>> clientP =
-        get_client(remote_calcite_port_);
+    std::pair<shared_ptr<CalciteServerClient>, shared_ptr<TTransport>> clientP = get_client(remote_calcite_port_);
     clientP.first->shutdown();
     clientP.second->close();
   }
