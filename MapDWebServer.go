@@ -278,17 +278,12 @@ func uploadHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	uploadDir := dataDir + "/mapd_import/"
-	switch r.FormValue("uploadtype") {
-	case "image":
-		uploadDir = dataDir + "/mapd_images/"
-	default:
-		sid := r.Header.Get("sessionid")
-		if len(r.FormValue("sessionid")) > 0 {
-			sid = r.FormValue("sessionid")
-		}
-		sessionId := filepath.Base(filepath.Clean(sid))
-		uploadDir = dataDir + "/mapd_import/" + sessionId + "/"
+	sid := r.Header.Get("sessionid")
+	if len(r.FormValue("sessionid")) > 0 {
+		sid = r.FormValue("sessionid")
 	}
+	sessionId := filepath.Base(filepath.Clean(sid))
+	uploadDir = dataDir + "/mapd_import/" + sessionId + "/"
 
 	for _, fhs := range r.MultipartForm.File {
 		for _, fh := range fhs {
@@ -457,15 +452,6 @@ func (rp *ReverseProxy) proxyHandler(rw http.ResponseWriter, r *http.Request) {
 	h.ServeHTTP(rw, r)
 }
 
-func imagesHandler(rw http.ResponseWriter, r *http.Request) {
-	if r.RequestURI == "/images/" {
-		rw.Write([]byte(""))
-		return
-	}
-	h := http.StripPrefix("/images/", http.FileServer(http.Dir(dataDir+"/mapd_images/")))
-	h.ServeHTTP(rw, r)
-}
-
 func downloadsHandler(rw http.ResponseWriter, r *http.Request) {
 	if r.RequestURI == "/downloads/" {
 		rw.Write([]byte(""))
@@ -551,7 +537,6 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/upload", uploadHandler)
-	mux.HandleFunc("/images/", imagesHandler)
 	mux.HandleFunc("/downloads/", downloadsHandler)
 	mux.HandleFunc("/deleteUpload", deleteUploadHandler)
 	mux.HandleFunc("/servers.json", serversHandler)
@@ -560,11 +545,6 @@ func main() {
 	mux.HandleFunc("/metrics/", metricsHandler)
 	mux.HandleFunc("/metrics/reset/", metricsResetHandler)
 	mux.HandleFunc("/version.txt", versionHandler)
-
-	// Required while Immerse V1 or V2 is deployed to a subdir of the frontend.
-	// To be removed once Immerse V1 is no longer distributed.
-	mux.HandleFunc("/v1/servers.json", serversHandler)
-	mux.HandleFunc("/v2/servers.json", serversHandler)
 
 	if profile {
 		mux.HandleFunc("/debug/pprof/", pprof.Index)
