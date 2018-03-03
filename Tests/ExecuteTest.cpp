@@ -4061,6 +4061,28 @@ TEST(Select, GeoSpatial) {
                                  dt)),
         static_cast<double>(0.01));
 
+    // Geodesic distance between Paris and LA: ~9105km
+    ASSERT_NEAR(static_cast<double>(9105643.0),
+                v<double>(run_simple_agg("SELECT ST_Distance(ST_GeomFromText('POINT(-118.4079 33.9434)', 4326), "
+                                         "ST_GeomFromText('POINT(2.5559 49.0083)', 4326)) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(10000.0));
+    // Cartesian distance between Paris and LA calculated from wgs84 degrees
+    ASSERT_NEAR(static_cast<double>(121.89),
+                v<double>(run_simple_agg("SELECT ST_Distance('POINT(-118.4079 33.9434)', 'POINT(2.5559 49.0083)') "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(1.0));
+    // Cartesian distance between Paris and LA wgs84 coords transformed to web merc
+    ASSERT_NEAR(static_cast<double>(13653148.0),
+                v<double>(run_simple_agg("SELECT ST_Distance("
+                                         "ST_Transform(ST_GeomFromText('POINT(-118.4079 33.9434)', 4326), 900913), "
+                                         "ST_Transform(ST_GeomFromText('POINT(2.5559 49.0083)', 4326), 900913)) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(10000.0));
+
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(p,p);", dt)));
     ASSERT_EQ(
@@ -4090,6 +4112,43 @@ TEST(Select, GeoSpatial) {
                                         "'POLYGON((2 0, 0 2, -2 0, 0 -2, 2 0),(1 0, 0 1, -1 0, 0 -1, 1 0))', "
                                         "'POINT(0.1 0.1)') FROM geospatial_test limit 1;",
                                         dt)));
+
+    // Coord accessors
+    ASSERT_NEAR(static_cast<double>(-118.4079),
+                v<double>(run_simple_agg("SELECT ST_X('POINT(-118.4079 33.9434)') "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.0));
+    ASSERT_NEAR(static_cast<double>(33.9434),
+                v<double>(run_simple_agg("SELECT ST_Y(ST_GeomFromText('POINT(-118.4079 33.9434)', 4326)) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.0));
+    ASSERT_NEAR(static_cast<double>(4021204.558),
+                v<double>(run_simple_agg("SELECT ST_Y(ST_Transform("
+                                         "ST_GeomFromText('POINT(-118.4079 33.9434)', 4326), 900913)) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.001));
+
+    ASSERT_NEAR(static_cast<double>(-118.4079),
+                v<double>(run_simple_agg("SELECT ST_XMax('POINT(-118.4079 33.9434)') "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.0));
+    ASSERT_NEAR(static_cast<double>(3960189.382),
+                v<double>(run_simple_agg("SELECT ST_YMax('MULTIPOLYGON "
+                                         "(((-13201820.2402333 3957482.147359,-13189665.9329505 3960189.38265416,"
+                                         "-13176924.0813953 3949756.56479131)))') "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.001));
+    ASSERT_NEAR(static_cast<double>(4021204.558),
+                v<double>(run_simple_agg("SELECT ST_YMin(ST_Transform(ST_GeomFromText("
+                                         "'LINESTRING (-118.4079 33.9434, 2.5559 49.0083)', 4326), 900913)) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.001));
   }
 }
 
