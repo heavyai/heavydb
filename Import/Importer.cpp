@@ -1211,14 +1211,13 @@ bool importGeoFromWkt(std::string& wkt,
   if (ogr_status != OGRERR_NONE)
     status = false;
   if (status && geom) {
-    int srid = 0;
+    int srid;
     auto sr = geom->getSpatialReference();
-
     if (!sr) {
       srid = 0;
     } else if (sr->IsGeographic()) {
       srid = 0;
-      // Need to transform all geographic objects to WGS 84, EPSG 4236 ?
+      // TODO: may have to transform all geographic objects to WGS 84, EPSG 4236
       // ti.set_dimension(4326);
       // auto poSR = new OGRSpatialReference();
       // poSR->importFromEPSG(4326);
@@ -1230,8 +1229,8 @@ bool importGeoFromWkt(std::string& wkt,
       // if (srid != -1)
       //  srid = 0;
     }
-    // TODO: Store SRID in ti
     ti.set_dimension(srid);
+    ti.set_scale(srid);
   }
   if (status == false) {
     if (geom)
@@ -1352,9 +1351,9 @@ bool importGeoFromLonLat(double lon, double lat, std::vector<double>& coords) {
   //poSR0->importFromEPSG(4326);
   //point->assignSpatialReference(poSR0);
 
-  auto poSR = new OGRSpatialReference();
-  poSR->importFromEPSG(3857);
-  point->transformTo(poSR);
+  // auto poSR = new OGRSpatialReference();
+  // poSR->importFromEPSG(3857);
+  // point->transformTo(poSR);
 
   coords.push_back(point->getX());
   coords.push_back(point->getY());

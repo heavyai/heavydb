@@ -1053,9 +1053,19 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
     CHECK_EQ(size_t(1), rex_function->size());
     return translateScalarRex(rex_function->getOperand(0));
   }
+  if (rex_function->getName() == std::string("ST_X") || rex_function->getName() == std::string("ST_Y") ||
+      rex_function->getName() == std::string("ST_XMin") || rex_function->getName() == std::string("ST_YMin") ||
+      rex_function->getName() == std::string("ST_XMax") || rex_function->getName() == std::string("ST_YMax")) {
+    if (rex_function->size() != size_t(1)) {
+      throw QueryNotSupported("Geo Function " + rex_function->getName() + " expects one argument");
+    }
+    return translateUnaryGeoFunction(rex_function);
+  }
   if (rex_function->getName() == std::string("ST_Distance") || rex_function->getName() == std::string("ST_Contains")) {
-    CHECK_EQ(size_t(2), rex_function->size());
-    return translateGeoFunction(rex_function);
+    if (rex_function->size() != size_t(2)) {
+      throw QueryNotSupported("Geo Function " + rex_function->getName() + " expects two arguments");
+    }
+    return translateBinaryGeoFunction(rex_function);
   }
   if (!ExtensionFunctionsWhitelist::get(rex_function->getName())) {
     throw QueryNotSupported("Function " + rex_function->getName() + " not supported");

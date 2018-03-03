@@ -1179,9 +1179,9 @@ geo_type:	POINT { $<nodeval>$ = new SQLType(kPOINT); }
 	;
 
 geography_type:	GEOGRAPHY '(' geo_type ')'
-	{ $<nodeval>$ = new SQLType(dynamic_cast<SQLType*>($<nodeval>3)->get_type(), 4326, 0, false); }
+	{ $<nodeval>$ = new SQLType(dynamic_cast<SQLType*>($<nodeval>3)->get_type(), 4326, 4326, false); }
 	|	GEOGRAPHY '(' geo_type ',' INTNUM ')'
-	{ $<nodeval>$ = new SQLType(dynamic_cast<SQLType*>($<nodeval>3)->get_type(), $<intval>5, 0, false); }
+	{ $<nodeval>$ = new SQLType(dynamic_cast<SQLType*>($<nodeval>3)->get_type(), $<intval>5, $<intval>5, false); }
 
 	/* the various things you can name */
 

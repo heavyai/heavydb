@@ -110,7 +110,9 @@ class RelAlgTranslator {
 
   std::vector<std::shared_ptr<Analyzer::Expr>> translateFunctionArgs(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateGeoFunction(const RexFunctionOperator*) const;
+  std::shared_ptr<Analyzer::Expr> translateUnaryGeoFunction(const RexFunctionOperator*) const;
+
+  std::shared_ptr<Analyzer::Expr> translateBinaryGeoFunction(const RexFunctionOperator*) const;
 
   std::vector<std::shared_ptr<Analyzer::Expr>> translateGeoFunctionArg(const RexScalar*, SQLTypeInfo&) const;
 
