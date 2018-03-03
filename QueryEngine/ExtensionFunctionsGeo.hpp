@@ -187,6 +187,60 @@ bool contains_polygon_linestring(double* poly, int64_t num, double* l, int64_t l
 }
 
 EXTENSION_NOINLINE
+double ST_X(double* p, int64_t pnum, int32_t isr, int32_t osr) {
+  return coord_x(p, 0, isr, osr);
+}
+
+EXTENSION_NOINLINE
+double ST_Y(double* p, int64_t pnum, int32_t isr, int32_t osr) {
+  return coord_y(p, 1, isr, osr);
+}
+
+EXTENSION_NOINLINE
+double ST_XMin(double* coords, int64_t num, int32_t isr, int32_t osr) {
+  double xmin = 0.0;
+  for (int32_t i = 0; i < num; i += 2) {
+    double x = coord_x(coords, i, isr, osr);
+    if (i == 0 || x < xmin)
+      xmin = x;
+  }
+  return xmin;
+}
+
+EXTENSION_NOINLINE
+double ST_YMin(double* coords, int64_t num, int32_t isr, int32_t osr) {
+  double ymin = 0.0;
+  for (int32_t i = 1; i < num; i += 2) {
+    double y = coord_y(coords, i, isr, osr);
+    if (i == 1 || y < ymin)
+      ymin = y;
+  }
+  return ymin;
+}
+
+EXTENSION_NOINLINE
+double ST_XMax(double* coords, int64_t num, int32_t isr, int32_t osr) {
+  double xmax = 0.0;
+  for (int32_t i = 0; i < num; i += 2) {
+    double x = coord_x(coords, i, isr, osr);
+    if (i == 0 || x > xmax)
+      xmax = x;
+  }
+  return xmax;
+}
+
+EXTENSION_NOINLINE
+double ST_YMax(double* coords, int64_t num, int32_t isr, int32_t osr) {
+  double ymax = 0.0;
+  for (int32_t i = 1; i < num; i += 2) {
+    double y = coord_y(coords, i, isr, osr);
+    if (i == 1 || y > ymax)
+      ymax = y;
+  }
+  return ymax;
+}
+
+EXTENSION_NOINLINE
 double ST_Distance_Point_Point(double* p1, int64_t p1num, double* p2, int64_t p2num, int32_t isr, int32_t osr) {
   double p1x = coord_x(p1, 0, isr, osr);
   double p1y = coord_y(p1, 1, isr, osr);
