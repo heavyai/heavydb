@@ -211,7 +211,7 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
   const auto& ext_func_args = ext_func_sig->getArgs();
   CHECK_LE(function_oper->getArity(), ext_func_args.size());
   std::vector<llvm::Value*> args;
-  for (size_t i = 0; i < function_oper->getArity(); ++i) {
+  for (size_t i = 0, j = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
     llvm::Value* arg_lv{nullptr};
@@ -230,14 +230,15 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
                                     {orig_arg_lvs[i], posArg(arg), ll_int(log2_bytes(elem_ti.get_logical_size()))});
       args.push_back(castArrayPointer(ptr_lv, elem_ti));
       args.push_back(cgen_state_->ir_builder_.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_)));
+      j++;
     } else {
-      const auto arg_target_ti = ext_arg_type_to_type_info(ext_func_args[i]);
+      const auto arg_target_ti = ext_arg_type_to_type_info(ext_func_args[i + j]);
       if (arg_ti.get_type() != arg_target_ti.get_type()) {
         arg_lv = codegenCast(orig_arg_lvs[i], arg_ti, arg_target_ti, false, co);
       } else {
         arg_lv = orig_arg_lvs[i];
       }
-      CHECK_EQ(arg_lv->getType(), ext_arg_type_to_llvm_type(ext_func_args[i], cgen_state_->context_));
+      CHECK_EQ(arg_lv->getType(), ext_arg_type_to_llvm_type(ext_func_args[i + j], cgen_state_->context_));
       args.push_back(arg_lv);
     }
   }
