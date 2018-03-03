@@ -127,6 +127,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         opTab.addOperator(new ST_Contains());
         opTab.addOperator(new ST_Distance());
         opTab.addOperator(new ST_GeomFromText());
+        opTab.addOperator(new ST_Transform());
         opTab.addOperator(new ST_X());
         opTab.addOperator(new ST_Y());
         opTab.addOperator(new ST_XMin());
@@ -656,7 +657,34 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     static class ST_GeomFromText extends SqlFunction {
 
         ST_GeomFromText() {
-            super("ST_GeomFromText", SqlKind.OTHER_FUNCTION, null, null, OperandTypes.ANY, SqlFunctionCategory.SYSTEM);
+            super("ST_GeomFromText",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.or(
+                            OperandTypes.family(SqlTypeFamily.ANY),
+                            OperandTypes.family(SqlTypeFamily.ANY, SqlTypeFamily.INTEGER)),
+                    SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            assert opBinding.getOperandCount() == 1;
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.INTEGER);
+        }
+    }
+
+    static class ST_Transform extends SqlFunction {
+
+        ST_Transform() {
+            super("ST_Transform",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.family(SqlTypeFamily.ANY, SqlTypeFamily.INTEGER),
+                    SqlFunctionCategory.SYSTEM);
         }
 
         @Override
