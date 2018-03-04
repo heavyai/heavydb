@@ -199,10 +199,13 @@ class SQLTypeInfo {
   HOST DEVICE inline SQLTypes get_subtype() const { return subtype; }
   HOST DEVICE inline int get_dimension() const { return dimension; }
   inline int get_precision() const { return dimension; }
+  HOST DEVICE inline int get_input_srid() const { return dimension; }
   HOST DEVICE inline int get_scale() const { return scale; }
+  HOST DEVICE inline int get_output_srid() const { return scale; }
   HOST DEVICE inline bool get_notnull() const { return notnull; }
   HOST DEVICE inline EncodingType get_compression() const { return compression; }
   HOST DEVICE inline int get_comp_param() const { return comp_param; }
+  HOST DEVICE inline int get_index() const { return comp_param; }
   HOST DEVICE inline int get_size() const { return size; }
   inline int get_logical_size() const {
     if (compression == kENCODING_FIXED) {
@@ -232,12 +235,15 @@ class SQLTypeInfo {
   inline void set_subtype(SQLTypes st) { subtype = st; }
   inline void set_dimension(int d) { dimension = d; }
   inline void set_precision(int d) { dimension = d; }
+  inline void set_input_srid(int d) { dimension = d; }
   inline void set_scale(int s) { scale = s; }
+  inline void set_output_srid(int s) { scale = s; }
   inline void set_notnull(bool n) { notnull = n; }
   inline void set_size(int s) { size = s; }
   inline void set_fixed_size() { size = get_storage_size(); }
   inline void set_compression(EncodingType c) { compression = c; }
   inline void set_comp_param(int p) { comp_param = p; }
+  inline void set_index(int s) { comp_param = s; }
 #ifndef __CUDACC__
   inline std::string get_type_name() const {
     if (IS_GEO(type) && scale == 4326)

@@ -4149,6 +4149,44 @@ TEST(Select, GeoSpatial) {
                                          "from geospatial_test limit 1;",
                                          dt)),
                 static_cast<double>(0.001));
+
+    // Point accessors
+    ASSERT_EQ(static_cast<double>(34.274647),
+              v<double>(run_simple_agg("SELECT ST_Y(ST_PointN(ST_GeomFromText('LINESTRING(-118.243683 34.052235, "
+                                       "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
+                                       "-122.446747 37.733795)', 4326), 2)) "
+                                       "from geospatial_test limit 1;",
+                                       dt)));
+    ASSERT_EQ(static_cast<double>(-122.446747),
+              v<double>(run_simple_agg("SELECT ST_X(ST_EndPoint(ST_GeomFromText('LINESTRING(-118.243683 34.052235, "
+                                       "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
+                                       "-122.446747 37.733795)', 4326))) "
+                                       "from geospatial_test limit 1;",
+                                       dt)));
+    ASSERT_NEAR(static_cast<double>(557637.370),  // geodesic distance between first and end points: LA - SF trip
+                v<double>(run_simple_agg("SELECT ST_Distance(ST_PointN(ST_GeomFromText("
+                                         "'LINESTRING(-118.243683 34.052235, "
+                                         "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
+                                         "-122.446747 37.733795)', 4326), 1), "
+                                         "ST_EndPoint(ST_GeomFromText("
+                                         "'LINESTRING(-118.243683 34.052235, "
+                                         "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
+                                         "-122.446747 37.733795)', 4326))) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.001));
+    ASSERT_NEAR(static_cast<double>(689217.783),  // cartesian distance between transformed first and end points
+                v<double>(run_simple_agg("SELECT ST_Distance(ST_StartPoint(ST_Transform(ST_GeomFromText("
+                                         "'LINESTRING(-118.243683 34.052235, "
+                                         "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
+                                         "-122.446747 37.733795)', 4326), 900913)), "
+                                         "ST_EndPoint(ST_Transform(ST_GeomFromText("
+                                         "'LINESTRING(-118.243683 34.052235, "
+                                         "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
+                                         "-122.446747 37.733795)', 4326), 900913))) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.001));
   }
 }
 

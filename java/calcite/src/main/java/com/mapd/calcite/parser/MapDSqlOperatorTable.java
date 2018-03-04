@@ -134,6 +134,9 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         opTab.addOperator(new ST_XMax());
         opTab.addOperator(new ST_YMin());
         opTab.addOperator(new ST_YMax());
+        opTab.addOperator(new ST_PointN());
+        opTab.addOperator(new ST_StartPoint());
+        opTab.addOperator(new ST_EndPoint());
         opTab.addOperator(new ApproxCountDistinct());
         if (extSigs == null) {
             return;
@@ -813,6 +816,66 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
             final RelDataTypeFactory typeFactory
                     = opBinding.getTypeFactory();
             return typeFactory.createSqlType(SqlTypeName.DOUBLE);
+        }
+    }
+
+    static class ST_PointN extends SqlFunction {
+
+        ST_PointN() {
+            super("ST_PointN",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.family(SqlTypeFamily.ANY, SqlTypeFamily.INTEGER),
+                    SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            assert opBinding.getOperandCount() == 1;
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.INTEGER);
+        }
+    }
+
+    static class ST_EndPoint extends SqlFunction {
+
+        ST_EndPoint() {
+            super("ST_EndPoint",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.family(SqlTypeFamily.ANY),
+                    SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            assert opBinding.getOperandCount() == 1;
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.INTEGER);
+        }
+    }
+
+    static class ST_StartPoint extends SqlFunction {
+
+        ST_StartPoint() {
+            super("ST_StartPoint",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.family(SqlTypeFamily.ANY),
+                    SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            assert opBinding.getOperandCount() == 1;
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.INTEGER);
         }
     }
 

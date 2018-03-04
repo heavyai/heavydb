@@ -157,12 +157,12 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       if (srid != 900913) {
         throw QueryNotSupported(rex_function->getName() + ": unsupported output SRID " + std::to_string(srid));
       }
-      if (arg_ti.get_dimension() > 0) {
-        if (arg_ti.get_dimension() != 4326) {
+      if (arg_ti.get_input_srid() > 0) {
+        if (arg_ti.get_input_srid() != 4326) {
           throw QueryNotSupported(rex_function->getName() + ": unsupported input SRID " +
-                                  std::to_string(arg_ti.get_dimension()));
+                                  std::to_string(arg_ti.get_input_srid()));
         }
-        arg_ti.set_scale(srid);  // We have a valid input SRID, register the output SRID for transform
+        arg_ti.set_output_srid(srid);  // We have a valid input SRID, register the output SRID for transform
       } else {
         throw QueryNotSupported(rex_function->getName() + ": unexpected input SRID, unable to transform");
       }
@@ -176,7 +176,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         throw QueryNotSupported(rex_function->getName() + " expects a string literal as first argument");
       }
       auto arg0 = translateGeoLiteral(rex_literal, arg_ti);
-      if (arg_ti.get_dimension() > 0) {
+      if (arg_ti.get_input_srid() > 0) {
         throw QueryNotSupported(rex_function->getName() + ": parsed geometry literal has unexpected SRID");
       }
       if (rex_function->size() == 2) {
@@ -200,9 +200,82 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         if (srid != 4326) {
           throw QueryNotSupported(rex_function->getName() + ": unsupported SRID " + std::to_string(srid));
         }
-        arg_ti.set_dimension(srid);  // Input SRID
-        arg_ti.set_scale(srid);      // Output SRID is the same - no transform
+        arg_ti.set_input_srid(srid);   // Input SRID
+        arg_ti.set_output_srid(srid);  // Output SRID is the same - no transform
       }
+      return arg0;
+    } else if (rex_function->getName() == std::string("ST_PointN")) {
+      if (rex_function->size() != 2) {
+        throw QueryNotSupported(rex_function->getName() + " expects two arguments");
+      }
+      const auto rex_scalar0 = dynamic_cast<const RexScalar*>(rex_function->getOperand(0));
+      if (!rex_scalar0) {
+        throw QueryNotSupported(rex_function->getName() + ": expects scalar as first argument");
+      }
+      auto arg0 = translateGeoFunctionArg(rex_scalar0, arg_ti);
+      if (arg_ti.get_type() != kLINESTRING) {
+        throw QueryNotSupported(rex_function->getName() + " expects LINESTRING as first argument");
+      }
+      const auto rex_literal = dynamic_cast<const RexLiteral*>(rex_function->getOperand(1));
+      if (!rex_literal) {
+        throw QueryNotSupported(rex_function->getName() + ": second argument is expected to be a literal");
+      }
+      const auto e = translateLiteral(rex_literal);
+      auto ce = std::dynamic_pointer_cast<Analyzer::Constant>(e);
+      if (!ce || !e->get_type_info().is_integer()) {
+        throw QueryNotSupported(rex_function->getName() + ": expecting integer index as second argument");
+      }
+      int32_t index = 0;
+      if (e->get_type_info().get_type() == kSMALLINT) {
+        index = static_cast<int32_t>(ce->get_constval().smallintval);
+      } else if (e->get_type_info().get_type() == kINT) {
+        index = static_cast<int32_t>(ce->get_constval().intval);
+      } else {
+        throw QueryNotSupported(rex_function->getName() + " expecting integer index");
+      }
+      if (arg_ti.get_index() != 0) {
+        throw QueryNotSupported(rex_function->getName() + ": LINESTRING is already indexed");
+      }
+      if (index == 0) {
+        throw QueryNotSupported(rex_function->getName() + ": invalid index");
+      }
+      arg_ti.set_index(index);
+      return arg0;
+    } else if (rex_function->getName() == std::string("ST_StartPoint")) {
+      if (rex_function->size() != 1) {
+        throw QueryNotSupported(rex_function->getName() + " expects one argument");
+      }
+      const auto rex_scalar0 = dynamic_cast<const RexScalar*>(rex_function->getOperand(0));
+      if (!rex_scalar0) {
+        throw QueryNotSupported(rex_function->getName() + ": expects scalar as first argument");
+      }
+      auto arg0 = translateGeoFunctionArg(rex_scalar0, arg_ti);
+      if (arg_ti.get_type() != kLINESTRING) {
+        throw QueryNotSupported(rex_function->getName() + " expects LINESTRING as first argument");
+      }
+      int32_t index = 1;
+      if (arg_ti.get_index() != 0) {
+        throw QueryNotSupported(rex_function->getName() + ": LINESTRING is already indexed");
+      }
+      arg_ti.set_index(index);
+      return arg0;
+    } else if (rex_function->getName() == std::string("ST_EndPoint")) {
+      if (rex_function->size() != 1) {
+        throw QueryNotSupported(rex_function->getName() + " expects one argument");
+      }
+      const auto rex_scalar0 = dynamic_cast<const RexScalar*>(rex_function->getOperand(0));
+      if (!rex_scalar0) {
+        throw QueryNotSupported(rex_function->getName() + ": expects scalar as first argument");
+      }
+      auto arg0 = translateGeoFunctionArg(rex_scalar0, arg_ti);
+      if (arg_ti.get_type() != kLINESTRING) {
+        throw QueryNotSupported(rex_function->getName() + " expects LINESTRING as first argument");
+      }
+      int32_t index = -1;
+      if (arg_ti.get_index() != 0) {
+        throw QueryNotSupported(rex_function->getName() + ": LINESTRING is already indexed");
+      }
+      arg_ti.set_index(index);
       return arg0;
     } else {
       throw QueryNotSupported("Unsupported argument: " + rex_function->getName());
@@ -238,24 +311,30 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
   SQLTypeInfo arg_ti;
   auto geoargs = translateGeoFunctionArg(rex_function->getOperand(0), arg_ti);
 
-  if (rex_function->getName() == std::string("ST_X") || rex_function->getName() == std::string("ST_Y")) {
-    if (arg_ti.get_type() != kPOINT) {
-      throw QueryNotSupported(rex_function->getName() + " expects a POINT");
-    }
-  }
-
-  // All geo function calls translated here only need the coords.
+  // All geo function calls translated here only need the coords, extras e.g. ring_sizes are dropped.
   // Specialize for other/new functions if needed.
   geoargs.erase(geoargs.begin() + 1, geoargs.end());
 
+  std::string specialized_geofunc{rex_function->getName()};
+  if (rex_function->getName() == std::string("ST_X") || rex_function->getName() == std::string("ST_Y")) {
+    if (arg_ti.get_type() == kLINESTRING && arg_ti.get_index() != 0) {
+      Datum index;
+      index.intval = arg_ti.get_index();
+      geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, index));
+    } else if (arg_ti.get_type() != kPOINT) {
+      throw QueryNotSupported(rex_function->getName() + " expects a POINT");
+    }
+    specialized_geofunc += suffix(arg_ti.get_type());
+  }
+
   Datum input_srid;
-  input_srid.intval = arg_ti.get_dimension();
+  input_srid.intval = arg_ti.get_input_srid();
   geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_srid));
   Datum output_srid;
-  output_srid.intval = arg_ti.get_scale();
+  output_srid.intval = arg_ti.get_output_srid();
   geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, output_srid));
 
-  return makeExpr<Analyzer::FunctionOper>(rex_function->getType(), rex_function->getName(), geoargs);
+  return makeExpr<Analyzer::FunctionOper>(rex_function->getType(), specialized_geofunc, geoargs);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
@@ -267,23 +346,35 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   SQLTypeInfo arg1_ti;
 
   auto geoargs0 = translateGeoFunctionArg(rex_function->getOperand(0), arg0_ti);
+  if (arg0_ti.get_type() == kLINESTRING) {
+    Datum index;
+    index.intval = arg0_ti.get_index();
+    geoargs0.push_back(makeExpr<Analyzer::Constant>(kINT, false, index));
+  }
   geoargs.insert(geoargs.end(), geoargs0.begin(), geoargs0.end());
   auto geoargs1 = translateGeoFunctionArg(rex_function->getOperand(1), arg1_ti);
+  if (arg1_ti.get_type() == kLINESTRING) {
+    Datum index;
+    index.intval = arg1_ti.get_index();
+    geoargs1.push_back(makeExpr<Analyzer::Constant>(kINT, false, index));
+  }
   geoargs.insert(geoargs.end(), geoargs1.begin(), geoargs1.end());
 
-  if (arg0_ti.get_scale() > 0 && arg0_ti.get_scale() != arg1_ti.get_scale()) {
+  if (arg0_ti.get_output_srid() > 0 && arg0_ti.get_output_srid() != arg1_ti.get_output_srid()) {
     throw QueryNotSupported(rex_function->getName() + " cannot accept different SRIDs");
   }
-  if (arg0_ti.get_dimension() > 0 && arg0_ti.get_dimension() != arg1_ti.get_dimension()) {
+  if (arg0_ti.get_input_srid() > 0 && arg0_ti.get_input_srid() != arg1_ti.get_input_srid()) {
     throw QueryNotSupported(rex_function->getName() + " currently doesn't handle transforms from different SRIDs");
   }
 
   std::string specialized_geofunc{rex_function->getName() + suffix(arg0_ti.get_type()) + suffix(arg1_ti.get_type())};
 
-  if (arg0_ti.get_scale() == 4326) {
+  if (arg0_ti.get_output_srid() == 4326) {
     // Need to call geodesic runtime functions
     if (rex_function->getName() == std::string("ST_Distance")) {
-      if (arg0_ti.get_type() == kPOINT && arg1_ti.get_type() == kPOINT) {
+      if ((arg0_ti.get_type() == kPOINT || (arg0_ti.get_type() == kLINESTRING && arg0_ti.get_index() != 0)) &&
+          (arg1_ti.get_type() == kPOINT || (arg1_ti.get_type() == kLINESTRING && arg1_ti.get_index() != 0))) {
+        // Geodesic distance between point or indexed linestrings
         specialized_geofunc += std::string("_Geodesic");
       } else {
         throw QueryNotSupported(rex_function->getName() + " currently doesn't accept non-POINT geographies");
@@ -295,10 +386,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
     // Need to call geometric/cartesian runtime functions
     // Add input/output SRID args to enable on-the-fly transforms
     Datum input_srid;
-    input_srid.intval = arg0_ti.get_dimension();
+    input_srid.intval = arg0_ti.get_input_srid();
     geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_srid));
     Datum output_srid;
-    output_srid.intval = arg0_ti.get_scale();
+    output_srid.intval = arg0_ti.get_output_srid();
     geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, output_srid));
   }
   return makeExpr<Analyzer::FunctionOper>(rex_function->getType(), specialized_geofunc, geoargs);
