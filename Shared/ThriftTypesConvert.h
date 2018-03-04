@@ -160,6 +160,9 @@ inline std::string thrift_to_name(const TTypeInfo& ti) {
     internal_ti.set_precision(ti.precision);
     internal_ti.set_scale(ti.scale);
   }
+  if (IS_GEO(type)) {
+    internal_ti.set_scale(ti.scale);
+  }
   return internal_ti.get_type_name();
 }
 

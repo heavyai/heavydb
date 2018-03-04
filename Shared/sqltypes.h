@@ -240,6 +240,8 @@ class SQLTypeInfo {
   inline void set_comp_param(int p) { comp_param = p; }
 #ifndef __CUDACC__
   inline std::string get_type_name() const {
+    if (IS_GEO(type) && scale == 4326)
+      return "GEOGRAPHY(" + type_name[(int)type] + ", 4326)";
     std::string ps = (type == kDECIMAL || type == kNUMERIC || subtype == kDECIMAL || subtype == kNUMERIC)
                          ? "(" + std::to_string(dimension) + "," + std::to_string(scale) + ")"
                          : "";
