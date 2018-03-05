@@ -24,6 +24,7 @@
 #include "InPlaceSort.h"
 #include "MaxwellCodegenPatch.h"
 #include "OutputBufferInitialization.h"
+#include "ScalarExprVisitor.h"
 
 #include "../CudaMgr/CudaMgr.h"
 #include "../Shared/checked_alloc.h"
@@ -1997,6 +1998,65 @@ int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_i
   return bucket;
 }
 
+namespace {
+
+class UsedColumnsVisitor : public ScalarExprVisitor<std::unordered_set<int>> {
+ protected:
+  virtual std::unordered_set<int> visitColumnVar(const Analyzer::ColumnVar* column) const override {
+    return {column->get_column_id()};
+  }
+
+  virtual std::unordered_set<int> aggregateResult(const std::unordered_set<int>& aggregate,
+                                                  const std::unordered_set<int>& next_result) const override {
+    auto result = aggregate;
+    result.insert(next_result.begin(), next_result.end());
+    return result;
+  }
+};
+
+std::vector<ssize_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_unit) {
+  if (ra_exe_unit.input_descs.size() > 1 || !ra_exe_unit.sort_info.order_entries.empty()) {
+    return {};
+  }
+  std::vector<ssize_t> target_indices(ra_exe_unit.target_exprs.size(), -1);
+  UsedColumnsVisitor columns_visitor;
+  std::unordered_set<int> used_columns;
+  for (const auto& simple_qual : ra_exe_unit.simple_quals) {
+    const auto crt_used_columns = columns_visitor.visit(simple_qual.get());
+    used_columns.insert(crt_used_columns.begin(), crt_used_columns.end());
+  }
+  for (const auto& qual : ra_exe_unit.quals) {
+    const auto crt_used_columns = columns_visitor.visit(qual.get());
+    used_columns.insert(crt_used_columns.begin(), crt_used_columns.end());
+  }
+  for (const auto& target : ra_exe_unit.target_exprs) {
+    if (dynamic_cast<const Analyzer::ColumnVar*>(target)) {
+      continue;
+    }
+    const auto crt_used_columns = columns_visitor.visit(target);
+    used_columns.insert(crt_used_columns.begin(), crt_used_columns.end());
+  }
+  for (size_t target_idx = 0; target_idx < ra_exe_unit.target_exprs.size(); ++target_idx) {
+    const auto target_expr = ra_exe_unit.target_exprs[target_idx];
+    CHECK(target_expr);
+    const auto& ti = target_expr->get_type_info();
+    const bool is_real_str_or_array = (ti.is_string() && ti.get_compression() == kENCODING_NONE) || ti.is_array();
+    if (is_real_str_or_array) {
+      continue;
+    }
+    const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
+    if (!col_var) {
+      continue;
+    }
+    if (!is_real_str_or_array && used_columns.find(col_var->get_column_id()) == used_columns.end()) {
+      target_indices[target_idx] = 0;
+    }
+  }
+  return target_indices;
+}
+
+}  // namespace
+
 void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                                                     const size_t max_groups_buffer_entry_count,
                                                     const size_t small_groups_buffer_entry_count,
@@ -2198,6 +2258,14 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
       CHECK(!must_use_baseline_sort);
       size_t group_slots =
           ra_exe_unit_.scan_limit ? static_cast<size_t>(ra_exe_unit_.scan_limit) : max_groups_buffer_entry_count;
+      const auto target_indices =
+          executor_->plan_state_->allow_lazy_fetch_ ? target_expr_proj_indices(ra_exe_unit_) : std::vector<ssize_t>{};
+      agg_col_widths.clear();
+      for (auto wid : get_col_byte_widths(ra_exe_unit_.target_exprs, target_indices)) {
+        // Baseline layout goes through new result set and ResultSetStorage::initializeRowWise
+        // assumes everything is padded to 8 bytes, make it so.
+        agg_col_widths.push_back({wid, static_cast<int8_t>(wid ? 8 : 0)});
+      }
       query_mem_desc_ = {executor_,
                          allow_multifrag,
                          col_range_info.hash_type_,
@@ -2210,7 +2278,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                          0,
 #endif
                          agg_col_widths,
-                         {},
+                         target_indices,
                          group_slots,
                          0,
                          col_range_info.min,
@@ -2897,6 +2965,7 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(llvm::Value* groups_buffer,
                     {groups_buffer,
                      LL_INT(static_cast<int32_t>(query_mem_desc_.entry_count)),
                      group_expr_lv,
+                     executor_->posArg(nullptr),
                      LL_INT(row_size_quad)});
   }
 }

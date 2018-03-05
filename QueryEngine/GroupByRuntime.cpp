@@ -215,10 +215,11 @@ extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_one_key_with_watchdog(
 extern "C" ALWAYS_INLINE DEVICE int64_t* get_scan_output_slot(int64_t* output_buffer,
                                                               const uint32_t output_buffer_entry_count,
                                                               const uint32_t pos,
+                                                              const int64_t offset_in_fragment,
                                                               const uint32_t row_size_quad) {
   uint64_t off = static_cast<uint64_t>(pos) * static_cast<uint64_t>(row_size_quad);
   if (pos < output_buffer_entry_count) {
-    output_buffer[off] = pos;
+    output_buffer[off] = offset_in_fragment;
     return output_buffer + off + 1;
   }
   return NULL;
