@@ -986,6 +986,61 @@ class RelSort : public RelAlgNode {
   bool hasEquivCollationOf(const RelSort& that) const;
 };
 
+class RelModify : public RelAlgNode {
+ public:
+  enum class ModifyOperation { Insert };
+  using RelAlgNodeInputPtr = std::shared_ptr<const RelAlgNode>;
+
+  static std::string yieldModifyOperationString(ModifyOperation const op) {
+    switch (op) {
+      case ModifyOperation::Insert:
+        return "INSERT";
+      default:
+        break;
+    }
+    throw std::runtime_error("Unexpected ModifyOperation enum encountered.");
+  }
+
+  static ModifyOperation yieldModifyOperationEnum(std::string const& op_string) {
+    if (op_string == "INSERT")
+      return ModifyOperation::Insert;
+    throw std::runtime_error(std::string("Unsupported logical modify operation encountered " + op_string));
+  }
+
+  RelModify(TableDescriptor const* const td, bool flattened, std::string const& op_string, RelAlgNodeInputPtr input)
+      : table_descriptor_(td), flattened_(flattened), operation_(yieldModifyOperationEnum(op_string)) {
+    inputs_.push_back(input);
+  }
+
+  RelModify(TableDescriptor const* const td, bool flattened, ModifyOperation op, RelAlgNodeInputPtr input)
+      : table_descriptor_(td), flattened_(flattened), operation_(op) {
+    inputs_.push_back(input);
+  }
+
+  TableDescriptor const* const getTableDescriptor() const { return table_descriptor_; }
+  bool const isFlattened() const { return flattened_; }
+  ModifyOperation getOperation() const { return operation_; }
+
+  size_t size() const override { return 0; }
+  std::shared_ptr<RelAlgNode> deepCopy() const override {
+    return std::make_shared<RelModify>(table_descriptor_, flattened_, operation_, inputs_[0]);
+  }
+
+  std::string toString() const override {
+    std::ostringstream result_stream;
+    result_stream << std::boolalpha << "(RelModify<" + std::to_string(reinterpret_cast<uint64_t>(this)) + "> "
+                  << table_descriptor_->tableName << " flattened= " << flattened_
+                  << " operation= " << yieldModifyOperationString(operation_) << ")";
+
+    return result_stream.str();
+  }
+
+ private:
+  const TableDescriptor* table_descriptor_;
+  bool flattened_;
+  ModifyOperation operation_;
+};
+
 class RelLogicalValues : public RelAlgNode {
  public:
   RelLogicalValues(const std::vector<TargetMetaInfo>& tuple_type) : tuple_type_(tuple_type) {}

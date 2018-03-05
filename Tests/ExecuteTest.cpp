@@ -68,8 +68,8 @@ std::string build_create_table_statement(const std::string& columns_definition,
   const std::string fragment_size_def{shard_info.shard_col.empty() ? "fragment_size=" + std::to_string(fragment_size)
                                                                    : ""};
 
-  const std::string shard_count_def{shard_info.shard_col.empty() ? "" : "shard_count=" +
-                                                                            std::to_string(shard_info.shard_count)};
+  const std::string shard_count_def{
+      shard_info.shard_col.empty() ? "" : "shard_count=" + std::to_string(shard_info.shard_count)};
 
   return "CREATE TABLE " + table_name + "(" + columns_definition + shard_key_def +
          boost::algorithm::join(shared_dict_def, "") + ") WITH (" + fragment_size_def + shard_count_def + ");";

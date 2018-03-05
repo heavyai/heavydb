@@ -319,7 +319,8 @@ std::unordered_set<const RelProject*> get_visible_projects(const RelAlgNode* roo
     return {project};
   }
 
-  if (dynamic_cast<const RelAggregate*>(root) || dynamic_cast<const RelScan*>(root)) {
+  if (dynamic_cast<const RelAggregate*>(root) || dynamic_cast<const RelScan*>(root) ||
+      dynamic_cast<const RelLogicalValues*>(root) || dynamic_cast<const RelModify*>(root)) {
     return std::unordered_set<const RelProject*>{};
   }
 
@@ -370,7 +371,8 @@ std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> bui
   std::unordered_set<const RelAlgNode*> visited;
   std::vector<const RelAlgNode*> work_set;
   for (auto node : nodes) {
-    if (std::dynamic_pointer_cast<RelScan>(node) || visited.count(node.get())) {
+    if (std::dynamic_pointer_cast<RelScan>(node) || std::dynamic_pointer_cast<RelModify>(node) ||
+        visited.count(node.get())) {
       continue;
     }
     work_set.push_back(node.get());
@@ -394,7 +396,7 @@ std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> bui
       CHECK(join || project || aggregate || filter || sort || left_deep_join || logical_values);
       for (size_t i = 0; i < walker->inputCount(); ++i) {
         auto src = walker->getInput(i);
-        if (dynamic_cast<const RelScan*>(src)) {
+        if (dynamic_cast<const RelScan*>(src) || dynamic_cast<const RelModify*>(src)) {
           continue;
         }
         if (web.empty() || !web.count(src)) {
@@ -797,7 +799,7 @@ std::unordered_map<const RelAlgNode*, std::unordered_set<size_t>> mark_live_colu
   std::vector<const RelAlgNode*> work_set;
   for (auto node_it = nodes.rbegin(); node_it != nodes.rend(); ++node_it) {
     auto node = node_it->get();
-    if (dynamic_cast<const RelScan*>(node) || live_outs.count(node)) {
+    if (dynamic_cast<const RelScan*>(node) || live_outs.count(node) || dynamic_cast<const RelModify*>(node)) {
       continue;
     }
     std::vector<size_t> all_live(node->size());

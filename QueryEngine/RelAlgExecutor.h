@@ -39,6 +39,9 @@ struct FirstStepExecutionResult {
 
 class RelAlgExecutor {
  public:
+  using TargetInfoList = std::vector<TargetInfo>;
+  using RowSetPtrSharedPtr = std::shared_ptr<RowSetPtr>;
+
   RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat)
       : executor_(executor), cat_(cat), now_(0), queue_time_ms_(0) {}
 
@@ -133,6 +136,7 @@ class RelAlgExecutor {
                               const int64_t queue_time_ms);
 
   ExecutionResult executeLogicalValues(const RelLogicalValues*, const ExecutionOptions&);
+  ExecutionResult executeModify(const RelModify* modify, const ExecutionOptions& eo);
 
   // TODO(alex): just move max_groups_buffer_entry_guess to RelAlgExecutionUnit once
   //             we deprecate the plan-based executor paths and remove WorkUnit

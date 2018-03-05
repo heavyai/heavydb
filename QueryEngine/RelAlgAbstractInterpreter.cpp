@@ -1472,6 +1472,8 @@ class RelAlgAbstractInterpreter {
         ra_node = dispatchSort(crt_node);
       } else if (rel_op == std::string("LogicalValues")) {
         ra_node = dispatchLogicalValues(crt_node);
+      } else if (rel_op == std::string("LogicalTableModify")) {
+        ra_node = dispatchModify(crt_node);
       } else {
         throw QueryNotSupported(std::string("Node ") + rel_op + " not supported yet");
       }
@@ -1559,6 +1561,16 @@ class RelAlgAbstractInterpreter {
     }
     const auto offset = get_int_literal_field(sort_ra, "offset", 0);
     return std::make_shared<RelSort>(collation, limit > 0 ? limit : 0, offset, inputs.front());
+  }
+
+  std::shared_ptr<RelModify> dispatchModify(const rapidjson::Value& logical_modify_ra) {
+    const auto inputs = getRelAlgInputs(logical_modify_ra);
+    CHECK_EQ(size_t(1), inputs.size());
+
+    const auto table_descriptor = getTableFromScanNode(logical_modify_ra);
+    bool flattened = json_bool(field(logical_modify_ra, "flattened"));
+    std::string op = json_str(field(logical_modify_ra, "operation"));
+    return std::make_shared<RelModify>(table_descriptor, flattened, op, inputs[0]);
   }
 
   std::shared_ptr<RelLogicalValues> dispatchLogicalValues(const rapidjson::Value& logical_values_ra) {

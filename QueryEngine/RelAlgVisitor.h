@@ -67,6 +67,10 @@ class RelAlgVisitor {
     if (logical_values) {
       return aggregateResult(result, visitLogicalValues(logical_values));
     }
+    const auto modify = dynamic_cast<const RelModify*>(rel_alg);
+    if( modify ) {
+      return aggregateResult(result, visitModify(modify));
+    }
     CHECK(false);
     return defaultResult();
   }
@@ -90,6 +94,8 @@ class RelAlgVisitor {
   virtual T visitSort(const RelSort*) const { return defaultResult(); }
 
   virtual T visitLogicalValues(const RelLogicalValues*) const { return defaultResult(); }
+
+  virtual T visitModify(const RelModify*) const { return defaultResult(); }
 
  protected:
   virtual T aggregateResult(const T& aggregate, const T& next_result) const { return next_result; }

@@ -20,6 +20,7 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelWriter;
 import org.apache.calcite.rel.logical.LogicalAggregate;
 import org.apache.calcite.rel.logical.LogicalTableScan;
+import org.apache.calcite.rel.logical.LogicalTableModify;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.sql.SqlExplainLevel;
 import org.apache.calcite.util.JsonBuilder;
@@ -73,6 +74,10 @@ public class MapDRelJsonWriter implements RelWriter {
     if (rel instanceof LogicalAggregate) {
       map.put("fields", rel.getRowType().getFieldNames());
     }
+    if (rel instanceof LogicalTableModify ) {
+      // FIX-ME:  What goes here?
+    }
+
     for (Pair<String, Object> value : values) {
       if (value.right instanceof RelNode) {
         continue;

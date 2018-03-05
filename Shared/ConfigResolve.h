@@ -12,4 +12,11 @@ using JVMRemoteDebugSelector = PreprocessorTrue;
 using JVMRemoteDebugSelector = PreprocessorFalse;
 #endif
 
+// Short-term crutch
+#ifdef ENABLE_PARSER_WRAPPER_BYPASS
+using PWParseToRAFilterSelector = PreprocessorTrue;
+#else
+using PWParseToRAFilterSelector = PreprocessorFalse;
+#endif
+
 #endif

@@ -3075,8 +3075,16 @@ Planner::RootPlan* MapDHandler::parse_to_plan(const std::string& query_str,
   return nullptr;
 }
 
-std::string MapDHandler::parse_to_ra(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info) {
+std::string MapDHandler::parse_to_ra(const std::string& query_str,
+                                     const Catalog_Namespace::SessionInfo& session_info,
+                                     PreprocessorFalse const&) {
   INJECT_TIMER(parse_to_ra)
+  return calcite_->process(session_info, query_str, legacy_syntax_, false);
+}
+
+std::string MapDHandler::parse_to_ra(const std::string& query_str,
+                                     const Catalog_Namespace::SessionInfo& session_info,
+                                     PreprocessorTrue const&) {
   ParserWrapper pw{query_str};
   const std::string actual_query{pw.is_select_explain || pw.is_select_calcite_explain ? pw.actual_query : query_str};
   if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {

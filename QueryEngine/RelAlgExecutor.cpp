@@ -501,6 +501,12 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
       addTemporaryTable(-logical_values->getId(), exec_desc.getResult().getDataPtr());
       return;
     }
+    const auto modify = dynamic_cast<const RelModify*>(body);
+    if (modify) {
+      exec_desc.setResult(executeModify(modify, eo_work_unit));
+      return;
+    }
+
     CHECK(false);
   } catch (const UnfoldedMultiJoinRequired&) {
     executeUnfoldedMultiJoin(body, exec_desc, co, eo, queue_time_ms);
@@ -1146,6 +1152,18 @@ ExecutionResult RelAlgExecutor::executeJoin(const RelJoin* join,
                                             const int64_t queue_time_ms) {
   const auto work_unit = createJoinWorkUnit(join, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   return executeWorkUnit(work_unit, join->getOutputMetainfo(), false, co, eo, render_info, queue_time_ms);
+}
+
+ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify, const ExecutionOptions& eo) {
+  if (eo.just_explain) {
+    throw std::runtime_error("EXPLAIN not supported for ModifyTable");
+  }
+
+  auto rs = std::make_shared<ResultSet>(
+      TargetInfoList{}, ExecutorDeviceType::CPU, QueryMemoryDescriptor{}, executor_->getRowSetMemoryOwner(), executor_);
+
+  std::vector<TargetMetaInfo> empty_targets;
+  return {rs, empty_targets};
 }
 
 ExecutionResult RelAlgExecutor::executeLogicalValues(const RelLogicalValues* logical_values,

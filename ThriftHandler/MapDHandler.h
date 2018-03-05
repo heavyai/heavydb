@@ -61,6 +61,7 @@
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
+#include "Shared/ConfigResolve.h"
 
 #include <fcntl.h>
 #include <glog/logging.h>
@@ -368,7 +369,17 @@ class MapDHandler : public MapDIf {
   static void value_to_thrift_column(const TargetValue& tv, const SQLTypeInfo& ti, TColumn& column);
   static TDatum value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti);
   static std::string apply_copy_to_shim(const std::string& query_str);
-  std::string parse_to_ra(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info);
+
+  std::string parse_to_ra(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info) {
+    return parse_to_ra(query_str, session_info, PWParseToRAFilterSelector());
+  }
+
+  std::string parse_to_ra(const std::string& query_str,
+                          const Catalog_Namespace::SessionInfo& session_info,
+                          PreprocessorTrue const&);
+  std::string parse_to_ra(const std::string& query_str,
+                          const Catalog_Namespace::SessionInfo& session_info,
+                          PreprocessorFalse const&);
 
   void sql_execute_impl(TQueryResult& _return,
                         const Catalog_Namespace::SessionInfo& session_info,

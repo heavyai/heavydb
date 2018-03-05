@@ -17,6 +17,7 @@
 package org.apache.calcite.rel.externalize;
 
 import org.apache.calcite.plan.RelOptCluster;
+import org.apache.calcite.plan.RelTraitSet;
 import org.apache.calcite.rel.RelCollation;
 import org.apache.calcite.rel.RelCollationImpl;
 import org.apache.calcite.rel.RelCollations;
@@ -27,6 +28,7 @@ import org.apache.calcite.rel.RelInput;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.AggregateCall;
 import org.apache.calcite.rel.core.CorrelationId;
+import org.apache.calcite.rel.core.TableModify.Operation;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
@@ -259,6 +261,8 @@ public class MapDRelJson {
     } else if (value instanceof RelDataTypeField) {
       return toJson((RelDataTypeField) value);
     } else if (value instanceof SemiJoinType) {
+      return value.toString();
+    } else if (value instanceof Operation) {
       return value.toString();
     } else {
       throw new UnsupportedOperationException("type not serializable: "

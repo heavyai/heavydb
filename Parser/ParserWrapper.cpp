@@ -30,7 +30,8 @@
 
 using namespace std;
 
-const std::vector<std::string> ParserWrapper::ddl_cmd = {"ALTER", "COPY", "GRANT", "CREATE", "DROP", "REVOKE", "SHOW", "TRUNCATE"};
+const std::vector<std::string> ParserWrapper::ddl_cmd =
+    {"ALTER", "COPY", "GRANT", "CREATE", "DROP", "REVOKE", "SHOW", "TRUNCATE"};
 
 const std::vector<std::string> ParserWrapper::update_dml_cmd = {
     "INSERT",

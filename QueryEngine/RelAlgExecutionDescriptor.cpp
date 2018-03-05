@@ -97,7 +97,7 @@ DAG build_dag(const RelAlgNode* sink) {
     }
 
     const auto input_num = node->inputCount();
-    CHECK(input_num == 1 || (dynamic_cast<const RelLogicalValues*>(node) && input_num == 0) ||
+    CHECK(input_num == 1 || (dynamic_cast<const RelModify*>(node) && input_num == 1) ||
           (input_num == 2 && (dynamic_cast<const RelJoin*>(node) || dynamic_cast<const RelLeftDeepInnerJoin*>(node))) ||
           (input_num > 2 &&
            (dynamic_cast<const RelMultiJoin*>(node) || dynamic_cast<const RelLeftDeepInnerJoin*>(node))));
@@ -150,6 +150,7 @@ std::vector<RaExecutionDesc> get_execution_descriptors(const RelAlgNode* ra_node
     CHECK_GE(node->inputCount(), size_t(0));
 #ifdef ENABLE_JOIN_EXEC
     CHECK((dynamic_cast<const RelJoin*>(node) && 2 == node->inputCount()) ||
+          (dynamic_cast<const RelModify*>(node) && 1 == node->inputCount()) ||
           (dynamic_cast<const RelLogicalValues*>(node) && node->inputCount() == 0) ||
           dynamic_cast<const RelLeftDeepInnerJoin*>(node) || (1 == node->inputCount()));
 #else
