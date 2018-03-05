@@ -82,16 +82,17 @@ void SysCatalog::init(const std::string& basePath,
   calciteMgr_ = calcite;
   check_privileges_ = check_privileges;
   sqliteConnector_.reset(new SqliteConnector(MAPD_SYSTEM_DB, basePath + "/mapd_catalogs/"));
-  if (check_privileges_) {
-    initObjectPrivileges();
-    buildRoleMap();
-    buildUserRoleMap();
-  }
-  if (!is_new_db) {
+  if (is_new_db) {
+    initDB();
+  } else {
+    checkAndExecuteMigrations();
     Catalog_Namespace::DBMetadata db_meta;
     CHECK(getMetadataForDB(MAPD_SYSTEM_DB, db_meta));
     currentDB_ = db_meta;
-    migrateSysCatalogSchema();
+  }
+  if (check_privileges_) {
+    buildRoleMap();
+    buildUserRoleMap();
   }
 }
 
@@ -115,30 +116,69 @@ void SysCatalog::initDB() {
       std::vector<std::string>{MAPD_ROOT_USER_ID_STR, MAPD_ROOT_USER, MAPD_ROOT_PASSWD_DEFAULT});
   sqliteConnector_->query(
       "CREATE TABLE mapd_databases (dbid integer primary key, name text unique, owner integer references mapd_users)");
-  sqliteConnector_->query(
-      "CREATE TABLE mapd_privileges (userid integer references mapd_users, dbid integer references mapd_databases, "
-      "select_priv boolean, insert_priv boolean, UNIQUE(userid, dbid))");
+  if (check_privileges_) {
+    sqliteConnector_->query("CREATE TABLE mapd_roles(roleName text, userName text, UNIQUE(roleName, userName))");
+    sqliteConnector_->query(
+        "CREATE TABLE mapd_object_privileges(roleName text, roleType bool, "
+        "objectName text, objectType integer, dbObjectType integer, dbId integer "
+        "references mapd_databases, tableId integer references mapd_tables, columnId integer references "
+        "mapd_columns, "
+        "privSelect bool, privInsert bool, privCreate bool, privTruncate bool, privDelete bool, privUpdate bool, "
+        "UNIQUE(roleName, dbObjectType, dbId, tableId, columnId))");
+  } else {
+    sqliteConnector_->query(
+        "CREATE TABLE mapd_privileges (userid integer references mapd_users, dbid integer references mapd_databases, "
+        "select_priv boolean, insert_priv boolean, UNIQUE(userid, dbid))");
+  }
   createDatabase("mapd", MAPD_ROOT_USER_ID);
 }
 
-void SysCatalog::migrateSysCatalogSchema() {
+void SysCatalog::checkAndExecuteMigrations() {
+  if (check_privileges_) {
+    createUserRoles();
+    migratePrivileges();
+  } else {
+    migratePrivileged_old();
+  }
+}
+
+void SysCatalog::createUserRoles() {
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_->query(
-        "CREATE TABLE IF NOT EXISTS mapd_privileges (userid integer references mapd_users, dbid integer references "
-        "mapd_databases, select_priv boolean, insert_priv boolean, UNIQUE(userid, dbid))");
-  } catch (const std::exception& e) {
+    sqliteConnector_->query("SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_roles'");
+    if (sqliteConnector_->getNumRows() != 0) {
+      // already done
+      sqliteConnector_->query("END TRANSACTION");
+      return;
+    }
+    sqliteConnector_->query("CREATE TABLE mapd_roles(roleName text, userName text, UNIQUE(roleName, userName))");
+    sqliteConnector_->query("SELECT name FROM mapd_users WHERE name <> \'" MAPD_ROOT_USER "\'");
+    size_t numRows = sqliteConnector_->getNumRows();
+    vector<string> user_names;
+    for (size_t i = 0; i < numRows; ++i) {
+      user_names.push_back(sqliteConnector_->getData<string>(i, 0));
+    }
+    for (const auto& user_name : user_names) {
+      // for each user, create a fake role with the same name
+      sqliteConnector_->query_with_text_params("INSERT INTO mapd_roles(roleName, userName) VALUES (?, ?)",
+                                               vector<string>{user_name, user_name});
+    }
+  } catch (const std::exception&) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
 }
 
-void SysCatalog::initObjectPrivileges() {
+void SysCatalog::migratePrivileges() {
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_->query(
-        "CREATE TABLE IF NOT EXISTS mapd_roles(roleName text, userName text, UNIQUE(roleName, userName))");
+    sqliteConnector_->query("SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_object_privileges'");
+    if (sqliteConnector_->getNumRows() != 0) {
+      // already done
+      sqliteConnector_->query("END TRANSACTION");
+      return;
+    }
     sqliteConnector_->query(
         "CREATE TABLE IF NOT EXISTS mapd_object_privileges(roleName text, roleType bool, "
         "objectName text, objectType integer, dbObjectType integer, dbId integer "
@@ -146,6 +186,96 @@ void SysCatalog::initObjectPrivileges() {
         "mapd_columns, "
         "privSelect bool, privInsert bool, privCreate bool, privTruncate bool, privDelete bool, privUpdate bool, "
         "UNIQUE(roleName, dbObjectType, dbId, tableId, columnId))");
+    // get the list of databases and their grantees
+    sqliteConnector_->query("SELECT userid, dbid FROM mapd_privileges WHERE select_priv = 1 and insert_priv = 1");
+    size_t numRows = sqliteConnector_->getNumRows();
+    vector<pair<int, int>> db_grantees(numRows);
+    for (size_t i = 0; i < numRows; ++i) {
+      db_grantees[i].first = sqliteConnector_->getData<int>(i, 0);
+      db_grantees[i].second = sqliteConnector_->getData<int>(i, 1);
+    }
+    // map user names to user ids
+    sqliteConnector_->query("select userid, name from mapd_users");
+    numRows = sqliteConnector_->getNumRows();
+    std::unordered_map<int, string> users_by_id;
+    std::unordered_map<int, bool> user_has_privs;
+    for (size_t i = 0; i < numRows; ++i) {
+      users_by_id[sqliteConnector_->getData<int>(i, 0)] = sqliteConnector_->getData<string>(i, 1);
+      user_has_privs[sqliteConnector_->getData<int>(i, 0)] = false;
+    }
+    // map db names to db ids
+    sqliteConnector_->query("select dbid, name from mapd_databases");
+    numRows = sqliteConnector_->getNumRows();
+    std::unordered_map<int, string> dbs_by_id;
+    for (size_t i = 0; i < numRows; ++i) {
+      dbs_by_id[sqliteConnector_->getData<int>(i, 0)] = sqliteConnector_->getData<string>(i, 1);
+    }
+    // migrate old privileges to new privileges: if user had insert access to database, he was a grantee
+    for (const auto& grantee : db_grantees) {
+      user_has_privs[grantee.first] = true;
+      sqliteConnector_->query_with_text_params(
+          "INSERT OR REPLACE INTO mapd_object_privileges(roleName, roleType, objectName, objectType, dbObjectType, "
+          "dbId, "
+          "tableId, "
+          "columnId, "
+          "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate) VALUES (?1, ?2, ?3, ?4, ?5, ?6, "
+          "?7, "
+          "?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+          std::vector<std::string>{users_by_id[grantee.first],
+                                   "1",
+                                   dbs_by_id[grantee.second],
+                                   std::to_string(DBObjectType::DatabaseDBObjectType),
+                                   std::to_string(DBObjectType::DatabaseDBObjectType),
+                                   std::to_string(grantee.second),
+                                   "-1",
+                                   "-1",
+                                   std::to_string(true),
+                                   std::to_string(true),
+                                   std::to_string(true),
+                                   std::to_string(true),
+                                   std::to_string(false),
+                                   std::to_string(false)});
+    }
+    for (auto user : user_has_privs) {
+      if (user.second == false && user.first != MAPD_ROOT_USER_ID) {
+        // grant defaul privileges
+        sqliteConnector_->query_with_text_params(
+            "INSERT OR REPLACE INTO mapd_object_privileges(roleName, roleType, objectName, objectType, dbObjectType, "
+            "dbId, "
+            "tableId, "
+            "columnId, "
+            "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate) VALUES (?1, ?2, ?3, ?4, ?5, ?6, "
+            "?7, "
+            "?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            std::vector<std::string>{users_by_id[user.first],
+                                     "1",
+                                     MAPD_SYSTEM_DB,
+                                     std::to_string(DBObjectType::DatabaseDBObjectType),
+                                     std::to_string(DBObjectType::DatabaseDBObjectType),
+                                     "0",
+                                     "-1",
+                                     "-1",
+                                     std::to_string(false),
+                                     std::to_string(false),
+                                     std::to_string(false),
+                                     std::to_string(false),
+                                     std::to_string(false),
+                                     std::to_string(false)});
+      }
+    }
+  } catch (const std::exception&) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+}
+
+void SysCatalog::migratePrivileged_old() {
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_->query(
+        "CREATE TABLE IF NOT EXISTS mapd_privileges (userid integer references mapd_users, dbid integer references "
+        "mapd_databases, select_priv boolean, insert_priv boolean, UNIQUE(userid, dbid))");
   } catch (const std::exception& e) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
@@ -194,6 +324,7 @@ void SysCatalog::dropUser(const string& name) {
         dropRole_unsafe(name);
         dropUserRole(name);
         const std::string& roleName(name);
+        // TODO (max): this one looks redundant as we just deleted it in dropRole_unsafe. Verify it
         sqliteConnector_->query_with_text_param("DELETE FROM mapd_roles WHERE userName = ?", roleName);
       }
     }
@@ -255,9 +386,9 @@ bool SysCatalog::checkPrivileges(UserMetadata& user, DBMetadata& db, const Privi
   has_privs.select_ = sqliteConnector_->getData<bool>(0, 0);
   has_privs.insert_ = sqliteConnector_->getData<bool>(0, 1);
 
-  if (wants_privs.select_ && wants_privs.select_ != has_privs.select_)
+  if (wants_privs.select_ && !has_privs.select_)
     return false;
-  if (wants_privs.insert_ && wants_privs.insert_ != has_privs.insert_)
+  if (wants_privs.insert_ && !has_privs.insert_)
     return false;
 
   return true;

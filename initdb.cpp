@@ -95,7 +95,6 @@ int main(int argc, char* argv[]) {
     auto dummy_calcite = std::make_shared<Calcite>(-1, 0, base_path, 1024);
     auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
     sys_cat.init(base_path, dummy, {}, dummy_calcite, true, false);
-    sys_cat.initDB();
   } catch (std::exception& e) {
     std::cerr << "Exception: " << e.what() << "\n";
   }

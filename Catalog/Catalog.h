@@ -317,8 +317,6 @@ class SysCatalog {
             std::shared_ptr<Calcite> calcite,
             bool is_new_db,
             bool check_privileges);
-  void initDB();
-  void initObjectPrivileges();
   void createUser(const std::string& name, const std::string& passwd, bool issuper);
   void dropUser(const std::string& name);
   void alterUser(const int32_t userid, const std::string* passwd, bool* is_superp);
@@ -377,9 +375,13 @@ class SysCatalog {
   SysCatalog() {}
   virtual ~SysCatalog();
 
+  void initDB();
   void buildRoleMap();
   void buildUserRoleMap();
-  void migrateSysCatalogSchema();
+  void checkAndExecuteMigrations();
+  void createUserRoles();
+  void migratePrivileges();
+  void migratePrivileged_old();
   void dropUserRole(const std::string& userName);
 
   // Here go functions not wrapped into transactions (necessary for nested calls)
