@@ -2566,11 +2566,6 @@ void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!currentUser.isSuper) {
     throw std::runtime_error("CREATE ROLE " + get_role() + " failed. It can only be executed by super user.");
   }
-  const auto role_name = boost::to_lower_copy<std::string>(get_role());
-  if (!role_name.compare(MAPD_DEFAULT_ROOT_USER_ROLE) || !role_name.compare(MAPD_DEFAULT_USER_ROLE)) {
-    throw std::runtime_error("CREATE ROLE " + get_role() +
-                             " failed because this role name is reserved and can't be used.");
-  }
   SysCatalog::instance().createRole(get_role());
 }
 

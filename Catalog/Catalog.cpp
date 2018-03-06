@@ -299,14 +299,6 @@ void SysCatalog::createUser(const string& name, const string& passwd, bool issup
       createRole_unsafe(name, true);
       grantDefaultPrivilegesToRole_unsafe(name, issuper);
       grantRole_unsafe(name, name);
-      if (!getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
-        createDefaultMapdRoles_unsafe();
-      }
-      if (issuper) {
-        grantRole_unsafe(MAPD_DEFAULT_ROOT_USER_ROLE, name);
-      } else {
-        grantRole_unsafe(MAPD_DEFAULT_USER_ROLE, name);
-      }
     }
   } catch (const std::exception& e) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
@@ -523,26 +515,6 @@ bool SysCatalog::getMetadataForDB(const string& name, DBMetadata& db) {
   return true;
 }
 
-void SysCatalog::createDefaultMapdRoles_unsafe() {
-  DBObject dbObject(get_currentDB().dbName, DatabaseDBObjectType);
-  auto* catalog = Catalog::get(get_currentDB().dbName).get();
-  CHECK(catalog);
-  dbObject.loadKey(*catalog);
-
-  // create default non suser role
-  if (!instance().getMetadataForRole(MAPD_DEFAULT_USER_ROLE)) {
-    createRole_unsafe(MAPD_DEFAULT_USER_ROLE);
-    grantDBObjectPrivileges_unsafe(MAPD_DEFAULT_USER_ROLE, dbObject, *catalog);
-  }
-  // create default suser role
-  if (!instance().getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
-    createRole_unsafe(MAPD_DEFAULT_ROOT_USER_ROLE);
-    dbObject.setPrivileges(AccessPrivileges::ALL);
-    grantDBObjectPrivileges_unsafe(MAPD_DEFAULT_ROOT_USER_ROLE, dbObject, *catalog);
-    grantRole_unsafe(MAPD_DEFAULT_ROOT_USER_ROLE, MAPD_ROOT_USER);
-  }
-}
-
 // Note (max): I wonder why this one is necessary
 void SysCatalog::grantDefaultPrivilegesToRole_unsafe(const std::string& name, bool issuper) {
   DBObject dbObject(get_currentDB().dbName, DatabaseDBObjectType);
@@ -567,20 +539,10 @@ void SysCatalog::createDBObject(const UserMetadata& user,
   try {
     if (user.userName.compare(MAPD_ROOT_USER)) {  // no need to grant to suser, has all privs by default
       grantDBObjectPrivileges_unsafe(user.userName, *object, catalog);
+      Role* user_rl = instance().getMetadataForUserRole(user.userId);
+      CHECK(user_rl);
+      user_rl->grantPrivileges(*object);
     }
-    Role* user_rl = instance().getMetadataForUserRole(user.userId);
-    if (!user_rl) {
-      if (!instance().getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
-        createDefaultMapdRoles_unsafe();
-      }
-      if (user.isSuper) {
-        grantRole_unsafe(MAPD_DEFAULT_ROOT_USER_ROLE, user.userName);
-      } else {
-        grantRole_unsafe(MAPD_DEFAULT_USER_ROLE, user.userName);
-      }
-      user_rl = instance().getMetadataForUserRole(user.userId);
-    }
-    user_rl->grantPrivileges(*object);
   } catch (std::exception&) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
@@ -863,24 +825,7 @@ bool SysCatalog::checkPrivileges(const UserMetadata& user, std::vector<DBObject>
     return true;
   }
   Role* user_rl = instance().getMetadataForUserRole(user.userId);
-  if (!user_rl) {
-    sqliteConnector_->query("BEGIN TRANSACTION");
-    try {
-      if (!instance().getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
-        createDefaultMapdRoles_unsafe();
-      }
-      if (user.isSuper) {
-        grantRole_unsafe(MAPD_DEFAULT_ROOT_USER_ROLE, user.userName);
-      } else {
-        grantRole_unsafe(MAPD_DEFAULT_USER_ROLE, user.userName);
-      }
-      user_rl = instance().getMetadataForUserRole(user.userId);
-    } catch (std::exception&) {
-      sqliteConnector_->query("ROLLBACK TRANSACTION");
-      throw;
-    }
-    sqliteConnector_->query("END TRANSACTION");
-  }
+  CHECK(user_rl);
   for (std::vector<DBObject>::iterator objectIt = privObjects.begin(); objectIt != privObjects.end(); ++objectIt) {
     if (!user_rl->checkPrivileges(*objectIt)) {
       return false;
@@ -936,9 +881,7 @@ bool SysCatalog::hasRole(const std::string& roleName, bool userPrivateRole) cons
 std::vector<std::string> SysCatalog::getRoles(bool userPrivateRole, bool isSuper, const int32_t userId) {
   std::vector<std::string> roles(0);
   for (RoleMap::iterator roleIt = roleMap_.begin(); roleIt != roleMap_.end(); ++roleIt) {
-    if ((!userPrivateRole && static_cast<GroupRole*>(roleIt->second)->isUserPrivateRole()) ||
-        !static_cast<GroupRole*>(roleIt->second)->roleName().compare(to_upper(MAPD_DEFAULT_ROOT_USER_ROLE)) ||
-        !static_cast<GroupRole*>(roleIt->second)->roleName().compare(to_upper(MAPD_DEFAULT_USER_ROLE))) {
+    if (!userPrivateRole && static_cast<GroupRole*>(roleIt->second)->isUserPrivateRole()) {
       continue;
     }
     if (!isSuper && !isRoleGrantedToUser(userId, static_cast<GroupRole*>(roleIt->second)->roleName())) {

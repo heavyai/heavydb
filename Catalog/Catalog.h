@@ -386,7 +386,6 @@ class SysCatalog {
 
   // Here go functions not wrapped into transactions (necessary for nested calls)
   void grantDefaultPrivilegesToRole_unsafe(const std::string& name, bool issuper);
-  void createDefaultMapdRoles_unsafe();
   void createRole_unsafe(const std::string& roleName, const bool& userPrivateRole = false);
   void dropRole_unsafe(const std::string& roleName);
   void grantRole_unsafe(const std::string& roleName, const std::string& userName);

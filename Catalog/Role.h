@@ -37,10 +37,6 @@
 #include <string>
 #include <glog/logging.h>
 
-/* the mapd default roles */
-#define MAPD_DEFAULT_ROOT_USER_ROLE "mapd_default_suser_role"
-#define MAPD_DEFAULT_USER_ROLE "mapd_default_user_role"
-
 // Abstract base class, includes access privileges to DB objects
 class Role {
   /**

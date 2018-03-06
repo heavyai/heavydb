@@ -242,13 +242,6 @@ bool UserRole::isUserPrivateRole() const {
 std::vector<std::string> UserRole::getRoles() const {
   std::vector<std::string> roles;
   for (auto roleIt = groupRole_.begin(); roleIt != groupRole_.end(); ++roleIt) {
-    if (static_cast<GroupRole*>(*roleIt)->isUserPrivateRole() ||
-        !static_cast<GroupRole*>(*roleIt)->roleName().compare(
-            boost::to_upper_copy<std::string>(MAPD_DEFAULT_ROOT_USER_ROLE)) ||
-        !static_cast<GroupRole*>(*roleIt)->roleName().compare(
-            boost::to_upper_copy<std::string>(MAPD_DEFAULT_USER_ROLE))) {
-      continue;
-    }
     roles.push_back((*roleIt)->roleName());
   }
   return roles;
