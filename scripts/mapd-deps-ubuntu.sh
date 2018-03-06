@@ -76,6 +76,8 @@ JAVA_PREFIX=$PREFIX/lib ./configure \
     --with-python=no \
     --with-php=no \
     --with-ruby=no \
+    --with-qt4=no \
+    --with-qt5=no \
     --prefix=$PREFIX
 make -j $(nproc)
 make install
@@ -143,7 +145,7 @@ make -j $(nproc)
 make install
 popd
 
-cat >> $PREFIX/mapd-deps.sh <<EOF
+cat > $PREFIX/mapd-deps.sh <<EOF
 PREFIX=$PREFIX
 
 LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH

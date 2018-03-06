@@ -195,7 +195,15 @@ extract thrift-$VERS.tar.gz
 pushd thrift-$VERS
 patch -p1 < $SCRIPTS_DIR/thrift-3821-tmemorybuffer-overflow-check.patch
 patch -p1 < $SCRIPTS_DIR/thrift-3821-tmemorybuffer-overflow-test.patch
-CFLAGS="-fPIC" CXXFLAGS="-fPIC" JAVA_PREFIX=$PREFIX/lib ./configure --prefix=$PREFIX --with-lua=no --with-python=no --with-php=no --with-boost-libdir=$PREFIX/lib
+CFLAGS="-fPIC" CXXFLAGS="-fPIC" JAVA_PREFIX=$PREFIX/lib ./configure \
+    --prefix=$PREFIX \
+    --with-lua=no \
+    --with-python=no \
+    --with-php=no \
+    --with-ruby=no \
+    --with-qt4=no \
+    --with-qt5=no \
+    --with-boost-libdir=$PREFIX/lib
 makej
 make install
 popd
