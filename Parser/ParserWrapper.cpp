@@ -83,9 +83,10 @@ ParserWrapper::ParserWrapper(std::string query_string) {
     }
   }
 
-  for (std::string u_dml : update_dml_cmd) {
-    is_update_dml = boost::istarts_with(query_string, u_dml);
+  for (int i = 0; i < update_dml_cmd.size(); i++) {
+    is_update_dml = boost::istarts_with(query_string, ParserWrapper::update_dml_cmd[i]);
     if (is_update_dml) {
+      dml_type = (DMLType)(i);
       return;
     }
   }

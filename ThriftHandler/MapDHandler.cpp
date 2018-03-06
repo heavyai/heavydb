@@ -2903,7 +2903,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
 
   try {
     ParserWrapper pw{query_str};
-    if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
+    if (is_calcite_path_permissable(pw)) {
       std::string query_ra;
       _return.execution_time_ms += measure<>::execution([&]() {
         // query_ra = TIME_WRAP(parse_to_ra)(query_str, session_info);
@@ -3075,19 +3075,11 @@ Planner::RootPlan* MapDHandler::parse_to_plan(const std::string& query_str,
   return nullptr;
 }
 
-std::string MapDHandler::parse_to_ra(const std::string& query_str,
-                                     const Catalog_Namespace::SessionInfo& session_info,
-                                     PreprocessorFalse const&) {
+std::string MapDHandler::parse_to_ra(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info) {
   INJECT_TIMER(parse_to_ra)
-  return calcite_->process(session_info, query_str, legacy_syntax_, false);
-}
-
-std::string MapDHandler::parse_to_ra(const std::string& query_str,
-                                     const Catalog_Namespace::SessionInfo& session_info,
-                                     PreprocessorTrue const&) {
   ParserWrapper pw{query_str};
   const std::string actual_query{pw.is_select_explain || pw.is_select_calcite_explain ? pw.actual_query : query_str};
-  if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
+  if (is_calcite_path_permissable(pw)) {
     return calcite_->process(session_info,
                              legacy_syntax_ ? pg_shim(actual_query) : actual_query,
                              legacy_syntax_,

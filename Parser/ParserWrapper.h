@@ -30,6 +30,9 @@
 
 class ParserWrapper {
  public:
+  // HACK:  This needs to go away as calcite takes over parsing
+  enum class DMLType : int { Insert = 0, Delete, Update, Upsert, NotDML };
+
   ParserWrapper(std::string query_string);
   std::string process(std::string user,
                       std::string passwd,
@@ -46,7 +49,11 @@ class ParserWrapper {
   bool is_copy_to = false;
   std::string actual_query;
 
+  DMLType getDMLType() const { return dml_type; }
+
  private:
+  DMLType dml_type = DMLType::NotDML;
+
   static const std::vector<std::string> ddl_cmd;
   static const std::vector<std::string> update_dml_cmd;
   static const std::string explain_str;

@@ -12,11 +12,10 @@ using JVMRemoteDebugSelector = PreprocessorTrue;
 using JVMRemoteDebugSelector = PreprocessorFalse;
 #endif
 
-// Short-term crutch
-#ifdef ENABLE_PARSER_WRAPPER_BYPASS
-using PWParseToRAFilterSelector = PreprocessorTrue;
+#ifdef CALCITE_DELETE_ENABLED
+using CalciteDeletePathSelector = PreprocessorTrue;
 #else
-using PWParseToRAFilterSelector = PreprocessorFalse;
+using CalciteDeletePathSelector = PreprocessorFalse;
 #endif
 
 #endif

@@ -62,6 +62,11 @@ if(ENABLE_JAVA_REMOTE_DEBUG)
   add_definitions("-DENABLE_JAVA_REMOTE_DEBUG")
 endif()
 
+option(ENABLE_CALCITE_DELETE_PATH "Enable Calcite Delete Path" OFF)
+if( ENABLE_CALCITE_DELETE_PATH )
+  add_definitions("-DCALCITE_DELETE_ENABLED")
+endif()
+
 option(ENABLE_CUDA "Enable CUDA support" ON)
 if(ENABLE_CUDA)
   find_package(CUDA REQUIRED)
