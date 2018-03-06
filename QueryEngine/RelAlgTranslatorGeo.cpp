@@ -35,7 +35,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
   ti = gcd->columnType;
   CHECK(IS_GEO(ti.get_type()));
   // Translate geo column reference to a list of physical column refs
-  for (auto i = 0; i < ti.get_physical_cols(); i++) {
+  for (auto i = 0; i < ti.get_physical_coord_cols(); i++) {
     const auto pcd = cat_.getMetadataForColumn(table_desc->tableId, rex_input->getIndex() + 1 + i + 1);
     auto pcol_ti = pcd->columnType;
     args.push_back(std::make_shared<Analyzer::ColumnVar>(pcol_ti, table_desc->tableId, pcd->columnId, rte_idx));
@@ -63,7 +63,6 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiter
   std::vector<int> ring_sizes;
   std::vector<int> poly_rings;
   int32_t srid = ti.get_output_srid();
-  int render_group = 0; // @TODO simon.eves where to get render_group from in this context?!
   if (!Importer_NS::importGeoFromWkt(*wkt->get_constval().stringval, ti, coords, ring_sizes, poly_rings)) {
     throw QueryNotSupported("Could not read geometry from text");
   }
@@ -121,11 +120,6 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiter
       arr_ti.set_size(poly_rings.size() * sizeof(int32_t));
       args.push_back(makeExpr<Analyzer::Constant>(arr_ti, false, poly_rings_exprs));
     }
-
-    Datum d;
-    d.intval = render_group;
-    SQLTypeInfo rg_ti = SQLTypeInfo(kINT, true);
-    args.push_back(makeExpr<Analyzer::Constant>(rg_ti, false, d));
   }
 
   return args;

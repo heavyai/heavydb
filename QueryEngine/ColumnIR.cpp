@@ -114,9 +114,9 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
       return {codegenRowId(col_var, co)};
     }
     auto col_ti = cd->columnType;
-    if (col_ti.get_physical_cols() > 0) {
+    if (col_ti.get_physical_coord_cols() > 0) {
       std::vector<llvm::Value*> cols;
-      for (auto i = 0; i < col_ti.get_physical_cols(); i++) {
+      for (auto i = 0; i < col_ti.get_physical_coord_cols(); i++) {
         auto cd0 = get_column_descriptor(col_id + i + 1, col_var->get_table_id(), *catalog_);
         auto col0_ti = cd0->columnType;
         CHECK(!cd0->isVirtualCol);

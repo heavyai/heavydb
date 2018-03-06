@@ -299,7 +299,7 @@ std::vector<ColumnLazyFetchInfo> QueryExecutionContext::getColLazyFetchInfo(
                     ? get_column_descriptor(col_id, col_var->get_table_id(), *executor_->catalog_)
                     : nullptr;
       if (cd && IS_GEO(cd->columnType.get_type())) {
-        for (auto i = 0; i < cd->columnType.get_physical_cols(); i++) {
+        for (auto i = 0; i < cd->columnType.get_physical_coord_cols(); i++) {
           auto cd0 = get_column_descriptor(col_id + i + 1, col_var->get_table_id(), *executor_->catalog_);
           auto col0_ti = cd0->columnType;
           CHECK(!cd0->isVirtualCol);

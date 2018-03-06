@@ -231,6 +231,31 @@ class SQLTypeInfo {
     }
     return 0;
   }
+  inline int get_physical_coord_cols() const {
+    // @TODO dmitri/simon rename this function?
+    // It needs to return the number of extra columns
+    // which need to go through the executor, as opposed
+    // to those which are only needed by CPU for poly
+    // cache building or what-not. For now, we just omit
+    // the Render Group column. If we add Bounding Box
+    // or something this may require rethinking. Perhaps
+    // these two functions need to return an array of
+    // offsets rather than just a number to loop over,
+    // so that executor and non-executor columns can
+    // be mixed.
+    switch (type) {
+      case kPOINT:
+      case kLINESTRING:
+        return 1;
+      case kPOLYGON:
+        return 2; // omit render group
+      case kMULTIPOLYGON:
+        return 3; // omit render group
+      default:
+        break;
+    }
+    return 0;
+  }
   inline void set_type(SQLTypes t) { type = t; }
   inline void set_subtype(SQLTypes st) { subtype = st; }
   inline void set_dimension(int d) { dimension = d; }
