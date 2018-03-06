@@ -168,7 +168,7 @@ using namespace Parser;
 %token CASE CAST CHAR_LENGTH CHARACTER CHECK CLOSE COLUMN COMMIT CONTINUE COPY CREATE CURRENT
 %token CURSOR DATABASE DATE DATETIME DATE_TRUNC DECIMAL DECLARE DEFAULT DELETE DESC DICTIONARY DISTINCT DOUBLE DROP
 %token ELSE END EXISTS EXPLAIN EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM
-%token GEOGRAPHY GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
+%token GEOGRAPHY GEOMETRY GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
 %token IS LANGUAGE LAST LENGTH LIKE LIMIT LINESTRING MOD MULTIPOLYGON NOW NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER POINT POLYGON PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token SMALLINT SOME TABLE TEMPORARY TEXT THEN TIME TIMESTAMP TO TRUNCATE UNION
@@ -1165,6 +1165,7 @@ data_type:
 	| TIMESTAMP '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kTIMESTAMP, $<intval>3); }
 	| geo_type { $<nodeval>$ = $<nodeval>1; }
 	| geography_type { $<nodeval>$ = $<nodeval>1; }
+	| geometry_type { $<nodeval>$ = $<nodeval>1; }
   | data_type '[' ']'
   { $<nodeval>$ = $<nodeval>1;
     if (dynamic_cast<SQLType*>($<nodeval>$)->get_is_array())
@@ -1181,6 +1182,11 @@ geo_type:	POINT { $<nodeval>$ = new SQLType(kPOINT); }
 geography_type:	GEOGRAPHY '(' geo_type ')'
 	{ $<nodeval>$ = new SQLType(dynamic_cast<SQLType*>($<nodeval>3)->get_type(), 4326, 4326, false); }
 	|	GEOGRAPHY '(' geo_type ',' INTNUM ')'
+	{ $<nodeval>$ = new SQLType(dynamic_cast<SQLType*>($<nodeval>3)->get_type(), $<intval>5, $<intval>5, false); }
+
+geometry_type:	GEOMETRY '(' geo_type ')'
+	{ $<nodeval>$ = new SQLType(dynamic_cast<SQLType*>($<nodeval>3)->get_type(), 0, 0, false); }
+	|	GEOMETRY '(' geo_type ',' INTNUM ')'
 	{ $<nodeval>$ = new SQLType(dynamic_cast<SQLType*>($<nodeval>3)->get_type(), $<intval>5, $<intval>5, false); }
 
 	/* the various things you can name */

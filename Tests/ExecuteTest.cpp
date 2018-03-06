@@ -2881,8 +2881,10 @@ void import_geospatial_test() {
   const std::string geospatial_test("DROP TABLE IF EXISTS geospatial_test;");
   run_ddl_statement(geospatial_test);
   run_ddl_statement(
-      "CREATE TABLE geospatial_test (p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON) "
-      "WITH (fragment_size=2);");
+      "CREATE TABLE geospatial_test ("
+      "p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON, "
+      "gp GEOMETRY(POINT), gp4326 GEOMETRY(POINT,4326), gp900913 GEOMETRY(POINT,900913)"
+      ") WITH (fragment_size=2);");
   for (ssize_t i = 0; i < g_num_rows; ++i) {
     const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) + ")'"};
     const std::string linestring{
@@ -2892,7 +2894,7 @@ void import_geospatial_test() {
     const std::string mpoly{"'MULTIPOLYGON(((0 0, " + std::to_string(i + 1) + " 0, 0 " + std::to_string(i + 1) +
                             ", 0 0)))'"};
     const std::string insert_query{"INSERT INTO geospatial_test VALUES(" + point + ", " + linestring + ", " + poly +
-                                   ", " + mpoly + ");"};
+                                   ", " + mpoly + ", " + point + ", " + point + ", " + point + ");"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
   }
 }
@@ -4187,6 +4189,24 @@ TEST(Select, GeoSpatial) {
                                          "from geospatial_test limit 1;",
                                          dt)),
                 static_cast<double>(0.001));
+
+    // Point geometries, literals in different spatial references, transforms
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance('POINT(0 0)', gp) < 100.0;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(4),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
+                                        "ST_Distance(ST_GeomFromText('POINT(0 0)', 4326), gp4326) < 500000.0;",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(4),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
+                                        "ST_Distance(ST_GeomFromText('POINT(0 0)', 900913), gp900913) < 5.0;",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(4),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
+                                        "ST_Distance(ST_Transform(ST_GeomFromText('POINT(0 0)', 4326), 900913), "
+                                        "ST_Transform(gp4326, 900913)) < 500000.0;",
+                                        dt)));
   }
 }
 

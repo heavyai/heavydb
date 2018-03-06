@@ -197,7 +197,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         } else {
           throw QueryNotSupported(rex_function->getName() + " expecting integer SRID");
         }
-        if (srid != 4326) {
+        if (srid != 0 && srid != 4326 && srid != 900913) {
           throw QueryNotSupported(rex_function->getName() + ": unsupported SRID " + std::to_string(srid));
         }
         arg_ti.set_input_srid(srid);   // Input SRID
