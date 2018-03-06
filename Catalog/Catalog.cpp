@@ -29,15 +29,16 @@
 #include <memory>
 #include <random>
 
-#include <boost/filesystem.hpp>
-#include <boost/uuid/sha1.hpp>
-#include "SharedDictionaryValidator.h"
-
 #include "DataMgr/LockMgr.h"
 #include "SharedDictionaryValidator.h"
 
 #include <boost/filesystem.hpp>
+#include <boost/version.hpp>
+#if BOOST_VERSION >= 106600
+#include <boost/uuid/detail/sha1.hpp>
+#else
 #include <boost/uuid/sha1.hpp>
+#endif
 
 #include "../Fragmenter/Fragmenter.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
