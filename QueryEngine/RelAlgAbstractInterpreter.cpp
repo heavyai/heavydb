@@ -747,6 +747,8 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std:
   std::vector<const Rex*> target_exprs;
   bool first_project{true};
   bool is_agg{false};
+  bool delete_disguised_as_select = false;
+
   for (const auto node_idx : pattern) {
     const auto ra_node = nodes[node_idx];
     const auto ra_filter = std::dynamic_pointer_cast<RelFilter>(ra_node);
@@ -759,6 +761,10 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std:
     const auto ra_project = std::dynamic_pointer_cast<RelProject>(ra_node);
     if (ra_project) {
       fields = ra_project->getFields();
+      delete_disguised_as_select = ra_project->isDeleteViaSelect();  // Can there be multiple ra_projects when this
+                                                                     // happens?  TODO:  Ask some SQL person if they can
+                                                                     // come up with something with two chained
+                                                                     // projects, see if they can become compound
       if (first_project) {
         CHECK_EQ(size_t(1), ra_project->inputCount());
         // Rebind the input of the project to the input of the filter itself
@@ -799,8 +805,8 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std:
       continue;
     }
   }
-  auto compound_node =
-      std::make_shared<RelCompound>(filter_rex, target_exprs, groupby_count, agg_exprs, fields, scalar_sources, is_agg);
+  auto compound_node = std::make_shared<RelCompound>(
+      filter_rex, target_exprs, groupby_count, agg_exprs, fields, scalar_sources, is_agg, delete_disguised_as_select);
   auto old_node = nodes[pattern.back()];
   nodes[pattern.back()] = compound_node;
   auto first_node = nodes[pattern.front()];
@@ -1570,7 +1576,13 @@ class RelAlgAbstractInterpreter {
     const auto table_descriptor = getTableFromScanNode(logical_modify_ra);
     bool flattened = json_bool(field(logical_modify_ra, "flattened"));
     std::string op = json_str(field(logical_modify_ra, "operation"));
-    return std::make_shared<RelModify>(table_descriptor, flattened, op, inputs[0]);
+
+    auto modify_node = std::make_shared<RelModify>(table_descriptor, flattened, op, inputs[0]);
+    if (modify_node->getOperation() == RelModify::ModifyOperation::Delete) {
+      modify_node->applyDeleteModificationsToInputNode();
+    }
+
+    return modify_node;
   }
 
   std::shared_ptr<RelLogicalValues> dispatchLogicalValues(const rapidjson::Value& logical_values_ra) {

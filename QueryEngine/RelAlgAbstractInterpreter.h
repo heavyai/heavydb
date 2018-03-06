@@ -356,9 +356,10 @@ class RexCase : public RexScalar {
 
 class RexFunctionOperator : public RexOperator {
  public:
-  RexFunctionOperator(const std::string& name,
-                      std::vector<std::unique_ptr<const RexScalar>>& operands,
-                      const SQLTypeInfo& ti)
+  using ConstRexScalarPtr = std::unique_ptr<const RexScalar>;
+  using ConstRexScalarPtrVector = std::vector<ConstRexScalarPtr>;
+
+  RexFunctionOperator(const std::string& name, ConstRexScalarPtrVector& operands, const SQLTypeInfo& ti)
       : RexOperator(kFUNCTION, operands, ti), name_(name) {}
 
   std::unique_ptr<const RexOperator> getDisambiguated(
@@ -537,6 +538,8 @@ class RelScan : public RelAlgNode {
 
 class RelProject : public RelAlgNode {
  public:
+  friend class RelModify;
+
   // Takes memory ownership of the expressions.
   RelProject(std::vector<std::unique_ptr<const RexScalar>>& scalar_exprs,
              const std::vector<std::string>& fields,
@@ -593,10 +596,20 @@ class RelProject : public RelAlgNode {
   }
 
   std::shared_ptr<RelAlgNode> deepCopy() const override;
+  bool isDeleteViaSelect() const { return is_delete_via_select_; }
 
  private:
+  void setDeleteViaSelectFlag() const { is_delete_via_select_ = true; }
+  void injectOffsetInFragmentExpr() const {
+    RexFunctionOperator::ConstRexScalarPtrVector transient_vector;
+    scalar_exprs_.emplace_back(boost::make_unique<RexFunctionOperator const>(
+        std::string("OFFSET_IN_FRAGMENT"), transient_vector, SQLTypeInfo(kINT, false)));
+    fields_.push_back(std::string("EXPR$DELETE_OFFSET_IN_FRAGMENT"));
+  }
+
   mutable std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_;
-  std::vector<std::string> fields_;
+  mutable std::vector<std::string> fields_;
+  mutable bool is_delete_via_select_ = false;
 };
 
 class RelAggregate : public RelAlgNode {
@@ -835,13 +848,15 @@ class RelCompound : public RelAlgNode {
               const std::vector<const RexAgg*>& agg_exprs,
               const std::vector<std::string>& fields,
               std::vector<std::unique_ptr<const RexScalar>>& scalar_sources,
-              const bool is_agg)
+              const bool is_agg,
+              const bool delete_disguised_as_select = false)
       : filter_expr_(std::move(filter_expr)),
         target_exprs_(target_exprs),
         groupby_count_(groupby_count),
         fields_(fields),
         is_agg_(is_agg),
-        scalar_sources_(std::move(scalar_sources)) {
+        scalar_sources_(std::move(scalar_sources)),
+        is_select_via_delete_(delete_disguised_as_select) {
     CHECK_EQ(fields.size(), target_exprs.size());
     for (auto agg_expr : agg_exprs) {
       agg_exprs_.emplace_back(agg_expr);
@@ -873,6 +888,8 @@ class RelCompound : public RelAlgNode {
 
   const size_t getGroupByCount() const { return groupby_count_; }
 
+  bool isDeleteViaSelect() const { return is_select_via_delete_; }
+
   bool isAggregate() const { return is_agg_; }
 
   std::string toString() const override {
@@ -903,6 +920,7 @@ class RelCompound : public RelAlgNode {
   const bool is_agg_;
   std::vector<std::unique_ptr<const RexScalar>>
       scalar_sources_;  // building blocks for group_indices_ and agg_exprs_; not actually projected, just owned
+  bool is_select_via_delete_ = false;
 };
 
 enum class SortDirection { Ascending, Descending };
@@ -988,11 +1006,13 @@ class RelSort : public RelAlgNode {
 
 class RelModify : public RelAlgNode {
  public:
-  enum class ModifyOperation { Insert };
+  enum class ModifyOperation { Insert, Delete };
   using RelAlgNodeInputPtr = std::shared_ptr<const RelAlgNode>;
 
   static std::string yieldModifyOperationString(ModifyOperation const op) {
     switch (op) {
+      case ModifyOperation::Delete:
+        return "DELETE";
       case ModifyOperation::Insert:
         return "INSERT";
       default:
@@ -1004,6 +1024,8 @@ class RelModify : public RelAlgNode {
   static ModifyOperation yieldModifyOperationEnum(std::string const& op_string) {
     if (op_string == "INSERT")
       return ModifyOperation::Insert;
+    else if (op_string == "DELETE")
+      return ModifyOperation::Delete;
     throw std::runtime_error(std::string("Unsupported logical modify operation encountered " + op_string));
   }
 
@@ -1033,6 +1055,13 @@ class RelModify : public RelAlgNode {
                   << " operation= " << yieldModifyOperationString(operation_) << ")";
 
     return result_stream.str();
+  }
+
+  void applyDeleteModificationsToInputNode() {
+    RelProject const* previous_project_node = dynamic_cast<RelProject const*>(inputs_[0].get());
+    CHECK(previous_project_node != nullptr);
+    previous_project_node->setDeleteViaSelectFlag();
+    previous_project_node->injectOffsetInFragmentExpr();
   }
 
  private:

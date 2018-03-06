@@ -292,6 +292,9 @@ void redirect_inputs_of(std::shared_ptr<RelAlgNode> node,
   if (std::dynamic_pointer_cast<RelSort>(node) && dynamic_cast<const RelScan*>(src_project->getInput(0))) {
     return;
   }
+  if (std::dynamic_pointer_cast<RelModify>(node)) {
+    return;  // NOTE:  Review this.  Not sure about this.
+  }
   CHECK(std::dynamic_pointer_cast<RelAggregate>(node) || std::dynamic_pointer_cast<RelSort>(node));
   node->replaceInput(src_project, src_project->getAndOwnInput(0));
 }

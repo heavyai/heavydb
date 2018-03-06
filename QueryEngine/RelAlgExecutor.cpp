@@ -503,7 +503,18 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
     }
     const auto modify = dynamic_cast<const RelModify*>(body);
     if (modify) {
+      const auto previous_stage_compound = dynamic_cast<RelCompound const*>(exec_descs[i - 1].getBody());
+      const auto previous_stage_project = dynamic_cast<RelProject const*>(exec_descs[i - 1].getBody());
+
+      if (previous_stage_compound != nullptr || previous_stage_project != nullptr) {
+        exec_desc.setResult(exec_descs[i - 1].getResult());
+        return;
+      }
+
       exec_desc.setResult(executeModify(modify, eo_work_unit));
+
+      // FIXME:  Debugging table.  Remove when feature is complete.
+      // addTemporaryTable(-modify->getId(), exec_desc.getResult().getDataPtr());
       return;
     }
 
@@ -1101,6 +1112,11 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
                                                 const ExecutionOptions& eo,
                                                 RenderInfo* render_info,
                                                 const int64_t queue_time_ms) {
+  if (compound->isDeleteViaSelect()) {
+    // TODO:  Talk to Alex and fill this in
+    // Set compilation options
+  }
+
   const auto work_unit = createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   return executeWorkUnit(
       work_unit, compound->getOutputMetainfo(), compound->isAggregate(), co, eo, render_info, queue_time_ms);
@@ -1122,6 +1138,12 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
                                                const int64_t queue_time_ms) {
   auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   CompilationOptions co_project = co;
+
+  if (project->isDeleteViaSelect()) {
+    // TODO:  Talk to Alex and fill this in
+    // Set compilation options
+  }
+
   if (project->isSimple()) {
     CHECK_EQ(size_t(1), project->inputCount());
     const auto input_ra = project->getInput(0);
