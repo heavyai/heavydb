@@ -361,11 +361,11 @@ struct TRawPixelData {
 
 struct TRenderDatum {
   1: TDatumType type
-  2: bool is_array
-  3: TDatumVal value
+  2: i32 cnt
+  3: binary value
 }
 
-typedef map<string, map<string, map<string, map<i32, TRenderDatum>>>> TRenderDataAggMap
+typedef map<string, map<string, map<string, map<i32, list<TRenderDatum>>>>> TRenderDataAggMap
 
 struct TRenderStepResult {
   1: TRenderDataAggMap merge_data
