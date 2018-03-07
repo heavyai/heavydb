@@ -309,3 +309,14 @@ size_t Fragmenter_Namespace::TableInfo::getNumTuplesUpperBound() const {
   }
   return numTuples;
 }
+
+size_t Fragmenter_Namespace::TableInfo::getFragmentNumTuplesUpperBound() const {
+  if (!fragments.empty() && fragments.front().resultSet) {
+    return fragments.front().resultSet->entryCount();
+  }
+  size_t fragment_num_tupples_upper_bound = 0;
+  for (const auto& fragment : fragments) {
+    fragment_num_tupples_upper_bound = std::max(fragment.getNumTuples(), fragment_num_tupples_upper_bound);
+  }
+  return fragment_num_tupples_upper_bound;
+}

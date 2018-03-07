@@ -1380,7 +1380,8 @@ void Executor::dispatchFragments(
                                           frag_list_idx % context_count,
                                           rowid_lookup_key));
       ++frag_list_idx;
-      if (is_sample_query(ra_exe_unit) && fragment.getNumTuples() >= ra_exe_unit.scan_limit) {
+      const auto sample_query_limit = ra_exe_unit.sort_info.limit + ra_exe_unit.sort_info.offset;
+      if (is_sample_query(ra_exe_unit) && sample_query_limit > 0 && fragment.getNumTuples() >= sample_query_limit) {
         break;
       }
     }
