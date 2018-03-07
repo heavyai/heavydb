@@ -2400,6 +2400,18 @@ TEST(Select, CastFromNull) {
   }
 }
 
+TEST(Select, ColumnWidths) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT DISTINCT x FROM test_inner ORDER BY x;", dt);
+    c("SELECT DISTINCT str from test_inner ORDER BY str;", dt);
+    c("SELECT fn from test where fn < -100.7;", dt);
+    c("SELECT fixed_str, SUM(f)/SUM(t)  FROM test WHERE fixed_str IN ('foo','bar') GROUP BY fixed_str ORDER BY "
+      "fixed_str;",
+      dt);
+  }
+}
+
 TEST(Select, TimeInterval) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -4314,6 +4326,11 @@ int create_and_populate_tables() {
   }
   {
     const std::string insert_query{"INSERT INTO test_inner VALUES(7, 43, 'foo');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{"INSERT INTO test_inner VALUES(-9, 72, 'bars');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }

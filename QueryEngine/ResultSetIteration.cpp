@@ -22,13 +22,13 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  */
 
+#include "../Shared/likely.h"
 #include "Execute.h"
-#include "ResultSet.h"
 #include "ResultRows.h"
+#include "ResultSet.h"
 #include "RuntimeFunctions.h"
 #include "SqlTypesLayout.h"
 #include "TypePunning.h"
-#include "../Shared/likely.h"
 
 namespace {
 
@@ -513,7 +513,8 @@ int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch, const int8_t* byt
     type_bitwidth = 8 * type_info.get_size();
   }
   CHECK_EQ(size_t(0), type_bitwidth % 8);
-  auto val = type_info.get_compression() == kENCODING_DICT && type_info.get_size() < type_info.get_logical_size()
+  auto val = (type_info.get_compression() == kENCODING_DICT && type_info.get_size() < type_info.get_logical_size() &&
+              type_info.get_comp_param())
                  ? fixed_width_unsigned_decode_noinline(byte_stream, type_bitwidth / 8, pos)
                  : fixed_width_int_decode_noinline(byte_stream, type_bitwidth / 8, pos);
   if (type_info.get_compression() != kENCODING_NONE) {
@@ -790,8 +791,34 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
                                        const bool translate_strings,
                                        const bool decimal_to_double,
                                        const size_t entry_buff_idx) const {
-  const bool float_argument_input = takes_float_argument(target_info);
-  const auto actual_compact_sz = float_argument_input ? sizeof(float) : compact_sz;
+  // The logic to get the actual size of the buffer value
+  // Here we have to consider every major type and process it accordingly
+
+  // For All sizes of ints it is a simple matter of getting the corresponding width of column.
+  // For floats we simply check the case when floats were NOT expanded to a 64 bit float i.e. double during query
+  // execution.
+  // All timestamps data types are basically interpreted as corresponding int type.
+
+  // For double we simply pick sizeof(double)
+  auto actual_compact_sz = compact_sz;
+  if (target_info.sql_type.get_type() == kFLOAT) {
+    actual_compact_sz = sizeof(double);
+    if (target_info.is_agg && (target_info.agg_kind == kAVG || target_info.agg_kind == kSUM ||
+                               target_info.agg_kind == kMIN || target_info.agg_kind == kMAX)) {
+      actual_compact_sz = sizeof(float);
+    }
+  }
+
+  // All the IDs of strings in encoded string dictionary are stored as 32 bit wide ints. Hence we interpret ID of that
+  // column as 32 bit int. We need to do it becase NULL for encoded dict is INT_MIN.
+  // For temp dictionaries check if target_info's comp_param is 0.
+  // If it is a temp dictionary interpret it using the size of the current target value.
+
+  // Check Target is Encoded string and not a temp String Dictionary
+  if (target_info.sql_type.is_string() && target_info.sql_type.get_compression() == kENCODING_DICT &&
+      target_info.sql_type.get_comp_param()) {
+    actual_compact_sz = sizeof(int32_t);
+  }
 
   auto ival = read_int_from_buff(ptr, actual_compact_sz);
   const auto& chosen_type = get_compact_type(target_info);
@@ -939,9 +966,19 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(int8_t* rowwise_target_pt
   }
   auto ptr1 = rowwise_target_ptr;
   CHECK_LT(slot_idx, query_mem_desc_.agg_col_widths.size());
-  auto compact_sz1 = query_mem_desc_.agg_col_widths[slot_idx].compact;
+  // logic for deciding width of column
+
+  int8_t compact_sz1 = 0;
+  if (target_info.is_agg) {
+    compact_sz1 = std::max(target_info.sql_type.get_size(), target_info.agg_arg_type.get_size());
+  } else {
+    compact_sz1 = target_info.sql_type.get_size();
+  }
+
+  // logic for deciding width of column
   if (target_info.agg_kind == kAVG || is_real_str_or_array(target_info)) {
     const auto ptr2 = rowwise_target_ptr + query_mem_desc_.agg_col_widths[slot_idx].compact;
+    compact_sz1 = query_mem_desc_.agg_col_widths[slot_idx].compact;
     const auto compact_sz2 = query_mem_desc_.agg_col_widths[slot_idx + 1].compact;
     CHECK(ptr2);
     return target_info.agg_kind == kAVG
