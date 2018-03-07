@@ -1626,7 +1626,12 @@ ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
   CHECK(count_scalar_tv);
   const auto count_ptr = boost::get<int64_t>(count_scalar_tv);
   CHECK(count_ptr);
-  return std::max(*count_ptr, int64_t(1));
+  CHECK_GE(*count_ptr, 0);
+  auto count_upper_bound = static_cast<size_t>(*count_ptr);
+  if (table_infos.size() == 1) {
+    count_upper_bound = std::min(table_infos.front().info.getFragmentNumTuplesUpperBound(), count_upper_bound);
+  }
+  return std::max(count_upper_bound, size_t(1));
 }
 
 bool RelAlgExecutor::isRowidLookup(const WorkUnit& work_unit) {

@@ -140,6 +140,8 @@ class TableInfo {
 
   void setPhysicalNumTuples(const size_t physNumTuples) { numTuples = physNumTuples; }
 
+  size_t getFragmentNumTuplesUpperBound() const;
+
   std::vector<int> chunkKeyPrefix;
   std::deque<FragmentInfo> fragments;
 
