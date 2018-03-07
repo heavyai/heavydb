@@ -459,14 +459,22 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
   try {
     const auto compound = dynamic_cast<const RelCompound*>(body);
     if (compound) {
-      exec_desc.setResult(executeCompound(compound, co, eo_work_unit, render_info, queue_time_ms));
-      addTemporaryTable(-compound->getId(), exec_desc.getResult().getDataPtr());
+      if (compound->isDeleteViaSelect()) {
+        executeDeleteViaCompound(compound, co, eo_work_unit, render_info, queue_time_ms);
+      } else {
+        exec_desc.setResult(executeCompound(compound, co, eo_work_unit, render_info, queue_time_ms));
+        addTemporaryTable(-compound->getId(), exec_desc.getResult().getDataPtr());
+      }
       return;
     }
     const auto project = dynamic_cast<const RelProject*>(body);
     if (project) {
-      exec_desc.setResult(executeProject(project, co, eo_work_unit, render_info, queue_time_ms));
-      addTemporaryTable(-project->getId(), exec_desc.getResult().getDataPtr());
+      if (project->isDeleteViaSelect()) {
+        executeDeleteViaProject(project, co, eo_work_unit, render_info, queue_time_ms);
+      } else {
+        exec_desc.setResult(executeProject(project, co, eo_work_unit, render_info, queue_time_ms));
+        addTemporaryTable(-project->getId(), exec_desc.getResult().getDataPtr());
+      }
       return;
     }
     const auto aggregate = dynamic_cast<const RelAggregate*>(body);
@@ -503,18 +511,7 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
     }
     const auto modify = dynamic_cast<const RelModify*>(body);
     if (modify) {
-      const auto previous_stage_compound = dynamic_cast<RelCompound const*>(exec_descs[i - 1].getBody());
-      const auto previous_stage_project = dynamic_cast<RelProject const*>(exec_descs[i - 1].getBody());
-
-      if (previous_stage_compound != nullptr || previous_stage_project != nullptr) {
-        exec_desc.setResult(exec_descs[i - 1].getResult());
-        return;
-      }
-
       exec_desc.setResult(executeModify(modify, eo_work_unit));
-
-      // FIXME:  Debugging table.  Remove when feature is complete.
-      // addTemporaryTable(-modify->getId(), exec_desc.getResult().getDataPtr());
       return;
     }
 
@@ -1107,16 +1104,50 @@ std::vector<TargetMetaInfo> get_targets_meta(const RA* ra_node, const std::vecto
 
 }  // namespace
 
+void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
+                                              const CompilationOptions& co,
+                                              const ExecutionOptions& eo,
+                                              RenderInfo* render_info,
+                                              const int64_t queue_time_ms) {
+  const auto work_unit = createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
+  CompilationOptions co_project = co;
+  co_project.device_type_ = ExecutorDeviceType::CPU;
+
+  executor_->executeUpdate(
+      work_unit.exe_unit, table_infos.front(), co_project, eo, cat_, executor_->row_set_mem_owner_, delete_callback_);
+}
+
+void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
+                                             const CompilationOptions& co,
+                                             const ExecutionOptions& eo,
+                                             RenderInfo* render_info,
+                                             const int64_t queue_time_ms) {
+  auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
+  CompilationOptions co_project = co;
+
+  if (project->isSimple()) {
+    CHECK_EQ(size_t(1), project->inputCount());
+    const auto input_ra = project->getInput(0);
+    if (dynamic_cast<const RelSort*>(input_ra)) {
+      co_project.device_type_ = ExecutorDeviceType::CPU;
+      const auto& input_table = get_temporary_table(&temporary_tables_, -input_ra->getId());
+      const auto input_rows = boost::get<RowSetPtr>(&input_table);
+      CHECK(input_rows && *input_rows);
+      work_unit.exe_unit.scan_limit = (*input_rows)->rowCount();
+    }
+  }
+
+  executor_->executeUpdate(
+      work_unit.exe_unit, table_infos.front(), co_project, eo, cat_, executor_->row_set_mem_owner_, delete_callback_);
+}
+
 ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
                                                 const CompilationOptions& co,
                                                 const ExecutionOptions& eo,
                                                 RenderInfo* render_info,
                                                 const int64_t queue_time_ms) {
-  if (compound->isDeleteViaSelect()) {
-    // TODO:  Talk to Alex and fill this in
-    // Set compilation options
-  }
-
   const auto work_unit = createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   return executeWorkUnit(
       work_unit, compound->getOutputMetainfo(), compound->isAggregate(), co, eo, render_info, queue_time_ms);
@@ -1138,11 +1169,6 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
                                                const int64_t queue_time_ms) {
   auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   CompilationOptions co_project = co;
-
-  if (project->isDeleteViaSelect()) {
-    // TODO:  Talk to Alex and fill this in
-    // Set compilation options
-  }
 
   if (project->isSimple()) {
     CHECK_EQ(size_t(1), project->inputCount());

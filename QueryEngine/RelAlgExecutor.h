@@ -27,6 +27,7 @@
 #include "Distributed/AggregatedResult.h"
 
 #include <ctime>
+#include <sstream>
 
 enum class MergeType { Union, Reduce };
 
@@ -43,7 +44,23 @@ class RelAlgExecutor {
   using RowSetPtrSharedPtr = std::shared_ptr<RowSetPtr>;
 
   RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat)
-      : executor_(executor), cat_(cat), now_(0), queue_time_ms_(0) {}
+      : executor_(executor), cat_(cat), now_(0), queue_time_ms_(0) {
+    delete_callback_ = [](UpdateLogForFragment const& update_log) -> void {
+      LOG(ERROR) << "Delete in : " << update_log.getFragmentIndex();
+      for (size_t i = 0; i < update_log.getEntryCount(); ++i) {
+        const auto row = update_log.getEntryAt(i);
+        CHECK(!row.empty());
+        for (const auto& col : row) {
+          const auto scalar_tv = boost::get<ScalarTargetValue>(&col);
+          CHECK(scalar_tv);
+          int64_t data = *(boost::get<int64_t>(scalar_tv));
+          std::cout << data << ' ';
+        }
+        std::cout << "<-- Offset in Fragment: " << update_log.getFragmentIndex() << '\n';
+      }
+      std::cout.flush();
+    };
+  }
 
   ExecutionResult executeRelAlgQuery(const std::string& query_ra,
                                      const CompilationOptions& co,
@@ -98,6 +115,17 @@ class RelAlgExecutor {
                          const ExecutionOptions&,
                          RenderInfo*,
                          const int64_t queue_time_ms);
+
+  void executeDeleteViaCompound(const RelCompound* compound,
+                                const CompilationOptions& co,
+                                const ExecutionOptions& eo,
+                                RenderInfo* render_info,
+                                const int64_t queue_time_ms);
+  void executeDeleteViaProject(const RelProject*,
+                               const CompilationOptions&,
+                               const ExecutionOptions&,
+                               RenderInfo*,
+                               const int64_t queue_time_ms);
 
   ExecutionResult executeCompound(const RelCompound*,
                                   const CompilationOptions&,
@@ -241,6 +269,8 @@ class RelAlgExecutor {
   int64_t queue_time_ms_;
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;
   static const size_t max_groups_buffer_entry_default_guess{16384};
+
+  UpdateLogForFragment::Callback delete_callback_;
 };
 
 #endif  // QUERYENGINE_RELALGEXECUTOR_H
