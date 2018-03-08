@@ -38,14 +38,23 @@ struct FirstStepExecutionResult {
   bool is_outermost_query;
 };
 
-class RelAlgExecutor {
- public:
-  using TargetInfoList = std::vector<TargetInfo>;
-  using RowSetPtrSharedPtr = std::shared_ptr<RowSetPtr>;
+struct RelAlgExecutorTraits {
+  using ExecutorType = Executor;
+  using CatalogType = Catalog_Namespace::Catalog;
+};
 
-  RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat)
-      : executor_(executor), cat_(cat), now_(0), queue_time_ms_(0) {
-    delete_callback_ = [](UpdateLogForFragment const& update_log) -> void {
+template <typename EXECUTOR_TRAITS, typename FRAGMENT_UPDATER = UpdateLogForFragment>
+class StorageIOFacility {
+ public:
+  using ExecutorType = typename EXECUTOR_TRAITS::ExecutorType;
+  using CatalogType = typename EXECUTOR_TRAITS::CatalogType;
+  using FragmentUpdaterType = FRAGMENT_UPDATER;
+  using UpdateCallback = typename UpdateLogForFragment::Callback;
+
+  StorageIOFacility(ExecutorType* executor, CatalogType const& catalog) : executor_(executor), catalog_(catalog) {}
+
+  UpdateCallback yieldDeleteCallback() {
+    auto callback = [](FragmentUpdaterType const& update_log) -> void {
       LOG(ERROR) << "Delete in : " << update_log.getFragmentIndex();
       for (size_t i = 0; i < update_log.getEntryCount(); ++i) {
         const auto row = update_log.getEntryAt(i);
@@ -60,7 +69,23 @@ class RelAlgExecutor {
       }
       std::cout.flush();
     };
+    return callback;
   }
+
+ private:
+  ExecutorType* executor_;
+  CatalogType const& catalog_;
+};
+
+class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
+ public:
+  using TargetInfoList = std::vector<TargetInfo>;
+  using RowSetPtrSharedPtr = std::shared_ptr<RowSetPtr>;
+
+  using StorageIOFacility<RelAlgExecutorTraits>::yieldDeleteCallback;
+
+  RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat)
+      : StorageIOFacility(executor, cat), executor_(executor), cat_(cat), now_(0), queue_time_ms_(0) {}
 
   ExecutionResult executeRelAlgQuery(const std::string& query_ra,
                                      const CompilationOptions& co,
@@ -269,8 +294,6 @@ class RelAlgExecutor {
   int64_t queue_time_ms_;
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;
   static const size_t max_groups_buffer_entry_default_guess{16384};
-
-  UpdateLogForFragment::Callback delete_callback_;
 };
 
 #endif  // QUERYENGINE_RELALGEXECUTOR_H

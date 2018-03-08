@@ -51,6 +51,8 @@ namespace Fragmenter_Namespace {
 
 class InsertOrderFragmenter : public AbstractFragmenter {
  public:
+  using ModifyTransactionTracker = UpdelRoll;
+
   InsertOrderFragmenter(const std::vector<int> chunkKeyPrefix,
                         std::vector<Chunk_NS::Chunk>& chunkVec,
                         Data_Namespace::DataMgr* dataMgr,

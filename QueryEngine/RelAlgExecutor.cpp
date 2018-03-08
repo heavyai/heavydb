@@ -1114,8 +1114,13 @@ void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
   CompilationOptions co_project = co;
   co_project.device_type_ = ExecutorDeviceType::CPU;
 
-  executor_->executeUpdate(
-      work_unit.exe_unit, table_infos.front(), co_project, eo, cat_, executor_->row_set_mem_owner_, delete_callback_);
+  executor_->executeUpdate(work_unit.exe_unit,
+                           table_infos.front(),
+                           co_project,
+                           eo,
+                           cat_,
+                           executor_->row_set_mem_owner_,
+                           yieldDeleteCallback());
 }
 
 void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
@@ -1139,8 +1144,13 @@ void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
     }
   }
 
-  executor_->executeUpdate(
-      work_unit.exe_unit, table_infos.front(), co_project, eo, cat_, executor_->row_set_mem_owner_, delete_callback_);
+  executor_->executeUpdate(work_unit.exe_unit,
+                           table_infos.front(),
+                           co_project,
+                           eo,
+                           cat_,
+                           executor_->row_set_mem_owner_,
+                           yieldDeleteCallback());
 }
 
 ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
