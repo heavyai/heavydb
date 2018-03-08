@@ -519,6 +519,10 @@ int main(int argc, char** argv) {
     LOG(INFO) << "String servers file specified running as dbleaf with config at '" << cluster_file << "'";
   }
   LOG(INFO) << " Watchdog is set to " << enable_watchdog;
+  LOG(INFO) << " Dynamic Watchdog is set to " << enable_dynamic_watchdog;
+  if (enable_dynamic_watchdog) {
+    LOG(INFO) << " Dynamic Watchdog timeout is set to " << dynamic_watchdog_time_limit;
+  }
   if (!mapd_parameters.ha_group_id.empty()) {
     LOG(INFO) << " HA group id " << mapd_parameters.ha_group_id;
     if (mapd_parameters.ha_unique_server_id.empty()) {
