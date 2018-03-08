@@ -37,6 +37,7 @@
 #include "Shared/MapDParameters.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/scope.h"
+#include "Shared/measure.h"
 
 #include "AggregatedColRange.h"
 #include "StringDictionaryGenerations.h"
@@ -54,6 +55,7 @@
 #include <set>
 #include <thread>
 
+bool g_enable_debug_timer{false};
 bool g_enable_watchdog{false};
 bool g_enable_dynamic_watchdog{false};
 unsigned g_dynamic_watchdog_time_limit{10000};
@@ -88,6 +90,7 @@ std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
                                                 const std::string& debug_file,
                                                 const MapDParameters mapd_parameters,
                                                 ::QueryRenderer::QueryRenderManager* render_manager) {
+  INJECT_TIMER(getExecutor)
   const auto executor_key = std::make_pair(db_id, render_manager);
   {
     mapd_shared_lock<mapd_shared_mutex> read_lock(executors_cache_mutex_);
@@ -772,9 +775,10 @@ std::unordered_set<int> get_available_gpus(const Catalog_Namespace::Catalog& cat
 }
 
 size_t get_context_count(const ExecutorDeviceType device_type, const size_t cpu_count, const size_t gpu_count) {
-  return device_type == ExecutorDeviceType::GPU ? gpu_count : device_type == ExecutorDeviceType::Hybrid
-                                                                  ? std::max(static_cast<size_t>(cpu_count), gpu_count)
-                                                                  : static_cast<size_t>(cpu_count);
+  return device_type == ExecutorDeviceType::GPU
+             ? gpu_count
+             : device_type == ExecutorDeviceType::Hybrid ? std::max(static_cast<size_t>(cpu_count), gpu_count)
+                                                         : static_cast<size_t>(cpu_count);
 }
 
 namespace {
@@ -873,6 +877,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                     RenderInfo* render_info,
                                     const bool has_cardinality_estimation) {
+  INJECT_TIMER(Exec_executeWorkUnit)
   const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in);
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type_);
   CHECK(!query_infos.empty());
@@ -930,6 +935,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                                          error_code,
                                          render_info);
     try {
+      INJECT_TIMER(execution_dispatch_comp)
       crt_min_byte_width = execution_dispatch.compile(
           join_info, max_groups_buffer_entry_guess, crt_min_byte_width, options, has_cardinality_estimation);
     } catch (CompilationRetryNoCompaction&) {
@@ -952,6 +958,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
         const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
         const size_t ctx_idx,
         const int64_t rowid_lookup_key) {
+      INJECT_TIMER(execution_dispatch_run)
       execution_dispatch.run(chosen_device_type, chosen_device_id, options, frag_ids, ctx_idx, rowid_lookup_key);
       if (execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid) {
         std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
@@ -1775,6 +1782,7 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
                                             const uint32_t start_rowid,
                                             const uint32_t num_tables,
                                             RenderInfo* render_info) {
+  INJECT_TIMER(executePlanWithoutGroupBy)
   results = RowSetPtr(nullptr);
   if (col_buffers.empty()) {
     return 0;
@@ -1948,6 +1956,7 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                          const uint32_t start_rowid,
                                          const uint32_t num_tables,
                                          RenderInfo* render_info) {
+  INJECT_TIMER(executePlanWithGroupBy)
   if (contains_iter_expr(ra_exe_unit.target_exprs)) {
     results = IterTabPtr(nullptr);
   } else {

@@ -19,6 +19,11 @@
 
 #include <chrono>
 #include <sstream>
+#include <iomanip>
+
+#include <glog/logging.h>
+
+extern bool g_enable_debug_timer;
 
 template <typename TimeT = std::chrono::milliseconds>
 struct measure {
@@ -55,5 +60,37 @@ std::string timer_lap(Type clock_begin, Type& clock_last) {
   oss << overall.count() << " - " << since_last.count();
   return oss.str();
 }
+
+struct InjectTimer {
+  InjectTimer(std::string const& description, int const& lineNum, std::string const& func)
+      : description_(description), lineNum_(lineNum), func_(func) {
+    if (g_enable_debug_timer) {
+      start_ = timer_start();
+      LOG(INFO) << "Timer start " << std::setfill(' ') << std::setw(35) << description_ << " " << std::setw(35) << func_
+                << ":" << std::setw(5) << lineNum_;
+    }
+  }
+
+  ~InjectTimer() {
+    if (g_enable_debug_timer) {
+      LOG(INFO) << "Timer end   " << std::setfill(' ') << std::setw(35) << description_ << " " << std::setw(35) << func_
+                << ":" << std::setw(5) << lineNum_ << " elapsed " << timer_stop(start_) << " ms";
+    }
+  }
+
+  std::string description_;
+  int lineNum_;
+  std::string func_;
+
+  std::chrono::steady_clock::time_point start_;
+};
+#define INJECT_TIMER(DESC) InjectTimer DESC(#DESC, __LINE__, __FUNCTION__);
+
+template <typename Fn, Fn fn, typename... Args>
+typename std::result_of<Fn(Args...)>::type time_wrap(Args... args) {
+  InjectTimer t("test", 1, "test");
+  return fn(std::forward<Args>(args)...);
+}
+#define TIME_WRAP(FUNC) time_wrap<decltype(&FUNC), &FUNC>
 
 #endif  // _MEASURE_H_

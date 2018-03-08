@@ -30,9 +30,9 @@
 
 #include "Shared/MapDParameters.h"
 #include "Shared/mapd_shared_ptr.h"
+#include "Shared/measure.h"
 #include "Shared/scope.h"
 
-#include <glog/logging.h>
 #include <signal.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
@@ -325,6 +325,10 @@ int main(int argc, char** argv) {
                              ->implicit_value(10000),
                          "Dynamic watchdog time limit, in milliseconds");
   desc_adv.add_options()(
+      "enable-debug-timer",
+      po::value<bool>(&g_enable_debug_timer)->default_value(g_enable_debug_timer)->implicit_value(true),
+      "Enable dynamic watchdog");
+  desc_adv.add_options()(
       "trivial-loop-join-threshold",
       po::value<unsigned>(&g_trivial_loop_join_threshold)
           ->default_value(g_trivial_loop_join_threshold)
@@ -523,6 +527,7 @@ int main(int argc, char** argv) {
   if (enable_dynamic_watchdog) {
     LOG(INFO) << " Dynamic Watchdog timeout is set to " << dynamic_watchdog_time_limit;
   }
+  LOG(INFO) << " Debug Timer is set to " << g_enable_debug_timer;
   if (!mapd_parameters.ha_group_id.empty()) {
     LOG(INFO) << " HA group id " << mapd_parameters.ha_group_id;
     if (mapd_parameters.ha_unique_server_id.empty()) {
