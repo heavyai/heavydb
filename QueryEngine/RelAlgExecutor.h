@@ -29,6 +29,8 @@
 #include <ctime>
 #include <sstream>
 
+#include "StorageIOFacility.h"
+
 enum class MergeType { Union, Reduce };
 
 struct FirstStepExecutionResult {
@@ -41,48 +43,13 @@ struct FirstStepExecutionResult {
 struct RelAlgExecutorTraits {
   using ExecutorType = Executor;
   using CatalogType = Catalog_Namespace::Catalog;
-};
-
-template <typename EXECUTOR_TRAITS, typename FRAGMENT_UPDATER = UpdateLogForFragment>
-class StorageIOFacility {
- public:
-  using ExecutorType = typename EXECUTOR_TRAITS::ExecutorType;
-  using CatalogType = typename EXECUTOR_TRAITS::CatalogType;
-  using FragmentUpdaterType = FRAGMENT_UPDATER;
-  using UpdateCallback = typename UpdateLogForFragment::Callback;
-
-  StorageIOFacility(ExecutorType* executor, CatalogType const& catalog) : executor_(executor), catalog_(catalog) {}
-
-  UpdateCallback yieldDeleteCallback() {
-    auto callback = [](FragmentUpdaterType const& update_log) -> void {
-      LOG(ERROR) << "Delete in : " << update_log.getFragmentIndex();
-      for (size_t i = 0; i < update_log.getEntryCount(); ++i) {
-        const auto row = update_log.getEntryAt(i);
-        CHECK(!row.empty());
-        for (const auto& col : row) {
-          const auto scalar_tv = boost::get<ScalarTargetValue>(&col);
-          CHECK(scalar_tv);
-          int64_t data = *(boost::get<int64_t>(scalar_tv));
-          std::cout << data << ' ';
-        }
-        std::cout << "<-- Offset in Fragment: " << update_log.getFragmentIndex() << '\n';
-      }
-      std::cout.flush();
-    };
-    return callback;
-  }
-
- private:
-  ExecutorType* executor_;
-  CatalogType const& catalog_;
+  using TableDescriptorType = TableDescriptor;
 };
 
 class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
  public:
   using TargetInfoList = std::vector<TargetInfo>;
   using RowSetPtrSharedPtr = std::shared_ptr<RowSetPtr>;
-
-  using StorageIOFacility<RelAlgExecutorTraits>::yieldDeleteCallback;
 
   RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat)
       : StorageIOFacility(executor, cat), executor_(executor), cat_(cat), now_(0), queue_time_ms_(0) {}

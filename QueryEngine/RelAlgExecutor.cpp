@@ -1120,7 +1120,7 @@ void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
                            eo,
                            cat_,
                            executor_->row_set_mem_owner_,
-                           yieldDeleteCallback());
+                           yieldDeleteCallback(compound->getModifiedTableDescriptor()));
 }
 
 void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
@@ -1150,7 +1150,7 @@ void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
                            eo,
                            cat_,
                            executor_->row_set_mem_owner_,
-                           yieldDeleteCallback());
+                           yieldDeleteCallback(project->getModifiedTableDescriptor()));
 }
 
 ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
@@ -1233,6 +1233,7 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(const RelLogicalValues* log
   query_mem_desc.executor_ = executor_;
   query_mem_desc.entry_count = 1;
   query_mem_desc.hash_type = GroupByColRangeType::Scan;
+
   const auto& tuple_type = logical_values->getTupleType();
   for (size_t i = 0; i < tuple_type.size(); ++i) {
     query_mem_desc.agg_col_widths.emplace_back(ColWidths{8, 8});

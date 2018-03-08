@@ -607,6 +607,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       return opBinding.getOperandType(0);
     }
 
+
     private static java.util.List<SqlTypeFamily> signature() {
       java.util.List<SqlTypeFamily> truncate_sig = new java.util.ArrayList<SqlTypeFamily>();
       truncate_sig.add(SqlTypeFamily.NUMERIC);

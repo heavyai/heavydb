@@ -747,7 +747,8 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std:
   std::vector<const Rex*> target_exprs;
   bool first_project{true};
   bool is_agg{false};
-  bool delete_disguised_as_select = false;
+
+  std::shared_ptr<ModifyManipulationTarget> manipulation_target;
 
   for (const auto node_idx : pattern) {
     const auto ra_node = nodes[node_idx];
@@ -761,10 +762,8 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std:
     const auto ra_project = std::dynamic_pointer_cast<RelProject>(ra_node);
     if (ra_project) {
       fields = ra_project->getFields();
-      delete_disguised_as_select = ra_project->isDeleteViaSelect();  // Can there be multiple ra_projects when this
-                                                                     // happens?  TODO:  Ask some SQL person if they can
-                                                                     // come up with something with two chained
-                                                                     // projects, see if they can become compound
+      manipulation_target = ra_project;
+
       if (first_project) {
         CHECK_EQ(size_t(1), ra_project->inputCount());
         // Rebind the input of the project to the input of the filter itself
@@ -805,8 +804,16 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std:
       continue;
     }
   }
-  auto compound_node = std::make_shared<RelCompound>(
-      filter_rex, target_exprs, groupby_count, agg_exprs, fields, scalar_sources, is_agg, delete_disguised_as_select);
+
+  auto compound_node = std::make_shared<RelCompound>(filter_rex,
+                                                     target_exprs,
+                                                     groupby_count,
+                                                     agg_exprs,
+                                                     fields,
+                                                     scalar_sources,
+                                                     is_agg,
+                                                     manipulation_target->isDeleteViaSelect(),
+                                                     manipulation_target->getModifiedTableDescriptor());
   auto old_node = nodes[pattern.back()];
   nodes[pattern.back()] = compound_node;
   auto first_node = nodes[pattern.front()];
@@ -1599,6 +1606,7 @@ class RelAlgAbstractInterpreter {
     CHECK(inputs_arr.IsArray());
     const auto& tuples_arr = field(logical_values_ra, "tuples");
     CHECK(tuples_arr.IsArray());
+
     if (inputs_arr.Size() || tuples_arr.Size()) {
       throw QueryNotSupported("Non-empty LogicalValues not supported yet");
     }

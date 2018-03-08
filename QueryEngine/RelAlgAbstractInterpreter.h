@@ -536,7 +536,22 @@ class RelScan : public RelAlgNode {
   const std::vector<std::string> field_names_;
 };
 
-class RelProject : public RelAlgNode {
+class ModifyManipulationTarget {
+ public:
+  ModifyManipulationTarget(bool const delete_via_select = false, TableDescriptor const* table_descriptor = nullptr)
+      : is_delete_via_select_(delete_via_select), table_descriptor_(table_descriptor) {}
+
+  void setDeleteViaSelectFlag() const { is_delete_via_select_ = true; }
+  bool const isDeleteViaSelect() const { return is_delete_via_select_; }
+  TableDescriptor const* getModifiedTableDescriptor() const { return table_descriptor_; }
+  void setModifiedTableDescriptor(TableDescriptor const* td) const { table_descriptor_ = td; }
+
+ private:
+  mutable bool is_delete_via_select_ = false;
+  mutable TableDescriptor const* table_descriptor_ = nullptr;
+};
+
+class RelProject : public RelAlgNode, public ModifyManipulationTarget {
  public:
   friend class RelModify;
 
@@ -544,7 +559,7 @@ class RelProject : public RelAlgNode {
   RelProject(std::vector<std::unique_ptr<const RexScalar>>& scalar_exprs,
              const std::vector<std::string>& fields,
              std::shared_ptr<const RelAlgNode> input)
-      : scalar_exprs_(std::move(scalar_exprs)), fields_(fields) {
+      : ModifyManipulationTarget(false, nullptr), scalar_exprs_(std::move(scalar_exprs)), fields_(fields) {
     inputs_.push_back(input);
   }
 
@@ -596,10 +611,8 @@ class RelProject : public RelAlgNode {
   }
 
   std::shared_ptr<RelAlgNode> deepCopy() const override;
-  bool isDeleteViaSelect() const { return is_delete_via_select_; }
 
  private:
-  void setDeleteViaSelectFlag() const { is_delete_via_select_ = true; }
   void injectOffsetInFragmentExpr() const {
     RexFunctionOperator::ConstRexScalarPtrVector transient_vector;
     scalar_exprs_.emplace_back(boost::make_unique<RexFunctionOperator const>(
@@ -609,7 +622,6 @@ class RelProject : public RelAlgNode {
 
   mutable std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_;
   mutable std::vector<std::string> fields_;
-  mutable bool is_delete_via_select_ = false;
 };
 
 class RelAggregate : public RelAlgNode {
@@ -837,7 +849,7 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
 // It's the result of combining a sequence of 'RelFilter' (optional), 'RelProject',
 // 'RelAggregate' (optional) and a simple 'RelProject' (optional) into a single node
 // which can be efficiently executed with no intermediate buffers.
-class RelCompound : public RelAlgNode {
+class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
  public:
   // 'target_exprs_' are either scalar expressions owned by 'scalar_sources_'
   // or aggregate expressions owned by 'agg_exprs_', with the arguments
@@ -849,14 +861,15 @@ class RelCompound : public RelAlgNode {
               const std::vector<std::string>& fields,
               std::vector<std::unique_ptr<const RexScalar>>& scalar_sources,
               const bool is_agg,
-              const bool delete_disguised_as_select = false)
-      : filter_expr_(std::move(filter_expr)),
+              bool delete_disguised_as_select = false,
+              TableDescriptor const* manipulation_target_table = nullptr)
+      : ModifyManipulationTarget(delete_disguised_as_select, manipulation_target_table),
+        filter_expr_(std::move(filter_expr)),
         target_exprs_(target_exprs),
         groupby_count_(groupby_count),
         fields_(fields),
         is_agg_(is_agg),
-        scalar_sources_(std::move(scalar_sources)),
-        is_select_via_delete_(delete_disguised_as_select) {
+        scalar_sources_(std::move(scalar_sources)) {
     CHECK_EQ(fields.size(), target_exprs.size());
     for (auto agg_expr : agg_exprs) {
       agg_exprs_.emplace_back(agg_expr);
@@ -888,8 +901,6 @@ class RelCompound : public RelAlgNode {
 
   const size_t getGroupByCount() const { return groupby_count_; }
 
-  bool isDeleteViaSelect() const { return is_select_via_delete_; }
-
   bool isAggregate() const { return is_agg_; }
 
   std::string toString() const override {
@@ -920,7 +931,6 @@ class RelCompound : public RelAlgNode {
   const bool is_agg_;
   std::vector<std::unique_ptr<const RexScalar>>
       scalar_sources_;  // building blocks for group_indices_ and agg_exprs_; not actually projected, just owned
-  bool is_select_via_delete_ = false;
 };
 
 enum class SortDirection { Ascending, Descending };
@@ -1062,6 +1072,7 @@ class RelModify : public RelAlgNode {
     CHECK(previous_project_node != nullptr);
     previous_project_node->setDeleteViaSelectFlag();
     previous_project_node->injectOffsetInFragmentExpr();
+    previous_project_node->setModifiedTableDescriptor(table_descriptor_);
   }
 
  private:
