@@ -329,7 +329,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
 
   std::string specialized_geofunc{rex_function->getName()};
   if (rex_function->getName() == std::string("ST_X") || rex_function->getName() == std::string("ST_Y")) {
-    if (arg_ti.get_type() == kLINESTRING && arg_ti.get_index() != 0) {
+    if (arg_ti.get_type() == kLINESTRING) {
+      if (arg_ti.get_index() == 0) {
+        throw QueryNotSupported(rex_function->getName() + " expects a POINT, use LINESTRING accessor, e.g. ST_POINTN");
+      }
       Datum index;
       index.intval = arg_ti.get_index();
       geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, index));

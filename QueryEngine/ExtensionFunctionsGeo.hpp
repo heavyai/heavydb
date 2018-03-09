@@ -198,15 +198,15 @@ double ST_Y_Point(double* p, int64_t pnum, int32_t isr, int32_t osr) {
 
 EXTENSION_NOINLINE
 double ST_X_LineString(double* l, int64_t lnum, int32_t li, int32_t isr, int32_t osr) {
-  if (li < 0)
-    li = lnum / 2;
+  if (li < 0 || li > lnum / 2)
+    li = lnum / 2;  // Endpoint
   return coord_x(l, 2 * (li - 1), isr, osr);
 }
 
 EXTENSION_NOINLINE
 double ST_Y_LineString(double* l, int64_t lnum, int32_t li, int32_t isr, int32_t osr) {
-  if (li < 0)
-    li = lnum / 2;
+  if (li < 0 || li > lnum / 2)
+    li = lnum / 2;  // Endpoint
   return coord_y(l, 2 * (li - 1) + 1, isr, osr);
 }
 
@@ -277,8 +277,8 @@ double ST_Distance_Point_LineString_Geodesic(double* p, int64_t pnum, double* l,
   // Currently only indexed LineString is supported
   double px = coord_x(p, 0, 4326, 4326);
   double py = coord_y(p, 1, 4326, 4326);
-  if (li < 0)  // Endpoint
-    li = lnum / 2;
+  if (li < 0 || li > lnum / 2)
+    li = lnum / 2;  // Endpoint
   double lx = coord_x(l, 2 * (li - 1), 4326, 4326);
   double ly = coord_y(l, 2 * (li - 1) + 1, 4326, 4326);
   return distance_in_meters(px, py, lx, ly);
@@ -298,12 +298,12 @@ double ST_Distance_LineString_LineString_Geodesic(double* l1,
                                                   int64_t l2num,
                                                   int32_t l2i) {
   // Currently only indexed LineStrings are supported
-  if (l1i < 0)  // Endpoint
-    l1i = l1num / 2;
+  if (l1i < 0 || l1i > l1num / 2)
+    l1i = l1num / 2;  // Endpoint
   double l1x = coord_x(l1, 2 * (l1i - 1), 4326, 4326);
   double l1y = coord_y(l1, 2 * (l1i - 1) + 1, 4326, 4326);
-  if (l2i < 0)  // Endpoint
-    l2i = l2num / 2;
+  if (l2i < 0 || l2i > l2num / 2)
+    l2i = l2num / 2;  // Endpoint
   double l2x = coord_x(l2, 2 * (l2i - 1), 4326, 4326);
   double l2y = coord_y(l2, 2 * (l2i - 1) + 1, 4326, 4326);
   return distance_in_meters(l1x, l1y, l2x, l2y);
@@ -316,8 +316,8 @@ ST_Distance_Point_LineString(double* p, int64_t pnum, double* l, int64_t lnum, i
   double py = coord_y(p, 1, isr, osr);
 
   if (li != 0) {  // Indexed linestring:
-    if (li < 0)
-      li = lnum / 2;
+    if (li < 0 || li > lnum / 2)
+      li = lnum / 2;  // Endpoint
     double lx = coord_x(l, 2 * (li - 1), isr, osr);
     double ly = coord_y(l, 2 * (li - 1) + 1, isr, osr);
     return distance_point_point(px, py, lx, ly);

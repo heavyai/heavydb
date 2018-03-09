@@ -4152,7 +4152,7 @@ TEST(Select, GeoSpatial) {
                                          dt)),
                 static_cast<double>(0.001));
 
-    // Point accessors
+    // Point accessors, Linestring indexing
     ASSERT_EQ(static_cast<double>(34.274647),
               v<double>(run_simple_agg("SELECT ST_Y(ST_PointN(ST_GeomFromText('LINESTRING(-118.243683 34.052235, "
                                        "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
@@ -4189,6 +4189,15 @@ TEST(Select, GeoSpatial) {
                                          "from geospatial_test limit 1;",
                                          dt)),
                 static_cast<double>(0.001));
+    // Linestring: check that runaway indices are controlled
+    ASSERT_NEAR(static_cast<double>(-122.446747),  // stop at endpoint
+                v<double>(run_simple_agg("SELECT ST_X(ST_PointN(ST_GeomFromText("
+                                         "'LINESTRING(-118.243683 34.052235, "
+                                         "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
+                                         "-122.446747 37.733795)', 4326), 1000000)) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.001));
 
     // Point geometries, literals in different spatial references, transforms
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
@@ -4209,8 +4218,24 @@ TEST(Select, GeoSpatial) {
                                         dt)));
 
     // Test some exceptions
+    // Point coord accessor used on a non-POINT, in this case unindexed LINESTRING (missing ST_POINTN)
+    EXPECT_THROW(run_simple_agg("SELECT ST_Y(ST_GeomFromText("
+                                "'LINESTRING(-118.243683 34.052235, -119.229034 34.274647)', 4326)) "
+                                "from geospatial_test limit 1;",
+                                dt),
+                 std::runtime_error);
+    // Two accessors in a row
+    EXPECT_THROW(run_simple_agg("SELECT ST_X(ST_Y(ST_GeomFromText('POINT(-118.243683 34.052235)', 4326))) "
+                                "from geospatial_test limit 1;",
+                                dt),
+                 std::runtime_error);
     // Coord order reversed, longitude value is out of latitude range
     EXPECT_THROW(run_simple_agg("SELECT ST_Y(ST_GeomFromText('POINT(34.052235 -118.243683)', 4326)) "
+                                "from geospatial_test limit 1;",
+                                dt),
+                 std::runtime_error);
+    // Linestring accessor on a non-LINESTRING
+    EXPECT_THROW(run_simple_agg("SELECT ST_X(ST_ENDPOINT('POINT(-118.243683 34.052235)')) "
                                 "from geospatial_test limit 1;",
                                 dt),
                  std::runtime_error);
