@@ -1229,8 +1229,8 @@ bool importGeoFromWkt(std::string& wkt,
       // if (srid != -1)
       //  srid = 0;
     }
-    ti.set_dimension(srid);
-    ti.set_scale(srid);
+    ti.set_input_srid(srid);
+    ti.set_output_srid(srid);
   }
   if (status == false) {
     if (geom)
@@ -1467,13 +1467,26 @@ static ImportStatus import_thread(int thread_id,
                 if (col_ti.get_type() != import_ti.get_type()) {
                   throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
                 }
-                // TODO: Check if column and wkt SRIDs match. Transform to column SRID: col_ti.get_dimension()
+                // TODO: Check if column and wkt SRIDs match. Transform to column SRID: col_ti.get_output_srid()
               }
 
               ++cd_it;
               auto cd_coords = *cd_it;
               std::vector<TDatum> td_coords;
+              bool x = true;
               for (auto coord : coords) {
+                if (col_ti.get_output_srid() == 4326) {
+                  if (x) {
+                    if (coord < -180.0 || coord > 180.0)
+                      throw std::runtime_error(cd->columnName + ": Imported WGS84 longitude " + std::to_string(coord) +
+                                               " is out of bounds");
+                  } else {
+                    if (coord < -90.0 || coord > 90.0)
+                      throw std::runtime_error(cd->columnName + ": Imported WGS84 latitude " + std::to_string(coord) +
+                                               " is out of bounds");
+                  }
+                  x = !x;
+                }
                 TDatum td_coord;
                 td_coord.val.real_val = coord;
                 td_coords.push_back(td_coord);

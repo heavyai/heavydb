@@ -4207,6 +4207,13 @@ TEST(Select, GeoSpatial) {
                                         "ST_Distance(ST_Transform(ST_GeomFromText('POINT(0 0)', 4326), 900913), "
                                         "ST_Transform(gp4326, 900913)) < 500000.0;",
                                         dt)));
+
+    // Test some exceptions
+    // Coord order reversed, longitude value is out of latitude range
+    EXPECT_THROW(run_simple_agg("SELECT ST_Y(ST_GeomFromText('POINT(34.052235 -118.243683)', 4326)) "
+                                "from geospatial_test limit 1;",
+                                dt),
+                 std::runtime_error);
   }
 }
 

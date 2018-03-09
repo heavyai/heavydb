@@ -62,14 +62,27 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiter
   std::vector<double> coords;
   std::vector<int> ring_sizes;
   std::vector<int> poly_rings;
+  int32_t srid = ti.get_output_srid();
   if (!Importer_NS::importGeoFromWkt(*wkt->get_constval().stringval, ti, coords, ring_sizes, poly_rings)) {
     throw QueryNotSupported("Could not read geometry from text");
   }
+  ti.set_input_srid(srid);
+  ti.set_output_srid(srid);
 
   std::vector<std::shared_ptr<Analyzer::Expr>> args;
-
   std::list<std::shared_ptr<Analyzer::Expr>> coord_exprs;
+  bool x = true;
   for (auto c : coords) {
+    if (ti.get_output_srid() == 4326) {
+      if (x) {
+        if (c < -180.0 || c > 180.0)
+          throw QueryNotSupported("Imported WGS84 longitude " + std::to_string(c) + " is out of bounds");
+      } else {
+        if (c < -90.0 || c > 90.0)
+          throw QueryNotSupported("Imported WGS84 latitude " + std::to_string(c) + " is out of bounds");
+      }
+      x = !x;
+    }
     Datum d;
     d.doubleval = c;
     auto e = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
@@ -171,14 +184,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       if (rex_function->size() != 1 && rex_function->size() != 2) {
         throw QueryNotSupported(rex_function->getName() + " expects one or two arguments");
       }
-      const auto rex_literal = dynamic_cast<const RexLiteral*>(rex_function->getOperand(0));
-      if (!rex_literal) {
-        throw QueryNotSupported(rex_function->getName() + " expects a string literal as first argument");
-      }
-      auto arg0 = translateGeoLiteral(rex_literal, arg_ti);
-      if (arg_ti.get_input_srid() > 0) {
-        throw QueryNotSupported(rex_function->getName() + ": parsed geometry literal has unexpected SRID");
-      }
+      // First - register srid, then send it to geo literal translation
+      int32_t srid = 0;
       if (rex_function->size() == 2) {
         const auto rex_literal = dynamic_cast<const RexLiteral*>(rex_function->getOperand(1));
         if (!rex_literal) {
@@ -189,7 +196,6 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         if (!ce || !e->get_type_info().is_integer()) {
           throw QueryNotSupported(rex_function->getName() + ": expecting integer SRID");
         }
-        int32_t srid = 0;
         if (e->get_type_info().get_type() == kSMALLINT) {
           srid = static_cast<int32_t>(ce->get_constval().smallintval);
         } else if (e->get_type_info().get_type() == kINT) {
@@ -200,9 +206,15 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         if (srid != 0 && srid != 4326 && srid != 900913) {
           throw QueryNotSupported(rex_function->getName() + ": unsupported SRID " + std::to_string(srid));
         }
-        arg_ti.set_input_srid(srid);   // Input SRID
-        arg_ti.set_output_srid(srid);  // Output SRID is the same - no transform
       }
+      arg_ti.set_input_srid(srid);   // Input SRID
+      arg_ti.set_output_srid(srid);  // Output SRID is the same - no transform
+
+      const auto rex_literal = dynamic_cast<const RexLiteral*>(rex_function->getOperand(0));
+      if (!rex_literal) {
+        throw QueryNotSupported(rex_function->getName() + " expects a string literal as first argument");
+      }
+      auto arg0 = translateGeoLiteral(rex_literal, arg_ti);
       return arg0;
     } else if (rex_function->getName() == std::string("ST_PointN")) {
       if (rex_function->size() != 2) {
