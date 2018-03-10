@@ -4310,6 +4310,15 @@ TEST(Select, GeoSpatial) {
 
 namespace {
 
+void set_deleted_column() {
+  auto& cat = g_session->get_catalog();
+  const auto td = cat.getMetadataForTable("test_inner_deleted");
+  CHECK(td);
+  const auto cd = cat.getMetadataForColumn(td->tableId, "deleted");
+  CHECK(cd);
+  cat.setDeletedColumn(td, cd);
+}
+
 int create_and_populate_tables() {
   try {
     const std::string drop_old_test{"DROP TABLE IF EXISTS test_inner;"};
@@ -4342,12 +4351,7 @@ int create_and_populate_tables() {
     const auto create_test_inner_deleted =
         build_create_table_statement(columns_definition, "test_inner_deleted", {"", 0}, {}, 2);
     run_ddl_statement(create_test_inner_deleted);
-    auto& cat = g_session->get_catalog();
-    const auto td = cat.getMetadataForTable("test_inner_deleted");
-    CHECK(td);
-    const auto cd = cat.getMetadataForColumn(td->tableId, "deleted");
-    CHECK(cd);
-    cat.setDeletedColumn(td, cd);
+    set_deleted_column();
     g_sqlite_comparator.query("CREATE TABLE test_inner_deleted(x int not null, y int, str text);");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test_inner_deleted'";
@@ -4854,6 +4858,7 @@ int main(int argc, char** argv) {
   const bool use_existing_data = vm.count("use-existing-data");
   int err{0};
   if (use_existing_data) {
+    set_deleted_column();
     testing::GTEST_FLAG(filter) = "Select*";
   } else {
     err = create_and_populate_tables();
