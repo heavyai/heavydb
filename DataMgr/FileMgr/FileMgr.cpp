@@ -630,8 +630,7 @@ AbstractBuffer* FileMgr::getBuffer(const ChunkKey& key, const size_t numBytes) {
   mapd_shared_lock<mapd_shared_mutex> chunkIndexReadLock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.find(key);
   if (chunkIt == chunkIndex_.end()) {
-    LOG(ERROR) << "Failed to get chunk " << showChunk(key);
-    LOG(FATAL) << "Chunk does not exist." << showChunk(key);
+    LOG(FATAL) << "Chunk does not exist. " << showChunk(key);
   }
   return chunkIt->second;
 }

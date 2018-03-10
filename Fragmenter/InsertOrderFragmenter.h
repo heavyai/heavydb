@@ -80,9 +80,9 @@ class InsertOrderFragmenter : public AbstractFragmenter {
    * @todo be able to fill up current fragment in
    * multi-row insert before creating new fragment
    */
-  virtual void insertData(const InsertData& insertDataStruct);
+  virtual void insertData(InsertData& insertDataStruct);
 
-  virtual void insertDataNoCheckpoint(const InsertData& insertDataStruct);
+  virtual void insertDataNoCheckpoint(InsertData& insertDataStruct);
 
   virtual void dropFragmentsToSize(const size_t maxRows);
   /**
@@ -174,7 +174,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   void getChunkMetadata();
 
   void lockInsertCheckpointData(const InsertData& insertDataStruct);
-  void insertDataImpl(const InsertData& insertDataStruct);
+  void insertDataImpl(InsertData& insertDataStruct);
 
   InsertOrderFragmenter(const InsertOrderFragmenter&);
   InsertOrderFragmenter& operator=(const InsertOrderFragmenter&);

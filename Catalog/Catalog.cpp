@@ -1104,6 +1104,31 @@ void Catalog::updatePageSize() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
+void Catalog::updateDeletedColumnIndicator() {
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query("PRAGMA TABLE_INFO(mapd_columns)");
+    std::vector<std::string> cols;
+    for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
+      cols.push_back(sqliteConnector_.getData<std::string>(i, 1));
+    }
+    if (std::find(cols.begin(), cols.end(), std::string("version_num")) == cols.end()) {
+      LOG(INFO) << "Updating mapd_columns updateDeletedColumnIndicator";
+      // need to add new version info
+      string queryString("ALTER TABLE mapd_columns ADD version_num BIGINT DEFAULT " +
+                         std::to_string(DEFAULT_INITIAL_VERSION));
+      sqliteConnector_.query(queryString);
+      // need to add new column to table defintion to indicate deleted column, column used as bitmap
+      // for deleted rows.
+      sqliteConnector_.query("ALTER TABLE mapd_columns  ADD is_deletedcol boolean default false ");
+    }
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
 // introduce DB version into the dictionary tables
 // if the DB does not have a version rename all dictionary tables
 
@@ -1219,6 +1244,7 @@ void Catalog::CheckAndExecuteMigrations() {
   updateLogicalToPhysicalTableLinkSchema();
   updateDictionarySchema();
   updatePageSize();
+  updateDeletedColumnIndicator();
 }
 
 void SysCatalog::buildRoleMap() {
@@ -1344,7 +1370,7 @@ void Catalog::buildMaps() {
   }
   string columnQuery(
       "SELECT tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, compression, comp_param, "
-      "size, chunks, is_systemcol, is_virtualcol, virtual_expr from mapd_columns");
+      "size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_deletedcol from mapd_columns");
   sqliteConnector_.query(columnQuery);
   numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
@@ -1364,10 +1390,14 @@ void Catalog::buildMaps() {
     cd->isSystemCol = sqliteConnector_.getData<bool>(r, 12);
     cd->isVirtualCol = sqliteConnector_.getData<bool>(r, 13);
     cd->virtualExpr = sqliteConnector_.getData<string>(r, 14);
+    cd->isDeletedCol = sqliteConnector_.getData<bool>(r, 15);
     ColumnKey columnKey(cd->tableId, to_upper(cd->columnName));
     columnDescriptorMap_[columnKey] = cd;
     ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
     columnDescriptorMapById_[columnIdKey] = cd;
+    if (cd->isDeletedCol) {
+      setDeletedColumnUnlocked(tableDescriptorMapById_[cd->tableId], cd);
+    }
   }
   string viewQuery("SELECT tableid, sql FROM mapd_views");
   sqliteConnector_.query(viewQuery);
@@ -1451,6 +1481,11 @@ void Catalog::addTableToMap(TableDescriptor& td,
     columnDescriptorMap_[columnKey] = new_cd;
     ColumnIdKey columnIdKey(new_cd->tableId, new_cd->columnId);
     columnDescriptorMapById_[columnIdKey] = new_cd;
+
+    // Add deleted column to the map
+    if (cd.isDeletedCol) {
+      setDeletedColumnUnlocked(new_td, new_cd);
+    }
   }
   std::unique_ptr<StringDictionaryClient> client;
   DictRef dict_ref(currentDB_.dbId, -1);
@@ -1852,8 +1887,8 @@ void Catalog::createTable(TableDescriptor& td,
     columns.push_back(cd);
   }
 
-  // add row_id column
   ColumnDescriptor cd;
+  // add row_id column -- Must be last column in the table
   cd.columnName = "rowid";
   cd.isSystemCol = true;
   cd.columnType = SQLTypeInfo(kBIGINT, true);
@@ -1864,6 +1899,17 @@ void Catalog::createTable(TableDescriptor& td,
   cd.virtualExpr = "MAPD_FRAG_ID * MAPD_ROWS_PER_FRAG + MAPD_FRAG_ROW_ID";
 #endif
   columns.push_back(cd);
+
+  if (td.hasDeletedCol) {
+    ColumnDescriptor cd_del;
+    cd_del.columnName = "$deleted$";
+    cd_del.isSystemCol = true;
+    cd_del.isVirtualCol = false;
+    cd_del.columnType = SQLTypeInfo(kBOOLEAN, true);
+    cd_del.isDeletedCol = true;
+
+    columns.push_back(cd_del);
+  }
 
   td.nColumns = columns.size();
   sqliteConnector_.query("BEGIN TRANSACTION");
@@ -1902,10 +1948,10 @@ void Catalog::createTable(TableDescriptor& td,
         }
         sqliteConnector_.query_with_text_params(
             "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, "
-            "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr) "
+            "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_deletedcol) "
             "VALUES (?, ?, ?, ?, ?, "
             "?, "
-            "?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             std::vector<std::string>{std::to_string(td.tableId),
                                      std::to_string(colId),
                                      cd.columnName,
@@ -1920,7 +1966,8 @@ void Catalog::createTable(TableDescriptor& td,
                                      "",
                                      std::to_string(cd.isSystemCol),
                                      std::to_string(cd.isVirtualCol),
-                                     cd.virtualExpr});
+                                     cd.virtualExpr,
+                                     std::to_string(cd.isDeletedCol)});
         cd.tableId = td.tableId;
         cd.columnId = colId++;
         cds.push_back(cd);
@@ -2038,6 +2085,10 @@ const ColumnDescriptor* Catalog::getDeletedColumn(const TableDescriptor* td) con
 
 void Catalog::setDeletedColumn(const TableDescriptor* td, const ColumnDescriptor* cd) {
   std::lock_guard<std::mutex> lock(cat_mutex_);
+  setDeletedColumnUnlocked(td, cd);
+}
+
+void Catalog::setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd) {
   const auto it_ok = deletedColumnPerTable_.emplace(td, cd);
   CHECK(it_ok.second);
 }

@@ -44,17 +44,22 @@ struct TableDescriptor {
   int64_t maxRows;                                // max number of rows in the table
   std::string partitions;                         // distributed partition scheme
   std::string keyMetainfo;                        // meta-information about shard keys and shared dictionary, as JSON
+
   Fragmenter_Namespace::AbstractFragmenter*
       fragmenter;       // point to fragmenter object for the table.  it's instantiated upon first use.
   int32_t nShards;      // # of shards, i.e. physical tables for this logical table (default: 0)
   int shardedColumnId;  // Id of the column to be sharded on
   Data_Namespace::MemoryLevel persistenceLevel;
+  bool hasDeletedCol;  // Does table has a delete col, Yes (VACUUM = DELAYED)
+                       //                              No  (VACUUM = IMMEDIATE)
+
   TableDescriptor()
       : tableId(-1),
         shard(-1),
         nShards(0),
         shardedColumnId(0),
-        persistenceLevel(Data_Namespace::MemoryLevel::DISK_LEVEL) {}
+        persistenceLevel(Data_Namespace::MemoryLevel::DISK_LEVEL),
+        hasDeletedCol(false) {}
 };
 
 inline bool table_is_replicated(const TableDescriptor* td) {

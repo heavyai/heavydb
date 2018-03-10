@@ -283,7 +283,7 @@ public class MetaConnect {
       MAPDLOGGER.debug("table id is " + id);
       MAPDLOGGER.debug("table name is " + tableName);
       String query = String.format(
-              "SELECT * FROM mapd_columns where tableid = %d order by columnid;", id);
+              "SELECT * FROM mapd_columns where tableid = %d and not is_deletedcol order by columnid;", id);
       MAPDLOGGER.debug(query);
       rs = stmt.executeQuery(query);
       while (rs.next()) {

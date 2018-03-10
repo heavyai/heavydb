@@ -67,8 +67,8 @@ std::string build_create_table_statement(const std::string& columns_definition,
   const std::string fragment_size_def{shard_info.shard_col.empty() ? "fragment_size=" + std::to_string(fragment_size)
                                                                    : ""};
 
-  const std::string shard_count_def{
-      shard_info.shard_col.empty() ? "" : "shard_count=" + std::to_string(shard_info.shard_count)};
+  const std::string shard_count_def{shard_info.shard_col.empty() ? "" : "shard_count=" +
+                                                                            std::to_string(shard_info.shard_count)};
 
   return "CREATE TABLE " + table_name + "(" + columns_definition + shard_key_def +
          boost::algorithm::join(shared_dict_def, "") + ") WITH (" + fragment_size_def + shard_count_def + ");";
@@ -2774,7 +2774,7 @@ void import_join_test() {
 #else
                                                         3
 #endif
-  );
+                                                        );
   run_ddl_statement(create_test);
   g_sqlite_comparator.query("CREATE TABLE join_test(x int not null, y int, str text, dup_str text);");
   {
@@ -3944,6 +3944,21 @@ TEST(Truncate, Count) {
   run_multiple_agg("insert into trunc_test values(4, '4');", ExecutorDeviceType::CPU);
   ASSERT_EQ(int64_t(7), v<int64_t>(run_simple_agg("SELECT SUM(i1) FROM trunc_test;", ExecutorDeviceType::CPU)));
   run_ddl_statement("drop table trunc_test;");
+}
+
+TEST(Create, Delete) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("create table vacuum_test (i1 integer, t1 text) with (vacuum='delayed');");
+    run_multiple_agg("insert into vacuum_test values(1, '1');", dt);
+    run_multiple_agg("insert into vacuum_test values(2, '2');", dt);
+    ASSERT_EQ(int64_t(3), v<int64_t>(run_simple_agg("SELECT SUM(i1) FROM vacuum_test;", dt)));
+    run_multiple_agg("insert into vacuum_test values(3, '3');", dt);
+    run_multiple_agg("insert into vacuum_test values(4, '4');", dt);
+    // add a real delete in here
+    ASSERT_EQ(int64_t(10), v<int64_t>(run_simple_agg("SELECT SUM(i1) FROM vacuum_test;", dt)));
+    run_ddl_statement("drop table vacuum_test;");
+  }
 }
 
 TEST(Select, Deleted) {

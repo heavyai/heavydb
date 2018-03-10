@@ -2033,9 +2033,21 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         } else {
           td.nShards = shard_count;
         }
+      } else if (boost::iequals(*p->get_name(), "vacuum")) {
+        const auto vacuum = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+        CHECK(vacuum);
+        const auto vacuum_uc = boost::to_upper_copy<std::string>(*vacuum);
+        if (vacuum_uc != "IMMEDIATE" && vacuum_uc != "DELAYED") {
+          throw std::runtime_error("VACUUM must be IMMEDIATE or DELAYED");
+        }
+        if (boost::iequals(vacuum_uc, "DELAYED")) {
+          td.hasDeletedCol = true;
+        } else {
+          td.hasDeletedCol = false;
+        }
       } else {
         throw std::runtime_error("Invalid CREATE TABLE option " + *p->get_name() +
-                                 ".  Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_ROWS, PARTITIONS or SHARD_COUNT.");
+                                 ".  Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_ROWS, PARTITIONS, VACUUM or SHARD_COUNT.");
       }
     }
   }

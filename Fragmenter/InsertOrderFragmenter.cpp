@@ -190,7 +190,7 @@ void InsertOrderFragmenter::deleteFragments(const vector<int>& dropFragIds) {
   }
 }
 
-void InsertOrderFragmenter::insertData(const InsertData& insertDataStruct) {
+void InsertOrderFragmenter::insertData(InsertData& insertDataStruct) {
   // TODO: this local lock will need to be centralized when ALTER COLUMN is added, bc
   mapd_unique_lock<mapd_shared_mutex> insertLock(
       insertMutex_);  // prevent two threads from trying to insert into the same table simultaneously
@@ -201,16 +201,28 @@ void InsertOrderFragmenter::insertData(const InsertData& insertDataStruct) {
   }
 }
 
-void InsertOrderFragmenter::insertDataNoCheckpoint(const InsertData& insertDataStruct) {
+void InsertOrderFragmenter::insertDataNoCheckpoint(InsertData& insertDataStruct) {
   // TODO: this local lock will need to be centralized when ALTER COLUMN is added, bc
   mapd_unique_lock<mapd_shared_mutex> insertLock(
       insertMutex_);  // prevent two threads from trying to insert into the same table simultaneously
   insertDataImpl(insertDataStruct);
 }
 
-void InsertOrderFragmenter::insertDataImpl(const InsertData& insertDataStruct) {
-  std::unordered_map<int, int> inverseInsertDataColIdMap;
+void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
+  // populate deleted system column of it exists, as it will not come from client
+  std::unique_ptr<int8_t[]> data_for_deleted_column;
+  for (const auto& cit : columnMap_)
+    if (cit.second.get_column_desc()->isDeletedCol) {
+      data_for_deleted_column.reset(new int8_t[insertDataStruct.numRows]);
+      memset(data_for_deleted_column.get(), 0, insertDataStruct.numRows);
+      insertDataStruct.data.emplace_back(DataBlockPtr{data_for_deleted_column.get()});
+      insertDataStruct.columnIds.push_back(cit.second.get_column_desc()->columnId);
+      break;
+    }
+  // MAT we need to add a removal of the empty column we pushed onto here
+  // for upstream safety.  Should not be a problem but need to fix.
 
+  std::unordered_map<int, int> inverseInsertDataColIdMap;
   for (size_t insertId = 0; insertId < insertDataStruct.columnIds.size(); ++insertId) {
     inverseInsertDataColIdMap.insert(std::make_pair(insertDataStruct.columnIds[insertId], insertId));
   }

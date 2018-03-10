@@ -222,6 +222,7 @@ class Catalog {
   const ColumnDescriptor* getDeletedColumn(const TableDescriptor* td) const;
 
   void setDeletedColumn(const TableDescriptor* td, const ColumnDescriptor* cd);
+  void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);
 
  protected:
   typedef std::map<std::string, TableDescriptor*> TableDescriptorMap;
@@ -247,6 +248,7 @@ class Catalog {
   void updateLogicalToPhysicalTableMap(const int32_t logical_tb_id);
   void updateDictionarySchema();
   void updatePageSize();
+  void updateDeletedColumnIndicator();
   void buildMaps();
   void addTableToMap(TableDescriptor& td,
                      const std::list<ColumnDescriptor>& columns,

@@ -78,7 +78,7 @@ class AbstractFragmenter {
    * with locks and checkpoints
    */
 
-  virtual void insertData(const InsertData& insertDataStruct) = 0;
+  virtual void insertData(InsertData& insertDataStruct) = 0;
 
   /**
    * @brief Given data wrapped in an InsertData struct,
@@ -86,7 +86,7 @@ class AbstractFragmenter {
    * No locks and checkpoints taken needs to be managed externally
    */
 
-  virtual void insertDataNoCheckpoint(const InsertData& insertDataStruct) = 0;
+  virtual void insertDataNoCheckpoint(InsertData& insertDataStruct) = 0;
 
   /**
    * @brief Will truncate table to less than maxRows by dropping
