@@ -80,6 +80,10 @@ using GeometryPtrVector = std::vector<OGRGeometry*>;
 #define DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT 0
 #define PROMOTE_POLYGON_TO_MULTIPOLYGON 1
 
+// the EPSG that we force geographic data to
+// 4326 = WGS84 lat/lon
+#define GEOGRAPHIC_SPATIAL_REFERENCE 4326
+
 static mapd_shared_mutex status_mutex;
 static std::map<std::string, ImportStatus> import_status_map;
 
@@ -1735,7 +1739,7 @@ static ImportStatus import_thread_delimited(int thread_id,
 
 static ImportStatus import_thread_shapefile(int thread_id,
                                             Importer* importer,
-                                            OGRSpatialReference* poSR,
+                                            OGRSpatialReference* poGeographicSR,
                                             const FeaturePtrVector& features,
                                             size_t numFeatures,
                                             const FieldNameToIndexMapType& fieldNameToIndexMap,
@@ -1761,7 +1765,7 @@ static ImportStatus import_thread_shapefile(int thread_id,
     CHECK(pGeometry);
 
     // transform it
-    pGeometry->transformTo(poSR);
+    pGeometry->transformTo(poGeographicSR);
 
     size_t col_idx = 0;
     try {
@@ -3142,6 +3146,8 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::s
 #endif
         SQLTypeInfo ti;
         ti.set_type(geoType);
+        ti.set_input_srid(GEOGRAPHIC_SPATIAL_REFERENCE);
+        ti.set_output_srid(GEOGRAPHIC_SPATIAL_REFERENCE);
         cd.columnType = ti;
         cds.push_back(cd);
       }
@@ -3195,9 +3201,9 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
       fieldNameToIndexMap.emplace(std::make_pair(poFieldDefn->GetNameRef(), iField));
     }
 
-    // the spatial reference we want to put everything in
-    auto poSR = new OGRSpatialReference();
-    poSR->importFromEPSG(3857);
+    // the geographic spatial reference we want to put everything in
+    std::unique_ptr<OGRSpatialReference> poGeographicSR(new OGRSpatialReference());
+    poGeographicSR->importFromEPSG(GEOGRAPHIC_SPATIAL_REFERENCE);
 
 #if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
     // just one "thread"
@@ -3280,7 +3286,7 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 #if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
       // call worker function directly
       if (DEBUG_SHAPEFILE_IMPORT) LOG(INFO) << "DEBUG: Starting worker for features " << firstFeatureThisChunk << " to " << firstFeatureThisChunk + numFeaturesThisChunk - 1;
-      auto ret_import_status = import_thread_shapefile(0, this, poSR, features[thread_id], numFeaturesThisChunk,
+      auto ret_import_status = import_thread_shapefile(0, this, poGeographicSR.get(), features[thread_id], numFeaturesThisChunk,
                                                        fieldNameToIndexMap, columnNameToSourceNameMap, columnIdToRenderGroupAnalyzerMap);
       import_status += ret_import_status;
       import_status.rows_estimated = ((float)firstFeatureThisChunk / (float)numFeatures) * import_status.rows_completed;
@@ -3298,7 +3304,7 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
       // fire up that thread to import this geometry
       if (DEBUG_SHAPEFILE_IMPORT) LOG(INFO) << "DEBUG: Starting worker thread " << thread_id << " for features " << firstFeatureThisChunk << " to " << firstFeatureThisChunk + numFeaturesThisChunk - 1;
       threads.push_back(
-          std::async(std::launch::async, import_thread_shapefile, thread_id, this, poSR, features[thread_id], numFeaturesThisChunk,
+          std::async(std::launch::async, import_thread_shapefile, thread_id, this, poGeographicSR.get(), features[thread_id], numFeaturesThisChunk,
                      fieldNameToIndexMap, columnNameToSourceNameMap, columnIdToRenderGroupAnalyzerMap));
 
       // let the threads run
@@ -3397,9 +3403,6 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
     // otherwise, the thread on the other end would throw an unwanted 'write()'
     // exception
     import_status.load_truncated = load_truncated;
-
-    // tidy up
-    delete poSR;
 
     if (DEBUG_SHAPEFILE_IMPORT) LOG(INFO) << "Import completed in " << float(timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(import_timer)) / 1000.0f << "ms";
 
