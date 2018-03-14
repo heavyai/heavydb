@@ -211,6 +211,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
   bool getDBConvert() const;
   void createTopLevelMetadata();  // create metadata shared by all tables of all DBs
   std::string getFileMgrBasePath() const { return fileMgrBasePath_; }
+  void closeRemovePhysical();
 
   void free_page(std::pair<FileInfo*, int>&& page);
   const std::pair<const int, const int> get_fileMgrKey() const { return fileMgrKey_; }

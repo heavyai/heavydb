@@ -177,16 +177,9 @@ void GlobalFileMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
   if (fm == nullptr) {
     LOG(FATAL) << "Drop table failed. Table " << db_id << " " << tb_id << " does not exist.";
   }
-
-  /* remove directory containing table related data */
-  boost::system::error_code ec;
-  boost::filesystem::path pathToTableDS(fm->getFileMgrBasePath());
-  boost::filesystem::remove_all(pathToTableDS, ec);
-
+  fm->closeRemovePhysical();
   /* remove table related in-memory DS only if directory was removed successfully */
-  if (ec == 0) {
-    delete fm;
-  }
+  delete fm;
 }
 
 void GlobalFileMgr::setTableEpoch(const int db_id, const int tb_id, const int start_epoch) {

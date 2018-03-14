@@ -1433,8 +1433,10 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
       CHECK_GE(dd->refcount, 1);
       --dd->refcount;
       if (!dd->refcount) {
-        if (!isTemp)
+        dd->stringDict.reset();
+        if (!isTemp) {
           boost::filesystem::remove_all(dd->dictFolderPath);
+        }
         if (client) {
           client->drop(dict_ref);
         }
@@ -2038,6 +2040,8 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
       CHECK_GE(dd->refcount, 1);
       // if this is the only table using this dict reset the dict
       if (dd->refcount == 1) {
+        // close the dictionary
+        dd->stringDict.reset();
         boost::filesystem::remove_all(dd->dictFolderPath);
         if (client) {
           client->drop(dd->dictRef);

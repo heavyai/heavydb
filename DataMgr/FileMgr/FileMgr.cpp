@@ -397,6 +397,29 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
   }
 }
 
+void FileMgr::closeRemovePhysical() {
+  for (auto file_info : files_) {
+    if (file_info->f) {
+      close(file_info->f);
+      file_info->f = nullptr;
+    }
+  }
+
+  if (epochFile_) {
+    close(epochFile_);
+    epochFile_ = nullptr;
+  }
+
+  /* remove directory containing table related data */
+  boost::system::error_code ec;
+  boost::filesystem::path pathToTableDS(getFileMgrBasePath());
+  boost::filesystem::remove_all(pathToTableDS, ec);
+
+  if (ec != 0) {
+    LOG(FATAL) << "failed to remove file " << getFileMgrBasePath() << "error was " << ec;
+  }
+}
+
 void FileMgr::copyPage(Page& srcPage,
                        FileMgr* destFileMgr,
                        Page& destPage,
