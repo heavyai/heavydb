@@ -137,6 +137,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         opTab.addOperator(new ST_PointN());
         opTab.addOperator(new ST_StartPoint());
         opTab.addOperator(new ST_EndPoint());
+        opTab.addOperator(new ST_SRID());
+        opTab.addOperator(new ST_SetSRID());
         opTab.addOperator(new ApproxCountDistinct());
         if (extSigs == null) {
             return;
@@ -867,6 +869,46 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
                     null,
                     null,
                     OperandTypes.family(SqlTypeFamily.ANY),
+                    SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            assert opBinding.getOperandCount() == 1;
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.INTEGER);
+        }
+    }
+
+    static class ST_SRID extends SqlFunction {
+
+        ST_SRID() {
+            super("ST_SRID",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.family(SqlTypeFamily.ANY),
+                    SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            assert opBinding.getOperandCount() == 1;
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.INTEGER);
+        }
+    }
+
+    static class ST_SetSRID extends SqlFunction {
+
+        ST_SetSRID() {
+            super("ST_SetSRID",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.family(SqlTypeFamily.ANY, SqlTypeFamily.INTEGER),
                     SqlFunctionCategory.SYSTEM);
         }
 

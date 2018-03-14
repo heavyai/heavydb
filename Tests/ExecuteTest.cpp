@@ -4239,6 +4239,25 @@ TEST(Select, GeoSpatial) {
                                 "from geospatial_test limit 1;",
                                 dt),
                  std::runtime_error);
+
+    // ST_SRID, ST_SetSRID
+    ASSERT_EQ(static_cast<int64_t>(0),
+              v<int64_t>(run_simple_agg("SELECT ST_SRID(p) from geospatial_test limit 1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(4326),
+              v<int64_t>(run_simple_agg("SELECT ST_SRID(gp4326) from geospatial_test limit 1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(900913),
+              v<int64_t>(run_simple_agg("SELECT ST_SRID(gp900913) from geospatial_test limit 1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(4326),
+              v<int64_t>(run_simple_agg("SELECT ST_SRID(ST_GeomFromText('POINT(-118.243683 34.052235)', 4326)) "
+                                        "from geospatial_test limit 1;",
+                                        dt)));
+    // Geodesic distance between Paris and LA: ~9105km
+    ASSERT_NEAR(static_cast<double>(9105643.0),
+                v<double>(run_simple_agg("SELECT ST_Distance(ST_SetSRID('POINT(-118.4079 33.9434)', 4326), "
+                                         "ST_SetSRID('POINT(2.5559 49.0083)', 4326)) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(10000.0));
   }
 }
 
