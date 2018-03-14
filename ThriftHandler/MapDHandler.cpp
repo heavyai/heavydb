@@ -1700,6 +1700,12 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
     copy_params.array_end = unescape_char(cp.array_end);
   if (cp.threads != 0)
     copy_params.threads = cp.threads;
+  if (cp.s3_access_key.length() > 0)
+    copy_params.s3_access_key = cp.s3_access_key;
+  if (cp.s3_secret_key.length() > 0)
+    copy_params.s3_secret_key = cp.s3_secret_key;
+  if (cp.s3_region.length() > 0)
+    copy_params.s3_region = cp.s3_region;
   switch (cp.table_type) {
     case TTableType::POLYGON:
       copy_params.table_type = Importer_NS::TableType::POLYGON;
@@ -1724,6 +1730,9 @@ TCopyParams MapDHandler::copyparams_to_thrift(const Importer_NS::CopyParams& cp)
   copy_params.array_begin = cp.array_begin;
   copy_params.array_end = cp.array_end;
   copy_params.threads = cp.threads;
+  copy_params.s3_access_key = cp.s3_access_key;
+  copy_params.s3_secret_key = cp.s3_secret_key;
+  copy_params.s3_region = cp.s3_region;
   switch (cp.table_type) {
     case Importer_NS::TableType::POLYGON:
       copy_params.table_type = TTableType::POLYGON;
@@ -1745,17 +1754,18 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
   // Assume relative paths are relative to data_path / mapd_import / <session>
   std::string file_name{file_name_in};
   auto file_path = boost::filesystem::path(file_name);
-  if (!boost::filesystem::path(file_name).is_absolute()) {
-    file_path = import_path_ / session / boost::filesystem::path(file_name).filename();
-    file_name = file_path.string();
-  }
-
-  if (!boost::filesystem::exists(file_path)) {
-    THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
-  }
-
   Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
+  // can be a s3 url
+  if (!boost::istarts_with(file_name, "s3://")) {
+    if (!boost::filesystem::path(file_name).is_absolute()) {
+      file_path = import_path_ / session / boost::filesystem::path(file_name).filename();
+      file_name = file_path.string();
+    }
 
+    if (!boost::filesystem::exists(file_path)) {
+      THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
+    }
+  }
   try {
     if (copy_params.table_type == Importer_NS::TableType::DELIMITED) {
       Importer_NS::Detector detector(file_path, copy_params);

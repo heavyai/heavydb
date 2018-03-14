@@ -161,6 +161,9 @@ struct TCopyParams {
   10: string array_end
   11: i32 threads
   12: TTableType table_type=TTableType.DELIMITED
+  13: string s3_access_key
+  14: string s3_secret_key
+  15: string s3_region
 }
 
 struct TDetectResult {

@@ -1513,7 +1513,7 @@ ImportStatus Detector::importDelimited(const std::string& file_path, const bool 
   // somehow clang does not support ext/stdio_filebuf.h, so
   // need to diy readline with customized copy_params.line_delim...
   char line[1 << 20];
-  auto end_time = std::chrono::steady_clock::now() + timeout;
+  auto end_time = std::chrono::steady_clock::now() + timeout * (boost::istarts_with(file_path, "s3://") ? 3 : 1);
   try {
     while (!feof(p_file)) {
       int c;

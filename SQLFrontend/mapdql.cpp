@@ -41,6 +41,7 @@
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <limits>
 #include <string>
 
@@ -53,6 +54,7 @@
 #include "MapDRelease.h"
 #include "MapDServer.h"
 #include "Shared/checked_alloc.h"
+#include "Shared/ThriftTypesConvert.h"
 #include "gen-cpp/MapD.h"
 
 #include "linenoise.h"
@@ -171,6 +173,32 @@ void detect_table(char* file_name, TCopyParams& copy_params, ClientContext& cont
 
   try {
     context.client.detect_column_types(_return, context.session, file_name, copy_params);
+    // print result only for verifying detect_column_types api
+    // as this cmd seems never planned for public use
+    for (const auto tct : _return.row_set.row_desc)
+      printf("%20.20s ", tct.col_name.c_str());
+    printf("\n");
+    for (const auto tct : _return.row_set.row_desc)
+      printf("%20.20s ", type_info_from_thrift(tct.col_type).get_type_name().c_str());
+    printf("\n");
+    for (const auto row : _return.row_set.rows) {
+      for (const auto col : row.cols)
+        printf("%20.20s ", col.val.str_val.c_str());
+      printf("\n");
+    }
+    // output CREATE TABLE command
+    std::stringstream oss;
+    oss << "CREATE TABLE your_table_name(";
+    for (size_t i = 0; i < _return.row_set.row_desc.size(); ++i) {
+      const auto tct = _return.row_set.row_desc[i];
+      oss << (i ? ", " : "") << tct.col_name << " " << type_info_from_thrift(tct.col_type).get_type_name();
+      if (type_info_from_thrift(tct.col_type).is_string())
+        oss << " ENCODING DICT";
+      if (type_info_from_thrift(tct.col_type).is_array())
+        oss << "[]";
+    }
+    oss << ");";
+    printf("\n%s\n", oss.str().c_str());
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
@@ -1259,7 +1287,14 @@ int main(int argc, char** argv) {
     } else if (!strncmp(line, "\\detect", 7)) {
       char* filepath = strtok(line + 8, " ");
       TCopyParams copy_params;
-      copy_params.delimiter = delimiter;
+      copy_params.delimiter = ",";
+      char* env;
+      if (nullptr != (env = getenv("AWS_REGION")))
+        copy_params.s3_region = env;
+      if (nullptr != (env = getenv("AWS_ACCESS_KEY_ID")))
+        copy_params.s3_access_key = env;
+      if (nullptr != (env = getenv("AWS_SECRET_ACCESS_KEY")))
+        copy_params.s3_secret_key = env;
       detect_table(filepath, copy_params, context);
     } else if (!strncmp(line, "\\historylen", 11)) {
       /* The "/historylen" command will change the history len. */
