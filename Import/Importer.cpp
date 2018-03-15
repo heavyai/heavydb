@@ -74,7 +74,6 @@ using FeaturePtrVector = std::vector<OGRFeature*>;
 using GeometryPtrVector = std::vector<OGRGeometry*>;
 
 #define DEBUG_TIMING false
-#define DEBUG_SHAPEFILE_IMPORT 0
 #define DEBUG_RENDER_GROUP_ANALYZER 0
 
 #define DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT 0
@@ -3170,8 +3169,6 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::s
 ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSourceNameMap) {
   OGRDataSource* poDS = nullptr;
   try {
-    auto import_timer = timer_start();
-
     // initial status
     bool load_truncated = false;
     set_import_status(import_id, import_status);
@@ -3275,7 +3272,6 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 #else
       auto thread_id = stack_thread_ids.top();
       stack_thread_ids.pop();
-      // LOG(INFO) << " stack_thread_ids.pop " << thread_id << std::endl;
 #endif
 
       // fill features buffer for new thread
@@ -3285,7 +3281,6 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 
 #if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
       // call worker function directly
-      if (DEBUG_SHAPEFILE_IMPORT) LOG(INFO) << "DEBUG: Starting worker for features " << firstFeatureThisChunk << " to " << firstFeatureThisChunk + numFeaturesThisChunk - 1;
       auto ret_import_status = import_thread_shapefile(0, this, poGeographicSR.get(), features[thread_id], numFeaturesThisChunk,
                                                        fieldNameToIndexMap, columnNameToSourceNameMap, columnIdToRenderGroupAnalyzerMap);
       import_status += ret_import_status;
@@ -3302,7 +3297,6 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 #else
 
       // fire up that thread to import this geometry
-      if (DEBUG_SHAPEFILE_IMPORT) LOG(INFO) << "DEBUG: Starting worker thread " << thread_id << " for features " << firstFeatureThisChunk << " to " << firstFeatureThisChunk + numFeaturesThisChunk - 1;
       threads.push_back(
           std::async(std::launch::async, import_thread_shapefile, thread_id, this, poGeographicSR.get(), features[thread_id], numFeaturesThisChunk,
                      fieldNameToIndexMap, columnNameToSourceNameMap, columnIdToRenderGroupAnalyzerMap));
@@ -3329,9 +3323,6 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 
             // recall thread_id for reuse
             stack_thread_ids.push(ret_import_status.thread_id);
-            // LOG(INFO) << " stack_thread_ids.push " << ret_import_status.thread_id << std::endl;
-
-            if (DEBUG_SHAPEFILE_IMPORT) LOG(INFO) << "DEBUG:   Thread " << ret_import_status.thread_id << " finished";
 
             threads.erase(it++);
             ++nready;
@@ -3370,12 +3361,18 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
     }
 
 #if !DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
-    // join dangling threads in case of LOG(ERROR) above
+    // wait for any remaining threads
     if (threads.size()) {
-      if (DEBUG_SHAPEFILE_IMPORT) LOG(INFO) << "DEBUG:   Waiting for dangling threads...";
       for (auto& p : threads)
+      {
+        // wait for the thread
         p.wait();
-      if (DEBUG_SHAPEFILE_IMPORT) LOG(INFO) << "DEBUG:   Done";
+        // get the result and update the final import status
+        auto ret_import_status = p.get();
+        import_status += ret_import_status;
+        import_status.rows_estimated = import_status.rows_completed;
+        set_import_status(import_id, import_status);
+      }
     }
 #endif
 
@@ -3403,8 +3400,6 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
     // otherwise, the thread on the other end would throw an unwanted 'write()'
     // exception
     import_status.load_truncated = load_truncated;
-
-    if (DEBUG_SHAPEFILE_IMPORT) LOG(INFO) << "Import completed in " << float(timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(import_timer)) / 1000.0f << "ms";
 
   } catch (const std::exception& e) {
     if (poDS)
