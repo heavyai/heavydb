@@ -30,14 +30,13 @@
 // convenience functions for multi-fragment support in multi-threaded worker functions (poly rendering, importer)
 
 using ChunkIterVector = std::vector<ChunkIter>;
-using ChunkAccessorTable = std::vector<std::tuple<size_t, std::vector<std::shared_ptr<Chunk_NS::Chunk>>, ChunkIterVector>>;
+using ChunkAccessorTable =
+    std::vector<std::tuple<size_t, std::vector<std::shared_ptr<Chunk_NS::Chunk>>, ChunkIterVector>>;
 
 ChunkAccessorTable getChunkAccessorTable(const Catalog_Namespace::Catalog& cat,
                                          const TableDescriptor* td,
                                          const std::vector<std::string>& columnNames);
 
-ChunkIterVector& getChunkItersAndRowOffset(ChunkAccessorTable& table,
-                                           size_t rowid,
-                                           size_t& rowOffset);
+ChunkIterVector& getChunkItersAndRowOffset(ChunkAccessorTable& table, size_t rowid, size_t& rowOffset);
 
-#endif // _CHUNK_ACCESSOR_TABLE_H_
+#endif  // _CHUNK_ACCESSOR_TABLE_H_

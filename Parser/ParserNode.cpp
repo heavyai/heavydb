@@ -1598,7 +1598,7 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
       std::vector<double> coords;
       std::vector<int> ring_sizes;
       std::vector<int> poly_rings;
-      int render_group = 0; // @TODO simon.eves where to get render_group from in this context?!
+      int render_group = 0;  // @TODO simon.eves where to get render_group from in this context?!
       SQLTypeInfo import_ti;
       if (!Importer_NS::importGeoFromWkt(*c->get_constval().stringval, import_ti, coords, ring_sizes, poly_rings)) {
         throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
@@ -1669,8 +1669,8 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
         CHECK_EQ(cd_render_group->columnType.get_type(), kINT);
         Datum d;
         d.intval = render_group;
-        tlist.emplace_back(new Analyzer::TargetEntry(
-            "", makeExpr<Analyzer::Constant>(cd_render_group->columnType, false, d), false));
+        tlist.emplace_back(
+            new Analyzer::TargetEntry("", makeExpr<Analyzer::Constant>(cd_render_group->columnType, false, d), false));
         ++it;
       }
     }

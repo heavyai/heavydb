@@ -677,9 +677,9 @@ class ImporterUtils {
     }
     if (s.size() - 1 > last) {  // if not empty string - disallow empty strings for now
       if (s.substr(last, s.size() - 1 - last).length() > StringDictionary::MAX_STRLEN)
-        throw std::runtime_error("Array String too long : " +
-                                 std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
-                                 std::to_string(StringDictionary::MAX_STRLEN));
+        throw std::runtime_error(
+            "Array String too long : " + std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
+            std::to_string(StringDictionary::MAX_STRLEN));
 
       string_vec.push_back(s.substr(last, s.size() - 1 - last));
     }
@@ -687,11 +687,12 @@ class ImporterUtils {
 };
 
 class RenderGroupAnalyzer {
-public:
+ public:
   RenderGroupAnalyzer() : _numRenderGroups(0) {}
   void seedFromExistingTableContents(const std::unique_ptr<Loader>& loader, const std::string& geoColumnBaseName);
   int insertCoordsAndReturnRenderGroup(const std::vector<double>& coords);
-private:
+
+ private:
   using Point = boost::geometry::model::point<double, 2, boost::geometry::cs::cartesian>;
   using Bounds = boost::geometry::model::box<Point>;
   using Node = std::pair<Bounds, int>;

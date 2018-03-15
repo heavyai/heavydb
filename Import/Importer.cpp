@@ -1489,9 +1489,9 @@ bool importGeoFromLonLat(double lon, double lat, std::vector<double>& coords) {
   if (std::isinf(lat) || std::isnan(lat) || std::isinf(lon) || std::isnan(lon))
     return false;
   auto point = new OGRPoint(lon, lat);
-  //auto poSR0 = new OGRSpatialReference();
-  //poSR0->importFromEPSG(4326);
-  //point->assignSpatialReference(poSR0);
+  // auto poSR0 = new OGRSpatialReference();
+  // poSR0->importFromEPSG(4326);
+  // point->assignSpatialReference(poSR0);
 
   // auto poSR = new OGRSpatialReference();
   // poSR->importFromEPSG(3857);
@@ -1502,13 +1502,14 @@ bool importGeoFromLonLat(double lon, double lat, std::vector<double>& coords) {
   return true;
 }
 
-static ImportStatus import_thread_delimited(int thread_id,
-                                            Importer* importer,
-                                            std::shared_ptr<const char> sbuffer,
-                                            size_t begin_pos,
-                                            size_t end_pos,
-                                            size_t total_size,
-                                            const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap) {
+static ImportStatus import_thread_delimited(
+    int thread_id,
+    Importer* importer,
+    std::shared_ptr<const char> sbuffer,
+    size_t begin_pos,
+    size_t end_pos,
+    size_t total_size,
+    const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap) {
   ImportStatus import_status;
   int64_t total_get_row_time_us = 0;
   int64_t total_str_to_val_time_us = 0;
@@ -1584,9 +1585,7 @@ static ImportStatus import_thread_delimited(int thread_id,
               std::vector<int> poly_rings;
               int render_group = 0;
 
-              if (col_type == kPOINT &&
-                  wkt.size() > 0 &&
-                  (wkt[0] == '.' || isdigit(wkt[0]) || wkt[0] == '-')) {
+              if (col_type == kPOINT && wkt.size() > 0 && (wkt[0] == '.' || isdigit(wkt[0]) || wkt[0] == '-')) {
                 // Invalid WKT, looks more like a scalar.
                 // Try custom POINT import: from two separate scalars rather than WKT string
                 double lon = std::atof(wkt.c_str());
@@ -1613,7 +1612,7 @@ static ImportStatus import_thread_delimited(int thread_id,
                   throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
                 }
 
-                // validate types
+// validate types
 #if PROMOTE_POLYGON_TO_MULTIPOLYGON
                 if (col_type != import_ti.get_type()) {
                   if (!(import_ti.get_type() == SQLTypes::kPOLYGON && col_type == SQLTypes::kMULTIPOLYGON))
@@ -1736,14 +1735,15 @@ static ImportStatus import_thread_delimited(int thread_id,
   return import_status;
 }
 
-static ImportStatus import_thread_shapefile(int thread_id,
-                                            Importer* importer,
-                                            OGRSpatialReference* poGeographicSR,
-                                            const FeaturePtrVector& features,
-                                            size_t numFeatures,
-                                            const FieldNameToIndexMapType& fieldNameToIndexMap,
-                                            const ColumnNameToSourceNameMapType& columnNameToSourceNameMap,
-                                            const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap) {
+static ImportStatus import_thread_shapefile(
+    int thread_id,
+    Importer* importer,
+    OGRSpatialReference* poGeographicSR,
+    const FeaturePtrVector& features,
+    size_t numFeatures,
+    const FieldNameToIndexMapType& fieldNameToIndexMap,
+    const ColumnNameToSourceNameMapType& columnNameToSourceNameMap,
+    const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap) {
   ImportStatus import_status;
   const CopyParams& copy_params = importer->get_copy_params();
   const std::list<const ColumnDescriptor*>& col_descs = importer->get_column_descs();
@@ -1755,7 +1755,6 @@ static ImportStatus import_thread_shapefile(int thread_id,
   auto convert_timer = timer_start();
 
   for (size_t iFeature = 0; iFeature < numFeatures; iFeature++) {
-
     if (!features[iFeature])
       continue;
 
@@ -1800,7 +1799,7 @@ static ImportStatus import_thread_shapefile(int thread_id,
             throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
           }
 
-          // validate types
+// validate types
 #if PROMOTE_POLYGON_TO_MULTIPOLYGON
           if (col_type != import_ti.get_type()) {
             if (!(import_ti.get_type() == SQLTypes::kPOLYGON && col_type == SQLTypes::kMULTIPOLYGON)) {
@@ -1809,7 +1808,7 @@ static ImportStatus import_thread_shapefile(int thread_id,
           }
 #else
           if (col_type != import_ti.get_type()) {
-              throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
+            throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
           }
 #endif
 
@@ -1905,7 +1904,8 @@ static ImportStatus import_thread_shapefile(int thread_id,
       LOG(ERROR) << "Input exception thrown: " << e.what() << ". Row discarded, issue at column : " << (col_idx + 1);
     }
   }
-  float convert_ms = float(timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(convert_timer)) / 1000.0f;
+  float convert_ms =
+      float(timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(convert_timer)) / 1000.0f;
 
   float load_ms = 0.0f;
   if (import_status.rows_completed > 0) {
@@ -1921,7 +1921,11 @@ static ImportStatus import_thread_shapefile(int thread_id,
 
   import_status.thread_id = thread_id;
 
-  if (DEBUG_TIMING) LOG(INFO) << "DEBUG:      Total " << float(timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(convert_timer)) / 1000.0f << "ms";
+  if (DEBUG_TIMING)
+    LOG(INFO) << "DEBUG:      Total "
+              << float(timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(convert_timer)) /
+                     1000.0f
+              << "ms";
 
   return import_status;
 }
@@ -2785,7 +2789,8 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
 
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-  auto columnDescriptors = loader->get_catalog().getAllColumnMetadataForTable(loader->get_table_desc()->tableId, false, false, false);
+  auto columnDescriptors =
+      loader->get_catalog().getAllColumnMetadataForTable(loader->get_table_desc()->tableId, false, false, false);
   for (auto cd : columnDescriptors) {
     SQLTypes ct = cd->columnType.get_type();
     if (ct == kPOLYGON || ct == kMULTIPOLYGON) {
@@ -2822,8 +2827,15 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
       stack_thread_ids.pop();
       // LOG(INFO) << " stack_thread_ids.pop " << thread_id << std::endl;
 
-      threads.push_back(
-          std::async(std::launch::async, import_thread_delimited, thread_id, this, sbuffer, begin_pos, end_pos, end_pos, columnIdToRenderGroupAnalyzerMap));
+      threads.push_back(std::async(std::launch::async,
+                                   import_thread_delimited,
+                                   thread_id,
+                                   this,
+                                   sbuffer,
+                                   begin_pos,
+                                   end_pos,
+                                   end_pos,
+                                   columnIdToRenderGroupAnalyzerMap));
 
       current_pos += end_pos;
       sbuffer.reset(new char[alloc_size]);
@@ -3015,7 +3027,7 @@ void Importer::readMetadataSampleGDAL(const std::string& fileName,
         // populate metadata for regular fields
         for (auto i : metadata) {
           auto iField = poFeature->GetFieldIndex(i.first.c_str());
-          if (iField >= 0) // geom is -1
+          if (iField >= 0)  // geom is -1
             metadata[i.first].at(iFeature) = std::string(poFeature->GetFieldAsString(iField));
         }
 
@@ -3224,7 +3236,8 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 
     // make render group analyzers for each poly column
     ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-    auto columnDescriptors = loader->get_catalog().getAllColumnMetadataForTable(loader->get_table_desc()->tableId, false, false, false);
+    auto columnDescriptors =
+        loader->get_catalog().getAllColumnMetadataForTable(loader->get_table_desc()->tableId, false, false, false);
     for (auto cd : columnDescriptors) {
       SQLTypes ct = cd->columnType.get_type();
       if (ct == kPOLYGON || ct == kMULTIPOLYGON) {
@@ -3262,11 +3275,10 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
     // for each feature...
     size_t firstFeatureThisChunk = 0;
     while (firstFeatureThisChunk < numFeatures) {
-
       // how many features this chunk
       size_t numFeaturesThisChunk = std::min(MAX_FEATURES_PER_CHUNK, numFeatures - firstFeatureThisChunk);
 
-      // get a thread_id not in use
+// get a thread_id not in use
 #if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
       int thread_id = 0;
 #else
@@ -3281,8 +3293,14 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 
 #if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
       // call worker function directly
-      auto ret_import_status = import_thread_shapefile(0, this, poGeographicSR.get(), features[thread_id], numFeaturesThisChunk,
-                                                       fieldNameToIndexMap, columnNameToSourceNameMap, columnIdToRenderGroupAnalyzerMap);
+      auto ret_import_status = import_thread_shapefile(0,
+                                                       this,
+                                                       poGeographicSR.get(),
+                                                       features[thread_id],
+                                                       numFeaturesThisChunk,
+                                                       fieldNameToIndexMap,
+                                                       columnNameToSourceNameMap,
+                                                       columnIdToRenderGroupAnalyzerMap);
       import_status += ret_import_status;
       import_status.rows_estimated = ((float)firstFeatureThisChunk / (float)numFeatures) * import_status.rows_completed;
       set_import_status(import_id, import_status);
@@ -3297,9 +3315,16 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 #else
 
       // fire up that thread to import this geometry
-      threads.push_back(
-          std::async(std::launch::async, import_thread_shapefile, thread_id, this, poGeographicSR.get(), features[thread_id], numFeaturesThisChunk,
-                     fieldNameToIndexMap, columnNameToSourceNameMap, columnIdToRenderGroupAnalyzerMap));
+      threads.push_back(std::async(std::launch::async,
+                                   import_thread_shapefile,
+                                   thread_id,
+                                   this,
+                                   poGeographicSR.get(),
+                                   features[thread_id],
+                                   numFeaturesThisChunk,
+                                   fieldNameToIndexMap,
+                                   columnNameToSourceNameMap,
+                                   columnIdToRenderGroupAnalyzerMap));
 
       // let the threads run
       while (threads.size() > 0) {
@@ -3310,7 +3335,8 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
           if (p.wait_for(span) == std::future_status::ready) {
             auto ret_import_status = p.get();
             import_status += ret_import_status;
-            import_status.rows_estimated = ((float)firstFeatureThisChunk / (float)numFeatures) * import_status.rows_completed;
+            import_status.rows_estimated =
+                ((float)firstFeatureThisChunk / (float)numFeatures) * import_status.rows_completed;
             set_import_status(import_id, import_status);
 
             // destroy and reset features
@@ -3330,8 +3356,7 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
             ++it;
         }
 
-        if (nready == 0)
-        {
+        if (nready == 0) {
           std::this_thread::yield();
         }
 
@@ -3363,8 +3388,7 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 #if !DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
     // wait for any remaining threads
     if (threads.size()) {
-      for (auto& p : threads)
-      {
+      for (auto& p : threads) {
         // wait for the thread
         p.wait();
         // get the result and update the final import status
@@ -3386,7 +3410,9 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
       loader->checkpoint();
     }
 
-    if (!load_failed && loader->get_table_desc()->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
+    if (!load_failed &&
+        loader->get_table_desc()->persistenceLevel ==
+            Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
       for (auto& p : import_buffers_vec[0]) {
         if (!p->stringDictCheckpoint()) {
           LOG(ERROR) << "Checkpointing Dictionary for Column " << p->getColumnDesc()->columnName << " failed.";
@@ -3419,7 +3445,8 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 // class RenderGroupAnalyzer
 //
 
-void RenderGroupAnalyzer::seedFromExistingTableContents(const std::unique_ptr<Loader>& loader, const std::string& geoColumnBaseName) {
+void RenderGroupAnalyzer::seedFromExistingTableContents(const std::unique_ptr<Loader>& loader,
+                                                        const std::string& geoColumnBaseName) {
   // get the table descriptor
   const auto& cat = loader->get_catalog();
   const std::string& tableName = loader->get_table_desc()->tableName;
@@ -3433,7 +3460,8 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(const std::unique_ptr<Lo
 
   // if the table is empty, we're done
   if (td->fragmenter->getFragmentsForQuery().getPhysicalNumTuples() == 0) {
-    if (DEBUG_RENDER_GROUP_ANALYZER) LOG(INFO) << "DEBUG: Table is empty!";
+    if (DEBUG_RENDER_GROUP_ANALYZER)
+      LOG(INFO) << "DEBUG: Table is empty!";
     return;
   }
 
@@ -3441,26 +3469,30 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(const std::unique_ptr<Lo
   const auto cd_coords = cat.getMetadataForColumn(td->tableId, geoColumnBaseName + "_coords");
   const auto cd_render_group = cat.getMetadataForColumn(td->tableId, geoColumnBaseName + "_render_group");
   if (!cd_coords || !cd_render_group) {
-    if (DEBUG_RENDER_GROUP_ANALYZER) LOG(INFO) << "DEBUG: Table doesn't have coords or render_group columns!";
+    if (DEBUG_RENDER_GROUP_ANALYZER)
+      LOG(INFO) << "DEBUG: Table doesn't have coords or render_group columns!";
     return;
   }
 
   // and validate their types
   if (cd_coords->columnType.get_type() != kARRAY || cd_coords->columnType.get_subtype() != kDOUBLE) {
-    if (DEBUG_RENDER_GROUP_ANALYZER) LOG(INFO) << "DEBUG: Table coords columns is wrong type!";
+    if (DEBUG_RENDER_GROUP_ANALYZER)
+      LOG(INFO) << "DEBUG: Table coords columns is wrong type!";
     return;
   }
   if (cd_render_group->columnType.get_type() != kINT) {
-    if (DEBUG_RENDER_GROUP_ANALYZER) LOG(INFO) << "DEBUG: Table render_group columns is wrong type!";
+    if (DEBUG_RENDER_GROUP_ANALYZER)
+      LOG(INFO) << "DEBUG: Table render_group columns is wrong type!";
     return;
   }
 
   // get chunk accessor table
-  auto chunkAccessorTable = getChunkAccessorTable(cat, td, { geoColumnBaseName + "_coords",
-                                                             geoColumnBaseName + "_render_group" });
+  auto chunkAccessorTable =
+      getChunkAccessorTable(cat, td, {geoColumnBaseName + "_coords", geoColumnBaseName + "_render_group"});
   const auto table_count = std::get<0>(chunkAccessorTable.back());
 
-  if (DEBUG_RENDER_GROUP_ANALYZER) LOG(INFO) << "DEBUG: Scanning existing table geo column set '" << geoColumnBaseName << "'";
+  if (DEBUG_RENDER_GROUP_ANALYZER)
+    LOG(INFO) << "DEBUG: Scanning existing table geo column set '" << geoColumnBaseName << "'";
 
   auto scanTimer = timer_start();
 
@@ -3510,10 +3542,13 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(const std::unique_ptr<Lo
     if (renderGroup >= _numRenderGroups)
       _numRenderGroups = renderGroup + 1;
 
-    if (DEBUG_RENDER_GROUP_ANALYZER) LOG(INFO) << "DEBUG:   Existing row " << row << " has " << numCoords << " coords, and Render Group " << renderGroup;
+    if (DEBUG_RENDER_GROUP_ANALYZER)
+      LOG(INFO) << "DEBUG:   Existing row " << row << " has " << numCoords << " coords, and Render Group "
+                << renderGroup;
   }
 
-  if (DEBUG_RENDER_GROUP_ANALYZER) LOG(INFO) << "DEBUG: Done! Now have " << _numRenderGroups << " Render Groups (" << timer_stop(scanTimer) << "ms)";
+  if (DEBUG_RENDER_GROUP_ANALYZER)
+    LOG(INFO) << "DEBUG: Done! Now have " << _numRenderGroups << " Render Groups (" << timer_stop(scanTimer) << "ms)";
 }
 
 int RenderGroupAnalyzer::insertCoordsAndReturnRenderGroup(const std::vector<double>& coords) {
@@ -3537,8 +3572,7 @@ int RenderGroupAnalyzer::insertCoordsAndReturnRenderGroup(const std::vector<doub
   // clear bit means available, allows use of find_first()
   boost::dynamic_bitset<> bits(_numRenderGroups);
   bits.set();
-  for (const auto& intersection : intersects)
-  {
+  for (const auto& intersection : intersects) {
     CHECK(intersection.second < _numRenderGroups);
     bits.reset(intersection.second);
   }

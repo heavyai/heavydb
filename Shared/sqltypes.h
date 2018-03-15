@@ -248,9 +248,9 @@ class SQLTypeInfo {
       case kLINESTRING:
         return 1;
       case kPOLYGON:
-        return 2; // omit render group
+        return 2;  // omit render group
       case kMULTIPOLYGON:
-        return 3; // omit render group
+        return 3;  // omit render group
       default:
         break;
     }

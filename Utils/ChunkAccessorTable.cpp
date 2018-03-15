@@ -41,7 +41,6 @@ ChunkAccessorTable getChunkAccessorTable(const Catalog_Namespace::Catalog& cat,
     // for each column...
     bool isFirstColumn = true;
     for (const auto& columnName : columnNames) {
-
       // get column descriptor
       const auto cd = cat.getMetadataForColumn(td->tableId, columnName);
       CHECK(cd);
@@ -53,12 +52,12 @@ ChunkAccessorTable getChunkAccessorTable(const Catalog_Namespace::Catalog& cat,
 
       // get the chunk
       std::shared_ptr<Chunk_NS::Chunk> chunk = Chunk_NS::Chunk::getChunk(cd,
-          &cat.get_dataMgr(),
-          chunkKey,
-          Data_Namespace::CPU_LEVEL,
-          0,
-          chunkMetaIt->second.numBytes,
-          chunkMetaIt->second.numElements);
+                                                                         &cat.get_dataMgr(),
+                                                                         chunkKey,
+                                                                         Data_Namespace::CPU_LEVEL,
+                                                                         0,
+                                                                         chunkMetaIt->second.numBytes,
+                                                                         chunkMetaIt->second.numElements);
       CHECK(chunk);
 
       // the size
@@ -93,9 +92,7 @@ ChunkAccessorTable getChunkAccessorTable(const Catalog_Namespace::Catalog& cat,
   return table;
 }
 
-ChunkIterVector& getChunkItersAndRowOffset(ChunkAccessorTable& table,
-                                           size_t rowid,
-                                           size_t& rowOffset) {
+ChunkIterVector& getChunkItersAndRowOffset(ChunkAccessorTable& table, size_t rowid, size_t& rowOffset) {
   rowOffset = 0;
   for (auto& entry : table) {
     if (rowid < std::get<0>(entry)) {

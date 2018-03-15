@@ -114,11 +114,9 @@ struct PolyData2d {
     return box;
   }
 
-  void setWKT(const char* wktIn) {
-    wkt = wktIn;
-  }
+  void setWKT(const char* wktIn) { wkt = wktIn; }
 
-private:
+ private:
   bool _inPoly, _inRing;
 };
 

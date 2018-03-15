@@ -1818,7 +1818,8 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
       const std::string geoColumnName(MAPD_GEO_PREFIX);
 
       check_geospatial_files(file_path);
-      std::list<ColumnDescriptor> cds = Importer_NS::Importer::gdalToColumnDescriptors(file_path.string(), geoColumnName);
+      std::list<ColumnDescriptor> cds =
+          Importer_NS::Importer::gdalToColumnDescriptors(file_path.string(), geoColumnName);
       for (auto cd : cds) {
         cd.columnName = sanitize_name(cd.columnName);
         _return.row_set.row_desc.push_back(populateThriftColumnType(nullptr, &cd));
