@@ -2332,17 +2332,22 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
     }
   }
   if (type == kTEXT) {
-    if (str.find("POINT") == 0) {
+    // convert to upper case
+    std::string str_upper_case = str;
+    std::transform(str_upper_case.begin(), str_upper_case.end(), str_upper_case.begin(), ::toupper);
+
+    // then test for leading words
+    if (str_upper_case.find("POINT") == 0) {
       type = kPOINT;
-    } else if (str.find("LINESTRING") == 0) {
+    } else if (str_upper_case.find("LINESTRING") == 0) {
       type = kLINESTRING;
-    } else if (str.find("POLYGON") == 0) {
+    } else if (str_upper_case.find("POLYGON") == 0) {
 #if PROMOTE_POLYGON_TO_MULTIPOLYGON
       type = kMULTIPOLYGON;
 #else
       type = kPOLYGON;
 #endif
-    } else if (str.find("MULTIPOLYGON") == 0) {
+    } else if (str_upper_case.find("MULTIPOLYGON") == 0) {
       type = kMULTIPOLYGON;
     }
   }
