@@ -1728,7 +1728,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
           new Analyzer::TargetEntry(targets_meta[i].get_resname(), target_exprs_owned_[target_start_idx + i], false));
     }
     if (render_info->isPotentialInSituRender()) {
-      return renderWorkUnit(work_unit, targets_meta, render_info, error_code, queue_time_ms);
+      // return an empty result (with the same queue time, and zero render time)
+      return { std::make_shared<ResultSet>(queue_time_ms, 0, executor_->row_set_mem_owner_), {} };
     }
   }
   if (!error_code) {
@@ -1985,6 +1986,8 @@ std::string RelAlgExecutor::getErrorMessageFromCode(const int32_t error_code) {
       return "Too many literals in the query";
     case Executor::ERR_STRING_CONST_IN_RESULTSET:
       return "NONE ENCODED String types are not supported as input result set.";
+    case Executor::ERR_OUT_OF_RENDER_MEM:
+      return "Not enough OpenGL memory to render the query results";
   }
   return "Other error: code " + std::to_string(error_code);
 }

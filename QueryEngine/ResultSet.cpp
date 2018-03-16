@@ -178,8 +178,7 @@ ResultSet::ResultSet(const std::string& explanation)
       cached_row_count_(-1),
       geo_return_type_(GeoReturnType::WktString) {}
 
-ResultSet::ResultSet(const std::string& image_bytes,
-                     int64_t queue_time_ms,
+ResultSet::ResultSet(int64_t queue_time_ms,
                      int64_t render_time_ms,
                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
     : device_type_(ExecutorDeviceType::CPU),
@@ -190,7 +189,6 @@ ResultSet::ResultSet(const std::string& image_bytes,
       estimator_buffer_(nullptr),
       host_estimator_buffer_(nullptr),
       none_encoded_strings_valid_(false),
-      explanation_(image_bytes),
       just_explain_(true),
       cached_row_count_(-1),
       geo_return_type_(GeoReturnType::WktString){};

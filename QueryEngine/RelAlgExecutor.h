@@ -200,12 +200,6 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
 
   bool isRowidLookup(const WorkUnit& work_unit);
 
-  ExecutionResult renderWorkUnit(const RelAlgExecutor::WorkUnit& work_unit,
-                                 const std::vector<TargetMetaInfo>& targets_meta,
-                                 RenderInfo* render_info,
-                                 const int32_t error_code,
-                                 const int64_t queue_time_ms);
-
   void executeUnfoldedMultiJoin(const RelAlgNode* user,
                                 RaExecutionDesc& exec_desc,
                                 const CompilationOptions& co,

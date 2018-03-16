@@ -319,29 +319,37 @@ class Executor {
                            const int render_widget_id,
                            const int pixelRadius = 0);
 
-  std::shared_ptr<ResultSet> renderPolygons(const std::string& queryStr,
-                                            const ExecutionResult& results,
-                                            const Catalog_Namespace::SessionInfo& session,
-                                            const int render_widget_id,
-                                            const rapidjson::Value& data_desc,
-                                            RenderInfo* render_query_data,
-                                            const std::string* render_config_json = nullptr,
-                                            const std::string& poly_table_name = "");
+  std::shared_ptr<ResultSet> renderPointsNonInSitu(const std::string& queryStr,
+                                                   const ExecutionResult& results,
+                                                   const Catalog_Namespace::SessionInfo& session,
+                                                   const int render_widget_id,
+                                                   const rapidjson::Value& data_desc,
+                                                   RenderInfo* render_query_data);
 
-  std::shared_ptr<ResultSet> renderNonInSituData(const std::string& queryStr,
-                                                 const ExecutionResult& results,
-                                                 const Catalog_Namespace::SessionInfo& session,
-                                                 const int render_widget_id,
-                                                 const rapidjson::Value& data_desc,
-                                                 RenderInfo* render_query_data,
-                                                 const std::string* render_config_json = nullptr);
+  std::shared_ptr<ResultSet> renderPointsInSitu(RenderInfo* render_query_data);
 
-  std::shared_ptr<ResultSet> renderLines(const std::string& queryStr,
-                                         const ExecutionResult& results,
-                                         const Catalog_Namespace::SessionInfo& session,
-                                         const int render_widget_id,
-                                         const rapidjson::Value& data_desc,
-                                         RenderInfo* render_query_data);
+  std::shared_ptr<ResultSet> renderPolygonsNonInSitu(const std::string& queryStr,
+                                                     const ExecutionResult& results,
+                                                     const Catalog_Namespace::SessionInfo& session,
+                                                     const int render_widget_id,
+                                                     const rapidjson::Value& data_desc,
+                                                     RenderInfo* render_query_data,
+                                                     const std::string& poly_table_name);
+
+  std::shared_ptr<ResultSet> renderPolygonsInSitu(const std::string& queryStr,
+                                                  const ExecutionResult& results,
+                                                  const Catalog_Namespace::SessionInfo& session,
+                                                  const int render_widget_id,
+                                                  const rapidjson::Value& data_desc,
+                                                  RenderInfo* render_query_data,
+                                                  const std::string& poly_table_name);
+
+  std::shared_ptr<ResultSet> renderLinesNonInSitu(const std::string& queryStr,
+                                                  const ExecutionResult& results,
+                                                  const Catalog_Namespace::SessionInfo& session,
+                                                  const int render_widget_id,
+                                                  const rapidjson::Value& data_desc,
+                                                  RenderInfo* render_query_data);
 
   std::vector<int32_t> getStringIds(const std::string& col_name,
                                     const std::vector<std::string>& col_vals,
@@ -849,8 +857,6 @@ class Executor {
                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
   RowSetPtr collectAllDeviceShardedTopResults(ExecutionDispatch& execution_dispatch) const;
-
-  std::string renderRows(RenderInfo* render_query_data);
 
   std::unordered_map<int, const Analyzer::BinOper*> getInnerTabIdToJoinCond() const;
 

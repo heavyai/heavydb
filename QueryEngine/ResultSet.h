@@ -241,8 +241,7 @@ class ResultSet {
 
   ResultSet(const std::string& explanation);
 
-  ResultSet(const std::string& image_bytes,
-            int64_t queue_time_ms,
+  ResultSet(int64_t queue_time_ms,
             int64_t render_time_ms,
             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 

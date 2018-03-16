@@ -17,11 +17,6 @@
 #include "../../Execute.h"
 #include "../../RelAlgExecutionDescriptor.h"
 
-std::string Executor::renderRows(RenderInfo* render_query_data) {
-  CHECK(false);
-  return "";
-}
-
 int64_t Executor::getRowidForPixel(const int64_t x,
                                    const int64_t y,
                                    const std::string& session_id,
@@ -31,35 +26,44 @@ int64_t Executor::getRowidForPixel(const int64_t x,
   return 0;
 }
 
-std::shared_ptr<ResultSet> Executor::renderLines(const std::string& queryStr,
-                                                 const ExecutionResult& results,
-                                                 const Catalog_Namespace::SessionInfo& session,
-                                                 const int render_widget_id,
-                                                 const rapidjson::Value& data_desc,
-                                                 RenderInfo* render_query_data) {
+std::shared_ptr<ResultSet> Executor::renderLinesNonInSitu(const std::string& queryStr,
+                                                          const ExecutionResult& results,
+                                                          const Catalog_Namespace::SessionInfo& session,
+                                                          const int render_widget_id,
+                                                          const rapidjson::Value& data_desc,
+                                                          RenderInfo* render_query_data) {
   CHECK(false);
   return nullptr;
 }
 
-std::shared_ptr<ResultSet> Executor::renderPolygons(const std::string& queryStr,
-                                                    const ExecutionResult& results,
-                                                    const Catalog_Namespace::SessionInfo& session,
-                                                    const int render_widget_id,
-                                                    const rapidjson::Value& data_desc,
-                                                    RenderInfo* render_query_data,
-                                                    const std::string* render_config_json,
-                                                    const std::string& poly_table_name) {
+std::shared_ptr<ResultSet> renderPolygonsNonInSitu(const std::string& queryStr,
+                                                   const ExecutionResult& results,
+                                                   const Catalog_Namespace::SessionInfo& session,
+                                                   const int render_widget_id,
+                                                   const rapidjson::Value& data_desc,
+                                                   RenderInfo* render_query_data,
+                                                   const std::string& poly_table_name) {
   CHECK(false);
   return nullptr;
 }
 
-std::shared_ptr<ResultSet> Executor::renderNonInSituData(const std::string& queryStr,
-                                                         const ExecutionResult& results,
-                                                         const Catalog_Namespace::SessionInfo& session,
-                                                         const int render_widget_id,
-                                                         const rapidjson::Value& data_desc,
-                                                         RenderInfo* render_query_data,
-                                                         const std::string* render_config_json) {
+std::shared_ptr<ResultSet> renderPolygonsInSitu(const std::string& queryStr,
+                                                const ExecutionResult& results,
+                                                const Catalog_Namespace::SessionInfo& session,
+                                                const int render_widget_id,
+                                                const rapidjson::Value& data_desc,
+                                                RenderInfo* render_query_data,
+                                                const std::string& poly_table_name) {
+  CHECK(false);
+  return nullptr;
+}
+
+std::shared_ptr<ResultSet> renderLinesNonInSitu(const std::string& queryStr,
+                                                const ExecutionResult& results,
+                                                const Catalog_Namespace::SessionInfo& session,
+                                                const int render_widget_id,
+                                                const rapidjson::Value& data_desc,
+                                                RenderInfo* render_query_data) {
   CHECK(false);
   return nullptr;
 }

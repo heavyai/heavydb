@@ -87,13 +87,11 @@ set(query_engine_source_files
 if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
   list(APPEND query_engine_source_files
     ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/ExecuteRenderInterface.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/RelAlgExecutorRenderInterface.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/RenderAllocator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/RenderInfo.cpp)
 else()
   list(APPEND query_engine_source_files
     ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/os/ExecuteRenderInterface.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/os/RelAlgExecutorRenderInterface.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/os/RenderAllocator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/os/RenderInfo.cpp)
 endif()
@@ -110,6 +108,13 @@ execute_process(COMMAND ${llvm_config_cmd} "--includedir"
 
 if(ENABLE_CUDA)
   set(MAPD_DEFINITIONS "-DHAVE_CUDA")
+  set(NVCC_BUILD_TYPE_ARGS)
+  string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPERCASE)
+  if(CMAKE_BUILD_TYPE_UPPERCASE MATCHES DEBUG)
+    list(APPEND NVCC_BUILD_TYPE_ARGS -DTHRUST_DEBUG -g)
+  else()
+    list(APPEND NVCC_BUILD_TYPE_ARGS -O3)
+  endif()
 endif()
 
 if(ENABLE_MULTIFRAG_JOIN)
@@ -157,7 +162,11 @@ add_custom_command(
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast DESTINATION QueryEngine)
 
 if(ENABLE_CUDA)
-  add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)
+  if (ENABLE_RENDERING)
+    add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o ${CMAKE_CURRENT_BINARY_DIR}/ThrustPolygons.o)
+  else()
+    add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)
+  endif()
 else()
   add_library(QueryEngine ${query_engine_source_files})
 endif()
@@ -179,6 +188,7 @@ add_custom_command(
         ${MAPD_DEFINITIONS}
         -arch sm_30
         -lib ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
+        ${NVCC_BUILD_TYPE_ARGS}
         -o ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a
     )
 
@@ -196,9 +206,9 @@ add_custom_command(
         --device-link
         -arch sm_30
         -std=c++11
+        ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu
     )
-
 
 add_custom_command(
     DEPENDS TopKSort.cu
@@ -208,10 +218,10 @@ add_custom_command(
         ${MAPD_HOST_COMPILER_FLAG}
         -Xcompiler -fPIC
         -std=c++11
-        -O3
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         -arch sm_30
+        ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/TopKSort.cu
     )
 
@@ -222,11 +232,11 @@ add_custom_command(
     ARGS
         ${MAPD_HOST_COMPILER_FLAG}
         -Xcompiler -fPIC
-        -O3
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         -arch sm_30
         -std=c++11
+        ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/InPlaceSortImpl.cu
     )
 
@@ -238,10 +248,10 @@ add_custom_command(
         ${MAPD_HOST_COMPILER_FLAG}
         -Xcompiler -fPIC
         -std=c++11
-        -O3
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         -arch sm_30
+        ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/ResultSetSortImpl.cu
     )
 
@@ -254,9 +264,9 @@ add_custom_command(
         -Xcompiler -fPIC
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
-        -O3
         -arch sm_30
         -std=c++11
+        ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuInitGroups.cu
     )
 
@@ -269,10 +279,27 @@ add_custom_command(
         -Xcompiler -fPIC
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
-        -O3
         -arch sm_30
         -std=c++11
+        ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/HashJoinRuntimeGpu.cu
+    )
+
+add_custom_command(
+    DEPENDS Rendering/ee/ThrustPolygons.cu
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ThrustPolygons.o
+    COMMAND nvcc
+    ARGS
+        -I ${CMAKE_SOURCE_DIR}
+        -I ${glbinding_INCLUDE_DIR}
+        ${MAPD_HOST_COMPILER_FLAG}
+        -Xcompiler -fPIC
+        -D_FORCE_INLINES
+        ${MAPD_DEFINITIONS}
+        -arch sm_30
+        -std=c++11
+        ${NVCC_BUILD_TYPE_ARGS}
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/ThrustPolygons.cu
     )
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})

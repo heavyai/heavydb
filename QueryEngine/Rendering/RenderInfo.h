@@ -25,7 +25,6 @@ class RenderInfo {
   std::unique_ptr<RenderAllocatorMap> render_allocator_map_ptr;
   const std::string session_id;
   const int render_widget_id;
-  const std::string render_vega;
   const size_t render_small_groups_buffer_entry_count{2 * 1024 * 1024};
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner;
   std::vector<std::shared_ptr<Analyzer::TargetEntry>> targets;  // Info for all the column targets retrieved in
@@ -47,7 +46,6 @@ class RenderInfo {
   bool isPotentialInSituRender() const;
   bool useCudaBuffers() const;
   void disableCudaBuffers();
-  bool hasVega() const;
 
   std::shared_ptr<QueryRenderer::QueryDataLayout> getQueryVboLayout() const;
   void setQueryVboLayout(const std::shared_ptr<QueryRenderer::QueryDataLayout>& vbo_layout);

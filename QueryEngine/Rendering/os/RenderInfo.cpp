@@ -57,11 +57,6 @@ void RenderInfo::disableCudaBuffers() {
   CHECK(false);
 }
 
-bool RenderInfo::hasVega() const {
-  CHECK(false);
-  return false;
-}
-
 std::shared_ptr<QueryRenderer::QueryDataLayout> RenderInfo::getQueryVboLayout() const {
   CHECK(false);
   return nullptr;
