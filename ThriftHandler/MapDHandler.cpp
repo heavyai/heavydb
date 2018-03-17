@@ -2048,10 +2048,10 @@ void MapDHandler::create_table(const TSessionId& session,
 
 void MapDHandler::import_table(const TSessionId& session,
                                const std::string& table_name,
-                               const std::string& file_name,
+                               const std::string& file_name_in,
                                const TCopyParams& cp) {
   check_read_only("import_table");
-  LOG(INFO) << "import_table " << table_name << " from " << file_name;
+  LOG(INFO) << "import_table " << table_name << " from " << file_name_in;
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
 
@@ -2061,12 +2061,18 @@ void MapDHandler::import_table(const TSessionId& session,
   }
   check_table_load_privileges(session_info, table_name);
 
-  auto file_path = import_path_ / session / boost::filesystem::path(file_name).filename();
-  if (!boost::filesystem::exists(file_path)) {
-    THROW_MAPD_EXCEPTION("File does not exist: " + file_path.filename().string());
-  }
-
+  std::string file_name{file_name_in};
+  auto file_path = boost::filesystem::path(file_name);
   Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
+  if (!boost::istarts_with(file_name, "s3://")) {
+    if (!boost::filesystem::path(file_name).is_absolute()) {
+      file_path = import_path_ / session / boost::filesystem::path(file_name).filename();
+      file_name = file_path.string();
+    }
+    if (!boost::filesystem::exists(file_path)) {
+      THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
+    }
+  }
 
   // TODO(andrew): add delimiter detection to Importer
   if (copy_params.delimiter == '\0') {
