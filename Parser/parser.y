@@ -1163,31 +1163,33 @@ data_type:
 	| TIME '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kTIME, $<intval>3); }
 	| TIMESTAMP { $<nodeval>$ = new SQLType(kTIMESTAMP); }
 	| TIMESTAMP '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kTIMESTAMP, $<intval>3); }
-	| geo_type { $<nodeval>$ = $<nodeval>1; }
+	| geo_type { $<nodeval>$ = new SQLType(static_cast<SQLTypes>($<intval>1)); }
 	| geography_type { $<nodeval>$ = $<nodeval>1; }
 	| geometry_type { $<nodeval>$ = $<nodeval>1; }
-  | data_type '[' ']'
-  { $<nodeval>$ = $<nodeval>1;
-    if (dynamic_cast<SQLType*>($<nodeval>$)->get_is_array())
-      throw std::runtime_error("array of array not supported.");
-    dynamic_cast<SQLType*>($<nodeval>$)->set_is_array(true); }
+	| data_type '[' ']'
+	{
+		$<nodeval>$ = $<nodeval>1;
+		if (dynamic_cast<SQLType*>($<nodeval>$)->get_is_array())
+		  throw std::runtime_error("array of array not supported.");
+		dynamic_cast<SQLType*>($<nodeval>$)->set_is_array(true);
+	}
 	;
 
-geo_type:	POINT { $<nodeval>$ = new SQLType(kPOINT); }
-	|	LINESTRING { $<nodeval>$ = new SQLType(kLINESTRING); }
-	|	POLYGON { $<nodeval>$ = new SQLType(kPOLYGON); }
-	|	MULTIPOLYGON { $<nodeval>$ = new SQLType(kMULTIPOLYGON); }
+geo_type:	POINT { $<intval>$ = kPOINT; }
+	|	LINESTRING { $<intval>$ = kLINESTRING; }
+	|	POLYGON { $<intval>$ = kPOLYGON; }
+	|	MULTIPOLYGON { $<intval>$ = kMULTIPOLYGON; }
 	;
 
 geography_type:	GEOGRAPHY '(' geo_type ')'
-	{ $<nodeval>$ = new SQLType(dynamic_cast<SQLType*>($<nodeval>3)->get_type(), 4326, 4326, false); }
+		{ $<nodeval>$ = new SQLType(static_cast<SQLTypes>($<intval>3), 4326, 4326, false); }
 	|	GEOGRAPHY '(' geo_type ',' INTNUM ')'
-	{ $<nodeval>$ = new SQLType(dynamic_cast<SQLType*>($<nodeval>3)->get_type(), $<intval>5, $<intval>5, false); }
+		{ $<nodeval>$ = new SQLType(static_cast<SQLTypes>($<intval>3), $<intval>5, $<intval>5, false); }
 
 geometry_type:	GEOMETRY '(' geo_type ')'
-	{ $<nodeval>$ = new SQLType(dynamic_cast<SQLType*>($<nodeval>3)->get_type(), 0, 0, false); }
+		{ $<nodeval>$ = new SQLType(static_cast<SQLTypes>($<intval>3), 0, 0, false); }
 	|	GEOMETRY '(' geo_type ',' INTNUM ')'
-	{ $<nodeval>$ = new SQLType(dynamic_cast<SQLType*>($<nodeval>3)->get_type(), $<intval>5, $<intval>5, false); }
+		{ $<nodeval>$ = new SQLType(static_cast<SQLTypes>($<intval>3), $<intval>5, $<intval>5, false); }
 
 	/* the various things you can name */
 
