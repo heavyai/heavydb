@@ -703,7 +703,7 @@ void SysCatalog::createRole_unsafe(const std::string& roleName, const bool& user
   }
   Role* rl = getMetadataForRole(roleName);
   CHECK(!rl);  // it has been checked already in the calling proc that this role doesn't exist, fail otherwize
-  rl = new GroupRole(to_upper(roleName), userPrivateRole);
+  rl = new GroupRole(roleName, userPrivateRole);
   roleMap_[to_upper(roleName)] = rl;
 
   // NOTE (max): Why create an empty privileges record for a role?
@@ -888,7 +888,7 @@ std::vector<std::string> SysCatalog::getRoles(bool userPrivateRole, bool isSuper
     if (!isSuper && !isRoleGrantedToUser(userId, static_cast<GroupRole*>(roleIt->second)->roleName())) {
       continue;
     }
-    roles.push_back(roleIt->first);
+    roles.push_back(roleIt->second->roleName());
   }
   return roles;
 }
@@ -1248,7 +1248,7 @@ void SysCatalog::buildRoleMap() {
       dbObject.setPrivileges(privs);
       Role* rl = getMetadataForRole(roleName);
       if (!rl) {
-        rl = new GroupRole(to_upper(roleName), userPrivateRole);
+        rl = new GroupRole(roleName, userPrivateRole);
         roleMap_[to_upper(roleName)] = rl;
       }
       rl->grantPrivileges(dbObject);
