@@ -488,7 +488,7 @@ std::string datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
       prefix = std::string("MULTIPOLYGON(((");
       suffix = std::string(")))");
     }
-    // TODO: need to break coord list into rings (POLYGON) and polys/rings (MULTIPOLYGON) 
+    // TODO: need to break coord list into rings (POLYGON) and polys/rings (MULTIPOLYGON)
     return prefix + boost::algorithm::join(elem_strs, ", ") + suffix;
   }
   return scalar_datum_to_string(datum, type_info);
@@ -658,7 +658,7 @@ void register_signal_handler() {
   signal(SIGINT, mapdql_signal_handler);
 }
 
-void print_memory_summary(ClientContext context, std::string memory_level) {
+void print_memory_summary(ClientContext& context, std::string memory_level) {
   std::ostringstream tss;
   std::vector<TNodeMemoryInfo> memory_info;
   std::string sub_system;
@@ -738,7 +738,7 @@ void print_memory_summary(ClientContext context, std::string memory_level) {
   std::cout << tss.str() << std::endl;
 }
 
-void print_memory_info(ClientContext context, std::string memory_level) {
+void print_memory_info(ClientContext& context, std::string memory_level) {
   int MB = 1024 * 1024;
   std::ostringstream tss;
   std::vector<TNodeMemoryInfo> memory_info;
@@ -831,7 +831,7 @@ std::string print_hardware_specification(THardwareInfo hw_spec) {
   return tss.str();
 }
 
-void print_all_hardware_info(ClientContext context) {
+void print_all_hardware_info(ClientContext& context) {
   std::ostringstream tss;
   for (auto hw_info : context.cluster_hardware_info.hardware_info) {
     tss << "===========================================" << std::endl;
@@ -841,7 +841,7 @@ void print_all_hardware_info(ClientContext context) {
   std::cout << tss.str();
 }
 
-void get_role(ClientContext context) {
+void get_role(ClientContext& context) {
   context.role_names.clear();
   context.userPrivateRole = false;
   if (thrift_with_retry(kGET_ROLE, context, context.privs_role_name.c_str())) {
@@ -855,7 +855,7 @@ void get_role(ClientContext context) {
   }
 }
 
-void get_db_objects_for_role(ClientContext context) {
+void get_db_objects_for_role(ClientContext& context) {
   context.role_names.clear();
   context.userPrivateRole = true;
   if (thrift_with_retry(kGET_ROLE, context, context.privs_role_name.c_str())) {
@@ -922,7 +922,7 @@ void get_db_objects_for_role(ClientContext context) {
   }
 }
 
-void get_db_object_privs(ClientContext context) {
+void get_db_object_privs(ClientContext& context) {
   context.role_names.clear();
   context.userPrivateRole = true;
   if (thrift_with_retry(kGET_ALL_ROLES, context, nullptr)) {
@@ -997,7 +997,7 @@ void get_db_object_privs(ClientContext context) {
   }
 }
 
-void set_license_key(ClientContext context, const std::string& token) {
+void set_license_key(ClientContext& context, const std::string& token) {
   context.license_key = token;
   if (thrift_with_retry(kSET_LICENSE_KEY, context, nullptr)) {
     for (auto claims : context.license_info.claims) {
@@ -1010,7 +1010,7 @@ void set_license_key(ClientContext context, const std::string& token) {
   }
 }
 
-void get_license_claims(ClientContext context) {
+void get_license_claims(ClientContext& context) {
   if (thrift_with_retry(kGET_LICENSE_CLAIMS, context, nullptr)) {
     for (auto claims : context.license_info.claims) {
       std::vector<std::string> jwt;
@@ -1305,39 +1305,6 @@ int main(int argc, char** argv) {
         std::cout << "Cannot connect to MapD Server." << std::endl;
       }
 
-    } else if (!strncmp(line, "\\status", 8)) {
-      if (thrift_with_retry(kGET_SERVER_STATUS, context, nullptr)) {
-        time_t t = (time_t)context.cluster_status[0].start_time;
-        std::tm* tm_ptr = gmtime(&t);
-        char buf[12] = {0};
-        strftime(buf, 11, "%F", tm_ptr);
-        std::string server_version = context.cluster_status[0].version;
-
-        std::cout << "The Server Version Number  : " << context.cluster_status[0].version << std::endl;
-        std::cout << "The Server Start Time      : " << buf << " : " << tm_ptr->tm_hour << ":" << tm_ptr->tm_min << ":"
-                  << tm_ptr->tm_sec << std::endl;
-        std::cout << "The Server edition         : " << server_version << std::endl;
-
-        if (context.cluster_status.size() > 1) {
-          std::cout << "The Number of Leaves       : " << context.cluster_status.size() - 1 << std::endl;
-          for (auto leaf = context.cluster_status.begin() + 1; leaf != context.cluster_status.end(); ++leaf) {
-            t = (time_t)leaf->start_time;
-            buf[11] = 0;
-            std::tm* tm_ptr = gmtime(&t);
-            strftime(buf, 11, "%F", tm_ptr);
-            std::cout << "--------------------------------------------------" << std::endl;
-            std::cout << "Name of Leaf               : " << leaf->host_name << std::endl;
-            if (server_version.compare(leaf->version) != 0) {
-              std::cout << "The Leaf Version Number   : " << leaf->version << std::endl;
-              std::cerr << "Version number mismatch!" << std::endl;
-            }
-            std::cout << "The Leaf Start Time        : " << buf << " : " << tm_ptr->tm_hour << ":" << tm_ptr->tm_min
-                      << ":" << tm_ptr->tm_sec << std::endl;
-          }
-        }
-      } else {
-        std::cout << "Cannot connect to MapD Server." << std::endl;
-      }
     } else if (!strncmp(line, "\\detect", 7)) {
       char* filepath = strtok(line + 8, " ");
       TCopyParams copy_params;
@@ -1414,6 +1381,7 @@ int main(int argc, char** argv) {
 	( "\\role_list", 2, RoleListCmd<>(context), "Usage: \\role_list <userName>")
 	( "\\roles", 1, RolesCmd<>(context))("\\set_license", 2, [&](Params const& p ) { set_license_key(context, p[1]); })
 	( "\\get_license", 1, [&](Params const&) { get_license_claims(context); })
+	( "\\status", 1, StatusCmd<>( context ), "Usage \\status" )
 	.is_resolved();
 
       if (resolution_status == false) {

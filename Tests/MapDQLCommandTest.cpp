@@ -103,11 +103,11 @@ TEST(MapDQLTest, CommandResolutionChain_ThreeSet_FirstHit) {
   bool third_hit = false;
 
   auto resolution =
-      CommandResolutionChain<>(
-          "\\fake_command1 token1 token2", "\\fake_command1", 3, [&](Params const& p) { first_hit = true; })(
-          "\\fake_command2", 1, [&](Params const& p) { second_hit = true; })(
-          "\\fake_command3", 1, [&](Params const& p) { third_hit = true; })
-          .is_resolved();
+      CommandResolutionChain<>("\\fake_command1 token1 token2", "\\fake_command1", 3, [&](Params const& p) {
+        first_hit = true;
+      })("\\fake_command2", 1, [&](Params const& p) { second_hit = true; })("\\fake_command3", 1, [&](Params const& p) {
+        third_hit = true;
+      }).is_resolved();
 
   EXPECT_TRUE(resolution);
   EXPECT_TRUE(first_hit);
@@ -123,11 +123,11 @@ TEST(MapDQLTest, CommandResolutionChain_ThreeSet_SecondHit) {
   bool third_hit = false;
 
   auto resolution =
-      CommandResolutionChain<>(
-          "\\fake_command2 token1 token2", "\\fake_command1", 1, [&](Params const& p) { first_hit = true; })(
-          "\\fake_command2", 3, [&](Params const& p) { second_hit = true; })(
-          "\\fake_command3", 1, [&](Params const& p) { third_hit = true; })
-          .is_resolved();
+      CommandResolutionChain<>("\\fake_command2 token1 token2", "\\fake_command1", 1, [&](Params const& p) {
+        first_hit = true;
+      })("\\fake_command2", 3, [&](Params const& p) { second_hit = true; })("\\fake_command3", 1, [&](Params const& p) {
+        third_hit = true;
+      }).is_resolved();
 
   EXPECT_TRUE(resolution);
   EXPECT_FALSE(first_hit);
@@ -143,11 +143,11 @@ TEST(MapDQLTest, CommandResolutionChain_ThreeSet_ThirdHit) {
   bool third_hit = false;
 
   auto resolution =
-      CommandResolutionChain<>(
-          "\\fake_command3 token1 token2", "\\fake_command1", 1, [&](Params const& p) { first_hit = true; })(
-          "\\fake_command2", 1, [&](Params const& p) { second_hit = true; })(
-          "\\fake_command3", 3, [&](Params const& p) { third_hit = true; })
-          .is_resolved();
+      CommandResolutionChain<>("\\fake_command3 token1 token2", "\\fake_command1", 1, [&](Params const& p) {
+        first_hit = true;
+      })("\\fake_command2", 1, [&](Params const& p) { second_hit = true; })("\\fake_command3", 3, [&](Params const& p) {
+        third_hit = true;
+      }).is_resolved();
 
   EXPECT_TRUE(resolution);
   EXPECT_FALSE(first_hit);
@@ -163,11 +163,11 @@ TEST(MapDQLTest, CommandResolutionChain_ThreeSet_NoHits) {
   bool third_hit = false;
 
   auto resolution =
-      CommandResolutionChain<>(
-          "\\i_cant_be_matched token1 token2", "\\fake_command1", 3, [&](Params const& p) { first_hit = true; })(
-          "\\fake_command2", 1, [&](Params const& p) { second_hit = true; })(
-          "\\fake_command3", 1, [&](Params const& p) { third_hit = true; })
-          .is_resolved();
+      CommandResolutionChain<>("\\i_cant_be_matched token1 token2", "\\fake_command1", 3, [&](Params const& p) {
+        first_hit = true;
+      })("\\fake_command2", 1, [&](Params const& p) { second_hit = true; })("\\fake_command3", 1, [&](Params const& p) {
+        third_hit = true;
+      }).is_resolved();
 
   EXPECT_FALSE(resolution);
   EXPECT_FALSE(first_hit);
@@ -209,6 +209,42 @@ TEST(MapDQLTest, CopyGeoCommandTest) {
                         .is_resolved();
 
   EXPECT_TRUE(unit_test_context.import_geo_table_invoked);
+  EXPECT_TRUE(resolution);
+}
+
+//
+// \\status Command Unit Test and Support Mockups
+//
+
+struct StatusCommandMockupContext {
+  std::string file_name;
+  std::string table_name;
+  bool get_status_invoked = true;
+};
+
+struct StatusCommandContextOpsPolicy {
+  using ThriftServiceType = ThriftService;
+  using ContextType = StatusCommandMockupContext;
+};
+
+template <typename CONTEXT_OP_POLICY>
+class StatusCommandMockupContextOperations {
+ public:
+  using ThriftService = typename CONTEXT_OP_POLICY::ThriftServiceType;
+  using ContextType = typename CONTEXT_OP_POLICY::ContextType;
+
+  static void get_status(ContextType& context, std::ostream&) { context.get_status_invoked = true; }
+};
+
+TEST(MapDQLTest, StatusCommandTest) {
+  using Params = CommandResolutionChain<>::CommandTokenList;
+  using UnitTestStatusCmd = StatusCmd<StatusCommandContextOpsPolicy, StatusCommandMockupContextOperations>;
+  StatusCommandMockupContext unit_test_context;
+
+  auto resolution =
+      CommandResolutionChain<>("\\status", "\\status", 1, UnitTestStatusCmd(unit_test_context)).is_resolved();
+
+  EXPECT_TRUE(unit_test_context.get_status_invoked);
   EXPECT_TRUE(resolution);
 }
 
