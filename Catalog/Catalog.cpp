@@ -2275,8 +2275,14 @@ void Catalog::removeChunks(const int table_id) {
 
 void Catalog::dropTable(const TableDescriptor* td) {
   const auto physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
-
-  sqliteConnector_.query("BEGIN TRANSACTION");
+  SqliteConnector* sys_conn = SysCatalog::instance().getSqliteConnector();
+  SqliteConnector* drop_conn = sys_conn;
+  sys_conn->query("BEGIN TRANSACTION");
+  bool is_system_db = currentDB_.dbName == MAPD_SYSTEM_DB;  // whether we need two connectors or not
+  if (!is_system_db) {
+    drop_conn = &sqliteConnector_;
+    drop_conn->query("BEGIN TRANSACTION");
+  }
   try {
     if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
       // remove all corresponding physical tables if this is a logical table
@@ -2286,47 +2292,52 @@ void Catalog::dropTable(const TableDescriptor* td) {
         int32_t physical_tb_id = physicalTables[i];
         const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
         CHECK(phys_td);
-        doDropTable(phys_td);
+        doDropTable(phys_td, drop_conn);
         removeTableFromMap(phys_td->tableName, physical_tb_id);
       }
 
       // remove corresponding record from the logicalToPhysicalTableMap in sqlite database
 
-      sqliteConnector_.query_with_text_param("DELETE FROM mapd_logical_to_physical WHERE logical_table_id = ?",
-                                             std::to_string(td->tableId));
+      drop_conn->query_with_text_param("DELETE FROM mapd_logical_to_physical WHERE logical_table_id = ?",
+                                       std::to_string(td->tableId));
       logicalToPhysicalTableMapById_.erase(td->tableId);
     }
-    doDropTable(td);
+    doDropTable(td, drop_conn);
     removeTableFromMap(td->tableName, td->tableId);
   } catch (std::exception& e) {
-    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    if (!is_system_db) {
+      drop_conn->query("ROLLBACK TRANSACTION");
+    }
+    sys_conn->query("ROLLBACK TRANSACTION");
     throw;
   }
-  sqliteConnector_.query("END TRANSACTION");
+  if (!is_system_db) {
+    drop_conn->query("END TRANSACTION");
+  }
+  sys_conn->query("END TRANSACTION");
 }
 
-void Catalog::doDropTable(const TableDescriptor* td) {
+void Catalog::doDropTable(const TableDescriptor* td, SqliteConnector* conn) {
   const int tableId = td->tableId;
-  sqliteConnector_.query_with_text_param("DELETE FROM mapd_tables WHERE tableid = ?", std::to_string(tableId));
-  sqliteConnector_.query_with_text_params(
-      "select comp_param from mapd_columns where compression = ? and tableid = ?",
-      std::vector<std::string>{std::to_string(kENCODING_DICT), std::to_string(tableId)});
-  int numRows = sqliteConnector_.getNumRows();
+  conn->query_with_text_param("DELETE FROM mapd_tables WHERE tableid = ?", std::to_string(tableId));
+  conn->query_with_text_params("select comp_param from mapd_columns where compression = ? and tableid = ?",
+                               std::vector<std::string>{std::to_string(kENCODING_DICT), std::to_string(tableId)});
+  int numRows = conn->getNumRows();
   std::vector<int> dict_id_list;
   for (int r = 0; r < numRows; ++r) {
-    dict_id_list.push_back(sqliteConnector_.getData<int>(r, 0));
+    dict_id_list.push_back(conn->getData<int>(r, 0));
   }
   for (auto dict_id : dict_id_list) {
-    sqliteConnector_.query_with_text_params("UPDATE mapd_dictionaries SET refcount = refcount - 1 WHERE dictid = ?",
-                                            std::vector<std::string>{std::to_string(dict_id)});
+    conn->query_with_text_params("UPDATE mapd_dictionaries SET refcount = refcount - 1 WHERE dictid = ?",
+                                 std::vector<std::string>{std::to_string(dict_id)});
   }
-  sqliteConnector_.query_with_text_params(
+  conn->query_with_text_params(
       "DELETE FROM mapd_dictionaries WHERE dictid in (select comp_param from mapd_columns where compression = ? "
       "and tableid = ?) and refcount = 0",
       std::vector<std::string>{std::to_string(kENCODING_DICT), std::to_string(tableId)});
-  sqliteConnector_.query_with_text_param("DELETE FROM mapd_columns WHERE tableid = ?", std::to_string(tableId));
+  conn->query_with_text_param("DELETE FROM mapd_columns WHERE tableid = ?", std::to_string(tableId));
   if (td->isView)
-    sqliteConnector_.query_with_text_param("DELETE FROM mapd_views WHERE tableid = ?", std::to_string(tableId));
+    conn->query_with_text_param("DELETE FROM mapd_views WHERE tableid = ?", std::to_string(tableId));
   // must destroy fragmenter before deleteChunks is called.
   if (td->fragmenter != nullptr) {
     auto tableDescIt = tableDescriptorMapById_.find(tableId);

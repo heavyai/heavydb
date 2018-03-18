@@ -264,7 +264,7 @@ class Catalog {
   void addFrontendViewToMap(FrontendViewDescriptor& vd);
   void addLinkToMap(LinkDescriptor& ld);
   void removeTableFromMap(const std::string& tableName, int tableId);
-  void doDropTable(const TableDescriptor* td);
+  void doDropTable(const TableDescriptor* td, SqliteConnector* conn);
   void doTruncateTable(const TableDescriptor* td);
   void renamePhysicalTable(const TableDescriptor* td, const std::string& newTableName);
   void instantiateFragmenter(TableDescriptor* td) const;
@@ -331,6 +331,7 @@ class SysCatalog {
   Data_Namespace::DataMgr& get_dataMgr() const { return *dataMgr_; }
   Calcite& get_calciteMgr() const { return *calciteMgr_; }
   const std::string& get_basePath() const { return basePath_; }
+  SqliteConnector* getSqliteConnector() { return sqliteConnector_.get(); }
   std::list<DBMetadata> getAllDBMetadata();
   std::list<UserMetadata> getAllUserMetadata();
   void createDBObject(const UserMetadata& user,
