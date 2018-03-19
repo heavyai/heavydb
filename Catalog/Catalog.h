@@ -341,7 +341,7 @@ class SysCatalog {
                                DBObject& object,
                                const Catalog_Namespace::Catalog& catalog);
   void revokeDBObjectPrivileges(const std::string& roleName,
-                                DBObject& object,
+                                DBObject object,
                                 const Catalog_Namespace::Catalog& catalog);
   void revokeDBObjectPrivilegesFromAllRoles_unsafe(const std::string& objectName,
                                                    const DBObjectType& objectType,
@@ -395,7 +395,7 @@ class SysCatalog {
                                       DBObject& object,
                                       const Catalog_Namespace::Catalog& catalog);
   void revokeDBObjectPrivileges_unsafe(const std::string& roleName,
-                                       DBObject& object,
+                                       DBObject object,
                                        const Catalog_Namespace::Catalog& catalog);
 
   template <typename F, typename... Args>

@@ -596,7 +596,7 @@ void SysCatalog::grantDBObjectPrivileges_unsafe(const std::string& roleName,
 
 // REVOKE INSERT ON TABLE payroll_table FROM payroll_dept_role;
 void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
-                                                 DBObject& object,
+                                                 DBObject object,
                                                  const Catalog_Namespace::Catalog& catalog) {
   if (!roleName.compare(MAPD_ROOT_USER)) {
     throw runtime_error("Request to revoke privileges from " + roleName +
@@ -615,26 +615,34 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
   object.resetPrivileges();
   rl->getPrivileges(object);
   auto privs = object.getPrivileges();
-  sqliteConnector_->query_with_text_params(
-      "INSERT OR REPLACE INTO mapd_object_privileges(roleName, roleType, objectName, objectType, dbObjectType, dbId, "
-      "tableId, "
-      "columnId, "
-      "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, "
-      "?8, ?9, ?10, ?11, ?12, ?13, ?14)",
-      std::vector<std::string>{roleName,
-                               std::to_string(rl->isUserPrivateRole()),
-                               object.getName(),
-                               std::to_string(object.getType()),
-                               objectKey[0],
-                               objectKey[1],
-                               objectKey[2],
-                               objectKey[3],
-                               std::to_string(privs.select),
-                               std::to_string(privs.insert),
-                               std::to_string(privs.create),
-                               std::to_string(privs.truncate),
-                               std::to_string(false),
-                               std::to_string(false)});
+  if (privs.hasAny()) {
+    sqliteConnector_->query_with_text_params(
+        "INSERT OR REPLACE INTO mapd_object_privileges(roleName, roleType, objectName, objectType, dbObjectType, dbId, "
+        "tableId, "
+        "columnId, "
+        "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, "
+        "?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        std::vector<std::string>{roleName,
+                                 std::to_string(rl->isUserPrivateRole()),
+                                 object.getName(),
+                                 std::to_string(object.getType()),
+                                 objectKey[0],
+                                 objectKey[1],
+                                 objectKey[2],
+                                 objectKey[3],
+                                 std::to_string(privs.select),
+                                 std::to_string(privs.insert),
+                                 std::to_string(privs.create),
+                                 std::to_string(privs.truncate),
+                                 std::to_string(false),
+                                 std::to_string(false)});
+  } else {
+    sqliteConnector_->query_with_text_params(
+        "DELETE FROM mapd_object_privileges WHERE roleName = ?1 and roleType = ?2 and dbObjectType = ?3 and dbId = ?4 "
+        "and tableId = ?5 and columnId = ?6",
+        std::vector<std::string>{
+            roleName, std::to_string(rl->isUserPrivateRole()), objectKey[0], objectKey[1], objectKey[2], objectKey[3]});
+  }
 }
 
 void SysCatalog::revokeDBObjectPrivilegesFromAllRoles_unsafe(const std::string& objectName,
@@ -2589,7 +2597,7 @@ void SysCatalog::grantDBObjectPrivileges(const std::string& roleName,
 }
 
 void SysCatalog::revokeDBObjectPrivileges(const std::string& roleName,
-                                          DBObject& object,
+                                          DBObject object,
                                           const Catalog_Namespace::Catalog& catalog) {
   execInTransaction(&SysCatalog::revokeDBObjectPrivileges_unsafe, roleName, object, catalog);
 }
