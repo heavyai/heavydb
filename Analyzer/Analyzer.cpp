@@ -1613,6 +1613,9 @@ bool Datum_equal(const SQLTypeInfo& ti, Datum val1, Datum val2) {
       return val1.doubleval == val2.doubleval;
     case kTIME:
     case kTIMESTAMP:
+    case kDATE:
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH:
       return val1.timeval == val2.timeval;
     case kPOINT:
     case kLINESTRING:

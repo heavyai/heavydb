@@ -2176,6 +2176,17 @@ TEST(Select, Time) {
         "HAVING d IS NOT NULL;",
         dt);
     check_one_date_trunc_group(*one_row, 1388534400);
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test where "
+                                        "DATE '2017-05-30' = DATE '2017-05-31' OR "
+                                        "DATE '2017-05-31' = DATE '2017-05-30';",
+                                        dt)));
+    ASSERT_EQ(
+        2 * g_num_rows,
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test where "
+                                  "EXTRACT(DOW from TIMESTAMPADD(HOUR, -5, TIMESTAMP '2017-05-31 1:11:11')) = 1 OR "
+                                  "EXTRACT(DOW from TIMESTAMPADD(HOUR, -5, TIMESTAMP '2017-05-31 1:11:11')) = 2;",
+                                  dt)));
   }
 }
 
