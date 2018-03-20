@@ -2556,12 +2556,6 @@ void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         "CREATE ROLE " + get_role() +
         " failed. This command may be executed only when DB object level access privileges check turned on.");
   }
-
-  auto& catalog = session.get_catalog();
-  if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB) {
-    throw std::runtime_error("CREATE ROLE " + get_role() + " failed. Must be in the system database ('" +
-                             std::string(MAPD_SYSTEM_DB) + "') to create roles.");
-  }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
     throw std::runtime_error("CREATE ROLE " + get_role() + " failed. It can only be executed by super user.");
@@ -2575,11 +2569,6 @@ void DropRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error(
         "DROP ROLE " + get_role() +
         " failed. This command may be executed only when DB object level access privileges check turned on.");
-  }
-  auto& catalog = session.get_catalog();
-  if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB) {
-    throw std::runtime_error("DROP ROLE " + get_role() + " failed. Must be in the system database ('" +
-                             std::string(MAPD_SYSTEM_DB) + "') to drop roles.");
   }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
@@ -2783,12 +2772,6 @@ void GrantRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         "GRANT " + get_role() + " TO " + get_user() +
         " failed. This command may be executed only when DB object level access privileges check turned on.");
   }
-  auto& catalog = session.get_catalog();
-  if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB) {
-    throw std::runtime_error("GRANT " + get_role() + " TO " + get_user() +
-                             "; failed. Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) +
-                             "') to grant roles.");
-  }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
     throw std::runtime_error("GRANT " + get_role() + " TO " + get_user() +
@@ -2807,12 +2790,6 @@ void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error(
         "REVOKE " + get_role() + " FROM " + get_user() +
         " failed. This command may be executed only when DB object level access privileges check turned on.");
-  }
-  auto& catalog = session.get_catalog();
-  if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB) {
-    throw std::runtime_error("REVOKE " + get_role() + " TO " + get_user() +
-                             "; failed. Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) +
-                             "') to revoke roles.");
   }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
@@ -3096,10 +3073,6 @@ void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
-  if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
-    throw std::runtime_error("Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) +
-                             "') to create databases.");
   if (SysCatalog::instance().arePrivilegesOn() && !session.get_currentUser().isSuper) {
     throw std::runtime_error("CREATE DATABASE command can only be executed by super user.");
   }
@@ -3122,10 +3095,6 @@ void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
-  if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
-    throw std::runtime_error("Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) +
-                             "') to drop databases.");
   if (SysCatalog::instance().arePrivilegesOn() && !session.get_currentUser().isSuper) {
     throw std::runtime_error("DROP DATABASE command can only be executed by super user.");
   }
@@ -3141,7 +3110,6 @@ void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
   std::string passwd;
   bool is_super = false;
   for (auto& p : name_value_list) {
@@ -3164,15 +3132,12 @@ void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   if (passwd.empty())
     throw std::runtime_error("Must have a password for CREATE USER.");
-  if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
-    throw std::runtime_error("Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) + "') to create users.");
   if (!session.get_currentUser().isSuper)
     throw std::runtime_error("Only super user can create new users.");
   SysCatalog::instance().createUser(*user_name, passwd, is_super);
 }
 
 void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
   if (SysCatalog::instance().arePrivilegesOn() && !session.get_currentUser().isSuper) {
     throw std::runtime_error("ALTER USER command failed. It can only be executed by super user.");
   }
@@ -3205,8 +3170,6 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       throw std::runtime_error("Invalid CREATE USER option " + *p->get_name() +
                                ".  Should be PASSWORD, INSERTACCESS or IS_SUPER.");
   }
-  if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
-    throw std::runtime_error("Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) + "') to alter users.");
   Catalog_Namespace::UserMetadata user;
   if (!SysCatalog::instance().getMetadataForUser(*user_name, user))
     throw std::runtime_error("User " + *user_name + " does not exist.");
@@ -3228,9 +3191,6 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
-  if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
-    throw std::runtime_error("Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) + "') to drop users.");
   if (!session.get_currentUser().isSuper)
     throw std::runtime_error("Only super user can drop users.");
   SysCatalog::instance().dropUser(*user_name);
