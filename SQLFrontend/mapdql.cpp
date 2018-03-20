@@ -558,10 +558,6 @@ TDatum columnar_val_to_datum(const TColumn& col, const size_t row_idx, const TTy
 // based on http://www.gnu.org/software/libc/manual/html_node/getpass.html
 std::string mapd_getpass() {
   struct termios origterm, tmpterm;
-  int nread;
-
-  size_t MAX_PASSWORD_LENGTH{256};
-  char* password = (char*)checked_malloc(MAX_PASSWORD_LENGTH);
 
   tcgetattr(STDIN_FILENO, &origterm);
   tmpterm = origterm;
@@ -569,12 +565,13 @@ std::string mapd_getpass() {
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &tmpterm);
 
   std::cout << "Password: ";
-  nread = getline(&password, &MAX_PASSWORD_LENGTH, stdin);
+  std::string password;
+  std::getline(std::cin, password);
   std::cout << std::endl;
 
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &origterm);
 
-  return std::string(password, nread - 1);
+  return password;
 }
 
 enum Action { INITIALIZE, TURN_ON, TURN_OFF, INTERRUPT };
