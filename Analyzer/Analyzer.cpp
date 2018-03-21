@@ -34,7 +34,7 @@
 namespace Analyzer {
 
 Constant::~Constant() {
-  if (type_info.is_string() && !is_null)
+  if ((type_info.is_string() || type_info.is_geometry()) && !is_null)
     delete constval.stringval;
 }
 
@@ -80,7 +80,7 @@ std::shared_ptr<Analyzer::Expr> Var::deep_copy() const {
 
 std::shared_ptr<Analyzer::Expr> Constant::deep_copy() const {
   Datum d = constval;
-  if (type_info.is_string() && !is_null) {
+  if ((type_info.is_string() || type_info.is_geometry()) && !is_null) {
     d.stringval = new std::string(*constval.stringval);
   }
   if (type_info.get_type() == kARRAY) {
@@ -896,6 +896,12 @@ void Constant::set_null_value() {
     case kVARCHAR:
     case kCHAR:
     case kTEXT:
+      constval.stringval = nullptr;
+      break;
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+    case kMULTIPOLYGON:
       constval.stringval = nullptr;
       break;
     case kFLOAT:
