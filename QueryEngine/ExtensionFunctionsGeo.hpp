@@ -791,3 +791,39 @@ bool ST_Contains_Polygon_Polygon(double* poly1_coords,
                                         isr,
                                         osr);
 }
+
+EXTENSION_NOINLINE
+bool ST_Contains_MultiPolygon_Point(double* mpoly_coords,
+                                    int64_t mpoly_num_coords,
+                                    int32_t* mpoly_ring_sizes,
+                                    int64_t mpoly_num_rings,
+                                    int32_t* mpoly_poly_sizes,
+                                    int64_t mpoly_num_polys,
+                                    double* p,
+                                    int64_t pnum,
+                                    int32_t isr,
+                                    int32_t osr) {
+  if (mpoly_num_polys <= 0)
+    return false;
+
+  // Set specific poly pointers as we move through the coords/ringsizes/polyrings arrays.
+  auto next_poly_coords = mpoly_coords;
+  auto next_poly_ring_sizes = mpoly_ring_sizes;
+
+  for (auto poly = 0; poly < mpoly_num_polys; poly++) {
+    auto poly_coords = next_poly_coords;
+    auto poly_ring_sizes = next_poly_ring_sizes;
+    auto poly_num_rings = mpoly_poly_sizes[poly];
+    // Count number of coords in all of poly's rings, advance ring size pointer.
+    int32_t poly_num_coords = 0;
+    for (auto ring = 0; ring < poly_num_rings; ring++) {
+      poly_num_coords += 2 * *next_poly_ring_sizes++;
+    }
+    next_poly_coords += poly_num_coords;
+    if (ST_Contains_Polygon_Point(poly_coords, poly_num_coords, poly_ring_sizes, poly_num_rings, p, pnum, isr, osr)) {
+      return true;
+    }
+  }
+
+  return false;
+}

@@ -4125,6 +4125,12 @@ TEST(Select, GeoSpatial) {
                                         "'POLYGON((2 0, 0 2, -2 0, 0 -2, 2 0),(1 0, 0 1, -1 0, 0 -1, 1 0))', "
                                         "'POINT(0.1 0.1)') FROM geospatial_test limit 1;",
                                         dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),  // back to true if we combine the holed polygon with one more in a multipolygon
+              v<int64_t>(run_simple_agg("SELECT ST_Contains("
+                                        "'MULTIPOLYGON(((2 0, 0 2, -2 0, 0 -2, 2 0),(1 0, 0 1, -1 0, 0 -1, 1 0)), "
+                                        "((2 0, 0 2, -2 0, 0 -2, 1 -2, 2 -1)))', "
+                                        "'POINT(0.1 0.1)') FROM geospatial_test limit 1;",
+                                        dt)));
 
     // Coord accessors
     ASSERT_NEAR(static_cast<double>(-118.4079),
