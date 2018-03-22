@@ -101,7 +101,7 @@ void S3Archive::init_for_read() {
 //
 // likely in the future there will be other file types that need to
 // land entirely to be imported... (avro?)
-const std::string S3Archive::land(const std::string& objkey, std::exception_ptr& teptr) {
+const std::string S3Archive::land(const std::string& objkey, std::exception_ptr& teptr, const bool for_detection) {
   // 7z file needs entire landing; other file types use a named pipe
   static std::atomic<int64_t> seqno(((int64_t)getpid() << 32) | time(0));
   // need a dummy ext b/c no-ext now indicate plain_text
@@ -139,6 +139,11 @@ const std::string S3Archive::land(const std::string& objkey, std::exception_ptr&
    */
   Aws::S3::Model::GetObjectRequest object_request;
   object_request.WithBucket(bucket_name).WithKey(objkey);
+
+  // set a download byte range (max 10mb) to avoid getting stuck on detecting big s3 files
+  if (use_pipe && for_detection)
+    object_request.SetRange("bytes=0-10000000");
+
   auto get_object_outcome = s3_client->GetObject(object_request);
   if (!get_object_outcome.IsSuccess())
     throw std::runtime_error("failed to get object '" + objkey + "' of s3 url '" + url + "': " +

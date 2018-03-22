@@ -35,9 +35,9 @@
 class S3Archive : public Archive {
  public:
   S3Archive(const std::string& url, const bool plain_text) : Archive(url, plain_text) {
-    // init aws api should be singleton because because
-    // it's bad to call Aws::InitAPI and Aws::ShutdownAPI
-    // multiple times.
+// init aws api should be singleton because because
+// it's bad to call Aws::InitAPI and Aws::ShutdownAPI
+// multiple times.
 #ifdef HAVE_AWS_S3
     {
       std::unique_lock<std::mutex> lck(awsapi_mtx);
@@ -84,15 +84,13 @@ class S3Archive : public Archive {
   virtual void init_for_read();
   const std::vector<std::string>& get_objkeys() { return objkeys; }
 #ifdef HAVE_AWS_S3
-  const std::string land(const std::string& objkey, std::exception_ptr& teptr);
+  const std::string land(const std::string& objkey, std::exception_ptr& teptr, const bool for_detection);
   void vacuum(const std::string& objkey);
 #else
-  const std::string land(const std::string& objkey, std::exception_ptr& teptr) {
+  const std::string land(const std::string& objkey, std::exception_ptr& teptr, const bool for_detection) {
     throw std::runtime_error("AWS S3 support not available");
   }
-  void vacuum(const std::string& objkey) {
-    throw std::runtime_error("AWS S3 support not available");
-  }
+  void vacuum(const std::string& objkey) { throw std::runtime_error("AWS S3 support not available"); }
 #endif  // HAVE_AWS_S3
 
  private:
@@ -102,7 +100,7 @@ class S3Archive : public Archive {
   static Aws::SDKOptions awsapi_options;
 
   std::unique_ptr<Aws::S3::S3Client> s3_client;
-#endif  // HAVE_AWS_S3
+#endif                        // HAVE_AWS_S3
   std::string s3_access_key;  // per-query credentials to override the
   std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
   std::string s3_region;

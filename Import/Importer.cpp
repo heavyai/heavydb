@@ -2197,6 +2197,7 @@ ImportStatus Detector::importDelimited(const std::string& file_path, const bool 
   // need to diy readline with customized copy_params.line_delim...
   char line[1 << 20];
   auto end_time = std::chrono::steady_clock::now() + timeout * (boost::istarts_with(file_path, "s3://") ? 3 : 1);
+  int nline{0};
   try {
     while (!feof(p_file)) {
       int c;
@@ -2220,8 +2221,10 @@ ImportStatus Detector::importDelimited(const std::string& file_path, const bool 
 
       raw_data += std::string(line, n);
       raw_data += copy_params.line_delim;
+      ++nline;
       if (std::chrono::steady_clock::now() > end_time) {
-        break;
+        if (nline > 10000)
+          break;
       }
     }
   } catch (std::exception& e) {
@@ -2577,7 +2580,7 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {
     // importing it like doing with a 'local file'.
     for (auto const& objkey : objkeys)
       try {
-        auto file_path = us3arch ? us3arch->land(objkey, teptr) : objkey;
+        auto file_path = us3arch ? us3arch->land(objkey, teptr, nullptr != dynamic_cast<Detector*>(this)) : objkey;
         if (boost::filesystem::exists(file_path))
           import_local_parquet(file_path);
         if (us3arch)
@@ -2659,7 +2662,7 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
         } else if (S3_objkey_url_scheme == url_parts[2]) {
 #ifdef HAVE_AWS_S3
           auto objkey = file_path.substr(3 + S3_objkey_url_scheme.size());
-          auto file_path = us3arch->land(objkey, teptr);
+          auto file_path = us3arch->land(objkey, teptr, nullptr != dynamic_cast<Detector*>(this));
           if (0 == file_path.size())
             throw std::runtime_error(std::string("failed to land s3 object: ") + objkey);
           uarch.reset(new PosixFileArchive(file_path, copy_params.plain_text));
