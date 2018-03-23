@@ -1318,6 +1318,10 @@ bool importGeoFromGeometry(OGRGeometry* geom,
         // add final interior ring size
         ring_sizes.push_back(numPointsAdded);
       }
+#if PROMOTE_POLYGON_TO_MULTIPOLYGON
+      // how many rings in this polygon?
+      poly_rings.push_back(1 + polygon->getNumInteriorRings());
+#endif
       break;
     }
     case wkbMultiPolygon: {
