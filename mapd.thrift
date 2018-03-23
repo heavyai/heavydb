@@ -365,7 +365,7 @@ struct TRenderDatum {
   3: binary value
 }
 
-typedef map<string, map<string, map<string, map<i32, list<TRenderDatum>>>>> TRenderDataAggMap
+typedef map<string, map<string, map<string, map<string, list<TRenderDatum>>>>> TRenderDataAggMap
 
 struct TRenderStepResult {
   1: TRenderDataAggMap merge_data
