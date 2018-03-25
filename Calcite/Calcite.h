@@ -54,6 +54,7 @@ class Calcite {
           const std::string& session_prefix);
   TPlanResult process(const Catalog_Namespace::SessionInfo& session_info,
                       const std::string sql_string,
+                      const std::vector<TFilterPushDownInfo>& filter_push_down_info,
                       const bool legacy_syntax,
                       const bool is_explain);
   std::vector<TCompletionHint> getCompletionHints(
@@ -75,6 +76,7 @@ class Calcite {
                  const size_t calcite_max_mem);
   TPlanResult processImpl(const Catalog_Namespace::SessionInfo& session_info,
                           const std::string sql_string,
+                          const std::vector<TFilterPushDownInfo>& filter_push_down_info,
                           const bool legacy_syntax,
                           const bool is_explain);
   std::vector<std::string> get_db_objects(const std::string ra);

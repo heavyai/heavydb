@@ -187,6 +187,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
     const RelAlgNode* body;
     const size_t max_groups_buffer_entry_guess;
     std::unique_ptr<QueryRewriter> query_rewriter;
+    const std::vector<size_t> input_permutation;
+    const std::vector<size_t> left_deep_join_input_sizes;
   };
 
   WorkUnit createSortInputWorkUnit(const RelSort*, const bool just_explain);
@@ -208,6 +210,21 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                               const bool is_agg,
                               const CompilationOptions& co,
                               const ExecutionOptions& eo);
+
+  struct FilterSelectivity {
+    const float fraction_passing;
+    const size_t total_rows_upper_bound;
+
+    size_t getRowsPassingUpperBound() const { return fraction_passing * total_rows_upper_bound; }
+
+    static constexpr float kFractionPassingLowThreshold = 0.01;
+    static constexpr float kFractionPassingHighThreshold = 0.4;
+    static constexpr size_t kRowsPassingUpperBoundThreshold = 2000000;
+  };
+
+  FilterSelectivity getFilterSelectivity(const std::vector<std::shared_ptr<Analyzer::Expr>>& filter_expressions,
+                                         const CompilationOptions& co,
+                                         const ExecutionOptions& eo);
 
   bool isRowidLookup(const WorkUnit& work_unit);
 

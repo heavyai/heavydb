@@ -863,7 +863,7 @@ TEST_F(ViewObject, GroupRoleFooGetsGrants) {
 
 TEST_F(ViewObject, CalciteViewResolution) {
   TPlanResult result =
-      ::g_calcite->process(*g_session, "select * from bill_table", true, false);
+      ::g_calcite->process(*g_session, "select * from bill_table", {}, true, false);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
@@ -875,7 +875,7 @@ TEST_F(ViewObject, CalciteViewResolution) {
   EXPECT_EQ(result.resolved_accessed_objects.tables_deleted_from.size(), (size_t)0);
   EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0], "bill_table");
 
-  result = ::g_calcite->process(*g_session, "select * from bill_view", true, false);
+  result = ::g_calcite->process(*g_session, "select * from bill_view", {}, true, false);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
@@ -887,7 +887,7 @@ TEST_F(ViewObject, CalciteViewResolution) {
   EXPECT_EQ(result.resolved_accessed_objects.tables_deleted_from.size(), (size_t)0);
   EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0], "bill_table");
 
-  result = ::g_calcite->process(*g_session, "select * from bill_view_outer", true, false);
+  result = ::g_calcite->process(*g_session, "select * from bill_view_outer", {}, true, false);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);

@@ -22,6 +22,11 @@
 
 class ResultSet;
 
+struct PushedDownFilterInfo {
+  std::vector<std::shared_ptr<Analyzer::Expr>> filter_expressions;
+  std::pair<size_t, size_t> input_start_end;  // For Calcite only
+};
+
 class ExecutionResult {
  public:
   ExecutionResult(const std::shared_ptr<ResultSet>& rows,
@@ -45,7 +50,11 @@ class ExecutionResult {
     }
   }
 
-  ExecutionResult(const ExecutionResult& that) : targets_meta_(that.targets_meta_) {
+  ExecutionResult(const ExecutionResult& that)
+      : targets_meta_(that.targets_meta_), pushed_down_filter_info_(that.pushed_down_filter_info_) {
+    if (!pushed_down_filter_info_.empty()) {
+      return;
+    }
     if (const auto rows = boost::get<RowSetPtr>(&that.result_)) {
       CHECK(*rows);
       result_ = *rows;
@@ -59,7 +68,12 @@ class ExecutionResult {
     }
   }
 
-  ExecutionResult(ExecutionResult&& that) : targets_meta_(std::move(that.targets_meta_)) {
+  ExecutionResult(ExecutionResult&& that)
+      : targets_meta_(std::move(that.targets_meta_)),
+        pushed_down_filter_info_(std::move(that.pushed_down_filter_info_)) {
+    if (!pushed_down_filter_info_.empty()) {
+      return;
+    }
     if (auto rows = boost::get<RowSetPtr>(&that.result_)) {
       result_ = std::move(*rows);
       CHECK(boost::get<RowSetPtr>(result_));
@@ -71,7 +85,14 @@ class ExecutionResult {
     }
   }
 
+  ExecutionResult(const std::vector<PushedDownFilterInfo>& pushed_down_filter_info)
+      : pushed_down_filter_info_(pushed_down_filter_info) {}
+
   ExecutionResult& operator=(const ExecutionResult& that) {
+    if (!that.pushed_down_filter_info_.empty()) {
+      pushed_down_filter_info_ = that.pushed_down_filter_info_;
+      return *this;
+    }
     if (const auto rows = boost::get<RowSetPtr>(&that.result_)) {
       CHECK(*rows);
       result_ = *rows;
@@ -108,6 +129,8 @@ class ExecutionResult {
 
   const std::vector<TargetMetaInfo>& getTargetsMeta() const { return targets_meta_; }
 
+  const std::vector<PushedDownFilterInfo>& getPushedDownFilterInfo() const { return pushed_down_filter_info_; }
+
   void setQueueTime(const int64_t queue_time_ms) {
     if (auto rows = boost::get<RowSetPtr>(&result_)) {
       CHECK(*rows);
@@ -118,6 +141,7 @@ class ExecutionResult {
  private:
   ResultPtr result_;
   std::vector<TargetMetaInfo> targets_meta_;
+  std::vector<PushedDownFilterInfo> pushed_down_filter_info_;
 };
 
 class RaExecutionDesc {

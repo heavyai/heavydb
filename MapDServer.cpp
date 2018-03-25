@@ -422,6 +422,11 @@ int main(int argc, char** argv) {
       "max-session-duration",
       po::value<int>(&max_session_duration)->default_value(max_session_duration),
       "Maximum duration of active session.");
+  desc_adv.add_options()("enable-filter-push-down",
+                         po::value<bool>(&g_enable_filter_push_down)
+                             ->default_value(false)
+                             ->implicit_value(true),
+                         "Enable filter push down through joins");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);

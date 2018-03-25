@@ -70,6 +70,7 @@ bool g_from_table_reordering{true};
 bool g_inner_join_fragment_skipping{false};
 extern bool g_enable_smem_group_by;
 extern std::unique_ptr<llvm::Module> g_rt_module;
+bool g_enable_filter_push_down{false};
 
 Executor::Executor(const int db_id,
                    const size_t block_size_x,

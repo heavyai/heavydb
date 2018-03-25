@@ -16,6 +16,7 @@
 package com.mapd.calcite.parser;
 
 import static com.mapd.calcite.parser.MapDParser.CURRENT_PARSER;
+import java.util.ArrayList;
 
 import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
@@ -66,7 +67,7 @@ public class MapDView extends MapDTable implements TranslatableTable {
   @Override
   public RelNode toRel(RelOptTable.ToRelContext context, RelOptTable relOptTable) {
     try {
-      return CURRENT_PARSER.get().queryToSqlNode(viewSql, true).rel;
+      return CURRENT_PARSER.get().queryToSqlNode(viewSql, new ArrayList<>(), true).rel;
     } catch (SqlParseException ex) {
       assert false;
       return null;
@@ -82,7 +83,7 @@ public class MapDView extends MapDTable implements TranslatableTable {
   @Override
   public RelDataType getRowType(RelDataTypeFactory rdtf) {
     try {
-      final RelRoot relAlg = CURRENT_PARSER.get().queryToSqlNode(viewSql, true);
+      final RelRoot relAlg = CURRENT_PARSER.get().queryToSqlNode(viewSql, new ArrayList<>(), true);
       return relAlg.validatedRowType;
     } catch (SqlParseException e) {
       assert false;

@@ -740,7 +740,7 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
         std::string query_ra;
         std::map<std::string, bool> tableNames;
         execution_time_ms += measure<>::execution(
-            [&]() { query_ra = parse_to_ra(query_str, session_info, &tableNames); });
+            [&]() { query_ra = parse_to_ra(query_str, {}, session_info, &tableNames); });
 
         // COPY_TO/SELECT: get read ExecutorOuterLock >> read UpdateDeleteLock locks
         mapd_shared_lock<mapd_shared_mutex> executeReadLock(
@@ -1017,7 +1017,7 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
                                    const std::string& query_str,
                                    const Catalog_Namespace::SessionInfo& session_info) {
   try {
-    const auto query_ra = parse_to_ra(query_str, session_info);
+    const auto query_ra = parse_to_ra(query_str, {}, session_info);
     TQueryResult result;
     MapDHandler::execute_rel_alg(result,
                                  query_ra,
@@ -1027,7 +1027,8 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
                                  -1,
                                  -1,
                                  false,
-                                 true);
+                                 true,
+                                 false);
     const auto& row_desc =
         fixup_row_descriptor(result.row_set.row_desc, session_info.get_catalog());
     for (const auto& col_desc : row_desc) {
@@ -1366,7 +1367,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
       if (!SysCatalog::instance().arePrivilegesOn() ||
           hasTableAccessPrivileges(td, session)) {
         session_info.make_superuser();
-        const auto query_ra = parse_to_ra(td->viewSQL, session_info);
+        const auto query_ra = parse_to_ra(td->viewSQL, {}, session_info);
         TQueryResult result;
         execute_rel_alg(result,
                         query_ra,
@@ -1376,7 +1377,8 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
                         -1,
                         -1,
                         false,
-                        true);
+                        true, 
+                        false);
         _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
       } else {
         THROW_MAPD_EXCEPTION("User has no access privileges to table " + table_name);
@@ -1556,7 +1558,7 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
     size_t num_cols = 0;
     if (td->isView) {
       try {
-        const auto query_ra = parse_to_ra(td->viewSQL, session_info);
+        const auto query_ra = parse_to_ra(td->viewSQL, {}, session_info);
         TQueryResult result;
         execute_rel_alg(result,
                         query_ra,
@@ -1566,7 +1568,8 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
                         -1,
                         -1,
                         false,
-                        true);
+                        true,
+                        false);
         num_cols = result.row_set.row_desc.size();
         for (const auto col : result.row_set.row_desc) {
           if (col.is_physical) {
@@ -3504,7 +3507,7 @@ void MapDHandler::set_execution_mode_nolock(Catalog_Namespace::SessionInfo* sess
   }
 }
 
-void MapDHandler::execute_rel_alg(TQueryResult& _return,
+std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(TQueryResult& _return,
                                   const std::string& query_ra,
                                   const bool column_format,
                                   const Catalog_Namespace::SessionInfo& session_info,
@@ -3512,7 +3515,8 @@ void MapDHandler::execute_rel_alg(TQueryResult& _return,
                                   const int32_t first_n,
                                   const int32_t at_most_n,
                                   const bool just_explain,
-                                  const bool just_validate) const {
+                                  const bool just_validate,
+                                  const bool find_push_down_candidates) const {
   INJECT_TIMER(execute_rel_alg);
   const auto& cat = session_info.get_catalog();
   CompilationOptions co = {
@@ -3525,7 +3529,8 @@ void MapDHandler::execute_rel_alg(TQueryResult& _return,
                          jit_debug_,
                          just_validate,
                          g_enable_dynamic_watchdog,
-                         g_dynamic_watchdog_time_limit};
+                         g_dynamic_watchdog_time_limit,
+                         find_push_down_candidates};
   auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
@@ -3542,6 +3547,10 @@ void MapDHandler::execute_rel_alg(TQueryResult& _return,
       [&]() { result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr); });
   // reduce execution time by the time spent during queue waiting
   _return.execution_time_ms -= result.getRows()->getQueueTime();
+  const auto& filter_push_down_info = result.getPushedDownFilterInfo();
+  if (!filter_push_down_info.empty()) {
+    return filter_push_down_info;
+  }
   if (just_explain) {
     convert_explain(_return, *result.getRows(), column_format);
   } else {
@@ -3552,6 +3561,7 @@ void MapDHandler::execute_rel_alg(TQueryResult& _return,
                  first_n,
                  at_most_n);
   }
+  return {};
 }
 
 void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
@@ -3573,7 +3583,8 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                          jit_debug_,
                          false,
                          g_enable_dynamic_watchdog,
-                         g_dynamic_watchdog_time_limit};
+                         g_dynamic_watchdog_time_limit,
+                         false};
   auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
@@ -3863,7 +3874,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       std::string query_ra;
       _return.execution_time_ms += measure<>::execution([&]() {
         // query_ra = TIME_WRAP(parse_to_ra)(query_str, session_info);
-        query_ra = parse_to_ra(query_str, session_info, &tableNames);
+        query_ra = parse_to_ra(query_str, {}, session_info, &tableNames);
       });
 
       if (pw.is_select_calcite_explain) {
@@ -3886,15 +3897,37 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
                                        tableNames,
                                        upddelLocks,
                                        LockType::UpdateDeleteLock);
-      execute_rel_alg(_return,
-                      query_ra,
-                      column_format,
-                      session_info,
-                      executor_device_type,
-                      first_n,
-                      at_most_n,
-                      pw.is_select_explain,
-                      false);
+      const auto filter_push_down_requests = execute_rel_alg(_return,
+                                                             query_ra,
+                                                             column_format,
+                                                             session_info,
+                                                             executor_device_type,
+                                                             first_n,
+                                                             at_most_n,
+                                                             pw.is_select_explain,
+                                                             false,
+                                                             g_enable_filter_push_down);
+      if (!filter_push_down_requests.empty()) {
+        std::vector<TFilterPushDownInfo> filter_push_down_info;
+        for (const auto& req : filter_push_down_requests) {
+          TFilterPushDownInfo filter_push_down_info_for_request;
+          filter_push_down_info_for_request.input_start = req.input_start_end.first;
+          filter_push_down_info_for_request.input_end = req.input_start_end.second;
+          filter_push_down_info.push_back(filter_push_down_info_for_request);
+        }
+        _return.execution_time_ms +=
+            measure<>::execution([&]() { query_ra = parse_to_ra(query_str, filter_push_down_info, session_info); });
+        execute_rel_alg(_return,
+                        query_ra,
+                        column_format,
+                        session_info,
+                        executor_device_type,
+                        first_n,
+                        at_most_n,
+                        pw.is_select_explain,
+                        false,
+                        false);
+      }
       return;
     }
     LOG(INFO) << "passing query to legacy processor";
@@ -3932,7 +3965,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         if (auto stmtp = dynamic_cast<Parser::ExportQueryStmt*>(stmt.get())) {
           std::map<std::string, bool> tableNames;
           const auto query_string = stmtp->get_select_stmt();
-          const auto query_ra = parse_to_ra(query_string, session_info, &tableNames);
+          const auto query_ra = parse_to_ra(query_string, {}, session_info, &tableNames);
           getTableLocks<mapd_shared_mutex>(session_info.get_catalog(),
                                            tableNames,
                                            upddelLocks,
@@ -4012,7 +4045,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
           // >> read UpdateDeleteLock locks
           std::map<std::string, bool> tableNames;
           const auto query_string = stmtp->get_query()->to_string();
-          const auto query_ra = parse_to_ra(query_str, session_info, &tableNames);
+          const auto query_ra = parse_to_ra(query_str, {}, session_info, &tableNames);
           getTableLocks<mapd_shared_mutex>(session_info.get_catalog(),
                                            tableNames,
                                            upddelLocks,
@@ -4083,6 +4116,7 @@ Planner::RootPlan* MapDHandler::parse_to_plan(
         calcite_
             ->process(session_info,
                       legacy_syntax_ ? pg_shim(actual_query) : actual_query,
+                      {}, 
                       legacy_syntax_,
                       pw.is_select_calcite_explain)
             .plan_result;
@@ -4097,8 +4131,9 @@ Planner::RootPlan* MapDHandler::parse_to_plan(
 }
 
 std::string MapDHandler::parse_to_ra(const std::string& query_str,
-                                     const Catalog_Namespace::SessionInfo& session_info,
-                                     std::map<std::string, bool>* tableNames) {
+                                      const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+                                      const Catalog_Namespace::SessionInfo& session_info,
+                                      std::map<std::string, bool>* tableNames) {
   INJECT_TIMER(parse_to_ra);
   ParserWrapper pw{query_str};
   const std::string actual_query{
@@ -4106,6 +4141,7 @@ std::string MapDHandler::parse_to_ra(const std::string& query_str,
   if (is_calcite_path_permissable(pw)) {
     auto result = calcite_->process(session_info,
                                     legacy_syntax_ ? pg_shim(actual_query) : actual_query,
+                                    filter_push_down_info,
                                     legacy_syntax_,
                                     pw.is_select_calcite_explain);
     if (tableNames) {

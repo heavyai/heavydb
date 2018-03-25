@@ -39,6 +39,7 @@ struct ExecutionOptions {
   const bool with_dynamic_watchdog;  // Per work unit, not global.
   const unsigned
       dynamic_watchdog_time_limit;  // Dynamic watchdog time limit, in milliseconds.
+  const bool find_push_down_candidates;
 };
 
 #endif  // QUERYENGINE_COMPILATIONOPTIONS_H

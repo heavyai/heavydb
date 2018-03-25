@@ -28,11 +28,16 @@ import org.apache.calcite.plan.RelOptMaterialization;
 import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.RelOptSchema;
 import org.apache.calcite.plan.RelOptTable.ViewExpander;
+import org.apache.calcite.plan.hep.HepPlanner;
+import org.apache.calcite.plan.hep.HepProgram;
 import org.apache.calcite.plan.RelTraitDef;
 import org.apache.calcite.plan.RelTraitSet;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
+import org.apache.calcite.rel.core.RelFactories;
 import org.apache.calcite.rel.metadata.CachingRelMetadataProvider;
+import org.apache.calcite.rel.rules.DynamicFilterJoinRule;
+import org.apache.calcite.rel.rules.FilterJoinRule;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.rex.RexExecutor;
@@ -59,7 +64,9 @@ import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Util;
 
 import com.google.common.collect.ImmutableList;
+import com.mapd.calcite.parser.MapDParser;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
@@ -94,6 +101,8 @@ public class MapDPlanner implements Planner {
 
   // set in STATE_5_CONVERT
   private RelRoot root;
+
+  private List<MapDParser.FilterPushDownInfo> filterPushDownInfo = new ArrayList<>();
 
   /** Creates a planner. Not a public API; call
    * {@link org.apache.calcite.tools.Frameworks#getPlanner} instead. */
@@ -276,7 +285,24 @@ public class MapDPlanner implements Planner {
     root = root.withRel(sqlToRelConverter.flattenTypes(root.rel, true));
     root = root.withRel(RelDecorrelator.decorrelateQuery(root.rel));
     state = State.STATE_5_CONVERTED;
-    return root;
+    if (filterPushDownInfo.isEmpty()) {
+      return root;
+    }
+    final DynamicFilterJoinRule dynamicFilterJoinRule = new DynamicFilterJoinRule(
+        true, RelFactories.LOGICAL_BUILDER, FilterJoinRule.TRUE_PREDICATE, filterPushDownInfo);
+    final HepProgram program =
+      HepProgram.builder()
+          .addRuleInstance(dynamicFilterJoinRule)
+          .build();
+    HepPlanner prePlanner = new HepPlanner(program);
+    prePlanner.setRoot(root.rel);
+    final RelNode rootRelNode = prePlanner.findBestExp();
+    filterPushDownInfo.clear();
+    return root.withRel(rootRelNode);
+  }
+
+  public void setFilterPushDownInfo(final List<MapDParser.FilterPushDownInfo> filterPushDownInfo) {
+    this.filterPushDownInfo = filterPushDownInfo;
   }
 
   /** Implements {@link org.apache.calcite.plan.RelOptTable.ViewExpander}

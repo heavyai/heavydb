@@ -74,6 +74,7 @@ Planner::RootPlan* parse_plan_calcite(
   const auto query_ra =
       calcite_mgr.process(*sess,
                           pg_shim(query_str),
+                          {},
                           true,
                           false)
           .plan_result;  //  if we want to be able to check plans we may want to calc this
@@ -223,10 +224,10 @@ ExecutionResult run_select_query(
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
   ExecutionOptions eo = {
-      false, true, just_explain, allow_loop_joins, false, false, false, false, 10000};
+      false, true, just_explain, allow_loop_joins, false, false, false, false, 10000, false};
   auto& calcite_mgr = cat.get_calciteMgr();
   const auto query_ra =
-      calcite_mgr.process(*session, pg_shim(query_str), true, false).plan_result;
+      calcite_mgr.process(*session, pg_shim(query_str), {}, true, false).plan_result;
   RelAlgExecutor ra_executor(executor.get(), cat);
   return ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
 }
