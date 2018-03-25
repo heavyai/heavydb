@@ -80,7 +80,7 @@ public final class MapDParser {
     this.mapdPort = mapdPort;
   }
 
-  private Planner getPlanner() {
+  private MapDPlanner getPlanner() {
     MapDSchema mapd = new MapDSchema(dataDir, this, mapdPort, mapdUser);
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
     final FrameworkConfig config = Frameworks.newConfigBuilder()
@@ -98,10 +98,21 @@ public final class MapDParser {
     this.mapdUser = mapdUser;
   }
 
-  public String getRelAlgebra(String sql, final boolean legacy_syntax, final MapDUser mapDUser, final boolean isExplain)
+  public static class FilterPushDownInfo {
+    public FilterPushDownInfo(final int input_start, final int input_end)  {
+      this.input_start = input_start;
+      this.input_end = input_end;
+    }
+
+    public int input_start;
+    public int input_end;
+  }
+
+  public String getRelAlgebra(String sql, final List<FilterPushDownInfo> filterPushDownInfo,
+          final boolean legacy_syntax, final MapDUser mapDUser, final boolean isExplain)
           throws SqlParseException, ValidationException, RelConversionException {
     callCount++;
-    final RelRoot sqlRel = queryToSqlNode(sql, legacy_syntax);
+    final RelRoot sqlRel = queryToSqlNode(sql, filterPushDownInfo, legacy_syntax);
 
     RelNode project = sqlRel.project();
 
@@ -115,11 +126,12 @@ public final class MapDParser {
   }
 
   public MapDPlanner.CompletionResult getCompletionHints(String sql, int cursor, List<String> visible_tables) {
-    return ((MapDPlanner) getPlanner()).getCompletionHints(sql, cursor, visible_tables);
+    return getPlanner().getCompletionHints(sql, cursor, visible_tables);
   }
 
-  RelRoot queryToSqlNode(final String sql, final boolean legacy_syntax) throws SqlParseException, ValidationException, RelConversionException {
-    Planner planner = getPlanner();
+  RelRoot queryToSqlNode(final String sql, final List<FilterPushDownInfo> filterPushDownInfo, final boolean legacy_syntax)
+          throws SqlParseException, ValidationException, RelConversionException {
+    MapDPlanner planner = getPlanner();
 
     SqlNode node = processSQL(sql, legacy_syntax, planner);
     if (legacy_syntax) {
@@ -160,6 +172,7 @@ public final class MapDParser {
       validateR = planner.validate(validateR);
     }
 
+    planner.setFilterPushDownInfo(filterPushDownInfo);
     RelRoot relR = planner.rel(validateR);
     planner.close();
     return relR;

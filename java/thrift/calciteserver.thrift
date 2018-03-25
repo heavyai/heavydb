@@ -12,11 +12,18 @@ struct TPlanResult {
   2: i64 execution_time_ms
 }
 
+struct TFilterPushDownInfo {
+  1: i32 input_start
+  2: i32 input_end
+}
+
 service CalciteServer {
 
    void ping(),
    void shutdown(),
-   TPlanResult process(1:string user 2:string passwd 3:string catalog 4:string sql_text 5:bool legacySyntax 6:bool isexplain) throws (1:InvalidParseRequest parseErr),
+   TPlanResult process(1:string user 2:string passwd 3:string catalog 4:string sql_text
+                       5:list<TFilterPushDownInfo> filterPushDownInfo 6:bool legacySyntax
+                       7:bool isexplain) throws (1:InvalidParseRequest parseErr),
    string getExtensionFunctionWhitelist()
    void updateMetadata(1: string catalog, 2:string table),
    list<completion_hints.TCompletionHint> getCompletionHints(1:string user, 2:string passwd, 3:string catalog,

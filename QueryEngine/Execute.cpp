@@ -64,6 +64,7 @@ bool g_null_div_by_zero{false};
 unsigned g_trivial_loop_join_threshold{1000};
 bool g_left_deep_join_optimization{true};
 bool g_from_table_reordering{true};
+bool g_enable_filter_push_down{false};
 
 Executor::Executor(const int db_id,
                    const size_t block_size_x,

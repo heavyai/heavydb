@@ -20,6 +20,7 @@ import com.mapd.calcite.parser.MapDUser;
 import com.mapd.thrift.calciteserver.InvalidParseRequest;
 import com.mapd.thrift.calciteserver.TCompletionHint;
 import com.mapd.thrift.calciteserver.TCompletionHintType;
+import com.mapd.thrift.calciteserver.TFilterPushDownInfo;
 import com.mapd.thrift.calciteserver.TPlanResult;
 import com.mapd.thrift.calciteserver.CalciteServer;
 import java.io.IOException;
@@ -80,7 +81,8 @@ class CalciteServerHandler implements CalciteServer.Iface {
   }
 
   @Override
-  public TPlanResult process(String user, String session, String catalog, String sqlText, boolean legacySyntax, boolean isExplain) throws InvalidParseRequest, TException {
+  public TPlanResult process(String user, String session, String catalog, String sqlText,
+      java.util.List<TFilterPushDownInfo> thriftFilterPushDownInfo, boolean legacySyntax, boolean isExplain) throws InvalidParseRequest, TException {
     long timer = System.currentTimeMillis();
     callCount++;
     MapDParser parser;
@@ -103,7 +105,11 @@ class CalciteServerHandler implements CalciteServer.Iface {
     }
     String relAlgebra;
     try {
-      relAlgebra = parser.getRelAlgebra(sqlText, legacySyntax, mapDUser, isExplain);
+      final List<MapDParser.FilterPushDownInfo> filterPushDownInfo = new ArrayList<>();
+      for (final TFilterPushDownInfo req : thriftFilterPushDownInfo) {
+        filterPushDownInfo.add(new MapDParser.FilterPushDownInfo(req.input_start, req.input_end));
+      }
+      relAlgebra = parser.getRelAlgebra(sqlText, filterPushDownInfo, legacySyntax, mapDUser, isExplain);
     } catch (SqlParseException ex) {
       String msg = "Parse failed: " + ex.getMessage();
       MAPDLOGGER.error(msg);

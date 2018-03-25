@@ -53,6 +53,7 @@
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/JsonAccessors.h"
+#include "QueryEngine/RelAlgExecutionDescriptor.h"
 #include "QueryEngine/TableGenerations.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/StringTransform.h"
@@ -368,7 +369,9 @@ class MapDHandler : public MapDIf {
   static void value_to_thrift_column(const TargetValue& tv, const SQLTypeInfo& ti, TColumn& column);
   static TDatum value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti);
   static std::string apply_copy_to_shim(const std::string& query_str);
-  std::string parse_to_ra(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info);
+  std::string parse_to_ra(const std::string& query_str,
+                          const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+                          const Catalog_Namespace::SessionInfo& session_info);
 
   void sql_execute_impl(TQueryResult& _return,
                         const Catalog_Namespace::SessionInfo& session_info,
@@ -384,15 +387,16 @@ class MapDHandler : public MapDIf {
   void validate_rel_alg(TTableDescriptor& _return,
                         const std::string& query_str,
                         const Catalog_Namespace::SessionInfo& session_info);
-  void execute_rel_alg(TQueryResult& _return,
-                       const std::string& query_ra,
-                       const bool column_format,
-                       const Catalog_Namespace::SessionInfo& session_info,
-                       const ExecutorDeviceType executor_device_type,
-                       const int32_t first_n,
-                       const int32_t at_most_n,
-                       const bool just_explain,
-                       const bool just_validate) const;
+  std::vector<PushedDownFilterInfo> execute_rel_alg(TQueryResult& _return,
+                                                    const std::string& query_ra,
+                                                    const bool column_format,
+                                                    const Catalog_Namespace::SessionInfo& session_info,
+                                                    const ExecutorDeviceType executor_device_type,
+                                                    const int32_t first_n,
+                                                    const int32_t at_most_n,
+                                                    const bool just_explain,
+                                                    const bool just_validate,
+                                                    const bool find_push_down_candidates) const;
   void execute_rel_alg_df(TDataFrame& _return,
                           const std::string& query_ra,
                           const Catalog_Namespace::SessionInfo& session_info,

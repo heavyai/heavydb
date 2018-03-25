@@ -15,6 +15,8 @@
  */
 package com.mapd.calcite.parser;
 
+import java.util.ArrayList;
+
 import com.mapd.thrift.server.TTableDetails;
 import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.rel.RelNode;
@@ -53,7 +55,7 @@ public class MapDView extends MapDTable implements TranslatableTable {
   @Override
   public RelNode toRel(RelOptTable.ToRelContext context, RelOptTable relOptTable) {
     try {
-      return parser.queryToSqlNode(viewSql, true).rel;
+      return parser.queryToSqlNode(viewSql, new ArrayList<>(), true).rel;
     } catch (SqlParseException ex) {
       assert false;
       return null;
@@ -69,7 +71,7 @@ public class MapDView extends MapDTable implements TranslatableTable {
   @Override
   public RelDataType getRowType(RelDataTypeFactory rdtf) {
     try {
-      final RelRoot relAlg = parser.queryToSqlNode(viewSql, true);
+      final RelRoot relAlg = parser.queryToSqlNode(viewSql, new ArrayList<>(), true);
       return relAlg.validatedRowType;
     } catch (SqlParseException e) {
       assert false;

@@ -206,9 +206,10 @@ void Calcite::updateMetadata(std::string catalog, std::string table) {
 
 std::string Calcite::process(const Catalog_Namespace::SessionInfo& session_info,
                              const std::string sql_string,
+                             const std::vector<TFilterPushDownInfo>& filter_push_down_info,
                              const bool legacy_syntax,
                              const bool is_explain) {
-  std::string ra = processImpl(session_info, sql_string, legacy_syntax, is_explain);
+  std::string ra = processImpl(session_info, sql_string, filter_push_down_info, legacy_syntax, is_explain);
 
   // gather tables used in this query
   if (!is_explain) {
@@ -271,6 +272,7 @@ std::vector<std::string> Calcite::get_db_objects(const std::string ra) {
 
 std::string Calcite::processImpl(const Catalog_Namespace::SessionInfo& session_info,
                                  const std::string sql_string,
+                                 const std::vector<TFilterPushDownInfo>& filter_push_down_info,
                                  const bool legacy_syntax,
                                  const bool is_explain) {
   auto& cat = session_info.get_catalog();
@@ -290,7 +292,8 @@ std::string Calcite::processImpl(const Catalog_Namespace::SessionInfo& session_i
 
         std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> clientP =
             get_client(remote_calcite_port_);
-        clientP.first->process(ret, user, session, catalog, sql_string, legacy_syntax, is_explain);
+        clientP.first->process(
+            ret, user, session, catalog, sql_string, filter_push_down_info, legacy_syntax, is_explain);
         clientP.second->close();
       });
 

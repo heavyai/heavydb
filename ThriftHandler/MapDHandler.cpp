@@ -647,7 +647,7 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
       ParserWrapper pw{query_str};
       if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
         std::string query_ra;
-        execution_time_ms += measure<>::execution([&]() { query_ra = parse_to_ra(query_str, session_info); });
+        execution_time_ms += measure<>::execution([&]() { query_ra = parse_to_ra(query_str, {}, session_info); });
 
         // COPY_TO/SELECT: get read ExecutorOuterLock >> read UpdateDeleteLock locks
         mapd_shared_lock<mapd_shared_mutex> executeReadLock(
@@ -897,9 +897,10 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
                                    const std::string& query_str,
                                    const Catalog_Namespace::SessionInfo& session_info) {
   try {
-    const auto query_ra = parse_to_ra(query_str, session_info);
+    const auto query_ra = parse_to_ra(query_str, {}, session_info);
     TQueryResult result;
-    MapDHandler::execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, -1, -1, false, true);
+    MapDHandler::execute_rel_alg(
+        result, query_ra, true, session_info, ExecutorDeviceType::CPU, -1, -1, false, true, false);
     const auto& row_desc = fixup_row_descriptor(result.row_set.row_desc, session_info.get_catalog());
     for (const auto& col_desc : row_desc) {
       const auto it_ok = _return.insert(std::make_pair(col_desc.col_name, col_desc));
@@ -1121,9 +1122,9 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
   }
   if (td->isView) {
     try {
-      const auto query_ra = parse_to_ra(td->viewSQL, session_info);
+      const auto query_ra = parse_to_ra(td->viewSQL, {}, session_info);
       TQueryResult result;
-      execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, -1, -1, false, true);
+      execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, -1, -1, false, true, false);
       _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
     } catch (std::exception& e) {
       TColumnType tColumnType;
@@ -1302,9 +1303,9 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return, const TSessi
     size_t num_cols = 0;
     if (td->isView) {
       try {
-        const auto query_ra = parse_to_ra(td->viewSQL, session_info);
+        const auto query_ra = parse_to_ra(td->viewSQL, {}, session_info);
         TQueryResult result;
-        execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, -1, -1, false, true);
+        execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, -1, -1, false, true, false);
         num_cols = result.row_set.row_desc.size();
         for (const auto col : result.row_set.row_desc) {
           if (col.is_physical) {
@@ -2581,15 +2582,16 @@ void MapDHandler::set_execution_mode_nolock(Catalog_Namespace::SessionInfo* sess
   }
 }
 
-void MapDHandler::execute_rel_alg(TQueryResult& _return,
-                                  const std::string& query_ra,
-                                  const bool column_format,
-                                  const Catalog_Namespace::SessionInfo& session_info,
-                                  const ExecutorDeviceType executor_device_type,
-                                  const int32_t first_n,
-                                  const int32_t at_most_n,
-                                  const bool just_explain,
-                                  const bool just_validate) const {
+std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(TQueryResult& _return,
+                                                               const std::string& query_ra,
+                                                               const bool column_format,
+                                                               const Catalog_Namespace::SessionInfo& session_info,
+                                                               const ExecutorDeviceType executor_device_type,
+                                                               const int32_t first_n,
+                                                               const int32_t at_most_n,
+                                                               const bool just_explain,
+                                                               const bool just_validate,
+                                                               const bool find_push_down_candidates) const {
   INJECT_TIMER(execute_rel_alg)
   const auto& cat = session_info.get_catalog();
   CompilationOptions co = {executor_device_type, true, ExecutorOptLevel::Default, g_enable_dynamic_watchdog};
@@ -2601,7 +2603,8 @@ void MapDHandler::execute_rel_alg(TQueryResult& _return,
                          jit_debug_,
                          just_validate,
                          g_enable_dynamic_watchdog,
-                         g_dynamic_watchdog_time_limit};
+                         g_dynamic_watchdog_time_limit,
+                         find_push_down_candidates};
   auto executor = Executor::getExecutor(
       cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", mapd_parameters_, nullptr);
   RelAlgExecutor ra_executor(executor.get(), cat);
@@ -2613,11 +2616,16 @@ void MapDHandler::execute_rel_alg(TQueryResult& _return,
       measure<>::execution([&]() { result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr); });
   // reduce execution time by the time spent during queue waiting
   _return.execution_time_ms -= result.getRows()->getQueueTime();
+  const auto& filter_push_down_info = result.getPushedDownFilterInfo();
+  if (!filter_push_down_info.empty()) {
+    return filter_push_down_info;
+  }
   if (just_explain) {
     convert_explain(_return, *result.getRows(), column_format);
   } else {
     convert_rows(_return, result.getTargetsMeta(), *result.getRows(), column_format, first_n, at_most_n);
   }
+  return {};
 }
 
 void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
@@ -2637,7 +2645,8 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                          jit_debug_,
                          false,
                          g_enable_dynamic_watchdog,
-                         g_dynamic_watchdog_time_limit};
+                         g_dynamic_watchdog_time_limit,
+                         false};
   auto executor = Executor::getExecutor(
       cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", mapd_parameters_, nullptr);
   RelAlgExecutor ra_executor(executor.get(), cat);
@@ -2907,7 +2916,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       std::string query_ra;
       _return.execution_time_ms += measure<>::execution([&]() {
         // query_ra = TIME_WRAP(parse_to_ra)(query_str, session_info);
-        query_ra = parse_to_ra(query_str, session_info);
+        query_ra = parse_to_ra(query_str, {}, session_info);
       });
 
       if (pw.is_select_calcite_explain) {
@@ -2922,15 +2931,37 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       getTableReadLocks<mapd_shared_mutex>(
           session_info.get_catalog(), query_ra, readUpdateDeleteLocks, LockType::UpdateDeleteLock);
       // todo(ppan): need WRITE locks on UPDATE/DELETE
-      execute_rel_alg(_return,
-                      query_ra,
-                      column_format,
-                      session_info,
-                      executor_device_type,
-                      first_n,
-                      at_most_n,
-                      pw.is_select_explain,
-                      false);
+      const auto filter_push_down_requests = execute_rel_alg(_return,
+                                                             query_ra,
+                                                             column_format,
+                                                             session_info,
+                                                             executor_device_type,
+                                                             first_n,
+                                                             at_most_n,
+                                                             pw.is_select_explain,
+                                                             false,
+                                                             g_enable_filter_push_down);
+      if (!filter_push_down_requests.empty()) {
+        std::vector<TFilterPushDownInfo> filter_push_down_info;
+        for (const auto& req : filter_push_down_requests) {
+          TFilterPushDownInfo filter_push_down_info_for_request;
+          filter_push_down_info_for_request.input_start = req.input_start_end.first;
+          filter_push_down_info_for_request.input_end = req.input_start_end.second;
+          filter_push_down_info.push_back(filter_push_down_info_for_request);
+        }
+        _return.execution_time_ms +=
+            measure<>::execution([&]() { query_ra = parse_to_ra(query_str, filter_push_down_info, session_info); });
+        execute_rel_alg(_return,
+                        query_ra,
+                        column_format,
+                        session_info,
+                        executor_device_type,
+                        first_n,
+                        at_most_n,
+                        pw.is_select_explain,
+                        false,
+                        false);
+      }
       return;
     }
     LOG(INFO) << "passing query to legacy processor";
@@ -2965,7 +2996,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         const auto copy_stmt = dynamic_cast<Parser::CopyTableStmt*>(ddl);
         if (auto stmtp = dynamic_cast<Parser::ExportQueryStmt*>(stmt.get())) {
           const auto query_string = stmtp->get_select_stmt();
-          const auto query_ra = parse_to_ra(query_string, session_info);
+          const auto query_ra = parse_to_ra(query_string, {}, session_info);
           getTableReadLocks<mapd_shared_mutex>(
               session_info.get_catalog(), query_ra, readUpdateDeleteLocks, LockType::UpdateDeleteLock);
         } else if (auto stmtp = dynamic_cast<Parser::CopyTableStmt*>(stmt.get())) {
@@ -3012,7 +3043,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
               session_info.get_catalog(), *stmtp->get_table(), LockType::CheckpointLock);
           // >> read UpdateDeleteLock locks
           const auto query_string = stmtp->get_query()->to_string();
-          const auto query_ra = parse_to_ra(query_str, session_info);
+          const auto query_ra = parse_to_ra(query_str, {}, session_info);
           getTableReadLocks<mapd_shared_mutex>(
               session_info.get_catalog(), query_ra, readUpdateDeleteLocks, LockType::UpdateDeleteLock);
           // [ write UpdateDeleteLocks ] lock is deferred in InsertOrderFragmenter::deleteFragments
@@ -3063,6 +3094,7 @@ Planner::RootPlan* MapDHandler::parse_to_plan(const std::string& query_str,
     const std::string actual_query{pw.is_select_explain || pw.is_select_calcite_explain ? pw.actual_query : query_str};
     const auto query_ra = calcite_->process(session_info,
                                             legacy_syntax_ ? pg_shim(actual_query) : actual_query,
+                                            {},
                                             legacy_syntax_,
                                             pw.is_select_calcite_explain);
     auto root_plan = translate_query(query_ra, cat);
@@ -3075,13 +3107,16 @@ Planner::RootPlan* MapDHandler::parse_to_plan(const std::string& query_str,
   return nullptr;
 }
 
-std::string MapDHandler::parse_to_ra(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info) {
+std::string MapDHandler::parse_to_ra(const std::string& query_str,
+                                     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+                                     const Catalog_Namespace::SessionInfo& session_info) {
   INJECT_TIMER(parse_to_ra)
   ParserWrapper pw{query_str};
   const std::string actual_query{pw.is_select_explain || pw.is_select_calcite_explain ? pw.actual_query : query_str};
   if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
     return calcite_->process(session_info,
                              legacy_syntax_ ? pg_shim(actual_query) : actual_query,
+                             filter_push_down_info,
                              legacy_syntax_,
                              pw.is_select_calcite_explain);
   }

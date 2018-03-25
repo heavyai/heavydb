@@ -21,6 +21,7 @@ import com.mapd.thrift.calciteserver.CalciteServer;
 import com.mapd.thrift.calciteserver.TPlanResult;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -233,7 +234,7 @@ public class TestServer {
       transport.open();
       TProtocol protocol = new TBinaryProtocol(transport);
       CalciteServer.Client client = new CalciteServer.Client(protocol);
-      TPlanResult algebra = client.process("user", "passwd", "SALES", query, false, false);
+      TPlanResult algebra = client.process("user", "passwd", "SALES", query, new ArrayList<>(), false, false);
       transport.close();
       try {
         assertEquals(algebra.plan_result, result);

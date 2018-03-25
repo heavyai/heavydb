@@ -368,6 +368,9 @@ int main(int argc, char** argv) {
       "hll-precision-bits",
       po::value<int>(&g_hll_precision_bits)->default_value(g_hll_precision_bits)->implicit_value(g_hll_precision_bits),
       "Number of bits used from the hash value used to specify the bucket number.");
+  desc_adv.add_options()("enable-filter-push-down",
+                         po::value<bool>(&g_enable_filter_push_down)->default_value(false)->implicit_value(true),
+                         "Enable filter push down through joins");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);

@@ -97,6 +97,7 @@ Planner::RootPlan* parse_plan_calcite(const std::string& query_str,
   const Catalog_Namespace::SessionInfo* sess = session.get();
   const auto query_ra = calcite_mgr.process(*sess,
                                             pg_shim(query_str),
+                                            {},
                                             true,
                                             false);  //  if we want to be able to check plans we may want to calc this
   return translate_query(query_ra, cat);
@@ -118,9 +119,9 @@ ExecutionResult run_select_query(const std::string& query_str,
   const auto& cat = session->get_catalog();
   auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
   CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
-  ExecutionOptions eo = {false, true, false, allow_loop_joins, false, false, false, false, 10000};
+  ExecutionOptions eo = {false, true, false, allow_loop_joins, false, false, false, false, 10000, false};
   auto& calcite_mgr = cat.get_calciteMgr();
-  const auto query_ra = calcite_mgr.process(*session, pg_shim(query_str), true, false);
+  const auto query_ra = calcite_mgr.process(*session, pg_shim(query_str), {}, true, false);
   RelAlgExecutor ra_executor(executor.get(), cat);
   return ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
 }

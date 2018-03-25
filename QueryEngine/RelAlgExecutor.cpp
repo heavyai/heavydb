@@ -19,6 +19,7 @@
 
 #include "CalciteDeserializerUtils.h"
 #include "CardinalityEstimator.h"
+#include "DeepCopyVisitor.h"
 #include "EquiJoinCondition.h"
 #include "ExecutionException.h"
 #include "ExpressionRewrite.h"
@@ -445,7 +446,8 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
                                       eo.jit_debug,
                                       eo.just_validate,
                                       eo.with_dynamic_watchdog,
-                                      eo.dynamic_watchdog_time_limit};
+                                      eo.dynamic_watchdog_time_limit,
+                                      eo.find_push_down_candidates};
 
   if (render_info && !render_info->table_names.size() && leaf_results_.size()) {
     // Save the table names for render queries for distributed aggregation queries.
@@ -460,12 +462,18 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
     const auto compound = dynamic_cast<const RelCompound*>(body);
     if (compound) {
       exec_desc.setResult(executeCompound(compound, co, eo_work_unit, render_info, queue_time_ms));
+      if (!exec_desc.getResult().getPushedDownFilterInfo().empty()) {
+        return;
+      }
       addTemporaryTable(-compound->getId(), exec_desc.getResult().getDataPtr());
       return;
     }
     const auto project = dynamic_cast<const RelProject*>(body);
     if (project) {
       exec_desc.setResult(executeProject(project, co, eo_work_unit, render_info, queue_time_ms));
+      if (!exec_desc.getResult().getPushedDownFilterInfo().empty()) {
+        return;
+      }
       addTemporaryTable(-project->getId(), exec_desc.getResult().getDataPtr());
       return;
     }
@@ -484,6 +492,9 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
     const auto sort = dynamic_cast<const RelSort*>(body);
     if (sort) {
       exec_desc.setResult(executeSort(sort, co, eo_work_unit, render_info, queue_time_ms));
+      if (!exec_desc.getResult().getPushedDownFilterInfo().empty()) {
+        return;
+      }
       addTemporaryTable(-sort->getId(), exec_desc.getResult().getDataPtr());
       return;
     }
@@ -1251,6 +1262,9 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
       if (render_info && render_info->isPotentialInSituRender()) {
         return source_result;
       }
+      if (!source_result.getPushedDownFilterInfo().empty()) {
+        return source_result;
+      }
       auto rows_to_sort = source_result.getRows();
       if (eo.just_explain) {
         return {rows_to_sort, {}};
@@ -1331,7 +1345,9 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* 
            scan_total_limit},
           source,
           max_groups_buffer_entry_guess,
-          std::move(source_work_unit.query_rewriter)};
+          std::move(source_work_unit.query_rewriter),
+          source_work_unit.input_permutation,
+          source_work_unit.left_deep_join_input_sizes};
 }
 
 namespace {
@@ -1429,6 +1445,54 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
   return ra_exe_unit;
 }
 
+std::vector<PushedDownFilterInfo> find_push_down_filters(const RelAlgExecutionUnit& ra_exe_unit,
+                                                         const std::vector<size_t>& input_permutation,
+                                                         const std::vector<size_t>& left_deep_join_input_sizes) {
+  std::vector<PushedDownFilterInfo> result;
+  if (left_deep_join_input_sizes.empty()) {
+    return result;
+  }
+  std::vector<size_t> input_size_prefix_sums(left_deep_join_input_sizes.size());
+  std::partial_sum(
+      left_deep_join_input_sizes.begin(), left_deep_join_input_sizes.end(), input_size_prefix_sums.begin());
+  std::vector<int> to_original_rte_idx(ra_exe_unit.input_descs.size(), ra_exe_unit.input_descs.size());
+  if (!input_permutation.empty()) {
+    CHECK_EQ(to_original_rte_idx.size(), input_permutation.size());
+    for (size_t i = 0; i < input_permutation.size(); ++i) {
+      CHECK_LT(input_permutation[i], to_original_rte_idx.size());
+      CHECK_EQ(to_original_rte_idx[input_permutation[i]], to_original_rte_idx.size());
+      to_original_rte_idx[input_permutation[i]] = i;
+    }
+  } else {
+    std::iota(to_original_rte_idx.begin(), to_original_rte_idx.end(), 0);
+  }
+  std::unordered_map<int, std::vector<std::shared_ptr<Analyzer::Expr>>> filters_per_nesting_level;
+  for (const auto& level_conditions : ra_exe_unit.inner_joins) {
+    AllRangeTableIndexVisitor visitor;
+    for (const auto& cond : level_conditions.quals) {
+      const auto rte_indices = visitor.visit(cond.get());
+      if (rte_indices.size() > 1) {
+        continue;
+      }
+      const int rte_idx = *rte_indices.cbegin();
+      if (!rte_idx) {
+        continue;
+      }
+      CHECK_GE(rte_idx, 0);
+      CHECK_LT(static_cast<size_t>(rte_idx), to_original_rte_idx.size());
+      filters_per_nesting_level[to_original_rte_idx[rte_idx]].push_back(cond);
+    }
+  }
+  for (const auto& kv : filters_per_nesting_level) {
+    CHECK_GE(kv.first, 0);
+    CHECK_LT(kv.first, input_size_prefix_sums.size());
+    size_t input_start = kv.first ? input_size_prefix_sums[kv.first - 1] : 0;
+    size_t input_end = input_size_prefix_sums[kv.first];
+    result.emplace_back(PushedDownFilterInfo{kv.second, {input_start, input_end}});
+  }
+  return result;
+}
+
 }  // namespace
 
 ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& work_unit,
@@ -1439,6 +1503,22 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
                                                 RenderInfo* render_info,
                                                 const int64_t queue_time_ms) {
   INJECT_TIMER(executeWorkUnit)
+  if (!eo.just_explain && eo.find_push_down_candidates) {
+    const auto all_push_down_candidates =
+        find_push_down_filters(work_unit.exe_unit, work_unit.input_permutation, work_unit.left_deep_join_input_sizes);
+    std::vector<PushedDownFilterInfo> selective_push_down_candidates;
+    for (const auto& candidate : all_push_down_candidates) {
+      const auto selectivity = getFilterSelectivity(candidate.filter_expressions, co, eo);
+      if (selectivity.fraction_passing < FilterSelectivity::kFractionPassingLowThreshold ||
+          (selectivity.fraction_passing < FilterSelectivity::kFractionPassingHighThreshold &&
+           selectivity.getRowsPassingUpperBound() < FilterSelectivity::kRowsPassingUpperBoundThreshold)) {
+        selective_push_down_candidates.push_back(candidate);
+      }
+    }
+    if (!selective_push_down_candidates.empty()) {
+      return ExecutionResult(selective_push_down_candidates);
+    }
+  }
   const auto body = work_unit.body;
   CHECK(body);
   auto it = leaf_results_.find(body->getId());
@@ -1629,6 +1709,102 @@ ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
   return std::max(*count_ptr, int64_t(1));
 }
 
+namespace {
+
+class BindFilterToOutermostVisitor : public DeepCopyVisitor {
+  std::shared_ptr<Analyzer::Expr> visitColumnVar(const Analyzer::ColumnVar* col_var) const override {
+    return makeExpr<Analyzer::ColumnVar>(
+        col_var->get_type_info(), col_var->get_table_id(), col_var->get_column_id(), 0);
+  }
+};
+
+class CollectInputColumnsVisitor : public ScalarExprVisitor<std::unordered_set<InputColDescriptor>> {
+  std::unordered_set<InputColDescriptor> visitColumnVar(const Analyzer::ColumnVar* col_var) const override {
+    return {InputColDescriptor(col_var->get_column_id(), col_var->get_table_id(), 0)};
+  }
+
+ public:
+  std::unordered_set<InputColDescriptor> aggregateResult(
+      const std::unordered_set<InputColDescriptor>& aggregate,
+      const std::unordered_set<InputColDescriptor>& next_result) const override {
+    auto result = aggregate;
+    result.insert(next_result.begin(), next_result.end());
+    return result;
+  }
+};
+
+}  // namespace
+
+RelAlgExecutor::FilterSelectivity RelAlgExecutor::getFilterSelectivity(
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& filter_expressions,
+    const CompilationOptions& co,
+    const ExecutionOptions& eo) {
+  CollectInputColumnsVisitor input_columns_visitor;
+  std::list<std::shared_ptr<Analyzer::Expr>> quals;
+  std::unordered_set<InputColDescriptor> input_column_descriptors;
+  BindFilterToOutermostVisitor bind_filter_to_outermost;
+  for (const auto& filter_expr : filter_expressions) {
+    input_column_descriptors =
+        input_columns_visitor.aggregateResult(input_column_descriptors, input_columns_visitor.visit(filter_expr.get()));
+    quals.push_back(bind_filter_to_outermost.visit(filter_expr.get()));
+  }
+  std::vector<InputDescriptor> input_descs;
+  std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
+  for (const auto& input_col_desc : input_column_descriptors) {
+    if (input_descs.empty()) {
+      input_descs.push_back(input_col_desc.getScanDesc());
+    } else {
+      CHECK(input_col_desc.getScanDesc() == input_descs.front());
+    }
+    input_col_descs.push_back(std::make_shared<const InputColDescriptor>(input_col_desc));
+  }
+  const auto count_expr =
+      makeExpr<Analyzer::AggExpr>(SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, false), kCOUNT, nullptr, false, nullptr);
+  RelAlgExecutionUnit ra_exe_unit{input_descs,
+                                  {},
+                                  input_col_descs,
+                                  {},
+                                  quals,
+                                  JoinType::INVALID,
+                                  {},
+                                  {},
+                                  {},
+                                  {},
+                                  {},
+                                  {count_expr.get()},
+                                  {},
+                                  nullptr,
+                                  {{}, SortAlgorithm::Default, 0, 0},
+                                  0};
+  int32_t error_code{0};
+  size_t one{1};
+  ResultPtr filtered_result;
+  const auto table_infos = get_table_infos(input_descs, executor_);
+  CHECK_EQ(size_t(1), table_infos.size());
+  const size_t total_rows_upper_bound = table_infos.front().info.getNumTuplesUpperBound();
+  try {
+    filtered_result = executor_->executeWorkUnit(
+        &error_code, one, true, table_infos, ra_exe_unit, co, eo, cat_, executor_->row_set_mem_owner_, nullptr, false);
+  } catch (...) {
+    return {1., FilterSelectivity::kRowsPassingUpperBoundThreshold};
+  }
+  if (error_code) {
+    return {1., FilterSelectivity::kRowsPassingUpperBoundThreshold};
+  }
+  const auto& filtered_result_rows = boost::get<RowSetPtr>(filtered_result);
+  CHECK(filtered_result_rows);
+  const auto count_row = filtered_result_rows->getNextRow(false, false);
+  CHECK_EQ(size_t(1), count_row.size());
+  const auto& count_tv = count_row.front();
+  const auto count_scalar_tv = boost::get<ScalarTargetValue>(&count_tv);
+  CHECK(count_scalar_tv);
+  const auto count_ptr = boost::get<int64_t>(count_scalar_tv);
+  CHECK(count_ptr);
+  const auto rows_passing = *count_ptr;
+  const auto rows_total = std::max(total_rows_upper_bound, size_t(1));
+  return {static_cast<float>(rows_passing) / rows_total, total_rows_upper_bound};
+}
+
 bool RelAlgExecutor::isRowidLookup(const WorkUnit& work_unit) {
   const auto& ra_exe_unit = work_unit.exe_unit;
   if (ra_exe_unit.input_descs.size() != 1) {
@@ -1680,7 +1856,8 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
                                    eo.jit_debug,
                                    false,
                                    eo.with_dynamic_watchdog,
-                                   eo.dynamic_watchdog_time_limit};
+                                   eo.dynamic_watchdog_time_limit,
+                                   false};
   ExecutionResult result{std::make_shared<ResultSet>(
                              std::vector<TargetInfo>{}, co.device_type_, QueryMemoryDescriptor{}, nullptr, executor_),
                          {}};
@@ -2038,6 +2215,15 @@ std::vector<JoinType> left_deep_join_types(const RelLeftDeepInnerJoin* left_deep
   return join_types;
 }
 
+std::vector<size_t> get_left_deep_join_input_sizes(const RelLeftDeepInnerJoin* left_deep_join) {
+  std::vector<size_t> input_sizes;
+  for (size_t i = 0; i < left_deep_join->inputCount(); ++i) {
+    const auto inputs = get_node_output(left_deep_join->getInput(i));
+    input_sizes.push_back(inputs.size());
+  }
+  return input_sizes;
+}
+
 }  // namespace
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompound* compound,
@@ -2053,10 +2239,13 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   JoinQualsPerNestingLevel left_deep_inner_joins;
   const auto join_types =
       left_deep_join ? left_deep_join_types(left_deep_join) : std::vector<JoinType>{get_join_type(compound)};
+  std::vector<size_t> input_permutation;
+  std::vector<size_t> left_deep_join_input_sizes;
   if (left_deep_join) {
+    left_deep_join_input_sizes = get_left_deep_join_input_sizes(left_deep_join);
     if (g_from_table_reordering &&
         std::find(join_types.begin(), join_types.end(), JoinType::LEFT) == join_types.end()) {
-      const auto input_permutation = get_node_input_permutation(query_infos);
+      input_permutation = get_node_input_permutation(query_infos);
       input_to_nest_level = get_input_nest_levels(compound, input_permutation);
       std::tie(input_descs, input_col_descs, std::ignore) =
           get_input_desc(compound, input_to_nest_level, input_permutation, cat_);
@@ -2100,7 +2289,9 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   return {rewritten_exe_unit,
           compound,
           max_groups_buffer_entry_default_guess,
-          std::unique_ptr<QueryRewriter>(query_rewriter)};
+          std::unique_ptr<QueryRewriter>(query_rewriter),
+          input_permutation,
+          left_deep_join_input_sizes};
 }
 
 namespace {
@@ -2444,11 +2635,14 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
   JoinQualsPerNestingLevel left_deep_inner_joins;
   const auto join_types =
       left_deep_join ? left_deep_join_types(left_deep_join) : std::vector<JoinType>{get_join_type(project)};
+  std::vector<size_t> input_permutation;
+  std::vector<size_t> left_deep_join_input_sizes;
   if (left_deep_join) {
+    left_deep_join_input_sizes = get_left_deep_join_input_sizes(left_deep_join);
     const auto query_infos = get_table_infos(input_descs, executor_);
     if (g_from_table_reordering &&
         std::find(join_types.begin(), join_types.end(), JoinType::LEFT) == join_types.end()) {
-      const auto input_permutation = get_node_input_permutation(query_infos);
+      input_permutation = get_node_input_permutation(query_infos);
       input_to_nest_level = get_input_nest_levels(project, input_permutation);
       std::tie(input_descs, input_col_descs, std::ignore) =
           get_input_desc(project, input_to_nest_level, input_permutation, cat_);
@@ -2479,7 +2673,9 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
            0},
           project,
           max_groups_buffer_entry_default_guess,
-          nullptr};
+          nullptr,
+          input_permutation,
+          left_deep_join_input_sizes};
 }
 
 namespace {

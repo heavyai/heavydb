@@ -7,6 +7,8 @@ import com.mapd.calcite.parser.MapDParser;
 import com.mapd.calcite.parser.MapDSchema;
 import com.mapd.calcite.parser.MapDSerializer;
 import com.mapd.calcite.parser.MapDUser;
+
+import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.calcite.plan.RelOptUtil;
@@ -75,7 +77,8 @@ public class tester {
         mp.setUser(mdu);
         
         try {
-            MAPDLOGGER.error("MapDParser result: \n"+mp.getRelAlgebra("select * from customer where c_custkey = 1.345000 limit 5", true, mdu, false));
+            MAPDLOGGER.error("MapDParser result: \n"+mp.getRelAlgebra(
+                "select * from customer where c_custkey = 1.345000 limit 5", new ArrayList<>(), true, mdu, false));
         } catch (SqlParseException ex) {
             Logger.getLogger(tester.class.getName()).log(Level.SEVERE, null, ex);
         } catch (ValidationException ex) {
