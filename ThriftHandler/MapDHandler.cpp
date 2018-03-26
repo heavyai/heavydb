@@ -356,19 +356,23 @@ void MapDHandler::interrupt(const TSessionId& session) {
 }
 
 void MapDHandler::get_server_status(TServerStatus& _return, const TSessionId& session) {
+  const auto rendering_enabled = bool(render_handler_);
   _return.read_only = read_only_;
   _return.version = MAPD_RELEASE;
-  _return.rendering_enabled = bool(render_handler_);
+  _return.rendering_enabled = rendering_enabled;
+  _return.poly_rendering_enabled = rendering_enabled && !(leaf_aggregator_.leafCount() > 0);
   _return.start_time = start_time_;
   _return.edition = MAPD_EDITION;
   _return.host_name = "aggregator";
 }
 
 void MapDHandler::get_status(std::vector<TServerStatus>& _return, const TSessionId& session) {
+  const auto rendering_enabled = bool(render_handler_);
   TServerStatus ret;
   ret.read_only = read_only_;
   ret.version = MAPD_RELEASE;
-  ret.rendering_enabled = bool(render_handler_);
+  ret.rendering_enabled = rendering_enabled;
+  ret.poly_rendering_enabled = rendering_enabled && !(leaf_aggregator_.leafCount() > 0);
   ret.start_time = start_time_;
   ret.edition = MAPD_EDITION;
   ret.host_name = "aggregator";

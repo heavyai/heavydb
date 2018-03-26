@@ -198,6 +198,7 @@ struct TServerStatus {
   4: i64 start_time
   5: string edition
   6: string host_name
+  7: bool poly_rendering_enabled
 }
 
 struct TPixel {
