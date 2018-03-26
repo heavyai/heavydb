@@ -57,7 +57,7 @@ class Role {
   virtual void removeRole(Role* role) = 0;
 
   virtual void grantPrivileges(const DBObject& object) = 0;
-  virtual void revokePrivileges(const DBObject& object) = 0;
+  virtual DBObject revokePrivileges(const DBObject& object) = 0;
   virtual void getPrivileges(DBObject& object) = 0;
   virtual void grantRole(Role* role) = 0;
   virtual void revokeRole(Role* role) = 0;
@@ -68,7 +68,8 @@ class Role {
   virtual bool isUserPrivateRole() const = 0;
   virtual std::vector<std::string> getRoles() const = 0;
   const DBObjectMap* getDbObject() const;
-  DBObject* findDbObject(const DBObjectKey objectKey) const;
+  DBObject* findDbObject(const DBObjectKey& objectKey) const;
+  virtual void dropDbObject(const DBObjectKey& objectKey) = 0;
 
  protected:
   void copyDbObjects(const Role& role);
@@ -92,7 +93,7 @@ class UserRole : public Role {
   virtual void removeRole(Role* role);
 
   virtual void grantPrivileges(const DBObject& object);
-  virtual void revokePrivileges(const DBObject& object);
+  virtual DBObject revokePrivileges(const DBObject& object);
   virtual void getPrivileges(DBObject& object);
   virtual void grantRole(Role* role);
   virtual void revokeRole(Role* role);
@@ -102,6 +103,7 @@ class UserRole : public Role {
   virtual std::string roleName(bool userName = false) const;
   virtual bool isUserPrivateRole() const;
   virtual std::vector<std::string> getRoles() const;
+  virtual void dropDbObject(const DBObjectKey& objectKey);
 
  private:
   int32_t userId_;
@@ -123,7 +125,7 @@ class GroupRole : public Role {
   virtual void removeRole(Role* role);
 
   virtual void grantPrivileges(const DBObject& object);
-  virtual void revokePrivileges(const DBObject& object);
+  virtual DBObject revokePrivileges(const DBObject& object);
   virtual void getPrivileges(DBObject& object);
   virtual void grantRole(Role* role);
   virtual void revokeRole(Role* role);
@@ -133,6 +135,7 @@ class GroupRole : public Role {
   virtual std::string roleName(bool userName = false) const;
   virtual bool isUserPrivateRole() const;
   virtual std::vector<std::string> getRoles() const;
+  virtual void dropDbObject(const DBObjectKey& objectKey);
 
  private:
   bool userPrivateRole_;

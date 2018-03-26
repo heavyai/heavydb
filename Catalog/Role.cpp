@@ -29,7 +29,7 @@ const Role::DBObjectMap* Role::getDbObject() const {
   return &dbObjectMap_;
 }
 
-DBObject* Role::findDbObject(const DBObjectKey objectKey) const {
+DBObject* Role::findDbObject(const DBObjectKey& objectKey) const {
   DBObject* dbObject = nullptr;
   auto dbObjectIt = dbObjectMap_.find(objectKey);
   if (dbObjectIt != dbObjectMap_.end()) {
@@ -141,7 +141,7 @@ void UserRole::grantPrivileges(const DBObject& object) {
   }
 }
 
-void UserRole::revokePrivileges(const DBObject& object) {
+DBObject UserRole::revokePrivileges(const DBObject& object) {
   throw runtime_error("revokePrivileges() api should not be used with objects of the UserRole class.");
 }
 
@@ -247,6 +247,10 @@ std::vector<std::string> UserRole::getRoles() const {
   return roles;
 }
 
+void UserRole::dropDbObject(const DBObjectKey& objectKey) {
+  dbObjectMap_.erase(objectKey);
+}
+
 //      ***** Class GroupRole *****
 
 GroupRole::GroupRole(const std::string& name, const bool& userPrivateRole)
@@ -308,14 +312,18 @@ void GroupRole::grantPrivileges(const DBObject& object) {
   updatePrivileges();
 }
 
-void GroupRole::revokePrivileges(const DBObject& object) {
+DBObject GroupRole::revokePrivileges(const DBObject& object) {
   auto dbObject = findDbObject(object.getObjectKey());
   if (!dbObject || !dbObject->getPrivileges().hasAny()) {  // not found or has none of privileges set
     throw runtime_error("Can not revoke privileges because " + roleName() + " has no privileges to " +
                         object.getName());
   }
   dbObject->revokePrivileges(object);
+  if (!dbObject->getPrivileges().hasAny()) {
+    dropDbObject(object.getObjectKey());
+  }
   updatePrivileges();
+  return *dbObject;
 }
 
 bool GroupRole::hasRole(Role* role) {
@@ -354,4 +362,11 @@ bool GroupRole::isUserPrivateRole() const {
 
 std::vector<std::string> GroupRole::getRoles() const {
   throw runtime_error("getRoles() api should not be used with objects of the GroupRole class.");
+}
+
+void GroupRole::dropDbObject(const DBObjectKey& objectKey) {
+  dbObjectMap_.erase(objectKey);
+  for (auto roleIt = userRole_.begin(); roleIt != userRole_.end(); ++roleIt) {
+    (*roleIt)->dropDbObject(objectKey);
+  }
 }

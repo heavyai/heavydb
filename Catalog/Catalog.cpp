@@ -608,12 +608,8 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
                         " failed because role or user with this name does not exist.");
   }
   object.loadKey(catalog);
-  rl->revokePrivileges(object);
-
-  /* apply revoke privileges statement to sqlite DB */
+  object = rl->revokePrivileges(object);
   std::vector<std::string> objectKey = object.toString();
-  object.resetPrivileges();
-  rl->getPrivileges(object);
   auto privs = object.getPrivileges();
   if (privs.hasAny()) {
     sqliteConnector_->query_with_text_params(
