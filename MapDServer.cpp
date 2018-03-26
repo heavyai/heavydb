@@ -285,6 +285,9 @@ int main(int argc, char** argv) {
       "from-table-reordering",
       po::value<bool>(&g_from_table_reordering)->default_value(g_from_table_reordering)->implicit_value(true),
       "Enable automatic table reordering in FROM clause");
+  desc.add_options()("enable-watchdog",
+                     po::value<bool>(&enable_watchdog)->default_value(enable_watchdog)->implicit_value(true),
+                     "Enable watchdog");
   desc.add_options()(
       "help-advanced",
       "Print advanced and experimental options. These options should not normally be used in production.");
@@ -312,9 +315,6 @@ int main(int argc, char** argv) {
   desc_adv.add_options()("num-reader-threads",
                          po::value<size_t>(&num_reader_threads)->default_value(num_reader_threads),
                          "Number of reader threads to use");
-  desc_adv.add_options()("enable-watchdog",
-                         po::value<bool>(&enable_watchdog)->default_value(enable_watchdog)->implicit_value(true),
-                         "Enable watchdog");
   desc_adv.add_options()(
       "enable-dynamic-watchdog",
       po::value<bool>(&enable_dynamic_watchdog)->default_value(enable_dynamic_watchdog)->implicit_value(true),
