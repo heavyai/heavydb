@@ -197,7 +197,7 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const Compi
   const auto& lhs_ti = lhs->get_type_info();
   const auto& rhs_ti = rhs->get_type_info();
 
-  if (g_fast_strcmp && lhs_ti.is_string() && rhs_ti.is_string()) {
+  if (g_fast_strcmp && lhs_ti.is_string() && rhs_ti.is_string() && !(IS_EQUIVALENCE(optype) || optype == kNE)) {
     auto cmp_str =
         codegenStrCmp(optype, qualifier, bin_oper->get_own_left_operand(), bin_oper->get_own_right_operand(), co);
     if (cmp_str) {
