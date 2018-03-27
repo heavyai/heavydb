@@ -326,7 +326,7 @@ size_t ResultSet::rowCount(const bool force_parallel) const {
   if (!storage_) {
     return 0;
   }
-  if (force_parallel || entryCount() > 100000) {
+  if (force_parallel || entryCount() > 20000) {
     return parallelRowCount();
   }
   std::lock_guard<std::mutex> lock(row_iteration_mutex_);

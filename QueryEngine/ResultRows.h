@@ -395,7 +395,7 @@ inline bool can_use_parallel_algorithms(const ResultSet& rows) {
 }
 
 inline bool use_parallel_algorithms(const ResultSet& rows) {
-  return can_use_parallel_algorithms(rows) && rows.entryCount() >= 30000;
+  return can_use_parallel_algorithms(rows) && rows.entryCount() >= 20000;
 }
 
 #endif  // QUERYENGINE_RESULTROWS_H
