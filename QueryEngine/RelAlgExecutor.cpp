@@ -2021,7 +2021,8 @@ std::vector<size_t> get_node_input_permutation(const std::vector<InputTableInfo>
   std::sort(input_permutation.begin(),
             input_permutation.end(),
             [&table_infos](const size_t lhs_index, const size_t rhs_index) {
-              return table_infos[lhs_index].info.getNumTuples() > table_infos[rhs_index].info.getNumTuples();
+              return table_infos[lhs_index].info.getNumTuplesUpperBound() >
+                     table_infos[rhs_index].info.getNumTuplesUpperBound();
             });
   return input_permutation;
 }
