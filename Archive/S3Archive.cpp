@@ -152,6 +152,8 @@ const std::string S3Archive::land(const std::string& objkey, std::exception_ptr&
 
   // streaming means asynch
   std::atomic<bool> is_get_object_outcome_moved(false);
+  // fix a race between S3Archive::land and S3Archive::~S3Archive on S3Archive itself
+  auto& bucket_name = this->bucket_name;
   auto th_writer = std::thread([=, &teptr, &get_object_outcome, &is_get_object_outcome_moved]() {
     try {
       LOG(INFO) << "downloading s3://" << bucket_name << "/" << objkey << " to " << (use_pipe ? "pipe " : "file ")
