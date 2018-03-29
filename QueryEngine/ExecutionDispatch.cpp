@@ -434,6 +434,8 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      render_info_);
     } catch (const CompilationRetryNoLazyFetch&) {
       OOM_TRACE_PUSH();
+      if (executor_->cgen_state_->module_)
+        delete executor_->cgen_state_->module_;
       compilation_result_cpu_ = executor_->compileWorkUnit(query_infos_,
                                                            ra_exe_unit_,
                                                            co_cpu,
@@ -481,6 +483,8 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      render_info_);
     } catch (const CompilationRetryNoLazyFetch&) {
       OOM_TRACE_PUSH();
+      if (executor_->cgen_state_->module_)
+        delete executor_->cgen_state_->module_;
       compilation_result_gpu_ = executor_->compileWorkUnit(query_infos_,
                                                            ra_exe_unit_,
                                                            co_gpu,
