@@ -531,18 +531,18 @@ void SysCatalog::grantDefaultPrivilegesToRole_unsafe(const std::string& name, bo
 void SysCatalog::createDBObject(const UserMetadata& user,
                                 const std::string& objectName,
                                 const Catalog_Namespace::Catalog& catalog) {
-  DBObject* object = new DBObject(objectName, TableDBObjectType);
-  object->loadKey(catalog);
-  object->setPrivileges(AccessPrivileges::ALL_NO_DB);
-  object->setUserPrivateObject();
-  object->setOwningUserId(user.userId);
+  DBObject object(objectName, TableDBObjectType);
+  object.loadKey(catalog);
+  object.setPrivileges(AccessPrivileges::ALL_NO_DB);
+  object.setUserPrivateObject();
+  object.setOwningUserId(user.userId);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     if (user.userName.compare(MAPD_ROOT_USER)) {  // no need to grant to suser, has all privs by default
-      grantDBObjectPrivileges_unsafe(user.userName, *object, catalog);
+      grantDBObjectPrivileges_unsafe(user.userName, object, catalog);
       Role* user_rl = instance().getMetadataForUserRole(user.userId);
       CHECK(user_rl);
-      user_rl->grantPrivileges(*object);
+      user_rl->grantPrivileges(object);
     }
   } catch (std::exception&) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
