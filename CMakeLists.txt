@@ -165,6 +165,8 @@ if(ENABLE_ASAN)
   add_definitions("-DWITH_DECODERS_BOUNDS_CHECKING")
 elseif(ENABLE_TSAN)
   set(SAN_FLAGS "-fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer")
+  # required for older GCC, see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=64354
+  add_definitions("-D__SANITIZE_THREAD__")
 endif()
 if(ENABLE_ASAN OR ENABLE_TSAN)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SAN_FLAGS}")
