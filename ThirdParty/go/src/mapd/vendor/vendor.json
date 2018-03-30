@@ -25,9 +25,27 @@
 			"revisionTime": "2017-06-08T00:51:49Z"
 		},
 		{
+			"checksumSHA1": "g/V4qrXjUGG9B+e3hB+4NAYJ5Gs=",
+			"path": "github.com/gorilla/context",
+			"revision": "08b5f424b9271eedf6f9f0ce86cb9396ed337a42",
+			"revisionTime": "2016-08-17T18:46:32Z"
+		},
+		{
 			"path": "github.com/gorilla/handlers",
 			"revision": "b3aff83722cb2ae031a70cae984650e3a16cd20e",
 			"revisionTime": "2016-02-01T11:49:43-08:00"
+		},
+		{
+			"checksumSHA1": "ucTBCc7dDRKLGPsYfAzu/Gq63qA=",
+			"path": "github.com/gorilla/securecookie",
+			"revision": "e59506cc896acb7f7bf732d4fdf5e25f7ccd8983",
+			"revisionTime": "2017-02-24T19:38:04Z"
+		},
+		{
+			"checksumSHA1": "/jOLCzAcN8p1GakgUYaWOs4tjw8=",
+			"path": "github.com/gorilla/sessions",
+			"revision": "a2f2a3de9a4a575047f73e3e36bc85ecc3546391",
+			"revisionTime": "2018-03-21T16:38:55Z"
 		},
 		{
 			"path": "github.com/hashicorp/hcl",
