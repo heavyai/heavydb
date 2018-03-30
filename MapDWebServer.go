@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,13 +21,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Jeffail/gabs"
 	log "github.com/Sirupsen/logrus"
 	"github.com/andrewseidl/viper"
 	"github.com/gorilla/handlers"
-	"github.com/rcrowley/go-metrics"
+	"github.com/gorilla/sessions"
+	metrics "github.com/rcrowley/go-metrics"
 	"github.com/rs/cors"
 	"github.com/spf13/pflag"
-	"gopkg.in/tylerb/graceful.v1"
+	graceful "gopkg.in/tylerb/graceful.v1"
 )
 
 var (
@@ -51,7 +54,9 @@ var (
 )
 
 var (
-	registry metrics.Registry
+	registry          metrics.Registry
+	sessionStore      *sessions.CookieStore
+	serversJSONParams []string
 )
 
 type Server struct {
@@ -251,6 +256,17 @@ func init() {
 		Units:  "ms",
 		Labels: []string{"execution_time_ms", "total_time_ms"},
 	}
+
+	c := 64
+	b := make([]byte, c)
+	_, err = rand.Read(b)
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	sessionStore = sessions.NewCookieStore(b)
+	sessionStore.MaxAge(0)
+	serversJSONParams = []string{"username", "password", "database"}
 }
 
 func uploadHandler(rw http.ResponseWriter, r *http.Request) {
@@ -352,11 +368,26 @@ func (w *ResponseMultiWriter) Write(b []byte) (int, error) {
 	return w.Writer.Write(b)
 }
 
+func hasCustomServersJSONParams(r *http.Request) bool {
+	for _, k := range serversJSONParams {
+		if len(r.FormValue(k)) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // thriftTimingHandler records timings for all Thrift method calls. It also
 // records timings reported by the backend, as defined by ThriftMethodMap.
 // TODO(andrew): use proper Thrift-generated parser
 func thriftTimingHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" && hasCustomServersJSONParams(r) {
+			setServersJSONHandler(rw, r)
+			http.Redirect(rw, r, r.URL.Path, http.StatusSeeOther)
+			return
+		}
+
 		if !enableMetrics || r.Method != "POST" || (r.Method == "POST" && r.URL.Path != "/") {
 			h.ServeHTTP(rw, r)
 			return
@@ -426,6 +457,26 @@ func metricsResetHandler(rw http.ResponseWriter, r *http.Request) {
 	metricsHandler(rw, r)
 }
 
+func setServersJSONHandler(rw http.ResponseWriter, r *http.Request) {
+	session, _ := sessionStore.Get(r, "servers-json")
+
+	for _, key := range serversJSONParams {
+		if len(r.FormValue(key)) > 0 {
+			session.Values[key] = r.FormValue(key)
+		}
+	}
+
+	session.Save(r, rw)
+}
+
+func clearServersJSONHandler(rw http.ResponseWriter, r *http.Request) {
+	session, _ := sessionStore.Get(r, "servers-json")
+
+	session.Options.MaxAge = -1
+
+	session.Save(r, rw)
+}
+
 func docsHandler(rw http.ResponseWriter, r *http.Request) {
 	h := http.StripPrefix("/docs/", http.FileServer(http.Dir(docsDir)))
 	h.ServeHTTP(rw, r)
@@ -461,6 +512,30 @@ func downloadsHandler(rw http.ResponseWriter, r *http.Request) {
 	h.ServeHTTP(rw, r)
 }
 
+func modifyServersJSON(r *http.Request, orig []byte) ([]byte, error) {
+	session, _ := sessionStore.Get(r, "servers-json")
+	j, err := gabs.ParseJSON(orig)
+	if err != nil {
+		return nil, err
+	}
+
+	jj, err := j.Children()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, key := range serversJSONParams {
+		if session.Values[key] != nil {
+			_, err = jj[0].Set(session.Values[key].(string), key)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return j.BytesIndent("", "  "), nil
+}
+
 func serversHandler(rw http.ResponseWriter, r *http.Request) {
 	var j []byte
 	servers := ""
@@ -493,9 +568,18 @@ func serversHandler(rw http.ResponseWriter, r *http.Request) {
 		ss := []Server{s}
 		j, _ = json.Marshal(ss)
 	}
+
+	jj, err := modifyServersJSON(r, j)
+	if err != nil {
+		msg := "Error processing servers.json: " + err.Error()
+		http.Error(rw, msg, http.StatusInternalServerError)
+		log.Println(msg)
+		return
+	}
+
 	rw.Header().Del("Cache-Control")
 	rw.Header().Add("Cache-Control", "no-cache, no-store, must-revalidate")
-	rw.Write(j)
+	rw.Write(jj)
 }
 
 func versionHandler(rw http.ResponseWriter, r *http.Request) {
@@ -545,6 +629,8 @@ func main() {
 	mux.HandleFunc("/metrics/", metricsHandler)
 	mux.HandleFunc("/metrics/reset/", metricsResetHandler)
 	mux.HandleFunc("/version.txt", versionHandler)
+	mux.HandleFunc("/_internal/set-servers-json", setServersJSONHandler)
+	mux.HandleFunc("/_internal/clear-servers-json", clearServersJSONHandler)
 
 	if profile {
 		mux.HandleFunc("/debug/pprof/", pprof.Index)
