@@ -39,6 +39,7 @@ add_executable(UtilTest UtilTest.cpp)
 add_executable(StorageTest StorageTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
 add_executable(StoragePerfTest StoragePerfTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
 add_executable(ImportTest ImportTest.cpp QueryRunner.cpp)
+add_executable(UpdelStorageTest UpdelStorageTest.cpp QueryRunner.cpp)
 add_executable(TopKTest TopKTest.cpp QueryRunner.cpp)
 add_executable(TokenCompletionHintsTest TokenCompletionHintsTest.cpp)
 add_executable(MapDQLCommandTest MapDQLCommandTest.cpp)
@@ -56,12 +57,14 @@ target_link_libraries(ResultSetBaselineRadixSortTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS})
 target_link_libraries(StringDictionaryTest StringDictionary gtest ${Boost_LIBRARIES})
 target_link_libraries(ImportTest gtest ${EXECUTE_TEST_LIBS})
+target_link_libraries(UpdelStorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TopKTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd_thrift ${Boost_LIBRARIES})
 target_link_libraries(MapDQLCommandTest gtest ${EXECUTE_TEST_LIBS} ${Boost_LIBRARIES})
 
 set(TEST_ARGS "--gtest_output=xml:../")
 add_test(PlanTest PlanTest ${TEST_ARGS})
+add_test(UpdelStorageTest UpdelStorageTest ${TEST_ARGS})
 add_test(ImportTest ImportTest ${TEST_ARGS})
 add_test(UtilTest UtilTest ${TEST_ARGS})
 add_test(ExecuteTest ExecuteTest ${TEST_ARGS})
@@ -94,6 +97,7 @@ set(SANITY_TESTS
   ResultSetBaselineRadixSortTest
   StorageTest
   ImportTest
+  UpdelStorageTest
   TopKTest
   TokenCompletionHintsTest
   MapDQLCommandTest

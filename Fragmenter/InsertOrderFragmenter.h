@@ -42,7 +42,6 @@ class DataMgr;
 #define DEFAULT_MAX_CHUNK_SIZE 1073741824  // in bytes
 
 namespace Fragmenter_Namespace {
-
 /**
  * @type InsertOrderFragmenter
  * @brief	The InsertOrderFragmenter is a child class of
@@ -96,6 +95,47 @@ class InsertOrderFragmenter : public AbstractFragmenter {
    * @brief get fragmenter's type (as string
    */
   inline std::string getFragmenterType() { return fragmenterType_; }
+
+  static void updateColumn(const Catalog_Namespace::Catalog* catalog,
+                           const std::string& tabName,
+                           const std::string& colName,
+                           const int fragmentId,
+                           const std::vector<uint64_t>& fragOffsets,
+                           const std::vector<ScalarTargetValue>& rhsValues,
+                           const Data_Namespace::MemoryLevel memoryLevel,
+                           UpdelRoll& updelRoll);
+
+  virtual void updateColumn(const Catalog_Namespace::Catalog* catalog,
+                            const TableDescriptor* td,
+                            const ColumnDescriptor* cd,
+                            const int fragmentId,
+                            const std::vector<uint64_t>& fragOffsets,
+                            const std::vector<ScalarTargetValue>& rhsValues,
+                            const Data_Namespace::MemoryLevel memoryLevel,
+                            UpdelRoll& updelRoll);
+
+  virtual void updateColumn(const Catalog_Namespace::Catalog* catalog,
+                            const TableDescriptor* td,
+                            const ColumnDescriptor* cd,
+                            const int fragmentId,
+                            const std::vector<uint64_t>& fragOffsets,
+                            const ScalarTargetValue& rhsValue,
+                            const Data_Namespace::MemoryLevel memoryLevel,
+                            UpdelRoll& updelRoll);
+
+  virtual void updateColumnMetadata(const ColumnDescriptor* cd,
+                                    const FragmentInfo& fragment,
+                                    std::shared_ptr<Chunk_NS::Chunk> chunk,
+                                    const bool null,
+                                    const double dmax,
+                                    const double dmin,
+                                    const int64_t lmax,
+                                    const int64_t lmin,
+                                    UpdelRoll& updelRoll);
+
+  virtual void updateMetadata(const Catalog_Namespace::Catalog* catalog,
+                              const TableDescriptor* td,
+                              UpdelRoll& updelRoll);
 
  private:
   std::vector<int> chunkKeyPrefix_;

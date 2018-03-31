@@ -76,6 +76,7 @@ set(query_engine_source_files
     RegexpFunctions.cpp
     JoinHashTable.cpp
     HashJoinRuntime.cpp
+    
     Codec.h
     Execute.h
     NvidiaKernel.h

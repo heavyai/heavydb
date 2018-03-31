@@ -100,6 +100,9 @@ class FragmentInfo {
 
   void setPhysicalNumTuples(const size_t physNumTuples) { numTuples = physNumTuples; }
 
+  void invalidateChunkMetadataMap() const { synthesizedMetadataIsValid = false; };
+  void invalidateNumTuples() const { synthesizedNumTuplesIsValid = false; }
+
   int fragmentId;
   size_t shadowNumTuples;
   std::vector<int> deviceIds;

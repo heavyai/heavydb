@@ -23,9 +23,11 @@
 #define _ABSTRACT_FRAGMENTER_H
 
 #include "../Shared/sqltypes.h"
+#include "../Shared/UpdelRoll.h"
 #include "Fragmenter.h"
 #include <vector>
 #include <string>
+#include <boost/variant.hpp>
 
 // Should the ColumnInfo and FragmentInfo structs be in
 // AbstractFragmenter?
@@ -35,8 +37,15 @@ class AbstractBuffer;
 class AbstractDataMgr;
 };
 
-namespace Fragmenter_Namespace {
+namespace Catalog_Namespace {
+class Catalog;
+}
+struct TableDescriptor;
+struct ColumnDescriptor;
 
+namespace Fragmenter_Namespace {
+using NullableString = boost::variant<std::string, void*>;
+using ScalarTargetValue = boost::variant<int64_t, double, float, NullableString>;
 /*
  * @type AbstractFragmenter
  * @brief abstract base class for all table partitioners
@@ -97,6 +106,38 @@ class AbstractFragmenter {
    */
 
   virtual std::string getFragmenterType() = 0;
+
+  virtual void updateColumn(const Catalog_Namespace::Catalog* catalog,
+                            const TableDescriptor* td,
+                            const ColumnDescriptor* cd,
+                            const int fragmentId,
+                            const std::vector<uint64_t>& fragOffsets,
+                            const std::vector<ScalarTargetValue>& rhsValues,
+                            const Data_Namespace::MemoryLevel memoryLevel,
+                            UpdelRoll& updelRoll) = 0;
+
+  virtual void updateColumn(const Catalog_Namespace::Catalog* catalog,
+                            const TableDescriptor* td,
+                            const ColumnDescriptor* cd,
+                            const int fragmentId,
+                            const std::vector<uint64_t>& fragOffsets,
+                            const ScalarTargetValue& rhsValue,
+                            const Data_Namespace::MemoryLevel memoryLevel,
+                            UpdelRoll& updelRoll) = 0;
+
+  virtual void updateColumnMetadata(const ColumnDescriptor* cd,
+                                    const FragmentInfo& fragment,
+                                    std::shared_ptr<Chunk_NS::Chunk> chunk,
+                                    const bool null,
+                                    const double dmax,
+                                    const double dmin,
+                                    const int64_t lmax,
+                                    const int64_t lmin,
+                                    UpdelRoll& updelRoll) = 0;
+
+  virtual void updateMetadata(const Catalog_Namespace::Catalog* catalog,
+                              const TableDescriptor* td,
+                              UpdelRoll& updelRoll) = 0;
 };
 
 }  // Fragmenter_Namespace
