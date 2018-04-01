@@ -63,30 +63,34 @@ void S3Archive::init_for_read() {
       s3_client.reset(new Aws::S3::S3Client(std::make_shared<Aws::Auth::AnonymousAWSCredentialsProvider>(), s3_config));
 
     auto list_objects_outcome = s3_client->ListObjects(objects_request);
-    if (!list_objects_outcome.IsSuccess())
-      throw std::runtime_error("failed to list objects of s3 url '" + url + "': " +
-                               list_objects_outcome.GetError().GetExceptionName() + ": " +
-                               list_objects_outcome.GetError().GetMessage());
+    if (list_objects_outcome.IsSuccess()) {
+      // pass only object keys to next stage, which may be Importer::import_parquet,
+      // Importer::import_compressed or else, depending on copy_params (eg. .is_parquet)
+      auto object_list = list_objects_outcome.GetResult().GetContents();
+      if (0 == object_list.size())
+        throw std::runtime_error("no object was found with s3 url '" + url + "'");
 
-    // pass only object keys to next stage, which may be Importer::import_parquet,
-    // Importer::import_compressed or else, depending on copy_params (eg. .is_parquet)
-    auto object_list = list_objects_outcome.GetResult().GetContents();
-    if (0 == object_list.size())
-      throw std::runtime_error("no object was found with s3 url '" + url + "'");
+      LOG(INFO) << "Found " << object_list.size() << " objects with url '" + url + "':";
+      for (auto const& obj : object_list) {
+        std::string objkey = obj.GetKey().c_str();
+        LOG(INFO) << "\t" << objkey << " (size = " << obj.GetSize() << " bytes)";
+        // skip _SUCCESS and keys with trailing / or basename with heading '.'
+        boost::filesystem::path path{objkey};
+        if (0 == obj.GetSize())
+          continue;
+        if ('/' == objkey.back())
+          continue;
+        if ('.' == path.filename().string().front())
+          continue;
+        objkeys.push_back(objkey);
+      }
+    } else {
+      // could not ListObject
+      // could be the object is there but we do not have listObject Privilege
+      // We can treat it as a specific object, so should try to parse it and pass to getObject as a singleton
 
-    LOG(INFO) << "Found " << object_list.size() << " objects with url '" + url + "':";
-    for (auto const& obj : object_list) {
-      std::string objkey = obj.GetKey().c_str();
-      LOG(INFO) << "\t" << objkey << " (size = " << obj.GetSize() << " bytes)";
-      // skip _SUCCESS and keys with trailing / or basename with heading '.'
-      boost::filesystem::path path{objkey};
-      if (0 == obj.GetSize())
-        continue;
-      if ('/' == objkey.back())
-        continue;
-      if ('.' == path.filename().string().front())
-        continue;
-      objkeys.push_back(objkey);
+      objkeys.push_back(prefix_name);
+
     }
   } catch (...) {
     throw;
