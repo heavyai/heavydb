@@ -90,11 +90,13 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                                          chunk_meta_it->second.numBytes,
                                          chunk_meta_it->second.numElements);
 
-  bool null{false};
-  double dmax{std::numeric_limits<double>::min()};
-  double dmin{std::numeric_limits<double>::max()};
-  int64_t lmax{std::numeric_limits<int64_t>::min()};
-  int64_t lmin{std::numeric_limits<int64_t>::max()};
+  const auto ncore = (size_t)cpu_threads();
+
+  std::vector<bool> null(ncore, false);
+  std::vector<double> dmax(ncore, std::numeric_limits<double>::min());
+  std::vector<double> dmin(ncore, std::numeric_limits<double>::max());
+  std::vector<int64_t> lmax(ncore, std::numeric_limits<int64_t>::min());
+  std::vector<int64_t> lmin(ncore, std::numeric_limits<int64_t>::max());
 
   // parallel update elements
   std::vector<std::future<void>> threads;
@@ -113,13 +115,12 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
     threads.clear();
   };
 
-  const auto ncore = (size_t)cpu_threads();
   const auto segsz = (nrow + ncore - 1) / ncore;
   const auto& lctype = cd->columnType;
   auto dbuf = chunk->get_buffer();
   auto d0 = dbuf->getMemoryPtr();
   dbuf->setUpdated();
-  for (size_t rbegin = 0; rbegin < nrow; rbegin += segsz) {
+  for (size_t rbegin = 0, c = 0; rbegin < nrow; ++c, rbegin += segsz) {
     threads.emplace_back(std::async(std::launch::async, [=, &null, &lmin, &lmax, &dmin, &dmax] {
       for (size_t r = rbegin; r < std::min(rbegin + segsz, nrow); r++) {
         const auto roffs = fragOffsets[r];
@@ -128,21 +129,21 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
         if (const auto v = boost::get<int64_t>(sv)) {
           put_scalar<int64_t>(dptr, lctype, *v);
           if (lctype.is_integer())
-            set_minmax<int64_t>(lmin, lmax, *v);
+            set_minmax<int64_t>(lmin[c], lmax[c], *v);
           else
-            set_minmax<double>(dmin, dmax, *v);
+            set_minmax<double>(dmin[c], dmax[c], *v);
         } else if (const auto v = boost::get<double>(sv)) {
           put_scalar<double>(dptr, lctype, *v);
           if (lctype.is_integer())
-            set_minmax<int64_t>(lmin, lmax, *v);
+            set_minmax<int64_t>(lmin[c], lmax[c], *v);
           else
-            set_minmax<double>(dmin, dmax, *v);
+            set_minmax<double>(dmin[c], dmax[c], *v);
         } else if (const auto v = boost::get<float>(sv)) {
           put_scalar<float>(dptr, lctype, *v);
           if (lctype.is_integer())
-            set_minmax<int64_t>(lmin, lmax, *v);
+            set_minmax<int64_t>(lmin[c], lmax[c], *v);
           else
-            set_minmax<double>(dmin, dmax, *v);
+            set_minmax<double>(dmin[c], dmax[c], *v);
         } else if (const auto v = boost::get<NullableString>(sv)) {
           const auto s = boost::get<std::string>(v);
           const auto sval = s ? *s : std::string("");
@@ -154,21 +155,21 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
             CHECK(stringDict);
             auto sidx = stringDict->getOrAdd(sval);
             put_scalar<int32_t>(dptr, lctype, sidx);
-            set_minmax<int64_t>(lmin, lmax, sidx);
+            set_minmax<int64_t>(lmin[c], lmax[c], sidx);
           } else if (sval.size() > 0) {
             auto dval = std::atof(sval.data());
             if (lctype.is_boolean())
               dval = sval == "t" || sval == "true" || sval == "T" || sval == "True";
             if (lctype.is_fp() || lctype.is_decimal()) {
               put_scalar<double>(dptr, lctype, dval);
-              set_minmax<double>(dmin, dmax, dval);
+              set_minmax<double>(dmin[c], dmax[c], dval);
             } else {
               put_scalar<int64_t>(dptr, lctype, dval);
-              set_minmax<int64_t>(lmin, lmax, dval);
+              set_minmax<int64_t>(lmin[c], lmax[c], dval);
             }
           } else {
             put_null(dptr, lctype, cd->columnName);
-            null = true;
+            null[c] = true;
           }
         } else
           CHECK(false);
@@ -183,7 +184,19 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
   if (failed_any_chunk)
     std::rethrow_exception(failed_any_chunk);
 
-  updateColumnMetadata(cd, fragment, chunk, null, dmax, dmin, lmax, lmin, updelRoll);
+  bool lc_null{false};
+  double lc_dmax{std::numeric_limits<double>::min()};
+  double lc_dmin{std::numeric_limits<double>::max()};
+  int64_t lc_lmax{std::numeric_limits<int64_t>::min()};
+  int64_t lc_lmin{std::numeric_limits<int64_t>::max()};
+  for (int c = 0; c < ncore; ++c) {
+    lc_null |= null[c];
+    lc_dmax = std::max<double>(lc_dmax, dmax[c]);
+    lc_dmin = std::min<double>(lc_dmin, dmin[c]);
+    lc_lmax = std::max<int64_t>(lc_lmax, lmax[c]);
+    lc_lmin = std::min<int64_t>(lc_lmin, lmin[c]);
+  }
+  updateColumnMetadata(cd, fragment, chunk, lc_null, lc_dmax, lc_dmin, lc_lmax, lc_lmin, updelRoll);
 }
 
 void InsertOrderFragmenter::updateColumnMetadata(const ColumnDescriptor* cd,
