@@ -121,7 +121,8 @@ enum EncodingType {
   kENCODING_DIFF = 3,    // Differential encoding
   kENCODING_DICT = 4,    // Dictionary encoding
   kENCODING_SPARSE = 5,  // Null encoding for sparse columns
-  kENCODING_LAST = 6
+  kENCODING_GEOINT = 6,  // Encoding coordinates as intergers
+  kENCODING_LAST = 7
 };
 
 #define IS_INTEGER(T) (((T) == kINT) || ((T) == kSMALLINT) || ((T) == kBIGINT))

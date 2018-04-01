@@ -28,7 +28,8 @@ enum TEncodingType {
   RL,
   DIFF,
   DICT,
-  SPARSE
+  SPARSE,
+  GEOINT
 }
 
 enum TExecuteMode {

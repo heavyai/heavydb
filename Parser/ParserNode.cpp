@@ -1947,6 +1947,19 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         cd.columnType.set_compression(kENCODING_SPARSE);
         cd.columnType.set_comp_param(compression->get_encoding_param());
         // throw std::runtime_error("SPARSE encoding not supported yet.");
+      } else if (boost::iequals(comp, "geoint")) {
+        if (!cd.columnType.is_geometry() || cd.columnType.get_output_srid() != 4326)
+          throw std::runtime_error(cd.columnName + ": GEOINT encoding is only supported on WGS84 geo columns.");
+        if (compression->get_encoding_param() == 0)
+          comp_param = 32;  // default to 32-bits
+        else
+          comp_param = compression->get_encoding_param();
+        if (comp_param != 32) {
+          throw std::runtime_error(cd.columnName + ": Only 32-bit integer encoding is supported");
+        }
+        // encoding longitude/latitude as integers
+        cd.columnType.set_compression(kENCODING_GEOINT);
+        cd.columnType.set_comp_param(comp_param);
       } else
         throw std::runtime_error(cd.columnName + ": Invalid column compression scheme " + comp);
     }

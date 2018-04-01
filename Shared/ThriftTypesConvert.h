@@ -130,6 +130,7 @@ inline TEncodingType::type encoding_to_thrift(const SQLTypeInfo& type_info) {
     THRIFT_ENCODING_CASE(DIFF)
     THRIFT_ENCODING_CASE(DICT)
     THRIFT_ENCODING_CASE(SPARSE)
+    THRIFT_ENCODING_CASE(GEOINT)
     default:
       CHECK(false);
   }
@@ -146,6 +147,7 @@ inline EncodingType thrift_to_encoding(const TEncodingType::type tEncodingType) 
     UNTHRIFT_ENCODING_CASE(DIFF)
     UNTHRIFT_ENCODING_CASE(DICT)
     UNTHRIFT_ENCODING_CASE(SPARSE)
+    UNTHRIFT_ENCODING_CASE(GEOINT)
     default:
       CHECK(false);
   }
