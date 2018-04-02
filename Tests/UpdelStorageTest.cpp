@@ -121,8 +121,12 @@ bool update_a_numeric_column(const string& table,
                              const int step,
                              const double val,
                              const double avg,
-                             const bool commit = true) {
-  update_common<double>(table, column, cnt, step, val, commit);
+                             const bool commit = true,
+                             const bool by_string = false) {
+  if (by_string)
+    update_common<std::string>(table, column, cnt, step, std::to_string(val), commit);
+  else
+    update_common<double>(table, column, cnt, step, val, commit);
   return compare_agg(table, column, cnt, avg);
 }
 
@@ -300,6 +304,14 @@ TEST_F(UpdateStorageTest, Half_decimal_pickup_longitude_x2) {
 }
 TEST_F(UpdateStorageTest, Half_decimal_pickup_longitude_x2_rollback) {
   EXPECT_TRUE(update_a_numeric_column("trips", "pickup_longitude", 100, 2, -73.978165 * 2, -73.978165 * 1.0, false));
+}
+TEST_F(UpdateStorageTest, Half_decimal_pickup_longitude_x2_by_string) {
+  EXPECT_TRUE(
+      update_a_numeric_column("trips", "pickup_longitude", 100, 2, -73.978165 * 2, -73.978165 * 1.5, true, true));
+}
+TEST_F(UpdateStorageTest, Half_decimal_pickup_longitude_x2_rollback_by_string) {
+  EXPECT_TRUE(
+      update_a_numeric_column("trips", "pickup_longitude", 100, 2, -73.978165 * 2, -73.978165 * 1.0, false, true));
 }
 
 TEST_F(UpdateStorageTest, All_string_vendor_id) {

@@ -189,7 +189,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
   double lc_dmin{std::numeric_limits<double>::max()};
   int64_t lc_lmax{std::numeric_limits<int64_t>::min()};
   int64_t lc_lmin{std::numeric_limits<int64_t>::max()};
-  for (int c = 0; c < ncore; ++c) {
+  for (size_t c = 0; c < ncore; ++c) {
     lc_null |= null[c];
     lc_dmax = std::max<double>(lc_dmax, dmax[c]);
     lc_dmin = std::min<double>(lc_dmin, dmin[c]);
