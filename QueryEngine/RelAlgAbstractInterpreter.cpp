@@ -812,8 +812,10 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std:
                                                      fields,
                                                      scalar_sources,
                                                      is_agg,
+                                                     manipulation_target->isUpdateViaSelect(),
                                                      manipulation_target->isDeleteViaSelect(),
-                                                     manipulation_target->getModifiedTableDescriptor());
+                                                     manipulation_target->getModifiedTableDescriptor(),
+                                                     manipulation_target->getTargetColumns());
   auto old_node = nodes[pattern.back()];
   nodes[pattern.back()] = compound_node;
   auto first_node = nodes[pattern.front()];
@@ -1583,10 +1585,27 @@ class RelAlgAbstractInterpreter {
     const auto table_descriptor = getTableFromScanNode(logical_modify_ra);
     bool flattened = json_bool(field(logical_modify_ra, "flattened"));
     std::string op = json_str(field(logical_modify_ra, "operation"));
+    RelModify::TargetColumnList target_column_list;
 
-    auto modify_node = std::make_shared<RelModify>(table_descriptor, flattened, op, inputs[0]);
-    if (modify_node->getOperation() == RelModify::ModifyOperation::Delete) {
-      modify_node->applyDeleteModificationsToInputNode();
+    if (op == "UPDATE") {
+      const auto& update_columns = field(logical_modify_ra, "updateColumnList");
+      CHECK(update_columns.IsArray());
+
+      for (auto column_arr_it = update_columns.Begin(); column_arr_it != update_columns.End(); ++column_arr_it) {
+        target_column_list.push_back(column_arr_it->GetString());
+      }
+    }
+
+    auto modify_node = std::make_shared<RelModify>(table_descriptor, flattened, op, target_column_list, inputs[0]);
+    switch (modify_node->getOperation()) {
+      case RelModify::ModifyOperation::Delete: {
+        modify_node->applyDeleteModificationsToInputNode();
+      } break;
+      case RelModify::ModifyOperation::Update: {
+        modify_node->applyUpdateModificationsToInputNode();
+      }
+      default:
+        break;
     }
 
     return modify_node;

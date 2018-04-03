@@ -108,6 +108,18 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                          RenderInfo*,
                          const int64_t queue_time_ms);
 
+  void executeUpdateViaCompound(const RelCompound* compound,
+                                const CompilationOptions& co,
+                                const ExecutionOptions& eo,
+                                RenderInfo* render_info,
+                                const int64_t queue_time_ms);
+  void executeUpdateViaProject(const RelProject*,
+                               const CompilationOptions&,
+                               const ExecutionOptions&,
+                               RenderInfo*,
+                               const int64_t queue_time_ms);
+  
+
   void executeDeleteViaCompound(const RelCompound* compound,
                                 const CompilationOptions& co,
                                 const ExecutionOptions& eo,

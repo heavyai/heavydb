@@ -12,6 +12,12 @@ using JVMRemoteDebugSelector = PreprocessorTrue;
 using JVMRemoteDebugSelector = PreprocessorFalse;
 #endif
 
+#ifdef CALCITE_UPDATE_ENABLED
+using CalciteUpdatePathSelector = PreprocessorTrue;
+#else
+using CalciteUpdatePathSelector = PreprocessorFalse;
+#endif
+
 #ifdef CALCITE_DELETE_ENABLED
 using CalciteDeletePathSelector = PreprocessorTrue;
 #else

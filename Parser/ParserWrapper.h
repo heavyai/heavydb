@@ -62,11 +62,33 @@ class ParserWrapper {
   static const std::string calcite_explain_str;
 };
 
-template <typename PARSER_WRAPPER, typename SELECTOR = CalciteDeletePathSelector>
-bool is_calcite_permissable_dml(PARSER_WRAPPER const& pw) {
-  if (std::is_same<SELECTOR, PreprocessorFalse>::value)
-    return !pw.is_update_dml;
-  return (!pw.is_update_dml || (pw.getDMLType() == ParserWrapper::DMLType::Delete));
+
+enum class CalciteDMLPathSelection : int {
+    Unsupported = 0,
+    OnlyUpdates = 1,
+    OnlyDeletes = 2,
+    UpdatesAndDeletes = 3
+};
+
+inline CalciteDMLPathSelection yield_dml_path_selector() {
+   int selector = 0;
+   if( std::is_same< CalciteDeletePathSelector, PreprocessorTrue >::value ) selector |= 0x02;
+   if( std::is_same< CalciteUpdatePathSelector, PreprocessorTrue >::value ) selector |= 0x01;
+   return static_cast< CalciteDMLPathSelection >( selector );
+}
+
+inline bool is_calcite_permissable_dml( ParserWrapper const& pw ) {
+    switch( yield_dml_path_selector() ) {
+        case CalciteDMLPathSelection::OnlyUpdates:
+            return !pw.is_update_dml || (pw.getDMLType() == ParserWrapper::DMLType::Update);
+        case CalciteDMLPathSelection::OnlyDeletes:
+            return !pw.is_update_dml || (pw.getDMLType() == ParserWrapper::DMLType::Delete);
+        case CalciteDMLPathSelection::UpdatesAndDeletes:
+            return !pw.is_update_dml || (pw.getDMLType() == ParserWrapper::DMLType::Delete) || (pw.getDMLType() == ParserWrapper::DMLType::Update);
+        case CalciteDMLPathSelection::Unsupported:
+        default:
+            return false;
+    }
 }
 
 inline bool is_calcite_path_permissable(ParserWrapper const& pw) {

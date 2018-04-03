@@ -28,6 +28,8 @@
 #include <memory>
 #include <unordered_map>
 
+using ColumnNameList = std::vector<std::string>;
+
 class Rex {
  public:
   virtual std::string toString() const = 0;
@@ -193,6 +195,9 @@ class RexLiteral : public RexScalar {
   const unsigned type_scale_;
   const unsigned type_precision_;
 };
+
+using RexLiteralArray = std::vector<RexLiteral>;
+using TupleContentsArray = std::vector<RexLiteralArray>;
 
 class RexOperator : public RexScalar {
  public:
@@ -538,17 +543,31 @@ class RelScan : public RelAlgNode {
 
 class ModifyManipulationTarget {
  public:
-  ModifyManipulationTarget(bool const delete_via_select = false, TableDescriptor const* table_descriptor = nullptr)
-      : is_delete_via_select_(delete_via_select), table_descriptor_(table_descriptor) {}
+  ModifyManipulationTarget(bool const update_via_select = false,
+                           bool const delete_via_select = false,
+                           TableDescriptor const* table_descriptor = nullptr,
+                           ColumnNameList target_columns = ColumnNameList())
+      : is_update_via_select_(update_via_select),
+        is_delete_via_select_(delete_via_select),
+        table_descriptor_(table_descriptor),
+        target_columns_(target_columns) {}
 
+  void setUpdateViaSelectFlag() const { is_update_via_select_ = true; }
   void setDeleteViaSelectFlag() const { is_delete_via_select_ = true; }
+  bool const isUpdateViaSelect() const { return is_update_via_select_; }
   bool const isDeleteViaSelect() const { return is_delete_via_select_; }
   TableDescriptor const* getModifiedTableDescriptor() const { return table_descriptor_; }
   void setModifiedTableDescriptor(TableDescriptor const* td) const { table_descriptor_ = td; }
 
+  int getTargetColumnCount() const { return target_columns_.size(); }
+  void setTargetColumns(ColumnNameList const& target_columns) const { target_columns_ = target_columns; }
+  ColumnNameList const& getTargetColumns() const { return target_columns_; }
+
  private:
+  mutable bool is_update_via_select_ = false;
   mutable bool is_delete_via_select_ = false;
   mutable TableDescriptor const* table_descriptor_ = nullptr;
+  mutable ColumnNameList target_columns_;
 };
 
 class RelProject : public RelAlgNode, public ModifyManipulationTarget {
@@ -559,7 +578,7 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   RelProject(std::vector<std::unique_ptr<const RexScalar>>& scalar_exprs,
              const std::vector<std::string>& fields,
              std::shared_ptr<const RelAlgNode> input)
-      : ModifyManipulationTarget(false, nullptr), scalar_exprs_(std::move(scalar_exprs)), fields_(fields) {
+      : ModifyManipulationTarget(false, false, nullptr), scalar_exprs_(std::move(scalar_exprs)), fields_(fields) {
     inputs_.push_back(input);
   }
 
@@ -861,9 +880,14 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
               const std::vector<std::string>& fields,
               std::vector<std::unique_ptr<const RexScalar>>& scalar_sources,
               const bool is_agg,
+              bool update_disguised_as_select = false,
               bool delete_disguised_as_select = false,
-              TableDescriptor const* manipulation_target_table = nullptr)
-      : ModifyManipulationTarget(delete_disguised_as_select, manipulation_target_table),
+              TableDescriptor const* manipulation_target_table = nullptr,
+              ColumnNameList target_columns = ColumnNameList())
+      : ModifyManipulationTarget(update_disguised_as_select,
+                                 delete_disguised_as_select,
+                                 manipulation_target_table,
+                                 target_columns),
         filter_expr_(std::move(filter_expr)),
         target_exprs_(target_exprs),
         groupby_count_(groupby_count),
@@ -1016,8 +1040,9 @@ class RelSort : public RelAlgNode {
 
 class RelModify : public RelAlgNode {
  public:
-  enum class ModifyOperation { Insert, Delete };
+  enum class ModifyOperation { Insert, Delete, Update };
   using RelAlgNodeInputPtr = std::shared_ptr<const RelAlgNode>;
+  using TargetColumnList = std::vector<std::string>;
 
   static std::string yieldModifyOperationString(ModifyOperation const op) {
     switch (op) {
@@ -1025,6 +1050,8 @@ class RelModify : public RelAlgNode {
         return "DELETE";
       case ModifyOperation::Insert:
         return "INSERT";
+      case ModifyOperation::Update:
+        return "UPDATE";
       default:
         break;
     }
@@ -1036,26 +1063,42 @@ class RelModify : public RelAlgNode {
       return ModifyOperation::Insert;
     else if (op_string == "DELETE")
       return ModifyOperation::Delete;
+    else if (op_string == "UPDATE")
+      return ModifyOperation::Update;
+
     throw std::runtime_error(std::string("Unsupported logical modify operation encountered " + op_string));
   }
 
-  RelModify(TableDescriptor const* const td, bool flattened, std::string const& op_string, RelAlgNodeInputPtr input)
-      : table_descriptor_(td), flattened_(flattened), operation_(yieldModifyOperationEnum(op_string)) {
+  RelModify(TableDescriptor const* const td,
+            bool flattened,
+            std::string const& op_string,
+            TargetColumnList const& target_column_list,
+            RelAlgNodeInputPtr input)
+      : table_descriptor_(td),
+        flattened_(flattened),
+        operation_(yieldModifyOperationEnum(op_string)),
+        target_column_list_(target_column_list) {
     inputs_.push_back(input);
   }
 
-  RelModify(TableDescriptor const* const td, bool flattened, ModifyOperation op, RelAlgNodeInputPtr input)
-      : table_descriptor_(td), flattened_(flattened), operation_(op) {
+  RelModify(TableDescriptor const* const td,
+            bool flattened,
+            ModifyOperation op,
+            TargetColumnList const& target_column_list,
+            RelAlgNodeInputPtr input)
+      : table_descriptor_(td), flattened_(flattened), operation_(op), target_column_list_(target_column_list) {
     inputs_.push_back(input);
   }
 
   TableDescriptor const* const getTableDescriptor() const { return table_descriptor_; }
   bool const isFlattened() const { return flattened_; }
   ModifyOperation getOperation() const { return operation_; }
+  TargetColumnList const& getUpdateColumnNames() { return target_column_list_; }
+  int getUpdateColumnCount() const { return target_column_list_.size(); }
 
   size_t size() const override { return 0; }
   std::shared_ptr<RelAlgNode> deepCopy() const override {
-    return std::make_shared<RelModify>(table_descriptor_, flattened_, operation_, inputs_[0]);
+    return std::make_shared<RelModify>(table_descriptor_, flattened_, operation_, target_column_list_, inputs_[0]);
   }
 
   std::string toString() const override {
@@ -1065,6 +1108,16 @@ class RelModify : public RelAlgNode {
                   << " operation= " << yieldModifyOperationString(operation_) << ")";
 
     return result_stream.str();
+  }
+
+  void applyUpdateModificationsToInputNode() {
+    RelProject const* previous_project_node = dynamic_cast<RelProject const*>(inputs_[0].get());
+    CHECK(previous_project_node != nullptr);
+
+    previous_project_node->setUpdateViaSelectFlag();
+    previous_project_node->injectOffsetInFragmentExpr();
+    previous_project_node->setModifiedTableDescriptor(table_descriptor_);
+    previous_project_node->setTargetColumns(target_column_list_);
   }
 
   void applyDeleteModificationsToInputNode() {
@@ -1079,6 +1132,7 @@ class RelModify : public RelAlgNode {
   const TableDescriptor* table_descriptor_;
   bool flattened_;
   ModifyOperation operation_;
+  TargetColumnList target_column_list_;
 };
 
 class RelLogicalValues : public RelAlgNode {

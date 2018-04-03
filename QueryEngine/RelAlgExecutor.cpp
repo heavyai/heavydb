@@ -461,6 +461,8 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
     if (compound) {
       if (compound->isDeleteViaSelect()) {
         executeDeleteViaCompound(compound, co, eo_work_unit, render_info, queue_time_ms);
+      } else if (compound->isUpdateViaSelect()) {
+        executeUpdateViaCompound(compound, co, eo_work_unit, render_info, queue_time_ms);
       } else {
         exec_desc.setResult(executeCompound(compound, co, eo_work_unit, render_info, queue_time_ms));
         addTemporaryTable(-compound->getId(), exec_desc.getResult().getDataPtr());
@@ -471,6 +473,8 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
     if (project) {
       if (project->isDeleteViaSelect()) {
         executeDeleteViaProject(project, co, eo_work_unit, render_info, queue_time_ms);
+      } else if (project->isUpdateViaSelect()) {
+        executeUpdateViaProject(project, co, eo_work_unit, render_info, queue_time_ms);
       } else {
         exec_desc.setResult(executeProject(project, co, eo_work_unit, render_info, queue_time_ms));
         addTemporaryTable(-project->getId(), exec_desc.getResult().getDataPtr());
@@ -1103,6 +1107,51 @@ std::vector<TargetMetaInfo> get_targets_meta(const RA* ra_node, const std::vecto
 }
 
 }  // namespace
+
+void RelAlgExecutor::executeUpdateViaCompound(const RelCompound* compound,
+                                              const CompilationOptions& co,
+                                              const ExecutionOptions& eo,
+                                              RenderInfo* render_info,
+                                              const int64_t queue_time_ms) {
+  const auto work_unit = createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
+  CompilationOptions co_project = co;
+  co_project.device_type_ = ExecutorDeviceType::CPU;
+
+  auto update_callback = yieldUpdateCallback(UpdateParameters(
+      compound->getModifiedTableDescriptor(), compound->getTargetColumns(), compound->getOutputMetainfo()));
+
+  executor_->executeUpdate(
+      work_unit.exe_unit, table_infos.front(), co_project, eo, cat_, executor_->row_set_mem_owner_, update_callback);
+}
+
+void RelAlgExecutor::executeUpdateViaProject(const RelProject* project,
+                                             const CompilationOptions& co,
+                                             const ExecutionOptions& eo,
+                                             RenderInfo* render_info,
+                                             const int64_t queue_time_ms) {
+  auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
+  CompilationOptions co_project = co;
+
+  if (project->isSimple()) {
+    CHECK_EQ(size_t(1), project->inputCount());
+    const auto input_ra = project->getInput(0);
+    if (dynamic_cast<const RelSort*>(input_ra)) {
+      co_project.device_type_ = ExecutorDeviceType::CPU;
+      const auto& input_table = get_temporary_table(&temporary_tables_, -input_ra->getId());
+      const auto input_rows = boost::get<RowSetPtr>(&input_table);
+      CHECK(input_rows && *input_rows);
+      work_unit.exe_unit.scan_limit = (*input_rows)->rowCount();
+    }
+  }
+
+  auto update_callback = yieldUpdateCallback(UpdateParameters(
+      project->getModifiedTableDescriptor(), project->getTargetColumns(), project->getOutputMetainfo()));
+
+  executor_->executeUpdate(
+      work_unit.exe_unit, table_infos.front(), co_project, eo, cat_, executor_->row_set_mem_owner_, update_callback);
+}
 
 void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
                                               const CompilationOptions& co,

@@ -2,6 +2,8 @@
 #define STORAGEIOFACILITY_H
 
 #include "Fragmenter/InsertOrderFragmenter.h"
+#include "TargetMetaInfo.h"
+
 #include "Shared/ConfigResolve.h"
 #include "Shared/UpdelRoll.h"
 #include <boost/variant.hpp>
@@ -11,6 +13,38 @@ class DefaultIOFacet {
  public:
   using FragmenterType = FRAGMENTER_TYPE;
   using DeleteVictimOffsetList = std::vector<uint64_t>;
+  using UpdateTargetOffsetList = std::vector<uint64_t>;
+  using UpdateTargetTypeList = std::vector<TargetMetaInfo>;
+  using UpdateTargetColumnNamesList = std::vector<std::string>;
+
+  template <typename CATALOG_TYPE,
+            typename TABLE_TYPE,
+            typename COLUMN_NAME,
+            typename FRAGMENT_INDEX,
+            typename FRAGMENT_OFFSET,
+            typename UPDATE_VALUE_TYPE>
+  void updateColumn(CATALOG_TYPE const& cat,
+                    TABLE_TYPE const& table_descriptor,
+                    COLUMN_NAME const& column_name,
+                    FRAGMENT_INDEX frag_index,
+                    FRAGMENT_OFFSET frag_offset,
+                    UPDATE_VALUE_TYPE update_value) {
+    const auto fragmenter = dynamic_cast<Fragmenter_Namespace::InsertOrderFragmenter*>(table_descriptor->fragmenter);
+    CHECK(fragmenter);
+    typename FragmenterType::ModifyTransactionTracker transaction_tracker;
+    ColumnDescriptor const* target_column = cat.getMetadataForColumn(table_descriptor->tableId, column_name);
+
+    fragmenter->updateColumn(&cat,
+                             table_descriptor,
+                             target_column,
+                             frag_index,
+                             UpdateTargetOffsetList{frag_offset},
+                             std::vector<ScalarTargetValue>{update_value},
+                             Data_Namespace::MemoryLevel::CPU_LEVEL,
+                             transaction_tracker);
+
+    transaction_tracker.commitUpdate();
+  }
 
   template <typename CATALOG_TYPE, typename TABLE_TYPE, typename FRAGMENT_INDEX, typename VICTIM_OFFSET_LIST>
   void deleteColumns(CATALOG_TYPE const& cat,
@@ -49,8 +83,70 @@ class StorageIOFacility {
   using IOFacility = IO_FACET;
   using TableDescriptorType = typename EXECUTOR_TRAITS::TableDescriptorType;
   using DeleteVictimOffsetList = typename IOFacility::DeleteVictimOffsetList;
+  using UpdateTargetOffsetList = typename IOFacility::UpdateTargetOffsetList;
+  using UpdateTargetTypeList = typename IOFacility::UpdateTargetTypeList;
+  using UpdateTargetColumnNamesList = typename IOFacility::UpdateTargetColumnNamesList;
+
+  class UpdateParameters {
+   public:
+    UpdateParameters(UpdateParameters const& other)
+        : table_descriptor_(other.table_descriptor_),
+          update_column_names_(other.update_column_names_),
+          targets_meta_(other.targets_meta_) {}
+    UpdateParameters(TableDescriptorType const* table_desc,
+                     UpdateTargetColumnNamesList const& update_column_names,
+                     UpdateTargetTypeList const& target_types)
+        : table_descriptor_(table_desc), update_column_names_(update_column_names), targets_meta_(target_types){};
+
+    typename UpdateTargetColumnNamesList::size_type getUpdateColumnCount() const { return update_column_names_.size(); }
+    TableDescriptorType const* getTableDescriptor() const { return table_descriptor_; }
+    UpdateTargetTypeList const& getTargetsMetaInfo() const { return targets_meta_; }
+    typename UpdateTargetTypeList::size_type getTargetsMetaInfoSize() const { return targets_meta_.size(); }
+    UpdateTargetColumnNamesList const& getUpdateColumnNames() const { return update_column_names_; }
+
+   private:
+    TableDescriptorType const* table_descriptor_;
+    UpdateTargetColumnNamesList update_column_names_;
+    UpdateTargetTypeList const& targets_meta_;
+  };
 
   StorageIOFacility(ExecutorType* executor, CatalogType const& catalog) : executor_(executor), catalog_(catalog) {}
+
+  UpdateCallback yieldUpdateCallback(UpdateParameters update_parameters) {
+    auto callback = [this, update_parameters](FragmentUpdaterType const& update_log) -> void {
+      auto fragment_index(update_log.getFragmentIndex());
+      UpdateTargetOffsetList victim_offsets;
+
+      for (size_t i = 0; i < update_log.getEntryCount(); ++i) {
+        auto const row(update_log.getEntryAt(i));
+        CHECK(!row.empty());
+        CHECK(row.size() == update_parameters.getTargetsMetaInfoSize());
+        int starting_result_column_index = row.size() - update_parameters.getUpdateColumnCount() - 1;
+        CHECK(starting_result_column_index >= 0);
+
+        // Fetch offset
+        auto terminal_column_iter = std::prev(row.end());
+        const auto scalar_tv = boost::get<ScalarTargetValue>(&*terminal_column_iter);
+        CHECK(scalar_tv);
+        uint64_t fragment_offset = static_cast<uint64_t>(*(boost::get<int64_t>(scalar_tv)));
+
+        for (int i = starting_result_column_index, column_name_index = 0; i < static_cast<int>(row.size() - 1);
+             i++, column_name_index++) {
+          const auto scalar_tv = boost::get<ScalarTargetValue>(row[i]);
+          // auto& type_info = update_parameters.getTargetsMetaInfo()[i].get_type_info();
+
+          // FIX-ME:  Maybe speed up things and fetch column descriptors for re-use
+          IOFacility().updateColumn(catalog_,
+                                    update_parameters.getTableDescriptor(),
+                                    update_parameters.getUpdateColumnNames()[column_name_index],
+                                    fragment_index,
+                                    fragment_offset,
+                                    scalar_tv);
+        }
+      }
+    };
+    return callback;
+  }
 
   UpdateCallback yieldDeleteCallback(TableDescriptorType const* table_descriptor) {
     auto callback = [this, table_descriptor](FragmentUpdaterType const& update_log) -> void {
@@ -69,7 +165,6 @@ class StorageIOFacility {
         victim_offsets.push_back(fragment_offset);
       }
       IOFacility().deleteColumns(catalog_, table_descriptor, fragment_index, victim_offsets);
-
     };
     return callback;
   }
