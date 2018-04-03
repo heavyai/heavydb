@@ -108,7 +108,6 @@ void copy_table(char const* filepath, char const* table, ClientContext& context)
     return;
   }
   if (!thrift_with_retry(kGET_TABLE_DETAILS, context, table)) {
-    std::cerr << "Cannot connect to table." << std::endl;
     return;
   }
   const TRowDescriptor& row_desc = context.table_details.row_desc;
@@ -251,8 +250,6 @@ void get_table_epoch(ClientContext& context, const std::string& table_specifier)
 
     if (thrift_with_retry(kGET_TABLE_EPOCH, context, nullptr)) {
       std::cout << "table epoch is " << context.epoch_value << std::endl;
-    } else {
-      std::cerr << "Cannot connect to MapD Server." << std::endl;
     }
   } else {
     // presume we have a table name
@@ -264,15 +261,12 @@ void get_table_epoch(ClientContext& context, const std::string& table_specifier)
         return;
       }
     } else {
-      std::cerr << "Cannot connect to MapD Server." << std::endl;
       return;
     }
     context.table_name = table_specifier;
 
     if (thrift_with_retry(kGET_TABLE_EPOCH_BY_NAME, context, nullptr)) {
       std::cout << "table epoch is " << context.epoch_value << std::endl;
-    } else {
-      std::cerr << "Cannot connect to MapD Server." << std::endl;
     }
   }
 }
@@ -326,8 +320,6 @@ void set_table_epoch(ClientContext& context, const std::string& table_details) {
 
     if (thrift_with_retry(kSET_TABLE_EPOCH, context, nullptr)) {
       std::cout << "table epoch set" << std::endl;
-    } else {
-      std::cout << "Cannot connect to MapD Server." << std::endl;
     }
   } else {
     std::vector<std::string> split_result;
@@ -345,7 +337,6 @@ void set_table_epoch(ClientContext& context, const std::string& table_details) {
         return;
       }
     } else {
-      std::cerr << "Cannot connect to MapD Server." << std::endl;
       return;
     }
     context.table_name = split_result[0];
@@ -362,8 +353,6 @@ void set_table_epoch(ClientContext& context, const std::string& table_details) {
     }
     if (thrift_with_retry(kSET_TABLE_EPOCH_BY_NAME, context, nullptr)) {
       std::cout << "table epoch set" << std::endl;
-    } else {
-      std::cout << "Cannot connect to MapD Server." << std::endl;
     }
   }
 }
@@ -838,159 +827,86 @@ void print_all_hardware_info(ClientContext& context) {
   std::cout << tss.str();
 }
 
-void get_role(ClientContext& context) {
-  context.role_names.clear();
-  context.userPrivateRole = false;
-  if (thrift_with_retry(kGET_ROLE, context, context.privs_role_name.c_str())) {
-    if (context.role_names.size() > 0) {
-      std::cout << "Role " << context.privs_role_name << " exists." << std::endl;
-    } else {
-      std::cout << "Role " << context.privs_role_name << " does not exist." << std::endl;
+static void print_privs(const std::vector<bool>& privs) {
+  for (size_t j = 0; j < privs.size(); j++) {
+    if (privs[j]) {
+      switch (j) {
+        case 0: {
+          std::cout << " select";
+          break;
+        }
+        case 1: {
+          std::cout << " insert";
+          break;
+        }
+        case 2: {
+          std::cout << " create";
+          break;
+        }
+        case 3: {
+          std::cout << " truncate";
+          break;
+        }
+        default: { CHECK(false); }
+      }
     }
-  } else {
-    std::cout << "Cannot connect to MapD Server." << std::endl;
   }
 }
 
-void get_db_objects_for_role(ClientContext& context) {
-  context.role_names.clear();
-  context.userPrivateRole = true;
-  if (thrift_with_retry(kGET_ROLE, context, context.privs_role_name.c_str())) {
-    if (context.role_names.size() == 0) {
-      std::cout << "Role or user " << context.privs_role_name << " does not exist." << std::endl;
-    } else {
-      context.db_objects.clear();
-      if (thrift_with_retry(kGET_OBJECTS_FOR_ROLE, context, context.privs_role_name.c_str())) {
-        for (size_t i = 0; i < context.db_objects.size(); i++) {
-          bool any_granted_privs = false;
-          for (size_t j = 0; j < context.db_objects[i].privs.size(); j++) {
-            if (context.db_objects[i].privs[j]) {
-              any_granted_privs = true;
-              break;
-            }
-          }
-          if (!any_granted_privs) {
-            continue;
-          }
-          std::cout << context.db_objects[i].objectName.c_str();
-          switch (context.db_objects[i].objectType) {
-            case (TDBObjectType::DatabaseDBObjectType): {
-              std::cout << " (database)";
-              break;
-            }
-            case (TDBObjectType::TableDBObjectType): {
-              std::cout << " (table)";
-              break;
-            }
-            default: { CHECK(false); }
-          }
-          std::cout << " privileges:";
-          for (size_t j = 0; j < context.db_objects[i].privs.size(); j++) {
-            if (context.db_objects[i].privs[j]) {
-              switch (j) {
-                case (0): {
-                  std::cout << " select";
-                  break;
-                }
-                case (1): {
-                  std::cout << " insert";
-                  break;
-                }
-                case (2): {
-                  std::cout << " create";
-                  break;
-                }
-                case (3): {
-                  std::cout << " truncate";
-                  break;
-                }
-                default: { CHECK(false); }
-              }
-            }
-          }
-          std::cout << std::endl;
+void get_db_objects_for_grantee(ClientContext& context) {
+  context.db_objects.clear();
+  if (thrift_with_retry(kGET_OBJECTS_FOR_GRANTEE, context, nullptr)) {
+    for (const auto& db_object : context.db_objects) {
+      bool any_granted_privs = false;
+      for (size_t j = 0; j < db_object.privs.size(); j++) {
+        if (db_object.privs[j]) {
+          any_granted_privs = true;
+          break;
         }
-      } else {
-        std::cout << "Cannot connect to MapD Server." << std::endl;
       }
+      if (!any_granted_privs) {
+        continue;
+      }
+      std::cout << db_object.objectName.c_str();
+      switch (db_object.objectType) {
+        case (TDBObjectType::DatabaseDBObjectType): {
+          std::cout << " (database):";
+          break;
+        }
+        case (TDBObjectType::TableDBObjectType): {
+          std::cout << " (table):";
+          break;
+        }
+        default: { CHECK(false); }
+      }
+      print_privs(db_object.privs);
+      std::cout << std::endl;
     }
-  } else {
-    std::cout << "Cannot connect to MapD Server." << std::endl;
   }
 }
 
 void get_db_object_privs(ClientContext& context) {
-  context.role_names.clear();
-  context.userPrivateRole = true;
-  if (thrift_with_retry(kGET_ALL_ROLES, context, nullptr)) {
-    for (size_t i = 0; i < context.role_names.size(); i++) {
-      context.db_objects.clear();
-      context.privs_role_name = context.role_names[i];
-      if (thrift_with_retry(kGET_OBJECTS_FOR_ROLE, context, context.privs_role_name.c_str())) {
-        bool print_role(true);
-        for (size_t i = 0; i < context.db_objects.size(); i++) {
-          if (boost::to_upper_copy<std::string>(context.privs_object_name)
-                  .compare(boost::to_upper_copy<std::string>(context.db_objects[i].objectName))) {
-            continue;
-          }
-          bool any_granted_privs = false;
-          for (size_t j = 0; j < context.db_objects[i].privs.size(); j++) {
-            if (context.db_objects[i].privs[j]) {
-              any_granted_privs = true;
-              break;
-            }
-          }
-          if (!any_granted_privs) {
-            continue;
-          }
-          if (print_role) {
-            std::cout << "Role/User: " << context.privs_role_name.c_str() << std::endl;
-            print_role = false;
-          }
-          std::cout << "           DB Object: " << context.db_objects[i].objectName.c_str();
-          switch (context.db_objects[i].objectType) {
-            case (TDBObjectType::DatabaseDBObjectType): {
-              std::cout << " (database)";
-              break;
-            }
-            case (TDBObjectType::TableDBObjectType): {
-              std::cout << " (table)   ";
-              break;
-            }
-            default: { CHECK(false); }
-          }
-          std::cout << " privileges:";
-          for (size_t j = 0; j < context.db_objects[i].privs.size(); j++) {
-            if (context.db_objects[i].privs[j]) {
-              switch (j) {
-                case (0): {
-                  std::cout << " select";
-                  break;
-                }
-                case (1): {
-                  std::cout << " insert";
-                  break;
-                }
-                case (2): {
-                  std::cout << " create";
-                  break;
-                }
-                case (3): {
-                  std::cout << " truncate";
-                  break;
-                }
-                default: { CHECK(false); }
-              }
-            }
-          }
-          std::cout << std::endl;
-        }
-      } else {
-        std::cout << "Cannot connect to MapD Server." << std::endl;
+  context.db_objects.clear();
+  if (thrift_with_retry(kGET_OBJECT_PRIVS, context, nullptr)) {
+    for (const auto& db_object : context.db_objects) {
+      if (boost::to_upper_copy<std::string>(context.privs_object_name)
+              .compare(boost::to_upper_copy<std::string>(db_object.objectName))) {
+        continue;
       }
+      bool any_granted_privs = false;
+      for (size_t j = 0; j < db_object.privs.size(); j++) {
+        if (db_object.privs[j]) {
+          any_granted_privs = true;
+          break;
+        }
+      }
+      if (!any_granted_privs) {
+        continue;
+      }
+      std::cout << db_object.grantee << " privileges:";
+      print_privs(db_object.privs);
+      std::cout << std::endl;
     }
-  } else {
-    std::cout << "Cannot connect to MapD Server." << std::endl;
   }
 }
 
@@ -1016,8 +932,6 @@ void get_license_claims(ClientContext& context) {
         std::cout << decode64(jwt[1]) << std::endl;
       }
     }
-  } else {
-    std::cout << "Cannot connect to MapD Server." << std::endl;
   }
 }
 
@@ -1271,35 +1185,25 @@ int main(int argc, char** argv) {
     } else if (!strncmp(line, "\\memory_cpu", 11)) {
       if (thrift_with_retry(kGET_MEMORY_CPU, context, nullptr)) {
         print_memory_info(context, "cpu");
-      } else {
-        std::cout << "Cannot connect to MapD Server." << std::endl;
       }
     } else if (!strncmp(line, "\\clear_gpu", 11)) {
       if (thrift_with_retry(kCLEAR_MEMORY_GPU, context, nullptr)) {
         std::cout << "MapD Server GPU memory Cleared " << std::endl;
-      } else {
-        std::cout << "Cannot connect to MapD Server." << std::endl;
       }
     } else if (!strncmp(line, "\\clear_cpu", 11)) {
       if (thrift_with_retry(kCLEAR_MEMORY_CPU, context, nullptr)) {
         std::cout << "MapD Server CPU memory Cleared " << std::endl;
-      } else {
-        std::cout << "Cannot connect to MapD Server." << std::endl;
       }
     } else if (!strncmp(line, "\\memory_summary", 11)) {
       if (thrift_with_retry(kGET_MEMORY_SUMMARY, context, nullptr)) {
         print_memory_summary(context, "cpu");
         print_memory_summary(context, "gpu");
-      } else {
-        std::cout << "Cannot connect to MapD Server." << std::endl;
       }
     } else if (!strncmp(line, "\\hardware_info", 13)) {
       if (context.cluster_hardware_info.hardware_info.size() > 0 ||
           thrift_with_retry(kGET_HARDWARE_INFO, context, nullptr)) {
         // TODO(vraj): try not to abuse using short circuit here
         print_all_hardware_info(context);
-      } else {
-        std::cout << "Cannot connect to MapD Server." << std::endl;
       }
     } else if (!strncmp(line, "\\status", 8)) {
       if (thrift_with_retry(kGET_SERVER_STATUS, context, nullptr)) {
@@ -1333,8 +1237,6 @@ int main(int argc, char** argv) {
                       << ":" << tm_ptr->tm_sec << std::endl;
           }
         }
-      } else {
-        std::cout << "Cannot connect to MapD Server." << std::endl;
       }
     } else if (!strncmp(line, "\\detect", 7)) {
       char* filepath = strtok(line + 8, " ");
@@ -1362,16 +1264,6 @@ int main(int argc, char** argv) {
       print_timing = true;
     } else if (!strncmp(line, "\\notiming", 9)) {
       print_timing = false;
-    } else if (!strncmp(line, "\\role_check", 11)) {
-      std::string temp_line(line);
-      boost::algorithm::trim(temp_line);
-      if (temp_line.size() > 11) {
-        context.privs_role_name.clear();
-        context.privs_role_name = strtok(line + 12, " ");
-        get_role(context);
-      } else {
-        std::cout << "Command role_check failed because parameter role name is missing." << std::endl;
-      }
     } else if (!strncmp(line, "\\privileges", 11)) {
       std::string temp_line(line);
       boost::algorithm::trim(temp_line);
@@ -1379,23 +1271,32 @@ int main(int argc, char** argv) {
         context.privs_role_name.clear();
         context.privs_role_name = strtok(line + 12, " ");
         if (!context.privs_role_name.compare(MAPD_ROOT_USER)) {
-          std::cout << "Command privileges failed because " << MAPD_ROOT_USER
+          std::cerr << "Command privileges failed because " << MAPD_ROOT_USER
                     << " root user has all privileges by default." << std::endl;
         } else {
-          get_db_objects_for_role(context);
+          get_db_objects_for_grantee(context);
         }
       } else {
-        std::cout << "Command privileges failed because parameter role name or user name is missing." << std::endl;
+        std::cerr << "Command privileges failed because parameter role name or user name is missing." << std::endl;
       }
     } else if (!strncmp(line, "\\object_privileges", 18)) {
-      std::string temp_line(line);
-      boost::algorithm::trim(temp_line);
-      if (temp_line.size() > 18) {
-        context.privs_object_name.clear();
-        context.privs_object_name = strtok(line + 19, " ");
+      std::string cmd(line);
+      boost::trim(cmd);
+      std::vector<std::string> args;
+      boost::split(args, cmd, boost::is_any_of("\t "), boost::token_compress_on);
+      if (args.size() == 3) {
+        context.privs_object_name = args[2];
+        if (args[1] == "database") {
+          context.object_type = TDBObjectType::DatabaseDBObjectType;
+        } else if (args[1] == "table") {
+          context.object_type = TDBObjectType::TableDBObjectType;
+        } else {
+          std::cerr << "Object type should be on in { database, table }" << std::endl;
+        }
         get_db_object_privs(context);
       } else {
-        std::cout << "Command object_privileges failed because parameter object name is missing." << std::endl;
+        std::cerr << "Command object_privileges failed. It requires two parameters: object type and object name."
+                  << std::endl;
       }
     } else if (line[0] == '\\' && line[1] == 'q') {
       break;

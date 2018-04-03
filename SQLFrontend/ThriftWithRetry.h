@@ -12,6 +12,7 @@ bool thrift_with_retry(SERVICE_ENUM which_service, CLIENT_CONTEXT& context, char
   int max_reconnect = 4;
   int con_timeout_base = 1;
   if (try_count > max_reconnect) {
+    std::cerr << "Cannot connect to MapD Server." << std::endl;
     return false;
   }
   try {
@@ -97,17 +98,15 @@ bool thrift_with_retry(SERVICE_ENUM which_service, CLIENT_CONTEXT& context, char
       case kEXPORT_DASHBOARD:
         context.client.get_frontend_view(context.view_return, context.session, context.view_name);
         break;
-      case kGET_ROLE:
-        context.client.get_role(context.role_names, context.session, context.privs_role_name, context.userPrivateRole);
+      case kGET_ROLES:
+        context.client.get_roles(context.role_names, context.session);
         break;
-      case kGET_ALL_ROLES:
-        context.client.get_all_roles(context.role_names, context.session, context.userPrivateRole);
-        break;
-      case kGET_OBJECTS_FOR_ROLE:
-        context.client.get_db_objects_for_role(context.db_objects, context.session, context.privs_role_name);
+      case kGET_OBJECTS_FOR_GRANTEE:
+        context.client.get_db_objects_for_grantee(context.db_objects, context.session, context.privs_role_name);
         break;
       case kGET_OBJECT_PRIVS:
-        context.client.get_db_object_privs(context.db_objects, context.session, context.privs_object_name);
+        context.client.get_db_object_privs(
+            context.db_objects, context.session, context.privs_object_name, context.object_type);
         break;
       case kGET_ROLES_FOR_USER:
         context.client.get_all_roles_for_user(context.role_names, context.session, context.privs_user_name);

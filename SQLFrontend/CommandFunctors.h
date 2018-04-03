@@ -36,14 +36,11 @@ class ContextOperations {
 
   static void get_all_roles(ContextType& context) {
     context.role_names.clear();
-    context.userPrivateRole = false;
-    thrift_op<kGET_ALL_ROLES>(context,
-                              [](ContextType& lambda_context) {
-                                for (auto role_name : lambda_context.role_names) {
-                                  std::cout << role_name << std::endl;
-                                }
-                              },
-                              [](ContextType&) { std::cout << "Cannot connect to MapD Server." << std::endl; });
+    thrift_op<kGET_ROLES>(context, [](ContextType& lambda_context) {
+      for (auto role_name : lambda_context.role_names) {
+        std::cout << role_name << std::endl;
+      }
+    });
   }
 
   static void get_status(ContextType& context, std::ostream& output_stream = std::cout) {
@@ -78,29 +75,20 @@ class ContextOperations {
         }
       }
     };
-
-    auto fail_op = [&output_stream](ContextType& lambda_context) {
-      output_stream << "Cannot connect to MapD Server." << std::endl;
-    };
-
-    thrift_op<kGET_SERVER_STATUS>(context, success_op, fail_op);
+    thrift_op<kGET_SERVER_STATUS>(context, success_op);
   }
 
   static void get_all_roles_for_user(ContextType& context) {
     context.role_names.clear();
-    thrift_op<kGET_ROLES_FOR_USER>(context,
-                                   context.privs_user_name.c_str(),
-                                   [](ContextType& lambda_context) {
-                                     if (lambda_context.role_names.size() == 0) {
-                                       std::cout << "No roles are granted to user "
-                                                 << lambda_context.privs_user_name.c_str() << std::endl;
-                                     } else {
-                                       for (auto role_name : lambda_context.role_names) {
-                                         std::cout << role_name << std::endl;
-                                       }
-                                     }
-                                   },
-                                   [](ContextType&) { std::cout << "Cannot connect to MapD Server." << std::endl; });
+    thrift_op<kGET_ROLES_FOR_USER>(context, context.privs_user_name.c_str(), [](ContextType& lambda_context) {
+      if (lambda_context.role_names.size() == 0) {
+        std::cout << "No roles are granted to user " << lambda_context.privs_user_name.c_str() << std::endl;
+      } else {
+        for (auto role_name : lambda_context.role_names) {
+          std::cout << role_name << std::endl;
+        }
+      }
+    });
   }
 };
 
@@ -236,12 +224,11 @@ StandardCommand(Help, {
   std::cout << "\\export_dashboard <dashboard name> <filename> Exports a dashboard to a file.\n";
   std::cout << "\\import_dashboard <dashboard name> <filename> Imports a dashboard from a file\n";
   std::cout << "\\roles Reports all roles.\n";
-  std::cout << "\\role_check <roleName> Verifies whether role exists.\n";
   std::cout << "\\role_list <userName> Reports all roles granted to user.\n";
   std::cout << "\\privileges {<roleName>|<userName>} Reports all database objects privileges granted to role or "
                "user.\n";
-  std::cout
-      << "\\object_privileges <object_name> Reports all privileges granted to an object for all roles and users.\n";
+  std::cout << "\\object_privileges {database|table} <object_name> Reports all privileges granted to an object for all "
+               "roles and users.\n";
   std::cout << "\\q Quit.\n";
   std::cout.flush();
 });
@@ -321,14 +308,13 @@ StandardCommand(ListColumns, {
       }
       std::string encoding;
       if (p.col_type.type == TDatumType::STR) {
-        encoding = (p.col_type.encoding == 0 ? " ENCODING NONE"
-                                             : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                   std::to_string(p.col_type.comp_param) + ")");
+        encoding =
+            (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                               std::to_string(p.col_type.comp_param) + ")");
 
       } else {
-        encoding = (p.col_type.encoding == 0 ? ""
-                                             : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                   std::to_string(p.col_type.comp_param) + ")");
+        encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                        std::to_string(p.col_type.comp_param) + ")");
       }
       output_stream << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
                     << (p.col_type.nullable ? "" : " NOT NULL") << encoding;

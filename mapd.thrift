@@ -393,6 +393,7 @@ struct TDBObject {
   1: string objectName
   2: TDBObjectType objectType
   3: list<bool> privs
+  4: string grantee
 }
 
 struct TLicenseInfo {
@@ -464,14 +465,10 @@ service MapD {
   TTableDescriptor get_table_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
   TRowDescriptor get_row_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
   # object privileges
-  list<string> get_role(1: TSessionId session 2: string roleName  3: bool userPrivateRole) throws (1: TMapDException e)
-  list<string> get_all_roles(1: TSessionId session 2: bool userPrivateRole) throws (1: TMapDException e)
-  list<TAccessPrivileges> get_db_object_privileges_for_role(1: TSessionId session 2: string roleName 3: i16 objectType 4: string objectName) throws (1: TMapDException e)
-  list<TDBObject> get_db_objects_for_role(1: TSessionId session 2: string roleName) throws (1: TMapDException e)
-  list<TDBObject> get_db_object_privs(1: TSessionId session 2: string objectName) throws (1: TMapDException e)
+  list<string> get_roles(1: TSessionId session) throws (1: TMapDException e)
+  list<TDBObject> get_db_objects_for_grantee(1: TSessionId session 2: string roleName) throws (1: TMapDException e)
+  list<TDBObject> get_db_object_privs(1: TSessionId session 2: string objectName 3: TDBObjectType type) throws (1: TMapDException e)
   list<string> get_all_roles_for_user(1: TSessionId session 2: string userName) throws (1: TMapDException e)
-  list<TAccessPrivileges> get_db_object_privileges_for_user(1: TSessionId session 2: string userName 3: i16 objectType 4: string objectName) throws (1: TMapDException e)
-  list<TDBObject> get_db_objects_for_user(1: TSessionId session 2: string userName) throws (1: TMapDException e)
   # licensing
   TLicenseInfo set_license_key(1: TSessionId session, 2: string key, 3: string nonce = "") throws (1: TMapDException e)
   TLicenseInfo get_license_claims(1: TSessionId session, 2: string nonce = "") throws (1: TMapDException e)

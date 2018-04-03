@@ -275,27 +275,17 @@ class MapDHandler : public MapDIf {
   void get_table_descriptor(TTableDescriptor& _return, const TSessionId& session, const std::string& table_name);
   void get_row_descriptor(TRowDescriptor& _return, const TSessionId& session, const std::string& table_name);
   // DB Object Privileges
-  void get_role(std::vector<std::string>& _return,
-                const TSessionId& session,
-                const std::string& roleName,
-                bool userPrivateRole);
-  void get_all_roles(std::vector<std::string>& _return, const TSessionId& session, bool userPrivateRole);
-  void get_db_object_privileges_for_role(std::vector<TAccessPrivileges>& _return,
-                                         const TSessionId& session,
-                                         const std::string& roleName,
-                                         const int16_t objectType,
-                                         const std::string& objectName);
-  void get_db_objects_for_role(std::vector<TDBObject>& _return, const TSessionId& session, const std::string& roleName);
-  void get_db_object_privs(std::vector<TDBObject>& _return, const TSessionId& session, const std::string& objectName);
+  void get_roles(std::vector<std::string>& _return, const TSessionId& session);
+  void get_db_objects_for_grantee(std::vector<TDBObject>& _return,
+                                  const TSessionId& session,
+                                  const std::string& roleName);
+  void get_db_object_privs(std::vector<TDBObject>& _return,
+                           const TSessionId& session,
+                           const std::string& objectName,
+                           const TDBObjectType::type type);
   void get_all_roles_for_user(std::vector<std::string>& _return,
                               const TSessionId& session,
                               const std::string& userName);
-  void get_db_object_privileges_for_user(std::vector<TAccessPrivileges>& _return,
-                                         const TSessionId& session,
-                                         const std::string& userName,
-                                         const int16_t objectType,
-                                         const std::string& objectName);
-  void get_db_objects_for_user(std::vector<TDBObject>& _return, const TSessionId& session, const std::string& userName);
   // licensing
   void set_license_key(TLicenseInfo& _return,
                        const TSessionId& session,

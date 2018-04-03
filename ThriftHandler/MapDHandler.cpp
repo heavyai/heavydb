@@ -900,77 +900,89 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
   }
 }
 
-void MapDHandler::get_role(std::vector<std::string>& roles,
-                           const TSessionId& session,
-                           const std::string& roleName,
-                           bool userPrivateRole) {
-  auto session_it = get_session_it(session);
-  auto session_info_ptr = session_it->second.get();
-  if (SysCatalog::instance().hasRole(roleName, userPrivateRole)) {
-    if ((session_info_ptr->get_currentUser().isSuper) ||
-        (!session_info_ptr->get_currentUser().isSuper &&
-         SysCatalog::instance().isRoleGrantedToUser(session_info_ptr->get_currentUser().userId, roleName))) {
-      roles.push_back(roleName);
-    }
-  }
-  return;
-}
-
-void MapDHandler::get_all_roles(std::vector<std::string>& roles, const TSessionId& session, bool userPrivateRole) {
+void MapDHandler::get_roles(std::vector<std::string>& roles, const TSessionId& session) {
   auto session_it = get_session_it(session);
   auto session_info_ptr = session_it->second.get();
   roles = SysCatalog::instance().getRoles(
-      userPrivateRole, session_info_ptr->get_currentUser().isSuper, session_info_ptr->get_currentUser().userId);
+      false, session_info_ptr->get_currentUser().isSuper, session_info_ptr->get_currentUser().userId);
 }
 
-void MapDHandler::get_db_object_privileges_for_role(std::vector<TAccessPrivileges>& TDBObjectPrivsForRole,
-                                                    const TSessionId& session,
-                                                    const std::string& roleName,
-                                                    const int16_t objectType,
-                                                    const std::string& objectName) {
-  TAccessPrivileges tprivObject;
-  TDBObjectPrivsForRole.push_back(tprivObject);
+static TDBObject serialize_db_object(const std::string& roleName, const DBObject& inObject) {
+  TDBObject outObject;
+  outObject.objectName = inObject.getName();
+  outObject.grantee = roleName;
+  switch (inObject.getType()) {
+    case (DatabaseDBObjectType): {
+      outObject.objectType = TDBObjectType::DatabaseDBObjectType;
+      break;
+    }
+    case (TableDBObjectType): {
+      outObject.objectType = TDBObjectType::TableDBObjectType;
+      break;
+    }
+    default: { CHECK(false); }
+  }
+  auto privs = inObject.getPrivileges();
+  outObject.privs = {privs.select, privs.insert, privs.create, privs.truncate};
+  return outObject;
 }
 
-void MapDHandler::get_db_objects_for_role(std::vector<TDBObject>& TDBObjectsForRole,
-                                          const TSessionId& session,
-                                          const std::string& roleName) {
+void MapDHandler::get_db_objects_for_grantee(std::vector<TDBObject>& TDBObjectsForRole,
+                                             const TSessionId& session,
+                                             const std::string& roleName) {
+  auto session_it = get_session_it(session);
+  auto session_info_ptr = session_it->second.get();
+  auto user = session_info_ptr->get_currentUser();
+  if (!user.isSuper && !SysCatalog::instance().isRoleGrantedToUser(user.userId, roleName)) {
+    return;
+  }
   Role* rl = SysCatalog::instance().getMetadataForRole(roleName);
   if (rl) {
-    auto session_it = get_session_it(session);
-    auto session_info_ptr = session_it->second.get();
     auto dbId = session_info_ptr->get_catalog().get_currentDB().dbId;
     for (auto dbObjectIt = rl->getDbObject()->begin(); dbObjectIt != rl->getDbObject()->end(); ++dbObjectIt) {
       if (dbObjectIt->first.dbId != dbId) {
         // TODO (max): it doesn't scale well in case we have many DBs (not a typical usecase for now, though)
         continue;
       }
-      TDBObject tdbObject;
-      tdbObject.objectName = dbObjectIt->second->getName();
-      switch (dbObjectIt->second->getType()) {
-        case (DatabaseDBObjectType): {
-          tdbObject.objectType = TDBObjectType::DatabaseDBObjectType;
-          break;
-        }
-        case (TableDBObjectType): {
-          tdbObject.objectType = TDBObjectType::TableDBObjectType;
-          break;
-        }
-        default: { CHECK(false); }
-      }
-      auto privs = dbObjectIt->second->getPrivileges();
-      tdbObject.privs = {privs.select, privs.insert, privs.create, privs.truncate};
+      TDBObject tdbObject = serialize_db_object(roleName, *dbObjectIt->second);
       TDBObjectsForRole.push_back(tdbObject);
     }
   } else {
-    std::cout << "Role " << roleName << " does not exist." << std::endl;
+    THROW_MAPD_EXCEPTION("User or role " + roleName + " does not exist.");
   }
 }
 
 void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
                                       const TSessionId& session,
-                                      const std::string& objectName) {
-  throw std::runtime_error("MapDHandler::get_db_object_privs(..) api should not be used.");
+                                      const std::string& objectName,
+                                      const TDBObjectType::type type) {
+  auto session_it = get_session_it(session);
+  auto session_info_ptr = session_it->second.get();
+  DBObjectType object_type;
+  switch (type) {
+    case TDBObjectType::DatabaseDBObjectType:
+      object_type = DBObjectType::DatabaseDBObjectType;
+      break;
+    case TDBObjectType::TableDBObjectType:
+      object_type = DBObjectType::TableDBObjectType;
+      break;
+    default: { CHECK(false); }
+  }
+  DBObject object_to_find(objectName, object_type);
+  try {
+    object_to_find.loadKey(session_info_ptr->get_catalog());
+  } catch (const std::exception&) {
+    THROW_MAPD_EXCEPTION("Object with name " + objectName + " does not exist.");
+  }
+  std::vector<std::string> roles = SysCatalog::instance().getRoles(
+      true, session_info_ptr->get_currentUser().isSuper, session_info_ptr->get_currentUser().userId);
+  for (const auto& role : roles) {
+    DBObject* object_found;
+    Role* rl = SysCatalog::instance().getMetadataForRole(role);
+    if (rl && (object_found = rl->findDbObject(object_to_find.getObjectKey()))) {
+      TDBObjects.push_back(serialize_db_object(role, *object_found));
+    }
+  }
 }
 
 void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
@@ -987,10 +999,7 @@ void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
       if (session_info_ptr->get_currentUser().userId == user_meta.userId) {
         get_roles = true;
       } else {
-        TMapDException ex;
-        ex.error_msg = "Only superuser is authorized to request list of roles granted to another user.";
-        LOG(ERROR) << ex.error_msg;
-        throw ex;
+        THROW_MAPD_EXCEPTION("Only superuser is authorized to request list of roles granted to another user.");
       }
     }
     if (get_roles) {
@@ -1002,22 +1011,6 @@ void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
-}
-
-void MapDHandler::get_db_object_privileges_for_user(std::vector<TAccessPrivileges>& TDBObjectPrivsForUser,
-                                                    const TSessionId& session,
-                                                    const std::string& userName,
-                                                    const int16_t objectType,
-                                                    const std::string& objectName) {
-  TAccessPrivileges tprivObject;
-  TDBObjectPrivsForUser.push_back(tprivObject);
-}
-
-void MapDHandler::get_db_objects_for_user(std::vector<TDBObject>& TDBObjectsForUser,
-                                          const TSessionId& session,
-                                          const std::string& userName) {
-  TDBObject tdbObject;
-  TDBObjectsForUser.push_back(tdbObject);
 }
 
 std::string dump_table_col_names(const std::map<std::string, std::vector<std::string>>& table_col_names) {
