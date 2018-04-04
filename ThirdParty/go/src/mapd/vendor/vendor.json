@@ -8,6 +8,11 @@
 			"revisionTime": "2016-01-02T09:47:48-05:00"
 		},
 		{
+			"path": "github.com/Jeffail/gabs",
+			"revision": "9cef256b595a9e616eb6aec1da446529b7705613",
+			"revisionTime": "2017-06-07T19:55:31Z"
+		},
+		{
 			"path": "github.com/Sirupsen/logrus",
 			"revision": "f7f79f729e0fbe2fcc061db48a9ba0263f588252",
 			"revisionTime": "2016-01-18T19:00:32-05:00"

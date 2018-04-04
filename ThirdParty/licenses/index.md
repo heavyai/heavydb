@@ -41,6 +41,7 @@ gorilla/handlers | [BSD](<https://github.com/gorilla/handlers/blob/master/LICENS
 gorilla/securecookie | [BSD](<https://github.com/gorilla/securecookie/blob/master/LICENSE>) | HTTP session handlers |
 gorilla/sessions | [BSD](<https://github.com/gorilla/sessions/blob/master/LICENSE>) | HTTP session handlers |
 pelletier/go-toml | [MIT](<https://github.com/pelletier/go-toml/blob/master/LICENSE>) | Config file parser |
+Jeffail/gabs | [MIT](<https://github.com/Jeffail/gabs/blob/master/LICENSE>) | JSON Parsing |
 rs/cors | [MIT](<https://github.com/rs/cors/blob/master/LICENSE>) | CORS handler |
 Sirupsen/logrus | [MIT](<https://github.com/Sirupsen/logrus/blob/master/LICENSE>) | Go logging |
 spf13/afero | [BSD](<https://github.com/spf13/afero/blob/master/LICENSE.txt>) | CLI flags handler |
