@@ -1120,7 +1120,7 @@ void Catalog::updateDeletedColumnIndicator() {
       sqliteConnector_.query(queryString);
       // need to add new column to table defintion to indicate deleted column, column used as bitmap
       // for deleted rows.
-      sqliteConnector_.query("ALTER TABLE mapd_columns  ADD is_deletedcol boolean default false ");
+      sqliteConnector_.query("ALTER TABLE mapd_columns  ADD is_deletedcol boolean default 0 ");
     }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
