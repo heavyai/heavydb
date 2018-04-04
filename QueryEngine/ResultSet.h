@@ -360,6 +360,8 @@ class ResultSet {
                            const size_t device_id,
                            const std::vector<std::string>& col_names) const;
 
+  size_t getLimit();
+
  private:
   std::vector<TargetValue> getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const;
 

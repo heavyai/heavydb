@@ -1116,7 +1116,7 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
       const auto& input_table = get_temporary_table(&temporary_tables_, -input_ra->getId());
       const auto input_rows = boost::get<RowSetPtr>(&input_table);
       CHECK(input_rows && *input_rows);
-      work_unit.exe_unit.scan_limit = (*input_rows)->rowCount();
+      work_unit.exe_unit.scan_limit = std::min((*input_rows)->getLimit(), (*input_rows)->rowCount());
     }
   }
   return executeWorkUnit(work_unit, project->getOutputMetainfo(), false, co_project, eo, render_info, queue_time_ms);

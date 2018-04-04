@@ -23,15 +23,15 @@
  */
 
 #include "ResultSet.h"
+#include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Execute.h"
 #include "InPlaceSort.h"
 #include "OutputBufferInitialization.h"
 #include "RuntimeFunctions.h"
-#include "SqlTypesLayout.h"
-#include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"
+#include "SqlTypesLayout.h"
 
 #include <algorithm>
 #include <bitset>
@@ -804,4 +804,8 @@ int64_t ResultSetStorage::mappedPtr(const int64_t remote_ptr) const {
     return int64_t(0);
   }
   return it->second;
+}
+
+size_t ResultSet::getLimit() {
+  return keep_first_;
 }

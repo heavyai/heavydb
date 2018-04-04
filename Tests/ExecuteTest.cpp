@@ -659,6 +659,9 @@ TEST(Select, LimitAndOffset) {
       const auto rows = run_multiple_agg("SELECT * FROM test WHERE x <> 8 LIMIT 3 OFFSET 1;", dt);
       ASSERT_EQ(size_t(3), rows->rowCount());
     }
+    c("SELECT str FROM (SELECT str, SUM(y) as total_y FROM test GROUP BY str ORDER BY total_y DESC, "
+      "str LIMIT 1);",
+      dt);
     EXPECT_THROW(run_multiple_agg("SELECT * FROM test LIMIT 0;", dt), std::runtime_error);
   }
 }
