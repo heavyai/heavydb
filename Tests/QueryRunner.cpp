@@ -131,7 +131,7 @@ std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
                                             const bool hoist_literals,
                                             const bool allow_loop_joins) {
   ParserWrapper pw{query_str};
-  if (!(pw.is_other_explain || pw.is_ddl || pw.is_update_dml)) {
+  if( is_calcite_path_permissable( pw ) ) {
     const auto execution_result = run_select_query(query_str, session, device_type, hoist_literals, allow_loop_joins);
     return execution_result.getRows();
   }

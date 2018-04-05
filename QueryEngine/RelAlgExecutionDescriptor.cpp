@@ -97,7 +97,8 @@ DAG build_dag(const RelAlgNode* sink) {
     }
 
     const auto input_num = node->inputCount();
-    CHECK(input_num == 1 || (dynamic_cast<const RelModify*>(node) && input_num == 1) ||
+    CHECK(input_num == 1 || (dynamic_cast<const RelLogicalValues*>(node) && input_num == 0) ||
+	  (dynamic_cast<const RelModify*>(node) && input_num == 1) ||
           (input_num == 2 && (dynamic_cast<const RelJoin*>(node) || dynamic_cast<const RelLeftDeepInnerJoin*>(node))) ||
           (input_num > 2 &&
            (dynamic_cast<const RelMultiJoin*>(node) || dynamic_cast<const RelLeftDeepInnerJoin*>(node))));

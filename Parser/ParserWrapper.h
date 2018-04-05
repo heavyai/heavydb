@@ -28,6 +28,8 @@
 #include <vector>
 #include <boost/regex.hpp>
 
+#include "Shared/ConfigResolve.h"
+
 class ParserWrapper {
  public:
   // HACK:  This needs to go away as calcite takes over parsing
@@ -59,5 +61,16 @@ class ParserWrapper {
   static const std::string explain_str;
   static const std::string calcite_explain_str;
 };
+
+template <typename PARSER_WRAPPER, typename SELECTOR = CalciteDeletePathSelector>
+bool is_calcite_permissable_dml(PARSER_WRAPPER const& pw) {
+  if (std::is_same<SELECTOR, PreprocessorFalse>::value)
+    return !pw.is_update_dml;
+  return (!pw.is_update_dml || (pw.getDMLType() == ParserWrapper::DMLType::Delete));
+}
+
+inline bool is_calcite_path_permissable(ParserWrapper const& pw) {
+  return (!pw.is_ddl && is_calcite_permissable_dml(pw) && !pw.is_other_explain);
+}
 
 #endif  // PARSERWRAPPER_H_

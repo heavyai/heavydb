@@ -20,6 +20,7 @@
 #include "../Parser/parser.h"
 #include "../QueryEngine/ArrowResultSet.h"
 #include "../SqliteConnector/SqliteConnector.h"
+#include "../Shared/ConfigResolve.h"
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
@@ -55,7 +56,8 @@ std::string build_create_table_statement(const std::string& columns_definition,
                                          const std::string& table_name,
                                          const ShardInfo& shard_info,
                                          const std::vector<SharedDictionaryInfo>& shared_dict_info,
-                                         const size_t fragment_size) {
+                                         const size_t fragment_size,
+                                         const bool delete_support = true) {
   const std::string shard_key_def{shard_info.shard_col.empty() ? "" : ", SHARD KEY (" + shard_info.shard_col + ")"};
 
   std::vector<std::string> shared_dict_def;
@@ -65,14 +67,25 @@ std::string build_create_table_statement(const std::string& columns_definition,
                                 shared_dict_info[idx].ref_table + "(" + shared_dict_info[idx].ref_col + ")");
     }
   }
-  const std::string fragment_size_def{shard_info.shard_col.empty() ? "fragment_size=" + std::to_string(fragment_size)
-                                                                   : ""};
 
-  const std::string shard_count_def{
-      shard_info.shard_col.empty() ? "" : "shard_count=" + std::to_string(shard_info.shard_count)};
+  std::ostringstream with_statement_assembly;
+  if (shard_info.shard_col.empty()) {
+    with_statement_assembly << "fragment_size=" << fragment_size;
+  } else {
+    with_statement_assembly << "shard_count=" << shard_info.shard_count;
+  }
+
+  if (delete_support) {
+    with_statement_assembly << ", vacuum='delayed'";
+  }
+
+  // const std::string fragment_size_def{shard_info.shard_col.empty() ? "fragment_size=" + std::to_string(fragment_size)
+  //                                                                 : ""};
+  // const std::string shard_count_def{shard_info.shard_col.empty() ? "" : "shard_count=" +
+  //                                                                          std::to_string(shard_info.shard_count)};
 
   return "CREATE TABLE " + table_name + "(" + columns_definition + shard_key_def +
-         boost::algorithm::join(shared_dict_def, "") + ") WITH (" + fragment_size_def + shard_count_def + ");";
+         boost::algorithm::join(shared_dict_def, "") + ") WITH (" + with_statement_assembly.str() + ");";
 }
 
 std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
@@ -2777,7 +2790,7 @@ void import_text_group_by_test() {
   run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
 }
 
-void import_join_test() {
+void import_join_test(bool with_delete_support) {
   const std::string drop_old_test{"DROP TABLE IF EXISTS join_test;"};
   run_ddl_statement(drop_old_test);
   g_sqlite_comparator.query(drop_old_test);
@@ -2791,7 +2804,8 @@ void import_join_test() {
 #else
                                                         3
 #endif
-                                                        );
+                                                        ,
+                                                        with_delete_support);
   run_ddl_statement(create_test);
   g_sqlite_comparator.query("CREATE TABLE join_test(x int not null, y int, str text, dup_str text);");
   {
@@ -3414,6 +3428,9 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
 }
 
 TEST(Select, Joins_InnerJoin_AtLeastThreeTables) {
+  auto save_watchdog = g_enable_watchdog;
+  g_enable_watchdog = false;
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 #ifdef ENABLE_JOIN_EXEC
@@ -3459,6 +3476,8 @@ TEST(Select, Joins_InnerJoin_AtLeastThreeTables) {
       dt);
 #endif
   }
+
+  g_enable_watchdog = save_watchdog;
 }
 
 TEST(Select, Joins_InnerJoin_Filters) {
@@ -3491,6 +3510,9 @@ TEST(Select, Joins_InnerJoin_Filters) {
 }
 
 TEST(Select, Joins_LeftOuterJoin) {
+  auto save_watchdog = g_enable_watchdog;
+  g_enable_watchdog = false;
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x ORDER BY test.x ASC;",
@@ -3581,6 +3603,7 @@ TEST(Select, Joins_LeftOuterJoin) {
       dt);
     c("SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test.str = test_inner.str AND test.x = test_inner.x;", dt);
   }
+  g_enable_watchdog = save_watchdog;
 }
 
 TEST(Select, Joins_LeftJoin_Filters) {
@@ -3962,9 +3985,547 @@ TEST(Truncate, Count) {
   run_ddl_statement("drop table trunc_test;");
 }
 
+TEST(Delete, IntraFragment) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table vacuum_test (i1 integer, t1 text) with (vacuum='delayed');");
+    run_multiple_agg("insert into vacuum_test values(1, '1');", dt);
+    run_multiple_agg("insert into vacuum_test values(2, '2');", dt);
+    run_multiple_agg("insert into vacuum_test values(3, '3');", dt);
+    run_multiple_agg("insert into vacuum_test values(4, '4');", dt);
+    run_multiple_agg("delete from vacuum_test where i1 <= 4;", dt);
+
+    ASSERT_EQ(int64_t(0), v<int64_t>(run_simple_agg("SELECT COUNT(i1) FROM vacuum_test;", dt)));
+
+    run_ddl_statement("drop table vacuum_test;");
+  }
+}
+
+#if 0
+// FIX-ME:  Test failing on some systems with calcite exceptions, needs rewriting
+TEST(Delete, Joins_EmptyTable) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    c("SELECT vacuum_test_alt.x, emptytab.x FROM vacuum_test_alt, emptytab WHERE vacuum_test_alt.x = emptytab.x;", dt);
+    c("SELECT COUNT(*) FROM vacuum_test_alt, emptytab GROUP BY vacuum_test_alt.x;", dt);
+    c("SELECT COUNT(*) FROM vacuum_test_alt, emptytab, test_inner where vacuum_test_alt.x = emptytab.x;", dt);
+    c("SELECT vacuum_test_alt.x, emptytab.x FROM vacuum_test_alt LEFT JOIN emptytab ON vacuum_test_alt.y = emptytab.y "
+      "ORDER BY "
+      "vacuum_test_alt.x ASC;",
+      dt);
+
+    run_ddl_statement("drop table vacuum_test_alt;");
+  }
+}
+#endif
+
+TEST(Delete, Joins_InnerJoin_TwoTables) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    c("SELECT COUNT(*) FROM test a JOIN single_row_test b ON a.x = b.x;", dt);
+    c("SELECT COUNT(*) from test a JOIN single_row_test b ON a.ofd = b.x;", dt);
+    c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x;", dt);
+    c("SELECT a.y, z FROM test a JOIN test_inner b ON a.x = b.x order by a.y;", dt);
+    c("SELECT COUNT(*) FROM test a JOIN join_test b ON a.str = b.dup_str;", dt);
+    c("SELECT COUNT(*) FROM test_inner_x a JOIN test_x b ON a.x = b.x;", dt);
+    c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str ORDER BY a.x;", dt);
+    c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x ORDER BY a.x;", dt);
+    c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str GROUP BY a.x ORDER BY a.x;", dt);
+    c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x GROUP BY a.x ORDER BY a.x;", dt);
+    c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x AND test.rowid = test_inner.rowid;", dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.y = test_inner.y OR (test.y IS NULL AND test_inner.y IS NULL);",
+      dt);
+    c("SELECT COUNT(*) FROM test, join_test WHERE (test.str = join_test.dup_str OR (test.str IS NULL AND "
+      "join_test.dup_str IS NULL));",
+      dt);
+    c("SELECT t1.fixed_null_str FROM (SELECT fixed_null_str, SUM(x) n1 FROM test GROUP BY fixed_null_str) t1 INNER "
+      "JOIN (SELECT fixed_null_str, SUM(y) n2 FROM test GROUP BY fixed_null_str) t2 ON ((t1.fixed_null_str = "
+      "t2.fixed_null_str) OR (t1.fixed_null_str IS NULL AND t2.fixed_null_str IS NULL));",
+      dt);
+  }
+}
+
+TEST(Delete, Joins_InnerJoin_AtLeastThreeTables) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  auto save_watchdog = g_enable_watchdog;
+  g_enable_watchdog = false;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+#ifdef ENABLE_JOIN_EXEC
+    c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str;", dt);
+    c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str JOIN "
+      "join_test AS d ON c.x = d.x;",
+      dt);
+    c("SELECT a.y, count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str "
+      "GROUP BY a.y;",
+      dt);
+    c("SELECT a.x AS x, a.y, b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
+      "c.str "
+      "ORDER BY a.y;",
+      dt);
+    c("SELECT a.x, b.x, b.str, c.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.x = c.x "
+      "ORDER BY b.str;",
+      dt);
+    c("SELECT a.x, b.x, c.x FROM test a JOIN test_inner b ON a.x = b.x JOIN join_test c ON b.x = c.x;", dt);
+    c("SELECT count(*) FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str;",
+      dt);
+    c("SELECT count(*) FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str JOIN "
+      "hash_join_test AS d ON c.x = d.x;",
+      dt);
+    c("SELECT count(*) FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str JOIN "
+      "join_test AS d ON c.x = d.x;",
+      dt);
+    c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str JOIN "
+      "hash_join_test AS d ON c.x = d.x;",
+      dt);
+    c("SELECT a.x AS x, a.y, b.str FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str "
+      "= c.str "
+      "ORDER BY a.y;",
+      dt);
+    c("SELECT a.x, b.x, c.x FROM test a JOIN test_inner b ON a.x = b.x JOIN hash_join_test c ON b.x = c.x;", dt);
+    c("SELECT a.x, b.x FROM test_inner a JOIN test_inner b ON a.x = b.x ORDER BY a.x;", dt);
+    c("SELECT a.x, b.x FROM join_test a JOIN join_test b ON a.x = b.x ORDER BY a.x;", dt);
+    c("SELECT COUNT(1) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON a.t = c.x;", dt);
+    c("SELECT COUNT(*) FROM test a JOIN test_inner b ON a.str = b.str JOIN hash_join_test c ON a.x = c.x JOIN "
+      "join_test d ON a.x > d.x;",
+      dt);
+    c("SELECT a.x, b.str, c.str, d.y FROM hash_join_test a JOIN test b ON a.x = b.x JOIN join_test c ON b.x = c.x JOIN "
+      "test_inner d ON b.x = d.x ORDER BY a.x, b.str;",
+      dt);
+#endif
+  }
+
+  g_enable_watchdog = save_watchdog;
+}
+
+TEST(Delete, Joins_InnerJoin_Filters) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str WHERE a.y "
+      "< 43;",
+      dt);
+    c("SELECT SUM(a.x), b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str "
+      "WHERE a.y "
+      "= 43 group by b.str;",
+      dt);
+    c("SELECT COUNT(*) FROM test JOIN test_inner ON test.str = test_inner.str AND test.x = 7;", dt);
+    c("SELECT test.x, test_inner.str FROM test JOIN test_inner ON test.str = test_inner.str AND test.x <> 7;", dt);
+    c("SELECT count(*) FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str "
+      "WHERE a.y "
+      "< 43;",
+      dt);
+    c("SELECT SUM(a.x), b.str FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
+      "c.str "
+      "WHERE a.y "
+      "= 43 group by b.str;",
+      dt);
+    c("SELECT COUNT(*) FROM test a JOIN join_test b ON a.x = b.x JOIN test_inner c ON c.str = a.str WHERE c.str = "
+      "'foo';",
+      dt);
+    c("SELECT COUNT(*) FROM test t1 JOIN test t2 ON t1.x = t2.x WHERE t1.y > t2.y;", dt);
+    c("SELECT COUNT(*) FROM test t1 JOIN test t2 ON t1.x = t2.x WHERE t1.null_str = t2.null_str;", dt);
+  }
+}
+
+TEST(Delete, Joins_LeftOuterJoin) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  auto save_watchdog = g_enable_watchdog;
+  g_enable_watchdog = false;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x ORDER BY test.x ASC;",
+      dt);
+    c("SELECT test.x key1, CASE WHEN test_inner.x IS NULL THEN 99 ELSE test_inner.x END key2 FROM test LEFT OUTER JOIN "
+      "test_inner ON test.x = test_inner.x GROUP BY key1, key2 ORDER BY key1;",
+      dt);
+    c("SELECT test_inner.x key1 FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x GROUP BY key1 HAVING "
+      "key1 IS NOT NULL;",
+      dt);
+    c("SELECT COUNT(*) FROM test_inner a LEFT JOIN test b ON a.x = b.x;", dt);
+    c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x ORDER BY a.x, b.str;", dt);
+    c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x ORDER BY a.x, b.str;", dt);
+    c("SELECT COUNT(*) FROM test_inner a LEFT OUTER JOIN test_x b ON a.x = b.x;", dt);
+    c("SELECT COUNT(*) FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str;", dt);
+    c("SELECT COUNT(*) FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str;", dt);
+    c("SELECT a.x, b.str FROM test_inner a LEFT OUTER JOIN test_x b ON a.x = b.x ORDER BY a.x, b.str IS NULL, b.str;",
+      dt);
+    c("SELECT a.x, b.str FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str ORDER BY a.x, b.str IS NULL, "
+      "b.str;",
+      dt);
+    c("SELECT a.x, b.str FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str ORDER BY a.x, b.str IS NULL, "
+      "b.str;",
+      dt);
+    c("SELECT COUNT(*) FROM test_inner_x a LEFT JOIN test_x b ON a.x = b.x;", dt);
+    c("SELECT COUNT(*) FROM test a LEFT JOIN join_test b ON a.str = b.dup_str;", dt);
+    c("SELECT COUNT(*) FROM test a LEFT JOIN join_test b ON a.str = b.dup_str;", dt);
+    c("SELECT a.x, b.str FROM test_inner_x a LEFT JOIN test_x b ON a.x = b.x ORDER BY a.x, b.str IS NULL, b.str;", dt);
+    c("SELECT a.x, b.str FROM test a LEFT JOIN join_test b ON a.str = b.dup_str ORDER BY a.x, b.str IS NULL, b.str;",
+      dt);
+    c("SELECT a.x, b.str FROM test a LEFT JOIN join_test b ON a.str = b.dup_str ORDER BY a.x, b.str IS NULL, b.str;",
+      dt);
+    c("SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test_inner.x = test.x WHERE test_inner.str = test.str;", dt);
+    c("SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test_inner.x < test.x WHERE test_inner.str = test.str;", dt);
+    c("SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test_inner.x > test.x WHERE test_inner.str = test.str;", dt);
+    c("SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test_inner.x >= test.x WHERE test_inner.str = test.str;", dt);
+    c("SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test_inner.x <= test.x WHERE test_inner.str = test.str;", dt);
+    c("SELECT test_inner.y, COUNT(*) n FROM test LEFT JOIN test_inner ON test_inner.x = test.x WHERE test_inner.str = "
+      "'foo' GROUP BY test_inner.y ORDER BY n DESC;",
+      dt);
+    c("SELECT a.x, COUNT(b.y) FROM test a LEFT JOIN test_inner b ON b.x = a.x AND b.str NOT LIKE 'box' GROUP BY a.x "
+      "ORDER BY a.x;",
+      dt);
+    c("SELECT a.x FROM test a LEFT OUTER JOIN test_inner b ON TRUE ORDER BY a.x ASC;",
+      "SELECT a.x FROM test a LEFT OUTER JOIN test_inner b ON 1 ORDER BY a.x ASC;",
+      dt);
+    c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON test.x > test_inner.x LEFT "
+      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
+      "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON test.x > test_inner.x LEFT "
+      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC, hash_join_test.x ASC;",
+      dt);
+    c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON test.x = test_inner.x LEFT "
+      "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
+      "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON test.x = test_inner.x LEFT "
+      "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC, hash_join_test.x ASC;",
+      dt);
+    c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON test.x > test_inner.x INNER "
+      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
+      "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON test.x > test_inner.x INNER "
+      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC, hash_join_test.x ASC;",
+      dt);
+    c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON test.x = test_inner.x INNER "
+      "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
+      "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON test.x = test_inner.x INNER "
+      "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC, hash_join_test.x ASC;",
+      dt);
+    c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test INNER JOIN test_inner ON test.x > test_inner.x LEFT "
+      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
+      "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test INNER JOIN test_inner ON test.x > test_inner.x LEFT "
+      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC, hash_join_test.x ASC;",
+      dt);
+    c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test INNER JOIN test_inner ON test.x = test_inner.x LEFT "
+      "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
+      "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test INNER JOIN test_inner ON test.x = test_inner.x LEFT "
+      "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, hash_join_test.x ORDER BY "
+      "test_inner.y ASC, hash_join_test.x ASC;",
+      dt);
+    c("SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test.str = test_inner.str AND test.x = test_inner.x;", dt);
+  }
+
+  g_enable_watchdog = save_watchdog;
+}
+
+TEST(Delete, Joins_LeftJoin_Filters) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE test.y > 40 "
+      "ORDER BY test.x ASC;",
+      dt);
+    c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE test.y > 42 "
+      "ORDER BY test.x ASC;",
+      dt);
+    c("SELECT test.str AS foobar, test_inner.str FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE "
+      "test.y > 42 ORDER BY foobar DESC LIMIT 8;",
+      dt);
+    c("SELECT test.x AS foobar, test_inner.x AS inner_foobar, test.f AS f_foobar FROM test LEFT OUTER JOIN test_inner "
+      "ON test.str = test_inner.str WHERE test.y > 40 ORDER BY foobar DESC, f_foobar DESC;",
+      dt);
+    c("SELECT test.str AS foobar, test_inner.str FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE "
+      "test_inner.str IS NOT NULL ORDER BY foobar DESC;",
+      dt);
+    c("SELECT COUNT(*) FROM test_inner a LEFT JOIN (SELECT * FROM test WHERE y > 40) b ON a.x = b.x;", dt);
+    c("SELECT a.x, b.str FROM join_test a LEFT JOIN (SELECT * FROM test WHERE y > 40) b ON a.x = b.x ORDER BY a.x, "
+      "b.str;",
+      dt);
+    c("SELECT COUNT(*) FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7;", dt);
+    c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7 ORDER BY a.x, b.str;", dt);
+    c("SELECT COUNT(*) FROM join_test a LEFT JOIN test b ON a.x = b.x WHERE a.x = 7;", dt);
+    c("SELECT a.x FROM join_test a LEFT JOIN test b ON a.x = b.x WHERE a.x = 7;", dt);
+  }
+}
+
+TEST(Delete, Joins_MultiCompositeColumns) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT a.x, b.str FROM test AS a JOIN join_test AS b ON a.str = b.str AND a.x = b.x ORDER BY a.x, b.str;", dt);
+    c("SELECT a.x, b.str FROM test AS a JOIN join_test AS b ON a.x = b.x AND a.str = b.str ORDER BY a.x, b.str;", dt);
+    c("SELECT a.z, b.str FROM test a JOIN join_test b ON a.y = b.y AND a.x = b.x ORDER BY a.z, b.str;", dt);
+    c("SELECT a.z, b.str FROM test a JOIN test_inner b ON a.y = b.y AND a.x = b.x ORDER BY a.z, b.str;", dt);
+    c("SELECT COUNT(*) FROM test a JOIN join_test b ON a.x = b.x AND a.y = b.x JOIN test_inner c ON a.x = c.x WHERE "
+      "c.str <> 'foo';",
+      dt);
+    c("SELECT a.x, b.x, d.str FROM test a JOIN test_inner b ON a.str = b.str JOIN hash_join_test c ON a.x = c.x JOIN "
+      "join_test d ON a.x >= d.x AND a.x < d.x + 5 ORDER BY a.x, b.x;",
+      dt);
+    c("SELECT COUNT(*) FROM test, join_test WHERE (test.x = join_test.x OR (test.x IS NULL AND join_test.x IS NULL)) "
+      "AND (test.y = join_test.y OR (test.y IS NULL AND join_test.y IS NULL));",
+      dt);
+    c("SELECT COUNT(*) FROM test, join_test WHERE (test.str = join_test.dup_str OR (test.str IS NULL AND "
+      "join_test.dup_str IS NULL)) AND (test.x = join_test.x OR (test.x IS NULL AND join_test.x IS NULL));",
+      dt);
+  }
+}
+
+TEST(Delete, Joins_BuildHashTable) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
+    // Intentionally duplicate previous string join to cover hash table building.
+    c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
+  }
+}
+
+TEST(Delete, Joins_ComplexQueries) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test a JOIN (SELECT * FROM test WHERE y < 43) b ON a.x = b.x JOIN join_test c ON a.x = c.x "
+      "WHERE a.fixed_str = 'foo';",
+      dt);
+    c("SELECT * FROM (SELECT a.y, b.str FROM test a JOIN join_test b ON a.x = b.x) ORDER BY y, str;", dt);
+    c("SELECT x, dup_str FROM (SELECT * FROM test a JOIN join_test b ON a.x = b.x) WHERE y > 40 ORDER BY x, dup_str;",
+      dt);
+    c("SELECT a.x FROM (SELECT * FROM test WHERE x = 8) AS a JOIN (SELECT * FROM test_inner WHERE x = 7) AS b ON a.str "
+      "= b.str WHERE a.y < 42;",
+      dt);
+    c("SELECT a.str as key0,a.fixed_str as key1,COUNT(*) AS color FROM test a JOIN (select str,count(*) "
+      "from test group by str order by COUNT(*) desc limit 40) b on a.str=b.str JOIN (select "
+      "fixed_str,count(*) from test group by fixed_str order by count(*) desc limit 40) c on "
+      "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
+      dt);
+    c("SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR false;",
+      "SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR 0;",
+      dt);
+  }
+}
+
+TEST(Delete, Joins_TimeAndDate) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test a, test b WHERE a.m = b.m;", dt);
+    c("SELECT COUNT(*) FROM test a, test b WHERE a.n = b.n;", dt);
+    c("SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o;", dt);
+  }
+}
+
+TEST(Delete, Joins_OneOuterExpression) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x - 1 = test_inner.x;", dt);
+    c("SELECT COUNT(*) FROM test_inner, test WHERE test.x - 1 = test_inner.x;", dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x + 0 = test_inner.x;", dt);
+    c("SELECT COUNT(*) FROM test_inner, test WHERE test.x + 0 = test_inner.x;", dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x + 1 = test_inner.x;", dt);
+    c("SELECT COUNT(*) FROM test_inner, test WHERE test.x + 1 = test_inner.x;", dt);
+    c("SELECT COUNT(*) FROM test a, test b WHERE a.o + INTERVAL '0' DAY = b.o;",
+      "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o;",
+      dt);
+    c("SELECT COUNT(*) FROM test b, test a WHERE a.o + INTERVAL '0' DAY = b.o;",
+      "SELECT COUNT(*) FROM test b, test a WHERE a.o = b.o;",
+      dt);
+  }
+}
+
+TEST(Delete, Joins_MultipleOuterExpressions) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x - 1 = test_inner.x AND test.str = test_inner.str;", dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x + 0 = test_inner.x AND test.str = test_inner.str;", dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.str = test_inner.str AND test.x + 0 = test_inner.x;", dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x + 1 = test_inner.x AND test.str = test_inner.str;", dt);
+    // The following query will fallback to loop join because we don't reorder the
+    // expressions to be consistent with table order for composite equality yet.
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x + 0 = test_inner.x AND test_inner.str = test.str;", dt);
+    c("SELECT COUNT(*) FROM test a, test b WHERE a.o + INTERVAL '0' DAY = b.o AND a.str = b.str;",
+      "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o AND a.str = b.str;",
+      dt);
+    c("SELECT COUNT(*) FROM test a, test b WHERE a.o + INTERVAL '0' DAY = b.o AND a.x = b.x;",
+      "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o AND a.x = b.x;",
+      dt);
+  }
+}
+
+TEST(Delete, Joins_Unsupported) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+#ifndef ENABLE_JOIN_EXEC
+    EXPECT_THROW(
+        run_multiple_agg("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON "
+                         "b.str = c.str;",
+                         dt),
+        std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
+                     "c.str JOIN join_test AS d ON c.x = d.x;",
+                     dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT a.x AS x, y, b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c "
+                     "ON b.str = c.str ORDER BY x;",
+                     dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
+                     "c.str WHERE a.y "
+                     "< 43;",
+                     dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT SUM(a.x), b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON "
+                     "b.str = c.str WHERE a.y "
+                     "= 43 group by b.str;",
+                     dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT a.str as key0,a.fixed_str as key1,COUNT(*) AS color FROM test a JOIN (select str,count(*) "
+                     "from test group by str order by COUNT(*) desc limit 40) b on a.str=b.str JOIN (select "
+                     "fixed_str,count(*) from test group by fixed_str order by count(*) desc limit 40) c on "
+                     "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
+                     dt),
+                 std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT x, tnone FROM test LEFT JOIN text_group_by_test ON test.str = text_group_by_test.tdef;", dt),
+        std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT * FROM test a JOIN test b on a.b = b.x;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT * FROM test a JOIN test b on a.f = b.f;", dt), std::runtime_error);
+#endif
+  }
+}
+
+TEST(Delete, ExtraFragment) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  auto insert_op = [](int random_val) -> std::string {
+    std::ostringstream insert_string;
+    insert_string << "insert into vacuum_test values (" << random_val << ", '" << random_val << "');";
+    return insert_string.str();
+  };
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table vacuum_test (i1 integer, t1 text) with (vacuum='delayed', fragment_size=10);");
+    for (int i = 1; i <= 100; i++) {
+      run_multiple_agg(insert_op(i), dt);
+    }
+    run_multiple_agg("delete from vacuum_test where i1 > 50;", dt);
+    ASSERT_EQ(int64_t(50), v<int64_t>(run_simple_agg("SELECT COUNT(i1) FROM vacuum_test;", dt)));
+    run_ddl_statement("drop table vacuum_test;");
+  }
+}
+
+TEST(Delete, Joins_ImplicitJoins) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+  auto save_watchdog = g_enable_watchdog;
+  g_enable_watchdog = false;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("DELETE FROM test WHERE test.x = 8;", dt);
+
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x;", dt);
+    c("SELECT COUNT(*) FROM test, hash_join_test WHERE test.t = hash_join_test.t;", dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x < test_inner.x + 1;", dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str = test_inner.str;", dt);
+    c("SELECT test_inner.x, COUNT(*) AS n FROM test, test_inner WHERE test.x = test_inner.x GROUP BY test_inner.x "
+      "ORDER BY n;",
+      dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.str = test_inner.str;", dt);
+    c("SELECT test.str, COUNT(*) FROM test, test_inner WHERE test.str = test_inner.str GROUP BY test.str;", dt);
+    c("SELECT test_inner.str, COUNT(*) FROM test, test_inner WHERE test.str = test_inner.str GROUP BY test_inner.str;",
+      dt);
+    c("SELECT test.str, COUNT(*) AS foobar FROM test, test_inner WHERE test.x = test_inner.x AND test.x > 6 GROUP BY "
+      "test.str HAVING foobar > 5;",
+      dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str LIKE 'real_ba%' AND test.x = test_inner.x;", dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE LENGTH(test.real_str) = 8 AND test.x = test_inner.x;", dt);
+    c("SELECT a.x, b.str FROM test a, join_test b WHERE a.str = b.str GROUP BY a.x, b.str ORDER BY a.x, b.str;", dt);
+    c("SELECT a.x, b.str FROM test a, join_test b WHERE a.str = b.str ORDER BY a.x, b.str;", dt);
+    c("SELECT COUNT(1) FROM test a, join_test b, test_inner c WHERE a.str = b.str AND b.x = c.x", dt);
+    c("SELECT COUNT(*) FROM test a, join_test b, test_inner c WHERE a.x = b.x AND a.y = b.x AND a.x = c.x AND c.str = "
+      "'foo';",
+      dt);
+    c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.y = b.y;", dt);
+    c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.str = b.str;", dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE (test.x = test_inner.x AND test.y = 42 AND test_inner.str = 'foo') "
+      "OR (test.x = test_inner.x AND test.y = 43 AND test_inner.str = 'foo');",
+      dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x OR test.x = test_inner.x;", dt);
+    c("SELECT bar.str FROM test, bar WHERE test.str = bar.str;", dt);
+    ASSERT_EQ(
+        int64_t(3),
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, join_test WHERE test.rowid = join_test.rowid;", dt)));
+    ASSERT_EQ(7,
+              v<int64_t>(run_simple_agg(
+                  "SELECT test.x FROM test, test_inner WHERE test.x = test_inner.x AND test.rowid = 9;", dt)));
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x AND test.rowid = 20;", dt)));
+  }
+  g_enable_watchdog = save_watchdog;
+}
+
 TEST(Create, Delete) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+
     run_ddl_statement("create table vacuum_test (i1 integer, t1 text) with (vacuum='delayed');");
     run_multiple_agg("insert into vacuum_test values(1, '1');", dt);
     run_multiple_agg("insert into vacuum_test values(2, '2');", dt);
@@ -3977,6 +4538,7 @@ TEST(Create, Delete) {
   }
 }
 
+#if 0
 TEST(Select, Deleted) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -3995,6 +4557,7 @@ TEST(Select, Deleted) {
       dt);
   }
 }
+#endif
 
 TEST(Select, GeoSpatial) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -4487,14 +5050,14 @@ int create_and_populate_rounding_table() {
   return 0;
 }
 
-int create_and_populate_tables() {
+int create_and_populate_tables(bool with_delete_support = true) {
   try {
     const std::string drop_old_test{"DROP TABLE IF EXISTS test_inner;"};
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{"x int not null, y int, str text encoding dict"};
     const auto create_test_inner = build_create_table_statement(
-        columns_definition, "test_inner", {g_shard_count ? "str" : "", g_shard_count}, {}, 2);
+        columns_definition, "test_inner", {g_shard_count ? "str" : "", g_shard_count}, {}, 2, with_delete_support);
     run_ddl_statement(create_test_inner);
     g_sqlite_comparator.query("CREATE TABLE test_inner(x int not null, y int, str text);");
   } catch (...) {
@@ -4512,12 +5075,43 @@ int create_and_populate_tables() {
     g_sqlite_comparator.query(insert_query);
   }
   try {
+    const std::string drop_old_test{"DROP TABLE IF EXISTS vacuum_test_alt;"};
+    run_ddl_statement(drop_old_test);
+    g_sqlite_comparator.query(drop_old_test);
+    std::string columns_definition{"x int not null, y int"};
+    const auto create_vacuum_test_alt = build_create_table_statement(
+        columns_definition, "vacuum_test_alt", {g_shard_count ? "str" : "", g_shard_count}, {}, 2, with_delete_support);
+    run_ddl_statement(create_vacuum_test_alt);
+    g_sqlite_comparator.query("CREATE TABLE vacuum_test_alt(x int not null, y int );");
+
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'vacuum_test_alt'";
+    return -EEXIST;
+  }
+  {
+    const std::string insert_query1{"INSERT INTO vacuum_test_alt VALUES(1,10);"};
+    const std::string insert_query2{"INSERT INTO vacuum_test_alt VALUES(2,20);"};
+    const std::string insert_query3{"INSERT INTO vacuum_test_alt VALUES(3,30);"};
+    const std::string insert_query4{"INSERT INTO vacuum_test_alt VALUES(4,40);"};
+
+    run_multiple_agg(insert_query1, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query1);
+    run_multiple_agg(insert_query2, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query2);
+    run_multiple_agg(insert_query3, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query3);
+    run_multiple_agg(insert_query4, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query4);
+  }
+  try {
+#if 0
     const std::string drop_old_test_inner_deleted{"DROP TABLE IF EXISTS test_inner_deleted;"};
     run_ddl_statement(drop_old_test_inner_deleted);
     g_sqlite_comparator.query(drop_old_test_inner_deleted);
     std::string columns_definition{"x int not null, y int, str text encoding dict, deleted boolean"};
+
     const auto create_test_inner_deleted =
-        build_create_table_statement(columns_definition, "test_inner_deleted", {"", 0}, {}, 2);
+        build_create_table_statement(columns_definition, "test_inner_deleted", {"", 0}, {}, 2, with_delete_support );
     run_ddl_statement(create_test_inner_deleted);
     auto& cat = g_session->get_catalog();
     const auto td = cat.getMetadataForTable("test_inner_deleted");
@@ -4525,14 +5119,18 @@ int create_and_populate_tables() {
     const auto cd = cat.getMetadataForColumn(td->tableId, "deleted");
     CHECK(cd);
     cat.setDeletedColumn(td, cd);
+
     g_sqlite_comparator.query("CREATE TABLE test_inner_deleted(x int not null, y int, str text);");
+#endif
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test_inner_deleted'";
     return -EEXIST;
   }
   {
+#if 0
     const std::string insert_query{"INSERT INTO test_inner_deleted VALUES(7, 43, 'foo', 't');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+#endif
   }
   try {
     const std::string drop_old_test{"DROP TABLE IF EXISTS test_inner_x;"};
@@ -4540,7 +5138,7 @@ int create_and_populate_tables() {
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{"x int not null, y int, str text encoding dict"};
     const auto create_test_inner = build_create_table_statement(
-        columns_definition, "test_inner_x", {g_shard_count ? "x" : "", g_shard_count}, {}, 2);
+        columns_definition, "test_inner_x", {g_shard_count ? "x" : "", g_shard_count}, {}, 2, with_delete_support);
     run_ddl_statement(create_test_inner);
     g_sqlite_comparator.query("CREATE TABLE test_inner_x(x int not null, y int, str text);");
   } catch (...) {
@@ -4557,7 +5155,8 @@ int create_and_populate_tables() {
     run_ddl_statement(drop_old_bar);
     g_sqlite_comparator.query(drop_old_bar);
     std::string columns_definition{"str text encoding dict"};
-    const auto create_bar = build_create_table_statement(columns_definition, "bar", {"", 0}, {}, 2);
+    const auto create_bar =
+        build_create_table_statement(columns_definition, "bar", {"", 0}, {}, 2, with_delete_support);
     run_ddl_statement(create_bar);
     g_sqlite_comparator.query("CREATE TABLE bar(str text);");
   } catch (...) {
@@ -4585,7 +5184,8 @@ int create_and_populate_tables() {
                                      "test",
                                      {g_shard_count ? "str" : "", g_shard_count},
                                      {{"str", "test_inner", "str"}, {"shared_dict", "test", "str"}},
-                                     2);
+                                     2,
+                                     with_delete_support);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn float, d "
@@ -4637,8 +5237,8 @@ int create_and_populate_tables() {
         "timestamp(0), n time(0), o date, o1 date encoding fixed(32), fx int encoding fixed(16), dd decimal(10, 2), "
         "dd_notnull decimal(10, 2) not null, ss text encoding dict, u int, ofd int, ufd int not null, ofq bigint, ufq "
         "bigint not null"};
-    const std::string create_test =
-        build_create_table_statement(columns_definition, "test_x", {g_shard_count ? "x" : "", g_shard_count}, {}, 2);
+    const std::string create_test = build_create_table_statement(
+        columns_definition, "test_x", {g_shard_count ? "x" : "", g_shard_count}, {}, 2, with_delete_support);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
         "CREATE TABLE test_x(x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn float, d "
@@ -4756,7 +5356,7 @@ int create_and_populate_tables() {
     return -EEXIST;
   }
   try {
-    import_join_test();
+    import_join_test(with_delete_support);
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'join_test'";
     return -EEXIST;
@@ -4909,6 +5509,8 @@ int create_as_select_empty() {
 }
 
 void drop_tables() {
+  const std::string drop_vacuum_test_alt("DROP TABLE vacuum_test_alt;");
+  g_sqlite_comparator.query(drop_vacuum_test_alt);
   const std::string drop_test_inner{"DROP TABLE test_inner;"};
   run_ddl_statement(drop_test_inner);
   g_sqlite_comparator.query(drop_test_inner);
@@ -4918,9 +5520,11 @@ void drop_tables() {
   const std::string drop_test_inner_x{"DROP TABLE test_inner_x;"};
   run_ddl_statement(drop_test_inner_x);
   g_sqlite_comparator.query(drop_test_inner_x);
+#if 0
   const std::string drop_test_inner_deleted{"DROP TABLE test_inner_deleted;"};
   run_ddl_statement(drop_test_inner_deleted);
   g_sqlite_comparator.query(drop_test_inner_deleted);
+#endif
   const std::string drop_bar{"DROP TABLE bar;"};
   run_ddl_statement(drop_bar);
   g_sqlite_comparator.query(drop_bar);

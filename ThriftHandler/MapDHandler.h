@@ -370,17 +370,6 @@ class MapDHandler : public MapDIf {
   static TDatum value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti);
   static std::string apply_copy_to_shim(const std::string& query_str);
 
-  template <typename PARSER_WRAPPER, typename SELECTOR = CalciteDeletePathSelector>
-  bool is_calcite_permissable_dml(PARSER_WRAPPER const& pw) const {
-    if (std::is_same<SELECTOR, PreprocessorFalse>::value)
-      return !pw.is_update_dml;
-    return (!pw.is_update_dml || (pw.getDMLType() == ParserWrapper::DMLType::Delete));
-  }
-
-  bool is_calcite_path_permissable(ParserWrapper const& pw) const {
-    return (!pw.is_ddl && is_calcite_permissable_dml(pw) && !pw.is_other_explain);
-  }
-
   std::string parse_to_ra(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info);
 
   void sql_execute_impl(TQueryResult& _return,
