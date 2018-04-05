@@ -210,8 +210,13 @@ const std::string S3Archive::land(const std::string& objkey, std::exception_ptr&
     // to be moved before it can exits; otherwise, the move() above will boom!!
     while (!is_get_object_outcome_moved)
       std::this_thread::yield();
-    th_writer.detach();
-    // after the thread is detached, any exception happening to rdbuf()
+
+    // no more detach this thread b/c detach thread is not possible to terminate
+    // safely. when sanity test exits and glog is destructed too soon, the LOG(INFO)
+    // above may still be holding glog rwlock while glog dtor tries to destruct the lock,
+    // this causing a race, though unlikely this race would happen in production env.
+    threads.push_back(std::move(th_writer));
+    // join is delayed to ~S3Archive; any exception happening to rdbuf()
     // is passed to the upstream Importer th_pipe_writer thread via teptr.
   } else {
     try {

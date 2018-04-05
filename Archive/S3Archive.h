@@ -19,6 +19,7 @@
 
 #include <stdio.h>
 #include <map>
+#include <thread>
 #include <exception>
 #include "Archive.h"
 
@@ -75,6 +76,9 @@ class S3Archive : public Archive {
 
   virtual ~S3Archive() {
 #ifdef HAVE_AWS_S3
+    for (auto& thread : threads)
+      if (thread.joinable())
+        thread.join();
     std::unique_lock<std::mutex> lck(awsapi_mtx);
     if (0 == --awsapi_count)
       Aws::ShutdownAPI(awsapi_options);
@@ -100,6 +104,7 @@ class S3Archive : public Archive {
   static Aws::SDKOptions awsapi_options;
 
   std::unique_ptr<Aws::S3::S3Client> s3_client;
+  std::vector<std::thread> threads;
 #endif                        // HAVE_AWS_S3
   std::string s3_access_key;  // per-query credentials to override the
   std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
