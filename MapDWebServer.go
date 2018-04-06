@@ -369,6 +369,14 @@ func (w *ResponseMultiWriter) Write(b []byte) (int, error) {
 }
 
 func hasCustomServersJSONParams(r *http.Request) bool {
+	// Checking for form values requires calling ParseForm, which modifies the
+	// request buffer and causes issues with the proxy. Solution is to duplicate
+	// the request body and reset it after reading.
+	b, _ := ioutil.ReadAll(r.Body)
+	rdr1 := ioutil.NopCloser(bytes.NewReader(b))
+	rdr2 := ioutil.NopCloser(bytes.NewReader(b))
+	r.Body = rdr1
+	defer func() { r.Body = rdr2 }()
 	for _, k := range serversJSONParams {
 		if len(r.FormValue(k)) > 0 {
 			return true
