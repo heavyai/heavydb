@@ -35,7 +35,7 @@ SQLTypeInfo UpdateLogForFragment::getColumnType(const size_t col_idx) const {
   return rs_->getColType(col_idx);
 }
 
-void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit,
+void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
                              const InputTableInfo& table_info,
                              const CompilationOptions& co,
                              const ExecutionOptions& eo,
@@ -43,6 +43,8 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit,
                              std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                              const UpdateLogForFragment::Callback& cb) {
   CHECK(cb);
+  const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in);
+
   // could use std::thread::hardware_concurrency(), but some
   // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
   // Play it POSIX.1 safe instead.
