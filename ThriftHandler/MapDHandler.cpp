@@ -1280,6 +1280,74 @@ void MapDHandler::get_views(std::vector<std::string>& table_names, const TSessio
   get_tables_impl(table_names, session, GET_VIEWS);
 }
 
+void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return, const TSessionId& session) {
+  const auto session_info = get_session(session);
+  auto& cat = session_info.get_catalog();
+  const auto tables = cat.getAllTableMetadata();
+  _return.reserve(tables.size());
+
+  for (const auto td : tables) {
+    if (td->shard >= 0) {
+      // skip shards, they're not standalone tables
+      continue;
+    }
+    if (SysCatalog::instance().arePrivilegesOn() && !hasTableAccessPrivileges(td, session)) {
+      // skip table, as there are no privileges to access it
+      continue;
+    }
+
+    TTableMeta ret;
+    ret.table_name = td->tableName;
+    ret.is_view = td->isView;
+    ret.is_replicated = table_is_replicated(td);
+    ret.shard_count = td->nShards;
+    ret.max_rows = td->maxRows;
+
+    std::set<TDatumType::type> col_datum_types;
+    size_t num_cols = 0;
+    if (td->isView) {
+      try {
+        const auto query_ra = parse_to_ra(td->viewSQL, session_info);
+        TQueryResult result;
+        execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, -1, -1, false, true);
+        num_cols = result.row_set.row_desc.size();
+        for (const auto col : result.row_set.row_desc) {
+          if (col.is_physical) {
+            num_cols--;
+            continue;
+          }
+          col_datum_types.insert(col.col_type.type);
+        }
+      } catch (std::exception& e) {
+        LOG(WARNING) << "get_tables_meta: Ignoring broken view: " << td->tableName;
+      }
+    } else {
+      try {
+        if (!SysCatalog::instance().arePrivilegesOn() || hasTableAccessPrivileges(td, session)) {
+          const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, false, true, false);
+          const auto deleted_cd = cat.getDeletedColumn(td);
+          for (const auto cd : col_descriptors) {
+            if (cd == deleted_cd) {
+              continue;
+            }
+            col_datum_types.insert(type_to_thrift(cd->columnType));
+          }
+          num_cols = col_descriptors.size();
+        } else {
+          continue;
+        }
+      } catch (std::runtime_error e) {
+        THROW_MAPD_EXCEPTION(e.what());
+      }
+    }
+
+    ret.num_cols = num_cols;
+    std::copy(col_datum_types.begin(), col_datum_types.end(), std::back_inserter(ret.col_datum_types));
+
+    _return.push_back(ret);
+  }
+}
+
 void MapDHandler::get_users(std::vector<std::string>& user_names, const TSessionId& session) {
   const auto session_info = get_session(session);
   if (!isUserAuthorized(session_info, std::string("get_users"))) {

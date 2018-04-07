@@ -140,6 +140,7 @@ class MapDHandler : public MapDIf {
   void get_tables(std::vector<std::string>& _return, const TSessionId& session);
   void get_physical_tables(std::vector<std::string>& _return, const TSessionId& session);
   void get_views(std::vector<std::string>& _return, const TSessionId& session);
+  void get_tables_meta(std::vector<TTableMeta>& _return, const TSessionId& session);
   void get_table_details(TTableDetails& _return, const TSessionId& session, const std::string& table_name);
   void get_internal_table_details(TTableDetails& _return, const TSessionId& session, const std::string& table_name);
   void get_users(std::vector<std::string>& _return, const TSessionId& session);

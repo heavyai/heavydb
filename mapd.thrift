@@ -264,6 +264,16 @@ struct TNodeMemoryInfo {
   6: list<TMemoryData> node_memory_data
 }
 
+struct TTableMeta {
+  1: string table_name
+  2: i64 num_cols
+  3: list<TDatumType> col_datum_types
+  4: bool is_view
+  5: bool is_replicated
+  6: i64 shard_count
+  7: i64 max_rows
+}
+
 struct TTableDetails {
   1: TRowDescriptor row_desc
   2: i64 fragment_size
@@ -411,6 +421,7 @@ service MapD {
   list<string> get_tables(1: TSessionId session) throws (1: TMapDException e)
   list<string> get_physical_tables(1: TSessionId session) throws (1: TMapDException e)
   list<string> get_views(1: TSessionId session) throws (1: TMapDException e)
+  list<TTableMeta> get_tables_meta(1: TSessionId session) throws (1: TMapDException e)
   TTableDetails get_table_details(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
   TTableDetails get_internal_table_details(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
   list<string> get_users(1: TSessionId session) throws (1: TMapDException e)
