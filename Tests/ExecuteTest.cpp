@@ -3985,6 +3985,345 @@ TEST(Truncate, Count) {
   run_ddl_statement("drop table trunc_test;");
 }
 
+TEST(Update, Text) {
+  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
+    return;
+  auto save_watchdog = g_enable_watchdog;
+  g_enable_watchdog = false;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table text_default (t text) with (vacuum='delayed');");
+
+    run_multiple_agg("insert into text_default values ('do');", dt);
+    run_multiple_agg("insert into text_default values ('you');", dt);
+    run_multiple_agg("insert into text_default values ('know');", dt);
+    run_multiple_agg("insert into text_default values ('the');", dt);
+    run_multiple_agg("insert into text_default values ('muffin');", dt);
+    run_multiple_agg("insert into text_default values ('man');", dt);
+
+    run_multiple_agg("update text_default set t='pizza' where char_length(t) <= 3;", dt);
+    ASSERT_EQ(int64_t(4), v<int64_t>(run_simple_agg("select count(t) from text_default where t='pizza';", dt)));
+
+    run_ddl_statement("drop table text_default;");
+  }
+
+  g_enable_watchdog = save_watchdog;
+}
+
+TEST(Update, TextINVariant) {
+  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
+    return;
+  auto save_watchdog = g_enable_watchdog;
+  g_enable_watchdog = false;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table text_default (t text) with (vacuum='delayed');");
+
+    run_multiple_agg("insert into text_default values ('do');", dt);
+    run_multiple_agg("insert into text_default values ('you');", dt);
+    run_multiple_agg("insert into text_default values ('know');", dt);
+    run_multiple_agg("insert into text_default values ('the');", dt);
+    run_multiple_agg("insert into text_default values ('muffin');", dt);
+    run_multiple_agg("insert into text_default values ('man');", dt);
+
+    run_multiple_agg("update text_default set t='pizza' where t in ('do','you','the','man');", dt);
+    ASSERT_EQ(int64_t(4), v<int64_t>(run_simple_agg("select count(t) from text_default where t='pizza';", dt)));
+
+    run_ddl_statement("drop table text_default;");
+  }
+
+  g_enable_watchdog = save_watchdog;
+}
+
+TEST(Update, TextEncodingDict16) {
+  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
+    return;
+  auto save_watchdog = g_enable_watchdog;
+  g_enable_watchdog = false;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table textenc16_default (t text encoding dict(16)) with (vacuum='delayed');");
+
+    run_multiple_agg("insert into textenc16_default values ('do');", dt);
+    run_multiple_agg("insert into textenc16_default values ('you');", dt);
+    run_multiple_agg("insert into textenc16_default values ('know');", dt);
+    run_multiple_agg("insert into textenc16_default values ('the');", dt);
+    run_multiple_agg("insert into textenc16_default values ('muffin');", dt);
+    run_multiple_agg("insert into textenc16_default values ('man');", dt);
+
+    run_multiple_agg("update textenc16_default set t='pizza' where char_length(t) <= 3;", dt);
+    ASSERT_EQ(int64_t(4), v<int64_t>(run_simple_agg("select count(t) from textenc16_default where t='pizza';", dt)));
+
+    run_ddl_statement("drop table textenc16_default;");
+  }
+
+  g_enable_watchdog = save_watchdog;
+}
+
+TEST(Update, TextEncodingDict8) {
+  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
+    return;
+  auto save_watchdog = g_enable_watchdog;
+  g_enable_watchdog = false;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table textenc8_default (t text encoding dict(8)) with (vacuum='delayed');");
+    run_multiple_agg("insert into textenc8_default values ('do');", dt);
+    run_multiple_agg("insert into textenc8_default values ('you');", dt);
+    run_multiple_agg("insert into textenc8_default values ('know');", dt);
+    run_multiple_agg("insert into textenc8_default values ('the');", dt);
+    run_multiple_agg("insert into textenc8_default values ('muffin');", dt);
+    run_multiple_agg("insert into textenc8_default values ('man');", dt);
+
+    run_multiple_agg("update textenc8_default set t='pizza' where char_length(t) <= 3;", dt);
+    ASSERT_EQ(int64_t(4), v<int64_t>(run_simple_agg("select count(t) from textenc8_default where t='pizza';", dt)));
+
+    run_ddl_statement("drop table textenc8_default;");
+  }
+  g_enable_watchdog = save_watchdog;
+}
+
+TEST(Update, MultiColumnInteger) {
+  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table multicoltable (x integer, y integer, z integer) with (vacuum='delayed');");
+    run_multiple_agg("insert into multicoltable values (2,3,4);", dt);
+    run_multiple_agg("insert into multicoltable values (4,9,16);", dt);
+
+    run_multiple_agg(
+        "update multicoltable set x=-power(x,2),y=-power(y,2),z=-power(z,2) where x < 10 and y < 10 and z < 10;", dt);
+    ASSERT_EQ(int64_t(0), v<int64_t>(run_simple_agg("select sum(x) from multicoltable;", dt)));
+    ASSERT_EQ(int64_t(0), v<int64_t>(run_simple_agg("select sum(y) from multicoltable;", dt)));
+    ASSERT_EQ(int64_t(0), v<int64_t>(run_simple_agg("select sum(z) from multicoltable;", dt)));
+
+    run_ddl_statement("drop table multicoltable;");
+  }
+}
+
+TEST(Update, TimestampUpdate) {
+  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table timestamp_default (t timestamp) with (vacuum='delayed');");
+
+    run_multiple_agg("insert into timestamp_default values ('12/01/2013:000001');", dt);
+    run_multiple_agg("insert into timestamp_default values ('12/01/2013:000002');", dt);
+    run_multiple_agg("insert into timestamp_default values ('12/01/2013:000003');", dt);
+    run_multiple_agg("insert into timestamp_default values ('12/01/2013:000004');", dt);
+    run_multiple_agg(
+        "update timestamp_default set t=timestampadd( second, 59, date_trunc( minute, t ) ) where mod( extract( second "
+        "from t ), 2 )=1;",
+        dt);
+
+    ASSERT_EQ(
+        int64_t(2),
+        v<int64_t>(run_simple_agg("select count(t) from timestamp_default where extract( second from t )=59;", dt)));
+
+    run_ddl_statement("drop table timestamp_default;");
+  }
+}
+
+TEST(Update, TimeUpdate) {
+  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table time_default (t time) with (vacuum='delayed');");
+
+    run_multiple_agg("insert into time_default values('00:00:01');", dt);
+    run_multiple_agg("insert into time_default values('00:01:00');", dt);
+    run_multiple_agg("insert into time_default values('01:00:00');", dt);
+
+    run_multiple_agg("update time_default set t='11:11:00' where t='00:00:01';", dt);
+    run_multiple_agg("update time_default set t='11:00:11' where t='00:01:00';", dt);
+    run_multiple_agg("update time_default set t='00:11:11' where t='01:00:00';", dt);
+
+    ASSERT_EQ(int64_t(2),
+              v<int64_t>(run_simple_agg("select count(t) from time_default where extract(hour from t)=11;", dt)));
+    ASSERT_EQ(int64_t(2),
+              v<int64_t>(run_simple_agg("select count(t) from time_default where extract(minute from t)=11;", dt)));
+    ASSERT_EQ(int64_t(2),
+              v<int64_t>(run_simple_agg("select count(t) from time_default where extract(second from t)=11;", dt)));
+
+    run_ddl_statement("drop table time_default;");
+  }
+}
+
+TEST(Update, DateUpdate) {
+  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table date_default (d date) with (vacuum='delayed');");
+
+    run_multiple_agg("insert into date_default values('01/01/1901');", dt);
+    run_multiple_agg("insert into date_default values('02/02/1902');", dt);
+    run_multiple_agg("insert into date_default values('03/03/1903');", dt);
+    run_multiple_agg("insert into date_default values('04/04/1904');", dt);
+
+    run_multiple_agg("update date_default set d='12/25/2000' where mod(extract(day from d),2)=1;", dt);
+    ASSERT_EQ(int64_t(2), v<int64_t>(run_simple_agg("select count(d) from date_default where d='12/25/2000';", dt)));
+
+    run_ddl_statement("drop table date_default;");
+  }
+}
+
+TEST(Update, FloatUpdate) {
+  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table float_default (f float) with (vacuum='delayed');");
+
+    run_multiple_agg("insert into float_default values(-0.01);", dt);
+    run_multiple_agg("insert into float_default values( 0.02);", dt);
+    run_multiple_agg("insert into float_default values(-0.03);", dt);
+    run_multiple_agg("insert into float_default values( 0.04);", dt);
+
+    run_multiple_agg("update float_default set f=ABS(f) where f < 0;", dt);
+    ASSERT_FLOAT_EQ(static_cast<float>(0.01),
+                    v<float>(run_simple_agg("select f from float_default where f > 0.0 and f < 0.02;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<float>(0.03),
+                    v<float>(run_simple_agg("select f from float_default where f > 0.02 and f < 0.04;", dt)));
+
+    run_ddl_statement("drop table float_default;");
+  }
+}
+
+TEST(Update, IntegerUpdate) {
+  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table integer_default (i integer) with (vacuum='delayed');");
+
+    run_multiple_agg("insert into integer_default values(-1);", dt);
+    run_multiple_agg("insert into integer_default values( 2);", dt);
+    run_multiple_agg("insert into integer_default values(-3);", dt);
+    run_multiple_agg("insert into integer_default values( 4);", dt);
+
+    run_multiple_agg("update integer_default set i=-i where i < 0;", dt);
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg("select i from integer_default where i > 0 and i < 2;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(3),
+              v<int64_t>(run_simple_agg("select i from integer_default where i > 2 and i < 4;", dt)));
+    run_ddl_statement("drop table integer_default;");
+  }
+}
+
+TEST(Update, DoubleUpdate) {
+  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table double_default (d double) with (vacuum='delayed');");
+
+    run_multiple_agg("insert into double_default values(-0.01);", dt);
+    run_multiple_agg("insert into double_default values( 0.02);", dt);
+    run_multiple_agg("insert into double_default values(-0.03);", dt);
+    run_multiple_agg("insert into double_default values( 0.04);", dt);
+
+    run_multiple_agg("update double_default set d=ABS(d) where d < 0;", dt);
+    ASSERT_FLOAT_EQ(static_cast<double>(0.01),
+                    v<double>(run_simple_agg("select d from double_default where d > 0.0 and d < 0.02;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<double>(0.03),
+                    v<double>(run_simple_agg("select d from double_default where d > 0.02 and d < 0.04;", dt)));
+
+    run_ddl_statement("drop table double_default;");
+  }
+}
+
+TEST(Update, SmallIntUpdate) {
+  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table smallint_default (s smallint) with (vacuum='delayed');");
+
+    run_multiple_agg("insert into smallint_default values(-1);", dt);
+    run_multiple_agg("insert into smallint_default values( 2);", dt);
+    run_multiple_agg("insert into smallint_default values(-3);", dt);
+    run_multiple_agg("insert into smallint_default values( 4);", dt);
+
+    run_multiple_agg("update smallint_default set s=-s where s < 0;", dt);
+    run_multiple_agg("select s from smallint_default where s > 0 and s < 2;", dt);
+    run_multiple_agg("select s from smallint_default where s > 2 and s < 4;", dt);
+
+    run_ddl_statement("drop table smallint_default;");
+  }
+}
+
+TEST(Update, BigIntUpdate) {
+  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table bigint_default (b bigint) with (vacuum='delayed');");
+    run_multiple_agg("insert into bigint_default values(-1);", dt);
+    run_multiple_agg("insert into bigint_default values( 2);", dt);
+    run_multiple_agg("insert into bigint_default values(-3);", dt);
+    run_multiple_agg("insert into bigint_default values( 4);", dt);
+
+    run_multiple_agg("update bigint_default set b=-b where b < 0;", dt);
+    run_multiple_agg("select b from bigint_default where b > 0 and b < 2;", dt);
+    run_multiple_agg("select b from bigint_default where b > 2 and b < 4;", dt);
+
+    run_ddl_statement("drop table bigint_default;");
+  }
+}
+
+TEST(Update, DecimalUpdate) {
+  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table decimal_default (d decimal(5)) with (vacuum='delayed');");
+    run_multiple_agg("insert into decimal_default values(-1);", dt);
+    run_multiple_agg("insert into decimal_default values( 2);", dt);
+    run_multiple_agg("insert into decimal_default values(-3);", dt);
+    run_multiple_agg("insert into decimal_default values( 4);", dt);
+
+    run_multiple_agg("update decimal_default set d=-d where d < 0;", dt);
+
+    run_simple_agg("select d from decimal_default where d > 0 and d < 2;", dt);
+    run_simple_agg("select d from decimal_default where d > 2 and d < 4;", dt);
+    ;
+
+    run_ddl_statement("drop table decimal_default;");
+  }
+}
+
 TEST(Delete, IntraFragment) {
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
     return;
