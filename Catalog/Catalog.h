@@ -152,7 +152,8 @@ class Catalog {
   void createShardedTable(TableDescriptor& td,
                           const std::list<ColumnDescriptor>& columns,
                           const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs);
-  void createFrontendView(FrontendViewDescriptor& vd);
+  int32_t createFrontendView(FrontendViewDescriptor& vd);
+  void replaceFrontendView(FrontendViewDescriptor& vd);
   std::string createLink(LinkDescriptor& ld, size_t min_length);
   void dropTable(const TableDescriptor* td);
   void truncateTable(const TableDescriptor* td);
@@ -176,9 +177,10 @@ class Catalog {
 
   const FrontendViewDescriptor* getMetadataForFrontendView(const std::string& userId,
                                                            const std::string& viewName) const;
-  const FrontendViewDescriptor* getMetadataForFrontendView(int viewId) const;
-
   void deleteMetadataForFrontendView(const std::string& userId, const std::string& viewName);
+
+  const FrontendViewDescriptor* getMetadataForDashboard(const int32_t dashboard_id) const;
+  void deleteMetadataForDashboard(const int32_t dashboard_id);
 
   const LinkDescriptor* getMetadataForLink(const std::string& link) const;
   const LinkDescriptor* getMetadataForLink(int linkId) const;
@@ -234,7 +236,6 @@ class Catalog {
   typedef std::map<ColumnIdKey, ColumnDescriptor*> ColumnDescriptorMapById;
   typedef std::map<DictRef, std::unique_ptr<DictDescriptor>> DictDescriptorMapById;
   typedef std::map<std::string, FrontendViewDescriptor*> FrontendViewDescriptorMap;
-  typedef std::map<int, FrontendViewDescriptor*> FrontendViewDescriptorMapById;
   typedef std::map<std::string, LinkDescriptor*> LinkDescriptorMap;
   typedef std::map<int, LinkDescriptor*> LinkDescriptorMapById;
 
@@ -249,6 +250,8 @@ class Catalog {
   void updateDictionarySchema();
   void updatePageSize();
   void updateDeletedColumnIndicator();
+  void updateFrontendViewsToDashboards();
+
   void buildMaps();
   void addTableToMap(TableDescriptor& td,
                      const std::list<ColumnDescriptor>& columns,
@@ -284,7 +287,7 @@ class Catalog {
   ColumnDescriptorMap columnDescriptorMap_;
   ColumnDescriptorMapById columnDescriptorMapById_;
   DictDescriptorMapById dictDescriptorMapByRef_;
-  FrontendViewDescriptorMap frontendViewDescriptorMap_;
+  FrontendViewDescriptorMap dashboardDescriptorMap_;
   LinkDescriptorMap linkDescriptorMap_;
   LinkDescriptorMapById linkDescriptorMapById_;
   SqliteConnector sqliteConnector_;

@@ -1165,7 +1165,7 @@ void MapDHandler::get_frontend_view(TFrontendView& _return, const TSessionId& se
   auto& cat = session_info.get_catalog();
   auto vd = cat.getMetadataForFrontendView(std::to_string(session_info.get_currentUser().userId), view_name);
   if (!vd) {
-    THROW_MAPD_EXCEPTION("View " + view_name + " doesn't exist");
+    THROW_MAPD_EXCEPTION("Dashboard " + view_name + " doesn't exist");
   }
   _return.view_name = view_name;
   _return.view_state = vd->viewState;
@@ -1975,6 +1975,119 @@ void MapDHandler::render_vega(TRenderResult& _return,
             << " (ms), Total Render: " << _return.render_time_ms << " (ms)";
 }
 
+// dashboards
+void MapDHandler::get_dashboard(TDashboard& dashboard, const TSessionId& session, const int32_t dashboard_id) {
+  const auto session_info = get_session(session);
+  auto& cat = session_info.get_catalog();
+  auto dash = cat.getMetadataForDashboard(dashboard_id);
+  if (!dash) {
+    THROW_MAPD_EXCEPTION("Dashboard with dashboard id" + std::to_string(dashboard_id) + " doesn't exist");
+  }
+  // TODO DASHSHARE
+  // validate access permissions
+  dashboard.dashboard_name = dash->viewName;
+  dashboard.dashboard_state = dash->viewState;
+  dashboard.image_hash = dash->imageHash;
+  dashboard.update_time = dash->updateTime;
+  dashboard.dashboard_metadata = dash->viewMetadata;
+  dashboard.dashboard_owner = dash->user;
+  dashboard.dashboard_id = dash->viewId;
+  dashboard.dashboard_owner = dash->user;
+}
+
+void MapDHandler::get_dashboards(std::vector<TDashboard>& dashboards, const TSessionId& session) {
+  const auto session_info = get_session(session);
+  auto& cat = session_info.get_catalog();
+  const auto dashes = cat.getAllFrontendViewMetadata();
+  for (const auto d : dashes) {
+    // TODO DASHSHARE
+    // replace this entire check with permission check
+    // should this checking be in catalog?
+    if (d->userId == session_info.get_currentUser().userId) {
+      TDashboard dash;
+      dash.dashboard_name = d->viewName;
+      dash.image_hash = d->imageHash;
+      dash.update_time = d->updateTime;
+      dash.dashboard_metadata = d->viewMetadata;
+      dash.dashboard_id = d->viewId;
+      dash.dashboard_owner = d->user;
+      dashboards.push_back(dash);
+    }
+  }
+}
+
+int32_t MapDHandler::create_dashboard(const TSessionId& session,
+                                      const std::string& dashboard_name,
+                                      const std::string& dashboard_state,
+                                      const std::string& image_hash,
+                                      const std::string& dashboard_metadata) {
+  check_read_only("create_dashboard");
+  const auto session_info = get_session(session);
+  auto& cat = session_info.get_catalog();
+
+  // TODO DASHSHARE check permissions
+  FrontendViewDescriptor vd;
+  vd.viewName = dashboard_name;
+  vd.viewState = dashboard_state;
+  vd.imageHash = image_hash;
+  vd.viewMetadata = dashboard_metadata;
+  vd.userId = session_info.get_currentUser().userId;
+  vd.user = session_info.get_currentUser().userName;
+
+  try {
+    return cat.createFrontendView(vd);
+  } catch (const std::exception& e) {
+    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+  }
+}
+
+void MapDHandler::replace_dashboard(const TSessionId& session,
+                                    const int32_t dashboard_id,
+                                    const std::string& dashboard_name,
+                                    const std::string& dashboard_owner,
+                                    const std::string& dashboard_state,
+                                    const std::string& image_hash,
+                                    const std::string& dashboard_metadata) {
+  check_read_only("replace_dashboard");
+  const auto session_info = get_session(session);
+  auto& cat = session_info.get_catalog();
+
+  // TODO DASHSHARE check permissions
+  FrontendViewDescriptor vd;
+  vd.viewName = dashboard_name;
+  vd.viewState = dashboard_state;
+  vd.imageHash = image_hash;
+  vd.viewMetadata = dashboard_metadata;
+  Catalog_Namespace::UserMetadata user;
+  SysCatalog::instance().getMetadataForUser(dashboard_owner, user);
+  vd.userId = user.userId;
+  vd.user = dashboard_owner;
+  vd.viewId = dashboard_id;
+
+  try {
+    cat.replaceFrontendView(vd);
+  } catch (const std::exception& e) {
+    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+  }
+}
+
+void MapDHandler::delete_dashboard(const TSessionId& session, const int32_t dashboard_id) {
+  check_read_only("delete_dashboard");
+  const auto session_info = get_session(session);
+  auto& cat = session_info.get_catalog();
+  auto dash = cat.getMetadataForDashboard(dashboard_id);
+  if (!dash) {
+    THROW_MAPD_EXCEPTION("Dashboard with id" + std::to_string(dashboard_id) + " doesn't exist, so cannot delete it");
+  }
+  // TODO DASHSHARE
+  // check permissions or in catalog?
+  try {
+    cat.deleteMetadataForDashboard(dashboard_id);
+  } catch (const std::exception& e) {
+    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+  }
+}
+
 void MapDHandler::create_frontend_view(const TSessionId& session,
                                        const std::string& view_name,
                                        const std::string& view_state,
@@ -1989,6 +2102,7 @@ void MapDHandler::create_frontend_view(const TSessionId& session,
   vd.imageHash = image_hash;
   vd.viewMetadata = view_metadata;
   vd.userId = session_info.get_currentUser().userId;
+  vd.user = session_info.get_currentUser().userName;
 
   try {
     cat.createFrontendView(vd);

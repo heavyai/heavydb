@@ -191,6 +191,16 @@ struct TFrontendView {
   5: string view_metadata
 }
 
+struct TDashboard {
+  1: string dashboard_name
+  2: string dashboard_state
+  3: string image_hash
+  4: string update_time
+  5: string dashboard_metadata
+  6: i32 dashboard_id
+  7: string dashboard_owner
+}
+
 struct TServerStatus {
   1: bool read_only
   2: string version
@@ -453,6 +463,13 @@ service MapD {
   list<TFrontendView> get_frontend_views(1: TSessionId session) throws (1: TMapDException e)
   void create_frontend_view(1: TSessionId session, 2: string view_name, 3: string view_state, 4: string image_hash, 5: string view_metadata) throws (1: TMapDException e)
   void delete_frontend_view(1: TSessionId session, 2: string view_name) throws (1: TMapDException e)
+  #dashboard will deprecate frontendview name over time
+  TDashboard get_dashboard(1: TSessionId session, 2: i32 dashboard_id) throws (1: TMapDException e)
+  list<TDashboard> get_dashboards(1: TSessionId session) throws (1: TMapDException e)
+  i32 create_dashboard(1: TSessionId session, 2: string dashboard_name, 3: string dashboard_state, 4: string image_hash, 5: string dashboard_metadata) throws (1: TMapDException e)
+  void replace_dashboard(1: TSessionId session, 2: i32 dashboard_id, 3: string dashboard_name, 4: string dashboard_owner, 5: string dashboard_state, 6: string image_hash, 7: string dashboard_metadata) throws (1: TMapDException e)
+  void delete_dashboard(1: TSessionId session, 2: i32 dashboard_id) throws (1: TMapDException e)
+  #dashboard links
   TFrontendView get_link_view(1: TSessionId session, 2: string link) throws (1: TMapDException e)
   string create_link(1: TSessionId session, 2: string view_state, 3: string view_metadata) throws (1: TMapDException e)
   # import

@@ -211,6 +211,24 @@ class MapDHandler : public MapDIf {
                             const std::string& image_hash,
                             const std::string& view_metadata);
   void delete_frontend_view(const TSessionId& session, const std::string& view_name);
+
+  // dashboards
+  void get_dashboard(TDashboard& _return, const TSessionId& session, int32_t dashboard_id);
+  void get_dashboards(std::vector<TDashboard>& _return, const TSessionId& session);
+  int32_t create_dashboard(const TSessionId& session,
+                           const std::string& dashboard_name,
+                           const std::string& dashboard_state,
+                           const std::string& image_hash,
+                           const std::string& dashboard_metadata);
+  void replace_dashboard(const TSessionId& session,
+                         const int32_t dashboard_id,
+                         const std::string& dashboard_name,
+                         const std::string& dashboard_owner,
+                         const std::string& dashboard_state,
+                         const std::string& image_hash,
+                         const std::string& dashboard_metadata);
+  void delete_dashboard(const TSessionId& session, const int32_t dashboard_id);
+
   void get_link_view(TFrontendView& _return, const TSessionId& session, const std::string& link);
   void create_link(std::string& _return,
                    const TSessionId& session,

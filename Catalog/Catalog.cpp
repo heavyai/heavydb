@@ -271,6 +271,38 @@ void SysCatalog::migratePrivileges() {
   sqliteConnector_->query("END TRANSACTION");
 }
 
+// migration will be done as two step process this release
+// will create and use new table
+// next release will remove old table, doing this to have fall back path
+// incase of migration failure
+void Catalog::updateFrontendViewsToDashboards() {
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query("SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_dashboards'");
+    if (sqliteConnector_.getNumRows() != 0) {
+      // already done
+      sqliteConnector_.query("END TRANSACTION");
+      return;
+    }
+    sqliteConnector_.query(
+        "CREATE TABLE mapd_dashboards (id integer primary key autoincrement, name text , "
+        "userid integer references mapd_users, state text, image_hash text, update_time timestamp, "
+        "metadata text, UNIQUE(userid, name) )");
+    // now copy content from old table to new table
+    sqliteConnector_.query(
+        "insert into mapd_dashboards (id, name , "
+        "userid, state, image_hash, update_time , "
+        "metadata) "
+        "SELECT viewid , name , userid, view_state, image_hash, update_time, view_metadata "
+        "from mapd_frontend_views");
+
+  } catch (const std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
 void SysCatalog::migratePrivileged_old() {
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
@@ -402,12 +434,14 @@ void SysCatalog::createDatabase(const string& name, int owner) {
   dbConn.query(
       "CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype "
       "integer, colsubtype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, "
-      "comp_param integer, size integer, chunks text, is_systemcol boolean, is_virtualcol boolean, virtual_expr text, "
+      "comp_param integer, size integer, chunks text, is_systemcol boolean, is_virtualcol boolean, virtual_expr "
+      "text, "
       "primary key(tableid, columnid), unique(tableid, name))");
   dbConn.query("CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text)");
   dbConn.query(
-      "CREATE TABLE mapd_frontend_views (viewid integer primary key, name text unique, userid integer references "
-      "mapd_users, view_state text, image_hash text, update_time timestamp, view_metadata text)");
+      "CREATE TABLE mapd_dashboards (id integer primary key autoincrement, name text , "
+      "userid integer references mapd_users, state text, image_hash text, update_time timestamp, "
+      "metadata text, UNIQUE(userid, name) )");
   dbConn.query(
       "CREATE TABLE mapd_links (linkid integer primary key, userid integer references mapd_users, "
       "link text unique, view_state text, update_time timestamp, view_metadata text)");
@@ -613,10 +647,12 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
   auto privs = object.getPrivileges();
   if (privs.hasAny()) {
     sqliteConnector_->query_with_text_params(
-        "INSERT OR REPLACE INTO mapd_object_privileges(roleName, roleType, objectName, objectType, dbObjectType, dbId, "
+        "INSERT OR REPLACE INTO mapd_object_privileges(roleName, roleType, objectName, objectType, dbObjectType, "
+        "dbId, "
         "tableId, "
         "columnId, "
-        "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, "
+        "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate) VALUES (?1, ?2, ?3, ?4, ?5, ?6, "
+        "?7, "
         "?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         std::vector<std::string>{roleName,
                                  std::to_string(rl->isUserPrivateRole()),
@@ -634,7 +670,8 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
                                  std::to_string(false)});
   } else {
     sqliteConnector_->query_with_text_params(
-        "DELETE FROM mapd_object_privileges WHERE roleName = ?1 and roleType = ?2 and dbObjectType = ?3 and dbId = ?4 "
+        "DELETE FROM mapd_object_privileges WHERE roleName = ?1 and roleType = ?2 and dbObjectType = ?3 and dbId = "
+        "?4 "
         "and tableId = ?5 and columnId = ?6",
         std::vector<std::string>{
             roleName, std::to_string(rl->isUserPrivateRole()), objectKey[0], objectKey[1], objectKey[2], objectKey[3]});
@@ -1017,6 +1054,14 @@ void Catalog::updateTableDescriptorSchema() {
 void Catalog::updateFrontendViewSchema() {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
+    // check table still exists
+    sqliteConnector_.query("SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_frontend_views'");
+    if (sqliteConnector_.getNumRows() == 0) {
+      // table does not exists
+      // no need to migrate
+      sqliteConnector_.query("END TRANSACTION");
+      return;
+    }
     sqliteConnector_.query("PRAGMA TABLE_INFO(mapd_frontend_views)");
     std::vector<std::string> cols;
     for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
@@ -1063,6 +1108,14 @@ void Catalog::updateFrontendViewAndLinkUsers() {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query("UPDATE mapd_links SET userid = 0 WHERE userid IS NULL");
+    // check table still exists
+    sqliteConnector_.query("SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_frontend_views'");
+    if (sqliteConnector_.getNumRows() == 0) {
+      // table does not exists
+      // no need to migrate
+      sqliteConnector_.query("END TRANSACTION");
+      return;
+    }
     sqliteConnector_.query("UPDATE mapd_frontend_views SET userid = 0 WHERE userid IS NULL");
   } catch (const std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -1245,6 +1298,7 @@ void Catalog::CheckAndExecuteMigrations() {
   updateDictionarySchema();
   updatePageSize();
   updateDeletedColumnIndicator();
+  updateFrontendViewsToDashboards();
 }
 
 void SysCatalog::buildRoleMap() {
@@ -1410,8 +1464,9 @@ void Catalog::buildMaps() {
   }
 
   string frontendViewQuery(
-      "SELECT viewid, view_state, name, image_hash, strftime('%Y-%m-%dT%H:%M:%SZ', update_time), userid, view_metadata "
-      "FROM mapd_frontend_views");
+      "SELECT id, state, name, image_hash, strftime('%Y-%m-%dT%H:%M:%SZ', update_time), userid, "
+      "metadata "
+      "FROM mapd_dashboards");
   sqliteConnector_.query(frontendViewQuery);
   numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
@@ -1423,7 +1478,7 @@ void Catalog::buildMaps() {
     vd->updateTime = sqliteConnector_.getData<string>(r, 4);
     vd->userId = sqliteConnector_.getData<int>(r, 5);
     vd->viewMetadata = sqliteConnector_.getData<string>(r, 6);
-    frontendViewDescriptorMap_[std::to_string(vd->userId) + vd->viewName] = vd;
+    dashboardDescriptorMap_[std::to_string(vd->userId) + ":" + vd->viewName] = vd;
   }
 
   string linkQuery(
@@ -1565,7 +1620,7 @@ void Catalog::addFrontendViewToMap(FrontendViewDescriptor& vd) {
   std::lock_guard<std::mutex> lock(cat_mutex_);
   FrontendViewDescriptor* new_vd = new FrontendViewDescriptor();
   *new_vd = vd;
-  frontendViewDescriptorMap_[std::to_string(vd.userId) + vd.viewName] = new_vd;
+  dashboardDescriptorMap_[std::to_string(vd.userId) + ":" + vd.viewName] = new_vd;
 }
 
 void Catalog::addLinkToMap(LinkDescriptor& ld) {
@@ -1677,17 +1732,19 @@ const ColumnDescriptor* Catalog::getMetadataForColumn(int tableId, int columnId)
 
 void Catalog::deleteMetadataForFrontendView(const std::string& userId, const std::string& viewName) {
   std::lock_guard<std::mutex> lock(cat_mutex_);
-  auto viewDescIt = frontendViewDescriptorMap_.find(userId + viewName);
-  if (viewDescIt == frontendViewDescriptorMap_.end()) {  // check to make sure view exists
-    LOG(ERROR) << "deleteting view for user " << userId << " view " << viewName << " does not exist in map";
-    return;
+  auto viewDescIt = dashboardDescriptorMap_.find(userId + ":" + viewName);
+  if (viewDescIt == dashboardDescriptorMap_.end()) {  // check to make sure view exists
+    LOG(ERROR) << "No metadata for dashboard for user " << userId << " dashboard " << viewName
+               << " does not exist in map";
+    throw runtime_error("No metadata for dashboard for user " + userId + " dashboard " + viewName +
+                        " does not exist in map");
   }
   // found view in Map now remove it
-  frontendViewDescriptorMap_.erase(viewDescIt);
+  dashboardDescriptorMap_.erase(viewDescIt);
   // remove from DB
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_.query_with_text_params("DELETE FROM mapd_frontend_views WHERE name = ? and userid = ?",
+    sqliteConnector_.query_with_text_params("DELETE FROM mapd_dashboards WHERE name = ? and userid = ?",
                                             std::vector<std::string>{viewName, userId});
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -1698,11 +1755,54 @@ void Catalog::deleteMetadataForFrontendView(const std::string& userId, const std
 
 const FrontendViewDescriptor* Catalog::getMetadataForFrontendView(const string& userId, const string& viewName) const {
   std::lock_guard<std::mutex> lock(cat_mutex_);
-  auto viewDescIt = frontendViewDescriptorMap_.find(userId + viewName);
-  if (viewDescIt == frontendViewDescriptorMap_.end()) {  // check to make sure view exists
+  auto viewDescIt = dashboardDescriptorMap_.find(userId + ":" + viewName);
+  if (viewDescIt == dashboardDescriptorMap_.end()) {  // check to make sure view exists
     return nullptr;
   }
   return viewDescIt->second;  // returns pointer to view descriptor
+}
+
+const FrontendViewDescriptor* Catalog::getMetadataForDashboard(const int32_t id) const {
+  std::string userId;
+  std::string name;
+  bool found{false};
+  {
+    std::lock_guard<std::mutex> lock(cat_mutex_);
+    for (auto descp : dashboardDescriptorMap_) {
+      auto dash = descp.second;
+      if (dash->viewId == id) {
+        userId = std::to_string(dash->userId);
+        name = dash->viewName;
+        found = true;
+        break;
+      }
+    }
+  }
+  if (found) {
+    return getMetadataForFrontendView(userId, name);
+  }
+  return nullptr;
+}
+
+void Catalog::deleteMetadataForDashboard(const int32_t id) {
+  std::string userId;
+  std::string name;
+  bool found{false};
+  {
+    std::lock_guard<std::mutex> lock(cat_mutex_);
+    for (auto descp : dashboardDescriptorMap_) {
+      auto dash = descp.second;
+      if (dash->viewId == id) {
+        userId = std::to_string(dash->userId);
+        name = dash->viewName;
+        found = true;
+        break;
+      }
+    }
+  }
+  if (found) {
+    return deleteMetadataForFrontendView(userId, name);
+  }
 }
 
 const LinkDescriptor* Catalog::getMetadataForLink(const string& link) const {
@@ -1767,7 +1867,7 @@ list<const TableDescriptor*> Catalog::getAllTableMetadata() const {
 
 list<const FrontendViewDescriptor*> Catalog::getAllFrontendViewMetadata() const {
   list<const FrontendViewDescriptor*> view_list;
-  for (auto p : frontendViewDescriptorMap_)
+  for (auto p : dashboardDescriptorMap_)
     view_list.push_back(p.second);
   return view_list;
 }
@@ -1917,7 +2017,8 @@ void Catalog::createTable(TableDescriptor& td,
     try {
       sqliteConnector_.query_with_text_params(
           "INSERT INTO mapd_tables (name, ncolumns, isview, fragments, frag_type, max_frag_rows, max_chunk_size, "
-          "frag_page_size, max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo) VALUES (?, ?, ?, ?, "
+          "frag_page_size, max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo) VALUES (?, ?, ?, "
+          "?, "
           "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 
           std::vector<std::string>{td.tableName,
@@ -2473,22 +2574,22 @@ void Catalog::renameColumn(const TableDescriptor* td, const ColumnDescriptor* cd
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
 }
 
-void Catalog::createFrontendView(FrontendViewDescriptor& vd) {
+int32_t Catalog::createFrontendView(FrontendViewDescriptor& vd) {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     // TODO(andrew): this should be an upsert
-    sqliteConnector_.query_with_text_params("SELECT viewid FROM mapd_frontend_views WHERE name = ? and userid = ?",
+    sqliteConnector_.query_with_text_params("SELECT id FROM mapd_dashboards WHERE name = ? and userid = ?",
                                             std::vector<std::string>{vd.viewName, std::to_string(vd.userId)});
     if (sqliteConnector_.getNumRows() > 0) {
       sqliteConnector_.query_with_text_params(
-          "UPDATE mapd_frontend_views SET view_state = ?, image_hash = ?, view_metadata = ?, update_time = "
+          "UPDATE mapd_dashboards SET state = ?, image_hash = ?, metadata = ?, update_time = "
           "datetime('now') where name = ? "
           "and userid = ?",
           std::vector<std::string>{
               vd.viewState, vd.imageHash, vd.viewMetadata, vd.viewName, std::to_string(vd.userId)});
     } else {
       sqliteConnector_.query_with_text_params(
-          "INSERT INTO mapd_frontend_views (name, view_state, image_hash, view_metadata, update_time, userid) "
+          "INSERT INTO mapd_dashboards (name, state, image_hash, metadata, update_time, userid) "
           "VALUES "
           "(?,?,?,?, "
           "datetime('now'), ?)",
@@ -2504,7 +2605,7 @@ void Catalog::createFrontendView(FrontendViewDescriptor& vd) {
   // now get the auto generated viewid
   try {
     sqliteConnector_.query_with_text_params(
-        "SELECT viewid, strftime('%Y-%m-%dT%H:%M:%SZ', update_time) FROM mapd_frontend_views "
+        "SELECT id, strftime('%Y-%m-%dT%H:%M:%SZ', update_time) FROM mapd_dashboards "
         "WHERE name = ? and userid = ?",
         std::vector<std::string>{vd.viewName, std::to_string(vd.userId)});
     vd.viewId = sqliteConnector_.getData<int>(0, 0);
@@ -2512,6 +2613,43 @@ void Catalog::createFrontendView(FrontendViewDescriptor& vd) {
   } catch (std::exception& e) {
     throw;
   }
+  addFrontendViewToMap(vd);
+  return vd.viewId;
+}
+
+void Catalog::replaceFrontendView(FrontendViewDescriptor& vd) {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  auto viewDescIt = dashboardDescriptorMap_.find(vd.userId + ":" + vd.viewName);
+  if (viewDescIt == dashboardDescriptorMap_.end()) {  // check to make sure view exists
+    LOG(ERROR) << "Error replacing dashboard for user " << vd.user << " dashboard " << vd.viewName
+               << " does not exist in map";
+    // TODO DASHSHARE throw exception
+    return;
+  }
+  // found view in Map now remove it
+  dashboardDescriptorMap_.erase(viewDescIt);
+
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    // TODO(andrew): this should be an upsert
+    sqliteConnector_.query_with_text_params("SELECT id FROM mapd_dashboards WHERE id = ?",
+                                            std::vector<std::string>{std::to_string(vd.viewId)});
+    if (sqliteConnector_.getNumRows() > 0) {
+      sqliteConnector_.query_with_text_params(
+          "UPDATE mapd_dashboards SET state = ?, image_hash = ?, metadata = ?, update_time = "
+          "datetime('now') where name = ? "
+          "and userid = ?",
+          std::vector<std::string>{
+              vd.viewState, vd.imageHash, vd.viewMetadata, vd.viewName, std::to_string(vd.userId)});
+    } else {
+      // TODO DASHSHARE throw exception no table to replace in DB?
+    }
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+
   addFrontendViewToMap(vd);
 }
 

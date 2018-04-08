@@ -35,6 +35,7 @@ struct FrontendViewDescriptor {
   std::string updateTime;
   std::string viewMetadata;
   int32_t userId;
+  std::string user;
 };
 
 #endif  // FRONTEND_VIEW_DESCRIPTOR
