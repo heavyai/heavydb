@@ -135,7 +135,6 @@ class MapDHandler : public MapDIf {
   void get_status(std::vector<TServerStatus>& _return, const TSessionId& session);
   void get_hardware_info(TClusterHardwareInfo& _return, const TSessionId& session);
 
-  bool isUserAuthorized(const Catalog_Namespace::SessionInfo& session_info, const std::string command_name);
   bool hasTableAccessPrivileges(const TableDescriptor* td, const TSessionId& session);
   void get_tables(std::vector<std::string>& _return, const TSessionId& session);
   void get_physical_tables(std::vector<std::string>& _return, const TSessionId& session);

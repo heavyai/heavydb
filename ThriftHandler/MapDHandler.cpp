@@ -907,8 +907,7 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
 void MapDHandler::get_roles(std::vector<std::string>& roles, const TSessionId& session) {
   auto session_it = get_session_it(session);
   auto session_info_ptr = session_it->second.get();
-  roles = SysCatalog::instance().getRoles(
-      false, session_info_ptr->get_currentUser().isSuper, session_info_ptr->get_currentUser().userId);
+  roles = SysCatalog::instance().getRoles(false, true, session_info_ptr->get_currentUser().userId);
 }
 
 static TDBObject serialize_db_object(const std::string& roleName, const DBObject& inObject) {
@@ -996,24 +995,13 @@ void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
   auto session_info_ptr = session_it->second.get();
   Catalog_Namespace::UserMetadata user_meta;
   if (SysCatalog::instance().getMetadataForUser(userName, user_meta)) {
-    bool get_roles = false;
-    if (session_info_ptr->get_currentUser().isSuper) {
-      get_roles = true;
-    } else {
-      if (session_info_ptr->get_currentUser().userId == user_meta.userId) {
-        get_roles = true;
-      } else {
-        THROW_MAPD_EXCEPTION("Only superuser is authorized to request list of roles granted to another user.");
-      }
-    }
-    if (get_roles) {
+    if (session_info_ptr->get_currentUser().isSuper || session_info_ptr->get_currentUser().userId == user_meta.userId) {
       roles = SysCatalog::instance().getUserRoles(user_meta.userId);
+    } else {
+      THROW_MAPD_EXCEPTION("Only a superuser is authorized to request list of roles granted to another user.");
     }
   } else {
-    TMapDException ex;
-    ex.error_msg = "User " + userName + " does not exist.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("User " + userName + " does not exist.");
   }
 }
 
@@ -1187,18 +1175,6 @@ void MapDHandler::get_link_view(TFrontendView& _return, const TSessionId& sessio
   _return.view_metadata = ld->viewMetadata;
 }
 
-bool MapDHandler::isUserAuthorized(const Catalog_Namespace::SessionInfo& session_info, const std::string command_name) {
-  bool is_user_authorized = true;
-  if (SysCatalog::instance().arePrivilegesOn() && !session_info.get_currentUser().isSuper) {
-    is_user_authorized = false;
-    TMapDException ex;
-    ex.error_msg = "Only superuser is authorized to run command " + command_name;
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
-  }
-  return is_user_authorized;
-}
-
 bool MapDHandler::hasTableAccessPrivileges(const TableDescriptor* td, const TSessionId& session) {
   bool hasAccessPrivs = false;
   const auto session_info = get_session(session);
@@ -1348,11 +1324,7 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return, const TSessi
   }
 }
 
-void MapDHandler::get_users(std::vector<std::string>& user_names, const TSessionId& session) {
-  const auto session_info = get_session(session);
-  if (!isUserAuthorized(session_info, std::string("get_users"))) {
-    return;
-  }
+void MapDHandler::get_users(std::vector<std::string>& user_names, const TSessionId& /* session*/) {
   std::list<Catalog_Namespace::UserMetadata> user_list = SysCatalog::instance().getAllUserMetadata();
   for (auto u : user_list) {
     user_names.push_back(u.userName);
@@ -1422,8 +1394,8 @@ void MapDHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
 
 void MapDHandler::get_databases(std::vector<TDBInfo>& dbinfos, const TSessionId& session) {
   const auto session_info = get_session(session);
-  if (!isUserAuthorized(session_info, std::string("get_databases"))) {
-    return;
+  if (SysCatalog::instance().arePrivilegesOn() && !session_info.get_currentUser().isSuper) {
+    THROW_MAPD_EXCEPTION("Only a superuser is authorized to get list of databases.");
   }
   std::list<Catalog_Namespace::DBMetadata> db_list = SysCatalog::instance().getAllDBMetadata();
   std::list<Catalog_Namespace::UserMetadata> user_list = SysCatalog::instance().getAllUserMetadata();
