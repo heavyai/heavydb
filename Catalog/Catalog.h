@@ -342,6 +342,7 @@ class SysCatalog {
   std::list<UserMetadata> getAllUserMetadata();
   void createDBObject(const UserMetadata& user,
                       const std::string& objectName,
+                      DBObjectType type,
                       const Catalog_Namespace::Catalog& catalog);
   void grantDBObjectPrivileges(const std::string& roleName,
                                DBObject& object,

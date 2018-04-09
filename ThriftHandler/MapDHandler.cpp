@@ -915,15 +915,17 @@ static TDBObject serialize_db_object(const std::string& roleName, const DBObject
   outObject.objectName = inObject.getName();
   outObject.grantee = roleName;
   switch (inObject.getType()) {
-    case (DatabaseDBObjectType): {
+    case DatabaseDBObjectType:
       outObject.objectType = TDBObjectType::DatabaseDBObjectType;
       break;
-    }
-    case (TableDBObjectType): {
+    case TableDBObjectType:
       outObject.objectType = TDBObjectType::TableDBObjectType;
       break;
-    }
-    default: { CHECK(false); }
+    case DashboardDBObjectType:
+      outObject.objectType = TDBObjectType::DashboardDBObjectType;
+      break;
+    default:
+      CHECK(false);
   }
   auto privs = inObject.getPrivileges();
   outObject.privs = {privs.select, privs.insert, privs.create, privs.truncate};
@@ -969,7 +971,11 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
     case TDBObjectType::TableDBObjectType:
       object_type = DBObjectType::TableDBObjectType;
       break;
-    default: { CHECK(false); }
+    case TDBObjectType::DashboardDBObjectType:
+      object_type = DBObjectType::DashboardDBObjectType;
+      break;
+    default:
+      CHECK(false);
   }
   DBObject object_to_find(objectName, object_type);
   try {

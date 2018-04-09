@@ -458,12 +458,16 @@ void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name, Catal
       /* revoke object privileges to all tables of the database being dropped */
       if (db_cat) {
         const auto tables = db_cat->getAllTableMetadata();
-        for (const auto td : tables) {
-          if (td->shard >= 0) {
+        for (const auto table : tables) {
+          if (table->shard >= 0) {
             // skip shards, they're not standalone tables
             continue;
           }
-          revokeDBObjectPrivilegesFromAllRoles_unsafe(td->tableName, TableDBObjectType, db_cat);
+          revokeDBObjectPrivilegesFromAllRoles_unsafe(table->tableName, TableDBObjectType, db_cat);
+        }
+        const auto dashboards = db_cat->getAllFrontendViewMetadata();
+        for (const auto dashboard : dashboards) {
+          revokeDBObjectPrivilegesFromAllRoles_unsafe(dashboard->viewName, DashboardDBObjectType, db_cat);
         }
       }
       Catalog::remove(name);
@@ -564,10 +568,15 @@ void SysCatalog::grantDefaultPrivilegesToRole_unsafe(const std::string& name, bo
 
 void SysCatalog::createDBObject(const UserMetadata& user,
                                 const std::string& objectName,
+                                DBObjectType type,
                                 const Catalog_Namespace::Catalog& catalog) {
-  DBObject object(objectName, TableDBObjectType);
+  DBObject object(objectName, type);
   object.loadKey(catalog);
-  object.setPrivileges(AccessPrivileges::ALL_NO_DB);
+  if (type == DatabaseDBObjectType) {
+    object.setPrivileges(AccessPrivileges::ALL);
+  } else {
+    object.setPrivileges(AccessPrivileges::ALL_NO_DB);
+  }
   object.setUserPrivateObject();
   object.setOwningUserId(user.userId);
   sqliteConnector_->query("BEGIN TRANSACTION");

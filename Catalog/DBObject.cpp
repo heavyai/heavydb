@@ -19,10 +19,19 @@ DBObject::DBObject(const std::string& name, const DBObjectType& type) : objectNa
   privsValid_ = false;
   userPrivateObject_ = false;
   owningUserId_ = 0;
+  objectId_ = 0;
+}
+
+DBObject::DBObject(const int32_t id, const DBObjectType& type) : objectId_(id), objectType_(type) {
+  objectName_ = "";
+  privsValid_ = false;
+  userPrivateObject_ = false;
+  owningUserId_ = 0;
 }
 
 DBObject::DBObject(const DBObject& object)
     : objectName_(object.objectName_),
+      objectId_(object.objectId_),
       objectType_(object.objectType_),
       privsValid_(object.privsValid_),
       userPrivateObject_(object.userPrivateObject_),
@@ -55,28 +64,22 @@ void DBObject::revokePrivileges(const DBObject& object) {
 std::vector<std::string> DBObject::toString() const {
   std::vector<std::string> objectKey;
   switch (objectType_) {
-    case (DatabaseDBObjectType): {
+    case DatabaseDBObjectType:
       objectKey.push_back(std::to_string(objectKey_.dbObjectType));
       objectKey.push_back(std::to_string(objectKey_.dbId));
       objectKey.push_back(std::to_string(-1));
       objectKey.push_back(std::to_string(-1));
       break;
-    }
-    case (TableDBObjectType): {
+    case TableDBObjectType:
+    case DashboardDBObjectType:
       objectKey.push_back(std::to_string(objectKey_.dbObjectType));
       objectKey.push_back(std::to_string(objectKey_.dbId));
       objectKey.push_back(std::to_string(objectKey_.tableId));
       objectKey.push_back(std::to_string(-1));
       break;
-    }
-    case (ColumnDBObjectType): {
+    case ColumnDBObjectType:
       throw std::runtime_error("Privileges for columns are not supported in current release.");
       break;
-    }
-    case (DashboardDBObjectType): {
-      throw std::runtime_error("Privileges for dashboards are not supported in current release.");
-      break;
-    }
     default: { CHECK(false); }
   }
   return objectKey;
@@ -85,31 +88,43 @@ std::vector<std::string> DBObject::toString() const {
 void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
   DBObjectKey objectKey;
   switch (getType()) {
-    case (DatabaseDBObjectType): {
+    case DatabaseDBObjectType: {
       Catalog_Namespace::DBMetadata db;
       if (!Catalog_Namespace::SysCatalog::instance().getMetadataForDB(getName(), db)) {
         throw std::runtime_error("Failure generating DB object key. Database " + getName() + " does not exist.");
       }
       objectKey.dbObjectType = static_cast<int32_t>(DatabaseDBObjectType);
       objectKey.dbId = db.dbId;
+      objectId_ = db.dbId;
       break;
     }
-    case (TableDBObjectType): {
-      if (!catalog.getMetadataForTable(getName())) {
+    case TableDBObjectType: {
+      auto table = catalog.getMetadataForTable(getName());
+      if (!table) {
         throw std::runtime_error("Failure generating DB object key. Table " + getName() + " does not exist.");
       }
       objectKey.dbObjectType = static_cast<int32_t>(TableDBObjectType);
       objectKey.dbId = catalog.get_currentDB().dbId;
-      objectKey.tableId = catalog.getMetadataForTable(getName())->tableId;
+      objectKey.tableId = table->tableId;
+      objectId_ = table->tableId;
       break;
     }
-    case (ColumnDBObjectType): {
+    case DashboardDBObjectType: {
+      auto dashboard = catalog.getMetadataForDashboard(getId());
+      if (!dashboard) {
+        throw std::runtime_error("Failure generating DB object key. Dashboard " + getName() + " does not exist.");
+      }
+      objectKey.dbObjectType = static_cast<int32_t>(TableDBObjectType);
+      objectKey.dbId = catalog.get_currentDB().dbId;
+      objectKey.tableId = dashboard->viewId;
+      objectName_ = dashboard->viewName;
       break;
     }
-    case (DashboardDBObjectType): {
+    case ColumnDBObjectType:
+      throw std::runtime_error("Privileges for columns are not supported in current release.");
       break;
-    }
-    default: { CHECK(false); }
+    default:
+      CHECK(false);
   }
   setObjectKey(objectKey);
 }
@@ -117,26 +132,21 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
 DBObjectKey DBObjectKey::fromString(const std::vector<std::string>& key, const DBObjectType& type) {
   DBObjectKey objectKey;
   switch (type) {
-    case (DatabaseDBObjectType): {
+    case DatabaseDBObjectType:
       objectKey.dbObjectType = std::stoi(key[0]);
       objectKey.dbId = std::stoi(key[1]);
       break;
-    }
-    case (TableDBObjectType): {
+    case TableDBObjectType:
+    case DashboardDBObjectType:
       objectKey.dbObjectType = std::stoi(key[0]);
       objectKey.dbId = std::stoi(key[1]);
       objectKey.tableId = std::stoi(key[2]);
       break;
-    }
-    case (ColumnDBObjectType): {
+    case ColumnDBObjectType:
       throw std::runtime_error("Privileges for columns are not supported in current release.");
       break;
-    }
-    case (DashboardDBObjectType): {
-      throw std::runtime_error("Privileges for dashboards are not supported in current release.");
-      break;
-    }
-    default: { CHECK(false); }
+    default:
+      CHECK(false);
   }
   return objectKey;
 }

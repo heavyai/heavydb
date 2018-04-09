@@ -70,13 +70,10 @@ struct AccessPrivileges {
   bool create = false;
   bool truncate = false;
 
-  AccessPrivileges() { }
+  AccessPrivileges() {}
 
-  AccessPrivileges(bool select, bool insert, bool create, bool truncate) :
-    select(select),
-    insert(insert),
-    create(create),
-    truncate(truncate) { }
+  AccessPrivileges(bool select, bool insert, bool create, bool truncate)
+      : select(select), insert(insert), create(create), truncate(truncate) {}
 
   void reset() { select = insert = create = truncate = false; }
   bool hasAny() const { return select || insert || create || truncate; }
@@ -92,10 +89,12 @@ struct AccessPrivileges {
 class DBObject {
  public:
   DBObject(const std::string& name, const DBObjectType& type);
+  DBObject(const int32_t id, const DBObjectType& type);
   DBObject(const DBObject& object);
   ~DBObject() {}
 
   std::string getName() const { return objectName_; }
+  int32_t getId() const { return objectId_; }
   DBObjectType getType() const { return objectType_; }
   DBObjectKey getObjectKey() const { return objectKey_; }
   void setObjectKey(const DBObjectKey& objectKey) { objectKey_ = objectKey; }
@@ -117,6 +116,7 @@ class DBObject {
 
  private:
   std::string objectName_;
+  int32_t objectId_;
   DBObjectType objectType_;
   DBObjectKey objectKey_;
   AccessPrivileges objectPrivs_;

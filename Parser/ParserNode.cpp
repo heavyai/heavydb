@@ -2058,7 +2058,7 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   catalog.createShardedTable(td, columns, shared_dict_defs);
   if (SysCatalog::instance().arePrivilegesOn()) {
     // TODO (max): It's transactionally unsafe, should be fixed: we may create object w/o privileges
-    SysCatalog::instance().createDBObject(session.get_currentUser(), td.tableName, catalog);
+    SysCatalog::instance().createDBObject(session.get_currentUser(), td.tableName, TableDBObjectType, catalog);
   }
 }
 
@@ -2269,7 +2269,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   }
   if (SysCatalog::instance().arePrivilegesOn()) {
     // TODO (max): It's transactionally unsafe, should be fixed: we may create object w/o privileges
-    SysCatalog::instance().createDBObject(session.get_currentUser(), td.tableName, catalog);
+    SysCatalog::instance().createDBObject(session.get_currentUser(), td.tableName, TableDBObjectType, catalog);
   }
 }
 
