@@ -30,6 +30,7 @@ std::string DBObjectTypeToString(DBObjectType type) {
     default:
       CHECK(false);
   }
+  return "not possible";
 }
 
 DBObjectType DBObjectTypeFromString(const std::string& type) {

@@ -343,16 +343,15 @@ class SysCatalog {
   void createDBObject(const UserMetadata& user,
                       const std::string& objectName,
                       DBObjectType type,
-                      const Catalog_Namespace::Catalog& catalog);
+                      const Catalog_Namespace::Catalog& catalog,
+                      int32_t objectId = -1);
   void grantDBObjectPrivileges(const std::string& roleName,
                                DBObject& object,
                                const Catalog_Namespace::Catalog& catalog);
   void revokeDBObjectPrivileges(const std::string& roleName,
                                 DBObject object,
                                 const Catalog_Namespace::Catalog& catalog);
-  void revokeDBObjectPrivilegesFromAllRoles_unsafe(const std::string& objectName,
-                                                   const DBObjectType& objectType,
-                                                   Catalog* catalog = nullptr);
+  void revokeDBObjectPrivilegesFromAllRoles_unsafe(DBObject object, Catalog* catalog);
   void getDBObjectPrivileges(const std::string& roleName,
                              DBObject& object,
                              const Catalog_Namespace::Catalog& catalog) const;

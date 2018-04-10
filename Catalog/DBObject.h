@@ -103,7 +103,7 @@ class DBObject {
   int32_t getId() const { return objectId_; }
   void setId(int32_t id) { objectId_ = id; }
   DBObjectType getType() const { return objectType_; }
-  DBObjectKey getObjectKey() const { return objectKey_; }
+  DBObjectKey getObjectKey() const { CHECK(-1!=objectKey_.dbId); /** load key not called? */ return objectKey_; }
   void setObjectKey(const DBObjectKey& objectKey) { objectKey_ = objectKey; }
   const AccessPrivileges& getPrivileges() const { return objectPrivs_; }
   void setPrivileges(const AccessPrivileges& privs) { objectPrivs_ = privs; }

@@ -496,16 +496,17 @@ void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name, Catal
             // skip shards, they're not standalone tables
             continue;
           }
-          revokeDBObjectPrivilegesFromAllRoles_unsafe(table->tableName, TableDBObjectType, db_cat);
+          revokeDBObjectPrivilegesFromAllRoles_unsafe(DBObject(table->tableName, TableDBObjectType), db_cat);
         }
         const auto dashboards = db_cat->getAllFrontendViewMetadata();
         for (const auto dashboard : dashboards) {
-          revokeDBObjectPrivilegesFromAllRoles_unsafe(dashboard->viewName, DashboardDBObjectType, db_cat);
+          revokeDBObjectPrivilegesFromAllRoles_unsafe(DBObject(dashboard->viewId, DashboardDBObjectType), db_cat);
         }
       }
       Catalog::remove(name);
       /* revoke object privileges to the database being dropped */
-      revokeDBObjectPrivilegesFromAllRoles_unsafe(name, DatabaseDBObjectType);
+      revokeDBObjectPrivilegesFromAllRoles_unsafe(DBObject(name, DatabaseDBObjectType),
+                                                  Catalog::get(MAPD_SYSTEM_DB).get());
     }
     std::lock_guard<std::mutex> lock(cat_mutex_);
     sqliteConnector_->query_with_text_param("DELETE FROM mapd_databases WHERE dbid = ?", std::to_string(dbid));
@@ -602,8 +603,9 @@ void SysCatalog::grantDefaultPrivilegesToRole_unsafe(const std::string& name, bo
 void SysCatalog::createDBObject(const UserMetadata& user,
                                 const std::string& objectName,
                                 DBObjectType type,
-                                const Catalog_Namespace::Catalog& catalog) {
-  DBObject object(objectName, type);
+                                const Catalog_Namespace::Catalog& catalog,
+                                int32_t objectId) {
+  DBObject object = objectId == -1 ? DBObject(objectName, type) : DBObject(objectId, type);
   object.loadKey(catalog);
   switch (type) {
     case TableDBObjectType:
@@ -615,11 +617,6 @@ void SysCatalog::createDBObject(const UserMetadata& user,
     default:
       object.setPrivileges(AccessPrivileges::ALL);
       break;
-  }
-  if (type == DatabaseDBObjectType) {
-    object.setPrivileges(AccessPrivileges::ALL);
-  } else {
-    object.setPrivileges(AccessPrivileges::ALL_TABLE);
   }
   object.setOwner(user.userId);
   sqliteConnector_->query("BEGIN TRANSACTION");
@@ -733,18 +730,12 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
   }
 }
 
-void SysCatalog::revokeDBObjectPrivilegesFromAllRoles_unsafe(const std::string& objectName,
-                                                             const DBObjectType& objectType,
-                                                             Catalog* catalog) {
-  if (!catalog) {
-    catalog = Catalog::get(MAPD_SYSTEM_DB).get();
-    CHECK(catalog);
-  }
-  DBObject dbObject(objectName, objectType);
+void SysCatalog::revokeDBObjectPrivilegesFromAllRoles_unsafe(DBObject dbObject, Catalog* catalog) {
   dbObject.loadKey(*catalog);
-  auto privs = (objectType == TableDBObjectType) ? AccessPrivileges::ALL_TABLE : (objectType == DashboardDBObjectType)
-                                                                                     ? AccessPrivileges::ALL_DASHBOARD
-                                                                                     : AccessPrivileges::ALL;
+  auto privs =
+      (dbObject.getType() == TableDBObjectType)
+          ? AccessPrivileges::ALL_TABLE
+          : (dbObject.getType() == DashboardDBObjectType) ? AccessPrivileges::ALL_DASHBOARD : AccessPrivileges::ALL;
   dbObject.setPrivileges(privs);
   std::vector<std::string> roles = getRoles(true, true, 0);
   for (size_t i = 0; i < roles.size(); i++) {
@@ -1879,7 +1870,11 @@ void Catalog::deleteMetadataForDashboard(const int32_t id) {
     }
   }
   if (found) {
-    return deleteMetadataForFrontendView(userId, name);
+    // TODO: transactionally unsafe
+    if (SysCatalog::instance().arePrivilegesOn()) {
+      SysCatalog::instance().revokeDBObjectPrivilegesFromAllRoles_unsafe(DBObject(id, DashboardDBObjectType), this);
+    }
+    deleteMetadataForFrontendView(userId, name);
   }
 }
 
@@ -2588,7 +2583,8 @@ void Catalog::doDropTable(const TableDescriptor* td, SqliteConnector* conn) {
   dataMgr_->removeTableRelatedDS(currentDB_.dbId, tableId);
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
   if (SysCatalog::instance().arePrivilegesOn()) {
-    SysCatalog::instance().revokeDBObjectPrivilegesFromAllRoles_unsafe(td->tableName, TableDBObjectType, this);
+    SysCatalog::instance().revokeDBObjectPrivilegesFromAllRoles_unsafe(DBObject(td->tableName, TableDBObjectType),
+                                                                       this);
   }
 }
 

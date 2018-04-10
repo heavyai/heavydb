@@ -1956,16 +1956,26 @@ void MapDHandler::render_vega(TRenderResult& _return,
             << " (ms), Total Render: " << _return.render_time_ms << " (ms)";
 }
 
+static bool can_see_dashboard(const Catalog_Namespace::Catalog& catalog, const FrontendViewDescriptor& dash, const Catalog_Namespace::UserMetadata& user) {
+  DBObject object(dash.viewId, DashboardDBObjectType);
+  object.loadKey(catalog);
+  object.setPrivileges(AccessPrivileges::SELECT);
+  std::vector<DBObject> privs = {object};
+  return (SysCatalog::instance().arePrivilegesOn() && SysCatalog::instance().checkPrivileges(user, privs)) ||
+         user.userId == dash.userId;
+}
+
 // dashboards
 void MapDHandler::get_dashboard(TDashboard& dashboard, const TSessionId& session, const int32_t dashboard_id) {
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
   auto dash = cat.getMetadataForDashboard(dashboard_id);
   if (!dash) {
-    THROW_MAPD_EXCEPTION("Dashboard with dashboard id" + std::to_string(dashboard_id) + " doesn't exist");
+    THROW_MAPD_EXCEPTION("Dashboard with dashboard id " + std::to_string(dashboard_id) + " doesn't exist");
   }
-  // TODO DASHSHARE
-  // validate access permissions
+  if (!can_see_dashboard(cat, *dash, session_info.get_currentUser())) {
+    THROW_MAPD_EXCEPTION("User has no select privileges for the dashboard with id " + std::to_string(dashboard_id));
+  }
   dashboard.dashboard_name = dash->viewName;
   dashboard.dashboard_state = dash->viewState;
   dashboard.image_hash = dash->imageHash;
@@ -1981,10 +1991,7 @@ void MapDHandler::get_dashboards(std::vector<TDashboard>& dashboards, const TSes
   auto& cat = session_info.get_catalog();
   const auto dashes = cat.getAllFrontendViewMetadata();
   for (const auto d : dashes) {
-    // TODO DASHSHARE
-    // replace this entire check with permission check
-    // should this checking be in catalog?
-    if (d->userId == session_info.get_currentUser().userId) {
+    if (can_see_dashboard(cat, *d, session_info.get_currentUser())) {
       TDashboard dash;
       dash.dashboard_name = d->viewName;
       dash.image_hash = d->imageHash;
@@ -2006,7 +2013,11 @@ int32_t MapDHandler::create_dashboard(const TSessionId& session,
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
 
-  // TODO DASHSHARE check permissions
+  if (SysCatalog::instance().arePrivilegesOn() &&
+      !session_info.checkDBAccessPrivileges(AccessPrivileges::CREATE_DASHBOARD)) {
+    throw std::runtime_error("Not enough privileges to create a dashboard.");
+  }
+
   FrontendViewDescriptor vd;
   vd.viewName = dashboard_name;
   vd.viewState = dashboard_state;
@@ -2016,7 +2027,11 @@ int32_t MapDHandler::create_dashboard(const TSessionId& session,
   vd.user = session_info.get_currentUser().userName;
 
   try {
-    return cat.createFrontendView(vd);
+    auto id = cat.createFrontendView(vd);
+    // TODO: transactionally unsafe
+    SysCatalog::instance().createDBObject(
+        session_info.get_currentUser(), dashboard_name, DashboardDBObjectType, cat, id);
+    return id;
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
@@ -2033,7 +2048,11 @@ void MapDHandler::replace_dashboard(const TSessionId& session,
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
 
-  // TODO DASHSHARE check permissions
+  if (SysCatalog::instance().arePrivilegesOn() &&
+      !session_info.checkDBAccessPrivileges(AccessPrivileges::CREATE_DASHBOARD)) {
+    throw std::runtime_error("Not enough privileges to replace a dashboard.");
+  }
+
   FrontendViewDescriptor vd;
   vd.viewName = dashboard_name;
   vd.viewState = dashboard_state;
@@ -2062,8 +2081,10 @@ void MapDHandler::delete_dashboard(const TSessionId& session, const int32_t dash
   if (!dash) {
     THROW_MAPD_EXCEPTION("Dashboard with id" + std::to_string(dashboard_id) + " doesn't exist, so cannot delete it");
   }
-  // TODO DASHSHARE
-  // check permissions or in catalog?
+  if (SysCatalog::instance().arePrivilegesOn() &&
+      !session_info.checkDBAccessPrivileges(AccessPrivileges::CREATE_DASHBOARD)) {
+    throw std::runtime_error("Not enough privileges to delete a dashboard.");
+  }
   try {
     cat.deleteMetadataForDashboard(dashboard_id);
   } catch (const std::exception& e) {
