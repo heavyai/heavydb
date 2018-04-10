@@ -124,8 +124,8 @@ void SysCatalog::initDB() {
         "objectName text, objectType integer, dbObjectType integer, dbId integer "
         "references mapd_databases, tableId integer references mapd_tables, columnId integer references "
         "mapd_columns, "
-        "privSelect bool, privInsert bool, privCreate bool, privTruncate bool, privDelete bool, privUpdate bool, "
-        "userid integer, UNIQUE(roleName, dbObjectType, dbId, tableId, columnId))");
+        "privSelect bool, privInsert bool, privCreate bool, privCreateDashboard bool, privTruncate bool, "
+        "privDelete bool, privUpdate bool, userid integer, UNIQUE(roleName, dbObjectType, dbId, tableId, columnId))");
   } else {
     sqliteConnector_->query(
         "CREATE TABLE mapd_privileges (userid integer references mapd_users, dbid integer references mapd_databases, "
@@ -186,7 +186,8 @@ void SysCatalog::migratePrivileges() {
         "objectName text, objectType integer, dbObjectType integer, dbId integer "
         "references mapd_databases, tableId integer references mapd_tables, columnId integer references "
         "mapd_columns, "
-        "privSelect bool, privInsert bool, privCreate bool, privTruncate bool, privDelete bool, privUpdate bool, "
+        "privSelect bool, privInsert bool, privCreate bool, privCreateDashboard bool, privTruncate bool, privDelete "
+        "bool, privUpdate bool, "
         "userid integer, UNIQUE(roleName, dbObjectType, dbId, tableId, columnId))");
     // get the list of databases and their grantees
     sqliteConnector_->query("SELECT userid, dbid FROM mapd_privileges WHERE select_priv = 1 and insert_priv = 1");
@@ -220,9 +221,9 @@ void SysCatalog::migratePrivileges() {
           "dbId, "
           "tableId, "
           "columnId, "
-          "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate, userid) VALUES (?1, ?2, ?3, ?4, "
-          "?5,"
-          " ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+          "privSelect, privInsert, privCreate, privCreateDashboard, privTruncate, privDelete, privUpdate, userid) "
+          "VALUES (?1, ?2, ?3, "
+          "?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
           std::vector<std::string>{users_by_id[grantee.first],
                                    "1",
                                    dbs_by_id[grantee.second],
@@ -231,6 +232,7 @@ void SysCatalog::migratePrivileges() {
                                    std::to_string(grantee.second),
                                    "-1",
                                    "-1",
+                                   std::to_string(true),
                                    std::to_string(true),
                                    std::to_string(true),
                                    std::to_string(true),
@@ -247,9 +249,9 @@ void SysCatalog::migratePrivileges() {
             "dbId, "
             "tableId, "
             "columnId, "
-            "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate, userid) VALUES (?1, ?2, ?3, ?4, "
-            "?5,"
-            " ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+            "privSelect, privInsert, privCreate, privCreateDashboard, privTruncate, privDelete, privUpdate, userid) "
+            "VALUES "
+            "(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             std::vector<std::string>{users_by_id[user.first],
                                      "1",
                                      MAPD_SYSTEM_DB,
@@ -258,6 +260,7 @@ void SysCatalog::migratePrivileges() {
                                      "0",
                                      "-1",
                                      "-1",
+                                     std::to_string(false),
                                      std::to_string(false),
                                      std::to_string(false),
                                      std::to_string(false),
@@ -287,6 +290,11 @@ void SysCatalog::updateObjectPrivileges() {
       string queryString("ALTER TABLE mapd_object_privileges ADD userid integer DEFAULT " +
                          std::to_string(MAPD_ROOT_USER_ID));
       sqliteConnector_->query(queryString);
+    }
+    if (std::find(cols.begin(), cols.end(), std::string("privCreateDashboard")) == cols.end()) {
+      string queryString("ALTER TABLE mapd_object_privileges ADD privCreateDashboard bool DEFAULT 0");
+      sqliteConnector_->query(queryString);
+      sqliteConnector_->query("UPDATE mapd_object_privileges SET privCreateDashboard = privCreate");
     }
   } catch (std::exception& e) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
@@ -599,7 +607,7 @@ void SysCatalog::createDBObject(const UserMetadata& user,
   object.loadKey(catalog);
   switch (type) {
     case TableDBObjectType:
-      object.setPrivileges(AccessPrivileges::ALL_NO_DB);
+      object.setPrivileges(AccessPrivileges::ALL_TABLE);
       break;
     case DashboardDBObjectType:
       object.setPrivileges(AccessPrivileges::ALL_DASHBOARD);
@@ -611,7 +619,7 @@ void SysCatalog::createDBObject(const UserMetadata& user,
   if (type == DatabaseDBObjectType) {
     object.setPrivileges(AccessPrivileges::ALL);
   } else {
-    object.setPrivileges(AccessPrivileges::ALL_NO_DB);
+    object.setPrivileges(AccessPrivileges::ALL_TABLE);
   }
   object.setOwner(user.userId);
   sqliteConnector_->query("BEGIN TRANSACTION");
@@ -654,9 +662,8 @@ void SysCatalog::grantDBObjectPrivileges_unsafe(const std::string& roleName,
       "INSERT OR REPLACE INTO mapd_object_privileges(roleName, roleType, objectName, objectType, dbObjectType, dbId, "
       "tableId, "
       "columnId, "
-      "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate, userid) VALUES (?1, ?2, ?3, ?4, ?5, "
-      "?6, ?7, "
-      "?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+      "privSelect, privInsert, privCreate, privCreateDashboard, privTruncate, privDelete, privUpdate, userid) VALUES "
+      "(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
       std::vector<std::string>{roleName,
                                std::to_string(rl->isUserPrivateRole()),
                                object.getName(),
@@ -669,6 +676,7 @@ void SysCatalog::grantDBObjectPrivileges_unsafe(const std::string& roleName,
                                std::to_string(privs.insert),
                                std::to_string(privs.create),
                                std::to_string(privs.truncate),
+                               std::to_string(privs.create_dashboard),
                                std::to_string(false),
                                std::to_string(false),
                                std::to_string(object.getOwner())});
@@ -697,8 +705,8 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
         "dbId, "
         "tableId, "
         "columnId, "
-        "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate, userid) VALUES (?1, ?2, ?3, ?4, ?5,"
-        " ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+        "privSelect, privInsert, privCreate, privCreateDashboard, privTruncate, privDelete, privUpdate, userid) VALUES "
+        "(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
         std::vector<std::string>{roleName,
                                  std::to_string(rl->isUserPrivateRole()),
                                  object.getName(),
@@ -711,6 +719,7 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
                                  std::to_string(privs.insert),
                                  std::to_string(privs.create),
                                  std::to_string(privs.truncate),
+                                 std::to_string(privs.create_dashboard),
                                  std::to_string(false),
                                  std::to_string(false),
                                  std::to_string(object.getOwner())});
@@ -733,7 +742,7 @@ void SysCatalog::revokeDBObjectPrivilegesFromAllRoles_unsafe(const std::string& 
   }
   DBObject dbObject(objectName, objectType);
   dbObject.loadKey(*catalog);
-  auto privs = (objectType == TableDBObjectType) ? AccessPrivileges::ALL_NO_DB : (objectType == DashboardDBObjectType)
+  auto privs = (objectType == TableDBObjectType) ? AccessPrivileges::ALL_TABLE : (objectType == DashboardDBObjectType)
                                                                                      ? AccessPrivileges::ALL_DASHBOARD
                                                                                      : AccessPrivileges::ALL;
   dbObject.setPrivileges(privs);
@@ -805,8 +814,8 @@ void SysCatalog::createRole_unsafe(const std::string& roleName, const bool& user
   sqliteConnector_->query_with_text_params(
       "INSERT INTO mapd_object_privileges(roleName, roleType, objectName, objectType, dbObjectType, dbId, tableId, "
       "columnId, "
-      "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate, userid) "
-      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "privSelect, privInsert, privCreate, privCreateDashboard, privTruncate, privDelete, privUpdate, userid) "
+      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       std::vector<std::string>{roleName,
                                std::to_string(userPrivateRole),
                                dbObject.getName(),
@@ -818,6 +827,7 @@ void SysCatalog::createRole_unsafe(const std::string& roleName, const bool& user
                                std::to_string(privs.select),
                                std::to_string(privs.insert),
                                std::to_string(privs.create),
+                               std::to_string(privs.truncate),
                                std::to_string(privs.truncate),
                                std::to_string(false),
                                std::to_string(false),
@@ -1355,7 +1365,8 @@ void Catalog::CheckAndExecuteMigrations() {
 void SysCatalog::buildRoleMap() {
   string roleQuery(
       "SELECT roleName, roleType, objectName, objectType, dbObjectType, dbId, tableId, columnId, privSelect, "
-      "privInsert, privCreate, privTruncate, privDelete, privUpdate, userid from mapd_object_privileges");
+      "privInsert, privCreate, privCreateDashboard, privTruncate, privDelete, privUpdate, userid "
+      "from mapd_object_privileges");
   sqliteConnector_->query(roleQuery);
   size_t numRows = sqliteConnector_->getNumRows();
   std::vector<std::string> objectKeyStr(4);
@@ -1375,9 +1386,10 @@ void SysCatalog::buildRoleMap() {
     privs.select = sqliteConnector_->getData<bool>(r, 8);
     privs.insert = sqliteConnector_->getData<bool>(r, 9);
     privs.create = sqliteConnector_->getData<bool>(r, 10);
-    privs.truncate = sqliteConnector_->getData<bool>(r, 11);
+    privs.create_dashboard = sqliteConnector_->getData<bool>(r, 10);
+    privs.truncate = sqliteConnector_->getData<bool>(r, 12);
     DBObject dbObject(objectName, objectType);
-    dbObject.setOwner(sqliteConnector_->getData<bool>(r, 14));
+    dbObject.setOwner(sqliteConnector_->getData<bool>(r, 15));
     dbObject.setObjectKey(objectKey);
     dbObject.setPrivileges(privs);
     switch (objectType) {

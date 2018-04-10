@@ -827,7 +827,7 @@ void print_all_hardware_info(ClientContext& context) {
   std::cout << tss.str();
 }
 
-static void print_privs(const std::vector<bool>& privs) {
+static void print_privs(const std::vector<bool>& privs, TDBObjectType::type type) {
   for (size_t j = 0; j < privs.size(); j++) {
     if (privs[j]) {
       switch (j) {
@@ -836,7 +836,7 @@ static void print_privs(const std::vector<bool>& privs) {
           break;
         }
         case 1: {
-          std::cout << " insert";
+          std::cout << (type == TDBObjectType::DashboardDBObjectType ? " edit" : " insert");
           break;
         }
         case 2: {
@@ -845,6 +845,10 @@ static void print_privs(const std::vector<bool>& privs) {
         }
         case 3: {
           std::cout << " truncate";
+          break;
+        }
+        case 4: {
+          std::cout << " create_dashboard";
           break;
         }
         default: { CHECK(false); }
@@ -879,7 +883,7 @@ void get_db_objects_for_grantee(ClientContext& context) {
         }
         default: { CHECK(false); }
       }
-      print_privs(db_object.privs);
+      print_privs(db_object.privs, db_object.objectType);
       std::cout << std::endl;
     }
   }
@@ -904,7 +908,7 @@ void get_db_object_privs(ClientContext& context) {
         continue;
       }
       std::cout << db_object.grantee << " privileges:";
-      print_privs(db_object.privs);
+      print_privs(db_object.privs, db_object.objectType);
       std::cout << std::endl;
     }
   }

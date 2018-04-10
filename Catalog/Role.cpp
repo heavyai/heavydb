@@ -100,7 +100,8 @@ static bool hasEnoughPrivs(const DBObject* real, const DBObject* requested) {
     if ((requested->getPrivileges().select && !real->getPrivileges().select) ||
         (requested->getPrivileges().insert && !real->getPrivileges().insert) ||
         (requested->getPrivileges().create && !real->getPrivileges().create) ||
-        (requested->getPrivileges().truncate && !real->getPrivileges().truncate)) {
+        (requested->getPrivileges().truncate && !real->getPrivileges().truncate) ||
+        (requested->getPrivileges().create_dashboard && !real->getPrivileges().create_dashboard)) {
       return false;
     } else {
       return true;

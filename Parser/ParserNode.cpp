@@ -2636,7 +2636,7 @@ static AccessPrivileges parseStringPrivs(const std::string& privs,
                                          const std::string& object_name) {
   AccessPrivileges result;
   if (privs.compare("ALL") == 0) {
-    result = (objectType == TableDBObjectType) ? AccessPrivileges::ALL_NO_DB : (objectType == DashboardDBObjectType)
+    result = (objectType == TableDBObjectType) ? AccessPrivileges::ALL_TABLE : (objectType == DashboardDBObjectType)
                                                                                    ? AccessPrivileges::ALL_DASHBOARD
                                                                                    : AccessPrivileges::ALL;
   } else if (privs.compare("SELECT") == 0) {
@@ -2649,6 +2649,8 @@ static AccessPrivileges parseStringPrivs(const std::string& privs,
     result.truncate = true;
   } else if (privs.compare("EDIT") == 0 && (objectType == DashboardDBObjectType)) {
     result.insert = true;
+  } else if (privs.compare("CREATE DASHBOARD") == 0 && (objectType == DatabaseDBObjectType)) {
+    result.create_dashboard = true;
   } else if (privs.compare("SHARE") == 0 && (objectType == DashboardDBObjectType)) {
     throw std::runtime_error("SHARE on a dashboard is not implemented in current version.");
     // privs.update = true;
@@ -2758,6 +2760,9 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) 
   }
   if (privs.truncate) {
     printf(" TRUNCATE");
+  }
+  if (privs.create_dashboard) {
+    printf(" CREATE DASHBOARD");
   }
   printf(".\n");
 }

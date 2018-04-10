@@ -72,22 +72,24 @@ struct AccessPrivileges {
   bool insert = false;
   bool create = false;
   bool truncate = false;
+  bool create_dashboard = false;
 
   AccessPrivileges() {}
 
-  AccessPrivileges(bool select, bool insert, bool create, bool truncate)
-      : select(select), insert(insert), create(create), truncate(truncate) {}
+  AccessPrivileges(bool select, bool insert, bool create, bool truncate, bool create_dashboard)
+      : select(select), insert(insert), create(create), truncate(truncate), create_dashboard(create_dashboard) {}
 
-  void reset() { select = insert = create = truncate = false; }
-  bool hasAny() const { return select || insert || create || truncate; }
+  void reset() { select = insert = create = truncate = create_dashboard = false; }
+  bool hasAny() const { return select || insert || create || truncate || create_dashboard; }
 
   static const AccessPrivileges ALL;
-  static const AccessPrivileges ALL_NO_DB;
+  static const AccessPrivileges ALL_TABLE;
   static const AccessPrivileges ALL_DASHBOARD;
   static const AccessPrivileges SELECT;
   static const AccessPrivileges INSERT;
   static const AccessPrivileges CREATE;
   static const AccessPrivileges TRUNCATE;
+  static const AccessPrivileges CREATE_DASHBOARD;
 };
 
 class DBObject {

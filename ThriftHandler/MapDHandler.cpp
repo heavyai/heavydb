@@ -928,7 +928,7 @@ static TDBObject serialize_db_object(const std::string& roleName, const DBObject
       CHECK(false);
   }
   auto privs = inObject.getPrivileges();
-  outObject.privs = {privs.select, privs.insert, privs.create, privs.truncate};
+  outObject.privs = {privs.select, privs.insert, privs.create, privs.truncate, privs.create_dashboard};
   return outObject;
 }
 
@@ -1207,6 +1207,9 @@ bool MapDHandler::hasTableAccessPrivileges(const TableDescriptor* td, const TSes
         dbObject.setPrivileges(AccessPrivileges::TRUNCATE);
         break;
       case (3):
+        dbObject.setPrivileges(AccessPrivileges::CREATE_DASHBOARD);
+        break;
+      case (4):
         break;
       default:
         CHECK(false);

@@ -400,6 +400,7 @@ struct TAccessPrivileges {
   2: bool insert_;
   3: bool create_;
   4: bool truncate_;
+  5: bool create_dashboard_;
 }
 
 enum TDBObjectType {
