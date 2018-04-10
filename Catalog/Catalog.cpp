@@ -125,7 +125,7 @@ void SysCatalog::initDB() {
         "references mapd_databases, tableId integer references mapd_tables, columnId integer references "
         "mapd_columns, "
         "privSelect bool, privInsert bool, privCreate bool, privTruncate bool, privDelete bool, privUpdate bool, "
-        "UNIQUE(roleName, dbObjectType, dbId, tableId, columnId))");
+        "userid integer, UNIQUE(roleName, dbObjectType, dbId, tableId, columnId))");
   } else {
     sqliteConnector_->query(
         "CREATE TABLE mapd_privileges (userid integer references mapd_users, dbid integer references mapd_databases, "
@@ -138,6 +138,7 @@ void SysCatalog::checkAndExecuteMigrations() {
   if (check_privileges_) {
     createUserRoles();
     migratePrivileges();
+    updateObjectPrivileges();
   } else {
     migratePrivileged_old();
   }
@@ -186,7 +187,7 @@ void SysCatalog::migratePrivileges() {
         "references mapd_databases, tableId integer references mapd_tables, columnId integer references "
         "mapd_columns, "
         "privSelect bool, privInsert bool, privCreate bool, privTruncate bool, privDelete bool, privUpdate bool, "
-        "UNIQUE(roleName, dbObjectType, dbId, tableId, columnId))");
+        "userid integer, UNIQUE(roleName, dbObjectType, dbId, tableId, columnId))");
     // get the list of databases and their grantees
     sqliteConnector_->query("SELECT userid, dbid FROM mapd_privileges WHERE select_priv = 1 and insert_priv = 1");
     size_t numRows = sqliteConnector_->getNumRows();
@@ -219,9 +220,9 @@ void SysCatalog::migratePrivileges() {
           "dbId, "
           "tableId, "
           "columnId, "
-          "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate) VALUES (?1, ?2, ?3, ?4, ?5, ?6, "
-          "?7, "
-          "?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+          "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate, userid) VALUES (?1, ?2, ?3, ?4, "
+          "?5,"
+          " ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
           std::vector<std::string>{users_by_id[grantee.first],
                                    "1",
                                    dbs_by_id[grantee.second],
@@ -235,7 +236,8 @@ void SysCatalog::migratePrivileges() {
                                    std::to_string(true),
                                    std::to_string(true),
                                    std::to_string(false),
-                                   std::to_string(false)});
+                                   std::to_string(false),
+                                   std::to_string(MAPD_ROOT_USER_ID)});
     }
     for (auto user : user_has_privs) {
       if (user.second == false && user.first != MAPD_ROOT_USER_ID) {
@@ -245,9 +247,9 @@ void SysCatalog::migratePrivileges() {
             "dbId, "
             "tableId, "
             "columnId, "
-            "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate) VALUES (?1, ?2, ?3, ?4, ?5, ?6, "
-            "?7, "
-            "?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate, userid) VALUES (?1, ?2, ?3, ?4, "
+            "?5,"
+            " ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             std::vector<std::string>{users_by_id[user.first],
                                      "1",
                                      MAPD_SYSTEM_DB,
@@ -261,10 +263,32 @@ void SysCatalog::migratePrivileges() {
                                      std::to_string(false),
                                      std::to_string(false),
                                      std::to_string(false),
-                                     std::to_string(false)});
+                                     std::to_string(false),
+                                     std::to_string(MAPD_ROOT_USER_ID)});
+        ;
       }
     }
   } catch (const std::exception&) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+}
+
+void SysCatalog::updateObjectPrivileges() {
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_->query("PRAGMA TABLE_INFO(mapd_object_privileges)");
+    std::vector<std::string> cols;
+    for (size_t i = 0; i < sqliteConnector_->getNumRows(); i++) {
+      cols.push_back(sqliteConnector_->getData<std::string>(i, 1));
+    }
+    if (std::find(cols.begin(), cols.end(), std::string("userid")) == cols.end()) {
+      string queryString("ALTER TABLE mapd_object_privileges ADD userid integer DEFAULT " +
+                         std::to_string(MAPD_ROOT_USER_ID));
+      sqliteConnector_->query(queryString);
+    }
+  } catch (std::exception& e) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
   }
@@ -427,7 +451,8 @@ void SysCatalog::createDatabase(const string& name, int owner) {
       "INSERT INTO mapd_databases (name, owner) VALUES (?, " + std::to_string(owner) + ")", name);
   SqliteConnector dbConn(name, basePath_ + "/mapd_catalogs/");
   dbConn.query(
-      "CREATE TABLE mapd_tables (tableid integer primary key, name text unique, ncolumns integer, isview boolean, "
+      "CREATE TABLE mapd_tables (tableid integer primary key, name text unique, userid integer, ncolumns integer, "
+      "isview boolean, "
       "fragments text, frag_type integer, max_frag_rows integer, max_chunk_size bigint, frag_page_size integer, "
       "max_rows bigint, partitions text, shard_column_id integer, shard integer, num_shards integer, version_num "
       "BIGINT DEFAULT 1) ");
@@ -577,8 +602,7 @@ void SysCatalog::createDBObject(const UserMetadata& user,
   } else {
     object.setPrivileges(AccessPrivileges::ALL_NO_DB);
   }
-  object.setUserPrivateObject();
-  object.setOwningUserId(user.userId);
+  object.setOwner(user.userId);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     if (user.userName.compare(MAPD_ROOT_USER)) {  // no need to grant to suser, has all privs by default
@@ -619,8 +643,9 @@ void SysCatalog::grantDBObjectPrivileges_unsafe(const std::string& roleName,
       "INSERT OR REPLACE INTO mapd_object_privileges(roleName, roleType, objectName, objectType, dbObjectType, dbId, "
       "tableId, "
       "columnId, "
-      "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, "
-      "?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+      "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate, userid) VALUES (?1, ?2, ?3, ?4, ?5, "
+      "?6, ?7, "
+      "?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
       std::vector<std::string>{roleName,
                                std::to_string(rl->isUserPrivateRole()),
                                object.getName(),
@@ -634,7 +659,8 @@ void SysCatalog::grantDBObjectPrivileges_unsafe(const std::string& roleName,
                                std::to_string(privs.create),
                                std::to_string(privs.truncate),
                                std::to_string(false),
-                               std::to_string(false)});
+                               std::to_string(false),
+                               std::to_string(object.getOwner())});
 }
 
 // REVOKE INSERT ON TABLE payroll_table FROM payroll_dept_role;
@@ -660,9 +686,8 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
         "dbId, "
         "tableId, "
         "columnId, "
-        "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate) VALUES (?1, ?2, ?3, ?4, ?5, ?6, "
-        "?7, "
-        "?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate, userid) VALUES (?1, ?2, ?3, ?4, ?5,"
+        " ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         std::vector<std::string>{roleName,
                                  std::to_string(rl->isUserPrivateRole()),
                                  object.getName(),
@@ -676,7 +701,8 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
                                  std::to_string(privs.create),
                                  std::to_string(privs.truncate),
                                  std::to_string(false),
-                                 std::to_string(false)});
+                                 std::to_string(false),
+                                 std::to_string(object.getOwner())});
   } else {
     sqliteConnector_->query_with_text_params(
         "DELETE FROM mapd_object_privileges WHERE roleName = ?1 and roleType = ?2 and dbObjectType = ?3 and dbId = "
@@ -716,7 +742,7 @@ bool SysCatalog::verifyDBObjectOwnership(const UserMetadata& user,
     if (rl) {
       object.loadKey(catalog);
       auto* found_object = rl->findDbObject(object.getObjectKey());
-      if (found_object && found_object->getOwningUserId() == user.userId) {
+      if (found_object && found_object->getOwner() == user.userId) {
         return true;
       }
     }
@@ -768,8 +794,8 @@ void SysCatalog::createRole_unsafe(const std::string& roleName, const bool& user
   sqliteConnector_->query_with_text_params(
       "INSERT INTO mapd_object_privileges(roleName, roleType, objectName, objectType, dbObjectType, dbId, tableId, "
       "columnId, "
-      "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, "
-      "?, ?, ?, ?, ?)",
+      "privSelect, privInsert, privCreate, privTruncate, privDelete, privUpdate, userid) "
+      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       std::vector<std::string>{roleName,
                                std::to_string(userPrivateRole),
                                dbObject.getName(),
@@ -783,7 +809,8 @@ void SysCatalog::createRole_unsafe(const std::string& roleName, const bool& user
                                std::to_string(privs.create),
                                std::to_string(privs.truncate),
                                std::to_string(false),
-                               std::to_string(false)});
+                               std::to_string(false),
+                               std::to_string(dbObject.getOwner())});
 }
 
 void SysCatalog::dropRole_unsafe(const std::string& roleName) {
@@ -1053,6 +1080,10 @@ void Catalog::updateTableDescriptorSchema() {
       string queryString("ALTER TABLE mapd_tables ADD key_metainfo TEXT DEFAULT '[]'");
       sqliteConnector_.query(queryString);
     }
+    if (std::find(cols.begin(), cols.end(), std::string("userid")) == cols.end()) {
+      string queryString("ALTER TABLE mapd_tables ADD userid integer DEFAULT " + std::to_string(MAPD_ROOT_USER_ID));
+      sqliteConnector_.query(queryString);
+    }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
@@ -1313,8 +1344,7 @@ void Catalog::CheckAndExecuteMigrations() {
 void SysCatalog::buildRoleMap() {
   string roleQuery(
       "SELECT roleName, roleType, objectName, objectType, dbObjectType, dbId, tableId, columnId, privSelect, "
-      "privInsert, privCreate, privTruncate, "
-      "privDelete, privUpdate from mapd_object_privileges");
+      "privInsert, privCreate, privTruncate, privDelete, privUpdate, userid from mapd_object_privileges");
   sqliteConnector_->query(roleQuery);
   size_t numRows = sqliteConnector_->getNumRows();
   std::vector<std::string> objectKeyStr(4);
@@ -1335,17 +1365,28 @@ void SysCatalog::buildRoleMap() {
     privs.insert = sqliteConnector_->getData<bool>(r, 9);
     privs.create = sqliteConnector_->getData<bool>(r, 10);
     privs.truncate = sqliteConnector_->getData<bool>(r, 11);
-    {
-      DBObject dbObject(objectName, objectType);
-      dbObject.setObjectKey(objectKey);
-      dbObject.setPrivileges(privs);
-      Role* rl = getMetadataForRole(roleName);
-      if (!rl) {
-        rl = new GroupRole(roleName, userPrivateRole);
-        roleMap_[to_upper(roleName)] = rl;
-      }
-      rl->grantPrivileges(dbObject);
+    DBObject dbObject(objectName, objectType);
+    dbObject.setOwner(sqliteConnector_->getData<bool>(r, 14));
+    dbObject.setObjectKey(objectKey);
+    dbObject.setPrivileges(privs);
+    switch (objectType) {
+      case DatabaseDBObjectType:
+        dbObject.setId(dbObject.getObjectKey().dbId);
+        break;
+      case TableDBObjectType:
+      case DashboardDBObjectType:
+        dbObject.setId(dbObject.getObjectKey().tableId);
+        break;
+      case ColumnDBObjectType:
+      default:
+        CHECK(false);
     }
+    Role* rl = getMetadataForRole(roleName);
+    if (!rl) {
+      rl = new GroupRole(roleName, userPrivateRole);
+      roleMap_[to_upper(roleName)] = rl;
+    }
+    rl->grantPrivileges(dbObject);
   }
 }
 
@@ -1405,7 +1446,7 @@ void Catalog::buildMaps() {
 
   string tableQuery(
       "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, max_chunk_size, frag_page_size, "
-      "max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo from mapd_tables");
+      "max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo, userid from mapd_tables");
   sqliteConnector_.query(tableQuery);
   numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
@@ -1425,6 +1466,7 @@ void Catalog::buildMaps() {
     td->shard = sqliteConnector_.getData<int>(r, 12);
     td->nShards = sqliteConnector_.getData<int>(r, 13);
     td->keyMetainfo = sqliteConnector_.getData<string>(r, 14);
+    td->userId = sqliteConnector_.getData<int>(r, 15);
     if (!td->isView) {
       td->fragmenter = nullptr;
     }
@@ -2029,12 +2071,13 @@ void Catalog::createTable(TableDescriptor& td,
   if (td.persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
     try {
       sqliteConnector_.query_with_text_params(
-          "INSERT INTO mapd_tables (name, ncolumns, isview, fragments, frag_type, max_frag_rows, max_chunk_size, "
+          "INSERT INTO mapd_tables (name, userid, ncolumns, isview, fragments, frag_type, max_frag_rows, "
+          "max_chunk_size, "
           "frag_page_size, max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo) VALUES (?, ?, ?, "
-          "?, "
-          "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 
           std::vector<std::string>{td.tableName,
+                                   std::to_string(td.userId),
                                    std::to_string(td.nColumns),
                                    std::to_string(td.isView),
                                    "",

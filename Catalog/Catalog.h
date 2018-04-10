@@ -390,6 +390,7 @@ class SysCatalog {
   void createUserRoles();
   void migratePrivileges();
   void migratePrivileged_old();
+  void updateObjectPrivileges();
   void dropUserRole(const std::string& userName);
 
   // Here go functions not wrapped into transactions (necessary for nested calls)

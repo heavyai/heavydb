@@ -95,6 +95,7 @@ class DBObject {
 
   std::string getName() const { return objectName_; }
   int32_t getId() const { return objectId_; }
+  void setId(int32_t id) { objectId_ = id; }
   DBObjectType getType() const { return objectType_; }
   DBObjectKey getObjectKey() const { return objectKey_; }
   void setObjectKey(const DBObjectKey& objectKey) { objectKey_ = objectKey; }
@@ -105,10 +106,8 @@ class DBObject {
   void updatePrivileges(const DBObject& object);
   void grantPrivileges(const DBObject& object) { updatePrivileges(object); }
   void revokePrivileges(const DBObject& object);
-  bool isUserPrivateObject() const { return userPrivateObject_; }
-  void setUserPrivateObject() { userPrivateObject_ = true; }
-  int32_t getOwningUserId() const { return owningUserId_; }
-  void setOwningUserId(int32_t userId) { owningUserId_ = userId; }
+  int32_t getOwner() const { return ownerId_; }
+  void setOwner(int32_t userId) { ownerId_ = userId; }
   bool privsValid() const { return privsValid_; }
   void unvalidate() { privsValid_ = false; }
   std::vector<std::string> toString() const;
@@ -121,8 +120,7 @@ class DBObject {
   DBObjectKey objectKey_;
   AccessPrivileges objectPrivs_;
   bool privsValid_;
-  bool userPrivateObject_;  // false if not use private
-  int32_t owningUserId_;    // 0 - if not owned by user
+  int32_t ownerId_;  // 0 - if not owned by user
 };
 
 #endif /* DBOBJECT_H */

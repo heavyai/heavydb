@@ -1960,6 +1960,7 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   TableDescriptor td;
   td.tableName = *table;
+  td.userId = session.get_currentUser().userId;
   td.nColumns = columns.size();
   td.isView = false;
   td.fragmenter = nullptr;
@@ -2198,6 +2199,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   }
   TableDescriptor td;
   td.tableName = table_name_;
+  td.userId = session.get_currentUser().userId;
   td.nColumns = column_descriptors.size();
   td.isView = false;
   td.fragmenter = nullptr;
@@ -3059,6 +3061,7 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   catalog.get_calciteMgr().process(session, query_after_shim, true, true);
   TableDescriptor td;
   td.tableName = view_name_;
+  td.userId = session.get_currentUser().userId;
   td.nColumns = 0;
   td.isView = true;
   td.viewSQL = query_after_shim;

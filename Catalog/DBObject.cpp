@@ -17,16 +17,14 @@ const AccessPrivileges AccessPrivileges::TRUNCATE = AccessPrivileges(false, fals
 
 DBObject::DBObject(const std::string& name, const DBObjectType& type) : objectName_(name), objectType_(type) {
   privsValid_ = false;
-  userPrivateObject_ = false;
-  owningUserId_ = 0;
+  ownerId_ = 0;
   objectId_ = 0;
 }
 
 DBObject::DBObject(const int32_t id, const DBObjectType& type) : objectId_(id), objectType_(type) {
   objectName_ = "";
   privsValid_ = false;
-  userPrivateObject_ = false;
-  owningUserId_ = 0;
+  ownerId_ = 0;
 }
 
 DBObject::DBObject(const DBObject& object)
@@ -34,8 +32,7 @@ DBObject::DBObject(const DBObject& object)
       objectId_(object.objectId_),
       objectType_(object.objectType_),
       privsValid_(object.privsValid_),
-      userPrivateObject_(object.userPrivateObject_),
-      owningUserId_(object.owningUserId_) {
+      ownerId_(object.ownerId_) {
   setObjectKey(object.objectKey_);
   copyPrivileges(object);
 }
@@ -96,6 +93,7 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
       objectKey.dbObjectType = static_cast<int32_t>(DatabaseDBObjectType);
       objectKey.dbId = db.dbId;
       objectId_ = db.dbId;
+      ownerId_ = db.dbOwner;
       break;
     }
     case TableDBObjectType: {
@@ -107,6 +105,7 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
       objectKey.dbId = catalog.get_currentDB().dbId;
       objectKey.tableId = table->tableId;
       objectId_ = table->tableId;
+      ownerId_ = table->userId;
       break;
     }
     case DashboardDBObjectType: {
@@ -118,6 +117,7 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
       objectKey.dbId = catalog.get_currentDB().dbId;
       objectKey.tableId = dashboard->viewId;
       objectName_ = dashboard->viewName;
+      ownerId_ = dashboard->userId;
       break;
     }
     case ColumnDBObjectType:

@@ -33,6 +33,7 @@ struct TableDescriptor {
   int32_t tableId; /**< tableId starts at 0 for valid tables. */
   int32_t shard;
   std::string tableName; /**< tableName is the name of the table table -must be unique */
+  int32_t userId;
   int32_t nColumns;
   bool isView;
   std::string viewSQL;
