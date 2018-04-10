@@ -46,6 +46,9 @@ enum DBObjectType {
   DashboardDBObjectType
 };
 
+std::string DBObjectTypeToString(DBObjectType type);
+DBObjectType DBObjectTypeFromString(const std::string& type);
+
 struct DBObjectKey {
   int32_t dbObjectType = -1;
   int32_t dbId = -1;
@@ -80,6 +83,7 @@ struct AccessPrivileges {
 
   static const AccessPrivileges ALL;
   static const AccessPrivileges ALL_NO_DB;
+  static const AccessPrivileges ALL_DASHBOARD;
   static const AccessPrivileges SELECT;
   static const AccessPrivileges INSERT;
   static const AccessPrivileges CREATE;

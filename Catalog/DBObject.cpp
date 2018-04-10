@@ -10,10 +10,38 @@
 
 const AccessPrivileges AccessPrivileges::ALL = AccessPrivileges(true, true, true, true);
 const AccessPrivileges AccessPrivileges::ALL_NO_DB = AccessPrivileges(true, true, false, true);
+const AccessPrivileges AccessPrivileges::ALL_DASHBOARD = AccessPrivileges(true, true, false, false);
 const AccessPrivileges AccessPrivileges::SELECT = AccessPrivileges(true, false, false, false);
 const AccessPrivileges AccessPrivileges::INSERT = AccessPrivileges(false, true, false, false);
 const AccessPrivileges AccessPrivileges::CREATE = AccessPrivileges(false, false, true, false);
 const AccessPrivileges AccessPrivileges::TRUNCATE = AccessPrivileges(false, false, false, true);
+
+std::string DBObjectTypeToString(DBObjectType type) {
+  switch (type) {
+    case DatabaseDBObjectType:
+      return "DATABASE";
+    case TableDBObjectType:
+      return "TABLE";
+    case DashboardDBObjectType:
+      return "DASHBOARD";
+    case ColumnDBObjectType:
+      return "COLUMN";
+    default:
+      CHECK(false);
+  }
+}
+
+DBObjectType DBObjectTypeFromString(const std::string& type) {
+  if (type.compare("DATABASE") == 0) {
+    return DatabaseDBObjectType;
+  } else if (type.compare("TABLE") == 0) {
+    return TableDBObjectType;
+  } else if (type.compare("DASHBOARD") == 0) {
+    return DashboardDBObjectType;
+  } else {
+    throw std::runtime_error("DB object type " + type + " is not supported.");
+  }
+}
 
 DBObject::DBObject(const std::string& name, const DBObjectType& type) : objectName_(name), objectType_(type) {
   privsValid_ = false;
@@ -111,7 +139,8 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
     case DashboardDBObjectType: {
       auto dashboard = catalog.getMetadataForDashboard(getId());
       if (!dashboard) {
-        throw std::runtime_error("Failure generating DB object key. Dashboard " + getName() + " does not exist.");
+        throw std::runtime_error("Failure generating DB object key. Dashboard with ID " + std::to_string(getId()) +
+                                 " does not exist.");
       }
       objectKey.dbObjectType = static_cast<int32_t>(TableDBObjectType);
       objectKey.dbId = catalog.get_currentDB().dbId;

@@ -48,7 +48,7 @@
       parseTrees.emplace_back(new DropRoleStmt(role_name));                                                             \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    boost::regex grant_privileges_expr{R"(GRANT\s+([A-Za-z_][A-Za-z0-9\$_]*)\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z_][A-Za-z0-9\$_\.]*)\s+TO\s+([A-Za-z_][A-Za-z0-9\$_]*)\s*;)", \
+    boost::regex grant_privileges_expr{R"(GRANT\s+([A-Za-z_][A-Za-z0-9\$_]*)\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z0-9\$_\.]*)\s+TO\s+([A-Za-z_][A-Za-z0-9\$_]*)\s*;)", \
                                        boost::regex::extended | boost::regex::icase};                                   \
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, grant_privileges_expr)) {                \
       const auto priv = what[1].str();                                                                                  \
@@ -58,7 +58,7 @@
       parseTrees.emplace_back(new GrantPrivilegesStmt(priv, object_type, object_name, role_name));                      \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    boost::regex revoke_privileges_expr{R"(REVOKE\s+([A-Za-z_][A-Za-z0-9\$_]*)\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z_][A-Za-z0-9\$_\.]*)\s+FROM\s+([A-Za-z_][A-Za-z0-9\$_]*)\s*;)", \
+    boost::regex revoke_privileges_expr{R"(REVOKE\s+([A-Za-z_][A-Za-z0-9\$_]*)\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z0-9\$_\.]*)\s+FROM\s+([A-Za-z_][A-Za-z0-9\$_]*)\s*;)", \
                                        boost::regex::extended | boost::regex::icase};                                   \
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, revoke_privileges_expr)) {               \
       const auto priv = what[1].str();                                                                                  \
@@ -68,7 +68,7 @@
       parseTrees.emplace_back(new RevokePrivilegesStmt(priv, object_type, object_name, role_name));                     \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    boost::regex show_privileges_expr{R"(SHOW\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z_][A-Za-z0-9\$_\.]*)\s+FOR\s+([A-Za-z_][A-Za-z0-9\$_]*)\s*;)", \
+    boost::regex show_privileges_expr{R"(SHOW\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z0-9\$_\.]*)\s+FOR\s+([A-Za-z_][A-Za-z0-9\$_]*)\s*;)", \
                                        boost::regex::extended | boost::regex::icase};                                   \
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, show_privileges_expr)) {                 \
       const auto object_type = what[1].str();                                                                           \

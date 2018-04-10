@@ -597,6 +597,17 @@ void SysCatalog::createDBObject(const UserMetadata& user,
                                 const Catalog_Namespace::Catalog& catalog) {
   DBObject object(objectName, type);
   object.loadKey(catalog);
+  switch (type) {
+    case TableDBObjectType:
+      object.setPrivileges(AccessPrivileges::ALL_NO_DB);
+      break;
+    case DashboardDBObjectType:
+      object.setPrivileges(AccessPrivileges::ALL_DASHBOARD);
+      break;
+    default:
+      object.setPrivileges(AccessPrivileges::ALL);
+      break;
+  }
   if (type == DatabaseDBObjectType) {
     object.setPrivileges(AccessPrivileges::ALL);
   } else {
@@ -722,7 +733,9 @@ void SysCatalog::revokeDBObjectPrivilegesFromAllRoles_unsafe(const std::string& 
   }
   DBObject dbObject(objectName, objectType);
   dbObject.loadKey(*catalog);
-  auto privs = objectType == DatabaseDBObjectType ? AccessPrivileges::ALL : AccessPrivileges::ALL_NO_DB;
+  auto privs = (objectType == TableDBObjectType) ? AccessPrivileges::ALL_NO_DB : (objectType == DashboardDBObjectType)
+                                                                                     ? AccessPrivileges::ALL_DASHBOARD
+                                                                                     : AccessPrivileges::ALL;
   dbObject.setPrivileges(privs);
   std::vector<std::string> roles = getRoles(true, true, 0);
   for (size_t i = 0; i < roles.size(); i++) {
@@ -737,14 +750,12 @@ void SysCatalog::revokeDBObjectPrivilegesFromAllRoles_unsafe(const std::string& 
 bool SysCatalog::verifyDBObjectOwnership(const UserMetadata& user,
                                          DBObject object,
                                          const Catalog_Namespace::Catalog& catalog) {
-  if (object.getType() == TableDBObjectType) {
-    Role* rl = instance().getMetadataForUserRole(user.userId);
-    if (rl) {
-      object.loadKey(catalog);
-      auto* found_object = rl->findDbObject(object.getObjectKey());
-      if (found_object && found_object->getOwner() == user.userId) {
-        return true;
-      }
+  Role* rl = instance().getMetadataForUserRole(user.userId);
+  if (rl) {
+    object.loadKey(catalog);
+    auto* found_object = rl->findDbObject(object.getObjectKey());
+    if (found_object && found_object->getOwner() == user.userId) {
+      return true;
     }
   }
   return false;

@@ -2612,7 +2612,7 @@ std::string extractObjectNameFromHierName(const std::string& objectHierName,
       throw std::runtime_error("DB object name is not correct " + objectHierName);
     }
   } else {
-    if (objectType.compare("TABLE") == 0) {
+    if (objectType.compare("TABLE") == 0 || objectType.compare("DASHBOARD") == 0) {
       switch (componentNames.size()) {
         case (1): {
           objectName = componentNames[0];
@@ -2631,6 +2631,46 @@ std::string extractObjectNameFromHierName(const std::string& objectHierName,
   return objectName;
 }
 
+static AccessPrivileges parseStringPrivs(const std::string& privs,
+                                         const DBObjectType& objectType,
+                                         const std::string& object_name) {
+  AccessPrivileges result;
+  if (privs.compare("ALL") == 0) {
+    result = (objectType == TableDBObjectType) ? AccessPrivileges::ALL_NO_DB : (objectType == DashboardDBObjectType)
+                                                                                   ? AccessPrivileges::ALL_DASHBOARD
+                                                                                   : AccessPrivileges::ALL;
+  } else if (privs.compare("SELECT") == 0) {
+    result.select = true;
+  } else if (privs.compare("INSERT") == 0 && (objectType != DashboardDBObjectType)) {
+    result.insert = true;
+  } else if ((privs.compare("CREATE") == 0) && (objectType == DatabaseDBObjectType)) {
+    result.create = true;
+  } else if (privs.compare("TRUNCATE") == 0 && (objectType != DashboardDBObjectType)) {
+    result.truncate = true;
+  } else if (privs.compare("EDIT") == 0 && (objectType == DashboardDBObjectType)) {
+    result.insert = true;
+  } else if (privs.compare("SHARE") == 0 && (objectType == DashboardDBObjectType)) {
+    throw std::runtime_error("SHARE on a dashboard is not implemented in current version.");
+    // privs.update = true;
+  } else {
+    throw std::runtime_error("Privileges " + privs + " on DB object " + object_name + " are not correct.");
+  }
+  return result;
+}
+
+static DBObject createObject(const std::string& objectName, DBObjectType objectType) {
+  if (objectType == DashboardDBObjectType) {
+    try {
+      int32_t dashboard_id = stoi(objectName);
+      return DBObject(dashboard_id, objectType);
+    } catch (const std::exception&) {
+      throw std::runtime_error("Privileges on dashboards should be changed via integer dashboard ID");
+    }
+  } else {
+    return DBObject(objectName, objectType);
+  }
+}
+
 // GRANT SELECT/INSERT/CREATE ON TABLE payroll_table TO payroll_dept_role;
 void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!SysCatalog::instance().arePrivilegesOn()) {
@@ -2642,16 +2682,8 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
   const auto& currentUser = session.get_currentUser();
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
   const auto objectName = extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
-  DBObjectType objectType = TableDBObjectType;
-  if (parserObjectType.compare("DATABASE") == 0) {
-    objectType = DatabaseDBObjectType;
-  } else {
-    if (parserObjectType.compare("TABLE") != 0) {
-      throw std::runtime_error("DB object type " + parserObjectType + " is not supported.");
-    }
-  }
-  DBObject dbObject(objectName, objectType);
-
+  DBObjectType objectType = DBObjectTypeFromString(parserObjectType);
+  DBObject dbObject = createObject(objectName, objectType);
   /* verify object ownership if not suser */
   if (!currentUser.isSuper) {
     if (!SysCatalog::instance().verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
@@ -2659,24 +2691,8 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
                                " failed. It can only be executed by super user or owner of the object.");
     }
   }
-
   /* set proper values of privileges & grant them to the object */
-  AccessPrivileges privs;
-  const auto priv = boost::to_upper_copy<std::string>(get_priv());
-  if (priv.compare("ALL") == 0) {
-    privs = objectType == DatabaseDBObjectType ? AccessPrivileges::ALL : AccessPrivileges::ALL_NO_DB;
-  } else if (priv.compare("SELECT") == 0) {
-    privs.select = true;
-  } else if (priv.compare("INSERT") == 0) {
-    privs.insert = true;
-  } else if ((priv.compare("CREATE") == 0) && (objectType == DatabaseDBObjectType)) {
-    privs.create = true;
-  } else if (priv.compare("TRUNCATE") == 0) {
-    privs.truncate = true;
-  } else {
-    throw std::runtime_error("Privileges " + get_priv() + " being granted to DB object " + get_object() +
-                             " are not correct.");
-  }
+  AccessPrivileges privs = parseStringPrivs(boost::to_upper_copy<std::string>(get_priv()), objectType, get_object());
   dbObject.setPrivileges(privs);
   SysCatalog::instance().grantDBObjectPrivileges(get_role(), dbObject, catalog);
 }
@@ -2692,16 +2708,8 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
   const auto& currentUser = session.get_currentUser();
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
   const auto objectName = extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
-  DBObjectType objectType = TableDBObjectType;
-  if (parserObjectType.compare("DATABASE") == 0) {
-    objectType = DatabaseDBObjectType;
-  } else {
-    if (parserObjectType.compare("TABLE") != 0) {
-      throw std::runtime_error("DB object type " + parserObjectType + " is not supported.");
-    }
-  }
-  DBObject dbObject(objectName, objectType);
-
+  DBObjectType objectType = DBObjectTypeFromString(parserObjectType);
+  DBObject dbObject = createObject(objectName, objectType);
   /* verify object ownership if not suser */
   if (!currentUser.isSuper) {
     if (!SysCatalog::instance().verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
@@ -2709,24 +2717,8 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
                                " failed. It can only be executed by super user or owner of the object.");
     }
   }
-
   /* set proper values of privileges & revoke them from the object */
-  AccessPrivileges privs;
-  const auto priv = boost::to_upper_copy<std::string>(get_priv());
-  if (priv.compare("ALL") == 0) {
-    privs = objectType == DatabaseDBObjectType ? AccessPrivileges::ALL : AccessPrivileges::ALL_NO_DB;
-  } else if (priv.compare("SELECT") == 0) {
-    privs.select = true;
-  } else if (priv.compare("INSERT") == 0) {
-    privs.insert = true;
-  } else if ((priv.compare("CREATE") == 0) && (objectType == DatabaseDBObjectType)) {
-    privs.create = true;
-  } else if (priv.compare("TRUNCATE") == 0) {
-    privs.truncate = true;
-  } else {
-    throw std::runtime_error("Privileges " + get_priv() + " being granted to DB object " + get_object() +
-                             " are not correct.");
-  }
+  AccessPrivileges privs = parseStringPrivs(boost::to_upper_copy<std::string>(get_priv()), objectType, get_object());
   dbObject.setPrivileges(privs);
   SysCatalog::instance().revokeDBObjectPrivileges(get_role(), dbObject, catalog);
 }
@@ -2742,16 +2734,8 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) 
   const auto& currentUser = session.get_currentUser();
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
   const auto objectName = extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
-  DBObjectType objectType = TableDBObjectType;
-  if (parserObjectType.compare("DATABASE") == 0) {
-    objectType = DatabaseDBObjectType;
-  } else {
-    if (parserObjectType.compare("TABLE") != 0) {
-      throw std::runtime_error("DB object type " + parserObjectType + " is not supported.");
-    }
-  }
-  DBObject dbObject(objectName, objectType);
-
+  DBObjectType objectType = DBObjectTypeFromString(parserObjectType);
+  DBObject dbObject = createObject(objectName, objectType);
   /* verify object ownership if not suser */
   if (!currentUser.isSuper) {
     if (!SysCatalog::instance().verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
@@ -2759,7 +2743,6 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) 
                                " failed. It can only be executed by super user or owner of the object.");
     }
   }
-
   /* get values of privileges for the object and report them */
   SysCatalog::instance().getDBObjectPrivileges(get_role(), dbObject, catalog);
   AccessPrivileges privs = dbObject.getPrivileges();
