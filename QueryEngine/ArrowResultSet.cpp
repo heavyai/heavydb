@@ -141,13 +141,21 @@ size_t ArrowResultSet::rowCount() const {
   return record_batch_->num_rows();
 }
 
-std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(const ExecutionResult& results) {
-  const auto& targets_meta = results.getTargetsMeta();
+std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(const ExecutionResult* results,
+                                                          const std::shared_ptr<ResultSet>& rows) {
   std::vector<std::string> col_names;
-  for (const auto& target_meta : targets_meta) {
-    col_names.push_back(target_meta.get_resname());
+
+  if (results) {
+    const auto& targets_meta = results->getTargetsMeta();
+    for (auto& meta : targets_meta) {
+      col_names.push_back(meta.get_resname());
+    }
+  } else {
+    for (unsigned int i = 0; i < rows->colCount(); i++) {
+      col_names.push_back("col_" + std::to_string(i));
+    }
   }
-  const auto serialized_arrow_output = results.getRows()->getSerializedArrowOutput(col_names);
+  const auto serialized_arrow_output = rows->getSerializedArrowOutput(col_names);
 
   arrow::io::BufferReader schema_reader(serialized_arrow_output.schema);
 
@@ -169,4 +177,8 @@ std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(const ExecutionResult&
   // reference that memory (zero copy).
 
   return boost::make_unique<ArrowResultSet>(batch);
+}
+
+std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(const ExecutionResult& results) {
+  return result_set_arrow_loopback(&results, results.getRows());
 }

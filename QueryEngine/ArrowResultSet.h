@@ -20,6 +20,7 @@
 #include "SqlTypesLayout.h"
 #include "TargetMetaInfo.h"
 #include "TargetValue.h"
+#include "ResultSet.h"
 #include "../Shared/sqltypes.h"
 
 #include <arrow/api.h>
@@ -55,5 +56,10 @@ class ExecutionResult;
 // Take results from the executor, serializes them to Arrow and then deserialize
 // them to ArrowResultSet, which can then be used by the existing test framework.
 std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(const ExecutionResult& results);
+
+// QUERYENGINE_// Take results from the executor, serializes them to Arrow and then deserialize
+// them to ArrowResultSet, which can then be used by the existing test framework.
+std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(const ExecutionResult* results,
+                                                          const std::shared_ptr<ResultSet>& rows);
 
 #endif  // QUERYENGINE_ARROWRESULTSET_H

@@ -51,50 +51,6 @@ using namespace ::apache::thrift::transport;
 extern bool g_aggregator;
 extern size_t g_leaf_count;
 
-AggregatedColRange column_ranges_from_thrift(const std::vector<TColumnRange>& thrift_column_ranges) {
-  AggregatedColRange column_ranges;
-  for (const auto& thrift_column_range : thrift_column_ranges) {
-    PhysicalInput phys_input{thrift_column_range.col_id, thrift_column_range.table_id};
-    switch (thrift_column_range.type) {
-      case TExpressionRangeType::INTEGER:
-        column_ranges.setColRange(phys_input,
-                                  ExpressionRange::makeIntRange(thrift_column_range.int_min,
-                                                                thrift_column_range.int_max,
-                                                                thrift_column_range.bucket,
-                                                                thrift_column_range.has_nulls));
-        break;
-      case TExpressionRangeType::FLOAT:
-        column_ranges.setColRange(
-            phys_input,
-            ExpressionRange::makeFloatRange(
-                thrift_column_range.fp_min, thrift_column_range.fp_max, thrift_column_range.has_nulls));
-        break;
-      case TExpressionRangeType::DOUBLE:
-        column_ranges.setColRange(
-            phys_input,
-            ExpressionRange::makeDoubleRange(
-                thrift_column_range.fp_min, thrift_column_range.fp_max, thrift_column_range.has_nulls));
-        break;
-      case TExpressionRangeType::INVALID:
-        column_ranges.setColRange(phys_input, ExpressionRange::makeInvalidRange());
-        break;
-      default:
-        CHECK(false);
-    }
-  }
-  return column_ranges;
-}
-
-StringDictionaryGenerations string_dictionary_generations_from_thrift(
-    const std::vector<TDictionaryGeneration>& thrift_string_dictionary_generations) {
-  StringDictionaryGenerations string_dictionary_generations;
-  for (const auto& thrift_string_dictionary_generation : thrift_string_dictionary_generations) {
-    string_dictionary_generations.setGeneration(thrift_string_dictionary_generation.dict_id,
-                                                thrift_string_dictionary_generation.entry_count);
-  }
-  return string_dictionary_generations;
-}
-
 TableGenerations table_generations_from_thrift(const std::vector<TTableGeneration>& thrift_table_generations) {
   TableGenerations table_generations;
   for (const auto& thrift_table_generation : thrift_table_generations) {

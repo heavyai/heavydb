@@ -18,6 +18,7 @@
 #define QUERY_RUNNER_H
 
 #include "../QueryEngine/CompilationOptions.h"
+#include "LeafAggregator.h"
 
 #include <memory>
 #include <string>
@@ -30,6 +31,14 @@ class ResultSet;
 class ExecutionResult;
 
 namespace QueryRunner {
+
+LeafAggregator* get_leaf_aggregator();
+
+Catalog_Namespace::SessionInfo* get_distributed_session(const char* db_path);
+
+Catalog_Namespace::SessionInfo* get_session(const char* db_path,
+                                            std::vector<LeafHostInfo> string_servers,
+                                            std::vector<LeafHostInfo> leaf_servers);
 
 Catalog_Namespace::SessionInfo* get_session(const char* db_path);
 
@@ -47,6 +56,11 @@ std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
 
 void run_ddl_statement(const std::string& create_table_stmt,
                        const std::unique_ptr<Catalog_Namespace::SessionInfo>& session);
+
+std::shared_ptr<ResultSet> run_sql_distributed(const std::string& query_str,
+                                               const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
+                                               const ExecutorDeviceType device_type,
+                                               bool allow_loop_joins);
 
 }  // namespace QueryRunner
 

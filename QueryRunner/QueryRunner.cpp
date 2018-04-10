@@ -26,9 +26,12 @@
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/RelAlgExecutor.h"
 
+#include <random>
 #include <boost/filesystem/operations.hpp>
 
 #define CALCITEPORT 39093
+
+extern bool g_aggregator;
 
 namespace {
 
@@ -79,7 +82,15 @@ Planner::RootPlan* parse_plan(const std::string& query_str,
 
 namespace QueryRunner {
 
-Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
+LeafAggregator* leaf_aggregator = nullptr;
+
+LeafAggregator* get_leaf_aggregator() {
+  return leaf_aggregator;
+}
+
+Catalog_Namespace::SessionInfo* get_session(const char* db_path,
+                                            std::vector<LeafHostInfo> string_servers,
+                                            std::vector<LeafHostInfo> leaf_servers) {
   std::string db_name{MAPD_SYSTEM_DB};
   std::string user_name{"mapd"};
   std::string passwd{"HyperInteractive"};
@@ -106,11 +117,17 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
     CHECK(sys_cat.getMetadataForDB(db_name, db));
     CHECK(user.isSuper || (user.userId == db.dbOwner));
   }
-  return new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
-                                                base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, calcite),
-                                            user,
-                                            ExecutorDeviceType::GPU,
-                                            "");
+
+  g_aggregator = !leaf_servers.empty();
+
+  auto cat = std::make_shared<Catalog_Namespace::Catalog>(base_path.string(), db, dataMgr, string_servers, calcite);
+  Catalog_Namespace::SessionInfo* session = new Catalog_Namespace::SessionInfo(cat, user, ExecutorDeviceType::GPU, "");
+
+  return session;
+}
+
+Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
+  return get_session(db_path, std::vector<LeafHostInfo>{}, std::vector<LeafHostInfo>{});
 }
 
 ExecutionResult run_select_query(const std::string& query_str,
@@ -118,6 +135,8 @@ ExecutionResult run_select_query(const std::string& query_str,
                                  const ExecutorDeviceType device_type,
                                  const bool hoist_literals,
                                  const bool allow_loop_joins) {
+  CHECK(!g_aggregator);
+
   const auto& cat = session->get_catalog();
   auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
   CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
@@ -128,11 +147,36 @@ ExecutionResult run_select_query(const std::string& query_str,
   return ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
 }
 
+TExecuteMode::type to_execute_mode(ExecutorDeviceType device_type) {
+  switch (device_type) {
+    case ExecutorDeviceType::Hybrid:
+      return TExecuteMode::type::HYBRID;
+    case ExecutorDeviceType::GPU:
+      return TExecuteMode::type::GPU;
+    case ExecutorDeviceType::CPU:
+      return TExecuteMode::type::CPU;
+  }
+
+  CHECK(false);
+  return TExecuteMode::type::HYBRID;
+}
+
+std::shared_ptr<ResultSet> run_sql_distributed(const std::string& query_str,
+                                               const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
+                                               const ExecutorDeviceType device_type,
+                                               bool allow_loop_joins) {
+  return nullptr;
+}
+
 std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
                                             const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
                                             const ExecutorDeviceType device_type,
                                             const bool hoist_literals,
                                             const bool allow_loop_joins) {
+  if (g_aggregator) {
+    return run_sql_distributed(query_str, session, device_type, allow_loop_joins);
+  }
+
   ParserWrapper pw{query_str};
   if (is_calcite_path_permissable(pw)) {
     const auto execution_result = run_select_query(query_str, session, device_type, hoist_literals, allow_loop_joins);
@@ -156,6 +200,11 @@ std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
 
 void run_ddl_statement(const std::string& create_table_stmt,
                        const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
+  if (g_aggregator) {
+    run_sql_distributed(create_table_stmt, session, ExecutorDeviceType::CPU, false);
+    return;
+  }
+
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;

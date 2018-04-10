@@ -48,5 +48,5 @@ set(parser_source_files
 
 add_library(Parser ${BisonppOutput} ${FlexppOutput} ${CMAKE_CURRENT_BINARY_DIR}/parser.h ${parser_source_files})
 add_dependencies(Parser ParserFiles ScannerFiles)
-target_link_libraries(Parser Shared QueryEngine)
+target_link_libraries(Parser Shared QueryEngine Catalog DataMgr)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
