@@ -222,20 +222,17 @@ void InsertOrderFragmenter::updateColumnMetadata(const ColumnDescriptor* cd,
   if (lctype.is_integer()) {
     buffer->encoder->updateStats(lmax, null);
     buffer->encoder->updateStats(lmin, null);
-    chunkMetadata[cd->columnId].fillChunkStats<int64_t>(lmin, lmax, null);
   } else if (lctype.is_fp()) {
     buffer->encoder->updateStats(dmax, null);
     buffer->encoder->updateStats(dmin, null);
-    chunkMetadata[cd->columnId].fillChunkStats<double>(lmin, lmax, null);
   } else if (lctype.is_decimal()) {
     buffer->encoder->updateStats((int64_t)(dmax * pow(10, lctype.get_scale())), null);
     buffer->encoder->updateStats((int64_t)(dmin * pow(10, lctype.get_scale())), null);
-    chunkMetadata[cd->columnId].fillChunkStats<int64_t>(lmin, lmax, null);
   } else if (!lctype.is_array() && !(lctype.is_string() && kENCODING_DICT != lctype.get_compression())) {
     buffer->encoder->updateStats(lmax, null);
     buffer->encoder->updateStats(lmin, null);
-    chunkMetadata[cd->columnId].fillChunkStats<int64_t>(lmin, lmax, null);
   }
+  buffer->encoder->getMetadata(chunkMetadata[cd->columnId]);
 
   if (updelRoll.dirty_chunks.count(chunk.get()) == 0)
     updelRoll.dirty_chunks.emplace(chunk.get(), chunk);
