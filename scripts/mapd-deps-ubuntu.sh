@@ -83,7 +83,7 @@ make -j $(nproc)
 make install
 popd
 
-VERS=1.11.3
+VERS=1.14.3
 wget --continue https://github.com/Blosc/c-blosc/archive/v$VERS.tar.gz
 tar xvf v$VERS.tar.gz
 BDIR="c-blosc-$VERS/build"
@@ -103,7 +103,7 @@ make -j $(nproc)
 make install
 popd
 
-VERS=2017.10.16.00
+VERS=2018.05.07.00
 wget --continue https://github.com/facebook/folly/archive/v$VERS.tar.gz
 tar xvf v$VERS.tar.gz
 pushd folly-$VERS/folly

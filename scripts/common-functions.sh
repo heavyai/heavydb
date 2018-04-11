@@ -59,7 +59,7 @@ function install_arrow() {
 
 }
 
-AWSCPP_VERSION=1.3.10
+AWSCPP_VERSION=1.4.76
 
 function install_awscpp() {
     # default c++ standard support
