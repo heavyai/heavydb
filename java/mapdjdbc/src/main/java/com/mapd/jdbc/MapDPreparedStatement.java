@@ -136,9 +136,9 @@ class MapDPreparedStatement implements PreparedStatement {
 
   @Override
   public ResultSet executeQuery() throws SQLException {
-    MAPDLOGGER.debug("Entered");
     if (isNewBatch) {
       String qsql = getQuery();
+      MAPDLOGGER.debug("executeQuery, sql=" + qsql);
       return stmt.executeQuery(qsql);
     }
     throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
@@ -348,6 +348,7 @@ class MapDPreparedStatement implements PreparedStatement {
         tsr.addToCols(tsv);
       }
       rows.add(tsr);
+      MAPDLOGGER.debug("addBatch, rows=" + rows.size());
     } else {
       throw new UnsupportedOperationException("addBatch only supported for insert, line:" + new Throwable().
               getStackTrace()[0].getLineNumber());
@@ -620,7 +621,7 @@ class MapDPreparedStatement implements PreparedStatement {
 
   @Override
   public void close() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    MAPDLOGGER.debug("close");
     if (stmt != null) {
       //TODO MAT probably more needed here
       stmt.close();
@@ -672,7 +673,7 @@ class MapDPreparedStatement implements PreparedStatement {
   }
 
   @Override
-  public void setQueryTimeout(int seconds) throws SQLException { 
+  public void setQueryTimeout(int seconds) throws SQLException {
     MAPDLOGGER.debug("Entered");
     SQLWarning warning = new SQLWarning("Query timeouts are not supported.  Substituting a value of zero.");
     if (rootWarning == null)
@@ -795,26 +796,29 @@ class MapDPreparedStatement implements PreparedStatement {
   @Override
   public void clearBatch() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    rows.clear();
+    if (rows != null) {
+      rows.clear();
+    }
   }
 
   @Override
   public int[] executeBatch() throws SQLException {
-    MAPDLOGGER.debug("Entered");
     int ret[] = null;
     if (rows != null) {
+      MAPDLOGGER.debug("executeBatch, rows=" + rows.size());
       try {
         // send the batch
         client.load_table(session, insertTableName, rows);
       } catch (TMapDException ex) {
-        throw new SQLException("addBatch failed : " + ex.getError_msg());
+        throw new SQLException("executeBatch failed: " + ex.getError_msg());
       } catch (TException ex) {
-        throw new SQLException("addBatch failed : " + ex.toString());
+        throw new SQLException("executeBatch failed: " + ex.toString());
       }
       ret = new int[rows.size()];
       for (int i = 0; i < rows.size(); i++) {
         ret[i] = 1;
       }
+      clearBatch();
     }
     return ret;
   }
