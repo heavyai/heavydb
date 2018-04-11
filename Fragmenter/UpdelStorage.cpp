@@ -116,12 +116,12 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
   };
 
   const auto segsz = (nrow + ncore - 1) / ncore;
-  const auto& lctype = cd->columnType;
   auto dbuf = chunk->get_buffer();
   auto d0 = dbuf->getMemoryPtr();
   dbuf->setUpdated();
   for (size_t rbegin = 0, c = 0; rbegin < nrow; ++c, rbegin += segsz) {
     threads.emplace_back(std::async(std::launch::async, [=, &null, &lmin, &lmax, &dmin, &dmax] {
+      SQLTypeInfo lctype = cd->columnType;
       for (size_t r = rbegin; r < std::min(rbegin + segsz, nrow); r++) {
         const auto roffs = fragOffsets[r];
         auto dptr = d0 + roffs * get_uncompressed_element_size(lctype);
@@ -160,6 +160,8 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
             auto dval = std::atof(sval.data());
             if (lctype.is_boolean())
               dval = sval == "t" || sval == "true" || sval == "T" || sval == "True";
+            else if (lctype.is_time())
+              dval = StringToDatum(sval, lctype).timeval;
             if (lctype.is_fp() || lctype.is_decimal()) {
               put_scalar<double>(dptr, lctype, dval);
               set_minmax<double>(dmin[c], dmax[c], dval);

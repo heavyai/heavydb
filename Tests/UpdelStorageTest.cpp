@@ -146,6 +146,8 @@ bool update_a_encoded_string_column(const string& table,
   return r_cnt == (commit ? cnt / step : 0);
 }
 
+#define update_a_datetime_column update_a_encoded_string_column
+
 bool update_a_boolean_column(const string& table,
                              const string& column,
                              const int64_t cnt,
@@ -328,6 +330,10 @@ TEST_F(UpdateStorageTest, Half_string_vendor_id_rollback) {
   EXPECT_TRUE(update_a_encoded_string_column("trips", "vendor_id", 100, 2, "xyzabc", false));
 }
 
+TEST_F(UpdateStorageTest, Half_datetime_pickup_datetime_id) {
+  EXPECT_TRUE(update_a_datetime_column("trips", "pickup_datetime", 100, 2, "2018-04-06 18:27:59"));
+}
+
 TEST_F(UpdateStorageTest, All_boolean_deleted) {
   EXPECT_TRUE(update_a_boolean_column("trips", "deleted", 100, 1, true));
 }
@@ -340,6 +346,23 @@ TEST_F(UpdateStorageTest, Half_boolean_deleted) {
 }
 TEST_F(UpdateStorageTest, Half_boolean_deleted_rollback) {
   EXPECT_TRUE(update_a_boolean_column("trips", "deleted", 100, 2, true, false));
+}
+
+const char* create_table_times =
+    "	CREATE TABLE times ("
+    "			t_date      DATE,"
+    "			t_time      TIME,"
+    "			t_datetime  TIMESTAMP,"
+    "			t_idx       INTEGER"
+    "			);";
+
+TEST(UpdateStorageTest_Times, Update_times) {
+  EXPECT_NO_THROW(init_table_data("times", create_table_times, ""););
+  EXPECT_NO_THROW(run_query("insert into times values('2000-1-1', '01:01:01', '2000-1-1 01:01:01', 1)"););
+  EXPECT_TRUE(update_a_datetime_column("times", "t_date", 1, 1, "2018-1-1"));
+  EXPECT_TRUE(update_a_datetime_column("times", "t_time", 1, 1, "18:01:01"));
+  EXPECT_TRUE(update_a_datetime_column("times", "t_datetime", 1, 1, "2018-1-1 18:01:01"));
+  EXPECT_NO_THROW(run_ddl("drop table times;"););
 }
 }
 
