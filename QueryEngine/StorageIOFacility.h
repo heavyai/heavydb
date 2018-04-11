@@ -16,41 +16,48 @@ class DefaultIOFacet {
   using UpdateTargetOffsetList = std::vector<uint64_t>;
   using UpdateTargetTypeList = std::vector<TargetMetaInfo>;
   using UpdateTargetColumnNamesList = std::vector<std::string>;
+  using TransactionLog = typename FragmenterType::ModifyTransactionTracker;
+  using TransactionLogPtr = std::unique_ptr<TransactionLog>;
+
+  template <typename TRANSACTION_FUNCTOR>
+  static void performTransaction(TRANSACTION_FUNCTOR transaction_functor) {
+    TransactionLog transaction_tracker;
+    transaction_functor(transaction_tracker);
+    transaction_tracker.commitUpdate();
+  }
 
   template <typename CATALOG_TYPE,
-            typename TABLE_TYPE,
-            typename COLUMN_NAME,
-            typename FRAGMENT_INDEX,
-            typename FRAGMENT_OFFSET,
-            typename UPDATE_VALUE_TYPE>
-  void updateColumn(CATALOG_TYPE const& cat,
-                    TABLE_TYPE const& table_descriptor,
-                    COLUMN_NAME const& column_name,
-                    FRAGMENT_INDEX frag_index,
-                    FRAGMENT_OFFSET frag_offset,
-                    UPDATE_VALUE_TYPE update_value) {
+            typename TABLE_DESCRIPTOR_TYPE,
+            typename COLUMN_NAME_TYPE,
+            typename FRAGMENT_INDEX_TYPE,
+            typename FRAGMENT_OFFSET_LIST_TYPE,
+            typename UPDATE_VALUES_LIST_TYPE>
+  static void updateColumn(CATALOG_TYPE const& cat,
+                           TABLE_DESCRIPTOR_TYPE const& table_descriptor,
+                           COLUMN_NAME_TYPE const& column_name,
+                           FRAGMENT_INDEX_TYPE const frag_index,
+                           FRAGMENT_OFFSET_LIST_TYPE const& frag_offsets,
+                           UPDATE_VALUES_LIST_TYPE const& update_values,
+                           TransactionLog& transaction_tracker) {
     const auto fragmenter = dynamic_cast<Fragmenter_Namespace::InsertOrderFragmenter*>(table_descriptor->fragmenter);
     CHECK(fragmenter);
-    typename FragmenterType::ModifyTransactionTracker transaction_tracker;
     ColumnDescriptor const* target_column = cat.getMetadataForColumn(table_descriptor->tableId, column_name);
 
     fragmenter->updateColumn(&cat,
                              table_descriptor,
                              target_column,
                              frag_index,
-                             UpdateTargetOffsetList{frag_offset},
-                             std::vector<ScalarTargetValue>{update_value},
+                             frag_offsets,
+                             update_values,
                              Data_Namespace::MemoryLevel::CPU_LEVEL,
                              transaction_tracker);
-
-    transaction_tracker.commitUpdate();
   }
 
   template <typename CATALOG_TYPE, typename TABLE_TYPE, typename FRAGMENT_INDEX, typename VICTIM_OFFSET_LIST>
-  void deleteColumns(CATALOG_TYPE const& cat,
-                     TABLE_TYPE const& table_descriptor,
-                     FRAGMENT_INDEX frag_index,
-                     VICTIM_OFFSET_LIST& victims) {
+  static void deleteColumns(CATALOG_TYPE const& cat,
+                            TABLE_TYPE const& table_descriptor,
+                            FRAGMENT_INDEX frag_index,
+                            VICTIM_OFFSET_LIST& victims) {
     const auto fragmenter = dynamic_cast<Fragmenter_Namespace::InsertOrderFragmenter*>(table_descriptor->fragmenter);
     CHECK(fragmenter);
     ColumnDescriptor const* deleted_column_desc = cat.getDeletedColumn(table_descriptor);
@@ -86,6 +93,7 @@ class StorageIOFacility {
   using UpdateTargetOffsetList = typename IOFacility::UpdateTargetOffsetList;
   using UpdateTargetTypeList = typename IOFacility::UpdateTargetTypeList;
   using UpdateTargetColumnNamesList = typename IOFacility::UpdateTargetColumnNamesList;
+  using UpdateTargetColumnNameType = typename UpdateTargetColumnNamesList::value_type;
 
   class UpdateParameters {
    public:
@@ -113,38 +121,50 @@ class StorageIOFacility {
   StorageIOFacility(ExecutorType* executor, CatalogType const& catalog) : executor_(executor), catalog_(catalog) {}
 
   UpdateCallback yieldUpdateCallback(UpdateParameters update_parameters) {
+    using OffsetVector = std::vector<uint64_t>;
+    using ScalarTargetValueVector = std::vector<ScalarTargetValue>;
+
     auto callback = [this, update_parameters](FragmentUpdaterType const& update_log) -> void {
-      auto fragment_index(update_log.getFragmentIndex());
-      UpdateTargetOffsetList victim_offsets;
+      IOFacility::performTransaction(
+          [this, &update_log, update_parameters](typename IOFacility::TransactionLog& transaction_tracker) -> void {
+            auto fragment_index(update_log.getFragmentIndex());
 
-      for (size_t i = 0; i < update_log.getEntryCount(); ++i) {
-        auto const row(update_log.getEntryAt(i));
-        CHECK(!row.empty());
-        CHECK(row.size() == update_parameters.getTargetsMetaInfoSize());
-        int starting_result_column_index = row.size() - update_parameters.getUpdateColumnCount() - 1;
-        CHECK(starting_result_column_index >= 0);
+            // Iterate over each column
+            for (decltype(update_parameters.getUpdateColumnCount()) column_index = 0;
+                 column_index < update_parameters.getUpdateColumnCount();
+                 column_index++) {
+              OffsetVector column_offsets;
+              ScalarTargetValueVector scalar_target_values;
 
-        // Fetch offset
-        auto terminal_column_iter = std::prev(row.end());
-        const auto scalar_tv = boost::get<ScalarTargetValue>(&*terminal_column_iter);
-        CHECK(scalar_tv);
-        uint64_t fragment_offset = static_cast<uint64_t>(*(boost::get<int64_t>(scalar_tv)));
+              // Iterate over each row, aggregate column update information into column_update_info
+              for (decltype(update_log.getEntryCount()) row_index = 0; row_index < update_log.getEntryCount();
+                   row_index++) {
+                auto const row(update_log.getEntryAt(row_index));
 
-        for (int i = starting_result_column_index, column_name_index = 0; i < static_cast<int>(row.size() - 1);
-             i++, column_name_index++) {
-          const auto scalar_tv = boost::get<ScalarTargetValue>(row[i]);
-          // auto& type_info = update_parameters.getTargetsMetaInfo()[i].get_type_info();
+                CHECK(!row.empty());
+                CHECK(row.size() == update_parameters.getTargetsMetaInfoSize());
+                int result_set_column_index = row.size() - update_parameters.getUpdateColumnCount() - 1 + column_index;
 
-          // FIX-ME:  Maybe speed up things and fetch column descriptors for re-use
-          IOFacility().updateColumn(catalog_,
-                                    update_parameters.getTableDescriptor(),
-                                    update_parameters.getUpdateColumnNames()[column_name_index],
-                                    fragment_index,
-                                    fragment_offset,
-                                    scalar_tv);
-        }
-      }
+                // Fetch offset
+                auto terminal_column_iter = std::prev(row.end());
+                const auto frag_offset_scalar_tv = boost::get<ScalarTargetValue>(&*terminal_column_iter);
+                CHECK(frag_offset_scalar_tv);
+
+                column_offsets.push_back(static_cast<uint64_t>(*(boost::get<int64_t>(frag_offset_scalar_tv))));
+                scalar_target_values.push_back(boost::get<ScalarTargetValue>(row[result_set_column_index]));
+              }
+
+              IOFacility::updateColumn(catalog_,
+                                       update_parameters.getTableDescriptor(),
+                                       update_parameters.getUpdateColumnNames()[column_index],
+                                       fragment_index,
+                                       column_offsets,
+                                       scalar_target_values,
+                                       transaction_tracker);
+            }
+          });
     };
+
     return callback;
   }
 
@@ -160,11 +180,10 @@ class StorageIOFacility {
         const auto scalar_tv = boost::get<ScalarTargetValue>(&*terminal_column_iter);
         CHECK(scalar_tv);
 
-        // TODO:  Flag ppan's PR to stay with int64 instead of uint64
         uint64_t fragment_offset = static_cast<uint64_t>(*(boost::get<int64_t>(scalar_tv)));
         victim_offsets.push_back(fragment_offset);
       }
-      IOFacility().deleteColumns(catalog_, table_descriptor, fragment_index, victim_offsets);
+      IOFacility::deleteColumns(catalog_, table_descriptor, fragment_index, victim_offsets);
     };
     return callback;
   }
