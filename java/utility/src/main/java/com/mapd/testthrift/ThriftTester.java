@@ -153,6 +153,18 @@ public class ThriftTester {
         }
         count++;
       }
+      
+      int dash = client.create_dashboard(session, "test1", "state", "image", "metadata");
+      
+      logger.info ("dash id is " + dash);
+      
+      int dash2 = client.create_dashboard(session, "test2", "state2", "image2", "metadata2");
+      
+      logger.info ("dash2 id is " + dash2);
+      
+      client.replace_dashboard(session, dash2, "test3", "mapd", "state3", "image3", "metadata3");
+      
+      logger.info ("replaced");
 
       // Now disconnect
       logger.info("Trying to disconnect session " + session);

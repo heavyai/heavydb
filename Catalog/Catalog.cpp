@@ -1618,6 +1618,10 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
 
 void Catalog::addFrontendViewToMap(FrontendViewDescriptor& vd) {
   std::lock_guard<std::mutex> lock(cat_mutex_);
+  addFrontendViewToMapNoLock(vd);
+}
+
+void Catalog::addFrontendViewToMapNoLock(FrontendViewDescriptor& vd) {
   FrontendViewDescriptor* new_vd = new FrontendViewDescriptor();
   *new_vd = vd;
   dashboardDescriptorMap_[std::to_string(vd.userId) + ":" + vd.viewName] = new_vd;
@@ -2617,40 +2621,50 @@ int32_t Catalog::createFrontendView(FrontendViewDescriptor& vd) {
   return vd.viewId;
 }
 
-void Catalog::replaceFrontendView(FrontendViewDescriptor& vd) {
+void Catalog::replaceDashboard(FrontendViewDescriptor& vd) {
   std::lock_guard<std::mutex> lock(cat_mutex_);
-  auto viewDescIt = dashboardDescriptorMap_.find(vd.userId + ":" + vd.viewName);
-  if (viewDescIt == dashboardDescriptorMap_.end()) {  // check to make sure view exists
-    LOG(ERROR) << "Error replacing dashboard for user " << vd.user << " dashboard " << vd.viewName
-               << " does not exist in map";
-    // TODO DASHSHARE throw exception
-    return;
+
+  bool found{false};
+  for (auto descp : dashboardDescriptorMap_) {
+    auto dash = descp.second;
+    if (dash->viewId == vd.viewId) {
+      found = true;
+      auto viewDescIt = dashboardDescriptorMap_.find(std::to_string(dash->userId) + ":" + dash->viewName);
+      if (viewDescIt == dashboardDescriptorMap_.end()) {  // check to make sure view exists
+        LOG(ERROR) << "No metadata for dashboard for user " << dash->userId << " dashboard " << dash->viewName
+                   << " does not exist in map";
+        throw runtime_error("No metadata for dashboard for user " + std::to_string(dash->userId) + " dashboard " +
+                            dash->viewName + " does not exist in map");
+      }
+      dashboardDescriptorMap_.erase(viewDescIt);
+      break;
+    }
   }
-  // found view in Map now remove it
-  dashboardDescriptorMap_.erase(viewDescIt);
+  if (!found) {
+    LOG(ERROR) << "Error replacing dashboard id " << vd.viewId << " does not exist in map";
+    throw runtime_error("Error replacing dashboard id " + std::to_string(vd.viewId) + " does not exist in map");
+  }
 
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    // TODO(andrew): this should be an upsert
     sqliteConnector_.query_with_text_params("SELECT id FROM mapd_dashboards WHERE id = ?",
                                             std::vector<std::string>{std::to_string(vd.viewId)});
     if (sqliteConnector_.getNumRows() > 0) {
       sqliteConnector_.query_with_text_params(
-          "UPDATE mapd_dashboards SET state = ?, image_hash = ?, metadata = ?, update_time = "
-          "datetime('now') where name = ? "
-          "and userid = ?",
+          "UPDATE mapd_dashboards SET name = ?, state = ?, image_hash = ?, metadata = ?, update_time = "
+          "datetime('now') where id = ? ",
           std::vector<std::string>{
-              vd.viewState, vd.imageHash, vd.viewMetadata, vd.viewName, std::to_string(vd.userId)});
+              vd.viewName, vd.viewState, vd.imageHash, vd.viewMetadata, std::to_string(vd.viewId)});
     } else {
-      // TODO DASHSHARE throw exception no table to replace in DB?
+      LOG(ERROR) << "Error replacing dashboard id " << vd.viewId << " does not exist in db";
+      throw runtime_error("Error replacing dashboard id " + std::to_string(vd.viewId) + " does not exist in db");
     }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
-
-  addFrontendViewToMap(vd);
+  addFrontendViewToMapNoLock(vd);
 }
 
 std::string Catalog::calculateSHA1(const std::string& data) {

@@ -2059,13 +2059,15 @@ void MapDHandler::replace_dashboard(const TSessionId& session,
   vd.imageHash = image_hash;
   vd.viewMetadata = dashboard_metadata;
   Catalog_Namespace::UserMetadata user;
-  SysCatalog::instance().getMetadataForUser(dashboard_owner, user);
+  if (!SysCatalog::instance().getMetadataForUser(dashboard_owner, user)) {
+    THROW_MAPD_EXCEPTION(std::string("Dashboard owner ") + dashboard_owner + " does not exist");
+  }
   vd.userId = user.userId;
   vd.user = dashboard_owner;
   vd.viewId = dashboard_id;
 
   try {
-    cat.replaceFrontendView(vd);
+    cat.replaceDashboard(vd);
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }

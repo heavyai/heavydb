@@ -153,7 +153,7 @@ class Catalog {
                           const std::list<ColumnDescriptor>& columns,
                           const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs);
   int32_t createFrontendView(FrontendViewDescriptor& vd);
-  void replaceFrontendView(FrontendViewDescriptor& vd);
+  void replaceDashboard(FrontendViewDescriptor& vd);
   std::string createLink(LinkDescriptor& ld, size_t min_length);
   void dropTable(const TableDescriptor* td);
   void truncateTable(const TableDescriptor* td);
@@ -267,6 +267,7 @@ class Catalog {
                            const TableDescriptor& td,
                            const bool isLogicalTable);
   void addFrontendViewToMap(FrontendViewDescriptor& vd);
+  void addFrontendViewToMapNoLock(FrontendViewDescriptor& vd);
   void addLinkToMap(LinkDescriptor& ld);
   void removeTableFromMap(const std::string& tableName, int tableId);
   void doDropTable(const TableDescriptor* td, SqliteConnector* conn);
