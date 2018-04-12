@@ -88,8 +88,8 @@ void update_prepare_offsets_values(const int64_t cnt,
                                    std::vector<ScalarTargetValue>& rhsValues) {
   for (int64_t i = 0; i < cnt; i += step) {
     fragOffsets.push_back(i);
-    rhsValues.push_back(ScalarTargetValue(val));
   }
+  rhsValues.push_back(ScalarTargetValue(val));
 }
 
 template <typename T>

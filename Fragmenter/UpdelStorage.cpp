@@ -120,63 +120,66 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
   auto d0 = dbuf->getMemoryPtr();
   dbuf->setUpdated();
   for (size_t rbegin = 0, c = 0; rbegin < nrow; ++c, rbegin += segsz) {
-    threads.emplace_back(std::async(std::launch::async, [=, &null, &lmin, &lmax, &dmin, &dmax] {
-      SQLTypeInfo lctype = cd->columnType;
-      for (size_t r = rbegin; r < std::min(rbegin + segsz, nrow); r++) {
-        const auto roffs = fragOffsets[r];
-        auto dptr = d0 + roffs * get_uncompressed_element_size(lctype);
-        const auto sv = &rhsValues[1 == nval ? 0 : r];
-        if (const auto v = boost::get<int64_t>(sv)) {
-          put_scalar<int64_t>(dptr, lctype, *v);
-          if (lctype.is_integer())
-            set_minmax<int64_t>(lmin[c], lmax[c], *v);
-          else
-            set_minmax<double>(dmin[c], dmax[c], *v);
-        } else if (const auto v = boost::get<double>(sv)) {
-          put_scalar<double>(dptr, lctype, *v);
-          if (lctype.is_integer())
-            set_minmax<int64_t>(lmin[c], lmax[c], *v);
-          else
-            set_minmax<double>(dmin[c], dmax[c], *v);
-        } else if (const auto v = boost::get<float>(sv)) {
-          put_scalar<float>(dptr, lctype, *v);
-          if (lctype.is_integer())
-            set_minmax<int64_t>(lmin[c], lmax[c], *v);
-          else
-            set_minmax<double>(dmin[c], dmax[c], *v);
-        } else if (const auto v = boost::get<NullableString>(sv)) {
-          const auto s = boost::get<std::string>(v);
-          const auto sval = s ? *s : std::string("");
-          if (lctype.is_string()) {
-            CHECK(kENCODING_DICT == lctype.get_compression());
-            auto dictDesc = catalog->getMetadataForDict(cd->columnType.get_comp_param());
-            CHECK(dictDesc);
-            auto stringDict = dictDesc->stringDict.get();
-            CHECK(stringDict);
-            auto sidx = stringDict->getOrAdd(sval);
-            put_scalar<int32_t>(dptr, lctype, sidx);
-            set_minmax<int64_t>(lmin[c], lmax[c], sidx);
-          } else if (sval.size() > 0) {
-            auto dval = std::atof(sval.data());
-            if (lctype.is_boolean())
-              dval = sval == "t" || sval == "true" || sval == "T" || sval == "True";
-            else if (lctype.is_time())
-              dval = StringToDatum(sval, lctype).timeval;
-            if (lctype.is_fp() || lctype.is_decimal()) {
-              put_scalar<double>(dptr, lctype, dval);
-              set_minmax<double>(dmin[c], dmax[c], dval);
-            } else {
-              put_scalar<int64_t>(dptr, lctype, dval);
-              set_minmax<int64_t>(lmin[c], lmax[c], dval);
-            }
-          } else {
-            put_null(dptr, lctype, cd->columnName);
-            null[c] = true;
+    threads.emplace_back(
+        std::async(std::launch::async, [=, &null, &lmin, &lmax, &dmin, &dmax, &fragOffsets, &rhsValues] {
+          SQLTypeInfo lctype = cd->columnType;
+          DictDescriptor* dictDesc{nullptr};
+          for (size_t r = rbegin; r < std::min(rbegin + segsz, nrow); r++) {
+            const auto roffs = fragOffsets[r];
+            auto dptr = d0 + roffs * get_uncompressed_element_size(lctype);
+            const auto sv = &rhsValues[1 == nval ? 0 : r];
+            if (const auto v = boost::get<int64_t>(sv)) {
+              put_scalar<int64_t>(dptr, lctype, *v);
+              if (lctype.is_integer())
+                set_minmax<int64_t>(lmin[c], lmax[c], *v);
+              else
+                set_minmax<double>(dmin[c], dmax[c], *v);
+            } else if (const auto v = boost::get<double>(sv)) {
+              put_scalar<double>(dptr, lctype, *v);
+              if (lctype.is_integer())
+                set_minmax<int64_t>(lmin[c], lmax[c], *v);
+              else
+                set_minmax<double>(dmin[c], dmax[c], *v);
+            } else if (const auto v = boost::get<float>(sv)) {
+              put_scalar<float>(dptr, lctype, *v);
+              if (lctype.is_integer())
+                set_minmax<int64_t>(lmin[c], lmax[c], *v);
+              else
+                set_minmax<double>(dmin[c], dmax[c], *v);
+            } else if (const auto v = boost::get<NullableString>(sv)) {
+              const auto s = boost::get<std::string>(v);
+              const auto sval = s ? *s : std::string("");
+              if (lctype.is_string()) {
+                CHECK(kENCODING_DICT == lctype.get_compression());
+                dictDesc = dictDesc ? dictDesc : const_cast<DictDescriptor*>(
+                                                     catalog->getMetadataForDict(cd->columnType.get_comp_param()));
+                CHECK(dictDesc);
+                auto stringDict = dictDesc->stringDict.get();
+                CHECK(stringDict);
+                auto sidx = stringDict->getOrAdd(sval);
+                put_scalar<int32_t>(dptr, lctype, sidx);
+                set_minmax<int64_t>(lmin[c], lmax[c], sidx);
+              } else if (sval.size() > 0) {
+                auto dval = std::atof(sval.data());
+                if (lctype.is_boolean())
+                  dval = sval == "t" || sval == "true" || sval == "T" || sval == "True";
+                else if (lctype.is_time())
+                  dval = StringToDatum(sval, lctype).timeval;
+                if (lctype.is_fp() || lctype.is_decimal()) {
+                  put_scalar<double>(dptr, lctype, dval);
+                  set_minmax<double>(dmin[c], dmax[c], dval);
+                } else {
+                  put_scalar<int64_t>(dptr, lctype, dval);
+                  set_minmax<int64_t>(lmin[c], lmax[c], dval);
+                }
+              } else {
+                put_null(dptr, lctype, cd->columnName);
+                null[c] = true;
+              }
+            } else
+              CHECK(false);
           }
-        } else
-          CHECK(false);
-      }
-    }));
+        }));
     if (threads.size() >= (size_t)cpu_threads())
       wait_cleanup_threads();
     if (failed_any_chunk)
