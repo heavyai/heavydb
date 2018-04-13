@@ -1036,6 +1036,35 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
       rex_function->getName() == std::string("TRUNCATE")) {
     return makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(
         rex_function->getType(), rex_function->getName(), translateFunctionArgs(rex_function));
+  } else if (rex_function->getName() == std::string("ROUND")) {
+    std::vector<std::shared_ptr<Analyzer::Expr>> args = translateFunctionArgs(rex_function);
+
+    if (rex_function->size() == 1) {
+      // push a 0 constant if 2nd operand is missing.
+      // this needs to be done as calcite returns
+      // only the 1st operand without defaulting the 2nd one
+      // when the user did not specify the 2nd operand.
+      SQLTypes t = kSMALLINT;
+      Datum d;
+      d.smallintval = 0;
+      args.push_back(makeExpr<Analyzer::Constant>(t, false, d));
+    }
+
+    // make sure we have only 2 operands
+    CHECK(args.size() == 2);
+
+    if (!args[0]->get_type_info().is_number()) {
+      throw std::runtime_error("Only numeric 1st operands are supported");
+    }
+
+    // the 2nd operand does not need to be a constant
+    // it can happily reference another integer column
+    if (!args[1]->get_type_info().is_integer()) {
+      throw std::runtime_error("Only integer 2nd operands are supported");
+    }
+
+    return makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(
+        rex_function->getType(), rex_function->getName(), args);
   }
   if (rex_function->getName() == std::string("DATETIME_PLUS")) {
     auto dt_plus = makeExpr<Analyzer::FunctionOper>(

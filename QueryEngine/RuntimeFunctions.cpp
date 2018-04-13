@@ -31,6 +31,7 @@
 #include <tuple>
 #include <thread>
 #include <chrono>
+#include <cmath>
 
 // decoder implementations
 

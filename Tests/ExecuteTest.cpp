@@ -26,6 +26,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/program_options.hpp>
 #include <sstream>
+#include <cmath>
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -4308,7 +4309,151 @@ TEST(Select, GeoSpatial) {
   }
 }
 
+TEST(Rounding, ROUND) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    // Check no 2nd parameter
+    // the cast is required. SQLite seems to only return FLOATs
+    // clang-format off
+    std::string select = "SELECT CAST(ROUND(s16) AS SMALLINT) AS r_s16, "
+        "CAST(ROUND(s32) AS INT) AS r_s32, "
+        "CAST(ROUND(s64) AS BIGINT) AS r_s64, "
+        "ROUND(f32) AS r_f32, "
+        "ROUND(f64) AS r_f64, "
+        "ROUND(n64) AS r_n64, "
+        "ROUND(d64) AS r_d64 FROM test_rounding";
+    // clang-format on
+    c(select, dt);
+
+    // Check negative 2nd parameter
+    for (int n = -9; n < 0; n++) {
+      std::string i = std::to_string(n);
+      std::string rounding_base = std::to_string((int)pow(10, std::abs(n))) + ".0";
+
+      // clang-format off
+      std::string sqlLite_select = "SELECT CAST(ROUND((s16/"+rounding_base+")) * "+rounding_base+" AS SMALLINT) AS r_s16, "
+              "CAST(ROUND((s32/"+rounding_base+")) * "+rounding_base+" AS INT) AS r_s32, "
+              "CAST(ROUND((s64/"+rounding_base+")) * "+rounding_base+" AS BIGINT) AS r_s64, "
+              "ROUND((f32/"+rounding_base+")) * "+rounding_base+" AS r_f32, "
+              "ROUND((f64/"+rounding_base+")) * "+rounding_base+" AS r_f64, "
+              "ROUND((n64/"+rounding_base+")) * "+rounding_base+" AS r_n64, "
+              "ROUND((d64/"+rounding_base+")) * "+rounding_base+" AS r_d64 FROM test_rounding";
+      // clang-format on
+
+      // clang-format off
+      select = "SELECT ROUND(s16, "+i+") AS r_s16, "
+              "ROUND(s32, "+i+") AS r_s32, "
+              "ROUND(s64, "+i+") AS r_s64, "
+              "ROUND(f32, "+i+") AS r_f32, "
+              "ROUND(f64, "+i+") AS r_f64, "
+              "ROUND(n64, "+i+") AS r_n64, "
+              "ROUND(d64, "+i+") AS r_d64 FROM test_rounding";
+      // clang-format on
+      c(select, sqlLite_select, dt);
+    }
+
+    // check positive 2nd parameter
+    for (int n = 0; n < 10; n++) {
+      std::string i = std::to_string(n);
+
+      // the cast is required. SQLite seems to only return FLOATs
+      // clang-format off
+      select = "SELECT CAST(ROUND(s16, "+i+") AS SMALLINT) AS r_s16, "
+              "CAST(ROUND(s32, "+i+") AS INT) AS r_s32, "
+              "CAST(ROUND(s64, "+i+") AS BIGINT) AS r_s64, "
+              "ROUND(f32, "+i+") AS r_f32, "
+              "ROUND(f64, "+i+") AS r_f64, "
+              "ROUND(n64, "+i+") AS r_n64, "
+              "ROUND(d64, "+i+") AS r_d64 FROM test_rounding";
+      // clang-format on
+      c(select, dt);
+    }
+
+    // check null 2nd parameter
+    // the cast is required. SQLite seems to only return FLOATs
+    // clang-format off
+    select = "SELECT CAST(ROUND(s16, (SELECT s16 FROM test_rounding WHERE s16 IS NULL)) AS SMALLINT) AS r_s16, "
+        "CAST(ROUND(s32, (SELECT s16 FROM test_rounding WHERE s16 IS NULL)) AS INT) AS r_s32, "
+        "CAST(ROUND(s64, (SELECT s16 FROM test_rounding WHERE s16 IS NULL)) AS BIGINT) AS r_s64, "
+        "ROUND(f32, (SELECT s16 FROM test_rounding WHERE s16 IS NULL)) AS r_f32, "
+        "ROUND(f64, (SELECT s16 FROM test_rounding WHERE s16 IS NULL)) AS r_f64, "
+        "ROUND(n64, (SELECT s16 FROM test_rounding WHERE s16 IS NULL)) AS r_n64, "
+        "ROUND(d64, (SELECT s16 FROM test_rounding WHERE s16 IS NULL)) AS r_d64 FROM test_rounding"; 
+    c(select, dt);
+    // clang-format on
+
+    // check that no -0.0 (negative zero) is returned
+    TargetValue val_s16 =
+        run_simple_agg("SELECT ROUND(CAST(-1.7 as SMALLINT), -1) as r_val FROM test_rounding WHERE s16 IS NULL;", dt);
+    TargetValue val_s32 =
+        run_simple_agg("SELECT ROUND(CAST(-1.7 as INT), -1) as r_val FROM test_rounding WHERE s16 IS NULL;", dt);
+    TargetValue val_s64 =
+        run_simple_agg("SELECT ROUND(CAST(-1.7 as BIGINT), -1) as r_val FROM test_rounding WHERE s16 IS NULL;", dt);
+    TargetValue val_f32 =
+        run_simple_agg("SELECT ROUND(CAST(-1.7 as FLOAT), -1) as r_val FROM test_rounding WHERE s16 IS NULL;", dt);
+    TargetValue val_f64 =
+        run_simple_agg("SELECT ROUND(CAST(-1.7 as DOUBLE), -1) as r_val FROM test_rounding WHERE s16 IS NULL;", dt);
+    TargetValue val_n64 = run_simple_agg(
+        "SELECT ROUND(CAST(-1.7 as NUMERIC(10,5)), -1) as r_val FROM test_rounding WHERE s16 IS NULL;", dt);
+    TargetValue val_d64 = run_simple_agg(
+        "SELECT ROUND(CAST(-1.7 as DECIMAL(10,5)), -1) as r_val FROM test_rounding WHERE s16 IS NULL;", dt);
+
+    ASSERT_TRUE(0 == boost::get<int64_t>(boost::get<ScalarTargetValue>(val_s16)));
+    ASSERT_TRUE(0 == boost::get<int64_t>(boost::get<ScalarTargetValue>(val_s32)));
+    ASSERT_TRUE(0 == boost::get<int64_t>(boost::get<ScalarTargetValue>(val_s64)));
+
+    ASSERT_FLOAT_EQ(0.0f, boost::get<float>(boost::get<ScalarTargetValue>(val_f32)));
+    ASSERT_FALSE(std::signbit(boost::get<float>(boost::get<ScalarTargetValue>(val_f32))));
+
+    ASSERT_DOUBLE_EQ(0.0, boost::get<double>(boost::get<ScalarTargetValue>(val_f64)));
+    ASSERT_FALSE(std::signbit(boost::get<double>(boost::get<ScalarTargetValue>(val_f64))));
+
+    ASSERT_DOUBLE_EQ(0.0, boost::get<double>(boost::get<ScalarTargetValue>(val_n64)));
+    ASSERT_FALSE(std::signbit(boost::get<double>(boost::get<ScalarTargetValue>(val_f64))));
+
+    ASSERT_DOUBLE_EQ(0.0, boost::get<double>(boost::get<ScalarTargetValue>(val_d64)));
+    ASSERT_FALSE(std::signbit(boost::get<double>(boost::get<ScalarTargetValue>(val_f64))));
+  }
+}
+
 namespace {
+
+int create_and_populate_rounding_table() {
+  try {
+    const std::string drop_test_table{"DROP TABLE IF EXISTS test_rounding;"};
+    run_ddl_statement(drop_test_table);
+    g_sqlite_comparator.query(drop_test_table);
+
+    const std::string create_test_table{
+        "CREATE TABLE test_rounding (s16 SMALLINT, s32 INTEGER, s64 BIGINT, f32 FLOAT, f64 DOUBLE, n64 NUMERIC(10,5), "
+        "d64 DECIMAL(10,5));"};
+    run_ddl_statement(create_test_table);
+    g_sqlite_comparator.query(create_test_table);
+
+    const std::string inser_positive_test_data{
+        "INSERT INTO test_rounding VALUES(3456, 234567, 3456789012, 3456.3456, 34567.23456, 34567.23456, "
+        "34567.23456);"};
+    run_multiple_agg(inser_positive_test_data, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(inser_positive_test_data);
+
+    const std::string inser_negative_test_data{
+        "INSERT INTO test_rounding VALUES(-3456, -234567, -3456789012, -3456.3456, -34567.23456, -34567.23456, "
+        "-34567.23456);"};
+    run_multiple_agg(inser_negative_test_data, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(inser_negative_test_data);
+
+    const std::string inser_null_test_data{
+        "INSERT INTO test_rounding VALUES(NULL, NULL, NULL, NULL, NULL, NULL, NULL);"};
+    run_multiple_agg(inser_null_test_data, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(inser_null_test_data);
+
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_rounding'";
+    return -EEXIST;
+  }
+  return 0;
+}
 
 int create_and_populate_tables() {
   try {
@@ -4652,6 +4797,12 @@ int create_and_populate_tables() {
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
+
+  int rc = create_and_populate_rounding_table();
+  if (rc) {
+    return rc;
+  }
+
   return 0;
 }
 
@@ -4788,6 +4939,10 @@ void drop_tables() {
   const std::string drop_empty_ctas_test{"DROP TABLE empty_ctas_test;"};
   g_sqlite_comparator.query(drop_empty_ctas_test);
   run_ddl_statement(drop_empty_ctas_test);
+
+  const std::string drop_test_table_rounding{"DROP TABLE test_rounding;"};
+  run_ddl_statement(drop_test_table_rounding);
+  g_sqlite_comparator.query(drop_test_table_rounding);
 }
 
 void drop_views() {
@@ -4810,11 +4965,15 @@ size_t choose_shard_count() {
 
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
-  LOG(INFO) << " after initialization";
   testing::InitGoogleTest(&argc, argv);
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
+
+  // these two are here to allow passing correctly google testing parameters
+  desc.add_options()("gtest_list_tests", "list all test");
+  desc.add_options()("gtest_filter", "filters tests, use --help for details");
+
   desc.add_options()("disable-literal-hoisting", "Disable literal hoisting");
   desc.add_options()("with-sharding", "Create sharded tables");
   desc.add_options()("use-result-set",
