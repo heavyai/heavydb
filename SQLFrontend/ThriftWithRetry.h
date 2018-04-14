@@ -119,6 +119,8 @@ bool thrift_with_retry(SERVICE_ENUM which_service, CLIENT_CONTEXT& context, char
         break;
       case kGET_COMPLETION_HINTS:
         context.client.get_completion_hints(context.completion_hints, context.session, arg, -1);
+      case kGET_DASHBOARDS:
+        context.client.get_dashboards(context.dash_names, context.session);
         break;
     }
   } catch (TMapDException& e) {

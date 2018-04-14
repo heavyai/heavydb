@@ -53,6 +53,7 @@ struct MetaClientContext {
   std::string license_key;
   TLicenseInfo license_info;
   std::vector<TCompletionHint> completion_hints;
+  std::vector<TDashboard> dash_names;
 
   MetaClientContext(TTransport& t, CLIENT_TYPE& c)
       : transport(t), client(c), session(INVALID_SESSION_ID), execution_mode(TExecuteMode::GPU) {}

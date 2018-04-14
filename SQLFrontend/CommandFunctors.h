@@ -90,6 +90,20 @@ class ContextOperations {
       }
     });
   }
+
+  static void get_dashboards(ContextType& context) {
+    context.dash_names.clear();
+    thrift_op<kGET_DASHBOARDS>(context, [](ContextType& lambda_context) {
+      if (lambda_context.dash_names.size() == 0) {
+        std::cout << "User does not have level of access to dashboards." << std::endl;
+      } else {
+        std::cout << "Dashboard | Owner" << std::endl;
+        for (auto p : lambda_context.dash_names) {
+          std::cout << p.dashboard_name << " | " << p.dashboard_owner << std::endl;
+        }
+      }
+    });
+  }
 };
 
 struct DefaultContextOpPolicy {
@@ -209,6 +223,7 @@ StandardCommand(Help, {
   std::cout << "\\v [regex] List all views, optionally matching regex.\n";
   std::cout << "\\d <table> List all columns of a table or a view.\n";
   std::cout << "\\c <database> <user> <password>.\n";
+  std::cout << "\\dash List all dashboards accessible by user.\n";
   std::cout << "\\o <table> Return a memory optimized schema based on current data distribution in table.\n";
   std::cout << "\\gpu Execute in GPU mode's.\n";
   std::cout << "\\cpu Execute in CPU mode's.\n";
@@ -538,5 +553,7 @@ StandardCommand(GetOptimizedSchema, {
 
   thrift_op<kGET_TABLE_DETAILS>(cmdContext(), table_name.c_str(), on_success_lambda);
 });
+
+StandardCommand(ListDashboards, ContextOps::get_dashboards(cmdContext()));
 
 #endif

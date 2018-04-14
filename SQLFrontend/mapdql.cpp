@@ -1314,6 +1314,7 @@ int main(int argc, char** argv) {
 	( "\\roles", 1, RolesCmd<>(context))("\\set_license", 2, [&](Params const& p ) { set_license_key(context, p[1]); })
 	( "\\get_license", 1, [&](Params const&) { get_license_claims(context); })
 	( "\\status", 1, StatusCmd<>( context ), "Usage \\status" )
+  	( "\\dash", 1, ListDashboardsCmd<>( context ) )
 	.is_resolved();
 
       if (resolution_status == false) {
