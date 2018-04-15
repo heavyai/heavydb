@@ -146,7 +146,7 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
         throw std::runtime_error("Failure generating DB object key. Dashboard with ID " + std::to_string(getId()) +
                                  " does not exist.");
       }
-      objectKey.dbObjectType = static_cast<int32_t>(TableDBObjectType);
+      objectKey.dbObjectType = static_cast<int32_t>(DashboardDBObjectType);
       objectKey.dbId = catalog.get_currentDB().dbId;
       objectKey.tableId = dashboard->viewId;
       objectName_ = dashboard->viewName;

@@ -1956,7 +1956,9 @@ void MapDHandler::render_vega(TRenderResult& _return,
             << " (ms), Total Render: " << _return.render_time_ms << " (ms)";
 }
 
-static bool can_see_dashboard(const Catalog_Namespace::Catalog& catalog, const FrontendViewDescriptor& dash, const Catalog_Namespace::UserMetadata& user) {
+static bool can_see_dashboard(const Catalog_Namespace::Catalog& catalog,
+                              const FrontendViewDescriptor& dash,
+                              const Catalog_Namespace::UserMetadata& user) {
   DBObject object(dash.viewId, DashboardDBObjectType);
   object.loadKey(catalog);
   object.setPrivileges(AccessPrivileges::SELECT);
@@ -2109,7 +2111,11 @@ void MapDHandler::create_frontend_view(const TSessionId& session,
   vd.user = session_info.get_currentUser().userName;
 
   try {
-    cat.createFrontendView(vd);
+    auto id = cat.createFrontendView(vd);
+
+    if (SysCatalog::instance().arePrivilegesOn()) {
+      SysCatalog::instance().createDBObject(session_info.get_currentUser(), view_name, DashboardDBObjectType, cat, id);
+    }
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }

@@ -1380,7 +1380,7 @@ void SysCatalog::buildRoleMap() {
     privs.create_dashboard = sqliteConnector_->getData<bool>(r, 10);
     privs.truncate = sqliteConnector_->getData<bool>(r, 12);
     DBObject dbObject(objectName, objectType);
-    dbObject.setOwner(sqliteConnector_->getData<bool>(r, 15));
+    dbObject.setOwner(sqliteConnector_->getData<int>(r, 15));
     dbObject.setObjectKey(objectKey);
     dbObject.setPrivileges(privs);
     switch (objectType) {
