@@ -17,10 +17,12 @@
 #define UPDELROLL_H
 
 #include <map>
+#include <set>
 #include <mutex>
 
 #include "../Chunk/Chunk.h"
 #include "../DataMgr/ChunkMetadata.h"
+#include "../DataMgr/MemoryLevel.h"
 
 namespace Fragmenter_Namespace {
 class InsertOrderFragmenter;
@@ -35,13 +37,14 @@ struct TableDescriptor;
 // this roll records stuff that need to be roll back/forw after upd/del fails or finishes
 struct UpdelRoll {
   ~UpdelRoll() {
-    if (dirty_chunks.size())
+    if (dirtyChunks.size())
       cancelUpdate();
   }
   std::mutex mutex;
 
   // chunks changed during this query
-  std::map<Chunk_NS::Chunk*, std::shared_ptr<Chunk_NS::Chunk>> dirty_chunks;
+  std::map<Chunk_NS::Chunk*, std::shared_ptr<Chunk_NS::Chunk>> dirtyChunks;
+  std::set<ChunkKey> dirtyChunkeys;
 
   // new FragmentInfo.numTuples
   std::map<int, size_t> numTuples;
@@ -53,6 +56,7 @@ struct UpdelRoll {
   const Catalog_Namespace::Catalog* catalog;
   const TableDescriptor* tableDescriptor;
   Fragmenter_Namespace::InsertOrderFragmenter* insertOrderFragmenter;
+  Data_Namespace::MemoryLevel memoryLevel{Data_Namespace::MemoryLevel::CPU_LEVEL};
 
   void cancelUpdate();
   void commitUpdate();

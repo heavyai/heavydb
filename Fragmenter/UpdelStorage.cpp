@@ -67,6 +67,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
   updelRoll.catalog = catalog;
   updelRoll.tableDescriptor = td;
   updelRoll.insertOrderFragmenter = this;
+  updelRoll.memoryLevel = memoryLevel;
 
   const auto nrow = fragOffsets.size();
   const auto nval = rhsValues.size();
@@ -237,10 +238,15 @@ void InsertOrderFragmenter::updateColumnMetadata(const ColumnDescriptor* cd,
   }
   buffer->encoder->getMetadata(chunkMetadata[cd->columnId]);
 
-  if (updelRoll.dirty_chunks.count(chunk.get()) == 0)
-    updelRoll.dirty_chunks.emplace(chunk.get(), chunk);
+  if (updelRoll.dirtyChunks.count(chunk.get()) == 0)
+    updelRoll.dirtyChunks.emplace(chunk.get(), chunk);
 
-  fragment.invalidateChunkMetadataMap();
+  ChunkKey chunkey{updelRoll.catalog->get_currentDB().dbId, cd->tableId, cd->columnId, fragment.fragmentId};
+  updelRoll.dirtyChunkeys.insert(chunkey);
+
+  // removed as @alex suggests. keep it commented in case of any chance to revisit it
+  // once after vacuum code is introduced.
+  // fragment.invalidateChunkMetadataMap();
 }
 
 void InsertOrderFragmenter::updateMetadata(const Catalog_Namespace::Catalog* catalog,
@@ -271,11 +277,15 @@ void InsertOrderFragmenter::updateMetadata(const Catalog_Namespace::Catalog* cat
 void UpdelRoll::commitUpdate() {
   catalog->get_dataMgr().checkpoint(catalog->get_currentDB().dbId, tableDescriptor->tableId);
   insertOrderFragmenter->updateMetadata(catalog, tableDescriptor, *this);
-  dirty_chunks.clear();
+  dirtyChunks.clear();
+  // flush gpu dirty chunks if update was not on gpu
+  if (memoryLevel != Data_Namespace::MemoryLevel::GPU_LEVEL)
+    for (const auto& chunkey : dirtyChunkeys)
+      catalog->get_dataMgr().deleteChunksWithPrefix(chunkey, Data_Namespace::MemoryLevel::GPU_LEVEL);
 }
 
 void UpdelRoll::cancelUpdate() {
-  for (auto dit : dirty_chunks) {
+  for (auto dit : dirtyChunks) {
     catalog->get_dataMgr().free(dit.first->get_buffer());
     dit.first->set_buffer(nullptr);
   }
