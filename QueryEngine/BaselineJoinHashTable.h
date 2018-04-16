@@ -63,6 +63,13 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   JoinHashTableInterface::HashType getHashType() const noexcept override;
 
+  static auto yieldCacheInvalidator() -> std::function<void()> {
+    return []() -> void {
+      std::lock_guard<std::mutex> guard(hash_table_cache_mutex_);
+      hash_table_cache_.clear();
+    };
+  }
+
  private:
   BaselineJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,
                         const std::vector<InputTableInfo>& query_infos,

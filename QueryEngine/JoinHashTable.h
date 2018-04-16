@@ -42,6 +42,7 @@
 #include <memory>
 #include <mutex>
 #include <stdexcept>
+#include <functional>
 
 class Executor;
 
@@ -108,6 +109,13 @@ class JoinHashTable : public JoinHashTableInterface {
                                                 Executor* executor);
 
   static llvm::Value* codegenHashTableLoad(const size_t table_idx, Executor* executor);
+
+  static auto yieldCacheInvalidator() -> std::function<void()> {
+    return []() -> void {
+      std::lock_guard<std::mutex> guard(join_hash_table_cache_mutex_);
+      join_hash_table_cache_.clear();
+    };
+  }
 
  private:
   JoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,

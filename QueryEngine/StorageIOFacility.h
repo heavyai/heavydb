@@ -3,6 +3,7 @@
 
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "TargetMetaInfo.h"
+#include "UpdateCacheInvalidators.h"
 
 #include "Shared/ConfigResolve.h"
 #include "Shared/UpdelRoll.h"
@@ -21,9 +22,17 @@ class DefaultIOFacet {
 
   template <typename TRANSACTION_FUNCTOR>
   static void performTransaction(TRANSACTION_FUNCTOR transaction_functor) {
-    TransactionLog transaction_tracker;
-    transaction_functor(transaction_tracker);
-    transaction_tracker.commitUpdate();
+    try {
+      // Invalidate the caches, success or fail (for now)
+      UpdateTriggeredCacheInvalidator::invalidateCaches();
+
+      TransactionLog transaction_tracker;
+      transaction_functor(transaction_tracker);
+      transaction_tracker.commitUpdate();
+    } catch (...) {  // FIX-ME:  Can we improve caught exception spec, or is this sufficient?
+      LOG(INFO) << "Update operation failed.";
+      throw;
+    }
   }
 
   template <typename CATALOG_TYPE,
@@ -62,16 +71,24 @@ class DefaultIOFacet {
     CHECK(fragmenter);
     ColumnDescriptor const* deleted_column_desc = cat.getDeletedColumn(table_descriptor);
     if (deleted_column_desc != nullptr) {
-      typename FragmenterType::ModifyTransactionTracker transaction_tracker;
-      fragmenter->updateColumn(&cat,
-                               table_descriptor,
-                               deleted_column_desc,
-                               frag_index,
-                               victims,
-                               ScalarTargetValue(int64_t(1L)),
-                               Data_Namespace::MemoryLevel::CPU_LEVEL,
-                               transaction_tracker);
-      transaction_tracker.commitUpdate();
+      try {
+        // Invalidate the caches, success or fail (for now)
+        DeleteTriggeredCacheInvalidator::invalidateCaches();
+
+        typename FragmenterType::ModifyTransactionTracker transaction_tracker;
+        fragmenter->updateColumn(&cat,
+                                 table_descriptor,
+                                 deleted_column_desc,
+                                 frag_index,
+                                 victims,
+				 ScalarTargetValue(int64_t(1L)),				 
+                                 Data_Namespace::MemoryLevel::CPU_LEVEL,
+                                 transaction_tracker);
+        transaction_tracker.commitUpdate();
+      } catch (...) {  // FIX-ME:  Can we improve caught exception spec, or is this sufficient?
+        LOG(INFO) << "Delete operation failed.";
+        throw;
+      }
     } else {
       LOG(INFO) << "Delete metadata column unavailable; skipping delete operation.";
     }
