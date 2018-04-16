@@ -97,9 +97,9 @@ class ContextOperations {
       if (lambda_context.dash_names.size() == 0) {
         std::cout << "User does not have level of access to dashboards." << std::endl;
       } else {
-        std::cout << "Dashboard | Owner" << std::endl;
+        std::cout << "Dashboard ID | Dashboard Name | Owner" << std::endl;
         for (auto p : lambda_context.dash_names) {
-          std::cout << p.dashboard_name << " | " << p.dashboard_owner << std::endl;
+          std::cout << p.dashboard_id << " | " << p.dashboard_name << " | " << p.dashboard_owner << std::endl;
         }
       }
     });
