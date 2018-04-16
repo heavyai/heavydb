@@ -34,6 +34,11 @@ public class DashboardTest {
 
   final static Logger logger = LoggerFactory.getLogger(DashboardTest.class);
   
+  static interface TestRun {
+    void run() throws Exception;
+  }
+    
+  
   public static void main(String[] args) throws Exception {
     logger.info("Hello, World");
 
@@ -52,6 +57,10 @@ public class DashboardTest {
     
     int create_dashboard(String name) throws Exception {
       return client.create_dashboard(sessionId, name, "STATE", name+"_hash", name+"_meta");
+    }
+    
+    void replace_dashboard(int dashboard_id, java.lang.String name, java.lang.String new_owner) throws Exception {
+      client.replace_dashboard(sessionId, dashboard_id, name, new_owner, "STATE", name+"_hash", name+"_meta");
     }
     
     TDashboard get_dashboard(int id) throws Exception {
@@ -102,6 +111,20 @@ public class DashboardTest {
     assertEqual(name+"_meta", db.getDashboard_metadata());
   }
   
+  void shouldThrowException(String msg, TestRun test) {
+    boolean failed;
+    try {
+      test.run();
+      failed = true;
+    } catch (Exception e) {
+      failed = false;
+    }
+    
+    if (failed) {
+      throw new RuntimeException(msg);
+    }
+  }
+  
   void doWork(String[] args) throws Exception {
     logger.info("In doWork");
 
@@ -127,18 +150,10 @@ public class DashboardTest {
     MapDSession bob = getClient("localhost", 9091, "mapd", "bob", "password");
     MapDSession foo = getClient("localhost", 9091, "mapd", "foo", "password");
     
-    try {
-      bob.create_dashboard("for_bob");
-      throw new RuntimeException("bob should be able to create dashboards");
-    } catch (Exception e) {
-    }
-
-    try {
-      foo.create_dashboard("for_bob");
-      throw new RuntimeException("foo should be able to create dashboards");
-    } catch (Exception e) {
-    }
     
+    shouldThrowException("bob should not be able to create dashboards", () -> bob.create_dashboard("for_bob") );
+    shouldThrowException("foo should not be able to create dashboards", () -> foo.create_dashboard("for_bob") );
+
     int for_bob = jason.create_dashboard("for_bob");
     int for_sales = jason.create_dashboard("for_sales");
     int for_all = jason.create_dashboard("for_all");
@@ -156,17 +171,8 @@ public class DashboardTest {
     assertEqual(2, bob.get_dashboards().size());
     assertEqual(2, foo.get_dashboards().size());
     
-    try {
-      bob.get_dashboard(for_sales);
-      throw new RuntimeException("bob should not be able to access for_sales");
-    } catch (Exception e) {
-    }
-
-    try {
-      foo.get_dashboard(for_bob);
-      throw new RuntimeException("foo should not be able to access for_bob");
-    } catch (Exception e) {
-    }
+    shouldThrowException("bob should not be able to access for_sales", () -> bob.get_dashboard(for_sales) );
+    shouldThrowException("foo should not be able to access for_bob", () -> foo.get_dashboard(for_bob) );
     
     assertEqual("for_bob", bob.get_dashboard(for_bob));
     assertEqual("for_all", bob.get_dashboard(for_all));
@@ -174,19 +180,42 @@ public class DashboardTest {
     assertEqual("for_sales", foo.get_dashboard(for_sales));
     assertEqual("for_all", foo.get_dashboard(for_all));
     
+    
+    // check update
+    shouldThrowException("bob can not edit for_bob", () -> bob.replace_dashboard(for_bob, "for_bob2", "jason"));
+    shouldThrowException("foo can not edit for_bob", () -> foo.replace_dashboard(for_bob, "for_bob2", "jason"));
+    shouldThrowException("bob can not edit for_sales", () -> bob.replace_dashboard(for_sales, "for_sales2", "jason"));
+    shouldThrowException("foo can not edit for_sales", () -> foo.replace_dashboard(for_sales, "for_sales2", "jason"));
+    
+    jason.runSql("GRANT EDIT ON DASHBOARD "+for_bob+" TO bob;");
+    jason.runSql("GRANT EDIT ON DASHBOARD "+for_sales+" TO salesDept;");
+    shouldThrowException("foo can not edit for_bob", () -> foo.replace_dashboard(for_bob, "for_bob2", "jason"));
+    shouldThrowException("bob can not edit for_sales", () -> bob.replace_dashboard(for_sales, "for_sales2", "jason"));
+    
+    jason.replace_dashboard(for_all, "for_all2", "jason");
+    bob.replace_dashboard(for_bob, "for_bob2", "jason");
+    foo.replace_dashboard(for_sales, "for_sales2", "jason");
+    
+    assertEqual("for_bob2", bob.get_dashboard(for_bob));
+    assertEqual("for_all2", bob.get_dashboard(for_all));
+    
+    assertEqual("for_sales2", foo.get_dashboard(for_sales));
+    assertEqual("for_all2", foo.get_dashboard(for_all));
+    
+    
     jason.delete_dashboard(for_bob);
     
     assertEqual(1, bob.get_dashboards().size());
     assertEqual(2, foo.get_dashboards().size());
-    assertEqual("for_all", bob.get_dashboard(for_all));
-    assertEqual("for_sales", foo.get_dashboard(for_sales));
-    assertEqual("for_all", foo.get_dashboard(for_all));
+    assertEqual("for_all2", bob.get_dashboard(for_all));
+    assertEqual("for_sales2", foo.get_dashboard(for_sales));
+    assertEqual("for_all2", foo.get_dashboard(for_all));
     
     jason.delete_dashboard(for_all);
 
     assertEqual(0, bob.get_dashboards().size());
     assertEqual(1, foo.get_dashboards().size());
-    assertEqual("for_sales", foo.get_dashboard(for_sales));
+    assertEqual("for_sales2", foo.get_dashboard(for_sales));
 
     jason.delete_dashboard(for_sales);
 

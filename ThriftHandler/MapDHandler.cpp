@@ -1967,6 +1967,16 @@ static bool can_see_dashboard(const Catalog_Namespace::Catalog& catalog,
          user.userId == dash.userId;
 }
 
+static bool can_edit_dashboard(const Catalog_Namespace::SessionInfo& session_info, int dashboard_id) {
+  DBObject object(dashboard_id, DashboardDBObjectType);
+  auto& catalog = session_info.get_catalog();
+  auto& user = session_info.get_currentUser();
+  object.loadKey(catalog);
+  object.setPrivileges(AccessPrivileges::CREATE_DASHBOARD);
+  std::vector<DBObject> privs = {object};
+  return (!SysCatalog::instance().arePrivilegesOn() || SysCatalog::instance().checkPrivileges(user, privs));
+}
+
 // dashboards
 void MapDHandler::get_dashboard(TDashboard& dashboard, const TSessionId& session, const int32_t dashboard_id) {
   const auto session_info = get_session(session);
@@ -2050,8 +2060,7 @@ void MapDHandler::replace_dashboard(const TSessionId& session,
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
 
-  if (SysCatalog::instance().arePrivilegesOn() &&
-      !session_info.checkDBAccessPrivileges(AccessPrivileges::CREATE_DASHBOARD)) {
+  if (!can_edit_dashboard(session_info, dashboard_id)) {
     throw std::runtime_error("Not enough privileges to replace a dashboard.");
   }
 

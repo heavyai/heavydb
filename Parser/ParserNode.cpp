@@ -2636,9 +2636,9 @@ static AccessPrivileges parseStringPrivs(const std::string& privs,
                                          const std::string& object_name) {
   AccessPrivileges result;
   if (privs.compare("ALL") == 0) {
-    result = (objectType == TableDBObjectType) ? AccessPrivileges::ALL_TABLE : (objectType == DashboardDBObjectType)
-                                                                                   ? AccessPrivileges::ALL_DASHBOARD
-                                                                                   : AccessPrivileges::ALL;
+    result = (objectType == TableDBObjectType)
+                 ? AccessPrivileges::ALL_TABLE
+                 : (objectType == DashboardDBObjectType) ? AccessPrivileges::ALL_DASHBOARD : AccessPrivileges::ALL;
   } else if (privs.compare("SELECT") == 0) {
     result.select = true;
   } else if (privs.compare("INSERT") == 0 && (objectType != DashboardDBObjectType)) {
@@ -2648,7 +2648,7 @@ static AccessPrivileges parseStringPrivs(const std::string& privs,
   } else if (privs.compare("TRUNCATE") == 0 && (objectType != DashboardDBObjectType)) {
     result.truncate = true;
   } else if (privs.compare("EDIT") == 0 && (objectType == DashboardDBObjectType)) {
-    result.insert = true;
+    result.create_dashboard = true;
   } else if (privs.compare("CREATE DASHBOARD") == 0 && (objectType == DatabaseDBObjectType)) {
     result.create_dashboard = true;
   } else if (privs.compare("SHARE") == 0 && (objectType == DashboardDBObjectType)) {
