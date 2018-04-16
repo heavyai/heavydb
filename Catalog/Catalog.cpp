@@ -561,9 +561,16 @@ list<DBMetadata> SysCatalog::getAllDBMetadata() {
   return db_list;
 }
 
-list<UserMetadata> SysCatalog::getAllUserMetadata() {
+list<UserMetadata> SysCatalog::getAllUserMetadata(long dbId) {
   std::lock_guard<std::mutex> lock(cat_mutex_);
-  sqliteConnector_->query("SELECT userid, name, issuper FROM mapd_users");
+  std::string sql = "SELECT userid, name, issuper FROM mapd_users";
+  if (dbId >= 0) {
+    sql =
+        "SELECT userid, name, issuper FROM mapd_users WHERE name IN (SELECT roleName FROM mapd_object_privileges WHERE "
+        "roleType=1 AND dbId=" +
+        std::to_string(dbId) + ")";
+  }
+  sqliteConnector_->query(sql);
   int numRows = sqliteConnector_->getNumRows();
   list<UserMetadata> user_list;
   for (int r = 0; r < numRows; ++r) {
@@ -574,6 +581,10 @@ list<UserMetadata> SysCatalog::getAllUserMetadata() {
     user_list.push_back(user);
   }
   return user_list;
+}
+
+list<UserMetadata> SysCatalog::getAllUserMetadata() {
+  return getAllUserMetadata(-1);
 }
 
 bool SysCatalog::getMetadataForDB(const string& name, DBMetadata& db) {
@@ -966,6 +977,20 @@ bool SysCatalog::isRoleGrantedToUser(const int32_t userId, const std::string& ro
 bool SysCatalog::hasRole(const std::string& roleName, bool userPrivateRole) const {
   Role* rl = instance().getMetadataForRole(roleName);
   return rl && (userPrivateRole == rl->isUserPrivateRole());
+}
+
+std::vector<std::string> SysCatalog::getRoles(const int32_t dbId) {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  std::string sql =
+      "SELECT DISTINCT roleName FROM mapd_object_privileges WHERE roleType=0 AND dbId=" + std::to_string(dbId);
+  sqliteConnector_->query(sql);
+  int numRows = sqliteConnector_->getNumRows();
+
+  std::vector<std::string> roles(0);
+  for (int r = 0; r < numRows; ++r) {
+    roles.push_back(sqliteConnector_->getData<string>(r, 0));
+  }
+  return roles;
 }
 
 std::vector<std::string> SysCatalog::getRoles(bool userPrivateRole, bool isSuper, const int32_t userId) {
@@ -2735,6 +2760,12 @@ void Catalog::replaceDashboard(FrontendViewDescriptor& vd) {
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
+
+  // now reload the object
+  sqliteConnector_.query_with_text_params(
+      "SELECT id, strftime('%Y-%m-%dT%H:%M:%SZ', update_time)  FROM mapd_dashboards WHERE id = ?",
+      std::vector<std::string>{std::to_string(vd.viewId)});
+  vd.updateTime = sqliteConnector_.getData<string>(0, 1);
   addFrontendViewToMapNoLock(vd);
 }
 

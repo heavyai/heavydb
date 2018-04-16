@@ -17,9 +17,7 @@ package com.mapd.dashboard;
 
 import com.mapd.thrift.server.*;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
+import java.util.*;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -43,7 +41,8 @@ public class DashboardTest {
     logger.info("Hello, World");
 
     DashboardTest x = new DashboardTest();
-    x.doWork(args);
+    x.testUserRoles();
+    x.testDashboards();
   }
   
   
@@ -64,7 +63,8 @@ public class DashboardTest {
     }
     
     TDashboard get_dashboard(int id) throws Exception {
-      return client.get_dashboard(sessionId, id);
+      TDashboard dashboard = client.get_dashboard(sessionId, id);
+      return dashboard;
     }
 
     void delete_dashboard(int id) throws Exception {
@@ -77,6 +77,10 @@ public class DashboardTest {
     
     List<String> get_users() throws Exception {
       return client.get_users(sessionId);
+    }
+    
+    List<String> get_roles() throws Exception {
+      return client.get_roles(sessionId);
     }
   }
   
@@ -125,24 +129,70 @@ public class DashboardTest {
     }
   }
   
-  void doWork(String[] args) throws Exception {
-    logger.info("In doWork");
+  void testUserRoles() throws Exception {
+    logger.info("testDashboards()");
+    MapDSession su = getClient("localhost", 9091, "mapd", "mapd", "HyperInteractive"); 
+        
+    su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
+    su.runSql("CREATE USER jason (password = 'password', is_super = 'false');");
+    su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");
+    
+    su.runSql("CREATE ROLE salesDept;");
+    su.runSql("CREATE USER foo (password = 'password', is_super = 'false');");
+    
+    su.runSql("CREATE DATABASE db1;");
+    su.runSql("CREATE DATABASE db2;");
+    MapDSession dba1 = getClient("localhost", 9091, "db1", "bob", "password");
+    MapDSession dba2 = getClient("localhost", 9091, "db2", "foo", "password");
+    MapDSession dba = getClient("localhost", 9091, "db2", "dba", "password");
+    assertEqual(0, dba1.get_users().size());
+    assertEqual(0, dba1.get_roles().size());
+    assertEqual(0, dba2.get_users().size());
+    assertEqual(0, dba2.get_roles().size());
+    assertEqual(5, dba.get_users().size());
+    assertEqual(1, dba.get_roles().size());
+    
+    su.runSql("GRANT create dashboard on database db1 to jason;");
+    assertEqual(Arrays.asList("jason"), dba1.get_users());
+    assertEqual(0, dba1.get_roles().size());
+    assertEqual(0, dba2.get_users().size());
+    assertEqual(0, dba2.get_roles().size());
+    assertEqual(5, dba.get_users().size());
+    assertEqual(1, dba.get_roles().size());
+    
+    su.runSql("GRANT create dashboard on database db1 to salesDept;");
+    assertEqual(Arrays.asList("jason"), dba1.get_users());
+    assertEqual(Arrays.asList("salesDept"), dba1.get_roles());
+    assertEqual(0, dba2.get_users().size());
+    assertEqual(0, dba2.get_roles().size());
+    assertEqual(5, dba.get_users().size());
+    assertEqual(1, dba.get_roles().size());
+    
+    su.runSql("DROP DATABASE db1;");
+    su.runSql("DROP DATABASE db2;");
+    su.runSql("DROP USER foo;");
+    su.runSql("DROP ROLE salesDept;");
+    su.runSql("DROP USER bob;");
+    su.runSql("DROP USER jason;");
+    su.runSql("DROP USER dba;");
+  }
+  
+  void testDashboards() throws Exception {
+    logger.info("testDashboards()");
 
     MapDSession su = getClient("localhost", 9091, "mapd", "mapd", "HyperInteractive"); 
     
     List<String> users = su.get_users();
     
-    if (!users.contains("dba")) {
-      su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
-      su.runSql("CREATE USER jason (password = 'password', is_super = 'false');");
-      su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");
-      
-      su.runSql("CREATE ROLE salesDept;");
-      su.runSql("CREATE USER foo (password = 'password', is_super = 'false');");
-  
-      su.runSql("GRANT salesDept TO foo;");
-      su.runSql("GRANT create dashboard on database mapd to jason;");
-    }
+    su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
+    su.runSql("CREATE USER jason (password = 'password', is_super = 'false');");
+    su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");
+    
+    su.runSql("CREATE ROLE salesDept;");
+    su.runSql("CREATE USER foo (password = 'password', is_super = 'false');");
+
+    su.runSql("GRANT salesDept TO foo;");
+    su.runSql("GRANT create dashboard on database mapd to jason;");
 
     
     MapDSession dba = getClient("localhost", 9091, "mapd", "dba", "password");
@@ -160,7 +210,6 @@ public class DashboardTest {
     
     assertEqual(0, bob.get_dashboards().size());
     assertEqual(0, foo.get_dashboards().size());
-    
     
     MapDSession granter = jason;
     granter.runSql("GRANT SELECT ON DASHBOARD "+for_bob+" TO bob;");
@@ -221,5 +270,11 @@ public class DashboardTest {
 
     assertEqual(0, bob.get_dashboards().size());
     assertEqual(0, foo.get_dashboards().size());
+    
+    su.runSql("DROP USER foo;");
+    su.runSql("DROP ROLE salesDept;");
+    su.runSql("DROP USER bob;");
+    su.runSql("DROP USER jason;");
+    su.runSql("DROP USER dba;");
   }
 }

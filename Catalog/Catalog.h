@@ -340,6 +340,10 @@ class SysCatalog {
   SqliteConnector* getSqliteConnector() { return sqliteConnector_.get(); }
   std::list<DBMetadata> getAllDBMetadata();
   std::list<UserMetadata> getAllUserMetadata();
+  /**
+   * return the users associated with the given DB
+   */
+  std::list<UserMetadata> getAllUserMetadata(long dbId);
   void createDBObject(const UserMetadata& user,
                       const std::string& objectName,
                       DBObjectType type,
@@ -367,6 +371,7 @@ class SysCatalog {
   bool isRoleGrantedToUser(const int32_t userId, const std::string& roleName) const;
   bool hasRole(const std::string& roleName, bool userPrivateRole) const;  // true - role exists, false - otherwise
   std::vector<std::string> getRoles(bool userPrivateRole, bool isSuper, const int32_t userId);
+  std::vector<std::string> getRoles(const int32_t dbId);
   std::vector<std::string> getUserRoles(const int32_t userId);
   bool arePrivilegesOn() const { return check_privileges_; }
 

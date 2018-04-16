@@ -905,9 +905,13 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
 }
 
 void MapDHandler::get_roles(std::vector<std::string>& roles, const TSessionId& session) {
-  auto session_it = get_session_it(session);
-  auto session_info_ptr = session_it->second.get();
-  roles = SysCatalog::instance().getRoles(false, true, session_info_ptr->get_currentUser().userId);
+  auto session_info = get_session(session);
+
+  if (SysCatalog::instance().arePrivilegesOn() && !session_info.get_currentUser().isSuper) {
+    roles = SysCatalog::instance().getRoles(session_info.get_catalog().get_currentDB().dbId);
+  } else {
+    roles = SysCatalog::instance().getRoles(false, true, session_info.get_currentUser().userId);
+  }
 }
 
 static TDBObject serialize_db_object(const std::string& roleName, const DBObject& inObject) {
@@ -1333,8 +1337,15 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return, const TSessi
   }
 }
 
-void MapDHandler::get_users(std::vector<std::string>& user_names, const TSessionId& /* session*/) {
-  std::list<Catalog_Namespace::UserMetadata> user_list = SysCatalog::instance().getAllUserMetadata();
+void MapDHandler::get_users(std::vector<std::string>& user_names, const TSessionId& session) {
+  std::list<Catalog_Namespace::UserMetadata> user_list;
+  const auto session_info = get_session(session);
+
+  if (SysCatalog::instance().arePrivilegesOn() && !session_info.get_currentUser().isSuper) {
+    user_list = SysCatalog::instance().getAllUserMetadata(session_info.get_catalog().get_currentDB().dbId);
+  } else {
+    user_list = SysCatalog::instance().getAllUserMetadata();
+  }
   for (auto u : user_list) {
     user_names.push_back(u.userName);
   }
