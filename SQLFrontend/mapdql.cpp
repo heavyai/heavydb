@@ -881,6 +881,10 @@ void get_db_objects_for_grantee(ClientContext& context) {
           std::cout << " (table):";
           break;
         }
+        case (TDBObjectType::DashboardDBObjectType): {
+          std::cout << " (dashboard):";
+          break;
+        }
         default: { CHECK(false); }
       }
       print_privs(db_object.privs, db_object.objectType);
