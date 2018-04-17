@@ -563,6 +563,14 @@ class ModifyManipulationTarget {
   void setTargetColumns(ColumnNameList const& target_columns) const { target_columns_ = target_columns; }
   ColumnNameList const& getTargetColumns() const { return target_columns_; }
 
+  template <typename VALIDATION_FUNCTOR>
+  bool validateTargetColumns(VALIDATION_FUNCTOR validator) const {
+    for (auto const& column_name : target_columns_)
+      if (validator(column_name) == false)
+        return false;
+    return true;
+  }
+
  private:
   mutable bool is_update_via_select_ = false;
   mutable bool is_delete_via_select_ = false;

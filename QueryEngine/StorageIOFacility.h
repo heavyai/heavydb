@@ -19,6 +19,7 @@ class DefaultIOFacet {
   using UpdateTargetColumnNamesList = std::vector<std::string>;
   using TransactionLog = typename FragmenterType::ModifyTransactionTracker;
   using TransactionLogPtr = std::unique_ptr<TransactionLog>;
+  using ColumnValidationFunction = std::function<bool(std::string const&)>;
 
   template <typename TRANSACTION_FUNCTOR>
   static void performTransaction(TRANSACTION_FUNCTOR transaction_functor) {
@@ -29,7 +30,7 @@ class DefaultIOFacet {
       TransactionLog transaction_tracker;
       transaction_functor(transaction_tracker);
       transaction_tracker.commitUpdate();
-    } catch (...) {  // FIX-ME:  Can we improve caught exception spec, or is this sufficient?
+    } catch (...) {
       LOG(INFO) << "Update operation failed.";
       throw;
     }
@@ -50,7 +51,7 @@ class DefaultIOFacet {
                            TransactionLog& transaction_tracker) {
     const auto fragmenter = dynamic_cast<Fragmenter_Namespace::InsertOrderFragmenter*>(table_descriptor->fragmenter);
     CHECK(fragmenter);
-    ColumnDescriptor const* target_column = cat.getMetadataForColumn(table_descriptor->tableId, column_name);
+    auto const* target_column = cat.getMetadataForColumn(table_descriptor->tableId, column_name);
 
     fragmenter->updateColumn(&cat,
                              table_descriptor,
@@ -69,7 +70,7 @@ class DefaultIOFacet {
                             VICTIM_OFFSET_LIST& victims) {
     const auto fragmenter = dynamic_cast<Fragmenter_Namespace::InsertOrderFragmenter*>(table_descriptor->fragmenter);
     CHECK(fragmenter);
-    ColumnDescriptor const* deleted_column_desc = cat.getDeletedColumn(table_descriptor);
+    auto const* deleted_column_desc = cat.getDeletedColumn(table_descriptor);
     if (deleted_column_desc != nullptr) {
       try {
         // Invalidate the caches, success or fail (for now)
@@ -85,7 +86,7 @@ class DefaultIOFacet {
                                  Data_Namespace::MemoryLevel::CPU_LEVEL,
                                  transaction_tracker);
         transaction_tracker.commitUpdate();
-      } catch (...) {  // FIX-ME:  Can we improve caught exception spec, or is this sufficient?
+      } catch (...) {
         LOG(INFO) << "Delete operation failed.";
         throw;
       }
@@ -93,6 +94,20 @@ class DefaultIOFacet {
       LOG(INFO) << "Delete metadata column unavailable; skipping delete operation.";
     }
   }
+
+  template <typename CATALOG_TYPE, typename TABLE_DESCRIPTOR_TYPE>
+  static std::function<bool(std::string const&)> yieldColumnValidator(CATALOG_TYPE const& cat,
+                                                                      TABLE_DESCRIPTOR_TYPE const* table_descriptor) {
+    return [&cat, table_descriptor](std::string const& column_name) -> bool {
+      auto const* target_column = cat.getMetadataForColumn(table_descriptor->tableId, column_name);
+
+      // The default IO facet currently only rejects none-encoded string columns
+      auto column_type(target_column->columnType);
+      if (column_type.is_string() && column_type.get_compression() == kENCODING_NONE)
+        return false;
+      return true;
+    };
+  };
 };
 
 template <typename EXECUTOR_TRAITS,
@@ -111,6 +126,7 @@ class StorageIOFacility {
   using UpdateTargetTypeList = typename IOFacility::UpdateTargetTypeList;
   using UpdateTargetColumnNamesList = typename IOFacility::UpdateTargetColumnNamesList;
   using UpdateTargetColumnNameType = typename UpdateTargetColumnNamesList::value_type;
+  using ColumnValidationFunction = typename IOFacility::ColumnValidationFunction;
 
   class UpdateParameters {
    public:
@@ -136,6 +152,10 @@ class StorageIOFacility {
   };
 
   StorageIOFacility(ExecutorType* executor, CatalogType const& catalog) : executor_(executor), catalog_(catalog) {}
+
+  ColumnValidationFunction yieldColumnValidator(TableDescriptorType const* table_descriptor) {
+    return IOFacility::yieldColumnValidator(catalog_, table_descriptor);
+  }
 
   UpdateCallback yieldUpdateCallback(UpdateParameters update_parameters) {
     using OffsetVector = std::vector<uint64_t>;

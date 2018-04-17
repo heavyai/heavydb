@@ -3985,6 +3985,34 @@ TEST(Truncate, Count) {
   run_ddl_statement("drop table trunc_test;");
 }
 
+// Can uncomment once Michael fixes a thing in Catalog.cpp
+// TEST(Update, NoneEncodedText) {
+//  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
+//    return;
+//  auto save_watchdog = g_enable_watchdog;
+//  g_enable_watchdog = false;
+//
+//  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+//    SKIP_NO_GPU();
+//
+//    run_ddl_statement("create table textencnone_default (t text encoding none) with (vacuum='delayed');");
+//
+//    run_multiple_agg("insert into textencnone_default values ('do');",dt);
+//    run_multiple_agg("insert into textencnone_default values ('you');",dt);
+//    run_multiple_agg("insert into textencnone_default values ('know');",dt);
+//    run_multiple_agg("insert into textencnone_default values ('the');",dt);
+//    run_multiple_agg("insert into textencnone_default values ('muffin');",dt);
+//    run_multiple_agg("insert into textencnone_default values ('man');",dt);
+//
+//    EXPECT_THROW( run_multiple_agg( "update textencnone_default set t='pizza' where char_length(t) <= 3;", dt ),
+//      std::runtime_error
+//    );
+//    run_ddl_statement("drop table textencnone_default;");
+//  }
+//
+//  g_enable_watchdog = save_watchdog;
+//}
+
 TEST(Update, Text) {
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
     return;

@@ -1113,6 +1113,11 @@ void RelAlgExecutor::executeUpdateViaCompound(const RelCompound* compound,
                                               const ExecutionOptions& eo,
                                               RenderInfo* render_info,
                                               const int64_t queue_time_ms) {
+  if (!compound->validateTargetColumns(yieldColumnValidator(compound->getModifiedTableDescriptor()))) {
+    throw std::runtime_error(
+        "Unsupported update operation encountered.  (None-encoded string column updates are not supported.)");
+  }
+
   const auto work_unit = createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   CompilationOptions co_project = co;
@@ -1130,6 +1135,11 @@ void RelAlgExecutor::executeUpdateViaProject(const RelProject* project,
                                              const ExecutionOptions& eo,
                                              RenderInfo* render_info,
                                              const int64_t queue_time_ms) {
+  if (!project->validateTargetColumns(yieldColumnValidator(project->getModifiedTableDescriptor()))) {
+    throw std::runtime_error(
+        "Unsupported update operation encountered.  (None-encoded string column updates are not supported.)");
+  }
+
   auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   CompilationOptions co_project = co;
