@@ -55,6 +55,8 @@ bool is_dict_enc_str(const SQLTypeInfo& ti) {
 SQLTypes get_dict_index_type(const SQLTypeInfo& ti) {
   CHECK(is_dict_enc_str(ti));
   switch (ti.get_size()) {
+    case 1:
+      return kTINYINT;
     case 2:
       return kSMALLINT;
     case 4:
@@ -70,6 +72,8 @@ SQLTypes get_dict_index_type(const SQLTypeInfo& ti) {
 SQLTypeInfo get_dict_index_type_info(const SQLTypeInfo& ti) {
   CHECK(is_dict_enc_str(ti));
   switch (ti.get_size()) {
+    case 1:
+      return SQLTypeInfo(kTINYINT, ti.get_notnull());
     case 2:
       return SQLTypeInfo(kSMALLINT, ti.get_notnull());
     case 4:
@@ -86,6 +90,8 @@ SQLTypes get_physical_type(const SQLTypeInfo& ti) {
   auto logical_type = ti.get_type();
   if (IS_INTEGER(logical_type)) {
     switch (ti.get_size()) {
+      case 1:
+        return kTINYINT;
       case 2:
         return kSMALLINT;
       case 4:
@@ -152,6 +158,8 @@ static TypePtr get_arrow_type(const SQLTypeInfo& mapd_type, const std::shared_pt
   switch (get_physical_type(mapd_type)) {
     case kBOOLEAN:
       return boolean();
+    case kTINYINT:
+      return int8();
     case kSMALLINT:
       return int16();
     case kINT:
@@ -232,6 +240,9 @@ struct ColumnBuilder {
     switch (this->physical_type) {
       case kBOOLEAN:
         append_to_builder<BooleanBuilder, bool>(values, is_valid);
+        break;
+      case kTINYINT:
+        append_to_builder<Int8Builder, int8_t>(values, is_valid);
         break;
       case kSMALLINT:
         append_to_builder<Int16Builder, int16_t>(values, is_valid);
@@ -371,6 +382,10 @@ std::shared_ptr<arrow::RecordBatch> ResultSet::getArrowBatch(const std::shared_p
         switch (column.physical_type) {
           case kBOOLEAN:
             create_or_append_value<bool, int64_t>(*scalar_value, value_seg[j], entry_count);
+            create_or_append_validity<int64_t>(*scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
+            break;
+          case kTINYINT:
+            create_or_append_value<int8_t, int64_t>(*scalar_value, value_seg[j], entry_count);
             create_or_append_validity<int64_t>(*scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
             break;
           case kSMALLINT:

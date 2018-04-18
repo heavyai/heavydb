@@ -86,6 +86,8 @@ public class MapDTable implements Table {
   // since we do not use them on the validator side of the calcite 'fence'
   private RelDataType getRelDataType(TDatumType dType, int precision, int scale, RelDataTypeFactory typeFactory) {
     switch (dType) {
+      case TINYINT:
+        return typeFactory.createSqlType(SqlTypeName.TINYINT);
       case SMALLINT:
         return typeFactory.createSqlType(SqlTypeName.SMALLINT);
       case INT:

@@ -205,6 +205,7 @@ class SQLiteComparator {
         checkTypeConsistency(ref_col_type, mapd_ti);
         const bool ref_is_null = connector_.isNull(row_idx, col_idx);
         switch (mapd_type) {
+          case kTINYINT:
           case kSMALLINT:
           case kINT:
           case kBIGINT: {
@@ -2389,6 +2390,7 @@ TEST(Select, UnsupportedCast) {
 TEST(Select, CastFromLiteral) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    c("SELECT CAST(2.3 AS TINYINT) FROM test;", dt);
     c("SELECT CAST(2.3 AS SMALLINT) FROM test;", dt);
     c("SELECT CAST(2.3 AS INT) FROM test;", dt);
     c("SELECT CAST(2.3 AS BIGINT) FROM test;", dt);
@@ -2405,6 +2407,7 @@ TEST(Select, CastFromLiteral) {
 TEST(Select, CastFromNull) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    c("SELECT CAST(NULL AS TINYINT) FROM test;", dt);
     c("SELECT CAST(NULL AS SMALLINT) FROM test;", dt);
     c("SELECT CAST(NULL AS INT) FROM test;", dt);
     c("SELECT CAST(NULL AS BIGINT) FROM test;", dt);
@@ -2651,6 +2654,11 @@ void import_array_test(const std::string& table_name) {
               }
               break;
             }
+            case kTINYINT:
+              for (size_t i = 0; i < 3; ++i) {
+                array_elems.push_back(std::to_string(row_idx + i + 1));
+              }
+              break;
             case kSMALLINT:
               for (size_t i = 0; i < 3; ++i) {
                 array_elems.push_back(std::to_string(row_idx + i + 1));

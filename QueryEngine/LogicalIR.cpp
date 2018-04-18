@@ -32,9 +32,10 @@ bool contains_unsafe_division(const Analyzer::Expr* expr) {
       const auto& datum = rhs_constant->get_constval();
       const auto& ti = rhs_constant->get_type_info();
       const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
-      if ((type == kBOOLEAN && datum.boolval == 0) || (type == kSMALLINT && datum.smallintval == 0) ||
-          (type == kINT && datum.intval == 0) || (type == kBIGINT && datum.bigintval == 0LL) ||
-          (type == kFLOAT && datum.floatval == 0.0) || (type == kDOUBLE && datum.doubleval == 0.0)) {
+      if ((type == kBOOLEAN && datum.boolval == 0) || (type == kTINYINT && datum.tinyintval == 0) ||
+          (type == kSMALLINT && datum.smallintval == 0) || (type == kINT && datum.intval == 0) ||
+          (type == kBIGINT && datum.bigintval == 0LL) || (type == kFLOAT && datum.floatval == 0.0) ||
+          (type == kDOUBLE && datum.doubleval == 0.0)) {
         return true;
       }
     }

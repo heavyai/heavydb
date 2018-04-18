@@ -351,6 +351,10 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
   const auto constant_type = constant_expr->get_type_info().get_type();
   const auto datum = constant_expr->get_constval();
   switch (constant_type) {
+    case kTINYINT: {
+      const int64_t v = datum.tinyintval;
+      return ExpressionRange::makeIntRange(v, v, 0, false);
+    }
     case kSMALLINT: {
       const int64_t v = datum.smallintval;
       return ExpressionRange::makeIntRange(v, v, 0, false);
@@ -468,6 +472,7 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
     case kVARCHAR:
       CHECK_EQ(kENCODING_DICT, col_ti.get_compression());
     case kBOOLEAN:
+    case kTINYINT:
     case kSMALLINT:
     case kINT:
     case kBIGINT:

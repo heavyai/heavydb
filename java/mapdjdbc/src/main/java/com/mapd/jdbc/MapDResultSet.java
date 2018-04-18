@@ -150,6 +150,7 @@ class MapDResultSet implements java.sql.ResultSet {
     TDatumType type = sqlResult.row_set.row_desc.get(columnIndex - 1).col_type.type;
 
     switch (type) {
+      case TINYINT:
       case SMALLINT:
       case INT:
       case BIGINT:
@@ -272,6 +273,7 @@ class MapDResultSet implements java.sql.ResultSet {
     TDatumType type = sqlResult.row_set.row_desc.get(columnIndex - 1).col_type.type;
 
     switch (type) {
+      case TINYINT:
       case SMALLINT:
       case INT:
       case BIGINT:
@@ -546,6 +548,7 @@ class MapDResultSet implements java.sql.ResultSet {
       wasNull = false;
       // check type
       switch (rowDesc.get(columnIndex - 1).col_type.type) {
+        case TINYINT:
         case SMALLINT:
         case INT:
         case BIGINT:

@@ -29,6 +29,10 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer, const SQLTypeIn
           return new NoneEncoder<int8_t>(buffer);
           break;
         }
+        case kTINYINT: {
+          return new NoneEncoder<int8_t>(buffer);
+          break;
+        }
         case kSMALLINT: {
           return new NoneEncoder<int16_t>(buffer);
           break;

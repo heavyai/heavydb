@@ -490,6 +490,7 @@ public class SQLImporter {
     }
     switch (cType) {
       case java.sql.Types.TINYINT:
+        return ("TINYINT");
       case java.sql.Types.SMALLINT:
         return ("SMALLINT");
       case java.sql.Types.INTEGER:

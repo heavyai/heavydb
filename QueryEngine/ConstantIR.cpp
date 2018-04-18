@@ -32,6 +32,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
                                            get_int_type(1, cgen_state_->context_), constant->get_constval().boolval)}
                                      : std::vector<llvm::Value*>{llvm::ConstantInt::get(
                                            get_int_type(8, cgen_state_->context_), constant->get_constval().boolval)};
+    case kTINYINT:
     case kSMALLINT:
     case kINT:
     case kBIGINT:
@@ -79,6 +80,8 @@ llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant)
   }
   const auto type = type_info.is_decimal() ? decimal_to_int_type(type_info) : type_info.get_type();
   switch (type) {
+    case kTINYINT:
+      return ll_int(constant->get_constval().tinyintval);
     case kSMALLINT:
       return ll_int(constant->get_constval().smallintval);
     case kINT:

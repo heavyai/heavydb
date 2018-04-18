@@ -252,6 +252,9 @@ int8_t* appendDatum(int8_t* buf, Datum d, const SQLTypeInfo& ti) {
     case kSMALLINT:
       *(int16_t*)buf = d.smallintval;
       return buf + sizeof(int16_t);
+    case kTINYINT:
+      *(int8_t*)buf = d.tinyintval;
+      return buf + sizeof(int8_t);
     case kFLOAT:
       *(float*)buf = d.floatval;
       return buf + sizeof(float);
@@ -323,6 +326,9 @@ Datum TDatumToDatum(const TDatum& datum, SQLTypeInfo& ti) {
     case kSMALLINT:
       d.smallintval = datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
       break;
+    case kTINYINT:
+      d.tinyintval = datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
+      break;
     case kFLOAT:
       d.floatval = datum.is_null ? NULL_FLOAT : datum.val.real_val;
       break;
@@ -384,6 +390,18 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         SQLTypeInfo ti = cd->columnType;
         Datum d = StringToDatum(val, ti);
         addBoolean((int8_t)d.boolval);
+      }
+      break;
+    }
+    case kTINYINT: {
+      if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
+        SQLTypeInfo ti = cd->columnType;
+        Datum d = StringToDatum(val, ti);
+        addTinyint(d.tinyintval);
+      } else {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addTinyint(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
     }
@@ -1103,6 +1121,15 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
       }
       break;
     }
+    case kTINYINT:
+      if (!is_null) {
+        addTinyint((int8_t)datum.val.int_val);
+      } else {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addTinyint(inline_fixed_encoding_null_val(cd->columnType));
+      }
+      break;
     case kSMALLINT:
       if (!is_null) {
         addSmallint((int16_t)datum.val.int_val);
@@ -2046,6 +2073,9 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
       switch (type) {
         case kBOOLEAN:
           shard_output_buffers[col_idx]->addBoolean(int_value_at(*input_buffer, i));
+          break;
+        case kTINYINT:
+          shard_output_buffers[col_idx]->addTinyint(int_value_at(*input_buffer, i));
           break;
         case kSMALLINT:
           shard_output_buffers[col_idx]->addSmallint(int_value_at(*input_buffer, i));

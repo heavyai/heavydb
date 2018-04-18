@@ -371,6 +371,8 @@ llvm::ConstantInt* Executor::inlineIntNull(const SQLTypeInfo& type_info) {
   switch (type) {
     case kBOOLEAN:
       return ll_int(static_cast<int8_t>(inline_int_null_val(type_info)));
+    case kTINYINT:
+      return ll_int(static_cast<int8_t>(inline_int_null_val(type_info)));
     case kSMALLINT:
       return ll_int(static_cast<int16_t>(inline_int_null_val(type_info)));
     case kINT:
@@ -2204,6 +2206,12 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
         auto col_data = col_data_bytes;
         *col_data =
             col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : (col_datum.boolval ? 1 : 0);
+        break;
+      }
+      case kTINYINT: {
+        auto col_data = reinterpret_cast<int8_t*>(col_data_bytes);
+        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.tinyintval;
+        int_col_val = col_datum.tinyintval;
         break;
       }
       case kSMALLINT: {

@@ -60,7 +60,10 @@ enum SQLTypes {
   kLINESTRING = 19,
   kPOLYGON = 20,
   kMULTIPOLYGON = 21,
-  kSQLTYPE_LAST = 22
+  kTINYINT = 22,
+  kGEOMETRY = 23,
+  kGEOGRAPHY = 24,
+  kSQLTYPE_LAST = 25
 };
 
 struct VarlenDatum {
@@ -125,10 +128,10 @@ enum EncodingType {
   kENCODING_LAST = 7
 };
 
-#define IS_INTEGER(T) (((T) == kINT) || ((T) == kSMALLINT) || ((T) == kBIGINT))
+#define IS_INTEGER(T) (((T) == kINT) || ((T) == kSMALLINT) || ((T) == kBIGINT) || ((T) == kTINYINT))
 #define IS_NUMBER(T)                                                                                 \
   (((T) == kINT) || ((T) == kSMALLINT) || ((T) == kDOUBLE) || ((T) == kFLOAT) || ((T) == kBIGINT) || \
-   ((T) == kNUMERIC) || ((T) == kDECIMAL))
+   ((T) == kNUMERIC) || ((T) == kDECIMAL) || ((T) == kTINYINT))
 #define IS_STRING(T) (((T) == kTEXT) || ((T) == kVARCHAR) || ((T) == kCHAR))
 #define IS_TIME(T) (((T) == kTIME) || ((T) == kTIMESTAMP) || ((T) == kDATE))
 #define IS_GEO(T) (((T) == kPOINT) || ((T) == kLINESTRING) || ((T) == kPOLYGON) || ((T) == kMULTIPOLYGON))
@@ -351,6 +354,8 @@ class SQLTypeInfo {
     switch (type) {
       case kBOOLEAN:
         return (int8_t)d.boolval == NULL_BOOLEAN;
+      case kTINYINT:
+        return d.tinyintval == NULL_TINYINT;
       case kSMALLINT:
         return d.smallintval == NULL_SMALLINT;
       case kINT:
@@ -434,6 +439,8 @@ class SQLTypeInfo {
   inline int get_storage_size() const {
     switch (type) {
       case kBOOLEAN:
+        return sizeof(int8_t);
+      case kTINYINT:
         return sizeof(int8_t);
       case kSMALLINT:
         switch (compression) {

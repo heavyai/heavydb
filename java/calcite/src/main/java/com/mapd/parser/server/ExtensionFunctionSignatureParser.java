@@ -81,6 +81,9 @@ class ExtensionFunctionSignatureParser {
         if (type_name.equals("bool") || type_name.equals("_Bool")) {
             return ExtensionFunction.ExtArgumentType.Bool;
         }
+        if (type_name.equals("int8_t") || type_name.equals("char")) {
+            return ExtensionFunction.ExtArgumentType.Int8;
+        }
         if (type_name.equals("int16_t")) {
             return ExtensionFunction.ExtArgumentType.Int16;
         }
@@ -108,6 +111,8 @@ class ExtensionFunctionSignatureParser {
 
     private static ExtensionFunction.ExtArgumentType pointerType(final ExtensionFunction.ExtArgumentType targetType) {
         switch (targetType) {
+            case Int8:
+                return ExtensionFunction.ExtArgumentType.PInt8;
             case Int16:
                 return ExtensionFunction.ExtArgumentType.PInt16;
             case Int32:

@@ -25,6 +25,8 @@ llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type, llvm::
   switch (ext_arg_type) {
     case ExtArgumentType::Bool:
       return get_int_type(1, ctx);
+    case ExtArgumentType::Int8:
+      return get_int_type(8, ctx);
     case ExtArgumentType::Int16:
       return get_int_type(16, ctx);
     case ExtArgumentType::Int32:

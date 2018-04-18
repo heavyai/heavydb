@@ -1213,6 +1213,10 @@ class Executor {
           return getOrAddLiteral(constant->get_is_null() ? int8_t(inline_int_null_val(ti))
                                                          : int8_t(constant->get_constval().boolval ? 1 : 0),
                                  device_id);
+        case kTINYINT:
+          return getOrAddLiteral(
+              constant->get_is_null() ? int8_t(inline_int_null_val(ti)) : constant->get_constval().tinyintval,
+              device_id);
         case kSMALLINT:
           return getOrAddLiteral(
               constant->get_is_null() ? int16_t(inline_int_null_val(ti)) : constant->get_constval().smallintval,
@@ -1273,6 +1277,16 @@ class Executor {
                 int32_array_literal.push_back(i);
               }
               return getOrAddLiteral(int32_array_literal, device_id);
+            }
+            if (ti.get_subtype() == kTINYINT) {
+              std::vector<int8_t> int8_array_literal;
+              for (const auto& value : constant->get_value_list()) {
+                const auto c = dynamic_cast<const Analyzer::Constant*>(value.get());
+                CHECK(c);
+                int8_t i = c->get_constval().tinyintval;
+                int8_array_literal.push_back(i);
+              }
+              return getOrAddLiteral(int8_array_literal, device_id);
             }
             throw std::runtime_error("Unsupported literal array");
           }

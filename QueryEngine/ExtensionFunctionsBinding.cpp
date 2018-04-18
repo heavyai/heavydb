@@ -62,6 +62,8 @@ unsigned narrowing_conversion_score(const SQLTypeInfo& arg_ti, const SQLTypeInfo
         return 2;
       case kSMALLINT:
         return 3;
+      case kTINYINT:
+        return 4;
       default:
         CHECK(false);
     }
@@ -116,6 +118,8 @@ bool element_type_is_compatible(const SQLTypeInfo& elem_ti, const ExtArgumentTyp
   }
   CHECK(elem_ti.is_integer() || (elem_ti.is_string() && elem_ti.get_compression() == kENCODING_DICT));
   switch (elem_ti.get_size()) {
+    case 1:
+      return ty == ExtArgumentType::PInt8;
     case 2:
       return ty == ExtArgumentType::PInt16;
     case 4:
@@ -192,6 +196,8 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
   switch (ext_arg_type) {
     case ExtArgumentType::Bool:
       return SQLTypeInfo(kBOOLEAN, true);
+    case ExtArgumentType::Int8:
+      return SQLTypeInfo(kTINYINT, true);
     case ExtArgumentType::Int16:
       return SQLTypeInfo(kSMALLINT, true);
     case ExtArgumentType::Int32:

@@ -240,6 +240,21 @@ class ArrayNoneEncoder : public Encoder {
           }
         }
       } break;
+      case kTINYINT: {
+        const int8_t* int_array = (int8_t*)array.pointer;
+        for (size_t i = 0; i < array.length / sizeof(int8_t); i++) {
+          if (int_array[i] == NULL_TINYINT)
+            has_nulls = true;
+          else if (initialized) {
+            elem_min.tinyintval = std::min(elem_min.tinyintval, int_array[i]);
+            elem_max.tinyintval = std::max(elem_max.tinyintval, int_array[i]);
+          } else {
+            elem_min.tinyintval = int_array[i];
+            elem_max.tinyintval = int_array[i];
+            initialized = true;
+          }
+        }
+      } break;
       case kBIGINT:
       case kNUMERIC:
       case kDECIMAL: {

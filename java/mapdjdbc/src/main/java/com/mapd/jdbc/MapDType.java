@@ -73,6 +73,8 @@ class MapDType {
 
   static int toJava(TDatumType type) {
     switch (type) {
+      case TINYINT:
+        return java.sql.Types.TINYINT;
       case SMALLINT:
         return java.sql.Types.SMALLINT;
       case INT:

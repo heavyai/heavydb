@@ -93,6 +93,8 @@ inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
   switch (type) {
     case kBOOLEAN:
       return inline_int_null_value<int8_t>();
+    case kTINYINT:
+      return inline_int_null_value<int8_t>();
     case kSMALLINT:
       return inline_int_null_value<int16_t>();
     case kINT:
@@ -158,6 +160,8 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
   const auto int_type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
   switch (int_type) {
     case kBOOLEAN:
+      return 8;
+    case kTINYINT:
       return 8;
     case kSMALLINT:
       return 16;

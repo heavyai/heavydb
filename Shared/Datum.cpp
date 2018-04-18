@@ -52,7 +52,8 @@ std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
                                                      "POINT",
                                                      "LINESTRING",
                                                      "POLYGON",
-                                                     "MULTIPOLYGON"};
+                                                     "MULTIPOLYGON",
+                                                     "TINYINT"};
 std::string SQLTypeInfo::comp_name[kENCODING_LAST] = {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "GEOINT"};
 
 int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
@@ -126,6 +127,9 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       break;
     case kSMALLINT:
       d.smallintval = std::stoi(s);
+      break;
+    case kTINYINT:
+      d.tinyintval = std::stoi(s);
       break;
     case kFLOAT:
       d.floatval = std::stof(s);
@@ -271,6 +275,8 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
       return std::to_string(d.intval);
     case kSMALLINT:
       return std::to_string(d.smallintval);
+    case kTINYINT:
+      return std::to_string(d.tinyintval);
     case kBIGINT:
       return std::to_string(d.bigintval);
     case kFLOAT:
@@ -314,6 +320,8 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
 
 SQLTypes decimal_to_int_type(const SQLTypeInfo& ti) {
   switch (ti.get_size()) {
+    case 1:
+      return kTINYINT;
     case 2:
       return kSMALLINT;
     case 4:

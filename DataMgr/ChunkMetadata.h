@@ -41,6 +41,11 @@ struct ChunkMetadata {
         chunkStats.max.tinyintval = max;
         break;
       }
+      case kTINYINT: {
+        chunkStats.min.tinyintval = min;
+        chunkStats.max.tinyintval = max;
+        break;
+      }
       case kSMALLINT: {
         chunkStats.min.smallintval = min;
         chunkStats.max.smallintval = max;

@@ -362,8 +362,37 @@ SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1, const SQLType
   }
   CHECK(type1.is_number() && type2.is_number());
   switch (type1.get_type()) {
+    case kTINYINT:
+      switch (type2.get_type()) {
+        case kSMALLINT:
+          common_type = SQLTypeInfo(kSMALLINT, notnull);
+          break;
+        case kINT:
+          common_type = SQLTypeInfo(kINT, notnull);
+          break;
+        case kBIGINT:
+          common_type = SQLTypeInfo(kBIGINT, notnull);
+          break;
+        case kFLOAT:
+          common_type = SQLTypeInfo(kFLOAT, notnull);
+          break;
+        case kDOUBLE:
+          common_type = SQLTypeInfo(kDOUBLE, notnull);
+          break;
+        case kNUMERIC:
+        case kDECIMAL:
+          common_type =
+              SQLTypeInfo(kDECIMAL, std::max(5 + type2.get_scale(), type2.get_dimension()), type2.get_scale(), notnull);
+          break;
+        default:
+          CHECK(false);
+      }
+      break;
     case kSMALLINT:
       switch (type2.get_type()) {
+        case kTINYINT:
+          common_type = SQLTypeInfo(kSMALLINT, notnull);
+          break;
         case kINT:
           common_type = SQLTypeInfo(kINT, notnull);
           break;
@@ -387,6 +416,9 @@ SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1, const SQLType
       break;
     case kINT:
       switch (type2.get_type()) {
+        case kTINYINT:
+          common_type = SQLTypeInfo(kINT, notnull);
+          break;
         case kSMALLINT:
           common_type = SQLTypeInfo(kINT, notnull);
           break;
@@ -412,6 +444,9 @@ SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1, const SQLType
       break;
     case kBIGINT:
       switch (type2.get_type()) {
+        case kTINYINT:
+          common_type = SQLTypeInfo(kBIGINT, notnull);
+          break;
         case kSMALLINT:
           common_type = SQLTypeInfo(kBIGINT, notnull);
           break;
@@ -434,6 +469,9 @@ SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1, const SQLType
       break;
     case kFLOAT:
       switch (type2.get_type()) {
+        case kTINYINT:
+          common_type = SQLTypeInfo(kFLOAT, notnull);
+          break;
         case kSMALLINT:
           common_type = SQLTypeInfo(kFLOAT, notnull);
           break;
@@ -456,6 +494,7 @@ SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1, const SQLType
       break;
     case kDOUBLE:
       switch (type2.get_type()) {
+        case kTINYINT:
         case kSMALLINT:
         case kINT:
         case kBIGINT:
@@ -579,8 +618,40 @@ IntFracRepr decimal_to_int_frac(const int64_t dec, const SQLTypeInfo& ti) {
 
 void Constant::cast_number(const SQLTypeInfo& new_type_info) {
   switch (type_info.get_type()) {
+    case kTINYINT:
+      switch (new_type_info.get_type()) {
+        case kTINYINT:
+          break;
+        case kINT:
+          constval.intval = (int32_t)constval.tinyintval;
+          break;
+        case kSMALLINT:
+          constval.smallintval = (int16_t)constval.tinyintval;
+          break;
+        case kBIGINT:
+          constval.bigintval = (int64_t)constval.tinyintval;
+          break;
+        case kDOUBLE:
+          constval.doubleval = (double)constval.tinyintval;
+          break;
+        case kFLOAT:
+          constval.floatval = (float)constval.tinyintval;
+          break;
+        case kNUMERIC:
+        case kDECIMAL:
+          constval.bigintval = (int64_t)constval.tinyintval;
+          for (int i = 0; i < new_type_info.get_scale(); i++)
+            constval.bigintval *= 10;
+          break;
+        default:
+          CHECK(false);
+      }
+      break;
     case kINT:
       switch (new_type_info.get_type()) {
+        case kTINYINT:
+          constval.tinyintval = (int8_t)constval.intval;
+          break;
         case kINT:
           break;
         case kSMALLINT:
@@ -607,6 +678,9 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
       break;
     case kSMALLINT:
       switch (new_type_info.get_type()) {
+        case kTINYINT:
+          constval.tinyintval = (int8_t)constval.smallintval;
+          break;
         case kINT:
           constval.intval = (int32_t)constval.smallintval;
           break;
@@ -633,6 +707,9 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
       break;
     case kBIGINT:
       switch (new_type_info.get_type()) {
+        case kTINYINT:
+          constval.tinyintval = (int8_t)constval.bigintval;
+          break;
         case kINT:
           constval.intval = (int32_t)constval.bigintval;
           break;
@@ -658,6 +735,9 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
       break;
     case kDOUBLE:
       switch (new_type_info.get_type()) {
+        case kTINYINT:
+          constval.tinyintval = (int8_t)constval.doubleval;
+          break;
         case kINT:
           constval.intval = (int32_t)constval.doubleval;
           break;
@@ -684,6 +764,9 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
       break;
     case kFLOAT:
       switch (new_type_info.get_type()) {
+        case kTINYINT:
+          constval.tinyintval = (int8_t)constval.floatval;
+          break;
         case kINT:
           constval.intval = (int32_t)constval.floatval;
           break;
@@ -711,6 +794,11 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
     case kNUMERIC:
     case kDECIMAL:
       switch (new_type_info.get_type()) {
+        case kTINYINT:
+          for (int i = 0; i < type_info.get_scale(); i++)
+            constval.bigintval /= 10;
+          constval.tinyintval = (int8_t)constval.bigintval;
+          break;
         case kINT:
           for (int i = 0; i < type_info.get_scale(); i++)
             constval.bigintval /= 10;
@@ -745,6 +833,9 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
       break;
     case kTIMESTAMP:
       switch (new_type_info.get_type()) {
+        case kTINYINT:
+          constval.tinyintval = (int8_t)constval.timeval;
+          break;
         case kINT:
           constval.intval = (int32_t)constval.timeval;
           break;
@@ -772,6 +863,9 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
       break;
     case kBOOLEAN:
       switch (new_type_info.get_type()) {
+        case kTINYINT:
+          constval.tinyintval = constval.boolval ? 1 : 0;
+          break;
         case kINT:
           constval.intval = constval.boolval ? 1 : 0;
           break;
@@ -873,6 +967,9 @@ void Constant::set_null_value() {
   switch (type_info.get_type()) {
     case kBOOLEAN:
       constval.boolval = NULL_BOOLEAN;
+      break;
+    case kTINYINT:
+      constval.tinyintval = NULL_TINYINT;
       break;
     case kINT:
       constval.intval = NULL_INT;
@@ -1617,6 +1714,8 @@ bool Datum_equal(const SQLTypeInfo& ti, Datum val1, Datum val2) {
       return val1.intval == val2.intval;
     case kSMALLINT:
       return val1.smallintval == val2.smallintval;
+    case kTINYINT:
+      return val1.tinyintval == val2.tinyintval;
     case kFLOAT:
       return val1.floatval == val2.floatval;
     case kDOUBLE:

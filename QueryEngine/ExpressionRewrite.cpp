@@ -361,6 +361,18 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
           }
           CHECK(!IS_ARITHMETIC(optype));
           break;
+        case kTINYINT:
+          if (IS_COMPARISON(optype)) {
+            result.boolval = foldComparison(optype, lhs.tinyintval, rhs.tinyintval);
+            result_type = kBOOLEAN;
+            return true;
+          }
+          if (IS_ARITHMETIC(optype)) {
+            result.tinyintval = foldArithmetic(optype, lhs.tinyintval, rhs.tinyintval);
+            return true;
+          }
+          CHECK(!IS_LOGIC(optype));
+          break;
         case kSMALLINT:
           if (IS_COMPARISON(optype)) {
             result.boolval = foldComparison(optype, lhs.smallintval, rhs.smallintval);

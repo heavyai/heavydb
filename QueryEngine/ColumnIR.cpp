@@ -32,6 +32,8 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
       switch (int_type) {
         case kBOOLEAN:
           return std::make_shared<FixedWidthInt>(1);
+        case kTINYINT:
+          return std::make_shared<FixedWidthInt>(1);
         case kSMALLINT:
           return std::make_shared<FixedWidthInt>(2);
         case kINT:
@@ -260,6 +262,7 @@ SQLTypes get_phys_int_type(const size_t byte_sz) {
   switch (byte_sz) {
     case 1:
       return kBOOLEAN;
+    // TODO: kTINYINT
     case 2:
       return kSMALLINT;
     case 4:

@@ -380,6 +380,7 @@ std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_in
     return "NULL";
   }
   switch (type_info.type) {
+    case TDatumType::TINYINT:
     case TDatumType::SMALLINT:
     case TDatumType::INT:
     case TDatumType::BIGINT:
@@ -498,6 +499,7 @@ TDatum columnar_val_to_datum(const TColumn& col, const size_t row_idx, const TTy
   }
   datum.is_null = col.nulls[row_idx];
   switch (col_type.type) {
+    case TDatumType::TINYINT:
     case TDatumType::SMALLINT:
     case TDatumType::INT:
     case TDatumType::BIGINT:

@@ -82,6 +82,7 @@ public class MetaConnect {
   private static final int KLINESTRING = 19;
   private static final int KPOLYGON = 20;
   private static final int KMULTIPOLYGON = 21;
+  private static final int KTINYINT = 22;
 
   private static volatile Map<String, Set<String>> MAPD_DATABASE_TO_TABLES
           = new ConcurrentHashMap();
@@ -500,6 +501,8 @@ public class MetaConnect {
     switch (type) {
       case KBOOLEAN:
         return TDatumType.BOOL;
+      case KTINYINT:
+        return TDatumType.TINYINT;
       case KSMALLINT:
         return TDatumType.SMALLINT;
       case KINT:

@@ -121,6 +121,9 @@ inline SQLTypes to_sql_type(const std::string& type_name) {
   if (type_name == std::string("INTEGER")) {
     return kINT;
   }
+  if (type_name == std::string("TINYINT")) {
+    return kTINYINT;
+  }
   if (type_name == std::string("SMALLINT")) {
     return kSMALLINT;
   }

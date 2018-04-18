@@ -60,6 +60,8 @@ bool match_const_integer(const Analyzer::Expr* expr, const int64_t v) {
   }
   const auto& datum = const_expr->get_constval();
   switch (const_ti.get_type()) {
+    case kTINYINT:
+      return v == datum.tinyintval;
     case kSMALLINT:
       return v == datum.smallintval;
     case kINT:

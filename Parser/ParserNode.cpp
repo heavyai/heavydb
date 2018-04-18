@@ -1309,6 +1309,9 @@ std::string SQLType::to_string() const {
     case kINT:
       str = "INT";
       break;
+    case kTINYINT:
+      str = "TINYINT";
+      break;
     case kSMALLINT:
       str = "SMALLINT";
       break;
@@ -2965,6 +2968,9 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         switch (ti.get_type()) {
           case kBOOLEAN:
             is_null = (int_val == NULL_BOOLEAN);
+            break;
+          case kTINYINT:
+            is_null = (int_val == NULL_TINYINT);
             break;
           case kSMALLINT:
             is_null = (int_val == NULL_SMALLINT);

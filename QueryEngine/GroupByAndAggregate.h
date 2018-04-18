@@ -461,6 +461,8 @@ inline int64_t extract_from_datum(const Datum datum, const SQLTypeInfo& ti) {
   switch (type) {
     case kBOOLEAN:
       return datum.tinyintval;
+    case kTINYINT:
+      return datum.tinyintval;
     case kSMALLINT:
       return datum.smallintval;
     case kCHAR:

@@ -1007,7 +1007,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     }
 
     private static boolean isPointerType(final ExtensionFunction.ExtArgumentType type) {
-      return type == ExtensionFunction.ExtArgumentType.PInt16
+      return type == ExtensionFunction.ExtArgumentType.PInt8
+              || type == ExtensionFunction.ExtArgumentType.PInt16
               || type == ExtensionFunction.ExtArgumentType.PInt32
               || type == ExtensionFunction.ExtArgumentType.PInt64
               || type == ExtensionFunction.ExtArgumentType.PFloat
@@ -1024,6 +1025,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       switch (type) {
         case Bool:
           return SqlTypeName.BOOLEAN;
+        case Int8:
+          return SqlTypeName.TINYINT;
         case Int16:
           return SqlTypeName.SMALLINT;
         case Int32:
@@ -1034,6 +1037,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
           return SqlTypeName.FLOAT;
         case Double:
           return SqlTypeName.DOUBLE;
+        case PInt8:
         case PInt16:
         case PInt32:
         case PInt64:

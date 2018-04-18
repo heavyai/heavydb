@@ -68,6 +68,16 @@ std::pair<Datum, bool> datum_from_scalar_tv(const ScalarTargetValue* scalar_tv, 
   Datum d{0};
   bool is_null_const{false};
   switch (ti.get_type()) {
+    case kTINYINT: {
+      const auto ival = boost::get<int64_t>(scalar_tv);
+      CHECK(ival);
+      if (*ival == inline_int_null_val(ti)) {
+        is_null_const = true;
+      } else {
+        d.tinyintval = *ival;
+      }
+      break;
+    }
     case kSMALLINT: {
       const auto ival = boost::get<int64_t>(scalar_tv);
       CHECK(ival);
@@ -794,6 +804,10 @@ std::shared_ptr<Analyzer::Constant> makeNumericConstant(const SQLTypeInfo& ti, c
   CHECK(ti.is_number());
   Datum datum{0};
   switch (ti.get_type()) {
+    case kTINYINT: {
+      datum.tinyintval = val;
+      break;
+    }
     case kSMALLINT: {
       datum.smallintval = val;
       break;

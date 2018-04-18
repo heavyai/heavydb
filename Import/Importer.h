@@ -132,6 +132,9 @@ class TypedImportBuffer : boost::noncopyable {
       case kBOOLEAN:
         bool_buffer_ = new std::vector<int8_t>();
         break;
+      case kTINYINT:
+        tinyint_buffer_ = new std::vector<int8_t>();
+        break;
       case kSMALLINT:
         smallint_buffer_ = new std::vector<int16_t>();
         break;
@@ -198,6 +201,9 @@ class TypedImportBuffer : boost::noncopyable {
       case kBOOLEAN:
         delete bool_buffer_;
         break;
+      case kTINYINT:
+        delete tinyint_buffer_;
+        break;
       case kSMALLINT:
         delete smallint_buffer_;
         break;
@@ -257,6 +263,8 @@ class TypedImportBuffer : boost::noncopyable {
   }
 
   void addBoolean(const int8_t v) { bool_buffer_->push_back(v); }
+
+  void addTinyint(const int8_t v) { tinyint_buffer_->push_back(v); }
 
   void addSmallint(const int16_t v) { smallint_buffer_->push_back(v); }
 
@@ -333,6 +341,8 @@ class TypedImportBuffer : boost::noncopyable {
     switch (column_desc_->columnType.get_type()) {
       case kBOOLEAN:
         return reinterpret_cast<int8_t*>(&((*bool_buffer_)[0]));
+      case kTINYINT:
+        return reinterpret_cast<int8_t*>(&((*tinyint_buffer_)[0]));
       case kSMALLINT:
         return reinterpret_cast<int8_t*>(&((*smallint_buffer_)[0]));
       case kINT:
@@ -358,6 +368,8 @@ class TypedImportBuffer : boost::noncopyable {
     switch (column_desc_->columnType.get_type()) {
       case kBOOLEAN:
         return sizeof((*bool_buffer_)[0]);
+      case kTINYINT:
+        return sizeof((*tinyint_buffer_)[0]);
       case kSMALLINT:
         return sizeof((*smallint_buffer_)[0]);
       case kINT:
@@ -412,6 +424,10 @@ class TypedImportBuffer : boost::noncopyable {
     switch (column_desc_->columnType.get_type()) {
       case kBOOLEAN: {
         bool_buffer_->clear();
+        break;
+      }
+      case kTINYINT: {
+        tinyint_buffer_->clear();
         break;
       }
       case kSMALLINT: {
@@ -493,6 +509,7 @@ class TypedImportBuffer : boost::noncopyable {
  private:
   union {
     std::vector<int8_t>* bool_buffer_;
+    std::vector<int8_t>* tinyint_buffer_;
     std::vector<int16_t>* smallint_buffer_;
     std::vector<int32_t>* int_buffer_;
     std::vector<int64_t>* bigint_buffer_;

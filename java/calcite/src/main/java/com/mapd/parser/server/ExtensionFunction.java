@@ -25,7 +25,7 @@ import java.util.List;
 public class ExtensionFunction {
 
     public enum ExtArgumentType {
-        Int16, Int32, Int64, Float, Double, Void, PInt16, PInt32, PInt64, PFloat, PDouble, Bool
+        Int8, Int16, Int32, Int64, Float, Double, Void, PInt8, PInt16, PInt32, PInt64, PFloat, PDouble, Bool
     };
 
     ExtensionFunction(final List<ExtArgumentType> args, final ExtArgumentType ret) {
@@ -62,6 +62,8 @@ public class ExtensionFunction {
         switch (type) {
             case Bool:
                 return "i1";
+            case Int8:
+                return "i8";
             case Int16:
                 return "i16";
             case Int32:
@@ -72,6 +74,8 @@ public class ExtensionFunction {
                 return "float";
             case Double:
                 return "double";
+            case PInt8:
+                return "i8*";
             case PInt16:
                 return "i16*";
             case PInt32:

@@ -31,6 +31,8 @@ inline TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
   switch (type) {
     case kBOOLEAN:
       return TDatumType::BOOL;
+    case kTINYINT:
+      return TDatumType::TINYINT;
     case kSMALLINT:
       return TDatumType::SMALLINT;
     case kINT:
@@ -76,6 +78,8 @@ inline SQLTypes thrift_to_type(const TDatumType::type& type) {
   switch (type) {
     case TDatumType::BOOL:
       return kBOOLEAN;
+    case TDatumType::TINYINT:
+      return kTINYINT;
     case TDatumType::SMALLINT:
       return kSMALLINT;
     case TDatumType::INT:
