@@ -1,4 +1,4 @@
-message(STATUS "Using CURL_INCLUDE_DIRS: ${CURL_INCLUDE_DIRS}.")
+#message(STATUS "Using CURL_INCLUDE_DIRS: ${CURL_INCLUDE_DIRS}.")
 include_directories(
     ${CPR_INCLUDE_DIRS}
     ${CURL_INCLUDE_DIRS})
@@ -39,6 +39,6 @@ add_library(${CPR_LIBRARIES}
     "${CPR_INCLUDE_DIRS}/cpr/timeout.h"
     "${CPR_INCLUDE_DIRS}/cpr/util.h")
 
-message(STATUS "Using CURL_LIBRARIES: ${CURL_LIBRARIES}.")
+#message(STATUS "Using CURL_LIBRARIES: ${CURL_LIBRARIES}.")
 target_link_libraries(${CPR_LIBRARIES}
     ${CURL_LIBRARIES})
