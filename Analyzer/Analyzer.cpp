@@ -2000,6 +2000,9 @@ void AggExpr::print() const {
     case kAPPROX_COUNT_DISTINCT:
       agg = "APPROX_COUNT_DISTINCT";
       break;
+    case kLAST_SAMPLE:
+      agg = "LAST_SAMPLE";
+      break;
   }
   std::cout << "(" << agg;
   if (is_distinct)
