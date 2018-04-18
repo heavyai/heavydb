@@ -1198,6 +1198,7 @@ TEST(Select, Strings) {
     c("SELECT fixed_str, COUNT(*) FROM test WHERE fixed_str = 'bar' GROUP BY fixed_str HAVING COUNT(*) > 4 ORDER BY "
       "fixed_str;",
       dt);
+    c("SELECT 'foo' FROM test ORDER BY x;", dt);
     ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(str) = 3;", dt)));
     ASSERT_EQ(g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str ILIKE 'f%%';", dt)));
     ASSERT_EQ(g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE (str ILIKE 'f%%');", dt)));
@@ -3877,7 +3878,6 @@ TEST(Select, UnsupportedExtensions) {
 TEST(Select, UnsupportedSortOfIntermediateResult) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    EXPECT_THROW(run_multiple_agg("SELECT 'foo' FROM test ORDER BY x;", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT real_str FROM test ORDER BY x;", dt), std::runtime_error);
   }
 }
