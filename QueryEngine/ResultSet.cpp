@@ -54,7 +54,7 @@ ResultSetStorage::ResultSetStorage(const std::vector<TargetInfo>& targets,
     } else {
       target_init_vals_.push_back(target_info.is_agg ? 0xdeadbeef : 0);
     }
-    if (target_info.agg_kind == kAVG) {
+    if (target_info.agg_kind == kAVG || (target_info.agg_kind == kLAST_SAMPLE && target_info.sql_type.is_varlen())) {
       target_init_vals_.push_back(0);
     }
   }

@@ -38,7 +38,7 @@
 #include <algorithm>
 
 inline bool is_real_str_or_array(const TargetInfo& target_info) {
-  return !target_info.is_agg &&
+  return (!target_info.is_agg || target_info.agg_kind == kLAST_SAMPLE) &&
          (target_info.sql_type.is_array() ||
           (target_info.sql_type.is_string() && target_info.sql_type.get_compression() == kENCODING_NONE));
 }

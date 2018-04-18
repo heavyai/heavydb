@@ -260,7 +260,8 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(int8_t* this_buff,
       auto that_ptr1 = that_crt_col_ptr + entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx].compact;
       int8_t* this_ptr2{nullptr};
       const int8_t* that_ptr2{nullptr};
-      if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
+      if (agg_info.is_agg &&
+          (agg_info.agg_kind == kAVG || (agg_info.agg_kind == kLAST_SAMPLE && agg_info.sql_type.is_varlen()))) {
         this_ptr2 = this_next_col_ptr + entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
         that_ptr2 = that_next_col_ptr + entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
       }
@@ -311,7 +312,8 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(const size_t entry_idx,
     const auto& target_info = targets_[target_logical_idx];
     int8_t* this_ptr2{nullptr};
     const int8_t* that_ptr2{nullptr};
-    if (target_info.is_agg && target_info.agg_kind == kAVG) {
+    if (target_info.is_agg &&
+        (target_info.agg_kind == kAVG || (target_info.agg_kind == kLAST_SAMPLE && target_info.sql_type.is_varlen()))) {
       this_ptr2 = this_targets_ptr + query_mem_desc_.agg_col_widths[target_slot_idx].compact;
       that_ptr2 = that_targets_ptr + query_mem_desc_.agg_col_widths[target_slot_idx].compact;
     }
@@ -624,7 +626,8 @@ void ResultSetStorage::reduceOneSlotBaseline(int64_t* this_buff,
                                              const ResultSetStorage& that) const {
   int8_t* this_ptr2{nullptr};
   const int8_t* that_ptr2{nullptr};
-  if (target_info.is_agg && target_info.agg_kind == kAVG) {
+  if (target_info.is_agg &&
+      (target_info.agg_kind == kAVG || (target_info.agg_kind == kLAST_SAMPLE && target_info.sql_type.is_varlen()))) {
     const auto this_count_off = query_mem_desc_.output_columnar ? query_mem_desc_.entry_count : 1;
     const auto that_count_off = query_mem_desc_.output_columnar ? that_entry_count : 1;
     this_ptr2 = reinterpret_cast<int8_t*>(&this_buff[this_slot + this_count_off]);
@@ -1022,6 +1025,7 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
   } else {
     switch (chosen_bytes) {
       case 4: {
+        CHECK(target_info.agg_kind != kLAST_SAMPLE);
         const auto rhs_proj_col = *reinterpret_cast<const int32_t*>(that_ptr1);
         if (rhs_proj_col != init_val) {
           *reinterpret_cast<int32_t*>(this_ptr1) = rhs_proj_col;
@@ -1032,6 +1036,10 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
         const auto rhs_proj_col = *reinterpret_cast<const int64_t*>(that_ptr1);
         if (rhs_proj_col != init_val) {
           *reinterpret_cast<int64_t*>(this_ptr1) = rhs_proj_col;
+        }
+        if (target_info.agg_kind == kLAST_SAMPLE && target_info.sql_type.is_varlen()) {
+          CHECK(this_ptr2 && that_ptr2);
+          *reinterpret_cast<int64_t*>(this_ptr2) = *reinterpret_cast<const int64_t*>(that_ptr2);
         }
         break;
       }
