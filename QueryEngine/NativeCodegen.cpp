@@ -816,11 +816,12 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
     const auto target_expr = target_exprs[target_idx];
     CHECK(target_expr);
     const auto target_type_info = target_expr->get_type_info();
-    const auto target_type = target_type_info.get_type();
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
-    if (!agg_expr) {
-      result.push_back((target_type == kFLOAT || target_type == kDOUBLE) ? "agg_id_double" : "agg_id");
-      if (target_type_info.is_string() && target_type_info.get_compression() == kENCODING_NONE) {
+    const bool is_varlen = (target_type_info.is_string() && target_type_info.get_compression() == kENCODING_NONE) ||
+                           target_type_info.is_array() || target_type_info.is_geometry();
+    if (!agg_expr || agg_expr->get_aggtype() == kLAST_SAMPLE) {
+      result.push_back(target_type_info.is_fp() ? "agg_id_double" : "agg_id");
+      if (is_varlen) {
         result.push_back("agg_id");
       }
       continue;

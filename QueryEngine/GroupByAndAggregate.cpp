@@ -1614,7 +1614,7 @@ int32_t get_agg_count(const std::vector<Analyzer::Expr*>& target_exprs) {
   for (auto target_expr : target_exprs) {
     CHECK(target_expr);
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
-    if (!agg_expr) {
+    if (!agg_expr || agg_expr->get_aggtype() == kLAST_SAMPLE) {
       const auto& ti = target_expr->get_type_info();
       if (ti.is_string() && ti.get_compression() != kENCODING_DICT) {
         agg_count += 2;
@@ -3192,9 +3192,8 @@ namespace {
 
 std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
   const auto& chosen_type = get_compact_type(target_info);
-  if (!target_info.is_agg) {
-    if ((chosen_type.is_string() && chosen_type.get_compression() == kENCODING_NONE) || chosen_type.is_array() ||
-        chosen_type.is_geometry()) {
+  if (!target_info.is_agg || target_info.agg_kind == kLAST_SAMPLE) {
+    if (chosen_type.is_varlen()) {
       return {"agg_id", "agg_id"};
     }
     return {"agg_id"};

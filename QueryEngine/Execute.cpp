@@ -1130,6 +1130,13 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
     } else if (agg_info.agg_kind == kAVG) {
       entry.push_back(inline_null_val(agg_info.agg_arg_type, float_argument_input));
       entry.push_back(0);
+    } else if (agg_info.agg_kind == kLAST_SAMPLE) {
+      if (agg_info.sql_type.is_varlen()) {
+        entry.push_back(0);
+        entry.push_back(0);
+      } else {
+        entry.push_back(inline_null_val(agg_info.sql_type, float_argument_input));
+      }
     } else {
       entry.push_back(inline_null_val(agg_info.sql_type, float_argument_input));
     }
@@ -1906,11 +1913,11 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
         break;
       }
       reduced_outs.push_back(val1);
-      if (agg_info.agg_kind == kAVG) {
+      if (agg_info.agg_kind == kAVG || (agg_info.agg_kind == kLAST_SAMPLE && agg_info.sql_type.is_varlen())) {
         const auto chosen_bytes =
             static_cast<size_t>(query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx + 1].compact);
         int64_t val2;
-        std::tie(val2, error_code) = reduceResults(kCOUNT,
+        std::tie(val2, error_code) = reduceResults(agg_info.agg_kind == kAVG ? kCOUNT : agg_info.agg_kind,
                                                    agg_info.sql_type,
                                                    query_exe_context->init_agg_vals_[out_vec_idx + 1],
                                                    float_argument_input ? sizeof(int32_t) : chosen_bytes,

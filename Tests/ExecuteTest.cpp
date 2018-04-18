@@ -4423,6 +4423,29 @@ TEST(Select, LastSample) {
     ASSERT_EQ("else",
               boost::get<std::string>(v<NullableString>(
                   run_simple_agg("SELECT LAST_SAMPLE(CASE WHEN x IN (9) THEN str ELSE 'else' END) FROM test;", dt))));
+    {
+      const auto rows = run_multiple_agg("SELECT LAST_SAMPLE(real_str), COUNT(*) FROM test WHERE x > 8;", dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(2), crt_row.size());
+      const auto nullable_str = v<NullableString>(crt_row[0]);
+      const auto null_ptr = boost::get<void*>(&nullable_str);
+      ASSERT_TRUE(null_ptr && !*null_ptr);
+      ASSERT_EQ(0, v<int64_t>(crt_row[1]));
+      const auto empty_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(0), empty_row.size());
+    }
+    {
+      const auto rows = run_multiple_agg("SELECT LAST_SAMPLE(real_str), COUNT(*) FROM test WHERE x > 7;", dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(2), crt_row.size());
+      const auto nullable_str = v<NullableString>(crt_row[0]);
+      const auto str_ptr = boost::get<std::string>(&nullable_str);
+      ASSERT_TRUE(str_ptr);
+      ASSERT_EQ("real_bar", boost::get<std::string>(*str_ptr));
+      ASSERT_EQ(g_num_rows / 2, v<int64_t>(crt_row[1]));
+      const auto empty_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(0), empty_row.size());
+    }
   }
 }
 

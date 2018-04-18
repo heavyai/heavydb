@@ -31,7 +31,7 @@ inline std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targ
   for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size(); ++target_idx, ++agg_col_idx) {
     CHECK_LT(agg_col_idx, query_mem_desc.agg_col_widths.size());
     const auto agg_info = targets[target_idx];
-    if (!agg_info.is_agg) {
+    if (!agg_info.is_agg || agg_info.agg_kind == kLAST_SAMPLE) {
       if (query_mem_desc.agg_col_widths[agg_col_idx].compact > 0) {
         agg_init_vals.push_back(0);
       }
@@ -114,7 +114,7 @@ int64_t get_agg_initial_val(const SQLAgg agg,
   const auto byte_width = enable_compaction ? compact_byte_width(static_cast<unsigned>(get_bit_width(ti) >> 3),
                                                                  unsigned(min_byte_width_to_compact))
                                             : sizeof(int64_t);
-  CHECK_GE(byte_width, static_cast<unsigned>(ti.get_logical_size()));
+  CHECK(ti.get_logical_size() < 0 || byte_width >= static_cast<unsigned>(ti.get_logical_size()));
   switch (agg) {
     case kAVG:
     case kSUM: {
