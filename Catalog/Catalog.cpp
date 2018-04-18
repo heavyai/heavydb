@@ -2008,10 +2008,10 @@ void Catalog::createTable(TableDescriptor& td,
 
           ColumnDescriptor physical_cd_coords;
           physical_cd_coords.columnName = cd.columnName + "_coords";
-          SQLTypeInfo ti = SQLTypeInfo(kARRAY, true);
-          ti.set_subtype(kDOUBLE);
-          ti.set_size(2 * sizeof(double));
-          physical_cd_coords.columnType = ti;
+          SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, true);
+          // Raw data: compressed/uncompressed coords
+          coords_ti.set_subtype(kTINYINT);
+          physical_cd_coords.columnType = coords_ti;
           columns.push_back(physical_cd_coords);
 
           // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
@@ -2023,9 +2023,10 @@ void Catalog::createTable(TableDescriptor& td,
 
           ColumnDescriptor physical_cd_coords;
           physical_cd_coords.columnName = cd.columnName + "_coords";
-          SQLTypeInfo ti = SQLTypeInfo(kARRAY, true);
-          ti.set_subtype(kDOUBLE);
-          physical_cd_coords.columnType = ti;
+          SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, true);
+          // Raw data: compressed/uncompressed coords
+          coords_ti.set_subtype(kTINYINT);
+          physical_cd_coords.columnType = coords_ti;
           columns.push_back(physical_cd_coords);
 
           // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
@@ -2038,7 +2039,8 @@ void Catalog::createTable(TableDescriptor& td,
           ColumnDescriptor physical_cd_coords;
           physical_cd_coords.columnName = cd.columnName + "_coords";
           SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, true);
-          coords_ti.set_subtype(kDOUBLE);
+          // Raw data: compressed/uncompressed coords
+          coords_ti.set_subtype(kTINYINT);
           physical_cd_coords.columnType = coords_ti;
           columns.push_back(physical_cd_coords);
 
@@ -2065,7 +2067,8 @@ void Catalog::createTable(TableDescriptor& td,
           ColumnDescriptor physical_cd_coords;
           physical_cd_coords.columnName = cd.columnName + "_coords";
           SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, true);
-          coords_ti.set_subtype(kDOUBLE);
+          // Raw data: compressed/uncompressed coords
+          coords_ti.set_subtype(kTINYINT);
           physical_cd_coords.columnType = coords_ti;
           columns.push_back(physical_cd_coords);
 

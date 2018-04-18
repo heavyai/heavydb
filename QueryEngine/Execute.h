@@ -1290,6 +1290,18 @@ class Executor {
             }
             throw std::runtime_error("Unsupported literal array");
           }
+          if (enc_type == kENCODING_GEOINT) {
+            if (ti.get_subtype() == kTINYINT) {
+              std::vector<int8_t> int8_array_literal;
+              for (const auto& value : constant->get_value_list()) {
+                const auto c = dynamic_cast<const Analyzer::Constant*>(value.get());
+                CHECK(c);
+                int8_t i = c->get_constval().tinyintval;
+                int8_array_literal.push_back(i);
+              }
+              return getOrAddLiteral(int8_array_literal, device_id);
+            }
+          }
           throw std::runtime_error("Encoded literal arrays are not supported");
         }
         default:

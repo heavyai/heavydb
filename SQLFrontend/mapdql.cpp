@@ -459,6 +459,7 @@ std::string datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
     elem_type_info.type = TDatumType::DOUBLE;
     elem_type_info.is_array = false;
     std::string last_coord;
+    // TODO: need to decompress compressed coords
     for (auto elem_datum_it = datum.val.arr_val.begin(); elem_datum_it != datum.val.arr_val.end(); ++elem_datum_it) {
       if (std::distance(datum.val.arr_val.begin(), elem_datum_it) % 2 == 0) {
         last_coord = scalar_datum_to_string(*elem_datum_it, elem_type_info);

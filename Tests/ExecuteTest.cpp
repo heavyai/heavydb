@@ -2933,7 +2933,7 @@ void import_geospatial_test() {
   run_ddl_statement(
       "CREATE TABLE geospatial_test ("
       "p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON, "
-      "gp GEOMETRY(POINT), gp4326 GEOMETRY(POINT,4326), gp900913 GEOMETRY(POINT,900913)"
+      "gp GEOMETRY(POINT), gp4326 GEOMETRY(POINT,4326) ENCODING GEOINT(32), gp900913 GEOMETRY(POINT,900913)"
       ") WITH (fragment_size=2);");
   for (ssize_t i = 0; i < g_num_rows; ++i) {
     const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) + ")'"};
@@ -5183,13 +5183,13 @@ TEST(Select, GeoSpatial) {
                 v<double>(run_simple_agg("SELECT ST_Y(ST_GeomFromText('POINT(-118.4079 33.9434)', 4326)) "
                                          "from geospatial_test limit 1;",
                                          dt)),
-                static_cast<double>(0.0));
+                static_cast<double>(0.01));
     ASSERT_NEAR(static_cast<double>(4021204.558),
                 v<double>(run_simple_agg("SELECT ST_Y(ST_Transform("
                                          "ST_GeomFromText('POINT(-118.4079 33.9434)', 4326), 900913)) "
                                          "from geospatial_test limit 1;",
                                          dt)),
-                static_cast<double>(0.001));
+                static_cast<double>(0.01));
 
     ASSERT_NEAR(static_cast<double>(-118.4079),
                 v<double>(run_simple_agg("SELECT ST_XMax('POINT(-118.4079 33.9434)') "
@@ -5202,27 +5202,29 @@ TEST(Select, GeoSpatial) {
                                          "-13176924.0813953 3949756.56479131)))') "
                                          "from geospatial_test limit 1;",
                                          dt)),
-                static_cast<double>(0.001));
+                static_cast<double>(0.01));
     ASSERT_NEAR(static_cast<double>(4021204.558),
                 v<double>(run_simple_agg("SELECT ST_YMin(ST_Transform(ST_GeomFromText("
                                          "'LINESTRING (-118.4079 33.9434, 2.5559 49.0083)', 4326), 900913)) "
                                          "from geospatial_test limit 1;",
                                          dt)),
-                static_cast<double>(0.001));
+                static_cast<double>(0.01));
 
     // Point accessors, Linestring indexing
-    ASSERT_EQ(static_cast<double>(34.274647),
-              v<double>(run_simple_agg("SELECT ST_Y(ST_PointN(ST_GeomFromText('LINESTRING(-118.243683 34.052235, "
-                                       "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
-                                       "-122.446747 37.733795)', 4326), 2)) "
-                                       "from geospatial_test limit 1;",
-                                       dt)));
-    ASSERT_EQ(static_cast<double>(-122.446747),
-              v<double>(run_simple_agg("SELECT ST_X(ST_EndPoint(ST_GeomFromText('LINESTRING(-118.243683 34.052235, "
-                                       "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
-                                       "-122.446747 37.733795)', 4326))) "
-                                       "from geospatial_test limit 1;",
-                                       dt)));
+    ASSERT_NEAR(static_cast<double>(34.274647),
+                v<double>(run_simple_agg("SELECT ST_Y(ST_PointN(ST_GeomFromText('LINESTRING(-118.243683 34.052235, "
+                                         "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
+                                         "-122.446747 37.733795)', 4326), 2)) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<double>(-122.446747),
+                v<double>(run_simple_agg("SELECT ST_X(ST_EndPoint(ST_GeomFromText('LINESTRING(-118.243683 34.052235, "
+                                         "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
+                                         "-122.446747 37.733795)', 4326))) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.01));
     ASSERT_NEAR(static_cast<double>(557637.370),  // geodesic distance between first and end points: LA - SF trip
                 v<double>(run_simple_agg("SELECT ST_Distance(ST_PointN(ST_GeomFromText("
                                          "'LINESTRING(-118.243683 34.052235, "
@@ -5234,7 +5236,7 @@ TEST(Select, GeoSpatial) {
                                          "-122.446747 37.733795)', 4326))) "
                                          "from geospatial_test limit 1;",
                                          dt)),
-                static_cast<double>(0.001));
+                static_cast<double>(0.01));
     ASSERT_NEAR(static_cast<double>(689217.783),  // cartesian distance between transformed first and end points
                 v<double>(run_simple_agg("SELECT ST_Distance(ST_StartPoint(ST_Transform(ST_GeomFromText("
                                          "'LINESTRING(-118.243683 34.052235, "
@@ -5246,7 +5248,7 @@ TEST(Select, GeoSpatial) {
                                          "-122.446747 37.733795)', 4326), 900913))) "
                                          "from geospatial_test limit 1;",
                                          dt)),
-                static_cast<double>(0.001));
+                static_cast<double>(0.01));
     // Linestring: check that runaway indices are controlled
     ASSERT_NEAR(static_cast<double>(-122.446747),  // stop at endpoint
                 v<double>(run_simple_agg("SELECT ST_X(ST_PointN(ST_GeomFromText("
@@ -5255,7 +5257,7 @@ TEST(Select, GeoSpatial) {
                                          "-122.446747 37.733795)', 4326), 1000000)) "
                                          "from geospatial_test limit 1;",
                                          dt)),
-                static_cast<double>(0.001));
+                static_cast<double>(0.01));
 
     // Point geometries, literals in different spatial references, transforms
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),

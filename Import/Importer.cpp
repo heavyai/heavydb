@@ -1534,6 +1534,47 @@ bool importGeoFromLonLat(double lon, double lat, std::vector<double>& coords) {
   return true;
 }
 
+uint64_t compress_coord(double coord, const SQLTypeInfo& ti, bool x) {
+  if (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32) {
+    // compress longitude: -180..180  --->  -2,147,483,647..2,147,483,647
+    // compress latitude: -90..90  --->  -2,147,483,647..2,147,483,647
+    int32_t compressed_coord = static_cast<int32_t>(coord * (2147483647.0 / (x ? 180.0 : 90.0)));
+    return static_cast<uint64_t>(*reinterpret_cast<uint32_t*>(&compressed_coord));
+  }
+  return *reinterpret_cast<uint64_t*>(&coord);
+}
+
+std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeInfo& ti) {
+  std::vector<uint8_t> compressed_coords;
+  bool x = true;
+  for (auto coord : coords) {
+    auto coord_data_ptr = reinterpret_cast<uint64_t*>(&coord);
+    uint64_t coord_data = *coord_data_ptr;
+    auto coord_data_size = sizeof(double);
+
+    if (ti.get_output_srid() == 4326) {
+      if (x) {
+        if (coord < -180.0 || coord > 180.0)
+          throw std::runtime_error("WGS84 longitude " + std::to_string(coord) + " is out of bounds");
+      } else {
+        if (coord < -90.0 || coord > 90.0)
+          throw std::runtime_error("WGS84 latitude " + std::to_string(coord) + " is out of bounds");
+      }
+      if (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32) {
+        coord_data = compress_coord(coord, ti, x);
+        coord_data_size = ti.get_comp_param() / 8;
+      }
+      x = !x;
+    }
+
+    for (auto i = 0; i < coord_data_size; i++) {
+      compressed_coords.push_back(coord_data & 0xFF);
+      coord_data >>= 8;
+    }
+  }
+  return compressed_coords;
+}
+
 static ImportStatus import_thread_delimited(
     int thread_id,
     Importer* importer,
@@ -1667,27 +1708,15 @@ static ImportStatus import_thread_delimited(
 
               ++cd_it;
               auto cd_coords = *cd_it;
-              std::vector<TDatum> td_coords;
-              bool x = true;
-              for (auto coord : coords) {
-                if (col_ti.get_output_srid() == 4326) {
-                  if (x) {
-                    if (coord < -180.0 || coord > 180.0)
-                      throw std::runtime_error(cd->columnName + ": Imported WGS84 longitude " + std::to_string(coord) +
-                                               " is out of bounds");
-                  } else {
-                    if (coord < -90.0 || coord > 90.0)
-                      throw std::runtime_error(cd->columnName + ": Imported WGS84 latitude " + std::to_string(coord) +
-                                               " is out of bounds");
-                  }
-                  x = !x;
-                }
-                TDatum td_coord;
-                td_coord.val.real_val = coord;
-                td_coords.push_back(td_coord);
+              std::vector<TDatum> td_coord_data;
+              std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
+              for (auto cc : compressed_coords) {
+                TDatum td_byte;
+                td_byte.val.int_val = cc;
+                td_coord_data.push_back(td_byte);
               }
               TDatum tdd_coords;
-              tdd_coords.val.arr_val = td_coords;
+              tdd_coords.val.arr_val = td_coord_data;
               tdd_coords.is_null = false;
               import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false);
               ++col_idx;

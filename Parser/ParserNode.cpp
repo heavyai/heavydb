@@ -62,6 +62,7 @@ bool importGeoFromWkt(std::string& wkt,
                       std::vector<int>& ring_sizes,
                       std::vector<int>& poly_rings);
 
+std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeInfo& ti);
 }  // Importer_NS
 
 namespace Parser {
@@ -1596,14 +1597,26 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
     const auto& col_ti = cd->columnType;
     if (col_ti.get_physical_cols() > 0) {
       CHECK(cd->columnType.is_geometry());
+      std::string* wkt{nullptr};
       auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
-      CHECK(c);
+      if (c) {
+        wkt = c->get_constval().stringval;
+      } else {
+        auto uoper = std::dynamic_pointer_cast<Analyzer::UOper>(e);
+        if (uoper && uoper->get_optype() == kCAST) {
+          auto c = dynamic_cast<const Analyzer::Constant*>(uoper->get_operand());
+          if (c) {
+            wkt = c->get_constval().stringval;
+          }
+        }
+      }
+      CHECK(wkt);
       std::vector<double> coords;
       std::vector<int> ring_sizes;
       std::vector<int> poly_rings;
       int render_group = 0;  // @TODO simon.eves where to get render_group from in this context?!
       SQLTypeInfo import_ti;
-      if (!Importer_NS::importGeoFromWkt(*c->get_constval().stringval, import_ti, coords, ring_sizes, poly_rings)) {
+      if (!Importer_NS::importGeoFromWkt(*wkt, import_ti, coords, ring_sizes, poly_rings)) {
         throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
       }
       if (cd->columnType.get_type() != import_ti.get_type()) {
@@ -1614,12 +1627,13 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
       const ColumnDescriptor* cd_coords = catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + 1);
       CHECK(cd_coords);
       CHECK_EQ(cd_coords->columnType.get_type(), kARRAY);
-      CHECK_EQ(cd_coords->columnType.get_subtype(), kDOUBLE);
+      CHECK_EQ(cd_coords->columnType.get_subtype(), kTINYINT);
+      auto compressed_coords = Importer_NS::compress_coords(coords, col_ti);
       std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-      for (auto c : coords) {
+      for (auto cc : compressed_coords) {
         Datum d;
-        d.doubleval = c;
-        auto e = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
+        d.tinyintval = cc;
+        auto e = makeExpr<Analyzer::Constant>(kTINYINT, false, d);
         value_exprs.push_back(e);
       }
       tlist.emplace_back(new Analyzer::TargetEntry(

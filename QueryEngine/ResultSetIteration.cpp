@@ -635,6 +635,24 @@ TargetValue build_geo_target_value(const SQLTypeInfo& geo_ti,
                                    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                    const Executor* executor) {
   CHECK(geo_ti.is_geometry());
+  if (geo_ti.get_compression() == kENCODING_GEOINT) {
+    if (geo_ti.get_comp_param() == 32) {
+      const auto compressed_coords = reinterpret_cast<const int32_t*>(coords);
+      std::vector<double> decompressed_coords;
+      bool x = true;
+      for (auto i = 0; i < coords_sz / sizeof(int32_t); i++) {
+        // compress longitude: -180..180  --->  -2,147,483,647..2,147,483,647
+        // compress latitude: -90..90  --->  -2,147,483,647..2,147,483,647
+        double decompressed_coord = (x ? 180.0 : 90.0) * (compressed_coords[i] / 2147483647.0);
+        decompressed_coords.push_back(decompressed_coord);
+        x = !x;
+      }
+      size_t decompressed_coords_sz = decompressed_coords.size() * sizeof(double);
+      auto decompressed_coords_data = reinterpret_cast<int8_t*>(decompressed_coords.data());
+      // Return a simple array of coordinates. TODO(d): ring sizes, multipolygon ring counts, etc.
+      return build_array_target_value<double>(decompressed_coords_data, decompressed_coords_sz, row_set_mem_owner);
+    }
+  }
   CHECK_EQ(kENCODING_NONE, geo_ti.get_compression());
   // Return a simple array of coordinates. TODO(d): ring sizes, multipolygon ring counts, etc.
   return build_array_target_value<double>(coords, coords_sz, row_set_mem_owner);

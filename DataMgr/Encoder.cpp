@@ -163,6 +163,17 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer, const SQLTypeIn
       }
       break;
     }
+    case kENCODING_GEOINT: {
+      switch (sqlType.get_type()) {
+        case kPOINT:
+        case kLINESTRING:
+        case kPOLYGON:
+        case kMULTIPOLYGON:
+          return new StringNoneEncoder(buffer);
+        default: { return 0; }
+      }
+      break;
+    }
     default: {
       return 0;
       break;
