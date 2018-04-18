@@ -976,8 +976,11 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(const RA* 
       continue;
     }
     const auto scalar_expr = translator.translateScalarRex(scalar_rex);
-    const auto folded_scalar_expr = fold_expr(scalar_expr.get());
-    scalar_sources.push_back(folded_scalar_expr);
+    try {
+      scalar_sources.push_back(set_transient_dict(fold_expr(scalar_expr.get())));
+    } catch (...) {
+      scalar_sources.push_back(fold_expr(scalar_expr.get()));
+    }
   }
   return scalar_sources;
 }
