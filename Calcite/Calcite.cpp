@@ -169,8 +169,12 @@ int Calcite::ping() {
   }
 }
 
-Calcite::Calcite(const int mapd_port, const int port, const std::string& data_dir, const size_t calcite_max_mem)
-    : server_available_(false) {
+Calcite::Calcite(const int mapd_port,
+                 const int port,
+                 const std::string& data_dir,
+                 const size_t calcite_max_mem,
+                 const std::string& session_prefix)
+    : server_available_(false), session_prefix_(session_prefix) {
   LOG(INFO) << "Creating Calcite Handler,  Calcite Port is " << port << " base data dir is " << data_dir;
   if (port < 0) {
     CHECK(false) << "JNI mode no longer supported.";
@@ -272,6 +276,10 @@ std::string Calcite::processImpl(const Catalog_Namespace::SessionInfo& session_i
   auto& cat = session_info.get_catalog();
   std::string user = session_info.get_currentUser().userName;
   std::string session = session_info.get_session_id();
+  if (!session_prefix_.empty()) {
+    // preprend session prefix, if present
+    session = session_prefix_ + "/" + session;
+  }
   std::string catalog = cat.get_currentDB().dbName;
 
   LOG(INFO) << "User " << user << " catalog " << catalog << " sql '" << sql_string << "'";

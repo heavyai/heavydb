@@ -73,12 +73,13 @@ namespace Catalog_Namespace {
  */
 struct UserMetadata {
   UserMetadata(int32_t u, const std::string& n, const std::string& p, bool s)
-      : userId(u), userName(n), passwd(p), isSuper(s) {}
+      : userId(u), userName(n), passwd(p), isSuper(s), isReallySuper(s) {}
   UserMetadata() {}
   int32_t userId;
   std::string userName;
   std::string passwd;
   bool isSuper;
+  bool isReallySuper;
 };
 
 /*
@@ -458,11 +459,13 @@ class SessionInfo {
   std::string get_session_id() const { return session_id; }
   time_t get_last_used_time() const { return last_used_time; }
   void update_time() { last_used_time = time(0); }
+  void reset_superuser() { currentUser_.isSuper = currentUser_.isReallySuper; }
+  void make_superuser() { currentUser_.isSuper = true; }
   bool checkDBAccessPrivileges(const AccessPrivileges& privs) const;
 
  private:
   std::shared_ptr<Catalog> catalog_;
-  const UserMetadata currentUser_;
+  UserMetadata currentUser_;
   std::atomic<ExecutorDeviceType> executor_device_type_;
   const std::string session_id;
   std::atomic<time_t> last_used_time;  // for cleaning up SessionInfo after client dies

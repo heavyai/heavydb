@@ -108,6 +108,8 @@ using namespace Lock_Namespace;
   LOG(ERROR) << ex.error_msg;        \
   throw ex;
 
+std::string generate_random_string(const size_t len);
+
 MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const std::vector<LeafHostInfo>& string_leaves,
                          const std::string& base_data_path,
@@ -172,10 +174,14 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                                               start_gpu,
                                               total_reserved,
                                               num_reader_threads));
+
+  std::string calcite_session_prefix = "calcite-" + generate_random_string(64);
+
   calcite_.reset(new Calcite(mapd_parameters.mapd_server_port,
                              mapd_parameters.calcite_port,
                              base_data_path_,
-                             mapd_parameters_.calcite_max_mem));
+                             mapd_parameters_.calcite_max_mem,
+                             calcite_session_prefix));
   ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
 
   if (!data_mgr_->gpusPresent()) {
@@ -2493,10 +2499,26 @@ void MapDHandler::get_heap_profile(std::string& profile, const TSessionId& sessi
 }
 
 SessionMap::iterator MapDHandler::get_session_it(const TSessionId& session) {
+  auto calcite_session_prefix = calcite_->get_session_prefix();
+  auto prefix_length = calcite_session_prefix.size();
+  if (prefix_length) {
+    if (0 == session.compare(0, prefix_length, calcite_session_prefix)) {
+      // call coming from calcite, elevate user to be superuser
+      auto session_it = sessions_.find(session.substr(prefix_length + 1));
+      if (session_it == sessions_.end()) {
+        THROW_MAPD_EXCEPTION("Session not valid.");
+      }
+      session_it->second->make_superuser();
+      session_it->second->update_time();
+      return session_it;
+    }
+  }
+
   auto session_it = sessions_.find(session);
   if (session_it == sessions_.end()) {
     THROW_MAPD_EXCEPTION("Session not valid.");
   }
+  session_it->second->reset_superuser();
   session_it->second->update_time();
   return session_it;
 }
@@ -2881,7 +2903,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
       std::string query_ra;
       _return.execution_time_ms += measure<>::execution([&]() {
-        //query_ra = TIME_WRAP(parse_to_ra)(query_str, session_info);
+        // query_ra = TIME_WRAP(parse_to_ra)(query_str, session_info);
         query_ra = parse_to_ra(query_str, session_info);
       });
 

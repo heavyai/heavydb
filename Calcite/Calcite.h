@@ -37,7 +37,13 @@ class SessionInfo;
 
 class Calcite {
  public:
-  Calcite(const int mapd_port, const int port, const std::string& data_dir, const size_t calcite_max_mem);
+  Calcite(const int mapd_port, const int port, const std::string& data_dir, const size_t calcite_max_mem)
+      : Calcite(mapd_port, port, data_dir, calcite_max_mem, ""){};
+  Calcite(const int mapd_port,
+          const int port,
+          const std::string& data_dir,
+          const size_t calcite_max_mem,
+          const std::string& session_prefix);
   std::string process(const Catalog_Namespace::SessionInfo& session_info,
                       const std::string sql_string,
                       const bool legacy_syntax,
@@ -49,6 +55,8 @@ class Calcite {
   std::string getExtensionFunctionWhitelist();
   void updateMetadata(std::string catalog, std::string table);
   virtual ~Calcite();
+
+  std::string& get_session_prefix() { return session_prefix_; }
 
  private:
   void runServer(const int mapd_port, const int port, const std::string& data_dir, const size_t calcite_max_mem);
@@ -63,6 +71,7 @@ class Calcite {
 
   bool server_available_;
   int remote_calcite_port_ = -1;
+  std::string session_prefix_;
 };
 
 #endif /* CALCITE_H */

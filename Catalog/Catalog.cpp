@@ -543,6 +543,7 @@ bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
   user.userName = sqliteConnector_->getData<string>(0, 1);
   user.passwd = sqliteConnector_->getData<string>(0, 2);
   user.isSuper = sqliteConnector_->getData<bool>(0, 3);
+  user.isReallySuper = user.isSuper;
   return true;
 }
 
