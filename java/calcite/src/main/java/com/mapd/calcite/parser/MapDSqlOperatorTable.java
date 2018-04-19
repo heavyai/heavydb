@@ -139,6 +139,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new ST_SetSRID());
     opTab.addOperator(new OffsetInFragment());
     opTab.addOperator(new ApproxCountDistinct());
+    opTab.addOperator(new LastSample());
     if (extSigs == null) {
       return;
     }
@@ -960,6 +961,23 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       final RelDataTypeFactory typeFactory
               = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.BIGINT);
+    }
+  }
+
+  public static class LastSample extends SqlAggFunction {
+
+    public LastSample() {
+      super("LAST_SAMPLE",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.ANY,
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
     }
   }
 

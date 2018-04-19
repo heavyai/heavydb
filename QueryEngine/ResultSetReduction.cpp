@@ -1012,6 +1012,7 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
         AGGREGATE_ONE_NULLABLE_VALUE(min, this_ptr1, that_ptr1, init_val, chosen_bytes, target_info);
         break;
       }
+      case kLAST_SAMPLE:
       case kMAX: {
         AGGREGATE_ONE_NULLABLE_VALUE(max, this_ptr1, that_ptr1, init_val, chosen_bytes, target_info);
         break;
