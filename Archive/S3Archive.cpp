@@ -186,15 +186,27 @@ const std::string S3Archive::land(const std::string& objkey, std::exception_ptr&
   auto& bucket_name = this->bucket_name;
   auto th_writer = std::thread([=, &teptr, &get_object_outcome, &is_get_object_outcome_moved]() {
     try {
-      LOG(INFO) << "downloading s3://" << bucket_name << "/" << objkey << " to " << (use_pipe ? "pipe " : "file ")
-                << file_path << "...";
+      // this static mutex protect the static google::last_tm_time_for_raw_log from
+      // concurrent LOG(INFO)s that call RawLog__SetLastTime to write the variable!
+      static std::mutex mutex_glog;
+#define MAPD_S3_LOG(x)                             \
+  {                                                \
+    std::unique_lock<std::mutex> lock(mutex_glog); \
+    x;                                             \
+  }
+      MAPD_S3_LOG(LOG(INFO) << "downloading s3://" << bucket_name << "/" << objkey << " to "
+                            << (use_pipe ? "pipe " : "file ")
+                            << file_path
+                            << "...")
       auto get_object_outcome_moved = decltype(get_object_outcome)(std::move(get_object_outcome));
       is_get_object_outcome_moved = true;
       Aws::OFStream local_file;
       local_file.open(file_path.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
       local_file << get_object_outcome_moved.GetResult().GetBody().rdbuf();
-      LOG(INFO) << "downloaded s3://" << bucket_name << "/" << objkey << " to " << (use_pipe ? "pipe " : "file ")
-                << file_path << ".";
+      MAPD_S3_LOG(LOG(INFO) << "downloaded s3://" << bucket_name << "/" << objkey << " to "
+                            << (use_pipe ? "pipe " : "file ")
+                            << file_path
+                            << ".")
     } catch (...) {
       // need this way to capture any exception occurring when
       // this thread runs as a disjoint asynchronous thread
