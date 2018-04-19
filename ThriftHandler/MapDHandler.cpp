@@ -2114,6 +2114,63 @@ void MapDHandler::delete_dashboard(const TSessionId& session, const int32_t dash
   }
 }
 
+// Note: Grants not available for objects as of now
+void MapDHandler::share_dashboard(const TSessionId& session,
+                                  const int32_t dashboard_id,
+                                  const std::vector<std::string>& groups,
+                                  const std::vector<std::string>& objects,
+                                  const TAccessPrivileges& permissions) {
+  check_read_only("share_dashboard");
+  const auto session_info = get_session(session);
+  auto& cat = session_info.get_catalog();
+  auto dash = cat.getMetadataForDashboard(dashboard_id);
+  if (!dash) {
+    THROW_MAPD_EXCEPTION("Exception: Dashboard id " + std::to_string(dashboard_id) + " does not exist");
+  } else if (session_info.get_currentUser().userId != dash->userId) {
+    throw std::runtime_error("User should be owner of dashboard to share it");
+  }
+  Catalog_Namespace::UserMetadata user_meta;
+  for_each(groups.begin(), groups.end(), [&](std::string user) {
+    if (!SysCatalog::instance().getMetadataForUser(user, user_meta)) {
+      THROW_MAPD_EXCEPTION("Exception: User " + user + " does not exist");
+    } else if (user_meta.isSuper) {
+      THROW_MAPD_EXCEPTION("Exception: User " + user + " is a super user and have all privileges");
+    }
+  });
+  // By default object type can only be dashboard
+  DBObjectType object_type = DBObjectType::DashboardDBObjectType;
+  DBObject object(dashboard_id, object_type);
+  // TODO: Create bitmaps for Access Privileges to eliminate boilerplate code
+  if (!permissions.select_ && !permissions.insert_ && !permissions.create_ && !permissions.truncate_ &&
+      !permissions.create_dashboard_) {
+    throw std::runtime_error("Atleast one privilege should be assigned for grants");
+  } else {
+    if (permissions.select_) {
+      object.setPrivileges(AccessPrivileges::SELECT);
+    }
+    if (permissions.insert_) {
+      object.setPrivileges(AccessPrivileges::INSERT);
+    }
+    if (permissions.create_) {
+      object.setPrivileges(AccessPrivileges::CREATE);
+    }
+    if (permissions.truncate_) {
+      object.setPrivileges(AccessPrivileges::TRUNCATE);
+    }
+    if (permissions.create_dashboard_) {
+      object.setPrivileges(AccessPrivileges::CREATE_DASHBOARD);
+    }
+  }
+  // TODO: check for already existing privileges, then skip
+  for (auto role : groups) {
+    try {
+      SysCatalog::instance().grantDBObjectPrivileges(role, object, cat);
+    } catch (const std::exception& e) {
+      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    }
+  }
+}
+
 void MapDHandler::create_frontend_view(const TSessionId& session,
                                        const std::string& view_name,
                                        const std::string& view_state,
