@@ -590,6 +590,16 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
             CHECK(false);
         }
       }
+    case kLAST_SAMPLE: {
+      int64_t agg_result = agg_init_val;
+      for (size_t i = 0; i < out_vec_sz; ++i) {
+        if (out_vec[i] != agg_init_val) {
+          agg_result = out_vec[i];
+          break;
+        }
+      }
+      return {agg_result, 0};
+    }
     default:
       CHECK(false);
   }

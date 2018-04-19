@@ -986,7 +986,7 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
   const auto chosen_bytes = float_argument_input ? static_cast<int8_t>(sizeof(float))
                                                  : query_mem_desc_.agg_col_widths[target_slot_idx].compact;
   auto init_val = target_init_vals_[init_agg_val_idx];
-  if (target_info.is_agg) {
+  if (target_info.is_agg && target_info.agg_kind != kLAST_SAMPLE) {
     switch (target_info.agg_kind) {
       case kCOUNT:
       case kAPPROX_COUNT_DISTINCT: {
@@ -1023,14 +1023,14 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
     switch (chosen_bytes) {
       case 4: {
         const auto rhs_proj_col = *reinterpret_cast<const int32_t*>(that_ptr1);
-        if (rhs_proj_col) {
+        if (rhs_proj_col != init_val) {
           *reinterpret_cast<int32_t*>(this_ptr1) = rhs_proj_col;
         }
         break;
       }
       case 8: {
         const auto rhs_proj_col = *reinterpret_cast<const int64_t*>(that_ptr1);
-        if (rhs_proj_col) {
+        if (rhs_proj_col != init_val) {
           *reinterpret_cast<int64_t*>(this_ptr1) = rhs_proj_col;
         }
         break;

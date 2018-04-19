@@ -4417,6 +4417,15 @@ TEST(Rounding, ROUND) {
   }
 }
 
+TEST(Select, LastSample) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    ASSERT_EQ("else",
+              boost::get<std::string>(v<NullableString>(
+                  run_simple_agg("SELECT LAST_SAMPLE(CASE WHEN x IN (9) THEN str ELSE 'else' END) FROM test;", dt))));
+  }
+}
+
 namespace {
 
 int create_and_populate_rounding_table() {
