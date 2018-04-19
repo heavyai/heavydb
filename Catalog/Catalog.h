@@ -238,6 +238,7 @@ class Catalog {
   typedef std::map<std::string, FrontendViewDescriptor*> FrontendViewDescriptorMap;
   typedef std::map<std::string, LinkDescriptor*> LinkDescriptorMap;
   typedef std::map<int, LinkDescriptor*> LinkDescriptorMapById;
+  typedef std::unordered_map<const TableDescriptor*, const ColumnDescriptor*> DeletedColumnPerTableMap;
 
   void CheckAndExecuteMigrations();
   void updateDictionaryNames();
@@ -308,7 +309,7 @@ class Catalog {
 
  private:
   static std::map<std::string, std::shared_ptr<Catalog>> mapd_cat_map_;
-  std::unordered_map<const TableDescriptor*, const ColumnDescriptor*> deletedColumnPerTable_;
+  DeletedColumnPerTableMap deletedColumnPerTable_;
 };
 
 /*

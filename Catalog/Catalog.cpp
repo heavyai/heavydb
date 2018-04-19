@@ -1658,7 +1658,13 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
   TableDescriptorMapById::iterator tableDescIt = tableDescriptorMapById_.find(tableId);
   if (tableDescIt == tableDescriptorMapById_.end())
     throw runtime_error("Table " + tableName + " does not exist.");
+
   TableDescriptor* td = tableDescIt->second;
+
+  if (td->hasDeletedCol) {
+    deletedColumnPerTable_.erase(td);
+  }
+
   int ncolumns = td->nColumns;
   tableDescriptorMapById_.erase(tableDescIt);
   tableDescriptorMap_.erase(to_upper(tableName));
