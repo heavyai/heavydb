@@ -3212,6 +3212,8 @@ std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
       return {"agg_sum"};
     case kAPPROX_COUNT_DISTINCT:
       return {"agg_approximate_count_distinct"};
+    case kLAST_SAMPLE:
+      return {"agg_id"};
     default:
       abort();
   }
@@ -3345,7 +3347,9 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
     auto agg_info = target_info(target_expr);
     auto arg_expr = agg_arg(target_expr);
     if (arg_expr) {
-      if (query_mem_desc_.hash_type == GroupByColRangeType::Scan) {
+      if (agg_info.agg_kind == kLAST_SAMPLE) {
+        agg_info.skip_null_val = false;
+      } else if (query_mem_desc_.hash_type == GroupByColRangeType::Scan) {
         agg_info.skip_null_val = true;
       } else if (constrained_not_null(arg_expr, ra_exe_unit_.quals)) {
         agg_info.skip_null_val = false;

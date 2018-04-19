@@ -860,6 +860,14 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
       case kCOUNT:
         result.push_back(agg_expr->get_is_distinct() ? "agg_count_distinct" : "agg_count");
         break;
+      case kLAST_SAMPLE: {
+        if ((agg_type_info.is_string() && agg_type_info.get_compression() == kENCODING_NONE) ||
+            agg_type_info.is_array()) {
+          throw std::runtime_error("LAST_SAMPLE on none encoded strings or arrays not supported yet");
+        }
+        result.push_back(agg_type_info.is_fp() ? "agg_id_double" : "agg_id");
+        break;
+      }
       case kAPPROX_COUNT_DISTINCT:
         result.push_back("agg_approximate_count_distinct");
         break;
