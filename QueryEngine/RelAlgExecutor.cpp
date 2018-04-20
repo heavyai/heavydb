@@ -1143,12 +1143,12 @@ void RelAlgExecutor::executeUpdateViaProject(const RelProject* project,
   auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   CompilationOptions co_project = co;
+  co_project.device_type_ = ExecutorDeviceType::CPU;
 
   if (project->isSimple()) {
     CHECK_EQ(size_t(1), project->inputCount());
     const auto input_ra = project->getInput(0);
     if (dynamic_cast<const RelSort*>(input_ra)) {
-      co_project.device_type_ = ExecutorDeviceType::CPU;
       const auto& input_table = get_temporary_table(&temporary_tables_, -input_ra->getId());
       const auto input_rows = boost::get<RowSetPtr>(&input_table);
       CHECK(input_rows && *input_rows);
@@ -1190,12 +1190,12 @@ void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
   auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   CompilationOptions co_project = co;
+  co_project.device_type_ = ExecutorDeviceType::CPU;
 
   if (project->isSimple()) {
     CHECK_EQ(size_t(1), project->inputCount());
     const auto input_ra = project->getInput(0);
     if (dynamic_cast<const RelSort*>(input_ra)) {
-      co_project.device_type_ = ExecutorDeviceType::CPU;
       const auto& input_table = get_temporary_table(&temporary_tables_, -input_ra->getId());
       const auto input_rows = boost::get<RowSetPtr>(&input_table);
       CHECK(input_rows && *input_rows);
