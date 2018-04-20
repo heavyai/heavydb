@@ -279,6 +279,7 @@ add_library(mapd_thrift
     ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp)
+target_compile_options(mapd_thrift PRIVATE -fPIC)
 target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
