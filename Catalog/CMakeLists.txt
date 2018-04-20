@@ -12,7 +12,7 @@ include_directories(${StringDictionary_BINARY_DIR})
 add_library(Catalog ${catalog_source_files})
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  find_library(LDAP_LIBRARIES NAMES ldap)
+  add_subdirectory(ee)
 endif()
 
-target_link_libraries(Catalog SqliteConnector StringDictionary Fragmenter ${LDAP_LIBRARIES} Calcite)
+target_link_libraries(Catalog SqliteConnector StringDictionary Fragmenter ${AUTH_LIBRARIES} Calcite)

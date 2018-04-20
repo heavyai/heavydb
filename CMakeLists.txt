@@ -286,8 +286,10 @@ add_library(mapd_thrift
 target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+  include_directories(Catalog/ee)
   include_directories(Distributed/ee)
 else()
+  include_directories(Catalog/os)
   include_directories(Distributed/os)
 endif()
 

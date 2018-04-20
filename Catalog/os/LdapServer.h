@@ -42,10 +42,10 @@ struct LdapMetadata {
 
 class LdapServer {
  public:
-  LdapServer(){};
-  LdapServer(const LdapMetadata& ldapMetadata){};
-  bool authenticate_user(const std::string& userName, const std::string& passwd) { return false; };
-  bool inUse() { return false; };
+  LdapServer() {}
+  LdapServer(const LdapMetadata& ldapMetadata) {}
+  bool authenticate_user(const std::string& userName, const std::string& passwd) { return false; }
+  bool inUse() { return false; }
 };
 
 #endif /* LDAPSERVER_H */
