@@ -180,6 +180,8 @@ class InsertOrderFragmenter : public AbstractFragmenter {
 
   InsertOrderFragmenter(const InsertOrderFragmenter&);
   InsertOrderFragmenter& operator=(const InsertOrderFragmenter&);
+  // FIX-ME:  Temporary lock; needs removing.
+  mutable std::mutex temp_mutex_;
 };
 
 }  // Fragmenter_Namespace

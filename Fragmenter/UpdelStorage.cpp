@@ -157,7 +157,11 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                 CHECK(dictDesc);
                 auto stringDict = dictDesc->stringDict.get();
                 CHECK(stringDict);
-                auto sidx = stringDict->getOrAdd(sval);
+                decltype(stringDict->getOrAdd(sval)) sidx;
+                {
+                  std::unique_lock<std::mutex> lock(temp_mutex_);
+                  sidx = stringDict->getOrAdd(sval);
+                }
                 put_scalar<int32_t>(dptr, lctype, sidx);
                 set_minmax<int64_t>(lmin[c], lmax[c], sidx);
               } else if (sval.size() > 0) {
