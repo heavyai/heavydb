@@ -2120,7 +2120,7 @@ void MapDHandler::delete_dashboard(const TSessionId& session, const int32_t dash
   }
 }
 
-// Note: Grants not available for objects as of now
+// NOOP: Grants not available for objects as of now
 void MapDHandler::share_dashboard(const TSessionId& session,
                                   const int32_t dashboard_id,
                                   const std::vector<std::string>& groups,
@@ -2132,15 +2132,17 @@ void MapDHandler::share_dashboard(const TSessionId& session,
   auto dash = cat.getMetadataForDashboard(dashboard_id);
   if (!dash) {
     THROW_MAPD_EXCEPTION("Exception: Dashboard id " + std::to_string(dashboard_id) + " does not exist");
-  } else if (session_info.get_currentUser().userId != dash->userId) {
-    throw std::runtime_error("User should be owner of dashboard to share it");
+  } else if (session_info.get_currentUser().userId != dash->userId && !session_info.get_currentUser().isSuper) {
+    throw std::runtime_error("User should be either owner of dashboard or super user to share it");
   }
+  std::vector<std::string> valid_groups;
   Catalog_Namespace::UserMetadata user_meta;
-  for_each(groups.begin(), groups.end(), [&](std::string user) {
-    if (!SysCatalog::instance().getMetadataForUser(user, user_meta)) {
-      THROW_MAPD_EXCEPTION("Exception: User " + user + " does not exist");
-    } else if (user_meta.isSuper) {
-      THROW_MAPD_EXCEPTION("Exception: User " + user + " is a super user and have all privileges");
+  for_each(groups.begin(), groups.end(), [&](std::string group) {
+    if (!SysCatalog::instance().getMetadataForUser(group, user_meta) &&
+        !SysCatalog::instance().getMetadataForRole(group)) {
+      THROW_MAPD_EXCEPTION("Exception: User/Role " + group + " does not exist");
+    } else if (!user_meta.isSuper) {
+      valid_groups.push_back(group);
     }
   });
   // By default object type can only be dashboard
@@ -2151,6 +2153,7 @@ void MapDHandler::share_dashboard(const TSessionId& session,
       !permissions.create_dashboard_) {
     throw std::runtime_error("Atleast one privilege should be assigned for grants");
   } else {
+    object.resetPrivileges();
     if (permissions.select_) {
       object.setPrivileges(AccessPrivileges::SELECT);
     }
@@ -2167,8 +2170,8 @@ void MapDHandler::share_dashboard(const TSessionId& session,
       object.setPrivileges(AccessPrivileges::CREATE_DASHBOARD);
     }
   }
-  // TODO: check for already existing privileges, then skip
-  for (auto role : groups) {
+  // TODO: check for already existing privileges that are in line to be granted, then skip
+  for (auto role : valid_groups) {
     try {
       SysCatalog::instance().grantDBObjectPrivileges(role, object, cat);
     } catch (const std::exception& e) {
