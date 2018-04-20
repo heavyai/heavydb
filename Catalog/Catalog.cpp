@@ -810,7 +810,14 @@ void SysCatalog::createRole_unsafe(const std::string& roleName, const bool& user
   DBObject dbObject(get_currentDB().dbName, DatabaseDBObjectType);
   auto* catalog = Catalog::get(get_currentDB().dbName).get();
   CHECK(catalog);
-  dbObject.loadKey(*catalog);
+  DBObjectKey objKey;
+  // 0 is an id that does not exist
+  objKey.dbId = 0;
+  objKey.tableId = 0;
+  objKey.columnId = 0;
+  // we default to abstract
+  objKey.dbObjectType = DatabaseDBObjectType; // misusing DatabaseDBObjectType for now
+  dbObject.setObjectKey(objKey);
   rl->grantPrivileges(dbObject);
   std::vector<std::string> objectKey = dbObject.toString();
   auto privs = dbObject.getPrivileges();
