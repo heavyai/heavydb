@@ -903,3 +903,38 @@ int main(int argc, char* argv[]) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+
+//
+// \dash Command Unit Test and Support Mockups
+//
+
+struct DashboardsCommandMockupContext {
+  bool get_dashbaords_invoked = false;
+};
+
+struct DashboardsCommandContextOpsPolicy {
+  using ThriftServiceType = ThriftService;
+  using ContextType = DashboardsCommandMockupContext;
+};
+
+template <typename CONTEXT_OP_POLICY>
+class DashboardsCommandMockupContextOperations {
+ public:
+  using ThriftService = typename CONTEXT_OP_POLICY::ThriftServiceType;
+  using ContextType = typename CONTEXT_OP_POLICY::ContextType;
+
+  static void get_dashboards(ContextType& context) { context.get_dashbaords_invoked = true; }
+};
+
+TEST(MapDQLTest, DashboardsCommandTest) {
+  using Params = CommandResolutionChain<>::CommandTokenList;
+  using UnitTestDashboardsCmd =
+      ListDashboardsCmd<DashboardsCommandContextOpsPolicy, DashboardsCommandMockupContextOperations>;
+  DashboardsCommandMockupContext unit_test_context;
+
+  auto resolution =
+      CommandResolutionChain<>("\\dash", "\\dash", 1, UnitTestDashboardsCmd(unit_test_context)).is_resolved();
+
+  EXPECT_TRUE(unit_test_context.get_dashbaords_invoked);
+  EXPECT_TRUE(resolution);
+}
