@@ -43,6 +43,7 @@ add_executable(UpdelStorageTest UpdelStorageTest.cpp QueryRunner.cpp)
 add_executable(TopKTest TopKTest.cpp QueryRunner.cpp)
 add_executable(TokenCompletionHintsTest TokenCompletionHintsTest.cpp)
 add_executable(MapDQLCommandTest MapDQLCommandTest.cpp)
+add_executable(DBObjectPrivilegesTest DBObjectPrivilegesTest.cpp)
 
 target_link_libraries(PlanTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
 target_link_libraries(ProfileTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROF_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
@@ -61,6 +62,7 @@ target_link_libraries(UpdelStorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TopKTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd_thrift ${Boost_LIBRARIES})
 target_link_libraries(MapDQLCommandTest gtest ${EXECUTE_TEST_LIBS} ${Boost_LIBRARIES})
+target_link_libraries(DBObjectPrivilegesTest gtest ${EXECUTE_TEST_LIBS} ${Boost_LIBRARIES})
 
 set(TEST_ARGS "--gtest_output=xml:../")
 add_test(PlanTest PlanTest ${TEST_ARGS})
@@ -77,6 +79,7 @@ add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 add_test(TopKTest TopKTest ${TEST_ARGS})
 add_test(TokenCompletionHintsTest TokenCompletionHintsTest ${TEST_ARGS})
 add_test(MapDQLCommandTest MapDQLCommandTest ${TEST_ARGS})
+add_test(DBObjectPrivilegesTest DBObjectPrivilegesTest ${TEST_ARGS})
 
 # parse s3 credentials
 file(READ aws/s3client.conf S3CLIENT_CONF)
@@ -101,6 +104,7 @@ set(SANITY_TESTS
   TopKTest
   TokenCompletionHintsTest
   MapDQLCommandTest
+  DBObjectPrivilegesTest
 )
 set_tests_properties(${SANITY_TESTS} PROPERTIES LABELS "sanity")
 

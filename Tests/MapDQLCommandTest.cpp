@@ -105,7 +105,9 @@ TEST(MapDQLTest, CommandResolutionChain_ThreeSet_FirstHit) {
   auto resolution =
       CommandResolutionChain<>("\\fake_command1 token1 token2", "\\fake_command1", 3, 3, [&](Params const& p) {
         first_hit = true;
-      })("\\fake_command2", 1, 1, [&](Params const& p) { second_hit = true; })("\\fake_command3", 1, 1, [&](Params const& p) {
+      })("\\fake_command2", 1, 1, [&](Params const& p) {
+        second_hit = true;
+      })("\\fake_command3", 1, 1, [&](Params const& p) {
         third_hit = true;
       }).is_resolved();
 
@@ -125,7 +127,9 @@ TEST(MapDQLTest, CommandResolutionChain_ThreeSet_SecondHit) {
   auto resolution =
       CommandResolutionChain<>("\\fake_command2 token1 token2", "\\fake_command1", 1, 1, [&](Params const& p) {
         first_hit = true;
-      })("\\fake_command2", 3, 3, [&](Params const& p) { second_hit = true; })("\\fake_command3", 1, 1, [&](Params const& p) {
+      })("\\fake_command2", 3, 3, [&](Params const& p) {
+        second_hit = true;
+      })("\\fake_command3", 1, 1, [&](Params const& p) {
         third_hit = true;
       }).is_resolved();
 
@@ -145,7 +149,9 @@ TEST(MapDQLTest, CommandResolutionChain_ThreeSet_ThirdHit) {
   auto resolution =
       CommandResolutionChain<>("\\fake_command3 token1 token2", "\\fake_command1", 1, 1, [&](Params const& p) {
         first_hit = true;
-      })("\\fake_command2", 1, 1, [&](Params const& p) { second_hit = true; })("\\fake_command3", 3, 3, [&](Params const& p) {
+      })("\\fake_command2", 1, 1, [&](Params const& p) {
+        second_hit = true;
+      })("\\fake_command3", 3, 3, [&](Params const& p) {
         third_hit = true;
       }).is_resolved();
 
@@ -165,7 +171,9 @@ TEST(MapDQLTest, CommandResolutionChain_ThreeSet_NoHits) {
   auto resolution =
       CommandResolutionChain<>("\\i_cant_be_matched token1 token2", "\\fake_command1", 3, 3, [&](Params const& p) {
         first_hit = true;
-      })("\\fake_command2", 1, 1, [&](Params const& p) { second_hit = true; })("\\fake_command3", 1, 1, [&](Params const& p) {
+      })("\\fake_command2", 1, 1, [&](Params const& p) {
+        second_hit = true;
+      })("\\fake_command3", 1, 1, [&](Params const& p) {
         third_hit = true;
       }).is_resolved();
 
@@ -390,9 +398,9 @@ TEST(MapDQLTest, ListUsersCommandTest_ListAll) {
   // Run the test for \u
   std::ostringstream test_capture_stream1;
   ListUsersCommandMockupContext unit_test_context_list_all;
-  auto resolution1 =
-      CommandResolutionChain<>("\\u", "\\u", 1, 1, UnitTestListUsersCmd(unit_test_context_list_all), test_capture_stream1)
-          .is_resolved();
+  auto resolution1 = CommandResolutionChain<>(
+                         "\\u", "\\u", 1, 1, UnitTestListUsersCmd(unit_test_context_list_all), test_capture_stream1)
+                         .is_resolved();
   EXPECT_TRUE(resolution1);
 
   std::string output_back_to_input(test_capture_stream1.str());
@@ -416,9 +424,10 @@ TEST(MapDQLTest, ListUsersCommandTest_OnlyLisa) {
 
   std::ostringstream test_capture_stream2;
   ListUsersCommandMockupContext unit_test_context_only_lisa;
-  auto resolution2 = CommandResolutionChain<>(
-                         "\\u ^lisa", "\\u", 1, 1, UnitTestListUsersCmd(unit_test_context_only_lisa), test_capture_stream2)
-                         .is_resolved();
+  auto resolution2 =
+      CommandResolutionChain<>(
+          "\\u ^lisa", "\\u", 1, 1, UnitTestListUsersCmd(unit_test_context_only_lisa), test_capture_stream2)
+          .is_resolved();
   EXPECT_TRUE(resolution2);
 
   std::string output_back_to_input(test_capture_stream2.str());
@@ -560,9 +569,9 @@ TEST(MapDQLTest, ListTablesCommandTest_InnerMatch) {
 
   std::ostringstream test_capture_stream;
   ListTablesCommandMockupContext unit_test_context;
-  auto resolution =
-      CommandResolutionChain<>("\\t .+inner.+", "\\t", 1, 1, UnitTestListTablesCmd(unit_test_context), test_capture_stream)
-          .is_resolved();
+  auto resolution = CommandResolutionChain<>(
+                        "\\t .+inner.+", "\\t", 1, 1, UnitTestListTablesCmd(unit_test_context), test_capture_stream)
+                        .is_resolved();
   EXPECT_TRUE(resolution);
 
   std::string output_back_to_input(test_capture_stream.str());
@@ -620,9 +629,9 @@ TEST(MapDQLTest, ViewListCommandTest_EndsWith4Digits) {
 
   std::ostringstream test_capture_stream;
   ListViewsCommandMockupContext unit_test_context;
-  auto resolution =
-      CommandResolutionChain<>("\\v .+\\d{4}$", "\\v", 1, 1, UnitTestListViewsCmd(unit_test_context), test_capture_stream)
-          .is_resolved();
+  auto resolution = CommandResolutionChain<>(
+                        "\\v .+\\d{4}$", "\\v", 1, 1, UnitTestListViewsCmd(unit_test_context), test_capture_stream)
+                        .is_resolved();
   EXPECT_TRUE(resolution);
 
   std::string output_back_to_input(test_capture_stream.str());
@@ -660,7 +669,8 @@ TEST(MapDQLTest, ImportDashboardCommandTest_SimpleDashSimpleFilename) {
   ImportDashboardCommandMockupContext unit_test_context;
   auto resolution = CommandResolutionChain<>("\\import_dashboard simpledash unlikely_file_to_over_be_opened_1234.txt",
                                              "\\import_dashboard",
-                                             3, 3,
+                                             3,
+                                             3,
                                              UnitTestImportDashboardCmd(unit_test_context),
                                              test_capture_stream)
                         .is_resolved();
@@ -687,7 +697,8 @@ TEST(MapDQLTest, ImportDashboardCommandTest_SimpleDashComplexFilename) {
   ImportDashboardCommandMockupContext unit_test_context;
   auto resolution = CommandResolutionChain<>("\\import_dashboard simpledash \"C:\\\\Windows is Terrible\\\\lol.txt\"",
                                              "\\import_dashboard",
-                                             3, 3,
+                                             3,
+                                             3,
                                              UnitTestImportDashboardCmd(unit_test_context),
                                              test_capture_stream)
                         .is_resolved();
@@ -716,7 +727,8 @@ TEST(MapDQLTest, ImportDashboardCommandTest_ComplexDashSimpleFilename) {
   ImportDashboardCommandMockupContext unit_test_context;
   auto resolution = CommandResolutionChain<>("\\import_dashboard \"\\\"Who uses spaces anyway?\\\"\" simpledash.txt",
                                              "\\import_dashboard",
-                                             3, 3,
+                                             3,
+                                             3,
                                              UnitTestImportDashboardCmd(unit_test_context),
                                              test_capture_stream)
                         .is_resolved();
@@ -745,7 +757,8 @@ TEST(MapDQLTest, ImportDashboardCommandTest_ComplexDashComplexFilename) {
       CommandResolutionChain<>(
           "\\import_dashboard \"\\\"Who uses spaces anyway?\\\"\" \"C:\\\\Windows is Terrible\\\\lol.txt\"",
           "\\import_dashboard",
-          3, 3,
+          3,
+          3,
           UnitTestImportDashboardCmd(unit_test_context),
           test_capture_stream)
           .is_resolved();
@@ -799,7 +812,8 @@ TEST(MapDQLTest, ExportDashboardCommandTest_SimpleDashSimpleFilename) {
   ExportDashboardCommandMockupContext unit_test_context;
   auto resolution = CommandResolutionChain<>(fake_input.c_str(),
                                              "\\export_dashboard",
-                                             3, 3,
+                                             3,
+                                             3,
                                              UnitTestExportDashboardCmd(unit_test_context),
                                              test_capture_stream)
                         .is_resolved();
@@ -831,7 +845,8 @@ TEST(MapDQLTest, ExportDashboardCommandTest_SimpleDashComplexFilename) {
   ExportDashboardCommandMockupContext unit_test_context;
   auto resolution = CommandResolutionChain<>(fake_input.c_str(),
                                              "\\export_dashboard",
-                                             3, 3,
+                                             3,
+                                             3,
                                              UnitTestExportDashboardCmd(unit_test_context),
                                              test_capture_stream)
                         .is_resolved();
@@ -859,7 +874,8 @@ TEST(MapDQLTest, ExportDashboardCommandTest_ComplexDashSimpleFilename) {
   ExportDashboardCommandMockupContext unit_test_context;
   auto resolution = CommandResolutionChain<>(fake_input.c_str(),
                                              "\\export_dashboard",
-                                             3, 3,
+                                             3,
+                                             3,
                                              UnitTestExportDashboardCmd(unit_test_context),
                                              test_capture_stream)
                         .is_resolved();
@@ -886,7 +902,8 @@ TEST(MapDQLTest, ExportDashboardCommandTest_ComplexDashComplexFilename) {
   ExportDashboardCommandMockupContext unit_test_context;
   auto resolution = CommandResolutionChain<>(fake_input.c_str(),
                                              "\\export_dashboard",
-                                             3, 3,
+                                             3,
+                                             3,
                                              UnitTestExportDashboardCmd(unit_test_context),
                                              test_capture_stream)
                         .is_resolved();
@@ -933,7 +950,7 @@ TEST(MapDQLTest, DashboardsCommandTest) {
   DashboardsCommandMockupContext unit_test_context;
 
   auto resolution =
-      CommandResolutionChain<>("\\dash", "\\dash", 1, UnitTestDashboardsCmd(unit_test_context)).is_resolved();
+      CommandResolutionChain<>("\\dash", "\\dash", 1, 1, UnitTestDashboardsCmd(unit_test_context)).is_resolved();
 
   EXPECT_TRUE(unit_test_context.get_dashbaords_invoked);
   EXPECT_TRUE(resolution);
