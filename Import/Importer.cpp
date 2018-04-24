@@ -3332,6 +3332,15 @@ std::vector<std::string> Importer::gdalGetAllFilesInArchive(const std::string& f
   return files;
 }
 
+/* static */
+bool Importer::gdalSupportsNetworkFileAccess() {
+#if (GDAL_VERSION_MAJOR > 2) || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR >= 2)
+  return true;
+#else
+  return false;
+#endif
+}
+
 ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSourceNameMap) {
   OGRDataSource* poDS = nullptr;
   try {

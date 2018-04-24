@@ -1824,11 +1824,19 @@ std::string get_actual_geo_filename(const std::string& file_name_in,
   // capture the original name
   std::string file_name(file_name_in);
 
+  bool gdal_network = Importer_NS::Importer::gdalSupportsNetworkFileAccess();
+
   // modify head of filename based on source location
   if (boost::istarts_with(file_name, "http://") || boost::istarts_with(file_name, "https://")) {
+    if (!gdal_network) {
+      THROW_MAPD_EXCEPTION("HTTP geo file import not supported! Update to GDAL 2.2 or later!");
+    }
     // invoke GDAL CURL virtual file reader
     file_name = "/vsicurl/" + file_name;
   } else if (boost::istarts_with(file_name, "s3://")) {
+    if (!gdal_network) {
+      THROW_MAPD_EXCEPTION("S3 geo file import not supported! Update to GDAL 2.2 or later!");
+    }
     // invoke GDAL S3 virtual file reader
     boost::replace_first(file_name, "s3://", "/vsis3/");
   } else if (!boost::filesystem::path(file_name).is_absolute()) {

@@ -727,6 +727,7 @@ class Importer : public DataStreamSink {
                                      const CopyParams& copy_params);
   static bool gdalFileExists(const std::string& fileName, const CopyParams& copy_params);
   static std::vector<std::string> gdalGetAllFilesInArchive(const std::string& fileName, const CopyParams& copy_params);
+  static bool gdalSupportsNetworkFileAccess();
 
  private:
   static void initGDAL();
