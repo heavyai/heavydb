@@ -34,7 +34,7 @@ public class MapDDriver implements java.sql.Driver {
   final static org.slf4j.Logger logger = LoggerFactory.getLogger(MapDDriver.class);
   public static final String PREFIX = "jdbc:mapd:";
   int driverMajorVersion = 1;
-  int driverMinorVersion = 2;
+  int driverMinorVersion = 3;
 
 
   static {

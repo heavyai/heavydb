@@ -49,12 +49,12 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDDatabaseMetaData.class);
 
-  MapDConnection con = null;
-  int driverMajorVersion = 1;
-  int driverMinorVersion = 2;
-  int databaseMajorVersion = 0;
-  int databaseMinorVersion = 0;
-  String databaseVersion = null;
+    MapDConnection con = null;
+    int driverMajorVersion = 1;
+    int driverMinorVersion = 3;
+    int databaseMajorVersion = 0;
+    int databaseMinorVersion = 0;
+    String databaseVersion = null;
 
   public MapDDatabaseMetaData(MapDConnection connection) throws SQLException {
     this.con = connection;
@@ -1224,6 +1224,7 @@ SQLException - if a database access error occurs
     MAPDLOGGER.debug("TablePattern " + tableNamePattern + " tableNamePattern " + tableNamePattern);
     String modifiedTablePattern = tableNamePattern.replaceAll("%", ".*");
   
+      
     // declare the columns in the result set
     TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
     TColumnType columns[] = {
@@ -1245,92 +1246,57 @@ SQLException - if a database access error occurs
       rowDesc.add(col);
       dataMap.put(col.col_name, new MapDData(col.col_type.type));
     }
-    List<String> users;
     List<String> roles;
     List<TDBObject> db_objects = new ArrayList();
+    List<String> tables;
     try {
-      users = con.client.get_users(con.session);
-      for (String user : users) {
-        db_objects = con.client.get_db_objects_for_role(con.session, user); 
-        // check if the table matches the input pattern
-        for (TDBObject db_object : db_objects) {
-          if (db_object.objectType == TDBObjectType.TableDBObjectType) {
-            String tableName = db_object.objectName;
-            if (tableNamePattern == null || tableNamePattern.equals(tableName)) {
-              List<Boolean> privs = db_object.getPrivs();
-              Boolean priv[] = privs.toArray(new Boolean[privs.size()]);
-              TAccessPrivileges ta = new TAccessPrivileges(priv[0],priv[1], priv[2], priv[3]);
-              int ordinal = 1;
-              for (Boolean prv : privs) {
-                if (prv == true) {
-                  switch (ta.fieldForId(ordinal)) {
-                  case SELECT_:
-                    dataMap.get("PRIVILEGE").add("SELECT");
-                    break;
-                  case INSERT_:
-                    dataMap.get("PRIVILEGE").add("INSERT");
-                    break;
-                  case CREATE_:
-                    dataMap.get("PRIVILEGE").add("CREATE");
-                    break;
-                  case TRUNCATE_:
-                    dataMap.get("PRIVILEGE").add("TRUNCATE");
-                    break;
+      tables = con.client.get_tables(con.session);
+
+
+        for (String table : tables) {
+          db_objects = con.client.get_db_object_privs(con.session, table, TDBObjectType.TableDBObjectType); 
+          
+          // check if the table matches the input pattern
+          for (TDBObject db_object : db_objects) {
+            if (db_object.objectType == TDBObjectType.TableDBObjectType) {
+              String tableName = db_object.objectName;
+
+              if (tableNamePattern == null || tableNamePattern.equals(tableName)) {
+                List<Boolean> privs = db_object.getPrivs();
+                Boolean priv[] = privs.toArray(new Boolean[privs.size()]);
+                TAccessPrivileges ta = new TAccessPrivileges(priv[0],priv[1], priv[2], priv[3]);
+                int ordinal = 1;
+                for (Boolean prv : privs) {
+                  if (prv == true) {
+                    switch (ta.fieldForId(ordinal)) {
+                    case SELECT_:
+                      dataMap.get("PRIVILEGE").add("SELECT");
+                      break;
+                    case INSERT_:
+                      dataMap.get("PRIVILEGE").add("INSERT");
+                      break;
+                    case CREATE_:
+                      dataMap.get("PRIVILEGE").add("CREATE");
+                      break;
+                    case TRUNCATE_:
+                      dataMap.get("PRIVILEGE").add("TRUNCATE");
+                      break;
+                    }
+                    dataMap.get("TABLE_CAT").setNull(true);
+                    dataMap.get("TABLE_SCHEM").setNull(true);
+                    dataMap.get("TABLE_NAME").add(tableName);
+                    dataMap.get("GRANTOR").setNull(true);
+                    dataMap.get("GRANTEE").add(db_object.grantee);
+                    dataMap.get("IS_GRANTABLE").add("NO");
                   }
-                  dataMap.get("TABLE_CAT").setNull(true);
-                  dataMap.get("TABLE_SCHEM").setNull(true);
-                  dataMap.get("TABLE_NAME").add(tableName);
-                  dataMap.get("GRANTOR").setNull(true);
-                  dataMap.get("GRANTEE").add(user);
-                  dataMap.get("IS_GRANTABLE").add("NO");
+                  ordinal++;
                 }
-                ordinal++;
-              }
-            }   
+              }   
+            }
           }
-        }  
-      }
-     roles = con.client.get_all_roles(con.session, false);
-      for (String role : roles) {
-        db_objects = con.client.get_db_objects_for_role(con.session, role); 
-        // check if the table matches the input pattern
-        for (TDBObject db_object : db_objects) {
-          if (db_object.objectType == TDBObjectType.TableDBObjectType) {
-            String tableName = db_object.objectName;
-            if (tableNamePattern == null || tableNamePattern.equals(tableName)) {
-              List<Boolean> privs = db_object.getPrivs();
-              Boolean priv[] = privs.toArray(new Boolean[privs.size()]);
-              TAccessPrivileges ta = new TAccessPrivileges(priv[0],priv[1], priv[2], priv[3]);
-              int ordinal = 1;
-              for (Boolean prv : privs) {
-                if (prv == true) {
-                  switch (ta.fieldForId(ordinal)) {
-                  case SELECT_:
-                    dataMap.get("PRIVILEGE").add("SELECT");
-                    break;
-                  case INSERT_:
-                    dataMap.get("PRIVILEGE").add("INSERT");
-                    break;
-                  case CREATE_:
-                    dataMap.get("PRIVILEGE").add("CREATE");
-                    break;
-                  case TRUNCATE_:
-                    dataMap.get("PRIVILEGE").add("TRUNCATE");
-                    break;
-                  }
-                  dataMap.get("TABLE_CAT").setNull(true);
-                  dataMap.get("TABLE_SCHEM").setNull(true);
-                  dataMap.get("TABLE_NAME").add(tableName);
-                  dataMap.get("GRANTOR").setNull(true);
-                  dataMap.get("GRANTEE").add(role);
-                  dataMap.get("IS_GRANTABLE").add("NO");
-                }
-                ordinal++;
-              }
-            }   
-          }
-        }  
-      }
+        } 
+
+      
     }
     catch (TException ex) {
       throw new SQLException("get_privileges failed " + ex.toString());
