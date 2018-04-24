@@ -726,6 +726,7 @@ class Importer : public DataStreamSink {
                                      int rowLimit,
                                      const CopyParams& copy_params);
   static bool gdalFileExists(const std::string& fileName, const CopyParams& copy_params);
+  static std::vector<std::string> gdalGetAllFilesInArchive(const std::string& fileName, const CopyParams& copy_params);
 
  private:
   static void initGDAL();

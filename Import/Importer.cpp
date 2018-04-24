@@ -2975,6 +2975,7 @@ void Importer::initGDAL() {
     GDALAllRegister();
     OGRRegisterAll();
     CPLSetErrorHandler(*GDALErrorHandler);
+    LOG(INFO) << "GDAL Initialized: " << GDALVersionInfo("--version");
     gdal_initialized = true;
   }
 }
@@ -3258,6 +3259,77 @@ bool Importer::gdalFileExists(const std::string& fileName, const CopyParams& cop
   if (result < 0)
     return false;
   return VSI_ISREG(sb.st_mode);
+}
+
+void gdalGatherFilesInArchiveRecursive(const std::string& archive_path, std::vector<std::string>& files) {
+
+  // prepare to gather subfolders
+  std::vector<std::string> subfolders;
+
+  // get entries
+  char** entries = VSIReadDir(archive_path.c_str());
+  if (!entries) {
+    LOG(WARNING) << "Failed to get file listing at archive: " << archive_path;
+    return;
+  }
+
+  // force scope
+  {
+    // request clean-up
+    ScopeGuard entries_guard = [&] { CSLDestroy(entries); };
+
+    // check all the entries
+    int index = 0;
+    while (true) {
+      // get next entry, or drop out if there isn't one
+      char* entry = entries[index];
+      if (!entry)
+        break;
+
+      // build the full path
+      std::string entry_path = archive_path + std::string("/") + std::string(entry);
+
+      // is it a file or a sub-folder
+      VSIStatBufL sb;
+      int result = VSIStatExL(entry_path.c_str(), &sb, VSI_STAT_NATURE_FLAG);
+      if (result < 0)
+        break;
+
+      if (VSI_ISDIR(sb.st_mode)) {
+        // add sub-folder to be recursed into
+        subfolders.push_back(entry_path);
+      } else {
+        // add this file
+        files.push_back(entry_path);
+      }
+
+      // go to next entry
+      index++;
+    }
+  }
+
+  // recurse into each subfolder we found
+  for (const auto& subfolder : subfolders) {
+    gdalGatherFilesInArchiveRecursive(subfolder, files);
+  }
+}
+
+/* static */
+std::vector<std::string> Importer::gdalGetAllFilesInArchive(const std::string& fileName, const CopyParams& copy_params) {
+  // lazy init GDAL
+  initGDAL();
+
+  // set authorization tokens
+  setGDALAuthorizationTokens(copy_params);
+
+  // prepare to gather files
+  std::vector<std::string> files;
+
+  // gather the files recursively
+  gdalGatherFilesInArchiveRecursive(fileName, files);
+
+  // return everything we found
+  return files;
 }
 
 ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSourceNameMap) {

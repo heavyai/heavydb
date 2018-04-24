@@ -1818,6 +1818,76 @@ TCopyParams MapDHandler::copyparams_to_thrift(const Importer_NS::CopyParams& cp)
   return copy_params;
 }
 
+std::string get_actual_geo_filename(const std::string& file_name_in,
+                                    const boost::filesystem::path& import_tmp_path,
+                                    const Importer_NS::CopyParams& copy_params) {
+  // capture the original name
+  std::string file_name(file_name_in);
+
+  // modify head of filename based on source location
+  if (boost::istarts_with(file_name, "http://") || boost::istarts_with(file_name, "https://")) {
+    // invoke GDAL CURL virtual file reader
+    file_name = "/vsicurl/" + file_name;
+  } else if (boost::istarts_with(file_name, "s3://")) {
+    // invoke GDAL S3 virtual file reader
+    boost::replace_first(file_name, "s3://", "/vsis3/");
+  } else if (!boost::filesystem::path(file_name).is_absolute()) {
+    // assume relative paths are relative to data_path / mapd_import / <session>
+    auto file_path = import_tmp_path / boost::filesystem::path(file_name).filename();
+    file_name = file_path.string();
+  }
+
+  // check for compressed file or file bundle
+  bool is_archive = false;
+  if (boost::iends_with(file_name, ".zip")) {
+    // zip archive
+    file_name = "/vsizip/" + file_name;
+    is_archive = true;
+  } else if (boost::iends_with(file_name, ".tar") ||
+             boost::iends_with(file_name, ".tgz") ||
+             boost::iends_with(file_name, ".tar.gz")) {
+    // tar archive (compressed or uncompressed)
+    file_name = "/vsitar/" + file_name;
+    is_archive = true;
+  } else if (boost::iends_with(file_name, ".gz")) {
+    // single gzip'd file (not an archive)
+    file_name = "/vsigzip/" + file_name;
+  }
+
+  // is it an archive?
+  if (is_archive) {
+    // get the recursive list of all files in the archive
+    std::vector<std::string> files = Importer_NS::Importer::gdalGetAllFilesInArchive(file_name, copy_params);
+
+    // report the list
+    LOG(INFO) << "import_geo_table: Found " << files.size() << " files in archive " << file_name;
+    for (const auto& file : files) {
+      LOG(INFO) << "import_geo_table:   " << file;
+    }
+
+    // scan the list for one (and only one) candidate file
+    // order or checking: shp, geojson, kml
+    bool found_suitable_file = false;
+    for (const auto& file : files) {
+      if (boost::iends_with(file, ".shp") ||
+          boost::iends_with(file, ".geojson") ||
+          boost::iends_with(file, ".kml")) {
+        file_name = file;
+        found_suitable_file = true;
+        break;
+      }
+    }
+
+    // did we find anything
+    if (!found_suitable_file) {
+      THROW_MAPD_EXCEPTION("Failed to find any suitable geo files in archive: " + file_name_in);
+    }
+  }
+
+  // done
+  return file_name;
+}
+
 void MapDHandler::detect_column_types(TDetectResult& _return,
                                       const TSessionId& session,
                                       const std::string& file_name_in,
@@ -1825,10 +1895,17 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
   check_read_only("detect_column_types");
   get_session(session);
 
-  // Assume relative paths are relative to data_path / mapd_import / <session>
-  std::string file_name{file_name_in};
-  auto file_path = boost::filesystem::path(file_name);
   Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
+
+  std::string file_name{file_name_in};
+
+  // if it's a geo table, handle alternative paths (S3, HTTP, archive etc.)
+  if (copy_params.table_type == Importer_NS::TableType::POLYGON) {
+    auto import_tmp_path = import_path_ / session;
+    file_name = get_actual_geo_filename(file_name, import_tmp_path, copy_params);
+  }
+
+  auto file_path = boost::filesystem::path(file_name);
   // can be a s3 url
   if (!boost::istarts_with(file_name, "s3://")) {
     if (!boost::filesystem::path(file_name).is_absolute()) {
@@ -2393,19 +2470,24 @@ void MapDHandler::import_geo_table(const TSessionId& session,
 
   Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
 
-  // Assume relative paths are relative to data_path / mapd_import / <session>
   std::string file_name{file_name_in};
-  if (!boost::filesystem::path(file_name).is_absolute()) {
-    auto file_path = import_path_ / session / boost::filesystem::path(file_name).filename();
-    file_name = file_path.string();
-  }
 
-  LOG(INFO) << "import_geo_table " << table_name << " from " << file_name;
+  // handle alternative filenames (S3, HTTP, archive)
+  auto import_tmp_path = import_path_ / session;
+  file_name = get_actual_geo_filename(file_name, import_tmp_path, copy_params);
 
+  // log what we're about to try to do
+  LOG(INFO) << "import_geo_table: Creating table: " << table_name;
+  LOG(INFO) << "import_geo_table: Original filename: " << file_name_in;
+  LOG(INFO) << "import_geo_table: Actual filename: " << file_name;
+
+  // use GDAL to check the primary file exists (even if on S3 and/or in archive)
   auto file_path = boost::filesystem::path(file_name);
   if (!Importer_NS::Importer::gdalFileExists(file_name, copy_params)) {
     THROW_MAPD_EXCEPTION("File does not exist: " + file_path.filename().string());
   }
+
+  // use GDAL to check any dependent files exist (ditto)
   try {
     check_geospatial_files(file_path, copy_params);
   } catch (const std::exception& e) {
