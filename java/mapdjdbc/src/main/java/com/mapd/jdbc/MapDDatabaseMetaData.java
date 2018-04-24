@@ -1264,7 +1264,7 @@ SQLException - if a database access error occurs
               if (tableNamePattern == null || tableNamePattern.equals(tableName)) {
                 List<Boolean> privs = db_object.getPrivs();
                 Boolean priv[] = privs.toArray(new Boolean[privs.size()]);
-                TAccessPrivileges ta = new TAccessPrivileges(priv[0],priv[1], priv[2], priv[3]);
+                TAccessPrivileges ta = new TAccessPrivileges(priv[0],priv[1], priv[2], priv[3], false);
                 int ordinal = 1;
                 for (Boolean prv : privs) {
                   if (prv == true) {
