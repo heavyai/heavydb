@@ -261,7 +261,7 @@ make install
 popd
 
 download_make_install http://download.osgeo.org/proj/proj-4.9.3.tar.gz
-download_make_install http://download.osgeo.org/gdal/2.0.3/gdal-2.0.3.tar.xz "" "--without-curl --without-geos --with-libkml=$PREFIX --with-static-proj4=$PREFIX"
+download_make_install http://download.osgeo.org/gdal/2.2.4/gdal-2.2.4.tar.xz "" "--without-curl --without-geos --with-libkml=$PREFIX --with-static-proj4=$PREFIX"
 
 # Apache Arrow (see common-functions.sh)
 install_arrow
