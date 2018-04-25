@@ -1814,7 +1814,7 @@ std::string serialize_key_metainfo(const ShardKeyDef* shard_key_def,
 void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   // check access privileges
-  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType, AccessPrivileges::CREATE)) {
+  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType, AccessPrivileges::CREATE_TABLE)) {
     throw std::runtime_error("Table " + *table + " will not be created. User has no create privileges.");
   }
 
@@ -2204,7 +2204,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   auto& catalog = session.get_catalog();
 
   // check access privileges
-  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType, AccessPrivileges::CREATE)) {
+  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType, AccessPrivileges::CREATE_TABLE)) {
     throw std::runtime_error("CTAS failed. Table " + table_name_ +
                              " will not be created. User has no create privileges.");
   }
@@ -2324,7 +2324,7 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
 
   // check access privileges
-  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType, AccessPrivileges::CREATE)) {
+  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType, AccessPrivileges::DROP_TABLE)) {
     throw std::runtime_error("Table " + *table + " will not be dropped. User has no proper privileges.");
   }
 
@@ -2354,7 +2354,7 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     std::vector<DBObject> privObjects;
     DBObject dbObject(*table, TableDBObjectType);
     dbObject.loadKey(catalog);
-    dbObject.setPrivileges(AccessPrivileges::TRUNCATE);
+    dbObject.setPrivileges(AccessPrivileges::TRUNCATE_TABLE);
     privObjects.push_back(dbObject);
     if (!SysCatalog::instance().checkPrivileges(session.get_currentUser(), privObjects)) {
       throw std::runtime_error("Table " + *table + " will not be trancated. User " +
@@ -2430,7 +2430,7 @@ void CopyTableStmt::execute(
     std::vector<DBObject> privObjects;
     DBObject dbObject(*table, TableDBObjectType);
     dbObject.loadKey(catalog);
-    dbObject.setPrivileges(AccessPrivileges::INSERT);
+    dbObject.setPrivileges(AccessPrivileges::INSERT_INTO_TABLE);
     privObjects.push_back(dbObject);
     if (!SysCatalog::instance().checkPrivileges(session.get_currentUser(), privObjects)) {
       throw std::runtime_error("Violation of access privileges: user " + session.get_currentUser().userName +
@@ -2680,24 +2680,28 @@ static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(const std::str
                                                                   const DBObjectType& objectType,
                                                                   const std::string& object_name) {
   if (privs.compare("ALL") == 0) {
+    // all on database not supported right now!
+
     if (objectType == TableDBObjectType) {
       return {AccessPrivileges::ALL_TABLE, TableDBObjectType};
     } else if (objectType == DashboardDBObjectType) {
-      return {AccessPrivileges::ALL_TABLE, TableDBObjectType};
+      return {AccessPrivileges::ALL_DASHBOARD, TableDBObjectType};
     }
-    return {AccessPrivileges::ALL_TABLE, objectType};
-  } else if (privs.compare("SELECT") == 0 && (objectType != DashboardDBObjectType)) {
-    return {AccessPrivileges::SELECT, TableDBObjectType};
-  } else if (privs.compare("INSERT") == 0 && (objectType != DashboardDBObjectType)) {
-    return {AccessPrivileges::INSERT, TableDBObjectType};
+
   } else if ((privs.compare("CREATE") == 0) && (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::CREATE, TableDBObjectType};
+    return {AccessPrivileges::CREATE_TABLE, TableDBObjectType};
+  } else if (privs.compare("SELECT") == 0 && (objectType != DashboardDBObjectType)) {
+    return {AccessPrivileges::SELECT_FROM_TABLE, TableDBObjectType};
+  } else if (privs.compare("INSERT") == 0 && (objectType != DashboardDBObjectType)) {
+    return {AccessPrivileges::INSERT_INTO_TABLE, TableDBObjectType};
   } else if (privs.compare("TRUNCATE") == 0 && (objectType != DashboardDBObjectType)) {
-    return {AccessPrivileges::TRUNCATE, TableDBObjectType};
+    return {AccessPrivileges::TRUNCATE_TABLE, TableDBObjectType};
   } else if (privs.compare("UPDATE") == 0 && (objectType != DashboardDBObjectType)) {
-    return {AccessPrivileges::UPDATE, TableDBObjectType};
+    return {AccessPrivileges::UPDATE_IN_TABLE, TableDBObjectType};
   } else if (privs.compare("DELETE") == 0 && (objectType != DashboardDBObjectType)) {
-    //    return {AccessPrivileges::DELETE, TableDBObjectType};
+    return {AccessPrivileges::DELETE_FROM_TABLE, TableDBObjectType};
+  } else if (privs.compare("DROP") == 0 && (objectType != DashboardDBObjectType)) {
+    return {AccessPrivileges::DROP_TABLE, TableDBObjectType};
   } else if (privs.compare("VIEW") == 0 && (objectType == DashboardDBObjectType)) {
     return {AccessPrivileges::VIEW_DASHBOARD, DashboardDBObjectType};
   } else if (privs.compare("EDIT") == 0 && (objectType == DashboardDBObjectType)) {

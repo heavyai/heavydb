@@ -37,8 +37,15 @@ namespace Catalog_Namespace {
 class Catalog;
 }
 
-// DB objects for which privileges are currently supported
-enum DBObjectType { AbstractDBObjectType = 0, DatabaseDBObjectType, TableDBObjectType, DashboardDBObjectType };
+// DB objects for which privileges are currently supported, only ever add enums, never remove as the nums are persisted
+// in the catalog DB
+enum DBObjectType {
+  AbstractDBObjectType = 0,
+  DatabaseDBObjectType,
+  TableDBObjectType,
+  DashboardDBObjectType,
+  ViewDBObjectType
+};
 
 std::string DBObjectTypeToString(DBObjectType type);
 DBObjectType DBObjectTypeFromString(const std::string& type);
@@ -105,16 +112,24 @@ struct AccessPrivileges {
   void remove(AccessPrivileges newprivs) { privileges &= ~(newprivs.privileges); }
 
   static const AccessPrivileges NONE;
+
+  // database permissions
   static const AccessPrivileges ALL_DATABASE;
-  static const AccessPrivileges ALL_TABLE;
-  static const AccessPrivileges ALL_DASHBOARD;
+
+  // table permissions
   static const AccessPrivileges ALL_TABLE_MIGRATE;
+  static const AccessPrivileges ALL_TABLE;
+  static const AccessPrivileges CREATE_TABLE;
+  static const AccessPrivileges DROP_TABLE;
+  static const AccessPrivileges SELECT_FROM_TABLE;
+  static const AccessPrivileges INSERT_INTO_TABLE;
+  static const AccessPrivileges UPDATE_IN_TABLE;
+  static const AccessPrivileges DELETE_FROM_TABLE;
+  static const AccessPrivileges TRUNCATE_TABLE;
+
+  // dashboard permissions
   static const AccessPrivileges ALL_DASHBOARD_MIGRATE;
-  static const AccessPrivileges SELECT;
-  static const AccessPrivileges INSERT;
-  static const AccessPrivileges UPDATE;
-  static const AccessPrivileges CREATE;
-  static const AccessPrivileges TRUNCATE;
+  static const AccessPrivileges ALL_DASHBOARD;
   static const AccessPrivileges CREATE_DASHBOARD;
   static const AccessPrivileges VIEW_DASHBOARD;
   static const AccessPrivileges EDIT_DASHBOARD;

@@ -223,7 +223,7 @@ std::string Calcite::process(const Catalog_Namespace::SessionInfo& session_info,
       for (size_t i = 0; i < v_db_obj.size(); i++) {
         DBObject dbObject(v_db_obj[i], TableDBObjectType);
         dbObject.loadKey(catalog);
-        dbObject.setPrivileges(AccessPrivileges::SELECT);
+        dbObject.setPrivileges(AccessPrivileges::SELECT_FROM_TABLE);
         privObjects.push_back(dbObject);
       }
       if (!Catalog_Namespace::SysCatalog::instance().checkPrivileges(session_info.get_currentUser(), privObjects)) {

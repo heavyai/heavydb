@@ -104,6 +104,38 @@ static bool hasEnoughPrivs(const DBObject* real, const DBObject* requested) {
   }
 }
 
+static bool hasAnyPrivs(const DBObject* real, const DBObject* requested) {
+  if (real) {
+    return real->getPrivileges().hasAny();
+  } else {
+    return false;
+  }
+}
+
+bool UserRole::hasAnyPrivileges(const DBObject& objectRequested) const {
+  DBObjectKey objectKey = objectRequested.getObjectKey();
+  if (hasAnyPrivs(findDbObject(objectKey), &objectRequested)) {
+    return true;
+  }
+
+  // if we have an object associated -> ignore it
+  if (objectKey.objectId != -1) {
+    objectKey.objectId = -1;
+    if (hasAnyPrivs(findDbObject(objectKey), &objectRequested)) {
+      return true;
+    }
+  }
+
+  // if we have an
+  if (objectKey.dbId != -1) {
+    objectKey.dbId = -1;
+    if (hasAnyPrivs(findDbObject(objectKey), &objectRequested)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool UserRole::checkPrivileges(const DBObject& objectRequested) const {
   DBObjectKey objectKey = objectRequested.getObjectKey();
   if (hasEnoughPrivs(findDbObject(objectKey), &objectRequested)) {
@@ -274,6 +306,9 @@ size_t GroupRole::getMembershipSize() const {
   return userRole_.size();
 }
 
+bool GroupRole::hasAnyPrivileges(const DBObject& objectRequested) const {
+  throw runtime_error("hasAnyPrivileges api should not be used with objects of the GroupRole class.");
+}
 bool GroupRole::checkPrivileges(const DBObject& objectRequested) const {
   throw runtime_error("checkPrivileges api should not be used with objects of the GroupRole class.");
 }

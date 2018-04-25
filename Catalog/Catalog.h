@@ -368,6 +368,9 @@ class SysCatalog {
   void dropRole(const std::string& roleName);
   void grantRole(const std::string& roleName, const std::string& userName);
   void revokeRole(const std::string& roleName, const std::string& userName);
+  // check if the user has any permissions on all the given objects
+  bool hasAnyPrivileges(const UserMetadata& user, std::vector<DBObject>& privObjects);
+  // check if the user has the requested permissions on all the given objects
   bool checkPrivileges(const UserMetadata& user, std::vector<DBObject>& privObjects);
   bool checkPrivileges(const std::string& userName, std::vector<DBObject>& privObjects);
   Role* getMetadataForRole(const std::string& roleName) const;
@@ -398,7 +401,6 @@ class SysCatalog {
   void createUserRoles();
   void migratePrivileges();
   void migratePrivileged_old();
-  void updateObjectPrivileges();
   void dropUserRole(const std::string& userName);
 
   // Here go functions not wrapped into transactions (necessary for nested calls)

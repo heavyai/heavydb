@@ -85,7 +85,7 @@
         <configuration>
           <archive>
             <manifest>
-              <mainClass>com.mapd.parser.server.CalciteServerCaller</mainClass>
+              <mainClass>com.mapd.dashboard.DashboardTest</mainClass>
             </manifest>
           </archive>
           <descriptorRefs>

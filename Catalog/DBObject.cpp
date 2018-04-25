@@ -8,19 +8,22 @@
 #include "DBObject.h"
 #include "Catalog.h"
 
-const AccessPrivileges AccessPrivileges::ALL_DATABASE = AccessPrivileges(DatabasePrivileges::ALL);
-const AccessPrivileges AccessPrivileges::ALL_TABLE = AccessPrivileges(TablePrivileges::ALL);
-const AccessPrivileges AccessPrivileges::ALL_DASHBOARD = AccessPrivileges(DashboardPrivileges::ALL);
-
-const AccessPrivileges AccessPrivileges::ALL_TABLE_MIGRATE = AccessPrivileges(TablePrivileges::ALL_MIGRATE);
-const AccessPrivileges AccessPrivileges::ALL_DASHBOARD_MIGRATE = AccessPrivileges(DashboardPrivileges::ALL_MIGRATE);
 const AccessPrivileges AccessPrivileges::NONE = AccessPrivileges(0);
 
-const AccessPrivileges AccessPrivileges::SELECT = AccessPrivileges(TablePrivileges::SELECT_FROM_TABLE);
-const AccessPrivileges AccessPrivileges::INSERT = AccessPrivileges(TablePrivileges::INSERT_INTO_TABLE);
-const AccessPrivileges AccessPrivileges::UPDATE = AccessPrivileges(TablePrivileges::UPDATE_IN_TABLE);
-const AccessPrivileges AccessPrivileges::CREATE = AccessPrivileges(TablePrivileges::CREATE_TABLE);
-const AccessPrivileges AccessPrivileges::TRUNCATE = AccessPrivileges(TablePrivileges::TRUNCATE_TABLE);
+const AccessPrivileges AccessPrivileges::ALL_DATABASE = AccessPrivileges(DatabasePrivileges::ALL);
+
+const AccessPrivileges AccessPrivileges::ALL_TABLE = AccessPrivileges(TablePrivileges::ALL);
+const AccessPrivileges AccessPrivileges::ALL_TABLE_MIGRATE = AccessPrivileges(TablePrivileges::ALL_MIGRATE);
+const AccessPrivileges AccessPrivileges::CREATE_TABLE = AccessPrivileges(TablePrivileges::CREATE_TABLE);
+const AccessPrivileges AccessPrivileges::DROP_TABLE = AccessPrivileges(TablePrivileges::DROP_TABLE);
+const AccessPrivileges AccessPrivileges::SELECT_FROM_TABLE = AccessPrivileges(TablePrivileges::SELECT_FROM_TABLE);
+const AccessPrivileges AccessPrivileges::INSERT_INTO_TABLE = AccessPrivileges(TablePrivileges::INSERT_INTO_TABLE);
+const AccessPrivileges AccessPrivileges::UPDATE_IN_TABLE = AccessPrivileges(TablePrivileges::UPDATE_IN_TABLE);
+const AccessPrivileges AccessPrivileges::DELETE_FROM_TABLE = AccessPrivileges(TablePrivileges::DELETE_FROM_TABLE);
+const AccessPrivileges AccessPrivileges::TRUNCATE_TABLE = AccessPrivileges(TablePrivileges::TRUNCATE_TABLE);
+
+const AccessPrivileges AccessPrivileges::ALL_DASHBOARD = AccessPrivileges(DashboardPrivileges::ALL);
+const AccessPrivileges AccessPrivileges::ALL_DASHBOARD_MIGRATE = AccessPrivileges(DashboardPrivileges::ALL_MIGRATE);
 const AccessPrivileges AccessPrivileges::CREATE_DASHBOARD = AccessPrivileges(DashboardPrivileges::CREATE_DASHBOARD);
 const AccessPrivileges AccessPrivileges::EDIT_DASHBOARD = AccessPrivileges(DashboardPrivileges::EDIT_DASHBOARD);
 const AccessPrivileges AccessPrivileges::DELETE_DASHBOARD = AccessPrivileges(DashboardPrivileges::DELETE_DASHBOARD);

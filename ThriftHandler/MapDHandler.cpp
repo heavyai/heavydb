@@ -1003,11 +1003,16 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
       CHECK(false);
   }
   DBObject object_to_find(objectName, object_type);
+
   try {
+    if (object_type == DashboardDBObjectType) {
+      object_to_find = DBObject(std::stoi(objectName), object_type);
+    }
     object_to_find.loadKey(session_info_ptr->get_catalog());
   } catch (const std::exception&) {
     THROW_MAPD_EXCEPTION("Object with name " + objectName + " does not exist.");
   }
+
   std::vector<std::string> roles = SysCatalog::instance().getRoles(
       true, session_info_ptr->get_currentUser().isSuper, session_info_ptr->get_currentUser().userId);
   for (const auto& role : roles) {
@@ -1212,42 +1217,15 @@ void MapDHandler::get_link_view(TFrontendView& _return, const TSessionId& sessio
 }
 
 bool MapDHandler::hasTableAccessPrivileges(const TableDescriptor* td, const TSessionId& session) {
-  bool hasAccessPrivs = false;
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
   auto user_metadata = session_info.get_currentUser();
+
+  std::vector<DBObject> privObjects;
   DBObject dbObject(td->tableName, TableDBObjectType);
   dbObject.loadKey(cat);
-  std::vector<DBObject> privObjects;
-  dbObject.setPrivileges(AccessPrivileges::SELECT);
-  privObjects.push_back(dbObject);
-  for (size_t i = 0; i < 4; i++) {
-    if (SysCatalog::instance().checkPrivileges(user_metadata, privObjects)) {
-      hasAccessPrivs = true;
-      break;
-    }
-    switch (i) {
-      case (0):
-        dbObject.setPrivileges(AccessPrivileges::INSERT);
-        break;
-      case (1):
-        dbObject.setPrivileges(AccessPrivileges::CREATE);
-        break;
-      case (2):
-        dbObject.setPrivileges(AccessPrivileges::TRUNCATE);
-        break;
-      case (3):
-        dbObject.setPrivileges(AccessPrivileges::CREATE_DASHBOARD);
-        break;
-      case (4):
-        break;
-      default:
-        CHECK(false);
-    }
-    privObjects.pop_back();
-    privObjects.push_back(dbObject);
-  }
-  return hasAccessPrivs;
+
+  return SysCatalog::instance().hasAnyPrivileges(user_metadata, privObjects);
 }
 
 void MapDHandler::get_tables_impl(std::vector<std::string>& table_names,
@@ -1871,8 +1849,7 @@ std::string get_actual_geo_filename(const std::string& file_name_in,
     // zip archive
     file_name = "/vsizip/" + file_name;
     is_archive = true;
-  } else if (boost::iends_with(file_name, ".tar") ||
-             boost::iends_with(file_name, ".tgz") ||
+  } else if (boost::iends_with(file_name, ".tar") || boost::iends_with(file_name, ".tgz") ||
              boost::iends_with(file_name, ".tar.gz")) {
     // tar archive (compressed or uncompressed)
     file_name = "/vsitar/" + file_name;
@@ -1897,9 +1874,7 @@ std::string get_actual_geo_filename(const std::string& file_name_in,
     // order or checking: shp, geojson, kml
     bool found_suitable_file = false;
     for (const auto& file : files) {
-      if (boost::iends_with(file, ".shp") ||
-          boost::iends_with(file, ".geojson") ||
-          boost::iends_with(file, ".kml")) {
+      if (boost::iends_with(file, ".shp") || boost::iends_with(file, ".geojson") || boost::iends_with(file, ".kml")) {
         file_name = file;
         found_suitable_file = true;
         break;
@@ -2648,7 +2623,7 @@ void MapDHandler::check_table_load_privileges(const Catalog_Namespace::SessionIn
   if (SysCatalog::instance().arePrivilegesOn()) {
     DBObject dbObject(table_name, TableDBObjectType);
     dbObject.loadKey(cat);
-    dbObject.setPrivileges(AccessPrivileges::INSERT);
+    dbObject.setPrivileges(AccessPrivileges::INSERT_INTO_TABLE);
     std::vector<DBObject> privObjects;
     privObjects.push_back(dbObject);
     if (!SysCatalog::instance().checkPrivileges(user_metadata, privObjects)) {

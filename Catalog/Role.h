@@ -51,6 +51,7 @@ class Role {
   virtual ~Role();
 
   virtual size_t getMembershipSize() const = 0;
+  virtual bool hasAnyPrivileges(const DBObject& objectRequested) const = 0;
   virtual bool checkPrivileges(const DBObject& objectRequested) const = 0;
   virtual void copyRoles(const std::unordered_set<Role*>& roles) = 0;
   virtual void addRole(Role* role) = 0;
@@ -86,6 +87,7 @@ class UserRole : public Role {
   virtual ~UserRole();
 
   virtual size_t getMembershipSize() const;
+  virtual bool hasAnyPrivileges(const DBObject& objectRequested) const;
   virtual bool checkPrivileges(const DBObject& objectRequested) const;
 
   virtual void copyRoles(const std::unordered_set<Role*>& roles);
@@ -119,6 +121,7 @@ class GroupRole : public Role {
   virtual ~GroupRole();
 
   virtual size_t getMembershipSize() const;
+  virtual bool hasAnyPrivileges(const DBObject& objectRequested) const;
   virtual bool checkPrivileges(const DBObject& objectRequested) const;
   virtual void copyRoles(const std::unordered_set<Role*>& roles);
   virtual void addRole(Role* role);

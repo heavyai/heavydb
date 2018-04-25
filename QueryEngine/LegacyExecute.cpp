@@ -703,7 +703,7 @@ std::shared_ptr<ResultSet> Executor::execute(const Planner::RootPlan* root_plan,
       auto td = cat.getMetadataForTable(table_id);
       DBObject dbObject(td->tableName, TableDBObjectType);
       dbObject.loadKey(cat);
-      dbObject.setPrivileges(AccessPrivileges::INSERT);
+      dbObject.setPrivileges(AccessPrivileges::INSERT_INTO_TABLE);
       std::vector<DBObject> privObjects;
       privObjects.push_back(dbObject);
       if (Catalog_Namespace::SysCatalog::instance().arePrivilegesOn() &&
