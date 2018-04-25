@@ -186,7 +186,9 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
   size_t lit_buf_size{0};
   std::vector<std::string> real_strings;
   std::vector<std::vector<double>> double_array_literals;
+  std::vector<std::vector<int8_t>> align64_int8_array_literals;
   std::vector<std::vector<int32_t>> int32_array_literals;
+  std::vector<std::vector<int8_t>> align32_int8_array_literals;
   std::vector<std::vector<int8_t>> int8_array_literals;
   for (const auto& lit : dev_literals) {
     lit_buf_size = addAligned(lit_buf_size, Executor::literalBytes(lit));
@@ -206,6 +208,15 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
       const auto p = boost::get<std::vector<int8_t>>(&lit);
       CHECK(p);
       int8_array_literals.push_back(*p);
+    } else if (lit.which() == 11) {
+      const auto p = boost::get<std::pair<std::vector<int8_t>, int>>(&lit);
+      CHECK(p);
+      if (p->second == 64)
+        align64_int8_array_literals.push_back(p->first);
+      else if (p->second == 32)
+        align32_int8_array_literals.push_back(p->first);
+      else
+        CHECK(false);
     }
   }
   if (lit_buf_size > static_cast<size_t>(std::numeric_limits<int16_t>::max())) {
@@ -223,12 +234,26 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
     CHECK_LE(double_array_literal.size(), static_cast<size_t>(std::numeric_limits<int16_t>::max()));
     lit_buf_size += double_array_literal.size() * sizeof(double);
   }
+  if (align64_int8_array_literals.size() > 0)
+    lit_buf_size = align(lit_buf_size, sizeof(uint64_t));
+  int16_t crt_align64_int8_arr_lit_off = lit_buf_size;
+  for (const auto& align64_int8_array_literal : align64_int8_array_literals) {
+    CHECK_LE(align64_int8_array_literals.size(), static_cast<size_t>(std::numeric_limits<int16_t>::max()));
+    lit_buf_size += align64_int8_array_literal.size();
+  }
   if (int32_array_literals.size() > 0)
     lit_buf_size = align(lit_buf_size, sizeof(int32_t));
   int16_t crt_int32_arr_lit_off = lit_buf_size;
   for (const auto& int32_array_literal : int32_array_literals) {
     CHECK_LE(int32_array_literal.size(), static_cast<size_t>(std::numeric_limits<int16_t>::max()));
     lit_buf_size += int32_array_literal.size() * sizeof(int32_t);
+  }
+  if (align32_int8_array_literals.size() > 0)
+    lit_buf_size = align(lit_buf_size, sizeof(int32_t));
+  int16_t crt_align32_int8_arr_lit_off = lit_buf_size;
+  for (const auto& align32_int8_array_literal : align32_int8_array_literals) {
+    CHECK_LE(align32_int8_array_literals.size(), static_cast<size_t>(std::numeric_limits<int16_t>::max()));
+    lit_buf_size += align32_int8_array_literal.size();
   }
   int16_t crt_int8_arr_lit_off = lit_buf_size;
   for (const auto& int8_array_literal : int8_array_literals) {
@@ -237,7 +262,9 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
   }
   unsigned crt_real_str_idx = 0;
   unsigned crt_double_arr_lit_idx = 0;
+  unsigned crt_align64_int8_arr_lit_idx = 0;
   unsigned crt_int32_arr_lit_idx = 0;
+  unsigned crt_align32_int8_arr_lit_idx = 0;
   unsigned crt_int8_arr_lit_idx = 0;
   std::vector<int8_t> serialized(lit_buf_size);
   size_t off{0};
@@ -343,6 +370,38 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
         memcpy(&serialized[crt_int8_arr_lit_off], crt_int8_arr_lit.data(), int8_array_bytesize);
         ++crt_int8_arr_lit_idx;
         crt_int8_arr_lit_off += int8_array_bytesize;
+        break;
+      }
+      case 11: {
+        const auto p = boost::get<std::pair<std::vector<int8_t>, int>>(&lit);
+        CHECK(p);
+        if (p->second == 64) {
+          int32_t off_and_len = crt_align64_int8_arr_lit_off << 16;
+          const auto& crt_align64_int8_arr_lit = align64_int8_array_literals[crt_align64_int8_arr_lit_idx];
+          int32_t len = crt_align64_int8_arr_lit.size();
+          CHECK_EQ((len >> 16), 0);
+          off_and_len |= static_cast<int16_t>(len);
+          int32_t align64_int8_array_bytesize = len;
+          memcpy(&serialized[off - lit_bytes], &off_and_len, lit_bytes);
+          memcpy(
+              &serialized[crt_align64_int8_arr_lit_off], crt_align64_int8_arr_lit.data(), align64_int8_array_bytesize);
+          ++crt_align64_int8_arr_lit_idx;
+          crt_align64_int8_arr_lit_off += align64_int8_array_bytesize;
+        } else if (p->second == 32) {
+          int32_t off_and_len = crt_align32_int8_arr_lit_off << 16;
+          const auto& crt_align32_int8_arr_lit = align32_int8_array_literals[crt_align32_int8_arr_lit_idx];
+          int32_t len = crt_align32_int8_arr_lit.size();
+          CHECK_EQ((len >> 16), 0);
+          off_and_len |= static_cast<int16_t>(len);
+          int32_t align32_int8_array_bytesize = len;
+          memcpy(&serialized[off - lit_bytes], &off_and_len, lit_bytes);
+          memcpy(
+              &serialized[crt_align32_int8_arr_lit_off], crt_align32_int8_arr_lit.data(), align32_int8_array_bytesize);
+          ++crt_align32_int8_arr_lit_idx;
+          crt_align32_int8_arr_lit_off += align32_int8_array_bytesize;
+        } else {
+          CHECK(false);
+        }
         break;
       }
       default:

@@ -131,6 +131,18 @@ std::vector<llvm::Value*> Executor::codegenHoistedConstants(const std::vector<co
     auto len_lv = cgen_state_->ir_builder_.CreateAnd(off_and_len, ll_int(int32_t(0x0000ffff)));
     return {ll_int(int64_t(0)), cgen_state_->ir_builder_.CreateGEP(lit_buff_lv, off_lv), len_lv};
   }
+  if (type_info.is_array() && enc_type == kENCODING_GEOINT) {
+    CHECK_EQ(kENCODING_GEOINT, type_info.get_compression());
+    CHECK_EQ(kTINYINT, type_info.get_subtype());
+    auto off_and_len_ptr = cgen_state_->ir_builder_.CreateBitCast(
+        lit_buf_start, llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0));
+    // packed offset + length, 16 bits each
+    auto off_and_len = cgen_state_->ir_builder_.CreateLoad(off_and_len_ptr);
+    auto off_lv = cgen_state_->ir_builder_.CreateLShr(
+        cgen_state_->ir_builder_.CreateAnd(off_and_len, ll_int(int32_t(0xffff0000))), ll_int(int32_t(16)));
+    auto len_lv = cgen_state_->ir_builder_.CreateAnd(off_and_len, ll_int(int32_t(0x0000ffff)));
+    return {cgen_state_->ir_builder_.CreateGEP(lit_buff_lv, off_lv), len_lv};
+  }
   if (type_info.is_array() && enc_type == kENCODING_NONE) {
     CHECK_EQ(kENCODING_NONE, type_info.get_compression());
     auto off_and_len_ptr = cgen_state_->ir_builder_.CreateBitCast(

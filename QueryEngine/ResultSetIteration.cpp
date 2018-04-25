@@ -640,7 +640,7 @@ TargetValue build_geo_target_value(const SQLTypeInfo& geo_ti,
       const auto compressed_coords = reinterpret_cast<const int32_t*>(coords);
       std::vector<double> decompressed_coords;
       bool x = true;
-      for (auto i = 0; i < coords_sz / sizeof(int32_t); i++) {
+      for (size_t i = 0; i < coords_sz / sizeof(int32_t); i++) {
         // compress longitude: -180..180  --->  -2,147,483,647..2,147,483,647
         // compress latitude: -90..90  --->  -2,147,483,647..2,147,483,647
         double decompressed_coord = (x ? 180.0 : 90.0) * (compressed_coords[i] / 2147483647.0);

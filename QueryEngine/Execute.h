@@ -391,7 +391,8 @@ class Executor {
                          std::string,
                          std::vector<double>,
                          std::vector<int32_t>,
-                         std::vector<int8_t>>
+                         std::vector<int8_t>,
+                         std::pair<std::vector<int8_t>, int>>
       LiteralValue;
   typedef std::vector<LiteralValue> LiteralValues;
 
@@ -1163,6 +1164,8 @@ class Executor {
         return 4;  // std::vector<int32_t>
       case 10:
         return 4;  // std::vector<int8_t>
+      case 11:
+        return 4;  // std::pair<std::vector<int8_t>, int>
       default:
         abort();
     }
@@ -1286,6 +1289,9 @@ class Executor {
                 int8_t i = c->get_constval().tinyintval;
                 int8_array_literal.push_back(i);
               }
+              if (ti.get_comp_param() == 64) {
+                return getOrAddLiteral(std::make_pair(int8_array_literal, 64), device_id);
+              }
               return getOrAddLiteral(int8_array_literal, device_id);
             }
             throw std::runtime_error("Unsupported literal array");
@@ -1298,6 +1304,9 @@ class Executor {
                 CHECK(c);
                 int8_t i = c->get_constval().tinyintval;
                 int8_array_literal.push_back(i);
+              }
+              if (ti.get_comp_param() == 32) {
+                return getOrAddLiteral(std::make_pair(int8_array_literal, 32), device_id);
               }
               return getOrAddLiteral(int8_array_literal, device_id);
             }

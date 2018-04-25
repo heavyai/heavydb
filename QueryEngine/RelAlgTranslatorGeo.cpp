@@ -87,6 +87,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiter
   SQLTypeInfo arr_ti = SQLTypeInfo(kARRAY, true);
   arr_ti.set_subtype(kTINYINT);
   arr_ti.set_size(compressed_coords.size() * sizeof(int8_t));
+  arr_ti.set_compression(ti.get_compression());
+  arr_ti.set_comp_param((ti.get_compression() == kENCODING_GEOINT) ? 32 : 64);
   args.push_back(makeExpr<Analyzer::Constant>(arr_ti, false, compressed_coord_exprs));
 
   auto lit_type = ti.get_type();

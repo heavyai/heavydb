@@ -1550,7 +1550,7 @@ std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeI
   for (auto coord : coords) {
     auto coord_data_ptr = reinterpret_cast<uint64_t*>(&coord);
     uint64_t coord_data = *coord_data_ptr;
-    auto coord_data_size = sizeof(double);
+    size_t coord_data_size = sizeof(double);
 
     if (ti.get_output_srid() == 4326) {
       if (x) {
@@ -1567,7 +1567,7 @@ std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeI
       x = !x;
     }
 
-    for (auto i = 0; i < coord_data_size; i++) {
+    for (size_t i = 0; i < coord_data_size; i++) {
       compressed_coords.push_back(coord_data & 0xFF);
       coord_data >>= 8;
     }
