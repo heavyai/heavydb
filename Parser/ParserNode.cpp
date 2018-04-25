@@ -1882,6 +1882,10 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         // default to 32-bits
         cd.columnType.set_compression(kENCODING_DICT);
         cd.columnType.set_comp_param(32);
+      } else if (cd.columnType.is_geometry() && cd.columnType.get_output_srid() == 4326) {
+        // default to GEOINT 32-bits
+        cd.columnType.set_compression(kENCODING_GEOINT);
+        cd.columnType.set_comp_param(32);
       } else {
         cd.columnType.set_compression(kENCODING_NONE);
         cd.columnType.set_comp_param(0);
