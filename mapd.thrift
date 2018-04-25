@@ -420,11 +420,21 @@ struct TDashboardPermissions {
   4: bool edit_;
 }
 
+struct TViewPermissions {
+  1: bool create_;
+  2: bool drop_;
+  3: bool select_;
+  4: bool insert_;
+  5: bool update_;
+  6: bool delete_;
+}
+
 enum TDBObjectType {
   AbstractDBObjectType = 0,
   DatabaseDBObjectType,
   TableDBObjectType,
   DashboardDBObjectType
+  ViewDBObjectType
 }
 
 struct TDBObject {

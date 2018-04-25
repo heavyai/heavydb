@@ -254,6 +254,7 @@ class Catalog {
   void updatePageSize();
   void updateDeletedColumnIndicator();
   void updateFrontendViewsToDashboards();
+  void recordOwnershipOfObjectsInObjectPermissions();
 
   void buildMaps();
   void addTableToMap(TableDescriptor& td,
@@ -386,6 +387,8 @@ class SysCatalog {
     static SysCatalog sys_cat;
     return sys_cat;
   }
+
+  void populateRoleDbObjects(const std::vector<DBObject>& objects);
 
  private:
   typedef std::map<std::string, Role*> RoleMap;

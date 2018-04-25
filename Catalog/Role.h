@@ -66,6 +66,7 @@ class Role {
   virtual void updatePrivileges(Role* role) = 0;
   virtual void updatePrivileges() = 0;
   virtual std::string roleName(bool userName = false) const = 0;
+  virtual std::string userName() const = 0;
   virtual bool isUserPrivateRole() const = 0;
   virtual std::vector<std::string> getRoles() const = 0;
   const DBObjectMap* getDbObject() const;
@@ -106,6 +107,8 @@ class UserRole : public Role {
   virtual bool isUserPrivateRole() const;
   virtual std::vector<std::string> getRoles() const;
   virtual void dropDbObject(const DBObjectKey& objectKey);
+  virtual std::string userName() const {return userName_; };
+
 
  private:
   int32_t userId_;
@@ -139,6 +142,8 @@ class GroupRole : public Role {
   virtual bool isUserPrivateRole() const;
   virtual std::vector<std::string> getRoles() const;
   virtual void dropDbObject(const DBObjectKey& objectKey);
+  virtual std::string userName() const;
+
 
  private:
   bool userPrivateRole_;

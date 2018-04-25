@@ -97,6 +97,20 @@ struct DashboardPrivileges {
   static const int32_t ALL_MIGRATE = CREATE_DASHBOARD | DELETE_DASHBOARD | VIEW_DASHBOARD | EDIT_DASHBOARD;
 };
 
+struct ViewPrivileges {
+  static const int32_t ALL = -1;
+  static const int32_t CREATE_VIEW = 1 << 0;
+  static const int32_t DROP_VIEW = 1 << 1;
+  static const int32_t SELECT_FROM_VIEW = 1 << 2;
+  static const int32_t INSERT_INTO_VIEW = 1 << 3;
+  static const int32_t UPDATE_IN_VIEW = 1 << 4;
+  static const int32_t DELETE_FROM_VIEW = 1 << 5;
+  static const int32_t TRUNCATE_VIEW = 1 << 6;
+
+  static const int32_t ALL_MIGRATE = CREATE_VIEW | DROP_VIEW | SELECT_FROM_VIEW | INSERT_INTO_VIEW;
+
+};
+
 struct AccessPrivileges {
   int64_t privileges;
 
@@ -134,6 +148,18 @@ struct AccessPrivileges {
   static const AccessPrivileges VIEW_DASHBOARD;
   static const AccessPrivileges EDIT_DASHBOARD;
   static const AccessPrivileges DELETE_DASHBOARD;
+
+
+  // view permissions
+  static const AccessPrivileges ALL_VIEW_MIGRATE;
+  static const AccessPrivileges ALL_VIEW;
+  static const AccessPrivileges CREATE_VIEW;
+  static const AccessPrivileges DROP_VIEW;
+  static const AccessPrivileges SELECT_FROM_VIEW;
+  static const AccessPrivileges INSERT_INTO_VIEW;
+  static const AccessPrivileges UPDATE_IN_VIEW;
+  static const AccessPrivileges DELETE_FROM_VIEW;
+  static const AccessPrivileges TRUNCATE_VIEW;
 };
 
 class DBObject {

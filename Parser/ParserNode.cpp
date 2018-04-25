@@ -3146,6 +3146,11 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
 void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
+
+  if (SysCatalog::instance().arePrivilegesOn() && !session.checkDBAccessPrivileges(DBObjectType::ViewDBObjectType, AccessPrivileges::CREATE_VIEW)) {
+    throw std::runtime_error("View " + view_name_ + " will not be created. User has no create view privileges.");
+  }
+
   if (catalog.getMetadataForTable(view_name_) != nullptr) {
     if (if_not_exists_)
       return;
@@ -3169,6 +3174,10 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  if (SysCatalog::instance().arePrivilegesOn() && !session.checkDBAccessPrivileges(DBObjectType::ViewDBObjectType, AccessPrivileges::DROP_VIEW)) {
+    throw std::runtime_error("View " + *view_name + " will not be dropped. User has no drop view privileges.");
+  }
+
   auto& catalog = session.get_catalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*view_name);
   if (td == nullptr) {

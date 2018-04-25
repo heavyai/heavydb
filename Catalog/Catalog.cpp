@@ -287,6 +287,15 @@ void SysCatalog::migratePrivileges() {
         DBObject object(key, AccessPrivileges::ALL_DASHBOARD_MIGRATE, MAPD_ROOT_USER_ID);
         insertOrUpdateObjectPrivileges(sqliteConnector_, users_by_id[grantee.first], true, object);
       }
+
+      {
+        // view level permissions
+        DBObjectKey key;
+        key.permissionType = DBObjectType::ViewDBObjectType;
+        key.dbId = grantee.second;
+        DBObject object(key, AccessPrivileges::ALL_VIEW_MIGRATE, MAPD_ROOT_USER_ID);
+        insertOrUpdateObjectPrivileges(sqliteConnector_, users_by_id[grantee.first], true, object);
+      }
     }
     for (auto user : user_has_privs) {
       if (user.second == false && user.first != MAPD_ROOT_USER_ID) {
@@ -1323,6 +1332,81 @@ void Catalog::updateDictionarySchema() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
+void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query("SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_record_ownership_marker'");
+    if (sqliteConnector_.getNumRows() != 0) {
+      // already done
+      sqliteConnector_.query("END TRANSACTION");
+      return;
+    }
+    sqliteConnector_.query("CREATE TABLE mapd_record_ownership_marker (dummy integer)");
+
+    std::vector<DBObject> objects;
+
+    {
+      // tables and views
+      string tableQuery("SELECT tableid, name, userid, isview FROM mapd_tables WHERE userid > 0");
+      sqliteConnector_.query(tableQuery);
+      size_t numRows = sqliteConnector_.getNumRows();
+      for (size_t r = 0; r < numRows; ++r) {
+        int32_t tableid = sqliteConnector_.getData<int>(r, 0);
+        std::string tableName = sqliteConnector_.getData<string>(r, 1);
+        int32_t ownerid = sqliteConnector_.getData<int>(r, 2);
+        bool isview = sqliteConnector_.getData<bool>(r, 3);
+
+        DBObjectType type = isview ? DBObjectType::ViewDBObjectType : DBObjectType::TableDBObjectType;
+        DBObjectKey key;
+        key.dbId = currentDB_.dbId;
+        key.objectId = tableid;
+        key.permissionType = type;
+
+        DBObject obj(tableName, type);
+        obj.setObjectKey(key);
+        obj.setOwner(ownerid);
+        obj.setPrivileges(isview ? AccessPrivileges::ALL_VIEW : AccessPrivileges::ALL_TABLE);
+
+        objects.push_back(obj);
+      }
+    }
+
+    {
+      // dashboards
+      string tableQuery("SELECT id, name, userid FROM mapd_dashboards WHERE userid > 0");
+      sqliteConnector_.query(tableQuery);
+      size_t numRows = sqliteConnector_.getNumRows();
+      for (size_t r = 0; r < numRows; ++r) {
+        int32_t dashId = sqliteConnector_.getData<int>(r, 0);
+        std::string dashName = sqliteConnector_.getData<string>(r, 1);
+        int32_t ownerid = sqliteConnector_.getData<int>(r, 2);
+
+        DBObjectType type = DBObjectType::DashboardDBObjectType;
+        DBObjectKey key;
+        key.dbId = currentDB_.dbId;
+        key.objectId = dashId;
+        key.permissionType = type;
+
+        DBObject obj(dashName, type);
+        obj.setObjectKey(key);
+        obj.setOwner(ownerid);
+        obj.setPrivileges(AccessPrivileges::ALL_DASHBOARD);
+
+        objects.push_back(obj);
+      }
+    }
+
+    SysCatalog::instance().populateRoleDbObjects(objects);
+
+
+  } catch (const std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+
+}
+
 void Catalog::CheckAndExecuteMigrations() {
   updateTableDescriptorSchema();
   updateFrontendViewAndLinkUsers();
@@ -1334,6 +1418,7 @@ void Catalog::CheckAndExecuteMigrations() {
   updatePageSize();
   updateDeletedColumnIndicator();
   updateFrontendViewsToDashboards();
+  recordOwnershipOfObjectsInObjectPermissions();
 }
 
 void SysCatalog::buildRoleMap() {
@@ -1373,6 +1458,29 @@ void SysCatalog::buildRoleMap() {
     }
     rl->grantPrivileges(dbObject);
   }
+}
+
+void SysCatalog::populateRoleDbObjects(const std::vector<DBObject>& objects) {
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+
+    for (auto dbobject : objects) {
+      Role* role = getMetadataForUserRole(dbobject.getOwner());
+      if (role) {
+        Role* groupRole = getMetadataForRole(role->userName());
+        if (groupRole) {
+          insertOrUpdateObjectPrivileges(sqliteConnector_, role->userName(), true, dbobject);
+          groupRole->grantPrivileges(dbobject);
+        }
+      }
+    }
+
+  } catch (const std::exception& e) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+
 }
 
 void SysCatalog::buildUserRoleMap() {

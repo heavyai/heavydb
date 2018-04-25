@@ -312,6 +312,9 @@ bool GroupRole::hasAnyPrivileges(const DBObject& objectRequested) const {
 bool GroupRole::checkPrivileges(const DBObject& objectRequested) const {
   throw runtime_error("checkPrivileges api should not be used with objects of the GroupRole class.");
 }
+std::string GroupRole::userName() const {
+  throw runtime_error("userName api should not be used with objects of the GroupRole class.");
+}
 void GroupRole::copyRoles(const std::unordered_set<Role*>& roles) {
   for (auto roleIt = roles.begin(); roleIt != roles.end(); ++roleIt) {
     userRole_.insert(*roleIt);

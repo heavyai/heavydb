@@ -28,6 +28,7 @@ cmake_install.cmake
 install_manifest.txt
 _build/
 build/
+build3.6/
 
 # Eclipse build files
 Debug/

@@ -29,6 +29,16 @@ const AccessPrivileges AccessPrivileges::EDIT_DASHBOARD = AccessPrivileges(Dashb
 const AccessPrivileges AccessPrivileges::DELETE_DASHBOARD = AccessPrivileges(DashboardPrivileges::DELETE_DASHBOARD);
 const AccessPrivileges AccessPrivileges::VIEW_DASHBOARD = AccessPrivileges(DashboardPrivileges::VIEW_DASHBOARD);
 
+const AccessPrivileges AccessPrivileges::ALL_VIEW = AccessPrivileges(ViewPrivileges::ALL);
+const AccessPrivileges AccessPrivileges::ALL_VIEW_MIGRATE = AccessPrivileges(ViewPrivileges::ALL_MIGRATE);
+const AccessPrivileges AccessPrivileges::CREATE_VIEW = AccessPrivileges(ViewPrivileges::CREATE_VIEW);
+const AccessPrivileges AccessPrivileges::DROP_VIEW = AccessPrivileges(ViewPrivileges::DROP_VIEW);
+const AccessPrivileges AccessPrivileges::SELECT_FROM_VIEW = AccessPrivileges(ViewPrivileges::SELECT_FROM_VIEW);
+const AccessPrivileges AccessPrivileges::INSERT_INTO_VIEW = AccessPrivileges(ViewPrivileges::INSERT_INTO_VIEW);
+const AccessPrivileges AccessPrivileges::UPDATE_IN_VIEW = AccessPrivileges(ViewPrivileges::UPDATE_IN_VIEW);
+const AccessPrivileges AccessPrivileges::DELETE_FROM_VIEW = AccessPrivileges(ViewPrivileges::DELETE_FROM_VIEW);
+const AccessPrivileges AccessPrivileges::TRUNCATE_VIEW = AccessPrivileges(ViewPrivileges::TRUNCATE_VIEW);
+
 std::string ObjectPermissionTypeToString(DBObjectType type) {
   switch (type) {
     case DatabaseDBObjectType:
@@ -129,6 +139,7 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
       }
       break;
     }
+    case ViewDBObjectType:
     case TableDBObjectType: {
       // permissions on tables
 
@@ -137,7 +148,7 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
       if (!getName().empty()) {
         auto table = catalog.getMetadataForTable(getName());
         if (!table) {
-          throw std::runtime_error("Failure generating DB object key. Table " + getName() + " does not exist.");
+          throw std::runtime_error("Failure generating DB object key. Table/View " + getName() + " does not exist.");
         }
         objectKey_.objectId = table->tableId;
         ownerId_ = table->userId;
@@ -180,6 +191,7 @@ DBObjectKey DBObjectKey::fromString(const std::vector<std::string>& key, const D
       objectKey.dbId = std::stoi(key[1]);
       break;
     case TableDBObjectType:
+    case ViewDBObjectType:
     case DashboardDBObjectType:
       objectKey.permissionType = std::stoi(key[0]);
       objectKey.dbId = std::stoi(key[1]);
