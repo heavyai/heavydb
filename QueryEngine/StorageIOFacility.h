@@ -41,13 +41,15 @@ class DefaultIOFacet {
             typename COLUMN_NAME_TYPE,
             typename FRAGMENT_INDEX_TYPE,
             typename FRAGMENT_OFFSET_LIST_TYPE,
-            typename UPDATE_VALUES_LIST_TYPE>
+            typename UPDATE_VALUES_LIST_TYPE,
+            typename COLUMN_TYPE_INFO>
   static void updateColumn(CATALOG_TYPE const& cat,
                            TABLE_DESCRIPTOR_TYPE const& table_descriptor,
                            COLUMN_NAME_TYPE const& column_name,
                            FRAGMENT_INDEX_TYPE const frag_index,
                            FRAGMENT_OFFSET_LIST_TYPE const& frag_offsets,
                            UPDATE_VALUES_LIST_TYPE const& update_values,
+                           COLUMN_TYPE_INFO const& col_type_info,
                            TransactionLog& transaction_tracker) {
     const auto fragmenter = dynamic_cast<Fragmenter_Namespace::InsertOrderFragmenter*>(table_descriptor->fragmenter);
     CHECK(fragmenter);
@@ -82,7 +84,7 @@ class DefaultIOFacet {
                                  deleted_column_desc,
                                  frag_index,
                                  victims,
-				 ScalarTargetValue(int64_t(1L)),				 
+                                 ScalarTargetValue(int64_t(1L)),
                                  Data_Namespace::MemoryLevel::CPU_LEVEL,
                                  transaction_tracker);
         transaction_tracker.commitUpdate();
@@ -165,7 +167,10 @@ class StorageIOFacility {
       IOFacility::performTransaction(
           [this, &update_log, update_parameters](typename IOFacility::TransactionLog& transaction_tracker) -> void {
             auto fragment_index(update_log.getFragmentIndex());
+            auto const& targetsMetaInfo(update_parameters.getTargetsMetaInfo());
 
+            int target_meta_info_base_index =
+                update_parameters.getTargetsMetaInfoSize() - update_parameters.getUpdateColumnCount() - 1;
             // Iterate over each column
             for (decltype(update_parameters.getUpdateColumnCount()) column_index = 0;
                  column_index < update_parameters.getUpdateColumnCount();
@@ -191,12 +196,14 @@ class StorageIOFacility {
                 scalar_target_values.push_back(boost::get<ScalarTargetValue>(row[result_set_column_index]));
               }
 
+              auto const& specific_target_meta_info(targetsMetaInfo[target_meta_info_base_index + column_index]);
               IOFacility::updateColumn(catalog_,
                                        update_parameters.getTableDescriptor(),
                                        update_parameters.getUpdateColumnNames()[column_index],
                                        fragment_index,
                                        column_offsets,
                                        scalar_target_values,
+                                       specific_target_meta_info.get_type_info(),
                                        transaction_tracker);
             }
           });
