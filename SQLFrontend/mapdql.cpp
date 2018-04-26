@@ -359,14 +359,14 @@ void set_table_epoch(ClientContext& context, const std::string& table_details) {
 
 void process_backslash_commands(char* command, ClientContext& context) {
   // clang-format off
-  auto resolution_status = CommandResolutionChain<>( command, "\\h", 1, HelpCmd<>( context ) )
-  ( "\\d", 2, ListColumnsCmd<>( context ), "Usage: \\d <table>" )
-  ( "\\o", 2, GetOptimizedSchemaCmd<>( context ), "Usage: \\o <table>" )
-  ( "\\t", 1, ListTablesCmd<>( context ) )
-  ( "\\v", 1, ListViewsCmd<>( context ) )
-  ( "\\c", 4, ConnectToDBCmd<>( context ), "Usage: \\c <database> <user> <password>." )
-  ( "\\u", 1, ListUsersCmd<>( context ) )
-  ( "\\l", 1, ListDatabasesCmd<>( context ) )
+  auto resolution_status = CommandResolutionChain<>( command, "\\h", 1, 1, HelpCmd<>( context ) )
+  ( "\\d", 2, 2, ListColumnsCmd<>( context ), "Usage: \\d <table>" )
+  ( "\\o", 2, 2, GetOptimizedSchemaCmd<>( context ), "Usage: \\o <table>" )
+  ( "\\t", 1, 1, ListTablesCmd<>( context ) )
+  ( "\\v", 1, 1, ListViewsCmd<>( context ) )
+  ( "\\c", 4, 4, ConnectToDBCmd<>( context ), "Usage: \\c <database> <user> <password>." )
+  ( "\\u", 1, 1, ListUsersCmd<>( context ) )
+  ( "\\l", 1, 1, ListDatabasesCmd<>( context ) )
   .is_resolved();
 
   if( !resolution_status ) {
@@ -1319,17 +1319,17 @@ int main(int argc, char** argv) {
       using Params = CommandResolutionChain<>::CommandTokenList;
 
       // clang-format off
-      auto resolution_status = CommandResolutionChain<>( line, "\\copygeo", 3, CopyGeoCmd<>(context), "Usage: \\copygeo <serverGeoFileName> <tableName>")
-	( "\\copy", 3, [&](Params const& p) { copy_table(p[1].c_str() /* filepath */, p[2].c_str() /* table */, context); } )
-	( "\\ste", 2, [&](Params const& p) { set_table_epoch(context, p[1] /* table_details */); } )
-	( "\\gte", 2, [&](Params const& p) { get_table_epoch(context, p[1] /* table_details */); } )
-	( "\\export_dashboard", 3, ExportDashboardCmd<>( context ), "Usage \\export_dashboard <dash name> <file name>" )
-	( "\\import_dashboard", 3, ImportDashboardCmd<>( context ), "Usage \\import_dashboard <dash name> <file name>"  )
-	( "\\role_list", 2, RoleListCmd<>(context), "Usage: \\role_list <userName>")
-	( "\\roles", 1, RolesCmd<>(context))("\\set_license", 2, [&](Params const& p ) { set_license_key(context, p[1]); })
-	( "\\get_license", 1, [&](Params const&) { get_license_claims(context); })
-	( "\\status", 1, StatusCmd<>( context ), "Usage \\status" )
-  	( "\\dash", 1, ListDashboardsCmd<>( context ) )
+      auto resolution_status = CommandResolutionChain<>( line, "\\copygeo", 3, 3, CopyGeoCmd<>(context), "Usage: \\copygeo <serverGeoFileName> <tableName> [<encoding>]")
+  ( "\\copy", 3, 3, [&](Params const& p) { copy_table(p[1].c_str() /* filepath */, p[2].c_str() /* table */, context); } )
+  ( "\\ste", 2, 2, [&](Params const& p) { set_table_epoch(context, p[1] /* table_details */); } )
+  ( "\\gte", 2, 2, [&](Params const& p) { get_table_epoch(context, p[1] /* table_details */); } )
+  ( "\\export_dashboard", 3, 3, ExportDashboardCmd<>( context ), "Usage \\export_dashboard <dash name> <file name>" )
+	( "\\import_dashboard", 3, 3, ImportDashboardCmd<>( context ), "Usage \\import_dashboard <dash name> <file name>"  )
+  ( "\\role_list", 2, 2, RoleListCmd<>(context), "Usage: \\role_list <userName>")
+  ( "\\roles", 1, 1, RolesCmd<>(context))("\\set_license", 2, 2, [&](Params const& p ) { set_license_key(context, p[1]); })
+  ( "\\get_license", 1, 1, [&](Params const&) { get_license_claims(context); })
+  ( "\\status", 1, 1, StatusCmd<>( context ), "Usage \\status" )
+    ( "\\dash", 1, 1, ListDashboardsCmd<>( context ) )
 	.is_resolved();
 
       if (resolution_status == false) {

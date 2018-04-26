@@ -26,7 +26,8 @@ class CommandResolutionChain {
   template <typename RESOLUTION_FUNCTOR>
   CommandResolutionChain(char const* command_line,
                          std::string const& target_command,
-                         ParamCountType expected_param_count,
+                         ParamCountType min_param_count,
+                         ParamCountType max_param_count,
                          RESOLUTION_FUNCTOR resolution_op,
                          std::string const& custom_help,
                          std::ostream& output_stream = std::cout)
@@ -34,46 +35,51 @@ class CommandResolutionChain {
     extractTokens(command_line);
 
     resolve_command(target_command,
-                    expected_param_count,
+                    min_param_count,
+                    max_param_count,
                     resolution_op,
-                    custom_help_string(target_command, expected_param_count, custom_help));
+                    custom_help_string(target_command, min_param_count, max_param_count, custom_help));
   }
 
   template <typename RESOLUTION_FUNCTOR>
   CommandResolutionChain(char const* command_line,
                          std::string const& target_command,
-                         ParamCountType expected_param_count,
+                         ParamCountType min_param_count,
+                         ParamCountType max_param_count,
                          RESOLUTION_FUNCTOR resolution_op,
                          std::ostream& output_stream = std::cout)
       : m_resolved(false), m_output_stream(output_stream) {
     extractTokens(command_line);
 
     resolve_command(
-        target_command, expected_param_count, resolution_op, default_help_string(target_command, expected_param_count));
+        target_command, min_param_count, max_param_count, resolution_op, default_help_string(target_command, min_param_count, max_param_count));
   }
 
   template <typename RESOLUTION_FUNCTOR>
   CommandResolutionChain& operator()(std::string const& target_command,
-                                     ParamCountType expected_param_count,
+                                     ParamCountType min_param_count,
+                                     ParamCountType max_param_count,
                                      RESOLUTION_FUNCTOR resolution_op,
                                      std::string const& custom_help) {
     if (m_resolved == true)
       return (*this);
     resolve_command(target_command,
-                    expected_param_count,
+                    min_param_count,
+                    max_param_count,
                     resolution_op,
-                    custom_help_string(target_command, expected_param_count, custom_help));
+                    custom_help_string(target_command, min_param_count, max_param_count, custom_help));
     return (*this);
   }
 
   template <typename RESOLUTION_FUNCTOR>
   CommandResolutionChain& operator()(std::string const& target_command,
-                                     ParamCountType expected_param_count,
+                                     ParamCountType min_param_count,
+                                     ParamCountType max_param_count,
                                      RESOLUTION_FUNCTOR resolution_op) {
     if (m_resolved == true)
       return (*this);
     resolve_command(
-        target_command, expected_param_count, resolution_op, default_help_string(target_command, expected_param_count));
+        target_command, min_param_count, max_param_count, resolution_op, default_help_string(target_command, min_param_count, max_param_count));
     return (*this);
   }
 
@@ -92,25 +98,52 @@ class CommandResolutionChain {
   }
 
   std::string custom_help_string(std::string const& target_command,
-                                 ParamCountType expected_param_count,
+                                 ParamCountType min_param_count,
+                                 ParamCountType max_param_count,
                                  std::string const& custom_help) {
     std::ostringstream help_stream;
-    help_stream << target_command << " incorrect number of parameters provided; need " << expected_param_count - 1
-                << " total parameter(s)\n"
-                << custom_help << std::endl;
+    if (min_param_count == max_param_count) {
+      help_stream << target_command
+                  << " incorrect number of parameters provided; need "
+                  << min_param_count - 1
+                  << " total parameter(s)\n"
+                  << custom_help << std::endl;
+    } else {
+      help_stream << target_command
+                  << " incorrect number of parameters provided; need between "
+                  << min_param_count - 1
+                  << " and "
+                  << max_param_count - 1
+                  << " total parameter(s)\n"
+                  << custom_help << std::endl;
+    }
     return help_stream.str();
   }
 
-  std::string default_help_string(std::string const& target_command, ParamCountType expected_param_count) {
+  std::string default_help_string(std::string const& target_command,
+                                  ParamCountType min_param_count,
+                                  ParamCountType max_param_count) {
     std::ostringstream help_stream;
-    help_stream << target_command << " incorrect number of parameters provided; need " << expected_param_count - 1
-                << " total parameter(s)" << std::endl;
+    if (min_param_count == max_param_count) {
+      help_stream << target_command
+                  << " incorrect number of parameters provided; need "
+                  << min_param_count - 1
+                  << " total parameter(s)" << std::endl;
+    } else {
+      help_stream << target_command
+                  << " incorrect number of parameters provided; need between "
+                  << min_param_count - 1
+                  << " and "
+                  << max_param_count - 1
+                  << " total parameter(s)" << std::endl;
+    }
     return help_stream.str();
   }
 
   template <typename RESOLUTION_MECHANISM>
   void resolve_command(std::string const& target_command,
-                       ParamCountType expected_param_count,
+                       ParamCountType min_param_count,
+                       ParamCountType max_param_count,
                        RESOLUTION_MECHANISM resolution_op,
                        std::string const& help_info) {
     using SelectorType = typename std::conditional<std::is_base_of<CmdDeterminant, RESOLUTION_MECHANISM>::value,
@@ -125,7 +158,7 @@ class CommandResolutionChain {
         // And we know the count is at least one, in this branch
         execute_functor_resolution_op(resolution_op, SelectorType());
       } else {
-        if (m_command_token_list.size() != expected_param_count) {
+        if (m_command_token_list.size() < min_param_count || m_command_token_list.size() > max_param_count) {
           m_output_stream << help_info << '\n';
         } else {
           execute_functor_resolution_op(resolution_op, SelectorType());
