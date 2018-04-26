@@ -130,6 +130,14 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
   auto dbuf = chunk->get_buffer();
   auto d0 = dbuf->getMemoryPtr();
   dbuf->setUpdated();
+  {
+    std::lock_guard<std::mutex> lck(updelRoll.mutex);
+    if (updelRoll.dirtyChunks.count(chunk.get()) == 0)
+      updelRoll.dirtyChunks.emplace(chunk.get(), chunk);
+
+    ChunkKey chunkey{updelRoll.catalog->get_currentDB().dbId, cd->tableId, cd->columnId, fragment.fragmentId};
+    updelRoll.dirtyChunkeys.insert(chunkey);
+  }
   for (size_t rbegin = 0, c = 0; rbegin < nrow; ++c, rbegin += segsz) {
     threads.emplace_back(
         std::async(std::launch::async, [=, &null, &lmin, &lmax, &dmin, &dmax, &fragOffsets, &rhsValues] {
@@ -262,12 +270,6 @@ void InsertOrderFragmenter::updateColumnMetadata(const ColumnDescriptor* cd,
     buffer->encoder->updateStats(lmin, null);
   }
   buffer->encoder->getMetadata(chunkMetadata[cd->columnId]);
-
-  if (updelRoll.dirtyChunks.count(chunk.get()) == 0)
-    updelRoll.dirtyChunks.emplace(chunk.get(), chunk);
-
-  ChunkKey chunkey{updelRoll.catalog->get_currentDB().dbId, cd->tableId, cd->columnId, fragment.fragmentId};
-  updelRoll.dirtyChunkeys.insert(chunkey);
 
   // removed as @alex suggests. keep it commented in case of any chance to revisit it
   // once after vacuum code is introduced.
