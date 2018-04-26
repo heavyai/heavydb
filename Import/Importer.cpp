@@ -3284,6 +3284,7 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::s
 #endif
         SQLTypeInfo ti;
         ti.set_type(geoType);
+        ti.set_subtype(kGEOGRAPHY);
         ti.set_input_srid(GEOGRAPHIC_SPATIAL_REFERENCE);
         ti.set_output_srid(GEOGRAPHIC_SPATIAL_REFERENCE);
         ti.set_compression(copy_params.geo_coords_encoding);

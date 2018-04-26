@@ -2405,10 +2405,13 @@ void MapDHandler::create_table(const TSessionId& session,
     if (col.col_type.type == TDatumType::INTERVAL_DAY_TIME || col.col_type.type == TDatumType::INTERVAL_YEAR_MONTH) {
       THROW_MAPD_EXCEPTION("Unsupported type: " + thrift_to_name(col.col_type) + " for column: " + col.col_name);
     }
-    // if no precision or scale passed in set to default 14,7
-    if (col.col_type.precision == 0 && col.col_type.precision == 0) {
-      col.col_type.precision = 14;
-      col.col_type.scale = 7;
+
+    if (col.col_type.type == TDatumType::DECIMAL) {
+      // if no precision or scale passed in set to default 14,7
+      if (col.col_type.precision == 0 && col.col_type.scale == 0) {
+        col.col_type.precision = 14;
+        col.col_type.scale = 7;
+      }
     }
 
     std::string col_stmt;
