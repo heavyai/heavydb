@@ -98,6 +98,7 @@ void update_common(const string& table,
                    const int64_t cnt,
                    const int step,
                    const T& val,
+                   const SQLTypeInfo& rhsType,
                    const bool commit = true) {
   UpdelRoll updelRoll;
   std::vector<uint64_t> fragOffsets;
@@ -109,6 +110,7 @@ void update_common(const string& table,
                                                             0,  // 1st frag since we have only 100 rows
                                                             fragOffsets,
                                                             rhsValues,
+                                                            rhsType,
                                                             Data_Namespace::MemoryLevel::CPU_LEVEL,
                                                             updelRoll);
   if (commit)
@@ -124,9 +126,9 @@ bool update_a_numeric_column(const string& table,
                              const bool commit = true,
                              const bool by_string = false) {
   if (by_string)
-    update_common<std::string>(table, column, cnt, step, std::to_string(val), commit);
+    update_common<std::string>(table, column, cnt, step, std::to_string(val), SQLTypeInfo(), commit);
   else
-    update_common<double>(table, column, cnt, step, val, commit);
+    update_common<double>(table, column, cnt, step, val, SQLTypeInfo(), commit);
   return compare_agg(table, column, cnt, avg);
 }
 
@@ -136,7 +138,7 @@ bool update_a_encoded_string_column(const string& table,
                                     const int step,
                                     const string& val,
                                     const bool commit = true) {
-  update_common<const std::string>(table, column, cnt, step, val, commit);
+  update_common<const std::string>(table, column, cnt, step, val, SQLTypeInfo(), commit);
   // count updated string
   std::string query_str = "SELECT count() FROM " + table + " WHERE " + column + " = '" + val + "';";
   auto rows = run_query(query_str);
@@ -154,7 +156,7 @@ bool update_a_boolean_column(const string& table,
                              const int step,
                              const bool val,
                              const bool commit = true) {
-  update_common<const std::string>(table, column, cnt, step, val ? "T" : "F", commit);
+  update_common<const std::string>(table, column, cnt, step, val ? "T" : "F", SQLTypeInfo(), commit);
   // count updated bools
   std::string query_str = "SELECT count() FROM " + table + " WHERE " + (val ? "" : " NOT ") + column + ";";
   auto rows = run_query(query_str);
@@ -162,6 +164,35 @@ bool update_a_boolean_column(const string& table,
   CHECK_EQ(size_t(1), crt_row.size());
   auto r_cnt = v<int64_t>(crt_row[0]);
   return r_cnt == (commit ? cnt / step : 0);
+}
+
+template <typename T>
+bool update_column_from_decimal(const string& table,
+                                const string& column,
+                                const int64_t cnt,
+                                const int64_t rhsDecimal,
+                                const SQLTypeInfo& rhsType,
+                                const SQLTypeInfo& lhsType,
+                                const double max_loss,
+                                const bool commit = true) {
+  update_common<int64_t>(table, column, cnt, 1, rhsDecimal, rhsType, commit);
+  std::string query_str = "SELECT DISTINCT " + column + " FROM " + table + ";";
+  auto rows = run_query(query_str);
+  CHECK_EQ(size_t(1), rows->rowCount());
+  auto crt_row = rows->getNextRow(true, false);  // no decimal_to_double convert
+  auto l_decimal = v<T>(crt_row[0]);
+  int64_t r_decimal = rhsDecimal;
+
+  if (lhsType.is_decimal())
+    l_decimal = convert_decimal_value_to_scale(l_decimal, lhsType, rhsType);
+  else
+    l_decimal *= pow(10, rhsType.get_scale());
+
+  auto r_loss = fabs(l_decimal - r_decimal) / r_decimal;
+  if (!(r_loss <= max_loss))
+    std::cout << "l_decimal: " << l_decimal << ", r_decimal: " << r_decimal << ", r_loss: " << r_loss
+              << ", max_loss: " << max_loss << std::endl;
+  return r_loss <= max_loss;
 }
 
 void import_table_file(const string& table, const string& file) {
@@ -231,8 +262,8 @@ const char* create_table_trips =
     "			trip_distance           FLOAT,				"
     "			pickup_longitude        DECIMAL(14,7),		"
     "			pickup_latitude         DECIMAL(14,7),		"
-    "			dropoff_longitude       DECIMAL(14,7),		"
-    "			dropoff_latitude        DECIMAL(14,7),		"
+    "			dropoff_longitude       DOUBLE,				"
+    "			dropoff_latitude        DECIMAL(19,5),		"
     "			deleted                 BOOLEAN				"
     "			) WITH (FRAGMENT_SIZE=75000000);			";
 
@@ -251,6 +282,103 @@ class UpdateStorageTest : public ::testing::Test {
 
   virtual void TearDown() { ASSERT_NO_THROW(run_ddl("drop table trips;");); }
 };
+
+#define SQLTypeInfo_dropoff_latitude SQLTypeInfo(kDECIMAL, 19, 5, false)
+TEST_F(UpdateStorageTest, All_RHS_decimal_10_0_LHS_decimal_19_5) {
+  EXPECT_TRUE(update_column_from_decimal<int64_t>("trips",
+                                                  "dropoff_latitude",
+                                                  100,
+                                                  1234506789,
+                                                  SQLTypeInfo(kDECIMAL, 10, 0, false),
+                                                  SQLTypeInfo_dropoff_latitude,
+                                                  0));
+}
+TEST_F(UpdateStorageTest, All_RHS_decimal_10_2_LHS_decimal_19_5) {
+  EXPECT_TRUE(update_column_from_decimal<int64_t>("trips",
+                                                  "dropoff_latitude",
+                                                  100,
+                                                  1234506789,
+                                                  SQLTypeInfo(kDECIMAL, 10, 2, false),
+                                                  SQLTypeInfo_dropoff_latitude,
+                                                  0));
+}
+TEST_F(UpdateStorageTest, All_RHS_decimal_15_2_LHS_decimal_19_5) {
+  EXPECT_TRUE(update_column_from_decimal<int64_t>("trips",
+                                                  "dropoff_latitude",
+                                                  100,
+                                                  123456789012345,
+                                                  SQLTypeInfo(kDECIMAL, 15, 2, false),
+                                                  SQLTypeInfo_dropoff_latitude,
+                                                  0));
+}
+TEST_F(UpdateStorageTest, All_RHS_decimal_17_2_LHS_decimal_19_5_throw) {
+  EXPECT_THROW(update_column_from_decimal<int64_t>("trips",
+                                                   "dropoff_latitude",
+                                                   100,
+                                                   12345678901234567,
+                                                   SQLTypeInfo(kDECIMAL, 17, 2, false),
+                                                   SQLTypeInfo_dropoff_latitude,
+                                                   0),
+               std::runtime_error);
+}
+
+#define SQLTypeInfo_dropoff_longitude SQLTypeInfo(kDOUBLE, false)
+TEST_F(UpdateStorageTest, All_RHS_decimal_10_0_LHS_double) {
+  EXPECT_TRUE(update_column_from_decimal<double>("trips",
+                                                 "dropoff_longitude",
+                                                 100,
+                                                 1234506789,
+                                                 SQLTypeInfo(kDECIMAL, 10, 0, false),
+                                                 SQLTypeInfo_dropoff_longitude,
+                                                 1E-15));
+}
+TEST_F(UpdateStorageTest, All_RHS_decimal_10_2_LHS_double) {
+  EXPECT_TRUE(update_column_from_decimal<double>("trips",
+                                                 "dropoff_longitude",
+                                                 100,
+                                                 1234506789,
+                                                 SQLTypeInfo(kDECIMAL, 10, 2, false),
+                                                 SQLTypeInfo_dropoff_longitude,
+                                                 1E-15));
+}
+TEST_F(UpdateStorageTest, All_RHS_decimal_15_2_LHS_double) {
+  EXPECT_TRUE(update_column_from_decimal<double>("trips",
+                                                 "dropoff_longitude",
+                                                 100,
+                                                 123456789012345,
+                                                 SQLTypeInfo(kDECIMAL, 15, 2, false),
+                                                 SQLTypeInfo_dropoff_longitude,
+                                                 1E-15));
+}
+
+#define SQLTypeInfo_trip_time_in_secs SQLTypeInfo(kINT, false)
+TEST_F(UpdateStorageTest, All_RHS_decimal_10_0_LHS_integer) {
+  EXPECT_TRUE(update_column_from_decimal<int64_t>("trips",
+                                                  "trip_time_in_secs",
+                                                  100,
+                                                  1234506789,
+                                                  SQLTypeInfo(kDECIMAL, 10, 0, false),
+                                                  SQLTypeInfo_trip_time_in_secs,
+                                                  1));
+}
+TEST_F(UpdateStorageTest, All_RHS_decimal_10_2_LHS_integer) {
+  EXPECT_TRUE(update_column_from_decimal<int64_t>("trips",
+                                                  "trip_time_in_secs",
+                                                  100,
+                                                  1234506789,
+                                                  SQLTypeInfo(kDECIMAL, 10, 2, false),
+                                                  SQLTypeInfo_trip_time_in_secs,
+                                                  1));
+}
+TEST_F(UpdateStorageTest, All_RHS_decimal_15_5_LHS_integer) {
+  EXPECT_TRUE(update_column_from_decimal<int64_t>("trips",
+                                                  "trip_time_in_secs",
+                                                  100,
+                                                  123456789012345,
+                                                  SQLTypeInfo(kDECIMAL, 15, 5, false),
+                                                  SQLTypeInfo_trip_time_in_secs,
+                                                  1));
+}
 
 TEST_F(UpdateStorageTest, All_smallint_passenger_count_x2) {
   EXPECT_TRUE(update_a_numeric_column("trips", "passenger_count", 100, 1, 4 * 2, 4 * 2.0));

@@ -113,6 +113,7 @@ class AbstractFragmenter {
                             const int fragmentId,
                             const std::vector<uint64_t>& fragOffsets,
                             const std::vector<ScalarTargetValue>& rhsValues,
+                            const SQLTypeInfo& rhsType,
                             const Data_Namespace::MemoryLevel memoryLevel,
                             UpdelRoll& updelRoll) = 0;
 
@@ -122,6 +123,7 @@ class AbstractFragmenter {
                             const int fragmentId,
                             const std::vector<uint64_t>& fragOffsets,
                             const ScalarTargetValue& rhsValue,
+                            const SQLTypeInfo& rhsType,
                             const Data_Namespace::MemoryLevel memoryLevel,
                             UpdelRoll& updelRoll) = 0;
 
@@ -133,6 +135,7 @@ class AbstractFragmenter {
                                     const double dmin,
                                     const int64_t lmax,
                                     const int64_t lmin,
+                                    const SQLTypeInfo& rhsType,
                                     UpdelRoll& updelRoll) = 0;
 
   virtual void updateMetadata(const Catalog_Namespace::Catalog* catalog,

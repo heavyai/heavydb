@@ -35,13 +35,14 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                                          const int fragmentId,
                                          const std::vector<uint64_t>& fragOffsets,
                                          const std::vector<ScalarTargetValue>& rhsValues,
+                                         const SQLTypeInfo& rhsType,
                                          const Data_Namespace::MemoryLevel memoryLevel,
                                          UpdelRoll& updelRoll) {
   const auto td = catalog->getMetadataForTable(tabName);
   CHECK(td);
   const auto cd = catalog->getMetadataForColumn(td->tableId, colName);
   CHECK(cd);
-  td->fragmenter->updateColumn(catalog, td, cd, fragmentId, fragOffsets, rhsValues, memoryLevel, updelRoll);
+  td->fragmenter->updateColumn(catalog, td, cd, fragmentId, fragOffsets, rhsValues, rhsType, memoryLevel, updelRoll);
 }
 
 void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catalog,
@@ -50,10 +51,18 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                                          const int fragmentId,
                                          const std::vector<uint64_t>& fragOffsets,
                                          const ScalarTargetValue& rhsValue,
+                                         const SQLTypeInfo& rhsType,
                                          const Data_Namespace::MemoryLevel memoryLevel,
                                          UpdelRoll& updelRoll) {
-  updateColumn(
-      catalog, td, cd, fragmentId, fragOffsets, std::vector<ScalarTargetValue>(1, rhsValue), memoryLevel, updelRoll);
+  updateColumn(catalog,
+               td,
+               cd,
+               fragmentId,
+               fragOffsets,
+               std::vector<ScalarTargetValue>(1, rhsValue),
+               rhsType,
+               memoryLevel,
+               updelRoll);
 }
 
 void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catalog,
@@ -62,6 +71,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                                          const int fragmentId,
                                          const std::vector<uint64_t>& fragOffsets,
                                          const std::vector<ScalarTargetValue>& rhsValues,
+                                         const SQLTypeInfo& rhsType,
                                          const Data_Namespace::MemoryLevel memoryLevel,
                                          UpdelRoll& updelRoll) {
   updelRoll.catalog = catalog;
@@ -130,11 +140,21 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
             auto dptr = d0 + roffs * get_uncompressed_element_size(lctype);
             const auto sv = &rhsValues[1 == nval ? 0 : r];
             if (const auto v = boost::get<int64_t>(sv)) {
-              put_scalar<int64_t>(dptr, lctype, *v);
-              if (lctype.is_integer())
-                set_minmax<int64_t>(lmin[c], lmax[c], *v);
+              put_scalar<int64_t>(dptr, lctype, *v, &rhsType);
+              if (lctype.is_decimal()) {
+                int64_t decimal;
+                get_scalar<int64_t>(dptr, lctype, decimal);
+                set_minmax<int64_t>(lmin[c], lmax[c], decimal);
+                if (!((*v >= 0) ^ (decimal < 0)))
+                  throw std::runtime_error(
+                      "Data conversion overflow on " + std::to_string(*v) + " from DECIMAL(" +
+                      std::to_string(rhsType.get_dimension()) + ", " + std::to_string(rhsType.get_scale()) + ") to (" +
+                      std::to_string(lctype.get_dimension()) + ", " + std::to_string(lctype.get_scale()) + ")");
+              } else if (lctype.is_integer())
+                set_minmax<int64_t>(
+                    lmin[c], lmax[c], rhsType.is_decimal() ? round(decimal_to_double(rhsType, *v)) : *v);
               else
-                set_minmax<double>(dmin[c], dmax[c], *v);
+                set_minmax<double>(dmin[c], dmax[c], rhsType.is_decimal() ? decimal_to_double(rhsType, *v) : *v);
             } else if (const auto v = boost::get<double>(sv)) {
               put_scalar<double>(dptr, lctype, *v);
               if (lctype.is_integer())
@@ -206,7 +226,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
     lc_lmax = std::max<int64_t>(lc_lmax, lmax[c]);
     lc_lmin = std::min<int64_t>(lc_lmin, lmin[c]);
   }
-  updateColumnMetadata(cd, fragment, chunk, lc_null, lc_dmax, lc_dmin, lc_lmax, lc_lmin, updelRoll);
+  updateColumnMetadata(cd, fragment, chunk, lc_null, lc_dmax, lc_dmin, lc_lmax, lc_lmin, cd->columnType, updelRoll);
 }
 
 void InsertOrderFragmenter::updateColumnMetadata(const ColumnDescriptor* cd,
@@ -217,6 +237,7 @@ void InsertOrderFragmenter::updateColumnMetadata(const ColumnDescriptor* cd,
                                                  const double dmin,
                                                  const int64_t lmax,
                                                  const int64_t lmin,
+                                                 const SQLTypeInfo& rhsType,
                                                  UpdelRoll& updelRoll) {
   std::lock_guard<std::mutex> lck(updelRoll.mutex);
   if (0 == updelRoll.chunkMetadata.count(fragment.fragmentId))
@@ -227,7 +248,7 @@ void InsertOrderFragmenter::updateColumnMetadata(const ColumnDescriptor* cd,
 
   auto buffer = chunk->get_buffer();
   const auto& lctype = cd->columnType;
-  if (lctype.is_integer()) {
+  if (lctype.is_integer() || (lctype.is_decimal() && rhsType.is_decimal())) {
     buffer->encoder->updateStats(lmax, null);
     buffer->encoder->updateStats(lmin, null);
   } else if (lctype.is_fp()) {

@@ -61,6 +61,7 @@ class DefaultIOFacet {
                              frag_index,
                              frag_offsets,
                              update_values,
+                             col_type_info,
                              Data_Namespace::MemoryLevel::CPU_LEVEL,
                              transaction_tracker);
   }
@@ -85,6 +86,7 @@ class DefaultIOFacet {
                                  frag_index,
                                  victims,
                                  ScalarTargetValue(int64_t(1L)),
+                                 SQLTypeInfo(),
                                  Data_Namespace::MemoryLevel::CPU_LEVEL,
                                  transaction_tracker);
         transaction_tracker.commitUpdate();

@@ -109,16 +109,26 @@ static void put_scalar(void* ndptr, const SQLTypes etype, const int esize, const
   }
 }
 
+static inline double decimal_to_double(const SQLTypeInfo& otype, int64_t oval) {
+  return oval / pow(10, otype.get_scale());
+}
+
 template <typename T>
-static inline void put_scalar(void* ndptr, const SQLTypeInfo& ntype, const T oval) {
+static inline void put_scalar(void* ndptr, const SQLTypeInfo& ntype, const T oval, const SQLTypeInfo* otype = nullptr) {
   auto etype = ntype.is_array() ? ntype.get_subtype() : ntype.get_type();
   switch (etype) {
     case kNUMERIC:
     case kDECIMAL:
-      put_scalar<T>(ndptr, get_decimal_int_type(ntype), 0, oval * pow(10, ntype.get_scale()));
+      if (otype && otype->is_decimal())
+        put_scalar<int64_t>(ndptr, get_decimal_int_type(ntype), 0, convert_decimal_value_to_scale(oval, *otype, ntype));
+      else
+        put_scalar<T>(ndptr, get_decimal_int_type(ntype), 0, oval * pow(10, ntype.get_scale()));
       break;
     default:
-      put_scalar<T>(ndptr, etype, get_uncompressed_element_size(ntype), oval);
+      if (otype && otype->is_decimal())
+        put_scalar<double>(ndptr, ntype, decimal_to_double(*otype, oval));
+      else
+        put_scalar<T>(ndptr, etype, get_uncompressed_element_size(ntype), oval);
       break;
   }
 }
@@ -169,12 +179,22 @@ static inline bool get_scalar(void* ndptr, const SQLTypeInfo& ntype, T& v) {
     case kINT:
       return NULL_INT == (v = *(int32_t*)ndptr);
     case kBIGINT:
-    case kNUMERIC:
-    case kDECIMAL:
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
       return NULL_BIGINT == (v = *(int64_t*)ndptr);
+    case kNUMERIC:
+    case kDECIMAL:
+      switch (ntype.get_size()) {
+        case 2:
+          return NULL_SMALLINT == (v = *(int16_t*)ndptr);
+        case 4:
+          return NULL_INT == (v = *(int32_t*)ndptr);
+        case 8:
+          return NULL_BIGINT == (v = *(int64_t*)ndptr);
+        default:
+          CHECK(false);
+      }
     case kFLOAT:
       return NULL_FLOAT == (v = *(float*)ndptr);
     case kDOUBLE:
