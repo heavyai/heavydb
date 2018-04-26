@@ -1594,7 +1594,10 @@ void Catalog::buildMaps() {
     ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
     columnDescriptorMapById_[columnIdKey] = cd;
     if (cd->isDeletedCol) {
-      setDeletedColumnUnlocked(tableDescriptorMapById_[cd->tableId], cd);
+      auto td_itr = tableDescriptorMapById_.find(cd->tableId);
+      CHECK(td_itr != tableDescriptorMapById_.end());
+      td_itr->second->hasDeletedCol = true;
+      setDeletedColumnUnlocked(td_itr->second, cd);
     }
   }
   string viewQuery("SELECT tableid, sql FROM mapd_views");
@@ -1683,6 +1686,7 @@ void Catalog::addTableToMap(TableDescriptor& td,
 
     // Add deleted column to the map
     if (cd.isDeletedCol) {
+      CHECK(new_td->hasDeletedCol);
       setDeletedColumnUnlocked(new_td, new_cd);
     }
   }
@@ -1716,7 +1720,8 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
   TableDescriptor* td = tableDescIt->second;
 
   if (td->hasDeletedCol) {
-    deletedColumnPerTable_.erase(td);
+    const auto ret = deletedColumnPerTable_.erase(td);
+    CHECK_EQ(ret, size_t(1));
   }
 
   int ncolumns = td->nColumns;
