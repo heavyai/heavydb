@@ -2044,6 +2044,12 @@ std::vector<ssize_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_
     if (is_real_str_or_array) {
       continue;
     }
+    if (ti.is_geometry()) {
+      // TODO(adb): Ideally we could determine which physical columns are required for a given query and fetch only
+      // those. For now, we bail on the memory optimization, since it is possible that adding the physical columns could
+      // have unintended consequences further down the execution path.
+      return {};
+    }
     const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
     if (!col_var) {
       continue;
