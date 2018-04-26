@@ -1164,7 +1164,7 @@ data_type:
 	| TIME '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kTIME, $<intval>3); }
 	| TIMESTAMP { $<nodeval>$ = new SQLType(kTIMESTAMP); }
 	| TIMESTAMP '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kTIMESTAMP, $<intval>3); }
-	| geo_type { $<nodeval>$ = new SQLType(static_cast<SQLTypes>($<intval>1)); }
+	| geo_type { $<nodeval>$ = new SQLType(static_cast<SQLTypes>($<intval>1), static_cast<int>(kGEOMETRY), 0, false); }
 	| geography_type { $<nodeval>$ = $<nodeval>1; }
 	| geometry_type { $<nodeval>$ = $<nodeval>1; }
 	| data_type '[' ']'
@@ -1183,14 +1183,14 @@ geo_type:	POINT { $<intval>$ = kPOINT; }
 	;
 
 geography_type:	GEOGRAPHY '(' geo_type ')'
-		{ $<nodeval>$ = new SQLType(static_cast<SQLTypes>($<intval>3), 4326, 4326, false); }
+		{ $<nodeval>$ = new SQLType(static_cast<SQLTypes>($<intval>3), static_cast<int>(kGEOGRAPHY), 4326, false); }
 	|	GEOGRAPHY '(' geo_type ',' INTNUM ')'
-		{ $<nodeval>$ = new SQLType(static_cast<SQLTypes>($<intval>3), $<intval>5, $<intval>5, false); }
+		{ $<nodeval>$ = new SQLType(static_cast<SQLTypes>($<intval>3), static_cast<int>(kGEOGRAPHY), $<intval>5, false); }
 
 geometry_type:	GEOMETRY '(' geo_type ')'
-		{ $<nodeval>$ = new SQLType(static_cast<SQLTypes>($<intval>3), 0, 0, false); }
+		{ $<nodeval>$ = new SQLType(static_cast<SQLTypes>($<intval>3), static_cast<int>(kGEOMETRY), 0, false); }
 	|	GEOMETRY '(' geo_type ',' INTNUM ')'
-		{ $<nodeval>$ = new SQLType(static_cast<SQLTypes>($<intval>3), $<intval>5, $<intval>5, false); }
+		{ $<nodeval>$ = new SQLType(static_cast<SQLTypes>($<intval>3), static_cast<int>(kGEOMETRY), $<intval>5, false); }
 
 	/* the various things you can name */
 

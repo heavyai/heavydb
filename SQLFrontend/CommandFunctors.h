@@ -321,12 +321,18 @@ StandardCommand(ListColumns, {
       if (p.is_system) {
         continue;
       }
-      std::string encoding;
+      std::string encoding = "";
       if (p.col_type.type == TDatumType::STR) {
         encoding =
             (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
                                                                std::to_string(p.col_type.comp_param) + ")");
-
+      } else if (p.col_type.type == TDatumType::POINT || p.col_type.type == TDatumType::LINESTRING ||
+                 p.col_type.type == TDatumType::POLYGON || p.col_type.type == TDatumType::MULTIPOLYGON) {
+        if (p.col_type.scale == 4326) {
+          encoding =
+              (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                                 std::to_string(p.col_type.comp_param) + ")");
+        }
       } else {
         encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
                                                         std::to_string(p.col_type.comp_param) + ")");
@@ -509,13 +515,19 @@ StandardCommand(GetOptimizedSchema, {
     }
     std::string comma_or_blank("");
     for (TColumnType p : table_details.row_desc) {
-      std::string encoding;
+      std::string encoding = "";
       if (p.col_type.type == TDatumType::STR) {
         encoding = (p.col_type.encoding == 0
                         ? " ENCODING NONE"
                         : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
                               std::to_string(get_optimal_size(context, table_name, p.col_name, p.col_type.type)) + ")");
-
+      } else if (p.col_type.type == TDatumType::POINT || p.col_type.type == TDatumType::LINESTRING ||
+                 p.col_type.type == TDatumType::POLYGON || p.col_type.type == TDatumType::MULTIPOLYGON) {
+        if (p.col_type.scale == 4326) {
+          encoding =
+              (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                                 std::to_string(p.col_type.comp_param) + ")");
+        }
       } else {
         int opt_size = get_optimal_size(context, table_name, p.col_name, p.col_type.type);
         encoding = (opt_size == 0 ? "" : " ENCODING FIXED(" + std::to_string(opt_size) + ")");

@@ -1069,8 +1069,13 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog* cat, const Colu
   col_type.col_type.encoding = encoding_to_thrift(cd->columnType);
   col_type.col_type.nullable = !cd->columnType.get_notnull();
   col_type.col_type.is_array = cd->columnType.get_type() == kARRAY;
-  col_type.col_type.precision = cd->columnType.get_precision();
-  col_type.col_type.scale = cd->columnType.get_scale();
+  if (IS_GEO(cd->columnType.get_type())) {
+    col_type.col_type.precision = static_cast<int>(cd->columnType.get_subtype());
+    col_type.col_type.scale = cd->columnType.get_output_srid();
+  } else {
+    col_type.col_type.precision = cd->columnType.get_precision();
+    col_type.col_type.scale = cd->columnType.get_scale();
+  }
   col_type.is_system = cd->isSystemCol;
   if (cd->columnType.get_compression() == EncodingType::kENCODING_DICT && cat != nullptr) {
     // have to get the actual size of the encoding from the dictionary definition
@@ -2402,10 +2407,15 @@ void MapDHandler::create_table(const TSessionId& session,
 
     if (thrift_to_encoding(col.col_type.encoding) != kENCODING_NONE) {
       col_stmt.append("ENCODING " + thrift_to_encoding_name(col.col_type) + " ");
-    }
-    // deal with special case of non DICT encoded strings
-    if (thrift_to_encoding(col.col_type.encoding) == kENCODING_NONE && col.col_type.type == TDatumType::STR) {
-      col_stmt.append("ENCODING NONE");
+    } else {
+      // deal with special case of non DICT encoded strings and non encoded geo
+      if (col.col_type.type == TDatumType::STR) {
+        col_stmt.append("ENCODING NONE");
+      } else if (col.col_type.type == TDatumType::POINT || col.col_type.type == TDatumType::LINESTRING ||
+                 col.col_type.type == TDatumType::POLYGON || col.col_type.type == TDatumType::MULTIPOLYGON) {
+        if (col.col_type.scale == 4326)
+          col_stmt.append("ENCODING NONE");
+      }
     }
     col_stmts.push_back(col_stmt);
   }

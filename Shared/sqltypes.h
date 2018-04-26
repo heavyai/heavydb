@@ -273,8 +273,12 @@ class SQLTypeInfo {
   inline void set_comp_param(int p) { comp_param = p; }
 #ifndef __CUDACC__
   inline std::string get_type_name() const {
-    if (IS_GEO(type) && scale > 0)
-      return "GEOMETRY(" + type_name[(int)type] + ", " + std::to_string(scale) + ")";
+    if (IS_GEO(type)) {
+      std::string srid_string = "";
+      if (get_output_srid() > 0)
+        srid_string = ", " + std::to_string(get_output_srid());
+      return type_name[(int)subtype] + "(" + type_name[(int)type] + srid_string + ")";
+    }
     std::string ps = (type == kDECIMAL || type == kNUMERIC || subtype == kDECIMAL || subtype == kNUMERIC)
                          ? "(" + std::to_string(dimension) + "," + std::to_string(scale) + ")"
                          : "";

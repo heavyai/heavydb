@@ -68,6 +68,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiter
   if (!Importer_NS::importGeoFromWkt(*wkt->get_constval().stringval, ti, coords, ring_sizes, poly_rings)) {
     throw QueryNotSupported("Could not read geometry from text");
   }
+  ti.set_subtype(kGEOMETRY);
   ti.set_input_srid(srid);
   ti.set_output_srid(srid);
   // Compress geo literals by default
@@ -179,7 +180,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         throw QueryNotSupported(rex_function->getName() + ": unexpected input SRID, unable to transform");
       }
       return arg0;
-    } else if (rex_function->getName() == std::string("ST_GeomFromText")) {
+    } else if (rex_function->getName() == std::string("ST_GeomFromText") ||
+               rex_function->getName() == std::string("ST_GeogFromText")) {
       CHECK(rex_function->size() == size_t(1) || rex_function->size() == size_t(2));
       // First - register srid, then send it to geo literal translation
       int32_t srid = 0;
@@ -214,6 +216,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         throw QueryNotSupported(rex_function->getName() + " expects a string literal as first argument");
       }
       auto arg0 = translateGeoLiteral(rex_literal, arg_ti);
+      arg_ti.set_subtype((rex_function->getName() == std::string("ST_GeogFromText")) ? kGEOGRAPHY : kGEOMETRY);
       return arg0;
     } else if (rex_function->getName() == std::string("ST_PointN")) {
       CHECK_EQ(size_t(2), rex_function->size());
@@ -426,13 +429,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   }
   geoargs.insert(geoargs.end(), geoargs1.begin(), geoargs1.end());
 
+  if (arg0_ti.get_subtype() != kNULLT && arg0_ti.get_subtype() != arg1_ti.get_subtype()) {
+    throw QueryNotSupported(rex_function->getName() + " accepts either two GEOGRAPHY or two GEOMETRY arguments");
+  }
   if (arg0_ti.get_output_srid() > 0 && arg0_ti.get_output_srid() != arg1_ti.get_output_srid()) {
     throw QueryNotSupported(rex_function->getName() + " cannot accept different SRIDs");
   }
 
   std::string specialized_geofunc{rex_function->getName() + suffix(arg0_ti.get_type()) + suffix(arg1_ti.get_type())};
 
-  if (arg0_ti.get_output_srid() == 4326) {
+  if (arg0_ti.get_subtype() == kGEOGRAPHY && arg0_ti.get_output_srid() == 4326) {
     // Need to call geodesic runtime functions
     if (rex_function->getName() == std::string("ST_Distance")) {
       if ((arg0_ti.get_type() == kPOINT || (arg0_ti.get_type() == kLINESTRING && lindex0 != 0)) &&

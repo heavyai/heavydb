@@ -124,6 +124,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new Truncate());
     opTab.addOperator(new ST_Contains());
     opTab.addOperator(new ST_Distance());
+    opTab.addOperator(new ST_GeogFromText());
     opTab.addOperator(new ST_GeomFromText());
     opTab.addOperator(new ST_Transform());
     opTab.addOperator(new ST_X());
@@ -657,6 +658,28 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       st_distance_sig.add(SqlTypeFamily.ANY);
       st_distance_sig.add(SqlTypeFamily.ANY);
       return st_distance_sig;
+    }
+  }
+
+  static class ST_GeogFromText extends SqlFunction {
+
+    ST_GeogFromText() {
+      super("ST_GeogFromText",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.or(
+                      OperandTypes.family(SqlTypeFamily.ANY),
+                      OperandTypes.family(SqlTypeFamily.ANY, SqlTypeFamily.INTEGER)),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory
+              = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
   }
 

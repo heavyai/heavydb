@@ -68,6 +68,10 @@ inline TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
       return TDatumType::POLYGON;
     case kMULTIPOLYGON:
       return TDatumType::MULTIPOLYGON;
+    case kGEOMETRY:
+      return TDatumType::GEOMETRY;
+    case kGEOGRAPHY:
+      return TDatumType::GEOGRAPHY;
     default:
       break;
   }
@@ -112,6 +116,10 @@ inline SQLTypes thrift_to_type(const TDatumType::type& type) {
       return kPOLYGON;
     case TDatumType::MULTIPOLYGON:
       return kMULTIPOLYGON;
+    case TDatumType::GEOMETRY:
+      return kGEOMETRY;
+    case TDatumType::GEOGRAPHY:
+      return kGEOGRAPHY;
     default:
       break;
   }
@@ -167,7 +175,9 @@ inline std::string thrift_to_name(const TTypeInfo& ti) {
     internal_ti.set_scale(ti.scale);
   }
   if (IS_GEO(type)) {
-    internal_ti.set_scale(ti.scale);
+    internal_ti.set_subtype(static_cast<SQLTypes>(ti.precision));
+    internal_ti.set_input_srid(ti.scale);
+    internal_ti.set_output_srid(ti.scale);
   }
   return internal_ti.get_type_name();
 }
@@ -182,6 +192,16 @@ inline std::string thrift_to_encoding_name(const TTypeInfo& ti) {
 
 inline SQLTypeInfo type_info_from_thrift(const TTypeInfo& thrift_ti) {
   const auto ti = thrift_to_type(thrift_ti.type);
+  if (IS_GEO(ti)) {
+    const auto base_type = static_cast<SQLTypes>(thrift_ti.precision);
+    return SQLTypeInfo(ti,
+                       thrift_ti.scale,
+                       thrift_ti.scale,
+                       !thrift_ti.nullable,
+                       thrift_to_encoding(thrift_ti.encoding),
+                       thrift_ti.comp_param,
+                       base_type);
+  }
   const auto base_type = thrift_ti.is_array ? ti : kNULLT;
   const auto type = thrift_ti.is_array ? kARRAY : ti;
   return SQLTypeInfo(type,

@@ -2933,7 +2933,7 @@ void import_geospatial_test() {
   run_ddl_statement(
       "CREATE TABLE geospatial_test ("
       "p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON, "
-      "gp GEOMETRY(POINT), gp4326 GEOMETRY(POINT,4326) ENCODING GEOINT(32), gp900913 GEOMETRY(POINT,900913)"
+      "gp GEOMETRY(POINT), gp4326 GEOGRAPHY(POINT,4326) ENCODING GEOINT(32), gp900913 GEOMETRY(POINT,900913)"
       ") WITH (fragment_size=2);");
   for (ssize_t i = 0; i < g_num_rows; ++i) {
     const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) + ")'"};
@@ -5115,14 +5115,20 @@ TEST(Select, GeoSpatial) {
                                  dt)),
         static_cast<double>(0.01));
 
-    // Geodesic distance between Paris and LA: ~9105km
+    // Geodesic distance between Paris and LA geographic points: ~9105km
     ASSERT_NEAR(static_cast<double>(9105643.0),
-                v<double>(run_simple_agg("SELECT ST_Distance(ST_GeomFromText('POINT(-118.4079 33.9434)', 4326), "
-                                         "ST_GeomFromText('POINT(2.5559 49.0083)', 4326)) "
+                v<double>(run_simple_agg("SELECT ST_Distance(ST_GeogFromText('POINT(-118.4079 33.9434)', 4326), "
+                                         "ST_GeogFromText('POINT(2.5559 49.0083)', 4326)) "
                                          "from geospatial_test limit 1;",
                                          dt)),
                 static_cast<double>(10000.0));
     // Cartesian distance between Paris and LA calculated from wgs84 degrees
+    ASSERT_NEAR(static_cast<double>(121.89),
+                v<double>(run_simple_agg("SELECT ST_Distance(ST_GeomFromText('POINT(-118.4079 33.9434)', 4326), "
+                                         "ST_GeomFromText('POINT(2.5559 49.0083)', 4326)) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(1.0));
     ASSERT_NEAR(static_cast<double>(121.89),
                 v<double>(run_simple_agg("SELECT ST_Distance('POINT(-118.4079 33.9434)', 'POINT(2.5559 49.0083)') "
                                          "from geospatial_test limit 1;",
@@ -5226,6 +5232,18 @@ TEST(Select, GeoSpatial) {
                                          dt)),
                 static_cast<double>(0.01));
     ASSERT_NEAR(static_cast<double>(557637.370),  // geodesic distance between first and end points: LA - SF trip
+                v<double>(run_simple_agg("SELECT ST_Distance(ST_PointN(ST_GeogFromText("
+                                         "'LINESTRING(-118.243683 34.052235, "
+                                         "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
+                                         "-122.446747 37.733795)', 4326), 1), "
+                                         "ST_EndPoint(ST_GeogFromText("
+                                         "'LINESTRING(-118.243683 34.052235, "
+                                         "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
+                                         "-122.446747 37.733795)', 4326))) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<double>(5.587),  // cartesian distance in degrees, same points: LA - SF trip
                 v<double>(run_simple_agg("SELECT ST_Distance(ST_PointN(ST_GeomFromText("
                                          "'LINESTRING(-118.243683 34.052235, "
                                          "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
@@ -5237,7 +5255,7 @@ TEST(Select, GeoSpatial) {
                                          "from geospatial_test limit 1;",
                                          dt)),
                 static_cast<double>(0.01));
-    ASSERT_NEAR(static_cast<double>(689217.783),  // cartesian distance between transformed first and end points
+    ASSERT_NEAR(static_cast<double>(689217.783),  // cartesian distance between merc-transformed first and end points
                 v<double>(run_simple_agg("SELECT ST_Distance(ST_StartPoint(ST_Transform(ST_GeomFromText("
                                          "'LINESTRING(-118.243683 34.052235, "
                                          "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
@@ -5265,7 +5283,7 @@ TEST(Select, GeoSpatial) {
                   "SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance('POINT(0 0)', gp) < 100.0;", dt)));
     ASSERT_EQ(static_cast<int64_t>(4),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                        "ST_Distance(ST_GeomFromText('POINT(0 0)', 4326), gp4326) < 500000.0;",
+                                        "ST_Distance(ST_GeogFromText('POINT(0 0)', 4326), gp4326) < 500000.0;",
                                         dt)));
     ASSERT_EQ(static_cast<int64_t>(4),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
@@ -5273,24 +5291,24 @@ TEST(Select, GeoSpatial) {
                                         dt)));
     ASSERT_EQ(static_cast<int64_t>(4),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                        "ST_Distance(ST_Transform(ST_GeomFromText('POINT(0 0)', 4326), 900913), "
+                                        "ST_Distance(ST_Transform(ST_GeogFromText('POINT(0 0)', 4326), 900913), "
                                         "ST_Transform(gp4326, 900913)) < 500000.0;",
                                         dt)));
 
     // Test some exceptions
     // Point coord accessor used on a non-POINT, in this case unindexed LINESTRING (missing ST_POINTN)
-    EXPECT_THROW(run_simple_agg("SELECT ST_Y(ST_GeomFromText("
+    EXPECT_THROW(run_simple_agg("SELECT ST_Y(ST_GeogFromText("
                                 "'LINESTRING(-118.243683 34.052235, -119.229034 34.274647)', 4326)) "
                                 "from geospatial_test limit 1;",
                                 dt),
                  std::runtime_error);
     // Two accessors in a row
-    EXPECT_THROW(run_simple_agg("SELECT ST_X(ST_Y(ST_GeomFromText('POINT(-118.243683 34.052235)', 4326))) "
+    EXPECT_THROW(run_simple_agg("SELECT ST_X(ST_Y(ST_GeogFromText('POINT(-118.243683 34.052235)', 4326))) "
                                 "from geospatial_test limit 1;",
                                 dt),
                  std::runtime_error);
     // Coord order reversed, longitude value is out of latitude range
-    EXPECT_THROW(run_simple_agg("SELECT ST_Y(ST_GeomFromText('POINT(34.052235 -118.243683)', 4326)) "
+    EXPECT_THROW(run_simple_agg("SELECT ST_Y(ST_GeogFromText('POINT(34.052235 -118.243683)', 4326)) "
                                 "from geospatial_test limit 1;",
                                 dt),
                  std::runtime_error);
@@ -5308,13 +5326,14 @@ TEST(Select, GeoSpatial) {
     ASSERT_EQ(static_cast<int64_t>(900913),
               v<int64_t>(run_simple_agg("SELECT ST_SRID(gp900913) from geospatial_test limit 1;", dt)));
     ASSERT_EQ(static_cast<int64_t>(4326),
-              v<int64_t>(run_simple_agg("SELECT ST_SRID(ST_GeomFromText('POINT(-118.243683 34.052235)', 4326)) "
+              v<int64_t>(run_simple_agg("SELECT ST_SRID(ST_GeogFromText('POINT(-118.243683 34.052235)', 4326)) "
                                         "from geospatial_test limit 1;",
                                         dt)));
     // Geodesic distance between Paris and LA: ~9105km
     ASSERT_NEAR(static_cast<double>(9105643.0),
-                v<double>(run_simple_agg("SELECT ST_Distance(ST_SetSRID('POINT(-118.4079 33.9434)', 4326), "
-                                         "ST_SetSRID('POINT(2.5559 49.0083)', 4326)) "
+                v<double>(run_simple_agg("SELECT ST_Distance("
+                                         "ST_SetSRID(ST_GeogFromText('POINT(-118.4079 33.9434)'), 4326), "
+                                         "ST_SetSRID(ST_GeogFromText('POINT(2.5559 49.0083)'), 4326)) "
                                          "from geospatial_test limit 1;",
                                          dt)),
                 static_cast<double>(10000.0));

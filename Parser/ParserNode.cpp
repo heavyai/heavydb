@@ -1861,8 +1861,14 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       cd.columnType.set_subtype(t->get_type());
     } else
       cd.columnType.set_type(t->get_type());
-    cd.columnType.set_dimension(t->get_param1());
-    cd.columnType.set_scale(t->get_param2());
+    if (IS_GEO(t->get_type())) {
+      cd.columnType.set_subtype(static_cast<SQLTypes>(t->get_param1()));
+      cd.columnType.set_input_srid(t->get_param2());
+      cd.columnType.set_output_srid(t->get_param2());
+    } else {
+      cd.columnType.set_dimension(t->get_param1());
+      cd.columnType.set_scale(t->get_param2());
+    }
     const ColumnConstraintDef* cc = coldef->get_column_constraint();
     if (cc == nullptr)
       cd.columnType.set_notnull(false);
@@ -1947,11 +1953,16 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         cd.columnType.set_compression(kENCODING_DICT);
         cd.columnType.set_comp_param(comp_param);
       } else if (boost::iequals(comp, "NONE")) {
-        if (!cd.columnType.is_string() && !cd.columnType.is_string_array())
-          throw std::runtime_error(cd.columnName +
-                                   ": None encoding is only supported on string or string array columns.");
-        cd.columnType.set_compression(kENCODING_NONE);
-        cd.columnType.set_comp_param(0);
+        if (cd.columnType.is_geometry()) {
+          cd.columnType.set_compression(kENCODING_NONE);
+          cd.columnType.set_comp_param(64);
+        } else {
+          if (!cd.columnType.is_string() && !cd.columnType.is_string_array())
+            throw std::runtime_error(cd.columnName +
+                                     ": None encoding is only supported on string or string array columns.");
+          cd.columnType.set_compression(kENCODING_NONE);
+          cd.columnType.set_comp_param(0);
+        }
       } else if (boost::iequals(comp, "sparse")) {
         // sparse column encoding with mostly NULL values
         if (cd.columnType.get_notnull())
