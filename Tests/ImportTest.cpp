@@ -92,9 +92,53 @@ bool import_test_common(const string& query_str, const int64_t cnt, const double
   return compare_agg(cnt, avg);
 }
 
+bool import_test_common_geo(const string& query_str, const std::string& table, const int64_t cnt, const double avg) {
+  SQLParser parser;
+  std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
+  std::string last_parsed;
+  if (parser.parse(query_str, parse_trees, last_parsed))
+    return false;
+  CHECK_EQ(parse_trees.size(), size_t(1));
+  const auto& stmt = parse_trees.front();
+  Parser::CopyTableStmt* ddl = dynamic_cast<Parser::CopyTableStmt*>(stmt.get());
+  if (!ddl)
+    return false;
+  ddl->execute(*gsession);
+
+  // was it a geo copy from?
+  bool was_geo_copy_from = ddl->was_geo_copy_from();
+  if (!was_geo_copy_from)
+    return false;
+
+  // get the rest of the payload
+  std::string geo_copy_from_table, geo_copy_from_file_name;
+  Importer_NS::CopyParams geo_copy_from_copy_params;
+  ddl->get_geo_copy_from_payload(geo_copy_from_table, geo_copy_from_file_name, geo_copy_from_copy_params);
+
+  // was it the right table?
+  if (geo_copy_from_table != "geo")
+    return false;
+
+  // @TODO simon.eves
+  // test other stuff
+  // filename
+  // CopyParams contents
+
+  // success
+  return true;
+}
+
 bool import_test_local(const string& filename, const int64_t cnt, const double avg) {
   return import_test_common(
       string("COPY trips FROM '") + "../../Tests/Import/datafiles/" + filename + "' WITH (header='true');", cnt, avg);
+}
+
+bool import_test_local_geo(const string& filename, const string& other_options, const int64_t cnt, const double avg) {
+  return import_test_common_geo(string("COPY geo FROM '") + "../../Tests/Import/datafiles/" + filename +
+                                    "' WITH (geo='true'" + other_options + ");",
+                                "geo",
+                                cnt,
+                                avg);
 }
 
 #ifdef HAVE_AWS_S3
@@ -229,7 +273,10 @@ class ImportTest : public ::testing::Test {
     ASSERT_NO_THROW(run_ddl(create_table_trips););
   }
 
-  virtual void TearDown() { ASSERT_NO_THROW(run_ddl("drop table trips;");); }
+  virtual void TearDown() {
+    ASSERT_NO_THROW(run_ddl("drop table trips;"););
+    ASSERT_NO_THROW(run_ddl("drop table if exists geo;"););
+  }
 };
 
 TEST_F(ImportTest, One_csv_file) {
@@ -266,6 +313,51 @@ TEST_F(ImportTest, One_zip_with_many_csv_files) {
 
 TEST_F(ImportTest, One_7z_with_many_csv_files) {
   EXPECT_TRUE(import_test_local("trip_data.7z", 1000, 1.0));
+}
+
+// geo tests
+// test parser only for now
+// @TODO simon.eves
+// implement proper geo tests at MapDHandler level
+
+TEST_F(ImportTest, Geo_CSV_Local_Default) {
+  EXPECT_TRUE(import_test_local_geo("geospatial.csv", "", 10, 4.5));
+}
+
+TEST_F(ImportTest, Geo_CSV_Local_Type_Geometry) {
+  EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_type='geometry'", 10, 4.5));
+}
+
+TEST_F(ImportTest, Geo_CSV_Local_Type_Geography) {
+  EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_type='geography'", 10, 4.5));
+}
+
+TEST_F(ImportTest, Geo_CSV_Local_Type_Other) {
+  EXPECT_THROW(import_test_local_geo("geospatial.csv", ", geo_coords_type='other'", 10, 4.5), std::runtime_error);
+}
+
+TEST_F(ImportTest, Geo_CSV_Local_Encoding_NONE) {
+  EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_encoding='none'", 10, 4.5));
+}
+
+TEST_F(ImportTest, Geo_CSV_Local_Encoding_GEOINT32) {
+  EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_encoding='geoint(32)'", 10, 4.5));
+}
+
+TEST_F(ImportTest, Geo_CSV_Local_Encoding_Other) {
+  EXPECT_THROW(import_test_local_geo("geospatial.csv", ", geo_coords_encoding='other'", 10, 4.5), std::runtime_error);
+}
+
+TEST_F(ImportTest, Geo_CSV_Local_SRID_LonLat) {
+  EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_srid=4326", 10, 4.5));
+}
+
+TEST_F(ImportTest, Geo_CSV_Local_SRID_Mercator) {
+  EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_srid=900913", 10, 4.5));
+}
+
+TEST_F(ImportTest, Geo_CSV_Local_SRID_Other) {
+  EXPECT_THROW(import_test_local_geo("geospatial.csv", ", geo_coords_srid=12345", 10, 4.5), std::runtime_error);
 }
 
 #ifdef HAVE_AWS_S3

@@ -1319,7 +1319,7 @@ int main(int argc, char** argv) {
       using Params = CommandResolutionChain<>::CommandTokenList;
 
       // clang-format off
-      auto resolution_status = CommandResolutionChain<>( line, "\\copygeo", 3, 4, CopyGeoCmd<>(context), "Usage: \\copygeo <serverGeoFileName> <tableName> [<encoding>]")
+      auto resolution_status = CommandResolutionChain<>( line, "\\copygeo", 1, 4, CopyGeoCmd<>(context), "") // deprecated
   ( "\\copy", 3, 3, [&](Params const& p) { copy_table(p[1].c_str() /* filepath */, p[2].c_str() /* table */, context); } )
   ( "\\ste", 2, 2, [&](Params const& p) { set_table_epoch(context, p[1] /* table_details */); } )
   ( "\\gte", 2, 2, [&](Params const& p) { get_table_epoch(context, p[1] /* table_details */); } )

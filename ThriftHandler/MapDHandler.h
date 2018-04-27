@@ -491,6 +491,11 @@ class MapDHandler : public MapDIf {
   bool super_user_rights_;  // default is "false"; setting to "true" ignores passwd checks in "connect(..)" method
   const bool access_priv_check_;
 
+  bool _was_geo_copy_from;
+  std::string _geo_copy_from_table;
+  std::string _geo_copy_from_file_name;
+  Importer_NS::CopyParams _geo_copy_from_copy_params;
+
   // Only for IPC device memory deallocation
   mutable std::mutex handle_to_dev_ptr_mutex_;
   mutable std::unordered_map<std::string, int8_t*> ipc_handle_to_dev_ptr_;

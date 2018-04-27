@@ -2431,11 +2431,9 @@ void CopyTableStmt::execute(
 
   auto& catalog = session.get_catalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
-  if (td == nullptr)
-    throw std::runtime_error("Table " + *table + " does not exist.");
 
-  // check access privileges
-  if (SysCatalog::instance().arePrivilegesOn()) {
+  // if the table already exists, it's locked, so check access privileges
+  if (td && SysCatalog::instance().arePrivilegesOn()) {
     std::vector<DBObject> privObjects;
     DBObject dbObject(*table, TableDBObjectType);
     dbObject.loadKey(catalog);
@@ -2585,32 +2583,108 @@ void CopyTableStmt::execute(
           copy_params.lonlat = false;
         else
           throw std::runtime_error("Invalid string for boolean " + *s);
+      } else if (boost::iequals(*p->get_name(), "geo")) {
+        const StringLiteral* str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr)
+          throw std::runtime_error("Geo option must be a boolean.");
+        const std::string* s = str_literal->get_stringval();
+        if (*s == "t" || *s == "true" || *s == "T" || *s == "True")
+          copy_params.table_type = Importer_NS::TableType::POLYGON;
+        else if (*s == "f" || *s == "false" || *s == "F" || *s == "False")
+          copy_params.table_type = Importer_NS::TableType::DELIMITED;
+        else
+          throw std::runtime_error("Invalid string for boolean " + *s);
+      } else if (boost::iequals(*p->get_name(), "geo_coords_type")) {
+        const StringLiteral* str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr)
+          throw std::runtime_error("'geo_coords_type' option must be a string");
+        const std::string* s = str_literal->get_stringval();
+        if (boost::iequals(*s, "geography"))
+          copy_params.geo_coords_type = kGEOGRAPHY;
+        else if (boost::iequals(*s, "geometry"))
+          copy_params.geo_coords_type = kGEOMETRY;
+        else
+          throw std::runtime_error("Invalid string for 'geo_coords_type' option (must be 'GEOGRAPHY' or 'GEOMETRY'): " +
+                                   *s);
+      } else if (boost::iequals(*p->get_name(), "geo_coords_encoding")) {
+        const StringLiteral* str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr)
+          throw std::runtime_error("'geo_coords_encoding' option must be a string");
+        const std::string* s = str_literal->get_stringval();
+        if (boost::iequals(*s, "none")) {
+          copy_params.geo_coords_encoding = kENCODING_NONE;
+          copy_params.geo_coords_comp_param = 0;
+        } else if (boost::iequals(*s, "geoint(32)")) {
+          copy_params.geo_coords_encoding = kENCODING_GEOINT;
+          copy_params.geo_coords_comp_param = 32;
+        } else
+          throw std::runtime_error(
+              "Invalid string for 'geo_coords_encoding' option (must be 'NONE' or 'GEOINT(32)'): " + *s);
+      } else if (boost::iequals(*p->get_name(), "geo_coords_srid")) {
+        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+        if (int_literal == nullptr)
+          throw std::runtime_error("'geo_coords_srid' option must be an integer");
+        const int srid = int_literal->get_intval();
+        if (srid == 4326 || srid == 3857 || srid == 900913) {
+          copy_params.geo_coords_srid = srid;
+        } else
+          throw std::runtime_error("Invalid value for 'geo_coords_srid' option (must be 4326, 3857, or 900913): " +
+                                   std::to_string(srid));
       } else
         throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
     }
   }
-  auto importer = importer_factory(catalog, td, file_path, copy_params);
 
-  auto ms = measure<>::execution([&]() {
-    auto res = importer->import();
-    rows_completed += res.rows_completed;
-    rows_rejected += res.rows_rejected;
-    load_truncated = res.load_truncated;
-  });
-  total_time += ms;
-  if (load_truncated || rows_rejected > copy_params.max_reject) {
-    LOG(ERROR) << "COPY exited early due to reject records count during multi file processing ";
-    // if we have crossed the truncated load threshold
-    load_truncated = true;
-  }
   std::string tr;
-  if (!load_truncated) {
-    tr = std::string("Loaded: " + std::to_string(rows_completed) + " recs, Rejected: " + std::to_string(rows_rejected) +
-                     " recs in " + std::to_string((double)total_time / 1000.0) + " secs");
+
+  // the table MUST not already exist if geo mode is specified
+  if (copy_params.table_type == Importer_NS::TableType::POLYGON) {
+    if (td) {
+      // geo append (NOT YET)
+      throw std::runtime_error("COPY FROM of geo file to existing table (append) not yet implemented");
+    } else {
+      // geo import
+      // we do nothing here, except stash the parameters so we can
+      // do the import when we unwind to the top of the handler
+      _geo_copy_from_file_name = file_path;
+      _geo_copy_from_copy_params = copy_params;
+      _was_geo_copy_from = true;
+
+      // the result string
+      // @TODO simon.eves put something more useful in here
+      // except we really can't because we haven't done the import yet!
+      tr = std::string("Creating table '") + *table + std::string("' and importing geo...");
+    }
   } else {
-    tr = std::string("Loader truncated due to reject count.  Processed : " + std::to_string(rows_completed) +
-                     " recs, Rejected: " + std::to_string(rows_rejected) + " recs in " +
-                     std::to_string((double)total_time / 1000.0) + " secs");
+    if (td) {
+      // regular import
+      auto importer = importer_factory(catalog, td, file_path, copy_params);
+      auto ms = measure<>::execution([&]() {
+        auto res = importer->import();
+        rows_completed += res.rows_completed;
+        rows_rejected += res.rows_rejected;
+        load_truncated = res.load_truncated;
+      });
+      total_time += ms;
+
+      // results
+      if (load_truncated || rows_rejected > copy_params.max_reject) {
+        LOG(ERROR) << "COPY exited early due to reject records count during multi file processing ";
+        // if we have crossed the truncated load threshold
+        load_truncated = true;
+      }
+      if (!load_truncated) {
+        tr = std::string("Loaded: " + std::to_string(rows_completed) +
+                         " recs, Rejected: " + std::to_string(rows_rejected) + " recs in " +
+                         std::to_string((double)total_time / 1000.0) + " secs");
+      } else {
+        tr = std::string("Loader truncated due to reject count.  Processed : " + std::to_string(rows_completed) +
+                         " recs, Rejected: " + std::to_string(rows_rejected) + " recs in " +
+                         std::to_string((double)total_time / 1000.0) + " secs");
+      }
+    } else {
+      throw std::runtime_error("Table '" + *table + "' must exist before COPY FROM");
+    }
   }
 
   return_message.reset(new std::string(tr));

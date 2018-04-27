@@ -80,10 +80,6 @@ using GeometryPtrVector = std::vector<OGRGeometry*>;
 #define DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT 0
 #define PROMOTE_POLYGON_TO_MULTIPOLYGON 1
 
-// the EPSG that we force geographic data to
-// 4326 = WGS84 lat/lon
-#define GEOGRAPHIC_SPATIAL_REFERENCE 4326
-
 static mapd_shared_mutex status_mutex;
 static std::map<std::string, ImportStatus> import_status_map;
 
@@ -3284,9 +3280,9 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::s
 #endif
         SQLTypeInfo ti;
         ti.set_type(geoType);
-        ti.set_subtype(kGEOGRAPHY);
-        ti.set_input_srid(GEOGRAPHIC_SPATIAL_REFERENCE);
-        ti.set_output_srid(GEOGRAPHIC_SPATIAL_REFERENCE);
+        ti.set_subtype(copy_params.geo_coords_type);
+        ti.set_input_srid(copy_params.geo_coords_srid);
+        ti.set_output_srid(copy_params.geo_coords_srid);
         ti.set_compression(copy_params.geo_coords_encoding);
         ti.set_comp_param(copy_params.geo_coords_comp_param);
         cd.columnType = ti;
@@ -3341,7 +3337,6 @@ bool Importer::gdalFileOrDirectoryExists(const std::string& path, const CopyPara
 }
 
 void gdalGatherFilesInArchiveRecursive(const std::string& archive_path, std::vector<std::string>& files) {
-
   // prepare to gather subfolders
   std::vector<std::string> subfolders;
 
@@ -3394,7 +3389,8 @@ void gdalGatherFilesInArchiveRecursive(const std::string& archive_path, std::vec
 }
 
 /* static */
-std::vector<std::string> Importer::gdalGetAllFilesInArchive(const std::string& fileName, const CopyParams& copy_params) {
+std::vector<std::string> Importer::gdalGetAllFilesInArchive(const std::string& fileName,
+                                                            const CopyParams& copy_params) {
   // lazy init GDAL
   initGDAL();
 
@@ -3454,7 +3450,7 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 
     // the geographic spatial reference we want to put everything in
     std::unique_ptr<OGRSpatialReference> poGeographicSR(new OGRSpatialReference());
-    poGeographicSR->importFromEPSG(GEOGRAPHIC_SPATIAL_REFERENCE);
+    poGeographicSR->importFromEPSG(copy_params.geo_coords_srid);
 
 #if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
     // just one "thread"

@@ -175,6 +175,8 @@ struct TCopyParams {
   15: string s3_region
   16: TEncodingType geo_coords_encoding=TEncodingType.NONE
   17: i32 geo_coords_comp_param
+  18: TDatumType geo_coords_type=TDatumType.GEOGRAPHY
+  19: i32 geo_coords_srid=4326
 }
 
 struct TDetectResult {

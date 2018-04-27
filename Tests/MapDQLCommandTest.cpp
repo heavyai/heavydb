@@ -184,51 +184,6 @@ TEST(MapDQLTest, CommandResolutionChain_ThreeSet_NoHits) {
 }
 
 //
-// \\copygeo Command Unit Test and Support Mockups
-//
-
-struct CopyGeoCommandMockupContext {
-  std::string file_name;
-  std::string table_name;
-  bool import_geo_table_invoked = false;
-  // minimal TCopyParams
-  struct {
-    std::string s3_region;
-    std::string s3_access_key;
-    std::string s3_secret_key;
-    TEncodingType::type geo_coords_encoding;
-    int32_t geo_coords_comp_param;
-  } copy_params;
-};
-
-struct CopyGeoCommandContextOpsPolicy {
-  using ThriftServiceType = ThriftService;
-  using ContextType = CopyGeoCommandMockupContext;
-};
-
-template <typename CONTEXT_OP_POLICY>
-class CopyGeoCommandMockupContextOperations {
- public:
-  using ThriftService = typename CONTEXT_OP_POLICY::ThriftServiceType;
-  using ContextType = typename CONTEXT_OP_POLICY::ContextType;
-
-  static void import_geo_table(ContextType& context) { context.import_geo_table_invoked = true; }
-};
-
-TEST(MapDQLTest, CopyGeoCommandTest) {
-  using Params = CommandResolutionChain<>::CommandTokenList;
-  using UnitTestCopyGeoCmd = CopyGeoCmd<CopyGeoCommandContextOpsPolicy, CopyGeoCommandMockupContextOperations>;
-  CopyGeoCommandMockupContext unit_test_context;
-
-  auto resolution = CommandResolutionChain<>(
-                        "\\copygeo filename.csv tablename", "\\copygeo", 3, 3, UnitTestCopyGeoCmd(unit_test_context))
-                        .is_resolved();
-
-  EXPECT_TRUE(unit_test_context.import_geo_table_invoked);
-  EXPECT_TRUE(resolution);
-}
-
-//
 // \\status Command Unit Test and Support Mockups
 //
 

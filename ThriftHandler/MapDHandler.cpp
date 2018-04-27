@@ -142,7 +142,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       mapd_parameters_(mapd_parameters),
       legacy_syntax_(legacy_syntax),
       super_user_rights_(false),
-      access_priv_check_(access_priv_check) {
+      access_priv_check_(access_priv_check),
+      _was_geo_copy_from(false) {
   LOG(INFO) << "MapD Server " << MAPD_RELEASE;
   if (executor_device == "gpu") {
 #ifdef HAVE_CUDA
@@ -583,6 +584,7 @@ void MapDHandler::sql_execute(TQueryResult& _return,
                               const std::string& nonce,
                               const int32_t first_n,
                               const int32_t at_most_n) {
+  ScopeGuard reset_was_geo_copy_from = [&] { _was_geo_copy_from = false; };
   if (first_n >= 0 && at_most_n >= 0) {
     THROW_MAPD_EXCEPTION(std::string("At most one of first_n and at_most_n can be set"));
   }
@@ -615,6 +617,31 @@ void MapDHandler::sql_execute(TQueryResult& _return,
     });
     LOG(INFO) << "sql_execute-COMPLETED Total: " << _return.total_time_ms
               << " (ms), Execution: " << _return.execution_time_ms << " (ms)";
+  }
+
+  // if the SQL statement we just executed was a geo COPY FROM, the import
+  // parameters were captured, and this flag set, so we do the actual import here
+  if (_was_geo_copy_from) {
+    // import_geo_table() calls create_table() which calls this function to
+    // do the work, so reset the flag now to avoid executing this part a
+    // second time at the end of that, which would fail as the table was
+    // already created! Also reset the flag with a ScopeGuard on exiting
+    // this function any other way, such as an exception from the code above!
+    _was_geo_copy_from = false;
+
+    // distributed geo import not yet supported
+    if (leaf_aggregator_.leafCount() > 0) {
+      THROW_MAPD_EXCEPTION("Distributed geo import is not yet supported");
+    }
+
+    // now do (and time) the import
+    _return.total_time_ms = measure<>::execution([&]() {
+      import_geo_table(session,
+                       _geo_copy_from_table,
+                       _geo_copy_from_file_name,
+                       copyparams_to_thrift(_geo_copy_from_copy_params),
+                       TRowDescriptor());
+    });
   }
 }
 
@@ -1792,19 +1819,37 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
     case TTableType::POLYGON:
       copy_params.table_type = Importer_NS::TableType::POLYGON;
       break;
-    default:
+    case TTableType::DELIMITED:
       copy_params.table_type = Importer_NS::TableType::DELIMITED;
+      break;
+    default:
+      CHECK(false);
       break;
   }
   switch (cp.geo_coords_encoding) {
     case TEncodingType::GEOINT:
       copy_params.geo_coords_encoding = kENCODING_GEOINT;
       break;
-    default:
+    case TEncodingType::NONE:
       copy_params.geo_coords_encoding = kENCODING_NONE;
+      break;
+    default:
+      CHECK(false);
       break;
   }
   copy_params.geo_coords_comp_param = cp.geo_coords_comp_param;
+  switch (cp.geo_coords_type) {
+    case TDatumType::GEOGRAPHY:
+      copy_params.geo_coords_type = kGEOGRAPHY;
+      break;
+    case TDatumType::GEOMETRY:
+      copy_params.geo_coords_type = kGEOMETRY;
+      break;
+    default:
+      CHECK(false);
+      break;
+  }
+  copy_params.geo_coords_srid = cp.geo_coords_srid;
   return copy_params;
 }
 
@@ -1841,6 +1886,18 @@ TCopyParams MapDHandler::copyparams_to_thrift(const Importer_NS::CopyParams& cp)
       break;
   }
   copy_params.geo_coords_comp_param = cp.geo_coords_comp_param;
+  switch (cp.geo_coords_type) {
+    case kGEOGRAPHY:
+      copy_params.geo_coords_type = TDatumType::GEOGRAPHY;
+      break;
+    case kGEOMETRY:
+      copy_params.geo_coords_type = TDatumType::GEOMETRY;
+      break;
+    default:
+      CHECK(false);
+      break;
+  }
+  copy_params.geo_coords_srid = cp.geo_coords_srid;
   return copy_params;
 }
 
@@ -3179,10 +3236,17 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
           getTableReadLocks<mapd_shared_mutex>(
               session_info.get_catalog(), query_ra, readUpdateDeleteLocks, LockType::UpdateDeleteLock);
         } else if (auto stmtp = dynamic_cast<Parser::CopyTableStmt*>(stmt.get())) {
-          // COPY_FROM: CheckpointLock [ >> write UpdateDeleteLocks ]
-          chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-              session_info.get_catalog(), stmtp->get_table(), LockType::CheckpointLock);
-          // [ write UpdateDeleteLocks ] lock is deferred in InsertOrderFragmenter::deleteFragments
+          // get the lock if the table exists
+          // thus allowing COPY FROM to execute to create a table
+          // is it safe to do this check without a lock?
+          // if the table doesn't exist, the getTableLock will throw an exception anyway
+          const TableDescriptor* td = session_info.get_catalog().getMetadataForTable(stmtp->get_table());
+          if (td) {
+            // COPY_FROM: CheckpointLock [ >> write UpdateDeleteLocks ]
+            chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+                session_info.get_catalog(), stmtp->get_table(), LockType::CheckpointLock);
+            // [ write UpdateDeleteLocks ] lock is deferred in InsertOrderFragmenter::deleteFragments
+          }
         } else if (auto stmtp = dynamic_cast<Parser::TruncateTableStmt*>(stmt.get())) {
           chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
               session_info.get_catalog(), *stmtp->get_table(), LockType::CheckpointLock);
@@ -3199,9 +3263,16 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         } else {
           _return.execution_time_ms += measure<>::execution([&]() { ddl->execute(session_info); });
         }
-        // check if it was a copy statement gather response message
+        // if it was a copy statement...
         if (copy_stmt) {
+          // get response message
+          // @TODO simon.eves do we have any more useful info at this level... no!
           convert_result(_return, ResultSet(*copy_stmt->return_message.get()), true);
+
+          // get geo_copy_from info
+          _was_geo_copy_from = copy_stmt->was_geo_copy_from();
+          copy_stmt->get_geo_copy_from_payload(
+              _geo_copy_from_table, _geo_copy_from_file_name, _geo_copy_from_copy_params);
         }
       } else {
         const Parser::DMLStmt* dml;

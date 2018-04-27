@@ -187,37 +187,8 @@ class CmdStringUtilities {
 StandardCommand(Status, { ContextOps::get_status(cmdContext(), output_stream); });
 
 StandardCommand(CopyGeo, {
-  cmdContext().file_name = p[1];   // File name is the first parameter
-  cmdContext().table_name = p[2];  // Table name is the second parameter
-
-  // populate S3 authentication tokens from environment
-  char* env = nullptr;
-  if (nullptr != (env = getenv("AWS_REGION")))
-    cmdContext().copy_params.s3_region = env;
-  if (nullptr != (env = getenv("AWS_ACCESS_KEY_ID")))
-    cmdContext().copy_params.s3_access_key = env;
-  if (nullptr != (env = getenv("AWS_SECRET_ACCESS_KEY")))
-    cmdContext().copy_params.s3_secret_key = env;
-
-  // compression option
-  // default on
-  cmdContext().copy_params.geo_coords_encoding = TEncodingType::type::GEOINT;
-  cmdContext().copy_params.geo_coords_comp_param = 32;
-  if (p.size() == 4) {
-    std::string compression_option = p[3];
-    if (compression_option == "NONE") {
-      // no compression
-      cmdContext().copy_params.geo_coords_encoding = TEncodingType::type::NONE;
-      cmdContext().copy_params.geo_coords_comp_param = 0;
-    } else if (compression_option == "GEOINT(32)") {
-      // already the default
-    } else {
-      std::cout << "Error: Unknown Geo Encoding option (must be 'NONE' or 'GEOINT(32)')" << std::endl;
-      return;
-    }
-  }
-
-  ContextOps::import_geo_table(cmdContext());
+  std::cout << "Error: The \\copygeo command is deprecated. Use: COPY <table> FROM '<file>' WITH (geo='true');"
+            << std::endl;
 });
 
 StandardCommand(RoleList, {
@@ -341,19 +312,20 @@ StandardCommand(ListColumns, {
       }
       std::string encoding = "";
       if (p.col_type.type == TDatumType::STR) {
-        encoding =
-            (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                               std::to_string(p.col_type.comp_param) + ")");
+        encoding = (p.col_type.encoding == 0 ? " ENCODING NONE"
+                                             : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                   std::to_string(p.col_type.comp_param) + ")");
       } else if (p.col_type.type == TDatumType::POINT || p.col_type.type == TDatumType::LINESTRING ||
                  p.col_type.type == TDatumType::POLYGON || p.col_type.type == TDatumType::MULTIPOLYGON) {
         if (p.col_type.scale == 4326) {
-          encoding =
-              (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                                 std::to_string(p.col_type.comp_param) + ")");
+          encoding = (p.col_type.encoding == 0 ? " ENCODING NONE"
+                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                     std::to_string(p.col_type.comp_param) + ")");
         }
       } else {
-        encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                        std::to_string(p.col_type.comp_param) + ")");
+        encoding = (p.col_type.encoding == 0 ? ""
+                                             : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                   std::to_string(p.col_type.comp_param) + ")");
       }
       output_stream << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
                     << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
@@ -542,9 +514,9 @@ StandardCommand(GetOptimizedSchema, {
       } else if (p.col_type.type == TDatumType::POINT || p.col_type.type == TDatumType::LINESTRING ||
                  p.col_type.type == TDatumType::POLYGON || p.col_type.type == TDatumType::MULTIPOLYGON) {
         if (p.col_type.scale == 4326) {
-          encoding =
-              (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                                 std::to_string(p.col_type.comp_param) + ")");
+          encoding = (p.col_type.encoding == 0 ? " ENCODING NONE"
+                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                     std::to_string(p.col_type.comp_param) + ")");
         }
       } else {
         int opt_size = get_optimal_size(context, table_name, p.col_name, p.col_type.type);

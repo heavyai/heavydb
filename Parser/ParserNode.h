@@ -33,14 +33,9 @@
 #include "../Analyzer/Analyzer.h"
 #include "../Catalog/Catalog.h"
 
+#include <Import/Importer.h>
+
 #include <functional>
-
-namespace Importer_NS {
-
-struct CopyParams;
-class Importer;
-
-}  // Importer_NS
 
 namespace Parser {
 
@@ -1025,10 +1020,25 @@ class CopyTableStmt : public DDLStmt {
     return *table;
   }
 
+  bool was_geo_copy_from() const { return _was_geo_copy_from; }
+
+  void get_geo_copy_from_payload(std::string& geo_copy_from_table,
+                                 std::string& geo_copy_from_file_name,
+                                 Importer_NS::CopyParams& geo_copy_from_copy_params) {
+    geo_copy_from_table = *table;
+    geo_copy_from_file_name = _geo_copy_from_file_name;
+    geo_copy_from_copy_params = _geo_copy_from_copy_params;
+    _was_geo_copy_from = false;
+  }
+
  private:
   std::unique_ptr<std::string> table;
   std::unique_ptr<std::string> file_pattern;
   std::list<std::unique_ptr<NameValueAssign>> options;
+
+  bool _was_geo_copy_from = false;
+  std::string _geo_copy_from_file_name;
+  Importer_NS::CopyParams _geo_copy_from_copy_params;
 };
 
 /*
