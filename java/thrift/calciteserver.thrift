@@ -7,9 +7,17 @@ exception InvalidParseRequest {
   2: string whyUp
 }
 
+struct TAccessedQueryObjects {
+  1: list<string> tables_selected_from;
+  2: list<string> tables_inserted_into;
+  3: list<string> tables_updated_in;
+  4: list<string> tables_deleted_from;
+}
+
 struct TPlanResult {
   1: string plan_result
   2: i64 execution_time_ms
+  3: TAccessedQueryObjects accessed_objects;
 }
 
 service CalciteServer {

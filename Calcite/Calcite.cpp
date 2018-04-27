@@ -204,33 +204,59 @@ void Calcite::updateMetadata(std::string catalog, std::string table) {
   }
 }
 
+void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info,
+                              std::vector<std::string> tableOrViewNames,
+                              AccessPrivileges tablePrivs,
+                              AccessPrivileges viewPrivs) {
+  Catalog_Namespace::Catalog& catalog = session_info.get_catalog();
+
+  for (auto tableOrViewName : tableOrViewNames) {
+    const TableDescriptor* tableMeta = catalog.getMetadataForTable(tableOrViewName, false);
+
+    if (!tableMeta) {
+      throw std::runtime_error("unknown table of view: " + tableOrViewName);
+    }
+
+    DBObjectKey key;
+    key.dbId = catalog.get_currentDB().dbId;
+    key.permissionType = tableMeta->isView ? DBObjectType::ViewDBObjectType : DBObjectType::TableDBObjectType;
+    key.objectId = tableMeta->tableId;
+    AccessPrivileges privs = tableMeta->isView ? viewPrivs : tablePrivs;
+    DBObject dbobject(key, privs, tableMeta->userId);
+    std::vector<DBObject> privObjects{dbobject};
+
+    if (!Catalog_Namespace::SysCatalog::instance().checkPrivileges(session_info.get_currentUser(), privObjects)) {
+      throw std::runtime_error("Violation of access privileges: user " + session_info.get_currentUser().userName +
+                               " has no proper privileges for object " + tableOrViewName);
+    }
+  }
+}
+
 std::string Calcite::process(const Catalog_Namespace::SessionInfo& session_info,
                              const std::string sql_string,
                              const bool legacy_syntax,
                              const bool is_explain) {
-  std::string ra = processImpl(session_info, sql_string, legacy_syntax, is_explain);
+  TPlanResult result = processImpl(session_info, sql_string, legacy_syntax, is_explain);
+  std::string ra = result.plan_result;
 
-  // gather tables used in this query
-  if (!is_explain) {
-    // TODO MAT we need to extend the output from calcite to include views
-    // basically add a structure that returns all objects even if it is explain
-    // security requires explains to be restricted in real life
-
-    Catalog_Namespace::Catalog& catalog = session_info.get_catalog();
-    if (Catalog_Namespace::SysCatalog::instance().arePrivilegesOn()) {
-      std::vector<DBObject> privObjects;
-      std::vector<std::string> v_db_obj = get_db_objects(ra);
-      for (size_t i = 0; i < v_db_obj.size(); i++) {
-        DBObject dbObject(v_db_obj[i], TableDBObjectType);
-        dbObject.loadKey(catalog);
-        dbObject.setPrivileges(AccessPrivileges::SELECT_FROM_TABLE);
-        privObjects.push_back(dbObject);
-      }
-      if (!Catalog_Namespace::SysCatalog::instance().checkPrivileges(session_info.get_currentUser(), privObjects)) {
-        throw std::runtime_error("Violation of access privileges: user " + session_info.get_currentUser().userName +
-                                 " has no proper select privileges.");
-      }
-    }
+  if (!is_explain && Catalog_Namespace::SysCatalog::instance().arePrivilegesOn()) {
+    // check the individual tables
+    checkPermissionForTables(session_info,
+                             result.accessed_objects.tables_selected_from,
+                             AccessPrivileges::SELECT_FROM_TABLE,
+                             AccessPrivileges::SELECT_FROM_VIEW);
+    checkPermissionForTables(session_info,
+                             result.accessed_objects.tables_inserted_into,
+                             AccessPrivileges::INSERT_INTO_TABLE,
+                             AccessPrivileges::INSERT_INTO_VIEW);
+    checkPermissionForTables(session_info,
+                             result.accessed_objects.tables_updated_in,
+                             AccessPrivileges::UPDATE_IN_TABLE,
+                             AccessPrivileges::UPDATE_IN_VIEW);
+    checkPermissionForTables(session_info,
+                             result.accessed_objects.tables_deleted_from,
+                             AccessPrivileges::DELETE_FROM_TABLE,
+                             AccessPrivileges::DELETE_FROM_VIEW);
   }
 
   return ra;
@@ -269,7 +295,7 @@ std::vector<std::string> Calcite::get_db_objects(const std::string ra) {
   return v_db_obj;
 }
 
-std::string Calcite::processImpl(const Catalog_Namespace::SessionInfo& session_info,
+TPlanResult Calcite::processImpl(const Catalog_Namespace::SessionInfo& session_info,
                                  const std::string sql_string,
                                  const bool legacy_syntax,
                                  const bool is_explain) {
@@ -297,13 +323,15 @@ std::string Calcite::processImpl(const Catalog_Namespace::SessionInfo& session_i
       // LOG(INFO) << ret.plan_result;
       LOG(INFO) << "Time in Thrift " << (ms > ret.execution_time_ms ? ms - ret.execution_time_ms : 0)
                 << " (ms), Time in Java Calcite server " << ret.execution_time_ms << " (ms)";
-      return ret.plan_result;
+      return ret;
     } catch (InvalidParseRequest& e) {
       throw std::invalid_argument(e.whyUp);
     }
   } else {
     LOG(INFO) << "Not routing to Calcite, server is not up";
-    return "";
+    TPlanResult ret;
+    ret.plan_result = "";
+    return ret;
   }
 }
 

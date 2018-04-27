@@ -18,6 +18,7 @@ package com.mapd.parser.server;
 import com.mapd.calcite.parser.MapDParser;
 import com.mapd.calcite.parser.MapDUser;
 import com.mapd.thrift.calciteserver.InvalidParseRequest;
+import com.mapd.thrift.calciteserver.TAccessedQueryObjects;
 import com.mapd.thrift.calciteserver.TCompletionHint;
 import com.mapd.thrift.calciteserver.TCompletionHintType;
 import com.mapd.thrift.calciteserver.TPlanResult;
@@ -27,6 +28,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.apache.calcite.prepare.MapDPlanner;
+import org.apache.calcite.prepare.SqlIdentifierCapturer;
 import org.apache.calcite.runtime.CalciteContextException;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.validate.SqlMonikerType;
@@ -102,8 +104,10 @@ class CalciteServerHandler implements CalciteServer.Iface {
       sqlText = sqlText.substring(0, sqlText.length() - 1);
     }
     String relAlgebra;
+    SqlIdentifierCapturer capturer;
     try {
       relAlgebra = parser.getRelAlgebra(sqlText, legacySyntax, mapDUser, isExplain);
+      capturer = parser.captureIdentifier(sqlText, legacySyntax);
     } catch (SqlParseException ex) {
       String msg = "Parse failed: " + ex.getMessage();
       MAPDLOGGER.error(msg);
@@ -126,7 +130,19 @@ class CalciteServerHandler implements CalciteServer.Iface {
         throw new InvalidParseRequest(-4, msg);
       }
     }
-    return new TPlanResult(relAlgebra, System.currentTimeMillis() - timer);
+    
+    TAccessedQueryObjects accessedObjects = new TAccessedQueryObjects();
+    accessedObjects.tables_selected_from = new ArrayList<>(capturer.selects);
+    accessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
+    accessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
+    accessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
+    
+    TPlanResult result = new TPlanResult();
+    result.accessed_objects = accessedObjects;
+    result.plan_result = relAlgebra;
+    result.execution_time_ms = System.currentTimeMillis() - timer;
+    
+    return result;
   }
 
   @Override

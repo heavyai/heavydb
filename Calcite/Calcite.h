@@ -60,7 +60,7 @@ class Calcite {
 
  private:
   void runServer(const int mapd_port, const int port, const std::string& data_dir, const size_t calcite_max_mem);
-  std::string processImpl(const Catalog_Namespace::SessionInfo& session_info,
+  TPlanResult processImpl(const Catalog_Namespace::SessionInfo& session_info,
                           const std::string sql_string,
                           const bool legacy_syntax,
                           const bool is_explain);

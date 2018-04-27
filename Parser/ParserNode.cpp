@@ -2666,7 +2666,7 @@ std::string extractObjectNameFromHierName(const std::string& objectHierName,
       throw std::runtime_error("DB object name is not correct " + objectHierName);
     }
   } else {
-    if (objectType.compare("TABLE") == 0 || objectType.compare("DASHBOARD") == 0) {
+    if (objectType.compare("TABLE") == 0 || objectType.compare("DASHBOARD") == 0 || objectType.compare("VIEW") == 0) {
       switch (componentNames.size()) {
         case (1): {
           objectName = componentNames[0];
@@ -2695,28 +2695,63 @@ static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(const std::str
       return {AccessPrivileges::ALL_TABLE, TableDBObjectType};
     } else if (objectType == DashboardDBObjectType) {
       return {AccessPrivileges::ALL_DASHBOARD, TableDBObjectType};
+    } else if (objectType == ViewDBObjectType) {
+      return {AccessPrivileges::ALL_VIEW, ViewDBObjectType};
     }
 
+  } else if ((privs.compare("CREATE TABLE") == 0) && (objectType == DatabaseDBObjectType)) {
+    return {AccessPrivileges::CREATE_TABLE, TableDBObjectType};
   } else if ((privs.compare("CREATE") == 0) && (objectType == DatabaseDBObjectType)) {
     return {AccessPrivileges::CREATE_TABLE, TableDBObjectType};
-  } else if (privs.compare("SELECT") == 0 && (objectType != DashboardDBObjectType)) {
+  } else if (privs.compare("SELECT") == 0 && (objectType == DatabaseDBObjectType)) {
     return {AccessPrivileges::SELECT_FROM_TABLE, TableDBObjectType};
-  } else if (privs.compare("INSERT") == 0 && (objectType != DashboardDBObjectType)) {
+  } else if (privs.compare("INSERT") == 0 && (objectType == DatabaseDBObjectType)) {
     return {AccessPrivileges::INSERT_INTO_TABLE, TableDBObjectType};
-  } else if (privs.compare("TRUNCATE") == 0 && (objectType != DashboardDBObjectType)) {
+  } else if (privs.compare("TRUNCATE") == 0 && (objectType == DatabaseDBObjectType)) {
     return {AccessPrivileges::TRUNCATE_TABLE, TableDBObjectType};
-  } else if (privs.compare("UPDATE") == 0 && (objectType != DashboardDBObjectType)) {
+  } else if (privs.compare("UPDATE") == 0 && (objectType == DatabaseDBObjectType)) {
     return {AccessPrivileges::UPDATE_IN_TABLE, TableDBObjectType};
-  } else if (privs.compare("DELETE") == 0 && (objectType != DashboardDBObjectType)) {
+  } else if (privs.compare("DELETE") == 0 && (objectType == DatabaseDBObjectType)) {
     return {AccessPrivileges::DELETE_FROM_TABLE, TableDBObjectType};
-  } else if (privs.compare("DROP") == 0 && (objectType != DashboardDBObjectType)) {
+  } else if (privs.compare("DROP") == 0 && (objectType == DatabaseDBObjectType)) {
     return {AccessPrivileges::DROP_TABLE, TableDBObjectType};
-  } else if (privs.compare("VIEW") == 0 && (objectType == DashboardDBObjectType)) {
-    return {AccessPrivileges::VIEW_DASHBOARD, DashboardDBObjectType};
-  } else if (privs.compare("EDIT") == 0 && (objectType == DashboardDBObjectType)) {
-    return {AccessPrivileges::EDIT_DASHBOARD, DashboardDBObjectType};
-  } else if (privs.compare("DELETE") == 0 && (objectType == DashboardDBObjectType)) {
-    return {AccessPrivileges::DELETE_DASHBOARD, DashboardDBObjectType};
+
+  } else if (privs.compare("SELECT") == 0 && (objectType == TableDBObjectType)) {
+    return {AccessPrivileges::SELECT_FROM_TABLE, TableDBObjectType};
+  } else if (privs.compare("INSERT") == 0 && (objectType == TableDBObjectType)) {
+    return {AccessPrivileges::INSERT_INTO_TABLE, TableDBObjectType};
+  } else if (privs.compare("TRUNCATE") == 0 && (objectType == TableDBObjectType)) {
+    return {AccessPrivileges::TRUNCATE_TABLE, TableDBObjectType};
+  } else if (privs.compare("UPDATE") == 0 && (objectType == TableDBObjectType)) {
+    return {AccessPrivileges::UPDATE_IN_TABLE, TableDBObjectType};
+  } else if (privs.compare("DELETE") == 0 && (objectType == TableDBObjectType)) {
+    return {AccessPrivileges::DELETE_FROM_TABLE, TableDBObjectType};
+  } else if (privs.compare("DROP") == 0 && (objectType == TableDBObjectType)) {
+    return {AccessPrivileges::DROP_TABLE, TableDBObjectType};
+
+  } else if ((privs.compare("CREATE VIEW") == 0) && (objectType == DatabaseDBObjectType)) {
+    return {AccessPrivileges::CREATE_VIEW, ViewDBObjectType};
+  } else if (privs.compare("SELECT VIEW") == 0 && (objectType == DatabaseDBObjectType)) {
+    return {AccessPrivileges::SELECT_FROM_VIEW, ViewDBObjectType};
+  } else if (privs.compare("INSERT VIEW") == 0 && (objectType == DatabaseDBObjectType)) {
+    return {AccessPrivileges::INSERT_INTO_VIEW, ViewDBObjectType};
+  } else if (privs.compare("UPDATE VIEW") == 0 && (objectType == DatabaseDBObjectType)) {
+    return {AccessPrivileges::UPDATE_IN_VIEW, ViewDBObjectType};
+  } else if (privs.compare("DELETE VIEW") == 0 && (objectType == DatabaseDBObjectType)) {
+    return {AccessPrivileges::DELETE_FROM_VIEW, ViewDBObjectType};
+  } else if (privs.compare("DROP VIEW") == 0 && (objectType == DatabaseDBObjectType)) {
+    return {AccessPrivileges::DROP_VIEW, ViewDBObjectType};
+  } else if (privs.compare("SELECT") == 0 && (objectType == ViewDBObjectType)) {
+    return {AccessPrivileges::SELECT_FROM_VIEW, ViewDBObjectType};
+  } else if (privs.compare("INSERT") == 0 && (objectType == ViewDBObjectType)) {
+    return {AccessPrivileges::INSERT_INTO_VIEW, ViewDBObjectType};
+  } else if (privs.compare("UPDATE") == 0 && (objectType == ViewDBObjectType)) {
+    return {AccessPrivileges::UPDATE_IN_VIEW, ViewDBObjectType};
+  } else if (privs.compare("DELETE") == 0 && (objectType == ViewDBObjectType)) {
+    return {AccessPrivileges::DELETE_FROM_VIEW, ViewDBObjectType};
+  } else if (privs.compare("DROP") == 0 && (objectType == ViewDBObjectType)) {
+    return {AccessPrivileges::DROP_VIEW, ViewDBObjectType};
+
   } else if (privs.compare("CREATE DASHBOARD") == 0 && (objectType == DatabaseDBObjectType)) {
     return {AccessPrivileges::CREATE_DASHBOARD, DashboardDBObjectType};
   } else if (privs.compare("EDIT DASHBOARD") == 0 && (objectType == DatabaseDBObjectType)) {
@@ -2724,6 +2759,12 @@ static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(const std::str
   } else if (privs.compare("VIEW DASHBOARD") == 0 && (objectType == DatabaseDBObjectType)) {
     return {AccessPrivileges::VIEW_DASHBOARD, DashboardDBObjectType};
   } else if (privs.compare("DELETE DASHBOARD") == 0 && (objectType == DatabaseDBObjectType)) {
+    return {AccessPrivileges::DELETE_DASHBOARD, DashboardDBObjectType};
+  } else if (privs.compare("VIEW") == 0 && (objectType == DashboardDBObjectType)) {
+    return {AccessPrivileges::VIEW_DASHBOARD, DashboardDBObjectType};
+  } else if (privs.compare("EDIT") == 0 && (objectType == DashboardDBObjectType)) {
+    return {AccessPrivileges::EDIT_DASHBOARD, DashboardDBObjectType};
+  } else if (privs.compare("DELETE") == 0 && (objectType == DashboardDBObjectType)) {
     return {AccessPrivileges::DELETE_DASHBOARD, DashboardDBObjectType};
   }
 
@@ -3156,16 +3197,17 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
 
-  if (SysCatalog::instance().arePrivilegesOn() &&
-      !session.checkDBAccessPrivileges(DBObjectType::ViewDBObjectType, AccessPrivileges::CREATE_VIEW)) {
-    throw std::runtime_error("View " + view_name_ + " will not be created. User has no create view privileges.");
-  }
-
   if (catalog.getMetadataForTable(view_name_) != nullptr) {
     if (if_not_exists_)
       return;
     throw std::runtime_error("Table or View " + view_name_ + " already exists.");
   }
+
+  if (SysCatalog::instance().arePrivilegesOn() &&
+      !session.checkDBAccessPrivileges(DBObjectType::ViewDBObjectType, AccessPrivileges::CREATE_VIEW)) {
+    throw std::runtime_error("View " + view_name_ + " will not be created. User has no create view privileges.");
+  }
+
   const auto query_after_shim = pg_shim(select_query_);
   catalog.get_calciteMgr().process(session, query_after_shim, true, true);
   TableDescriptor td;
@@ -3181,14 +3223,14 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   td.fragPageSize = DEFAULT_PAGE_SIZE;
   td.maxRows = DEFAULT_MAX_ROWS;
   catalog.createTable(td, {}, {}, true);
+
+  if (SysCatalog::instance().arePrivilegesOn()) {
+    // TODO (max): It's transactionally unsafe, should be fixed: we may create object w/o privileges
+    SysCatalog::instance().createDBObject(session.get_currentUser(), view_name_, ViewDBObjectType, catalog);
+  }
 }
 
 void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  if (SysCatalog::instance().arePrivilegesOn() &&
-      !session.checkDBAccessPrivileges(DBObjectType::ViewDBObjectType, AccessPrivileges::DROP_VIEW)) {
-    throw std::runtime_error("View " + *view_name + " will not be dropped. User has no drop view privileges.");
-  }
-
   auto& catalog = session.get_catalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*view_name);
   if (td == nullptr) {
@@ -3196,6 +3238,12 @@ void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       return;
     throw std::runtime_error("View " + *view_name + " does not exist.");
   }
+
+  if (SysCatalog::instance().arePrivilegesOn() &&
+      !session.checkDBAccessPrivileges(DBObjectType::ViewDBObjectType, AccessPrivileges::DROP_VIEW)) {
+    throw std::runtime_error("View " + *view_name + " will not be dropped. User has no drop view privileges.");
+  }
+
   if (!td->isView)
     throw std::runtime_error(*view_name + " is a table.  Use DROP TABLE.");
   catalog.dropTable(td);

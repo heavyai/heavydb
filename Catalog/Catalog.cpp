@@ -2728,6 +2728,8 @@ void Catalog::dropTable(const TableDescriptor* td) {
 }
 
 void Catalog::doDropTable(const TableDescriptor* td, SqliteConnector* conn) {
+  bool view = td->isView;
+
   const int tableId = td->tableId;
   conn->query_with_text_param("DELETE FROM mapd_tables WHERE tableid = ?", std::to_string(tableId));
   conn->query_with_text_params("select comp_param from mapd_columns where compression = ? and tableid = ?",
@@ -2763,8 +2765,8 @@ void Catalog::doDropTable(const TableDescriptor* td, SqliteConnector* conn) {
   dataMgr_->removeTableRelatedDS(currentDB_.dbId, tableId);
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
   if (SysCatalog::instance().arePrivilegesOn()) {
-    SysCatalog::instance().revokeDBObjectPrivilegesFromAllRoles_unsafe(DBObject(td->tableName, TableDBObjectType),
-                                                                       this);
+    SysCatalog::instance().revokeDBObjectPrivilegesFromAllRoles_unsafe(
+        DBObject(td->tableName, view ? ViewDBObjectType : TableDBObjectType), this);
   }
 }
 

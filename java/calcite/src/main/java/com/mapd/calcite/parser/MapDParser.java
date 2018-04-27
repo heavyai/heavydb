@@ -41,6 +41,7 @@ import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.prepare.MapDPlanner;
+import org.apache.calcite.prepare.SqlIdentifierCapturer;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.type.SqlTypeUtil;
 import org.apache.calcite.tools.FrameworkConfig;
@@ -116,6 +117,19 @@ public final class MapDParser {
 
   public MapDPlanner.CompletionResult getCompletionHints(String sql, int cursor, List<String> visible_tables) {
     return ((MapDPlanner) getPlanner()).getCompletionHints(sql, cursor, visible_tables);
+  }
+  
+  public SqlIdentifierCapturer captureIdentifier(String sql, boolean legacy_syntax) throws SqlParseException {
+    try {
+      Planner planner = getPlanner();
+      SqlNode node = processSQL(sql, legacy_syntax, planner);
+      SqlIdentifierCapturer capturer = new SqlIdentifierCapturer();
+      capturer.scan(node);
+      return capturer;
+    } catch (Exception|Error e) {
+      MAPDLOGGER.error("Error parsing sql: "+sql, e);
+      return new SqlIdentifierCapturer();
+    }
   }
 
   RelRoot queryToSqlNode(final String sql, final boolean legacy_syntax) throws SqlParseException, ValidationException, RelConversionException {
@@ -215,6 +229,7 @@ public final class MapDParser {
       MAPDLOGGER.error("failed to process SQL '" + sql + "' \n" + ex.toString());
       throw ex;
     }
+    
     if (!legacy_syntax) {
       return parseR;
     }

@@ -47,6 +47,8 @@ std::string ObjectPermissionTypeToString(DBObjectType type) {
       return "TABLE";
     case DashboardDBObjectType:
       return "DASHBOARD";
+    case ViewDBObjectType:
+      return "VIEW";
     default:
       CHECK(false);
   }
@@ -60,6 +62,8 @@ DBObjectType DBObjectTypeFromString(const std::string& type) {
     return TableDBObjectType;
   } else if (type.compare("DASHBOARD") == 0) {
     return DashboardDBObjectType;
+  } else if (type.compare("VIEW") == 0) {
+    return ViewDBObjectType;
   } else {
     throw std::runtime_error("DB object type " + type + " is not supported.");
   }
@@ -113,6 +117,7 @@ std::vector<std::string> DBObject::toString() const {
       break;
     case TableDBObjectType:
     case DashboardDBObjectType:
+    case ViewDBObjectType:
       objectKey.push_back(std::to_string(objectKey_.permissionType));
       objectKey.push_back(std::to_string(objectKey_.dbId));
       objectKey.push_back(std::to_string(objectKey_.objectId));
