@@ -235,10 +235,6 @@ include_directories(${Arrow_INCLUDE_DIRS})
 # RapidJSON
 include_directories(ThirdParty/rapidjson)
 
-# Poly2Tri
-include_directories(ThirdParty/poly2tri)
-add_subdirectory(ThirdParty/poly2tri)
-
 # Linenoise
 include_directories(ThirdParty/linenoise)
 add_subdirectory(ThirdParty/linenoise)
@@ -461,7 +457,7 @@ add_custom_target(rerun_cmake ALL
   )
 add_dependencies(mapd_server rerun_cmake)
 
-target_link_libraries(mapd_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES} poly2tri)
+target_link_libraries(mapd_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
 if(ENABLE_FOLLY)
   target_link_libraries(initdb Catalog Fragmenter Shared Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${Folly_LIBRARIES} ${CMAKE_DL_LIBS})
 else()
