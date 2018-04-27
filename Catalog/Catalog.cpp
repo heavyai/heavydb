@@ -691,6 +691,35 @@ void SysCatalog::grantDBObjectPrivileges_unsafe(const std::string& roleName,
   object.resetPrivileges();
   rl->getPrivileges(object);
   insertOrUpdateObjectPrivileges(sqliteConnector_, roleName, rl->isUserPrivateRole(), object);
+  auto privs = object.getPrivileges();
+  // TODO: Add separate function to remove boilerplate code below
+  bool present = false;
+  if (1 == 1) {
+    insertOrUpdateObjectPrivileges(sqliteConnector_, roleName, rl->isUserPrivateRole(), object);
+    auto range = objectDescriptorMap_.equal_range(std::to_string(catalog.get_currentDB().dbId) + ":" +
+                                                  std::to_string(object.getObjectKey().permissionType) + ":" +
+                                                  std::to_string(object.getObjectKey().objectId));
+    for (auto d = range.first; d != range.second; ++d) {
+      // overwrite permissions
+      if (d->second->roleName == roleName) {
+        d->second->privs = privs;
+        present = true;
+      }
+    }
+  }
+  if (!present) {
+    ObjectRoleDescriptor* od = new ObjectRoleDescriptor();
+    od->roleName = roleName;
+    od->roleType = rl->isUserPrivateRole();
+    od->objectType = object.getObjectKey().permissionType;
+    od->dbId = object.getObjectKey().dbId;
+    od->objectId = object.getObjectKey().objectId;
+    od->privs = object.getPrivileges();
+    od->objectOwnerId = object.getOwner();
+    od->objectName = object.getName();
+    objectDescriptorMap_.insert(ObjectRoleDescriptorMap::value_type(
+        std::to_string(od->dbId) + ":" + std::to_string(od->objectType) + ":" + std::to_string(od->objectId), od));
+  }
 }
 
 // REVOKE INSERT ON TABLE payroll_table FROM payroll_dept_role;
@@ -709,9 +738,32 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
   object.loadKey(catalog);
   auto ret_object = rl->revokePrivileges(object);
   if (ret_object) {
+    // TODO: Add separate function to remove boilerplate code below
+    auto privs = ret_object->getPrivileges();
     insertOrUpdateObjectPrivileges(sqliteConnector_, roleName, rl->isUserPrivateRole(), *ret_object);
+    auto range = objectDescriptorMap_.equal_range(std::to_string(catalog.get_currentDB().dbId) + ":" +
+                                                  std::to_string(object.getObjectKey().permissionType) + ":" +
+                                                  std::to_string(object.getObjectKey().objectId));
+    for (auto d = range.first; d != range.second; ++d) {
+      // overwrite permissions
+      if (d->second->roleName == roleName) {
+        d->second->privs = privs;
+      }
+    }
   } else {
     deleteObjectPrivileges(sqliteConnector_, roleName, rl->isUserPrivateRole(), object);
+    auto range = objectDescriptorMap_.equal_range(std::to_string(catalog.get_currentDB().dbId) + ":" +
+                                                  std::to_string(object.getObjectKey().permissionType) + ":" +
+                                                  std::to_string(object.getObjectKey().objectId));
+    for (auto d = range.first; d != range.second;) {
+      // remove the entry
+      if (d->second->roleName == roleName) {
+        delete d->second;
+        d = objectDescriptorMap_.erase(d);
+      } else {
+        d++;
+      }
+    }
   }
 }
 

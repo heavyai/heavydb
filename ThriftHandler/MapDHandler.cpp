@@ -2345,7 +2345,6 @@ void MapDHandler::unshare_dashboard(const TSessionId& session,
 void MapDHandler::get_dashboard_grantees(std::vector<TDashboardGrantees>& dashboard_grantees,
                                          const TSessionId& session,
                                          int32_t dashboard_id) {
-  check_read_only("get_dashboard_grantees");
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
   Catalog_Namespace::UserMetadata user_meta;
@@ -2358,9 +2357,6 @@ void MapDHandler::get_dashboard_grantees(std::vector<TDashboardGrantees>& dashbo
   std::vector<ObjectRoleDescriptor*> objectsList;
   objectsList = SysCatalog::instance().getMetadataForObject(
       cat.get_currentDB().dbId, 3, dashboard_id);  // By default objectID is 3 for dashabaords
-  if (objectsList.empty()) {
-    THROW_MAPD_EXCEPTION("Exception: No users/roles have been assigned Dashboard id " + std::to_string(dashboard_id));
-  }
   for (auto object : objectsList) {
     TDashboardGrantees grantee;
     TDashboardPermissions perm;
