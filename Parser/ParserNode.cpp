@@ -2370,7 +2370,11 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
-
+  // check for superuser/owner
+  if (!session.get_currentUser().isSuper && session.get_currentUser().userId != td->userId) {
+    throw std::runtime_error("Current user doesn't have the privilege to alter table: " + *table +
+                             " Only superusers or owner can alter a table.");
+  }
   if (td == nullptr) {
     throw std::runtime_error("Table " + *table + " does not exist.");
   }
@@ -2383,6 +2387,11 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
+  // check for superuser/owner
+  if (!session.get_currentUser().isSuper && session.get_currentUser().userId != td->userId) {
+    throw std::runtime_error("Current user doesn't have the privilege to alter table: " + *table +
+                             " Only superusers or owner can alter a table.");
+  }
   if (td == nullptr) {
     throw std::runtime_error("Table " + *table + " does not exist.");
   }
@@ -3147,7 +3156,8 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
 
-  if (SysCatalog::instance().arePrivilegesOn() && !session.checkDBAccessPrivileges(DBObjectType::ViewDBObjectType, AccessPrivileges::CREATE_VIEW)) {
+  if (SysCatalog::instance().arePrivilegesOn() &&
+      !session.checkDBAccessPrivileges(DBObjectType::ViewDBObjectType, AccessPrivileges::CREATE_VIEW)) {
     throw std::runtime_error("View " + view_name_ + " will not be created. User has no create view privileges.");
   }
 
@@ -3174,7 +3184,8 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  if (SysCatalog::instance().arePrivilegesOn() && !session.checkDBAccessPrivileges(DBObjectType::ViewDBObjectType, AccessPrivileges::DROP_VIEW)) {
+  if (SysCatalog::instance().arePrivilegesOn() &&
+      !session.checkDBAccessPrivileges(DBObjectType::ViewDBObjectType, AccessPrivileges::DROP_VIEW)) {
     throw std::runtime_error("View " + *view_name + " will not be dropped. User has no drop view privileges.");
   }
 
