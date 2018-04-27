@@ -21,21 +21,6 @@ class DefaultIOFacet {
   using TransactionLogPtr = std::unique_ptr<TransactionLog>;
   using ColumnValidationFunction = std::function<bool(std::string const&)>;
 
-  template <typename TRANSACTION_FUNCTOR>
-  static void performTransaction(TRANSACTION_FUNCTOR transaction_functor) {
-    try {
-      // Invalidate the caches, success or fail (for now)
-      UpdateTriggeredCacheInvalidator::invalidateCaches();
-
-      TransactionLog transaction_tracker;
-      transaction_functor(transaction_tracker);
-      transaction_tracker.commitUpdate();
-    } catch (...) {
-      LOG(INFO) << "Update operation failed.";
-      throw;
-    }
-  }
-
   template <typename CATALOG_TYPE,
             typename TABLE_ID_TYPE,
             typename COLUMN_NAME_TYPE,
@@ -71,32 +56,23 @@ class DefaultIOFacet {
   static void deleteColumns(CATALOG_TYPE const& cat,
                             TABLE_ID_TYPE const&& table_id,
                             FRAGMENT_ID_TYPE const frag_id,
-                            VICTIM_OFFSET_LIST& victims) {
+                            VICTIM_OFFSET_LIST& victims,
+                            TransactionLog& transaction_tracker) {
     auto const* table_descriptor = cat.getMetadataForTable(table_id);
     auto* fragmenter = table_descriptor->fragmenter;
     CHECK(fragmenter);
 
     auto const* deleted_column_desc = cat.getDeletedColumn(table_descriptor);
     if (deleted_column_desc != nullptr) {
-      try {
-        // Invalidate the caches, success or fail (for now)
-        DeleteTriggeredCacheInvalidator::invalidateCaches();
-
-        typename FragmenterType::ModifyTransactionTracker transaction_tracker;
-        fragmenter->updateColumn(&cat,
-                                 table_descriptor,
-                                 deleted_column_desc,
-                                 frag_id,
-                                 victims,
-                                 ScalarTargetValue(int64_t(1L)),
-                                 SQLTypeInfo(),
-                                 Data_Namespace::MemoryLevel::CPU_LEVEL,
-                                 transaction_tracker);
-        transaction_tracker.commitUpdate();
-      } catch (...) {
-        LOG(INFO) << "Delete operation failed.";
-        throw;
-      }
+      fragmenter->updateColumn(&cat,
+                               table_descriptor,
+                               deleted_column_desc,
+                               frag_id,
+                               victims,
+                               ScalarTargetValue(int64_t(1L)),
+                               SQLTypeInfo(),
+                               Data_Namespace::MemoryLevel::CPU_LEVEL,
+                               transaction_tracker);
     } else {
       LOG(INFO) << "Delete metadata column unavailable; skipping delete operation.";
     }
@@ -135,15 +111,29 @@ class StorageIOFacility {
   using UpdateTargetColumnNameType = typename UpdateTargetColumnNamesList::value_type;
   using ColumnValidationFunction = typename IOFacility::ColumnValidationFunction;
 
-  class UpdateParameters {
+  class TransactionParameters {
    public:
-    UpdateParameters(UpdateParameters const& other)
-        : table_descriptor_(other.table_descriptor_),
-          update_column_names_(other.update_column_names_),
-          targets_meta_(other.targets_meta_) {}
-    UpdateParameters(TableDescriptorType const* table_desc,
-                     UpdateTargetColumnNamesList const& update_column_names,
-                     UpdateTargetTypeList const& target_types)
+    typename IOFacility::TransactionLog& getTransactionTracker() { return transaction_tracker_; }
+    void finalizeTransaction() { transaction_tracker_.commitUpdate(); }
+
+   private:
+    typename IOFacility::TransactionLog transaction_tracker_;
+  };
+
+  struct DeleteTransactionParameters : public TransactionParameters {
+   public:
+    DeleteTransactionParameters() {}
+
+   private:
+    DeleteTransactionParameters(DeleteTransactionParameters const& other) = delete;
+    DeleteTransactionParameters& operator=(DeleteTransactionParameters const& other) = delete;
+  };
+
+  class UpdateTransactionParameters : public TransactionParameters {
+   public:
+    UpdateTransactionParameters(TableDescriptorType const* table_desc,
+                                UpdateTargetColumnNamesList const& update_column_names,
+                                UpdateTargetTypeList const& target_types)
         : table_descriptor_(table_desc), update_column_names_(update_column_names), targets_meta_(target_types){};
 
     typename UpdateTargetColumnNamesList::size_type getUpdateColumnCount() const { return update_column_names_.size(); }
@@ -153,6 +143,9 @@ class StorageIOFacility {
     UpdateTargetColumnNamesList const& getUpdateColumnNames() const { return update_column_names_; }
 
    private:
+    UpdateTransactionParameters(UpdateTransactionParameters const& other) = delete;
+    UpdateTransactionParameters& operator=(UpdateTransactionParameters const& other) = delete;
+
     TableDescriptorType const* table_descriptor_;
     UpdateTargetColumnNamesList update_column_names_;
     UpdateTargetTypeList const& targets_meta_;
@@ -164,61 +157,56 @@ class StorageIOFacility {
     return IOFacility::yieldColumnValidator(catalog_, table_descriptor);
   }
 
-  UpdateCallback yieldUpdateCallback(UpdateParameters update_parameters) {
+  UpdateCallback yieldUpdateCallback(UpdateTransactionParameters& update_parameters) {
     using OffsetVector = std::vector<uint64_t>;
     using ScalarTargetValueVector = std::vector<ScalarTargetValue>;
 
-    auto callback = [this, update_parameters](FragmentUpdaterType const& update_log) -> void {
-      IOFacility::performTransaction(
-          [this, &update_log, update_parameters](typename IOFacility::TransactionLog& transaction_tracker) -> void {
-            auto fragment_index(update_log.getFragmentIndex());
-            auto const& targetsMetaInfo(update_parameters.getTargetsMetaInfo());
+    auto callback = [this, &update_parameters](FragmentUpdaterType const& update_log) -> void {
+      auto const& targetsMetaInfo(update_parameters.getTargetsMetaInfo());
 
-            int target_meta_info_base_index =
-                update_parameters.getTargetsMetaInfoSize() - update_parameters.getUpdateColumnCount() - 1;
-            // Iterate over each column
-            for (decltype(update_parameters.getUpdateColumnCount()) column_index = 0;
-                 column_index < update_parameters.getUpdateColumnCount();
-                 column_index++) {
-              OffsetVector column_offsets;
-              ScalarTargetValueVector scalar_target_values;
+      int target_meta_info_base_index =
+          update_parameters.getTargetsMetaInfoSize() - update_parameters.getUpdateColumnCount() - 1;
+      // Iterate over each column
+      for (decltype(update_parameters.getUpdateColumnCount()) column_index = 0;
+           column_index < update_parameters.getUpdateColumnCount();
+           column_index++) {
+        OffsetVector column_offsets;
+        ScalarTargetValueVector scalar_target_values;
 
-              // Iterate over each row, aggregate column update information into column_update_info
-              for (decltype(update_log.getEntryCount()) row_index = 0; row_index < update_log.getEntryCount();
-                   row_index++) {
-                auto const row(update_log.getEntryAt(row_index));
+        // Iterate over each row, aggregate column update information into column_update_info
+        for (decltype(update_log.getEntryCount()) row_index = 0; row_index < update_log.getEntryCount(); row_index++) {
+          auto const row(update_log.getEntryAt(row_index));
 
-                CHECK(!row.empty());
-                CHECK(row.size() == update_parameters.getTargetsMetaInfoSize());
-                int result_set_column_index = row.size() - update_parameters.getUpdateColumnCount() - 1 + column_index;
+          CHECK(!row.empty());
+          CHECK(row.size() == update_parameters.getTargetsMetaInfoSize());
+          int result_set_column_index = row.size() - update_parameters.getUpdateColumnCount() - 1 + column_index;
 
-                // Fetch offset
-                auto terminal_column_iter = std::prev(row.end());
-                const auto frag_offset_scalar_tv = boost::get<ScalarTargetValue>(&*terminal_column_iter);
-                CHECK(frag_offset_scalar_tv);
+          // Fetch offset
+          auto terminal_column_iter = std::prev(row.end());
+          const auto frag_offset_scalar_tv = boost::get<ScalarTargetValue>(&*terminal_column_iter);
+          CHECK(frag_offset_scalar_tv);
 
-                column_offsets.push_back(static_cast<uint64_t>(*(boost::get<int64_t>(frag_offset_scalar_tv))));
-                scalar_target_values.push_back(boost::get<ScalarTargetValue>(row[result_set_column_index]));
-              }
+          column_offsets.push_back(static_cast<uint64_t>(*(boost::get<int64_t>(frag_offset_scalar_tv))));
+          scalar_target_values.push_back(boost::get<ScalarTargetValue>(row[result_set_column_index]));
+        }
 
-              auto const& specific_target_meta_info(targetsMetaInfo[target_meta_info_base_index + column_index]);
-              IOFacility::updateColumn(catalog_,
-                                       update_log.getPhysicalTableId(),
-                                       update_parameters.getUpdateColumnNames()[column_index],
-                                       update_log.getFragmentId(),
-                                       column_offsets,
-                                       scalar_target_values,
-                                       specific_target_meta_info.get_type_info(),
-                                       transaction_tracker);
-            }
-          });
+        auto const& specific_target_meta_info(targetsMetaInfo[target_meta_info_base_index + column_index]);
+        IOFacility::updateColumn(catalog_,
+                                 update_log.getPhysicalTableId(),
+                                 update_parameters.getUpdateColumnNames()[column_index],
+                                 update_log.getFragmentId(),
+                                 column_offsets,
+                                 scalar_target_values,
+                                 specific_target_meta_info.get_type_info(),
+                                 update_parameters.getTransactionTracker());
+      }
     };
 
     return callback;
   }
 
-  UpdateCallback yieldDeleteCallback(TableDescriptorType const* table_descriptor) {
-    auto callback = [this, table_descriptor](FragmentUpdaterType const& update_log) -> void {
+  UpdateCallback yieldDeleteCallback(DeleteTransactionParameters& delete_parameters) {
+    auto callback = [this, &delete_parameters](FragmentUpdaterType const& update_log) -> void {
       DeleteVictimOffsetList victim_offsets;
 
       for (size_t i = 0; i < update_log.getEntryCount(); ++i) {
@@ -231,7 +219,11 @@ class StorageIOFacility {
         uint64_t fragment_offset = static_cast<uint64_t>(*(boost::get<int64_t>(scalar_tv)));
         victim_offsets.push_back(fragment_offset);
       }
-      IOFacility::deleteColumns(catalog_, update_log.getPhysicalTableId(), update_log.getFragmentId(), victim_offsets);
+      IOFacility::deleteColumns(catalog_,
+                                update_log.getPhysicalTableId(),
+                                update_log.getFragmentId(),
+                                victim_offsets,
+                                delete_parameters.getTransactionTracker());
     };
     return callback;
   }

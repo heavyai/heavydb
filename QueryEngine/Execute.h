@@ -252,15 +252,15 @@ class UpdateLogForFragment {
  public:
   using FragmentInfoType = Fragmenter_Namespace::FragmentInfo;
 
-  UpdateLogForFragment(FragmentInfoType const& fragment_info, size_t const, const std::shared_ptr<ResultSet>& rs );
+  UpdateLogForFragment(FragmentInfoType const& fragment_info, size_t const, const std::shared_ptr<ResultSet>& rs);
 
   std::vector<TargetValue> getEntryAt(const size_t index) const;
 
   size_t const getEntryCount() const;
   size_t const getFragmentIndex() const;
   FragmentInfoType const& getFragmentInfo() const;
-  auto const getPhysicalTableId() const -> decltype( FragmentInfoType::physicalTableId ) { return fragment_info_.physicalTableId; }
-  auto const getFragmentId() const -> decltype( FragmentInfoType::fragmentId ) { return fragment_info_.fragmentId; }
+  decltype( FragmentInfoType::physicalTableId ) const getPhysicalTableId() const { return fragment_info_.physicalTableId; }
+  decltype( FragmentInfoType::fragmentId ) const getFragmentId() const { return fragment_info_.fragmentId; }
 
   SQLTypeInfo getColumnType(const size_t col_idx) const;
 

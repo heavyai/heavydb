@@ -1123,11 +1123,17 @@ void RelAlgExecutor::executeUpdateViaCompound(const RelCompound* compound,
   CompilationOptions co_project = co;
   co_project.device_type_ = ExecutorDeviceType::CPU;
 
-  auto update_callback = yieldUpdateCallback(UpdateParameters(
-      compound->getModifiedTableDescriptor(), compound->getTargetColumns(), compound->getOutputMetainfo()));
-
-  executor_->executeUpdate(
-      work_unit.exe_unit, table_infos.front(), co_project, eo, cat_, executor_->row_set_mem_owner_, update_callback);
+  try {
+      UpdateTriggeredCacheInvalidator::invalidateCaches();
+      
+      UpdateTransactionParameters update_params( compound->getModifiedTableDescriptor(), compound->getTargetColumns(), compound->getOutputMetainfo() );
+      auto update_callback = yieldUpdateCallback( update_params );
+      executor_->executeUpdate( work_unit.exe_unit, table_infos.front(), co_project, eo, cat_, executor_->row_set_mem_owner_, update_callback);
+      update_params.finalizeTransaction();
+  } catch( ... ) {
+      LOG(INFO) << "Update operation failed.";
+      throw;
+  }
 }
 
 void RelAlgExecutor::executeUpdateViaProject(const RelProject* project,
@@ -1156,11 +1162,19 @@ void RelAlgExecutor::executeUpdateViaProject(const RelProject* project,
     }
   }
 
-  auto update_callback = yieldUpdateCallback(UpdateParameters(
-      project->getModifiedTableDescriptor(), project->getTargetColumns(), project->getOutputMetainfo()));
+  try {
+      UpdateTriggeredCacheInvalidator::invalidateCaches();
+      
+      UpdateTransactionParameters update_params( project->getModifiedTableDescriptor(), project->getTargetColumns(), project->getOutputMetainfo() );
+      auto update_callback = yieldUpdateCallback(update_params);
+      executor_->executeUpdate( work_unit.exe_unit, table_infos.front(), co_project, eo, cat_, executor_->row_set_mem_owner_, update_callback);
+      update_params.finalizeTransaction();
+  } catch( ... ) {
+      LOG(INFO) << "Update operation failed.";
+      throw;
+  }
 
-  executor_->executeUpdate(
-      work_unit.exe_unit, table_infos.front(), co_project, eo, cat_, executor_->row_set_mem_owner_, update_callback);
+
 }
 
 void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
@@ -1173,13 +1187,24 @@ void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
   CompilationOptions co_project = co;
   co_project.device_type_ = ExecutorDeviceType::CPU;
 
-  executor_->executeUpdate(work_unit.exe_unit,
-                           table_infos.front(),
-                           co_project,
-                           eo,
-                           cat_,
-                           executor_->row_set_mem_owner_,
-                           yieldDeleteCallback(compound->getModifiedTableDescriptor()));
+  try{
+      DeleteTriggeredCacheInvalidator::invalidateCaches();
+
+      DeleteTransactionParameters delete_params;
+      auto delete_callback = yieldDeleteCallback( delete_params );
+
+      executor_->executeUpdate(work_unit.exe_unit,
+                         table_infos.front(),
+                         co_project,
+                         eo,
+                         cat_,
+                         executor_->row_set_mem_owner_,
+                         delete_callback);
+      delete_params.finalizeTransaction();
+  } catch(...) {
+      LOG(INFO) << "Delete operation failed.";
+      throw;
+  }
 }
 
 void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
@@ -1203,13 +1228,25 @@ void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
     }
   }
 
-  executor_->executeUpdate(work_unit.exe_unit,
+  try{
+      DeleteTriggeredCacheInvalidator::invalidateCaches();
+
+      DeleteTransactionParameters delete_params;
+      auto delete_callback = yieldDeleteCallback( delete_params );
+
+      executor_->executeUpdate(work_unit.exe_unit,
                            table_infos.front(),
                            co_project,
                            eo,
                            cat_,
                            executor_->row_set_mem_owner_,
-                           yieldDeleteCallback(project->getModifiedTableDescriptor()));
+                           delete_callback);
+  } catch(...) {
+      LOG(INFO) << "Delete operation failed.";
+      throw;
+  }
+  
+
 }
 
 ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
