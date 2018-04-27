@@ -250,19 +250,24 @@ struct hash<std::pair<int, int>> {
 
 class UpdateLogForFragment {
  public:
-  UpdateLogForFragment(const size_t fragment_index, const std::shared_ptr<ResultSet>& rs);
+  using FragmentInfoType = Fragmenter_Namespace::FragmentInfo;
+
+  UpdateLogForFragment(FragmentInfoType const& fragment_info, size_t const, const std::shared_ptr<ResultSet>& rs );
 
   std::vector<TargetValue> getEntryAt(const size_t index) const;
 
-  size_t getEntryCount() const;
-
-  size_t getFragmentIndex() const;
+  size_t const getEntryCount() const;
+  size_t const getFragmentIndex() const;
+  FragmentInfoType const& getFragmentInfo() const;
+  auto const getPhysicalTableId() const -> decltype( FragmentInfoType::physicalTableId ) { return fragment_info_.physicalTableId; }
+  auto const getFragmentId() const -> decltype( FragmentInfoType::fragmentId ) { return fragment_info_.fragmentId; }
 
   SQLTypeInfo getColumnType(const size_t col_idx) const;
 
   using Callback = std::function<void(const UpdateLogForFragment&)>;
 
  private:
+  FragmentInfoType const& fragment_info_;
   size_t fragment_index_;
   std::shared_ptr<ResultSet> rs_;
 };
@@ -272,7 +277,7 @@ class Executor {
                 "Host hardware not supported, unexpected size of float / double.");
 
  public:
-  typedef std::deque<Fragmenter_Namespace::FragmentInfo> TableFragments;
+  using TableFragments = std::deque<Fragmenter_Namespace::FragmentInfo>;
 
   Executor(const int db_id,
            const size_t block_size_x,

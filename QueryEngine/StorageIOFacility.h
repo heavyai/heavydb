@@ -37,28 +37,29 @@ class DefaultIOFacet {
   }
 
   template <typename CATALOG_TYPE,
-            typename TABLE_DESCRIPTOR_TYPE,
+            typename TABLE_ID_TYPE,
             typename COLUMN_NAME_TYPE,
-            typename FRAGMENT_INDEX_TYPE,
+            typename FRAGMENT_ID_TYPE,
             typename FRAGMENT_OFFSET_LIST_TYPE,
             typename UPDATE_VALUES_LIST_TYPE,
             typename COLUMN_TYPE_INFO>
   static void updateColumn(CATALOG_TYPE const& cat,
-                           TABLE_DESCRIPTOR_TYPE const& table_descriptor,
+                           TABLE_ID_TYPE const&& table_id,
                            COLUMN_NAME_TYPE const& column_name,
-                           FRAGMENT_INDEX_TYPE const frag_index,
+                           FRAGMENT_ID_TYPE const frag_id,
                            FRAGMENT_OFFSET_LIST_TYPE const& frag_offsets,
                            UPDATE_VALUES_LIST_TYPE const& update_values,
                            COLUMN_TYPE_INFO const& col_type_info,
                            TransactionLog& transaction_tracker) {
-    const auto fragmenter = dynamic_cast<Fragmenter_Namespace::InsertOrderFragmenter*>(table_descriptor->fragmenter);
+    auto const* table_descriptor = cat.getMetadataForTable(table_id);
+    auto* fragmenter = table_descriptor->fragmenter;
     CHECK(fragmenter);
-    auto const* target_column = cat.getMetadataForColumn(table_descriptor->tableId, column_name);
+    auto const* target_column = cat.getMetadataForColumn(table_id, column_name);
 
     fragmenter->updateColumn(&cat,
                              table_descriptor,
                              target_column,
-                             frag_index,
+                             frag_id,
                              frag_offsets,
                              update_values,
                              col_type_info,
@@ -66,13 +67,15 @@ class DefaultIOFacet {
                              transaction_tracker);
   }
 
-  template <typename CATALOG_TYPE, typename TABLE_TYPE, typename FRAGMENT_INDEX, typename VICTIM_OFFSET_LIST>
+  template <typename CATALOG_TYPE, typename TABLE_ID_TYPE, typename FRAGMENT_ID_TYPE, typename VICTIM_OFFSET_LIST>
   static void deleteColumns(CATALOG_TYPE const& cat,
-                            TABLE_TYPE const& table_descriptor,
-                            FRAGMENT_INDEX frag_index,
+                            TABLE_ID_TYPE const&& table_id,
+                            FRAGMENT_ID_TYPE const frag_id,
                             VICTIM_OFFSET_LIST& victims) {
-    const auto fragmenter = dynamic_cast<Fragmenter_Namespace::InsertOrderFragmenter*>(table_descriptor->fragmenter);
+    auto const* table_descriptor = cat.getMetadataForTable(table_id);
+    auto* fragmenter = table_descriptor->fragmenter;
     CHECK(fragmenter);
+
     auto const* deleted_column_desc = cat.getDeletedColumn(table_descriptor);
     if (deleted_column_desc != nullptr) {
       try {
@@ -83,7 +86,7 @@ class DefaultIOFacet {
         fragmenter->updateColumn(&cat,
                                  table_descriptor,
                                  deleted_column_desc,
-                                 frag_index,
+                                 frag_id,
                                  victims,
                                  ScalarTargetValue(int64_t(1L)),
                                  SQLTypeInfo(),
@@ -200,9 +203,9 @@ class StorageIOFacility {
 
               auto const& specific_target_meta_info(targetsMetaInfo[target_meta_info_base_index + column_index]);
               IOFacility::updateColumn(catalog_,
-                                       update_parameters.getTableDescriptor(),
+                                       update_log.getPhysicalTableId(),
                                        update_parameters.getUpdateColumnNames()[column_index],
-                                       fragment_index,
+                                       update_log.getFragmentId(),
                                        column_offsets,
                                        scalar_target_values,
                                        specific_target_meta_info.get_type_info(),
@@ -216,7 +219,6 @@ class StorageIOFacility {
 
   UpdateCallback yieldDeleteCallback(TableDescriptorType const* table_descriptor) {
     auto callback = [this, table_descriptor](FragmentUpdaterType const& update_log) -> void {
-      auto fragment_index(update_log.getFragmentIndex());
       DeleteVictimOffsetList victim_offsets;
 
       for (size_t i = 0; i < update_log.getEntryCount(); ++i) {
@@ -229,7 +231,7 @@ class StorageIOFacility {
         uint64_t fragment_offset = static_cast<uint64_t>(*(boost::get<int64_t>(scalar_tv)));
         victim_offsets.push_back(fragment_offset);
       }
-      IOFacility::deleteColumns(catalog_, table_descriptor, fragment_index, victim_offsets);
+      IOFacility::deleteColumns(catalog_, update_log.getPhysicalTableId(), update_log.getFragmentId(), victim_offsets);
     };
     return callback;
   }

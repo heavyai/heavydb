@@ -16,18 +16,22 @@
 
 #include "Execute.h"
 
-UpdateLogForFragment::UpdateLogForFragment(const size_t fragment_index, const std::shared_ptr<ResultSet>& rs)
-    : fragment_index_(fragment_index), rs_(rs) {}
+UpdateLogForFragment::UpdateLogForFragment( FragmentInfoType const& fragment_info, size_t const fragment_index, const std::shared_ptr<ResultSet>& rs )
+    : fragment_info_( fragment_info ), fragment_index_(fragment_index), rs_(rs) {}
 
 std::vector<TargetValue> UpdateLogForFragment::getEntryAt(const size_t index) const {
   return rs_->getRowAtNoTranslations(index);
 }
 
-size_t UpdateLogForFragment::getEntryCount() const {
+UpdateLogForFragment::FragmentInfoType const& UpdateLogForFragment::getFragmentInfo() const {
+  return fragment_info_;
+}
+
+size_t const UpdateLogForFragment::getEntryCount() const {
   return rs_->entryCount();
 }
 
-size_t UpdateLogForFragment::getFragmentIndex() const {
+size_t const UpdateLogForFragment::getFragmentIndex() const {
   return fragment_index_;
 }
 
@@ -101,6 +105,6 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
     const auto& proj_fragment_results = current_fragment_execution_dispatch.getFragmentResults()[0];
     const auto proj_result_set = boost::get<RowSetPtr>(proj_fragment_results.first);
     CHECK(proj_result_set);
-    cb({fragment_index, proj_result_set});
+    cb({outer_fragments[fragment_index], fragment_index, proj_result_set});
   }
 }
