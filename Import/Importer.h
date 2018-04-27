@@ -749,11 +749,13 @@ class Importer : public DataStreamSink {
                                      int rowLimit,
                                      const CopyParams& copy_params);
   static bool gdalFileExists(const std::string& fileName, const CopyParams& copy_params);
+  static bool gdalFileOrDirectoryExists(const std::string& fileName, const CopyParams& copy_params);
   static std::vector<std::string> gdalGetAllFilesInArchive(const std::string& fileName, const CopyParams& copy_params);
   static bool gdalSupportsNetworkFileAccess();
 
  private:
   static void initGDAL();
+  static bool gdalStatInternal(const std::string& path, const CopyParams& copy_params, bool also_dir);
   static OGRDataSource* openGDALDataset(const std::string& fileName, const CopyParams& copy_params);
   static void setGDALAuthorizationTokens(const CopyParams& copy_params);
   std::string import_id;

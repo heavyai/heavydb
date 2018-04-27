@@ -1889,6 +1889,11 @@ std::string get_actual_geo_filename(const std::string& file_name_in,
 
   // is it an archive?
   if (is_archive) {
+    // first check it exists
+    if (!Importer_NS::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
+      THROW_MAPD_EXCEPTION("File does not exist: " + file_name_in);
+    }
+
     // get the recursive list of all files in the archive
     std::vector<std::string> files = Importer_NS::Importer::gdalGetAllFilesInArchive(file_name, copy_params);
 

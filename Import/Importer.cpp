@@ -3308,20 +3308,36 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::s
   return cds;
 }
 
-/* static */
-bool Importer::gdalFileExists(const std::string& fileName, const CopyParams& copy_params) {
+bool Importer::gdalStatInternal(const std::string& path, const CopyParams& copy_params, bool also_dir) {
   // lazy init GDAL
   initGDAL();
 
   // set authorization tokens
   setGDALAuthorizationTokens(copy_params);
 
-  // stat file
+  // stat path
   VSIStatBufL sb;
-  int result = VSIStatExL(fileName.c_str(), &sb, VSI_STAT_EXISTS_FLAG);
+  int result = VSIStatExL(path.c_str(), &sb, VSI_STAT_EXISTS_FLAG);
   if (result < 0)
     return false;
-  return VSI_ISREG(sb.st_mode);
+
+  // exists?
+  if (also_dir && (VSI_ISREG(sb.st_mode) || VSI_ISDIR(sb.st_mode))) {
+    return true;
+  } else if (VSI_ISREG(sb.st_mode)) {
+    return true;
+  }
+  return false;
+}
+
+/* static */
+bool Importer::gdalFileExists(const std::string& path, const CopyParams& copy_params) {
+  return gdalStatInternal(path, copy_params, false);
+}
+
+/* static */
+bool Importer::gdalFileOrDirectoryExists(const std::string& path, const CopyParams& copy_params) {
+  return gdalStatInternal(path, copy_params, true);
 }
 
 void gdalGatherFilesInArchiveRecursive(const std::string& archive_path, std::vector<std::string>& files) {
