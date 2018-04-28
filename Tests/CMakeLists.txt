@@ -104,6 +104,7 @@ set(SANITY_TESTS
   TopKTest
   TokenCompletionHintsTest
   MapDQLCommandTest
+  DBObjectPrivilegesTest
 )
 set_tests_properties(${SANITY_TESTS} PROPERTIES LABELS "sanity")
 
