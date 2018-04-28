@@ -27,6 +27,7 @@
 
 namespace Fragmenter_Namespace {
 class InsertOrderFragmenter;
+class FragmentInfo;
 }
 
 namespace Catalog_Namespace {
@@ -35,7 +36,7 @@ class Catalog;
 
 struct TableDescriptor;
 
-using MetaDataKey = std::pair<const TableDescriptor*, int>;
+using MetaDataKey = std::pair<const TableDescriptor*, Fragmenter_Namespace::FragmentInfo*>;
 
 // this roll records stuff that need to be roll back/forw after upd/del fails or finishes
 struct UpdelRoll {

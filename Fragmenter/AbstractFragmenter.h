@@ -128,7 +128,7 @@ class AbstractFragmenter {
                             UpdelRoll& updelRoll) = 0;
 
   virtual void updateColumnMetadata(const ColumnDescriptor* cd,
-                                    const FragmentInfo& fragment,
+                                    FragmentInfo& fragment,
                                     std::shared_ptr<Chunk_NS::Chunk> chunk,
                                     const bool null,
                                     const double dmax,
@@ -139,7 +139,7 @@ class AbstractFragmenter {
                                     UpdelRoll& updelRoll) = 0;
 
   virtual void updateMetadata(const Catalog_Namespace::Catalog* catalog,
-                              const TableDescriptor* td,
+                              const MetaDataKey& key,
                               UpdelRoll& updelRoll) = 0;
 };
 

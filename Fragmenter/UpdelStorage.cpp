@@ -84,11 +84,11 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
     return;
   CHECK(nrow == nval || 1 == nval);
 
-  const auto fragment_it = std::find_if(fragmentInfoVec_.begin(),
-                                        fragmentInfoVec_.end(),
-                                        [=](const FragmentInfo& f) -> bool { return f.fragmentId == fragmentId; });
+  auto fragment_it = std::find_if(fragmentInfoVec_.begin(), fragmentInfoVec_.end(), [=](FragmentInfo& f) -> bool {
+    return f.fragmentId == fragmentId;
+  });
   CHECK(fragment_it != fragmentInfoVec_.end());
-  const auto& fragment = *fragment_it;
+  auto& fragment = *fragment_it;
   auto chunk_meta_it = fragment.getChunkMetadataMapPhysical().find(cd->columnId);
   CHECK(chunk_meta_it != fragment.getChunkMetadataMapPhysical().end());
   ChunkKey chunk_key{catalog->get_currentDB().dbId, td->tableId, cd->columnId, fragment.fragmentId};
@@ -237,7 +237,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
 }
 
 void InsertOrderFragmenter::updateColumnMetadata(const ColumnDescriptor* cd,
-                                                 const FragmentInfo& fragment,
+                                                 FragmentInfo& fragment,
                                                  std::shared_ptr<Chunk_NS::Chunk> chunk,
                                                  const bool null,
                                                  const double dmax,
@@ -247,7 +247,7 @@ void InsertOrderFragmenter::updateColumnMetadata(const ColumnDescriptor* cd,
                                                  const SQLTypeInfo& rhsType,
                                                  UpdelRoll& updelRoll) {
   auto td = updelRoll.catalog->getMetadataForTable(cd->tableId);
-  auto key = std::make_pair(td, fragment.fragmentId);
+  auto key = std::make_pair(td, &fragment);
   std::lock_guard<std::mutex> lck(updelRoll.mutex);
   if (0 == updelRoll.chunkMetadata.count(key))
     updelRoll.chunkMetadata[key] = fragment.getChunkMetadataMapPhysical();
@@ -278,27 +278,25 @@ void InsertOrderFragmenter::updateColumnMetadata(const ColumnDescriptor* cd,
 }
 
 void InsertOrderFragmenter::updateMetadata(const Catalog_Namespace::Catalog* catalog,
-                                           const TableDescriptor* td,
+                                           const MetaDataKey& key,
                                            UpdelRoll& updelRoll) {
   mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
-  for (auto& fragmentInfo : fragmentInfoVec_) {
-    auto key = std::make_pair(td, fragmentInfo.fragmentId);
-    if (updelRoll.chunkMetadata.count(key)) {
-      const auto& chunkMetadata = updelRoll.chunkMetadata[key];
-      fragmentInfo.shadowChunkMetadataMap = chunkMetadata;
-      fragmentInfo.setChunkMetadataMap(chunkMetadata);
-      fragmentInfo.shadowNumTuples = updelRoll.numTuples[key];
-      fragmentInfo.setPhysicalNumTuples(fragmentInfo.shadowNumTuples);
-      // TODO(ppan): When fragment-level compaction is enable, the following code should suffice.
-      // When not (ie. existing code), we'll revert to update InsertOrderFragmenter::varLenColInfo_
-      /*
-      for (const auto cit : chunkMetadata) {
-        const auto& cd = *catalog->getMetadataForColumn(td->tableId, cit.first);
-        if (cd.columnType.get_size() < 0)
-          fragmentInfo.varLenColInfox[cd.columnId] = cit.second.numBytes;
-      }
-      */
+  if (updelRoll.chunkMetadata.count(key)) {
+    auto& fragmentInfo = *key.second;
+    const auto& chunkMetadata = updelRoll.chunkMetadata[key];
+    fragmentInfo.shadowChunkMetadataMap = chunkMetadata;
+    fragmentInfo.setChunkMetadataMap(chunkMetadata);
+    fragmentInfo.shadowNumTuples = updelRoll.numTuples[key];
+    fragmentInfo.setPhysicalNumTuples(fragmentInfo.shadowNumTuples);
+    // TODO(ppan): When fragment-level compaction is enable, the following code should suffice.
+    // When not (ie. existing code), we'll revert to update InsertOrderFragmenter::varLenColInfo_
+    /*
+    for (const auto cit : chunkMetadata) {
+      const auto& cd = *catalog->getMetadataForColumn(td->tableId, cit.first);
+      if (cd.columnType.get_size() < 0)
+        fragmentInfo.varLenColInfox[cd.columnId] = cit.second.numBytes;
     }
+    */
   }
 }
 
@@ -306,10 +304,11 @@ void InsertOrderFragmenter::updateMetadata(const Catalog_Namespace::Catalog* cat
 
 void UpdelRoll::commitUpdate() {
   // for each physical table
-  for (auto tableDescriptor : tableDescriptors) {
+  for (auto tableDescriptor : tableDescriptors)
     catalog->get_dataMgr().checkpoint(catalog->get_currentDB().dbId, tableDescriptor->tableId);
-    tableDescriptor->fragmenter->updateMetadata(catalog, tableDescriptor, *this);
-  }
+  // for each dirty fragment
+  for (auto& cm : chunkMetadata)
+    cm.first.first->fragmenter->updateMetadata(catalog, cm.first, *this);
   dirtyChunks.clear();
   // flush gpu dirty chunks if update was not on gpu
   if (memoryLevel != Data_Namespace::MemoryLevel::GPU_LEVEL)

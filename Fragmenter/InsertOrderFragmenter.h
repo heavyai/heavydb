@@ -129,7 +129,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
                             UpdelRoll& updelRoll);
 
   virtual void updateColumnMetadata(const ColumnDescriptor* cd,
-                                    const FragmentInfo& fragment,
+                                    FragmentInfo& fragment,
                                     std::shared_ptr<Chunk_NS::Chunk> chunk,
                                     const bool null,
                                     const double dmax,
@@ -139,9 +139,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
                                     const SQLTypeInfo& rhsType,
                                     UpdelRoll& updelRoll);
 
-  virtual void updateMetadata(const Catalog_Namespace::Catalog* catalog,
-                              const TableDescriptor* td,
-                              UpdelRoll& updelRoll);
+  virtual void updateMetadata(const Catalog_Namespace::Catalog* catalog, const MetaDataKey& key, UpdelRoll& updelRoll);
 
  private:
   std::vector<int> chunkKeyPrefix_;
