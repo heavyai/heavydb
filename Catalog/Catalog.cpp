@@ -1612,7 +1612,7 @@ void Catalog::buildMaps() {
   sqliteConnector_.query(frontendViewQuery);
   numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
-    FrontendViewDescriptor* vd = new FrontendViewDescriptor();
+    std::shared_ptr<FrontendViewDescriptor> vd = std::make_shared<FrontendViewDescriptor>();
     vd->viewId = sqliteConnector_.getData<int>(r, 0);
     vd->viewState = sqliteConnector_.getData<string>(r, 1);
     vd->viewName = sqliteConnector_.getData<string>(r, 2);
@@ -1772,9 +1772,7 @@ void Catalog::addFrontendViewToMap(FrontendViewDescriptor& vd) {
 }
 
 void Catalog::addFrontendViewToMapNoLock(FrontendViewDescriptor& vd) {
-  FrontendViewDescriptor* new_vd = new FrontendViewDescriptor();
-  *new_vd = vd;
-  dashboardDescriptorMap_[std::to_string(vd.userId) + ":" + vd.viewName] = new_vd;
+  dashboardDescriptorMap_[std::to_string(vd.userId) + ":" + vd.viewName] = std::make_shared<FrontendViewDescriptor>(vd);
 }
 
 void Catalog::addLinkToMap(LinkDescriptor& ld) {
@@ -1913,7 +1911,7 @@ const FrontendViewDescriptor* Catalog::getMetadataForFrontendView(const string& 
   if (viewDescIt == dashboardDescriptorMap_.end()) {  // check to make sure view exists
     return nullptr;
   }
-  return viewDescIt->second;  // returns pointer to view descriptor
+  return viewDescIt->second.get();  // returns pointer to view descriptor
 }
 
 const FrontendViewDescriptor* Catalog::getMetadataForDashboard(const int32_t id) const {
@@ -1923,7 +1921,7 @@ const FrontendViewDescriptor* Catalog::getMetadataForDashboard(const int32_t id)
   {
     std::lock_guard<std::mutex> lock(cat_mutex_);
     for (auto descp : dashboardDescriptorMap_) {
-      auto dash = descp.second;
+      auto dash = descp.second.get();
       if (dash->viewId == id) {
         userId = std::to_string(dash->userId);
         name = dash->viewName;
@@ -1945,7 +1943,7 @@ void Catalog::deleteMetadataForDashboard(const int32_t id) {
   {
     std::lock_guard<std::mutex> lock(cat_mutex_);
     for (auto descp : dashboardDescriptorMap_) {
-      auto dash = descp.second;
+      auto dash = descp.second.get();
       if (dash->viewId == id) {
         userId = std::to_string(dash->userId);
         name = dash->viewName;
@@ -2026,7 +2024,7 @@ list<const TableDescriptor*> Catalog::getAllTableMetadata() const {
 list<const FrontendViewDescriptor*> Catalog::getAllFrontendViewMetadata() const {
   list<const FrontendViewDescriptor*> view_list;
   for (auto p : dashboardDescriptorMap_)
-    view_list.push_back(p.second);
+    view_list.push_back(p.second.get());
   return view_list;
 }
 
@@ -2785,7 +2783,7 @@ void Catalog::replaceDashboard(FrontendViewDescriptor& vd) {
 
   bool found{false};
   for (auto descp : dashboardDescriptorMap_) {
-    auto dash = descp.second;
+    auto dash = descp.second.get();
     if (dash->viewId == vd.viewId) {
       found = true;
       auto viewDescIt = dashboardDescriptorMap_.find(std::to_string(dash->userId) + ":" + dash->viewName);

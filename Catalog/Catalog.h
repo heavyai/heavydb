@@ -237,7 +237,7 @@ class Catalog {
   typedef std::tuple<int, int> ColumnIdKey;
   typedef std::map<ColumnIdKey, ColumnDescriptor*> ColumnDescriptorMapById;
   typedef std::map<DictRef, std::unique_ptr<DictDescriptor>> DictDescriptorMapById;
-  typedef std::map<std::string, FrontendViewDescriptor*> FrontendViewDescriptorMap;
+  typedef std::map<std::string, std::shared_ptr<FrontendViewDescriptor>> FrontendViewDescriptorMap;
   typedef std::map<std::string, LinkDescriptor*> LinkDescriptorMap;
   typedef std::map<int, LinkDescriptor*> LinkDescriptorMapById;
   typedef std::unordered_map<const TableDescriptor*, const ColumnDescriptor*> DeletedColumnPerTableMap;
