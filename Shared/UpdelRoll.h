@@ -19,6 +19,7 @@
 #include <map>
 #include <set>
 #include <mutex>
+#include <utility>
 
 #include "../Chunk/Chunk.h"
 #include "../DataMgr/ChunkMetadata.h"
@@ -34,6 +35,8 @@ class Catalog;
 
 struct TableDescriptor;
 
+using MetaDataKey = std::pair<const TableDescriptor*, int>;
+
 // this roll records stuff that need to be roll back/forw after upd/del fails or finishes
 struct UpdelRoll {
   ~UpdelRoll() {
@@ -47,15 +50,14 @@ struct UpdelRoll {
   std::set<ChunkKey> dirtyChunkeys;
 
   // new FragmentInfo.numTuples
-  std::map<int, size_t> numTuples;
+  std::map<MetaDataKey, size_t> numTuples;
 
   // new FragmentInfo.ChunkMetadata;
-  std::map<int, std::map<int, ChunkMetadata>> chunkMetadata;
+  std::map<MetaDataKey, std::map<int, ChunkMetadata>> chunkMetadata;
 
   // helper members
   const Catalog_Namespace::Catalog* catalog;
-  const TableDescriptor* tableDescriptor;
-  Fragmenter_Namespace::InsertOrderFragmenter* insertOrderFragmenter;
+  std::set<const TableDescriptor*> tableDescriptors;
   Data_Namespace::MemoryLevel memoryLevel{Data_Namespace::MemoryLevel::CPU_LEVEL};
 
   void cancelUpdate();
