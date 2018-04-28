@@ -181,7 +181,8 @@ void deleteObjectPrivileges(std::unique_ptr<SqliteConnector>& sqliteConnector,
   DBObjectKey key = object.getObjectKey();
 
   sqliteConnector->query_with_text_params(
-      "DELETE FROM mapd_object_permissions WHERE roleName = ?1 and roleType = ?2 and objectPermissionsType = ?3 and dbId = "
+      "DELETE FROM mapd_object_permissions WHERE roleName = ?1 and roleType = ?2 and objectPermissionsType = ?3 and "
+      "dbId = "
       "?4 "
       "and objectId = ?5",
       std::vector<std::string>{roleName,
@@ -699,11 +700,9 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
                         " failed because role or user with this name does not exist.");
   }
   object.loadKey(catalog);
-  object = rl->revokePrivileges(object);
-  std::vector<std::string> objectKey = object.toString();
-  auto privs = object.getPrivileges();
-  if (privs.hasAny()) {
-    insertOrUpdateObjectPrivileges(sqliteConnector_, roleName, rl->isUserPrivateRole(), object);
+  auto ret_object = rl->revokePrivileges(object);
+  if (ret_object) {
+    insertOrUpdateObjectPrivileges(sqliteConnector_, roleName, rl->isUserPrivateRole(), *ret_object);
   } else {
     deleteObjectPrivileges(sqliteConnector_, roleName, rl->isUserPrivateRole(), object);
   }
@@ -1398,13 +1397,11 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
 
     SysCatalog::instance().populateRoleDbObjects(objects);
 
-
   } catch (const std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
-
 }
 
 void Catalog::CheckAndExecuteMigrations() {
@@ -1463,7 +1460,6 @@ void SysCatalog::buildRoleMap() {
 void SysCatalog::populateRoleDbObjects(const std::vector<DBObject>& objects) {
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
-
     for (auto dbobject : objects) {
       Role* role = getMetadataForUserRole(dbobject.getOwner());
       if (role) {
@@ -1480,7 +1476,6 @@ void SysCatalog::populateRoleDbObjects(const std::vector<DBObject>& objects) {
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
-
 }
 
 void SysCatalog::buildUserRoleMap() {

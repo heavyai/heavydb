@@ -43,7 +43,7 @@ class Role {
    * @type DBObjectMap
    * @brief Maps DBObject's object keys to pointers to DBObject class objects allocated on the heap
    */
-  typedef std::map<DBObjectKey, DBObject*> DBObjectMap;
+  typedef std::map<DBObjectKey, std::unique_ptr<DBObject>> DBObjectMap;
 
  public:
   Role(const std::string& name);
@@ -58,7 +58,7 @@ class Role {
   virtual void removeRole(Role* role) = 0;
 
   virtual void grantPrivileges(const DBObject& object) = 0;
-  virtual DBObject revokePrivileges(const DBObject& object) = 0;
+  virtual DBObject* revokePrivileges(const DBObject& object) = 0;
   virtual void getPrivileges(DBObject& object) = 0;
   virtual void grantRole(Role* role) = 0;
   virtual void revokeRole(Role* role) = 0;
@@ -96,7 +96,7 @@ class UserRole : public Role {
   virtual void removeRole(Role* role);
 
   virtual void grantPrivileges(const DBObject& object);
-  virtual DBObject revokePrivileges(const DBObject& object);
+  virtual DBObject* revokePrivileges(const DBObject& object);
   virtual void getPrivileges(DBObject& object);
   virtual void grantRole(Role* role);
   virtual void revokeRole(Role* role);
@@ -107,8 +107,7 @@ class UserRole : public Role {
   virtual bool isUserPrivateRole() const;
   virtual std::vector<std::string> getRoles() const;
   virtual void dropDbObject(const DBObjectKey& objectKey);
-  virtual std::string userName() const {return userName_; };
-
+  virtual std::string userName() const { return userName_; };
 
  private:
   int32_t userId_;
@@ -131,7 +130,7 @@ class GroupRole : public Role {
   virtual void removeRole(Role* role);
 
   virtual void grantPrivileges(const DBObject& object);
-  virtual DBObject revokePrivileges(const DBObject& object);
+  virtual DBObject* revokePrivileges(const DBObject& object);
   virtual void getPrivileges(DBObject& object);
   virtual void grantRole(Role* role);
   virtual void revokeRole(Role* role);
@@ -143,7 +142,6 @@ class GroupRole : public Role {
   virtual std::vector<std::string> getRoles() const;
   virtual void dropDbObject(const DBObjectKey& objectKey);
   virtual std::string userName() const;
-
 
  private:
   bool userPrivateRole_;

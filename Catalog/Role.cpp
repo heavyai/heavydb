@@ -19,9 +19,6 @@ Role::Role(const Role& role) : roleName_(role.roleName_) {
 }
 
 Role::~Role() {
-  for (auto dbObjectIt = dbObjectMap_.begin(); dbObjectIt != dbObjectMap_.end(); ++dbObjectIt) {
-    delete dbObjectIt->second;
-  }
   dbObjectMap_.clear();
 }
 
@@ -33,14 +30,14 @@ DBObject* Role::findDbObject(const DBObjectKey& objectKey) const {
   DBObject* dbObject = nullptr;
   auto dbObjectIt = dbObjectMap_.find(objectKey);
   if (dbObjectIt != dbObjectMap_.end()) {
-    dbObject = dbObjectIt->second;
+    dbObject = dbObjectIt->second.get();
   }
   return dbObject;
 }
 
 void Role::copyDbObjects(const Role& role) {
   for (auto it = role.dbObjectMap_.begin(); it != role.dbObjectMap_.end(); ++it) {
-    dbObjectMap_[it->first] = new DBObject(*(it->second));
+    dbObjectMap_[it->first] = std::make_unique<DBObject>(*it->second.get());
   }
 }
 
@@ -164,13 +161,13 @@ void UserRole::grantPrivileges(const DBObject& object) {
   // used for create_table and CTAS commands only, called from createDBObject() api
   auto dbObject = findDbObject(object.getObjectKey());
   if (!dbObject) {
-    dbObjectMap_[object.getObjectKey()] = new DBObject(object);
+    dbObjectMap_[object.getObjectKey()] = std::make_unique<DBObject>(object);
   } else {  // found
     dbObject->grantPrivileges(object);
   }
 }
 
-DBObject UserRole::revokePrivileges(const DBObject& object) {
+DBObject* UserRole::revokePrivileges(const DBObject& object) {
   throw runtime_error("revokePrivileges() api should not be used with objects of the UserRole class.");
 }
 
@@ -205,9 +202,10 @@ void UserRole::updatePrivileges(Role* role) {
   for (auto dbObjectIt = role->getDbObject()->begin(); dbObjectIt != role->getDbObject()->end(); ++dbObjectIt) {
     auto dbObject = findDbObject(dbObjectIt->first);
     if (dbObject) {  // found
-      dbObject->updatePrivileges(*(dbObjectIt->second));
+      dbObject->updatePrivileges(*dbObjectIt->second);
     } else {  // not found
-      dbObjectMap_[dbObjectIt->first] = new DBObject(*(dbObjectIt->second));
+      // auto obj = dbObjectIt->second.get();
+      dbObjectMap_[dbObjectIt->first] = std::make_unique<DBObject>(*dbObjectIt->second.get());
     }
   }
 }
@@ -336,25 +334,36 @@ std::string GroupRole::roleName(bool userName) const {
 void GroupRole::grantPrivileges(const DBObject& object) {
   DBObject* dbObject = findDbObject(object.getObjectKey());
   if (!dbObject) {  // not found
-    dbObjectMap_[object.getObjectKey()] = new DBObject(object);
+    dbObjectMap_[object.getObjectKey()] = std::make_unique<DBObject>(object);
   } else {  // found
     dbObject->grantPrivileges(object);
   }
   updatePrivileges();
 }
 
-DBObject GroupRole::revokePrivileges(const DBObject& object) {
+// I think the sematics here are to send in a object to revoke
+// if the revoke completely removed all permissions from the object get rid of it
+// but then there is nothing to send back to catalog to have rest of delete for
+// DB done
+DBObject* GroupRole::revokePrivileges(const DBObject& object) {
   auto dbObject = findDbObject(object.getObjectKey());
   if (!dbObject || !dbObject->getPrivileges().hasAny()) {  // not found or has none of privileges set
     throw runtime_error("Can not revoke privileges because " + roleName() + " has no privileges to " +
                         object.getName());
   }
+  bool object_removed = false;
   dbObject->revokePrivileges(object);
   if (!dbObject->getPrivileges().hasAny()) {
     dropDbObject(object.getObjectKey());
+    object_removed = true;
   }
   updatePrivileges();
-  return *dbObject;
+
+  if (object_removed) {
+    return nullptr;
+  }
+
+  return dbObject;
 }
 
 bool GroupRole::hasRole(Role* role) {
