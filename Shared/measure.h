@@ -84,7 +84,7 @@ struct InjectTimer {
 
   std::chrono::steady_clock::time_point start_;
 };
-#define INJECT_TIMER(DESC) InjectTimer DESC(#DESC, __LINE__, __FUNCTION__);
+#define INJECT_TIMER(DESC) InjectTimer DESC(#DESC, __LINE__, __FUNCTION__)
 
 template <typename Fn, Fn fn, typename... Args>
 typename std::result_of<Fn(Args...)>::type time_wrap(Args... args) {

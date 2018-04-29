@@ -2765,7 +2765,7 @@ void MapDHandler::execute_rel_alg(TQueryResult& _return,
                                   const int32_t at_most_n,
                                   const bool just_explain,
                                   const bool just_validate) const {
-  INJECT_TIMER(execute_rel_alg)
+  INJECT_TIMER(execute_rel_alg);
   const auto& cat = session_info.get_catalog();
   CompilationOptions co = {executor_device_type, true, ExecutorOptLevel::Default, g_enable_dynamic_watchdog};
   ExecutionOptions eo = {false,
@@ -2923,7 +2923,7 @@ void MapDHandler::convert_rows(TQueryResult& _return,
                                const bool column_format,
                                const int32_t first_n,
                                const int32_t at_most_n) const {
-  INJECT_TIMER(convert_rows)
+  INJECT_TIMER(convert_rows);
   _return.row_set.row_desc = convert_target_metainfo(targets);
   int32_t fetched{0};
   if (column_format) {
@@ -3251,7 +3251,7 @@ Planner::RootPlan* MapDHandler::parse_to_plan(const std::string& query_str,
 }
 
 std::string MapDHandler::parse_to_ra(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info) {
-  INJECT_TIMER(parse_to_ra)
+  INJECT_TIMER(parse_to_ra);
   ParserWrapper pw{query_str};
   const std::string actual_query{pw.is_select_explain || pw.is_select_calcite_explain ? pw.actual_query : query_str};
   if (is_calcite_path_permissable(pw)) {

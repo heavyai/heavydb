@@ -110,7 +110,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
                                                    const CompilationOptions& co,
                                                    const ExecutionOptions& eo,
                                                    RenderInfo* render_info) {
-  INJECT_TIMER(executeRelAlgQuery)
+  INJECT_TIMER(executeRelAlgQuery);
   try {
     return executeRelAlgQueryNoRetry(query_ra, co, eo, render_info);
   } catch (const QueryMustRunOnCpu&) {
@@ -126,7 +126,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const std::string& que
                                                           const CompilationOptions& co,
                                                           const ExecutionOptions& eo,
                                                           RenderInfo* render_info) {
-  INJECT_TIMER(executeRelAlgQueryNoRetry)
+  INJECT_TIMER(executeRelAlgQueryNoRetry);
   const auto ra = deserialize_ra_dag(query_ra, cat_, this);
   // capture the lock acquistion time
   auto clock_begin = timer_start();
@@ -285,7 +285,7 @@ void RelAlgExecutor::prepareLeafExecution(const AggregatedColRange& agg_col_rang
 ExecutionResult RelAlgExecutor::executeRelAlgSubQuery(const RexSubQuery* subquery,
                                                       const CompilationOptions& co,
                                                       const ExecutionOptions& eo) {
-  INJECT_TIMER(executeRelAlgSubQuery)
+  INJECT_TIMER(executeRelAlgSubQuery);
   auto ed_list = get_execution_descriptors(subquery->getRelAlg());
   return executeRelAlgSeq(ed_list, co, eo, nullptr, 0);
 }
@@ -295,7 +295,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
                                                  const ExecutionOptions& eo,
                                                  RenderInfo* render_info,
                                                  const int64_t queue_time_ms) {
-  INJECT_TIMER(executeRelAlgSeq)
+  INJECT_TIMER(executeRelAlgSeq);
   decltype(temporary_tables_)().swap(temporary_tables_);
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
   executor_->catalog_ = &cat_;
@@ -430,7 +430,7 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
                                        const ExecutionOptions& eo,
                                        RenderInfo* render_info,
                                        const int64_t queue_time_ms) {
-  INJECT_TIMER(executeRelAlgStep)
+  INJECT_TIMER(executeRelAlgStep);
   auto& exec_desc = exec_descs[i];
   const auto body = exec_desc.getBody();
   if (body->isNop()) {
@@ -1577,7 +1577,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
                                                 const ExecutionOptions& eo,
                                                 RenderInfo* render_info,
                                                 const int64_t queue_time_ms) {
-  INJECT_TIMER(executeWorkUnit)
+  INJECT_TIMER(executeWorkUnit);
   const auto body = work_unit.body;
   CHECK(body);
   auto it = leaf_results_.find(body->getId());

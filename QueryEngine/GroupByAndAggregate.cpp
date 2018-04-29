@@ -867,7 +867,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
                                                            const uint32_t num_tables,
                                                            const std::vector<int64_t>& join_hash_tables,
                                                            RenderAllocatorMap* render_allocator_map) {
-  INJECT_TIMER(lauchGpuCode)
+  INJECT_TIMER(lauchGpuCode);
 #ifdef HAVE_CUDA
   bool is_group_by{!query_mem_desc_.group_col_widths.empty()};
   data_mgr->cudaMgr_->setContext(device_id);
@@ -1162,7 +1162,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
                                                            int32_t* error_code,
                                                            const uint32_t num_tables,
                                                            const std::vector<int64_t>& join_hash_tables) {
-  INJECT_TIMER(lauchCpuCode)
+  INJECT_TIMER(lauchCpuCode);
   std::vector<const int8_t**> multifrag_col_buffers;
   for (auto& col_buffer : col_buffers) {
     multifrag_col_buffers.push_back(&col_buffer[0]);
