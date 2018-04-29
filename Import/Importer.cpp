@@ -1541,7 +1541,7 @@ uint64_t compress_coord(double coord, const SQLTypeInfo& ti, bool x) {
     int32_t compressed_coord = static_cast<int32_t>(coord * (2147483647.0 / (x ? 180.0 : 90.0)));
     return static_cast<uint64_t>(*reinterpret_cast<uint32_t*>(&compressed_coord));
   }
-  return *reinterpret_cast<uint64_t*>(&coord);
+  return *reinterpret_cast<uint64_t*>(may_alias_ptr(&coord));
 }
 
 std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeInfo& ti) {
