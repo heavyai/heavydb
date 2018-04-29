@@ -96,6 +96,9 @@ FORCE_INLINE DEVICE int64_t get_composite_key_index_impl(const T* key,
     if (keys_are_equal(&composite_key_dict[off], key, key_component_count)) {
       return h_probe;
     }
+    if (composite_key_dict[off] == SUFFIX(get_invalid_key)<T>()) {
+      return -1;
+    }
     h_probe = (h_probe + 1) % entry_count;
   }
   return -1;
