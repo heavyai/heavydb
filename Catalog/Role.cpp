@@ -37,7 +37,7 @@ DBObject* Role::findDbObject(const DBObjectKey& objectKey) const {
 
 void Role::copyDbObjects(const Role& role) {
   for (auto it = role.dbObjectMap_.begin(); it != role.dbObjectMap_.end(); ++it) {
-    dbObjectMap_[it->first] = std::make_unique<DBObject>(*it->second.get());
+    dbObjectMap_[it->first] = boost::make_unique<DBObject>(*it->second.get());
   }
 }
 
@@ -161,7 +161,7 @@ void UserRole::grantPrivileges(const DBObject& object) {
   // used for create_table and CTAS commands only, called from createDBObject() api
   auto dbObject = findDbObject(object.getObjectKey());
   if (!dbObject) {
-    dbObjectMap_[object.getObjectKey()] = std::make_unique<DBObject>(object);
+    dbObjectMap_[object.getObjectKey()] = boost::make_unique<DBObject>(object);
   } else {  // found
     dbObject->grantPrivileges(object);
   }
@@ -205,7 +205,7 @@ void UserRole::updatePrivileges(Role* role) {
       dbObject->updatePrivileges(*dbObjectIt->second);
     } else {  // not found
       // auto obj = dbObjectIt->second.get();
-      dbObjectMap_[dbObjectIt->first] = std::make_unique<DBObject>(*dbObjectIt->second.get());
+      dbObjectMap_[dbObjectIt->first] = boost::make_unique<DBObject>(*dbObjectIt->second.get());
     }
   }
 }
@@ -336,7 +336,7 @@ std::string GroupRole::roleName(bool userName) const {
 void GroupRole::grantPrivileges(const DBObject& object) {
   DBObject* dbObject = findDbObject(object.getObjectKey());
   if (!dbObject) {  // not found
-    dbObjectMap_[object.getObjectKey()] = std::make_unique<DBObject>(object);
+    dbObjectMap_[object.getObjectKey()] = boost::make_unique<DBObject>(object);
   } else {  // found
     dbObject->grantPrivileges(object);
   }

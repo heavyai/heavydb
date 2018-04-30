@@ -34,6 +34,7 @@
 #include <map>
 #include <unordered_set>
 #include <boost/algorithm/string.hpp>
+#include <boost/make_unique.hpp>
 #include <string>
 #include <glog/logging.h>
 
