@@ -30,7 +30,6 @@
   libkml                 [BSD](https://github.com/google/libkml/blob/master/LICENSE)                        GDAL, KML import
   minizip                [zlib](http://zlib.net/zlib_license.html)                                          GDAL, zip support
   pcre                   [BSD](http://www.pcre.org/licence.txt)                                             GDAL, KML import
-  poly2tri               [BSD](https://github.com/greenm01/poly2tri/blob/master/LICENSE)                    GDAL, Polygon triangulation
   proj4                  [MIT](http://proj4.org/license.html)                                               GDAL, Geospatial reprojection
   shapelib               [MIT](http://shapelib.maptools.org/license.html)                                   GDAL, Shapefile import
   uriparser              [BSD](https://sourceforge.net/p/uriparser/git/ci/master/tree/COPYING)              GDAL, KML import
