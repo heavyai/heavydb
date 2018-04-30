@@ -2355,8 +2355,10 @@ void MapDHandler::get_dashboard_grantees(std::vector<TDashboardGrantees>& dashbo
     THROW_MAPD_EXCEPTION("User should be either owner of dashboard or super user to access grantees");
   }
   std::vector<ObjectRoleDescriptor*> objectsList;
-  objectsList = SysCatalog::instance().getMetadataForObject(
-      cat.get_currentDB().dbId, 3, dashboard_id);  // By default objectID is 3 for dashabaords
+  objectsList =
+      SysCatalog::instance().getMetadataForObject(cat.get_currentDB().dbId,
+                                                  static_cast<int>(DBObjectType::DashboardDBObjectType),
+                                                  dashboard_id);  // By default objecttypecan be only dashabaords
   for (auto object : objectsList) {
     TDashboardGrantees grantee;
     TDashboardPermissions perm;
