@@ -166,12 +166,16 @@ class StorageIOFacility {
 
       int target_meta_info_base_index =
           update_parameters.getTargetsMetaInfoSize() - update_parameters.getUpdateColumnCount() - 1;
+
       // Iterate over each column
       for (decltype(update_parameters.getUpdateColumnCount()) column_index = 0;
            column_index < update_parameters.getUpdateColumnCount();
            column_index++) {
         OffsetVector column_offsets;
         ScalarTargetValueVector scalar_target_values;
+
+        column_offsets.reserve(update_log.getEntryCount());
+        scalar_target_values.reserve(update_log.getEntryCount());
 
         // Iterate over each row, aggregate column update information into column_update_info
         for (decltype(update_log.getEntryCount()) row_index = 0; row_index < update_log.getEntryCount(); row_index++) {
@@ -208,6 +212,7 @@ class StorageIOFacility {
   UpdateCallback yieldDeleteCallback(DeleteTransactionParameters& delete_parameters) {
     auto callback = [this, &delete_parameters](FragmentUpdaterType const& update_log) -> void {
       DeleteVictimOffsetList victim_offsets;
+      victim_offsets.reserve(update_log.getEntryCount());
 
       for (size_t i = 0; i < update_log.getEntryCount(); ++i) {
         auto const row(update_log.getEntryAt(i));
