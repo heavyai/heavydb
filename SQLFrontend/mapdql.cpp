@@ -912,6 +912,27 @@ void get_license_claims(ClientContext& context) {
   }
 }
 
+std::string hide_sensitive_data_from_query(const std::string& query_str) {
+  auto result = query_str;
+  boost::regex passwd{R"(^(CREATE|ALTER)\s+?USER.+password\s*?=\s*?'(?<pwd>.+?)'.+)",
+                      boost::regex_constants::perl | boost::regex::icase};
+  boost::smatch matches;
+  if (boost::regex_search(query_str, matches, passwd)) {
+    result.replace(matches["pwd"].first - query_str.begin(), matches["pwd"].length(), "XXXXXXXX");
+  }
+  return result;
+}
+
+std::string hide_sensitive_data_from_connect(const std::string& connect_str) {
+  auto result = connect_str;
+  boost::regex passwd{R"(^\\c\s+?.+?\s+?.+?\s+?(?<pwd>.+))", boost::regex_constants::perl | boost::regex::icase};
+  boost::smatch matches;
+  if (boost::regex_search(connect_str, matches, passwd)) {
+    result.replace(matches["pwd"].first - connect_str.begin(), matches["pwd"].length(), "XXXXXXXX");
+  }
+  return result;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1077,9 +1098,9 @@ int main(int argc, char** argv) {
       current_line.append(" ").append(trimmed_line);
       boost::algorithm::trim(current_line);
       if (current_line.back() == ';') {
-        linenoiseHistoryAdd(current_line.c_str());  /* Add to the history. */
-        linenoiseHistorySave("mapdql_history.txt"); /* Save the history on disk. */
         std::string query(current_line);
+        linenoiseHistoryAdd(hide_sensitive_data_from_query(current_line).c_str()); /* Add to the history. */
+        linenoiseHistorySave("mapdql_history.txt");                                /* Save the history on disk. */
         current_line.clear();
         prompt.assign("mapdql> ");
         (void)backchannel(TURN_ON, nullptr);
@@ -1309,7 +1330,12 @@ int main(int argc, char** argv) {
       // clang-format on
     }
 
-    linenoiseHistoryAdd(line);                  /* Add to the history. */
+    /* Add to the history. */
+    if (line[0] == '\\' && line[1] == 'c') {
+      linenoiseHistoryAdd(hide_sensitive_data_from_connect(line).c_str());
+    } else {
+      linenoiseHistoryAdd(line);
+    }
     linenoiseHistorySave("mapdql_history.txt"); /* Save the history on disk. */
   }
 
