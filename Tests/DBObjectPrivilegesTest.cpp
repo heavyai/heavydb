@@ -548,6 +548,108 @@ TEST_F(DashboardObject, AccessAfterRevokesTest) {
   EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), true);
 }
 
+TEST_F(DashboardObject, GranteesDefaultListTest) {
+  auto& g_cat = g_session->get_catalog();
+  auto perms_list = sys_cat.getMetadataForObject(
+      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dash_->id);
+  int size = static_cast<int>(perms_list.size());
+  ASSERT_EQ(size, 0);
+}
+
+TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
+  auto& g_cat = g_session->get_catalog();
+  auto perms_list = sys_cat.getMetadataForObject(
+      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dash_->id);
+  int recs1 = static_cast<int>(perms_list.size());
+  ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
+  AccessPrivileges dash_priv;
+  ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::VIEW_DASHBOARD));
+  privObjects.clear();
+  DBObject dash_object(dash_->id, DBObjectType::DashboardDBObjectType);
+  dash_object.loadKey(g_cat);
+  ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
+  privObjects.push_back(dash_object);
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("OldLady", dash_object, g_cat));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", dash_object, g_cat));
+  perms_list = sys_cat.getMetadataForObject(
+      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dash_->id);
+  int recs2 = static_cast<int>(perms_list.size());
+  ASSERT_NE(recs1, recs2);
+  ASSERT_EQ(recs2, 2);
+  ASSERT_TRUE(perms_list[0]->privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
+  ASSERT_TRUE(perms_list[1]->privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
+  ASSERT_FALSE(perms_list[1]->privs.hasPermission(DashboardPrivileges::EDIT_DASHBOARD));
+
+  ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::EDIT_DASHBOARD));
+  ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", dash_object, g_cat));
+  perms_list = sys_cat.getMetadataForObject(
+      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dash_->id);
+  int recs3 = static_cast<int>(perms_list.size());
+  ASSERT_EQ(recs3, 2);
+  ASSERT_TRUE(perms_list[0]->privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
+  ASSERT_TRUE(perms_list[1]->privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
+  ASSERT_TRUE(perms_list[1]->privs.hasPermission(DashboardPrivileges::EDIT_DASHBOARD));
+}
+
+TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
+  auto& g_cat = g_session->get_catalog();
+  auto perms_list = sys_cat.getMetadataForObject(
+      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dash_->id);
+  int recs1 = static_cast<int>(perms_list.size());
+  ASSERT_NO_THROW(sys_cat.grantRole("Gunners", "Arsenal"));
+  AccessPrivileges dash_priv;
+  ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::VIEW_DASHBOARD));
+  ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::EDIT_DASHBOARD));
+  privObjects.clear();
+  DBObject dash_object(dash_->id, DBObjectType::DashboardDBObjectType);
+  dash_object.loadKey(g_cat);
+  ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
+  privObjects.push_back(dash_object);
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Gunners", dash_object, g_cat));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Chelsea", dash_object, g_cat));
+  perms_list = sys_cat.getMetadataForObject(
+      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dash_->id);
+  int recs2 = static_cast<int>(perms_list.size());
+  ASSERT_NE(recs1, recs2);
+  ASSERT_EQ(recs2, 2);
+  ASSERT_TRUE(perms_list[0]->privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
+  ASSERT_TRUE(perms_list[0]->privs.hasPermission(DashboardPrivileges::EDIT_DASHBOARD));
+  ASSERT_TRUE(perms_list[1]->privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
+  ASSERT_TRUE(perms_list[1]->privs.hasPermission(DashboardPrivileges::EDIT_DASHBOARD));
+
+  ASSERT_NO_THROW(dash_priv.remove(AccessPrivileges::VIEW_DASHBOARD));
+  ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Gunners", dash_object, g_cat));
+  perms_list = sys_cat.getMetadataForObject(
+      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dash_->id);
+  int recs3 = static_cast<int>(perms_list.size());
+  ASSERT_EQ(recs3, 2);
+  ASSERT_TRUE(perms_list[0]->privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
+  ASSERT_FALSE(perms_list[0]->privs.hasPermission(DashboardPrivileges::EDIT_DASHBOARD));
+  ASSERT_TRUE(perms_list[1]->privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
+  ASSERT_TRUE(perms_list[1]->privs.hasPermission(DashboardPrivileges::EDIT_DASHBOARD));
+
+  ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::VIEW_DASHBOARD));
+  ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Gunners", dash_object, g_cat));
+  perms_list = sys_cat.getMetadataForObject(
+      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dash_->id);
+  int recs4 = static_cast<int>(perms_list.size());
+  ASSERT_EQ(recs4, 1);
+  ASSERT_TRUE(perms_list[0]->privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
+  ASSERT_TRUE(perms_list[0]->privs.hasPermission(DashboardPrivileges::EDIT_DASHBOARD));
+
+  ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::EDIT_DASHBOARD));
+  ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Chelsea", dash_object, g_cat));
+  perms_list = sys_cat.getMetadataForObject(
+      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dash_->id);
+  int recs5 = static_cast<int>(perms_list.size());
+  ASSERT_EQ(recs1, recs5);
+  ASSERT_EQ(recs5, 0);
+}
+
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   google::InitGoogleLogging(argv[0]);
