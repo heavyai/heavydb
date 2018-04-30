@@ -181,6 +181,26 @@ struct TableObject : testing::Test {
   virtual ~TableObject() { delete table_; }
 };
 
+struct ViewObject : testing::Test {
+  ViewObject() {
+    run_ddl("CREATE USER bob (password = 'password', is_super = 'false');");
+    run_ddl("CREATE ROLE salesDept;");
+    run_ddl("CREATE USER foo (password = 'password', is_super = 'false');");
+    run_ddl("GRANT salesDept TO foo;");
+
+    run_ddl("CREATE TABLE bill_table(id integer);");
+    run_ddl("CREATE VIEW bill_view AS SELECT id FROM bill_table;");
+  }
+  virtual ~ViewObject() {
+    run_ddl("DROP VIEW bill_view;");
+    run_ddl("DROP TABLE bill_table");
+
+    run_ddl("DROP USER foo;");
+    run_ddl("DROP ROLE salesDept;");
+    run_ddl("DROP USER bob;");
+  }
+};
+
 struct DashboardStruct {
   std::string dname1 = "ChampionsLeague";
   std::string dname2 = "Europa";
@@ -391,6 +411,69 @@ TEST_F(TableObject, AccessAfterRevokesTest) {
   privObjects.push_back(bundesliga_object);
   EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
   EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
+}
+
+void testViewPermissions(std::string user, std::string roleToGrant) {
+  DBObject bill_view("bill_view", DBObjectType::ViewDBObjectType);
+  auto& cat = g_session->get_catalog();
+  bill_view.loadKey(cat);
+  std::vector<DBObject> privs;
+
+  bill_view.setPrivileges(AccessPrivileges::CREATE_VIEW);
+  privs = {bill_view};
+  EXPECT_EQ(sys_cat.checkPrivileges(user, privs), false);
+
+  bill_view.setPrivileges(AccessPrivileges::DROP_VIEW);
+  privs = {bill_view};
+  EXPECT_EQ(sys_cat.checkPrivileges(user, privs), false);
+
+  bill_view.setPrivileges(AccessPrivileges::SELECT_FROM_VIEW);
+  privs = {bill_view};
+  EXPECT_EQ(sys_cat.checkPrivileges(user, privs), false);
+
+  bill_view.setPrivileges(AccessPrivileges::CREATE_VIEW);
+  sys_cat.grantDBObjectPrivileges(roleToGrant, bill_view, cat);
+  bill_view.setPrivileges(AccessPrivileges::CREATE_VIEW);
+  privs = {bill_view};
+  EXPECT_EQ(sys_cat.checkPrivileges(user, privs), true);
+
+  bill_view.setPrivileges(AccessPrivileges::DROP_VIEW);
+  sys_cat.grantDBObjectPrivileges(roleToGrant, bill_view, cat);
+  bill_view.setPrivileges(AccessPrivileges::DROP_VIEW);
+  privs = {bill_view};
+  EXPECT_EQ(sys_cat.checkPrivileges(user, privs), true);
+
+  bill_view.setPrivileges(AccessPrivileges::SELECT_FROM_VIEW);
+  sys_cat.grantDBObjectPrivileges(roleToGrant, bill_view, cat);
+  bill_view.setPrivileges(AccessPrivileges::SELECT_FROM_VIEW);
+  privs = {bill_view};
+  EXPECT_EQ(sys_cat.checkPrivileges(user, privs), true);
+
+  bill_view.setPrivileges(AccessPrivileges::CREATE_VIEW);
+  sys_cat.revokeDBObjectPrivileges(roleToGrant, bill_view, cat);
+  bill_view.setPrivileges(AccessPrivileges::CREATE_VIEW);
+  privs = {bill_view};
+  EXPECT_EQ(sys_cat.checkPrivileges(user, privs), false);
+
+  bill_view.setPrivileges(AccessPrivileges::DROP_VIEW);
+  sys_cat.revokeDBObjectPrivileges(roleToGrant, bill_view, cat);
+  bill_view.setPrivileges(AccessPrivileges::DROP_VIEW);
+  privs = {bill_view};
+  EXPECT_EQ(sys_cat.checkPrivileges(user, privs), false);
+
+  bill_view.setPrivileges(AccessPrivileges::SELECT_FROM_VIEW);
+  sys_cat.revokeDBObjectPrivileges(roleToGrant, bill_view, cat);
+  bill_view.setPrivileges(AccessPrivileges::SELECT_FROM_VIEW);
+  privs = {bill_view};
+  EXPECT_EQ(sys_cat.checkPrivileges(user, privs), false);
+}
+
+TEST_F(ViewObject, UserRoleBobGetsGrants) {
+  testViewPermissions("bob", "bob");
+}
+
+TEST_F(ViewObject, GroupRoleFooGetsGrants) {
+  testViewPermissions("foo", "salesDept");
 }
 
 TEST_F(DashboardObject, AccessDefaultsTest) {
