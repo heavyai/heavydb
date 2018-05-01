@@ -3312,7 +3312,9 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
 
   const auto query_after_shim = pg_shim(select_query_);
-  catalog.get_calciteMgr().process(session, query_after_shim, true, true);
+
+  // this now also ensures that access permissions are checked
+  catalog.get_calciteMgr().process(session, query_after_shim, true, false);
   TableDescriptor td;
   td.tableName = view_name_;
   td.userId = session.get_currentUser().userId;
