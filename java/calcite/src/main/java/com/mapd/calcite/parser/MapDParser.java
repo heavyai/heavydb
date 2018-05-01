@@ -16,14 +16,19 @@
 package com.mapd.calcite.parser;
 
 import com.mapd.parser.server.ExtensionFunction;
+
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.SqlAsOperator;
 import org.apache.calcite.sql.SqlBasicCall;
 import org.apache.calcite.sql.SqlCall;
@@ -119,7 +124,28 @@ public final class MapDParser {
     return ((MapDPlanner) getPlanner()).getCompletionHints(sql, cursor, visible_tables);
   }
   
-  public SqlIdentifierCapturer captureIdentifier(String sql, boolean legacy_syntax) throws SqlParseException {
+  public Set<String> resolveSelectIdentifiers(SqlIdentifierCapturer capturer) {
+    MapDSchema schema = new MapDSchema(dataDir, this, mapdPort, mapdUser);
+    HashSet<String> resolved = new HashSet<>();
+
+    for (String name : capturer.selects) {
+      MapDTable table = (MapDTable) schema.getTable(name);
+      if (null == table) {
+        throw new RuntimeException("table/view not found: " + name);
+      }
+      
+      if (table instanceof MapDView) {
+        MapDView view = (MapDView) table;
+        resolved.addAll(resolveSelectIdentifiers(view.getAccessedObjects()));
+      } else {
+        resolved.add(name);
+      }
+    }
+    
+    return resolved;
+  }
+  
+  public SqlIdentifierCapturer captureIdentifiers(String sql, boolean legacy_syntax) throws SqlParseException {
     try {
       Planner planner = getPlanner();
       SqlNode node = processSQL(sql, legacy_syntax, planner);

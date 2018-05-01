@@ -15,8 +15,8 @@
  */
 package com.mapd.calcite.parser;
 
-import com.mapd.thrift.server.TTableDetails;
 import org.apache.calcite.plan.RelOptTable;
+import org.apache.calcite.prepare.SqlIdentifierCapturer;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.type.RelDataType;
@@ -29,16 +29,29 @@ import org.apache.calcite.tools.ValidationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.mapd.thrift.server.TTableDetails;
+
 public class MapDView extends MapDTable implements TranslatableTable {
 
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDView.class);
   final MapDParser parser;
   private final String viewSql;
+  private SqlIdentifierCapturer accessObjects;
 
   public MapDView(String view_sql, TTableDetails ri, MapDParser mp) {
     super(ri);
     this.viewSql = view_sql;
     parser = mp;
+    try {
+      accessObjects = mp.captureIdentifiers(view_sql, true);
+    } catch (SqlParseException e) {
+      MAPDLOGGER.error("error parsing view SQL: " + view_sql, e);
+      accessObjects = new SqlIdentifierCapturer();
+    }
+  }
+  
+  public SqlIdentifierCapturer getAccessedObjects() {
+    return accessObjects;
   }
 
   String getViewSql() {

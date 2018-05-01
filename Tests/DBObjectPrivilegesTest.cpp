@@ -13,6 +13,7 @@
 #define CALCITEPORT 39093
 
 namespace {
+std::shared_ptr<Calcite> g_calcite;
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
 Catalog_Namespace::SysCatalog& sys_cat = Catalog_Namespace::SysCatalog::instance();
 ;
@@ -32,16 +33,16 @@ class DBObjectPermissionsEnv : public ::testing::Environment {
     CHECK(boost::filesystem::exists(base_path));
     auto system_db_file = base_path / "mapd_catalogs" / "mapd";
     auto data_dir = base_path / "mapd_data";
-    auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path.string(), 1024);
+    g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path.string(), 1024);
     {
       auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
       CHECK(boost::filesystem::exists(system_db_file));
-      sys_cat.init(base_path.string(), dataMgr, {}, calcite, false, true);
+      sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, false, true);
       CHECK(sys_cat.getMetadataForDB(db_name, db));
       auto cat = Catalog_Namespace::Catalog::get(db_name);
       if (cat == nullptr) {
         cat = std::make_shared<Catalog_Namespace::Catalog>(
-            base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, calcite);
+            base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite);
         Catalog_Namespace::Catalog::set(db_name, cat);
       }
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
@@ -49,7 +50,7 @@ class DBObjectPermissionsEnv : public ::testing::Environment {
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
     g_session.reset(
         new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
-                                               base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, calcite),
+                                               base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
                                            user,
                                            ExecutorDeviceType::GPU,
                                            ""));
@@ -190,8 +191,10 @@ struct ViewObject : testing::Test {
 
     run_ddl("CREATE TABLE bill_table(id integer);");
     run_ddl("CREATE VIEW bill_view AS SELECT id FROM bill_table;");
+    run_ddl("CREATE VIEW bill_view_outer AS SELECT id FROM bill_view;");
   }
   virtual ~ViewObject() {
+    run_ddl("DROP VIEW bill_view_outer;");
     run_ddl("DROP VIEW bill_view;");
     run_ddl("DROP TABLE bill_table");
 
@@ -474,6 +477,44 @@ TEST_F(ViewObject, UserRoleBobGetsGrants) {
 
 TEST_F(ViewObject, GroupRoleFooGetsGrants) {
   testViewPermissions("foo", "salesDept");
+}
+
+TEST_F(ViewObject, CalciteViewResolution) {
+  TPlanResult result = ::g_calcite->process(*g_session, "select * from bill_table", true, false);
+  EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
+  EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
+  EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
+  EXPECT_EQ(result.primary_accessed_objects.tables_deleted_from.size(), (size_t)0);
+  EXPECT_EQ(result.primary_accessed_objects.tables_selected_from[0], "bill_table");
+  EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from.size(), (size_t)1);
+  EXPECT_EQ(result.resolved_accessed_objects.tables_inserted_into.size(), (size_t)0);
+  EXPECT_EQ(result.resolved_accessed_objects.tables_updated_in.size(), (size_t)0);
+  EXPECT_EQ(result.resolved_accessed_objects.tables_deleted_from.size(), (size_t)0);
+  EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0], "bill_table");
+
+  result = ::g_calcite->process(*g_session, "select * from bill_view", true, false);
+  EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
+  EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
+  EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
+  EXPECT_EQ(result.primary_accessed_objects.tables_deleted_from.size(), (size_t)0);
+  EXPECT_EQ(result.primary_accessed_objects.tables_selected_from[0], "bill_view");
+  EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from.size(), (size_t)1);
+  EXPECT_EQ(result.resolved_accessed_objects.tables_inserted_into.size(), (size_t)0);
+  EXPECT_EQ(result.resolved_accessed_objects.tables_updated_in.size(), (size_t)0);
+  EXPECT_EQ(result.resolved_accessed_objects.tables_deleted_from.size(), (size_t)0);
+  EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0], "bill_table");
+
+  result = ::g_calcite->process(*g_session, "select * from bill_view_outer", true, false);
+  EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
+  EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
+  EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
+  EXPECT_EQ(result.primary_accessed_objects.tables_deleted_from.size(), (size_t)0);
+  EXPECT_EQ(result.primary_accessed_objects.tables_selected_from[0], "bill_view_outer");
+  EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from.size(), (size_t)1);
+  EXPECT_EQ(result.resolved_accessed_objects.tables_inserted_into.size(), (size_t)0);
+  EXPECT_EQ(result.resolved_accessed_objects.tables_updated_in.size(), (size_t)0);
+  EXPECT_EQ(result.resolved_accessed_objects.tables_deleted_from.size(), (size_t)0);
+  EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0], "bill_table");
 }
 
 TEST_F(DashboardObject, AccessDefaultsTest) {

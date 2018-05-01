@@ -17,7 +17,10 @@ struct TAccessedQueryObjects {
 struct TPlanResult {
   1: string plan_result
   2: i64 execution_time_ms
-  3: TAccessedQueryObjects accessed_objects;
+     // these are the primary objects accessed in this query without resolving views
+  3: TAccessedQueryObjects primary_accessed_objects;
+     // these are the accessed objects during this query after resolving all views 
+  4: TAccessedQueryObjects resolved_accessed_objects;
 }
 
 service CalciteServer {

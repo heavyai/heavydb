@@ -232,34 +232,33 @@ void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info
   }
 }
 
-std::string Calcite::process(const Catalog_Namespace::SessionInfo& session_info,
+TPlanResult Calcite::process(const Catalog_Namespace::SessionInfo& session_info,
                              const std::string sql_string,
                              const bool legacy_syntax,
                              const bool is_explain) {
   TPlanResult result = processImpl(session_info, sql_string, legacy_syntax, is_explain);
-  std::string ra = result.plan_result;
 
   if (!is_explain && Catalog_Namespace::SysCatalog::instance().arePrivilegesOn()) {
     // check the individual tables
     checkPermissionForTables(session_info,
-                             result.accessed_objects.tables_selected_from,
+                             result.primary_accessed_objects.tables_selected_from,
                              AccessPrivileges::SELECT_FROM_TABLE,
                              AccessPrivileges::SELECT_FROM_VIEW);
     checkPermissionForTables(session_info,
-                             result.accessed_objects.tables_inserted_into,
+                             result.primary_accessed_objects.tables_inserted_into,
                              AccessPrivileges::INSERT_INTO_TABLE,
                              AccessPrivileges::INSERT_INTO_VIEW);
     checkPermissionForTables(session_info,
-                             result.accessed_objects.tables_updated_in,
+                             result.primary_accessed_objects.tables_updated_in,
                              AccessPrivileges::UPDATE_IN_TABLE,
                              AccessPrivileges::UPDATE_IN_VIEW);
     checkPermissionForTables(session_info,
-                             result.accessed_objects.tables_deleted_from,
+                             result.primary_accessed_objects.tables_deleted_from,
                              AccessPrivileges::DELETE_FROM_TABLE,
                              AccessPrivileges::DELETE_FROM_VIEW);
   }
 
-  return ra;
+  return result;
 }
 
 std::vector<TCompletionHint> Calcite::getCompletionHints(const Catalog_Namespace::SessionInfo& session_info,

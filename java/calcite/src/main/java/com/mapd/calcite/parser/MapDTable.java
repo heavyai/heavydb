@@ -9,6 +9,9 @@ import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TDatumType;
 import com.mapd.thrift.server.TTableDetails;
 import com.mapd.thrift.server.TTypeInfo;
+
+import java.util.concurrent.atomic.AtomicLong;
+
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -31,9 +34,16 @@ import com.mapd.metadata.PolygonSqlType;
  * @author michael
  */
 public class MapDTable implements Table {
+  
+  private static final AtomicLong VERSION_PROVIDER = new AtomicLong();
 
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDTable.class);
   private final TTableDetails rowInfo;
+  private final long version = VERSION_PROVIDER.incrementAndGet();
+  
+  public long getVersion() {
+    return version;
+  }
 
   public MapDTable(TTableDetails ri) {
     rowInfo = ri;

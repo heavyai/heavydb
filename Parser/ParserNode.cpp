@@ -2151,7 +2151,7 @@ std::shared_ptr<ResultSet> getResultRows(const Catalog_Namespace::SessionInfo& s
 #endif  // HAVE_CUDA
   auto& calcite_mgr = catalog.get_calciteMgr();
 
-  const auto query_ra = calcite_mgr.process(session, pg_shim(select_stmt), true, false);
+  const auto query_ra = calcite_mgr.process(session, pg_shim(select_stmt), true, false).plan_result;
   CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
   ExecutionOptions eo = {false, true, false, true, false, false, false, false, 10000};
   RelAlgExecutor ra_executor(executor.get(), catalog);

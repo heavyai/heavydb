@@ -35,6 +35,7 @@ namespace Catalog_Namespace {
 class SessionInfo;
 }
 
+
 class Calcite {
  public:
   Calcite(const int mapd_port, const int port, const std::string& data_dir, const size_t calcite_max_mem)
@@ -44,7 +45,7 @@ class Calcite {
           const std::string& data_dir,
           const size_t calcite_max_mem,
           const std::string& session_prefix);
-  std::string process(const Catalog_Namespace::SessionInfo& session_info,
+  TPlanResult process(const Catalog_Namespace::SessionInfo& session_info,
                       const std::string sql_string,
                       const bool legacy_syntax,
                       const bool is_explain);

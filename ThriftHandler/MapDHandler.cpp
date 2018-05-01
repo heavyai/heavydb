@@ -3345,7 +3345,7 @@ Planner::RootPlan* MapDHandler::parse_to_plan(const std::string& query_str,
     const auto query_ra = calcite_->process(session_info,
                                             legacy_syntax_ ? pg_shim(actual_query) : actual_query,
                                             legacy_syntax_,
-                                            pw.is_select_calcite_explain);
+                                            pw.is_select_calcite_explain).plan_result;
     auto root_plan = translate_query(query_ra, cat);
     CHECK(root_plan);
     if (pw.is_select_explain) {
@@ -3364,7 +3364,7 @@ std::string MapDHandler::parse_to_ra(const std::string& query_str, const Catalog
     return calcite_->process(session_info,
                              legacy_syntax_ ? pg_shim(actual_query) : actual_query,
                              legacy_syntax_,
-                             pw.is_select_calcite_explain);
+                             pw.is_select_calcite_explain).plan_result;
   }
   return "";
 }

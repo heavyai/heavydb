@@ -105,9 +105,26 @@ class CalciteServerHandler implements CalciteServer.Iface {
     }
     String relAlgebra;
     SqlIdentifierCapturer capturer;
+    TAccessedQueryObjects primaryAccessedObjects = new TAccessedQueryObjects();
+    TAccessedQueryObjects resolvedAccessedObjects = new TAccessedQueryObjects();
+
     try {
       relAlgebra = parser.getRelAlgebra(sqlText, legacySyntax, mapDUser, isExplain);
-      capturer = parser.captureIdentifier(sqlText, legacySyntax);
+      capturer = parser.captureIdentifiers(sqlText, legacySyntax);
+      
+      primaryAccessedObjects.tables_selected_from = new ArrayList<>(capturer.selects);
+      primaryAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
+      primaryAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
+      primaryAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
+      
+      // also resolve all the views in the select part
+      // resolution of the other parts is not 
+      // necessary as these cannot be views
+      resolvedAccessedObjects.tables_selected_from = new ArrayList<>(parser.resolveSelectIdentifiers(capturer));
+      resolvedAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
+      resolvedAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
+      resolvedAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
+
     } catch (SqlParseException ex) {
       String msg = "Parse failed: " + ex.getMessage();
       MAPDLOGGER.error(msg);
@@ -130,15 +147,10 @@ class CalciteServerHandler implements CalciteServer.Iface {
         throw new InvalidParseRequest(-4, msg);
       }
     }
-    
-    TAccessedQueryObjects accessedObjects = new TAccessedQueryObjects();
-    accessedObjects.tables_selected_from = new ArrayList<>(capturer.selects);
-    accessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
-    accessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
-    accessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
-    
+
     TPlanResult result = new TPlanResult();
-    result.accessed_objects = accessedObjects;
+    result.primary_accessed_objects = primaryAccessedObjects;
+    result.resolved_accessed_objects = resolvedAccessedObjects;
     result.plan_result = relAlgebra;
     result.execution_time_ms = System.currentTimeMillis() - timer;
     
