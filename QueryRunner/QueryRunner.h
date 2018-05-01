@@ -17,12 +17,19 @@
 #ifndef QUERY_RUNNER_H
 #define QUERY_RUNNER_H
 
-#include "../Catalog/Catalog.h"
-#include "../QueryEngine/Execute.h"
-#include "../QueryEngine/RelAlgExecutionDescriptor.h"
+#include "../QueryEngine/CompilationOptions.h"
 
 #include <memory>
 #include <string>
+
+namespace Catalog_Namespace {
+class SessionInfo;
+} // namespace Catalog_Namespace
+
+class ResultSet;
+class ExecutionResult;
+
+namespace QueryRunner {
 
 Catalog_Namespace::SessionInfo* get_session(const char* db_path);
 
@@ -37,5 +44,10 @@ std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
                                             const ExecutorDeviceType device_type,
                                             const bool hoist_literals,
                                             const bool allow_loop_joins);
+
+void run_ddl_statement(const std::string& create_table_stmt,
+                       const std::unique_ptr<Catalog_Namespace::SessionInfo>& session);
+
+}  // namespace QueryRunner
 
 #endif  // QUERY_RUNNER_H

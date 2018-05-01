@@ -33,6 +33,7 @@
 #include "../Parser/ParserNode.h"
 #include "../DataMgr/DataMgr.h"
 #include "../Fragmenter/Fragmenter.h"
+#include "../QueryRunner/QueryRunner.h"
 #include "PopulateTableRandom.h"
 #include "ScanTable.h"
 #include "gtest/gtest.h"
@@ -52,16 +53,8 @@ using namespace Fragmenter_Namespace;
 namespace {
 std::unique_ptr<SessionInfo> gsession;
 
-void run_ddl(const string& input_str) {
-  SQLParser parser;
-  list<std::unique_ptr<Parser::Stmt>> parse_trees;
-  string last_parsed;
-  CHECK_EQ(parser.parse(input_str, parse_trees, last_parsed), 0);
-  CHECK_EQ(parse_trees.size(), size_t(1));
-  const auto& stmt = parse_trees.front();
-  Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
-  CHECK(ddl != nullptr);
-  ddl->execute(*gsession);
+inline void run_ddl_statement(const string& input_str) {
+  QueryRunner::run_ddl_statement(input_str, gsession);
 }
 
 class SQLTestEnv : public ::testing::Environment {
@@ -127,59 +120,59 @@ bool storage_test_parallel(const string& table_name, size_t num_rows, size_t thr
 #define LARGE 1000000
 
 TEST(StorageLarge, Numbers) {
-  ASSERT_NO_THROW(run_ddl("drop table if exists numbers;"););
-  ASSERT_NO_THROW(run_ddl("create table numbers (a smallint, b int, c bigint, d numeric(7,3), e "
+  ASSERT_NO_THROW(run_ddl_statement("drop table if exists numbers;"););
+  ASSERT_NO_THROW(run_ddl_statement("create table numbers (a smallint, b int, c bigint, d numeric(7,3), e "
                           "double, f float);"););
   EXPECT_TRUE(storage_test("numbers", LARGE));
-  ASSERT_NO_THROW(run_ddl("drop table numbers;"););
+  ASSERT_NO_THROW(run_ddl_statement("drop table numbers;"););
 }
 
 TEST(StorageSmall, Strings) {
-  ASSERT_NO_THROW(run_ddl("drop table if exists strings;"););
-  ASSERT_NO_THROW(run_ddl("create table strings (x varchar(10) encoding none, y text encoding none);"););
+  ASSERT_NO_THROW(run_ddl_statement("drop table if exists strings;"););
+  ASSERT_NO_THROW(run_ddl_statement("create table strings (x varchar(10) encoding none, y text encoding none);"););
   EXPECT_TRUE(storage_test("strings", SMALL));
-  ASSERT_NO_THROW(run_ddl("drop table strings;"););
+  ASSERT_NO_THROW(run_ddl_statement("drop table strings;"););
 }
 
 TEST(StorageSmall, AllTypes) {
-  ASSERT_NO_THROW(run_ddl("drop table if exists alltypes;"););
-  ASSERT_NO_THROW(run_ddl("create table alltypes (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
+  ASSERT_NO_THROW(run_ddl_statement("drop table if exists alltypes;"););
+  ASSERT_NO_THROW(run_ddl_statement("create table alltypes (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
                           "g timestamp(0), h time(0), i date, x varchar(10) encoding none, y text encoding none);"););
   EXPECT_TRUE(storage_test("alltypes", SMALL));
-  ASSERT_NO_THROW(run_ddl("drop table alltypes;"););
+  ASSERT_NO_THROW(run_ddl_statement("drop table alltypes;"););
 }
 
 TEST(StorageRename, AllTypes) {
-  ASSERT_NO_THROW(run_ddl("drop table if exists original_table;"););
+  ASSERT_NO_THROW(run_ddl_statement("drop table if exists original_table;"););
   ASSERT_NO_THROW(
-      run_ddl("create table original_table (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
+      run_ddl_statement("create table original_table (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
               "g timestamp(0), h time(0), i date, x varchar(10) encoding none, y text encoding none);"););
   EXPECT_TRUE(storage_test("original_table", SMALL));
 
-  ASSERT_NO_THROW(run_ddl("drop table if exists new_table;"););
-  ASSERT_NO_THROW(run_ddl("create table new_table (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
+  ASSERT_NO_THROW(run_ddl_statement("drop table if exists new_table;"););
+  ASSERT_NO_THROW(run_ddl_statement("create table new_table (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
                           "g timestamp(0), h time(0), i date, x varchar(10) encoding none, y text encoding none);"););
   EXPECT_TRUE(storage_test("new_table", SMALL));
 
-  ASSERT_NO_THROW(run_ddl("alter table original_table rename to old_table;"););
+  ASSERT_NO_THROW(run_ddl_statement("alter table original_table rename to old_table;"););
 
-  ASSERT_NO_THROW(run_ddl("alter table new_table rename to original_table;"););
+  ASSERT_NO_THROW(run_ddl_statement("alter table new_table rename to original_table;"););
 
-  ASSERT_NO_THROW(run_ddl("drop table old_table;"););
+  ASSERT_NO_THROW(run_ddl_statement("drop table old_table;"););
 
-  ASSERT_NO_THROW(run_ddl("create table new_table (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
+  ASSERT_NO_THROW(run_ddl_statement("create table new_table (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
                           "g timestamp(0), h time(0), i date, x varchar(10) encoding none, y text encoding none);"););
 
-  ASSERT_NO_THROW(run_ddl("drop table original_table;"););
-  ASSERT_NO_THROW(run_ddl("drop table new_table;"););
+  ASSERT_NO_THROW(run_ddl_statement("drop table original_table;"););
+  ASSERT_NO_THROW(run_ddl_statement("drop table new_table;"););
 }
 
 TEST(StorageSmallParallel, AllTypes) {
-  ASSERT_NO_THROW(run_ddl("drop table if exists alltypes;"););
-  ASSERT_NO_THROW(run_ddl("create table alltypes (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
+  ASSERT_NO_THROW(run_ddl_statement("drop table if exists alltypes;"););
+  ASSERT_NO_THROW(run_ddl_statement("create table alltypes (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
                           "g timestamp(0), h time(0), i date, x varchar(10) encoding none, y text encoding none);"););
   EXPECT_TRUE(storage_test_parallel("alltypes", SMALL, std::thread::hardware_concurrency()));
-  ASSERT_NO_THROW(run_ddl("drop table alltypes;"););
+  ASSERT_NO_THROW(run_ddl_statement("drop table alltypes;"););
 }
 
 int main(int argc, char* argv[]) {

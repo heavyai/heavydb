@@ -15,12 +15,13 @@
 * limitations under the License.
 */
 
-#include "QueryRunner.h"
-
 #include "../Parser/parser.h"
 #include "../QueryEngine/ArrowResultSet.h"
+#include "../QueryEngine/Execute.h"
+#include "../QueryEngine/RelAlgExecutionDescriptor.h"
 #include "../SqliteConnector/SqliteConnector.h"
 #include "../Import/Importer.h"
+#include "../QueryRunner/QueryRunner.h"
 
 #include <sstream>
 #include <boost/algorithm/string.hpp>
@@ -39,10 +40,14 @@ namespace {
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
 bool g_hoist_literals{true};
 
+inline void run_ddl_statement(const std::string query_str) {
+  QueryRunner::run_ddl_statement(query_str, g_session);
+}
+
 std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
                                             const ExecutorDeviceType device_type,
                                             const bool allow_loop_joins) {
-  return run_multiple_agg(query_str, g_session, device_type, g_hoist_literals, allow_loop_joins);
+  return QueryRunner::run_multiple_agg(query_str, g_session, device_type, g_hoist_literals, allow_loop_joins);
 }
 
 std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str, const ExecutorDeviceType device_type) {
@@ -56,19 +61,6 @@ T v(const TargetValue& r) {
   auto p = boost::get<T>(scalar_r);
   CHECK(p);
   return *p;
-}
-
-void run_ddl_statement(const string& create_table_stmt) {
-  SQLParser parser;
-  list<std::unique_ptr<Parser::Stmt>> parse_trees;
-  string last_parsed;
-  CHECK_EQ(parser.parse(create_table_stmt, parse_trees, last_parsed), 0);
-  CHECK_EQ(parse_trees.size(), size_t(1));
-  auto stmt = parse_trees.front().get();
-  Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
-  CHECK(ddl);
-  if (ddl != nullptr)
-    ddl->execute(*g_session);
 }
 
 bool skip_tests(const ExecutorDeviceType device_type) {
@@ -99,7 +91,7 @@ class SQLiteComparator {
   void compare_arrow_output(const std::string& query_string,
                             const std::string& sqlite_query_string,
                             const ExecutorDeviceType device_type) {
-    const auto results = run_select_query(query_string, g_session, device_type, g_hoist_literals, true);
+    const auto results = QueryRunner::run_select_query(query_string, g_session, device_type, g_hoist_literals, true);
     const auto arrow_mapd_results = result_set_arrow_loopback(results);
     compare_impl(arrow_mapd_results.get(), sqlite_query_string, device_type, false);
   }
@@ -657,7 +649,7 @@ int main(int argc, char* argv[]) {
   LOG(INFO) << " after initialization";
   ::testing::InitGoogleTest(&argc, argv);
 
-  g_session.reset(get_session(BASE_PATH));
+  g_session.reset(QueryRunner::get_session(BASE_PATH));
 
   int err{0};
   err = create_and_populate_tables();

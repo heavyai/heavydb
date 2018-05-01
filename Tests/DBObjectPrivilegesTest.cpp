@@ -2,6 +2,7 @@
 #include "../Catalog/Catalog.h"
 #include "../Catalog/DBObject.h"
 #include "../DataMgr/DataMgr.h"
+#include "../QueryRunner/QueryRunner.h"
 #include <boost/filesystem/operations.hpp>
 #include <gtest/gtest.h>
 #include <glog/logging.h>
@@ -57,16 +58,8 @@ class DBObjectPermissionsEnv : public ::testing::Environment {
   }
 };
 
-void run_ddl(const std::string& query) {
-  SQLParser parser;
-  std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
-  std::string last_parsed;
-  CHECK_EQ(parser.parse(query, parse_trees, last_parsed), 0);
-  CHECK_EQ(parse_trees.size(), size_t(1));
-  const auto& stmt = parse_trees.front();
-  Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
-  CHECK(ddl != nullptr);
-  ddl->execute(*g_session);
+inline void run_ddl_statement(const std::string& query) {
+  QueryRunner::run_ddl_statement(query, g_session);
 }
 }  // namespace
 
@@ -152,14 +145,14 @@ struct TableStruct {
   std::string dquery3 = "DROP TABLE IF EXISTS bundesliga;";
 
   void setup_tables() {
-    run_ddl(cquery1);
-    run_ddl(cquery2);
-    run_ddl(cquery3);
+    run_ddl_statement(cquery1);
+    run_ddl_statement(cquery2);
+    run_ddl_statement(cquery3);
   }
   void drop_tables() {
-    run_ddl(dquery1);
-    run_ddl(dquery2);
-    run_ddl(dquery3);
+    run_ddl_statement(dquery1);
+    run_ddl_statement(dquery2);
+    run_ddl_statement(dquery3);
   }
   Users* user;
   Roles* role;
@@ -184,23 +177,23 @@ struct TableObject : testing::Test {
 
 struct ViewObject : testing::Test {
   ViewObject() {
-    run_ddl("CREATE USER bob (password = 'password', is_super = 'false');");
-    run_ddl("CREATE ROLE salesDept;");
-    run_ddl("CREATE USER foo (password = 'password', is_super = 'false');");
-    run_ddl("GRANT salesDept TO foo;");
+    run_ddl_statement("CREATE USER bob (password = 'password', is_super = 'false');");
+    run_ddl_statement("CREATE ROLE salesDept;");
+    run_ddl_statement("CREATE USER foo (password = 'password', is_super = 'false');");
+    run_ddl_statement("GRANT salesDept TO foo;");
 
-    run_ddl("CREATE TABLE bill_table(id integer);");
-    run_ddl("CREATE VIEW bill_view AS SELECT id FROM bill_table;");
-    run_ddl("CREATE VIEW bill_view_outer AS SELECT id FROM bill_view;");
+    run_ddl_statement("CREATE TABLE bill_table(id integer);");
+    run_ddl_statement("CREATE VIEW bill_view AS SELECT id FROM bill_table;");
+    run_ddl_statement("CREATE VIEW bill_view_outer AS SELECT id FROM bill_view;");
   }
   virtual ~ViewObject() {
-    run_ddl("DROP VIEW bill_view_outer;");
-    run_ddl("DROP VIEW bill_view;");
-    run_ddl("DROP TABLE bill_table");
+    run_ddl_statement("DROP VIEW bill_view_outer;");
+    run_ddl_statement("DROP VIEW bill_view;");
+    run_ddl_statement("DROP TABLE bill_table");
 
-    run_ddl("DROP USER foo;");
-    run_ddl("DROP ROLE salesDept;");
-    run_ddl("DROP USER bob;");
+    run_ddl_statement("DROP USER foo;");
+    run_ddl_statement("DROP ROLE salesDept;");
+    run_ddl_statement("DROP USER bob;");
   }
 };
 

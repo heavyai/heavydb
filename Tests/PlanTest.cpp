@@ -28,6 +28,7 @@
 #include "../Parser/ParserNode.h"
 #include "../Planner/Planner.h"
 #include "../DataMgr/DataMgr.h"
+#include "../QueryRunner/QueryRunner.h"
 #include "gtest/gtest.h"
 #include "glog/logging.h"
 
@@ -78,16 +79,8 @@ class SQLTestEnv : public ::testing::Environment {
   }
 };
 
-void run_ddl(const string& input_str) {
-  SQLParser parser;
-  list<std::unique_ptr<Parser::Stmt>> parse_trees;
-  string last_parsed;
-  CHECK_EQ(parser.parse(input_str, parse_trees, last_parsed), 0);
-  CHECK_EQ(parse_trees.size(), size_t(1));
-  const auto& stmt = parse_trees.front();
-  Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
-  CHECK(ddl != nullptr);
-  ddl->execute(*gsession);
+inline void run_ddl_statement(const string& input_str) {
+  QueryRunner::run_ddl_statement(input_str, gsession);
 }
 
 RootPlan* plan_dml(const string& input_str) {
@@ -108,18 +101,18 @@ RootPlan* plan_dml(const string& input_str) {
 }  // namespace
 
 TEST(ParseAnalyzePlan, Create) {
-  ASSERT_NO_THROW(run_ddl("create table if not exists fat (a boolean, b char(5), c varchar(10), d numeric(10,2) "
+  ASSERT_NO_THROW(run_ddl_statement("create table if not exists fat (a boolean, b char(5), c varchar(10), d numeric(10,2) "
                           "encoding rl, e decimal(5,3) encoding sparse(16), f int encoding fixed(16), g smallint, "
                           "h real, i float, j double, k bigint encoding diff, l text not null encoding dict, m "
                           "timestamp(0), n time(0), o date);"););
   ASSERT_TRUE(gsession->get_catalog().getMetadataForTable("fat") != nullptr);
-  ASSERT_NO_THROW(run_ddl("create table if not exists skinny (a smallint, b int, c bigint);"););
+  ASSERT_NO_THROW(run_ddl_statement("create table if not exists skinny (a smallint, b int, c bigint);"););
   ASSERT_TRUE(gsession->get_catalog().getMetadataForTable("skinny") != nullptr);
-  ASSERT_NO_THROW(run_ddl("create table if not exists smallfrag (a int, b text, c bigint) with "
+  ASSERT_NO_THROW(run_ddl_statement("create table if not exists smallfrag (a int, b text, c bigint) with "
                           "(fragment_size = 1000, page_size = 512);"););
   const TableDescriptor* td = gsession->get_catalog().getMetadataForTable("smallfrag");
   EXPECT_TRUE(td->maxFragRows == 1000 && td->fragPageSize == 512);
-  ASSERT_NO_THROW(run_ddl("create table if not exists testdict (a varchar(100) encoding dict(8), c "
+  ASSERT_NO_THROW(run_ddl_statement("create table if not exists testdict (a varchar(100) encoding dict(8), c "
                           "text encoding dict);"););
   td = gsession->get_catalog().getMetadataForTable("testdict");
   const ColumnDescriptor* cd = gsession->get_catalog().getMetadataForColumn(td->tableId, "a");
@@ -282,26 +275,26 @@ TEST(ParseAnalyzePlan, Insert) {
 }
 
 TEST(DISABLED_ParseAnalyzePlan, Views) {
-  EXPECT_NO_THROW(run_ddl("create view if not exists voo as select * from skinny where a > 15;"););
-  EXPECT_NO_THROW(run_ddl("create view if not exists moo as select * from skinny where a > 15;"););
-  EXPECT_NO_THROW(run_ddl("create view if not exists mic as select c, avg(b) from skinny where a > 10 group by c;"););
-  EXPECT_NO_THROW(run_ddl("create view if not exists fatview as select a, d, g from fat where f > 100 and g is not "
+  EXPECT_NO_THROW(run_ddl_statement("create view if not exists voo as select * from skinny where a > 15;"););
+  EXPECT_NO_THROW(run_ddl_statement("create view if not exists moo as select * from skinny where a > 15;"););
+  EXPECT_NO_THROW(run_ddl_statement("create view if not exists mic as select c, avg(b) from skinny where a > 10 group by c;"););
+  EXPECT_NO_THROW(run_ddl_statement("create view if not exists fatview as select a, d, g from fat where f > 100 and g is not "
                           "null or k <= 100000000000 and c = 'xyz';"););
   EXPECT_NO_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("select * from fatview;")); });
 }
 
 void drop_views_and_tables() {
-  EXPECT_NO_THROW(run_ddl("drop view if exists voo;"));
-  EXPECT_NO_THROW(run_ddl("drop view if exists moo;"));
-  EXPECT_NO_THROW(run_ddl("drop view if exists goo;"));
-  EXPECT_NO_THROW(run_ddl("drop view if exists mic;"));
-  EXPECT_NO_THROW(run_ddl("drop view if exists fatview;"));
-  EXPECT_NO_THROW(run_ddl("drop table if exists fat;"));
-  EXPECT_NO_THROW(run_ddl("drop table if exists skinny;"));
-  EXPECT_NO_THROW(run_ddl("drop table if exists smallfrag;"));
-  EXPECT_NO_THROW(run_ddl("drop table if exists testdict;"));
+  EXPECT_NO_THROW(run_ddl_statement("drop view if exists voo;"));
+  EXPECT_NO_THROW(run_ddl_statement("drop view if exists moo;"));
+  EXPECT_NO_THROW(run_ddl_statement("drop view if exists goo;"));
+  EXPECT_NO_THROW(run_ddl_statement("drop view if exists mic;"));
+  EXPECT_NO_THROW(run_ddl_statement("drop view if exists fatview;"));
+  EXPECT_NO_THROW(run_ddl_statement("drop table if exists fat;"));
+  EXPECT_NO_THROW(run_ddl_statement("drop table if exists skinny;"));
+  EXPECT_NO_THROW(run_ddl_statement("drop table if exists smallfrag;"));
+  EXPECT_NO_THROW(run_ddl_statement("drop table if exists testdict;"));
   // non-existent table shouldn't throw either (for PR# 1030 to fix issue #1029)
-  EXPECT_NO_THROW(run_ddl("drop table if exists foxoxoxo;"));
+  EXPECT_NO_THROW(run_ddl_statement("drop table if exists foxoxoxo;"));
 }
 
 int main(int argc, char* argv[]) {

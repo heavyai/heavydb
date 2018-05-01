@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-#include "QueryRunner.h"
-
 #include "../Import/Importer.h"
 #include "../Parser/parser.h"
 #include "../QueryEngine/ArrowResultSet.h"
+#include "../QueryEngine/Execute.h"
+#include "../QueryEngine/RelAlgExecutionDescriptor.h"
 #include "../SqliteConnector/SqliteConnector.h"
 #include "../Shared/ConfigResolve.h"
+#include "../QueryRunner/QueryRunner.h"
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
@@ -91,7 +92,7 @@ std::string build_create_table_statement(const std::string& columns_definition,
 std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
                                             const ExecutorDeviceType device_type,
                                             const bool allow_loop_joins) {
-  return run_multiple_agg(query_str, g_session, device_type, g_hoist_literals, allow_loop_joins);
+  return QueryRunner::run_multiple_agg(query_str, g_session, device_type, g_hoist_literals, allow_loop_joins);
 }
 
 std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str, const ExecutorDeviceType device_type) {
@@ -114,17 +115,8 @@ T v(const TargetValue& r) {
   return *p;
 }
 
-void run_ddl_statement(const string& create_table_stmt) {
-  SQLParser parser;
-  list<std::unique_ptr<Parser::Stmt>> parse_trees;
-  string last_parsed;
-  CHECK_EQ(parser.parse(create_table_stmt, parse_trees, last_parsed), 0);
-  CHECK_EQ(parse_trees.size(), size_t(1));
-  auto stmt = parse_trees.front().get();
-  Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
-  CHECK(ddl);
-  if (ddl != nullptr)
-    ddl->execute(*g_session);
+inline void run_ddl_statement(const std::string& create_table_stmt) {
+  QueryRunner::run_ddl_statement(create_table_stmt, g_session);
 }
 
 bool skip_tests(const ExecutorDeviceType device_type) {
@@ -155,7 +147,7 @@ class SQLiteComparator {
   void compare_arrow_output(const std::string& query_string,
                             const std::string& sqlite_query_string,
                             const ExecutorDeviceType device_type) {
-    const auto results = run_select_query(query_string, g_session, device_type, g_hoist_literals, true);
+    const auto results = QueryRunner::run_select_query(query_string, g_session, device_type, g_hoist_literals, true);
     const auto arrow_mapd_results = result_set_arrow_loopback(results);
     compare_impl(arrow_mapd_results.get(), sqlite_query_string, device_type, false);
   }
@@ -6153,7 +6145,7 @@ int main(int argc, char** argv) {
   if (vm.count("disable-literal-hoisting"))
     g_hoist_literals = false;
 
-  g_session.reset(get_session(BASE_PATH));
+  g_session.reset(QueryRunner::get_session(BASE_PATH));
 
   if (vm.count("with-sharding"))
     g_shard_count = choose_shard_count();

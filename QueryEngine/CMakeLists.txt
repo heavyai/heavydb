@@ -163,12 +163,7 @@ endif()
 
 set(ARROW_LIBS ${Arrow_LIBRARIES})
 
-if(ENABLE_RENDERING)
-  target_link_libraries(QueryEngine CsvImport Planner StringDictionary Utils QueryRenderer ${ARROW_LIBS})
-else()
-  target_link_libraries(QueryEngine CsvImport Planner StringDictionary Utils  ${ARROW_LIBS})
-endif()
-
+target_link_libraries(QueryEngine Planner StringDictionary Utils ${ARROW_LIBS})
 
 add_custom_command(
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o

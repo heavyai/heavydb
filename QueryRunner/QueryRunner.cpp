@@ -16,52 +16,18 @@
 
 #include "QueryRunner.h"
 
-#include "../Parser/parser.h"
-#include "../QueryEngine/CalciteAdapter.h"
-#include "../Parser/ParserWrapper.h"
-#include "../Calcite/Calcite.h"
+#include "Parser/parser.h"
+#include "QueryEngine/CalciteAdapter.h"
+#include "Parser/ParserWrapper.h"
+#include "Calcite/Calcite.h"
+#include "Catalog/Catalog.h"
 
-#include "../QueryEngine/ExtensionFunctionsWhitelist.h"
-#include "../QueryEngine/RelAlgExecutor.h"
+#include "QueryEngine/ExtensionFunctionsWhitelist.h"
+#include "QueryEngine/RelAlgExecutor.h"
 
 #include <boost/filesystem/operations.hpp>
 
 #define CALCITEPORT 39093
-
-Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
-  std::string db_name{MAPD_SYSTEM_DB};
-  std::string user_name{"mapd"};
-  std::string passwd{"HyperInteractive"};
-  boost::filesystem::path base_path{db_path};
-  CHECK(boost::filesystem::exists(base_path));
-  auto system_db_file = base_path / "mapd_catalogs" / "mapd";
-  CHECK(boost::filesystem::exists(system_db_file));
-  auto data_dir = base_path / "mapd_data";
-  Catalog_Namespace::UserMetadata user;
-  Catalog_Namespace::DBMetadata db;
-  auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, db_path, 1024);
-  ExtensionFunctionsWhitelist::add(calcite->getExtensionFunctionWhitelist());
-#ifdef HAVE_CUDA
-  bool useGpus = true;
-#else
-  bool useGpus = false;
-#endif
-  {
-    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, useGpus, -1);
-    auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
-    sys_cat.init(base_path.string(), dataMgr, {}, calcite, false, false);
-    CHECK(sys_cat.getMetadataForUser(user_name, user));
-    CHECK_EQ(user.passwd, passwd);
-    CHECK(sys_cat.getMetadataForDB(db_name, db));
-    CHECK(user.isSuper || (user.userId == db.dbOwner));
-  }
-  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, useGpus, -1);
-  return new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
-                                                base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, calcite),
-                                            user,
-                                            ExecutorDeviceType::GPU,
-                                            "");
-}
 
 namespace {
 
@@ -110,6 +76,43 @@ Planner::RootPlan* parse_plan(const std::string& query_str,
 
 }  // namespace
 
+namespace QueryRunner {
+
+Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
+  std::string db_name{MAPD_SYSTEM_DB};
+  std::string user_name{"mapd"};
+  std::string passwd{"HyperInteractive"};
+  boost::filesystem::path base_path{db_path};
+  CHECK(boost::filesystem::exists(base_path));
+  auto system_db_file = base_path / "mapd_catalogs" / "mapd";
+  CHECK(boost::filesystem::exists(system_db_file));
+  auto data_dir = base_path / "mapd_data";
+  Catalog_Namespace::UserMetadata user;
+  Catalog_Namespace::DBMetadata db;
+  auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, db_path, 1024);
+  ExtensionFunctionsWhitelist::add(calcite->getExtensionFunctionWhitelist());
+#ifdef HAVE_CUDA
+  bool useGpus = true;
+#else
+  bool useGpus = false;
+#endif
+  {
+    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, useGpus, -1);
+    auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
+    sys_cat.init(base_path.string(), dataMgr, {}, calcite, false, false);
+    CHECK(sys_cat.getMetadataForUser(user_name, user));
+    CHECK_EQ(user.passwd, passwd);
+    CHECK(sys_cat.getMetadataForDB(db_name, db));
+    CHECK(user.isSuper || (user.userId == db.dbOwner));
+  }
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, useGpus, -1);
+  return new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
+                                                base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, calcite),
+                                            user,
+                                            ExecutorDeviceType::GPU,
+                                            "");
+}
+
 ExecutionResult run_select_query(const std::string& query_str,
                                  const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
                                  const ExecutorDeviceType device_type,
@@ -131,7 +134,7 @@ std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
                                             const bool hoist_literals,
                                             const bool allow_loop_joins) {
   ParserWrapper pw{query_str};
-  if( is_calcite_path_permissable( pw ) ) {
+  if (is_calcite_path_permissable(pw)) {
     const auto execution_result = run_select_query(query_str, session, device_type, hoist_literals, allow_loop_joins);
     return execution_result.getRows();
   }
@@ -150,3 +153,19 @@ std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
       plan, *session, hoist_literals, device_type, ExecutorOptLevel::LoopStrengthReduction, false, allow_loop_joins);
 #endif
 }
+
+void run_ddl_statement(const std::string& create_table_stmt,
+                       const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
+  SQLParser parser;
+  std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
+  std::string last_parsed;
+  CHECK_EQ(parser.parse(create_table_stmt, parse_trees, last_parsed), 0);
+  CHECK_EQ(parse_trees.size(), size_t(1));
+  auto stmt = parse_trees.front().get();
+  Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
+  CHECK(ddl);
+  if (ddl != nullptr)
+    ddl->execute(*session);
+}
+
+}  // namespace QueryRUnner

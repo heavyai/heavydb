@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-#include "QueryRunner.h"
+#include "../QueryRunner/QueryRunner.h"
+#include "../Catalog/Catalog.h"
 
 #include <boost/program_options.hpp>
 
@@ -55,9 +56,9 @@ int main(int argc, char** argv) {
     device_type = ExecutorDeviceType::CPU;
   }
 
-  std::unique_ptr<Catalog_Namespace::SessionInfo> session(get_session(db_path.c_str()));
+  std::unique_ptr<Catalog_Namespace::SessionInfo> session(QueryRunner::get_session(db_path.c_str()));
   for (size_t i = 0; i < iter; ++i) {
-    run_multiple_agg(query, session, device_type, true, true);
+    QueryRunner::run_multiple_agg(query, session, device_type, true, true);
   }
   return 0;
 }

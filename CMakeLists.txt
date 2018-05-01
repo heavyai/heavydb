@@ -290,6 +290,7 @@ else()
   include_directories(Distributed/os)
 endif()
 
+set(MAPD_RENDERING_LIBRARIES "")
 if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
   option(ENABLE_RENDERING "Build backend renderer" OFF)
   if(ENABLE_RENDERING)
@@ -367,6 +368,7 @@ add_subdirectory(Fragmenter)
 add_subdirectory(Chunk)
 add_subdirectory(Shared)
 add_subdirectory(Utils)
+add_subdirectory(QueryRunner)
 add_subdirectory(SQLFrontend)
 add_subdirectory(ThriftHandler)
 
@@ -377,23 +379,22 @@ endif()
 
 add_subdirectory(Calcite)
 
-set(MAPD_LIBRARIES Shared Catalog SqliteConnector Parser Analyzer Planner
-  QueryEngine DataMgr Fragmenter Chunk)
+set(MAPD_LIBRARIES Shared Catalog SqliteConnector Parser Analyzer Planner CsvImport QueryRunner QueryEngine DataMgr Fragmenter Chunk)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND MAPD_LIBRARIES Distributed)
 endif()
 
-if(ENABLE_FOLLY)
-  list(APPEND MAPD_LIBRARIES ${Folly_LIBRARIES})
-endif()
-
 list(APPEND MAPD_LIBRARIES Calcite)
-
-list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})
 
 if(ENABLE_RENDERING)
   list(APPEND MAPD_LIBRARIES "${MAPD_RENDERING_LIBRARIES}")
+endif()
+
+list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})
+
+if(ENABLE_FOLLY)
+  list(APPEND MAPD_LIBRARIES ${Folly_LIBRARIES})
 endif()
 
 if(ENABLE_LICENSING_AWS)
@@ -459,11 +460,8 @@ add_custom_target(rerun_cmake ALL
 add_dependencies(mapd_server rerun_cmake)
 
 target_link_libraries(mapd_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
-if(ENABLE_FOLLY)
-  target_link_libraries(initdb Catalog Fragmenter Shared Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${Folly_LIBRARIES} ${CMAKE_DL_LIBS})
-else()
-  target_link_libraries(initdb Catalog Fragmenter Shared Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
-endif()
+
+target_link_libraries(initdb ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
 
 macro(set_dpkg_arch arch_in arch_out)
   if("${arch_in}" STREQUAL "x86_64")

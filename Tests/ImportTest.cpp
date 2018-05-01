@@ -24,8 +24,7 @@
 #include "../Catalog/Catalog.h"
 #include "../Parser/parser.h"
 #include "../QueryEngine/ResultSet.h"
-
-#include "QueryRunner.h"
+#include "../QueryRunner/QueryRunner.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -41,16 +40,8 @@ namespace {
 std::unique_ptr<SessionInfo> gsession;
 bool g_hoist_literals{true};
 
-void run_ddl(const string& input_str) {
-  SQLParser parser;
-  list<std::unique_ptr<Parser::Stmt>> parse_trees;
-  string last_parsed;
-  CHECK_EQ(parser.parse(input_str, parse_trees, last_parsed), 0);
-  CHECK_EQ(parse_trees.size(), size_t(1));
-  const auto& stmt = parse_trees.front();
-  Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
-  CHECK(ddl != nullptr);
-  ddl->execute(*gsession);
+inline void run_ddl_statement(const string& input_str) {
+  QueryRunner::run_ddl_statement(input_str, gsession);
 }
 
 template <class T>
@@ -63,7 +54,7 @@ T v(const TargetValue& r) {
 }
 
 std::shared_ptr<ResultSet> run_query(const string& query_str) {
-  return run_multiple_agg(query_str, gsession, ExecutorDeviceType::CPU, g_hoist_literals, true);
+  return QueryRunner::run_multiple_agg(query_str, gsession, ExecutorDeviceType::CPU, g_hoist_literals, true);
 }
 
 bool compare_agg(const int64_t cnt, const double avg) {
@@ -269,13 +260,13 @@ const char* create_table_trips =
 class ImportTest : public ::testing::Test {
  protected:
   virtual void SetUp() {
-    ASSERT_NO_THROW(run_ddl("drop table if exists trips;"););
-    ASSERT_NO_THROW(run_ddl(create_table_trips););
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists trips;"););
+    ASSERT_NO_THROW(run_ddl_statement(create_table_trips););
   }
 
   virtual void TearDown() {
-    ASSERT_NO_THROW(run_ddl("drop table trips;"););
-    ASSERT_NO_THROW(run_ddl("drop table if exists geo;"););
+    ASSERT_NO_THROW(run_ddl_statement("drop table trips;"););
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists geo;"););
   }
 };
 

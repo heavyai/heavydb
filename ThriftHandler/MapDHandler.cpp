@@ -60,6 +60,7 @@
 #include "Shared/MapDParameters.h"
 #include "Shared/StringTransform.h"
 #include "Shared/geosupport.h"
+#include "Shared/import_helpers.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
@@ -2075,7 +2076,7 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
       std::list<ColumnDescriptor> cds =
           Importer_NS::Importer::gdalToColumnDescriptors(file_path.string(), geoColumnName, copy_params);
       for (auto cd : cds) {
-        cd.columnName = sanitize_name(cd.columnName);
+        cd.columnName = ImportHelpers::sanitize_name(cd.columnName);
         _return.row_set.row_desc.push_back(populateThriftColumnType(nullptr, &cd));
       }
       std::map<std::string, std::vector<std::string>> sample_data;
@@ -2514,16 +2515,6 @@ void MapDHandler::create_link(std::string& _return,
   }
 }
 
-std::string MapDHandler::sanitize_name(const std::string& name) {
-  boost::regex invalid_chars{R"([^0-9a-z_])", boost::regex::extended | boost::regex::icase};
-
-  std::string col_name = boost::regex_replace(name, invalid_chars, "");
-  if (reserved_keywords.find(boost::to_upper_copy<std::string>(col_name)) != reserved_keywords.end()) {
-    col_name += "_";
-  }
-  return col_name;
-}
-
 TColumnType MapDHandler::create_geo_column(const TDatumType::type type, const std::string& name, const bool is_array) {
   TColumnType ct;
   ct.col_name = name;
@@ -2554,7 +2545,7 @@ void MapDHandler::create_table(const TSessionId& session,
                                const TTableType::type table_type) {
   check_read_only("create_table");
 
-  if (table_name != sanitize_name(table_name)) {
+  if (table_name != ImportHelpers::sanitize_name(table_name)) {
     THROW_MAPD_EXCEPTION("Invalid characters in table name: " + table_name);
   }
 
@@ -2568,7 +2559,7 @@ void MapDHandler::create_table(const TSessionId& session,
   std::vector<std::string> col_stmts;
 
   for (auto col : rds) {
-    if (col.col_name != sanitize_name(col.col_name)) {
+    if (col.col_name != ImportHelpers::sanitize_name(col.col_name)) {
       THROW_MAPD_EXCEPTION("Invalid characters in column name: " + col.col_name);
     }
     if (col.col_type.type == TDatumType::INTERVAL_DAY_TIME || col.col_type.type == TDatumType::INTERVAL_YEAR_MONTH) {
@@ -2715,7 +2706,7 @@ void MapDHandler::import_geo_table(const TSessionId& session,
 
   std::map<std::string, std::string> colname_to_src;
   for (auto r : rd) {
-    colname_to_src[r.col_name] = r.src_name.length() > 0 ? r.src_name : sanitize_name(r.src_name);
+    colname_to_src[r.col_name] = r.src_name.length() > 0 ? r.src_name : ImportHelpers::sanitize_name(r.src_name);
   }
 
   const TableDescriptor* td = cat.getMetadataForTable(table_name);

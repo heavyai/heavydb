@@ -772,5 +772,20 @@ class Importer : public DataStreamSink {
   std::unique_ptr<Loader> loader;
   std::unique_ptr<bool[]> is_array_a;
 };
+
+class ImportDriver {
+ public:
+  ImportDriver(std::shared_ptr<Catalog_Namespace::Catalog> c,
+               const Catalog_Namespace::UserMetadata& user,
+               const ExecutorDeviceType t = ExecutorDeviceType::GPU)
+      : session_(new Catalog_Namespace::SessionInfo(c, user, t, "")) {}
+
+  void import_geo_table(const std::string& file_path, const std::string& table_name);
+
+ private:
+  std::unique_ptr<Catalog_Namespace::SessionInfo> session_;
 };
+
+}  // namespace Importer_NS
+
 #endif  // _IMPORTER_H_
