@@ -2933,7 +2933,8 @@ void import_geospatial_test() {
   run_ddl_statement(
       "CREATE TABLE geospatial_test ("
       "p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON, "
-      "gp GEOMETRY(POINT), gp4326 GEOGRAPHY(POINT,4326) ENCODING GEOINT(32), gp900913 GEOMETRY(POINT,900913)"
+      "gp GEOMETRY(POINT), gp4326 GEOGRAPHY(POINT,4326) ENCODING GEOINT(32), gp900913 GEOMETRY(POINT,900913), "
+      "ggp GEOGRAPHY(POINT), ggl GEOGRAPHY(LINESTRING,4326) ENCODING NONE, ggpoly GEOGRAPHY(POLYGON)"
       ") WITH (fragment_size=2);");
   for (ssize_t i = 0; i < g_num_rows; ++i) {
     const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) + ")'"};
@@ -2944,7 +2945,8 @@ void import_geospatial_test() {
     const std::string mpoly{"'MULTIPOLYGON(((0 0, " + std::to_string(i + 1) + " 0, 0 " + std::to_string(i + 1) +
                             ", 0 0)))'"};
     const std::string insert_query{"INSERT INTO geospatial_test VALUES(" + point + ", " + linestring + ", " + poly +
-                                   ", " + mpoly + ", " + point + ", " + point + ", " + point + ");"};
+                                   ", " + mpoly + ", " + point + ", " + point + ", " + point + ", " + point + ", " +
+                                   linestring + ", " + poly + ");"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
   }
 }
@@ -5192,6 +5194,11 @@ TEST(Select, GeoSpatial) {
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(poly, 'POINT(0.1 0.1)');", dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(ggpoly, ST_GeogFromText('POINT(0.1 0.1)', 4326));",
+            dt)));
     ASSERT_EQ(static_cast<int64_t>(1),  // polygon containing a point
               v<int64_t>(run_simple_agg("SELECT ST_Contains("
                                         "ST_GeomFromText('POLYGON((2 0, 0 2, -2 0, 0 -2, 2 0))'), "
@@ -5208,6 +5215,13 @@ TEST(Select, GeoSpatial) {
                                         "((2 0, 0 2, -2 0, 0 -2, 1 -2, 2 -1)))', "
                                         "'POINT(0.1 0.1)') FROM geospatial_test limit 1;",
                                         dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),  // last query but for geography objects
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_Contains("
+                  "ST_GeogFromText('MULTIPOLYGON(((2 0, 0 2, -2 0, 0 -2, 2 0),(1 0, 0 1, -1 0, 0 -1, 1 0)), "
+                  "((2 0, 0 2, -2 0, 0 -2, 1 -2, 2 -1)))', 4326), "
+                  "ST_GeogFromText('POINT(0.1 0.1)', 4326)) FROM geospatial_test limit 1;",
+                  dt)));
 
     // Coord accessors
     ASSERT_NEAR(static_cast<double>(-118.4079),

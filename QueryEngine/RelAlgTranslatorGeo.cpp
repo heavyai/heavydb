@@ -449,13 +449,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
     if (rex_function->getName() == std::string("ST_Distance")) {
       if ((arg0_ti.get_type() == kPOINT || (arg0_ti.get_type() == kLINESTRING && lindex0 != 0)) &&
           (arg1_ti.get_type() == kPOINT || (arg1_ti.get_type() == kLINESTRING && lindex1 != 0))) {
-        // Geodesic distance between point or indexed linestrings
+        // Geodesic distance between points (or indexed linestrings)
         specialized_geofunc += std::string("_Geodesic");
       } else {
         throw QueryNotSupported(rex_function->getName() + " currently doesn't accept non-POINT geographies");
       }
+    } else if (rex_function->getName() == std::string("ST_Contains")) {
+      // We currently don't have a geodesic implementation of ST_Contains,
+      // allowing calls to a [less precise] cartesian implementation.
     } else {
-      throw QueryNotSupported(rex_function->getName() + " currently doesn't accept geographies");
+      throw QueryNotSupported(rex_function->getName() + " doesn't accept geographies");
     }
   }
 
