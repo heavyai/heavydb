@@ -16,7 +16,7 @@
 package com.mapd.dashboard;
 
 import static com.mapd.tests.MapdAsserts.shouldThrowException;
-
+ 
 import java.util.Arrays;
 import java.util.List;
 
@@ -25,6 +25,8 @@ import org.slf4j.LoggerFactory;
 
 import com.mapd.tests.MapdAsserts;
 import com.mapd.tests.MapdTestClient;
+import com.mapd.thrift.server.TDBObject;
+import com.mapd.thrift.server.TDBObjectType;
 
 
 public class DashboardTest {
@@ -38,6 +40,7 @@ public class DashboardTest {
     DashboardTest x = new DashboardTest();
     x.testUserRoles();
     x.testDashboards();
+    x.testDbLevelDashboardPermissions();
   }
   
   
@@ -90,6 +93,71 @@ public class DashboardTest {
     su.runSql("DROP USER dba;");
   }
   
+  void testDbLevelDashboardPermissions() throws Exception {
+    logger.info("testDbLevelDashboardPermissions()");
+
+    MapdTestClient su = MapdTestClient.getClient("localhost", 9091, "mapd", "mapd", "HyperInteractive"); 
+    
+    su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
+    su.runSql("CREATE USER jason (password = 'password', is_super = 'false');");
+    
+    su.runSql("CREATE ROLE salesDept;");
+    su.runSql("CREATE USER foo (password = 'password', is_super = 'false');");
+
+    su.runSql("GRANT salesDept TO foo;");
+    
+    MapdTestClient dba = MapdTestClient.getClient("localhost", 9091, "mapd", "dba", "password");
+    MapdTestClient jason = MapdTestClient.getClient("localhost", 9091, "mapd", "jason", "password");
+    MapdTestClient foo = MapdTestClient.getClient("localhost", 9091, "mapd", "foo", "password");
+    
+    MapdAsserts.assertEqual(0, jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).size());
+    MapdAsserts.assertEqual(0, foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).size());
+
+    su.runSql("GRANT CREATE DASHBOARD ON DATABASE mapd TO jason;");
+    MapdAsserts.assertEqual(1, jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).size());
+    MapdAsserts.assertEqual(0, foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).size());
+    
+    TDBObject obj = jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
+    MapdAsserts.assertEqual(Arrays.asList(true, false, false, false), obj.getPrivs());
+
+    su.runSql("GRANT EDIT DASHBOARD ON DATABASE mapd TO jason;");
+    obj = jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
+    MapdAsserts.assertEqual(Arrays.asList(true, false, false, true), obj.getPrivs());
+
+    su.runSql("GRANT VIEW DASHBOARD ON DATABASE mapd TO jason;");
+    obj = jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
+    MapdAsserts.assertEqual(Arrays.asList(true, false, true, true), obj.getPrivs());
+
+    su.runSql("GRANT DELETE DASHBOARD ON DATABASE mapd TO jason;");
+    obj = jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
+    MapdAsserts.assertEqual(Arrays.asList(true, true, true, true), obj.getPrivs());
+
+    su.runSql("GRANT CREATE DASHBOARD ON DATABASE mapd TO salesDept;");
+    MapdAsserts.assertEqual(1, jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).size());
+    MapdAsserts.assertEqual(1, foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).size());
+    
+    obj = foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
+    MapdAsserts.assertEqual(Arrays.asList(true, false, false, false), obj.getPrivs());
+
+    su.runSql("GRANT EDIT DASHBOARD ON DATABASE mapd TO salesDept;");
+    obj = foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
+    MapdAsserts.assertEqual(Arrays.asList(true, false, false, true), obj.getPrivs());
+
+    su.runSql("GRANT VIEW DASHBOARD ON DATABASE mapd TO salesDept;");
+    obj = foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
+    MapdAsserts.assertEqual(Arrays.asList(true, false, true, true), obj.getPrivs());
+
+    su.runSql("GRANT DELETE DASHBOARD ON DATABASE mapd TO salesDept;");
+    obj = foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
+    MapdAsserts.assertEqual(Arrays.asList(true, true, true, true), obj.getPrivs());
+
+    
+    su.runSql("DROP USER foo;");
+    su.runSql("DROP ROLE salesDept;");
+    su.runSql("DROP USER jason;");
+    su.runSql("DROP USER dba;");
+  }
+  
   void testDashboards() throws Exception {
     logger.info("testDashboards()");
 
@@ -105,14 +173,14 @@ public class DashboardTest {
     su.runSql("CREATE USER foo (password = 'password', is_super = 'false');");
 
     su.runSql("GRANT salesDept TO foo;");
-    su.runSql("GRANT CREATE DASHBOARD ON DATABASE mapd TO jason;");
     
     MapdTestClient dba = MapdTestClient.getClient("localhost", 9091, "mapd", "dba", "password");
     MapdTestClient jason = MapdTestClient.getClient("localhost", 9091, "mapd", "jason", "password");
     MapdTestClient bob = MapdTestClient.getClient("localhost", 9091, "mapd", "bob", "password");
     MapdTestClient foo = MapdTestClient.getClient("localhost", 9091, "mapd", "foo", "password");
     
-    
+    su.runSql("GRANT CREATE DASHBOARD ON DATABASE mapd TO jason;");
+
     shouldThrowException("bob should not be able to create dashboards", () -> bob.create_dashboard("for_bob") );
     shouldThrowException("foo should not be able to create dashboards", () -> foo.create_dashboard("for_bob") );
 

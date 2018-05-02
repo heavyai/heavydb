@@ -22,6 +22,8 @@ import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TSocket;
 
 import com.mapd.thrift.server.MapD;
+import com.mapd.thrift.server.TDBObject;
+import com.mapd.thrift.server.TDBObjectType;
 import com.mapd.thrift.server.TDashboard;
 import com.mapd.thrift.server.TQueryResult;
 
@@ -60,6 +62,10 @@ public class MapdTestClient {
 
   public List<String> get_roles() throws Exception {
     return client.get_roles(sessionId);
+  }
+  
+  public List<TDBObject> get_db_object_privs(String objectName, TDBObjectType type) throws Exception {
+    return client.get_db_object_privs(sessionId, objectName, type);
   }
 
   public static MapdTestClient getClient(String host, int port, String db, String user, String password)

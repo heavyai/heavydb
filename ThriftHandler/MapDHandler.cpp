@@ -1043,7 +1043,11 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
 
   try {
     if (object_type == DashboardDBObjectType) {
-      object_to_find = DBObject(std::stoi(objectName), object_type);
+      if (objectName == "") {
+        object_to_find = DBObject(-1, object_type);
+      } else {
+        object_to_find = DBObject(std::stoi(objectName), object_type);
+      }
     }
     object_to_find.loadKey(session_info_ptr->get_catalog());
   } catch (const std::exception&) {
