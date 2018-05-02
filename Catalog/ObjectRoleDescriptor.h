@@ -29,7 +29,6 @@
 
 struct ObjectRoleDescriptor {
   std::string roleName;
-  bool roleType;
   int32_t objectType;
   int32_t dbId;
   int objectId;

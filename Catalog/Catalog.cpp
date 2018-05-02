@@ -400,6 +400,7 @@ void SysCatalog::dropUser(const string& name) {
       if (getMetadataForUser(name, user)) {
         dropRole_unsafe(name);
         dropUserRole(name);
+        deleteObjectDescriptorMap(name);
         const std::string& roleName(name);
         // TODO (max): this one looks redundant as we just deleted it in dropRole_unsafe. Verify it
         sqliteConnector_->query_with_text_param("DELETE FROM mapd_roles WHERE userName = ?", roleName);
@@ -706,35 +707,7 @@ void SysCatalog::grantDBObjectPrivileges_unsafe(const std::string& roleName,
   object.resetPrivileges();
   rl->getPrivileges(object);
   insertOrUpdateObjectPrivileges(sqliteConnector_, roleName, rl->isUserPrivateRole(), object);
-  auto privs = object.getPrivileges();
-  // TODO: Add separate function to remove boilerplate code below
-  bool present = false;
-  if (1 == 1) {
-    insertOrUpdateObjectPrivileges(sqliteConnector_, roleName, rl->isUserPrivateRole(), object);
-    auto range = objectDescriptorMap_.equal_range(std::to_string(catalog.get_currentDB().dbId) + ":" +
-                                                  std::to_string(object.getObjectKey().permissionType) + ":" +
-                                                  std::to_string(object.getObjectKey().objectId));
-    for (auto d = range.first; d != range.second; ++d) {
-      // overwrite permissions
-      if (d->second->roleName == roleName) {
-        d->second->privs = privs;
-        present = true;
-      }
-    }
-  }
-  if (!present) {
-    ObjectRoleDescriptor* od = new ObjectRoleDescriptor();
-    od->roleName = roleName;
-    od->roleType = rl->isUserPrivateRole();
-    od->objectType = object.getObjectKey().permissionType;
-    od->dbId = object.getObjectKey().dbId;
-    od->objectId = object.getObjectKey().objectId;
-    od->privs = object.getPrivileges();
-    od->objectOwnerId = object.getOwner();
-    od->objectName = object.getName();
-    objectDescriptorMap_.insert(ObjectRoleDescriptorMap::value_type(
-        std::to_string(od->dbId) + ":" + std::to_string(od->objectType) + ":" + std::to_string(od->objectId), od));
-  }
+  updateObjectDescriptorMap(roleName, object, catalog);
 }
 
 // REVOKE INSERT ON TABLE payroll_table FROM payroll_dept_role;
@@ -753,32 +726,11 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
   object.loadKey(catalog);
   auto ret_object = rl->revokePrivileges(object);
   if (ret_object) {
-    // TODO: Add separate function to remove boilerplate code below
-    auto privs = ret_object->getPrivileges();
     insertOrUpdateObjectPrivileges(sqliteConnector_, roleName, rl->isUserPrivateRole(), *ret_object);
-    auto range = objectDescriptorMap_.equal_range(std::to_string(catalog.get_currentDB().dbId) + ":" +
-                                                  std::to_string(object.getObjectKey().permissionType) + ":" +
-                                                  std::to_string(object.getObjectKey().objectId));
-    for (auto d = range.first; d != range.second; ++d) {
-      // overwrite permissions
-      if (d->second->roleName == roleName) {
-        d->second->privs = privs;
-      }
-    }
+    updateObjectDescriptorMap(roleName, *ret_object, catalog);
   } else {
     deleteObjectPrivileges(sqliteConnector_, roleName, rl->isUserPrivateRole(), object);
-    auto range = objectDescriptorMap_.equal_range(std::to_string(catalog.get_currentDB().dbId) + ":" +
-                                                  std::to_string(object.getObjectKey().permissionType) + ":" +
-                                                  std::to_string(object.getObjectKey().objectId));
-    for (auto d = range.first; d != range.second;) {
-      // remove the entry
-      if (d->second->roleName == roleName) {
-        delete d->second;
-        d = objectDescriptorMap_.erase(d);
-      } else {
-        d++;
-      }
-    }
+    deleteObjectDescriptorMap(roleName, object, catalog);
   }
 }
 
@@ -920,6 +872,69 @@ void SysCatalog::revokeRole_unsafe(const std::string& roleName, const std::strin
   }
   sqliteConnector_->query_with_text_params("DELETE FROM mapd_roles WHERE roleName = ? AND userName = ?",
                                            std::vector<std::string>{roleName, userName});
+}
+
+// Update or add element in ObjectRoleDescriptorMap
+void SysCatalog::updateObjectDescriptorMap(const std::string& roleName,
+                                           DBObject& object,
+                                           const Catalog_Namespace::Catalog& cat) {
+  bool present = false;
+  auto privs = object.getPrivileges();
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  auto range = objectDescriptorMap_.equal_range(std::to_string(cat.get_currentDB().dbId) + ":" +
+                                                std::to_string(object.getObjectKey().permissionType) + ":" +
+                                                std::to_string(object.getObjectKey().objectId));
+  for (auto d = range.first; d != range.second; ++d) {
+    if (d->second->roleName == roleName) {
+      // overwrite permissions
+      d->second->privs = privs;
+      present = true;
+    }
+  }
+  if (!present) {
+    ObjectRoleDescriptor* od = new ObjectRoleDescriptor();
+    od->roleName = roleName;
+    od->objectType = object.getObjectKey().permissionType;
+    od->dbId = object.getObjectKey().dbId;
+    od->objectId = object.getObjectKey().objectId;
+    od->privs = object.getPrivileges();
+    od->objectOwnerId = object.getOwner();
+    od->objectName = object.getName();
+    objectDescriptorMap_.insert(ObjectRoleDescriptorMap::value_type(
+        std::to_string(od->dbId) + ":" + std::to_string(od->objectType) + ":" + std::to_string(od->objectId), od));
+  }
+}
+
+// Remove user/role from ObjectRoleDescriptorMap
+void SysCatalog::deleteObjectDescriptorMap(const std::string& roleName) {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  for (auto d = objectDescriptorMap_.begin(); d != objectDescriptorMap_.end();) {
+    if (d->second->roleName == roleName) {
+      delete d->second;
+      d = objectDescriptorMap_.erase(d);
+    } else {
+      d++;
+    }
+  }
+}
+
+// Remove element from ObjectRoleDescriptorMap
+void SysCatalog::deleteObjectDescriptorMap(const std::string& roleName,
+                                           DBObject& object,
+                                           const Catalog_Namespace::Catalog& cat) {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  auto range = objectDescriptorMap_.equal_range(std::to_string(cat.get_currentDB().dbId) + ":" +
+                                                std::to_string(object.getObjectKey().permissionType) + ":" +
+                                                std::to_string(object.getObjectKey().objectId));
+  for (auto d = range.first; d != range.second;) {
+    // remove the entry
+    if (d->second->roleName == roleName) {
+      delete d->second;
+      d = objectDescriptorMap_.erase(d);
+    } else {
+      d++;
+    }
+  }
 }
 
 /*
@@ -1610,13 +1625,13 @@ void SysCatalog::buildObjectDescriptorMap() {
   for (size_t r = 0; r < numRows; ++r) {
     ObjectRoleDescriptor* od = new ObjectRoleDescriptor();
     od->roleName = sqliteConnector_->getData<string>(r, 0);
-    od->roleType = sqliteConnector_->getData<bool>(r, 1);
     od->objectType = sqliteConnector_->getData<int>(r, 2);
     od->dbId = sqliteConnector_->getData<int>(r, 3);
     od->objectId = sqliteConnector_->getData<int>(r, 4);
     od->privs.privileges = sqliteConnector_->getData<int>(r, 5);
     od->objectOwnerId = sqliteConnector_->getData<int>(r, 6);
     od->objectName = sqliteConnector_->getData<string>(r, 7);
+    std::lock_guard<std::mutex> lock(cat_mutex_);
     objectDescriptorMap_.insert(ObjectRoleDescriptorMap::value_type(
         std::to_string(od->dbId) + ":" + std::to_string(od->objectType) + ":" + std::to_string(od->objectId), od));
   }
