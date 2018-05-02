@@ -567,6 +567,21 @@ bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
   return true;
 }
 
+bool SysCatalog::getMetadataForUserById(const int32_t idIn, UserMetadata& user) {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  sqliteConnector_->query_with_text_param("SELECT userid, name, passwd, issuper FROM mapd_users WHERE userid = ?",
+                                          std::to_string(idIn));
+  int numRows = sqliteConnector_->getNumRows();
+  if (numRows == 0)
+    return false;
+  user.userId = sqliteConnector_->getData<int>(0, 0);
+  user.userName = sqliteConnector_->getData<string>(0, 1);
+  user.passwd = sqliteConnector_->getData<string>(0, 2);
+  user.isSuper = sqliteConnector_->getData<bool>(0, 3);
+  user.isReallySuper = user.isSuper;
+  return true;
+}
+
 list<DBMetadata> SysCatalog::getAllDBMetadata() {
   std::lock_guard<std::mutex> lock(cat_mutex_);
   sqliteConnector_->query("SELECT dbid, name, owner FROM mapd_databases");
@@ -1607,6 +1622,17 @@ void SysCatalog::buildObjectDescriptorMap() {
   }
 }
 
+namespace {
+std::string getUserFromId(const int32_t id) {
+  UserMetadata user;
+  if (SysCatalog::instance().getMetadataForUserById(id, user)) {
+    return user.userName;
+  }
+  // a user could be deleted and a dashboard still exist?
+  return "Unknown";
+}
+}
+
 void Catalog::buildMaps() {
   CheckAndExecuteMigrations();
 
@@ -1714,6 +1740,7 @@ void Catalog::buildMaps() {
     vd->updateTime = sqliteConnector_.getData<string>(r, 4);
     vd->userId = sqliteConnector_.getData<int>(r, 5);
     vd->viewMetadata = sqliteConnector_.getData<string>(r, 6);
+    vd->user = getUserFromId(vd->userId);
     dashboardDescriptorMap_[std::to_string(vd->userId) + ":" + vd->viewName] = vd;
   }
 

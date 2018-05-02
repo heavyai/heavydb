@@ -337,6 +337,7 @@ class SysCatalog {
   void createDatabase(const std::string& dbname, int owner);
   void dropDatabase(const int32_t dbid, const std::string& name, Catalog* db_cat);
   bool getMetadataForUser(const std::string& name, UserMetadata& user);
+  bool getMetadataForUserById(const int32_t idIn, UserMetadata& user);
   bool checkPasswordForUser(const std::string& passwd, UserMetadata& user);
   bool getMetadataForDB(const std::string& name, DBMetadata& db);
   const DBMetadata& get_currentDB() const { return currentDB_; }

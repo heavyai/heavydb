@@ -2173,7 +2173,6 @@ void MapDHandler::get_dashboard(TDashboard& dashboard, const TSessionId& session
   dashboard.dashboard_metadata = dash->viewMetadata;
   dashboard.dashboard_owner = dash->user;
   dashboard.dashboard_id = dash->viewId;
-  dashboard.dashboard_owner = dash->user;
 }
 
 void MapDHandler::get_dashboards(std::vector<TDashboard>& dashboards, const TSessionId& session) {
