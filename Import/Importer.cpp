@@ -2267,6 +2267,8 @@ bool Loader::loadToShard(const std::vector<std::unique_ptr<TypedImportBuffer>>& 
                          size_t row_count,
                          const TableDescriptor* shard_table,
                          bool checkpoint) {
+  std::lock_guard<std::mutex> loader_lock(loader_mutex_);
+
   Fragmenter_Namespace::InsertData ins_data(insert_data);
   ins_data.numRows = row_count;
   bool success = true;

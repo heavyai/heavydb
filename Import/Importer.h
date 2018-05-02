@@ -588,6 +588,7 @@ class Loader {
                    size_t row_count,
                    const TableDescriptor* shard_table,
                    bool checkpoint);
+  std::mutex loader_mutex_;
 };
 
 struct ImportStatus {
