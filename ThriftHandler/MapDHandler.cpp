@@ -1823,7 +1823,7 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
       copy_params.table_type = Importer_NS::TableType::DELIMITED;
       break;
     default:
-      CHECK(false);
+      THROW_MAPD_EXCEPTION("Invalid table_type in CopyParams: " + std::to_string((int)cp.table_type));
       break;
   }
   switch (cp.geo_coords_encoding) {
@@ -1834,7 +1834,7 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
       copy_params.geo_coords_encoding = kENCODING_NONE;
       break;
     default:
-      CHECK(false);
+      THROW_MAPD_EXCEPTION("Invalid geo_coords_encoding in CopyParams: " + std::to_string((int)cp.geo_coords_encoding));
       break;
   }
   copy_params.geo_coords_comp_param = cp.geo_coords_comp_param;
@@ -1846,10 +1846,19 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
       copy_params.geo_coords_type = kGEOMETRY;
       break;
     default:
-      CHECK(false);
+      THROW_MAPD_EXCEPTION("Invalid geo_coords_type in CopyParams: " + std::to_string((int)cp.geo_coords_type));
       break;
   }
-  copy_params.geo_coords_srid = cp.geo_coords_srid;
+  switch (cp.geo_coords_srid) {
+    case 4326:
+    case 3857:
+    case 900913:
+      copy_params.geo_coords_srid = cp.geo_coords_srid;
+      break;
+    default:
+      THROW_MAPD_EXCEPTION("Invalid geo_coords_srid in CopyParams (" + std::to_string((int)cp.geo_coords_srid));
+      break;
+  }
   return copy_params;
 }
 
