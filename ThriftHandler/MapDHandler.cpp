@@ -2179,6 +2179,8 @@ void MapDHandler::get_dashboard(TDashboard& dashboard, const TSessionId& session
   if (!is_allowed_on_dashboard(session_info, dash->viewId, AccessPrivileges::VIEW_DASHBOARD)) {
     THROW_MAPD_EXCEPTION("User has no view privileges for the dashboard with id " + std::to_string(dashboard_id));
   }
+  auto objects_list = SysCatalog::instance().getMetadataForObject(
+      cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dashboard_id);
   dashboard.dashboard_name = dash->viewName;
   dashboard.dashboard_state = dash->viewState;
   dashboard.image_hash = dash->imageHash;
@@ -2186,6 +2188,7 @@ void MapDHandler::get_dashboard(TDashboard& dashboard, const TSessionId& session
   dashboard.dashboard_metadata = dash->viewMetadata;
   dashboard.dashboard_owner = dash->user;
   dashboard.dashboard_id = dash->viewId;
+  dashboard.is_dash_shared = !objects_list.empty();
 }
 
 void MapDHandler::get_dashboards(std::vector<TDashboard>& dashboards, const TSessionId& session) {
@@ -2194,6 +2197,8 @@ void MapDHandler::get_dashboards(std::vector<TDashboard>& dashboards, const TSes
   const auto dashes = cat.getAllFrontendViewMetadata();
   for (const auto d : dashes) {
     if (is_allowed_on_dashboard(session_info, d->viewId, AccessPrivileges::VIEW_DASHBOARD)) {
+      auto objects_list = SysCatalog::instance().getMetadataForObject(
+          cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), d->viewId);
       TDashboard dash;
       dash.dashboard_name = d->viewName;
       dash.image_hash = d->imageHash;
@@ -2201,6 +2206,7 @@ void MapDHandler::get_dashboards(std::vector<TDashboard>& dashboards, const TSes
       dash.dashboard_metadata = d->viewMetadata;
       dash.dashboard_id = d->viewId;
       dash.dashboard_owner = d->user;
+      dash.is_dash_shared = !objects_list.empty();
       dashboards.push_back(dash);
     }
   }
@@ -3354,10 +3360,12 @@ Planner::RootPlan* MapDHandler::parse_to_plan(const std::string& query_str,
   // if this is a calcite select or explain select run in calcite
   if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
     const std::string actual_query{pw.is_select_explain || pw.is_select_calcite_explain ? pw.actual_query : query_str};
-    const auto query_ra = calcite_->process(session_info,
-                                            legacy_syntax_ ? pg_shim(actual_query) : actual_query,
-                                            legacy_syntax_,
-                                            pw.is_select_calcite_explain).plan_result;
+    const auto query_ra = calcite_
+                              ->process(session_info,
+                                        legacy_syntax_ ? pg_shim(actual_query) : actual_query,
+                                        legacy_syntax_,
+                                        pw.is_select_calcite_explain)
+                              .plan_result;
     auto root_plan = translate_query(query_ra, cat);
     CHECK(root_plan);
     if (pw.is_select_explain) {
@@ -3373,10 +3381,12 @@ std::string MapDHandler::parse_to_ra(const std::string& query_str, const Catalog
   ParserWrapper pw{query_str};
   const std::string actual_query{pw.is_select_explain || pw.is_select_calcite_explain ? pw.actual_query : query_str};
   if (is_calcite_path_permissable(pw)) {
-    return calcite_->process(session_info,
-                             legacy_syntax_ ? pg_shim(actual_query) : actual_query,
-                             legacy_syntax_,
-                             pw.is_select_calcite_explain).plan_result;
+    return calcite_
+        ->process(session_info,
+                  legacy_syntax_ ? pg_shim(actual_query) : actual_query,
+                  legacy_syntax_,
+                  pw.is_select_calcite_explain)
+        .plan_result;
   }
   return "";
 }

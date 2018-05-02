@@ -207,6 +207,7 @@ struct TDashboard {
   5: string dashboard_metadata
   6: i32 dashboard_id
   7: string dashboard_owner
+  8: bool is_dash_shared
 }
 
 struct TServerStatus {
