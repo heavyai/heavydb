@@ -403,10 +403,10 @@ struct TRenderDatum {
   3: binary value
 }
 
-typedef map<string, map<string, map<string, map<string, list<TRenderDatum>>>>> TRenderDataAggMap
+typedef map<string, map<string, map<string, map<string, list<TRenderDatum>>>>> TRenderAggDataMap
 
 struct TRenderStepResult {
-  1: TRenderDataAggMap merge_data
+  1: TRenderAggDataMap merge_data
   2: TRawPixelData raw_pixel_data
   3: i64 execution_time_ms
   4: i64 render_time_ms
@@ -538,7 +538,7 @@ service MapD {
   TStepResult execute_first_step(1: TPendingQuery pending_query) throws (1: TMapDException e)
   void broadcast_serialized_rows(1: string serialized_rows, 2: TRowDescriptor row_desc, 3: TQueryId query_id) throws (1: TMapDException e)
   TPendingRenderQuery start_render_query(1: TSessionId session, 2: i64 widget_id, 3: i16 node_idx, 4: string vega_json) throws (1: TMapDException e)
-  TRenderStepResult execute_next_render_step(1: TPendingRenderQuery pending_render, 2: TRenderDataAggMap merged_data) throws (1: TMapDException e)
+  TRenderStepResult execute_next_render_step(1: TPendingRenderQuery pending_render, 2: TRenderAggDataMap merged_data) throws (1: TMapDException e)
   void insert_data(1: TSessionId session, 2: TInsertData insert_data) throws (1: TMapDException e)
   void checkpoint(1: TSessionId session, 2: i32 db_id, 3: i32 table_id) throws (1: TMapDException e)
   # deprecated

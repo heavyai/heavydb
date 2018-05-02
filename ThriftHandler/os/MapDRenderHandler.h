@@ -56,7 +56,7 @@ class MapDRenderHandler {
 
   void execute_next_render_step(TRenderStepResult& _return,
                                 const TPendingRenderQuery& pending_render,
-                                const TRenderDataAggMap& merged_data) {
+                                const TRenderAggDataMap& merged_data) {
     CHECK(false);
   }
 

@@ -3851,7 +3851,7 @@ void MapDHandler::start_render_query(TPendingRenderQuery& _return,
 
 void MapDHandler::execute_next_render_step(TRenderStepResult& _return,
                                            const TPendingRenderQuery& pending_render,
-                                           const TRenderDataAggMap& merged_data) {
+                                           const TRenderAggDataMap& merged_data) {
   if (!render_handler_) {
     THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
   }

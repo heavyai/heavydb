@@ -124,6 +124,8 @@ class MapDHandler : public MapDIf {
 
   ~MapDHandler();
 
+  static inline size_t max_bytes_for_thrift() { return 2 * 1000 * 1000 * 1000L; }
+
   // Important ****
   //         This block must be keep in sync with mapd.thrift and HAHandler.h
   //         Please keep in same order for easy check and cut and paste
@@ -307,7 +309,7 @@ class MapDHandler : public MapDIf {
                           const std::string& vega_json);
   void execute_next_render_step(TRenderStepResult& _return,
                                 const TPendingRenderQuery& pending_render,
-                                const TRenderDataAggMap& merged_data);
+                                const TRenderAggDataMap& merged_data);
 
   void insert_data(const TSessionId& session, const TInsertData& insert_data);
   void checkpoint(const TSessionId& session, const int32_t db_id, const int32_t table_id);
