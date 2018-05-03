@@ -382,6 +382,8 @@ void SysCatalog::createUser(const string& name, const string& passwd, bool issup
                                              std::vector<std::string>{name, passwd, std::to_string(issuper)});
     if (arePrivilegesOn()) {
       createRole_unsafe(name, true);
+
+      // TODO: establish rational for this ...
       grantDefaultPrivilegesToRole_unsafe(name, issuper);
       grantRole_unsafe(name, name);
     }
@@ -600,14 +602,14 @@ list<DBMetadata> SysCatalog::getAllDBMetadata() {
 
 list<UserMetadata> SysCatalog::getAllUserMetadata(long dbId) {
   // this call is to return users that have some form of permissions to objects in the db
-  // sadly mapd_object_permissions table is also misused to mange user roles.
+  // sadly mapd_object_permissions table is also misused to manage user roles.
   std::lock_guard<std::mutex> lock(cat_mutex_);
   std::string sql = "SELECT userid, name, issuper FROM mapd_users";
   if (dbId >= 0) {
     sql =
         "SELECT userid, name, issuper FROM mapd_users WHERE name IN (SELECT roleName FROM mapd_object_permissions "
         "WHERE "
-        "objectobjectPermissions<>0 AND roleType=1 AND dbId=" +
+        "objectPermissions<>0 AND roleType=1 AND dbId=" +
         std::to_string(dbId) + ")";
   }
   sqliteConnector_->query(sql);
@@ -1049,9 +1051,11 @@ bool SysCatalog::hasRole(const std::string& roleName, bool userPrivateRole) cons
 }
 
 std::vector<std::string> SysCatalog::getRoles(const int32_t dbId) {
+  // this call is to return users that have some form of permissions to objects in the db
+  // sadly mapd_object_permissions table is also misused to manage user roles.
   std::lock_guard<std::mutex> lock(cat_mutex_);
   std::string sql =
-      "SELECT DISTINCT roleName FROM mapd_object_permissions WHERE roleType=0 AND dbId=" + std::to_string(dbId);
+      "SELECT DISTINCT roleName FROM mapd_object_permissions WHERE objectPermissions<>0 AND roleType=0 AND dbId=" + std::to_string(dbId);
   sqliteConnector_->query(sql);
   int numRows = sqliteConnector_->getNumRows();
 

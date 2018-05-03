@@ -1262,9 +1262,9 @@ bool MapDHandler::hasTableAccessPrivileges(const TableDescriptor* td, const TSes
   auto& cat = session_info.get_catalog();
   auto user_metadata = session_info.get_currentUser();
 
-  std::vector<DBObject> privObjects;
   DBObject dbObject(td->tableName, TableDBObjectType);
   dbObject.loadKey(cat);
+  std::vector<DBObject> privObjects = { dbObject };
 
   return SysCatalog::instance().hasAnyPrivileges(user_metadata, privObjects);
 }
