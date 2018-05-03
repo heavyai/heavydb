@@ -599,13 +599,15 @@ list<DBMetadata> SysCatalog::getAllDBMetadata() {
 }
 
 list<UserMetadata> SysCatalog::getAllUserMetadata(long dbId) {
+  // this call is to return users that have some form of permissions to objects in the db
+  // sadly mapd_object_permissions table is also misused to mange user roles.
   std::lock_guard<std::mutex> lock(cat_mutex_);
   std::string sql = "SELECT userid, name, issuper FROM mapd_users";
   if (dbId >= 0) {
     sql =
         "SELECT userid, name, issuper FROM mapd_users WHERE name IN (SELECT roleName FROM mapd_object_permissions "
         "WHERE "
-        "roleType=1 AND dbId=" +
+        "objectobjectPermissions<>0 AND roleType=1 AND dbId=" +
         std::to_string(dbId) + ")";
   }
   sqliteConnector_->query(sql);
