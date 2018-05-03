@@ -243,7 +243,7 @@ int main(int argc, char** argv) {
   size_t num_reader_threads = 0;   // number of threads used when loading data
   std::string db_convert_dir("");  // path to mapd DB to convert from; if path is empty, no conversion is requested
   std::string db_query_file("");   // path to file containing warmup queries list
-  bool enable_access_priv_check = false;  // enable DB objects access privileges checking
+  bool enable_access_priv_check = true;  // enable DB objects access privileges checking
 
   namespace po = boost::program_options;
 
@@ -362,7 +362,7 @@ int main(int argc, char** argv) {
       "db-query-list", po::value<std::string>(&db_query_file), "Path to file containing mapd queries");
   desc_adv.add_options()(
       "enable-access-priv-check",
-      po::value<bool>(&enable_access_priv_check)->default_value(enable_access_priv_check)->implicit_value(false),
+      po::value<bool>(&enable_access_priv_check)->default_value(enable_access_priv_check)->implicit_value(true),
       "Check user access privileges to database objects");
   desc_adv.add_options()(
       "hll-precision-bits",
@@ -527,7 +527,11 @@ int main(int argc, char** argv) {
   if (enable_dynamic_watchdog) {
     LOG(INFO) << " Dynamic Watchdog timeout is set to " << dynamic_watchdog_time_limit;
   }
+
+  LOG(INFO) << " Enable access priv check  is set to " << enable_access_priv_check;
+
   LOG(INFO) << " Debug Timer is set to " << g_enable_debug_timer;
+
   if (!mapd_parameters.ha_group_id.empty()) {
     LOG(INFO) << " HA group id " << mapd_parameters.ha_group_id;
     if (mapd_parameters.ha_unique_server_id.empty()) {
