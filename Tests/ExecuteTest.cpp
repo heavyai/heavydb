@@ -4398,34 +4398,34 @@ TEST(Update, JoinCacheInvalidationTest) {
   }
 }
 
-TEST(Delete, ShardedTableDeleteTest ) {
-  if( std::is_same< CalciteDeletePathSelector, PreprocessorFalse>::value )
+TEST(Delete, ShardedTableDeleteTest) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
     return;
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    run_ddl_statement("create table shardkey ( x integer, y integer, shard key (x) ) with (vacuum='delayed', shard_count=4);");
+    run_ddl_statement(
+        "create table shardkey ( x integer, y integer, shard key (x) ) with (vacuum='delayed', shard_count=4);");
 
-    run_multiple_agg( "insert into shardkey values (1,2);", dt);
-    run_multiple_agg( "insert into shardkey values (3,4);", dt);
-    run_multiple_agg( "insert into shardkey values (5,6);", dt);
-    run_multiple_agg( "insert into shardkey values (7,8);", dt);
-    run_multiple_agg( "insert into shardkey values (9,10);", dt);
-    run_multiple_agg( "insert into shardkey values (11,12);", dt);
-    run_multiple_agg( "insert into shardkey values (13,14);", dt);
-    run_multiple_agg( "insert into shardkey values (15,16);", dt);
-    run_multiple_agg( "insert into shardkey values (17,18);", dt);
+    run_multiple_agg("insert into shardkey values (1,2);", dt);
+    run_multiple_agg("insert into shardkey values (3,4);", dt);
+    run_multiple_agg("insert into shardkey values (5,6);", dt);
+    run_multiple_agg("insert into shardkey values (7,8);", dt);
+    run_multiple_agg("insert into shardkey values (9,10);", dt);
+    run_multiple_agg("insert into shardkey values (11,12);", dt);
+    run_multiple_agg("insert into shardkey values (13,14);", dt);
+    run_multiple_agg("insert into shardkey values (15,16);", dt);
+    run_multiple_agg("insert into shardkey values (17,18);", dt);
 
-    run_multiple_agg( "select * from shardkey;", dt );
-    run_multiple_agg( "delete from shardkey where x <= 9;", dt );
-    run_multiple_agg( "select sum(x) from shardkey;", dt );
+    run_multiple_agg("select * from shardkey;", dt);
+    run_multiple_agg("delete from shardkey where x <= 9;", dt);
+    run_multiple_agg("select sum(x) from shardkey;", dt);
 
-    ASSERT_EQ( int64_t(11+13+15+17), v<int64_t>(run_simple_agg("select sum(x) from shardkey;",dt)));
+    ASSERT_EQ(int64_t(11 + 13 + 15 + 17), v<int64_t>(run_simple_agg("select sum(x) from shardkey;", dt)));
 
     run_ddl_statement("drop table shardkey;");
   }
-
 }
 
 TEST(Delete, JoinCacheInvalidationTest) {
@@ -5592,7 +5592,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{"x int not null, y int"};
     const auto create_vacuum_test_alt = build_create_table_statement(
-        columns_definition, "vacuum_test_alt", {g_shard_count ? "str" : "", g_shard_count}, {}, 2, with_delete_support);
+        columns_definition, "vacuum_test_alt", {g_shard_count ? "x" : "", g_shard_count}, {}, 2, with_delete_support);
     run_ddl_statement(create_vacuum_test_alt);
     g_sqlite_comparator.query("CREATE TABLE vacuum_test_alt(x int not null, y int );");
 
