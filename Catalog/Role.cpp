@@ -219,9 +219,11 @@ void UserRole::updatePrivileges() {
       updatePrivileges(*roleIt);
     }
   }
-  for (auto dbObjectIt = dbObjectMap_.begin(); dbObjectIt != dbObjectMap_.end(); ++dbObjectIt) {
+  for (auto dbObjectIt = dbObjectMap_.begin(); dbObjectIt != dbObjectMap_.end();) {
     if (!dbObjectIt->second->getPrivileges().hasAny()) {
-      dbObjectMap_.erase(dbObjectIt);
+      dbObjectIt = dbObjectMap_.erase(dbObjectIt);
+    } else {
+      ++dbObjectIt;
     }
   }
 }
