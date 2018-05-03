@@ -86,6 +86,10 @@ Finally run the tests:
     cmake -DENABLE_TSAN=on -DENABLE_CUDA=off ..
     make -j 4
 
+We use a TSAN suppressions file to ignore warnings in third party libraries. Source the suppressions file by adding it to your `TSAN_OPTIONS` env:
+
+    export TSAN_OPTIONS="suppressions=/path/to/mapd/config/tsan.suppressions"
+
 Finally run the tests:
 
     make sanity_tests

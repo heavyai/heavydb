@@ -174,6 +174,9 @@ if(ENABLE_ASAN)
   set(SAN_FLAGS "-fsanitize=address -O1 -fno-omit-frame-pointer")
   add_definitions("-DWITH_DECODERS_BOUNDS_CHECKING")
 elseif(ENABLE_TSAN)
+  # Copy the config directory to the build dir for TSAN suppressions
+  file(COPY config DESTINATION ${CMAKE_BINARY_DIR})
+
   set(SAN_FLAGS "-fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer")
   # required for older GCC, see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=64354
   add_definitions("-D__SANITIZE_THREAD__")
