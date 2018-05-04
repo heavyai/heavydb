@@ -15,7 +15,7 @@
  */
 package com.mapd.jdbc;
 
-import com.mapd.thrift.server.TAccessPrivileges;
+import com.mapd.thrift.server.TTablePermissions;
 import com.mapd.thrift.server.TColumn;
 import com.mapd.thrift.server.TColumnData;
 import com.mapd.thrift.server.TColumnType;
@@ -1224,7 +1224,6 @@ SQLException - if a database access error occurs
     MAPDLOGGER.debug("TablePattern " + tableNamePattern + " tableNamePattern " + tableNamePattern);
     String modifiedTablePattern = tableNamePattern.replaceAll("%", ".*");
   
-      
     // declare the columns in the result set
     TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
     TColumnType columns[] = {
@@ -1254,37 +1253,38 @@ SQLException - if a database access error occurs
 
 
         for (String table : tables) {
-          db_objects = con.client.get_db_object_privs(con.session, table, TDBObjectType.TableDBObjectType); 
+          db_objects = con.client.get_db_object_privs(con.session, table, 
+             TDBObjectType.TableDBObjectType); 
           
           // check if the table matches the input pattern
           for (TDBObject db_object : db_objects) {
             if (db_object.objectType == TDBObjectType.TableDBObjectType) {
-              String tableName = db_object.objectName;
-
-              if (tableNamePattern == null || tableNamePattern.equals(tableName)) {
-                List<Boolean> privs = db_object.getPrivs();
-                Boolean priv[] = privs.toArray(new Boolean[privs.size()]);
-                TAccessPrivileges ta = new TAccessPrivileges(priv[0],priv[1], priv[2], priv[3], false);
+              if (tableNamePattern == null || tableNamePattern.equals(table)) {
+                Boolean priv[] = db_object.privs.toArray(new Boolean[db_object.privs.size()]);
+                TTablePermissions tt = new TTablePermissions(priv[0],priv[1], priv[2], priv[3],priv[4], false, false);
                 int ordinal = 1;
-                for (Boolean prv : privs) {
+                for (Boolean prv : priv) {
                   if (prv == true) {
-                    switch (ta.fieldForId(ordinal)) {
+                    switch (tt.fieldForId(ordinal)) {
+                    case CREATE_:
+                      dataMap.get("PRIVILEGE").add("CREATE");
+                      break;
+                    case DROP_:
+                      dataMap.get("PRIVILEGE").add("DROP");
+                      break;
                     case SELECT_:
                       dataMap.get("PRIVILEGE").add("SELECT");
                       break;
                     case INSERT_:
                       dataMap.get("PRIVILEGE").add("INSERT");
                       break;
-                    case CREATE_:
-                      dataMap.get("PRIVILEGE").add("CREATE");
-                      break;
-                    case TRUNCATE_:
-                      dataMap.get("PRIVILEGE").add("TRUNCATE");
+                    case DELETE_:
+                      dataMap.get("PRIVILEGE").add("DELETE");
                       break;
                     }
                     dataMap.get("TABLE_CAT").setNull(true);
                     dataMap.get("TABLE_SCHEM").setNull(true);
-                    dataMap.get("TABLE_NAME").add(tableName);
+                    dataMap.get("TABLE_NAME").add(table);
                     dataMap.get("GRANTOR").setNull(true);
                     dataMap.get("GRANTEE").add(db_object.grantee);
                     dataMap.get("IS_GRANTABLE").add("NO");
