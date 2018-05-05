@@ -1055,6 +1055,15 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
     THROW_MAPD_EXCEPTION("Object with name " + objectName + " does not exist.");
   }
 
+  // if user is superuser respond with a full priv
+  if (session_info_ptr->get_currentUser().isSuper) {
+    // using ALL_TABLE here to set max permissions
+    DBObject dbObj{
+        object_to_find.getObjectKey(), AccessPrivileges::ALL_TABLE, session_info_ptr->get_currentUser().userId};
+    dbObj.setName("super");
+    TDBObjects.push_back(serialize_db_object(session_info_ptr->get_currentUser().userName, dbObj));
+  };
+
   std::vector<std::string> roles = SysCatalog::instance().getRoles(
       true, session_info_ptr->get_currentUser().isSuper, session_info_ptr->get_currentUser().userId);
   for (const auto& role : roles) {
@@ -1265,7 +1274,7 @@ bool MapDHandler::hasTableAccessPrivileges(const TableDescriptor* td, const TSes
 
   DBObject dbObject(td->tableName, TableDBObjectType);
   dbObject.loadKey(cat);
-  std::vector<DBObject> privObjects = { dbObject };
+  std::vector<DBObject> privObjects = {dbObject};
 
   return SysCatalog::instance().hasAnyPrivileges(user_metadata, privObjects);
 }
