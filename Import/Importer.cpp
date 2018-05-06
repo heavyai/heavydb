@@ -68,13 +68,43 @@
 
 using std::ostream;
 
+namespace {
+
+struct OGRDataSourceDeleter {
+  void operator()(OGRDataSource* datasource) {
+    if (datasource) {
+      GDALClose(datasource);
+    }
+  }
+};
+using OGRDataSourceUqPtr = std::unique_ptr<OGRDataSource, OGRDataSourceDeleter>;
+
+struct OGRFeatureDeleter {
+  void operator()(OGRFeature* feature) {
+    if (feature) {
+      OGRFeature::DestroyFeature(feature);
+    }
+  }
+};
+using OGRFeatureUqPtr = std::unique_ptr<OGRFeature, OGRFeatureDeleter>;
+
+struct OGRSpatialReferenceDeleter {
+  void operator()(OGRSpatialReference* ref) {
+    if (ref) {
+      OGRSpatialReference::DestroySpatialReference(ref);
+    }
+  }
+};
+using OGRSpatialReferenceUqPtr = std::unique_ptr<OGRSpatialReference, OGRSpatialReferenceDeleter>;
+
+}  // namespace
+
 namespace Importer_NS {
 
 using FieldNameToIndexMapType = std::map<std::string, size_t>;
 using ColumnNameToSourceNameMapType = std::map<std::string, std::string>;
 using ColumnIdToRenderGroupAnalyzerMapType = std::map<int, std::shared_ptr<RenderGroupAnalyzer>>;
-using FeaturePtrVector = std::vector<OGRFeature*>;
-using GeometryPtrVector = std::vector<OGRGeometry*>;
+using FeaturePtrVector = std::vector<OGRFeatureUqPtr>;
 
 #define DEBUG_TIMING false
 #define DEBUG_RENDER_GROUP_ANALYZER 0
@@ -1537,7 +1567,8 @@ bool importGeoFromWkt(std::string& wkt,
       // For now, the returned SRID will always be zero and we never get here
       //
       // srid = GEOGRAPHIC_SPATIAL_REFERENCE;
-      // std::unique_ptr<OGRSpatialReference> poGeographicSR(new OGRSpatialReference());
+      // OGRSpatialReferenceUqPtr poGeographicSR(new OGRSpatialReference());
+      // // the geographic spatial reference we want to put everything in
       // poGeographicSR->importFromEPSG(GEOGRAPHIC_SPATIAL_REFERENCE);
       // geom->transformTo(poGeographicSR.get());
     } else {
@@ -1567,6 +1598,7 @@ bool importGeoFromLonLat(double lon, double lat, std::vector<double>& coords) {
   if (std::isinf(lat) || std::isnan(lat) || std::isinf(lon) || std::isnan(lon))
     return false;
   auto point = new OGRPoint(lon, lat);
+  // NOTE(adb): Use OGRSpatialReferenceUqPtr to ensure proper deletion
   // auto poSR0 = new OGRSpatialReference();
   // poSR0->importFromEPSG(4326);
   // point->assignSpatialReference(poSR0);
@@ -3165,7 +3197,7 @@ void Importer::setGDALAuthorizationTokens(const CopyParams& copy_params) {
 }
 
 /* static */
-OGRDataSource* Importer::openGDALDataset(const std::string& fileName, const CopyParams& copy_params) {
+OGRDataSource* Importer::openGDALDataset(const std::string& file_name, const CopyParams& copy_params) {
   // lazy init GDAL
   initGDAL();
 
@@ -3175,91 +3207,82 @@ OGRDataSource* Importer::openGDALDataset(const std::string& fileName, const Copy
   // open the file
   OGRDataSource* poDS;
 #if GDAL_VERSION_MAJOR == 1
-  poDS = (OGRDataSource*)OGRSFDriverRegistrar::Open(fileName.c_str(), false);
+  poDS = (OGRDataSource*)OGRSFDriverRegistrar::Open(file_name.c_str(), false);
 #else
-  poDS = (OGRDataSource*)GDALOpenEx(fileName.c_str(), GDAL_OF_VECTOR, nullptr, nullptr, nullptr);
+  poDS = (OGRDataSource*)GDALOpenEx(file_name.c_str(), GDAL_OF_VECTOR, nullptr, nullptr, nullptr);
 #endif
   if (poDS == nullptr) {
-    LOG(INFO) << "ogr error: " << CPLGetLastErrorMsg();
+    LOG(ERROR) << "openGDALDataset Error: " << CPLGetLastErrorMsg();
   }
+  // NOTE(adb): If extending this function, refactor to ensure any errors will not result in a memory leak if GDAL
+  // successfully opened the input dataset.
   return poDS;
 }
 
 /* static */
-void Importer::readMetadataSampleGDAL(const std::string& fileName,
-                                      const std::string& geoColumnName,
+void Importer::readMetadataSampleGDAL(const std::string& file_name,
+                                      const std::string& geo_column_name,
                                       std::map<std::string, std::vector<std::string>>& metadata,
                                       int rowLimit,
                                       const CopyParams& copy_params) {
-  OGRDataSource* poDS = nullptr;
-  try {
-    poDS = openGDALDataset(fileName, copy_params);
-    if (poDS == nullptr) {
-      throw std::runtime_error("Unable to open geo file " + fileName);
-    }
-    OGRLayer* poLayer;
-    poLayer = poDS->GetLayer(0);
-    if (poLayer == nullptr) {
-      throw std::runtime_error("No layers found in " + fileName);
-    }
-    OGRFeatureDefn* poFDefn = poLayer->GetLayerDefn();
-
-    // typeof GetFeatureCount() is different between GDAL 1.x (int32_t) and 2.x (int64_t)
-    auto nFeats = poLayer->GetFeatureCount();
-    size_t numFeatures =
-        std::max(static_cast<decltype(nFeats)>(0), std::min(static_cast<decltype(nFeats)>(rowLimit), nFeats));
-    for (auto iField = 0; iField < poFDefn->GetFieldCount(); iField++) {
-      OGRFieldDefn* poFieldDefn = poFDefn->GetFieldDefn(iField);
-      // FIXME(andrewseidl): change this to the faster one used by readVerticesFromGDAL
-      metadata.emplace(poFieldDefn->GetNameRef(), std::vector<std::string>(numFeatures));
-    }
-    metadata.emplace(geoColumnName, std::vector<std::string>(numFeatures));
-    OGRFeature* poFeature;
-    poLayer->ResetReading();
-    size_t iFeature = 0;
-    while ((poFeature = poLayer->GetNextFeature()) != nullptr && iFeature < numFeatures) {
-      OGRGeometry* poGeometry;
-      poGeometry = poFeature->GetGeometryRef();
-      if (poGeometry != nullptr) {
-        // validate geom type (again?)
-        switch (wkbFlatten(poGeometry->getGeometryType())) {
-          case wkbPoint:
-          case wkbLineString:
-          case wkbPolygon:
-          case wkbMultiPolygon:
-            break;
-          default:
-            throw std::runtime_error("Unsupported geometry type: " + std::string(poGeometry->getGeometryName()));
-        }
-
-        // populate metadata for regular fields
-        for (auto i : metadata) {
-          auto iField = poFeature->GetFieldIndex(i.first.c_str());
-          if (iField >= 0)  // geom is -1
-            metadata[i.first].at(iFeature) = std::string(poFeature->GetFieldAsString(iField));
-        }
-
-        // populate metadata for geo column with WKT string
-        char* wkts = nullptr;
-        poGeometry->exportToWkt(&wkts);
-        CHECK(wkts);
-        metadata[geoColumnName].at(iFeature) = wkts;
-        CPLFree(wkts);
-
-        // done with this feature
-        OGRFeature::DestroyFeature(poFeature);
-      }
-      iFeature++;
-    }
-  } catch (const std::exception& e) {
-    if (poDS)
-      GDALClose(poDS);
-    poDS = nullptr;
-    throw;
+  OGRDataSourceUqPtr poDS(openGDALDataset(file_name, copy_params));
+  if (poDS == nullptr) {
+    throw std::runtime_error("openGDALDataset Error: Unable to open geo file " + file_name);
   }
-  if (poDS)
-    GDALClose(poDS);
-  poDS = nullptr;
+  OGRLayer* poLayer = poDS->GetLayer(0);
+  if (poLayer == nullptr) {
+    throw std::runtime_error("No layers found in " + file_name);
+  }
+  OGRFeatureDefn* poFDefn = poLayer->GetLayerDefn();
+
+  // typeof GetFeatureCount() is different between GDAL 1.x (int32_t) and 2.x (int64_t)
+  auto nFeats = poLayer->GetFeatureCount();
+  size_t numFeatures =
+      std::max(static_cast<decltype(nFeats)>(0), std::min(static_cast<decltype(nFeats)>(rowLimit), nFeats));
+  for (auto iField = 0; iField < poFDefn->GetFieldCount(); iField++) {
+    OGRFieldDefn* poFieldDefn = poFDefn->GetFieldDefn(iField);
+    // FIXME(andrewseidl): change this to the faster one used by readVerticesFromGDAL
+    metadata.emplace(poFieldDefn->GetNameRef(), std::vector<std::string>(numFeatures));
+  }
+  metadata.emplace(geo_column_name, std::vector<std::string>(numFeatures));
+  poLayer->ResetReading();
+  size_t iFeature = 0;
+  while (iFeature < numFeatures) {
+    OGRFeatureUqPtr poFeature(poLayer->GetNextFeature());
+    if (!poFeature) {
+      break;
+    }
+
+    OGRGeometry* poGeometry;
+    poGeometry = poFeature->GetGeometryRef();
+    if (poGeometry != nullptr) {
+      // validate geom type (again?)
+      switch (wkbFlatten(poGeometry->getGeometryType())) {
+        case wkbPoint:
+        case wkbLineString:
+        case wkbPolygon:
+        case wkbMultiPolygon:
+          break;
+        default:
+          throw std::runtime_error("Unsupported geometry type: " + std::string(poGeometry->getGeometryName()));
+      }
+
+      // populate metadata for regular fields
+      for (auto i : metadata) {
+        auto iField = poFeature->GetFieldIndex(i.first.c_str());
+        if (iField >= 0)  // geom is -1
+          metadata[i.first].at(iFeature) = std::string(poFeature->GetFieldAsString(iField));
+      }
+
+      // populate metadata for geo column with WKT string
+      char* wkts = nullptr;
+      poGeometry->exportToWkt(&wkts);
+      CHECK(wkts);
+      metadata[geo_column_name].at(iFeature) = wkts;
+      CPLFree(wkts);
+    }
+    iFeature++;
+  }
 }
 
 std::pair<SQLTypes, bool> ogr_to_type(const OGRFieldType& ogr_type) {
@@ -3312,82 +3335,69 @@ SQLTypes ogr_to_type(const OGRwkbGeometryType& ogr_type) {
 }
 
 /* static */
-const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::string& fileName,
-                                                                    const std::string& geoColumnName,
+const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::string& file_name,
+                                                                    const std::string& geo_column_name,
                                                                     const CopyParams& copy_params) {
   std::list<ColumnDescriptor> cds;
-  OGRDataSource* poDS = nullptr;
-  try {
-    poDS = openGDALDataset(fileName, copy_params);
-    if (poDS == nullptr) {
-      throw std::runtime_error("Unable to open geo file " + fileName + " : " + CPLGetLastErrorMsg());
-    }
-    OGRLayer* poLayer;
-    poLayer = poDS->GetLayer(0);
-    if (poLayer == nullptr) {
-      throw std::runtime_error("No layers found in " + fileName);
-    }
-    OGRFeature* poFeature;
-    poLayer->ResetReading();
-    // TODO(andrewseidl): support multiple features
-    if ((poFeature = poLayer->GetNextFeature()) != nullptr) {
-      // get fields as regular columns
-      OGRFeatureDefn* poFDefn = poLayer->GetLayerDefn();
-      int iField;
-      for (iField = 0; iField < poFDefn->GetFieldCount(); iField++) {
-        OGRFieldDefn* poFieldDefn = poFDefn->GetFieldDefn(iField);
-        auto typePair = ogr_to_type(poFieldDefn->GetType());
-        ColumnDescriptor cd;
-        cd.columnName = poFieldDefn->GetNameRef();
-        cd.sourceName = poFieldDefn->GetNameRef();
-        SQLTypeInfo ti;
-        if (typePair.second) {
-          ti.set_type(kARRAY);
-          ti.set_subtype(typePair.first);
-        } else {
-          ti.set_type(typePair.first);
-        }
-        if (typePair.first == kTEXT) {
-          ti.set_compression(kENCODING_DICT);
-          ti.set_comp_param(32);
-        }
-        ti.set_fixed_size();
-        cd.columnType = ti;
-        cds.push_back(cd);
-      }
-      // get geo column, if any
-      OGRGeometry* poGeometry = poFeature->GetGeometryRef();
-      if (poGeometry) {
-        ColumnDescriptor cd;
-        cd.columnName = geoColumnName;
-        cd.sourceName = geoColumnName;
-        SQLTypes geoType = ogr_to_type(wkbFlatten(poGeometry->getGeometryType()));
-#if PROMOTE_POLYGON_TO_MULTIPOLYGON
-        geoType = (geoType == kPOLYGON) ? kMULTIPOLYGON : geoType;
-#endif
-        SQLTypeInfo ti;
-        ti.set_type(geoType);
-        ti.set_subtype(copy_params.geo_coords_type);
-        ti.set_input_srid(copy_params.geo_coords_srid);
-        ti.set_output_srid(copy_params.geo_coords_srid);
-        ti.set_compression(copy_params.geo_coords_encoding);
-        ti.set_comp_param(copy_params.geo_coords_comp_param);
-        cd.columnType = ti;
-        cds.push_back(cd);
-      }
-      // done with this feature
-      OGRFeature::DestroyFeature(poFeature);
-    }
-  } catch (const std::exception& e) {
-    if (poDS)
-      GDALClose(poDS);
-    poDS = nullptr;
-    throw;
-  }
-  if (poDS)
-    GDALClose(poDS);
-  poDS = nullptr;
 
+  OGRDataSourceUqPtr poDS(openGDALDataset(file_name, copy_params));
+  if (poDS == nullptr) {
+    throw std::runtime_error("openGDALDataset Error: Unable to open geo file " + file_name);
+  }
+  OGRLayer* poLayer = poDS->GetLayer(0);
+  if (poLayer == nullptr) {
+    throw std::runtime_error("No layers found in " + file_name);
+  }
+  poLayer->ResetReading();
+  // TODO(andrewseidl): support multiple features
+  OGRFeatureUqPtr poFeature(poLayer->GetNextFeature());
+  if (poFeature == nullptr) {
+    throw std::runtime_error("No features found in " + file_name);
+  }
+  // get fields as regular columns
+  OGRFeatureDefn* poFDefn = poLayer->GetLayerDefn();
+  int iField;
+  for (iField = 0; iField < poFDefn->GetFieldCount(); iField++) {
+    OGRFieldDefn* poFieldDefn = poFDefn->GetFieldDefn(iField);
+    auto typePair = ogr_to_type(poFieldDefn->GetType());
+    ColumnDescriptor cd;
+    cd.columnName = poFieldDefn->GetNameRef();
+    cd.sourceName = poFieldDefn->GetNameRef();
+    SQLTypeInfo ti;
+    if (typePair.second) {
+      ti.set_type(kARRAY);
+      ti.set_subtype(typePair.first);
+    } else {
+      ti.set_type(typePair.first);
+    }
+    if (typePair.first == kTEXT) {
+      ti.set_compression(kENCODING_DICT);
+      ti.set_comp_param(32);
+    }
+    ti.set_fixed_size();
+    cd.columnType = ti;
+    cds.push_back(cd);
+  }
+  // get geo column, if any
+  OGRGeometry* poGeometry = poFeature->GetGeometryRef();
+  if (poGeometry) {
+    ColumnDescriptor cd;
+    cd.columnName = geo_column_name;
+    cd.sourceName = geo_column_name;
+    SQLTypes geoType = ogr_to_type(wkbFlatten(poGeometry->getGeometryType()));
+#if PROMOTE_POLYGON_TO_MULTIPOLYGON
+    geoType = (geoType == kPOLYGON) ? kMULTIPOLYGON : geoType;
+#endif
+    SQLTypeInfo ti;
+    ti.set_type(geoType);
+    ti.set_subtype(copy_params.geo_coords_type);
+    ti.set_input_srid(copy_params.geo_coords_srid);
+    ti.set_output_srid(copy_params.geo_coords_srid);
+    ti.set_compression(copy_params.geo_coords_encoding);
+    ti.set_comp_param(copy_params.geo_coords_comp_param);
+    cd.columnType = ti;
+    cds.push_back(cd);
+  }
   return cds;
 }
 
@@ -3506,265 +3516,228 @@ bool Importer::gdalSupportsNetworkFileAccess() {
 }
 
 ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSourceNameMap) {
-  OGRDataSource* poDS = nullptr;
-  try {
-    // initial status
-    bool load_truncated = false;
-    set_import_status(import_id, import_status);
+  // initial status
+  bool load_truncated = false;
+  set_import_status(import_id, import_status);
 
-    // open the data set
-    poDS = openGDALDataset(file_path, copy_params);
-    if (poDS == nullptr) {
-      throw std::runtime_error("Unable to open geo file " + file_path);
-    }
+  OGRDataSourceUqPtr poDS(openGDALDataset(file_path, copy_params));
+  if (poDS == nullptr) {
+    throw std::runtime_error("openGDALDataset Error: Unable to open geo file " + file_path);
+  }
 
-    // get the first layer
-    OGRLayer* poLayer = poDS->GetLayer(0);
-    if (poLayer == nullptr) {
-      throw std::runtime_error("No layers found in " + file_path);
-    }
+  // get the first layer
+  OGRLayer* poLayer = poDS->GetLayer(0);
+  if (poLayer == nullptr) {
+    throw std::runtime_error("No layers found in " + file_path);
+  }
 
-    // get the number of features in this layer
-    size_t numFeatures = poLayer->GetFeatureCount();
+  // get the number of features in this layer
+  size_t numFeatures = poLayer->GetFeatureCount();
 
-    // build map of metadata field (additional columns) name to index
-    // use shared_ptr since we need to pass it to the worker
-    FieldNameToIndexMapType fieldNameToIndexMap;
-    OGRFeatureDefn* poFDefn = poLayer->GetLayerDefn();
-    size_t numFields = poFDefn->GetFieldCount();
-    for (size_t iField = 0; iField < numFields; iField++) {
-      OGRFieldDefn* poFieldDefn = poFDefn->GetFieldDefn(iField);
-      fieldNameToIndexMap.emplace(std::make_pair(poFieldDefn->GetNameRef(), iField));
-    }
+  // build map of metadata field (additional columns) name to index
+  // use shared_ptr since we need to pass it to the worker
+  FieldNameToIndexMapType fieldNameToIndexMap;
+  OGRFeatureDefn* poFDefn = poLayer->GetLayerDefn();
+  size_t numFields = poFDefn->GetFieldCount();
+  for (size_t iField = 0; iField < numFields; iField++) {
+    OGRFieldDefn* poFieldDefn = poFDefn->GetFieldDefn(iField);
+    fieldNameToIndexMap.emplace(std::make_pair(poFieldDefn->GetNameRef(), iField));
+  }
 
-    // the geographic spatial reference we want to put everything in
-    std::unique_ptr<OGRSpatialReference> poGeographicSR(new OGRSpatialReference());
-    poGeographicSR->importFromEPSG(copy_params.geo_coords_srid);
+  // the geographic spatial reference we want to put everything in
+  OGRSpatialReferenceUqPtr poGeographicSR(new OGRSpatialReference());
+  poGeographicSR->importFromEPSG(copy_params.geo_coords_srid);
 
 #if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
-    // just one "thread"
-    int max_threads = 1;
+  // just one "thread"
+  int max_threads = 1;
 #else
-    // how many threads to use
-    int max_threads = 0;
-    if (copy_params.threads == 0)
-      max_threads = sysconf(_SC_NPROCESSORS_CONF);
-    else
-      max_threads = copy_params.threads;
+  // how many threads to use
+  int max_threads = 0;
+  if (copy_params.threads == 0)
+    max_threads = sysconf(_SC_NPROCESSORS_CONF);
+  else
+    max_threads = copy_params.threads;
 #endif
 
-    // make an import buffer for each thread
-    for (int i = 0; i < max_threads; i++) {
-      import_buffers_vec.push_back(std::vector<std::unique_ptr<TypedImportBuffer>>());
-      for (const auto cd : loader->get_column_descs())
-        import_buffers_vec[i].push_back(
-            std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, loader->get_string_dict(cd))));
-    }
+  // make an import buffer for each thread
+  CHECK_EQ(import_buffers_vec.size(), 0);
+  import_buffers_vec.resize(max_threads);
+  for (int i = 0; i < max_threads; i++) {
+    for (const auto cd : loader->get_column_descs())
+      import_buffers_vec[i].emplace_back(new TypedImportBuffer(cd, loader->get_string_dict(cd)));
+  }
 
-    // make render group analyzers for each poly column
-    ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-    auto columnDescriptors =
-        loader->get_catalog().getAllColumnMetadataForTable(loader->get_table_desc()->tableId, false, false, false);
-    for (auto cd : columnDescriptors) {
-      SQLTypes ct = cd->columnType.get_type();
-      if (ct == kPOLYGON || ct == kMULTIPOLYGON) {
-        auto rga = std::make_shared<RenderGroupAnalyzer>();
-        rga->seedFromExistingTableContents(loader, cd->columnName);
-        columnIdToRenderGroupAnalyzerMap[cd->columnId] = rga;
-      }
+  // make render group analyzers for each poly column
+  ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
+  auto columnDescriptors =
+      loader->get_catalog().getAllColumnMetadataForTable(loader->get_table_desc()->tableId, false, false, false);
+  for (auto cd : columnDescriptors) {
+    SQLTypes ct = cd->columnType.get_type();
+    if (ct == kPOLYGON || ct == kMULTIPOLYGON) {
+      auto rga = std::make_shared<RenderGroupAnalyzer>();
+      rga->seedFromExistingTableContents(loader, cd->columnName);
+      columnIdToRenderGroupAnalyzerMap[cd->columnId] = rga;
     }
+  }
 
 #if !DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
-    // threads
-    std::list<std::future<ImportStatus>> threads;
+  // threads
+  std::list<std::future<ImportStatus>> threads;
 
-    // use a stack to track thread_ids which must not overlap among threads
-    // because thread_id is used to index import_buffers_vec[]
-    std::stack<int> stack_thread_ids;
-    for (int i = 0; i < max_threads; i++)
-      stack_thread_ids.push(i);
+  // use a stack to track thread_ids which must not overlap among threads
+  // because thread_id is used to index import_buffers_vec[]
+  std::stack<int> stack_thread_ids;
+  for (int i = 0; i < max_threads; i++)
+    stack_thread_ids.push(i);
 #endif
 
-    // checkpoint the table
-    auto start_epoch = loader->getTableEpoch();
+  // checkpoint the table
+  auto start_epoch = loader->getTableEpoch();
 
-    // reset the layer
-    poLayer->ResetReading();
+  // reset the layer
+  poLayer->ResetReading();
 
-    static const size_t MAX_FEATURES_PER_CHUNK = 1000;
+  static const size_t MAX_FEATURES_PER_CHUNK = 1000;
 
-    // make a features buffer for each thread
-    std::vector<FeaturePtrVector> features;
-    for (int i = 0; i < max_threads; i++) {
-      features.emplace_back(MAX_FEATURES_PER_CHUNK, nullptr);
-    }
+  // make a features buffer for each thread
+  std::vector<FeaturePtrVector> features(max_threads);
 
-    // for each feature...
-    size_t firstFeatureThisChunk = 0;
-    while (firstFeatureThisChunk < numFeatures) {
-      // how many features this chunk
-      size_t numFeaturesThisChunk = std::min(MAX_FEATURES_PER_CHUNK, numFeatures - firstFeatureThisChunk);
+  // for each feature...
+  size_t firstFeatureThisChunk = 0;
+  while (firstFeatureThisChunk < numFeatures) {
+    // how many features this chunk
+    size_t numFeaturesThisChunk = std::min(MAX_FEATURES_PER_CHUNK, numFeatures - firstFeatureThisChunk);
 
 // get a thread_id not in use
 #if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
-      int thread_id = 0;
+    int thread_id = 0;
 #else
-      auto thread_id = stack_thread_ids.top();
-      stack_thread_ids.pop();
+    auto thread_id = stack_thread_ids.top();
+    stack_thread_ids.pop();
+    CHECK(thread_id < max_threads);
 #endif
 
-      // fill features buffer for new thread
-      for (size_t i = 0; i < numFeaturesThisChunk; i++) {
-        features[thread_id][i] = poLayer->GetNextFeature();
-      }
+    // fill features buffer for new thread
+    for (size_t i = 0; i < numFeaturesThisChunk; i++) {
+      features[thread_id].emplace_back(poLayer->GetNextFeature());
+    }
 
 #if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
-      // call worker function directly
-      auto ret_import_status = import_thread_shapefile(0,
-                                                       this,
-                                                       poGeographicSR.get(),
-                                                       features[thread_id],
-                                                       numFeaturesThisChunk,
-                                                       fieldNameToIndexMap,
-                                                       columnNameToSourceNameMap,
-                                                       columnIdToRenderGroupAnalyzerMap);
-      import_status += ret_import_status;
-      import_status.rows_estimated = ((float)firstFeatureThisChunk / (float)numFeatures) * import_status.rows_completed;
-      set_import_status(import_id, import_status);
-
-      // destroy and reset features
-      FeaturePtrVector& threadFeatures = features[0];
-      for (size_t iFeature = 0; iFeature < MAX_FEATURES_PER_CHUNK; iFeature++) {
-        if (threadFeatures[iFeature])
-          OGRFeature::DestroyFeature(threadFeatures[iFeature]);
-        threadFeatures[iFeature] = nullptr;
-      }
+    // call worker function directly
+    auto ret_import_status = import_thread_shapefile(0,
+                                                     this,
+                                                     poGeographicSR.get(),
+                                                     std::move(features[thread_id]),
+                                                     numFeaturesThisChunk,
+                                                     fieldNameToIndexMap,
+                                                     columnNameToSourceNameMap,
+                                                     columnIdToRenderGroupAnalyzerMap);
+    import_status += ret_import_status;
+    import_status.rows_estimated = ((float)firstFeatureThisChunk / (float)numFeatures) * import_status.rows_completed;
+    set_import_status(import_id, import_status);
 #else
+    // fire up that thread to import this geometry
+    threads.push_back(std::async(std::launch::async,
+                                 import_thread_shapefile,
+                                 thread_id,
+                                 this,
+                                 poGeographicSR.get(),
+                                 std::move(features[thread_id]),
+                                 numFeaturesThisChunk,
+                                 fieldNameToIndexMap,
+                                 columnNameToSourceNameMap,
+                                 columnIdToRenderGroupAnalyzerMap));
 
-      // fire up that thread to import this geometry
-      threads.push_back(std::async(std::launch::async,
-                                   import_thread_shapefile,
-                                   thread_id,
-                                   this,
-                                   poGeographicSR.get(),
-                                   features[thread_id],
-                                   numFeaturesThisChunk,
-                                   fieldNameToIndexMap,
-                                   columnNameToSourceNameMap,
-                                   columnIdToRenderGroupAnalyzerMap));
+    // let the threads run
+    while (threads.size() > 0) {
+      int nready = 0;
+      for (std::list<std::future<ImportStatus>>::iterator it = threads.begin(); it != threads.end(); it = it) {
+        auto& p = *it;
+        std::chrono::milliseconds span(0);  //(std::distance(it, threads.end()) == 1? 1: 0);
+        if (p.wait_for(span) == std::future_status::ready) {
+          auto ret_import_status = p.get();
+          import_status += ret_import_status;
+          import_status.rows_estimated =
+              ((float)firstFeatureThisChunk / (float)numFeatures) * import_status.rows_completed;
+          set_import_status(import_id, import_status);
 
-      // let the threads run
-      while (threads.size() > 0) {
-        int nready = 0;
-        for (std::list<std::future<ImportStatus>>::iterator it = threads.begin(); it != threads.end(); it = it) {
-          auto& p = *it;
-          std::chrono::milliseconds span(0);  //(std::distance(it, threads.end()) == 1? 1: 0);
-          if (p.wait_for(span) == std::future_status::ready) {
-            auto ret_import_status = p.get();
-            import_status += ret_import_status;
-            import_status.rows_estimated =
-                ((float)firstFeatureThisChunk / (float)numFeatures) * import_status.rows_completed;
-            set_import_status(import_id, import_status);
+          // recall thread_id for reuse
+          stack_thread_ids.push(ret_import_status.thread_id);
 
-            // destroy and reset features
-            FeaturePtrVector& threadFeatures = features[ret_import_status.thread_id];
-            for (size_t iFeature = 0; iFeature < MAX_FEATURES_PER_CHUNK; iFeature++) {
-              if (threadFeatures[iFeature])
-                OGRFeature::DestroyFeature(threadFeatures[iFeature]);
-              threadFeatures[iFeature] = nullptr;
-            }
-
-            // recall thread_id for reuse
-            stack_thread_ids.push(ret_import_status.thread_id);
-
-            threads.erase(it++);
-            ++nready;
-          } else
-            ++it;
-        }
-
-        if (nready == 0) {
-          std::this_thread::yield();
-        }
-
-        // keep reading if any free thread slot
-        // this is one of the major difference from old threading model !!
-        if ((int)threads.size() < max_threads)
-          break;
+          threads.erase(it++);
+          ++nready;
+        } else
+          ++it;
       }
+
+      if (nready == 0) {
+        std::this_thread::yield();
+      }
+
+      // keep reading if any free thread slot
+      // this is one of the major difference from old threading model !!
+      if ((int)threads.size() < max_threads)
+        break;
+    }
 #endif
 
-      // out of rows?
-      if (import_status.rows_rejected > copy_params.max_reject) {
-        load_truncated = true;
-        load_failed = true;
-        LOG(ERROR) << "Maximum rows rejected exceeded. Halting load";
-        break;
-      }
-
-      // failed?
-      if (load_failed) {
-        load_truncated = true;
-        LOG(ERROR) << "A call to the Loader::load failed, Please review the logs for more details";
-        break;
-      }
-
-      firstFeatureThisChunk += numFeaturesThisChunk;
+    // out of rows?
+    if (import_status.rows_rejected > copy_params.max_reject) {
+      load_truncated = true;
+      load_failed = true;
+      LOG(ERROR) << "Maximum rows rejected exceeded. Halting load";
+      break;
     }
+
+    // failed?
+    if (load_failed) {
+      load_truncated = true;
+      LOG(ERROR) << "A call to the Loader::load failed, Please review the logs for more details";
+      break;
+    }
+
+    firstFeatureThisChunk += numFeaturesThisChunk;
+  }
 
 #if !DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
-    // wait for any remaining threads
-    if (threads.size()) {
-      for (auto& p : threads) {
-        // wait for the thread
-        p.wait();
-        // get the result and update the final import status
-        auto ret_import_status = p.get();
-        import_status += ret_import_status;
-        import_status.rows_estimated = import_status.rows_completed;
-        set_import_status(import_id, import_status);
-      }
+  // wait for any remaining threads
+  if (threads.size()) {
+    for (auto& p : threads) {
+      // wait for the thread
+      p.wait();
+      // get the result and update the final import status
+      auto ret_import_status = p.get();
+      import_status += ret_import_status;
+      import_status.rows_estimated = import_status.rows_completed;
+      set_import_status(import_id, import_status);
     }
+  }
 #endif
 
-    GDALClose(poDS);
-    poDS = nullptr;
+  if (load_failed) {
+    // rollback to starting epoch - undo all the added records
+    loader->setTableEpoch(start_epoch);
+  } else {
+    loader->checkpoint();
+  }
 
-    if (load_failed) {
-      // rollback to starting epoch - undo all the added records
-      loader->setTableEpoch(start_epoch);
-    } else {
-      loader->checkpoint();
-    }
-
-    if (!load_failed &&
-        loader->get_table_desc()->persistenceLevel ==
-            Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
-      for (auto& p : import_buffers_vec[0]) {
-        if (!p->stringDictCheckpoint()) {
-          LOG(ERROR) << "Checkpointing Dictionary for Column " << p->getColumnDesc()->columnName << " failed.";
-          load_failed = true;
-          break;
-        }
+  if (!load_failed &&
+      loader->get_table_desc()->persistenceLevel ==
+          Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
+    for (auto& p : import_buffers_vec[0]) {
+      if (!p->stringDictCheckpoint()) {
+        LOG(ERROR) << "Checkpointing Dictionary for Column " << p->getColumnDesc()->columnName << " failed.";
+        load_failed = true;
+        break;
       }
     }
-
-    // must set import_status.load_truncated before closing this end of pipe
-    // otherwise, the thread on the other end would throw an unwanted 'write()'
-    // exception
-    import_status.load_truncated = load_truncated;
-
-  } catch (const std::exception& e) {
-    if (poDS)
-      GDALClose(poDS);
-    poDS = nullptr;
-    throw;
   }
-  if (poDS)
-    GDALClose(poDS);
-  poDS = nullptr;
 
-  // done
+  // must set import_status.load_truncated before closing this end of pipe
+  // otherwise, the thread on the other end would throw an unwanted 'write()'
+  // exception
+  import_status.load_truncated = load_truncated;
   return import_status;
 }
 
