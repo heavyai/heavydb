@@ -417,7 +417,10 @@ class SysCatalog {
   void dropRole_unsafe(const std::string& roleName);
   void grantRole_unsafe(const std::string& roleName, const std::string& userName);
   void revokeRole_unsafe(const std::string& roleName, const std::string& userName);
-  void updateObjectDescriptorMap(const std::string& roleName, DBObject& object, const Catalog_Namespace::Catalog& cat);
+  void updateObjectDescriptorMap(const std::string& roleName,
+                                 DBObject& object,
+                                 bool roleType,
+                                 const Catalog_Namespace::Catalog& cat);
   void deleteObjectDescriptorMap(const std::string& roleName);
   void deleteObjectDescriptorMap(const std::string& roleName, DBObject& object, const Catalog_Namespace::Catalog& cat);
   void grantDBObjectPrivileges_unsafe(const std::string& roleName,

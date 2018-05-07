@@ -2323,14 +2323,15 @@ std::vector<std::string> MapDHandler::get_valid_groups(const TSessionId& session
   }
   std::vector<std::string> valid_groups;
   Catalog_Namespace::UserMetadata user_meta;
-  for_each(groups.begin(), groups.end(), [&](std::string group) {
+  for (auto& group : groups) {
+    user_meta.isSuper = false;  // initialize default flag
     if (!SysCatalog::instance().getMetadataForUser(group, user_meta) &&
         !SysCatalog::instance().getMetadataForRole(group)) {
       THROW_MAPD_EXCEPTION("Exception: User/Role " + group + " does not exist");
     } else if (!user_meta.isSuper) {
       valid_groups.push_back(group);
     }
-  });
+  }
   return valid_groups;
 }
 
@@ -2444,15 +2445,18 @@ void MapDHandler::get_dashboard_grantees(std::vector<TDashboardGrantees>& dashbo
       SysCatalog::instance().getMetadataForObject(cat.get_currentDB().dbId,
                                                   static_cast<int>(DBObjectType::DashboardDBObjectType),
                                                   dashboard_id);  // By default objecttypecan be only dashabaords
+  user_meta.userId = -1;
+  user_meta.userName = "";
+  SysCatalog::instance().getMetadataForUserById(dash->userId, user_meta);
   for (auto object : objectsList) {
+    if (user_meta.userName == object->roleName) {
+      // Mask owner
+      continue;
+    }
     TDashboardGrantees grantee;
     TDashboardPermissions perm;
     grantee.name = object->roleName;
-    if (SysCatalog::instance().getMetadataForUser(object->roleName, user_meta)) {
-      grantee.is_user = true;
-    } else if (SysCatalog::instance().getMetadataForRole(object->roleName)) {
-      grantee.is_user = false;
-    }
+    grantee.is_user = object->roleType;
     perm.create_ = object->privs.hasPermission(DashboardPrivileges::CREATE_DASHBOARD);
     perm.delete_ = object->privs.hasPermission(DashboardPrivileges::DELETE_DASHBOARD);
     perm.edit_ = object->privs.hasPermission(DashboardPrivileges::EDIT_DASHBOARD);

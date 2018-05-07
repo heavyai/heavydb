@@ -711,7 +711,7 @@ void SysCatalog::grantDBObjectPrivileges_unsafe(const std::string& roleName,
   object.resetPrivileges();
   rl->getPrivileges(object);
   insertOrUpdateObjectPrivileges(sqliteConnector_, roleName, rl->isUserPrivateRole(), object);
-  updateObjectDescriptorMap(roleName, object, catalog);
+  updateObjectDescriptorMap(roleName, object, rl->isUserPrivateRole(), catalog);
 }
 
 // REVOKE INSERT ON TABLE payroll_table FROM payroll_dept_role;
@@ -731,7 +731,7 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
   auto ret_object = rl->revokePrivileges(object);
   if (ret_object) {
     insertOrUpdateObjectPrivileges(sqliteConnector_, roleName, rl->isUserPrivateRole(), *ret_object);
-    updateObjectDescriptorMap(roleName, *ret_object, catalog);
+    updateObjectDescriptorMap(roleName, *ret_object, rl->isUserPrivateRole(), catalog);
   } else {
     deleteObjectPrivileges(sqliteConnector_, roleName, rl->isUserPrivateRole(), object);
     deleteObjectDescriptorMap(roleName, object, catalog);
@@ -881,6 +881,7 @@ void SysCatalog::revokeRole_unsafe(const std::string& roleName, const std::strin
 // Update or add element in ObjectRoleDescriptorMap
 void SysCatalog::updateObjectDescriptorMap(const std::string& roleName,
                                            DBObject& object,
+                                           bool roleType,
                                            const Catalog_Namespace::Catalog& cat) {
   bool present = false;
   auto privs = object.getPrivileges();
@@ -898,6 +899,7 @@ void SysCatalog::updateObjectDescriptorMap(const std::string& roleName,
   if (!present) {
     ObjectRoleDescriptor* od = new ObjectRoleDescriptor();
     od->roleName = roleName;
+    od->roleType = roleType;
     od->objectType = object.getObjectKey().permissionType;
     od->dbId = object.getObjectKey().dbId;
     od->objectId = object.getObjectKey().objectId;
@@ -1030,7 +1032,7 @@ std::vector<ObjectRoleDescriptor*> SysCatalog::getMetadataForObject(int32_t dbId
   for (auto d = range.first; d != range.second; ++d) {
     objectsList.push_back(d->second);
   }
-  return objectsList;  // return a vector of pointers to ObjectsMetaData
+  return objectsList;  // return pointers to objects
 }
 
 bool SysCatalog::isRoleGrantedToUser(const int32_t userId, const std::string& roleName) const {
@@ -1055,7 +1057,8 @@ std::vector<std::string> SysCatalog::getRoles(const int32_t dbId) {
   // sadly mapd_object_permissions table is also misused to manage user roles.
   std::lock_guard<std::mutex> lock(cat_mutex_);
   std::string sql =
-      "SELECT DISTINCT roleName FROM mapd_object_permissions WHERE objectPermissions<>0 AND roleType=0 AND dbId=" + std::to_string(dbId);
+      "SELECT DISTINCT roleName FROM mapd_object_permissions WHERE objectPermissions<>0 AND roleType=0 AND dbId=" +
+      std::to_string(dbId);
   sqliteConnector_->query(sql);
   int numRows = sqliteConnector_->getNumRows();
 
@@ -1631,6 +1634,7 @@ void SysCatalog::buildObjectDescriptorMap() {
   for (size_t r = 0; r < numRows; ++r) {
     ObjectRoleDescriptor* od = new ObjectRoleDescriptor();
     od->roleName = sqliteConnector_->getData<string>(r, 0);
+    od->roleType = sqliteConnector_->getData<bool>(r, 1);
     od->objectType = sqliteConnector_->getData<int>(r, 2);
     od->dbId = sqliteConnector_->getData<int>(r, 3);
     od->objectId = sqliteConnector_->getData<int>(r, 4);
