@@ -72,10 +72,6 @@ bool thrift_with_retry(SERVICE_ENUM which_service, CLIENT_CONTEXT& context, char
       case kGET_HARDWARE_INFO:
         context.client.get_hardware_info(context.cluster_hardware_info, context.session);
         break;
-      case kIMPORT_GEO_TABLE:
-        context.client.import_geo_table(
-            context.session, context.table_name, context.file_name, context.copy_params, TRowDescriptor());
-        break;
       case kSET_TABLE_EPOCH:
         context.client.set_table_epoch(context.session, context.db_id, context.table_id, context.epoch_value);
         break;

@@ -32,8 +32,6 @@ class ContextOperations {
   using ThriftService = typename CONTEXT_OP_POLICY::ThriftServiceType;
   using ContextType = typename CONTEXT_OP_POLICY::ContextType;
 
-  static void import_geo_table(ContextType& context) { thrift_op<kIMPORT_GEO_TABLE>(context); }
-
   static void get_all_roles(ContextType& context) {
     context.role_names.clear();
     thrift_op<kGET_ROLES>(context, [](ContextType& lambda_context) {
