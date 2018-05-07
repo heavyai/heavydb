@@ -1045,7 +1045,14 @@ int main(int argc, char** argv) {
 
   context.session = INVALID_SESSION_ID;
 
-  transport->open();
+  try {
+    transport->open();
+  } catch (...) {
+    std::cout
+        << "Failed to open transport. Is mapd_server running?"
+        << std::endl;
+    return 1;
+  }
 
   if (context.db_name.empty()) {
     std::cout
