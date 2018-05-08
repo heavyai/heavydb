@@ -1163,6 +1163,7 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog* cat, const Colu
   } else {
     col_type.col_type.comp_param = cd->columnType.get_comp_param();
   }
+  col_type.is_reserved_keyword = ImportHelpers::is_reserved_name(col_type.col_name);
   return col_type;
 }
 
@@ -1873,6 +1874,7 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
       THROW_MAPD_EXCEPTION("Invalid geo_coords_srid in CopyParams (" + std::to_string((int)cp.geo_coords_srid));
       break;
   }
+  copy_params.sanitize_column_names = cp.sanitize_column_names;
   return copy_params;
 }
 
@@ -1921,6 +1923,7 @@ TCopyParams MapDHandler::copyparams_to_thrift(const Importer_NS::CopyParams& cp)
       break;
   }
   copy_params.geo_coords_srid = cp.geo_coords_srid;
+  copy_params.sanitize_column_names = cp.sanitize_column_names;
   return copy_params;
 }
 
@@ -2116,9 +2119,12 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
         }
         col.col_type.type = type_to_thrift(ti);
         col.col_type.encoding = encoding_to_thrift(ti);
-        col.col_name = headers[col_idx];
-        col.is_reserved_keyword =
-            reserved_keywords.find(boost::to_upper_copy<std::string>(col.col_name)) != reserved_keywords.end();
+        if (copy_params.sanitize_column_names) {
+          col.col_name = ImportHelpers::sanitize_name(headers[col_idx]);
+        } else {
+          col.col_name = headers[col_idx];
+        }
+        col.is_reserved_keyword = ImportHelpers::is_reserved_name(col.col_name);
         _return.row_set.row_desc[col_idx] = col;
       }
       size_t num_samples = 100;
@@ -2143,7 +2149,9 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
       std::list<ColumnDescriptor> cds =
           Importer_NS::Importer::gdalToColumnDescriptors(file_path.string(), geoColumnName, copy_params);
       for (auto cd : cds) {
-        cd.columnName = ImportHelpers::sanitize_name(cd.columnName);
+        if (copy_params.sanitize_column_names) {
+          cd.columnName = ImportHelpers::sanitize_name(cd.columnName);
+        }
         _return.row_set.row_desc.push_back(populateThriftColumnType(nullptr, &cd));
       }
       std::map<std::string, std::vector<std::string>> sample_data;

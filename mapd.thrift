@@ -177,6 +177,7 @@ struct TCopyParams {
   17: i32 geo_coords_comp_param
   18: TDatumType geo_coords_type=TDatumType.GEOGRAPHY
   19: i32 geo_coords_srid=4326
+  20: bool sanitize_column_names=true
 }
 
 struct TDetectResult {

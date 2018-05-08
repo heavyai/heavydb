@@ -87,6 +87,7 @@ struct CopyParams {
   int32_t geo_coords_comp_param;
   SQLTypes geo_coords_type;
   int32_t geo_coords_srid;
+  bool sanitize_column_names;
 
   CopyParams()
       : delimiter(','),
@@ -110,7 +111,8 @@ struct CopyParams {
         geo_coords_encoding(kENCODING_GEOINT),
         geo_coords_comp_param(32),
         geo_coords_type(kGEOGRAPHY),
-        geo_coords_srid(4326) {}
+        geo_coords_srid(4326),
+        sanitize_column_names(true) {}
 
   CopyParams(char d, const std::string& n, char l, size_t b, size_t retries, size_t wait)
       : delimiter(d),
@@ -133,7 +135,8 @@ struct CopyParams {
         geo_coords_encoding(kENCODING_GEOINT),
         geo_coords_comp_param(32),
         geo_coords_type(kGEOGRAPHY),
-        geo_coords_srid(4326) {}
+        geo_coords_srid(4326),
+        sanitize_column_names(true) {}
 };
 
 class TypedImportBuffer : boost::noncopyable {
