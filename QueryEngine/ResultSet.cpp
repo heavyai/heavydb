@@ -96,7 +96,8 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
       data_mgr_(nullptr),
       none_encoded_strings_valid_(false),
       just_explain_(false),
-      cached_row_count_(-1) {}
+      cached_row_count_(-1),
+      geo_return_type_(GeoReturnType::WktString) {}
 
 ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
@@ -133,7 +134,8 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
       data_mgr_(nullptr),
       none_encoded_strings_valid_(false),
       just_explain_(false),
-      cached_row_count_(-1) {
+      cached_row_count_(-1),
+      geo_return_type_(GeoReturnType::WktString) {
 }
 
 ResultSet::ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator> estimator,
@@ -150,7 +152,8 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator> estimat
       data_mgr_(data_mgr),
       none_encoded_strings_valid_(false),
       just_explain_(false),
-      cached_row_count_(-1) {
+      cached_row_count_(-1),
+      geo_return_type_(GeoReturnType::WktString) {
   if (device_type == ExecutorDeviceType::GPU) {
     estimator_buffer_ =
         reinterpret_cast<int8_t*>(alloc_gpu_mem(data_mgr_, estimator_->getEstimatorBufferSize(), device_id_, nullptr));
@@ -172,7 +175,8 @@ ResultSet::ResultSet(const std::string& explanation)
       none_encoded_strings_valid_(false),
       explanation_(explanation),
       just_explain_(true),
-      cached_row_count_(-1) {}
+      cached_row_count_(-1),
+      geo_return_type_(GeoReturnType::WktString) {}
 
 ResultSet::ResultSet(const std::string& image_bytes,
                      int64_t queue_time_ms,
@@ -188,7 +192,8 @@ ResultSet::ResultSet(const std::string& image_bytes,
       none_encoded_strings_valid_(false),
       explanation_(image_bytes),
       just_explain_(true),
-      cached_row_count_(-1){};
+      cached_row_count_(-1),
+      geo_return_type_(GeoReturnType::WktString){};
 
 ResultSet::~ResultSet() {
   if (storage_) {

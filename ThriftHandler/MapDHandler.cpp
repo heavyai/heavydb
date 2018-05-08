@@ -442,14 +442,28 @@ void MapDHandler::value_to_thrift_column(const TargetValue& tv, const SQLTypeInf
     column.nulls.push_back(list_tv->size() == 0);
   } else if (ti.is_geometry()) {
     const auto list_tv = boost::get<std::vector<ScalarTargetValue>>(&tv);
-    CHECK(list_tv);
-    auto elem_type = SQLTypeInfo(kDOUBLE, false);
-    TColumn tColumn;
-    for (const auto& elem_tv : *list_tv) {
-      value_to_thrift_column(elem_tv, elem_type, tColumn);
+    if (list_tv) {
+      auto elem_type = SQLTypeInfo(kDOUBLE, false);
+      TColumn tColumn;
+      for (const auto& elem_tv : *list_tv) {
+        value_to_thrift_column(elem_tv, elem_type, tColumn);
+      }
+      column.data.arr_col.push_back(tColumn);
+      column.nulls.push_back(list_tv->size() == 0);
+    } else {
+      const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
+      CHECK(scalar_tv);
+      auto s_n = boost::get<NullableString>(scalar_tv);
+      auto s = boost::get<std::string>(s_n);
+      if (s) {
+        column.data.str_col.push_back(*s);
+      } else {
+        column.data.str_col.push_back("");  // null string
+        auto null_p = boost::get<void*>(s_n);
+        CHECK(null_p && !*null_p);
+      }
+      column.nulls.push_back(!s);
     }
-    column.data.arr_col.push_back(tColumn);
-    column.nulls.push_back(list_tv->size() == 0);
   } else {
     const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
     CHECK(scalar_tv);

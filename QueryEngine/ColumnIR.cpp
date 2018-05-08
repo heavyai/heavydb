@@ -88,13 +88,14 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
   if (col_var->get_rte_idx() <= 0 ||
       (!cgen_state_->outer_join_cond_lv_ &&
        (cgen_state_->outer_join_match_found_per_level_.empty() || !foundOuterJoinMatch(col_var->get_rte_idx())))) {
-    return codegenColVar(col_var, fetch_column, co);
+    return codegenColVar(col_var, fetch_column, true, co);
   }
   return codegenOuterJoinNullPlaceholder(col_var, fetch_column, co);
 }
 
 std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col_var,
                                                   const bool fetch_column,
+                                                  const bool update_query_plan,
                                                   const CompilationOptions& co) {
   const bool hoist_literals = co.hoist_literals_;
   auto col_id = col_var->get_column_id();
@@ -123,8 +124,11 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
         auto col0_ti = cd0->columnType;
         CHECK(!cd0->isVirtualCol);
         auto col0_var = makeExpr<Analyzer::ColumnVar>(col0_ti, col_var->get_table_id(), cd0->columnId, rte_idx);
-        auto col = codegenColVar(col0_var.get(), fetch_column, co);
+        auto col = codegenColVar(col0_var.get(), fetch_column, false, co);
         cols.insert(cols.end(), col.begin(), col.end());
+      }
+      if (plan_state_->isLazyFetchColumn(col_var)) {
+        plan_state_->columns_to_not_fetch_.insert(std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
       }
       return cols;
     }
@@ -153,7 +157,9 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
   auto pos_arg = posArg(col_var);
   auto col_byte_stream = colByteStream(col_var, fetch_column, hoist_literals);
   if (plan_state_->isLazyFetchColumn(col_var)) {
-    plan_state_->columns_to_not_fetch_.insert(std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
+    if (update_query_plan) {
+      plan_state_->columns_to_not_fetch_.insert(std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
+    }
 #ifdef ENABLE_MULTIFRAG_JOIN
     if (rte_idx > 0) {
       const auto offset = cgen_state_->frag_offsets_[rte_idx];
@@ -341,7 +347,7 @@ std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const Analyz
       llvm::BasicBlock::Create(cgen_state_->context_, "back_from_outer_join", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_args_bb);
   FetchCacheAnchor anchor(cgen_state_.get());
-  const auto orig_lvs = codegenColVar(col_var, fetch_column, co);
+  const auto orig_lvs = codegenColVar(col_var, fetch_column, true, co);
   cgen_state_->ir_builder_.CreateBr(phi_bb);
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_nulls_bb);
   const auto& null_ti = col_var->get_type_info();

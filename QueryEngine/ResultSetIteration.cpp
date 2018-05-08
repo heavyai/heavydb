@@ -23,6 +23,7 @@
  */
 
 #include "../Shared/likely.h"
+#include "../Shared/gdal_types.h"
 #include "Execute.h"
 #include "ResultRows.h"
 #include "ResultSet.h"
@@ -625,6 +626,58 @@ TargetValue build_array_target_value(const SQLTypeInfo& array_ti,
   return TargetValue(nullptr);
 }
 
+template <typename T>
+void unpack_geo_vector(std::vector<T>& output, const int8_t* input_ptr, const size_t sz) {
+  auto elems = reinterpret_cast<const T*>(input_ptr);
+  CHECK_EQ(size_t(0), sz % sizeof(T));
+  const size_t num_elems = sz / sizeof(T);
+  output.resize(num_elems);
+  for (size_t i = 0; i < num_elems; i++) {
+    output[i] = elems[i];
+  }
+}
+
+template <>
+void unpack_geo_vector(std::vector<ScalarTargetValue>& output, const int8_t* input_ptr, const size_t sz) {
+  auto elems = reinterpret_cast<const double*>(input_ptr);
+  CHECK_EQ(size_t(0), sz % sizeof(double));
+  const size_t num_elems = sz / sizeof(double);
+  output.resize(num_elems);
+  for (size_t i = 0; i < num_elems; i++) {
+    output[i] = ScalarTargetValue(elems[i]);
+  }
+}
+
+template <class T>
+T wrap_decompressed_coord(const double val) {
+  return static_cast<T>(val);
+}
+
+template <>
+double wrap_decompressed_coord(const double val) {
+  return val;
+}
+
+template <>
+ScalarTargetValue wrap_decompressed_coord(const double val) {
+  return ScalarTargetValue(val);
+}
+
+// TODO(adb): Move this to a common geo compression file / class
+template <typename T>
+void decompress_geo_coords_geoint32(std::vector<T>& dec, const int8_t* enc, const size_t sz) {
+  const auto compressed_coords = reinterpret_cast<const int32_t*>(enc);
+  bool x = true;
+  dec.reserve(sz / sizeof(int32_t));
+  for (size_t i = 0; i < sz / sizeof(int32_t); i++) {
+    // decompress longitude: -2,147,483,647..2,147,483,647  --->  -180..180
+    // decompress latitude:  -2,147,483,647..2,147,483,647  --->   -90..90
+    double decompressed_coord = (x ? 180.0 : 90.0) * (compressed_coords[i] / 2147483647.0);
+    dec.push_back(wrap_decompressed_coord<T>(decompressed_coord));
+    x = !x;
+  }
+}
+
 TargetValue build_geo_target_value(const SQLTypeInfo& geo_ti,
                                    const int8_t* coords,
                                    const size_t coords_sz,
@@ -633,29 +686,58 @@ TargetValue build_geo_target_value(const SQLTypeInfo& geo_ti,
                                    const int8_t* poly_rings,
                                    const size_t poly_rings_sz,
                                    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                   const Executor* executor) {
+                                   const Executor* executor,
+                                   const ResultSet::GeoReturnType return_type) {
   CHECK(geo_ti.is_geometry());
-  if (geo_ti.get_compression() == kENCODING_GEOINT) {
-    if (geo_ti.get_comp_param() == 32) {
-      const auto compressed_coords = reinterpret_cast<const int32_t*>(coords);
-      std::vector<double> decompressed_coords;
-      bool x = true;
-      for (size_t i = 0; i < coords_sz / sizeof(int32_t); i++) {
-        // compress longitude: -180..180  --->  -2,147,483,647..2,147,483,647
-        // compress latitude: -90..90  --->  -2,147,483,647..2,147,483,647
-        double decompressed_coord = (x ? 180.0 : 90.0) * (compressed_coords[i] / 2147483647.0);
-        decompressed_coords.push_back(decompressed_coord);
-        x = !x;
+  if (return_type != ResultSet::GeoReturnType::Double) {
+    // Use GDAL to return a geo type serialized to string
+    std::vector<double> decompressed_coords;
+    if (geo_ti.get_compression() == kENCODING_GEOINT) {
+      if (geo_ti.get_comp_param() == 32) {
+        decompress_geo_coords_geoint32(decompressed_coords, coords, coords_sz);
       }
-      size_t decompressed_coords_sz = decompressed_coords.size() * sizeof(double);
-      auto decompressed_coords_data = reinterpret_cast<int8_t*>(decompressed_coords.data());
-      // Return a simple array of coordinates. TODO(d): ring sizes, multipolygon ring counts, etc.
-      return build_array_target_value<double>(decompressed_coords_data, decompressed_coords_sz, row_set_mem_owner);
+    } else {
+      CHECK_EQ(geo_ti.get_compression(), kENCODING_NONE);
+      unpack_geo_vector(decompressed_coords, coords, coords_sz);
     }
+    switch (geo_ti.get_type()) {
+      case kPOINT: {
+        GDAL_namespace::GDALPoint point(decompressed_coords);
+        return NullableString(point.getWktString());
+      }
+      case kLINESTRING: {
+        GDAL_namespace::GDALLineString line(decompressed_coords);
+        return NullableString(line.getWktString());
+      }
+      case kPOLYGON: {
+        std::vector<int32_t> ring_sizes_vec;
+        unpack_geo_vector(ring_sizes_vec, ring_sizes, ring_sizes_sz);
+        GDAL_namespace::GDALPolygon poly(decompressed_coords, ring_sizes_vec);
+        return NullableString(poly.getWktString());
+      }
+      case kMULTIPOLYGON: {
+        std::vector<int32_t> ring_sizes_vec;
+        unpack_geo_vector(ring_sizes_vec, ring_sizes, ring_sizes_sz);
+        std::vector<int32_t> poly_rings_vec;
+        unpack_geo_vector(poly_rings_vec, poly_rings, poly_rings_sz);
+        GDAL_namespace::GDALMultiPolygon multipoly(decompressed_coords, ring_sizes_vec, poly_rings_vec);
+        return NullableString(multipoly.getWktString());
+      }
+      default:
+        throw std::runtime_error("Unknown Geometry type encountered: " + geo_ti.get_type_name());
+    }
+  } else {
+    std::vector<ScalarTargetValue> decompressed_coords;
+    if (geo_ti.get_compression() == kENCODING_GEOINT) {
+      if (geo_ti.get_comp_param() == 32) {
+        decompress_geo_coords_geoint32(decompressed_coords, coords, coords_sz);
+      }
+    } else {
+      CHECK_EQ(geo_ti.get_compression(), kENCODING_NONE);
+      unpack_geo_vector(decompressed_coords, coords, coords_sz);
+    }
+    return TargetValue(decompressed_coords);
   }
-  CHECK_EQ(kENCODING_NONE, geo_ti.get_compression());
-  // Return a simple array of coordinates. TODO(d): ring sizes, multipolygon ring counts, etc.
-  return build_array_target_value<double>(coords, coords_sz, row_set_mem_owner);
 }
 
 }  // namespace
@@ -732,29 +814,69 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
         std::string fetched_str(reinterpret_cast<char*>(vd.pointer), vd.length);
         return fetched_str;
       } else if (target_info.sql_type.is_geometry()) {
-        ArrayDatum coords_ad;
-        ArrayDatum ring_sizes_ad;
-        ArrayDatum poly_rings_ad;
-        ChunkIter_get_nth(
-            reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(frag_col_buffers[col_lazy_fetch.local_col_id])),
-            varlen_ptr,
-            &coords_ad,
-            &is_end);
-        CHECK(!is_end);
-        if (coords_ad.is_null) {
+        auto lazy_fetch_chunk = [](const int8_t* ptr, const int64_t varlen_ptr) {
+          ArrayDatum ad;
+          bool is_end;
+          ChunkIter_get_nth(reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(ptr)), varlen_ptr, &ad, &is_end);
+          CHECK(!is_end);
+          return ad;
+        };
+        ArrayDatum coords_ad = lazy_fetch_chunk(frag_col_buffers[col_lazy_fetch.local_col_id], varlen_ptr);
+        // If encoding geo types as WKT strings, step through the encoding anyway to return proper WKT string syntax for
+        // empty geo type.
+        if (coords_ad.is_null && (geo_return_type_ == GeoReturnType::Double)) {
           std::vector<ScalarTargetValue> empty_array;
           return TargetValue(empty_array);
         }
-        // TODO(d): will also need to read poly ring size array, multipolygon ring counts, etc
-        return build_geo_target_value(target_info.sql_type,
-                                      coords_ad.pointer,
-                                      coords_ad.length,
-                                      ring_sizes_ad.pointer,
-                                      ring_sizes_ad.length,
-                                      poly_rings_ad.pointer,
-                                      poly_rings_ad.length,
-                                      row_set_mem_owner_,
-                                      executor_);
+        switch (target_info.sql_type.get_type()) {
+          case kPOINT:
+          case kLINESTRING:
+            return build_geo_target_value(target_info.sql_type,
+                                          coords_ad.pointer,
+                                          coords_ad.length,
+                                          nullptr,
+                                          0,
+                                          nullptr,
+                                          0,
+                                          row_set_mem_owner_,
+                                          executor_,
+                                          geo_return_type_);
+            break;
+          case kPOLYGON: {
+            const auto ring_sizes_id = col_lazy_fetch.local_col_id + 1;
+            ArrayDatum ring_sizes_ad = lazy_fetch_chunk(frag_col_buffers[ring_sizes_id], varlen_ptr);
+            return build_geo_target_value(target_info.sql_type,
+                                          coords_ad.pointer,
+                                          coords_ad.length,
+                                          ring_sizes_ad.pointer,
+                                          ring_sizes_ad.length,
+                                          nullptr,
+                                          0,
+                                          row_set_mem_owner_,
+                                          executor_,
+                                          geo_return_type_);
+            break;
+          }
+          case kMULTIPOLYGON: {
+            const auto ring_sizes_id = col_lazy_fetch.local_col_id + 1;
+            ArrayDatum ring_sizes_ad = lazy_fetch_chunk(frag_col_buffers[ring_sizes_id], varlen_ptr);
+            const auto poly_rings_id = col_lazy_fetch.local_col_id + 2;
+            ArrayDatum poly_rings_ad = lazy_fetch_chunk(frag_col_buffers[poly_rings_id], varlen_ptr);
+            return build_geo_target_value(target_info.sql_type,
+                                          coords_ad.pointer,
+                                          coords_ad.length,
+                                          ring_sizes_ad.pointer,
+                                          ring_sizes_ad.length,
+                                          poly_rings_ad.pointer,
+                                          poly_rings_ad.length,
+                                          row_set_mem_owner_,
+                                          executor_,
+                                          geo_return_type_);
+            break;
+          }
+          default:
+            throw std::runtime_error("Unknown Geometry type encountered: " + target_info.sql_type.get_type_name());
+        }
       } else {
         CHECK(target_info.sql_type.is_array());
         ArrayDatum ad;

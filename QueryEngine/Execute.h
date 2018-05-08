@@ -429,6 +429,7 @@ class Executor {
   std::vector<llvm::Value*> codegen(const Analyzer::ColumnVar*, const bool fetch_column, const CompilationOptions&);
   std::vector<llvm::Value*> codegenColVar(const Analyzer::ColumnVar*,
                                           const bool fetch_column,
+                                          const bool update_query_plan,
                                           const CompilationOptions&);
   llvm::Value* codegenFixedLengthColVar(const Analyzer::ColumnVar* col_var,
                                         llvm::Value* col_byte_stream,

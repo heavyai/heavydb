@@ -362,6 +362,11 @@ class ResultSet {
 
   size_t getLimit();
 
+  enum class GeoReturnType { Double, WktString };
+  GeoReturnType getGeoReturnType() const { return geo_return_type_; }
+  void setGeoReturnWKtString() { geo_return_type_ = GeoReturnType::WktString; }
+  void setGeoReturnDouble() { geo_return_type_ = GeoReturnType::Double; }
+
  private:
   std::vector<TargetValue> getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const;
 
@@ -532,6 +537,9 @@ class ResultSet {
   const bool just_explain_;
   mutable std::atomic<ssize_t> cached_row_count_;
   mutable std::mutex row_iteration_mutex_;
+
+  // only used by geo
+  GeoReturnType geo_return_type_;
 
   friend class ResultSetManager;
 };
