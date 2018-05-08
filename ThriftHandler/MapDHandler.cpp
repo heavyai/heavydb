@@ -2106,6 +2106,14 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
         SQLTypes t = best_types[col_idx];
         EncodingType encodingType = best_encodings[col_idx];
         SQLTypeInfo ti(t, false, encodingType);
+        if (IS_GEO(t)) {
+          // set this so encoding_to_thrift does the right thing
+          ti.set_compression(copy_params.geo_coords_encoding);
+          // fill in these directly
+          col.col_type.precision = static_cast<int>(copy_params.geo_coords_type);
+          col.col_type.scale = copy_params.geo_coords_srid;
+          col.col_type.comp_param = copy_params.geo_coords_comp_param;
+        }
         col.col_type.type = type_to_thrift(ti);
         col.col_type.encoding = encoding_to_thrift(ti);
         col.col_name = headers[col_idx];
