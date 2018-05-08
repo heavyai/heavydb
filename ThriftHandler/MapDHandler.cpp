@@ -1552,7 +1552,7 @@ void MapDHandler::load_table_binary(const TSessionId& session,
   }
   // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
   //               Subtracting 1 (rowid) until TableDescriptor is updated.
-  if (rows.front().cols.size() != static_cast<size_t>(td->nColumns) - 1) {
+  if (rows.front().cols.size() != static_cast<size_t>(td->nColumns) - (td->hasDeletedCol ? 2 : 1)) {
     THROW_MAPD_EXCEPTION("Wrong number of columns to load into Table " + table_name);
   }
   auto col_descs = loader->get_column_descs();
@@ -1602,7 +1602,7 @@ void MapDHandler::prepare_columnar_loader(
   }
   // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
   //               Subtracting 1 (rowid) until TableDescriptor is updated.
-  if (num_cols != static_cast<size_t>(td->nColumns) - 1 || num_cols < 1) {
+  if (num_cols != static_cast<size_t>(td->nColumns) - (td->hasDeletedCol ? 2 : 1) || num_cols < 1) {
     THROW_MAPD_EXCEPTION("Wrong number of columns to load into Table " + table_name);
   }
   auto col_descs = (*loader)->get_column_descs();
@@ -1751,7 +1751,7 @@ void MapDHandler::load_table(const TSessionId& session,
   Importer_NS::CopyParams copy_params;
   // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
   //               Subtracting 1 (rowid) until TableDescriptor is updated.
-  if (rows.front().cols.size() != static_cast<size_t>(td->nColumns) - 1) {
+  if (rows.front().cols.size() != static_cast<size_t>(td->nColumns) - (td->hasDeletedCol ? 2 : 1)) {
     THROW_MAPD_EXCEPTION("Wrong number of columns to load into Table " + table_name + " (" +
                          std::to_string(rows.front().cols.size()) + " vs " + std::to_string(td->nColumns - 1) + ")");
   }
