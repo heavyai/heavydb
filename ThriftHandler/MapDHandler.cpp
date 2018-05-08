@@ -2616,7 +2616,9 @@ void MapDHandler::create_table(const TSessionId& session,
                                const TTableType::type table_type) {
   check_read_only("create_table");
 
-  if (table_name != ImportHelpers::sanitize_name(table_name)) {
+  if (ImportHelpers::is_reserved_name(table_name)) {
+    THROW_MAPD_EXCEPTION("Invalid table name (reserved keyword): " + table_name);
+  } else if (table_name != ImportHelpers::sanitize_name(table_name)) {
     THROW_MAPD_EXCEPTION("Invalid characters in table name: " + table_name);
   }
 
@@ -2630,7 +2632,9 @@ void MapDHandler::create_table(const TSessionId& session,
   std::vector<std::string> col_stmts;
 
   for (auto col : rds) {
-    if (col.col_name != ImportHelpers::sanitize_name(col.col_name)) {
+    if (ImportHelpers::is_reserved_name(col.col_name)) {
+      THROW_MAPD_EXCEPTION("Invalid column name (reserved keyword): " + col.col_name);
+    } else if (col.col_name != ImportHelpers::sanitize_name(col.col_name)) {
       THROW_MAPD_EXCEPTION("Invalid characters in column name: " + col.col_name);
     }
     if (col.col_type.type == TDatumType::INTERVAL_DAY_TIME || col.col_type.type == TDatumType::INTERVAL_YEAR_MONTH) {

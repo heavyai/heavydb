@@ -24,14 +24,17 @@
 
 namespace ImportHelpers {
 
+inline bool is_reserved_name(const std::string& name) {
+  return reserved_keywords.find(boost::to_upper_copy<std::string>(name)) != reserved_keywords.end();
+}
+
 inline std::string sanitize_name(const std::string& name) {
   boost::regex invalid_chars{R"([^0-9a-z_])", boost::regex::extended | boost::regex::icase};
-
-  std::string col_name = boost::regex_replace(name, invalid_chars, "");
-  if (reserved_keywords.find(boost::to_upper_copy<std::string>(col_name)) != reserved_keywords.end()) {
-    col_name += "_";
+  std::string sanitized_name = boost::regex_replace(name, invalid_chars, "");
+  if (is_reserved_name(sanitized_name)) {
+    sanitized_name += "_";
   }
-  return col_name;
+  return sanitized_name;
 }
 
 }  // namespace ImportHelpers

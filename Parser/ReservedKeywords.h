@@ -20,14 +20,12 @@
 #include <set>
 #include <string>
 
-// Keywords from https://calcite.apache.org/docs/reference.html#keywords
-// As of apache/calcite@9085b601081689b5b7f1e9f57deb20e2229910cb
 static std::set<std::string> reserved_keywords{
-    "ROWID",  // MapD internal
-    "AMMSC",  // MapD legacy
-    "ARRAY",
+
+    // MapD reserved keywords
+
+    "AMMSC",        // legacy
     "ASC",
-    "CHAR_LENGTH",
     "CONTINUE",
     "COPY",
     "DATABASE",
@@ -36,22 +34,35 @@ static std::set<std::string> reserved_keywords{
     "DESC",
     "FIRST",
     "FOUND",
+    "GEOGRAPHY",    // geo type
+    "GEOMETRY",     // geo type
     "IF",
     "ILIKE",
     "LAST",
     "LENGTH",
+    "LINESTRING",   // geo type
+    "MULTIPOLYGON", // geo type
     "NOW",
     "NULLX",
     "OPTION",
+    "POINT",        // geo type
+    "POLYGON",      // geo type
     "PRIVILEGES",
     "PUBLIC",
     "RENAME",
+    "ROLE",         // permissions
+    "ROWID",        // hidden column name
     "SCHEMA",
-    "SHOW",
+    "TEMPORARY",    // in-memory tables
     "TEXT",
     "VIEW",
     "WORK",
-    "ABS",  // Calcite reserved keywords
+
+    // Calcite reserved keywords
+    // https://calcite.apache.org/docs/reference.html#keywords
+    // As of apache/calcite@9085b601081689b5b7f1e9f57deb20e2229910cb
+
+    "ABS",
     "ALL",
     "ALLOCATE",
     "ALLOW",
