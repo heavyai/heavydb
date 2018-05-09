@@ -1719,15 +1719,32 @@ static ImportStatus import_thread_delimited(
         try {
           for (auto cd_it = col_descs.begin(); cd_it != col_descs.end(); cd_it++) {
             auto cd = *cd_it;
-            bool is_null = (row[import_idx] == copy_params.null_str);
-            if (!cd->columnType.is_string() && row[import_idx].empty())
-              is_null = true;
-            import_buffers[col_idx]->add_value(cd, row[import_idx], is_null, copy_params);
-            std::string wkt{row[import_idx]};
-            ++import_idx;
-            ++col_idx;
             const auto& col_ti = cd->columnType;
-            if (col_ti.get_physical_cols() > 0) {
+            if (col_ti.get_physical_cols() == 0) {
+              // not geo
+
+              // store the string (possibly null)
+              bool is_null = (row[import_idx] == copy_params.null_str);
+              if (!cd->columnType.is_string() && row[import_idx].empty())
+                is_null = true;
+              import_buffers[col_idx]->add_value(cd, row[import_idx], is_null, copy_params);
+
+              // next
+              ++import_idx;
+              ++col_idx;
+            } else {
+              // geo
+
+              // store null string in the base column
+              import_buffers[col_idx]->add_value(cd, copy_params.null_str, true, copy_params);
+
+              // WKT from string we're not storing
+              std::string wkt{row[import_idx]};
+
+              // next
+              ++import_idx;
+              ++col_idx;
+
               SQLTypes col_type = col_ti.get_type();
               CHECK(IS_GEO(col_type));
 
@@ -1932,15 +1949,8 @@ static ImportStatus import_thread_shapefile(
           SQLTypes col_type = col_ti.get_type();
           CHECK(IS_GEO(col_type));
 
-          // regenerate WKT string
-          char* wkts = nullptr;
-          pGeometry->exportToWkt(&wkts);
-          CHECK(wkts);
-          std::string wkt(wkts);
-          CPLFree(wkts);
-
-          // insert WKT string into the base column
-          import_buffers[col_idx]->add_value(cd, wkt, !cd->columnType.is_string(), copy_params);
+          // store null string in the base column
+          import_buffers[col_idx]->add_value(cd, copy_params.null_str, true, copy_params);
           ++col_idx;
 
           // the data we now need to extract for the other columns
@@ -2495,25 +2505,7 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
     }
   }
 
-  // see StringToDatum in Shared/Datum.cpp
-  if (type == kTEXT) {
-    char* buf;
-    buf = try_strptimes(str.c_str(), {"%Y-%m-%d", "%m/%d/%Y", "%d-%b-%y", "%d/%b/%Y"});
-    if (buf) {
-      type = kDATE;
-      if (*buf == 'T' || *buf == ' ' || *buf == ':') {
-        buf++;
-      }
-    }
-    buf = try_strptimes(buf == nullptr ? str.c_str() : buf, {"%T %z", "%T", "%H%M%S", "%R"});
-    if (buf) {
-      if (type == kDATE) {
-        type = kTIMESTAMP;
-      } else {
-        type = kTIME;
-      }
-    }
-  }
+  // check for geo types
   if (type == kTEXT) {
     // convert to upper case
     std::string str_upper_case = str;
@@ -2532,8 +2524,40 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
 #endif
     } else if (str_upper_case.find("MULTIPOLYGON") == 0) {
       type = kMULTIPOLYGON;
+    } else if (str_upper_case.find_first_not_of("0123456789ABCDEF") == std::string::npos &&
+               (str_upper_case.size() % 2) == 0) {
+      // could be a WKB hex blob
+      // we can't handle these yet
+      // leave as TEXT for now
+      // deliberate return here, as otherwise this would get matched as TIME
+      // @TODO
+      // implement WKB import
+      return type;
     }
   }
+
+  // check for time types
+  if (type == kTEXT) {
+    // @TODO
+    // make these tests more robust so they don't match stuff they should not
+    char* buf;
+    buf = try_strptimes(str.c_str(), {"%Y-%m-%d", "%m/%d/%Y", "%d-%b-%y", "%d/%b/%Y"});
+    if (buf) {
+      type = kDATE;
+      if (*buf == 'T' || *buf == ' ' || *buf == ':') {
+        buf++;
+      }
+    }
+    buf = try_strptimes(buf == nullptr ? str.c_str() : buf, {"%T %z", "%T", "%H%M%S", "%R"});
+    if (buf) {
+      if (type == kDATE) {
+        type = kTIMESTAMP;
+      } else {
+        type = kTIME;
+      }
+    }
+  }
+
   return type;
 }
 
