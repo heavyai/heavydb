@@ -2244,6 +2244,7 @@ static bool is_allowed_on_dashboard(const Catalog_Namespace::SessionInfo& sessio
 void MapDHandler::get_dashboard(TDashboard& dashboard, const TSessionId& session, const int32_t dashboard_id) {
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
+  Catalog_Namespace::UserMetadata user_meta;
   auto dash = cat.getMetadataForDashboard(dashboard_id);
   if (!dash) {
     THROW_MAPD_EXCEPTION("Dashboard with dashboard id " + std::to_string(dashboard_id) + " doesn't exist");
@@ -2251,6 +2252,8 @@ void MapDHandler::get_dashboard(TDashboard& dashboard, const TSessionId& session
   if (!is_allowed_on_dashboard(session_info, dash->viewId, AccessPrivileges::VIEW_DASHBOARD)) {
     THROW_MAPD_EXCEPTION("User has no view privileges for the dashboard with id " + std::to_string(dashboard_id));
   }
+  user_meta.userName = "";
+  SysCatalog::instance().getMetadataForUserById(dash->userId, user_meta);
   auto objects_list = SysCatalog::instance().getMetadataForObject(
       cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dashboard_id);
   dashboard.dashboard_name = dash->viewName;
@@ -2260,14 +2263,21 @@ void MapDHandler::get_dashboard(TDashboard& dashboard, const TSessionId& session
   dashboard.dashboard_metadata = dash->viewMetadata;
   dashboard.dashboard_owner = dash->user;
   dashboard.dashboard_id = dash->viewId;
-  dashboard.is_dash_shared = !objects_list.empty();
+  if (objects_list.empty() || (objects_list.size() == 1 && objects_list[0]->roleName == user_meta.userName)) {
+    dashboard.is_dash_shared = false;
+  } else {
+    dashboard.is_dash_shared = true;
+  }
 }
 
 void MapDHandler::get_dashboards(std::vector<TDashboard>& dashboards, const TSessionId& session) {
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
+  Catalog_Namespace::UserMetadata user_meta;
   const auto dashes = cat.getAllFrontendViewMetadata();
+  user_meta.userName = "";
   for (const auto d : dashes) {
+    SysCatalog::instance().getMetadataForUserById(d->userId, user_meta);
     if (is_allowed_on_dashboard(session_info, d->viewId, AccessPrivileges::VIEW_DASHBOARD)) {
       auto objects_list = SysCatalog::instance().getMetadataForObject(
           cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), d->viewId);
@@ -2278,7 +2288,12 @@ void MapDHandler::get_dashboards(std::vector<TDashboard>& dashboards, const TSes
       dash.dashboard_metadata = d->viewMetadata;
       dash.dashboard_id = d->viewId;
       dash.dashboard_owner = d->user;
-      dash.is_dash_shared = !objects_list.empty();
+      // dash.is_dash_shared = !objects_list.empty();
+      if (objects_list.empty() || (objects_list.size() == 1 && objects_list[0]->roleName == user_meta.userName)) {
+        dash.is_dash_shared = false;
+      } else {
+        dash.is_dash_shared = true;
+      }
       dashboards.push_back(dash);
     }
   }
