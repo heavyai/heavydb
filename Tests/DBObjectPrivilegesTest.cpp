@@ -17,7 +17,6 @@ namespace {
 std::shared_ptr<Calcite> g_calcite;
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
 Catalog_Namespace::SysCatalog& sys_cat = Catalog_Namespace::SysCatalog::instance();
-;
 Catalog_Namespace::UserMetadata user;
 Catalog_Namespace::DBMetadata db;
 std::vector<DBObject> privObjects;
@@ -58,8 +57,9 @@ class DBObjectPermissionsEnv : public ::testing::Environment {
   }
 };
 
-inline void run_ddl_statement(const std::string& query) {
-  QueryRunner::run_ddl_statement(query, g_session);
+inline void run_ddl_statement(const std::string& query,
+                              std::unique_ptr<Catalog_Namespace::SessionInfo>& session = g_session) {
+  QueryRunner::run_ddl_statement(query, session);
 }
 }  // namespace
 
@@ -136,6 +136,34 @@ struct Roles {
   explicit Roles() { setup_roles(); }
   virtual ~Roles() { drop_roles(); }
 };
+
+struct DatabaseStruct {
+  std::string dquery1 = "CREATE DATABASE london(OWNER='Arsenal');";
+  std::string dpquery1 = "DROP DATABASE london;";
+
+  Users* user;
+  Roles* role;
+  explicit DatabaseStruct() {
+    user = new Users();
+    role = new Roles();
+    if (sys_cat.getMetadataForDB("london", db)) {
+      run_ddl_statement(dpquery1);
+    }
+    run_ddl_statement(dquery1);
+  }
+  virtual ~DatabaseStruct() {
+    run_ddl_statement(dpquery1);
+    delete user;
+    delete role;
+  }
+};
+
+struct DatabaseObject : testing::Test {
+  DatabaseStruct* database_;
+  DatabaseObject() { database_ = new DatabaseStruct(); }
+  virtual ~DatabaseObject() { delete database_; }
+};
+
 struct TableStruct {
   std::string cquery1 = "CREATE TABLE IF NOT EXISTS epl(gp SMALLINT, won SMALLINT);";
   std::string cquery2 = "CREATE TABLE IF NOT EXISTS seriea(gp SMALLINT, won SMALLINT);";
@@ -245,6 +273,167 @@ struct DashboardObject : testing::Test {
   DashboardObject() { dash_ = new DashboardStruct(); }
   virtual ~DashboardObject() { delete dash_; }
 };
+
+TEST_F(DatabaseObject, AccessDefaultsTest) {
+  auto cat_london = Catalog_Namespace::Catalog::get("london");
+  DBObject london_object("london", DBObjectType::DatabaseDBObjectType);
+  privObjects.clear();
+  london_object.loadKey(*cat_london);
+
+  privObjects.push_back(london_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
+  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), false);
+  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
+}
+
+TEST_F(DatabaseObject, TableAccessTest) {
+  std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
+  boost::filesystem::path base_path{BASE_PATH};
+  auto system_db_file = base_path / "mapd_catalogs" / "london";
+  auto data_dir = base_path / "mapd_data";
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+  sys_cat.getMetadataForDB("london", db);
+  sys_cat.getMetadataForUser("Arsenal", user);
+  session_ars.reset(
+      new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
+                                             base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
+                                         user,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
+  auto& cat_london = session_ars->get_catalog();
+  AccessPrivileges arsenal_privs;
+  ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::CREATE_TABLE));
+  ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::DROP_TABLE));
+  DBObject london_object("london", DBObjectType::DatabaseDBObjectType);
+  privObjects.clear();
+  london_object.loadKey(cat_london);
+  london_object.resetPrivileges();
+  ASSERT_NO_THROW(london_object.setPrivileges(arsenal_privs));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Arsenal", london_object, cat_london));
+
+  london_object.resetPrivileges();
+  ASSERT_NO_THROW(london_object.setPrivileges(arsenal_privs));
+  privObjects.push_back(london_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+
+  london_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(arsenal_privs.remove(AccessPrivileges::CREATE_TABLE));
+  ASSERT_NO_THROW(london_object.setPrivileges(arsenal_privs));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Arsenal", london_object, cat_london));
+
+  london_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(london_object.setPrivileges(AccessPrivileges::CREATE_TABLE));
+  privObjects.push_back(london_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+}
+
+TEST_F(DatabaseObject, ViewAccessTest) {
+  std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
+  boost::filesystem::path base_path{BASE_PATH};
+  auto system_db_file = base_path / "mapd_catalogs" / "london";
+  auto data_dir = base_path / "mapd_data";
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+  sys_cat.getMetadataForDB("london", db);
+  sys_cat.getMetadataForUser("Arsenal", user);
+  session_ars.reset(
+      new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
+                                             base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
+                                         user,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
+  auto& cat_london = session_ars->get_catalog();
+  AccessPrivileges arsenal_privs;
+  ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_VIEW));
+  DBObject london_object("london", DBObjectType::DatabaseDBObjectType);
+  privObjects.clear();
+  london_object.loadKey(cat_london);
+  london_object.resetPrivileges();
+  ASSERT_NO_THROW(london_object.setPrivileges(arsenal_privs));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Arsenal", london_object, cat_london));
+
+  london_object.resetPrivileges();
+  ASSERT_NO_THROW(london_object.setPrivileges(arsenal_privs));
+  privObjects.push_back(london_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+
+  london_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(arsenal_privs.remove(AccessPrivileges::DROP_VIEW));
+  ASSERT_NO_THROW(arsenal_privs.remove(AccessPrivileges::TRUNCATE_VIEW));
+  ASSERT_NO_THROW(london_object.setPrivileges(arsenal_privs));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Arsenal", london_object, cat_london));
+
+  london_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(london_object.setPrivileges(AccessPrivileges::ALL_VIEW));
+  privObjects.push_back(london_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
+  london_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(london_object.setPrivileges(AccessPrivileges::DROP_VIEW));
+  privObjects.push_back(london_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+  london_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(london_object.setPrivileges(AccessPrivileges::TRUNCATE_VIEW));
+  privObjects.push_back(london_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+}
+
+TEST_F(DatabaseObject, DashboardAccessTest) {
+  std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
+  boost::filesystem::path base_path{BASE_PATH};
+  auto system_db_file = base_path / "mapd_catalogs" / "london";
+  auto data_dir = base_path / "mapd_data";
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+  sys_cat.getMetadataForDB("london", db);
+  sys_cat.getMetadataForUser("Arsenal", user);
+  session_ars.reset(
+      new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
+                                             base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
+                                         user,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
+  auto& cat_london = session_ars->get_catalog();
+  AccessPrivileges arsenal_privs;
+  ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DASHBOARD));
+  DBObject london_object("london", DBObjectType::DatabaseDBObjectType);
+  privObjects.clear();
+  london_object.loadKey(cat_london);
+  london_object.resetPrivileges();
+  ASSERT_NO_THROW(london_object.setPrivileges(arsenal_privs));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Arsenal", london_object, cat_london));
+
+  london_object.resetPrivileges();
+  ASSERT_NO_THROW(london_object.setPrivileges(arsenal_privs));
+  privObjects.push_back(london_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+
+  london_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(arsenal_privs.remove(AccessPrivileges::EDIT_DASHBOARD));
+  ASSERT_NO_THROW(london_object.setPrivileges(arsenal_privs));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Arsenal", london_object, cat_london));
+
+  london_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(london_object.setPrivileges(AccessPrivileges::CREATE_DASHBOARD));
+  privObjects.push_back(london_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
+  london_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(london_object.setPrivileges(AccessPrivileges::DELETE_DASHBOARD));
+  privObjects.push_back(london_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
+  london_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(london_object.setPrivileges(AccessPrivileges::EDIT_DASHBOARD));
+  privObjects.push_back(london_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+}
 
 TEST_F(TableObject, AccessDefaultsTest) {
   auto& g_cat = g_session->get_catalog();
