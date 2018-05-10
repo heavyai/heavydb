@@ -44,6 +44,9 @@ inline bool is_real_str_or_array(const TargetInfo& target_info) {
 }
 
 inline size_t advance_slot(const size_t j, const TargetInfo& target_info, const bool separate_varlen_storage) {
+  if (target_info.sql_type.is_geometry()) {
+    return j + target_info.sql_type.get_physical_coord_cols();
+  }
   return j +
          ((target_info.agg_kind == kAVG || (!separate_varlen_storage && is_real_str_or_array(target_info))) ? 2 : 1);
 }
