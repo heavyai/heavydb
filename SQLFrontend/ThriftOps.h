@@ -38,6 +38,7 @@ bool thrift_op(CONTEXT_TYPE& context,
                ON_FAIL_LAMBDA fail_op = ON_FAIL_LAMBDA(),
                int const try_count = 1) {
   if (thrift_with_retry(THRIFT_SERVICE, context, arg, try_count)) {
+    thrift_with_retry(kGET_SERVER_STATUS, context, nullptr);
     success_op(context);
     return true;
   }

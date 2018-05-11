@@ -345,7 +345,7 @@ StandardCommand(ListColumns, {
         comma_or_blank = ", ";
       }
       if (table_details.shard_count) {
-        frag += comma_or_blank + "SHARD_COUNT = " + std::to_string(table_details.shard_count);
+        frag += comma_or_blank + "SHARD_COUNT = " + std::to_string(table_details.shard_count * context.cluster_status.size());
         comma_or_blank = ", ";
       }
       if (DEFAULT_PAGE_SIZE != table_details.page_size) {
