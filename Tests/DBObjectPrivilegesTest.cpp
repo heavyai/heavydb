@@ -274,7 +274,7 @@ struct DashboardObject : testing::Test {
   virtual ~DashboardObject() { delete dash_; }
 };
 
-TEST_F(DatabaseObject, DISABLED_AccessDefaultsTest) {
+TEST_F(DatabaseObject, AccessDefaultsTest) {
   auto cat_london = Catalog_Namespace::Catalog::get("london");
   DBObject london_object("london", DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
@@ -287,7 +287,7 @@ TEST_F(DatabaseObject, DISABLED_AccessDefaultsTest) {
   EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
 }
 
-TEST_F(DatabaseObject, DISABLED_TableAccessTest) {
+TEST_F(DatabaseObject, TableAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
   boost::filesystem::path base_path{BASE_PATH};
   auto system_db_file = base_path / "mapd_catalogs" / "london";
@@ -330,7 +330,7 @@ TEST_F(DatabaseObject, DISABLED_TableAccessTest) {
   EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
 }
 
-TEST_F(DatabaseObject, DISABLED_ViewAccessTest) {
+TEST_F(DatabaseObject, ViewAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
   boost::filesystem::path base_path{BASE_PATH};
   auto system_db_file = base_path / "mapd_catalogs" / "london";
@@ -383,7 +383,7 @@ TEST_F(DatabaseObject, DISABLED_ViewAccessTest) {
   EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
 }
 
-TEST_F(DatabaseObject, DISABLED_DashboardAccessTest) {
+TEST_F(DatabaseObject, DashboardAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
   boost::filesystem::path base_path{BASE_PATH};
   auto system_db_file = base_path / "mapd_catalogs" / "london";
