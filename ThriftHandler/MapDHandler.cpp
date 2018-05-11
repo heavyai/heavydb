@@ -2313,12 +2313,12 @@ int32_t MapDHandler::create_dashboard(const TSessionId& session,
 
   if (SysCatalog::instance().arePrivilegesOn() &&
       !session_info.checkDBAccessPrivileges(DBObjectType::DashboardDBObjectType, AccessPrivileges::CREATE_DASHBOARD)) {
-    throw std::runtime_error("Not enough privileges to create a dashboard.");
+    THROW_MAPD_EXCEPTION("Not enough privileges to create a dashboard.");
   }
 
   auto dash = cat.getMetadataForFrontendView(std::to_string(session_info.get_currentUser().userId), dashboard_name);
   if (dash) {
-    throw std::runtime_error("Dashboard with name: " + dashboard_name + " already exists.");
+    THROW_MAPD_EXCEPTION("Dashboard with name: " + dashboard_name + " already exists.");
   }
 
   FrontendViewDescriptor vd;
@@ -2352,7 +2352,7 @@ void MapDHandler::replace_dashboard(const TSessionId& session,
   auto& cat = session_info.get_catalog();
 
   if (!is_allowed_on_dashboard(session_info, dashboard_id, AccessPrivileges::EDIT_DASHBOARD)) {
-    throw std::runtime_error("Not enough privileges to replace a dashboard.");
+    THROW_MAPD_EXCEPTION("Not enough privileges to replace a dashboard.");
   }
 
   FrontendViewDescriptor vd;
@@ -2385,7 +2385,7 @@ void MapDHandler::delete_dashboard(const TSessionId& session, const int32_t dash
   }
   if (SysCatalog::instance().arePrivilegesOn()) {
     if (!is_allowed_on_dashboard(session_info, dash->viewId, AccessPrivileges::DELETE_DASHBOARD)) {
-      throw std::runtime_error("Not enough privileges to delete a dashboard.");
+      THROW_MAPD_EXCEPTION("Not enough privileges to delete a dashboard.");
     }
   }
   try {
@@ -2435,7 +2435,7 @@ void MapDHandler::share_dashboard(const TSessionId& session,
   DBObjectType object_type = DBObjectType::DashboardDBObjectType;
   DBObject object(dashboard_id, object_type);
   if (!permissions.create_ && !permissions.delete_ && !permissions.edit_ && !permissions.view_) {
-    throw std::runtime_error("Atleast one privilege should be assigned for grants");
+    THROW_MAPD_EXCEPTION("Atleast one privilege should be assigned for grants");
   } else {
     AccessPrivileges privs;
 
@@ -2481,7 +2481,7 @@ void MapDHandler::unshare_dashboard(const TSessionId& session,
   DBObjectType object_type = DBObjectType::DashboardDBObjectType;
   DBObject object(dashboard_id, object_type);
   if (!permissions.create_ && !permissions.delete_ && !permissions.edit_ && !permissions.view_) {
-    throw std::runtime_error("Atleast one privilege should be assigned for revokes");
+    THROW_MAPD_EXCEPTION("Atleast one privilege should be assigned for revokes");
   } else {
     AccessPrivileges privs;
 
