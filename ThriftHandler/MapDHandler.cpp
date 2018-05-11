@@ -1960,9 +1960,7 @@ std::string convert_path_to_vsi(const std::string& path_in,
     // zip archive
     path = "/vsizip/" + path;
     is_archive = true;
-  } else if (boost::iends_with(path, ".tar") ||
-             boost::iends_with(path, ".tgz") ||
-             boost::iends_with(path, ".tar.gz")) {
+  } else if (boost::iends_with(path, ".tar") || boost::iends_with(path, ".tgz") || boost::iends_with(path, ".tar.gz")) {
     // tar archive (compressed or uncompressed)
     path = "/vsitar/" + path;
     is_archive = true;
@@ -1997,8 +1995,7 @@ std::string convert_path_from_vsi(const std::string& file_name_in) {
 }
 
 bool path_is_relative(const std::string& path_in) {
-  if (boost::istarts_with(path_in, "s3://") ||
-      boost::istarts_with(path_in, "http://") ||
+  if (boost::istarts_with(path_in, "s3://") || boost::istarts_with(path_in, "http://") ||
       boost::istarts_with(path_in, "https://")) {
     return false;
   }
@@ -2006,10 +2003,8 @@ bool path_is_relative(const std::string& path_in) {
 }
 
 bool is_a_supported_geo_file(const std::string& file_name) {
-  if (boost::iends_with(file_name, ".shp") ||
-      boost::iends_with(file_name, ".geojson") ||
-      boost::iends_with(file_name, ".geo.json") ||
-      boost::iends_with(file_name, ".kml")) {
+  if (boost::iends_with(file_name, ".shp") || boost::iends_with(file_name, ".geojson") ||
+      boost::iends_with(file_name, ".geo.json") || boost::iends_with(file_name, ".kml")) {
     return true;
   }
   return false;
@@ -2026,7 +2021,8 @@ std::string find_first_geo_file_in_archive(const std::string& archive_path,
   std::vector<std::string> files = Importer_NS::Importer::gdalGetAllFilesInArchive(archive_path, copy_params);
 
   // report the list
-  LOG(INFO) << "import_geo_table: Found " << files.size() << " files in Archive " << convert_path_from_vsi(archive_path);
+  LOG(INFO) << "import_geo_table: Found " << files.size() << " files in Archive "
+            << convert_path_from_vsi(archive_path);
   for (const auto& file : files) {
     LOG(INFO) << "import_geo_table:   " << file;
   }
@@ -2318,6 +2314,11 @@ int32_t MapDHandler::create_dashboard(const TSessionId& session,
   if (SysCatalog::instance().arePrivilegesOn() &&
       !session_info.checkDBAccessPrivileges(DBObjectType::DashboardDBObjectType, AccessPrivileges::CREATE_DASHBOARD)) {
     throw std::runtime_error("Not enough privileges to create a dashboard.");
+  }
+
+  auto dash = cat.getMetadataForFrontendView(std::to_string(session_info.get_currentUser().userId), dashboard_name);
+  if (dash) {
+    throw std::runtime_error("Dashboard with name: " + dashboard_name + " already exists.");
   }
 
   FrontendViewDescriptor vd;
