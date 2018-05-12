@@ -406,6 +406,12 @@ llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
     const auto col_var = static_cast<const Analyzer::ColumnVar*>(expr);
     const auto hash_pos_it = cgen_state_->scan_idx_to_hash_pos_.find(col_var->get_rte_idx());
     if (hash_pos_it != cgen_state_->scan_idx_to_hash_pos_.end()) {
+      if (hash_pos_it->second->getType()->isPointerTy()) {
+        CHECK(hash_pos_it->second->getType()->getPointerElementType()->isIntegerTy(32));
+        llvm::Value* result = cgen_state_->ir_builder_.CreateLoad(hash_pos_it->second);
+        result = cgen_state_->ir_builder_.CreateSExt(result, get_int_type(64, cgen_state_->context_));
+        return result;
+      }
       return hash_pos_it->second;
     }
     const auto inner_it =

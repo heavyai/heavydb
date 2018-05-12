@@ -419,10 +419,12 @@ std::function<llvm::Value*(const std::vector<llvm::Value*>&, llvm::Value*)> Exec
     // Avoid fetching the deleted column from a position which is not valid.
     // An invalid position can be returned by a one to one hash lookup (negative)
     // or at the end of iteration over a set of matching values.
-    auto is_valid_it =
-        cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGE, matching_row_index, ll_int<int64_t>(0));
+    llvm::Value* is_valid_it{nullptr};
     if (have_more_inner_rows) {
-      is_valid_it = cgen_state_->ir_builder_.CreateAnd(is_valid_it, have_more_inner_rows);
+      is_valid_it = have_more_inner_rows;
+    } else {
+      is_valid_it =
+          cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGE, matching_row_index, ll_int<int64_t>(0));
     }
     const auto it_valid_bb = llvm::BasicBlock::Create(cgen_state_->context_, "it_valid", cgen_state_->row_func_);
     const auto it_not_valid_bb =
@@ -498,16 +500,7 @@ llvm::Value* Executor::addJoinLoopIterator(const std::vector<llvm::Value*>& prev
     return it->second;
   }
   CHECK(!prev_iters.empty());
-  llvm::Value* matching_row_index{nullptr};
-  if (prev_iters.back()->getType()->isPointerTy()) {
-    CHECK(prev_iters.back()->getType()->getPointerElementType()->isIntegerTy(32));
-    matching_row_index = cgen_state_->ir_builder_.CreateLoad(prev_iters.back());
-    matching_row_index =
-        cgen_state_->ir_builder_.CreateSExt(matching_row_index, get_int_type(64, cgen_state_->context_));
-  } else {
-    matching_row_index = prev_iters.back();
-  }
-  CHECK(matching_row_index->getType()->isIntegerTy(64));
+  llvm::Value* matching_row_index = prev_iters.back();
   const auto it_ok = cgen_state_->scan_idx_to_hash_pos_.emplace(level_idx, matching_row_index);
   CHECK(it_ok.second);
   return matching_row_index;
