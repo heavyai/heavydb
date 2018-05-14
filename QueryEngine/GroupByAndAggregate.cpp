@@ -2014,7 +2014,8 @@ class UsedColumnsVisitor : public ScalarExprVisitor<std::unordered_set<int>> {
   }
 };
 
-std::vector<ssize_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_unit) {
+std::vector<ssize_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_unit,
+                                              const Catalog_Namespace::Catalog& cat) {
   if (ra_exe_unit.input_descs.size() > 1 || !ra_exe_unit.sort_info.order_entries.empty()) {
     return {};
   }
@@ -2030,8 +2031,12 @@ std::vector<ssize_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_
     used_columns.insert(crt_used_columns.begin(), crt_used_columns.end());
   }
   for (const auto& target : ra_exe_unit.target_exprs) {
-    if (dynamic_cast<const Analyzer::ColumnVar*>(target)) {
-      continue;
+    const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target);
+    if (col_var) {
+      const auto cd = get_column_descriptor_maybe(col_var->get_column_id(), col_var->get_table_id(), cat);
+      if (!cd || !cd->isVirtualCol) {
+        continue;
+      }
     }
     const auto crt_used_columns = columns_visitor.visit(target);
     used_columns.insert(crt_used_columns.begin(), crt_used_columns.end());
@@ -2264,8 +2269,11 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
       CHECK(!must_use_baseline_sort);
       size_t group_slots =
           ra_exe_unit_.scan_limit ? static_cast<size_t>(ra_exe_unit_.scan_limit) : max_groups_buffer_entry_count;
-      const auto target_indices =
-          executor_->plan_state_->allow_lazy_fetch_ ? target_expr_proj_indices(ra_exe_unit_) : std::vector<ssize_t>{};
+      const auto catalog = executor_->getCatalog();
+      CHECK(catalog);
+      const auto target_indices = executor_->plan_state_->allow_lazy_fetch_
+                                      ? target_expr_proj_indices(ra_exe_unit_, *catalog)
+                                      : std::vector<ssize_t>{};
       agg_col_widths.clear();
       for (auto wid : get_col_byte_widths(ra_exe_unit_.target_exprs, target_indices)) {
         // Baseline layout goes through new result set and ResultSetStorage::initializeRowWise

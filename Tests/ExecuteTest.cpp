@@ -3385,6 +3385,7 @@ TEST(Select, Joins_ImplicitJoins) {
       "'foo';",
       dt);
     c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.y = b.y;", dt);
+    c("SELECT SUM(b.y) FROM test a, test b WHERE a.x = b.x AND a.y = b.y;", dt);
     c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.str = b.str;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE (test.x = test_inner.x AND test.y = 42 AND test_inner.str = 'foo') "
       "OR (test.x = test_inner.x AND test.y = 43 AND test_inner.str = 'foo');",

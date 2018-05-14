@@ -215,8 +215,11 @@ int BaselineJoinHashTable::reifyWithLayout(const int device_count, const JoinHas
     return 0;
   }
   std::vector<BaselineJoinHashTable::ColumnsForDevice> columns_per_device;
+  const auto shard_count = shardCount();
   for (int device_id = 0; device_id < device_count; ++device_id) {
-    const auto columns_for_device = fetchColumnsForDevice(query_info.fragments, device_id);
+    const auto fragments =
+        shard_count ? only_shards_for_device(query_info.fragments, device_id, device_count) : query_info.fragments;
+    const auto columns_for_device = fetchColumnsForDevice(fragments, device_id);
     if (columns_for_device.err) {
       return columns_for_device.err;
     }
@@ -231,7 +234,6 @@ int BaselineJoinHashTable::reifyWithLayout(const int device_count, const JoinHas
   }
   std::vector<int> errors(device_count);
   std::vector<std::thread> init_threads;
-  const auto shard_count = computeShardCount();
   for (int device_id = 0; device_id < device_count; ++device_id) {
     const auto fragments =
         shard_count ? only_shards_for_device(query_info.fragments, device_id, device_count) : query_info.fragments;
