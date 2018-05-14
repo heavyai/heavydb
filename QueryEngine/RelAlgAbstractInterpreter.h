@@ -23,10 +23,12 @@
 
 #include <boost/variant.hpp>
 #include <boost/make_unique.hpp>
+#include <boost/utility.hpp>
 #include <rapidjson/document.h>
 
 #include <memory>
 #include <unordered_map>
+#include <iterator>
 
 using ColumnNameList = std::vector<std::string>;
 

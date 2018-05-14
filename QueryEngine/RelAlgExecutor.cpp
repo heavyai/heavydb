@@ -1093,6 +1093,21 @@ bool is_count_distinct(const Analyzer::Expr* expr) {
   return agg_expr && agg_expr->get_is_distinct();
 }
 
+std::vector<TargetMetaInfo> get_modify_manipulated_targets_meta(ModifyManipulationTarget const* manip_node,
+                                                                const std::vector<Analyzer::Expr*>& target_exprs) {
+  std::vector<TargetMetaInfo> targets_meta;
+
+  for (int i = 0; i < (manip_node->getTargetColumnCount()); ++i) {
+    CHECK(target_exprs[i]);
+    // TODO(alex): remove the count distinct type fixup.
+    targets_meta.emplace_back(
+        manip_node->getTargetColumns()[i],
+        is_count_distinct(target_exprs[i]) ? SQLTypeInfo(kBIGINT, false) : target_exprs[i]->get_type_info());
+  }
+
+  return targets_meta;
+}
+
 template <class RA>
 std::vector<TargetMetaInfo> get_targets_meta(const RA* ra_node, const std::vector<Analyzer::Expr*>& target_exprs) {
   std::vector<TargetMetaInfo> targets_meta;
@@ -1118,21 +1133,23 @@ void RelAlgExecutor::executeUpdateViaCompound(const RelCompound* compound,
         "Unsupported update operation encountered.  (None-encoded string column updates are not supported.)");
   }
 
-  const auto work_unit = createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  const auto work_unit = createModifyCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   CompilationOptions co_project = co;
   co_project.device_type_ = ExecutorDeviceType::CPU;
 
   try {
-      UpdateTriggeredCacheInvalidator::invalidateCaches();
-      
-      UpdateTransactionParameters update_params( compound->getModifiedTableDescriptor(), compound->getTargetColumns(), compound->getOutputMetainfo() );
-      auto update_callback = yieldUpdateCallback( update_params );
-      executor_->executeUpdate( work_unit.exe_unit, table_infos.front(), co_project, eo, cat_, executor_->row_set_mem_owner_, update_callback);
-      update_params.finalizeTransaction();
-  } catch( ... ) {
-      LOG(INFO) << "Update operation failed.";
-      throw;
+    UpdateTriggeredCacheInvalidator::invalidateCaches();
+
+    UpdateTransactionParameters update_params(
+        compound->getModifiedTableDescriptor(), compound->getTargetColumns(), compound->getOutputMetainfo());
+    auto update_callback = yieldUpdateCallback(update_params);
+    executor_->executeUpdate(
+        work_unit.exe_unit, table_infos.front(), co_project, eo, cat_, executor_->row_set_mem_owner_, update_callback);
+    update_params.finalizeTransaction();
+  } catch (...) {
+    LOG(INFO) << "Update operation failed.";
+    throw;
   }
 }
 
@@ -1146,7 +1163,7 @@ void RelAlgExecutor::executeUpdateViaProject(const RelProject* project,
         "Unsupported update operation encountered.  (None-encoded string column updates are not supported.)");
   }
 
-  auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  auto work_unit = createModifyProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   CompilationOptions co_project = co;
   co_project.device_type_ = ExecutorDeviceType::CPU;
@@ -1163,18 +1180,18 @@ void RelAlgExecutor::executeUpdateViaProject(const RelProject* project,
   }
 
   try {
-      UpdateTriggeredCacheInvalidator::invalidateCaches();
-      
-      UpdateTransactionParameters update_params( project->getModifiedTableDescriptor(), project->getTargetColumns(), project->getOutputMetainfo() );
-      auto update_callback = yieldUpdateCallback(update_params);
-      executor_->executeUpdate( work_unit.exe_unit, table_infos.front(), co_project, eo, cat_, executor_->row_set_mem_owner_, update_callback);
-      update_params.finalizeTransaction();
-  } catch( ... ) {
-      LOG(INFO) << "Update operation failed.";
-      throw;
+    UpdateTriggeredCacheInvalidator::invalidateCaches();
+
+    UpdateTransactionParameters update_params(
+        project->getModifiedTableDescriptor(), project->getTargetColumns(), project->getOutputMetainfo());
+    auto update_callback = yieldUpdateCallback(update_params);
+    executor_->executeUpdate(
+        work_unit.exe_unit, table_infos.front(), co_project, eo, cat_, executor_->row_set_mem_owner_, update_callback);
+    update_params.finalizeTransaction();
+  } catch (...) {
+    LOG(INFO) << "Update operation failed.";
+    throw;
   }
-
-
 }
 
 void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
@@ -1182,28 +1199,23 @@ void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
                                               const ExecutionOptions& eo,
                                               RenderInfo* render_info,
                                               const int64_t queue_time_ms) {
-  const auto work_unit = createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  const auto work_unit = createModifyCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   CompilationOptions co_project = co;
   co_project.device_type_ = ExecutorDeviceType::CPU;
 
-  try{
-      DeleteTriggeredCacheInvalidator::invalidateCaches();
+  try {
+    DeleteTriggeredCacheInvalidator::invalidateCaches();
 
-      DeleteTransactionParameters delete_params;
-      auto delete_callback = yieldDeleteCallback( delete_params );
+    DeleteTransactionParameters delete_params;
+    auto delete_callback = yieldDeleteCallback(delete_params);
 
-      executor_->executeUpdate(work_unit.exe_unit,
-                         table_infos.front(),
-                         co_project,
-                         eo,
-                         cat_,
-                         executor_->row_set_mem_owner_,
-                         delete_callback);
-      delete_params.finalizeTransaction();
-  } catch(...) {
-      LOG(INFO) << "Delete operation failed.";
-      throw;
+    executor_->executeUpdate(
+        work_unit.exe_unit, table_infos.front(), co_project, eo, cat_, executor_->row_set_mem_owner_, delete_callback);
+    delete_params.finalizeTransaction();
+  } catch (...) {
+    LOG(INFO) << "Delete operation failed.";
+    throw;
   }
 }
 
@@ -1212,7 +1224,7 @@ void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
                                              const ExecutionOptions& eo,
                                              RenderInfo* render_info,
                                              const int64_t queue_time_ms) {
-  auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  auto work_unit = createModifyProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   CompilationOptions co_project = co;
   co_project.device_type_ = ExecutorDeviceType::CPU;
@@ -1228,25 +1240,19 @@ void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
     }
   }
 
-  try{
-      DeleteTriggeredCacheInvalidator::invalidateCaches();
+  try {
+    DeleteTriggeredCacheInvalidator::invalidateCaches();
 
-      DeleteTransactionParameters delete_params;
-      auto delete_callback = yieldDeleteCallback( delete_params );
+    DeleteTransactionParameters delete_params;
+    auto delete_callback = yieldDeleteCallback(delete_params);
 
-      executor_->executeUpdate(work_unit.exe_unit,
-                           table_infos.front(),
-                           co_project,
-                           eo,
-                           cat_,
-                           executor_->row_set_mem_owner_,
-                           delete_callback);
-  } catch(...) {
-      LOG(INFO) << "Delete operation failed.";
-      throw;
+    executor_->executeUpdate(
+        work_unit.exe_unit, table_infos.front(), co_project, eo, cat_, executor_->row_set_mem_owner_, delete_callback);
+    delete_params.finalizeTransaction();
+  } catch (...) {
+    LOG(INFO) << "Delete operation failed.";
+    throw;
   }
-  
-
 }
 
 ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
@@ -1994,6 +2000,22 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createWorkUnit(const RelAlgNode* node,
 
 namespace {
 
+template <typename SET_TYPE>
+class UsedColumnsVisitor : public ScalarExprVisitor<SET_TYPE> {
+ public:
+  using ColumnIdSet = SET_TYPE;
+
+ protected:
+  virtual ColumnIdSet visitColumnVar(const Analyzer::ColumnVar* col_var) const { return {col_var->get_column_id()}; }
+
+  virtual std::unordered_set<int> aggregateResult(const std::unordered_set<int>& aggregate,
+                                                  const std::unordered_set<int>& next_result) const override {
+    auto result = aggregate;
+    result.insert(next_result.begin(), next_result.end());
+    return result;
+  }
+};
+
 class UsedTablesVisitor : public ScalarExprVisitor<std::unordered_set<int>> {
  protected:
   virtual std::unordered_set<int> visitColumnVar(const Analyzer::ColumnVar* column) const override {
@@ -2220,6 +2242,100 @@ std::vector<JoinType> left_deep_join_types(const RelLeftDeepInnerJoin* left_deep
 
 }  // namespace
 
+RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(const RelCompound* compound,
+                                                                      const SortInfo& sort_info,
+                                                                      const bool just_explain) {
+  std::vector<InputDescriptor> input_descs;
+  std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
+  auto input_to_nest_level = get_input_nest_levels(compound, {});
+  std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(compound, input_to_nest_level, {}, cat_);
+  const auto query_infos = get_table_infos(input_descs, executor_);
+  CHECK_EQ(size_t(1), compound->inputCount());
+  const auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(compound->getInput(0));
+  JoinQualsPerNestingLevel left_deep_inner_joins;
+  const auto join_types =
+      left_deep_join ? left_deep_join_types(left_deep_join) : std::vector<JoinType>{get_join_type(compound)};
+  if (left_deep_join) {
+    if (g_from_table_reordering &&
+        std::find(join_types.begin(), join_types.end(), JoinType::LEFT) == join_types.end()) {
+      const auto input_permutation = get_node_input_permutation(query_infos);
+      input_to_nest_level = get_input_nest_levels(compound, input_permutation);
+      std::tie(input_descs, input_col_descs, std::ignore) =
+          get_input_desc(compound, input_to_nest_level, input_permutation, cat_);
+    }
+    left_deep_inner_joins = translateLeftDeepJoinFilter(left_deep_join, input_descs, input_to_nest_level, just_explain);
+  }
+  const auto extra_input_descs = separate_extra_input_descs(input_descs);
+  RelAlgTranslator translator(cat_, executor_, input_to_nest_level, join_types, now_, just_explain);
+  const auto scalar_sources = translate_scalar_sources(compound, translator);
+  const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
+  const auto quals_cf = translate_quals(compound, translator);
+  const auto separated_quals = (!left_deep_join && join_types.back() == JoinType::LEFT)
+                                   ? SeparatedQuals{quals_cf.quals, {}}
+                                   : separate_join_quals(quals_cf.quals);
+  const auto simple_separated_quals = separate_join_quals(quals_cf.simple_quals);
+  CHECK(simple_separated_quals.join_quals.empty());
+  const auto target_exprs = translate_targets(target_exprs_owned_, scalar_sources, groupby_exprs, compound, translator);
+  CHECK_EQ(compound->size(), target_exprs.size());
+
+  // Filter col descs and drop unneeded col_descs
+  CHECK((target_exprs.size() - compound->getTargetColumnCount() - 1) > 0);
+  const auto update_expr_iter =
+      std::next(target_exprs.cbegin(), target_exprs.size() - compound->getTargetColumnCount() - 1);
+
+  using ColumnIdSet = std::unordered_set<int>;
+  UsedColumnsVisitor<ColumnIdSet> used_columns_visitor;
+  ColumnIdSet id_accumulator;
+
+  decltype(target_exprs) filtered_target_exprs(update_expr_iter, target_exprs.end());
+  for (auto const& expr : boost::make_iterator_range(update_expr_iter, target_exprs.end())) {
+    auto used_column_ids = used_columns_visitor.visit(expr);
+    id_accumulator.insert(used_column_ids.begin(), used_column_ids.end());
+  }
+  for (auto const& expr : quals_cf.simple_quals) {
+    auto simple_quals_used_column_ids = used_columns_visitor.visit(expr.get());
+    id_accumulator.insert(simple_quals_used_column_ids.begin(), simple_quals_used_column_ids.end());
+  }
+  for (auto const& expr : quals_cf.quals) {
+    auto quals_used_column_ids = used_columns_visitor.visit(expr.get());
+    id_accumulator.insert(quals_used_column_ids.begin(), quals_used_column_ids.end());
+  }
+
+  decltype(input_col_descs) filtered_input_col_descs;
+  for (auto col_desc : input_col_descs) {
+    if (id_accumulator.find(col_desc->getColId()) != id_accumulator.end()) {
+      filtered_input_col_descs.push_back(col_desc);
+    }
+  }
+
+  auto inner_join_quals = get_inner_join_quals(compound, translator);
+  inner_join_quals.insert(inner_join_quals.end(), separated_quals.join_quals.begin(), separated_quals.join_quals.end());
+  const RelAlgExecutionUnit exe_unit = {input_descs,
+                                        extra_input_descs,
+                                        filtered_input_col_descs,
+                                        quals_cf.simple_quals,
+                                        separated_quals.regular_quals,
+                                        left_deep_join ? JoinType::INVALID : join_types.back(),
+                                        left_deep_inner_joins,
+                                        get_join_dimensions(get_data_sink(compound), executor_),
+                                        inner_join_quals,
+                                        get_outer_join_quals(compound, translator),
+                                        groupby_exprs,
+                                        filtered_target_exprs,
+                                        {},
+                                        nullptr,
+                                        sort_info,
+                                        0};
+  QueryRewriter* query_rewriter = new QueryRewriter(exe_unit, query_infos, executor_, nullptr);
+  const auto rewritten_exe_unit = query_rewriter->rewrite();
+  const auto targets_meta = get_modify_manipulated_targets_meta(compound, rewritten_exe_unit.target_exprs);
+  compound->setOutputMetainfo(targets_meta);
+  return {rewritten_exe_unit,
+          compound,
+          max_groups_buffer_entry_default_guess,
+          std::unique_ptr<QueryRewriter>(query_rewriter)};
+}
+
 RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompound* compound,
                                                                 const SortInfo& sort_info,
                                                                 const bool just_explain) {
@@ -2254,6 +2370,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   const auto simple_separated_quals = separate_join_quals(quals_cf.simple_quals);
   CHECK(simple_separated_quals.join_quals.empty());
   const auto target_exprs = translate_targets(target_exprs_owned_, scalar_sources, groupby_exprs, compound, translator);
+
   CHECK_EQ(compound->size(), target_exprs.size());
   auto inner_join_quals = get_inner_join_quals(compound, translator);
   inner_join_quals.insert(inner_join_quals.end(), separated_quals.join_quals.begin(), separated_quals.join_quals.end());
@@ -2608,6 +2725,78 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(const RelAggreg
            sort_info,
            0},
           aggregate,
+          max_groups_buffer_entry_default_guess,
+          nullptr};
+}
+
+RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(const RelProject* project,
+                                                                     const SortInfo& sort_info,
+                                                                     const bool just_explain) {
+  std::vector<InputDescriptor> input_descs;
+  std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
+  auto input_to_nest_level = get_input_nest_levels(project, {});
+  std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(project, input_to_nest_level, {}, cat_);
+  const auto extra_input_descs = separate_extra_input_descs(input_descs);
+  const auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(project->getInput(0));
+  JoinQualsPerNestingLevel left_deep_inner_joins;
+  const auto join_types =
+      left_deep_join ? left_deep_join_types(left_deep_join) : std::vector<JoinType>{get_join_type(project)};
+  if (left_deep_join) {
+    const auto query_infos = get_table_infos(input_descs, executor_);
+    if (g_from_table_reordering &&
+        std::find(join_types.begin(), join_types.end(), JoinType::LEFT) == join_types.end()) {
+      const auto input_permutation = get_node_input_permutation(query_infos);
+      input_to_nest_level = get_input_nest_levels(project, input_permutation);
+      std::tie(input_descs, input_col_descs, std::ignore) =
+          get_input_desc(project, input_to_nest_level, input_permutation, cat_);
+    }
+    left_deep_inner_joins = translateLeftDeepJoinFilter(left_deep_join, input_descs, input_to_nest_level, just_explain);
+  }
+  RelAlgTranslator translator(cat_, executor_, input_to_nest_level, join_types, now_, just_explain);
+  const auto target_exprs_owned = translate_scalar_sources(project, translator);
+  target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
+  const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
+
+  CHECK((target_exprs.size() - project->getTargetColumnCount() - 1) > 0);
+  const auto update_expr_iter =
+      std::next(target_exprs.cbegin(), target_exprs.size() - project->getTargetColumnCount() - 1);
+  decltype(target_exprs) filtered_target_exprs(update_expr_iter, target_exprs.end());
+
+  using ColumnIdSet = std::unordered_set<int>;
+  UsedColumnsVisitor<ColumnIdSet> used_columns_visitor;
+  ColumnIdSet id_accumulator;
+
+  for (auto const& expr : boost::make_iterator_range(update_expr_iter, target_exprs.end())) {
+    auto used_column_ids = used_columns_visitor.visit(expr);
+    id_accumulator.insert(used_column_ids.begin(), used_column_ids.end());
+  }
+
+  decltype(input_col_descs) filtered_input_col_descs;
+  for (auto col_desc : input_col_descs) {
+    if (id_accumulator.find(col_desc->getColId()) != id_accumulator.end()) {
+      filtered_input_col_descs.push_back(col_desc);
+    }
+  }
+
+  const auto targets_meta = get_modify_manipulated_targets_meta(project, filtered_target_exprs);
+  project->setOutputMetainfo(targets_meta);
+  return {{input_descs,
+           extra_input_descs,
+           filtered_input_col_descs,
+           {},
+           {},
+           left_deep_join ? JoinType::INVALID : join_types.back(),
+           left_deep_inner_joins,
+           get_join_dimensions(get_data_sink(project), executor_),
+           get_inner_join_quals(project, translator),
+           get_outer_join_quals(project, translator),
+           {nullptr},
+           filtered_target_exprs,
+           {},
+           nullptr,
+           sort_info,
+           0},
+          project,
           max_groups_buffer_entry_default_guess,
           nullptr};
 }

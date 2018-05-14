@@ -118,7 +118,6 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                const ExecutionOptions&,
                                RenderInfo*,
                                const int64_t queue_time_ms);
-  
 
   void executeDeleteViaCompound(const RelCompound* compound,
                                 const CompilationOptions& co,
@@ -227,9 +226,14 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
 
   WorkUnit createWorkUnit(const RelAlgNode*, const SortInfo&, const bool just_explain);
 
+  WorkUnit createModifyCompoundWorkUnit(const RelCompound* compound,
+                                        const SortInfo& sort_info,
+                                        const bool just_explain);
   WorkUnit createCompoundWorkUnit(const RelCompound*, const SortInfo&, const bool just_explain);
 
   WorkUnit createAggregateWorkUnit(const RelAggregate*, const SortInfo&, const bool just_explain);
+
+  WorkUnit createModifyProjectWorkUnit(const RelProject* project, const SortInfo& sort_info, const bool just_explain);
 
   WorkUnit createProjectWorkUnit(const RelProject*, const SortInfo&, const bool just_explain);
 

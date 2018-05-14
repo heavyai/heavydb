@@ -52,11 +52,16 @@ class DefaultIOFacet {
                              transaction_tracker);
   }
 
-  template <typename CATALOG_TYPE, typename TABLE_ID_TYPE, typename FRAGMENT_ID_TYPE, typename VICTIM_OFFSET_LIST>
+  template <typename CATALOG_TYPE,
+            typename TABLE_ID_TYPE,
+            typename FRAGMENT_ID_TYPE,
+            typename VICTIM_OFFSET_LIST,
+            typename COLUMN_TYPE_INFO>
   static void deleteColumns(CATALOG_TYPE const& cat,
                             TABLE_ID_TYPE const&& table_id,
                             FRAGMENT_ID_TYPE const frag_id,
                             VICTIM_OFFSET_LIST& victims,
+                            COLUMN_TYPE_INFO const& col_type_info,
                             TransactionLog& transaction_tracker) {
     auto const* table_descriptor = cat.getMetadataForTable(table_id);
     auto* fragmenter = table_descriptor->fragmenter;
@@ -70,7 +75,7 @@ class DefaultIOFacet {
                                frag_id,
                                victims,
                                ScalarTargetValue(int64_t(1L)),
-                               SQLTypeInfo(),
+                               col_type_info,
                                Data_Namespace::MemoryLevel::CPU_LEVEL,
                                transaction_tracker);
     } else {
@@ -162,12 +167,6 @@ class StorageIOFacility {
     using ScalarTargetValueVector = std::vector<ScalarTargetValue>;
 
     auto callback = [this, &update_parameters](FragmentUpdaterType const& update_log) -> void {
-      auto const& targetsMetaInfo(update_parameters.getTargetsMetaInfo());
-
-      int target_meta_info_base_index =
-          update_parameters.getTargetsMetaInfoSize() - update_parameters.getUpdateColumnCount() - 1;
-
-      // Iterate over each column
       for (decltype(update_parameters.getUpdateColumnCount()) column_index = 0;
            column_index < update_parameters.getUpdateColumnCount();
            column_index++) {
@@ -177,31 +176,27 @@ class StorageIOFacility {
         column_offsets.reserve(update_log.getEntryCount());
         scalar_target_values.reserve(update_log.getEntryCount());
 
-        // Iterate over each row, aggregate column update information into column_update_info
         for (decltype(update_log.getEntryCount()) row_index = 0; row_index < update_log.getEntryCount(); row_index++) {
           auto const row(update_log.getEntryAt(row_index));
 
           CHECK(!row.empty());
-          CHECK(row.size() == update_parameters.getTargetsMetaInfoSize());
-          int result_set_column_index = row.size() - update_parameters.getUpdateColumnCount() - 1 + column_index;
+          CHECK(row.size() == update_parameters.getUpdateColumnCount() + 1);
 
-          // Fetch offset
           auto terminal_column_iter = std::prev(row.end());
           const auto frag_offset_scalar_tv = boost::get<ScalarTargetValue>(&*terminal_column_iter);
           CHECK(frag_offset_scalar_tv);
 
           column_offsets.push_back(static_cast<uint64_t>(*(boost::get<int64_t>(frag_offset_scalar_tv))));
-          scalar_target_values.push_back(boost::get<ScalarTargetValue>(row[result_set_column_index]));
+          scalar_target_values.push_back(boost::get<ScalarTargetValue>(row[column_index]));
         }
 
-        auto const& specific_target_meta_info(targetsMetaInfo[target_meta_info_base_index + column_index]);
         IOFacility::updateColumn(catalog_,
                                  update_log.getPhysicalTableId(),
                                  update_parameters.getUpdateColumnNames()[column_index],
                                  update_log.getFragmentId(),
                                  column_offsets,
                                  scalar_target_values,
-                                 specific_target_meta_info.get_type_info(),
+                                 update_log.getColumnType(column_index),
                                  update_parameters.getTransactionTracker());
       }
     };
@@ -228,6 +223,7 @@ class StorageIOFacility {
                                 update_log.getPhysicalTableId(),
                                 update_log.getFragmentId(),
                                 victim_offsets,
+                                update_log.getColumnType(0),
                                 delete_parameters.getTransactionTracker());
     };
     return callback;
