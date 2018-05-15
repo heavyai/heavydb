@@ -21,28 +21,34 @@ DEVICE ALWAYS_INLINE int32_t compression_unit_size(int32_t ic) {
   return 8;
 }
 
+DEVICE
+double transform_coord(double coord, int32_t isr, int32_t osr, bool x) {
+  if (isr == 4326) {
+    if (osr == 900913) {
+      // WGS 84 --> Web Mercator
+      if (x)
+        return conv_4326_900913_x(coord);
+      else
+        return conv_4326_900913_y(coord);
+    }
+  }
+  return coord;
+}
+
 // X coord accessor handling on-the-fly decommpression and transforms
 DEVICE
 double coord_x(int8_t* data, int32_t index, int32_t ic, int32_t isr, int32_t osr) {
   auto decompressed_coord_x = decompress_coord(data, index, ic, true);
-  if (isr == 4326) {
-    if (osr == 900913) {
-      return conv_4326_900913_x(decompressed_coord_x);  // WGS 84 --> Web Mercator
-    }
-  }
-  return decompressed_coord_x;
+  auto decompressed_transformed_coord_x = transform_coord(decompressed_coord_x, isr, osr, true);
+  return decompressed_transformed_coord_x;
 }
 
 // Y coord accessor handling on-the-fly decommpression and transforms
 DEVICE
 double coord_y(int8_t* data, int32_t index, int32_t ic, int32_t isr, int32_t osr) {
   auto decompressed_coord_y = decompress_coord(data, index, ic, false);
-  if (isr == 4326) {
-    if (osr == 900913) {
-      return conv_4326_900913_y(decompressed_coord_y);  // WGS 84 --> Web Mercator
-    }
-  }
-  return decompressed_coord_y;
+  auto decompressed_transformed_coord_y = transform_coord(decompressed_coord_y, isr, osr, false);
+  return decompressed_transformed_coord_y;
 }
 
 DEVICE
@@ -293,6 +299,26 @@ double ST_YMax(int8_t* coords, int64_t size, int32_t ic, int32_t isr, int32_t os
       ymax = y;
   }
   return ymax;
+}
+
+EXTENSION_INLINE
+double ST_XMin_Bounds(double* bounds, int64_t size, int32_t isr, int32_t osr) {
+  return transform_coord(bounds[0], isr, osr, true);
+}
+
+EXTENSION_INLINE
+double ST_YMin_Bounds(double* bounds, int64_t size, int32_t isr, int32_t osr) {
+  return transform_coord(bounds[1], isr, osr, false);
+}
+
+EXTENSION_INLINE
+double ST_XMax_Bounds(double* bounds, int64_t size, int32_t isr, int32_t osr) {
+  return transform_coord(bounds[2], isr, osr, true);
+}
+
+EXTENSION_INLINE
+double ST_YMax_Bounds(double* bounds, int64_t size, int32_t isr, int32_t osr) {
+  return transform_coord(bounds[3], isr, osr, false);
 }
 
 EXTENSION_NOINLINE

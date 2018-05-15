@@ -261,6 +261,17 @@ class SQLTypeInfo {
     }
     return 0;
   }
+  inline bool has_bounds() const {
+    switch (type) {
+      case kLINESTRING:
+      case kPOLYGON:
+      case kMULTIPOLYGON:
+        return true;
+      default:
+        break;
+    }
+    return false;
+  }
   inline void set_type(SQLTypes t) { type = t; }
   inline void set_subtype(SQLTypes st) { subtype = st; }
   inline void set_dimension(int d) { dimension = d; }

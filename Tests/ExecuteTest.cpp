@@ -5253,6 +5253,19 @@ TEST(Select, GeoSpatial) {
                                          dt)),
                 static_cast<double>(0.01));
 
+    ASSERT_NEAR(static_cast<double>(5),
+                v<double>(run_simple_agg("SELECT ST_XMax(p) from geospatial_test limit 1 offset 5;", dt)),
+                static_cast<double>(0.0));
+    ASSERT_NEAR(static_cast<double>(1.0),
+                v<double>(run_simple_agg("SELECT ST_YMin(gp4326) from geospatial_test limit 1 offset 1;", dt)),
+                static_cast<double>(0.001));
+    ASSERT_NEAR(static_cast<double>(2 * 7 + 1),
+                v<double>(run_simple_agg("SELECT ST_XMax(l) from geospatial_test limit 1 offset 7;", dt)),
+                static_cast<double>(0.0));
+    ASSERT_NEAR(static_cast<double>(2 + 1),
+                v<double>(run_simple_agg("SELECT ST_YMax(mpoly) from geospatial_test limit 1 offset 2;", dt)),
+                static_cast<double>(0.0));
+
     // Point accessors, Linestring indexing
     ASSERT_NEAR(static_cast<double>(34.274647),
                 v<double>(run_simple_agg("SELECT ST_Y(ST_PointN(ST_GeomFromText('LINESTRING(-118.243683 34.052235, "
