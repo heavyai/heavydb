@@ -2220,20 +2220,16 @@ void MapDHandler::delete_dashboard(const TSessionId& session, const int32_t dash
   }
 }
 
-// NOOP: Grants not available for objects as of now
-void MapDHandler::share_dashboard(const TSessionId& session,
-                                  const int32_t dashboard_id,
-                                  const std::vector<std::string>& groups,
-                                  const std::vector<std::string>& objects,
-                                  const TDashboardPermissions& permissions) {
-  check_read_only("share_dashboard");
+std::vector<std::string> MapDHandler::get_valid_groups(const TSessionId& session,
+                                                       int32_t dashboard_id,
+                                                       std::vector<std::string> groups) {
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
   auto dash = cat.getMetadataForDashboard(dashboard_id);
   if (!dash) {
     THROW_MAPD_EXCEPTION("Exception: Dashboard id " + std::to_string(dashboard_id) + " does not exist");
   } else if (session_info.get_currentUser().userId != dash->userId && !session_info.get_currentUser().isSuper) {
-    throw std::runtime_error("User should be either owner of dashboard or super user to share it");
+    throw std::runtime_error("User should be either owner of dashboard or super user to share/unshare it");
   }
   std::vector<std::string> valid_groups;
   Catalog_Namespace::UserMetadata user_meta;
@@ -2245,10 +2241,23 @@ void MapDHandler::share_dashboard(const TSessionId& session,
       valid_groups.push_back(group);
     }
   });
+  return valid_groups;
+}
+
+// NOOP: Grants not available for objects as of now
+void MapDHandler::share_dashboard(const TSessionId& session,
+                                  const int32_t dashboard_id,
+                                  const std::vector<std::string>& groups,
+                                  const std::vector<std::string>& objects,
+                                  const TDashboardPermissions& permissions) {
+  check_read_only("share_dashboard");
+  std::vector<std::string> valid_groups;
+  valid_groups = get_valid_groups(session, dashboard_id, groups);
+  const auto session_info = get_session(session);
+  auto& cat = session_info.get_catalog();
   // By default object type can only be dashboard
   DBObjectType object_type = DBObjectType::DashboardDBObjectType;
   DBObject object(dashboard_id, object_type);
-  // TODO: Create bitmaps for Access Privileges to eliminate boilerplate code
   if (!permissions.create_ && !permissions.delete_ && !permissions.edit_ && !permissions.view_) {
     throw std::runtime_error("Atleast one privilege should be assigned for grants");
   } else {
@@ -2273,10 +2282,55 @@ void MapDHandler::share_dashboard(const TSessionId& session,
 
     object.setPrivileges(privs);
   }
-  // TODO: check for already existing privileges that are in line to be granted, then skip
   for (auto role : valid_groups) {
     try {
       SysCatalog::instance().grantDBObjectPrivileges(role, object, cat);
+    } catch (const std::exception& e) {
+      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    }
+  }
+}
+
+void MapDHandler::unshare_dashboard(const TSessionId& session,
+                                    const int32_t dashboard_id,
+                                    const std::vector<std::string>& groups,
+                                    const std::vector<std::string>& objects,
+                                    const TDashboardPermissions& permissions) {
+  check_read_only("unshare_dashboard");
+  std::vector<std::string> valid_groups;
+  valid_groups = get_valid_groups(session, dashboard_id, groups);
+  const auto session_info = get_session(session);
+  auto& cat = session_info.get_catalog();
+  // By default object type can only be dashboard
+  DBObjectType object_type = DBObjectType::DashboardDBObjectType;
+  DBObject object(dashboard_id, object_type);
+  if (!permissions.create_ && !permissions.delete_ && !permissions.edit_ && !permissions.view_) {
+    throw std::runtime_error("Atleast one privilege should be assigned for revokes");
+  } else {
+    AccessPrivileges privs;
+
+    object.resetPrivileges();
+    if (permissions.delete_) {
+      privs.add(AccessPrivileges::DELETE_DASHBOARD);
+    }
+
+    if (permissions.create_) {
+      privs.add(AccessPrivileges::CREATE_DASHBOARD);
+    }
+
+    if (permissions.edit_) {
+      privs.add(AccessPrivileges::EDIT_DASHBOARD);
+    }
+
+    if (permissions.view_) {
+      privs.add(AccessPrivileges::VIEW_DASHBOARD);
+    }
+
+    object.setPrivileges(privs);
+  }
+  for (auto role : valid_groups) {
+    try {
+      SysCatalog::instance().revokeDBObjectPrivileges(role, object, cat);
     } catch (const std::exception& e) {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }

@@ -233,6 +233,11 @@ class MapDHandler : public MapDIf {
                        const std::vector<std::string>& groups,
                        const std::vector<std::string>& objects,
                        const TDashboardPermissions& permissions);
+  void unshare_dashboard(const TSessionId& session,
+                         const int32_t dashboard_id,
+                         const std::vector<std::string>& groups,
+                         const std::vector<std::string>& objects,
+                         const TDashboardPermissions& permissions);
 
   void get_link_view(TFrontendView& _return, const TSessionId& session, const std::string& link);
   void create_link(std::string& _return,
@@ -310,6 +315,9 @@ class MapDHandler : public MapDIf {
   void get_all_roles_for_user(std::vector<std::string>& _return,
                               const TSessionId& session,
                               const std::string& userName);
+  std::vector<std::string> get_valid_groups(const TSessionId& session,
+                                            int32_t dashboard_id,
+                                            std::vector<std::string> groups);
   // licensing
   void set_license_key(TLicenseInfo& _return,
                        const TSessionId& session,
