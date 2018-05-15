@@ -760,7 +760,8 @@ class Importer : public DataStreamSink {
                                      const CopyParams& copy_params);
   static bool gdalFileExists(const std::string& path, const CopyParams& copy_params);
   static bool gdalFileOrDirectoryExists(const std::string& path, const CopyParams& copy_params);
-  static std::vector<std::string> gdalGetAllFilesInArchive(const std::string& archive_path, const CopyParams& copy_params);
+  static std::vector<std::string> gdalGetAllFilesInArchive(const std::string& archive_path,
+                                                           const CopyParams& copy_params);
   static bool gdalSupportsNetworkFileAccess();
 
  private:
@@ -770,7 +771,7 @@ class Importer : public DataStreamSink {
   static void setGDALAuthorizationTokens(const CopyParams& copy_params);
   std::string import_id;
   size_t file_size;
-  int max_threads;
+  size_t max_threads;
   char* buffer[2];
   std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> import_buffers_vec;
   std::unique_ptr<Loader> loader;

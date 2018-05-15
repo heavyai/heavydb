@@ -2974,16 +2974,16 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
   }
 
   if (copy_params.threads == 0)
-    max_threads = sysconf(_SC_NPROCESSORS_CONF);
+    max_threads = static_cast<size_t>(sysconf(_SC_NPROCESSORS_CONF));
   else
-    max_threads = copy_params.threads;
+    max_threads = static_cast<size_t>(copy_params.threads);
 
   // deal with small files
   size_t alloc_size = IMPORT_FILE_BUFFER_SIZE;
   if (!decompressed && file_size < alloc_size)
     alloc_size = file_size;
 
-  for (int i = 0; i < max_threads; i++) {
+  for (size_t i = 0; i < max_threads; i++) {
     import_buffers_vec.push_back(std::vector<std::unique_ptr<TypedImportBuffer>>());
     for (const auto cd : loader->get_column_descs())
       import_buffers_vec[i].push_back(
@@ -3018,8 +3018,8 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
 
     // use a stack to track thread_ids which must not overlap among threads
     // because thread_id is used to index import_buffers_vec[]
-    std::stack<int> stack_thread_ids;
-    for (int i = 0; i < max_threads; i++)
+    std::stack<size_t> stack_thread_ids;
+    for (size_t i = 0; i < max_threads; i++)
       stack_thread_ids.push(i);
 
     auto start_epoch = loader->getTableEpoch();
@@ -3088,7 +3088,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
 
         // keep reading if any free thread slot
         // this is one of the major difference from old threading model !!
-        if ((int)threads.size() < max_threads)
+        if (threads.size() < max_threads)
           break;
       }
 
@@ -3580,10 +3580,10 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 
 #if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
   // just one "thread"
-  int max_threads = 1;
+  size_t max_threads = 1;
 #else
   // how many threads to use
-  int max_threads = 0;
+  size_t max_threads = 0;
   if (copy_params.threads == 0)
     max_threads = sysconf(_SC_NPROCESSORS_CONF);
   else
@@ -3593,7 +3593,7 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
   // make an import buffer for each thread
   CHECK_EQ(import_buffers_vec.size(), 0);
   import_buffers_vec.resize(max_threads);
-  for (int i = 0; i < max_threads; i++) {
+  for (size_t i = 0; i < max_threads; i++) {
     for (const auto cd : loader->get_column_descs())
       import_buffers_vec[i].emplace_back(new TypedImportBuffer(cd, loader->get_string_dict(cd)));
   }
@@ -3617,8 +3617,8 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 
   // use a stack to track thread_ids which must not overlap among threads
   // because thread_id is used to index import_buffers_vec[]
-  std::stack<int> stack_thread_ids;
-  for (int i = 0; i < max_threads; i++)
+  std::stack<size_t> stack_thread_ids;
+  for (size_t i = 0; i < max_threads; i++)
     stack_thread_ids.push(i);
 #endif
 
@@ -3641,7 +3641,7 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 
 // get a thread_id not in use
 #if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
-    int thread_id = 0;
+    size_t thread_id = 0;
 #else
     auto thread_id = stack_thread_ids.top();
     stack_thread_ids.pop();
@@ -3707,7 +3707,7 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 
       // keep reading if any free thread slot
       // this is one of the major difference from old threading model !!
-      if ((int)threads.size() < max_threads)
+      if (threads.size() < max_threads)
         break;
     }
 #endif
