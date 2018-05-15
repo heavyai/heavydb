@@ -173,6 +173,8 @@ struct TCopyParams {
   13: string s3_access_key
   14: string s3_secret_key
   15: string s3_region
+  16: TEncodingType geo_coords_encoding=TEncodingType.NONE
+  17: i32 geo_coords_comp_param
 }
 
 struct TDetectResult {

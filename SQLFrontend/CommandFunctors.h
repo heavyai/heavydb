@@ -199,6 +199,24 @@ StandardCommand(CopyGeo, {
   if (nullptr != (env = getenv("AWS_SECRET_ACCESS_KEY")))
     cmdContext().copy_params.s3_secret_key = env;
 
+  // compression option
+  // default on
+  cmdContext().copy_params.geo_coords_encoding = TEncodingType::type::GEOINT;
+  cmdContext().copy_params.geo_coords_comp_param = 32;
+  if (p.size() == 4) {
+    std::string compression_option = p[3];
+    if (compression_option == "NONE") {
+      // no compression
+      cmdContext().copy_params.geo_coords_encoding = TEncodingType::type::NONE;
+      cmdContext().copy_params.geo_coords_comp_param = 0;
+    } else if (compression_option == "GEOINT(32)") {
+      // already the default
+    } else {
+      std::cout << "Error: Unknown Geo Encoding option (must be 'NONE' or 'GEOINT(32)')" << std::endl;
+      return;
+    }
+  }
+
   ContextOps::import_geo_table(cmdContext());
 });
 

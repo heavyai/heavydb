@@ -1796,6 +1796,15 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
       copy_params.table_type = Importer_NS::TableType::DELIMITED;
       break;
   }
+  switch (cp.geo_coords_encoding) {
+    case TEncodingType::GEOINT:
+      copy_params.geo_coords_encoding = kENCODING_GEOINT;
+      break;
+    default:
+      copy_params.geo_coords_encoding = kENCODING_NONE;
+      break;
+  }
+  copy_params.geo_coords_comp_param = cp.geo_coords_comp_param;
   return copy_params;
 }
 
@@ -1823,6 +1832,15 @@ TCopyParams MapDHandler::copyparams_to_thrift(const Importer_NS::CopyParams& cp)
       copy_params.table_type = TTableType::DELIMITED;
       break;
   }
+  switch (cp.geo_coords_encoding) {
+    case kENCODING_GEOINT:
+      copy_params.geo_coords_encoding = TEncodingType::GEOINT;
+      break;
+    default:
+      copy_params.geo_coords_encoding = TEncodingType::NONE;
+      break;
+  }
+  copy_params.geo_coords_comp_param = cp.geo_coords_comp_param;
   return copy_params;
 }
 

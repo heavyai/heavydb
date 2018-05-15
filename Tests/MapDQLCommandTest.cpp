@@ -188,6 +188,8 @@ struct CopyGeoCommandMockupContext {
     std::string s3_region;
     std::string s3_access_key;
     std::string s3_secret_key;
+    TEncodingType::type geo_coords_encoding;
+    int32_t geo_coords_comp_param;
   } copy_params;
 };
 

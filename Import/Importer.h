@@ -83,6 +83,8 @@ struct CopyParams {
   size_t batch_size;
   // geospatial params
   bool lonlat;
+  EncodingType geo_coords_encoding;
+  int32_t geo_coords_comp_param;
 
   CopyParams()
       : delimiter(','),
@@ -102,7 +104,9 @@ struct CopyParams {
         retry_count(100),
         retry_wait(5),
         batch_size(1000),
-        lonlat(true) {}
+        lonlat(true),
+        geo_coords_encoding(kENCODING_NONE),
+        geo_coords_comp_param(0) {}
 
   CopyParams(char d, const std::string& n, char l, size_t b, size_t retries, size_t wait)
       : delimiter(d),
@@ -121,7 +125,9 @@ struct CopyParams {
         retry_count(retries),
         retry_wait(wait),
         batch_size(b),
-        lonlat(true) {}
+        lonlat(true),
+        geo_coords_encoding(kENCODING_NONE),
+        geo_coords_comp_param(0) {}
 };
 
 class TypedImportBuffer : boost::noncopyable {

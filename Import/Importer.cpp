@@ -1885,14 +1885,15 @@ static ImportStatus import_thread_shapefile(
           // create coords array value and add it to the physical column
           ++cd_it;
           auto cd_coords = *cd_it;
-          std::vector<TDatum> td_coords;
-          for (auto coord : coords) {
-            TDatum td_coord;
-            td_coord.val.real_val = coord;
-            td_coords.push_back(td_coord);
+          std::vector<TDatum> td_coord_data;
+          std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
+          for (auto cc : compressed_coords) {
+            TDatum td_byte;
+            td_byte.val.int_val = cc;
+            td_coord_data.push_back(td_byte);
           }
           TDatum tdd_coords;
-          tdd_coords.val.arr_val = td_coords;
+          tdd_coords.val.arr_val = td_coord_data;
           tdd_coords.is_null = false;
           import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false);
           ++col_idx;
@@ -3285,6 +3286,8 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::s
         ti.set_type(geoType);
         ti.set_input_srid(GEOGRAPHIC_SPATIAL_REFERENCE);
         ti.set_output_srid(GEOGRAPHIC_SPATIAL_REFERENCE);
+        ti.set_compression(copy_params.geo_coords_encoding);
+        ti.set_comp_param(copy_params.geo_coords_comp_param);
         cd.columnType = ti;
         cds.push_back(cd);
       }
