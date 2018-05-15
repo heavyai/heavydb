@@ -1310,12 +1310,13 @@ int main(int argc, char** argv) {
         context.privs_object_name = args[2];
         if (args[1] == "database") {
           context.object_type = TDBObjectType::DatabaseDBObjectType;
+          get_db_object_privs(context);
         } else if (args[1] == "table") {
           context.object_type = TDBObjectType::TableDBObjectType;
+          get_db_object_privs(context);
         } else {
           std::cerr << "Object type should be on in { database, table }" << std::endl;
         }
-        get_db_object_privs(context);
       } else {
         std::cerr << "Command object_privileges failed. It requires two parameters: object type and object name."
                   << std::endl;
