@@ -94,18 +94,11 @@ size_t UserRole::getMembershipSize() const {
 
 static bool hasEnoughPrivs(const DBObject* real, const DBObject* requested) {
   if (real) {
-    if (!real->privsValid()) {
-      CHECK(false);
-    }
-    if ((requested->getPrivileges().select && !real->getPrivileges().select) ||
-        (requested->getPrivileges().insert && !real->getPrivileges().insert) ||
-        (requested->getPrivileges().create && !real->getPrivileges().create) ||
-        (requested->getPrivileges().truncate && !real->getPrivileges().truncate) ||
-        (requested->getPrivileges().create_dashboard && !real->getPrivileges().create_dashboard)) {
-      return false;
-    } else {
-      return true;
-    }
+    auto req = requested->getPrivileges().privileges;
+    auto base = real->getPrivileges().privileges;
+
+    // ensures that all requested privileges are present
+    return req == (base & req);
   } else {
     return false;
   }
@@ -116,18 +109,21 @@ bool UserRole::checkPrivileges(const DBObject& objectRequested) const {
   if (hasEnoughPrivs(findDbObject(objectKey), &objectRequested)) {
     return true;
   }
-  objectKey.columnId = -1;
-  if (hasEnoughPrivs(findDbObject(objectKey), &objectRequested)) {
-    return true;
+
+  // if we have an object associated -> ignore it
+  if (objectKey.objectId != -1) {
+    objectKey.objectId = -1;
+    if (hasEnoughPrivs(findDbObject(objectKey), &objectRequested)) {
+      return true;
+    }
   }
-  objectKey.tableId = -1;
-  objectKey.dbObjectType = static_cast<int32_t>(DBObjectType::DatabaseDBObjectType);
-  if (hasEnoughPrivs(findDbObject(objectKey), &objectRequested)) {
-    return true;
-  }
-  objectKey.dbId = -1;
-  if (hasEnoughPrivs(findDbObject(objectKey), &objectRequested)) {
-    return true;
+
+  // if we have an
+  if (objectKey.dbId != -1) {
+    objectKey.dbId = -1;
+    if (hasEnoughPrivs(findDbObject(objectKey), &objectRequested)) {
+      return true;
+    }
   }
   return false;
 }
@@ -177,11 +173,7 @@ void UserRole::updatePrivileges(Role* role) {
   for (auto dbObjectIt = role->getDbObject()->begin(); dbObjectIt != role->getDbObject()->end(); ++dbObjectIt) {
     auto dbObject = findDbObject(dbObjectIt->first);
     if (dbObject) {  // found
-      if (dbObject->privsValid()) {
-        dbObject->updatePrivileges(*(dbObjectIt->second));
-      } else {
-        dbObject->copyPrivileges(*(dbObjectIt->second));
-      }
+      dbObject->updatePrivileges(*(dbObjectIt->second));
     } else {  // not found
       dbObjectMap_[dbObjectIt->first] = new DBObject(*(dbObjectIt->second));
     }
@@ -190,7 +182,7 @@ void UserRole::updatePrivileges(Role* role) {
 
 void UserRole::updatePrivileges() {
   for (auto dbObjectIt = dbObjectMap_.begin(); dbObjectIt != dbObjectMap_.end(); ++dbObjectIt) {
-    dbObjectIt->second->unvalidate();
+    dbObjectIt->second->resetPrivileges();
   }
   for (auto roleIt = groupRole_.begin(); roleIt != groupRole_.end(); ++roleIt) {
     if ((*roleIt)->getDbObject()->size() > 0) {
@@ -198,7 +190,7 @@ void UserRole::updatePrivileges() {
     }
   }
   for (auto dbObjectIt = dbObjectMap_.begin(); dbObjectIt != dbObjectMap_.end(); ++dbObjectIt) {
-    if (dbObjectIt->second->privsValid() == false) {
+    if (!dbObjectIt->second->getPrivileges().hasAny()) {
       dbObjectMap_.erase(dbObjectIt);
     }
   }

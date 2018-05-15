@@ -8,16 +8,25 @@
 #include "DBObject.h"
 #include "Catalog.h"
 
-const AccessPrivileges AccessPrivileges::ALL = AccessPrivileges(true, true, true, true, true);
-const AccessPrivileges AccessPrivileges::ALL_TABLE = AccessPrivileges(true, true, false, true, false);
-const AccessPrivileges AccessPrivileges::ALL_DASHBOARD = AccessPrivileges(true, true, false, false, false);
-const AccessPrivileges AccessPrivileges::SELECT = AccessPrivileges(true, false, false, false, false);
-const AccessPrivileges AccessPrivileges::INSERT = AccessPrivileges(false, true, false, false, false);
-const AccessPrivileges AccessPrivileges::CREATE = AccessPrivileges(false, false, true, false, false);
-const AccessPrivileges AccessPrivileges::TRUNCATE = AccessPrivileges(false, false, false, true, false);
-const AccessPrivileges AccessPrivileges::CREATE_DASHBOARD = AccessPrivileges(false, false, false, false, true);
+const AccessPrivileges AccessPrivileges::ALL_DATABASE = AccessPrivileges(DatabasePrivileges::ALL);
+const AccessPrivileges AccessPrivileges::ALL_TABLE = AccessPrivileges(TablePrivileges::ALL);
+const AccessPrivileges AccessPrivileges::ALL_DASHBOARD = AccessPrivileges(DashboardPrivileges::ALL);
 
-std::string DBObjectTypeToString(DBObjectType type) {
+const AccessPrivileges AccessPrivileges::ALL_TABLE_MIGRATE = AccessPrivileges(TablePrivileges::ALL_MIGRATE);
+const AccessPrivileges AccessPrivileges::ALL_DASHBOARD_MIGRATE = AccessPrivileges(DashboardPrivileges::ALL_MIGRATE);
+const AccessPrivileges AccessPrivileges::NONE = AccessPrivileges(0);
+
+const AccessPrivileges AccessPrivileges::SELECT = AccessPrivileges(TablePrivileges::SELECT_FROM_TABLE);
+const AccessPrivileges AccessPrivileges::INSERT = AccessPrivileges(TablePrivileges::INSERT_INTO_TABLE);
+const AccessPrivileges AccessPrivileges::UPDATE = AccessPrivileges(TablePrivileges::UPDATE_IN_TABLE);
+const AccessPrivileges AccessPrivileges::CREATE = AccessPrivileges(TablePrivileges::CREATE_TABLE);
+const AccessPrivileges AccessPrivileges::TRUNCATE = AccessPrivileges(TablePrivileges::TRUNCATE_TABLE);
+const AccessPrivileges AccessPrivileges::CREATE_DASHBOARD = AccessPrivileges(DashboardPrivileges::CREATE_DASHBOARD);
+const AccessPrivileges AccessPrivileges::EDIT_DASHBOARD = AccessPrivileges(DashboardPrivileges::EDIT_DASHBOARD);
+const AccessPrivileges AccessPrivileges::DELETE_DASHBOARD = AccessPrivileges(DashboardPrivileges::DELETE_DASHBOARD);
+const AccessPrivileges AccessPrivileges::VIEW_DASHBOARD = AccessPrivileges(DashboardPrivileges::VIEW_DASHBOARD);
+
+std::string ObjectPermissionTypeToString(DBObjectType type) {
   switch (type) {
     case DatabaseDBObjectType:
       return "DATABASE";
@@ -25,8 +34,6 @@ std::string DBObjectTypeToString(DBObjectType type) {
       return "TABLE";
     case DashboardDBObjectType:
       return "DASHBOARD";
-    case ColumnDBObjectType:
-      return "COLUMN";
     default:
       CHECK(false);
   }
@@ -45,69 +52,57 @@ DBObjectType DBObjectTypeFromString(const std::string& type) {
   }
 }
 
-DBObject::DBObject(const std::string& name, const DBObjectType& type) : objectName_(name), objectType_(type) {
-  privsValid_ = false;
-  ownerId_ = 0;
-  objectId_ = 0;
-}
-
-DBObject::DBObject(const int32_t id, const DBObjectType& type) : objectId_(id), objectType_(type) {
-  objectName_ = "";
-  privsValid_ = false;
+DBObject::DBObject(const std::string& name, const DBObjectType& objectAndPermissionType) : objectName_(name) {
+  objectType_ = objectAndPermissionType;
+  objectKey_.permissionType = objectAndPermissionType;
   ownerId_ = 0;
 }
 
-DBObject::DBObject(const DBObject& object)
-    : objectName_(object.objectName_),
-      objectId_(object.objectId_),
-      objectType_(object.objectType_),
-      privsValid_(object.privsValid_),
-      ownerId_(object.ownerId_) {
+DBObject::DBObject(const int32_t id, const DBObjectType& objectAndPermissionType) : objectName_("") {
+  objectType_ = objectAndPermissionType;
+  objectKey_.permissionType = objectAndPermissionType;
+  objectKey_.objectId = id;
+  ownerId_ = 0;
+}
+
+DBObject::DBObject(const DBObject& object) : objectName_(object.objectName_), ownerId_(object.ownerId_) {
+  objectType_ = object.objectType_;
   setObjectKey(object.objectKey_);
   copyPrivileges(object);
 }
 
 void DBObject::copyPrivileges(const DBObject& object) {
   objectPrivs_ = object.objectPrivs_;
-  privsValid_ = true;
 }
 
 void DBObject::updatePrivileges(const DBObject& object) {
-  objectPrivs_.select |= object.objectPrivs_.select;
-  objectPrivs_.insert |= object.objectPrivs_.insert;
-  objectPrivs_.create |= object.objectPrivs_.create;
-  objectPrivs_.truncate |= object.objectPrivs_.truncate;
-  objectPrivs_.create_dashboard |= object.objectPrivs_.create_dashboard;
-  privsValid_ = true;
+  objectPrivs_.privileges |= object.objectPrivs_.privileges;
 }
 
 void DBObject::revokePrivileges(const DBObject& object) {
-  objectPrivs_.select &= !object.objectPrivs_.select;
-  objectPrivs_.insert &= !object.objectPrivs_.insert;
-  objectPrivs_.create &= !object.objectPrivs_.create;
-  objectPrivs_.truncate &= !object.objectPrivs_.truncate;
-  objectPrivs_.create_dashboard &= !object.objectPrivs_.create_dashboard;
-  privsValid_ = true;
+  objectPrivs_.privileges &= ~(object.objectPrivs_.privileges);
+}
+
+void DBObject::setPermissionType(const DBObjectType& permissionType) {
+  objectKey_.permissionType = permissionType;
+}
+void DBObject::setObjectType(const DBObjectType& objectType) {
+  objectType_ = objectType;
 }
 
 std::vector<std::string> DBObject::toString() const {
   std::vector<std::string> objectKey;
-  switch (objectType_) {
+  switch (objectKey_.permissionType) {
     case DatabaseDBObjectType:
-      objectKey.push_back(std::to_string(objectKey_.dbObjectType));
+      objectKey.push_back(std::to_string(objectKey_.permissionType));
       objectKey.push_back(std::to_string(objectKey_.dbId));
-      objectKey.push_back(std::to_string(-1));
       objectKey.push_back(std::to_string(-1));
       break;
     case TableDBObjectType:
     case DashboardDBObjectType:
-      objectKey.push_back(std::to_string(objectKey_.dbObjectType));
+      objectKey.push_back(std::to_string(objectKey_.permissionType));
       objectKey.push_back(std::to_string(objectKey_.dbId));
-      objectKey.push_back(std::to_string(objectKey_.tableId));
-      objectKey.push_back(std::to_string(-1));
-      break;
-    case ColumnDBObjectType:
-      throw std::runtime_error("Privileges for columns are not supported in current release.");
+      objectKey.push_back(std::to_string(objectKey_.objectId));
       break;
     default: { CHECK(false); }
   }
@@ -115,68 +110,77 @@ std::vector<std::string> DBObject::toString() const {
 }
 
 void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
-  DBObjectKey objectKey;
-  switch (getType()) {
+  switch (objectType_) {
     case DatabaseDBObjectType: {
-      Catalog_Namespace::DBMetadata db;
-      if (!Catalog_Namespace::SysCatalog::instance().getMetadataForDB(getName(), db)) {
-        throw std::runtime_error("Failure generating DB object key. Database " + getName() + " does not exist.");
+      // permissions at DB level
+
+      if (!getName().empty()) {
+        Catalog_Namespace::DBMetadata db;
+        if (!Catalog_Namespace::SysCatalog::instance().getMetadataForDB(getName(), db)) {
+          throw std::runtime_error("Failure generating DB object key. Database " + getName() + " does not exist.");
+        }
+        objectKey_.dbId = db.dbId;
+        ownerId_ = db.dbOwner;
+      } else {
+        objectKey_.dbId = 0;  // very special case only used for initialisation of a role
       }
-      objectKey.dbObjectType = static_cast<int32_t>(DatabaseDBObjectType);
-      objectKey.dbId = db.dbId;
-      objectId_ = db.dbId;
-      ownerId_ = db.dbOwner;
       break;
     }
     case TableDBObjectType: {
-      auto table = catalog.getMetadataForTable(getName());
-      if (!table) {
-        throw std::runtime_error("Failure generating DB object key. Table " + getName() + " does not exist.");
+      // permissions on tables
+
+      objectKey_.dbId = catalog.get_currentDB().dbId;
+
+      if (!getName().empty()) {
+        auto table = catalog.getMetadataForTable(getName());
+        if (!table) {
+          throw std::runtime_error("Failure generating DB object key. Table " + getName() + " does not exist.");
+        }
+        objectKey_.objectId = table->tableId;
+        ownerId_ = table->userId;
+      } else {
+        // table permission at db level
+        ownerId_ = catalog.get_currentDB().dbOwner;
       }
-      objectKey.dbObjectType = static_cast<int32_t>(TableDBObjectType);
-      objectKey.dbId = catalog.get_currentDB().dbId;
-      objectKey.tableId = table->tableId;
-      objectId_ = table->tableId;
-      ownerId_ = table->userId;
+
       break;
     }
     case DashboardDBObjectType: {
-      auto dashboard = catalog.getMetadataForDashboard(getId());
-      if (!dashboard) {
-        throw std::runtime_error("Failure generating DB object key. Dashboard with ID " + std::to_string(getId()) +
-                                 " does not exist.");
+      // permissions on dashboards
+      objectKey_.dbId = catalog.get_currentDB().dbId;
+
+      if (objectKey_.objectId > 0) {
+        auto dashboard = catalog.getMetadataForDashboard(objectKey_.objectId);
+        if (!dashboard) {
+          throw std::runtime_error("Failure generating DB object key. Dashboard with ID " +
+                                   std::to_string(objectKey_.objectId) + " does not exist.");
+        }
+        objectName_ = dashboard->viewName;
+        ownerId_ = dashboard->userId;
+      } else {
+        // dashboard permission at DB level
+        ownerId_ = catalog.get_currentDB().dbOwner;
       }
-      objectKey.dbObjectType = static_cast<int32_t>(DashboardDBObjectType);
-      objectKey.dbId = catalog.get_currentDB().dbId;
-      objectKey.tableId = dashboard->viewId;
-      objectName_ = dashboard->viewName;
-      ownerId_ = dashboard->userId;
+
       break;
     }
-    case ColumnDBObjectType:
-      throw std::runtime_error("Privileges for columns are not supported in current release.");
-      break;
     default:
       CHECK(false);
   }
-  setObjectKey(objectKey);
 }
 
 DBObjectKey DBObjectKey::fromString(const std::vector<std::string>& key, const DBObjectType& type) {
   DBObjectKey objectKey;
   switch (type) {
     case DatabaseDBObjectType:
-      objectKey.dbObjectType = std::stoi(key[0]);
+      objectKey.permissionType = std::stoi(key[0]);
       objectKey.dbId = std::stoi(key[1]);
       break;
     case TableDBObjectType:
     case DashboardDBObjectType:
-      objectKey.dbObjectType = std::stoi(key[0]);
+      objectKey.permissionType = std::stoi(key[0]);
       objectKey.dbId = std::stoi(key[1]);
-      objectKey.tableId = std::stoi(key[2]);
-      break;
-    case ColumnDBObjectType:
-      throw std::runtime_error("Privileges for columns are not supported in current release.");
+      objectKey.objectId = std::stoi(key[2]);
       break;
     default:
       CHECK(false);

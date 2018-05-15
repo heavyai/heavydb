@@ -924,21 +924,36 @@ static TDBObject serialize_db_object(const std::string& roleName, const DBObject
   TDBObject outObject;
   outObject.objectName = inObject.getName();
   outObject.grantee = roleName;
-  switch (inObject.getType()) {
+  const auto ap = inObject.getPrivileges();
+  switch (inObject.getObjectKey().permissionType) {
     case DatabaseDBObjectType:
       outObject.objectType = TDBObjectType::DatabaseDBObjectType;
+      outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::CREATE_DATABASE));
+      outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::DROP_DATABASE));
+
       break;
     case TableDBObjectType:
       outObject.objectType = TDBObjectType::TableDBObjectType;
+      outObject.privs.push_back(ap.hasPermission(TablePrivileges::CREATE_TABLE));
+      outObject.privs.push_back(ap.hasPermission(TablePrivileges::DROP_TABLE));
+      outObject.privs.push_back(ap.hasPermission(TablePrivileges::SELECT_FROM_TABLE));
+      outObject.privs.push_back(ap.hasPermission(TablePrivileges::INSERT_INTO_TABLE));
+      outObject.privs.push_back(ap.hasPermission(TablePrivileges::UPDATE_IN_TABLE));
+      outObject.privs.push_back(ap.hasPermission(TablePrivileges::DELETE_FROM_TABLE));
+      outObject.privs.push_back(ap.hasPermission(TablePrivileges::TRUNCATE_TABLE));
+
       break;
     case DashboardDBObjectType:
       outObject.objectType = TDBObjectType::DashboardDBObjectType;
+      outObject.privs.push_back(ap.hasPermission(DashboardPrivileges::CREATE_DASHBOARD));
+      outObject.privs.push_back(ap.hasPermission(DashboardPrivileges::DELETE_DASHBOARD));
+      outObject.privs.push_back(ap.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
+      outObject.privs.push_back(ap.hasPermission(DashboardPrivileges::EDIT_DASHBOARD));
+
       break;
     default:
       CHECK(false);
   }
-  auto privs = inObject.getPrivileges();
-  outObject.privs = {privs.select, privs.insert, privs.create, privs.truncate, privs.create_dashboard};
   return outObject;
 }
 
@@ -2063,23 +2078,14 @@ void MapDHandler::render_vega(TRenderResult& _return,
             << " (ms), Total Render: " << _return.render_time_ms << " (ms)";
 }
 
-static bool can_see_dashboard(const Catalog_Namespace::Catalog& catalog,
-                              const FrontendViewDescriptor& dash,
-                              const Catalog_Namespace::UserMetadata& user) {
-  DBObject object(dash.viewId, DashboardDBObjectType);
-  object.loadKey(catalog);
-  object.setPrivileges(AccessPrivileges::SELECT);
-  std::vector<DBObject> privs = {object};
-  return (SysCatalog::instance().arePrivilegesOn() && SysCatalog::instance().checkPrivileges(user, privs)) ||
-         user.userId == dash.userId;
-}
-
-static bool can_edit_dashboard(const Catalog_Namespace::SessionInfo& session_info, int dashboard_id) {
+static bool is_allowed_on_dashboard(const Catalog_Namespace::SessionInfo& session_info,
+                                    int32_t dashboard_id,
+                                    AccessPrivileges requestedPermissions) {
   DBObject object(dashboard_id, DashboardDBObjectType);
   auto& catalog = session_info.get_catalog();
   auto& user = session_info.get_currentUser();
   object.loadKey(catalog);
-  object.setPrivileges(AccessPrivileges::CREATE_DASHBOARD);
+  object.setPrivileges(requestedPermissions);
   std::vector<DBObject> privs = {object};
   return (!SysCatalog::instance().arePrivilegesOn() || SysCatalog::instance().checkPrivileges(user, privs));
 }
@@ -2092,8 +2098,8 @@ void MapDHandler::get_dashboard(TDashboard& dashboard, const TSessionId& session
   if (!dash) {
     THROW_MAPD_EXCEPTION("Dashboard with dashboard id " + std::to_string(dashboard_id) + " doesn't exist");
   }
-  if (!can_see_dashboard(cat, *dash, session_info.get_currentUser())) {
-    THROW_MAPD_EXCEPTION("User has no select privileges for the dashboard with id " + std::to_string(dashboard_id));
+  if (!is_allowed_on_dashboard(session_info, dash->viewId, AccessPrivileges::VIEW_DASHBOARD)) {
+    THROW_MAPD_EXCEPTION("User has no view privileges for the dashboard with id " + std::to_string(dashboard_id));
   }
   dashboard.dashboard_name = dash->viewName;
   dashboard.dashboard_state = dash->viewState;
@@ -2110,7 +2116,7 @@ void MapDHandler::get_dashboards(std::vector<TDashboard>& dashboards, const TSes
   auto& cat = session_info.get_catalog();
   const auto dashes = cat.getAllFrontendViewMetadata();
   for (const auto d : dashes) {
-    if (can_see_dashboard(cat, *d, session_info.get_currentUser())) {
+    if (is_allowed_on_dashboard(session_info, d->viewId, AccessPrivileges::VIEW_DASHBOARD)) {
       TDashboard dash;
       dash.dashboard_name = d->viewName;
       dash.image_hash = d->imageHash;
@@ -2133,7 +2139,7 @@ int32_t MapDHandler::create_dashboard(const TSessionId& session,
   auto& cat = session_info.get_catalog();
 
   if (SysCatalog::instance().arePrivilegesOn() &&
-      !session_info.checkDBAccessPrivileges(AccessPrivileges::CREATE_DASHBOARD)) {
+      !session_info.checkDBAccessPrivileges(DBObjectType::DashboardDBObjectType, AccessPrivileges::CREATE_DASHBOARD)) {
     throw std::runtime_error("Not enough privileges to create a dashboard.");
   }
 
@@ -2167,7 +2173,7 @@ void MapDHandler::replace_dashboard(const TSessionId& session,
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
 
-  if (!can_edit_dashboard(session_info, dashboard_id)) {
+  if (!is_allowed_on_dashboard(session_info, dashboard_id, AccessPrivileges::EDIT_DASHBOARD)) {
     throw std::runtime_error("Not enough privileges to replace a dashboard.");
   }
 
@@ -2199,9 +2205,10 @@ void MapDHandler::delete_dashboard(const TSessionId& session, const int32_t dash
   if (!dash) {
     THROW_MAPD_EXCEPTION("Dashboard with id" + std::to_string(dashboard_id) + " doesn't exist, so cannot delete it");
   }
-  if (SysCatalog::instance().arePrivilegesOn() &&
-      !session_info.checkDBAccessPrivileges(AccessPrivileges::CREATE_DASHBOARD)) {
-    throw std::runtime_error("Not enough privileges to delete a dashboard.");
+  if (SysCatalog::instance().arePrivilegesOn()) {
+    if (!is_allowed_on_dashboard(session_info, dash->viewId, AccessPrivileges::DELETE_DASHBOARD)) {
+      throw std::runtime_error("Not enough privileges to delete a dashboard.");
+    }
   }
   try {
     cat.deleteMetadataForDashboard(dashboard_id);
@@ -2215,7 +2222,7 @@ void MapDHandler::share_dashboard(const TSessionId& session,
                                   const int32_t dashboard_id,
                                   const std::vector<std::string>& groups,
                                   const std::vector<std::string>& objects,
-                                  const TAccessPrivileges& permissions) {
+                                  const TDashboardPermissions& permissions) {
   check_read_only("share_dashboard");
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
@@ -2239,26 +2246,29 @@ void MapDHandler::share_dashboard(const TSessionId& session,
   DBObjectType object_type = DBObjectType::DashboardDBObjectType;
   DBObject object(dashboard_id, object_type);
   // TODO: Create bitmaps for Access Privileges to eliminate boilerplate code
-  if (!permissions.select_ && !permissions.insert_ && !permissions.create_ && !permissions.truncate_ &&
-      !permissions.create_dashboard_) {
+  if (!permissions.create_ && !permissions.delete_ && !permissions.edit_ && !permissions.view_) {
     throw std::runtime_error("Atleast one privilege should be assigned for grants");
   } else {
+    AccessPrivileges privs;
+
     object.resetPrivileges();
-    if (permissions.select_) {
-      object.setPrivileges(AccessPrivileges::SELECT);
+    if (permissions.delete_) {
+      privs.add(AccessPrivileges::DELETE_DASHBOARD);
     }
-    if (permissions.insert_) {
-      object.setPrivileges(AccessPrivileges::INSERT);
-    }
+
     if (permissions.create_) {
-      object.setPrivileges(AccessPrivileges::CREATE);
+      privs.add(AccessPrivileges::CREATE_DASHBOARD);
     }
-    if (permissions.truncate_) {
-      object.setPrivileges(AccessPrivileges::TRUNCATE);
+
+    if (permissions.edit_) {
+      privs.add(AccessPrivileges::EDIT_DASHBOARD);
     }
-    if (permissions.create_dashboard_) {
-      object.setPrivileges(AccessPrivileges::CREATE_DASHBOARD);
+
+    if (permissions.view_) {
+      privs.add(AccessPrivileges::VIEW_DASHBOARD);
     }
+
+    object.setPrivileges(privs);
   }
   // TODO: check for already existing privileges that are in line to be granted, then skip
   for (auto role : valid_groups) {

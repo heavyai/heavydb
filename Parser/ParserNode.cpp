@@ -1814,7 +1814,7 @@ std::string serialize_key_metainfo(const ShardKeyDef* shard_key_def,
 void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   // check access privileges
-  if (!session.checkDBAccessPrivileges(AccessPrivileges::CREATE)) {
+  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType, AccessPrivileges::CREATE)) {
     throw std::runtime_error("Table " + *table + " will not be created. User has no create privileges.");
   }
 
@@ -2204,7 +2204,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   auto& catalog = session.get_catalog();
 
   // check access privileges
-  if (!session.checkDBAccessPrivileges(AccessPrivileges::CREATE)) {
+  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType, AccessPrivileges::CREATE)) {
     throw std::runtime_error("CTAS failed. Table " + table_name_ +
                              " will not be created. User has no create privileges.");
   }
@@ -2324,7 +2324,7 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
 
   // check access privileges
-  if (!session.checkDBAccessPrivileges(AccessPrivileges::CREATE)) {
+  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType, AccessPrivileges::CREATE)) {
     throw std::runtime_error("Table " + *table + " will not be dropped. User has no proper privileges.");
   }
 
@@ -2676,43 +2676,60 @@ std::string extractObjectNameFromHierName(const std::string& objectHierName,
   return objectName;
 }
 
-static AccessPrivileges parseStringPrivs(const std::string& privs,
-                                         const DBObjectType& objectType,
-                                         const std::string& object_name) {
-  AccessPrivileges result;
+static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(const std::string& privs,
+                                                                  const DBObjectType& objectType,
+                                                                  const std::string& object_name) {
   if (privs.compare("ALL") == 0) {
-    result = (objectType == TableDBObjectType)
-                 ? AccessPrivileges::ALL_TABLE
-                 : (objectType == DashboardDBObjectType) ? AccessPrivileges::ALL_DASHBOARD : AccessPrivileges::ALL;
-  } else if (privs.compare("SELECT") == 0) {
-    result.select = true;
+    if (objectType == TableDBObjectType) {
+      return {AccessPrivileges::ALL_TABLE, TableDBObjectType};
+    } else if (objectType == DashboardDBObjectType) {
+      return {AccessPrivileges::ALL_TABLE, TableDBObjectType};
+    }
+    return {AccessPrivileges::ALL_TABLE, objectType};
+  } else if (privs.compare("SELECT") == 0 && (objectType != DashboardDBObjectType)) {
+    return {AccessPrivileges::SELECT, TableDBObjectType};
   } else if (privs.compare("INSERT") == 0 && (objectType != DashboardDBObjectType)) {
-    result.insert = true;
+    return {AccessPrivileges::INSERT, TableDBObjectType};
   } else if ((privs.compare("CREATE") == 0) && (objectType == DatabaseDBObjectType)) {
-    result.create = true;
+    return {AccessPrivileges::CREATE, TableDBObjectType};
   } else if (privs.compare("TRUNCATE") == 0 && (objectType != DashboardDBObjectType)) {
-    result.truncate = true;
+    return {AccessPrivileges::TRUNCATE, TableDBObjectType};
+  } else if (privs.compare("UPDATE") == 0 && (objectType != DashboardDBObjectType)) {
+    return {AccessPrivileges::UPDATE, TableDBObjectType};
+  } else if (privs.compare("DELETE") == 0 && (objectType != DashboardDBObjectType)) {
+    //    return {AccessPrivileges::DELETE, TableDBObjectType};
+  } else if (privs.compare("VIEW") == 0 && (objectType == DashboardDBObjectType)) {
+    return {AccessPrivileges::VIEW_DASHBOARD, DashboardDBObjectType};
   } else if (privs.compare("EDIT") == 0 && (objectType == DashboardDBObjectType)) {
-    result.create_dashboard = true;
+    return {AccessPrivileges::EDIT_DASHBOARD, DashboardDBObjectType};
+  } else if (privs.compare("DELETE") == 0 && (objectType == DashboardDBObjectType)) {
+    return {AccessPrivileges::DELETE_DASHBOARD, DashboardDBObjectType};
   } else if (privs.compare("CREATE DASHBOARD") == 0 && (objectType == DatabaseDBObjectType)) {
-    result.create_dashboard = true;
-  } else if (privs.compare("SHARE") == 0 && (objectType == DashboardDBObjectType)) {
-    throw std::runtime_error("SHARE on a dashboard is not implemented in current version.");
-    // privs.update = true;
-  } else {
-    throw std::runtime_error("Privileges " + privs + " on DB object " + object_name + " are not correct.");
+    return {AccessPrivileges::CREATE_DASHBOARD, DashboardDBObjectType};
+  } else if (privs.compare("EDIT DASHBOARD") == 0 && (objectType == DatabaseDBObjectType)) {
+    return {AccessPrivileges::EDIT_DASHBOARD, DashboardDBObjectType};
+  } else if (privs.compare("VIEW DASHBOARD") == 0 && (objectType == DatabaseDBObjectType)) {
+    return {AccessPrivileges::VIEW_DASHBOARD, DashboardDBObjectType};
+  } else if (privs.compare("DELETE DASHBOARD") == 0 && (objectType == DatabaseDBObjectType)) {
+    return {AccessPrivileges::DELETE_DASHBOARD, DashboardDBObjectType};
   }
-  return result;
+
+  throw std::runtime_error("Privileges " + privs + " on DB object " + object_name + " are not correct.");
+
+  return {AccessPrivileges::NONE, DatabaseDBObjectType};
 }
 
 static DBObject createObject(const std::string& objectName, DBObjectType objectType) {
   if (objectType == DashboardDBObjectType) {
-    try {
-      int32_t dashboard_id = stoi(objectName);
-      return DBObject(dashboard_id, objectType);
-    } catch (const std::exception&) {
-      throw std::runtime_error("Privileges on dashboards should be changed via integer dashboard ID");
+    int32_t dashboard_id = -1;
+    if (!objectName.empty()) {
+      try {
+        dashboard_id = stoi(objectName);
+      } catch (const std::exception&) {
+        throw std::runtime_error("Privileges on dashboards should be changed via integer dashboard ID");
+      }
     }
+    return DBObject(dashboard_id, objectType);
   } else {
     return DBObject(objectName, objectType);
   }
@@ -2729,7 +2746,7 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
   const auto& currentUser = session.get_currentUser();
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
   const auto objectName = extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
-  DBObjectType objectType = DBObjectTypeFromString(parserObjectType);
+  auto objectType = DBObjectTypeFromString(parserObjectType);
   DBObject dbObject = createObject(objectName, objectType);
   /* verify object ownership if not suser */
   if (!currentUser.isSuper) {
@@ -2739,8 +2756,12 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
     }
   }
   /* set proper values of privileges & grant them to the object */
-  AccessPrivileges privs = parseStringPrivs(boost::to_upper_copy<std::string>(get_priv()), objectType, get_object());
-  dbObject.setPrivileges(privs);
+  std::pair<AccessPrivileges, DBObjectType> privs =
+      parseStringPrivs(boost::to_upper_copy<std::string>(get_priv()), objectType, get_object());
+
+  dbObject.setPrivileges(privs.first);
+  dbObject.setPermissionType(privs.second);
+
   SysCatalog::instance().grantDBObjectPrivileges(get_role(), dbObject, catalog);
 }
 
@@ -2755,7 +2776,7 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
   const auto& currentUser = session.get_currentUser();
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
   const auto objectName = extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
-  DBObjectType objectType = DBObjectTypeFromString(parserObjectType);
+  auto objectType = DBObjectTypeFromString(parserObjectType);
   DBObject dbObject = createObject(objectName, objectType);
   /* verify object ownership if not suser */
   if (!currentUser.isSuper) {
@@ -2765,8 +2786,12 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
     }
   }
   /* set proper values of privileges & revoke them from the object */
-  AccessPrivileges privs = parseStringPrivs(boost::to_upper_copy<std::string>(get_priv()), objectType, get_object());
-  dbObject.setPrivileges(privs);
+  std::pair<AccessPrivileges, DBObjectType> privs =
+      parseStringPrivs(boost::to_upper_copy<std::string>(get_priv()), objectType, get_object());
+
+  dbObject.setPrivileges(privs.first);
+  dbObject.setPermissionType(privs.second);
+
   SysCatalog::instance().revokeDBObjectPrivileges(get_role(), dbObject, catalog);
 }
 
@@ -2781,7 +2806,7 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) 
   const auto& currentUser = session.get_currentUser();
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
   const auto objectName = extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
-  DBObjectType objectType = DBObjectTypeFromString(parserObjectType);
+  auto objectType = DBObjectTypeFromString(parserObjectType);
   DBObject dbObject = createObject(objectName, objectType);
   /* verify object ownership if not suser */
   if (!currentUser.isSuper) {
@@ -2794,20 +2819,49 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) 
   SysCatalog::instance().getDBObjectPrivileges(get_role(), dbObject, catalog);
   AccessPrivileges privs = dbObject.getPrivileges();
   printf("\nPRIVILEGES ON %s FOR %s ARE SET AS FOLLOWING: ", get_object().c_str(), get_role().c_str());
-  if (privs.select) {
-    printf(" SELECT");
-  }
-  if (privs.insert) {
-    printf(" INSERT");
-  }
-  if (privs.create) {
-    printf(" CREATE");
-  }
-  if (privs.truncate) {
-    printf(" TRUNCATE");
-  }
-  if (privs.create_dashboard) {
-    printf(" CREATE DASHBOARD");
+
+  if (objectType == DBObjectType::DatabaseDBObjectType) {
+    if (privs.hasPermission(DatabasePrivileges::CREATE_DATABASE)) {
+      printf(" CREATE");
+    }
+    if (privs.hasPermission(DatabasePrivileges::DROP_DATABASE)) {
+      printf(" DROP");
+    }
+  } else if (objectType == DBObjectType::TableDBObjectType) {
+    if (privs.hasPermission(TablePrivileges::CREATE_TABLE)) {
+      printf(" CREATE");
+    }
+    if (privs.hasPermission(TablePrivileges::DROP_TABLE)) {
+      printf(" DROP");
+    }
+    if (privs.hasPermission(TablePrivileges::SELECT_FROM_TABLE)) {
+      printf(" SELECT");
+    }
+    if (privs.hasPermission(TablePrivileges::INSERT_INTO_TABLE)) {
+      printf(" INSERT");
+    }
+    if (privs.hasPermission(TablePrivileges::UPDATE_IN_TABLE)) {
+      printf(" UPDATE");
+    }
+    if (privs.hasPermission(TablePrivileges::DELETE_FROM_TABLE)) {
+      printf(" DELETE");
+    }
+    if (privs.hasPermission(TablePrivileges::TRUNCATE_TABLE)) {
+      printf(" TRUNCATE");
+    }
+  } else if (objectType == DBObjectType::DashboardDBObjectType) {
+    if (privs.hasPermission(DashboardPrivileges::CREATE_DASHBOARD)) {
+      printf(" CREATE");
+    }
+    if (privs.hasPermission(DashboardPrivileges::DELETE_DASHBOARD)) {
+      printf(" DELETE");
+    }
+    if (privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD)) {
+      printf(" VIEW");
+    }
+    if (privs.hasPermission(DashboardPrivileges::EDIT_DASHBOARD)) {
+      printf(" EDIT");
+    }
   }
   printf(".\n");
 }

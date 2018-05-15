@@ -76,6 +76,7 @@ public class DashboardTest {
     }
     
     List<String> get_users() throws Exception {
+      logger.warn("" + client.get_users(sessionId));
       return client.get_users(sessionId);
     }
     
@@ -192,7 +193,11 @@ public class DashboardTest {
     su.runSql("CREATE USER foo (password = 'password', is_super = 'false');");
 
     su.runSql("GRANT salesDept TO foo;");
-    su.runSql("GRANT create dashboard on database mapd to jason;");
+    su.runSql("GRANT CREATE DASHBOARD ON DATABASE mapd TO jason;");
+    
+    if (1==0)
+      throw new RuntimeException("foo");
+    //su.runSql("GRANT DELETE DASHBOARD ON DATABASE mapd TO jason;");
 
     
     MapDSession dba = getClient("localhost", 9091, "mapd", "dba", "password");
@@ -212,10 +217,10 @@ public class DashboardTest {
     assertEqual(0, foo.get_dashboards().size());
     
     MapDSession granter = jason;
-    granter.runSql("GRANT SELECT ON DASHBOARD "+for_bob+" TO bob;");
-    granter.runSql("GRANT SELECT ON DASHBOARD "+for_sales+" TO salesDept;");
-    granter.runSql("GRANT SELECT ON DASHBOARD "+for_all+" TO bob;");
-    granter.runSql("GRANT SELECT ON DASHBOARD "+for_all+" TO salesDept;");
+    granter.runSql("GRANT VIEW ON DASHBOARD "+for_bob+" TO bob;");
+    granter.runSql("GRANT VIEW ON DASHBOARD "+for_sales+" TO salesDept;");
+    granter.runSql("GRANT VIEW ON DASHBOARD "+for_all+" TO bob;");
+    granter.runSql("GRANT VIEW ON DASHBOARD "+for_all+" TO salesDept;");
     
     assertEqual(2, bob.get_dashboards().size());
     assertEqual(2, foo.get_dashboards().size());
@@ -250,6 +255,14 @@ public class DashboardTest {
     
     assertEqual("for_sales2", foo.get_dashboard(for_sales));
     assertEqual("for_all2", foo.get_dashboard(for_all));
+    
+    shouldThrowException("foo can not delete for_bob", () -> foo.delete_dashboard(for_bob));
+    shouldThrowException("foo can not delete for_sales", () -> foo.delete_dashboard(for_sales));
+    shouldThrowException("foo can not delete for_all", () -> foo.delete_dashboard(for_all));
+
+    shouldThrowException("bob can not delete for_bob", () -> bob.delete_dashboard(for_bob));
+    shouldThrowException("bob can not delete for_sales", () -> bob.delete_dashboard(for_sales));
+    shouldThrowException("bob can not delete for_all", () -> bob.delete_dashboard(for_all));
     
     
     jason.delete_dashboard(for_bob);

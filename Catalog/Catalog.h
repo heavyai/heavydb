@@ -464,7 +464,7 @@ class SessionInfo {
   void update_time() { last_used_time = time(0); }
   void reset_superuser() { currentUser_.isSuper = currentUser_.isReallySuper; }
   void make_superuser() { currentUser_.isSuper = true; }
-  bool checkDBAccessPrivileges(const AccessPrivileges& privs) const;
+  bool checkDBAccessPrivileges(const DBObjectType& permissionType, const AccessPrivileges& privs) const;
 
  private:
   std::shared_ptr<Catalog> catalog_;

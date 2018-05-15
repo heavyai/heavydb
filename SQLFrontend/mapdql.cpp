@@ -831,32 +831,36 @@ void print_all_hardware_info(ClientContext& context) {
 }
 
 static void print_privs(const std::vector<bool>& privs, TDBObjectType::type type) {
-  for (size_t j = 0; j < privs.size(); j++) {
-    if (privs[j]) {
-      switch (j) {
-        case 0: {
-          std::cout << " select";
-          break;
-        }
-        case 1: {
-          std::cout << (type == TDBObjectType::DashboardDBObjectType ? " edit" : " insert");
-          break;
-        }
-        case 2: {
-          std::cout << " create";
-          break;
-        }
-        case 3: {
-          std::cout << " truncate";
-          break;
-        }
-        case 4: {
-          std::cout << " create_dashboard";
-          break;
-        }
-        default: { CHECK(false); }
-      }
-    }
+  if (type == TDBObjectType::DatabaseDBObjectType) {
+    if (privs[0])
+      std::cout << " create";
+    if (privs[1])
+      std::cout << " drop";
+  } else if (type == TDBObjectType::TableDBObjectType) {
+    if (privs[0])
+      std::cout << " create";
+    if (privs[1])
+      std::cout << " drop";
+    if (privs[2])
+      std::cout << " select";
+    if (privs[3])
+      std::cout << " insert";
+    if (privs[4])
+      std::cout << " update";
+    if (privs[5])
+      std::cout << " delete";
+    if (privs[6])
+      std::cout << " truncate";
+
+  } else if (type == TDBObjectType::DashboardDBObjectType) {
+    if (privs[0])
+      std::cout << " create";
+    if (privs[1])
+      std::cout << " delete";
+    if (privs[2])
+      std::cout << " view";
+    if (privs[3])
+      std::cout << " edit";
   }
 }
 

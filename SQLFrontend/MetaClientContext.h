@@ -47,7 +47,6 @@ struct MetaClientContext {
   std::string privs_user_name;
   std::string privs_object_name;
   std::vector<std::string> role_names;
-  std::vector<TAccessPrivileges> object_privileges;
   std::vector<TDBObject> db_objects;
   TDBObjectType::type object_type;
   std::string license_key;

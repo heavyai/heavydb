@@ -232,7 +232,7 @@ class MapDHandler : public MapDIf {
                        const int32_t dashboard_id,
                        const std::vector<std::string>& groups,
                        const std::vector<std::string>& objects,
-                       const TAccessPrivileges& permissions);
+                       const TDashboardPermissions& permissions);
 
   void get_link_view(TFrontendView& _return, const TSessionId& session, const std::string& link);
   void create_link(std::string& _return,
