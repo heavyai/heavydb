@@ -331,6 +331,9 @@ void MapDHandler::disconnect(const TSessionId& session) {
   if (leaf_aggregator_.leafCount() > 0) {
     leaf_aggregator_.disconnect(session);
   }
+  if (render_handler_) {
+    render_handler_->disconnect(session);
+  }
   auto session_it = MapDHandler::get_session_it(session);
   const auto dbname = session_it->second->get_catalog().get_currentDB().dbName;
   LOG(INFO) << "User " << session_it->second->get_currentUser().userName << " disconnected from database " << dbname

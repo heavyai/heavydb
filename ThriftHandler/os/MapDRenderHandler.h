@@ -35,6 +35,8 @@ class MapDRenderHandler {
     throw std::runtime_error("Rendering is only supported in the Enterprise and Community Editions");
   }
 
+  void disconnect(const TSessionId& session) {}
+
   void render_vega(TRenderResult& _return,
                    const Catalog_Namespace::SessionInfo& session_info,
                    const int64_t widget_id,
