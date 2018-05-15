@@ -282,6 +282,14 @@ class MapDHandler : public MapDIf {
                         const TCopyParams& copy_params,
                         const TRowDescriptor& row_desc);
   void import_table_status(TImportStatus& _return, const TSessionId& session, const std::string& import_id);
+  void get_first_geo_file_in_archive(std::string& _return,
+                                     const TSessionId& session,
+                                     const std::string& archive_path,
+                                     const TCopyParams& copy_params);
+  void get_all_files_in_archive(std::vector<std::string>& _return,
+                                const TSessionId& session,
+                                const std::string& archive_path,
+                                const TCopyParams& copy_params);
   // distributed
   void start_query(TPendingQuery& _return,
                    const TSessionId& session,

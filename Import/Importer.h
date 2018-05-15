@@ -755,9 +755,9 @@ class Importer : public DataStreamSink {
                                      std::map<std::string, std::vector<std::string>>& metadata,
                                      int rowLimit,
                                      const CopyParams& copy_params);
-  static bool gdalFileExists(const std::string& fileName, const CopyParams& copy_params);
-  static bool gdalFileOrDirectoryExists(const std::string& fileName, const CopyParams& copy_params);
-  static std::vector<std::string> gdalGetAllFilesInArchive(const std::string& fileName, const CopyParams& copy_params);
+  static bool gdalFileExists(const std::string& path, const CopyParams& copy_params);
+  static bool gdalFileOrDirectoryExists(const std::string& path, const CopyParams& copy_params);
+  static std::vector<std::string> gdalGetAllFilesInArchive(const std::string& archive_path, const CopyParams& copy_params);
   static bool gdalSupportsNetworkFileAccess();
 
  private:

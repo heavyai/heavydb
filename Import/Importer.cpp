@@ -3424,8 +3424,8 @@ bool Importer::gdalFileOrDirectoryExists(const std::string& path, const CopyPara
 }
 
 void gdalGatherFilesInArchiveRecursive(const std::string& archive_path, std::vector<std::string>& files) {
-  // prepare to gather subfolders
-  std::vector<std::string> subfolders;
+  // prepare to gather subdirectories
+  std::vector<std::string> subdirectories;
 
   // get entries
   char** entries = VSIReadDir(archive_path.c_str());
@@ -3443,12 +3443,17 @@ void gdalGatherFilesInArchiveRecursive(const std::string& archive_path, std::vec
     int index = 0;
     while (true) {
       // get next entry, or drop out if there isn't one
-      char* entry = entries[index];
-      if (!entry)
+      char* entry_c = entries[index++];
+      if (!entry_c)
         break;
+      std::string entry(entry_c);
+
+      // ignore '.' and '..'
+      if (entry == "." || entry == "..")
+        continue;
 
       // build the full path
-      std::string entry_path = archive_path + std::string("/") + std::string(entry);
+      std::string entry_path = archive_path + std::string("/") + entry;
 
       // is it a file or a sub-folder
       VSIStatBufL sb;
@@ -3457,26 +3462,23 @@ void gdalGatherFilesInArchiveRecursive(const std::string& archive_path, std::vec
         break;
 
       if (VSI_ISDIR(sb.st_mode)) {
-        // add sub-folder to be recursed into
-        subfolders.push_back(entry_path);
+        // add subdirectory to be recursed into
+        subdirectories.push_back(entry_path);
       } else {
         // add this file
         files.push_back(entry_path);
       }
-
-      // go to next entry
-      index++;
     }
   }
 
-  // recurse into each subfolder we found
-  for (const auto& subfolder : subfolders) {
-    gdalGatherFilesInArchiveRecursive(subfolder, files);
+  // recurse into each subdirectories we found
+  for (const auto& subdirectory : subdirectories) {
+    gdalGatherFilesInArchiveRecursive(subdirectory, files);
   }
 }
 
 /* static */
-std::vector<std::string> Importer::gdalGetAllFilesInArchive(const std::string& fileName,
+std::vector<std::string> Importer::gdalGetAllFilesInArchive(const std::string& archive_path,
                                                             const CopyParams& copy_params) {
   // lazy init GDAL
   initGDAL();
@@ -3488,7 +3490,7 @@ std::vector<std::string> Importer::gdalGetAllFilesInArchive(const std::string& f
   std::vector<std::string> files;
 
   // gather the files recursively
-  gdalGatherFilesInArchiveRecursive(fileName, files);
+  gdalGatherFilesInArchiveRecursive(archive_path, files);
 
   // return everything we found
   return files;
