@@ -125,7 +125,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const int start_gpu,
                          const size_t reserved_gpu_mem,
                          const size_t num_reader_threads,
-                         const LdapMetadata ldapMetadata,
+                         const AuthMetadata authMetadata,
                          const MapDParameters& mapd_parameters,
                          const std::string& db_convert_dir,
                          const bool legacy_syntax,
@@ -200,7 +200,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     case ExecutorDeviceType::Hybrid:
       LOG(INFO) << "Started in Hybrid mode" << std::endl;
   }
-  SysCatalog::instance().init(base_data_path_, data_mgr_, ldapMetadata, calcite_, false, access_priv_check);
+  SysCatalog::instance().init(base_data_path_, data_mgr_, authMetadata, calcite_, false, access_priv_check);
   import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   start_time_ = std::time(nullptr);
 

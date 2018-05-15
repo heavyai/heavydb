@@ -110,7 +110,7 @@ class Catalog {
           const std::string& dbname,
           std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
           const std::vector<LeafHostInfo>& string_dict_hosts,
-          LdapMetadata ldapMetadata,
+          AuthMetadata authMetadata,
           bool is_initdb,
           std::shared_ptr<Calcite> calcite);
 
@@ -135,7 +135,7 @@ class Catalog {
   Catalog(const std::string& basePath,
           const DBMetadata& curDB,
           std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-          LdapMetadata ldapMetadata,
+          AuthMetadata authMetadata,
           std::shared_ptr<Calcite> calcite);
 
   /**
@@ -321,7 +321,7 @@ class SysCatalog {
  public:
   void init(const std::string& basePath,
             std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-            LdapMetadata ldapMetadata,
+            AuthMetadata authMetadata,
             std::shared_ptr<Calcite> calcite,
             bool is_new_db,
             bool check_privileges);

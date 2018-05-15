@@ -116,7 +116,7 @@ class MapDHandler : public MapDIf {
               const int start_gpu,
               const size_t reserved_gpu_mem,
               const size_t num_reader_threads,
-              const LdapMetadata ldapMetadata,
+              const AuthMetadata authMetadata,
               const MapDParameters& mapd_parameters,
               const std::string& db_convert_dir,
               const bool legacy_syntax,

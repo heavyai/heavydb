@@ -14,26 +14,17 @@
  * limitations under the License.
  */
 
-/*
- * File:   LdapServer.h
- * Author: michael
- *
- * Created on January 26, 2016, 11:50 PM
- */
-
-#ifndef LDAPSERVER_H
-#define LDAPSERVER_H
-
-#include "Catalog/AuthMetadata.h"
+#ifndef AUTHMETADATA_H
+#define AUTHMETADATA_H
 
 #include <string>
 
-class LdapServer {
- public:
-  LdapServer() {}
-  LdapServer(const AuthMetadata& authMetadata) {}
-  bool authenticate_user(const std::string& userName, const std::string& passwd) { return false; }
-  bool inUse() { return false; }
+struct AuthMetadata {
+  AuthMetadata() {}
+  int32_t port;
+  std::string uri;
+  std::string distinguishedName;
+  std::string domainComp;
 };
 
-#endif /* LDAPSERVER_H */
+#endif /* AUTHMETADATA_H */

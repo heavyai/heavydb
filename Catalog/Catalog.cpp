@@ -29,6 +29,7 @@
 #include <memory>
 #include <random>
 
+#include "Catalog/AuthMetadata.h"
 #include "DataMgr/LockMgr.h"
 #include "SharedDictionaryValidator.h"
 
@@ -73,13 +74,13 @@ std::map<std::string, std::shared_ptr<Catalog>> Catalog::mapd_cat_map_;
 
 void SysCatalog::init(const std::string& basePath,
                       std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-                      LdapMetadata ldapMetadata,
+                      AuthMetadata authMetadata,
                       std::shared_ptr<Calcite> calcite,
                       bool is_new_db,
                       bool check_privileges) {
   basePath_ = basePath;
   dataMgr_ = dataMgr;
-  ldap_server_.reset(new LdapServer(ldapMetadata));
+  ldap_server_.reset(new LdapServer(authMetadata));
   calciteMgr_ = calcite;
   check_privileges_ = check_privileges;
   sqliteConnector_.reset(new SqliteConnector(MAPD_SYSTEM_DB, basePath + "/mapd_catalogs/"));
@@ -1028,7 +1029,7 @@ Catalog::Catalog(const string& basePath,
                  const string& dbname,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
                  const std::vector<LeafHostInfo>& string_dict_hosts,
-                 LdapMetadata ldapMetadata,
+                 AuthMetadata authMetadata,
                  bool is_initdb,
                  std::shared_ptr<Calcite> calcite)
     : basePath_(basePath),
@@ -1038,7 +1039,7 @@ Catalog::Catalog(const string& basePath,
       calciteMgr_(calcite),
       nextTempTableId_(MAPD_TEMP_TABLE_START_ID),
       nextTempDictId_(MAPD_TEMP_DICT_START_ID) {
-  ldap_server_.reset(new LdapServer(ldapMetadata));
+  ldap_server_.reset(new LdapServer(authMetadata));
   if (!is_initdb)
     buildMaps();
 }
@@ -1046,7 +1047,7 @@ Catalog::Catalog(const string& basePath,
 Catalog::Catalog(const string& basePath,
                  const DBMetadata& curDB,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-                 LdapMetadata ldapMetadata,
+                 AuthMetadata authMetadata,
                  std::shared_ptr<Calcite> calcite)
     : basePath_(basePath),
       sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/"),
@@ -1055,7 +1056,7 @@ Catalog::Catalog(const string& basePath,
       calciteMgr_(calcite),
       nextTempTableId_(MAPD_TEMP_TABLE_START_ID),
       nextTempDictId_(MAPD_TEMP_DICT_START_ID) {
-  ldap_server_.reset(new LdapServer(ldapMetadata));
+  ldap_server_.reset(new LdapServer(authMetadata));
   buildMaps();
 }
 

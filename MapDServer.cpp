@@ -229,7 +229,7 @@ int main(int argc, char** argv) {
   bool read_only = false;
   bool allow_loop_joins = false;
   bool enable_legacy_syntax = true;
-  LdapMetadata ldapMetadata;
+  AuthMetadata authMetadata;
   MapDParameters mapd_parameters;
   bool enable_rendering = false;
   bool enable_watchdog = true;
@@ -555,8 +555,8 @@ int main(int argc, char** argv) {
   LOG(INFO) << " MapD Server Port  " << mapd_parameters.mapd_server_port;
   LOG(INFO) << " MapD Calcite Port  " << mapd_parameters.calcite_port;
 
-  boost::algorithm::trim_if(ldapMetadata.distinguishedName, boost::is_any_of("\"'"));
-  boost::algorithm::trim_if(ldapMetadata.uri, boost::is_any_of("\"'"));
+  boost::algorithm::trim_if(authMetadata.distinguishedName, boost::is_any_of("\"'"));
+  boost::algorithm::trim_if(authMetadata.uri, boost::is_any_of("\"'"));
 
   // rudimetary signal handling to try to guarantee the logging gets flushed to files
   // on shutdown
@@ -577,7 +577,7 @@ int main(int argc, char** argv) {
                                                         start_gpu,
                                                         reserved_gpu_mem,
                                                         num_reader_threads,
-                                                        ldapMetadata,
+                                                        authMetadata,
                                                         mapd_parameters,
                                                         db_convert_dir,
                                                         enable_legacy_syntax,
