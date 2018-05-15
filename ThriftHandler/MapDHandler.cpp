@@ -2005,7 +2005,7 @@ bool path_is_relative(const std::string& path_in) {
 
 bool is_a_supported_geo_file(const std::string& file_name) {
   if (boost::iends_with(file_name, ".shp") || boost::iends_with(file_name, ".geojson") ||
-      boost::iends_with(file_name, ".geo.json") || boost::iends_with(file_name, ".kml")) {
+      boost::iends_with(file_name, ".json") || boost::iends_with(file_name, ".kml")) {
     return true;
   }
   return false;
@@ -2041,7 +2041,7 @@ std::string find_first_geo_file_in_archive(const std::string& archive_path,
 
   // did we find anything
   if (!found_suitable_file) {
-    THROW_MAPD_EXCEPTION("Failed to find any suitable geo files in Archive: " + convert_path_from_vsi(archive_path));
+    THROW_MAPD_EXCEPTION("Failed to find any supported geo files in Archive: " + convert_path_from_vsi(archive_path));
   }
 
   // return what we found
@@ -2784,7 +2784,7 @@ void MapDHandler::import_geo_table(const TSessionId& session,
   // if we get here, and we don't have the actual filename
   // of a supported geo file, something went wrong
   if (!is_a_supported_geo_file(file_name)) {
-    THROW_MAPD_EXCEPTION("File is not a geo file: " + file_name_in);
+    THROW_MAPD_EXCEPTION("File is not a supported geo file: " + file_name_in);
   }
 
   // log what we're about to try to do

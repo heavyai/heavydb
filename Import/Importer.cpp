@@ -3234,6 +3234,12 @@ OGRDataSource* Importer::openGDALDataset(const std::string& file_name, const Cop
   poDS = (OGRDataSource*)OGRSFDriverRegistrar::Open(file_name.c_str(), false);
 #else
   poDS = (OGRDataSource*)GDALOpenEx(file_name.c_str(), GDAL_OF_VECTOR, nullptr, nullptr, nullptr);
+  if (poDS == nullptr) {
+    poDS = (OGRDataSource*)GDALOpenEx(file_name.c_str(), GDAL_OF_READONLY | GDAL_OF_VECTOR, nullptr, nullptr, nullptr);
+    if (poDS) {
+      LOG(INFO) << "openGDALDataset had to open as read-only";
+    }
+  }
 #endif
   if (poDS == nullptr) {
     LOG(ERROR) << "openGDALDataset Error: " << CPLGetLastErrorMsg();
