@@ -1241,6 +1241,7 @@ ostream& operator<<(ostream& out, const std::vector<T>& v) {
 bool importGeoFromGeometry(OGRGeometry* geom,
                            SQLTypeInfo& ti,
                            std::vector<double>& coords,
+                           std::vector<double>& bounds,
                            std::vector<int>& ring_sizes,
                            std::vector<int>& poly_rings) {
   bool status = true;
@@ -1255,12 +1256,29 @@ bool importGeoFromGeometry(OGRGeometry* geom,
     case wkbLineString: {
       ti.set_type(kLINESTRING);
       OGRLineString* linestring = static_cast<OGRLineString*>(geom);
+      double minX = DBL_MAX, minY = DBL_MAX, maxX = -DBL_MAX, maxY = -DBL_MAX;
+      // add points
       for (int i = 0; i < linestring->getNumPoints(); i++) {
         OGRPoint point;
         linestring->getPoint(i, &point);
-        coords.push_back(point.getX());
-        coords.push_back(point.getY());
+        double x = point.getX();
+        double y = point.getY();
+        coords.push_back(x);
+        coords.push_back(y);
+        if (x < minX)
+          minX = x;
+        if (y < minY)
+          minY = y;
+        if (x > maxX)
+          maxX = x;
+        if (y > maxY)
+          maxY = y;
       }
+      // add bounds
+      bounds.push_back(minX);
+      bounds.push_back(minY);
+      bounds.push_back(maxX);
+      bounds.push_back(maxY);
       break;
     }
     case wkbPolygon: {
@@ -1277,6 +1295,7 @@ bool importGeoFromGeometry(OGRGeometry* geom,
       }
       // prepare to add the ring
       double lastX = DBL_MAX, lastY = DBL_MAX;
+      double minX = DBL_MAX, minY = DBL_MAX, maxX = -DBL_MAX, maxY = -DBL_MAX;
       size_t firstIndex = coords.size();
       int numPointsAdded = 0;
       int numPointsInRing = exteriorRing->getNumPoints();
@@ -1291,6 +1310,14 @@ bool importGeoFromGeometry(OGRGeometry* geom,
         lastY = point.getY();
         coords.push_back(lastX);
         coords.push_back(lastY);
+        if (lastX < minX)
+          minX = lastX;
+        if (lastY < minY)
+          minY = lastY;
+        if (lastX > maxX)
+          maxX = lastX;
+        if (lastY > maxY)
+          maxY = lastY;
         numPointsAdded++;
       }
       // if last point is same as first, discard it to leave the ring open
@@ -1342,6 +1369,11 @@ bool importGeoFromGeometry(OGRGeometry* geom,
         // add final interior ring size
         ring_sizes.push_back(numPointsAdded);
       }
+      // add bounds
+      bounds.push_back(minX);
+      bounds.push_back(minY);
+      bounds.push_back(maxX);
+      bounds.push_back(maxY);
 #if PROMOTE_POLYGON_TO_MULTIPOLYGON
       // how many rings in this polygon?
       poly_rings.push_back(1 + polygon->getNumInteriorRings());
@@ -1353,6 +1385,7 @@ bool importGeoFromGeometry(OGRGeometry* geom,
       // get the multi-polygon
       OGRMultiPolygon* mpolygon = static_cast<OGRMultiPolygon*>(geom);
       CHECK(mpolygon);
+      double minX = DBL_MAX, minY = DBL_MAX, maxX = -DBL_MAX, maxY = -DBL_MAX;
       // for each polygon...
       for (int p = 0; p < mpolygon->getNumGeometries(); p++) {
         // get the geom
@@ -1389,6 +1422,14 @@ bool importGeoFromGeometry(OGRGeometry* geom,
           lastY = point.getY();
           coords.push_back(lastX);
           coords.push_back(lastY);
+          if (lastX < minX)
+            minX = lastX;
+          if (lastY < minY)
+            minY = lastY;
+          if (lastX > maxX)
+            maxX = lastX;
+          if (lastY > maxY)
+            maxY = lastY;
           numPointsAdded++;
         }
         // if last point is same as first, discard it to leave the ring open
@@ -1452,6 +1493,11 @@ bool importGeoFromGeometry(OGRGeometry* geom,
       if (status) {
         status = (poly_rings.size() == (size_t)mpolygon->getNumGeometries());
       }
+      // add bounds
+      bounds.push_back(minX);
+      bounds.push_back(minY);
+      bounds.push_back(maxX);
+      bounds.push_back(maxY);
       break;
     }
     default:
@@ -1464,6 +1510,7 @@ bool importGeoFromGeometry(OGRGeometry* geom,
 bool importGeoFromWkt(std::string& wkt,
                       SQLTypeInfo& ti,
                       std::vector<double>& coords,
+                      std::vector<double>& bounds,
                       std::vector<int>& ring_sizes,
                       std::vector<int>& poly_rings) {
   bool status = true;
@@ -1506,7 +1553,7 @@ bool importGeoFromWkt(std::string& wkt,
     return false;
   }
 
-  status = importGeoFromGeometry(geom, ti, coords, ring_sizes, poly_rings);
+  status = importGeoFromGeometry(geom, ti, coords, bounds, ring_sizes, poly_rings);
 
   if (geom)
     geom_factory.destroyGeometry(geom);
@@ -1650,6 +1697,7 @@ static ImportStatus import_thread_delimited(
               CHECK(IS_GEO(col_type));
 
               std::vector<double> coords;
+              std::vector<double> bounds;
               std::vector<int> ring_sizes;
               std::vector<int> poly_rings;
               int render_group = 0;
@@ -1677,7 +1725,7 @@ static ImportStatus import_thread_delimited(
               } else {
                 // import it
                 SQLTypeInfo import_ti;
-                if (!importGeoFromWkt(wkt, import_ti, coords, ring_sizes, poly_rings)) {
+                if (!importGeoFromWkt(wkt, import_ti, coords, bounds, ring_sizes, poly_rings)) {
                   throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
                 }
 
@@ -1704,15 +1752,15 @@ static ImportStatus import_thread_delimited(
 
               ++cd_it;
               auto cd_coords = *cd_it;
-              std::vector<TDatum> td_coord_data;
+              std::vector<TDatum> td_coords_data;
               std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
               for (auto cc : compressed_coords) {
                 TDatum td_byte;
                 td_byte.val.int_val = cc;
-                td_coord_data.push_back(td_byte);
+                td_coords_data.push_back(td_byte);
               }
               TDatum tdd_coords;
-              tdd_coords.val.arr_val = td_coord_data;
+              tdd_coords.val.arr_val = td_coords_data;
               tdd_coords.is_null = false;
               import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false);
               ++col_idx;
@@ -1748,6 +1796,22 @@ static ImportStatus import_thread_delimited(
                 tdd_poly_rings.val.arr_val = td_poly_rings;
                 tdd_poly_rings.is_null = false;
                 import_buffers[col_idx]->add_value(cd_poly_rings, tdd_poly_rings, false);
+                ++col_idx;
+              }
+
+              if (col_type == kLINESTRING || col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+                ++cd_it;
+                auto cd_bounds = *cd_it;
+                std::vector<TDatum> td_bounds_data;
+                for (auto b : bounds) {
+                  TDatum td_double;
+                  td_double.val.real_val = b;
+                  td_bounds_data.push_back(td_double);
+                }
+                TDatum tdd_bounds;
+                tdd_bounds.val.arr_val = td_bounds_data;
+                tdd_bounds.is_null = false;
+                import_buffers[col_idx]->add_value(cd_bounds, tdd_bounds, false);
                 ++col_idx;
               }
 
@@ -1846,13 +1910,14 @@ static ImportStatus import_thread_shapefile(
 
           // the data we now need to extract for the other columns
           std::vector<double> coords;
+          std::vector<double> bounds;
           std::vector<int> ring_sizes;
           std::vector<int> poly_rings;
           int render_group = 0;
 
           // extract it
           SQLTypeInfo import_ti;
-          if (!importGeoFromGeometry(pGeometry, import_ti, coords, ring_sizes, poly_rings)) {
+          if (!importGeoFromGeometry(pGeometry, import_ti, coords, bounds, ring_sizes, poly_rings)) {
             throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
           }
 
@@ -1925,6 +1990,23 @@ static ImportStatus import_thread_shapefile(
             tdd_poly_rings.val.arr_val = td_poly_rings;
             tdd_poly_rings.is_null = false;
             import_buffers[col_idx]->add_value(cd_poly_rings, tdd_poly_rings, false);
+            ++col_idx;
+          }
+
+          if (col_type == kLINESTRING || col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+            // Create bounds array value and add it to the physical column
+            ++cd_it;
+            auto cd_bounds = *cd_it;
+            std::vector<TDatum> td_bounds_data;
+            for (auto b : bounds) {
+              TDatum td_double;
+              td_double.val.real_val = b;
+              td_bounds_data.push_back(td_double);
+            }
+            TDatum tdd_bounds;
+            tdd_bounds.val.arr_val = td_bounds_data;
+            tdd_bounds.is_null = false;
+            import_buffers[col_idx]->add_value(cd_bounds, tdd_bounds, false);
             ++col_idx;
           }
 

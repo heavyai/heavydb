@@ -223,12 +223,13 @@ class SQLTypeInfo {
   inline int get_physical_cols() const {
     switch (type) {
       case kPOINT:
+        return 1;  // coords
       case kLINESTRING:
-        return 1;
+        return 2;  // coords, bounds
       case kPOLYGON:
-        return 3;
+        return 4;  // coords, ring_sizes, bounds, render_group
       case kMULTIPOLYGON:
-        return 4;
+        return 5;  // coords, ring_sizes, poly_rings, bounds, render_group
       default:
         break;
     }
@@ -248,12 +249,13 @@ class SQLTypeInfo {
     // be mixed.
     switch (type) {
       case kPOINT:
-      case kLINESTRING:
         return 1;
+      case kLINESTRING:
+        return 1;  // omit bounds
       case kPOLYGON:
-        return 2;  // omit render group
+        return 2;  // omit bounds, render group
       case kMULTIPOLYGON:
-        return 3;  // omit render group
+        return 3;  // omit bounds, render group
       default:
         break;
     }

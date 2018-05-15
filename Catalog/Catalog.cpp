@@ -2163,6 +2163,13 @@ void Catalog::createTable(TableDescriptor& td,
           physical_cd_coords.columnType = coords_ti;
           columns.push_back(physical_cd_coords);
 
+          ColumnDescriptor physical_cd_bounds;
+          physical_cd_bounds.columnName = cd.columnName + "_bounds";
+          SQLTypeInfo bounds_ti = SQLTypeInfo(kARRAY, true);
+          bounds_ti.set_subtype(kDOUBLE);
+          physical_cd_bounds.columnType = bounds_ti;
+          columns.push_back(physical_cd_bounds);
+
           // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
 
           break;
@@ -2184,6 +2191,13 @@ void Catalog::createTable(TableDescriptor& td,
           ring_sizes_ti.set_subtype(kINT);
           physical_cd_ring_sizes.columnType = ring_sizes_ti;
           columns.push_back(physical_cd_ring_sizes);
+
+          ColumnDescriptor physical_cd_bounds;
+          physical_cd_bounds.columnName = cd.columnName + "_bounds";
+          SQLTypeInfo bounds_ti = SQLTypeInfo(kARRAY, true);
+          bounds_ti.set_subtype(kDOUBLE);
+          physical_cd_bounds.columnType = bounds_ti;
+          columns.push_back(physical_cd_bounds);
 
           ColumnDescriptor physical_cd_render_group;
           physical_cd_render_group.columnName = cd.columnName + "_render_group";
@@ -2219,6 +2233,13 @@ void Catalog::createTable(TableDescriptor& td,
           poly_rings_ti.set_subtype(kINT);
           physical_cd_poly_rings.columnType = poly_rings_ti;
           columns.push_back(physical_cd_poly_rings);
+
+          ColumnDescriptor physical_cd_bounds;
+          physical_cd_bounds.columnName = cd.columnName + "_bounds";
+          SQLTypeInfo bounds_ti = SQLTypeInfo(kARRAY, true);
+          bounds_ti.set_subtype(kDOUBLE);
+          physical_cd_bounds.columnType = bounds_ti;
+          columns.push_back(physical_cd_bounds);
 
           ColumnDescriptor physical_cd_render_group;
           physical_cd_render_group.columnName = cd.columnName + "_render_group";

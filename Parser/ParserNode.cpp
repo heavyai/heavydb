@@ -59,6 +59,7 @@ namespace Importer_NS {
 bool importGeoFromWkt(std::string& wkt,
                       SQLTypeInfo& ti,
                       std::vector<double>& coords,
+                      std::vector<double>& bounds,
                       std::vector<int>& ring_sizes,
                       std::vector<int>& poly_rings);
 
@@ -1612,11 +1613,12 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
       }
       CHECK(wkt);
       std::vector<double> coords;
+      std::vector<double> bounds;
       std::vector<int> ring_sizes;
       std::vector<int> poly_rings;
       int render_group = 0;  // @TODO simon.eves where to get render_group from in this context?!
       SQLTypeInfo import_ti;
-      if (!Importer_NS::importGeoFromWkt(*wkt, import_ti, coords, ring_sizes, poly_rings)) {
+      if (!Importer_NS::importGeoFromWkt(*wkt, import_ti, coords, bounds, ring_sizes, poly_rings)) {
         throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
       }
       if (cd->columnType.get_type() != import_ti.get_type()) {
@@ -1624,7 +1626,10 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
       }
       // TODO: check if import SRID matches columns SRID, may need to transform before inserting
 
-      const ColumnDescriptor* cd_coords = catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + 1);
+      int nextColumnOffset = 1;
+
+      const ColumnDescriptor* cd_coords =
+          catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + nextColumnOffset);
       CHECK(cd_coords);
       CHECK_EQ(cd_coords->columnType.get_type(), kARRAY);
       CHECK_EQ(cd_coords->columnType.get_subtype(), kTINYINT);
@@ -1639,11 +1644,12 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
       tlist.emplace_back(new Analyzer::TargetEntry(
           "", makeExpr<Analyzer::Constant>(cd_coords->columnType, false, value_exprs), false));
       ++it;
+      nextColumnOffset++;
 
       if (cd->columnType.get_type() == kPOLYGON || cd->columnType.get_type() == kMULTIPOLYGON) {
         // Put ring sizes array into separate physical column
         const ColumnDescriptor* cd_ring_sizes =
-            catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + 2);
+            catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + nextColumnOffset);
         CHECK(cd_ring_sizes);
         CHECK_EQ(cd_ring_sizes->columnType.get_type(), kARRAY);
         CHECK_EQ(cd_ring_sizes->columnType.get_subtype(), kINT);
@@ -1657,12 +1663,12 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
         tlist.emplace_back(new Analyzer::TargetEntry(
             "", makeExpr<Analyzer::Constant>(cd_ring_sizes->columnType, false, value_exprs), false));
         ++it;
-        int renderGroupColOffset = 3;
+        nextColumnOffset++;
 
         if (cd->columnType.get_type() == kMULTIPOLYGON) {
           // Put poly_rings array into separate physical column
           const ColumnDescriptor* cd_poly_rings =
-              catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + 3);
+              catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + nextColumnOffset);
           CHECK(cd_poly_rings);
           CHECK_EQ(cd_poly_rings->columnType.get_type(), kARRAY);
           CHECK_EQ(cd_poly_rings->columnType.get_subtype(), kINT);
@@ -1676,12 +1682,34 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
           tlist.emplace_back(new Analyzer::TargetEntry(
               "", makeExpr<Analyzer::Constant>(cd_poly_rings->columnType, false, value_exprs), false));
           ++it;
-          renderGroupColOffset = 4;
+          nextColumnOffset++;
         }
+      }
 
+      if (cd->columnType.get_type() == kLINESTRING || cd->columnType.get_type() == kPOLYGON ||
+          cd->columnType.get_type() == kMULTIPOLYGON) {
+        const ColumnDescriptor* cd_bounds =
+            catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + nextColumnOffset);
+        CHECK(cd_bounds);
+        CHECK_EQ(cd_bounds->columnType.get_type(), kARRAY);
+        CHECK_EQ(cd_bounds->columnType.get_subtype(), kDOUBLE);
+        std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
+        for (auto b : bounds) {
+          Datum d;
+          d.doubleval = b;
+          auto e = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
+          value_exprs.push_back(e);
+        }
+        tlist.emplace_back(new Analyzer::TargetEntry(
+            "", makeExpr<Analyzer::Constant>(cd_bounds->columnType, false, value_exprs), false));
+        ++it;
+        nextColumnOffset++;
+      }
+
+      if (cd->columnType.get_type() == kPOLYGON || cd->columnType.get_type() == kMULTIPOLYGON) {
         // Put render group into separate physical column
         const ColumnDescriptor* cd_render_group =
-            catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + renderGroupColOffset);
+            catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + nextColumnOffset);
         CHECK(cd_render_group);
         CHECK_EQ(cd_render_group->columnType.get_type(), kINT);
         Datum d;
@@ -1689,6 +1717,7 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
         tlist.emplace_back(
             new Analyzer::TargetEntry("", makeExpr<Analyzer::Constant>(cd_render_group->columnType, false, d), false));
         ++it;
+        nextColumnOffset++;
       }
     }
   }

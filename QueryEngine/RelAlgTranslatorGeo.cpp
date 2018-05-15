@@ -48,6 +48,7 @@ namespace Importer_NS {
 bool importGeoFromWkt(std::string& wkt,
                       SQLTypeInfo& ti,
                       std::vector<double>& coords,
+                      std::vector<double>& bounds,
                       std::vector<int>& ring_sizes,
                       std::vector<int>& polygon_sizes);
 
@@ -62,10 +63,11 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiter
   auto wkt = std::dynamic_pointer_cast<Analyzer::Constant>(e);
   CHECK(wkt);
   std::vector<double> coords;
+  std::vector<double> bounds;
   std::vector<int> ring_sizes;
   std::vector<int> poly_rings;
   int32_t srid = ti.get_output_srid();
-  if (!Importer_NS::importGeoFromWkt(*wkt->get_constval().stringval, ti, coords, ring_sizes, poly_rings)) {
+  if (!Importer_NS::importGeoFromWkt(*wkt->get_constval().stringval, ti, coords, bounds, ring_sizes, poly_rings)) {
     throw QueryNotSupported("Could not read geometry from text");
   }
   ti.set_subtype(kGEOMETRY);
@@ -76,24 +78,27 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiter
     ti.set_compression(kENCODING_GEOINT);
     ti.set_comp_param(32);
   }
+
+  std::vector<std::shared_ptr<Analyzer::Expr>> args;
+
   std::vector<uint8_t> compressed_coords = Importer_NS::compress_coords(coords, ti);
-  std::list<std::shared_ptr<Analyzer::Expr>> compressed_coord_exprs;
+  std::list<std::shared_ptr<Analyzer::Expr>> compressed_coords_exprs;
   for (auto cc : compressed_coords) {
     Datum d;
     d.tinyintval = cc;
     auto e = makeExpr<Analyzer::Constant>(kTINYINT, false, d);
-    compressed_coord_exprs.push_back(e);
+    compressed_coords_exprs.push_back(e);
   }
-  std::vector<std::shared_ptr<Analyzer::Expr>> args;
   SQLTypeInfo arr_ti = SQLTypeInfo(kARRAY, true);
   arr_ti.set_subtype(kTINYINT);
   arr_ti.set_size(compressed_coords.size() * sizeof(int8_t));
   arr_ti.set_compression(ti.get_compression());
   arr_ti.set_comp_param((ti.get_compression() == kENCODING_GEOINT) ? 32 : 64);
-  args.push_back(makeExpr<Analyzer::Constant>(arr_ti, false, compressed_coord_exprs));
+  args.push_back(makeExpr<Analyzer::Constant>(arr_ti, false, compressed_coords_exprs));
 
   auto lit_type = ti.get_type();
   if (lit_type == kPOLYGON || lit_type == kMULTIPOLYGON) {
+    // ring sizes
     std::list<std::shared_ptr<Analyzer::Expr>> ring_size_exprs;
     for (auto c : ring_sizes) {
       Datum d;
@@ -106,6 +111,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiter
     arr_ti.set_size(ring_sizes.size() * sizeof(int32_t));
     args.push_back(makeExpr<Analyzer::Constant>(arr_ti, false, ring_size_exprs));
 
+    // poly rings
     if (lit_type == kMULTIPOLYGON) {
       std::list<std::shared_ptr<Analyzer::Expr>> poly_rings_exprs;
       for (auto c : poly_rings) {

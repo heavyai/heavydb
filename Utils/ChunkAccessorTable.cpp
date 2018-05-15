@@ -43,7 +43,9 @@ ChunkAccessorTable getChunkAccessorTable(const Catalog_Namespace::Catalog& cat,
     for (const auto& columnName : columnNames) {
       // get column descriptor
       const auto cd = cat.getMetadataForColumn(td->tableId, columnName);
-      CHECK(cd);
+      if (!cd) {
+        throw std::runtime_error("Failed to find physical column '" + columnName + "'");
+      }
 
       // find the chunk
       ChunkKey chunkKey{cat.get_currentDB().dbId, td->tableId, cd->columnId, fragment.fragmentId};
