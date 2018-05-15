@@ -96,6 +96,7 @@ void SysCatalog::init(const std::string& basePath,
   if (check_privileges_) {
     buildRoleMap();
     buildUserRoleMap();
+    buildObjectDescriptorMap();
   }
 }
 
@@ -109,6 +110,12 @@ SysCatalog::~SysCatalog() {
     delete userRoleIt->second;
   }
   userRoleMap_.clear();
+  for (ObjectRoleDescriptorMap::iterator objectIt = objectDescriptorMap_.begin();
+       objectIt != objectDescriptorMap_.end();) {
+    ObjectRoleDescriptorMap::iterator eraseIt = objectIt++;
+    delete eraseIt->second;
+  }
+  objectDescriptorMap_.clear();
 }
 
 void SysCatalog::initDB() {
@@ -926,6 +933,20 @@ Role* SysCatalog::getMetadataForUserRole(int32_t userId) const {
   return userRoleIt->second;  // returns pointer to role
 }
 
+std::vector<ObjectRoleDescriptor*> SysCatalog::getMetadataForObject(int32_t dbId,
+                                                                    int32_t dbType,
+                                                                    int32_t objectId) const {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  std::vector<ObjectRoleDescriptor*> objectsList;
+
+  auto range = objectDescriptorMap_.equal_range(std::to_string(dbId) + ":" + std::to_string(dbType) + ":" +
+                                                std::to_string(objectId));
+  for (auto d = range.first; d != range.second; ++d) {
+    objectsList.push_back(d->second);
+  }
+  return objectsList;  // return a vector of pointers to ObjectsMetaData
+}
+
 bool SysCatalog::isRoleGrantedToUser(const int32_t userId, const std::string& roleName) const {
   bool rc = false;
   auto user_rl = instance().getMetadataForUserRole(userId);
@@ -1510,6 +1531,27 @@ void SysCatalog::buildUserRoleMap() {
       userRoleMap_[user.userId] = user_rl;
     }
     user_rl->grantRole(rl);
+  }
+}
+
+void SysCatalog::buildObjectDescriptorMap() {
+  string objectQuery(
+      "SELECT roleName, roleType, objectPermissionsType, dbId, objectId, objectPermissions, objectOwnerId, objectName "
+      "from mapd_object_permissions");
+  sqliteConnector_->query(objectQuery);
+  size_t numRows = sqliteConnector_->getNumRows();
+  for (size_t r = 0; r < numRows; ++r) {
+    ObjectRoleDescriptor* od = new ObjectRoleDescriptor();
+    od->roleName = sqliteConnector_->getData<string>(r, 0);
+    od->roleType = sqliteConnector_->getData<bool>(r, 1);
+    od->objectType = sqliteConnector_->getData<int>(r, 2);
+    od->dbId = sqliteConnector_->getData<int>(r, 3);
+    od->objectId = sqliteConnector_->getData<int>(r, 4);
+    od->privs.privileges = sqliteConnector_->getData<int>(r, 5);
+    od->objectOwnerId = sqliteConnector_->getData<int>(r, 6);
+    od->objectName = sqliteConnector_->getData<string>(r, 7);
+    objectDescriptorMap_.insert(ObjectRoleDescriptorMap::value_type(
+        std::to_string(od->dbId) + ":" + std::to_string(od->objectType) + ":" + std::to_string(od->objectId), od));
   }
 }
 

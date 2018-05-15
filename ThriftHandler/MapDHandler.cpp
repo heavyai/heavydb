@@ -2342,6 +2342,43 @@ void MapDHandler::unshare_dashboard(const TSessionId& session,
   }
 }
 
+void MapDHandler::get_dashboard_grantees(std::vector<TDashboardGrantees>& dashboard_grantees,
+                                         const TSessionId& session,
+                                         int32_t dashboard_id) {
+  check_read_only("get_dashboard_grantees");
+  const auto session_info = get_session(session);
+  auto& cat = session_info.get_catalog();
+  Catalog_Namespace::UserMetadata user_meta;
+  auto dash = cat.getMetadataForDashboard(dashboard_id);
+  if (!dash) {
+    THROW_MAPD_EXCEPTION("Exception: Dashboard id " + std::to_string(dashboard_id) + " does not exist");
+  } else if (session_info.get_currentUser().userId != dash->userId && !session_info.get_currentUser().isSuper) {
+    THROW_MAPD_EXCEPTION("User should be either owner of dashboard or super user to access grantees");
+  }
+  std::vector<ObjectRoleDescriptor*> objectsList;
+  objectsList = SysCatalog::instance().getMetadataForObject(
+      cat.get_currentDB().dbId, 3, dashboard_id);  // By default objectID is 3 for dashabaords
+  if (objectsList.empty()) {
+    THROW_MAPD_EXCEPTION("Exception: No users/roles have been assigned Dashboard id " + std::to_string(dashboard_id));
+  }
+  for (auto object : objectsList) {
+    TDashboardGrantees grantee;
+    TDashboardPermissions perm;
+    grantee.name = object->roleName;
+    if (SysCatalog::instance().getMetadataForUser(object->roleName, user_meta)) {
+      grantee.is_user = true;
+    } else if (SysCatalog::instance().getMetadataForRole(object->roleName)) {
+      grantee.is_user = false;
+    }
+    perm.create_ = object->privs.hasPermission(DashboardPrivileges::CREATE_DASHBOARD);
+    perm.delete_ = object->privs.hasPermission(DashboardPrivileges::DELETE_DASHBOARD);
+    perm.edit_ = object->privs.hasPermission(DashboardPrivileges::EDIT_DASHBOARD);
+    perm.view_ = object->privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD);
+    grantee.permissions = perm;
+    dashboard_grantees.push_back(grantee);
+  }
+}
+
 void MapDHandler::create_frontend_view(const TSessionId& session,
                                        const std::string& view_name,
                                        const std::string& view_state,

@@ -46,6 +46,7 @@
 #include "LinkDescriptor.h"
 #include "Role.h"
 #include "TableDescriptor.h"
+#include "ObjectRoleDescriptor.h"
 
 #include "../DataMgr/DataMgr.h"
 #include "../QueryEngine/CompilationOptions.h"
@@ -376,6 +377,7 @@ class SysCatalog {
   bool checkPrivileges(const std::string& userName, std::vector<DBObject>& privObjects);
   Role* getMetadataForRole(const std::string& roleName) const;
   Role* getMetadataForUserRole(int32_t userId) const;
+  std::vector<ObjectRoleDescriptor*> getMetadataForObject(int32_t dbId, int32_t dbType, int32_t objectId) const;
   bool isRoleGrantedToUser(const int32_t userId, const std::string& roleName) const;
   bool hasRole(const std::string& roleName, bool userPrivateRole) const;  // true - role exists, false - otherwise
   std::vector<std::string> getRoles(bool userPrivateRole, bool isSuper, const int32_t userId);
@@ -393,6 +395,7 @@ class SysCatalog {
  private:
   typedef std::map<std::string, Role*> RoleMap;
   typedef std::map<int32_t, Role*> UserRoleMap;
+  typedef std::multimap<std::string, ObjectRoleDescriptor*> ObjectRoleDescriptorMap;
 
   SysCatalog() {}
   virtual ~SysCatalog();
@@ -400,6 +403,7 @@ class SysCatalog {
   void initDB();
   void buildRoleMap();
   void buildUserRoleMap();
+  void buildObjectDescriptorMap();
   void checkAndExecuteMigrations();
   void createUserRoles();
   void migratePrivileges();
@@ -435,6 +439,7 @@ class SysCatalog {
   std::string basePath_;
   RoleMap roleMap_;
   UserRoleMap userRoleMap_;
+  ObjectRoleDescriptorMap objectDescriptorMap_;
   DBMetadata currentDB_;
   std::unique_ptr<SqliteConnector> sqliteConnector_;
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;

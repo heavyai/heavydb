@@ -238,6 +238,9 @@ class MapDHandler : public MapDIf {
                          const std::vector<std::string>& groups,
                          const std::vector<std::string>& objects,
                          const TDashboardPermissions& permissions);
+  void get_dashboard_grantees(std::vector<TDashboardGrantees>& _return,
+                              const TSessionId& session,
+                              int32_t dashboard_id);
 
   void get_link_view(TFrontendView& _return, const TSessionId& session, const std::string& link);
   void create_link(std::string& _return,
