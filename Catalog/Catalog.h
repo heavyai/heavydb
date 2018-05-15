@@ -42,6 +42,7 @@
 #include "DictDescriptor.h"
 #include "FrontendViewDescriptor.h"
 #include "LdapServer.h"
+#include "RestServer.h"
 #include "LinkDescriptor.h"
 #include "Role.h"
 #include "TableDescriptor.h"
@@ -299,6 +300,7 @@ class Catalog {
   mutable std::mutex cat_mutex_;
 
   std::unique_ptr<LdapServer> ldap_server_;
+  std::unique_ptr<RestServer> rest_server_;
   const std::vector<LeafHostInfo> string_dict_hosts_;
   std::shared_ptr<Calcite> calciteMgr_;
 
@@ -432,6 +434,7 @@ class SysCatalog {
   std::unique_ptr<SqliteConnector> sqliteConnector_;
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
   std::unique_ptr<LdapServer> ldap_server_;
+  std::unique_ptr<RestServer> rest_server_;
   std::shared_ptr<Calcite> calciteMgr_;
   mutable std::mutex cat_mutex_;
 };

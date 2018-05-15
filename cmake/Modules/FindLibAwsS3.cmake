@@ -115,7 +115,8 @@ find_path(LibAwsS3_INCLUDE_DIR
 #message("LibAwsS3_INCLUDE_DIR= ${LibAwsS3_INCLUDE_DIR}")
 
 # Set standard CMake FindPackage variables if found.
-set(LibAwsS3_LIBRARIES ${LibAwsS3_LIBRARIES} ${LibAwsS3_LIBRARY} ${libAwsCore_LIBRARY} ${LibCurl_LIBRARY} ${LibSsl_LIBRARY} ${LibCrypto_LIBRARY})
+set(LibAwsS3_SUPPORT_LIBRARIES ${LibCurl_LIBRARY} ${LibSsl_LIBRARY} ${LibCrypto_LIBRARY})
+set(LibAwsS3_LIBRARIES ${LibAwsS3_LIBRARIES} ${LibAwsS3_LIBRARY} ${libAwsCore_LIBRARY} ${LibAwsS3_SUPPORT_LIBRARIES})
 set(LibAwsS3_INCLUDE_DIRS ${LibAwsS3_INCLUDE_DIR})
 set(LibAwsS3_LIBRARY_DIRS ${LibAwsS3_LIBRARY_DIR})
 
@@ -124,7 +125,7 @@ if(LibAwsS3_USE_STATIC_LIBS)
 endif()
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(LibAwsS3 REQUIRED_VARS 
+find_package_handle_standard_args(LibAwsS3 REQUIRED_VARS
   LibAwsS3_INCLUDE_DIR
   LibAwsS3_LIBRARY
   libAwsCore_LIBRARY

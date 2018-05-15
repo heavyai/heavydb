@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-#ifndef AUTHMETADATA_H
-#define AUTHMETADATA_H
+#ifndef RESTSERVER_H
+#define RESTSERVER_H
+
+#include "Catalog/AuthMetadata.h"
 
 #include <string>
 
-struct AuthMetadata {
-  AuthMetadata() {}
-  int32_t port;
-  std::string uri;
-  std::string distinguishedName;
-  std::string domainComp;
-  std::string restUrl;
-  std::string restToken;
+class RestServer {
+ public:
+  RestServer() {}
+  RestServer(const AuthMetadata& authMetadata) {}
+  bool authenticate_user(const std::string& userName, const std::string& passwd) { return false; }
+  bool inUse() { return false; }
 };
 
-#endif /* AUTHMETADATA_H */
+#endif /* RESTSERVER_H */

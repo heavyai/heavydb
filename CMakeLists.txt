@@ -463,9 +463,9 @@ add_dependencies(mapd_server rerun_cmake)
 
 target_link_libraries(mapd_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES} poly2tri)
 if(ENABLE_FOLLY)
-target_link_libraries(initdb Catalog Fragmenter Shared Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${Folly_LIBRARIES} ${CMAKE_DL_LIBS})
+  target_link_libraries(initdb Catalog Fragmenter Shared Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${Folly_LIBRARIES} ${CMAKE_DL_LIBS})
 else()
-target_link_libraries(initdb Catalog Fragmenter Shared Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${CMAKE_DL_LIBS})
+  target_link_libraries(initdb Catalog Fragmenter Shared Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
 endif()
 
 macro(set_dpkg_arch arch_in arch_out)

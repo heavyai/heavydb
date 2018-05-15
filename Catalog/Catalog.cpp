@@ -81,6 +81,7 @@ void SysCatalog::init(const std::string& basePath,
   basePath_ = basePath;
   dataMgr_ = dataMgr;
   ldap_server_.reset(new LdapServer(authMetadata));
+  rest_server_.reset(new RestServer(authMetadata));
   calciteMgr_ = calcite;
   check_privileges_ = check_privileges;
   sqliteConnector_.reset(new SqliteConnector(MAPD_SYSTEM_DB, basePath + "/mapd_catalogs/"));
@@ -1040,6 +1041,7 @@ Catalog::Catalog(const string& basePath,
       nextTempTableId_(MAPD_TEMP_TABLE_START_ID),
       nextTempDictId_(MAPD_TEMP_DICT_START_ID) {
   ldap_server_.reset(new LdapServer(authMetadata));
+  rest_server_.reset(new RestServer(authMetadata));
   if (!is_initdb)
     buildMaps();
 }
@@ -1057,6 +1059,7 @@ Catalog::Catalog(const string& basePath,
       nextTempTableId_(MAPD_TEMP_TABLE_START_ID),
       nextTempDictId_(MAPD_TEMP_DICT_START_ID) {
   ldap_server_.reset(new LdapServer(authMetadata));
+  rest_server_.reset(new RestServer(authMetadata));
   buildMaps();
 }
 
