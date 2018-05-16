@@ -7,7 +7,10 @@
 
 #include "Shared/ConfigResolve.h"
 #include "Shared/UpdelRoll.h"
+#include "Shared/thread_count.h"
 #include <boost/variant.hpp>
+
+#include <future>
 
 template <typename FRAGMENTER_TYPE = Fragmenter_Namespace::InsertOrderFragmenter>
 class DefaultIOFacet {
@@ -162,76 +165,179 @@ class StorageIOFacility {
     return IOFacility::yieldColumnValidator(catalog_, table_descriptor);
   }
 
-  UpdateCallback yieldUpdateCallback(UpdateTransactionParameters& update_parameters) {
-    using OffsetVector = std::vector<uint64_t>;
-    using ScalarTargetValueVector = std::vector<ScalarTargetValue>;
+  UpdateCallback yieldUpdateCallback(UpdateTransactionParameters& update_parameters);
+  UpdateCallback yieldDeleteCallback(DeleteTransactionParameters& delete_parameters);
 
-    auto callback = [this, &update_parameters](FragmentUpdaterType const& update_log) -> void {
-      for (decltype(update_parameters.getUpdateColumnCount()) column_index = 0;
-           column_index < update_parameters.getUpdateColumnCount();
-           column_index++) {
-        OffsetVector column_offsets;
-        ScalarTargetValueVector scalar_target_values;
+ private:
+  int normalized_cpu_threads() const { return cpu_threads() / 2; }
 
-        column_offsets.reserve(update_log.getEntryCount());
-        scalar_target_values.reserve(update_log.getEntryCount());
+  ExecutorType* executor_;
+  CatalogType const& catalog_;
+};
 
-        for (decltype(update_log.getEntryCount()) row_index = 0; row_index < update_log.getEntryCount(); row_index++) {
-          auto const row(update_log.getEntryAt(row_index));
+template <typename EXECUTOR_TRAITS, typename IO_FACET, typename FRAGMENT_UPDATER>
+typename StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::UpdateCallback
+StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallback(
+    UpdateTransactionParameters& update_parameters) {
+  using OffsetVector = std::vector<uint64_t>;
+  using ScalarTargetValueVector = std::vector<ScalarTargetValue>;
+  using RowProcessingFuturesVector = std::vector<std::future<uint64_t>>;
 
-          CHECK(!row.empty());
-          CHECK(row.size() == update_parameters.getUpdateColumnCount() + 1);
+  auto callback = [this, &update_parameters](FragmentUpdaterType const& update_log) -> void {
+    auto rows_per_column = update_log.getEntryCount();
+    if (rows_per_column == 0)
+      return;
 
-          auto terminal_column_iter = std::prev(row.end());
-          const auto frag_offset_scalar_tv = boost::get<ScalarTargetValue>(&*terminal_column_iter);
-          CHECK(frag_offset_scalar_tv);
+    OffsetVector column_offsets(rows_per_column);
+    ScalarTargetValueVector scalar_target_values(rows_per_column);
 
-          column_offsets.push_back(static_cast<uint64_t>(*(boost::get<int64_t>(frag_offset_scalar_tv))));
-          scalar_target_values.push_back(boost::get<ScalarTargetValue>(row[column_index]));
-        }
+    auto complete_row_block_size = rows_per_column / normalized_cpu_threads();
+    auto partial_row_block_size = rows_per_column % normalized_cpu_threads();
+    auto usable_threads = normalized_cpu_threads();
+    if (UNLIKELY(rows_per_column < (unsigned)normalized_cpu_threads())) {
+      complete_row_block_size = rows_per_column;
+      partial_row_block_size = 0;
+      usable_threads = 1;
+    }
 
-        IOFacility::updateColumn(catalog_,
-                                 update_log.getPhysicalTableId(),
-                                 update_parameters.getUpdateColumnNames()[column_index],
-                                 update_log.getFragmentId(),
-                                 column_offsets,
-                                 scalar_target_values,
-                                 update_log.getColumnType(column_index),
-                                 update_parameters.getTransactionTracker());
+    auto process_rows = [&update_log, &update_parameters, &column_offsets, &scalar_target_values ](
+                            uint64_t column_index, uint64_t row_start, uint64_t row_count) __attribute__((hot))
+                            ->uint64_t {
+      uint64_t rows_processed = 0;
+      for (uint64_t row_index = row_start; row_index < (row_start + row_count); row_index++, rows_processed++) {
+        auto const row(update_log.getEntryAt(row_index));
+        __builtin_prefetch(row.data(), 0, 0);
+
+        CHECK(!row.empty());
+        CHECK(row.size() == update_parameters.getUpdateColumnCount() + 1);
+
+        auto terminal_column_iter = std::prev(row.end());
+        const auto frag_offset_scalar_tv = boost::get<ScalarTargetValue>(&*terminal_column_iter);
+        CHECK(frag_offset_scalar_tv);
+
+        column_offsets[row_index] = static_cast<uint64_t>(*(boost::get<int64_t>(frag_offset_scalar_tv)));
+        scalar_target_values[row_index] = boost::get<ScalarTargetValue>(row[column_index]);
       }
+      return rows_processed;
     };
 
-    return callback;
-  }
+    auto get_row_index = [complete_row_block_size](uint64_t thread_index) -> uint64_t {
+      return (thread_index * complete_row_block_size);
+    };
+    // Iterate over each column
+    for (decltype(update_parameters.getUpdateColumnCount()) column_index = 0;
+         column_index < update_parameters.getUpdateColumnCount();
+         column_index++) {
+      RowProcessingFuturesVector row_processing_futures;
+      row_processing_futures.reserve(usable_threads);
 
-  UpdateCallback yieldDeleteCallback(DeleteTransactionParameters& delete_parameters) {
-    auto callback = [this, &delete_parameters](FragmentUpdaterType const& update_log) -> void {
-      DeleteVictimOffsetList victim_offsets;
-      victim_offsets.reserve(update_log.getEntryCount());
+      for (unsigned i = 0; i < (unsigned)usable_threads; i++)
+        row_processing_futures.emplace_back(std::async(std::launch::async,
+                                                       std::forward<decltype(process_rows)>(process_rows),
+                                                       column_index,
+                                                       get_row_index(i),
+                                                       complete_row_block_size));
+      if (partial_row_block_size)
+        row_processing_futures.emplace_back(std::async(std::launch::async,
+                                                       std::forward<decltype(process_rows)>(process_rows),
+                                                       column_index,
+                                                       get_row_index(usable_threads),
+                                                       partial_row_block_size));
 
-      for (size_t i = 0; i < update_log.getEntryCount(); ++i) {
-        auto const row(update_log.getEntryAt(i));
+      uint64_t rows_processed(0);
+      for (auto& t : row_processing_futures) {
+        t.wait();
+        rows_processed += t.get();
+      }
+
+      IOFacility::updateColumn(catalog_,
+                               update_log.getPhysicalTableId(),
+                               update_parameters.getUpdateColumnNames()[column_index],
+                               update_log.getFragmentId(),
+                               column_offsets,
+                               scalar_target_values,
+                               update_log.getColumnType(column_index),
+                               update_parameters.getTransactionTracker());
+    }
+  };
+
+  return callback;
+}
+
+template <typename EXECUTOR_TRAITS, typename IO_FACET, typename FRAGMENT_UPDATER>
+typename StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::UpdateCallback
+StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldDeleteCallback(
+    DeleteTransactionParameters& delete_parameters) {
+  using RowProcessingFuturesVector = std::vector<std::future<uint64_t>>;
+
+  auto callback = [this, &delete_parameters](FragmentUpdaterType const& update_log) -> void {
+    auto rows_per_column = update_log.getEntryCount();
+    if (rows_per_column == 0)
+      return;
+    DeleteVictimOffsetList victim_offsets(rows_per_column);
+
+    auto complete_row_block_size = rows_per_column / normalized_cpu_threads();
+    auto partial_row_block_size = rows_per_column % normalized_cpu_threads();
+    auto usable_threads = normalized_cpu_threads();
+
+    if (UNLIKELY(rows_per_column < (unsigned)normalized_cpu_threads())) {
+      complete_row_block_size = rows_per_column;
+      partial_row_block_size = 0;
+      usable_threads = 1;
+    }
+
+    auto process_rows = [&update_log, &delete_parameters, &victim_offsets ](uint64_t row_start, uint64_t row_count)
+                            __attribute__((hot))
+                                ->uint64_t {
+      uint64_t rows_processed = 0;
+
+      for (uint64_t row_index = row_start; row_index < (row_start + row_count); row_index++, rows_processed++) {
+        auto const row(update_log.getEntryAt(row_index));
+        __builtin_prefetch(row.data(), 0, 0);
+
         CHECK(!row.empty());
         auto terminal_column_iter = std::prev(row.end());
         const auto scalar_tv = boost::get<ScalarTargetValue>(&*terminal_column_iter);
         CHECK(scalar_tv);
 
         uint64_t fragment_offset = static_cast<uint64_t>(*(boost::get<int64_t>(scalar_tv)));
-        victim_offsets.push_back(fragment_offset);
+        victim_offsets[row_index] = fragment_offset;
       }
-      IOFacility::deleteColumns(catalog_,
-                                update_log.getPhysicalTableId(),
-                                update_log.getFragmentId(),
-                                victim_offsets,
-                                update_log.getColumnType(0),
-                                delete_parameters.getTransactionTracker());
+      return rows_processed;
     };
-    return callback;
-  }
 
- private:
-  ExecutorType* executor_;
-  CatalogType const& catalog_;
-};
+    auto get_row_index = [complete_row_block_size](uint64_t thread_index) -> uint64_t {
+      return (thread_index * complete_row_block_size);
+    };
+
+    RowProcessingFuturesVector row_processing_futures;
+    row_processing_futures.reserve(usable_threads);
+
+    for (unsigned i = 0; i < (unsigned)usable_threads; i++)
+      row_processing_futures.emplace_back(std::async(std::launch::async,
+                                                     std::forward<decltype(process_rows)>(process_rows),
+                                                     get_row_index(i),
+                                                     complete_row_block_size));
+    if (partial_row_block_size)
+      row_processing_futures.emplace_back(std::async(std::launch::async,
+                                                     std::forward<decltype(process_rows)>(process_rows),
+                                                     get_row_index(usable_threads),
+                                                     partial_row_block_size));
+
+    uint64_t rows_processed(0);
+    for (auto& t : row_processing_futures) {
+      t.wait();
+      rows_processed += t.get();
+    }
+
+    IOFacility::deleteColumns(catalog_,
+                              update_log.getPhysicalTableId(),
+                              update_log.getFragmentId(),
+                              victim_offsets,
+                              update_log.getColumnType(0),
+                              delete_parameters.getTransactionTracker());
+  };
+  return callback;
+}
 
 #endif
