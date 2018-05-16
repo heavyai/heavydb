@@ -32,6 +32,7 @@
 #include "StringDictionaryGenerations.h"
 #include "TableGenerations.h"
 #include "TargetMetaInfo.h"
+#include "RelAlgTranslator.h"
 
 #include "../Analyzer/Analyzer.h"
 #include "../Chunk/Chunk.h"
@@ -73,6 +74,7 @@ extern bool g_allow_cpu_retry;
 extern bool g_null_div_by_zero;
 extern bool g_bigint_count;
 extern bool g_fast_strcmp;
+extern bool g_inner_join_fragment_skipping;
 
 class ExecutionResult;
 
@@ -1133,6 +1135,11 @@ class Executor {
                                         const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
                                         const ExecutionDispatch& execution_dispatch,
                                         const size_t frag_idx);
+
+  std::pair<bool, int64_t> skipFragmentInnerJoins(const InputDescriptor& table_desc,
+                                                  const Fragmenter_Namespace::FragmentInfo& fragment,
+                                                  const ExecutionDispatch& execution_dispatch,
+                                                  const size_t frag_idx);
 
   typedef std::vector<std::string> CodeCacheKey;
   typedef std::vector<std::tuple<void*, std::unique_ptr<llvm::ExecutionEngine>, std::unique_ptr<GpuCompilationContext>>>

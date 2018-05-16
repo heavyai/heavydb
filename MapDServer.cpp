@@ -368,6 +368,11 @@ int main(int argc, char** argv) {
       "hll-precision-bits",
       po::value<int>(&g_hll_precision_bits)->default_value(g_hll_precision_bits)->implicit_value(g_hll_precision_bits),
       "Number of bits used from the hash value used to specify the bucket number.");
+  desc_adv.add_options()("inner-join-fragment-skipping",
+                         po::value<bool>(&g_inner_join_fragment_skipping)
+                             ->default_value(g_inner_join_fragment_skipping)
+                             ->implicit_value(true),
+                         "Enable/disable inner join fragment skipping.");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
