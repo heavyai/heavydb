@@ -133,31 +133,32 @@ size_t get_shard_count(const Analyzer::BinOper* join_condition,
   if (executor->isOuterJoin()) {
     return 0;
   }
-  const Analyzer::ColumnVar* lhs_col{nullptr};
-  const Analyzer::Expr* rhs_col{nullptr};
+  const Analyzer::ColumnVar* inner_col{nullptr};
+  const Analyzer::Expr* outer_col{nullptr};
   std::shared_ptr<Analyzer::BinOper> redirected_bin_oper;
   try {
     redirected_bin_oper =
         std::dynamic_pointer_cast<Analyzer::BinOper>(redirect_expr(join_condition, ra_exe_unit.input_col_descs));
     CHECK(redirected_bin_oper);
-    std::tie(lhs_col, rhs_col) = get_cols(redirected_bin_oper, *executor->getCatalog(), executor->getTemporaryTables());
+    std::tie(inner_col, outer_col) =
+        get_cols(redirected_bin_oper, *executor->getCatalog(), executor->getTemporaryTables());
   } catch (...) {
     return 0;
   }
-  if (!lhs_col || !rhs_col) {
+  if (!inner_col || !outer_col) {
     return 0;
   }
-  return get_shard_count({lhs_col, rhs_col}, ra_exe_unit, executor);
+  return get_shard_count({inner_col, outer_col}, ra_exe_unit, executor);
 }
 
 namespace {
 
-bool shard_count_less_or_equal_device_count(const int outer_table_id, const Executor* executor) {
-  const auto outer_table_info = executor->getTableInfo(outer_table_id);
+bool shard_count_less_or_equal_device_count(const int inner_table_id, const Executor* executor) {
+  const auto inner_table_info = executor->getTableInfo(inner_table_id);
   std::unordered_set<int> device_holding_fragments;
   auto cuda_mgr = executor->getCatalog()->get_dataMgr().cudaMgr_;
   const int device_count = cuda_mgr ? cuda_mgr->getDeviceCount() : 1;
-  for (const auto& fragment : outer_table_info.fragments) {
+  for (const auto& fragment : inner_table_info.fragments) {
     if (fragment.shard != -1) {
       const auto it_ok = device_holding_fragments.emplace(fragment.shard % device_count);
       if (!it_ok.second) {
@@ -176,36 +177,37 @@ size_t get_shard_count(std::pair<const Analyzer::ColumnVar*, const Analyzer::Exp
   if (executor->isOuterJoin()) {
     return 0;
   }
-  const auto lhs_col = equi_pair.first;
-  const auto rhs_col = dynamic_cast<const Analyzer::ColumnVar*>(equi_pair.second);
-  if (!rhs_col || lhs_col->get_table_id() < 0 || rhs_col->get_table_id() < 0) {
+  const auto inner_col = equi_pair.first;
+  const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(equi_pair.second);
+  if (!outer_col || inner_col->get_table_id() < 0 || outer_col->get_table_id() < 0) {
     return 0;
   }
-  if (rhs_col->get_rte_idx()) {
+  if (outer_col->get_rte_idx()) {
     return 0;
   }
-  if (lhs_col->get_type_info() != rhs_col->get_type_info()) {
+  if (inner_col->get_type_info() != outer_col->get_type_info()) {
     return 0;
   }
   const auto catalog = executor->getCatalog();
-  const auto lhs_td = catalog->getMetadataForTable(lhs_col->get_table_id());
-  CHECK(lhs_td);
-  const auto rhs_td = catalog->getMetadataForTable(rhs_col->get_table_id());
-  CHECK(rhs_td);
-  if (lhs_td->shardedColumnId == 0 || rhs_td->shardedColumnId == 0 || lhs_td->nShards != rhs_td->nShards) {
+  const auto inner_td = catalog->getMetadataForTable(inner_col->get_table_id());
+  CHECK(inner_td);
+  const auto outer_td = catalog->getMetadataForTable(outer_col->get_table_id());
+  CHECK(outer_td);
+  if (inner_td->shardedColumnId == 0 || outer_td->shardedColumnId == 0 || inner_td->nShards != outer_td->nShards) {
     return 0;
   }
-  if (!shard_count_less_or_equal_device_count(rhs_td->tableId, executor)) {
+  if (!shard_count_less_or_equal_device_count(inner_td->tableId, executor)) {
     return 0;
   }
   if (contains_iter_expr(ra_exe_unit.target_exprs)) {
     return 0;
   }
   // The two columns involved must be the ones on which the tables have been sharded on.
-  return (lhs_td->shardedColumnId == lhs_col->get_column_id() && rhs_td->shardedColumnId == rhs_col->get_column_id()) ||
-                 (rhs_td->shardedColumnId == lhs_col->get_column_id() &&
-                  lhs_td->shardedColumnId == rhs_col->get_column_id())
-             ? lhs_td->nShards
+  return (inner_td->shardedColumnId == inner_col->get_column_id() &&
+          outer_td->shardedColumnId == outer_col->get_column_id()) ||
+                 (outer_td->shardedColumnId == inner_col->get_column_id() &&
+                  inner_td->shardedColumnId == inner_col->get_column_id())
+             ? inner_td->nShards
              : 0;
 }
 
