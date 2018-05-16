@@ -1041,8 +1041,8 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
       object_type = DBObjectType::DashboardDBObjectType;
       break;
     default:
-      THROW_MAPD_EXCEPTION("Failed to get object privileges for " + objectName +
-                           ": unknown object type (" + std::to_string(type) + ").");
+      THROW_MAPD_EXCEPTION("Failed to get object privileges for " + objectName + ": unknown object type (" +
+                           std::to_string(type) + ").");
   }
   DBObject object_to_find(objectName, object_type);
 
@@ -1236,6 +1236,11 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
   _return.shard_count = td->nShards;
   _return.key_metainfo = td->keyMetainfo;
   _return.is_temporary = td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
+  _return.partition_detail = td->partitions.empty()
+                                 ? TPartitionDetail::DEFAULT
+                                 : (table_is_replicated(td) ? TPartitionDetail::REPLICATED
+                                                            : (td->partitions == "SHARDED" ? TPartitionDetail::SHARDED
+                                                                                           : TPartitionDetail::OTHER));
 }
 
 // DEPRECATED(2017-04-17) - use get_table_details()

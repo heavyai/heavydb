@@ -340,6 +340,7 @@ StandardCommand(ListColumns, {
       std::string frag = "";
       std::string page = "";
       std::string row = "";
+      std::string partition_detail = "";
       if (DEFAULT_FRAGMENT_ROWS != table_details.fragment_size) {
         frag = "FRAGMENT_SIZE = " + std::to_string(table_details.fragment_size);
         comma_or_blank = ", ";
@@ -354,8 +355,15 @@ StandardCommand(ListColumns, {
       }
       if (DEFAULT_MAX_ROWS != table_details.max_rows) {
         row = comma_or_blank + "MAX_ROWS = " + std::to_string(table_details.max_rows);
+        comma_or_blank = ", ";
       }
-      std::string with = frag + page + row;
+      if (table_details.partition_detail != TPartitionDetail::DEFAULT) {
+        partition_detail = comma_or_blank + "PARTITION = " +
+                           (table_details.partition_detail == TPartitionDetail::REPLICATED ? "REPLICATED" : "");
+        partition_detail += (table_details.partition_detail == TPartitionDetail::SHARDED ? "SHARDED" : "");
+        partition_detail += (table_details.partition_detail == TPartitionDetail::OTHER ? "OTHER" : "");
+      }
+      std::string with = frag + page + row + partition_detail;
       if (with.length() > 0) {
         output_stream << "WITH (" << with << ")\n";
       }

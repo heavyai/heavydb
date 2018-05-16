@@ -51,6 +51,13 @@ enum TTableType {
   POLYGON
 }
 
+enum TPartitionDetail {
+  DEFAULT,
+  REPLICATED,
+  SHARDED,
+  OTHER
+}
+
 /* union */ struct TDatumVal {
   1: i64 int_val,
   2: double real_val,
@@ -303,6 +310,7 @@ struct TTableDetails {
   6: i64 shard_count
   7: string key_metainfo
   8: bool is_temporary
+  9: TPartitionDetail partition_detail
 }
 
 enum TExpressionRangeType {
