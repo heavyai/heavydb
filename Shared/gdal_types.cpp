@@ -61,9 +61,10 @@ GDALPolygon::GDALPolygon(const std::vector<double>& coords, const std::vector<in
   for (size_t r = 0; r < ring_sizes.size(); r++) {
     OGRLinearRing ring;
     const auto ring_sz = ring_sizes[r];
-    for (auto i = 0; i < ring_sz; i += 2) {
+    for (auto i = 0; i < 2 * ring_sz; i += 2) {
       ring.addPoint(coords[coords_ctr + i], coords[coords_ctr + i + 1]);
     }
+    ring.addPoint(coords[coords_ctr], coords[coords_ctr + 1]);
     coords_ctr += 2 * ring_sz;
     poly->addRing(&ring);
   }
@@ -86,6 +87,7 @@ GDALMultiPolygon::GDALMultiPolygon(const std::vector<double>& coords,
       for (auto i = 0; i < 2 * ring_sz; i += 2) {
         ring.addPoint(coords[coords_ctr + i], coords[coords_ctr + i + 1]);
       }
+      ring.addPoint(coords[coords_ctr], coords[coords_ctr + 1]);
       coords_ctr += 2 * ring_sz;
       poly.addRing(&ring);
       ring_ctr++;

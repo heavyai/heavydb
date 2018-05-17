@@ -40,7 +40,9 @@ inline std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targ
         agg_init_vals.push_back(0);
       }
       if (agg_info.sql_type.is_geometry()) {
-        for (auto i = 0; i < agg_info.sql_type.get_physical_coord_cols() - 1; ++i) {
+        agg_init_vals.push_back(0);
+        for (auto i = 1; i < agg_info.sql_type.get_physical_coord_cols(); ++i) {
+          agg_init_vals.push_back(0);
           agg_init_vals.push_back(0);
         }
       }

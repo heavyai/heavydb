@@ -99,10 +99,27 @@ std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str, const Execu
   return run_multiple_agg(query_str, device_type, true);
 }
 
-TargetValue run_simple_agg(const string& query_str, const ExecutorDeviceType device_type) {
+TargetValue run_simple_agg(const string& query_str,
+                           const ExecutorDeviceType device_type,
+                           const bool geo_return_double = true) {
   auto rows = run_multiple_agg(query_str, device_type);
+  if (geo_return_double) {
+    rows->setGeoReturnDouble();
+  }
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(1), crt_row.size());
+  return crt_row[0];
+}
+
+TargetValue get_first_target(const string& query_str,
+                             const ExecutorDeviceType device_type,
+                             const bool geo_return_double = true) {
+  auto rows = run_multiple_agg(query_str, device_type);
+  if (geo_return_double) {
+    rows->setGeoReturnDouble();
+  }
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_GE(crt_row.size(), size_t(1));
   return crt_row[0];
 }
 
@@ -113,6 +130,22 @@ T v(const TargetValue& r) {
   auto p = boost::get<T>(scalar_r);
   CHECK(p);
   return *p;
+}
+
+template <class T>
+void compare_array(const TargetValue& r, const std::vector<T>& arr, const double tol = -1.) {
+  auto scalar_tv_vector = boost::get<std::vector<ScalarTargetValue>>(&r);
+  CHECK(scalar_tv_vector);
+  ASSERT_EQ(scalar_tv_vector->size(), arr.size());
+  size_t ctr = 0;
+  for (const ScalarTargetValue scalar_tv : *scalar_tv_vector) {
+    auto p = boost::get<T>(&scalar_tv);
+    if (tol < 0.) {
+      ASSERT_EQ(*p, arr[ctr++]);
+    } else {
+      ASSERT_NEAR(*p, arr[ctr++], tol);
+    }
+  }
 }
 
 inline void run_ddl_statement(const std::string& create_table_stmt) {
@@ -5074,6 +5107,65 @@ TEST(Select, GeoSpatial) {
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
                                         "WHERE ST_Distance(p, 'LINESTRING(-1 0, 0 1)') < 2.5;",
                                         dt)));
+    // Projection (return doubles)
+    compare_array(run_simple_agg("SELECT p FROM geospatial_test WHERE rowid = 1;", dt), std::vector<double>{1., 1.});
+    compare_array(run_simple_agg("SELECT l FROM geospatial_test WHERE rowid = 1;", dt),
+                  std::vector<double>{1., 0., 2., 2., 3., 3.});
+    compare_array(run_simple_agg("SELECT poly FROM geospatial_test WHERE rowid = 1;", dt),
+                  std::vector<double>{0., 0., 0., 2., 2., 0.});
+    compare_array(run_simple_agg("SELECT mpoly FROM geospatial_test WHERE rowid = 1;", dt),
+                  std::vector<double>{0., 0., 0., 2., 2., 0.});
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;", dt)));
+    compare_array(
+        run_simple_agg("SELECT p FROM geospatial_test WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;", dt),
+        std::vector<double>{0., 0.});
+    compare_array(get_first_target(
+                      "SELECT p, l FROM geospatial_test WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;", dt),
+                  std::vector<double>{0., 0.});
+    compare_array(
+        run_simple_agg("SELECT l FROM geospatial_test WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;", dt),
+        std::vector<double>{0., 0., 0., 0.});
+    compare_array(
+        run_simple_agg(
+            "SELECT l FROM geospatial_test WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), p) BETWEEN 7 AND 8;", dt),
+        std::vector<double>{5., 0., 10., 10., 11., 11.});
+    compare_array(run_simple_agg("SELECT gp4326 FROM geospatial_test WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), "
+                                 "p) > 1 AND ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 2",
+                                 dt),
+                  std::vector<double>{0.9999, 0.9999},
+                  0.01);
+
+    // Projection (return WKT strings)
+    ASSERT_EQ("POINT (1 1)",
+              boost::get<std::string>(
+                  v<NullableString>(run_simple_agg("SELECT p FROM geospatial_test WHERE rowid = 1;", dt, false))));
+    ASSERT_EQ("LINESTRING (1 0,2 2,3 3)",
+              boost::get<std::string>(
+                  v<NullableString>(run_simple_agg("SELECT l FROM geospatial_test WHERE rowid = 1;", dt, false))));
+    ASSERT_EQ("POLYGON ((0 0,0 2,2 0,0 0))",
+              boost::get<std::string>(
+                  v<NullableString>(run_simple_agg("SELECT poly FROM geospatial_test WHERE rowid = 1;", dt, false))));
+    ASSERT_EQ("MULTIPOLYGON (((0 0,0 2,2 0,0 0)))",
+              boost::get<std::string>(
+                  v<NullableString>(run_simple_agg("SELECT mpoly FROM geospatial_test WHERE rowid = 1;", dt, false))));
+    ASSERT_EQ("LINESTRING (5 0,10 10,11 11)",
+              boost::get<std::string>(v<NullableString>(run_simple_agg(
+                  "SELECT l FROM geospatial_test WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), p) BETWEEN 7 AND 8;",
+                  dt,
+                  false))));
+    ASSERT_EQ(
+        "LINESTRING (0 0,0 0)",
+        boost::get<std::string>(v<NullableString>(get_first_target(
+            "SELECT l, p FROM geospatial_test WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;", dt, false))));
+    ASSERT_EQ(
+        "POINT (0 0)",
+        boost::get<std::string>(v<NullableString>(get_first_target(
+            "SELECT p, l FROM geospatial_test WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;", dt, false))));
+
+    // ST_Distance
     ASSERT_NEAR(static_cast<double>(2.0),
                 v<double>(run_simple_agg("SELECT ST_Distance('LINESTRING(-2 2, 2 2)', 'LINESTRING(4 2, 4 3)') "
                                          "from geospatial_test limit 1;",

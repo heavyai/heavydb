@@ -247,6 +247,11 @@ class SQLTypeInfo {
     // offsets rather than just a number to loop over,
     // so that executor and non-executor columns can
     // be mixed.
+    // NOTE(adb): In binding to extension functions, we need to know some pretty specific type info about each of the
+    // physical coords cols for each geo type. I added checks there to ensure the physical coords col for the geo type
+    // match what we expect. If these values are ever changed, corresponding values in
+    // ExtensionFunctionsBinding.cpp::compute_narrowing_conv_scores and
+    // ExtensionFunctionsBinding.cpp::compute_widening_conv_scores will also need to be changed.
     switch (type) {
       case kPOINT:
         return 1;

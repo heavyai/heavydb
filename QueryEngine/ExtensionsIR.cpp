@@ -48,7 +48,7 @@ bool ext_func_call_requires_nullcheck(const Analyzer::FunctionOper* function_ope
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
-    if (!arg_ti.get_notnull() && !arg_ti.is_array()) {
+    if (!arg_ti.get_notnull() && !arg_ti.is_array() && !arg_ti.is_geometry()) {
       return true;
     }
   }
@@ -80,21 +80,29 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
     const auto arg_lvs = codegen(arg, true, co);
-    if (arg_lvs.size() > 1) {
-      CHECK(arg_ti.is_array());
-      CHECK_EQ(size_t(2), arg_lvs.size());
-      const_arr_size[arg_lvs.front()] = arg_lvs.back();
+    // TODO(adb / d): Assuming no const array cols for geo (for now)
+    if (arg_ti.is_geometry()) {
+      CHECK_EQ(arg_ti.get_physical_coord_cols(), arg_lvs.size());
+      for (size_t i = 0; i < arg_lvs.size(); i++) {
+        orig_arg_lvs.push_back(arg_lvs[i]);
+      }
     } else {
-      CHECK_EQ(size_t(1), arg_lvs.size());
+      if (arg_lvs.size() > 1) {
+        CHECK(arg_ti.is_array());
+        CHECK_EQ(size_t(2), arg_lvs.size());
+        const_arr_size[arg_lvs.front()] = arg_lvs.back();
+      } else {
+        CHECK_EQ(size_t(1), arg_lvs.size());
+      }
+      orig_arg_lvs.push_back(arg_lvs.front());
     }
-    orig_arg_lvs.push_back(arg_lvs.front());
   }
   // The extension function implementations don't handle NULL, they work under
   // the assumption that the inputs are validated before calling them. Generate
   // code to do the check at the call site: if any argument is NULL, return NULL
   // without calling the function at all.
   const auto bbs = beginArgsNullcheck(function_oper, orig_arg_lvs);
-  CHECK_EQ(orig_arg_lvs.size(), function_oper->getArity());
+  CHECK_GE(orig_arg_lvs.size(), function_oper->getArity());
   // Arguments must be converted to the types the extension function can handle.
   const auto args = codegenFunctionOperCastArgs(function_oper, &ext_func_sig, orig_arg_lvs, const_arr_size, co);
   auto ext_call = cgen_state_->emitExternalCall(ext_func_sig.getName(), ret_ty, args);
@@ -204,7 +212,8 @@ llvm::Value* Executor::codegenFunctionOperWithCustomTypeHandling(
       const std::string func_name = "Round__4";
       const auto ret_ti = function_oper->get_type_info();
       CHECK(ret_ti.is_decimal());
-      const auto result_lv = cgen_state_->emitExternalCall(func_name, get_int_type(64, cgen_state_->context_), {arg0_lv, arg1_lv, ll_int(arg0_ti.get_scale())});
+      const auto result_lv = cgen_state_->emitExternalCall(
+          func_name, get_int_type(64, cgen_state_->context_), {arg0_lv, arg1_lv, ll_int(arg0_ti.get_scale())});
 
       return endArgsNullcheck(bbs0, result_lv, function_oper);
     }
@@ -220,7 +229,7 @@ llvm::Value* Executor::codegenFunctionOperNullArg(const Analyzer::FunctionOper* 
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
-    if (arg_ti.get_notnull() || arg_ti.is_array()) {
+    if (arg_ti.get_notnull() || arg_ti.is_array() || arg_ti.is_geometry()) {
       continue;
     }
     CHECK(arg_ti.is_number());
@@ -240,34 +249,115 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
   const auto& ext_func_args = ext_func_sig->getArgs();
   CHECK_LE(function_oper->getArity(), ext_func_args.size());
   std::vector<llvm::Value*> args;
-  for (size_t i = 0, j = 0; i < function_oper->getArity(); ++i) {
+  // i: argument in RA for the function op
+  // j: extra offset in orig_arg_lvs (to account for additional values required for a col, e.g. array cols)
+  // k: origin_arg_lvs counter
+  for (size_t i = 0, j = 0, k = 0; i < function_oper->getArity(); ++i, ++k) {
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
     llvm::Value* arg_lv{nullptr};
     if (arg_ti.is_array()) {
-      bool const_arr = (const_arr_size.count(orig_arg_lvs[i]) > 0);
+      bool const_arr = (const_arr_size.count(orig_arg_lvs[k]) > 0);
       const auto elem_ti = arg_ti.get_elem_type();
-      const auto ptr_lv = (const_arr) ? orig_arg_lvs[i]
+      const auto ptr_lv = (const_arr) ? orig_arg_lvs[k]
                                       : cgen_state_->emitExternalCall("array_buff",
                                                                       llvm::Type::getInt8PtrTy(cgen_state_->context_),
-                                                                      {orig_arg_lvs[i], posArg(arg)});
+                                                                      {orig_arg_lvs[k], posArg(arg)});
       const auto len_lv = (const_arr)
-                              ? const_arr_size.at(orig_arg_lvs[i])
+                              ? const_arr_size.at(orig_arg_lvs[k])
                               : cgen_state_->emitExternalCall(
                                     "array_size",
                                     get_int_type(32, cgen_state_->context_),
-                                    {orig_arg_lvs[i], posArg(arg), ll_int(log2_bytes(elem_ti.get_logical_size()))});
+                                    {orig_arg_lvs[k], posArg(arg), ll_int(log2_bytes(elem_ti.get_logical_size()))});
       args.push_back(castArrayPointer(ptr_lv, elem_ti));
       args.push_back(cgen_state_->ir_builder_.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_)));
       j++;
-    } else {
-      const auto arg_target_ti = ext_arg_type_to_type_info(ext_func_args[i + j]);
-      if (arg_ti.get_type() != arg_target_ti.get_type()) {
-        arg_lv = codegenCast(orig_arg_lvs[i], arg_ti, arg_target_ti, false, co);
-      } else {
-        arg_lv = orig_arg_lvs[i];
+    } else if (arg_ti.is_geometry()) {
+      // Coords
+      bool const_arr = (const_arr_size.count(orig_arg_lvs[k]) > 0);
+      // NOTE(adb): We're generating code to handle the TINYINT array only -- the actual geo encoding (or lack thereof)
+      // does not matter here
+      const auto elem_ti =
+          SQLTypeInfo(SQLTypes::kARRAY, 0, 0, false, EncodingType::kENCODING_NONE, 0, SQLTypes::kTINYINT)
+              .get_elem_type();
+      const auto ptr_lv = (const_arr) ? orig_arg_lvs[k]
+                                      : cgen_state_->emitExternalCall("array_buff",
+                                                                      llvm::Type::getInt8PtrTy(cgen_state_->context_),
+                                                                      {orig_arg_lvs[k], posArg(arg)});
+      const auto len_lv = (const_arr)
+                              ? const_arr_size.at(orig_arg_lvs[k])
+                              : cgen_state_->emitExternalCall(
+                                    "array_size",
+                                    get_int_type(32, cgen_state_->context_),
+                                    {orig_arg_lvs[k], posArg(arg), ll_int(log2_bytes(elem_ti.get_logical_size()))});
+      args.push_back(castArrayPointer(ptr_lv, elem_ti));
+      args.push_back(cgen_state_->ir_builder_.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_)));
+      j++;
+      switch (arg_ti.get_type()) {
+        case kPOINT:
+        case kLINESTRING:
+          break;
+        case kPOLYGON: {
+          k++;
+          // Ring Sizes
+          const auto elem_ti =
+              SQLTypeInfo(SQLTypes::kARRAY, 0, 0, false, EncodingType::kENCODING_NONE, 0, SQLTypes::kINT)
+                  .get_elem_type();
+          const auto ptr_lv = cgen_state_->emitExternalCall(
+              "array_buff", llvm::Type::getInt32PtrTy(cgen_state_->context_), {orig_arg_lvs[k], posArg(arg)});
+          const auto len_lv = cgen_state_->emitExternalCall(
+              "array_size",
+              get_int_type(32, cgen_state_->context_),
+              {orig_arg_lvs[k], posArg(arg), ll_int(log2_bytes(elem_ti.get_logical_size()))});
+          args.push_back(castArrayPointer(ptr_lv, elem_ti));
+          args.push_back(cgen_state_->ir_builder_.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_)));
+          j++;
+        } break;
+        case kMULTIPOLYGON: {
+          k++;
+          // Ring Sizes
+          {
+            const auto elem_ti =
+                SQLTypeInfo(SQLTypes::kARRAY, 0, 0, false, EncodingType::kENCODING_NONE, 0, SQLTypes::kINT)
+                    .get_elem_type();
+            const auto ptr_lv = cgen_state_->emitExternalCall(
+                "array_buff", llvm::Type::getInt32PtrTy(cgen_state_->context_), {orig_arg_lvs[k], posArg(arg)});
+            const auto len_lv = cgen_state_->emitExternalCall(
+                "array_size",
+                get_int_type(32, cgen_state_->context_),
+                {orig_arg_lvs[k], posArg(arg), ll_int(log2_bytes(elem_ti.get_logical_size()))});
+            args.push_back(castArrayPointer(ptr_lv, elem_ti));
+            args.push_back(cgen_state_->ir_builder_.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_)));
+          }
+          j++, k++;
+
+          // Poly Rings
+          {
+            const auto elem_ti =
+                SQLTypeInfo(SQLTypes::kARRAY, 0, 0, false, EncodingType::kENCODING_NONE, 0, SQLTypes::kINT)
+                    .get_elem_type();
+            const auto ptr_lv = cgen_state_->emitExternalCall(
+                "array_buff", llvm::Type::getInt32PtrTy(cgen_state_->context_), {orig_arg_lvs[k], posArg(arg)});
+            const auto len_lv = cgen_state_->emitExternalCall(
+                "array_size",
+                get_int_type(32, cgen_state_->context_),
+                {orig_arg_lvs[k], posArg(arg), ll_int(log2_bytes(elem_ti.get_logical_size()))});
+            args.push_back(castArrayPointer(ptr_lv, elem_ti));
+            args.push_back(cgen_state_->ir_builder_.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_)));
+          }
+          j++;
+        } break;
+        default:
+          CHECK(false);
       }
-      CHECK_EQ(arg_lv->getType(), ext_arg_type_to_llvm_type(ext_func_args[i + j], cgen_state_->context_));
+    } else {
+      const auto arg_target_ti = ext_arg_type_to_type_info(ext_func_args[k + j]);
+      if (arg_ti.get_type() != arg_target_ti.get_type()) {
+        arg_lv = codegenCast(orig_arg_lvs[k], arg_ti, arg_target_ti, false, co);
+      } else {
+        arg_lv = orig_arg_lvs[k];
+      }
+      CHECK_EQ(arg_lv->getType(), ext_arg_type_to_llvm_type(ext_func_args[k + j], cgen_state_->context_));
       args.push_back(arg_lv);
     }
   }

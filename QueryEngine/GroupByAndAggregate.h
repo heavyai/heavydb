@@ -532,6 +532,7 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list,
       if (chosen_type.is_geometry()) {
         for (auto i = 0; i < chosen_type.get_physical_coord_cols(); ++i) {
           col_widths.push_back(sizeof(int64_t));
+          col_widths.push_back(sizeof(int64_t));
         }
         ++col_expr_idx;
         continue;

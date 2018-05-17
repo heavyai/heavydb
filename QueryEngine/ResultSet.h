@@ -423,6 +423,21 @@ class ResultSet {
                                     const size_t target_logical_idx,
                                     const size_t entry_buff_idx) const;
 
+  struct VarlenTargetPtrPair {
+    int8_t* ptr1;
+    int8_t compact_sz1;
+    int8_t* ptr2;
+    int8_t compact_sz2;
+
+    VarlenTargetPtrPair() : ptr1(nullptr), compact_sz1(0), ptr2(nullptr), compact_sz2(0) {}
+  };
+  TargetValue makeGeoTargetValue(const VarlenTargetPtrPair& coords,
+                                 const VarlenTargetPtrPair& ring_sizes,
+                                 const VarlenTargetPtrPair& poly_rings,
+                                 const TargetInfo& target_info,
+                                 const size_t target_logical_idx,
+                                 const size_t entry_buff_idx) const;
+
   struct StorageLookupResult {
     const ResultSetStorage* storage_ptr;
     const size_t fixedup_entry_idx;

@@ -3211,7 +3211,7 @@ std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
   const auto& chosen_type = get_compact_type(target_info);
   if (!target_info.is_agg || target_info.agg_kind == kLAST_SAMPLE) {
     if (chosen_type.is_geometry()) {
-      return std::vector<std::string>(chosen_type.get_physical_coord_cols(), "agg_id");
+      return std::vector<std::string>(2 * chosen_type.get_physical_coord_cols(), "agg_id");
     }
     if (chosen_type.is_varlen()) {
       return {"agg_id", "agg_id"};
@@ -3382,13 +3382,26 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
       throw CompilationRetryNoCompaction();
     }
     llvm::Value* str_target_lv{nullptr};
-    // TODO(adb): improve this check to be more descriptive rather than just ignoring geo
     if (target_lvs.size() == 3 && !agg_info.sql_type.is_geometry()) {
       // none encoding string, pop the packed pointer + length since
       // it's only useful for IS NULL checks and assumed to be only
       // two components (pointer and length) for the purpose of projection
       str_target_lv = target_lvs.front();
       target_lvs.erase(target_lvs.begin());
+    }
+    if (agg_info.sql_type.is_geometry()) {
+      // Geo cols are expanded to the physical coord cols. Each physical coord col is an array. Ensure that the target
+      // values generated match the number of agg functions before continuing
+      if (target_lvs.size() < agg_fn_names.size()) {
+        CHECK_EQ(target_lvs.size(), agg_fn_names.size() / 2);
+        std::vector<llvm::Value*> new_target_lvs;
+        new_target_lvs.reserve(agg_fn_names.size());
+        for (const auto& target_lv : target_lvs) {
+          new_target_lvs.push_back(target_lv);
+          new_target_lvs.push_back(target_lv);
+        }
+        target_lvs = new_target_lvs;
+      }
     }
     if (target_lvs.size() < agg_fn_names.size()) {
       CHECK_EQ(size_t(1), target_lvs.size());
@@ -3398,7 +3411,7 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
       }
     } else {
       if (agg_info.sql_type.is_geometry()) {
-        CHECK_EQ(agg_info.sql_type.get_physical_coord_cols(), target_lvs.size());
+        CHECK_EQ(static_cast<size_t>(2 * agg_info.sql_type.get_physical_coord_cols()), target_lvs.size());
         CHECK_EQ(agg_fn_names.size(), target_lvs.size());
       } else {
         CHECK(str_target_lv || (agg_fn_names.size() == target_lvs.size()));
@@ -3711,6 +3724,27 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(const Analyzer::Exp
                                                        {target_lvs.front(),
                                                         executor_->posArg(target_expr),
                                                         executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))})};
+    }
+    if (target_ti.is_geometry() && !executor_->plan_state_->isLazyFetchColumn(target_expr)) {
+      const auto target_lvs = executor_->codegen(target_expr, !executor_->plan_state_->allow_lazy_fetch_, co);
+      CHECK_EQ(target_ti.get_physical_coord_cols(), target_lvs.size());
+      CHECK(!agg_expr);
+      const auto i32_ty = get_int_type(32, executor_->cgen_state_->context_);
+      const auto i8p_ty = llvm::PointerType::get(get_int_type(8, executor_->cgen_state_->context_), 0);
+      std::vector<llvm::Value*> coords;
+      size_t ctr = 0;
+      for (const auto& target_lv : target_lvs) {
+        // TODO(adb): consider adding a utility to sqltypes so we can get the types of the physical coords cols based on
+        // the sqltype (e.g. TINYINT for col 0, INT for col 1 for pols / mpolys, etc). Hardcoding for now.
+        // first array is the coords array (TINYINT). Subsequent arrays are regular INT.
+        const size_t elem_sz = ctr == 0 ? 1 : 4;
+        ctr++;
+        coords.push_back(executor_->cgen_state_->emitExternalCall(
+            "array_buff", i8p_ty, {target_lv, executor_->posArg(target_expr)}));
+        coords.push_back(executor_->cgen_state_->emitExternalCall(
+            "array_size", i32_ty, {target_lv, executor_->posArg(target_expr), executor_->ll_int(log2_bytes(elem_sz))}));
+      }
+      return coords;
     }
   }
   return agg_expr ? executor_->codegen(agg_expr->get_arg(), true, co)

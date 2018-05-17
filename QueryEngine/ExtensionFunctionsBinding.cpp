@@ -152,6 +152,52 @@ std::vector<unsigned> compute_narrowing_conv_scores(const Analyzer::FunctionOper
         CHECK(ExtArgumentType::Int64 == ext_func_args[phys_arg_idx]);
         continue;
       }
+      if (arg_ti.is_geometry()) {
+        if (ExtArgumentType::PInt8 != ext_func_args[phys_arg_idx]) {
+          score = std::numeric_limits<unsigned>::max();
+          break;
+        }
+        ++phys_arg_idx;
+        CHECK_LT(phys_arg_idx, ext_func_args.size());
+        CHECK(ExtArgumentType::Int64 == ext_func_args[phys_arg_idx]);
+        switch (arg_ti.get_type()) {
+          case kPOINT:
+          case kLINESTRING:
+            // kPOINT and kLINESTRING only have 1 physical coord col (PInt8 type)
+            CHECK_EQ(arg_ti.get_physical_coord_cols(), 1);
+            break;
+          case kPOLYGON:
+          case kMULTIPOLYGON: {
+            // Ring Sizes
+            CHECK_LT(phys_arg_idx + 2, ext_func_args.size());
+            ++phys_arg_idx;
+            if (ExtArgumentType::PInt32 != ext_func_args[phys_arg_idx]) {
+              score = std::numeric_limits<unsigned>::max();
+              break;
+            }
+            ++phys_arg_idx;
+            CHECK(ExtArgumentType::Int64 == ext_func_args[phys_arg_idx]);
+            if (arg_ti.get_type() == kPOLYGON) {
+              CHECK_EQ(arg_ti.get_physical_coord_cols(), 2);
+              break;
+            }
+            CHECK_EQ(arg_ti.get_physical_coord_cols(), 3);
+            // Poly Rings
+            CHECK_LT(phys_arg_idx + 2, ext_func_args.size());
+            ++phys_arg_idx;
+            if (ExtArgumentType::PInt32 != ext_func_args[phys_arg_idx]) {
+              score = std::numeric_limits<unsigned>::max();
+              break;
+            }
+            ++phys_arg_idx;
+            CHECK(ExtArgumentType::Int64 == ext_func_args[phys_arg_idx]);
+          } break;
+          default:
+            CHECK(false);
+            break;
+        }
+        continue;
+      }
       const auto arg_target_ti = ext_arg_type_to_type_info(ext_func_args[phys_arg_idx]);
       score += narrowing_conversion_score(arg_ti, arg_target_ti);
     }
@@ -179,6 +225,52 @@ std::vector<unsigned> compute_widening_conv_scores(const Analyzer::FunctionOper*
         ++phys_arg_idx;
         CHECK_LT(phys_arg_idx, ext_func_args.size());
         CHECK(ExtArgumentType::Int64 == ext_func_args[phys_arg_idx]);
+        continue;
+      }
+      if (arg_ti.is_geometry()) {
+        if (ExtArgumentType::PInt8 != ext_func_args[phys_arg_idx]) {
+          score = std::numeric_limits<unsigned>::max();
+          break;
+        }
+        ++phys_arg_idx;
+        CHECK_LT(phys_arg_idx, ext_func_args.size());
+        CHECK(ExtArgumentType::Int64 == ext_func_args[phys_arg_idx]);
+        switch (arg_ti.get_type()) {
+          case kPOINT:
+          case kLINESTRING:
+            // kPOINT and kLINESTRING only have 1 physical coord col (PInt8 type)
+            CHECK_EQ(arg_ti.get_physical_coord_cols(), 1);
+            break;
+          case kPOLYGON:
+          case kMULTIPOLYGON: {
+            // Ring Sizes
+            CHECK_LT(phys_arg_idx + 2, ext_func_args.size());
+            ++phys_arg_idx;
+            if (ExtArgumentType::PInt32 != ext_func_args[phys_arg_idx]) {
+              score = std::numeric_limits<unsigned>::max();
+              break;
+            }
+            ++phys_arg_idx;
+            CHECK(ExtArgumentType::Int64 == ext_func_args[phys_arg_idx]);
+            if (arg_ti.get_type() == kPOLYGON) {
+              CHECK_EQ(arg_ti.get_physical_coord_cols(), 2);
+              break;
+            }
+            CHECK_EQ(arg_ti.get_physical_coord_cols(), 3);
+            // Poly Rings
+            CHECK_LT(phys_arg_idx + 2, ext_func_args.size());
+            ++phys_arg_idx;
+            if (ExtArgumentType::PInt32 != ext_func_args[phys_arg_idx]) {
+              score = std::numeric_limits<unsigned>::max();
+              break;
+            }
+            ++phys_arg_idx;
+            CHECK(ExtArgumentType::Int64 == ext_func_args[phys_arg_idx]);
+          } break;
+          default:
+            CHECK(false);
+            break;
+        }
         continue;
       }
       const auto arg_target_ti = ext_arg_type_to_type_info(ext_func_args[phys_arg_idx]);

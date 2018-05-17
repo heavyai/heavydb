@@ -35,13 +35,12 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
   CHECK(gcd);
   ti = gcd->columnType;
   CHECK(IS_GEO(ti.get_type()));
-  // Translate geo column reference to a list of physical column refs,
-  // include bounds column if present and requested
-  auto bounds_col = (with_bounds && ti.has_bounds()) ? 1 : 0;
-  for (auto i = 0; i < ti.get_physical_coord_cols() + bounds_col; i++) {
-    const auto pcd = cat_.getMetadataForColumn(table_desc->tableId, rex_input->getIndex() + 1 + i + 1);
-    auto pcol_ti = pcd->columnType;
-    args.push_back(std::make_shared<Analyzer::ColumnVar>(pcol_ti, table_desc->tableId, pcd->columnId, rte_idx));
+  // Return geo column reference. The reference will be translated into physical columns as required. Bounds column will be added if present and requested.
+  args.push_back(std::make_shared<Analyzer::ColumnVar>(ti, table_desc->tableId, gcd->columnId, rte_idx));
+  if (with_bounds && ti.has_bounds()) {
+    const auto bounds_cd = cat_.getMetadataForColumn(table_desc->tableId, rex_input->getIndex() + ti.get_physical_coord_cols() + 2);
+    auto bounds_ti = bounds_cd->columnType;
+    args.push_back(std::make_shared<Analyzer::ColumnVar>(bounds_ti, table_desc->tableId, bounds_cd->columnId, rte_idx));
   }
   return args;
 }

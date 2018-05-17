@@ -127,8 +127,10 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
         auto col = codegenColVar(col0_var.get(), fetch_column, false, co);
         cols.insert(cols.end(), col.begin(), col.end());
       }
-      if (plan_state_->isLazyFetchColumn(col_var)) {
+      if (!fetch_column && plan_state_->isLazyFetchColumn(col_var)) {
         plan_state_->columns_to_not_fetch_.insert(std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
+      } else {
+        plan_state_->columns_to_fetch_.insert(std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
       }
       return cols;
     }
