@@ -53,7 +53,7 @@ GDALLineString::GDALLineString(const std::vector<double>& coords) {
 }
 
 GDALPolygon::GDALPolygon(const std::vector<double>& coords, const std::vector<int32_t>& ring_sizes) {
-  geom_ = OGRGeometryFactory::createGeometry(OGRwkbGeometryType::wkbMultiPolygon);
+  geom_ = OGRGeometryFactory::createGeometry(OGRwkbGeometryType::wkbPolygon);
   OGRPolygon* poly = dynamic_cast<OGRPolygon*>(geom_);
   CHECK(poly);
 
