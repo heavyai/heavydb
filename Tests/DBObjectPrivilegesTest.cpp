@@ -17,7 +17,6 @@ namespace {
 std::shared_ptr<Calcite> g_calcite;
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
 Catalog_Namespace::SysCatalog& sys_cat = Catalog_Namespace::SysCatalog::instance();
-;
 Catalog_Namespace::UserMetadata user;
 Catalog_Namespace::DBMetadata db;
 std::vector<DBObject> privObjects;
@@ -100,7 +99,7 @@ struct Users {
       CHECK(!sys_cat.getMetadataForUser("Bayern", user));
     }
   }
-  explicit Users() { setup_users(); }
+  Users() { setup_users(); }
   virtual ~Users() { drop_users(); }
 };
 struct Roles {
@@ -133,16 +132,29 @@ struct Roles {
       CHECK(!sys_cat.getMetadataForRole("sudens"));
     }
   }
-  explicit Roles() { setup_roles(); }
+  Roles() { setup_roles(); }
   virtual ~Roles() { drop_roles(); }
 };
-struct TableStruct {
-  std::string cquery1 = "CREATE TABLE IF NOT EXISTS epl(gp SMALLINT, won SMALLINT);";
-  std::string cquery2 = "CREATE TABLE IF NOT EXISTS seriea(gp SMALLINT, won SMALLINT);";
-  std::string cquery3 = "CREATE TABLE IF NOT EXISTS bundesliga(gp SMALLINT, won SMALLINT);";
-  std::string dquery1 = "DROP TABLE IF EXISTS epl;";
-  std::string dquery2 = "DROP TABLE IF EXISTS seriea;";
-  std::string dquery3 = "DROP TABLE IF EXISTS bundesliga;";
+
+struct DatabaseObject : testing::Test {
+  Catalog_Namespace::UserMetadata user_meta;
+  Catalog_Namespace::DBMetadata db_meta;
+  Users user_;
+  Roles role_;
+
+  explicit DatabaseObject() {}
+  virtual ~DatabaseObject() {}
+};
+
+struct TableObject : testing::Test {
+  const std::string cquery1 = "CREATE TABLE IF NOT EXISTS epl(gp SMALLINT, won SMALLINT);";
+  const std::string cquery2 = "CREATE TABLE IF NOT EXISTS seriea(gp SMALLINT, won SMALLINT);";
+  const std::string cquery3 = "CREATE TABLE IF NOT EXISTS bundesliga(gp SMALLINT, won SMALLINT);";
+  const std::string dquery1 = "DROP TABLE IF EXISTS epl;";
+  const std::string dquery2 = "DROP TABLE IF EXISTS seriea;";
+  const std::string dquery3 = "DROP TABLE IF EXISTS bundesliga;";
+  Users user_;
+  Roles role_;
 
   void setup_tables() {
     run_ddl_statement(cquery1);
@@ -154,29 +166,15 @@ struct TableStruct {
     run_ddl_statement(dquery2);
     run_ddl_statement(dquery3);
   }
-  Users* user;
-  Roles* role;
-  explicit TableStruct() {
-    user = new Users();
-    role = new Roles();
+  explicit TableObject() {
     drop_tables();
     setup_tables();
   }
-  virtual ~TableStruct() {
-    drop_tables();
-    delete user;
-    delete role;
-  }
-};
-
-struct TableObject : testing::Test {
-  TableStruct* table_;
-  TableObject() { table_ = new TableStruct(); }
-  virtual ~TableObject() { delete table_; }
+  virtual ~TableObject() { drop_tables(); }
 };
 
 struct ViewObject : testing::Test {
-  ViewObject() {
+  void setup_objects() {
     run_ddl_statement("CREATE USER bob (password = 'password', is_super = 'false');");
     run_ddl_statement("CREATE ROLE salesDept;");
     run_ddl_statement("CREATE USER foo (password = 'password', is_super = 'false');");
@@ -186,7 +184,8 @@ struct ViewObject : testing::Test {
     run_ddl_statement("CREATE VIEW bill_view AS SELECT id FROM bill_table;");
     run_ddl_statement("CREATE VIEW bill_view_outer AS SELECT id FROM bill_view;");
   }
-  virtual ~ViewObject() {
+
+  void remove_objects() {
     run_ddl_statement("DROP VIEW bill_view_outer;");
     run_ddl_statement("DROP VIEW bill_view;");
     run_ddl_statement("DROP TABLE bill_table");
@@ -195,15 +194,19 @@ struct ViewObject : testing::Test {
     run_ddl_statement("DROP ROLE salesDept;");
     run_ddl_statement("DROP USER bob;");
   }
+  explicit ViewObject() { setup_objects(); }
+  virtual ~ViewObject() { remove_objects(); }
 };
 
-struct DashboardStruct {
-  std::string dname1 = "ChampionsLeague";
-  std::string dname2 = "Europa";
-  std::string dstate = "active";
-  std::string dhash = "image00";
-  std::string dmeta = "Chelsea are champions";
+struct DashboardObject : testing::Test {
+  const std::string dname1 = "ChampionsLeague";
+  const std::string dname2 = "Europa";
+  const std::string dstate = "active";
+  const std::string dhash = "image00";
+  const std::string dmeta = "Chelsea are champions";
   int id;
+  Users user_;
+  Roles role_;
 
   FrontendViewDescriptor vd1;
   void setup_dashboards() {
@@ -224,27 +227,173 @@ struct DashboardStruct {
       gcat.deleteMetadataForDashboard(id);
     }
   }
-  Users* user;
-  Roles* role;
-
-  explicit DashboardStruct() {
-    user = new Users();
-    role = new Roles();
+  explicit DashboardObject() {
     drop_dashboards();
     setup_dashboards();
   }
-  virtual ~DashboardStruct() {
-    drop_dashboards();
-    delete user;
-    delete role;
-  }
+  virtual ~DashboardObject() { drop_dashboards(); }
 };
 
-struct DashboardObject : testing::Test {
-  DashboardStruct* dash_;
-  DashboardObject() { dash_ = new DashboardStruct(); }
-  virtual ~DashboardObject() { delete dash_; }
-};
+TEST_F(DatabaseObject, AccessDefaultsTest) {
+  auto cat_mapd = Catalog_Namespace::Catalog::get("mapd");
+  DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
+  privObjects.clear();
+  mapd_object.loadKey(*cat_mapd);
+
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
+  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), false);
+  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
+}
+
+TEST_F(DatabaseObject, TableAccessTest) {
+  std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
+  boost::filesystem::path base_path{BASE_PATH};
+  auto system_db_file = base_path / "mapd_catalogs" / "mapd";
+  auto data_dir = base_path / "mapd_data";
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+  sys_cat.getMetadataForDB("mapd", db_meta);
+  sys_cat.getMetadataForUser("Arsenal", user_meta);
+  session_ars.reset(
+      new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
+                                             base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
+                                         user_meta,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
+  auto& cat_mapd = session_ars->get_catalog();
+  AccessPrivileges arsenal_privs;
+  ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::CREATE_TABLE));
+  ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::DROP_TABLE));
+  DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
+  privObjects.clear();
+  mapd_object.loadKey(cat_mapd);
+  mapd_object.resetPrivileges();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(arsenal_privs));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Arsenal", mapd_object, cat_mapd));
+
+  mapd_object.resetPrivileges();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(arsenal_privs));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(arsenal_privs.remove(AccessPrivileges::CREATE_TABLE));
+  ASSERT_NO_THROW(mapd_object.setPrivileges(arsenal_privs));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Arsenal", mapd_object, cat_mapd));
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::CREATE_TABLE));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+}
+
+TEST_F(DatabaseObject, ViewAccessTest) {
+  std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
+  boost::filesystem::path base_path{BASE_PATH};
+  auto system_db_file = base_path / "mapd_catalogs" / "mapd";
+  auto data_dir = base_path / "mapd_data";
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+  sys_cat.getMetadataForDB("mapd", db_meta);
+  sys_cat.getMetadataForUser("Arsenal", user_meta);
+  session_ars.reset(
+      new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
+                                             base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
+                                         user_meta,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
+  auto& cat_mapd = session_ars->get_catalog();
+  AccessPrivileges arsenal_privs;
+  ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_VIEW));
+  DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
+  privObjects.clear();
+  mapd_object.loadKey(cat_mapd);
+  mapd_object.resetPrivileges();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(arsenal_privs));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Arsenal", mapd_object, cat_mapd));
+
+  mapd_object.resetPrivileges();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(arsenal_privs));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(arsenal_privs.remove(AccessPrivileges::DROP_VIEW));
+  ASSERT_NO_THROW(arsenal_privs.remove(AccessPrivileges::TRUNCATE_VIEW));
+  ASSERT_NO_THROW(mapd_object.setPrivileges(arsenal_privs));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Arsenal", mapd_object, cat_mapd));
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::ALL_VIEW));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::DROP_VIEW));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::TRUNCATE_VIEW));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+}
+
+TEST_F(DatabaseObject, DashboardAccessTest) {
+  std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
+  boost::filesystem::path base_path{BASE_PATH};
+  auto system_db_file = base_path / "mapd_catalogs" / "mapd";
+  auto data_dir = base_path / "mapd_data";
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+  sys_cat.getMetadataForDB("mapd", db_meta);
+  sys_cat.getMetadataForUser("Arsenal", user_meta);
+  session_ars.reset(
+      new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
+                                             base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
+                                         user_meta,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
+  auto& cat_mapd = session_ars->get_catalog();
+  AccessPrivileges arsenal_privs;
+  ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DASHBOARD));
+  DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
+  privObjects.clear();
+  mapd_object.loadKey(cat_mapd);
+  mapd_object.resetPrivileges();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(arsenal_privs));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Arsenal", mapd_object, cat_mapd));
+
+  mapd_object.resetPrivileges();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(arsenal_privs));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(arsenal_privs.remove(AccessPrivileges::EDIT_DASHBOARD));
+  ASSERT_NO_THROW(mapd_object.setPrivileges(arsenal_privs));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Arsenal", mapd_object, cat_mapd));
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::CREATE_DASHBOARD));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::DELETE_DASHBOARD));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::EDIT_DASHBOARD));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+}
 
 TEST_F(TableObject, AccessDefaultsTest) {
   auto& g_cat = g_session->get_catalog();
@@ -517,7 +666,7 @@ TEST_F(DashboardObject, AccessDefaultsTest) {
   AccessPrivileges dash_priv;
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::VIEW_DASHBOARD));
   privObjects.clear();
-  DBObject dash_object(dash_->id, DBObjectType::DashboardDBObjectType);
+  DBObject dash_object(id, DBObjectType::DashboardDBObjectType);
   dash_object.loadKey(g_cat);
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   privObjects.push_back(dash_object);
@@ -534,7 +683,7 @@ TEST_F(DashboardObject, AccessAfterGrantsTest) {
   AccessPrivileges dash_priv;
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::VIEW_DASHBOARD));
   privObjects.clear();
-  DBObject dash_object(dash_->id, DBObjectType::DashboardDBObjectType);
+  DBObject dash_object(id, DBObjectType::DashboardDBObjectType);
   dash_object.loadKey(g_cat);
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   privObjects.push_back(dash_object);
@@ -556,7 +705,7 @@ TEST_F(DashboardObject, AccessAfterRevokesTest) {
   AccessPrivileges dash_priv;
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::VIEW_DASHBOARD));
   privObjects.clear();
-  DBObject dash_object(dash_->id, DBObjectType::DashboardDBObjectType);
+  DBObject dash_object(id, DBObjectType::DashboardDBObjectType);
   dash_object.loadKey(g_cat);
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   privObjects.push_back(dash_object);
@@ -585,7 +734,7 @@ TEST_F(DashboardObject, AccessAfterRevokesTest) {
 TEST_F(DashboardObject, GranteesDefaultListTest) {
   auto& g_cat = g_session->get_catalog();
   auto perms_list = sys_cat.getMetadataForObject(
-      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dash_->id);
+      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), id);
   int size = static_cast<int>(perms_list.size());
   ASSERT_EQ(size, 0);
 }
@@ -593,20 +742,20 @@ TEST_F(DashboardObject, GranteesDefaultListTest) {
 TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
   auto& g_cat = g_session->get_catalog();
   auto perms_list = sys_cat.getMetadataForObject(
-      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dash_->id);
+      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), id);
   int recs1 = static_cast<int>(perms_list.size());
   ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
   AccessPrivileges dash_priv;
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::VIEW_DASHBOARD));
   privObjects.clear();
-  DBObject dash_object(dash_->id, DBObjectType::DashboardDBObjectType);
+  DBObject dash_object(id, DBObjectType::DashboardDBObjectType);
   dash_object.loadKey(g_cat);
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   privObjects.push_back(dash_object);
   ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("OldLady", dash_object, g_cat));
   ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", dash_object, g_cat));
   perms_list = sys_cat.getMetadataForObject(
-      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dash_->id);
+      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), id);
   int recs2 = static_cast<int>(perms_list.size());
   ASSERT_NE(recs1, recs2);
   ASSERT_EQ(recs2, 2);
@@ -618,7 +767,7 @@ TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", dash_object, g_cat));
   perms_list = sys_cat.getMetadataForObject(
-      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dash_->id);
+      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), id);
   int recs3 = static_cast<int>(perms_list.size());
   ASSERT_EQ(recs3, 2);
   ASSERT_TRUE(perms_list[0]->privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
@@ -629,21 +778,21 @@ TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
 TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   auto& g_cat = g_session->get_catalog();
   auto perms_list = sys_cat.getMetadataForObject(
-      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dash_->id);
+      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), id);
   int recs1 = static_cast<int>(perms_list.size());
   ASSERT_NO_THROW(sys_cat.grantRole("Gunners", "Arsenal"));
   AccessPrivileges dash_priv;
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::VIEW_DASHBOARD));
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::EDIT_DASHBOARD));
   privObjects.clear();
-  DBObject dash_object(dash_->id, DBObjectType::DashboardDBObjectType);
+  DBObject dash_object(id, DBObjectType::DashboardDBObjectType);
   dash_object.loadKey(g_cat);
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   privObjects.push_back(dash_object);
   ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Gunners", dash_object, g_cat));
   ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Chelsea", dash_object, g_cat));
   perms_list = sys_cat.getMetadataForObject(
-      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dash_->id);
+      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), id);
   int recs2 = static_cast<int>(perms_list.size());
   ASSERT_NE(recs1, recs2);
   ASSERT_EQ(recs2, 2);
@@ -656,7 +805,7 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Gunners", dash_object, g_cat));
   perms_list = sys_cat.getMetadataForObject(
-      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dash_->id);
+      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), id);
   int recs3 = static_cast<int>(perms_list.size());
   ASSERT_EQ(recs3, 2);
   ASSERT_TRUE(perms_list[0]->privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
@@ -668,7 +817,7 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Gunners", dash_object, g_cat));
   perms_list = sys_cat.getMetadataForObject(
-      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dash_->id);
+      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), id);
   int recs4 = static_cast<int>(perms_list.size());
   ASSERT_EQ(recs4, 1);
   ASSERT_TRUE(perms_list[0]->privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
@@ -678,7 +827,7 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Chelsea", dash_object, g_cat));
   perms_list = sys_cat.getMetadataForObject(
-      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), dash_->id);
+      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), id);
   int recs5 = static_cast<int>(perms_list.size());
   ASSERT_EQ(recs1, recs5);
   ASSERT_EQ(recs5, 0);
