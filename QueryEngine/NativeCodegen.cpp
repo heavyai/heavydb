@@ -16,6 +16,7 @@
 
 #include "Execute.h"
 #include "ExtensionFunctionsWhitelist.h"
+#include "LLVMFunctionAttributesUtil.h"
 #include "QueryTemplateGenerator.h"
 
 #include "Shared/mapdpath.h"
@@ -76,7 +77,7 @@ void verify_function_ir(const llvm::Function* func) {
   std::stringstream err_ss;
   llvm::raw_os_ostream err_os(err_ss);
   if (llvm::verifyFunction(*func, &err_os)) {
-    func->dump();
+    func->print(llvm::outs());
     LOG(FATAL) << err_ss.str();
   }
 }
@@ -117,8 +118,7 @@ void optimizeIR(llvm::Function* query_func,
   // optimizations might add attributes to the function
   // and NVPTX doesn't understand all of them; play it
   // safe and clear all attributes
-  llvm::AttributeSet no_attributes;
-  query_func->setAttributes(no_attributes);
+  clear_function_attributes(query_func);
   verify_function_ir(query_func);
 }
 
@@ -266,6 +266,8 @@ const std::string cuda_rt_decls =
     R"(
 declare void @llvm.lifetime.start(i64, i8* nocapture) nounwind
 declare void @llvm.lifetime.end(i64, i8* nocapture) nounwind
+declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) nounwind
+declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) nounwind
 declare i32 @pos_start_impl(i32*);
 declare i32 @group_buff_idx_impl();
 declare i32 @pos_step_impl();
@@ -434,7 +436,7 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(llvm::Funct
 
   auto get_group_value_func = module->getFunction("get_group_value_one_key");
   CHECK(get_group_value_func);
-  get_group_value_func->setAttributes(llvm::AttributeSet{});
+  clear_function_attributes(get_group_value_func);
 
   bool row_func_not_inlined = false;
   if (no_inline) {
@@ -448,9 +450,7 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(llvm::Funct
             get_gv_call.getCalledFunction()->getName() == "string_decode" ||
             get_gv_call.getCalledFunction()->getName() == "array_size" ||
             get_gv_call.getCalledFunction()->getName() == "linear_probabilistic_count") {
-          llvm::AttributeSet no_inline_attrs;
-          no_inline_attrs = no_inline_attrs.addAttribute(cgen_state_->context_, 0, llvm::Attribute::NoInline);
-          cgen_state_->row_func_->setAttributes(no_inline_attrs);
+          mark_function_never_inline(cgen_state_->row_func_);
           row_func_not_inlined = true;
           break;
         }
@@ -490,8 +490,7 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(llvm::Funct
 
   std::unordered_set<llvm::Function*> roots{multifrag_query_func, query_func};
   if (row_func_not_inlined) {
-    llvm::AttributeSet no_attributes;
-    cgen_state_->row_func_->setAttributes(no_attributes);
+    clear_function_attributes(cgen_state_->row_func_);
     roots.insert(cgen_state_->row_func_);
   }
 
@@ -660,9 +659,7 @@ std::vector<llvm::Value*> generate_column_heads_load(const int num_columns,
   auto& fetch_bb = query_func->front();
   llvm::IRBuilder<> fetch_ir_builder(&fetch_bb);
   fetch_ir_builder.SetInsertPoint(&*fetch_bb.begin());
-  auto& in_arg_list = query_func->getArgumentList();
-  CHECK_GE(in_arg_list.size(), size_t(4));
-  auto& byte_stream_arg = in_arg_list.front();
+  auto& byte_stream_arg = *query_func->args().begin();
   std::vector<llvm::Value*> col_heads;
   for (int col_id = 0; col_id <= max_col_local_id; ++col_id) {
     col_heads.emplace_back(fetch_ir_builder.CreateLoad(
@@ -1067,7 +1064,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const std::vector<InputTab
   CHECK(cgen_state_->row_func_);
 
   // make sure it's in-lined, we don't want register spills in the inner loop
-  cgen_state_->row_func_->addAttribute(llvm::AttributeSet::FunctionIndex, llvm::Attribute::AlwaysInline);
+  mark_function_always_inline(cgen_state_->row_func_);
 
   auto bb = llvm::BasicBlock::Create(cgen_state_->context_, "entry", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(bb);

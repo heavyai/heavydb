@@ -84,8 +84,7 @@ class WatchdogException : public std::runtime_error {
 class Executor;
 
 inline llvm::Value* get_arg_by_name(llvm::Function* func, const std::string& name) {
-  auto& arg_list = func->getArgumentList();
-  for (auto& arg : arg_list) {
+  for (auto& arg : func->args()) {
     if (arg.getName() == name) {
       return &arg;
     }
@@ -259,8 +258,10 @@ class UpdateLogForFragment {
   size_t const getEntryCount() const;
   size_t const getFragmentIndex() const;
   FragmentInfoType const& getFragmentInfo() const;
-  decltype( FragmentInfoType::physicalTableId ) const getPhysicalTableId() const { return fragment_info_.physicalTableId; }
-  decltype( FragmentInfoType::fragmentId ) const getFragmentId() const { return fragment_info_.fragmentId; }
+  decltype(FragmentInfoType::physicalTableId) const getPhysicalTableId() const {
+    return fragment_info_.physicalTableId;
+  }
+  decltype(FragmentInfoType::fragmentId) const getFragmentId() const { return fragment_info_.fragmentId; }
 
   SQLTypeInfo getColumnType(const size_t col_idx) const;
 

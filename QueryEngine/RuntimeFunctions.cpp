@@ -256,15 +256,15 @@ extern "C" ALWAYS_INLINE void agg_count_distinct_bitmap(int64_t* agg, const int6
   reinterpret_cast<int8_t*>(*agg)[bitmap_idx >> 3] |= (1 << (bitmap_idx & 7));
 }
 
-extern "C" NEVER_INLINE void agg_count_distinct_bitmap_gpu(int64_t*,
-                                                           const int64_t,
-                                                           const int64_t,
-                                                           const int64_t,
-                                                           const int64_t,
-                                                           const uint64_t,
-                                                           const uint64_t) {
-  abort();
-}
+#define GPU_RT_STUB NEVER_INLINE __attribute__((optnone))
+
+extern "C" GPU_RT_STUB void agg_count_distinct_bitmap_gpu(int64_t*,
+                                                          const int64_t,
+                                                          const int64_t,
+                                                          const int64_t,
+                                                          const int64_t,
+                                                          const uint64_t,
+                                                          const uint64_t) {}
 
 extern "C" NEVER_INLINE void agg_approximate_count_distinct(int64_t* agg, const int64_t key, const uint32_t b) {
   const uint64_t hash = MurmurHash64A(&key, sizeof(key), 0);
@@ -274,13 +274,11 @@ extern "C" NEVER_INLINE void agg_approximate_count_distinct(int64_t* agg, const 
   M[index] = std::max(M[index], rank);
 }
 
-extern "C" NEVER_INLINE void agg_approximate_count_distinct_gpu(int64_t*,
-                                                                const int64_t,
-                                                                const uint32_t,
-                                                                const int64_t,
-                                                                const int64_t) {
-  abort();
-}
+extern "C" GPU_RT_STUB void agg_approximate_count_distinct_gpu(int64_t*,
+                                                               const int64_t,
+                                                               const uint32_t,
+                                                               const int64_t,
+                                                               const int64_t) {}
 
 extern "C" ALWAYS_INLINE int8_t bit_is_set(const int64_t bitset,
                                            const int64_t val,
@@ -331,16 +329,14 @@ extern "C" ALWAYS_INLINE void agg_count_distinct_bitmap_skip_val(int64_t* agg,
   }
 }
 
-extern "C" NEVER_INLINE void agg_count_distinct_bitmap_skip_val_gpu(int64_t*,
-                                                                    const int64_t,
-                                                                    const int64_t,
-                                                                    const int64_t,
-                                                                    const int64_t,
-                                                                    const int64_t,
-                                                                    const uint64_t,
-                                                                    const uint64_t) {
-  abort();
-}
+extern "C" GPU_RT_STUB void agg_count_distinct_bitmap_skip_val_gpu(int64_t*,
+                                                                   const int64_t,
+                                                                   const int64_t,
+                                                                   const int64_t,
+                                                                   const int64_t,
+                                                                   const int64_t,
+                                                                   const uint64_t,
+                                                                   const uint64_t) {}
 
 extern "C" ALWAYS_INLINE uint32_t agg_count_int32(uint32_t* agg, const int32_t) {
   return (*agg)++;
@@ -550,116 +546,82 @@ extern "C" ALWAYS_INLINE int64_t decimal_ceil(const int64_t x, const int64_t sca
 
 // Shared memory aggregators. Should never be called,
 // real implementations are in cuda_mapd_rt.cu.
-#define DEF_SHARED_AGG_RET_STUBS(base_agg_func)                                                                       \
-  extern "C" __attribute__((noinline)) uint64_t base_agg_func##_shared(uint64_t* agg, const int64_t val) { abort(); } \
-                                                                                                                      \
-  extern "C" __attribute__((noinline))                                                                                \
-      uint64_t base_agg_func##_skip_val_shared(uint64_t* agg, const int64_t val, const int64_t skip_val) {            \
-    abort();                                                                                                          \
-  }                                                                                                                   \
-  extern "C" __attribute__((noinline)) uint32_t base_agg_func##_int32_shared(uint32_t* agg, const int32_t val) {      \
-    abort();                                                                                                          \
-  }                                                                                                                   \
-                                                                                                                      \
-  extern "C" __attribute__((noinline))                                                                                \
-      uint32_t base_agg_func##_int32_skip_val_shared(uint32_t* agg, const int32_t val, const int32_t skip_val) {      \
-    abort();                                                                                                          \
-  }                                                                                                                   \
-                                                                                                                      \
-  extern "C" __attribute__((noinline)) uint64_t base_agg_func##_double_shared(uint64_t* agg, const double val) {      \
-    abort();                                                                                                          \
-  }                                                                                                                   \
-                                                                                                                      \
-  extern "C" __attribute__((noinline))                                                                                \
-      uint64_t base_agg_func##_double_skip_val_shared(uint64_t* agg, const double val, const double skip_val) {       \
-    abort();                                                                                                          \
-  }                                                                                                                   \
-  extern "C" __attribute__((noinline)) uint32_t base_agg_func##_float_shared(uint32_t* agg, const float val) {        \
-    abort();                                                                                                          \
-  }                                                                                                                   \
-                                                                                                                      \
-  extern "C" __attribute__((noinline))                                                                                \
-      uint32_t base_agg_func##_float_skip_val_shared(uint32_t* agg, const float val, const float skip_val) {          \
-    abort();                                                                                                          \
+#define DEF_SHARED_AGG_RET_STUBS(base_agg_func)                                                                \
+  extern "C" GPU_RT_STUB uint64_t base_agg_func##_shared(uint64_t* agg, const int64_t val) { return 0; }       \
+                                                                                                               \
+  extern "C" GPU_RT_STUB uint64_t base_agg_func##_skip_val_shared(                                             \
+      uint64_t* agg, const int64_t val, const int64_t skip_val) {                                              \
+    return 0;                                                                                                  \
+  }                                                                                                            \
+  extern "C" GPU_RT_STUB uint32_t base_agg_func##_int32_shared(uint32_t* agg, const int32_t val) { return 0; } \
+                                                                                                               \
+  extern "C" GPU_RT_STUB uint32_t base_agg_func##_int32_skip_val_shared(                                       \
+      uint32_t* agg, const int32_t val, const int32_t skip_val) {                                              \
+    return 0;                                                                                                  \
+  }                                                                                                            \
+                                                                                                               \
+  extern "C" GPU_RT_STUB uint64_t base_agg_func##_double_shared(uint64_t* agg, const double val) { return 0; } \
+                                                                                                               \
+  extern "C" GPU_RT_STUB uint64_t base_agg_func##_double_skip_val_shared(                                      \
+      uint64_t* agg, const double val, const double skip_val) {                                                \
+    return 0;                                                                                                  \
+  }                                                                                                            \
+  extern "C" GPU_RT_STUB uint32_t base_agg_func##_float_shared(uint32_t* agg, const float val) { return 0; }   \
+                                                                                                               \
+  extern "C" GPU_RT_STUB uint32_t base_agg_func##_float_skip_val_shared(                                       \
+      uint32_t* agg, const float val, const float skip_val) {                                                  \
+    return 0;                                                                                                  \
   }
 
-#define DEF_SHARED_AGG_STUBS(base_agg_func)                                                                            \
-  extern "C" __attribute__((noinline)) void base_agg_func##_shared(int64_t* agg, const int64_t val) { abort(); }       \
-                                                                                                                       \
-  extern "C" __attribute__((noinline)) void base_agg_func##_skip_val_shared(                                           \
-      int64_t* agg, const int64_t val, const int64_t skip_val) {                                                       \
-    abort();                                                                                                           \
-  }                                                                                                                    \
-  extern "C" __attribute__((noinline)) void base_agg_func##_int32_shared(int32_t* agg, const int32_t val) { abort(); } \
-                                                                                                                       \
-  extern "C" __attribute__((noinline)) void base_agg_func##_int32_skip_val_shared(                                     \
-      int32_t* agg, const int32_t val, const int32_t skip_val) {                                                       \
-    abort();                                                                                                           \
-  }                                                                                                                    \
-                                                                                                                       \
-  extern "C" __attribute__((noinline)) void base_agg_func##_double_shared(int64_t* agg, const double val) { abort(); } \
-                                                                                                                       \
-  extern "C" __attribute__((noinline)) void base_agg_func##_double_skip_val_shared(                                    \
-      int64_t* agg, const double val, const double skip_val) {                                                         \
-    abort();                                                                                                           \
-  }                                                                                                                    \
-  extern "C" __attribute__((noinline)) void base_agg_func##_float_shared(int32_t* agg, const float val) { abort(); }   \
-                                                                                                                       \
-  extern "C" __attribute__((noinline)) void base_agg_func##_float_skip_val_shared(                                     \
-      int32_t* agg, const float val, const float skip_val) {                                                           \
-    abort();                                                                                                           \
-  }
+#define DEF_SHARED_AGG_STUBS(base_agg_func)                                                    \
+  extern "C" GPU_RT_STUB void base_agg_func##_shared(int64_t* agg, const int64_t val) {}       \
+                                                                                               \
+  extern "C" GPU_RT_STUB void base_agg_func##_skip_val_shared(                                 \
+      int64_t* agg, const int64_t val, const int64_t skip_val) {}                              \
+  extern "C" GPU_RT_STUB void base_agg_func##_int32_shared(int32_t* agg, const int32_t val) {} \
+                                                                                               \
+  extern "C" GPU_RT_STUB void base_agg_func##_int32_skip_val_shared(                           \
+      int32_t* agg, const int32_t val, const int32_t skip_val) {}                              \
+                                                                                               \
+  extern "C" GPU_RT_STUB void base_agg_func##_double_shared(int64_t* agg, const double val) {} \
+                                                                                               \
+  extern "C" GPU_RT_STUB void base_agg_func##_double_skip_val_shared(                          \
+      int64_t* agg, const double val, const double skip_val) {}                                \
+  extern "C" GPU_RT_STUB void base_agg_func##_float_shared(int32_t* agg, const float val) {}   \
+                                                                                               \
+  extern "C" GPU_RT_STUB void base_agg_func##_float_skip_val_shared(                           \
+      int32_t* agg, const float val, const float skip_val) {}
 
 DEF_SHARED_AGG_RET_STUBS(agg_count)
 DEF_SHARED_AGG_STUBS(agg_max)
 DEF_SHARED_AGG_STUBS(agg_min)
 DEF_SHARED_AGG_STUBS(agg_id)
 
-extern "C" __attribute__((noinline)) void agg_id_double_shared_slow(int64_t* agg, const double* val) {
-  abort();
+extern "C" GPU_RT_STUB void agg_id_double_shared_slow(int64_t* agg, const double* val) {}
+
+extern "C" GPU_RT_STUB int64_t agg_sum_shared(int64_t* agg, const int64_t val) {
+  return 0;
 }
 
-extern "C" __attribute__((noinline)) int64_t agg_sum_shared(int64_t* agg, const int64_t val) {
-  abort();
+extern "C" GPU_RT_STUB int64_t agg_sum_skip_val_shared(int64_t* agg, const int64_t val, const int64_t skip_val) {
+  return 0;
+}
+extern "C" GPU_RT_STUB int32_t agg_sum_int32_shared(int32_t* agg, const int32_t val) {
+  return 0;
 }
 
-extern "C" __attribute__((noinline)) int64_t agg_sum_skip_val_shared(int64_t* agg,
-                                                                     const int64_t val,
-                                                                     const int64_t skip_val) {
-  abort();
-}
-extern "C" __attribute__((noinline)) int32_t agg_sum_int32_shared(int32_t* agg, const int32_t val) {
-  abort();
+extern "C" GPU_RT_STUB int32_t agg_sum_int32_skip_val_shared(int32_t* agg, const int32_t val, const int32_t skip_val) {
+  return 0;
 }
 
-extern "C" __attribute__((noinline)) int32_t agg_sum_int32_skip_val_shared(int32_t* agg,
-                                                                           const int32_t val,
-                                                                           const int32_t skip_val) {
-  abort();
-}
+extern "C" GPU_RT_STUB void agg_sum_double_shared(int64_t* agg, const double val) {}
 
-extern "C" __attribute__((noinline)) void agg_sum_double_shared(int64_t* agg, const double val) {
-  abort();
-}
+extern "C" GPU_RT_STUB void agg_sum_double_skip_val_shared(int64_t* agg, const double val, const double skip_val) {}
+extern "C" GPU_RT_STUB void agg_sum_float_shared(int32_t* agg, const float val) {}
 
-extern "C" __attribute__((noinline)) void agg_sum_double_skip_val_shared(int64_t* agg,
-                                                                         const double val,
-                                                                         const double skip_val) {
-  abort();
-}
-extern "C" __attribute__((noinline)) void agg_sum_float_shared(int32_t* agg, const float val) {
-  abort();
-}
+extern "C" GPU_RT_STUB void agg_sum_float_skip_val_shared(int32_t* agg, const float val, const float skip_val) {}
 
-extern "C" __attribute__((noinline)) void agg_sum_float_skip_val_shared(int32_t* agg,
-                                                                        const float val,
-                                                                        const float skip_val) {
-  abort();
-}
-
-extern "C" __attribute__((noinline)) void force_sync() {
-  abort();
-}
+extern "C" GPU_RT_STUB void force_sync() {}
 
 // x64 stride functions
 
@@ -680,9 +642,11 @@ extern "C" __attribute__((noinline)) int32_t pos_step_impl() {
   return 1;
 }
 
-extern "C" __attribute__((noinline)) int8_t thread_warp_idx(const int8_t warp_sz) {
-  abort();
+extern "C" GPU_RT_STUB int8_t thread_warp_idx(const int8_t warp_sz) {
+  return 0;
 }
+
+#undef GPU_RT_STUB
 
 extern "C" ALWAYS_INLINE int32_t record_error_code(const int32_t err_code, int32_t* error_codes) {
   // NB: never override persistent error codes (with code greater than zero).

@@ -225,7 +225,8 @@ const std::vector<Analyzer::Expr*> Executor::codegenHashJoinsBeforeLoopJoin(
     return primary_quals;
   }
 
-  if (auto constant_true = dynamic_cast<llvm::ConstantInt*>(filter_lv)) {
+  if (llvm::isa<llvm::ConstantInt>(filter_lv)) {
+    auto constant_true = llvm::cast<llvm::ConstantInt>(filter_lv);
     CHECK_NE(constant_true->getSExtValue(), int64_t(0));
   } else {
     auto cond_true = llvm::BasicBlock::Create(cgen_state_->context_, "match_true", cgen_state_->row_func_);

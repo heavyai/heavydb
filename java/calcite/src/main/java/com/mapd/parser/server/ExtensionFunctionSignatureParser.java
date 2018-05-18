@@ -99,7 +99,7 @@ class ExtensionFunctionSignatureParser {
         if (type_name.equals("double")) {
             return ExtensionFunction.ExtArgumentType.Double;
         }
-        if (type_name.equals("void")) {
+        if (type_name.isEmpty() || type_name.equals("void")) {
             return ExtensionFunction.ExtArgumentType.Void;
         }
         if (type_name.endsWith(" *")) {

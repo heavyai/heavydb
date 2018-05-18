@@ -149,6 +149,7 @@ llvm::BasicBlock* JoinLoop::codegen(
         if (join_loop.is_deleted_) {
           match_found = builder.CreateAnd(match_found, builder.CreateNot(join_loop.is_deleted_(iterators, nullptr)));
         }
+        auto match_found_bb = builder.GetInsertBlock();
         switch (join_loop.type_) {
           case JoinType::INNER: {
             prev_comparison_result = match_found;
@@ -166,7 +167,7 @@ llvm::BasicBlock* JoinLoop::codegen(
         if (!prev_iter_advance_bb) {
           prev_iter_advance_bb = prev_exit_bb;
         }
-        last_head_bb = llvm::cast<llvm::Instruction>(match_found)->getParent();
+        last_head_bb = match_found_bb;
         break;
       }
       default:

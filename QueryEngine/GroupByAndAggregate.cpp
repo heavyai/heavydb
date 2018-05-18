@@ -22,6 +22,7 @@
 #include "ExpressionRewrite.h"
 #include "GpuInitGroups.h"
 #include "InPlaceSort.h"
+#include "LLVMFunctionAttributesUtil.h"
 #include "MaxwellCodegenPatch.h"
 #include "OutputBufferInitialization.h"
 #include "ScalarExprVisitor.h"
@@ -3174,8 +3175,8 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
   auto key_hash_func =
       llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "perfect_key_hash", executor_->cgen_state_->module_);
   executor_->cgen_state_->helper_functions_.push_back(key_hash_func);
-  key_hash_func->addAttribute(llvm::AttributeSet::FunctionIndex, llvm::Attribute::AlwaysInline);
-  auto& key_buff_arg = key_hash_func->getArgumentList().front();
+  mark_function_always_inline(key_hash_func);
+  auto& key_buff_arg = *key_hash_func->args().begin();
   llvm::Value* key_buff_lv = &key_buff_arg;
   auto bb = llvm::BasicBlock::Create(LL_CONTEXT, "entry", key_hash_func);
   llvm::IRBuilder<> key_hash_func_builder(bb);

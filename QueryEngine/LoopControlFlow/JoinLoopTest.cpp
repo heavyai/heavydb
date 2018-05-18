@@ -45,7 +45,7 @@ void verify_function_ir(const llvm::Function* func) {
   std::stringstream err_ss;
   llvm::raw_os_ostream err_os(err_ss);
   if (llvm::verifyFunction(*func, &err_os)) {
-    func->dump();
+    func->print(llvm::outs());
     LOG(FATAL) << err_ss.str();
   }
 }
