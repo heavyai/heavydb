@@ -1260,7 +1260,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
       } else {
         THROW_MAPD_EXCEPTION("User has no access privileges to table " + table_name);
       }
-    } catch (std::runtime_error e) {
+    } catch (const std::runtime_error& e) {
       THROW_MAPD_EXCEPTION(e.what());
     }
   }
@@ -1425,7 +1425,7 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return, const TSessi
         } else {
           continue;
         }
-      } catch (std::runtime_error e) {
+      } catch (const std::runtime_error& e) {
         THROW_MAPD_EXCEPTION(e.what());
       }
     }
