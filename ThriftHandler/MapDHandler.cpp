@@ -597,18 +597,24 @@ TDatum MapDHandler::value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti
 
 namespace {
 
- std::string hide_sensitive_data(const std::string& query_str) {
-   auto result = query_str;
-   boost::regex passwd{R"(^(CREATE|ALTER)\s+?USER.+password\s*?=\s*?'(?<pwd>.+?)'.+)",
-                       boost::regex_constants::perl | boost::regex::icase};
-   boost::smatch matches;
-   if (boost::regex_search(query_str, matches, passwd)) {
-     result.replace(matches["pwd"].first - query_str.begin(), matches["pwd"].length(), "XXXXXXXX");
-   }
-   return result;
- }
+std::string hide_sensitive_data(const std::string& query_str) {
+  auto result = query_str;
+  static const std::vector<std::string> patterns{
+      R"(^(CREATE|ALTER)\s+?USER.+password\s*?=\s*?'(?<pwd>.+?)'.+)",
+      R"(^COPY.+FROM.+WITH.+s3_access_key\s*?=\s*?'(?<pwd>.+?)'.+)",
+      R"(^COPY.+FROM.+WITH.+s3_secret_key\s*?=\s*?'(?<pwd>.+?)'.+)",
+  };
+  for (const auto& pattern : patterns) {
+    boost::regex passwd{pattern, boost::regex_constants::perl | boost::regex::icase};
+    boost::smatch matches;
+    if (boost::regex_search(result, matches, passwd)) {
+      result.replace(matches["pwd"].first - result.begin(), matches["pwd"].length(), "XXXXXXXX");
+    }
+  }
+  return result;
+}
 
- }  // namespace
+}  // namespace
 
 void MapDHandler::sql_execute(TQueryResult& _return,
                               const TSessionId& session,
