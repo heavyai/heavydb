@@ -233,6 +233,9 @@ add_subdirectory(ThirdParty/googletest)
 # Arrow
 find_package(Arrow REQUIRED)
 add_definitions("-DARROW_NO_DEPRECATED_API")
+if(HAVE_ARROW_STATIC_RECORDBATCH_CTOR)
+  add_definitions("-DHAVE_ARROW_STATIC_RECORDBATCH_CTOR")
+endif()
 include_directories(${Arrow_INCLUDE_DIRS})
 
 # RapidJSON

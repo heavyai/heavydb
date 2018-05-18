@@ -73,5 +73,11 @@ set(Arrow_GPU_LIBRARIES ${Arrow_GPU_LIBRARY})
 set(Arrow_LIBRARY_DIRS ${Arrow_LIBRARY_DIR})
 set(Arrow_INCLUDE_DIRS ${Arrow_LIBRARY_DIR}/../include)
 
+try_compile(HAVE_ARROW_STATIC_RECORDBATCH_CTOR
+  ${CMAKE_CURRENT_BINARY_DIR}
+  ${CMAKE_SOURCE_DIR}/cmake/Modules/arrow_static_recordbatch.cpp
+  COMPILE_DEFINITIONS -I${Arrow_INCLUDE_DIRS}
+  LINK_LIBRARIES ${Arrow_LIBRARY})
+
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(Arrow REQUIRED_VARS Arrow_LIBRARY)

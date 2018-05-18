@@ -46,6 +46,12 @@ typedef boost::variant<std::vector<bool>,
                        std::vector<std::string>>
     ValueArray;
 
+#ifdef HAVE_ARROW_STATIC_RECORDBATCH_CTOR
+#define ARROW_RECORDBATCH_MAKE arrow::RecordBatch::Make
+#else
+#define ARROW_RECORDBATCH_MAKE std::make_shared<arrow::RecordBatch>
+#endif
+
 namespace {
 
 bool is_dict_enc_str(const SQLTypeInfo& ti) {
@@ -347,7 +353,7 @@ std::shared_ptr<arrow::RecordBatch> ResultSet::getArrowBatch(const std::shared_p
 
   const auto entry_count = entryCount();
   if (!entry_count) {
-    return std::make_shared<arrow::RecordBatch>(schema, 0, result_columns);
+    return ARROW_RECORDBATCH_MAKE(schema, 0, result_columns);
   }
   const auto col_count = colCount();
   size_t row_count = 0;
@@ -460,7 +466,7 @@ std::shared_ptr<arrow::RecordBatch> ResultSet::getArrowBatch(const std::shared_p
   for (size_t i = 0; i < col_count; ++i) {
     result_columns.push_back(builders[i].finish());
   }
-  return std::make_shared<arrow::RecordBatch>(schema, row_count, result_columns);
+  return ARROW_RECORDBATCH_MAKE(schema, row_count, result_columns);
 }
 
 std::shared_ptr<arrow::RecordBatch> ResultSet::convertToArrow(const std::vector<std::string>& col_names,
