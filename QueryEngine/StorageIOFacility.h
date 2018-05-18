@@ -7,6 +7,7 @@
 
 #include "Shared/ConfigResolve.h"
 #include "Shared/UpdelRoll.h"
+#include "Shared/likely.h"
 #include "Shared/thread_count.h"
 #include <boost/variant.hpp>
 
