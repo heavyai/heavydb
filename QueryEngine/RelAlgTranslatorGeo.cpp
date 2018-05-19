@@ -464,7 +464,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   SQLTypeInfo arg1_ti;
   int32_t lindex0 = 0;
   int32_t lindex1 = 0;
-  bool with_bounds = false;
+  bool with_bounds = (rex_function->getName() == std::string("ST_Contains"));
 
   auto geoargs0 = translateGeoFunctionArg(rex_function->getOperand(0), arg0_ti, lindex0, with_bounds);
   if (arg0_ti.get_type() == kLINESTRING) {
