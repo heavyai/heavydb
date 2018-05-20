@@ -18,7 +18,8 @@
 
 std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColumn(const RexInput* rex_input,
                                                                                   SQLTypeInfo& ti,
-                                                                                  bool with_bounds) const {
+                                                                                  const bool with_bounds,
+                                                                                  const bool expand_geo_col) const {
   std::vector<std::shared_ptr<Analyzer::Expr>> args;
   const auto source = rex_input->getSourceNode();
   const auto it_rte_idx = input_to_nest_level_.find(source);
@@ -35,10 +36,21 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
   CHECK(gcd);
   ti = gcd->columnType;
   CHECK(IS_GEO(ti.get_type()));
-  // Return geo column reference. The reference will be translated into physical columns as required. Bounds column will be added if present and requested.
-  args.push_back(std::make_shared<Analyzer::ColumnVar>(ti, table_desc->tableId, gcd->columnId, rte_idx));
+  // Return geo column reference. The geo column may be expanded if required for extension function arguments.
+  // Otherwise, the geo column reference will be translated into physical columns as required. Bounds column will be
+  // added if present and requested.
+  if (expand_geo_col) {
+    for (auto i = 0; i < ti.get_physical_coord_cols(); i++) {
+      const auto pcd = cat_.getMetadataForColumn(table_desc->tableId, rex_input->getIndex() + 1 + i + 1);
+      auto pcol_ti = pcd->columnType;
+      args.push_back(std::make_shared<Analyzer::ColumnVar>(pcol_ti, table_desc->tableId, pcd->columnId, rte_idx));
+    }
+  } else {
+    args.push_back(std::make_shared<Analyzer::ColumnVar>(ti, table_desc->tableId, gcd->columnId, rte_idx));
+  }
   if (with_bounds && ti.has_bounds()) {
-    const auto bounds_cd = cat_.getMetadataForColumn(table_desc->tableId, rex_input->getIndex() + ti.get_physical_coord_cols() + 2);
+    const auto bounds_cd =
+        cat_.getMetadataForColumn(table_desc->tableId, rex_input->getIndex() + ti.get_physical_coord_cols() + 2);
     auto bounds_ti = bounds_cd->columnType;
     args.push_back(std::make_shared<Analyzer::ColumnVar>(bounds_ti, table_desc->tableId, bounds_cd->columnId, rte_idx));
   }
@@ -148,10 +160,12 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiter
   return args;
 }
 
-std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunctionArg(const RexScalar* rex_scalar,
-                                                                                       SQLTypeInfo& arg_ti,
-                                                                                       int32_t& lindex,
-                                                                                       bool with_bounds) const {
+std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunctionArg(
+    const RexScalar* rex_scalar,
+    SQLTypeInfo& arg_ti,
+    int32_t& lindex,
+    const bool with_bounds,
+    const bool expand_geo_col) const {
   std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
 
   const auto rex_input = dynamic_cast<const RexInput*>(rex_scalar);
@@ -161,7 +175,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
     if (!column || !column->get_type_info().is_geometry()) {
       throw QueryNotSupported("Geo function is expecting a geo column argument");
     }
-    return translateGeoColumn(rex_input, arg_ti, with_bounds);
+    return translateGeoColumn(rex_input, arg_ti, with_bounds, expand_geo_col);
   }
   const auto rex_function = dynamic_cast<const RexFunctionOperator*>(rex_scalar);
   if (rex_function) {
@@ -400,8 +414,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(1), rex_function->size());
 
-  SQLTypeInfo arg_ti;
   int32_t lindex = 0;
+  std::string specialized_geofunc{rex_function->getName()};
+
+  // All functions below use geo col as reference and expand it as necessary
+  SQLTypeInfo arg_ti;
   bool with_bounds = true;
   auto geoargs = translateGeoFunctionArg(rex_function->getOperand(0), arg_ti, lindex, with_bounds);
 
@@ -410,8 +427,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     output_srid.intval = arg_ti.get_output_srid();
     return makeExpr<Analyzer::Constant>(kINT, false, output_srid);
   }
-
-  std::string specialized_geofunc{rex_function->getName()};
 
   if (rex_function->getName() == std::string("ST_XMin") || rex_function->getName() == std::string("ST_YMin") ||
       rex_function->getName() == std::string("ST_XMax") || rex_function->getName() == std::string("ST_YMax")) {
