@@ -417,6 +417,25 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
   int32_t lindex = 0;
   std::string specialized_geofunc{rex_function->getName()};
 
+  // Geo function calls which do not need the coords col but do need cols associated with physical coords (e.g.
+  // ring_sizes / poly_rings)
+  if (rex_function->getName() == std::string("ST_NRings")) {
+    SQLTypeInfo arg_ti;
+    auto geoargs = translateGeoFunctionArg(rex_function->getOperand(0), arg_ti, lindex, false, true);
+    if (arg_ti.get_type() == kPOLYGON) {
+      CHECK_EQ(geoargs.size(), 2);
+      geoargs.erase(geoargs.begin(), geoargs.begin() + 1);  // remove the coords
+      return makeExpr<Analyzer::FunctionOper>(rex_function->getType(), specialized_geofunc, geoargs);
+    } else if (arg_ti.get_type() == kMULTIPOLYGON) {
+      CHECK_EQ(geoargs.size(), 3);
+      geoargs.erase(geoargs.begin(), geoargs.begin() + 1);  // remove the coords
+      geoargs.erase(geoargs.begin() + 1, geoargs.end());    // remove the poly_rings
+      return makeExpr<Analyzer::FunctionOper>(rex_function->getType(), specialized_geofunc, geoargs);
+    } else {
+      throw QueryNotSupported(rex_function->getName() + " expects a POLYGON or MULTIPOLYGON");
+    }
+  }
+
   // All functions below use geo col as reference and expand it as necessary
   SQLTypeInfo arg_ti;
   bool with_bounds = true;

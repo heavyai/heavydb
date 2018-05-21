@@ -6119,6 +6119,12 @@ TEST(Select, GeoSpatial) {
                                 dt),
                  std::runtime_error);
 
+    // ST_NRings
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg("SELECT ST_NRings(poly) from geospatial_test limit 1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg("SELECT ST_NRings(mpoly) from geospatial_test limit 1;", dt)));
+
     // ST_SRID, ST_SetSRID
     ASSERT_EQ(static_cast<int64_t>(0),
               v<int64_t>(run_simple_agg("SELECT ST_SRID(p) from geospatial_test limit 1;", dt)));

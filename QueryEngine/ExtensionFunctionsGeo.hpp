@@ -348,6 +348,11 @@ double ST_YMax_Bounds(double* bounds, int64_t size, int32_t isr, int32_t osr) {
   return transform_coord(bounds[3], isr, osr, false);
 }
 
+EXTENSION_INLINE
+int32_t ST_NRings(int32_t* poly_ring_sizes, int64_t poly_num_rings) {
+  return static_cast<int32_t>(poly_num_rings);
+}
+
 EXTENSION_NOINLINE
 double ST_Distance_Point_Point(int8_t* p1,
                                int64_t p1size,

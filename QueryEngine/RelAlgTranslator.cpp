@@ -1106,7 +1106,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
   }
   if (rex_function->getName() == std::string("ST_X") || rex_function->getName() == std::string("ST_Y") ||
       rex_function->getName() == std::string("ST_XMin") || rex_function->getName() == std::string("ST_YMin") ||
-      rex_function->getName() == std::string("ST_XMax") || rex_function->getName() == std::string("ST_YMax") ||
+      rex_function->getName() == std::string("ST_XMax") || rex_function->getName() == std::string("ST_YMax") || rex_function->getName() == std::string("ST_NRings") || 
       rex_function->getName() == std::string("ST_SRID")) {
     CHECK_EQ(rex_function->size(), size_t(1));
     return translateUnaryGeoFunction(rex_function);
