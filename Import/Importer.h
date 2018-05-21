@@ -110,7 +110,7 @@ struct CopyParams {
         lonlat(true),
         geo_coords_encoding(kENCODING_GEOINT),
         geo_coords_comp_param(32),
-        geo_coords_type(kGEOGRAPHY),
+        geo_coords_type(kGEOMETRY),
         geo_coords_srid(4326),
         sanitize_column_names(true) {}
 
@@ -134,7 +134,7 @@ struct CopyParams {
         lonlat(true),
         geo_coords_encoding(kENCODING_GEOINT),
         geo_coords_comp_param(32),
-        geo_coords_type(kGEOGRAPHY),
+        geo_coords_type(kGEOMETRY),
         geo_coords_srid(4326),
         sanitize_column_names(true) {}
 };

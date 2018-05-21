@@ -180,9 +180,9 @@ struct TCopyParams {
   13: string s3_access_key
   14: string s3_secret_key
   15: string s3_region
-  16: TEncodingType geo_coords_encoding=TEncodingType.NONE
-  17: i32 geo_coords_comp_param
-  18: TDatumType geo_coords_type=TDatumType.GEOGRAPHY
+  16: TEncodingType geo_coords_encoding=TEncodingType.GEOINT
+  17: i32 geo_coords_comp_param=32
+  18: TDatumType geo_coords_type=TDatumType.GEOMETRY
   19: i32 geo_coords_srid=4326
   20: bool sanitize_column_names=true
 }

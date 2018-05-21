@@ -2639,7 +2639,8 @@ void CopyTableStmt::execute(
           throw std::runtime_error("'geo_coords_type' option must be a string");
         const std::string* s = str_literal->get_stringval();
         if (boost::iequals(*s, "geography"))
-          copy_params.geo_coords_type = kGEOGRAPHY;
+          throw std::runtime_error("GEOGRAPHY coords type not yet supported. Please use GEOMETRY.");
+          //copy_params.geo_coords_type = kGEOGRAPHY;
         else if (boost::iequals(*s, "geometry"))
           copy_params.geo_coords_type = kGEOMETRY;
         else
