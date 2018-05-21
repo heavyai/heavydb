@@ -5122,9 +5122,24 @@ TEST(Select, GeoSpatial) {
     compare_array(
         run_simple_agg("SELECT p FROM geospatial_test WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;", dt),
         std::vector<double>{0., 0.});
+
     compare_array(get_first_target(
                       "SELECT p, l FROM geospatial_test WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;", dt),
                   std::vector<double>{0., 0.});
+    compare_array(get_first_target("SELECT p, ST_Distance(ST_GeomFromText('POINT(0 0)'), p), l FROM geospatial_test "
+                                   "WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
+                                   dt),
+                  std::vector<double>{0., 0.});
+    compare_array(get_first_target("SELECT l, ST_Distance(ST_GeomFromText('POINT(0 0)'), p), p FROM geospatial_test "
+                                   "WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
+                                   dt),
+                  std::vector<double>{0., 0., 0., 0.});
+    ASSERT_EQ(static_cast<double>(0.),
+              v<double>(get_first_target(
+                  "SELECT ST_Distance(ST_GeomFromText('POINT(0 0)'), p), p, l FROM geospatial_test WHERE "
+                  "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
+                  dt)));
+
     compare_array(
         run_simple_agg("SELECT l FROM geospatial_test WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;", dt),
         std::vector<double>{0., 0., 0., 0.});

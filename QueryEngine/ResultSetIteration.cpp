@@ -974,7 +974,7 @@ TargetValue ResultSet::makeGeoTargetValue(const VarlenTargetPtrPair& coords,
                                     geo_return_type_);
     case kPOLYGON: {
       auto ring_sizes_varlen_ptr = read_int_from_buff(ring_sizes.ptr1, ring_sizes.compact_sz1);
-      auto ring_sizes_length = read_int_from_buff(ring_sizes.ptr2, ring_sizes.compact_sz2);
+      auto ring_sizes_length = read_int_from_buff(ring_sizes.ptr2, ring_sizes.compact_sz2) * 4;
       std::vector<int8_t> ring_sizes_cpu_buffer;
       if (device_type_ == ExecutorDeviceType::GPU) {
         auto& data_mgr = query_mem_desc_.executor_->catalog_->get_dataMgr();
@@ -994,7 +994,7 @@ TargetValue ResultSet::makeGeoTargetValue(const VarlenTargetPtrPair& coords,
     } break;
     case kMULTIPOLYGON: {
       auto ring_sizes_varlen_ptr = read_int_from_buff(ring_sizes.ptr1, ring_sizes.compact_sz1);
-      auto ring_sizes_length = read_int_from_buff(ring_sizes.ptr2, ring_sizes.compact_sz2);
+      auto ring_sizes_length = read_int_from_buff(ring_sizes.ptr2, ring_sizes.compact_sz2) * 4;
       std::vector<int8_t> ring_sizes_cpu_buffer;
       if (device_type_ == ExecutorDeviceType::GPU) {
         auto& data_mgr = query_mem_desc_.executor_->catalog_->get_dataMgr();
@@ -1003,7 +1003,7 @@ TargetValue ResultSet::makeGeoTargetValue(const VarlenTargetPtrPair& coords,
       }
 
       auto poly_rings_varlen_ptr = read_int_from_buff(poly_rings.ptr1, poly_rings.compact_sz1);
-      auto poly_rings_length = read_int_from_buff(poly_rings.ptr2, poly_rings.compact_sz2);
+      auto poly_rings_length = read_int_from_buff(poly_rings.ptr2, poly_rings.compact_sz2) * 4;
       std::vector<int8_t> poly_rings_cpu_buffer;
       if (device_type_ == ExecutorDeviceType::GPU) {
         auto& data_mgr = query_mem_desc_.executor_->catalog_->get_dataMgr();
@@ -1025,6 +1025,7 @@ TargetValue ResultSet::makeGeoTargetValue(const VarlenTargetPtrPair& coords,
     default:
       throw std::runtime_error("Unknown Geometry type encountered: " + target_info.sql_type.get_type_name());
   }
+  return TargetValue(nullptr);
 }
 
 // Reads an integer or a float from ptr based on the type and the byte width.
