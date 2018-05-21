@@ -1,6 +1,10 @@
 #define COMPRESSION_NONE 0
 #define COMPRESSION_GEOINT32 1
 
+#define TOLERANCE 0.0000001
+#define ZERO_TO_TOLERANCE(x) ((-TOLERANCE <= (x)) && ((x) <= TOLERANCE))
+#define EQUAL_TO_TOLERANCE(a, b) (ZERO_TO_TOLERANCE((a) - (b)))
+
 DEVICE
 double decompress_coord(int8_t* data, int32_t index, int32_t ic, bool x) {
   if (ic == COMPRESSION_GEOINT32) {
@@ -902,7 +906,7 @@ bool ST_Contains_Point_Point(int8_t* p1,
   double p1y = coord_y(p1, 1, ic1, isr1, osr);
   double p2x = coord_x(p2, 0, ic2, isr2, osr);
   double p2y = coord_y(p2, 1, ic2, isr2, osr);
-  return (p1x == p2x) && (p1y == p2y);  // TODO: precision sensitivity
+  return EQUAL_TO_TOLERANCE(p1x, p2x) && EQUAL_TO_TOLERANCE(p1y, p2y);
 }
 
 EXTENSION_NOINLINE
@@ -922,8 +926,8 @@ bool ST_Contains_Point_LineString(int8_t* p,
   double py = coord_y(p, 1, ic1, isr1, osr);
 
   if (lbounds) {
-    // TODO: precision sensitivity
-    if (px == lbounds[0] && py == lbounds[1] && px == lbounds[2] && py == lbounds[3])
+    if (EQUAL_TO_TOLERANCE(px, lbounds[0]) && EQUAL_TO_TOLERANCE(py, lbounds[1]) &&
+        EQUAL_TO_TOLERANCE(px, lbounds[2]) && EQUAL_TO_TOLERANCE(py, lbounds[3]))
       return true;
   }
 
@@ -931,7 +935,7 @@ bool ST_Contains_Point_LineString(int8_t* p,
   for (int i = 0; i < l_num_coords; i += 2) {
     double lx = coord_x(l, i, ic2, isr2, osr);
     double ly = coord_y(l, i + 1, ic2, isr2, osr);
-    if (px == lx && py == ly)  // TODO: precision sensitivity
+    if (EQUAL_TO_TOLERANCE(px, lx) && EQUAL_TO_TOLERANCE(py, ly))
       continue;
     return false;
   }

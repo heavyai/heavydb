@@ -2924,8 +2924,9 @@ void import_geospatial_test() {
   run_ddl_statement(geospatial_test);
   run_ddl_statement(
       "CREATE TABLE geospatial_test ("
-      "p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON, "
-      "gp GEOMETRY(POINT), gp4326 GEOGRAPHY(POINT,4326) ENCODING GEOINT(32), gp900913 GEOMETRY(POINT,900913), "
+      "p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON, gp GEOMETRY(POINT), "
+      "gp4326 GEOGRAPHY(POINT,4326) ENCODING GEOINT(32), gp4326none GEOGRAPHY(POINT,4326) ENCODING NONE, "
+      "gp900913 GEOMETRY(POINT,900913), "
       "ggp GEOGRAPHY(POINT), ggl GEOGRAPHY(LINESTRING,4326) ENCODING NONE, ggpoly GEOGRAPHY(POLYGON)"
       ") WITH (fragment_size=2);");
   for (ssize_t i = 0; i < g_num_rows; ++i) {
@@ -2938,7 +2939,7 @@ void import_geospatial_test() {
                             ", 0 0)))'"};
     const std::string insert_query{"INSERT INTO geospatial_test VALUES(" + point + ", " + linestring + ", " + poly +
                                    ", " + mpoly + ", " + point + ", " + point + ", " + point + ", " + point + ", " +
-                                   linestring + ", " + poly + ");"};
+                                   point + ", " + linestring + ", " + poly + ");"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
   }
 }
@@ -5173,6 +5174,11 @@ TEST(Select, GeoSpatial) {
     ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains('POINT(0 0)', p);", dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(gp4326none, ST_GeogFromText('POINT(1 1)', 4326));",
+            dt)));
     ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains('POINT(0 0)', l);", dt)));
