@@ -1566,6 +1566,16 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Qu
       if (cd == nullptr)
         throw std::runtime_error("Column " + *c + " does not exist.");
       result_col_list.push_back(cd->columnId);
+      const auto& col_ti = cd->columnType;
+      if (col_ti.get_physical_cols() > 0) {
+        CHECK(cd->columnType.is_geometry());
+        for (auto i = 1; i <= col_ti.get_physical_cols(); i++) {
+          const ColumnDescriptor* pcd = catalog.getMetadataForColumn(td->tableId, cd->columnId + i);
+          if (pcd == nullptr)
+            throw std::runtime_error("Column " + *c + "'s metadata is incomplete.");
+          result_col_list.push_back(pcd->columnId);
+        }
+      }
     }
     if (catalog.getAllColumnMetadataForTable(td->tableId, false, false, true).size() != result_col_list.size())
       throw std::runtime_error("Insert into a subset of columns is not supported yet.");
