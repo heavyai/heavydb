@@ -320,7 +320,7 @@ TEST_F(ImportTest, Geo_CSV_Local_Type_Geometry) {
 }
 
 TEST_F(ImportTest, Geo_CSV_Local_Type_Geography) {
-  EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_type='geography'", 10, 4.5));
+  EXPECT_THROW(import_test_local_geo("geospatial.csv", ", geo_coords_type='geography'", 10, 4.5), std::runtime_error);
 }
 
 TEST_F(ImportTest, Geo_CSV_Local_Type_Other) {

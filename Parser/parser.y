@@ -1165,7 +1165,7 @@ data_type:
 	| TIMESTAMP { $<nodeval>$ = new SQLType(kTIMESTAMP); }
 	| TIMESTAMP '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kTIMESTAMP, $<intval>3); }
 	| geo_type { $<nodeval>$ = new SQLType(static_cast<SQLTypes>($<intval>1), static_cast<int>(kGEOMETRY), 0, false); }
-	| geography_type { $<nodeval>$ = $<nodeval>1; }
+        /* | geography_type { $<nodeval>$ = $<nodeval>1; } */
 	| geometry_type { $<nodeval>$ = $<nodeval>1; }
 	| data_type '[' ']'
 	{

@@ -2925,9 +2925,9 @@ void import_geospatial_test() {
   run_ddl_statement(
       "CREATE TABLE geospatial_test ("
       "p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON, gp GEOMETRY(POINT), "
-      "gp4326 GEOGRAPHY(POINT,4326) ENCODING GEOINT(32), gp4326none GEOGRAPHY(POINT,4326) ENCODING NONE, "
+      "gp4326 GEOMETRY(POINT,4326), gp4326none GEOMETRY(POINT,4326) ENCODING NONE, "
       "gp900913 GEOMETRY(POINT,900913), "
-      "ggp GEOGRAPHY(POINT), ggl GEOGRAPHY(LINESTRING,4326) ENCODING NONE, ggpoly GEOGRAPHY(POLYGON)"
+      "gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE, gpoly4326 GEOMETRY(POLYGON,4326)"
       ") WITH (fragment_size=2);");
   for (ssize_t i = 0; i < g_num_rows; ++i) {
     const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) + ")'"};
@@ -2939,7 +2939,7 @@ void import_geospatial_test() {
                             ", 0 0)))'"};
     const std::string insert_query{"INSERT INTO geospatial_test VALUES(" + point + ", " + linestring + ", " + poly +
                                    ", " + mpoly + ", " + point + ", " + point + ", " + point + ", " + point + ", " +
-                                   point + ", " + linestring + ", " + poly + ");"};
+                                   linestring + ", " + poly + ");"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
   }
 }
@@ -5185,7 +5185,7 @@ TEST(Select, GeoSpatial) {
     ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(gp4326none, ST_GeogFromText('POINT(1 1)', 4326));",
+            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(gp4326none, ST_GeomFromText('POINT(1 1)', 4326));",
             dt)));
     ASSERT_EQ(
         static_cast<int64_t>(1),
@@ -5201,11 +5201,10 @@ TEST(Select, GeoSpatial) {
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(poly, 'POINT(0.1 0.1)');", dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(g_num_rows),
-        v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(ggpoly, ST_GeogFromText('POINT(0.1 0.1)', 4326));",
-            dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(gpoly4326, "
+                                        "ST_GeomFromText('POINT(0.1 0.1)', 4326));",
+                                        dt)));
     ASSERT_EQ(static_cast<int64_t>(1),  // polygon containing a point
               v<int64_t>(run_simple_agg("SELECT ST_Contains("
                                         "ST_GeomFromText('POLYGON((2 0, 0 2, -2 0, 0 -2, 2 0))'), "
@@ -5225,9 +5224,9 @@ TEST(Select, GeoSpatial) {
     ASSERT_EQ(static_cast<int64_t>(1),  // last query but for geography objects
               v<int64_t>(run_simple_agg(
                   "SELECT ST_Contains("
-                  "ST_GeogFromText('MULTIPOLYGON(((2 0, 0 2, -2 0, 0 -2, 2 0),(1 0, 0 1, -1 0, 0 -1, 1 0)), "
+                  "ST_GeomFromText('MULTIPOLYGON(((2 0, 0 2, -2 0, 0 -2, 2 0),(1 0, 0 1, -1 0, 0 -1, 1 0)), "
                   "((2 0, 0 2, -2 0, 0 -2, 1 -2, 2 -1)))', 4326), "
-                  "ST_GeogFromText('POINT(0.1 0.1)', 4326)) FROM geospatial_test limit 1;",
+                  "ST_GeomFromText('POINT(0.1 0.1)', 4326)) FROM geospatial_test limit 1;",
                   dt)));
 
     // Coord accessors
@@ -5346,16 +5345,17 @@ TEST(Select, GeoSpatial) {
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance('POINT(0 0)', gp) < 100.0;", dt)));
     ASSERT_EQ(static_cast<int64_t>(4),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                        "ST_Distance(ST_GeogFromText('POINT(0 0)', 4326), gp4326) < 500000.0;",
-                                        dt)));
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM geospatial_test WHERE "
+                  "ST_Distance(ST_GeogFromText('POINT(0 0)', 4326), CastToGeography(gp4326)) < 500000.0;",
+                  dt)));
     ASSERT_EQ(static_cast<int64_t>(4),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
                                         "ST_Distance(ST_GeomFromText('POINT(0 0)', 900913), gp900913) < 5.0;",
                                         dt)));
     ASSERT_EQ(static_cast<int64_t>(4),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                        "ST_Distance(ST_Transform(ST_GeogFromText('POINT(0 0)', 4326), 900913), "
+                                        "ST_Distance(ST_Transform(ST_GeomFromText('POINT(0 0)', 4326), 900913), "
                                         "ST_Transform(gp4326, 900913)) < 500000.0;",
                                         dt)));
 
@@ -5394,13 +5394,14 @@ TEST(Select, GeoSpatial) {
                                         "from geospatial_test limit 1;",
                                         dt)));
     // Geodesic distance between Paris and LA: ~9105km
-    ASSERT_NEAR(static_cast<double>(9105643.0),
-                v<double>(run_simple_agg("SELECT ST_Distance("
-                                         "ST_SetSRID(ST_GeogFromText('POINT(-118.4079 33.9434)'), 4326), "
-                                         "ST_SetSRID(ST_GeogFromText('POINT(2.5559 49.0083)'), 4326)) "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(10000.0));
+    ASSERT_NEAR(
+        static_cast<double>(9105643.0),
+        v<double>(run_simple_agg("SELECT ST_Distance("
+                                 "CastToGeography(ST_SetSRID(ST_GeomFromText('POINT(-118.4079 33.9434)'), 4326)), "
+                                 "CastToGeography(ST_SetSRID(ST_GeomFromText('POINT(2.5559 49.0083)'), 4326))) "
+                                 "from geospatial_test limit 1;",
+                                 dt)),
+        static_cast<double>(10000.0));
   }
 }
 

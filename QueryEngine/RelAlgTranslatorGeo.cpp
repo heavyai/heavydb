@@ -364,7 +364,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       if (!IS_GEO(arg_ti.get_type())) {
         throw QueryNotSupported(rex_function->getName() + " expects geometry argument");
       }
-      if (arg_ti.get_output_srid() != 4326 || arg_ti.get_type() != kPOINT) {
+      if (!(arg_ti.get_type() == kPOINT || (arg_ti.get_type() == kLINESTRING && lindex != 0)) ||
+          arg_ti.get_output_srid() != 4326) {
         throw QueryNotSupported(rex_function->getName() + " expects point geometry with SRID=4326");
       }
       arg_ti.set_subtype(kGEOGRAPHY);
