@@ -60,9 +60,12 @@ void CudaMgr::fillDeviceProperties() {
   cudaDriverGetVersion(&gpu_driver_version);
   for (int deviceNum = 0; deviceNum < deviceCount_; ++deviceNum) {
     checkError(cuDeviceGet(&deviceProperties[deviceNum].device, deviceNum + startGpu_));
-    checkError(cuDeviceComputeCapability(&deviceProperties[deviceNum].computeMajor,
-                                         &deviceProperties[deviceNum].computeMinor,
-                                         deviceProperties[deviceNum].device));
+    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].computeMajor,
+                                    CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,
+                                    deviceProperties[deviceNum].device));
+    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].computeMinor,
+                                    CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,
+                                    deviceProperties[deviceNum].device));
     checkError(cuDeviceTotalMem(&deviceProperties[deviceNum].globalMem, deviceProperties[deviceNum].device));
     checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].constantMem,
                                     CU_DEVICE_ATTRIBUTE_TOTAL_CONSTANT_MEMORY,
