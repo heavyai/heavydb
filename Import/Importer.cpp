@@ -3162,11 +3162,27 @@ void Loader::setTableEpoch(int32_t start_epoch) {
 }
 
 void GDALErrorHandler(CPLErr eErrClass, int err_no, const char* msg) {
-  throw std::runtime_error("GDAL error: " + std::string(msg));
+  CHECK(eErrClass >= CE_None && eErrClass <= CE_Fatal);
+  static const char* errClassStrings[5] = {
+      "Info", "Debug", "Warning", "Failure", "Fatal",
+  };
+  std::string log_msg = std::string("GDAL ") + errClassStrings[eErrClass] + std::string(": ") + msg +
+                        std::string(" (") + std::to_string(err_no) + std::string(")");
+  if (eErrClass >= CE_Failure) {
+    throw std::runtime_error(log_msg);
+  } else {
+    LOG(INFO) << log_msg;
+  }
 }
 
 /* static */
+std::mutex Importer::init_gdal_mutex;
+
+/* static */
 void Importer::initGDAL() {
+  // this should not be called from multiple threads, but...
+  std::lock_guard<std::mutex> guard(Importer::init_gdal_mutex);
+  // init under mutex
   static bool gdal_initialized = false;
   if (!gdal_initialized) {
     // FIXME(andrewseidl): investigate if CPLPushFinderLocation can be public

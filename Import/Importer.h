@@ -776,6 +776,7 @@ class Importer : public DataStreamSink {
   std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> import_buffers_vec;
   std::unique_ptr<Loader> loader;
   std::unique_ptr<bool[]> is_array_a;
+  static std::mutex init_gdal_mutex;
 };
 
 class ImportDriver {
