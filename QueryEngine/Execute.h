@@ -254,6 +254,7 @@ class UpdateLogForFragment {
   UpdateLogForFragment(FragmentInfoType const& fragment_info, size_t const, const std::shared_ptr<ResultSet>& rs);
 
   std::vector<TargetValue> getEntryAt(const size_t index) const;
+  std::vector<TargetValue> getTranslatedEntryAt(const size_t index) const;
 
   size_t const getEntryCount() const;
   size_t const getFragmentIndex() const;

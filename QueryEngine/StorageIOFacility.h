@@ -201,13 +201,31 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
       usable_threads = 1;
     }
 
-    auto process_rows = [&update_log, &update_parameters, &column_offsets, &scalar_target_values ](
-                            uint64_t column_index, uint64_t row_start, uint64_t row_count) __attribute__((hot))
-                            ->uint64_t {
+    auto string_process_rows = [&update_log, &update_parameters, &column_offsets, &scalar_target_values](
+        uint64_t column_index, uint64_t row_start, uint64_t row_count) -> uint64_t {
+      uint64_t rows_processed = 0;
+      for (uint64_t row_index = row_start; row_index < (row_start + row_count); row_index++, rows_processed++) {
+        auto const row(update_log.getTranslatedEntryAt(row_index));
+        __builtin_prefetch(row.data(), 0, 0);
+
+        CHECK(!row.empty());
+        CHECK(row.size() == update_parameters.getUpdateColumnCount() + 1);
+
+        auto terminal_column_iter = std::prev(row.end());
+        const auto frag_offset_scalar_tv = boost::get<ScalarTargetValue>(&*terminal_column_iter);
+        CHECK(frag_offset_scalar_tv);
+
+        column_offsets[row_index] = static_cast<uint64_t>(*(boost::get<int64_t>(frag_offset_scalar_tv)));
+        scalar_target_values[row_index] = boost::get<ScalarTargetValue>(row[column_index]);
+      }
+      return rows_processed;
+    };
+
+    auto process_rows = [&update_log, &update_parameters, &column_offsets, &scalar_target_values](
+        uint64_t column_index, uint64_t row_start, uint64_t row_count) -> uint64_t {
       uint64_t rows_processed = 0;
       for (uint64_t row_index = row_start; row_index < (row_start + row_count); row_index++, rows_processed++) {
         auto const row(update_log.getEntryAt(row_index));
-        __builtin_prefetch(row.data(), 0, 0);
 
         CHECK(!row.empty());
         CHECK(row.size() == update_parameters.getUpdateColumnCount() + 1);
@@ -232,18 +250,37 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
       RowProcessingFuturesVector row_processing_futures;
       row_processing_futures.reserve(usable_threads);
 
-      for (unsigned i = 0; i < (unsigned)usable_threads; i++)
-        row_processing_futures.emplace_back(std::async(std::launch::async,
-                                                       std::forward<decltype(process_rows)>(process_rows),
-                                                       column_index,
-                                                       get_row_index(i),
-                                                       complete_row_block_size));
-      if (partial_row_block_size)
-        row_processing_futures.emplace_back(std::async(std::launch::async,
-                                                       std::forward<decltype(process_rows)>(process_rows),
-                                                       column_index,
-                                                       get_row_index(usable_threads),
-                                                       partial_row_block_size));
+      if (!update_log.getColumnType(column_index).is_string()) {  // Process non-string columns
+        for (unsigned i = 0; i < static_cast<unsigned>(usable_threads); i++)
+          row_processing_futures.emplace_back(std::async(std::launch::async,
+                                                         std::forward<decltype(process_rows)>(process_rows),
+                                                         column_index,
+                                                         get_row_index(i),
+                                                         complete_row_block_size));
+        if (partial_row_block_size) {
+          row_processing_futures.emplace_back(std::async(std::launch::async,
+                                                         std::forward<decltype(process_rows)>(process_rows),
+                                                         column_index,
+                                                         get_row_index(usable_threads),
+                                                         partial_row_block_size));
+        }
+      } else {  // Process string columns
+        for (unsigned i = 0; i < (unsigned)usable_threads; i++)
+          row_processing_futures.emplace_back(
+              std::async(std::launch::async,
+                         std::forward<decltype(string_process_rows)>(string_process_rows),
+                         column_index,
+                         get_row_index(i),
+                         complete_row_block_size));
+        if (partial_row_block_size) {
+          row_processing_futures.emplace_back(
+              std::async(std::launch::async,
+                         std::forward<decltype(string_process_rows)>(string_process_rows),
+                         column_index,
+                         get_row_index(usable_threads),
+                         partial_row_block_size));
+        }
+      }
 
       uint64_t rows_processed(0);
       for (auto& t : row_processing_futures) {
@@ -287,9 +324,8 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldDeleteCallb
       usable_threads = 1;
     }
 
-    auto process_rows = [&update_log, &delete_parameters, &victim_offsets ](uint64_t row_start, uint64_t row_count)
-                            __attribute__((hot))
-                                ->uint64_t {
+    auto process_rows = [&update_log, &delete_parameters, &victim_offsets](uint64_t row_start,
+                                                                           uint64_t row_count) -> uint64_t {
       uint64_t rows_processed = 0;
 
       for (uint64_t row_index = row_start; row_index < (row_start + row_count); row_index++, rows_processed++) {
@@ -308,7 +344,7 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldDeleteCallb
     };
 
     auto get_row_index = [complete_row_block_size](uint64_t thread_index) -> uint64_t {
-      return (thread_index * complete_row_block_size);
+      return thread_index * complete_row_block_size;
     };
 
     RowProcessingFuturesVector row_processing_futures;

@@ -23,6 +23,10 @@ std::vector<TargetValue> UpdateLogForFragment::getEntryAt(const size_t index) co
   return rs_->getRowAtNoTranslations(index);
 }
 
+std::vector<TargetValue> UpdateLogForFragment::getTranslatedEntryAt(const size_t index) const {
+  return rs_->getRowAt(index);
+}
+
 UpdateLogForFragment::FragmentInfoType const& UpdateLogForFragment::getFragmentInfo() const {
   return fragment_info_;
 }

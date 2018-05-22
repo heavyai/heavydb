@@ -1596,7 +1596,7 @@ class RelAlgAbstractInterpreter {
       }
     }
 
-    auto modify_node = std::make_shared<RelModify>(table_descriptor, flattened, op, target_column_list, inputs[0]);
+    auto modify_node = std::make_shared<RelModify>(cat_, table_descriptor, flattened, op, target_column_list, inputs[0]);
     switch (modify_node->getOperation()) {
       case RelModify::ModifyOperation::Delete: {
         modify_node->applyDeleteModificationsToInputNode();

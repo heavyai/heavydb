@@ -564,7 +564,7 @@ class ModifyManipulationTarget {
   int getTargetColumnCount() const { return target_columns_.size(); }
   void setTargetColumns(ColumnNameList const& target_columns) const { target_columns_ = target_columns; }
   ColumnNameList const& getTargetColumns() const { return target_columns_; }
-
+  
   template <typename VALIDATION_FUNCTOR>
   bool validateTargetColumns(VALIDATION_FUNCTOR validator) const {
     for (auto const& column_name : target_columns_)
@@ -583,7 +583,9 @@ class ModifyManipulationTarget {
 class RelProject : public RelAlgNode, public ModifyManipulationTarget {
  public:
   friend class RelModify;
-
+  using ConstRexScalarPtr = std::unique_ptr<const RexScalar>;
+  using ConstRexScalarPtrVector = std::vector<ConstRexScalarPtr>;
+  
   // Takes memory ownership of the expressions.
   RelProject(std::vector<std::unique_ptr<const RexScalar>>& scalar_exprs,
              const std::vector<std::string>& fields,
@@ -592,7 +594,8 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
     inputs_.push_back(input);
   }
 
-  void setExpressions(std::vector<std::unique_ptr<const RexScalar>>& exprs) { scalar_exprs_ = std::move(exprs); }
+
+  void setExpressions(std::vector<std::unique_ptr<const RexScalar>>& exprs) const { scalar_exprs_ = std::move(exprs); }
 
   // True iff all the projected expressions are inputs. If true,
   // this node can be elided and merged into the previous node
@@ -642,6 +645,11 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   std::shared_ptr<RelAlgNode> deepCopy() const override;
 
  private:
+  template< typename EXPR_VISITOR_FUNCTOR >
+  void visitAndStealScalarExprs( EXPR_VISITOR_FUNCTOR expr_burglar ) const {
+    for( int i = 0; i < static_cast< int >( scalar_exprs_.size() ); i++ ) expr_burglar( i, scalar_exprs_[i] );
+  }
+  
   void injectOffsetInFragmentExpr() const {
     RexFunctionOperator::ConstRexScalarPtrVector transient_vector;
     scalar_exprs_.emplace_back(boost::make_unique<RexFunctionOperator const>(
@@ -1079,24 +1087,27 @@ class RelModify : public RelAlgNode {
     throw std::runtime_error(std::string("Unsupported logical modify operation encountered " + op_string));
   }
 
-  RelModify(TableDescriptor const* const td,
+  RelModify(Catalog_Namespace::Catalog const& cat,
+            TableDescriptor const* const td,
             bool flattened,
             std::string const& op_string,
             TargetColumnList const& target_column_list,
             RelAlgNodeInputPtr input)
-      : table_descriptor_(td),
+      : catalog_( cat ),
+        table_descriptor_(td),
         flattened_(flattened),
         operation_(yieldModifyOperationEnum(op_string)),
         target_column_list_(target_column_list) {
     inputs_.push_back(input);
   }
 
-  RelModify(TableDescriptor const* const td,
+  RelModify(Catalog_Namespace::Catalog const& cat,
+            TableDescriptor const* const td,
             bool flattened,
             ModifyOperation op,
             TargetColumnList const& target_column_list,
             RelAlgNodeInputPtr input)
-      : table_descriptor_(td), flattened_(flattened), operation_(op), target_column_list_(target_column_list) {
+      : catalog_(cat), table_descriptor_(td), flattened_(flattened), operation_(op), target_column_list_(target_column_list) {
     inputs_.push_back(input);
   }
 
@@ -1108,7 +1119,7 @@ class RelModify : public RelAlgNode {
 
   size_t size() const override { return 0; }
   std::shared_ptr<RelAlgNode> deepCopy() const override {
-    return std::make_shared<RelModify>(table_descriptor_, flattened_, operation_, target_column_list_, inputs_[0]);
+    return std::make_shared<RelModify>(catalog_, table_descriptor_, flattened_, operation_, target_column_list_, inputs_[0]);
   }
 
   std::string toString() const override {
@@ -1128,6 +1139,38 @@ class RelModify : public RelAlgNode {
     previous_project_node->injectOffsetInFragmentExpr();
     previous_project_node->setModifiedTableDescriptor(table_descriptor_);
     previous_project_node->setTargetColumns(target_column_list_);
+
+    int target_update_column_expr_start = (int)( previous_project_node->getFields().size()  - target_column_list_.size() - 1 );
+    int target_update_column_expr_end = (int)( previous_project_node->getFields().size() - 2 );
+    CHECK( target_update_column_expr_start >= 0 );
+    CHECK( target_update_column_expr_end >= 0 );
+
+    RelProject::ConstRexScalarPtrVector transform_stash;
+    auto capped_cast_visitor = [this,&transform_stash, target_update_column_expr_start, target_update_column_expr_end]( int index, RelProject::ConstRexScalarPtr& expr_ptr ) {
+        if( index >= target_update_column_expr_start && index <= target_update_column_expr_end ) {
+            RelProject::ConstRexScalarPtrVector operand_stash;
+            operand_stash.emplace_back( std::move( expr_ptr ) );
+
+	    auto target_index = index - target_update_column_expr_start;
+
+            auto *column_desc = catalog_.getMetadataForColumn( table_descriptor_->tableId, target_column_list_[ target_index ] );
+            CHECK( column_desc != nullptr );
+            auto cast_target_type = column_desc->columnType;
+
+            auto capped_result_expr_ptr = boost::make_unique< RexOperator  const >(
+               kCAST,
+               operand_stash,
+               cast_target_type
+            );
+            transform_stash.emplace_back( std::move( capped_result_expr_ptr ) );
+        } else {
+            transform_stash.emplace_back( std::move( expr_ptr ) );
+        }
+        
+    };
+
+    previous_project_node->visitAndStealScalarExprs( capped_cast_visitor );
+    previous_project_node->setExpressions( transform_stash );
   }
 
   void applyDeleteModificationsToInputNode() {
@@ -1139,6 +1182,7 @@ class RelModify : public RelAlgNode {
   }
 
  private:
+  Catalog_Namespace::Catalog const& catalog_;
   const TableDescriptor* table_descriptor_;
   bool flattened_;
   ModifyOperation operation_;

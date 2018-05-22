@@ -345,6 +345,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(const RexOperat
       if (target_ti.is_time() || operand_ti.is_string()) {  // TODO(alex): check and unify with the rest of the cases
         return operand_expr->add_cast(target_ti);
       }
+      if( !operand_ti.is_string() && target_ti.is_string() ) {
+        return operand_expr->add_cast(target_ti);
+      }
+
       return std::make_shared<Analyzer::UOper>(target_ti, false, sql_op, operand_expr);
     }
     case kNOT:
