@@ -138,6 +138,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new ST_EndPoint());
     opTab.addOperator(new ST_SRID());
     opTab.addOperator(new ST_SetSRID());
+    opTab.addOperator(new CastToGeography());
     opTab.addOperator(new OffsetInFragment());
     opTab.addOperator(new ApproxCountDistinct());
     opTab.addOperator(new LastSample());
@@ -933,6 +934,26 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
               null,
               null,
               OperandTypes.family(SqlTypeFamily.ANY, SqlTypeFamily.INTEGER),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory
+              = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+    }
+  }
+
+  static class CastToGeography extends SqlFunction {
+
+    CastToGeography() {
+      super("CastToGeography",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.ANY),
               SqlFunctionCategory.SYSTEM);
     }
 

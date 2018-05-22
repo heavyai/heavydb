@@ -5148,6 +5148,14 @@ TEST(Select, GeoSpatial) {
                                          "from geospatial_test limit 1;",
                                          dt)),
                 static_cast<double>(10000.0));
+    // Geodesic distance between Paris and LA geometry points cast as geography points: ~9105km
+    ASSERT_NEAR(static_cast<double>(9105643.0),
+                v<double>(run_simple_agg(
+                    "SELECT ST_Distance(CastToGeography(ST_GeomFromText('POINT(-118.4079 33.9434)', 4326)), "
+                    "CastToGeography(ST_GeomFromText('POINT(2.5559 49.0083)', 4326))) "
+                    "from geospatial_test limit 1;",
+                    dt)),
+                static_cast<double>(10000.0));
     // Cartesian distance between Paris and LA calculated from wgs84 degrees
     ASSERT_NEAR(static_cast<double>(121.89),
                 v<double>(run_simple_agg("SELECT ST_Distance(ST_GeomFromText('POINT(-118.4079 33.9434)', 4326), "

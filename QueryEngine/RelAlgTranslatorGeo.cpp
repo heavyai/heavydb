@@ -354,6 +354,21 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       arg_ti.set_input_srid(srid);   // Input SRID
       arg_ti.set_output_srid(srid);  // Output SRID is the same - no transform
       return arg0;
+    } else if (rex_function->getName() == std::string("CastToGeography")) {
+      CHECK_EQ(size_t(1), rex_function->size());
+      const auto rex_scalar0 = dynamic_cast<const RexScalar*>(rex_function->getOperand(0));
+      if (!rex_scalar0) {
+        throw QueryNotSupported(rex_function->getName() + ": expects scalar as first argument");
+      }
+      auto arg0 = translateGeoFunctionArg(rex_scalar0, arg_ti, lindex, with_bounds);
+      if (!IS_GEO(arg_ti.get_type())) {
+        throw QueryNotSupported(rex_function->getName() + " expects geometry argument");
+      }
+      if (arg_ti.get_output_srid() != 4326 || arg_ti.get_type() != kPOINT) {
+        throw QueryNotSupported(rex_function->getName() + " expects point geometry with SRID=4326");
+      }
+      arg_ti.set_subtype(kGEOGRAPHY);
+      return arg0;
     } else {
       throw QueryNotSupported("Unsupported argument: " + rex_function->getName());
     }
