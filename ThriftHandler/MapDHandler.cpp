@@ -2214,6 +2214,7 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
           _return.row_set.rows.push_back(sample_row);
         }
       }
+      _return.copy_params = copyparams_to_thrift(copy_params);
     }
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION("detect_column_types error: " + std::string(e.what()));
