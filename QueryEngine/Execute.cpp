@@ -2419,11 +2419,14 @@ void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_desc
   for (size_t i = 0; i < ld_count; ++i) {
     CHECK_LT(i, query_infos.size());
     const auto frag_count = query_infos[i].info.fragments.size();
-    if (frag_count > 1) {
-      auto input_off_ptr = !i ? frag_off_ptr : cgen_state_->ir_builder_.CreateGEP(frag_off_ptr, ll_int(int32_t(i)));
-      cgen_state_->frag_offsets_.push_back(cgen_state_->ir_builder_.CreateLoad(input_off_ptr));
-    } else {
+    if (i > 0) {
       cgen_state_->frag_offsets_.push_back(nullptr);
+    } else {
+      if (frag_count > 1) {
+        cgen_state_->frag_offsets_.push_back(cgen_state_->ir_builder_.CreateLoad(frag_off_ptr));
+      } else {
+        cgen_state_->frag_offsets_.push_back(nullptr);
+      }
     }
   }
 }

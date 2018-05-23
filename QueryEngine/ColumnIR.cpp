@@ -259,6 +259,11 @@ llvm::Value* Executor::codegenRowId(const Analyzer::ColumnVar* col_var, const Co
   auto rowid_lv = posArg(col_var);
   if (offset_lv) {
     rowid_lv = cgen_state_->ir_builder_.CreateAdd(rowid_lv, offset_lv);
+  } else if (col_var->get_rte_idx() > 0) {
+    auto frag_off_ptr = get_arg_by_name(cgen_state_->row_func_, "frag_row_off");
+    auto input_off_ptr = cgen_state_->ir_builder_.CreateGEP(frag_off_ptr, ll_int(int32_t(col_var->get_rte_idx())));
+    auto rowid_offset_lv = cgen_state_->ir_builder_.CreateLoad(input_off_ptr);
+    rowid_lv = cgen_state_->ir_builder_.CreateAdd(rowid_lv, rowid_offset_lv);
   }
   if (table_generation.start_rowid > 0) {
     CHECK(start_rowid_lv);
