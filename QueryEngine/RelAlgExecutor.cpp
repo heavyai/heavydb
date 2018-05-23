@@ -1200,6 +1200,11 @@ void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
                                               const ExecutionOptions& eo,
                                               RenderInfo* render_info,
                                               const int64_t queue_time_ms) {
+  auto* table_descriptor = compound->getModifiedTableDescriptor();
+  if (!table_descriptor->hasDeletedCol) {
+    throw std::runtime_error("DELETE only supported on tables with the vacuum attribute set to 'delayed'");
+  }
+
   const auto work_unit = createModifyCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   CompilationOptions co_project = co;
@@ -1225,6 +1230,11 @@ void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
                                              const ExecutionOptions& eo,
                                              RenderInfo* render_info,
                                              const int64_t queue_time_ms) {
+  auto* table_descriptor = project->getModifiedTableDescriptor();
+  if (!table_descriptor->hasDeletedCol) {
+    throw std::runtime_error("DELETE only supported on tables with the vacuum attribute set to 'delayed'");
+  }
+
   auto work_unit = createModifyProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   CompilationOptions co_project = co;

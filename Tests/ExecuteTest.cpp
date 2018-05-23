@@ -4392,6 +4392,22 @@ TEST(Update, JoinCacheInvalidationTest) {
   }
 }
 
+TEST(Delete, WithoutVacuumAttribute) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table no_deletes (x integer);");
+    run_multiple_agg("insert into no_deletes values (10);", dt);
+    run_multiple_agg("insert into no_deletes values (11);", dt);
+    EXPECT_THROW(run_multiple_agg("delete from no_deletes where x > 10;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("delete from no_deletes;", dt), std::runtime_error);
+    run_ddl_statement("drop table no_deletes;");
+  }
+}
+
 TEST(Delete, ShardedTableDeleteTest) {
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
     return;
