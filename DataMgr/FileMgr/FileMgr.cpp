@@ -26,6 +26,7 @@
 #include "../Shared/measure.h"
 #include <boost/filesystem.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/system/error_code.hpp>
 #include <string>
 
 #include <algorithm>
@@ -415,7 +416,7 @@ void FileMgr::closeRemovePhysical() {
   boost::filesystem::path pathToTableDS(getFileMgrBasePath());
   boost::filesystem::remove_all(pathToTableDS, ec);
 
-  if (ec != 0) {
+  if (ec != boost::system::errc::success) {
     LOG(FATAL) << "failed to remove file " << getFileMgrBasePath() << "error was " << ec;
   }
 }
