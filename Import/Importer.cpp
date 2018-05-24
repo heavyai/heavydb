@@ -1933,7 +1933,16 @@ static ImportStatus import_thread_shapefile(
 
     // get this feature's geometry
     OGRGeometry* pGeometry = features[iFeature]->GetGeometryRef();
-    CHECK(pGeometry);
+    if (!pGeometry) {
+      // Silently ignoring features with no geometry defined.
+      // TODO: There's an argument to be made that such a case should be considered
+      // NULL instead of ignoring.
+      // Also, should we log a warning here? It seems like this code hit
+      // the same feature several times over the coarse of an import, so we'd want
+      // to minimize the amount of logging if the same feature is referenced many
+      // times or if there can be many such empty geometries.
+      continue;
+    }
 
     // transform it
     pGeometry->transformTo(poGeographicSR);
