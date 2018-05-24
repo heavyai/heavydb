@@ -6,6 +6,7 @@
 #include <boost/filesystem/operations.hpp>
 #include <gtest/gtest.h>
 #include <glog/logging.h>
+#include <thread>
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -831,6 +832,163 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   int recs5 = static_cast<int>(perms_list.size());
   ASSERT_EQ(recs1, recs5);
   ASSERT_EQ(recs5, 0);
+}
+
+void create_tables(std::string prefix, int max) {
+  auto& cat = g_session->get_catalog();
+  for (int i = 0; i < max; i++) {
+    std::string name = prefix + std::to_string(i);
+    run_ddl_statement("CREATE TABLE " + name + " (id integer);");
+    auto td = cat.getMetadataForTable(name, false);
+    ASSERT_TRUE(td);
+    ASSERT_EQ(td->isView, false);
+    ASSERT_EQ(td->tableName, name);
+  }
+}
+
+void create_views(std::string prefix, int max) {
+  auto& cat = g_session->get_catalog();
+  for (int i = 0; i < max; i++) {
+    std::string name = "view_" + prefix + std::to_string(i);
+    run_ddl_statement("CREATE VIEW " + name + " AS SELECT * FROM " + prefix + std::to_string(i) + ";");
+    auto td = cat.getMetadataForTable(name, false);
+    ASSERT_TRUE(td);
+    ASSERT_EQ(td->isView, true);
+    ASSERT_EQ(td->tableName, name);
+  }
+}
+
+void create_dashboards(std::string prefix, int max) {
+  auto& cat = g_session->get_catalog();
+  for (int i = 0; i < max; i++) {
+    std::string name = "dash_" + prefix + std::to_string(i);
+    FrontendViewDescriptor vd;
+    vd.viewName = name;
+    vd.viewState = name;
+    vd.imageHash = name;
+    vd.viewMetadata = name;
+    vd.userId = g_session->get_currentUser().userId;
+    ASSERT_EQ(0, g_session->get_currentUser().userId);
+    vd.user = g_session->get_currentUser().userName;
+    cat.createFrontendView(vd);
+
+    auto fvd = cat.getMetadataForFrontendView(std::to_string(g_session->get_currentUser().userId), name);
+    ASSERT_TRUE(fvd);
+    ASSERT_EQ(fvd->viewName, name);
+  }
+}
+
+void assert_grants(std::string prefix, int i, bool expected) {
+  auto& cat = g_session->get_catalog();
+
+  DBObject tablePermission(prefix + std::to_string(i), DBObjectType::TableDBObjectType);
+  try {
+    sys_cat.getDBObjectPrivileges("bob", tablePermission, cat);
+  } catch (std::runtime_error& e) {
+  }
+  ASSERT_EQ(expected, tablePermission.getPrivileges().hasPermission(TablePrivileges::SELECT_FROM_TABLE));
+
+  DBObject viewPermission("view_" + prefix + std::to_string(i), DBObjectType::ViewDBObjectType);
+  try {
+    sys_cat.getDBObjectPrivileges("bob", viewPermission, cat);
+  } catch (std::runtime_error& e) {
+  }
+  ASSERT_EQ(expected, viewPermission.getPrivileges().hasPermission(ViewPrivileges::SELECT_FROM_VIEW));
+
+  auto fvd = cat.getMetadataForFrontendView(std::to_string(g_session->get_currentUser().userId),
+                                            "dash_" + prefix + std::to_string(i));
+  DBObject dashPermission(fvd->viewId, DBObjectType::DashboardDBObjectType);
+  try {
+    sys_cat.getDBObjectPrivileges("bob", dashPermission, cat);
+  } catch (std::runtime_error& e) {
+  }
+  ASSERT_EQ(expected, dashPermission.getPrivileges().hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
+}
+
+void check_grant_access(std::string prefix, int max) {
+  auto& cat = g_session->get_catalog();
+
+  for (int i = 0; i < max; i++) {
+    assert_grants(prefix, i, false);
+
+    auto fvd = cat.getMetadataForFrontendView(std::to_string(g_session->get_currentUser().userId),
+                                              "dash_" + prefix + std::to_string(i));
+    run_ddl_statement("GRANT SELECT ON TABLE " + prefix + std::to_string(i) + " TO bob;");
+    run_ddl_statement("GRANT SELECT ON VIEW view_" + prefix + std::to_string(i) + " TO bob;");
+    run_ddl_statement("GRANT VIEW ON DASHBOARD " + std::to_string(fvd->viewId) + " TO bob;");
+    assert_grants(prefix, i, true);
+
+    run_ddl_statement("REVOKE SELECT ON TABLE " + prefix + std::to_string(i) + " FROM bob;");
+    run_ddl_statement("REVOKE SELECT ON VIEW view_" + prefix + std::to_string(i) + " FROM bob;");
+    run_ddl_statement("REVOKE VIEW ON DASHBOARD " + std::to_string(fvd->viewId) + " FROM bob;");
+    assert_grants(prefix, i, false);
+  }
+}
+
+void drop_dashboards(std::string prefix, int max) {
+  auto& cat = g_session->get_catalog();
+
+  for (int i = 0; i < max; i++) {
+    std::string name = "dash_" + prefix + std::to_string(i);
+
+    cat.deleteMetadataForFrontendView(std::to_string(g_session->get_currentUser().userId), name);
+    auto fvd = cat.getMetadataForFrontendView(std::to_string(g_session->get_currentUser().userId), name);
+    ASSERT_FALSE(fvd);
+  }
+}
+
+void drop_views(std::string prefix, int max) {
+  auto& cat = g_session->get_catalog();
+
+  for (int i = 0; i < max; i++) {
+    std::string name = "view_" + prefix + std::to_string(i);
+    run_ddl_statement("DROP VIEW " + name + ";");
+    auto td = cat.getMetadataForTable(name, false);
+    ASSERT_FALSE(td);
+  }
+}
+
+void drop_tables(std::string prefix, int max) {
+  auto& cat = g_session->get_catalog();
+
+  for (int i = 0; i < max; i++) {
+    std::string name = prefix + std::to_string(i);
+    run_ddl_statement("DROP TABLE " + name + ";");
+    auto td = cat.getMetadataForTable(name, false);
+    ASSERT_FALSE(td);
+  }
+}
+
+void run_concurrency_test(std::string prefix, int max) {
+  create_tables(prefix, max);
+  create_views(prefix, max);
+  create_dashboards(prefix, max);
+  check_grant_access(prefix, max);
+  drop_dashboards(prefix, max);
+  drop_views(prefix, max);
+  drop_tables(prefix, max);
+}
+
+TEST(Catalog, Concurrency) {
+  run_ddl_statement("CREATE USER bob (password = 'password', is_super = 'false');");
+  std::string prefix = "for_bob";
+
+  // only a single thread at the moment!
+  // because calcite access the sqlite-dbs
+  // directly when started in this mode
+  int num_threads = 1;
+  std::vector<std::shared_ptr<std::thread>> my_threads;
+
+  for (int i = 0; i < num_threads; i++) {
+    std::string prefix = "for_bob_" + std::to_string(i) + "_";
+    my_threads.push_back(std::make_shared<std::thread>(run_concurrency_test, prefix, 100));
+  }
+
+  for (auto& thread : my_threads) {
+    thread->join();
+  }
+
+  run_ddl_statement("DROP USER bob;");
 }
 
 int main(int argc, char* argv[]) {

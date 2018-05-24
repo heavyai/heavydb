@@ -54,6 +54,7 @@
 #include "LeafHostInfo.h"
 
 #include "../Calcite/Calcite.h"
+#include "../Shared/mapd_shared_mutex.h"
 
 struct Privileges {
   bool super_;
@@ -298,7 +299,6 @@ class Catalog {
   SqliteConnector sqliteConnector_;
   DBMetadata currentDB_;
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
-  mutable std::mutex cat_mutex_;
 
   std::unique_ptr<LdapServer> ldap_server_;
   std::unique_ptr<RestServer> rest_server_;
@@ -314,6 +314,14 @@ class Catalog {
  private:
   static std::map<std::string, std::shared_ptr<Catalog>> mapd_cat_map_;
   DeletedColumnPerTableMap deletedColumnPerTable_;
+
+ public:
+  mutable std::mutex sqliteMutex_;
+  mutable mapd_shared_mutex sharedMutex_;
+  mutable std::atomic<std::thread::id> thread_holding_sqlite_lock;
+  mutable std::atomic<std::thread::id> thread_holding_write_lock;
+  // assuming that you never call into a catalog from another catalog via the same thread
+  static thread_local bool thread_holds_read_lock;
 };
 
 /*
@@ -386,7 +394,7 @@ class SysCatalog {
   bool arePrivilegesOn() const { return check_privileges_; }
 
   static SysCatalog& instance() {
-    static SysCatalog sys_cat;
+    static SysCatalog sys_cat{};
     return sys_cat;
   }
 
@@ -397,7 +405,11 @@ class SysCatalog {
   typedef std::map<int32_t, Role*> UserRoleMap;
   typedef std::multimap<std::string, ObjectRoleDescriptor*> ObjectRoleDescriptorMap;
 
-  SysCatalog() {}
+  SysCatalog()
+      : sqliteMutex_(),
+        sharedMutex_(),
+        thread_holding_sqlite_lock(std::thread::id()),
+        thread_holding_write_lock(std::thread::id()) {}
   virtual ~SysCatalog();
 
   void initDB();
@@ -449,11 +461,18 @@ class SysCatalog {
   ObjectRoleDescriptorMap objectDescriptorMap_;
   DBMetadata currentDB_;
   std::unique_ptr<SqliteConnector> sqliteConnector_;
+
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
   std::unique_ptr<LdapServer> ldap_server_;
   std::unique_ptr<RestServer> rest_server_;
   std::shared_ptr<Calcite> calciteMgr_;
-  mutable std::mutex cat_mutex_;
+
+ public:
+  mutable std::mutex sqliteMutex_;
+  mutable mapd_shared_mutex sharedMutex_;
+  mutable std::atomic<std::thread::id> thread_holding_sqlite_lock;
+  mutable std::atomic<std::thread::id> thread_holding_write_lock;
+  static thread_local bool thread_holds_read_lock;
 };
 
 /*

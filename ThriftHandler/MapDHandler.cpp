@@ -1317,6 +1317,9 @@ bool MapDHandler::hasTableAccessPrivileges(const TableDescriptor* td, const TSes
   auto& cat = session_info.get_catalog();
   auto user_metadata = session_info.get_currentUser();
 
+  if (user_metadata.isSuper)
+    return true;
+
   DBObject dbObject(td->tableName, TableDBObjectType);
   dbObject.loadKey(cat);
   std::vector<DBObject> privObjects = {dbObject};

@@ -26,11 +26,16 @@ import com.mapd.thrift.server.TDBObject;
 import com.mapd.thrift.server.TDBObjectType;
 import com.mapd.thrift.server.TDashboard;
 import com.mapd.thrift.server.TQueryResult;
+import com.mapd.thrift.server.TTableDetails;
 
 public class MapdTestClient {
   MapD.Client client;
   String sessionId;
-
+  
+  public TTableDetails get_table_details(String table_name) throws Exception {
+    return client.get_table_details(sessionId, table_name);
+  }
+  
   public TQueryResult runSql(String sql) throws Exception {
     return client.sql_execute(sessionId, sql, true, null, -1, -1);
   }
