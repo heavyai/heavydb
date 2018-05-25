@@ -19,16 +19,16 @@
 #include "../QueryEngine/ArrowResultSet.h"
 #include "../QueryEngine/Execute.h"
 #include "../QueryEngine/RelAlgExecutionDescriptor.h"
-#include "../SqliteConnector/SqliteConnector.h"
-#include "../Shared/ConfigResolve.h"
 #include "../QueryRunner/QueryRunner.h"
+#include "../Shared/ConfigResolve.h"
+#include "../SqliteConnector/SqliteConnector.h"
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/program_options.hpp>
-#include <sstream>
 #include <cmath>
+#include <sstream>
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -6124,6 +6124,19 @@ TEST(Select, GeoSpatial) {
               v<int64_t>(run_simple_agg("SELECT ST_NRings(poly) from geospatial_test limit 1;", dt)));
     ASSERT_EQ(static_cast<int64_t>(1),
               v<int64_t>(run_simple_agg("SELECT ST_NRings(mpoly) from geospatial_test limit 1;", dt)));
+
+    // ST_NPoints
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg("SELECT ST_NPoints(p) from geospatial_test LIMIT 1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(3),
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_NPoints(l) FROM geospatial_test ORDER BY ST_NPoints(l) DESC LIMIT 1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(3),
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_NPoints(poly) FROM geospatial_test ORDER BY ST_NPoints(l) DESC LIMIT 1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(3),
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_NPoints(mpoly) FROM geospatial_test ORDER BY ST_NPoints(l) DESC LIMIT 1;", dt)));
 
     // ST_SRID, ST_SetSRID
     ASSERT_EQ(static_cast<int64_t>(0),

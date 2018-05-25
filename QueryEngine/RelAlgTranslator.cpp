@@ -345,7 +345,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(const RexOperat
       if (target_ti.is_time() || operand_ti.is_string()) {  // TODO(alex): check and unify with the rest of the cases
         return operand_expr->add_cast(target_ti);
       }
-      if( !operand_ti.is_string() && target_ti.is_string() ) {
+      if (!operand_ti.is_string() && target_ti.is_string()) {
         return operand_expr->add_cast(target_ti);
       }
 
@@ -1106,7 +1106,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
   }
   if (rex_function->getName() == std::string("ST_X") || rex_function->getName() == std::string("ST_Y") ||
       rex_function->getName() == std::string("ST_XMin") || rex_function->getName() == std::string("ST_YMin") ||
-      rex_function->getName() == std::string("ST_XMax") || rex_function->getName() == std::string("ST_YMax") || rex_function->getName() == std::string("ST_NRings") || 
+      rex_function->getName() == std::string("ST_XMax") || rex_function->getName() == std::string("ST_YMax") ||
+      rex_function->getName() == std::string("ST_NRings") || rex_function->getName() == std::string("ST_NPoints") ||
       rex_function->getName() == std::string("ST_SRID")) {
     CHECK_EQ(rex_function->size(), size_t(1));
     return translateUnaryGeoFunction(rex_function);

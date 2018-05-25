@@ -68,7 +68,7 @@ bool importGeoFromWkt(std::string& wkt,
 
 std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeInfo& ti);
 
-}  // Importer_NS
+}  // namespace Importer_NS
 
 std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiteral(const RexLiteral* rex_literal,
                                                                                    SQLTypeInfo& ti,
@@ -434,6 +434,15 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     } else {
       throw QueryNotSupported(rex_function->getName() + " expects a POLYGON or MULTIPOLYGON");
     }
+  } else if (rex_function->getName() == std::string("ST_NPoints")) {
+    SQLTypeInfo arg_ti;
+    auto geoargs = translateGeoFunctionArg(rex_function->getOperand(0), arg_ti, lindex, false, true);
+    geoargs.erase(geoargs.begin() + 1, geoargs.end());  // remove all but coords
+    // Add compression information
+    Datum input_compression;
+    input_compression.intval = (arg_ti.get_compression() == kENCODING_GEOINT && arg_ti.get_comp_param() == 32) ? 1 : 0;
+    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
+    return makeExpr<Analyzer::FunctionOper>(rex_function->getType(), specialized_geofunc, geoargs);
   }
 
   // All functions below use geo col as reference and expand it as necessary

@@ -349,6 +349,12 @@ double ST_YMax_Bounds(double* bounds, int64_t size, int32_t isr, int32_t osr) {
 }
 
 EXTENSION_INLINE
+int32_t ST_NPoints(int8_t* coords, int64_t coords_sz, int32_t ic) {
+  auto num_pts = coords_sz / compression_unit_size(ic);
+  return static_cast<int32_t>(num_pts / 2);
+}
+
+EXTENSION_INLINE
 int32_t ST_NRings(int32_t* poly_ring_sizes, int64_t poly_num_rings) {
   return static_cast<int32_t>(poly_num_rings);
 }
