@@ -1258,6 +1258,13 @@ std::string pg_shim_impl(const std::string& query) {
       result.replace(what.position(), what.length(), what[1] + "CORRELATION(");
     });
   }
+  {
+    boost::regex cast_to_geography_expr{R"(CAST\s*\(\s*(((?!geography).)+)\s+AS\s+geography\s*\))",
+                                        boost::regex::perl | boost::regex::icase};
+    apply_shim(result, cast_to_geography_expr, [](std::string& result, const boost::smatch& what) {
+      result.replace(what.position(), what.length(), "CastToGeography(" + what[1] + ")");
+    });
+  }
   return result;
 }
 

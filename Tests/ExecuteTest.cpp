@@ -5275,7 +5275,7 @@ TEST(Select, GeoSpatial) {
     ASSERT_NEAR(static_cast<double>(9105643.0),
                 v<double>(run_simple_agg(
                     "SELECT ST_Distance(CastToGeography(ST_GeomFromText('POINT(-118.4079 33.9434)', 4326)), "
-                    "CastToGeography(ST_GeomFromText('POINT(2.5559 49.0083)', 4326))) "
+                    "cast (ST_GeomFromText('POINT(2.5559 49.0083)', 4326) as geography)) "
                     "from geospatial_test limit 1;",
                     dt)),
                 static_cast<double>(10000.0));
