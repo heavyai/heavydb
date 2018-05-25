@@ -206,7 +206,6 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
       uint64_t rows_processed = 0;
       for (uint64_t row_index = row_start; row_index < (row_start + row_count); row_index++, rows_processed++) {
         auto const row(update_log.getTranslatedEntryAt(row_index));
-        __builtin_prefetch(row.data(), 0, 0);
 
         CHECK(!row.empty());
         CHECK(row.size() == update_parameters.getUpdateColumnCount() + 1);

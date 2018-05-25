@@ -4441,6 +4441,620 @@ TEST(Delete, WithoutVacuumAttribute) {
   }
 }
 
+TEST(Update, ImplicitCastToDate8) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table datetab ( d1 date ) with ( vacuum='delayed' );");
+    run_multiple_agg("insert into datetab values ('2001-04-05');", dt);
+
+    EXPECT_THROW(run_multiple_agg("update datetab set d1='nonsense';", dt), std::runtime_error);
+    EXPECT_EQ(int64_t(1), v<int64_t>(run_simple_agg("select count(d1) from datetab where d1='2001-04-05';", dt)));
+
+    run_multiple_agg("update datetab set d1=cast( '1999-12-31 23:59:59' as varchar(32) );", dt);
+    EXPECT_EQ(int64_t(1), v<int64_t>(run_simple_agg("select count(d1) from datetab where d1='1999-12-31';", dt)));
+
+    run_multiple_agg("update datetab set d1=cast( '1990-12-31 13:59:59' as char(32) );", dt);
+    EXPECT_EQ(int64_t(1), v<int64_t>(run_simple_agg("select count(d1) from datetab where d1='1990-12-31';", dt)));
+
+    run_multiple_agg("update datetab set d1=cast( '1989-01-01 00:00:00' as timestamp );", dt);
+    EXPECT_EQ(int64_t(1), v<int64_t>(run_simple_agg("select count(d1) from datetab where d1='1989-01-01';", dt)));
+
+    run_multiple_agg("update datetab set d1=cast( '2000' as date );", dt);
+    EXPECT_EQ(int64_t(1), v<int64_t>(run_simple_agg("select count(d1) from datetab where d1='2000-01-01';", dt)));
+
+    EXPECT_THROW(run_simple_agg("update datetab set d1=cast( 2000.00 as float );", dt), std::runtime_error);
+    EXPECT_THROW(run_simple_agg("update datetab set d1=cast( 2123.444 as double );", dt), std::runtime_error);
+    EXPECT_THROW(run_simple_agg("update datetab set d1=cast( 1235 as integer );", dt), std::runtime_error);
+    EXPECT_THROW(run_simple_agg("update datetab set d1=cast( 12 as smallint );", dt), std::runtime_error);
+    EXPECT_THROW(run_simple_agg("update datetab set d1=cast( 9 as bigint );", dt), std::runtime_error);
+    EXPECT_THROW(run_simple_agg("update datetab set d1=cast( 'False' as boolean );", dt), std::runtime_error);
+
+    run_ddl_statement("drop table datetab;");
+  }
+}
+
+TEST(Update, ImplicitCastToDate4) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table datetab4 ( d1 date ) with ( vacuum='delayed' );");
+    run_multiple_agg("insert into datetab4 values ('2001-04-05');", dt);
+
+    EXPECT_THROW(run_multiple_agg("update datetab4 set d1='nonsense';", dt), std::runtime_error);
+    EXPECT_EQ(int64_t(1), v<int64_t>(run_simple_agg("select count(d1) from datetab4 where d1='2001-04-05';", dt)));
+
+    run_multiple_agg("update datetab4 set d1=cast( '1999-12-31 23:59:59' as varchar(32) );", dt);
+    EXPECT_EQ(int64_t(1), v<int64_t>(run_simple_agg("select count(d1) from datetab4 where d1='1999-12-31';", dt)));
+
+    run_multiple_agg("update datetab4 set d1=cast( '1990-12-31 13:59:59' as char(32) );", dt);
+    EXPECT_EQ(int64_t(1), v<int64_t>(run_simple_agg("select count(d1) from datetab4 where d1='1990-12-31';", dt)));
+
+    run_multiple_agg("update datetab4 set d1=cast( '1989-01-01 00:00:00' as timestamp );", dt);
+    EXPECT_EQ(int64_t(1), v<int64_t>(run_simple_agg("select count(d1) from datetab4 where d1='1989-01-01';", dt)));
+
+    run_multiple_agg("update datetab4 set d1=cast( '2000' as date );", dt);
+    EXPECT_EQ(int64_t(1), v<int64_t>(run_simple_agg("select count(d1) from datetab4 where d1='2000-01-01';", dt)));
+
+    EXPECT_THROW(run_simple_agg("update datetab4 set d1=cast( 2000.00 as float );", dt), std::runtime_error);
+    EXPECT_THROW(run_simple_agg("update datetab4 set d1=cast( 2123.444 as double );", dt), std::runtime_error);
+    EXPECT_THROW(run_simple_agg("update datetab4 set d1=cast( 1235 as integer );", dt), std::runtime_error);
+    EXPECT_THROW(run_simple_agg("update datetab4 set d1=cast( 12 as smallint );", dt), std::runtime_error);
+    EXPECT_THROW(run_simple_agg("update datetab4 set d1=cast( 9 as bigint );", dt), std::runtime_error);
+    EXPECT_THROW(run_simple_agg("update datetab4 set d1=cast( 'False' as boolean );", dt), std::runtime_error);
+
+    run_ddl_statement("drop table datetab4;");
+  }
+}
+
+TEST(Update, ImplicitCastToEncodedString) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement(
+        "create table textenc ( s1 text encoding dict(32), s2 text encoding dict(16), s3 text encoding dict(8) ) with "
+        "(vacuum='delayed');");
+    run_multiple_agg("insert into textenc values ( 'kanye', 'omari', 'west' );", dt);
+
+    run_multiple_agg("update textenc set s1 = 'the';", dt);
+    EXPECT_EQ(NullableString("the"), v<NullableString>(run_simple_agg("select s1 from textenc where s1 = 'the';", dt)));
+
+    run_multiple_agg("update textenc set s2 = 'college';", dt);
+    EXPECT_EQ(NullableString("college"),
+              v<NullableString>(run_simple_agg("select s2 from textenc where s2 = 'college';", dt)));
+
+    run_multiple_agg("update textenc set s3 = 'dropout';", dt);
+    EXPECT_EQ(NullableString("dropout"),
+              v<NullableString>(run_simple_agg("select s3 from textenc where s3 = 'dropout';", dt)));
+
+    run_multiple_agg("update textenc set s1 = s2;", dt);
+    EXPECT_EQ(NullableString("college"),
+              v<NullableString>(run_simple_agg("select s1 from textenc where s1 = 'college';", dt)));
+
+    run_multiple_agg("update textenc set s2 = s3;", dt);
+    EXPECT_EQ(NullableString("dropout"),
+              v<NullableString>(run_simple_agg("select s2 from textenc where s2='dropout';", dt)));
+
+    run_multiple_agg("update textenc set s3 = s1;", dt);
+    EXPECT_EQ(NullableString("college"),
+              v<NullableString>(run_simple_agg("select s3 from textenc where s3='college';", dt)));
+
+    run_multiple_agg("update textenc set s1=cast('1977-06-08 00:00:00' as timestamp);", dt);
+    EXPECT_EQ(NullableString("1977-06-08 00:00:00"), v<NullableString>(run_simple_agg("select s1 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s1=cast('12:34:56' as time);", dt);
+    EXPECT_EQ(NullableString("12:34:56"), v<NullableString>(run_simple_agg("select s1 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s1=cast('1977-06-08' as date);", dt);
+    EXPECT_EQ(NullableString("1977-06-08"), v<NullableString>(run_simple_agg("select s1 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s1=cast( 1234.00 as float );", dt);
+    EXPECT_EQ(NullableString("1234.000000"), v<NullableString>(run_simple_agg("select s1 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s1=cast( 12345.00 as double );", dt);
+    EXPECT_EQ(NullableString("12345.000000"), v<NullableString>(run_simple_agg("select s1 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s1=cast( 1234 as integer );", dt);
+    EXPECT_EQ(NullableString("1234"), v<NullableString>(run_simple_agg("select s1 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s1=cast( 12 as smallint );", dt);
+    EXPECT_EQ(NullableString("12"), v<NullableString>(run_simple_agg("select s1 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s1=cast( 123412341234 as bigint );", dt);
+    EXPECT_EQ(NullableString("123412341234"), v<NullableString>(run_simple_agg("select s1 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s1=cast( 'True' as boolean );", dt);
+    EXPECT_EQ(NullableString("t"), v<NullableString>(run_simple_agg("select s1 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s1=cast( 1234.56 as decimal );", dt);
+    EXPECT_EQ(NullableString("               1235"), v<NullableString>(run_simple_agg("select s1 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s2=cast('1977-06-08 00:00:00' as timestamp);", dt);
+    EXPECT_EQ(NullableString("1977-06-08 00:00:00"), v<NullableString>(run_simple_agg("select s2 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s2=cast('12:34:56' as time);", dt);
+    EXPECT_EQ(NullableString("12:34:56"), v<NullableString>(run_simple_agg("select s2 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s2=cast('1977-06-08' as date);", dt);
+    EXPECT_EQ(NullableString("1977-06-08"), v<NullableString>(run_simple_agg("select s2 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s2=cast( 1234.00 as float );", dt);
+    EXPECT_EQ(NullableString("1234.000000"), v<NullableString>(run_simple_agg("select s2 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s2=cast( 12345.00 as double );", dt);
+    EXPECT_EQ(NullableString("12345.000000"), v<NullableString>(run_simple_agg("select s2 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s2=cast( 1234 as integer );", dt);
+    EXPECT_EQ(NullableString("1234"), v<NullableString>(run_simple_agg("select s2 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s2=cast( 12 as smallint );", dt);
+    EXPECT_EQ(NullableString("12"), v<NullableString>(run_simple_agg("select s2 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s2=cast( 123412341234 as bigint );", dt);
+    EXPECT_EQ(NullableString("123412341234"), v<NullableString>(run_simple_agg("select s2 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s2=cast( 'True' as boolean );", dt);
+    EXPECT_EQ(NullableString("t"), v<NullableString>(run_simple_agg("select s2 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s2=cast( 1234.56 as decimal );", dt);
+    EXPECT_EQ(NullableString("               1235"), v<NullableString>(run_simple_agg("select s2 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s3=cast('1977-06-08 00:00:00' as timestamp);", dt);
+    EXPECT_EQ(NullableString("1977-06-08 00:00:00"), v<NullableString>(run_simple_agg("select s3 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s3=cast('12:34:56' as time);", dt);
+    EXPECT_EQ(NullableString("12:34:56"), v<NullableString>(run_simple_agg("select s3 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s3=cast('1977-06-08' as date);", dt);
+    EXPECT_EQ(NullableString("1977-06-08"), v<NullableString>(run_simple_agg("select s3 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s3=cast( 1234.00 as float );", dt);
+    EXPECT_EQ(NullableString("1234.000000"), v<NullableString>(run_simple_agg("select s3 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s3=cast( 12345.00 as double );", dt);
+    EXPECT_EQ(NullableString("12345.000000"), v<NullableString>(run_simple_agg("select s3 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s3=cast( 1234 as integer );", dt);
+    EXPECT_EQ(NullableString("1234"), v<NullableString>(run_simple_agg("select s3 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s3=cast( 12 as smallint );", dt);
+    EXPECT_EQ(NullableString("12"), v<NullableString>(run_simple_agg("select s3 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s3=cast( 123412341234 as bigint );", dt);
+    EXPECT_EQ(NullableString("123412341234"), v<NullableString>(run_simple_agg("select s3 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s3=cast( 'True' as boolean );", dt);
+    EXPECT_EQ(NullableString("t"), v<NullableString>(run_simple_agg("select s3 from textenc;", dt)));
+
+    run_multiple_agg("update textenc set s3=cast( 1234.56 as decimal );", dt);
+    EXPECT_EQ(NullableString("               1235"), v<NullableString>(run_simple_agg("select s3 from textenc;", dt)));
+
+    run_ddl_statement("drop table textenc;");
+  }
+}
+
+TEST(Update, ImplicitCastToNoneEncodedString) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table none_str ( str text encoding none ) with (vacuum='delayed');");
+
+    run_multiple_agg("insert into none_str values ('kanye');", dt);
+    EXPECT_THROW(run_multiple_agg("update none_str set str='yeezy';", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update none_str set str='yeezy' where str='kanye';", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update none_str set str=cast('1977-06-08 00:00:00' as timestamp);", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update none_str set str=cast('12:34:56' as time);", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update none_str set str=cast('1977-06-08' as date);", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update none_str set str=cast( 1234.00 as float );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update none_str set str=cast( 12345.00 as double );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update none_str set str=cast( 1234 as integer );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update none_str set str=cast( 12 as smallint );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update none_str set str=cast( 123412341234 as bigint );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update none_str set str=cast( 'True' as boolean );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update none_str set str=cast( 1234.56 as decimal );", dt), std::runtime_error);
+
+    run_ddl_statement("drop table none_str;");
+  }
+}
+
+TEST(Update, ImplicitCastToNumericTypes) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table floattest ( f float ) with (vacuum='delayed');");
+    run_ddl_statement("create table doubletest ( d double ) with (vacuum='delayed');");
+    run_ddl_statement("create table inttest ( i integer ) with (vacuum='delayed');");
+    run_ddl_statement("create table sinttest ( i integer ) with (vacuum='delayed');");
+    run_ddl_statement("create table binttest ( i integer ) with (vacuum='delayed');");
+    run_ddl_statement("create table booltest ( b boolean ) with (vacuum='delayed');");
+    run_ddl_statement("create table dectest ( d decimal(10) ) with (vacuum='delayed');");
+
+    run_multiple_agg("insert into floattest values ( 0.1234 );", dt);
+    run_multiple_agg("insert into doubletest values ( 0.1234 );", dt);
+    run_multiple_agg("insert into inttest values ( 1234 );", dt);
+    run_multiple_agg("insert into sinttest values ( 1234 );", dt);
+    run_multiple_agg("insert into binttest values ( 1234 );", dt);
+    run_multiple_agg("insert into booltest values ( 'True' );", dt);
+    run_multiple_agg("insert into dectest values ( '1234.0' );", dt);
+
+    EXPECT_THROW(run_multiple_agg("update floattest set f=cast( 'nonsense' as varchar );", dt), std::invalid_argument);
+
+    run_multiple_agg("update floattest set f=cast( '128.90' as varchar );", dt);
+    EXPECT_FLOAT_EQ(float(128.90), v<float>(run_simple_agg("select f from floattest;", dt)));
+
+    run_multiple_agg("update floattest set f=cast ('2000-01-01 10:11:12' as timestamp );", dt);
+    EXPECT_FLOAT_EQ(float(9.467215 * powf(10, 8)), v<float>(run_simple_agg("select f from floattest;", dt)));
+
+    run_multiple_agg("update floattest set f=cast ('12:34:56' as time );", dt);
+    EXPECT_FLOAT_EQ(float(45296), v<float>(run_simple_agg("select f from floattest;", dt)));
+
+    run_multiple_agg("update floattest set f=cast ('1999-12-31' as date);", dt);
+    EXPECT_FLOAT_EQ(float(9.465984 * powf(10, 8)), v<float>(run_simple_agg("select f from floattest;", dt)));
+
+    run_multiple_agg("update floattest set f=cast (1234.0 as float);", dt);
+    EXPECT_FLOAT_EQ(float(1234.0), v<float>(run_simple_agg("select f from floattest;", dt)));
+
+    run_multiple_agg("update floattest set f=cast (1234.0 as double);", dt);
+    EXPECT_FLOAT_EQ(float(1234.0), v<float>(run_simple_agg("select f from floattest;", dt)));
+
+    run_multiple_agg("update floattest set f=cast(56780 as integer);", dt);
+    EXPECT_FLOAT_EQ(float(56780), v<float>(run_simple_agg("select f from floattest;", dt)));
+
+    run_multiple_agg("update floattest set f=cast(12345 as smallint);", dt);
+    EXPECT_FLOAT_EQ(float(12345), v<float>(run_simple_agg("select f from floattest;", dt)));
+
+    run_multiple_agg("update floattest set f=cast(12345 as bigint);", dt);
+    EXPECT_FLOAT_EQ(float(12345), v<float>(run_simple_agg("select f from floattest;", dt)));
+
+    run_multiple_agg("update floattest set f=cast('True' as boolean);", dt);
+    EXPECT_FLOAT_EQ(float(1), v<float>(run_simple_agg("select f from floattest;", dt)));
+
+    run_multiple_agg("update floattest set f=cast(1234.00 as decimal);", dt);
+    EXPECT_FLOAT_EQ(float(1234), v<float>(run_simple_agg("select f from floattest;", dt)));
+
+    EXPECT_THROW(run_multiple_agg("update doubletest set d=cast( 'nonsense' as varchar );", dt), std::invalid_argument);
+
+    run_multiple_agg("update doubletest set d=cast( '128.90' as varchar );", dt);
+    EXPECT_DOUBLE_EQ(double(128.90), v<double>(run_simple_agg("select d from doubletest;", dt)));
+
+    run_multiple_agg("update doubletest set d=cast( '2000-01-01 10:11:12' as timestamp );", dt);
+    EXPECT_DOUBLE_EQ(double(946721472), v<double>(run_simple_agg("select d from doubletest;", dt)));
+
+    run_multiple_agg("update doubletest set d=cast( '12:34:56' as time );", dt);
+    EXPECT_DOUBLE_EQ(double(45296), v<double>(run_simple_agg("select d from doubletest;", dt)));
+
+    run_multiple_agg("update doubletest set d=cast( '1999-12-31' as date );", dt);
+    EXPECT_DOUBLE_EQ(double(946598400), v<double>(run_simple_agg("select d from doubletest;", dt)));
+
+    run_multiple_agg("update doubletest set d=cast( 1234.0 as float );", dt);
+    EXPECT_DOUBLE_EQ(double(1234.0), v<double>(run_simple_agg("select d from doubletest;", dt)));
+
+    run_multiple_agg("update doubletest set d=cast( 1234.0 as double );", dt);
+    EXPECT_DOUBLE_EQ(double(1234.0), v<double>(run_simple_agg("select d from doubletest;", dt)));
+
+    run_multiple_agg("update doubletest set d=cast( 56780 as integer );", dt);
+    EXPECT_DOUBLE_EQ(double(56780), v<double>(run_simple_agg("select d from doubletest;", dt)));
+
+    run_multiple_agg("update doubletest set d=cast( 12345 as smallint );", dt);
+    EXPECT_DOUBLE_EQ(double(12345), v<double>(run_simple_agg("select d from doubletest;", dt)));
+
+    run_multiple_agg("update doubletest set d=cast( 12345 as bigint );", dt);
+    EXPECT_DOUBLE_EQ(double(12345), v<double>(run_simple_agg("select d from doubletest;", dt)));
+
+    run_multiple_agg("update doubletest set d=cast( 'True' as boolean );", dt);
+    EXPECT_DOUBLE_EQ(double(1), v<double>(run_simple_agg("select d from doubletest;", dt)));
+
+    run_multiple_agg("update doubletest set d=cast( 1234.00 as decimal );", dt);
+    EXPECT_DOUBLE_EQ(double(1234), v<double>(run_simple_agg("select d from doubletest;", dt)));
+
+    EXPECT_THROW(run_multiple_agg("update inttest set i=cast( 'nonsense' as varchar );", dt), std::invalid_argument);
+    run_multiple_agg("update inttest set i=cast( '128.90' as varchar );", dt);
+    EXPECT_EQ(int64_t(128), v<int64_t>(run_simple_agg("select i from inttest;", dt)));
+
+    run_multiple_agg("update inttest set i=cast( '2000-01-01 10:11:12' as timestamp );", dt);
+    EXPECT_EQ(int64_t(946721472), v<int64_t>(run_simple_agg("select i from inttest;", dt)));
+
+    run_multiple_agg("update inttest set i=cast( '12:34:56' as time );", dt);
+    EXPECT_EQ(int64_t(45296), v<int64_t>(run_simple_agg("select i from inttest;", dt)));
+
+    run_multiple_agg("update inttest set i=cast( '1999-12-31' as date );", dt);
+    EXPECT_EQ(int64_t(946598400), v<int64_t>(run_simple_agg("select i from inttest;", dt)));
+
+    run_multiple_agg("update inttest set i=cast( 1234.0 as float );", dt);
+    EXPECT_EQ(int64_t(1234), v<int64_t>(run_simple_agg("select i from inttest;", dt)));
+
+    run_multiple_agg("update inttest set i=cast( 1234.0 as double );", dt);
+    EXPECT_EQ(int64_t(1234), v<int64_t>(run_simple_agg("select i from inttest;", dt)));
+
+    run_multiple_agg("update inttest set i=cast( 56780 as integer );", dt);
+    EXPECT_EQ(int64_t(56780), v<int64_t>(run_simple_agg("select i from inttest;", dt)));
+
+    run_multiple_agg("update inttest set i=cast( 12345 as smallint );", dt);
+    EXPECT_EQ(int64_t(12345), v<int64_t>(run_simple_agg("select i from inttest;", dt)));
+
+    run_multiple_agg("update inttest set i=cast( 12345 as bigint );", dt);
+    EXPECT_EQ(int64_t(12345), v<int64_t>(run_simple_agg("select i from inttest;", dt)));
+
+    run_multiple_agg("update inttest set i=cast( 'True' as boolean );", dt);
+    EXPECT_EQ(int64_t(1), v<int64_t>(run_simple_agg("select i from inttest;", dt)));
+
+    run_multiple_agg("update inttest set i=cast( 1234.00 as decimal );", dt);
+    EXPECT_EQ(int64_t(1234), v<int64_t>(run_simple_agg("select i from inttest;", dt)));
+
+    EXPECT_THROW(run_multiple_agg("update sinttest set i=cast( 'nonsense' as varchar );", dt), std::invalid_argument);
+    run_multiple_agg("update sinttest set i=cast( '128.90' as varchar );", dt);
+    EXPECT_EQ(int64_t(128), v<int64_t>(run_simple_agg("select i from sinttest;", dt)));
+
+    run_multiple_agg("update sinttest set i=cast( '2000-01-01 10:11:12' as timestamp );", dt);
+    EXPECT_EQ(int64_t(946721472), v<int64_t>(run_simple_agg("select i from sinttest;", dt)));
+
+    run_multiple_agg("update sinttest set i=cast( '12:34:56' as time );", dt);
+    EXPECT_EQ(int64_t(45296), v<int64_t>(run_simple_agg("select i from sinttest;", dt)));
+
+    run_multiple_agg("update sinttest set i=cast( '1999-12-31' as date );", dt);
+    EXPECT_EQ(int64_t(946598400), v<int64_t>(run_simple_agg("select i from sinttest;", dt)));
+
+    run_multiple_agg("update sinttest set i=cast( 1234.0 as float );", dt);
+    EXPECT_EQ(int64_t(1234), v<int64_t>(run_simple_agg("select i from sinttest;", dt)));
+
+    run_multiple_agg("update sinttest set i=cast( 1234.0 as double );", dt);
+    EXPECT_EQ(int64_t(1234), v<int64_t>(run_simple_agg("select i from sinttest;", dt)));
+
+    run_multiple_agg("update sinttest set i=cast( 56780 as integer );", dt);
+    EXPECT_EQ(int64_t(56780), v<int64_t>(run_simple_agg("select i from sinttest;", dt)));
+
+    run_multiple_agg("update sinttest set i=cast( 12345 as smallint );", dt);
+    EXPECT_EQ(int64_t(12345), v<int64_t>(run_simple_agg("select i from sinttest;", dt)));
+
+    run_multiple_agg("update sinttest set i=cast( 12345 as bigint );", dt);
+    EXPECT_EQ(int64_t(12345), v<int64_t>(run_simple_agg("select i from sinttest;", dt)));
+
+    run_multiple_agg("update sinttest set i=cast( 'True' as boolean );", dt);
+    EXPECT_EQ(int64_t(1), v<int64_t>(run_simple_agg("select i from sinttest;", dt)));
+
+    run_multiple_agg("update sinttest set i=cast( 1234.00 as decimal );", dt);
+    EXPECT_EQ(int64_t(1234), v<int64_t>(run_simple_agg("select i from sinttest;", dt)));
+
+    EXPECT_THROW(run_multiple_agg("update binttest set i=cast( 'nonsense' as varchar );", dt), std::invalid_argument);
+    run_multiple_agg("update binttest set i=cast( '128.90' as varchar );", dt);
+    EXPECT_EQ(int64_t(128), v<int64_t>(run_simple_agg("select i from binttest;", dt)));
+
+    run_multiple_agg("update binttest set i=cast( '2000-01-01 10:11:12' as timestamp );", dt);
+    EXPECT_EQ(int64_t(946721472), v<int64_t>(run_simple_agg("select i from binttest;", dt)));
+
+    run_multiple_agg("update binttest set i=cast( '12:34:56' as time );", dt);
+    EXPECT_EQ(int64_t(45296), v<int64_t>(run_simple_agg("select i from binttest;", dt)));
+
+    run_multiple_agg("update binttest set i=cast( '1999-12-31' as date );", dt);
+    EXPECT_EQ(int64_t(946598400), v<int64_t>(run_simple_agg("select i from binttest;", dt)));
+
+    run_multiple_agg("update binttest set i=cast( 1234.0 as float );", dt);
+    EXPECT_EQ(int64_t(1234), v<int64_t>(run_simple_agg("select i from binttest;", dt)));
+
+    run_multiple_agg("update binttest set i=cast( 1234.0 as double );", dt);
+    EXPECT_EQ(int64_t(1234), v<int64_t>(run_simple_agg("select i from binttest;", dt)));
+
+    run_multiple_agg("update binttest set i=cast( 56780 as integer );", dt);
+    EXPECT_EQ(int64_t(56780), v<int64_t>(run_simple_agg("select i from binttest;", dt)));
+
+    run_multiple_agg("update binttest set i=cast( 12345 as smallint );", dt);
+    EXPECT_EQ(int64_t(12345), v<int64_t>(run_simple_agg("select i from binttest;", dt)));
+
+    run_multiple_agg("update binttest set i=cast( 12345 as bigint );", dt);
+    EXPECT_EQ(int64_t(12345), v<int64_t>(run_simple_agg("select i from binttest;", dt)));
+
+    run_multiple_agg("update binttest set i=cast( 'True' as boolean );", dt);
+    EXPECT_EQ(int64_t(1), v<int64_t>(run_simple_agg("select i from binttest;", dt)));
+
+    run_multiple_agg("update binttest set i=cast( 1234.00 as decimal );", dt);
+    EXPECT_EQ(int64_t(1234), v<int64_t>(run_simple_agg("select i from binttest;", dt)));
+
+    EXPECT_THROW(run_multiple_agg("update booltest set b=cast( 'nonsense' as varchar );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update booltest set b=cast( '128.90' as varchar );", dt), std::runtime_error);
+
+    EXPECT_THROW(run_multiple_agg("update booltest set b=cast( '2000-01-01 10:11:12' as timestamp );", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update booltest set b=cast( '12:34:56' as time );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update booltest set b=cast( '1999-12-31' as date );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update booltest set b=cast( 1234.0 as float );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update booltest set b=cast( 1234.0 as double );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update booltest set b=cast( 56780 as integer );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update booltest set b=cast( 12345 as smallint );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update booltest set b=cast( 12345 as bigint );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update booltest set b=cast( 'True' as boolean );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update booltest set b=cast( 1234.00 as decimal );", dt), std::runtime_error);
+
+    EXPECT_THROW(run_multiple_agg("update dectest set d=cast( 'nonsense' as varchar );", dt), std::invalid_argument);
+    run_multiple_agg("update dectest set d=cast( '128.90' as varchar );", dt);
+    EXPECT_EQ(int64_t(128), v<int64_t>(run_simple_agg("select cast( d as integer ) from dectest;", dt)));
+
+    run_multiple_agg("update dectest set d=cast( '2000-01-01 10:11:12' as timestamp );", dt);
+    EXPECT_EQ(int64_t(946721472), v<int64_t>(run_simple_agg("select cast( d as integer ) from dectest;", dt)));
+
+    run_multiple_agg("update dectest set d=cast( '12:34:56' as time );", dt);
+    EXPECT_EQ(int64_t(45296), v<int64_t>(run_simple_agg("select cast( d as integer ) from dectest;", dt)));
+
+    run_multiple_agg("update dectest set d=cast( '1999-12-31' as date );", dt);
+    EXPECT_EQ(int64_t(946598400), v<int64_t>(run_simple_agg("select cast( d as integer ) from dectest;", dt)));
+
+    EXPECT_THROW(run_multiple_agg("update dectest set d=cast( 1234.0 as float );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update dectest set d=cast( 1234.0 as double );", dt), std::runtime_error);
+
+    run_multiple_agg("update dectest set d=cast( 56780 as integer );", dt);
+    EXPECT_EQ(int64_t(56780), v<int64_t>(run_simple_agg("select cast( d as integer ) from dectest;", dt)));
+
+    run_multiple_agg("update dectest set d=cast( 12345 as smallint );", dt);
+    EXPECT_EQ(int64_t(12345), v<int64_t>(run_simple_agg("select cast( d as integer ) from dectest;", dt)));
+
+    run_multiple_agg("update dectest set d=cast( 12345 as bigint );", dt);
+    EXPECT_EQ(int64_t(12345), v<int64_t>(run_simple_agg("select cast( d as integer ) from dectest;", dt)));
+
+    run_multiple_agg("update dectest set d=cast( 'True' as boolean );", dt);
+    EXPECT_EQ(int64_t(1), v<int64_t>(run_simple_agg("select cast( d as integer ) from dectest;", dt)));
+
+    run_multiple_agg("update dectest set d=cast( 1234.00 as decimal );", dt);
+    EXPECT_EQ(int64_t(1234), v<int64_t>(run_simple_agg("select cast( d as integer ) from dectest;", dt)));
+
+    run_ddl_statement("drop table floattest;");
+    run_ddl_statement("drop table doubletest;");
+    run_ddl_statement("drop table inttest;");
+    run_ddl_statement("drop table sinttest;");
+    run_ddl_statement("drop table binttest;");
+    run_ddl_statement("drop table booltest;");
+    run_ddl_statement("drop table dectest;");
+  }
+}
+
+TEST(Update, ImplicitCastToTime4) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table time4 ( t1 time encoding fixed(32) ) with ( vacuum='delayed' );");
+    run_multiple_agg("insert into time4 values ('01:23:45');", dt);
+
+    EXPECT_THROW(run_multiple_agg("update time4 set t1='nonsense';", dt), std::exception);
+
+    // todo(pavan):  The parser is wrong on this one; need to disable this conversion
+    // run_multiple_agg("update time4 set t1=cast( '1999-12-31 23:59:59' as varchar(32) );", dt);
+    // run_multiple_agg("select t1 from time4;", dt);
+
+    // todo(pavan):  The parser is wrong on this one; need to disable this conversion
+    // run_multiple_agg("update time4 set t1=cast( '1990-12-31 23:59:59' as char(32) );", dt);
+    // run_multiple_agg("select t1 from time4;", dt);
+
+    EXPECT_THROW(run_multiple_agg("update time4 set t1=cast( '1989-01-01 00:00:00' as timestamp );", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update time4 set t1=cast( '2000' as date );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update time4 set t1=cast( 2000.00 as float );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update time4 set t1=cast( 2123.444 as double );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update time4 set t1=cast( 1235 as integer );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update time4 set t1=cast( 12 as smallint );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update time4 set t1=cast( 9 as bigint );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update time4 set t1=cast( 'False' as boolean );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update time4 set t1=cast( '1234.00' as decimal );", dt), std::runtime_error);
+
+    run_ddl_statement("drop table time4;");
+  }
+}
+
+TEST(Update, ImplicitCastToTime8) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table timetab ( t1 time ) with ( vacuum='delayed' );");
+    run_multiple_agg("insert into timetab values ('01:23:45');", dt);
+
+    EXPECT_THROW(run_multiple_agg("update timetab set t1='nonsense';", dt), std::exception);
+
+    // todo(pavan): The parser is wrong on this one; need to disable this conversion
+    // run_multiple_agg( "update timetab set t1=cast( '1999-12-31 23:59:59' as varchar(32) );" , dt );
+    // run_multiple_agg( "update timetab set t1=cast( '1990-12-31 23:59:59' as char(32) );" , dt );
+    // run_multiple_agg( "update timetab set t1=cast( '1989-01-01 00:00:00' as timestamp );" , dt );
+
+    EXPECT_THROW(run_multiple_agg("update timetab set t1=cast( '2000' as date );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update timetab set t1=cast( 2000.00 as float );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update timetab set t1=cast( 2123.444 as double );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update timetab set t1=cast( 1235 as integer );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update timetab set t1=cast( 12 as smallint );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update timetab set t1=cast( 9 as bigint );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update timetab set t1=cast( 'False' as boolean );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update timetab set t1=cast( '1234.00' as decimal );", dt), std::runtime_error);
+
+    run_ddl_statement("drop table timetab;");
+  }
+}
+
+TEST(Update, ImplicitCastToTimestamp8) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table tstamp ( t1 timestamp ) with ( vacuum='delayed' );");
+    run_multiple_agg("insert into tstamp values ('2000-01-01 00:00:00');", dt);
+
+    EXPECT_THROW(run_multiple_agg("update tstamp set t1='nonsense';", dt), std::exception);
+
+    run_multiple_agg("update tstamp set t1=cast( '1999-12-31 23:59:59' as varchar(32) );", dt);
+    EXPECT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg("select count(t1) from tstamp where t1='1999-12-31 23:59:59';", dt)));
+    run_multiple_agg("update tstamp set t1=cast( '1990-12-31 23:59:59' as char(32) );", dt);
+    EXPECT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg("select count(t1) from tstamp where t1='1990-12-31 23:59:59';", dt)));
+
+    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( '1989-01-01 00:00:00' as timestamp );", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( '2000' as date );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 2000.00 as float );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 2123.444 as double );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 1235 as integer );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 12 as smallint );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 9 as bigint );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 'False' as boolean );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( '1234.00' as decimal );", dt), std::runtime_error);
+
+    run_ddl_statement("drop table tstamp;");
+  }
+}
+
+TEST(Update, ImplicitCastToTimestamp4) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("create table tstamp4 ( t1 timestamp encoding fixed(32) ) with ( vacuum='delayed' );");
+    run_multiple_agg("insert into tstamp4 values ('2000-01-01 00:00:00');", dt);
+
+    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1='nonsense';", dt), std::exception);
+
+    run_multiple_agg("update tstamp4 set t1=cast( '1999-12-31 23:59:59' as varchar(32) );", dt);
+    EXPECT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg("select count(t1) from tstamp4 where t1='1999-12-31 23:59:59';", dt)));
+
+    run_multiple_agg("update tstamp4 set t1=cast( '1990-12-31 23:59:59' as char(32) );", dt);
+    EXPECT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg("select count(t1) from tstamp4 where t1='1990-12-31 23:59:59';", dt)));
+
+    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( '1989-01-01 00:00:00' as timestamp );", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( '2000' as date );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( 2000.00 as float );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( 2123.444 as double );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( 1235 as integer );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( 12 as smallint );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( 9 as bigint );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( 'False' as boolean );", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( '1234.00' as decimal );", dt), std::runtime_error);
+
+    run_ddl_statement("drop table tstamp4;");
+  }
+}
+
 TEST(Delete, ShardedTableDeleteTest) {
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
     return;
