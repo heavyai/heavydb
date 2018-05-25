@@ -2396,7 +2396,6 @@ ImportStatus Detector::importDelimited(const std::string& file_path, const bool 
   // need to diy readline with customized copy_params.line_delim...
   char line[1 << 20];
   auto end_time = std::chrono::steady_clock::now() + timeout * (boost::istarts_with(file_path, "s3://") ? 3 : 1);
-  int nline{0};
   try {
     while (!feof(p_file)) {
       int c;
@@ -2420,9 +2419,9 @@ ImportStatus Detector::importDelimited(const std::string& file_path, const bool 
 
       raw_data += std::string(line, n);
       raw_data += copy_params.line_delim;
-      ++nline;
+      ++import_status.rows_completed;
       if (std::chrono::steady_clock::now() > end_time) {
-        if (nline > 10000)
+        if (import_status.rows_completed > 10000)
           break;
       }
     }
@@ -2943,6 +2942,13 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
               }
           }
       } catch (...) {
+        // when import is aborted because too many data errors or because end of a detection,
+        // any exception thrown by s3 sdk or libarchive is okay and should be suppressed.
+        if (import_status.load_truncated)
+          break;
+        if (import_status.rows_completed > 0)
+          if (nullptr != dynamic_cast<Detector*>(this))
+            break;
         if (!teptr)  // no replace
           teptr = std::current_exception();
         break;
