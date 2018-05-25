@@ -2790,12 +2790,12 @@ const bool Catalog::checkMetadataForDeletedRecs(int dbId, int tableId, int colum
   ChunkKey chunkKeyPrefix = {dbId, tableId, columnId};
   std::vector<std::pair<ChunkKey, ChunkMetadata>> chunkMetadataVec;
   dataMgr_->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, chunkKeyPrefix);
-  int64_t chunk_min{0};
+  int64_t chunk_max{0};
 
   for (auto cm : chunkMetadataVec) {
-    chunk_min = cm.second.chunkStats.min.tinyintval;
+    chunk_max = cm.second.chunkStats.max.tinyintval;
     // delete has occured
-    if (chunk_min == -1) {
+    if (chunk_max == 1) {
       return true;
     }
   }

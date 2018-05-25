@@ -45,6 +45,10 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
   td->fragmenter->updateColumn(catalog, td, cd, fragmentId, fragOffsets, rhsValues, rhsType, memoryLevel, updelRoll);
 }
 
+inline bool is_integral(const SQLTypeInfo& t) {
+  return t.is_integer() || t.is_boolean() || t.is_time() || t.is_timeinterval();
+}
+
 void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catalog,
                                          const TableDescriptor* td,
                                          const ColumnDescriptor* cd,
@@ -157,20 +161,20 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                       "Data conversion overflow on " + std::to_string(*v) + " from DECIMAL(" +
                       std::to_string(rhsType.get_dimension()) + ", " + std::to_string(rhsType.get_scale()) + ") to (" +
                       std::to_string(lctype.get_dimension()) + ", " + std::to_string(lctype.get_scale()) + ")");
-              } else if (lctype.is_integer())
+              } else if (is_integral(lctype))
                 set_minmax<int64_t>(
                     lmin[c], lmax[c], rhsType.is_decimal() ? round(decimal_to_double(rhsType, *v)) : *v);
               else
                 set_minmax<double>(dmin[c], dmax[c], rhsType.is_decimal() ? decimal_to_double(rhsType, *v) : *v);
             } else if (const auto v = boost::get<double>(sv)) {
               put_scalar<double>(dptr, lctype, *v);
-              if (lctype.is_integer())
+              if (is_integral(lctype))
                 set_minmax<int64_t>(lmin[c], lmax[c], *v);
               else
                 set_minmax<double>(dmin[c], dmax[c], *v);
             } else if (const auto v = boost::get<float>(sv)) {
               put_scalar<float>(dptr, lctype, *v);
-              if (lctype.is_integer())
+              if (is_integral(lctype))
                 set_minmax<int64_t>(lmin[c], lmax[c], *v);
               else
                 set_minmax<double>(dmin[c], dmax[c], *v);
@@ -257,7 +261,7 @@ void InsertOrderFragmenter::updateColumnMetadata(const ColumnDescriptor* cd,
 
   auto buffer = chunk->get_buffer();
   const auto& lctype = cd->columnType;
-  if (lctype.is_integer() || (lctype.is_decimal() && rhsType.is_decimal())) {
+  if (is_integral(lctype) || (lctype.is_decimal() && rhsType.is_decimal())) {
     buffer->encoder->updateStats(lmax, null);
     buffer->encoder->updateStats(lmin, null);
   } else if (lctype.is_fp()) {
