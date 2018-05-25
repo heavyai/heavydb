@@ -2362,17 +2362,18 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
 
-  // check access privileges
-  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType, AccessPrivileges::DROP_TABLE)) {
-    throw std::runtime_error("Table " + *table + " will not be dropped. User has no proper privileges.");
-  }
-
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
   if (td == nullptr) {
     if (if_exists)
       return;
     throw std::runtime_error("Table " + *table + " does not exist.");
   }
+
+  // check access privileges
+  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType, AccessPrivileges::DROP_TABLE, *table)) {
+    throw std::runtime_error("Table " + *table + " will not be dropped. User has no proper privileges.");
+  }
+
   if (td->isView)
     throw std::runtime_error(*table + " is a view.  Use DROP VIEW.");
 
@@ -2640,7 +2641,7 @@ void CopyTableStmt::execute(
         const std::string* s = str_literal->get_stringval();
         if (boost::iequals(*s, "geography"))
           throw std::runtime_error("GEOGRAPHY coords type not yet supported. Please use GEOMETRY.");
-          //copy_params.geo_coords_type = kGEOGRAPHY;
+        // copy_params.geo_coords_type = kGEOGRAPHY;
         else if (boost::iequals(*s, "geometry"))
           copy_params.geo_coords_type = kGEOMETRY;
         else
@@ -2714,9 +2715,9 @@ void CopyTableStmt::execute(
         load_truncated = true;
       }
       if (!load_truncated) {
-        tr = std::string("Loaded: " + std::to_string(rows_completed) +
-                         " recs, Rejected: " + std::to_string(rows_rejected) + " recs in " +
-                         std::to_string((double)total_time / 1000.0) + " secs");
+        tr = std::string("Loaded: " + std::to_string(rows_completed) + " recs, Rejected: " +
+                         std::to_string(rows_rejected) + " recs in " + std::to_string((double)total_time / 1000.0) +
+                         " secs");
       } else {
         tr = std::string("Loader truncated due to reject count.  Processed : " + std::to_string(rows_completed) +
                          " recs, Rejected: " + std::to_string(rows_rejected) + " recs in " +
@@ -2808,7 +2809,7 @@ static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(const std::str
     if (objectType == TableDBObjectType) {
       return {AccessPrivileges::ALL_TABLE, TableDBObjectType};
     } else if (objectType == DashboardDBObjectType) {
-      return {AccessPrivileges::ALL_DASHBOARD, TableDBObjectType};
+      return {AccessPrivileges::ALL_DASHBOARD, DashboardDBObjectType};
     } else if (objectType == ViewDBObjectType) {
       return {AccessPrivileges::ALL_VIEW, ViewDBObjectType};
     }
@@ -3356,7 +3357,7 @@ void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
 
   if (SysCatalog::instance().arePrivilegesOn() &&
-      !session.checkDBAccessPrivileges(DBObjectType::ViewDBObjectType, AccessPrivileges::DROP_VIEW)) {
+      !session.checkDBAccessPrivileges(DBObjectType::ViewDBObjectType, AccessPrivileges::DROP_VIEW, *view_name)) {
     throw std::runtime_error("View " + *view_name + " will not be dropped. User has no drop view privileges.");
   }
 

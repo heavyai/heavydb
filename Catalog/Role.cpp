@@ -204,7 +204,6 @@ void UserRole::updatePrivileges(Role* role) {
     if (dbObject) {  // found
       dbObject->updatePrivileges(*dbObjectIt->second);
     } else {  // not found
-      // auto obj = dbObjectIt->second.get();
       dbObjectMap_[dbObjectIt->first] = boost::make_unique<DBObject>(*dbObjectIt->second.get());
     }
   }

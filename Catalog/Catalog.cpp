@@ -3373,7 +3373,9 @@ std::string Catalog::generatePhysicalTableName(const std::string& logicalTableNa
   return (physicalTableName);
 }
 
-bool SessionInfo::checkDBAccessPrivileges(const DBObjectType& permissionType, const AccessPrivileges& privs) const {
+bool SessionInfo::checkDBAccessPrivileges(const DBObjectType& permissionType,
+                                          const AccessPrivileges& privs,
+                                          const std::string& objectName) const {
   auto& cat = get_catalog();
   if (!SysCatalog::instance().arePrivilegesOn()) {
     // run flow without DB object level access permission checks
@@ -3390,7 +3392,7 @@ bool SessionInfo::checkDBAccessPrivileges(const DBObjectType& permissionType, co
     return SysCatalog::instance().checkPrivileges(currentUser, currentDB, wants_privs);
   } else {
     // run flow with DB object level access permission checks
-    DBObject object("", permissionType);
+    DBObject object(objectName, permissionType);
 
     if (permissionType == DBObjectType::DatabaseDBObjectType) {
       object.setName(cat.get_currentDB().dbName);
