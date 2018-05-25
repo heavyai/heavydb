@@ -42,6 +42,13 @@ std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
 bool g_hoist_literals{true};
 size_t g_shard_count{0};
 
+size_t choose_shard_count() {
+  CHECK(g_session);
+  const auto cuda_mgr = g_session->get_catalog().get_dataMgr().cudaMgr_;
+  const int device_count = cuda_mgr ? cuda_mgr->getDeviceCount() : 0;
+  return device_count > 1 ? device_count : 0;
+}
+
 struct ShardInfo {
   const std::string shard_col;
   const size_t shard_count;
@@ -70,11 +77,10 @@ std::string build_create_table_statement(const std::string& columns_definition,
   }
 
   std::ostringstream with_statement_assembly;
-  if (shard_info.shard_col.empty()) {
-    with_statement_assembly << "fragment_size=" << fragment_size;
-  } else {
-    with_statement_assembly << "shard_count=" << shard_info.shard_count;
+  if (!shard_info.shard_col.empty()) {
+    with_statement_assembly << "shard_count=" << shard_info.shard_count << ", ";
   }
+  with_statement_assembly << "fragment_size=" << fragment_size;
 
   if (delete_support) {
     with_statement_assembly << ", vacuum='delayed'";
@@ -3460,6 +3466,112 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
     c("SELECT t1.fixed_null_str FROM (SELECT fixed_null_str, SUM(x) n1 FROM test GROUP BY fixed_null_str) t1 INNER "
       "JOIN (SELECT fixed_null_str, SUM(y) n2 FROM test GROUP BY fixed_null_str) t2 ON ((t1.fixed_null_str = "
       "t2.fixed_null_str) OR (t1.fixed_null_str IS NULL AND t2.fixed_null_str IS NULL));",
+      dt);
+  }
+}
+
+int create_sharded_join_table(const std::string& table_name,
+                              size_t fragment_size,
+                              size_t num_rows,
+                              const ShardInfo& shard_info,
+                              bool with_delete_support = true) {
+  std::string columns_definition{"i INTEGER, j INTEGER, s TEXT ENCODING DICT(32)"};
+
+  try {
+    std::string drop_ddl{"DROP TABLE IF EXISTS " + table_name + ";"};
+    run_ddl_statement(drop_ddl);
+    g_sqlite_comparator.query(drop_ddl);
+
+    const auto create_ddl = build_create_table_statement(
+        columns_definition, table_name, shard_info, {}, fragment_size, with_delete_support);
+    run_ddl_statement(create_ddl);
+    g_sqlite_comparator.query("CREATE TABLE " + table_name + "(i int, j int, s text);");
+
+    const std::vector<std::string> alphabet{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+                                            "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"};
+    const auto alphabet_sz = alphabet.size();
+
+    int i = 0;
+    int j = num_rows;
+    for (size_t x = 0; x < num_rows; x++) {
+      const std::string insert_query{"INSERT INTO " + table_name + " VALUES(" + std::to_string(i) + "," +
+                                     std::to_string(j) + ",'" + alphabet[i % alphabet_sz] + "');"};
+      LOG(INFO) << insert_query;
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+      i++;
+      j--;
+    }
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Failed to (re-)create tables for Inner Join sharded test: " << e.what();
+    return -EEXIST;
+  }
+  return 0;
+}
+
+TEST(Select, Joins_InnerJoin_Sharded) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    size_t num_shards = 1;
+    if (dt == ExecutorDeviceType::GPU && choose_shard_count() > 0) {
+      num_shards = choose_shard_count();
+    }
+    ShardInfo shard_info{"i", num_shards};
+    size_t fragment_size = 2;
+    bool delete_support = false;
+
+    ASSERT_EQ(create_sharded_join_table("st1", fragment_size, 10 * num_shards, shard_info, delete_support), 0);
+    ASSERT_EQ(create_sharded_join_table("st2", fragment_size, num_shards * fragment_size, shard_info, delete_support),
+              0);
+
+    // Sharded Inner Joins
+    c("SELECT st1.i, st2.i FROM st1 INNER JOIN st2 ON st1.i = st2.i ORDER BY st1.i;", dt);
+    c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.i = st2.i ORDER BY st1.i;", dt);
+    c("SELECT st1.i, st2.i FROM st1 INNER JOIN st2 ON st1.i = st2.i WHERE st2.i > -1 ORDER BY st1.i;", dt);
+    c("SELECT st1.i, st2.i FROM st1 INNER JOIN st2 ON st1.i = st2.i WHERE st2.i > 0 ORDER BY st1.i;", dt);
+    c("SELECT st1.i, st1.s, st2.i, st2.s FROM st1 INNER JOIN st2 ON st1.i = st2.i WHERE st2.i > 0 ORDER BY st1.i;", dt);
+    c("SELECT st1.i, st1.j, st1.s, st2.i, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.i = st2.i WHERE st2.i > 0 ORDER "
+      "BY st1.i;",
+      dt);
+    c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.i = st2.i WHERE st2.i > 0 ORDER BY st1.i;", dt);
+    c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.i = st2.i WHERE st2.i > 0 and st1.s <> 'foo' "
+      "and st2.s <> 'foo' ORDER BY st1.i;",
+      dt);
+
+    // Non-sharded inner join (single frag)
+    c("SELECT st1.i, st2.i FROM st1 INNER JOIN st2 ON st1.j = st2.j ORDER BY st1.i;", dt);
+    c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j ORDER BY st1.i;", dt);
+    c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > -1 ORDER BY st1.i;", dt);
+    c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > 0 ORDER BY st1.i;", dt);
+    c("SELECT st1.j, st1.s, st2.j, st2.s FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > 0 ORDER BY st1.i;", dt);
+    c("SELECT st1.i, st1.j, st1.s, st2.i, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.i > 0 ORDER "
+      "BY st1.i;",
+      dt);
+    c("SELECT st1.i, st1.j, st1.s, st2.i, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > 0 ORDER "
+      "BY st1.i;",
+      dt);
+    c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > 0 ORDER BY st1.i;", dt);
+    c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > 0 and st1.s <> 'foo' "
+      "and st2.s <> 'foo' ORDER BY st1.i;",
+      dt);
+
+    ASSERT_EQ(create_sharded_join_table("st2", fragment_size, 8 * num_shards, shard_info, delete_support), 0);
+    // Non-sharded inner join (multi frag)
+    c("SELECT st1.i, st2.i FROM st1 INNER JOIN st2 ON st1.j = st2.j ORDER BY st1.i;", dt);
+    c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j ORDER BY st1.i;", dt);
+    c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > -1 ORDER BY st1.i;", dt);
+    c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > 0 ORDER BY st1.i;", dt);
+    c("SELECT st1.j, st1.s, st2.j, st2.s FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > 0 ORDER BY st1.i;", dt);
+    c("SELECT st1.i, st1.j, st1.s, st2.i, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.i > 0 ORDER "
+      "BY st1.i;",
+      dt);
+    c("SELECT st1.i, st1.j, st1.s, st2.i, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > 0 ORDER "
+      "BY st1.i;",
+      dt);
+    c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > 0 ORDER BY st1.i;", dt);
+    c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > 0 and st1.s <> 'foo' "
+      "and st2.s <> 'foo' ORDER BY st1.i;",
       dt);
   }
 }
@@ -6877,13 +6989,6 @@ void drop_views() {
   const std::string drop_join_view_test{"DROP VIEW join_view_test;"};
   run_ddl_statement(drop_join_view_test);
   g_sqlite_comparator.query(drop_join_view_test);
-}
-
-size_t choose_shard_count() {
-  CHECK(g_session);
-  const auto cuda_mgr = g_session->get_catalog().get_dataMgr().cudaMgr_;
-  const int device_count = cuda_mgr ? cuda_mgr->getDeviceCount() : 0;
-  return device_count > 1 ? device_count : 0;
 }
 
 }  // namespace
