@@ -2785,6 +2785,54 @@ const ColumnDescriptor* Catalog::getDeletedColumn(const TableDescriptor* td) con
   return it != deletedColumnPerTable_.end() ? it->second : nullptr;
 }
 
+const bool Catalog::checkMetadataForDeletedRecs(int dbId, int tableId, int columnId) const {
+  // check if there are rows deleted by examining metadata for the deletedColumn metadata
+  ChunkKey chunkKeyPrefix = {dbId, tableId, columnId};
+  std::vector<std::pair<ChunkKey, ChunkMetadata>> chunkMetadataVec;
+  dataMgr_->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, chunkKeyPrefix);
+  int64_t chunk_min{0};
+
+  for (auto cm : chunkMetadataVec) {
+    chunk_min = cm.second.chunkStats.min.tinyintval;
+    // delete has occured
+    if (chunk_min == -1) {
+      return true;
+    }
+  }
+  return false;
+}
+
+const ColumnDescriptor* Catalog::getDeletedColumnIfRowsDeleted(const TableDescriptor* td) const {
+  cat_read_lock read_lock(this);
+
+  const auto it = deletedColumnPerTable_.find(td);
+  // if not a table that supports delete return nullptr,  nothing more to do
+  if (it == deletedColumnPerTable_.end()) {
+    return nullptr;
+  }
+  const ColumnDescriptor* cd = it->second;
+
+  const auto physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
+
+  if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
+    // check all shards
+    const auto physicalTables = physicalTableIt->second;
+    CHECK(!physicalTables.empty());
+    for (size_t i = 0; i < physicalTables.size(); i++) {
+      int32_t physical_tb_id = physicalTables[i];
+      const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
+      CHECK(phys_td);
+      if (checkMetadataForDeletedRecs(currentDB_.dbId, phys_td->tableId, cd->columnId))
+        return cd;
+    }
+  } else {
+    if (checkMetadataForDeletedRecs(currentDB_.dbId, td->tableId, cd->columnId))
+      return cd;
+  }
+  // no deletes so far recorded in metadata
+  return nullptr;
+}
+
 void Catalog::setDeletedColumn(const TableDescriptor* td, const ColumnDescriptor* cd) {
   cat_write_lock write_lock(this);
   setDeletedColumnUnlocked(td, cd);

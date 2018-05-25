@@ -225,7 +225,9 @@ class Catalog {
   static std::shared_ptr<Catalog> get(const std::string& dbName);
   static void remove(const std::string& dbName);
 
+  const bool checkMetadataForDeletedRecs(int dbId, int tableId, int columnId) const;
   const ColumnDescriptor* getDeletedColumn(const TableDescriptor* td) const;
+  const ColumnDescriptor* getDeletedColumnIfRowsDeleted(const TableDescriptor* td) const;
 
   void setDeletedColumn(const TableDescriptor* td, const ColumnDescriptor* cd);
   void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);

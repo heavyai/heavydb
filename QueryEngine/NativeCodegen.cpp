@@ -1158,7 +1158,7 @@ llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(const RelAlgExecutio
   }
   const auto td = catalog_->getMetadataForTable(outer_input_desc.getTableId());
   CHECK(td);
-  const auto deleted_cd = catalog_->getDeletedColumn(td);
+  const auto deleted_cd = catalog_->getDeletedColumnIfRowsDeleted(td);
   if (!deleted_cd) {
     return nullptr;
   }

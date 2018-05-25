@@ -407,7 +407,7 @@ std::function<llvm::Value*(const std::vector<llvm::Value*>&, llvm::Value*)> Exec
   }
   const auto td = catalog_->getMetadataForTable(input_desc.getTableId());
   CHECK(td);
-  const auto deleted_cd = catalog_->getDeletedColumn(td);
+  const auto deleted_cd = catalog_->getDeletedColumnIfRowsDeleted(td);
   if (!deleted_cd) {
     return nullptr;
   }
