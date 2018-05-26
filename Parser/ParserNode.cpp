@@ -3441,9 +3441,7 @@ void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  if (SysCatalog::instance().arePrivilegesOn() && !session.get_currentUser().isSuper) {
-    throw std::runtime_error("ALTER USER command failed. It can only be executed by super user.");
-  }
+  // Parse the statement
   const std::string* passwd = nullptr;
   const std::string* insertaccessDB = nullptr;
   bool is_super = false;
@@ -3470,14 +3468,23 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       } else
         throw std::runtime_error("Value to IS_SUPER must be TRUE or FALSE.");
     } else
-      throw std::runtime_error("Invalid CREATE USER option " + *p->get_name() +
+      throw std::runtime_error("Invalid ALTER USER option " + *p->get_name() +
                                ".  Should be PASSWORD, INSERTACCESS or IS_SUPER.");
   }
+
+  // Check if the user is authorized to execute ALTER USER statement
   Catalog_Namespace::UserMetadata user;
   if (!SysCatalog::instance().getMetadataForUser(*user_name, user))
     throw std::runtime_error("User " + *user_name + " does not exist.");
-  if (!session.get_currentUser().isSuper && session.get_currentUser().userId != user.userId)
-    throw std::runtime_error("Only user super can change another user's attributes.");
+  if (!session.get_currentUser().isSuper) {
+    if (session.get_currentUser().userId != user.userId) {
+      throw std::runtime_error("Only super user can change another user's attributes.");
+    } else if (insertaccessDB || is_superp) {
+      throw std::runtime_error("A user can only update his password.");
+    }
+  }
+
+  // Execute it
   if (insertaccessDB) {
     LOG(INFO) << " InsertAccess being given to user " << user.userId << " for db " << *insertaccessDB;
     Catalog_Namespace::DBMetadata db;
