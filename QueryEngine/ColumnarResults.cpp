@@ -47,7 +47,8 @@ ColumnarResults::ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_se
   column_buffers_.resize(num_columns);
   for (size_t i = 0; i < num_columns; ++i) {
     const bool is_varlen = target_types[i].is_array() ||
-                           (target_types[i].is_string() && target_types[i].get_compression() == kENCODING_NONE);
+                           (target_types[i].is_string() && target_types[i].get_compression() == kENCODING_NONE) ||
+                           target_types[i].is_geometry();
     if (is_varlen) {
       throw ColumnarConversionNotSupported();
     }
@@ -173,8 +174,9 @@ ColumnarResults::ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_se
                                  const size_t num_rows,
                                  const SQLTypeInfo& target_type)
     : column_buffers_(1), num_rows_(num_rows), target_types_{target_type} {
-  const bool is_varlen =
-      target_type.is_array() || (target_type.is_string() && target_type.get_compression() == kENCODING_NONE);
+  const bool is_varlen = target_type.is_array() ||
+                         (target_type.is_string() && target_type.get_compression() == kENCODING_NONE) ||
+                         target_type.is_geometry();
   if (is_varlen) {
     throw ColumnarConversionNotSupported();
   }
