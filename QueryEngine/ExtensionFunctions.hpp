@@ -175,6 +175,10 @@ double Round(const double x, const int32_t y) {
   }
 
   double exp = pow(10, y);
+#if defined(__powerpc__) && !defined(__CUDACC__)
+  int32_t yy = y - 1;
+  exp = 10 * powf((float)10L, yy);
+#endif
   return (round(x * exp) / exp) + 0.0;
 }
 
@@ -185,6 +189,10 @@ float Round__(const float x, const int32_t y) {
   }
 
   float exp = powf((float)10L, y);
+#if defined(__powerpc__) && !defined(__CUDACC__)
+  int32_t yy = y - 1;
+  exp = 10 * powf((float)10L, yy);
+#endif
   return roundf(x * exp) / exp + 0.0f;
 }
 
@@ -198,6 +206,12 @@ int16_t Round__1(const int16_t x, const int32_t y) {
   int32_t p_half = p >> 1;
 
   int64_t temp = x;
+#if defined(__powerpc__) && !defined(__CUDACC__)
+  int16_t xx = x;
+  xx += 1;
+  temp = xx;
+  temp -= 1;
+#endif
   temp = temp >= 0 ? temp + p_half : temp - p_half;
   temp = temp / p;
   return temp * p;
@@ -213,6 +227,12 @@ int32_t Round__2(const int32_t x, const int32_t y) {
   int32_t p_half = p >> 1;
 
   int64_t temp = x;
+#if defined(__powerpc__) && !defined(__CUDACC__)
+  int32_t xx = x;
+  xx += 1;
+  temp = xx;
+  temp -= 1;
+#endif
   temp = temp >= 0 ? temp + p_half : temp - p_half;
   temp = temp / p;
   return temp * p;
@@ -299,6 +319,13 @@ int16_t Truncate__1(const int16_t x, const int32_t y) {
   }
   int32_t p = pow((float)10L, std::abs(y));
   int64_t temp = x / p;
+#if defined(__powerpc__) && !defined(__CUDACC__)
+  int16_t xx = x;
+  xx += 1;
+  temp = xx;
+  temp -= 1;
+  temp /= p;
+#endif
   return temp * p;
 }
 
