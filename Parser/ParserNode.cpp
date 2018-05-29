@@ -2254,8 +2254,8 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
   // get read UpdateDeleteLock on tables involved in SELECT subquery
   const auto query_ra = parse_to_ra(catalog, select_query_, session);
-  std::vector<std::shared_ptr<mapd_shared_lock<mapd_shared_mutex>>> readUpdateDeleteLocks;
-  Lock_Namespace::getTableReadLocks<mapd_shared_mutex>(
+  std::vector<std::shared_ptr<VLock>> readUpdateDeleteLocks;
+  Lock_Namespace::getTableLocks<mapd_shared_mutex>(
       session.get_catalog(), query_ra, readUpdateDeleteLocks, Lock_Namespace::LockType::UpdateDeleteLock);
   // [ write UpdateDeleteLocks ] lock is deferred in InsertOrderFragmenter::deleteFragments
 

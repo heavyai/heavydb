@@ -22,7 +22,7 @@ namespace Lock_Namespace {
 
 using namespace rapidjson;
 
-void getTableNames(std::set<std::string>& tableNames, const std::string query_ra) {
+void getTableNames(std::map<std::string, bool>& tableNames, const std::string query_ra) {
   rapidjson::Document query_ast;
   query_ast.Parse(query_ra.c_str());
   CHECK(!query_ast.HasParseError());
@@ -30,7 +30,7 @@ void getTableNames(std::set<std::string>& tableNames, const std::string query_ra
   getTableNames(tableNames, query_ast);
 }
 
-void getTableNames(std::set<std::string>& tableNames, const Value& value) {
+void getTableNames(std::map<std::string, bool>& tableNames, const Value& value) {
   if (value.IsArray()) {
     for (SizeType i = 0; i < value.Size(); ++i)
       getTableNames(tableNames, value[i]);
@@ -48,10 +48,12 @@ void getTableNames(std::set<std::string>& tableNames, const Value& value) {
   for (SizeType i = 0; i < rels.Size(); ++i) {
     const auto& rel = rels[i];
     const auto& relop = json_str(rel["relOp"]);
-    if ("EnumerableTableScan" != relop)
-      continue;
-    auto t = rel["table"].GetArray();
-    tableNames.insert(t[1].GetString());
+    if (rel.FindMember("table") != rel.MemberEnd())
+      if ("EnumerableTableScan" == relop || "LogicalTableModify" == relop) {
+        const auto t = rel["table"].GetArray();
+        CHECK(t[1].IsString());
+        tableNames[t[1].GetString()] |= "LogicalTableModify" == relop;
+      }
   }
 }
 

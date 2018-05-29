@@ -725,7 +725,6 @@ void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name, Catal
 }
 
 bool SysCatalog::checkPasswordForUser(const std::string& passwd, UserMetadata& user) {
-  std::lock_guard<std::mutex> lock(cat_mutex_);
   {
     int pwd_check_result = bcrypt_checkpw(passwd.c_str(), user.passwd_hash.c_str());
     // if the check fails there is a good chance that data on disc is broken
@@ -2195,6 +2194,7 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
     td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix,
                                                chunkVec,
                                                dataMgr_.get(),
+                                               this,
                                                td->tableId,
                                                td->shard,
                                                td->maxFragRows,
@@ -3414,6 +3414,22 @@ std::vector<const TableDescriptor*> Catalog::getPhysicalTablesDescriptors(
   }
 
   return physicalTables;
+}
+
+int Catalog::getLogicalTableId(const int physicalTableId) const {
+  for (const auto& l : logicalToPhysicalTableMapById_)
+    if (l.second.end() != std::find_if(l.second.begin(), l.second.end(), [&](decltype(*l.second.begin()) tid) -> bool {
+          return physicalTableId == tid;
+        }))
+      return l.first;
+  return physicalTableId;
+}
+
+void Catalog::checkpoint(const int logicalTableId) const {
+  const auto td = getMetadataForTable(logicalTableId);
+  const auto shards = getPhysicalTablesDescriptors(td);
+  for (const auto shard : shards)
+    get_dataMgr().checkpoint(get_currentDB().dbId, shard->tableId);
 }
 
 std::string Catalog::generatePhysicalTableName(const std::string& logicalTableName, const int32_t& shardNumber) {

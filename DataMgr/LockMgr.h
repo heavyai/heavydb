@@ -24,12 +24,13 @@
 #include <map>
 #include <mutex>
 #include <tuple>
-#include <set>
+#include "boost/variant.hpp"
 
 #include <rapidjson/document.h>
 
 namespace Lock_Namespace {
 using namespace rapidjson;
+using VLock = boost::variant<mapd_shared_lock<mapd_shared_mutex>, mapd_unique_lock<mapd_shared_mutex>>;
 
 enum LockType { TableMetadataLock, CheckpointLock, UpdateDeleteLock, ExecutorOuterLock, LockMax };
 
@@ -63,8 +64,8 @@ std::shared_ptr<MutexType> LockMgr<MutexType, KeyType>::getMutex(const LockType 
 }
 
 ChunkKey getTableChunkKey(const Catalog_Namespace::Catalog& cat, const std::string& tableName);
-void getTableNames(std::set<std::string>& tableNames, const Value& value);
-void getTableNames(std::set<std::string>& tableNames, const std::string query_ra);
+void getTableNames(std::map<std::string, bool>& tableNames, const Value& value);
+void getTableNames(std::map<std::string, bool>& tableNames, const std::string query_ra);
 std::string parse_to_ra(const Catalog_Namespace::Catalog& cat,
                         const std::string& query_str,
                         const Catalog_Namespace::SessionInfo& session_info);
@@ -93,7 +94,7 @@ void getTableMutexs(const Catalog_Namespace::Catalog& cat,
                     std::vector<std::shared_ptr<MutexType>>& tableMutexs,
                     const LockType lockType) {
   // parse ra to learn involved table names
-  std::set<std::string> tableNames;
+  std::map<std::string, bool> tableNames;
   getTableNames(tableNames, query_ra);
   // get a mutex<MutexType> for each involved table
   // mutexes already sorted like tableNames
@@ -101,35 +102,29 @@ void getTableMutexs(const Catalog_Namespace::Catalog& cat,
     tableMutexs.emplace_back(getTableMutex<MutexType>(cat, tableName, lockType));
 }
 
-template <typename MutexType, template <typename> class LockType>
+template <typename MutexType>
+void getTableLocks(const Catalog_Namespace::Catalog& cat,
+                   const std::map<std::string, bool>& tableNames,
+                   std::vector<std::shared_ptr<VLock>>& tableLocks,
+                   const Lock_Namespace::LockType lockType) {
+  for (const auto& tableName : tableNames)
+    if (tableName.second)
+      tableLocks.emplace_back(
+          std::make_shared<VLock>(getTableLock<MutexType, mapd_unique_lock>(cat, tableName.first, lockType)));
+    else
+      tableLocks.emplace_back(
+          std::make_shared<VLock>(getTableLock<MutexType, mapd_shared_lock>(cat, tableName.first, lockType)));
+}
+
+template <typename MutexType>
 void getTableLocks(const Catalog_Namespace::Catalog& cat,
                    const std::string& query_ra,
-                   std::vector<std::shared_ptr<LockType<MutexType>>>& tableLocks,
+                   std::vector<std::shared_ptr<VLock>>& tableLocks,
                    const Lock_Namespace::LockType lockType) {
   // parse ra to learn involved table names
-  std::set<std::string> tableNames;
+  std::map<std::string, bool> tableNames;
   getTableNames(tableNames, query_ra);
-  // get a mutex<MutexType> for each involved table
-  // locks already sorted like tableNames
-  for (const auto& tableName : tableNames)
-    tableLocks.emplace_back(
-        std::make_shared<LockType<MutexType>>(getTableLock<MutexType, LockType>(cat, tableName, lockType)));
-}
-
-template <typename MutexType>
-void getTableReadLocks(const Catalog_Namespace::Catalog& cat,
-                       const std::string& query_ra,
-                       std::vector<std::shared_ptr<mapd_shared_lock<MutexType>>>& tableLocks,
-                       const LockType lockType) {
-  getTableLocks<MutexType, mapd_shared_lock>(cat, query_ra, tableLocks, lockType);
-}
-
-template <typename MutexType>
-void getTableWriteLocks(const Catalog_Namespace::Catalog& cat,
-                        const std::string& query_ra,
-                        std::vector<std::shared_ptr<mapd_unique_lock<MutexType>>>& tableLocks,
-                        const LockType lockType) {
-  getTableLocks<MutexType, mapd_unique_lock>(cat, query_ra, tableLocks, lockType);
+  getTableLocks<MutexType>(cat, tableNames, tableLocks, lockType);
 }
 
 }  // Lock_Namespace

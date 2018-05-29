@@ -389,7 +389,9 @@ class MapDHandler : public MapDIf {
   static TDatum value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti);
   static std::string apply_copy_to_shim(const std::string& query_str);
 
-  std::string parse_to_ra(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info);
+  std::string parse_to_ra(const std::string& query_str,
+                          const Catalog_Namespace::SessionInfo& session_info,
+                          std::map<std::string, bool>* tableNames = nullptr);
 
   void sql_execute_impl(TQueryResult& _return,
                         const Catalog_Namespace::SessionInfo& session_info,

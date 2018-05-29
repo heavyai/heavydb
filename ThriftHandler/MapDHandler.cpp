@@ -713,14 +713,16 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
       ParserWrapper pw{query_str};
       if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
         std::string query_ra;
-        execution_time_ms += measure<>::execution([&]() { query_ra = parse_to_ra(query_str, session_info); });
+        std::map<std::string, bool> tableNames;
+        execution_time_ms +=
+            measure<>::execution([&]() { query_ra = parse_to_ra(query_str, session_info, &tableNames); });
 
         // COPY_TO/SELECT: get read ExecutorOuterLock >> read UpdateDeleteLock locks
         mapd_shared_lock<mapd_shared_mutex> executeReadLock(
             *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
-        std::vector<std::shared_ptr<mapd_shared_lock<mapd_shared_mutex>>> readUpdateDeleteLocks;
-        getTableReadLocks<mapd_shared_mutex>(
-            session_info.get_catalog(), query_ra, readUpdateDeleteLocks, LockType::UpdateDeleteLock);
+        std::vector<std::shared_ptr<VLock>> upddelLocks;
+        getTableLocks<mapd_shared_mutex>(
+            session_info.get_catalog(), tableNames, upddelLocks, LockType::UpdateDeleteLock);
 
         if (pw.is_select_calcite_explain) {
           throw std::runtime_error("explain is not unsupported by current thrift API");
@@ -3393,15 +3395,16 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
   mapd_unique_lock<mapd_shared_mutex> upddelLock;
   mapd_unique_lock<mapd_shared_mutex> executeWriteLock;
   mapd_shared_lock<mapd_shared_mutex> executeReadLock;
-  std::vector<std::shared_ptr<mapd_shared_lock<mapd_shared_mutex>>> readUpdateDeleteLocks;
+  std::vector<std::shared_ptr<VLock>> upddelLocks;
 
   try {
     ParserWrapper pw{query_str};
+    std::map<std::string, bool> tableNames;
     if (is_calcite_path_permissable(pw)) {
       std::string query_ra;
       _return.execution_time_ms += measure<>::execution([&]() {
         // query_ra = TIME_WRAP(parse_to_ra)(query_str, session_info);
-        query_ra = parse_to_ra(query_str, session_info);
+        query_ra = parse_to_ra(query_str, session_info, &tableNames);
       });
 
       if (pw.is_select_calcite_explain) {
@@ -3410,12 +3413,15 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         return;
       }
 
+      // UPDATE/DELETE needs to get a checkpoint lock as the first lock
+      for (const auto& table : tableNames)
+        if (table.second)
+          chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+              session_info.get_catalog(), table.first, LockType::CheckpointLock);
       // COPY_TO/SELECT: read ExecutorOuterLock >> read UpdateDeleteLock locks
       executeReadLock =
           mapd_shared_lock<mapd_shared_mutex>(*LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
-      getTableReadLocks<mapd_shared_mutex>(
-          session_info.get_catalog(), query_ra, readUpdateDeleteLocks, LockType::UpdateDeleteLock);
-      // todo(ppan): need WRITE locks on UPDATE/DELETE
+      getTableLocks<mapd_shared_mutex>(session_info.get_catalog(), tableNames, upddelLocks, LockType::UpdateDeleteLock);
       execute_rel_alg(_return,
                       query_ra,
                       column_format,
@@ -3458,10 +3464,11 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       if (ddl != nullptr && explain_stmt == nullptr) {
         const auto copy_stmt = dynamic_cast<Parser::CopyTableStmt*>(ddl);
         if (auto stmtp = dynamic_cast<Parser::ExportQueryStmt*>(stmt.get())) {
+          std::map<std::string, bool> tableNames;
           const auto query_string = stmtp->get_select_stmt();
-          const auto query_ra = parse_to_ra(query_string, session_info);
-          getTableReadLocks<mapd_shared_mutex>(
-              session_info.get_catalog(), query_ra, readUpdateDeleteLocks, LockType::UpdateDeleteLock);
+          const auto query_ra = parse_to_ra(query_string, session_info, &tableNames);
+          getTableLocks<mapd_shared_mutex>(
+              session_info.get_catalog(), tableNames, upddelLocks, LockType::UpdateDeleteLock);
         } else if (auto stmtp = dynamic_cast<Parser::CopyTableStmt*>(stmt.get())) {
           // get the lock if the table exists
           // thus allowing COPY FROM to execute to create a table
@@ -3519,10 +3526,11 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
           chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
               session_info.get_catalog(), *stmtp->get_table(), LockType::CheckpointLock);
           // >> read UpdateDeleteLock locks
+          std::map<std::string, bool> tableNames;
           const auto query_string = stmtp->get_query()->to_string();
-          const auto query_ra = parse_to_ra(query_str, session_info);
-          getTableReadLocks<mapd_shared_mutex>(
-              session_info.get_catalog(), query_ra, readUpdateDeleteLocks, LockType::UpdateDeleteLock);
+          const auto query_ra = parse_to_ra(query_str, session_info, &tableNames);
+          getTableLocks<mapd_shared_mutex>(
+              session_info.get_catalog(), tableNames, upddelLocks, LockType::UpdateDeleteLock);
           // [ write UpdateDeleteLocks ] lock is deferred in InsertOrderFragmenter::deleteFragments
           // TODO: this statement is not supported. once supported, it must not go thru
           // InsertOrderFragmenter::insertData, or deadlock will occur w/o moving the
@@ -3585,17 +3593,28 @@ Planner::RootPlan* MapDHandler::parse_to_plan(const std::string& query_str,
   return nullptr;
 }
 
-std::string MapDHandler::parse_to_ra(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info) {
+std::string MapDHandler::parse_to_ra(const std::string& query_str,
+                                     const Catalog_Namespace::SessionInfo& session_info,
+                                     std::map<std::string, bool>* tableNames) {
   INJECT_TIMER(parse_to_ra);
   ParserWrapper pw{query_str};
   const std::string actual_query{pw.is_select_explain || pw.is_select_calcite_explain ? pw.actual_query : query_str};
   if (is_calcite_path_permissable(pw)) {
-    return calcite_
-        ->process(session_info,
-                  legacy_syntax_ ? pg_shim(actual_query) : actual_query,
-                  legacy_syntax_,
-                  pw.is_select_calcite_explain)
-        .plan_result;
+    auto result = calcite_->process(session_info,
+                                    legacy_syntax_ ? pg_shim(actual_query) : actual_query,
+                                    legacy_syntax_,
+                                    pw.is_select_calcite_explain);
+    if (tableNames) {
+      for (const auto& table : result.resolved_accessed_objects.tables_selected_from)
+        (*tableNames)[table] = false;
+      for (const auto& tables : std::vector<decltype(result.resolved_accessed_objects.tables_inserted_into)>{
+               result.resolved_accessed_objects.tables_inserted_into,
+               result.resolved_accessed_objects.tables_updated_in,
+               result.resolved_accessed_objects.tables_deleted_from})
+        for (const auto& table : tables)
+          (*tableNames)[table] = true;
+    }
+    return result.plan_result;
   }
   return "";
 }

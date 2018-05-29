@@ -3161,10 +3161,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
 void Loader::checkpoint() {
   if (get_table_desc()->persistenceLevel ==
       Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
-    const auto shard_tables = get_catalog().getPhysicalTablesDescriptors(get_table_desc());
-    for (const auto shard_table : shard_tables) {
-      get_catalog().get_dataMgr().checkpoint(get_catalog().get_currentDB().dbId, shard_table->tableId);
-    }
+    get_catalog().checkpoint(get_table_desc()->tableId);
   }
 }
 

@@ -79,7 +79,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                                          const Data_Namespace::MemoryLevel memoryLevel,
                                          UpdelRoll& updelRoll) {
   updelRoll.catalog = catalog;
-  updelRoll.tableDescriptors.insert(td);
+  updelRoll.logicalTableId = catalog->getLogicalTableId(td->tableId);
   updelRoll.memoryLevel = memoryLevel;
 
   const auto nrow = fragOffsets.size();
@@ -145,49 +145,98 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
     threads.emplace_back(
         std::async(std::launch::async, [=, &null, &lmin, &lmax, &dmin, &dmax, &fragOffsets, &rhsValues] {
           SQLTypeInfo lctype = cd->columnType;
-          DictDescriptor* dictDesc{nullptr};
+
+          // !! not sure if this is a undocumented convention or a bug, but for a sharded table
+          // the dictionary id of a encoded string column is not specified by comp_param in physical
+          // table but somehow in logical table :) comp_param in physical table is always 0, so
+          // need to adapt accordingly...
+          auto cdl =
+              (shard_ < 0) ? cd : catalog->getMetadataForColumn(catalog->getLogicalTableId(td->tableId), cd->columnId);
+          CHECK(cdl);
+          StringDictionary* stringDict;
+          if (lctype.is_string()) {
+            CHECK(kENCODING_DICT == lctype.get_compression());
+            auto dictDesc = const_cast<DictDescriptor*>(catalog->getMetadataForDict(cdl->columnType.get_comp_param()));
+            CHECK(dictDesc);
+            stringDict = dictDesc->stringDict.get();
+            CHECK(stringDict);
+          }
+
           for (size_t r = rbegin; r < std::min(rbegin + segsz, nrow); r++) {
             const auto roffs = fragOffsets[r];
             auto dptr = d0 + roffs * get_uncompressed_element_size(lctype);
-            const auto sv = &rhsValues[1 == nval ? 0 : r];
-            if (const auto v = boost::get<int64_t>(sv)) {
-              put_scalar<int64_t>(dptr, lctype, *v, &rhsType);
+            auto sv = &rhsValues[1 == nval ? 0 : r];
+            ScalarTargetValue sv2;
+
+            // Subtle here is on the two cases of string-to-string assignments, when upstream
+            // passes RHS string as a string index instead of a preferred "real string".
+            //   case #1. For "SET str_col = str_literal", it is hard to resolve temp str index
+            //            in this layer, so if upstream passes a str idx here, an exception is thrown.
+            //   case #2. For "SET str_col1 = str_col2", RHS str idx is converted to LHS str idx.
+            if (rhsType.is_string())
+              if (const auto vp = boost::get<int64_t>(sv)) {
+                auto dictDesc = const_cast<DictDescriptor*>(catalog->getMetadataForDict(rhsType.get_comp_param()));
+                if (nullptr == dictDesc)
+                  throw std::runtime_error("UPDATE does not support cast from string literal to string column.");
+                auto stringDict = dictDesc->stringDict.get();
+                CHECK(stringDict);
+                sv2 = NullableString(stringDict->getString(*vp));
+                sv = &sv2;
+              }
+
+            if (const auto vp = boost::get<int64_t>(sv)) {
+              auto v = *vp;
+              if (lctype.is_string())
+#ifdef ENABLE_STRING_CONVERSION_AT_STORAGE_LAYER
+                v = stringDict->getOrAdd(
+                    DatumToString(rhsType.is_time() ? Datum{.timeval = v} : Datum{.bigintval = v}, rhsType));
+#else
+                throw std::runtime_error("UPDATE does not support cast to string.");
+#endif
+              put_scalar<int64_t>(dptr, lctype, v, &rhsType);
               if (lctype.is_decimal()) {
                 int64_t decimal;
                 get_scalar<int64_t>(dptr, lctype, decimal);
                 set_minmax<int64_t>(lmin[c], lmax[c], decimal);
-                if (!((*v >= 0) ^ (decimal < 0)))
+                if (!((v >= 0) ^ (decimal < 0)))
                   throw std::runtime_error(
-                      "Data conversion overflow on " + std::to_string(*v) + " from DECIMAL(" +
+                      "Data conversion overflow on " + std::to_string(v) + " from DECIMAL(" +
                       std::to_string(rhsType.get_dimension()) + ", " + std::to_string(rhsType.get_scale()) + ") to (" +
                       std::to_string(lctype.get_dimension()) + ", " + std::to_string(lctype.get_scale()) + ")");
               } else if (is_integral(lctype))
-                set_minmax<int64_t>(
-                    lmin[c], lmax[c], rhsType.is_decimal() ? round(decimal_to_double(rhsType, *v)) : *v);
+                set_minmax<int64_t>(lmin[c], lmax[c], rhsType.is_decimal() ? round(decimal_to_double(rhsType, v)) : v);
               else
-                set_minmax<double>(dmin[c], dmax[c], rhsType.is_decimal() ? decimal_to_double(rhsType, *v) : *v);
-            } else if (const auto v = boost::get<double>(sv)) {
-              put_scalar<double>(dptr, lctype, *v);
-              if (is_integral(lctype))
-                set_minmax<int64_t>(lmin[c], lmax[c], *v);
+                set_minmax<double>(dmin[c], dmax[c], rhsType.is_decimal() ? decimal_to_double(rhsType, v) : v);
+            } else if (const auto vp = boost::get<double>(sv)) {
+              auto v = *vp;
+              if (lctype.is_string())
+#ifdef ENABLE_STRING_CONVERSION_AT_STORAGE_LAYER
+                v = stringDict->getOrAdd(DatumToString(Datum{.doubleval = v}, rhsType));
+#else
+                throw std::runtime_error("UPDATE does not support cast to string.");
+#endif
+              put_scalar<double>(dptr, lctype, v);
+              if (lctype.is_integer())
+                set_minmax<int64_t>(lmin[c], lmax[c], v);
               else
-                set_minmax<double>(dmin[c], dmax[c], *v);
-            } else if (const auto v = boost::get<float>(sv)) {
-              put_scalar<float>(dptr, lctype, *v);
-              if (is_integral(lctype))
-                set_minmax<int64_t>(lmin[c], lmax[c], *v);
+                set_minmax<double>(dmin[c], dmax[c], v);
+            } else if (const auto vp = boost::get<float>(sv)) {
+              auto v = *vp;
+              if (lctype.is_string())
+#ifdef ENABLE_STRING_CONVERSION_AT_STORAGE_LAYER
+                v = stringDict->getOrAdd(DatumToString(Datum{.floatval = v}, rhsType));
+#else
+                throw std::runtime_error("UPDATE does not support cast to string.");
+#endif
+              put_scalar<float>(dptr, lctype, v);
+              if (lctype.is_integer())
+                set_minmax<int64_t>(lmin[c], lmax[c], v);
               else
-                set_minmax<double>(dmin[c], dmax[c], *v);
-            } else if (const auto v = boost::get<NullableString>(sv)) {
-              const auto s = boost::get<std::string>(v);
+                set_minmax<double>(dmin[c], dmax[c], v);
+            } else if (const auto vp = boost::get<NullableString>(sv)) {
+              const auto s = boost::get<std::string>(vp);
               const auto sval = s ? *s : std::string("");
               if (lctype.is_string()) {
-                CHECK(kENCODING_DICT == lctype.get_compression());
-                dictDesc = dictDesc ? dictDesc : const_cast<DictDescriptor*>(
-                                                     catalog->getMetadataForDict(cd->columnType.get_comp_param()));
-                CHECK(dictDesc);
-                auto stringDict = dictDesc->stringDict.get();
-                CHECK(stringDict);
                 decltype(stringDict->getOrAdd(sval)) sidx;
                 {
                   std::unique_lock<std::mutex> lock(temp_mutex_);
@@ -307,9 +356,10 @@ void InsertOrderFragmenter::updateMetadata(const Catalog_Namespace::Catalog* cat
 }  // namespace Fragmenter_Namespace
 
 void UpdelRoll::commitUpdate() {
-  // for each physical table
-  for (auto tableDescriptor : tableDescriptors)
-    catalog->get_dataMgr().checkpoint(catalog->get_currentDB().dbId, tableDescriptor->tableId);
+  if (nullptr == catalog)
+    return;
+  // checkpoint all shards regardless, or epoch becomes out of sync
+  catalog->checkpoint(logicalTableId);
   // for each dirty fragment
   for (auto& cm : chunkMetadata)
     cm.first.first->fragmenter->updateMetadata(catalog, cm.first, *this);
@@ -321,6 +371,8 @@ void UpdelRoll::commitUpdate() {
 }
 
 void UpdelRoll::cancelUpdate() {
+  if (nullptr == catalog)
+    return;
   for (auto dit : dirtyChunks) {
     catalog->get_dataMgr().free(dit.first->get_buffer());
     dit.first->set_buffer(nullptr);

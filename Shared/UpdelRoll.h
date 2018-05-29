@@ -56,9 +56,10 @@ struct UpdelRoll {
   // new FragmentInfo.ChunkMetadata;
   std::map<MetaDataKey, std::map<int, ChunkMetadata>> chunkMetadata;
 
-  // helper members
-  const Catalog_Namespace::Catalog* catalog;
-  std::set<const TableDescriptor*> tableDescriptors;
+  // on aggregater it's possible that updateColumn is never called but
+  // commitUpdate is still called, so this nullptr is a protection
+  const Catalog_Namespace::Catalog* catalog = nullptr;
+  int logicalTableId;
   Data_Namespace::MemoryLevel memoryLevel{Data_Namespace::MemoryLevel::CPU_LEVEL};
 
   void cancelUpdate();

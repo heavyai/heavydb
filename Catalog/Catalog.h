@@ -231,6 +231,8 @@ class Catalog {
 
   void setDeletedColumn(const TableDescriptor* td, const ColumnDescriptor* cd);
   void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);
+  int getLogicalTableId(const int physicalTableId) const;
+  void checkpoint(const int logicalTableId) const;
 
  protected:
   typedef std::map<std::string, TableDescriptor*> TableDescriptorMap;
@@ -308,7 +310,6 @@ class Catalog {
   std::shared_ptr<Calcite> calciteMgr_;
 
   LogicalToPhysicalTableMapById logicalToPhysicalTableMapById_;
-  int logicalTableDictId_;                         // logical table DictId (used for physical tables)
   static const std::string physicalTableNameTag_;  // extra component added to the name of each physical table
   int nextTempTableId_;
   int nextTempDictId_;

@@ -39,6 +39,7 @@ namespace Fragmenter_Namespace {
 InsertOrderFragmenter::InsertOrderFragmenter(const vector<int> chunkKeyPrefix,
                                              vector<Chunk>& chunkVec,
                                              Data_Namespace::DataMgr* dataMgr,
+                                             const Catalog_Namespace::Catalog* catalog,
                                              const int physicalTableId,
                                              const int shard,
                                              const size_t maxFragmentRows,
@@ -48,6 +49,7 @@ InsertOrderFragmenter::InsertOrderFragmenter(const vector<int> chunkKeyPrefix,
                                              const Data_Namespace::MemoryLevel defaultInsertLevel)
     : chunkKeyPrefix_(chunkKeyPrefix),
       dataMgr_(dataMgr),
+      catalog_(catalog),
       physicalTableId_(physicalTableId),
       shard_(shard),
       maxFragmentRows_(maxFragmentRows),
@@ -172,11 +174,23 @@ void InsertOrderFragmenter::dropFragmentsToSize(const size_t maxRows) {
 }
 
 void InsertOrderFragmenter::deleteFragments(const vector<int>& dropFragIds) {
+  // Fix a verified loophole on sharded logical table which is locked using logical tableId
+  // while it's its physical tables that can come here when fragments overflow during COPY.
+  // Locks on a logical table and its physical tables never intersect, which means potential races.
+  // It'll be an overkill to resolve a logical table to physical tables in MapDHandler,
+  // ParseNode or other higher layers where the logical table is locked with UpdateDeleteLock;
+  // it's easier to lock the logical table of its physical tables. A downside of this approach
+  // may be loss of parallel execution of deleteFragments across physical tables. Because
+  // deleteFragments is a short in-memory operation, the loss seems not a big deal.
+  auto chunkKeyPrefix = chunkKeyPrefix_;
+  if (shard_ >= 0)
+    chunkKeyPrefix[1] = catalog_->getLogicalTableId(chunkKeyPrefix[1]);
+
   // need to keep lock seq as UpdateDeleteLock >> fragmentInfoMutex_ or
   // SELECT and COPY may enter a deadlock
   using namespace Lock_Namespace;
   mapd_unique_lock<mapd_shared_mutex> deleteLock(
-      *LockMgr<mapd_shared_mutex, ChunkKey>::getMutex(LockType::UpdateDeleteLock, chunkKeyPrefix_));
+      *LockMgr<mapd_shared_mutex, ChunkKey>::getMutex(LockType::UpdateDeleteLock, chunkKeyPrefix));
   mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
 
   for (const auto fragId : dropFragIds) {
