@@ -5167,6 +5167,38 @@ TEST(Update, ImplicitCastToTimestamp4) {
   }
 }
 
+TEST(Update, ShardedTableShardKeyTest) {
+  if (std::is_same<CalciteUpdatePathSelector, PreprocessorFalse>::value)
+    return;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement(
+        "create table updateshardkey ( x integer, y integer, shard key (x) ) with (vacuum='delayed', shard_count=4);");
+
+    run_multiple_agg("insert into updateshardkey values (1,2);", dt);
+    run_multiple_agg("insert into updateshardkey values (3,4);", dt);
+    run_multiple_agg("insert into updateshardkey values (5,6);", dt);
+    run_multiple_agg("insert into updateshardkey values (7,8);", dt);
+    run_multiple_agg("insert into updateshardkey values (9,10);", dt);
+    run_multiple_agg("insert into updateshardkey values (11,12);", dt);
+    run_multiple_agg("insert into updateshardkey values (13,14);", dt);
+    run_multiple_agg("insert into updateshardkey values (15,16);", dt);
+    run_multiple_agg("insert into updateshardkey values (17,18);", dt);
+
+    EXPECT_THROW(run_multiple_agg("update updateshardkey set x=x-1;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update updateshardkey set x=x-1,y=y-1;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update updateshardkey set x=x-1 where x > 0;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("update updateshardkey set x=x-1,y=y-1 where x > 0;", dt), std::runtime_error);
+
+    EXPECT_EQ(int64_t(2 + 4 + 6 + 8 + 10 + 12 + 14 + 16 + 18),
+              v<int64_t>(run_simple_agg("select sum(y) from updateshardkey;", dt)));
+
+    run_ddl_statement("drop table updateshardkey;");
+  }
+}
+
 TEST(Delete, ShardedTableDeleteTest) {
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
     return;

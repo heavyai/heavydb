@@ -1163,8 +1163,13 @@ class RelModify : public RelAlgNode {
         auto* column_desc =
             catalog_.getMetadataForColumn(table_descriptor_->tableId, target_column_list_[target_index]);
         CHECK(column_desc != nullptr);
-        auto cast_target_type = column_desc->columnType;
 
+        if (table_descriptor_->nShards && (column_desc->columnId == table_descriptor_->shardedColumnId)) {
+          throw std::runtime_error("UPDATE of a shard key is currently unsupported.");
+        }
+
+        // Check for valid types
+        auto cast_target_type = column_desc->columnType;
         if (cast_target_type.is_varlen()) {
           throw std::runtime_error("UPDATE of a none-encoded string, geo, or array column is unsupported.");
         }
