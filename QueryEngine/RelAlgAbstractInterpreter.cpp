@@ -1583,6 +1583,10 @@ class RelAlgAbstractInterpreter {
     CHECK_EQ(size_t(1), inputs.size());
 
     const auto table_descriptor = getTableFromScanNode(logical_modify_ra);
+    if (table_descriptor->isView) {
+      throw std::runtime_error("UPDATE of a view is unsupported.");
+    }
+
     bool flattened = json_bool(field(logical_modify_ra, "flattened"));
     std::string op = json_str(field(logical_modify_ra, "operation"));
     RelModify::TargetColumnList target_column_list;
@@ -1596,7 +1600,8 @@ class RelAlgAbstractInterpreter {
       }
     }
 
-    auto modify_node = std::make_shared<RelModify>(cat_, table_descriptor, flattened, op, target_column_list, inputs[0]);
+    auto modify_node =
+        std::make_shared<RelModify>(cat_, table_descriptor, flattened, op, target_column_list, inputs[0]);
     switch (modify_node->getOperation()) {
       case RelModify::ModifyOperation::Delete: {
         modify_node->applyDeleteModificationsToInputNode();
