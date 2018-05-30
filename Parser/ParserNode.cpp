@@ -2127,10 +2127,10 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         if (vacuum_uc != "IMMEDIATE" && vacuum_uc != "DELAYED") {
           throw std::runtime_error("VACUUM must be IMMEDIATE or DELAYED");
         }
-        if (boost::iequals(vacuum_uc, "DELAYED")) {
-          td.hasDeletedCol = true;
-        } else {
+        if (boost::iequals(vacuum_uc, "IMMEDIATE")) {
           td.hasDeletedCol = false;
+        } else {
+          td.hasDeletedCol = true;
         }
       } else {
         throw std::runtime_error("Invalid CREATE TABLE option " + *p->get_name() +

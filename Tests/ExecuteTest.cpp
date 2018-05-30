@@ -4432,7 +4432,7 @@ TEST(Delete, WithoutVacuumAttribute) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    run_ddl_statement("create table no_deletes (x integer);");
+    run_ddl_statement("create table no_deletes (x integer) with (vacuum='immediate');");
     run_multiple_agg("insert into no_deletes values (10);", dt);
     run_multiple_agg("insert into no_deletes values (11);", dt);
     EXPECT_THROW(run_multiple_agg("delete from no_deletes where x > 10;", dt), std::runtime_error);

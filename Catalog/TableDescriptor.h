@@ -60,7 +60,7 @@ struct TableDescriptor {
         nShards(0),
         shardedColumnId(0),
         persistenceLevel(Data_Namespace::MemoryLevel::DISK_LEVEL),
-        hasDeletedCol(false) {}
+        hasDeletedCol(true) {}
 };
 
 inline bool table_is_replicated(const TableDescriptor* td) {
