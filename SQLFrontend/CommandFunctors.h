@@ -346,7 +346,11 @@ StandardCommand(ListColumns, {
         comma_or_blank = ", ";
       }
       if (table_details.shard_count) {
-        frag += comma_or_blank + "SHARD_COUNT = " + std::to_string(table_details.shard_count * context.cluster_status.size());
+        const auto shard_count = table_details.shard_count;
+        if (context.cluster_status.size() > 1) {
+          shard_count = table_details.shard_count * (context.cluster_status.size() - 1);
+        }
+        frag += comma_or_blank + "SHARD_COUNT = " + std::to_string(shard_count);
         comma_or_blank = ", ";
       }
       if (DEFAULT_PAGE_SIZE != table_details.page_size) {
@@ -456,8 +460,8 @@ StandardCommand(GetOptimizedSchema, {
     return context.query_return.row_set.columns[0].data.int_col[0];
   };
 
-  auto get_optimal_size = [run_query](
-      ClientContext& context, std::string table_name, std::string col_name, int col_type) -> int {
+  auto get_optimal_size =
+      [run_query](ClientContext& context, std::string table_name, std::string col_name, int col_type) -> int {
     switch (col_type) {
       case TDatumType::STR: {
         int strings = run_query(context, "select count(distinct " + col_name + ") from " + table_name + ";");
