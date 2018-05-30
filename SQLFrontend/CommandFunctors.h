@@ -346,7 +346,7 @@ StandardCommand(ListColumns, {
         comma_or_blank = ", ";
       }
       if (table_details.shard_count) {
-        const auto shard_count = table_details.shard_count;
+        auto shard_count = table_details.shard_count;
         if (context.cluster_status.size() > 1) {
           shard_count = table_details.shard_count * (context.cluster_status.size() - 1);
         }
