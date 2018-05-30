@@ -1632,7 +1632,9 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
         throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
       }
       if (cd->columnType.get_type() != import_ti.get_type()) {
-        throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
+        // allow POLYGON to be inserted into MULTIPOLYGON column
+        if (!(import_ti.get_type() == SQLTypes::kPOLYGON && cd->columnType.get_type() == SQLTypes::kMULTIPOLYGON))
+          throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
       }
       // TODO: check if import SRID matches columns SRID, may need to transform before inserting
 
