@@ -823,6 +823,20 @@ static void print_privs(const std::vector<bool>& privs, TDBObjectType::type type
       std::cout << " view";
     if (privs[3])
       std::cout << " edit";
+
+  } else if (type == TDBObjectType::ViewDBObjectType) {
+    if (privs[0])
+      std::cout << " create";
+    if (privs[1])
+      std::cout << " drop";
+    if (privs[2])
+      std::cout << " select";
+    if (privs[3])
+      std::cout << " insert";
+    if (privs[4])
+      std::cout << " update";
+    if (privs[5])
+      std::cout << " delete";
   }
 }
 
@@ -852,6 +866,10 @@ void get_db_objects_for_grantee(ClientContext& context) {
         }
         case (TDBObjectType::DashboardDBObjectType): {
           std::cout << " (dashboard):";
+          break;
+        }
+        case (TDBObjectType::ViewDBObjectType): {
+          std::cout << " (view):";
           break;
         }
         default: { CHECK(false); }

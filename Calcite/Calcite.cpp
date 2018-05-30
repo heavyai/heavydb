@@ -225,6 +225,10 @@ void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info
     DBObject dbobject(key, privs, tableMeta->userId);
     std::vector<DBObject> privObjects{dbobject};
 
+    if (!privs.hasAny()) {
+      throw std::runtime_error("Operation not supported for object " + tableOrViewName);
+    }
+
     if (!Catalog_Namespace::SysCatalog::instance().checkPrivileges(session_info.get_currentUser(), privObjects)) {
       throw std::runtime_error("Violation of access privileges: user " + session_info.get_currentUser().userName +
                                " has no proper privileges for object " + tableOrViewName);
@@ -238,6 +242,8 @@ TPlanResult Calcite::process(const Catalog_Namespace::SessionInfo& session_info,
                              const bool is_explain) {
   TPlanResult result = processImpl(session_info, sql_string, legacy_syntax, is_explain);
 
+  AccessPrivileges NOOP;
+
   if (!is_explain && Catalog_Namespace::SysCatalog::instance().arePrivilegesOn()) {
     // check the individual tables
     checkPermissionForTables(session_info,
@@ -247,15 +253,15 @@ TPlanResult Calcite::process(const Catalog_Namespace::SessionInfo& session_info,
     checkPermissionForTables(session_info,
                              result.primary_accessed_objects.tables_inserted_into,
                              AccessPrivileges::INSERT_INTO_TABLE,
-                             AccessPrivileges::INSERT_INTO_VIEW);
+                             NOOP);
     checkPermissionForTables(session_info,
                              result.primary_accessed_objects.tables_updated_in,
                              AccessPrivileges::UPDATE_IN_TABLE,
-                             AccessPrivileges::UPDATE_IN_VIEW);
+                             NOOP);
     checkPermissionForTables(session_info,
                              result.primary_accessed_objects.tables_deleted_from,
                              AccessPrivileges::DELETE_FROM_TABLE,
-                             AccessPrivileges::DELETE_FROM_VIEW);
+                             NOOP);
   }
 
   return result;

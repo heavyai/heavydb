@@ -2850,22 +2850,10 @@ static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(const std::str
     return {AccessPrivileges::CREATE_VIEW, ViewDBObjectType};
   } else if (privs.compare("SELECT VIEW") == 0 && (objectType == DatabaseDBObjectType)) {
     return {AccessPrivileges::SELECT_FROM_VIEW, ViewDBObjectType};
-  } else if (privs.compare("INSERT VIEW") == 0 && (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::INSERT_INTO_VIEW, ViewDBObjectType};
-  } else if (privs.compare("UPDATE VIEW") == 0 && (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::UPDATE_IN_VIEW, ViewDBObjectType};
-  } else if (privs.compare("DELETE VIEW") == 0 && (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::DELETE_FROM_VIEW, ViewDBObjectType};
   } else if (privs.compare("DROP VIEW") == 0 && (objectType == DatabaseDBObjectType)) {
     return {AccessPrivileges::DROP_VIEW, ViewDBObjectType};
   } else if (privs.compare("SELECT") == 0 && (objectType == ViewDBObjectType)) {
     return {AccessPrivileges::SELECT_FROM_VIEW, ViewDBObjectType};
-  } else if (privs.compare("INSERT") == 0 && (objectType == ViewDBObjectType)) {
-    return {AccessPrivileges::INSERT_INTO_VIEW, ViewDBObjectType};
-  } else if (privs.compare("UPDATE") == 0 && (objectType == ViewDBObjectType)) {
-    return {AccessPrivileges::UPDATE_IN_VIEW, ViewDBObjectType};
-  } else if (privs.compare("DELETE") == 0 && (objectType == ViewDBObjectType)) {
-    return {AccessPrivileges::DELETE_FROM_VIEW, ViewDBObjectType};
   } else if (privs.compare("DROP") == 0 && (objectType == ViewDBObjectType)) {
     return {AccessPrivileges::DROP_VIEW, ViewDBObjectType};
 
@@ -3032,6 +3020,25 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) 
     }
     if (privs.hasPermission(DashboardPrivileges::EDIT_DASHBOARD)) {
       printf(" EDIT");
+    }
+  } else if (objectType == DBObjectType::ViewDBObjectType) {
+    if (privs.hasPermission(ViewPrivileges::CREATE_VIEW)) {
+      printf(" CREATE");
+    }
+    if (privs.hasPermission(ViewPrivileges::DROP_VIEW)) {
+      printf(" DROP");
+    }
+    if (privs.hasPermission(ViewPrivileges::SELECT_FROM_VIEW)) {
+      printf(" SELECT");
+    }
+    if (privs.hasPermission(ViewPrivileges::INSERT_INTO_VIEW)) {
+      printf(" INSERT");
+    }
+    if (privs.hasPermission(ViewPrivileges::UPDATE_IN_VIEW)) {
+      printf(" UPDATE");
+    }
+    if (privs.hasPermission(ViewPrivileges::DELETE_FROM_VIEW)) {
+      printf(" DELETE");
     }
   }
   printf(".\n");

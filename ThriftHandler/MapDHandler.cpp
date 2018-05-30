@@ -1077,6 +1077,9 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
     case TDBObjectType::DashboardDBObjectType:
       object_type = DBObjectType::DashboardDBObjectType;
       break;
+    case TDBObjectType::ViewDBObjectType:
+      object_type = DBObjectType::ViewDBObjectType;
+      break;
     default:
       THROW_MAPD_EXCEPTION("Failed to get object privileges for " + objectName + ": unknown object type (" +
                            std::to_string(type) + ").");
