@@ -97,8 +97,8 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
 #else
   bool useGpus = false;
 #endif
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, useGpus, -1);
   {
-    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, useGpus, -1);
     auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
     sys_cat.init(base_path.string(), dataMgr, {}, calcite, false, false);
     CHECK(sys_cat.getMetadataForUser(user_name, user));
@@ -106,7 +106,6 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
     CHECK(sys_cat.getMetadataForDB(db_name, db));
     CHECK(user.isSuper || (user.userId == db.dbOwner));
   }
-  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, useGpus, -1);
   return new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
                                                 base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, calcite),
                                             user,

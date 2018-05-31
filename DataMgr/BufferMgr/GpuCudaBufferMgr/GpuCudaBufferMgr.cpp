@@ -15,9 +15,9 @@
  */
 
 #include "GpuCudaBufferMgr.h"
-#include "GpuCudaBuffer.h"
-#include "../../../CudaMgr/CudaMgr.h"
 #include <glog/logging.h>
+#include "../../../CudaMgr/CudaMgr.h"
+#include "GpuCudaBuffer.h"
 //#include "../CudaUtils.h"
 
 namespace Buffer_Namespace {
@@ -31,7 +31,12 @@ GpuCudaBufferMgr::GpuCudaBufferMgr(const int deviceId,
     : BufferMgr(deviceId, maxBufferSize, bufferAllocIncrement, pageSize, parentMgr), cudaMgr_(cudaMgr) {}
 
 GpuCudaBufferMgr::~GpuCudaBufferMgr() {
-  freeAllMem();
+  try {
+    cudaMgr_->synchronizeDevices();
+    freeAllMem();
+  } catch (const std::runtime_error& e) {
+    LOG(ERROR) << "CUDA Error: " << e.what();
+  }
 }
 
 void GpuCudaBufferMgr::addSlab(const size_t slabSize) {
@@ -59,4 +64,4 @@ void GpuCudaBufferMgr::allocateBuffer(BufferList::iterator segIt, const size_t p
                                                                                // Buffer in its buffer member
 }
 
-}  // Buffer_Namespace
+}  // namespace Buffer_Namespace

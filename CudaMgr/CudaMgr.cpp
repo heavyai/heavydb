@@ -15,11 +15,11 @@
  */
 
 #include "CudaMgr.h"
-#include <stdexcept>
-#include <iostream>
-#include "assert.h"
-#include <algorithm>
 #include <glog/logging.h>
+#include <algorithm>
+#include <iostream>
+#include <stdexcept>
+#include "assert.h"
 #ifdef HAVE_CUDA
 #include <cuda_runtime.h>
 #endif
@@ -48,8 +48,22 @@ CudaMgr::CudaMgr(const int, const int) {
 
 CudaMgr::~CudaMgr() {
 #ifdef HAVE_CUDA
+  try {
+    synchronizeDevices();
+    for (int d = 0; d < deviceCount_; ++d) {
+      checkError(cuCtxDestroy(deviceContexts[d]));
+    }
+  } catch (const std::runtime_error& e) {
+    LOG(ERROR) << "CUDA Error: " << e.what();
+  }
+#endif
+}
+
+void CudaMgr::synchronizeDevices() {
+#ifdef HAVE_CUDA
   for (int d = 0; d < deviceCount_; ++d) {
-    checkError(cuCtxDestroy(deviceContexts[d]));
+    setContext(d);
+    checkError(cuCtxSynchronize());
   }
 #endif
 }
@@ -108,6 +122,7 @@ void CudaMgr::fillDeviceProperties() {
 
 void CudaMgr::createDeviceContexts() {
 #ifdef HAVE_CUDA
+  CHECK_EQ(deviceContexts.size(), size_t(0));
   deviceContexts.resize(deviceCount_);
   for (int d = 0; d < deviceCount_; ++d) {
     CUresult status = cuCtxCreate(&deviceContexts[d], 0, deviceProperties[d].device);
@@ -258,7 +273,7 @@ void CudaMgr::checkError(CUresult status) {
 #endif
 }
 
-}  // CudaMgr_Namespace
+}  // namespace CudaMgr_Namespace
 
 /*
 int main () {

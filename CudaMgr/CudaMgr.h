@@ -87,6 +87,8 @@ class CudaMgr {
 
   const int getGpuDriverVersion() { return gpu_driver_version; }
 
+  void synchronizeDevices();
+
  private:
   void fillDeviceProperties();
   void createDeviceContexts();
