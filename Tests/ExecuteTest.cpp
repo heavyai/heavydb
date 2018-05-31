@@ -6109,6 +6109,22 @@ TEST(Select, GeoSpatial) {
                   "((2 0, 0 2, -2 0, 0 -2, 1 -2, 2 -1)))', 4326), "
                   "ST_GeomFromText('POINT(0.1 0.1)', 4326)) FROM geospatial_test limit 1;",
                   dt)));
+    // Tolerance
+    ASSERT_EQ(static_cast<int64_t>(1),  // point containing an extremely close point
+              v<int64_t>(run_simple_agg("SELECT ST_Contains("
+                                        "ST_GeomFromText('POINT(2.11000001 -1.72299999    )'), "
+                                        "ST_GeomFromText('POINT(2.11       -1.723)')) FROM geospatial_test limit 1;",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(0),  // point not containing a very close point
+              v<int64_t>(run_simple_agg("SELECT ST_Contains("
+                                        "ST_GeomFromText('POINT(2.11    -1.723    )'), "
+                                        "ST_GeomFromText('POINT(2.11001 -1.72299)')) FROM geospatial_test limit 1;",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),  // linestring containing an extremely close point
+              v<int64_t>(run_simple_agg("SELECT ST_Contains("
+                                        "ST_GeomFromText('LINESTRING(1 -1.00000001, 3 -1.00000001)'), "
+                                        "ST_GeomFromText('POINT(0.9999999 -1)')) FROM geospatial_test limit 1;",
+                                        dt)));
 
     // Coord accessors
     ASSERT_NEAR(static_cast<double>(-118.4079),

@@ -1,9 +1,22 @@
 #define COMPRESSION_NONE 0
 #define COMPRESSION_GEOINT32 1
-
 #define TOLERANCE 0.0000001
-#define ZERO_TO_TOLERANCE(x) ((-TOLERANCE <= (x)) && ((x) <= TOLERANCE))
-#define EQUAL_TO_TOLERANCE(a, b) (ZERO_TO_TOLERANCE((a) - (b)))
+
+DEVICE ALWAYS_INLINE bool tol_zero(double x) {
+  return (-TOLERANCE <= x) && (x <= TOLERANCE);
+}
+
+DEVICE ALWAYS_INLINE bool tol_eq(double x, double y) {
+  return tol_zero(x - y);
+}
+
+DEVICE ALWAYS_INLINE bool tol_le(double x, double y) {
+  return x <= (y + TOLERANCE);
+}
+
+DEVICE ALWAYS_INLINE bool tol_ge(double x, double y) {
+  return (x + TOLERANCE) >= y;
+}
 
 DEVICE
 double decompress_coord(int8_t* data, int32_t index, int32_t ic, bool x) {
@@ -64,7 +77,7 @@ double hypotenuse(double x, double y) {
     x = y;
     y = t;
   }
-  if (y == 0.0)
+  if (tol_zero(y))
     return x;
   return x * sqrt(1.0 + (y * y) / (x * x));
 }
@@ -78,7 +91,7 @@ DEVICE ALWAYS_INLINE double distance_point_point(double p1x, double p1y, double 
 DEVICE
 double distance_point_line(double px, double py, double l1x, double l1y, double l2x, double l2y) {
   double length = distance_point_point(l1x, l1y, l2x, l2y);
-  if (length == 0.0)
+  if (tol_zero(length))
     return distance_point_point(px, py, l1x, l1y);
 
   // Find projection of point P onto the line segment AB:
@@ -98,12 +111,12 @@ double distance_point_line(double px, double py, double l1x, double l1y, double 
 // Given three colinear points p, q, r, the function checks if
 // point q lies on line segment 'pr'
 DEVICE ALWAYS_INLINE bool on_segment(double px, double py, double qx, double qy, double rx, double ry) {
-  return (qx <= fmax(px, rx) && qx >= fmin(px, rx) && qy <= fmax(py, ry) && qy >= fmin(py, ry));
+  return (tol_le(qx, fmax(px, rx)) && tol_ge(qx, fmin(px, rx)) && tol_le(qy, fmax(py, ry)) && tol_ge(qy, fmin(py, ry)));
 }
 
 DEVICE ALWAYS_INLINE int16_t orientation(double px, double py, double qx, double qy, double rx, double ry) {
   auto val = ((qy - py) * (rx - qx) - (qx - px) * (ry - qy));
-  if (val == 0.0)
+  if (tol_zero(val))
     return 0;  // Points p, q and r are colinear
   if (val > 0.0)
     return 1;  // Clockwise point orientation
@@ -200,7 +213,7 @@ bool polygon_contains_point(int8_t* poly,
                              e2x,
                              e2y)) {
       result = !result;
-      if (distance_point_line(e2x, e2y, px, py, xray + 1.0, py) == 0.0) {
+      if (tol_zero(distance_point_line(e2x, e2y, px, py, xray + 1.0, py))) {
         // If ray goes through the edge's second vertex, flip the result again -
         // that vertex will be crossed again when we look at the next edge
         // TODO: sensitivity: how close should the ray be to the vertex be to register a crossing
@@ -232,26 +245,33 @@ bool polygon_contains_linestring(int8_t* poly,
 }
 
 DEVICE ALWAYS_INLINE bool box_contains_point(double* bounds, int64_t bounds_size, double px, double py) {
-  return (px >= bounds[0] && py >= bounds[1] && px <= bounds[2] && py <= bounds[3]);
+  return (tol_ge(px, bounds[0]) && tol_ge(py, bounds[1]) && tol_le(px, bounds[2]) && tol_le(py, bounds[3]));
 }
 
 DEVICE ALWAYS_INLINE bool box_contains_box(double* bounds1,
                                            int64_t bounds1_size,
                                            double* bounds2,
                                            int64_t bounds2_size) {
-  return (box_contains_point(bounds1, bounds1_size, bounds2[0], bounds2[1]) &&
-          box_contains_point(bounds1, bounds1_size, bounds2[1], bounds2[2]));
+  return (box_contains_point(bounds1, bounds1_size, bounds2[0], bounds2[1]) &&  // box1 <- box2: xmin, ymin
+          box_contains_point(bounds1, bounds1_size, bounds2[2], bounds2[3]));   // box1 <- box2: xmax, ymax
+}
+
+DEVICE ALWAYS_INLINE bool box_contains_box_vertex(double* bounds1,
+                                                  int64_t bounds1_size,
+                                                  double* bounds2,
+                                                  int64_t bounds2_size) {
+  return (box_contains_point(bounds1, bounds1_size, bounds2[0], bounds2[1]) ||  // box1 <- box2: xmin, ymin
+          box_contains_point(bounds1, bounds1_size, bounds2[2], bounds2[3]) ||  // box1 <- box2: xmax, ymax
+          box_contains_point(bounds1, bounds1_size, bounds2[0], bounds2[3]) ||  // box1 <- box2: xmin, ymax
+          box_contains_point(bounds1, bounds1_size, bounds2[2], bounds2[1]));   // box1 <- box2: xmax, ymin
 }
 
 DEVICE ALWAYS_INLINE bool box_overlaps_box(double* bounds1,
                                            int64_t bounds1_size,
                                            double* bounds2,
                                            int64_t bounds2_size) {
-  return (box_contains_point(bounds1, bounds1_size, bounds2[0], bounds2[1]) ||  // box1 <- box2: xmin, ymin
-          box_contains_point(bounds1, bounds1_size, bounds2[1], bounds2[2]) ||  // box1 <- box2: xmax, ymax
-          box_contains_point(bounds1, bounds1_size, bounds2[0], bounds2[2]) ||  // box1 <- box2: xmin, ymax
-          box_contains_point(bounds1, bounds1_size, bounds2[1], bounds2[1]) ||  // box1 <- box2: xmax, ymin
-          box_contains_point(bounds2, bounds2_size, bounds1[0], bounds1[0]));   // box2 <- box1: xmin, xmin
+  return (box_contains_box_vertex(bounds1, bounds1_size, bounds2, bounds2_size) ||
+          box_contains_box_vertex(bounds2, bounds2_size, bounds1, bounds1_size));
 }
 
 EXTENSION_NOINLINE
@@ -574,8 +594,10 @@ double ST_Distance_Point_MultiPolygon(int8_t* p,
         p, psize, poly_coords, poly_coords_size, poly_ring_sizes, poly_num_rings, ic1, isr1, ic2, isr2, osr);
     if (poly == 0 || min_distance > distance) {
       min_distance = distance;
-      if (min_distance == 0.0)
+      if (tol_zero(min_distance)) {
+        min_distance = 0.0;
         break;
+      }
     }
   }
 
@@ -644,7 +666,7 @@ double ST_Distance_LineString_LineString(int8_t* l1,
         dist = ldist;  // initialize dist with distance between the first two segments
       else if (dist > ldist)
         dist = ldist;
-      if (dist == 0.0)
+      if (tol_zero(dist))
         return 0.0;  // segments touch
 
       l21x = l22x;  // advance to the next point on l2
@@ -809,7 +831,6 @@ double ST_Distance_Polygon_Polygon(int8_t* poly1_coords,
                                                  osr);
       }
       poly1 += poly1_interior_ring_num_coords * compression_unit_size(ic1);
-      ;
     }
     return 0.0;
   }
@@ -854,7 +875,6 @@ double ST_Distance_Polygon_Polygon(int8_t* poly1_coords,
                                                  osr);
       }
       poly2 += poly2_interior_ring_num_coords * compression_unit_size(ic2);
-      ;
     }
     return 0.0;
   }
@@ -917,7 +937,7 @@ bool ST_Contains_Point_Point(int8_t* p1,
   double p1y = coord_y(p1, 1, ic1, isr1, osr);
   double p2x = coord_x(p2, 0, ic2, isr2, osr);
   double p2y = coord_y(p2, 1, ic2, isr2, osr);
-  return EQUAL_TO_TOLERANCE(p1x, p2x) && EQUAL_TO_TOLERANCE(p1y, p2y);
+  return tol_eq(p1x, p2x) && tol_eq(p1y, p2y);
 }
 
 EXTENSION_NOINLINE
@@ -937,8 +957,7 @@ bool ST_Contains_Point_LineString(int8_t* p,
   double py = coord_y(p, 1, ic1, isr1, osr);
 
   if (lbounds) {
-    if (EQUAL_TO_TOLERANCE(px, lbounds[0]) && EQUAL_TO_TOLERANCE(py, lbounds[1]) &&
-        EQUAL_TO_TOLERANCE(px, lbounds[2]) && EQUAL_TO_TOLERANCE(py, lbounds[3]))
+    if (tol_eq(px, lbounds[0]) && tol_eq(py, lbounds[1]) && tol_eq(px, lbounds[2]) && tol_eq(py, lbounds[3]))
       return true;
   }
 
@@ -946,7 +965,7 @@ bool ST_Contains_Point_LineString(int8_t* p,
   for (int i = 0; i < l_num_coords; i += 2) {
     double lx = coord_x(l, i, ic2, isr2, osr);
     double ly = coord_y(l, i + 1, ic2, isr2, osr);
-    if (EQUAL_TO_TOLERANCE(px, lx) && EQUAL_TO_TOLERANCE(py, ly))
+    if (tol_eq(px, lx) && tol_eq(py, ly))
       continue;
     return false;
   }
@@ -989,8 +1008,7 @@ bool ST_Contains_LineString_Point(int8_t* l,
                                   int32_t ic2,
                                   int32_t isr2,
                                   int32_t osr) {
-  // TODO: precision sensitivity
-  return (ST_Distance_Point_LineString(p, psize, l, lsize, li, ic2, isr2, ic1, isr1, osr) == 0.0);
+  return tol_zero(ST_Distance_Point_LineString(p, psize, l, lsize, li, ic2, isr2, ic1, isr1, osr));
 }
 
 EXTENSION_NOINLINE
