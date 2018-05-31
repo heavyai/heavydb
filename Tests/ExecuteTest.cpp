@@ -2285,7 +2285,7 @@ TEST(Select, ReturnNullFromDivByZero) {
     c("SELECT d / 0. FROM test;", dt);
     c("SELECT f / (f - f) FROM test;", dt);
     c("SELECT COUNT(*) FROM test GROUP BY y / (x - x);", dt);
-    c("SELECT COUNT(*) FROM test GROUP BY z, y / (x - x);", dt);
+    c("SELECT COUNT(*) n FROM test GROUP BY z, y / (x - x) ORDER BY n ASC;", dt);
     c("SELECT SUM(x) / SUM(CASE WHEN str = 'none' THEN y ELSE 0 END) FROM test;", dt);
     c("SELECT COUNT(*) FROM test WHERE y / (x - x) = 0;", dt);
     c("SELECT COUNT(*) FROM test WHERE x = x OR  y / (x - x) = y;", dt);
