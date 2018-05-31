@@ -1547,10 +1547,13 @@ bool importGeoFromWkt(std::string& wkt,
                       std::vector<int>& ring_sizes,
                       std::vector<int>& poly_rings) {
   bool status = true;
-  auto data = (char*)wkt.c_str();
-  OGRGeometryFactory geom_factory;
   OGRGeometry* geom = nullptr;
-  OGRErr ogr_status = geom_factory.createFromWkt(&data, NULL, &geom);
+#if (GDAL_VERSION_MAJOR > 2) || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR >= 3)
+  OGRErr ogr_status = OGRGeometryFactory::createFromWkt(wkt.c_str(), nullptr, &geom);
+#else
+  auto data = (char*)wkt.c_str();
+  OGRErr ogr_status = OGRGeometryFactory::createFromWkt(&data, NULL, &geom);
+#endif
   if (ogr_status != OGRERR_NONE)
     status = false;
   if (status && geom) {
@@ -1583,14 +1586,14 @@ bool importGeoFromWkt(std::string& wkt,
   }
   if (status == false) {
     if (geom)
-      geom_factory.destroyGeometry(geom);
+      OGRGeometryFactory::destroyGeometry(geom);
     return false;
   }
 
   status = importGeoFromGeometry(geom, ti, coords, bounds, ring_sizes, poly_rings);
 
   if (geom)
-    geom_factory.destroyGeometry(geom);
+    OGRGeometryFactory::destroyGeometry(geom);
   return status;
 }
 
@@ -3246,6 +3249,21 @@ void Importer::setGDALAuthorizationTokens(const CopyParams& copy_params) {
 #endif
     CPLSetConfigOption("AWS_SECRET_ACCESS_KEY", nullptr);
   }
+
+#if (GDAL_VERSION_MAJOR > 2) || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR >= 3)
+  // if we haven't set keys, we need to disable signed access
+  if (copy_params.s3_access_key.size() || copy_params.s3_secret_key.size()) {
+#if DEBUG_AWS_AUTHENTICATION
+    LOG(INFO) << "GDAL: Clearing AWS_NO_SIGN_REQUEST";
+#endif
+    CPLSetConfigOption("AWS_NO_SIGN_REQUEST", nullptr);
+  } else {
+#if DEBUG_AWS_AUTHENTICATION
+    LOG(INFO) << "GDAL: Setting AWS_NO_SIGN_REQUEST to 'YES'";
+#endif
+    CPLSetConfigOption("AWS_NO_SIGN_REQUEST", "YES");
+  }
+#endif
 }
 
 /* static */
@@ -3465,6 +3483,13 @@ bool Importer::gdalStatInternal(const std::string& path, const CopyParams& copy_
 
   // set authorization tokens
   setGDALAuthorizationTokens(copy_params);
+
+#if (GDAL_VERSION_MAJOR > 2) || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR >= 3)
+  // clear GDAL stat cache
+  // without this, file existence will be cached, even if authentication changes
+  // supposed to be available from GDAL 2.2.1 but our CentOS build disagrees
+  VSICurlClearCache();
+#endif
 
   // stat path
   VSIStatBufL sb;
