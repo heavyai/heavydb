@@ -5870,9 +5870,9 @@ TEST(Select, GeoSpatial) {
     compare_array(run_simple_agg("SELECT l FROM geospatial_test WHERE rowid = 1;", dt),
                   std::vector<double>{1., 0., 2., 2., 3., 3.});
     compare_array(run_simple_agg("SELECT poly FROM geospatial_test WHERE rowid = 1;", dt),
-                  std::vector<double>{0., 0., 0., 2., 2., 0.});
+                  std::vector<double>{0., 0., 2., 0., 0., 2.});
     compare_array(run_simple_agg("SELECT mpoly FROM geospatial_test WHERE rowid = 1;", dt),
-                  std::vector<double>{0., 0., 0., 2., 2., 0.});
+                  std::vector<double>{0., 0., 2., 0., 0., 2.});
     ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
@@ -5918,10 +5918,10 @@ TEST(Select, GeoSpatial) {
     ASSERT_EQ("LINESTRING (1 0,2 2,3 3)",
               boost::get<std::string>(
                   v<NullableString>(run_simple_agg("SELECT l FROM geospatial_test WHERE rowid = 1;", dt, false))));
-    ASSERT_EQ("POLYGON ((0 0,0 2,2 0,0 0))",
+    ASSERT_EQ("POLYGON ((0 0,2 0,0 2,0 0))",
               boost::get<std::string>(
                   v<NullableString>(run_simple_agg("SELECT poly FROM geospatial_test WHERE rowid = 1;", dt, false))));
-    ASSERT_EQ("MULTIPOLYGON (((0 0,0 2,2 0,0 0)))",
+    ASSERT_EQ("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))",
               boost::get<std::string>(
                   v<NullableString>(run_simple_agg("SELECT mpoly FROM geospatial_test WHERE rowid = 1;", dt, false))));
     ASSERT_EQ("LINESTRING (5 0,10 10,11 11)",

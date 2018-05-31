@@ -1322,8 +1322,8 @@ bool importGeoFromGeometry(OGRGeometry* geom,
       // get the ring
       OGRLinearRing* exteriorRing = polygon->getExteriorRing();
       CHECK(exteriorRing);
-      // make it CW
-      if (!exteriorRing->isClockwise()) {
+      // make it CCW
+      if (exteriorRing->isClockwise()) {
         exteriorRing->reverseWindingOrder();
       }
       // prepare to add the ring
@@ -1369,8 +1369,8 @@ bool importGeoFromGeometry(OGRGeometry* geom,
         // get the ring
         OGRLinearRing* interiorRing = polygon->getInteriorRing(r);
         CHECK(interiorRing);
-        // make it CCW
-        if (interiorRing->isClockwise()) {
+        // make it CW
+        if (!interiorRing->isClockwise()) {
           interiorRing->reverseWindingOrder();
         }
         // prepare to add the ring
@@ -1433,8 +1433,8 @@ bool importGeoFromGeometry(OGRGeometry* geom,
         // get the ring
         OGRLinearRing* exteriorRing = polygon->getExteriorRing();
         CHECK(exteriorRing);
-        // make it CW
-        if (!exteriorRing->isClockwise()) {
+        // make it CCW
+        if (exteriorRing->isClockwise()) {
           exteriorRing->reverseWindingOrder();
         }
         // prepare to add the ring
@@ -1483,8 +1483,8 @@ bool importGeoFromGeometry(OGRGeometry* geom,
           // get the ring
           OGRLinearRing* interiorRing = polygon->getInteriorRing(r);
           CHECK(interiorRing);
-          // make it CCW
-          if (interiorRing->isClockwise()) {
+          // make it CW
+          if (!interiorRing->isClockwise()) {
             interiorRing->reverseWindingOrder();
           }
           // prepare to add ring
