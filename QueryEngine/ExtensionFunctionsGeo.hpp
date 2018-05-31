@@ -476,17 +476,17 @@ double ST_Distance_LineString_LineString_Geodesic(int8_t* l1,
   return distance_in_meters(l1x, l1y, l2x, l2y);
 }
 
-EXTENSION_NOINLINE
-double ST_Distance_Point_LineString(int8_t* p,
-                                    int64_t psize,
-                                    int8_t* l,
-                                    int64_t lsize,
-                                    int32_t lindex,
-                                    int32_t ic1,
-                                    int32_t isr1,
-                                    int32_t ic2,
-                                    int32_t isr2,
-                                    int32_t osr) {
+DEVICE ALWAYS_INLINE double distance_point_linestring(int8_t* p,
+                                                      int64_t psize,
+                                                      int8_t* l,
+                                                      int64_t lsize,
+                                                      int32_t lindex,
+                                                      int32_t ic1,
+                                                      int32_t isr1,
+                                                      int32_t ic2,
+                                                      int32_t isr2,
+                                                      int32_t osr,
+                                                      bool check_closed) {
   double px = coord_x(p, 0, ic1, isr1, osr);
   double py = coord_y(p, 1, ic1, isr1, osr);
 
@@ -515,7 +515,43 @@ double ST_Distance_Point_LineString(int8_t* p,
     if (dist > ldist)
       dist = ldist;
   }
+  if (l_num_coords > 4 && check_closed) {
+    // Also check distance to the closing edge between the first and the last points
+    l1x = coord_x(l, 0, ic2, isr2, osr);
+    l1y = coord_y(l, 1, ic2, isr2, osr);
+    double ldist = distance_point_line(px, py, l1x, l1y, l2x, l2y);
+    if (dist > ldist)
+      dist = ldist;
+  }
   return dist;
+}
+
+EXTENSION_NOINLINE
+double ST_Distance_Point_ClosedLineString(int8_t* p,
+                                          int64_t psize,
+                                          int8_t* l,
+                                          int64_t lsize,
+                                          int32_t lindex,
+                                          int32_t ic1,
+                                          int32_t isr1,
+                                          int32_t ic2,
+                                          int32_t isr2,
+                                          int32_t osr) {
+  return distance_point_linestring(p, psize, l, lsize, lindex, ic1, isr1, ic2, isr2, osr, true);
+}
+
+EXTENSION_NOINLINE
+double ST_Distance_Point_LineString(int8_t* p,
+                                    int64_t psize,
+                                    int8_t* l,
+                                    int64_t lsize,
+                                    int32_t lindex,
+                                    int32_t ic1,
+                                    int32_t isr1,
+                                    int32_t ic2,
+                                    int32_t isr2,
+                                    int32_t osr) {
+  return distance_point_linestring(p, psize, l, lsize, lindex, ic1, isr1, ic2, isr2, osr, false);
 }
 
 EXTENSION_NOINLINE
@@ -539,7 +575,7 @@ double ST_Distance_Point_Polygon(int8_t* p,
   double py = coord_y(p, 1, ic1, isr1, osr);
   if (!polygon_contains_point(poly, exterior_ring_num_coords, px, py, ic2, isr2, osr)) {
     // Outside the exterior ring
-    return ST_Distance_Point_LineString(p, psize, poly, exterior_ring_coords_size, 0, ic1, isr1, ic2, isr2, osr);
+    return ST_Distance_Point_ClosedLineString(p, psize, poly, exterior_ring_coords_size, 0, ic1, isr1, ic2, isr2, osr);
   }
   // Inside exterior ring
   // Advance to first interior ring
@@ -550,7 +586,8 @@ double ST_Distance_Point_Polygon(int8_t* p,
     auto interior_ring_coords_size = interior_ring_num_coords * compression_unit_size(ic2);
     if (polygon_contains_point(poly, interior_ring_num_coords, px, py, ic2, isr2, osr)) {
       // Inside an interior ring
-      return ST_Distance_Point_LineString(p, psize, poly, interior_ring_coords_size, 0, ic1, isr1, ic2, isr2, osr);
+      return ST_Distance_Point_ClosedLineString(
+          p, psize, poly, interior_ring_coords_size, 0, ic1, isr1, ic2, isr2, osr);
     }
     poly += interior_ring_coords_size;
   }
