@@ -358,8 +358,11 @@ void InsertOrderFragmenter::updateMetadata(const Catalog_Namespace::Catalog* cat
 void UpdelRoll::commitUpdate() {
   if (nullptr == catalog)
     return;
+  const auto td = catalog->getMetadataForTable(logicalTableId);
+  CHECK(td);
   // checkpoint all shards regardless, or epoch becomes out of sync
-  catalog->checkpoint(logicalTableId);
+  if (td->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL)
+    catalog->checkpoint(logicalTableId);
   // for each dirty fragment
   for (auto& cm : chunkMetadata)
     cm.first.first->fragmenter->updateMetadata(catalog, cm.first, *this);
@@ -373,8 +376,11 @@ void UpdelRoll::commitUpdate() {
 void UpdelRoll::cancelUpdate() {
   if (nullptr == catalog)
     return;
-  for (auto dit : dirtyChunks) {
-    catalog->get_dataMgr().free(dit.first->get_buffer());
-    dit.first->set_buffer(nullptr);
-  }
+  const auto td = catalog->getMetadataForTable(logicalTableId);
+  CHECK(td);
+  if (td->persistenceLevel != memoryLevel)
+    for (auto dit : dirtyChunks) {
+      catalog->get_dataMgr().free(dit.first->get_buffer());
+      dit.first->set_buffer(nullptr);
+    }
 }
