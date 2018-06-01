@@ -1948,7 +1948,9 @@ static ImportStatus import_thread_shapefile(
     }
 
     // transform it
-    pGeometry->transformTo(poGeographicSR);
+    // avoid GDAL error if not transformable
+    if (pGeometry->getSpatialReference())
+      pGeometry->transformTo(poGeographicSR);
 
     size_t col_idx = 0;
     try {
