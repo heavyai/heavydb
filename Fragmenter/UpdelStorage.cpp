@@ -153,7 +153,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
           auto cdl =
               (shard_ < 0) ? cd : catalog->getMetadataForColumn(catalog->getLogicalTableId(td->tableId), cd->columnId);
           CHECK(cdl);
-          StringDictionary* stringDict;
+          StringDictionary* stringDict{nullptr};
           if (lctype.is_string()) {
             CHECK(kENCODING_DICT == lctype.get_compression());
             auto dictDesc = const_cast<DictDescriptor*>(catalog->getMetadataForDict(cdl->columnType.get_comp_param()));
