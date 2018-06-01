@@ -3576,6 +3576,69 @@ TEST(Select, Joins_InnerJoin_Sharded) {
   }
 }
 
+TEST(Select, Joins_Negative_ShardKey) {  
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    
+    size_t num_shards = 1;
+    if (dt == ExecutorDeviceType::GPU && choose_shard_count() > 0) {
+      num_shards = choose_shard_count();
+    }
+
+    std::string drop_ddl_1 = "DROP TABLE IF EXISTS shard_test_negative_1;";
+    run_ddl_statement(drop_ddl_1);
+    std::string drop_ddl_2 = "DROP TABLE IF EXISTS shard_test_negative_2;";
+    run_ddl_statement(drop_ddl_2);
+
+    std::string table_ddl_1 =
+        "CREATE TABLE shard_test_negative_1 (i INTEGER, j TEXT ENCODING DICT(32), SHARD KEY(i)) WITH (shard_count = " +
+        std::to_string(num_shards) + ");";
+    run_ddl_statement(table_ddl_1);
+
+    std::string table_ddl_2 =
+        "CREATE TABLE shard_test_negative_2 (i INTEGER, j TEXT ENCODING DICT(32), SHARD KEY(i)) WITH (shard_count = " +
+        std::to_string(num_shards) + ");";
+    run_ddl_statement(table_ddl_2);
+
+    for (size_t i = 0; i < 5; i++) {
+      for (const auto table : {"shard_test_negative_1", "shard_test_negative_2"}) {
+        const std::string insert_query{"INSERT INTO " + std::string(table) + " VALUES(" + std::to_string(i - 1) + ", " +
+                                       std::to_string(i) + ");"};
+        run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      }
+    }
+
+    ASSERT_EQ(static_cast<int64_t>(-1),
+              v<int64_t>(run_simple_agg("SELECT i FROM shard_test_negative_1 WHERE i < 0;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(-1),
+              v<int64_t>(run_simple_agg("SELECT i FROM shard_test_negative_2 WHERE i < 0;", dt)));
+
+    ASSERT_EQ(static_cast<int64_t>(-1),
+              v<int64_t>(run_simple_agg("SELECT t1.i FROM shard_test_negative_1 t1 INNER JOIN shard_test_negative_2 t2 "
+                                        "ON t1.i = t2.i WHERE t2.i < 0;",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(-1),
+              v<int64_t>(run_simple_agg("SELECT t2.i FROM shard_test_negative_1 t1 INNER JOIN shard_test_negative_2 t2 "
+                                        "ON t1.i = t2.i WHERE t1.i < 0;",
+                                        dt)));
+
+    ASSERT_EQ("0",
+              boost::get<std::string>(
+                  v<NullableString>(run_simple_agg("SELECT t1.j FROM shard_test_negative_1 t1 INNER JOIN "
+                                                   "shard_test_negative_2 t2 ON t1.i = t2.i WHERE t2.i < 0;",
+                                                   dt))));
+    ASSERT_EQ(static_cast<int64_t>(3),
+              v<int64_t>(run_simple_agg("SELECT t1.i FROM shard_test_negative_1 t1 INNER JOIN shard_test_negative_2 t2 "
+                                        "ON t1.i = t2.i WHERE t2.i > 2;",
+                                        dt)));
+    ASSERT_EQ("4",
+              boost::get<std::string>(
+                  v<NullableString>(run_simple_agg("SELECT t1.j FROM shard_test_negative_1 t1 INNER JOIN "
+                                                   "shard_test_negative_2 t2 ON t1.i = t2.i WHERE t2.i > 2;",
+                                                   dt))));
+  }
+}
+
 TEST(Select, Joins_InnerJoin_AtLeastThreeTables) {
   auto save_watchdog = g_enable_watchdog;
   g_enable_watchdog = false;

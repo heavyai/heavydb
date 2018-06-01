@@ -18,6 +18,7 @@
 #include "CompareKeysInl.h"
 #include "HyperLogLogRank.h"
 #include "MurmurHash1Inl.h"
+#include "../Shared/shard_key.h"
 #ifdef __CUDACC__
 #include "DecodersImpl.h"
 #include "GpuRtConstants.h"
@@ -129,7 +130,8 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
     int64_t elem = type_info.is_unsigned
                        ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
                        : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
-    if (elem % shard_info.num_shards != shard_info.shard) {
+    size_t shard = SHARD_FOR_KEY(elem, shard_info.num_shards);
+    if (shard != shard_info.shard) {
       continue;
     }
     if (elem == type_info.null_val) {

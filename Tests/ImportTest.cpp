@@ -30,7 +30,7 @@
 #define BASE_PATH "./tmp"
 #endif
 
-#define CALCITEPORT 9093
+#define CALCITEPORT 39093
 
 using namespace std;
 using namespace Catalog_Namespace;
@@ -304,6 +304,43 @@ TEST_F(ImportTest, One_zip_with_many_csv_files) {
 
 TEST_F(ImportTest, One_7z_with_many_csv_files) {
   EXPECT_TRUE(import_test_local("trip_data.7z", 1000, 1.0));
+}
+
+// Sharding tests
+const char* create_table_trips_sharded =
+    "	CREATE TABLE trips (									"
+    "     id                      INTEGER,            "
+    "			medallion               TEXT ENCODING DICT,	"
+    "			hack_license            TEXT ENCODING DICT,	"
+    "			vendor_id               TEXT ENCODING DICT,	"
+    "			rate_code_id            SMALLINT,			"
+    "			store_and_fwd_flag      TEXT ENCODING DICT,	"
+    "			pickup_datetime         TIMESTAMP,			"
+    "			dropoff_datetime        TIMESTAMP,			"
+    "			passenger_count         SMALLINT,			"
+    "			trip_time_in_secs       INTEGER,				"
+    "			trip_distance           DECIMAL(14,2),		"
+    "			pickup_longitude        DECIMAL(14,2),		"
+    "			pickup_latitude         DECIMAL(14,2),		"
+    "			dropoff_longitude       DECIMAL(14,2),		"
+    "			dropoff_latitude        DECIMAL(14,2),		"
+    "     shard key (id)                           "
+    "			) WITH (FRAGMENT_SIZE=75000000, SHARD_COUNT=2);";
+class ImportTestSharded : public ::testing::Test {
+ protected:
+  virtual void SetUp() {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists trips;"););
+    ASSERT_NO_THROW(run_ddl_statement(create_table_trips_sharded););
+  }
+
+  virtual void TearDown() {
+    ASSERT_NO_THROW(run_ddl_statement("drop table trips;"););
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists geo;"););
+  }
+};
+
+TEST_F(ImportTestSharded, One_csv_file) {
+  EXPECT_TRUE(import_test_local("trip_data_9_sharded.csv", 100, 1.0));
 }
 
 // geo tests

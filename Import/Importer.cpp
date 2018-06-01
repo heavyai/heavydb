@@ -51,6 +51,7 @@
 #include "../Shared/mapd_glob.h"
 #include "../Shared/scope.h"
 #include "../Shared/import_helpers.h"
+#include "../Shared/shard_key.h"
 
 #include "Importer.h"
 #include "DataMgr/LockMgr.h"
@@ -2231,7 +2232,7 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
   }
   for (size_t i = 0; i < row_count; ++i) {
     const auto val = int_value_at(*shard_column_input_buffer, i);
-    const auto shard = val % shard_count;
+    const size_t shard = SHARD_FOR_KEY(val, shard_count);
     auto& shard_output_buffers = all_shard_import_buffers[shard];
     for (size_t col_idx = 0; col_idx < import_buffers.size(); ++col_idx) {
       const auto& input_buffer = import_buffers[col_idx];

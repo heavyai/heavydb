@@ -38,6 +38,7 @@
 #include "Shared/checked_alloc.h"
 #include "Shared/scope.h"
 #include "Shared/measure.h"
+#include "Shared/shard_key.h"
 
 #include "AggregatedColRange.h"
 #include "StringDictionaryGenerations.h"
@@ -2365,7 +2366,9 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     }
     ++col_idx;
     if (col_idx == static_cast<size_t>(table_descriptor->shardedColumnId)) {
-      shard = shard_tables[int_col_val % shard_tables.size()];
+      const auto shard_count = shard_tables.size();
+      const size_t shard_idx = SHARD_FOR_KEY(int_col_val, shard_count);
+      shard = shard_tables[shard_idx];
     }
   }
   for (const auto& kv : col_buffers) {
