@@ -340,7 +340,7 @@ class ImportTestSharded : public ::testing::Test {
 };
 
 TEST_F(ImportTestSharded, One_csv_file) {
-  EXPECT_TRUE(import_test_local("trip_data_9_sharded.csv", 100, 1.0));
+  EXPECT_TRUE(import_test_local("sharded_trip_data_9.csv", 100, 1.0));
 }
 
 // geo tests
