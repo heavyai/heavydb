@@ -2445,6 +2445,12 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
       if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT && arg_ti.is_array()) {
         throw std::runtime_error("APPROX_COUNT_DISTINCT on arrays not supported yet");
       }
+      if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT && arg_ti.is_geometry()) {
+        throw std::runtime_error("APPROX_COUNT_DISTINCT on geometry columns not supported");
+      }
+      if (agg_info.is_distinct && arg_ti.is_geometry()) {
+        throw std::runtime_error("COUNT DISTINCT on geometry columns not supported");
+      }
       GroupByAndAggregate::ColRangeInfo no_range_info{GroupByColRangeType::OneColGuessedRange, 0, 0, 0, false};
       auto arg_range_info = arg_ti.is_fp() ? no_range_info : getExprRangeInfo(agg_expr->get_arg());
       CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::StdSet};
@@ -2460,7 +2466,7 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
         }
       }
       if (arg_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange &&
-          !arg_ti.is_array()) {  // TODO(alex): allow bitmap implementation for arrays
+          !(arg_ti.is_array() || arg_ti.is_geometry())) {  // TODO(alex): allow bitmap implementation for arrays
         if (arg_range_info.isEmpty()) {
           count_distinct_descriptors.emplace_back(CountDistinctDescriptor{
               CountDistinctImplType::Bitmap, 0, 64, agg_info.agg_kind == kAPPROX_COUNT_DISTINCT, device_type_, 1});
@@ -2476,7 +2482,7 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
         }
       }
       if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT && count_distinct_impl_type == CountDistinctImplType::StdSet &&
-          !arg_ti.is_array()) {
+          !(arg_ti.is_array() || arg_ti.is_geometry())) {
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
       }
       if (g_enable_watchdog && count_distinct_impl_type == CountDistinctImplType::StdSet) {
@@ -3382,7 +3388,8 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
       throw CompilationRetryNoCompaction();
     }
     llvm::Value* str_target_lv{nullptr};
-    if (target_lvs.size() == 3 && !agg_info.sql_type.is_geometry()) {
+    const bool agg_has_geo = agg_info.is_agg ? agg_info.agg_arg_type.is_geometry() : agg_info.sql_type.is_geometry();
+    if (target_lvs.size() == 3 && !agg_has_geo) {
       // none encoding string, pop the packed pointer + length since
       // it's only useful for IS NULL checks and assumed to be only
       // two components (pointer and length) for the purpose of projection
@@ -3410,9 +3417,13 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
         target_lvs.push_back(target_lvs.front());
       }
     } else {
-      if (agg_info.sql_type.is_geometry()) {
-        CHECK_EQ(static_cast<size_t>(2 * agg_info.sql_type.get_physical_coord_cols()), target_lvs.size());
-        CHECK_EQ(agg_fn_names.size(), target_lvs.size());
+      if (agg_has_geo) {
+        if (agg_info.is_agg) {
+          CHECK_EQ(static_cast<size_t>(agg_info.agg_arg_type.get_physical_coord_cols()), target_lvs.size());
+        } else {
+          CHECK_EQ(static_cast<size_t>(2 * agg_info.sql_type.get_physical_coord_cols()), target_lvs.size());
+          CHECK_EQ(agg_fn_names.size(), target_lvs.size());
+        }
       } else {
         CHECK(str_target_lv || (agg_fn_names.size() == target_lvs.size()));
         CHECK(target_lvs.size() == 1 || target_lvs.size() == 2);
@@ -3470,7 +3481,6 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
     const bool lazy_fetched{executor_->plan_state_->isLazyFetchColumn(target_expr)};
     for (const auto& agg_base_name : agg_fn_names) {
       if (agg_info.is_distinct && arg_expr->get_type_info().is_array()) {
-        CHECK(agg_info.is_distinct);
         CHECK_EQ(static_cast<size_t>(query_mem_desc_.agg_col_widths[agg_out_off].actual), sizeof(int64_t));
         // TODO(miyu): check if buffer may be columnar here
         CHECK(!outputColumnar());
@@ -3571,7 +3581,7 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
         codegenCountDistinct(target_idx, target_expr, agg_args, query_mem_desc_, co.device_type_);
       } else {
         const auto& arg_ti = agg_info.agg_arg_type;
-        if (need_skip_null) {
+        if (need_skip_null && !arg_ti.is_geometry()) {
           agg_fname += "_skip_val";
           auto null_lv =
               executor_->castToTypeIn(arg_ti.is_fp() ? static_cast<llvm::Value*>(executor_->inlineFpNull(arg_ti))

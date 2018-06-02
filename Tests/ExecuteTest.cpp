@@ -3576,10 +3576,10 @@ TEST(Select, Joins_InnerJoin_Sharded) {
   }
 }
 
-TEST(Select, Joins_Negative_ShardKey) {  
+TEST(Select, Joins_Negative_ShardKey) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    
+
     size_t num_shards = 1;
     if (dt == ExecutorDeviceType::GPU && choose_shard_count() > 0) {
       num_shards = choose_shard_count();
@@ -5905,8 +5905,17 @@ TEST(Select, Deleted) {
 TEST(Select, GeoSpatial) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(p,p) < 0.1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT count(p) FROM geospatial_test;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT count(l) FROM geospatial_test;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT count(poly) FROM geospatial_test;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT count(mpoly) FROM geospatial_test;", dt)));          
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance('POINT(0 0)', p) < 100.0;", dt)));
@@ -6381,6 +6390,12 @@ TEST(Select, GeoSpatial) {
                                  "from geospatial_test limit 1;",
                                  dt)),
         static_cast<double>(10000.0));
+
+    // SQLw/out geo support
+    EXPECT_THROW(run_multiple_agg("SELECT count(distinct p) FROM geospatial_test;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT approx_count_distinct(p) FROM geospatial_test;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT avg(p) FROM geospatial_test;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT p, count(*) FROM geospatial_test GROUP BY p;", dt), std::runtime_error);
   }
 }
 
