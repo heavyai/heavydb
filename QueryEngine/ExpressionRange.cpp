@@ -730,6 +730,10 @@ ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
       return ExpressionRange::makeIntRange(0, 59, 0, has_nulls);
     case kSECOND:
       return ExpressionRange::makeIntRange(0, 60, 0, has_nulls);
+    case kMILLISECOND:
+      return ExpressionRange::makeIntRange(0, 999, 0, has_nulls);
+    case kMICROSECOND:
+      return ExpressionRange::makeIntRange(0, 999999, 0, has_nulls);
     case kDOW:
       return ExpressionRange::makeIntRange(0, 6, 0, has_nulls);
     case kISODOW:

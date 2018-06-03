@@ -32,15 +32,17 @@
  */
 
 #include <time.h>
+#include <math.h>
+#include "TimeGM.h"
 
 /* Number of days per month (except for February in leap years). */
-static const int monoff[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
+// static const int monoff[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
 
-static int is_leap_year(int year) {
+int TimeGM::is_leap_year(int year) {
   return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
 }
 
-static int leap_days(int y1, int y2) {
+int TimeGM::leap_days(int y1, int y2) {
   --y1;
   --y2;
   return (y2 / 4 - y1 / 4) - (y2 / 100 - y1 / 100) + (y2 / 400 - y1 / 400);
@@ -49,7 +51,7 @@ static int leap_days(int y1, int y2) {
 /*
  * Code adapted from Python 2.4.1 sources (Lib/calendar.py).
  */
-time_t my_timegm(const struct tm* tm) {
+time_t TimeGM::my_timegm(const struct tm* tm) {
   int year;
   time_t days;
   time_t hours;
@@ -71,4 +73,14 @@ time_t my_timegm(const struct tm* tm) {
   seconds -= tm->tm_gmtoff;
 
   return seconds;
+}
+
+time_t TimeGM::my_timegm(const struct tm* tm, const int& fsc) {
+  time_t sec;
+  time_t fracsec;
+
+  sec = my_timegm(tm);
+  fracsec = (sec * pow(10.0, 6.0)) + fsc;
+
+  return fracsec;
 }

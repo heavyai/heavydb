@@ -51,6 +51,16 @@ DEVICE int extract_second(const time_t* tim_p) {
   return (int)((long)lcltime % SECSPERMIN);
 }
 
+DEVICE int extract_millisecond(const time_t* tim_p) {
+  const time_t lcltime = *tim_p;
+  return (int)((long)lcltime % MILLISECSPERSEC);
+}
+
+DEVICE int extract_microsecond(const time_t* tim_p) {
+  const time_t lcltime = *tim_p;
+  return (int)((long)lcltime % MICROSECSPERSEC);
+}
+
 DEVICE int extract_dow(const time_t* tim_p) {
   long days, rem;
   int weekday;
@@ -218,38 +228,45 @@ DEVICE tm* gmtime_r_newlib(const time_t* tim_p, tm* res) {
  */
 extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field, time_t timeval) {
   // We have fast paths for the 5 fields below - do not need to do full gmtime
+  time_t stimeval = (int64_t)(timeval / MICROSECSPERSEC);
   switch (field) {
     case kEPOCH:
       return timeval;
     case kQUARTERDAY:
-      return extract_quarterday(&timeval);
+      return extract_quarterday(&stimeval);
     case kHOUR:
-      return extract_hour(&timeval);
+      return extract_hour(&stimeval);
     case kMINUTE:
-      return extract_minute(&timeval);
+      return extract_minute(&stimeval);
     case kSECOND:
-      return extract_second(&timeval);
+      return extract_second(&stimeval);
+    case kMILLISECOND: {
+      time_t mtimeval = (int64_t)(timeval / MILLISECSPERSEC);
+      return extract_millisecond(&mtimeval);
+    }
+    case kMICROSECOND:
+      return extract_microsecond(&timeval);
     case kDOW:
-      return extract_dow(&timeval);
+      return extract_dow(&stimeval);
     case kISODOW: {
-      int64_t dow = extract_dow(&timeval);
+      int64_t dow = extract_dow(&stimeval);
       return (dow == 0 ? 7 : dow);
     }
     case kMONTH: {
-      if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
-        return extract_month_fast(&timeval);
+      if (stimeval >= 0L && stimeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
+        return extract_month_fast(&stimeval);
       }
       break;
     }
     case kQUARTER: {
-      if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
-        return extract_quarter_fast(&timeval);
+      if (stimeval >= 0L && stimeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
+        return extract_quarter_fast(&stimeval);
       }
       break;
     }
     case kYEAR: {
-      if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
-        return extract_year_fast(&timeval);
+      if (stimeval >= 0L && stimeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
+        return extract_year_fast(&stimeval);
       }
       break;
     }
@@ -258,7 +275,7 @@ extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field, time_
   }
 
   tm tm_struct;
-  gmtime_r_newlib(&timeval, &tm_struct);
+  gmtime_r_newlib(&stimeval, &tm_struct);
   switch (field) {
     case kYEAR:
       return 1900 + tm_struct.tm_year;
@@ -271,8 +288,8 @@ extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field, time_
     case kDOY:
       return tm_struct.tm_yday + 1;
     case kWEEK: {
-      int64_t doy = tm_struct.tm_yday;          // numbered from 0
-      int64_t dow = extract_dow(&timeval) + 1;  // use Sunday 1 - Saturday 7
+      int64_t doy = tm_struct.tm_yday;           // numbered from 0
+      int64_t dow = extract_dow(&stimeval) + 1;  // use Sunday 1 - Saturday 7
       int64_t week = (doy / 7) + 1;
       // now adjust for offset at start of year
       //      S M T W T F S

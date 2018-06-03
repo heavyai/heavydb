@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <math.h>
 #include "DateAdd.h"
 #include "ExtractFromTime.h"
 
@@ -91,17 +92,21 @@ time_t skip_months(time_t timeval, int64_t months_to_go) {
 
 extern "C" NEVER_INLINE DEVICE time_t DateAdd(DateaddField field, int64_t number, time_t timeval) {
   switch (field) {
-    case daSECOND:
-      /* this is the limit of current granularity */
+    case daMICROSECOND:
+      // highest level of granularity
       return timeval + number;
+    case daMILLISECOND:
+      return timeval + number * MILLISECSPERSEC;
+    case daSECOND:
+      return timeval + number * MICROSECSPERSEC;
     case daMINUTE:
-      return timeval + number * SECSPERMIN;
+      return timeval + number * SECSPERMIN * MICROSECSPERSEC;
     case daHOUR:
-      return timeval + number * SECSPERHOUR;
+      return timeval + number * SECSPERHOUR * MICROSECSPERSEC;
     case daDAY:
-      return timeval + number * SECSPERDAY;
+      return timeval + number * SECSPERDAY * MICROSECSPERSEC;
     case daWEEK:
-      return timeval + number * DAYSPERWEEK * SECSPERDAY;
+      return timeval + number * DAYSPERWEEK * SECSPERDAY * MICROSECSPERSEC;
     default:
       break;
   }
@@ -134,7 +139,8 @@ extern "C" NEVER_INLINE DEVICE time_t DateAdd(DateaddField field, int64_t number
 #endif
   }
   months_to_go *= number;
-  return skip_months(timeval, months_to_go);
+  time_t stimeval = (int64_t)(timeval / MICROSECSPERSEC);
+  return skip_months(stimeval, months_to_go) * MICROSECSPERSEC;
 }
 
 extern "C" DEVICE time_t DateAddNullable(const DateaddField field,

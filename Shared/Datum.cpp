@@ -30,6 +30,7 @@
 #include <cmath>
 #include "sqltypes.h"
 #include "StringTransform.h"
+#include "TimeGM.h"
 
 std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
                                                      "BOOLEAN",
@@ -100,9 +101,6 @@ int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
   return result * sign;
 }
 
-// had to port timegm because the one on MacOS is horrendously slow.
-extern time_t my_timegm(const struct tm* tm);
-
 /*
  * @brief convert string to a datum
  */
@@ -150,11 +148,11 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       tm_struct.tm_mon = 0;
       tm_struct.tm_year = 70;
       tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = tm_struct.tm_gmtoff = 0;
-      d.timeval = my_timegm(&tm_struct);
+      d.timeval = TimeGM::instance().my_timegm(&tm_struct);
       break;
     }
     case kTIMESTAMP: {
-      std::tm tm_struct;
+      std::tm tm_struct = {0};
       // not sure in advance if it is used so need to zero before processing
       tm_struct.tm_gmtoff = 0;
       char* tp;
@@ -179,7 +177,6 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       else
         throw std::runtime_error("Invalid timestamp break string " + s);
       // now parse the time
-      // @TODO handle fractional seconds
       char* p = strptime(tp, "%T %z", &tm_struct);
       if (!p)
         p = strptime(tp, "%T", &tm_struct);
@@ -217,11 +214,28 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       if (!p)
         throw std::runtime_error("Invalid timestamp time string " + s);
       tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = 0;
-      d.timeval = my_timegm(&tm_struct);
+      // handle fractional seconds
+      // TODO: better exception handling for fractions
+      if (*p == '.') {
+        p++;
+        int nsec = strlen(p);
+        std::string st(p);
+        if (nsec > 6) {
+          // extract first 6 sec
+          st = st.substr(0, 6);
+        } else if (nsec >= 0 && nsec < 6) {
+          char d = '0';
+          st += std::string(6 - nsec, d);
+        }
+        int fsc = std::stoi(st);
+        d.timeval = TimeGM::instance().my_timegm(&tm_struct, fsc);
+        break;
+      } else
+        d.timeval = TimeGM::instance().my_timegm(&tm_struct, 0);
       break;
     }
     case kDATE: {
-      std::tm tm_struct;
+      std::tm tm_struct = {0};
       // not sure in advance if it is used so need to zero before processing
       tm_struct.tm_gmtoff = 0;
       char* tp;
@@ -243,7 +257,7 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       }
       tm_struct.tm_sec = tm_struct.tm_min = tm_struct.tm_hour = 0;
       tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = tm_struct.tm_gmtoff = 0;
-      d.timeval = my_timegm(&tm_struct);
+      d.timeval = TimeGM::instance().my_timegm(&tm_struct);
       break;
     }
     case kPOINT:
@@ -293,11 +307,14 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
       return std::string(buf);
     }
     case kTIMESTAMP: {
+      std::string t = std::to_string(d.timeval / pow(10.0, 6.0));
+      time_t sec = std::stoll(t.substr(0, t.find(".")));
+      t = t.substr(t.find("."));
       std::tm tm_struct;
-      gmtime_r(&d.timeval, &tm_struct);
+      gmtime_r(&sec, &tm_struct);
       char buf[20];
       strftime(buf, 20, "%F %T", &tm_struct);
-      return std::string(buf);
+      return std::string(buf) += t;
     }
     case kDATE: {
       std::tm tm_struct;

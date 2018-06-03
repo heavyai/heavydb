@@ -33,6 +33,7 @@
 #include <limits>
 #include <stdexcept>
 #include <typeinfo>
+#include <math.h>
 #include "../Catalog/Catalog.h"
 #include "../Catalog/SharedDictionaryValidator.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
@@ -846,6 +847,10 @@ std::string extract_field_name(const ExtractField fieldno) {
       return "minute";
     case kSECOND:
       return "second";
+    case kMILLISECOND:
+      return "millisecond";
+    case kMICROSECOND:
+      return "microsecond";
     case kDOW:
       return "dow";
     case kISODOW:
@@ -907,6 +912,10 @@ ExtractField ExtractExpr::to_extract_field(const std::string& field) {
     fieldno = kMINUTE;
   else if (boost::iequals(field, "second"))
     fieldno = kSECOND;
+  else if (boost::iequals(field, "millisecond"))
+    fieldno = kMILLISECOND;
+  else if (boost::iequals(field, "microsecond"))
+    fieldno = kMICROSECOND;
   else if (boost::iequals(field, "dow"))
     fieldno = kDOW;
   else if (boost::iequals(field, "isodow"))
@@ -1761,14 +1770,16 @@ void SQLType::check_type() {
         throw std::runtime_error("DECIMAL and NUMERIC must have precision larger than scale.");
       break;
     case kTIMESTAMP:
+      if (param1 == -1)
+        param1 = 0;                                                       // set default to 0
+      else if (param1 != 0 && param1 != 3 && param1 != 6 && param1 != 9)  // // support milli/micro/nanosec precision
+        throw std::runtime_error("Only TIMESTAMP(n) where n = (0,3,6,9) are supported now.");
+      break;
     case kTIME:
       if (param1 == -1)
         param1 = 0;      // default precision is 0
       if (param1 > 0) {  // @TODO(wei) support sub-second precision later.
-        if (type == kTIMESTAMP)
-          throw std::runtime_error("Only TIMESTAMP(0) is supported now.");
-        else
-          throw std::runtime_error("Only TIME(0) is supported now.");
+        throw std::runtime_error("Only TIME(0) is supported now.");
       }
       break;
     case kPOINT:

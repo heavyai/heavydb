@@ -173,6 +173,8 @@ inline std::string thrift_to_name(const TTypeInfo& ti) {
   if (type == kDECIMAL || type == kNUMERIC) {
     internal_ti.set_precision(ti.precision);
     internal_ti.set_scale(ti.scale);
+  } else if (type == kTIMESTAMP) {
+    internal_ti.set_precision(ti.precision);
   }
   if (IS_GEO(type)) {
     internal_ti.set_subtype(static_cast<SQLTypes>(ti.precision));

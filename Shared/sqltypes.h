@@ -297,9 +297,12 @@ class SQLTypeInfo {
         srid_string = ", " + std::to_string(get_output_srid());
       return type_name[(int)subtype] + "(" + type_name[(int)type] + srid_string + ")";
     }
-    std::string ps = (type == kDECIMAL || type == kNUMERIC || subtype == kDECIMAL || subtype == kNUMERIC)
-                         ? "(" + std::to_string(dimension) + "," + std::to_string(scale) + ")"
-                         : "";
+    std::string ps = "";
+    if (type == kDECIMAL || type == kNUMERIC || subtype == kDECIMAL || subtype == kNUMERIC) {
+      ps = "(" + std::to_string(dimension) + "," + std::to_string(scale) + ")";
+    } else if (type == kTIMESTAMP) {
+      ps = "(" + std::to_string(dimension) + ")";
+    }
     return (type == kARRAY) ? type_name[(int)subtype] + ps + "[]" : type_name[(int)type] + ps;
   }
   inline std::string get_compression_name() const { return comp_name[(int)compression]; }
@@ -534,10 +537,11 @@ class SQLTypeInfo {
             assert(false);
         }
         break;
-      case kTIME:
       case kTIMESTAMP:
-        if (dimension > 0)
-          assert(false);  // not supported yet
+        if (dimension != 0 && dimension != 3 && dimension != 6 && dimension != 9)
+          assert(false);  // support milli/micro/nanosec precisions
+        break;
+      case kTIME:
       case kINTERVAL_DAY_TIME:
       case kINTERVAL_YEAR_MONTH:
       case kDATE:

@@ -21,6 +21,8 @@
 #include <time.h>
 #include "../Shared/funcannotations.h"
 
+#define MICROSECSPERSEC 1000000L
+#define MILLISECSPERSEC 1000L
 #define SECSPERMIN 60L
 #define MINSPERHOUR 60L
 #define HOURSPERDAY 24L
@@ -69,6 +71,8 @@ enum ExtractField {
   kHOUR,
   kMINUTE,
   kSECOND,
+  kMILLISECOND,
+  kMICROSECOND,
   kDOW,
   kISODOW,
   kDOY,

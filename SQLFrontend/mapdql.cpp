@@ -411,12 +411,14 @@ std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_in
       return buf;
     }
     case TDatumType::TIMESTAMP: {
-      time_t t = datum.val.int_val;
+      std::string t = std::to_string(datum.val.int_val / pow(10.0, 6.0));
+      time_t sec = std::stoll(t.substr(0, t.find(".")));
+      t = t.substr(t.find("."));
       std::tm tm_struct;
-      gmtime_r(&t, &tm_struct);
+      gmtime_r(&sec, &tm_struct);
       char buf[20];
       strftime(buf, 20, "%F %T", &tm_struct);
-      return buf;
+      return std::string(buf) += t;
     }
     case TDatumType::DATE: {
       time_t t = datum.val.int_val;
@@ -501,7 +503,7 @@ TDatum columnar_val_to_datum(const TColumn& col, const size_t row_idx, const TTy
     case TDatumType::POLYGON:
     case TDatumType::MULTIPOLYGON: {
       datum.val.str_val = col.data.str_col[row_idx];
-      break; 
+      break;
     }
     default:
       CHECK(false);
@@ -1049,9 +1051,7 @@ int main(int argc, char** argv) {
   try {
     transport->open();
   } catch (...) {
-    std::cout
-        << "Failed to open transport. Is mapd_server running?"
-        << std::endl;
+    std::cout << "Failed to open transport. Is mapd_server running?" << std::endl;
     return 1;
   }
 
