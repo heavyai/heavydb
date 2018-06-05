@@ -144,6 +144,10 @@ void create_or_append_validity(const ScalarTargetValue& value,
     is_valid = inline_int_null_val(col_type) != static_cast<int32_t>(*pvalue);
   } else if (col_type.is_integer()) {
     is_valid = inline_int_null_val(col_type) != static_cast<int64_t>(*pvalue);
+  } else if (col_type.get_type() == kTIMESTAMP) {
+    is_valid = inline_int_null_val(col_type) != static_cast<int64_t>(*pvalue);
+  } else if (col_type.get_type() == kTIME || col_type.get_type() == kDATE) {
+    is_valid = inline_int_null_val(col_type) != static_cast<int64_t>(*pvalue);
   } else {
     CHECK(col_type.is_fp());
     is_valid = inline_fp_null_val(col_type) != static_cast<double>(*pvalue);
@@ -176,24 +180,29 @@ static TypePtr get_arrow_type(const SQLTypeInfo& mapd_type, const std::shared_pt
       return float32();
     case kDOUBLE:
       return float64();
+    case kCHAR:
+    case kVARCHAR:
     case kTEXT:
       if (is_dict_enc_str(mapd_type)) {
         CHECK(dict_values);
         const auto index_type = get_arrow_type(get_dict_index_type_info(mapd_type), nullptr);
         return dictionary(index_type, dict_values);
       }
+      return utf8();
     case kDECIMAL:
     case kNUMERIC:
-    case kCHAR:
-    case kVARCHAR:
+      return decimal(mapd_type.get_precision(), mapd_type.get_scale());
     case kTIME:
-    case kTIMESTAMP:
+      return time32(TimeUnit::SECOND);
     case kDATE:
+      return date32();
+    case kTIMESTAMP:
+      return timestamp(TimeUnit::SECOND);
     case kARRAY:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
     default:
-      throw std::runtime_error(mapd_type.get_type_name() + " is not supported in temporary table.");
+      throw std::runtime_error(mapd_type.get_type_name() + " is not supported in Arrow result sets.");
   }
   return nullptr;
 }
@@ -218,6 +227,23 @@ struct ColumnBuilder {
   }
 
   void reserve(size_t row_count) { ARROW_THROW_NOT_OK(builder->Reserve(static_cast<int64_t>(row_count))); }
+
+  template <typename BuilderType, typename C_TYPE>
+  inline void append_to_datebuilder(const ValueArray& values, const std::shared_ptr<std::vector<bool>>& is_valid) {
+    const std::vector<C_TYPE>& vals = boost::get<std::vector<C_TYPE>>(values);
+
+    std::vector<C_TYPE> vals_scaled(vals.size());
+    std::transform(
+        vals.begin(), vals.end(), vals_scaled.begin(), [](C_TYPE a) -> C_TYPE { return a / (60 * 60 * 24); });
+
+    auto typed_builder = static_cast<BuilderType*>(this->builder.get());
+    if (this->field->nullable()) {
+      CHECK(is_valid.get());
+      ARROW_THROW_NOT_OK(typed_builder->Append(vals_scaled, *is_valid));
+    } else {
+      ARROW_THROW_NOT_OK(typed_builder->Append(vals_scaled));
+    }
+  }
 
   template <typename BuilderType, typename C_TYPE>
   inline void append_to_builder(const ValueArray& values, const std::shared_ptr<std::vector<bool>>& is_valid) {
@@ -265,9 +291,21 @@ struct ColumnBuilder {
       case kDOUBLE:
         append_to_builder<DoubleBuilder, double>(values, is_valid);
         break;
+      case kTIME:
+        append_to_builder<Time32Builder, int32_t>(values, is_valid);
+        break;
+      case kTIMESTAMP:
+        append_to_builder<TimestampBuilder, int64_t>(values, is_valid);
+        break;
+      case kDATE:
+        append_to_datebuilder<Date32Builder, int32_t>(values, is_valid);
+        break;
+      case kCHAR:
+      case kVARCHAR:
+      case kTEXT:
       default:
         // TODO(miyu): support more scalar types.
-        CHECK(false);
+        throw std::runtime_error(this->col_type.get_type_name() + " is not supported in Arrow result sets.");
     }
   }
 };
@@ -414,9 +452,21 @@ std::shared_ptr<arrow::RecordBatch> ResultSet::getArrowBatch(const std::shared_p
             create_or_append_value<double, double>(*scalar_value, value_seg[j], entry_count);
             create_or_append_validity<double>(*scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
             break;
+          case kTIME:
+            create_or_append_value<int32_t, int64_t>(*scalar_value, value_seg[j], entry_count);
+            create_or_append_validity<int64_t>(*scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
+            break;
+          case kDATE:
+            create_or_append_value<int32_t, int64_t>(*scalar_value, value_seg[j], entry_count);
+            create_or_append_validity<int64_t>(*scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
+            break;
+          case kTIMESTAMP:
+            create_or_append_value<int64_t, int64_t>(*scalar_value, value_seg[j], entry_count);
+            create_or_append_validity<int64_t>(*scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
+            break;
           default:
             // TODO(miyu): support more scalar types.
-            CHECK(false);
+            throw std::runtime_error(column.col_type.get_type_name() + " is not supported in Arrow result sets.");
         }
       }
     }
