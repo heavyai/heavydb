@@ -32,7 +32,8 @@ function download_make_install() {
     popd
 }
 
-ARROW_VERSION=apache-arrow-0.7.1
+# Apache Arrow 0.9.x dev version
+ARROW_VERSION=c0b0e3300ee9747e9eb781b517f0b3dc7c661ada
 
 function install_arrow() {
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz
@@ -89,7 +90,7 @@ function install_awscpp() {
     os=`uname`
     if [ "$os" = "Darwin" ]; then
         sudo make install
-    else 
+    else
         make install
     fi
 

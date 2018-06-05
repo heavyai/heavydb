@@ -347,7 +347,7 @@ std::shared_ptr<arrow::RecordBatch> ResultSet::getArrowBatch(const std::shared_p
 
   const auto entry_count = entryCount();
   if (!entry_count) {
-    return std::make_shared<arrow::RecordBatch>(schema, 0, result_columns);
+    return arrow::RecordBatch::Make(schema, 0, result_columns);
   }
   const auto col_count = colCount();
   size_t row_count = 0;
@@ -460,7 +460,7 @@ std::shared_ptr<arrow::RecordBatch> ResultSet::getArrowBatch(const std::shared_p
   for (size_t i = 0; i < col_count; ++i) {
     result_columns.push_back(builders[i].finish());
   }
-  return std::make_shared<arrow::RecordBatch>(schema, row_count, result_columns);
+  return arrow::RecordBatch::Make(schema, row_count, result_columns);
 }
 
 std::shared_ptr<arrow::RecordBatch> ResultSet::convertToArrow(const std::vector<std::string>& col_names,
