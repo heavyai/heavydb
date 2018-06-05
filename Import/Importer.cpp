@@ -3588,7 +3588,12 @@ std::vector<std::string> Importer::gdalGetAllFilesInArchive(const std::string& a
   // gather the files recursively
   gdalGatherFilesInArchiveRecursive(archive_path, files);
 
-  // return everything we found
+  // convert to relative paths inside archive
+  for (auto& file : files) {
+    file.erase(0, archive_path.size() + 1);  // remove archive_path and the slash
+  }
+
+  // done
   return files;
 }
 

@@ -2066,7 +2066,8 @@ bool is_a_supported_geo_file(const std::string& file_name, bool include_gz) {
 }
 
 std::string find_first_geo_file_in_archive(const std::string& archive_path,
-                                           const Importer_NS::CopyParams& copy_params) {
+                                           const Importer_NS::CopyParams& copy_params,
+                                           bool throw_exception_if_not_found) {
   // first check it exists
   if (!Importer_NS::Importer::gdalFileOrDirectoryExists(archive_path, copy_params)) {
     THROW_MAPD_EXCEPTION("Archive does not exist: " + convert_path_from_vsi(archive_path));
@@ -2093,12 +2094,18 @@ std::string find_first_geo_file_in_archive(const std::string& archive_path,
     }
   }
 
-  // did we find anything
+  // if we didn't find anything
   if (!found_suitable_file) {
-    THROW_MAPD_EXCEPTION("Failed to find any supported geo files in Archive: " + convert_path_from_vsi(archive_path));
+    if (throw_exception_if_not_found) {
+      // if called from detect or import, we throw
+      THROW_MAPD_EXCEPTION("Failed to find any supported geo files in Archive: " + convert_path_from_vsi(archive_path));
+    } else {
+      // if called from get_first_geo, we return an empty string
+      file_name.clear();
+    }
   }
 
-  // return what we found
+  // done
   return file_name;
 }
 
@@ -2124,7 +2131,10 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
     bool is_archive = false;
     file_name = convert_path_to_vsi(file_name, copy_params, is_archive);
     if (is_archive) {
-      file_name = find_first_geo_file_in_archive(file_name, copy_params);
+      std::string geo_file = find_first_geo_file_in_archive(file_name, copy_params, true);
+      if (geo_file.size()) {
+        file_name = file_name + std::string("/") + geo_file;
+      }
     }
   }
 
@@ -2833,7 +2843,10 @@ void MapDHandler::import_geo_table(const TSessionId& session,
   bool is_archive = false;
   file_name = convert_path_to_vsi(file_name, copy_params, is_archive);
   if (is_archive) {
-    file_name = find_first_geo_file_in_archive(file_name, copy_params);
+    std::string geo_file = find_first_geo_file_in_archive(file_name, copy_params, true);
+    if (geo_file.size()) {
+      file_name = file_name + std::string("/") + geo_file;
+    }
   }
 
   // if we get here, and we don't have the actual filename
@@ -2927,10 +2940,15 @@ void MapDHandler::get_first_geo_file_in_archive(std::string& _return,
   bool is_archive = false;
   archive_path = convert_path_to_vsi(archive_path, thrift_to_copyparams(copy_params), is_archive);
   if (is_archive) {
-    // find the single most likely file within
-    _return = find_first_geo_file_in_archive(archive_path, thrift_to_copyparams(copy_params));
-    // and convert it back to public form
-    _return = convert_path_from_vsi(_return);
+    // find the single most likely file within (do not throw exception if none)
+    std::string geo_file = find_first_geo_file_in_archive(archive_path, thrift_to_copyparams(copy_params), false);
+    if (geo_file.size()) {
+      // prepend it with the original path
+      _return = archive_path_in + std::string("/") + geo_file;
+    } else {
+      // just return the original path
+      _return = archive_path_in;
+    }
   } else {
     // just return the original path
     _return = archive_path_in;
@@ -2955,9 +2973,9 @@ void MapDHandler::get_all_files_in_archive(std::vector<std::string>& _return,
   if (is_archive) {
     // get files within
     _return = Importer_NS::Importer::gdalGetAllFilesInArchive(archive_path, thrift_to_copyparams(copy_params));
-    // convert them all back to public form
+    // prepend them all with original path
     for (auto& s : _return) {
-      s = convert_path_from_vsi(s);
+      s = archive_path_in + std::string("/") + s;
     }
   }
 }
