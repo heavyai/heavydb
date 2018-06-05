@@ -147,7 +147,7 @@ std::shared_ptr<Analyzer::Expr> TimestampLiteral::analyze(const Catalog_Namespac
 
 std::shared_ptr<Analyzer::Expr> TimestampLiteral::get(const time_t timestampval) {
   Datum d;
-  d.timeval = timestampval;
+  d.timeval = timestampval * MICROSEC;
   return makeExpr<Analyzer::Constant>(kTIMESTAMP, false, d);
 }
 

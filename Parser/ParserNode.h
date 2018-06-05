@@ -37,6 +37,8 @@
 
 #include <functional>
 
+#define MICROSEC 1000000L
+
 namespace Parser {
 
 /*
@@ -211,12 +213,12 @@ class DoubleLiteral : public Literal {
 class TimestampLiteral : public Literal {
  public:
   explicit TimestampLiteral() { time(&timestampval); }
-  time_t get_timestampval() const { return timestampval; }
+  time_t get_timestampval() const { return timestampval * MICROSEC; }
   virtual std::shared_ptr<Analyzer::Expr> analyze(const Catalog_Namespace::Catalog& catalog,
                                                   Analyzer::Query& query,
                                                   TlistRefType allow_tlist_ref = TLIST_NONE) const;
   static std::shared_ptr<Analyzer::Expr> get(const time_t);
-  virtual std::string to_string() const { return boost::lexical_cast<std::string>(timestampval); }
+  virtual std::string to_string() const { return boost::lexical_cast<std::string>(timestampval * MICROSEC); }
 
  private:
   time_t timestampval;

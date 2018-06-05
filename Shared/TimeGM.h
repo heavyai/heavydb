@@ -46,4 +46,5 @@ class TimeGM {
   int is_leap_year(int year);
   int leap_days(int y1, int y2);
 };
+
 #endif  // TIMEGM_H
