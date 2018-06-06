@@ -93,22 +93,31 @@ class read_lock {
   mapd_shared_lock<mapd_shared_mutex> lock;
   bool holds_lock;
 
- public:
-  read_lock(const T* cat) : catalog(cat) {
+  template <typename inner_type>
+  void lock_catalog(const inner_type* cat) {
     std::thread::id tid = std::this_thread::get_id();
 
-    if (catalog->thread_holding_write_lock != tid && !T::thread_holds_read_lock) {
-      lock = mapd_shared_lock<mapd_shared_mutex>(catalog->sharedMutex_);
-      T::thread_holds_read_lock = true;
+    if (cat->thread_holding_write_lock != tid && !inner_type::thread_holds_read_lock) {
+      lock = mapd_shared_lock<mapd_shared_mutex>(cat->sharedMutex_);
+      inner_type::thread_holds_read_lock = true;
       holds_lock = true;
-    } else {
-      holds_lock = false;
     }
+  }
+
+ public:
+  read_lock(const T* cat) : catalog(cat), holds_lock(false) {
+    if (catalog->name() == MAPD_SYSTEM_DB)
+      lock_catalog(&SysCatalog::instance());
+    else
+      lock_catalog(cat);
   }
 
   ~read_lock() {
     if (holds_lock) {
-      T::thread_holds_read_lock = false;
+      if (catalog->name() == MAPD_SYSTEM_DB)
+        SysCatalog::thread_holds_read_lock = false;
+      else
+        T::thread_holds_read_lock = false;
     }
   }
 };
@@ -119,22 +128,32 @@ class sqlite_lock {
   std::unique_lock<std::mutex> lock;
   bool holds_lock;
 
- public:
-  sqlite_lock(const T* cat) : catalog(cat) {
+  template <typename inner_type>
+  void lock_catalog(const inner_type* cat) {
     std::thread::id tid = std::this_thread::get_id();
-    if (catalog->thread_holding_sqlite_lock != tid) {
-      lock = std::unique_lock<std::mutex>(catalog->sqliteMutex_);
-      catalog->thread_holding_sqlite_lock = tid;
+
+    if (cat->thread_holding_sqlite_lock != tid) {
+      lock = std::unique_lock<std::mutex>(cat->sqliteMutex_);
+      cat->thread_holding_sqlite_lock = tid;
       holds_lock = true;
-    } else {
-      holds_lock = false;
     }
+  }
+
+ public:
+  sqlite_lock(const T* cat) : catalog(cat), holds_lock(false) {
+    if (catalog->name() == MAPD_SYSTEM_DB)
+      lock_catalog(&SysCatalog::instance());
+    else
+      lock_catalog(cat);
   }
 
   ~sqlite_lock() {
     if (holds_lock) {
       std::thread::id no_thread;
-      catalog->thread_holding_sqlite_lock = no_thread;
+      if (catalog->name() == MAPD_SYSTEM_DB)
+        SysCatalog::instance().thread_holding_sqlite_lock = no_thread;
+      else
+        catalog->thread_holding_sqlite_lock = no_thread;
     }
   }
 };
@@ -145,22 +164,32 @@ class write_lock {
   mapd_unique_lock<mapd_shared_mutex> lock;
   bool holds_lock;
 
- public:
-  write_lock(const T* cat) : catalog(cat) {
+  template <typename inner_type>
+  void lock_catalog(const inner_type* cat) {
     std::thread::id tid = std::this_thread::get_id();
 
-    if (catalog->thread_holding_write_lock != tid) {
-      lock = mapd_unique_lock<mapd_shared_mutex>(catalog->sharedMutex_);
-      catalog->thread_holding_write_lock = tid;
+    if (cat->thread_holding_write_lock != tid) {
+      lock = mapd_unique_lock<mapd_shared_mutex>(cat->sharedMutex_);
+      cat->thread_holding_write_lock = tid;
       holds_lock = true;
-    } else {
-      holds_lock = false;
     }
   }
+
+ public:
+  write_lock(const T* cat) : catalog(cat), holds_lock(false) {
+    if (catalog->name() == MAPD_SYSTEM_DB)
+      lock_catalog(&SysCatalog::instance());
+    else
+      lock_catalog(cat);
+  }
+
   ~write_lock() {
     if (holds_lock) {
       std::thread::id no_thread;
-      catalog->thread_holding_write_lock = no_thread;
+      if (catalog->name() == MAPD_SYSTEM_DB)
+        SysCatalog::instance().thread_holding_write_lock = no_thread;
+      else
+        catalog->thread_holding_write_lock = no_thread;
     }
   }
 };

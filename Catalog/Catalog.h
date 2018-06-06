@@ -233,6 +233,7 @@ class Catalog {
   void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);
   int getLogicalTableId(const int physicalTableId) const;
   void checkpoint(const int logicalTableId) const;
+  std::string name() const { return get_currentDB().dbName; }
 
  protected:
   typedef std::map<std::string, TableDescriptor*> TableDescriptorMap;
@@ -402,6 +403,7 @@ class SysCatalog {
   }
 
   void populateRoleDbObjects(const std::vector<DBObject>& objects);
+  std::string name() const { return MAPD_SYSTEM_DB; }
 
  private:
   typedef std::map<std::string, Role*> RoleMap;
