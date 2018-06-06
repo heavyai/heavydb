@@ -2900,6 +2900,24 @@ void MapDHandler::import_geo_table(const TSessionId& session,
   }
   check_table_load_privileges(session_info, table_name);
 
+  // Final check to ensure that we actually have a geo column
+  // before doing the actual import, in case the user naively
+  // overrode some column types in Immerse Preview. Avoids a
+  // fatal assert later when it fails to find the column. We
+  // should make Immerse more robust and disallow this.
+  bool have_geo_column = false;
+  for (const auto& r : rd) {
+    if (r.col_type.type == TDatumType::POINT ||
+        r.col_type.type == TDatumType::LINESTRING ||
+        r.col_type.type == TDatumType::POLYGON ||
+        r.col_type.type == TDatumType::MULTIPOLYGON) {
+      have_geo_column = true;
+    }
+  }
+  if (!have_geo_column) {
+    THROW_MAPD_EXCEPTION("Table " + table_name + " has no geo columns. Import aborted!");
+  }
+
   try {
     std::unique_ptr<Importer_NS::Importer> importer;
     if (leaf_aggregator_.leafCount() > 0) {
