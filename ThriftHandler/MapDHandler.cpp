@@ -3421,7 +3421,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
   try {
     ParserWrapper pw{query_str};
     std::map<std::string, bool> tableNames;
-    if (is_calcite_path_permissable(pw)) {
+    if (is_calcite_path_permissable(pw, read_only_)) {
       std::string query_ra;
       _return.execution_time_ms += measure<>::execution([&]() {
         // query_ra = TIME_WRAP(parse_to_ra)(query_str, session_info);

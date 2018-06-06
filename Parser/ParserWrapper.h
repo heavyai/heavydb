@@ -62,37 +62,41 @@ class ParserWrapper {
   static const std::string calcite_explain_str;
 };
 
-
 enum class CalciteDMLPathSelection : int {
-    Unsupported = 0,
-    OnlyUpdates = 1,
-    OnlyDeletes = 2,
-    UpdatesAndDeletes = 3
+  Unsupported = 0,
+  OnlyUpdates = 1,
+  OnlyDeletes = 2,
+  UpdatesAndDeletes = 3,
 };
 
 inline CalciteDMLPathSelection yield_dml_path_selector() {
-   int selector = 0;
-   if( std::is_same< CalciteDeletePathSelector, PreprocessorTrue >::value ) selector |= 0x02;
-   if( std::is_same< CalciteUpdatePathSelector, PreprocessorTrue >::value ) selector |= 0x01;
-   return static_cast< CalciteDMLPathSelection >( selector );
+  int selector = 0;
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorTrue>::value)
+    selector |= 0x02;
+  if (std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
+    selector |= 0x01;
+  return static_cast<CalciteDMLPathSelection>(selector);
 }
 
-inline bool is_calcite_permissable_dml( ParserWrapper const& pw ) {
-    switch( yield_dml_path_selector() ) {
-        case CalciteDMLPathSelection::OnlyUpdates:
-            return !pw.is_update_dml || (pw.getDMLType() == ParserWrapper::DMLType::Update);
-        case CalciteDMLPathSelection::OnlyDeletes:
-            return !pw.is_update_dml || (pw.getDMLType() == ParserWrapper::DMLType::Delete);
-        case CalciteDMLPathSelection::UpdatesAndDeletes:
-            return !pw.is_update_dml || (pw.getDMLType() == ParserWrapper::DMLType::Delete) || (pw.getDMLType() == ParserWrapper::DMLType::Update);
-        case CalciteDMLPathSelection::Unsupported:
-        default:
-            return false;
-    }
+inline bool is_calcite_permissable_dml(ParserWrapper const& pw, bool read_only_mode) {
+  if( read_only_mode ) return !pw.is_update_dml; // If we're read-only rejected, no DML is permissable
+
+  switch (yield_dml_path_selector()) {
+    case CalciteDMLPathSelection::OnlyUpdates:
+      return !pw.is_update_dml || (pw.getDMLType() == ParserWrapper::DMLType::Update);
+    case CalciteDMLPathSelection::OnlyDeletes:
+      return !pw.is_update_dml || (pw.getDMLType() == ParserWrapper::DMLType::Delete);
+    case CalciteDMLPathSelection::UpdatesAndDeletes:
+      return !pw.is_update_dml || (pw.getDMLType() == ParserWrapper::DMLType::Delete) ||
+             (pw.getDMLType() == ParserWrapper::DMLType::Update);
+    case CalciteDMLPathSelection::Unsupported:
+    default:
+      return false;
+  }
 }
 
-inline bool is_calcite_path_permissable(ParserWrapper const& pw) {
-  return (!pw.is_ddl && is_calcite_permissable_dml(pw) && !pw.is_other_explain);
+inline bool is_calcite_path_permissable(ParserWrapper const& pw, bool read_only_mode = false) {
+  return (!pw.is_ddl && is_calcite_permissable_dml(pw, read_only_mode) && !pw.is_other_explain);
 }
 
 #endif  // PARSERWRAPPER_H_
