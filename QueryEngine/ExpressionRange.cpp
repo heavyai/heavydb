@@ -705,14 +705,15 @@ ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
   const int32_t extract_field{extract_expr->get_field()};
   const auto arg_range = getExpressionRange(extract_expr->get_from_expr(), query_infos, executor, simple_quals);
   const bool has_nulls = arg_range.getType() == ExpressionRangeType::Invalid || arg_range.hasNulls();
+  const auto& extract_expr_ti = extract_expr->get_from_expr()->get_type_info();
   switch (extract_field) {
     case kYEAR: {
       if (arg_range.getType() == ExpressionRangeType::Invalid) {
         return ExpressionRange::makeInvalidRange();
       }
       CHECK(arg_range.getType() == ExpressionRangeType::Integer);
-      const int64_t year_range_min = ExtractFromTime(kYEAR, arg_range.getIntMin());
-      const int64_t year_range_max = ExtractFromTime(kYEAR, arg_range.getIntMax());
+      const int64_t year_range_min = ExtractFromTime(kYEAR, arg_range.getIntMin(), extract_expr_ti.get_dimension());
+      const int64_t year_range_max = ExtractFromTime(kYEAR, arg_range.getIntMax(), extract_expr_ti.get_dimension());
       return ExpressionRange::makeIntRange(year_range_min, year_range_max, 0, arg_range.hasNulls());
     }
     case kEPOCH:
@@ -734,6 +735,8 @@ ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
       return ExpressionRange::makeIntRange(0, 999, 0, has_nulls);
     case kMICROSECOND:
       return ExpressionRange::makeIntRange(0, 999999, 0, has_nulls);
+    case kNANOSECOND:
+      return ExpressionRange::makeIntRange(0, 999999999, 0, has_nulls);
     case kDOW:
       return ExpressionRange::makeIntRange(0, 6, 0, has_nulls);
     case kISODOW:
@@ -756,8 +759,11 @@ ExpressionRange getExpressionRange(const Analyzer::DatetruncExpr* datetrunc_expr
   if (arg_range.getType() == ExpressionRangeType::Invalid) {
     return ExpressionRange::makeInvalidRange();
   }
-  const int64_t min_ts = DateTruncate(datetrunc_expr->get_field(), arg_range.getIntMin());
-  const int64_t max_ts = DateTruncate(datetrunc_expr->get_field(), arg_range.getIntMax());
+  const auto& datetrunc_expr_ti = datetrunc_expr->get_from_expr()->get_type_info();
+  const int64_t min_ts =
+      DateTruncate(datetrunc_expr->get_field(), arg_range.getIntMin(), datetrunc_expr_ti.get_dimension());
+  const int64_t max_ts =
+      DateTruncate(datetrunc_expr->get_field(), arg_range.getIntMax(), datetrunc_expr_ti.get_dimension());
   const int64_t bucket = get_conservative_datetrunc_bucket(datetrunc_expr->get_field());
   return ExpressionRange::makeIntRange(min_ts, max_ts, bucket, arg_range.hasNulls());
 }

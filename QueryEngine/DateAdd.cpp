@@ -35,6 +35,7 @@ time_t skip_months(time_t timeval, int64_t months_to_go) {
                                              {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
   tm tm_struct;
   gmtime_r_newlib(&timeval, &tm_struct);
+  long dimen = 1;  // placeholder
   auto tod = (timeval % SECSPERDAY);
   auto day = (timeval / SECSPERDAY) * SECSPERDAY;
   // calculate the day of month offset
@@ -54,7 +55,7 @@ time_t skip_months(time_t timeval, int64_t months_to_go) {
     if (months_to_go > 0) {
       auto m = (mon + months_covered) % MONSPERYEAR;
       if (m == 1)
-        leap_year = is_leap(ExtractFromTime(kYEAR, month));
+        leap_year = is_leap(ExtractFromTime(kYEAR, month, dimen));
       month += (month_lengths[0 + leap_year][m] * SECSPERDAY);
       months_to_go--;
       months_covered++;
@@ -69,7 +70,7 @@ time_t skip_months(time_t timeval, int64_t months_to_go) {
     if (months_to_go < 0) {
       auto m = (((mon - 1 - months_covered) % MONSPERYEAR) + MONSPERYEAR) % MONSPERYEAR;
       if (m == 1)
-        leap_year = is_leap(ExtractFromTime(kYEAR, month));
+        leap_year = is_leap(ExtractFromTime(kYEAR, month, dimen));
       month -= (month_lengths[0 + leap_year][m] * SECSPERDAY);
       months_to_go++;
       months_covered++;
@@ -90,23 +91,51 @@ time_t skip_months(time_t timeval, int64_t months_to_go) {
   return new_timeval;
 }
 
-extern "C" NEVER_INLINE DEVICE time_t DateAdd(DateaddField field, int64_t number, time_t timeval) {
+extern "C" NEVER_INLINE DEVICE time_t DateAdd(DateaddField field, int64_t number, time_t timeval, const int32_t dimen) {
+  long scale_ret = 1;
+  if (dimen == 3) {
+    scale_ret = MILLISECSPERSEC;
+  } else if (dimen == 6) {
+    scale_ret = MICROSECSPERSEC;
+  } else if (dimen == 9) {
+    scale_ret = NANOSECSPERSEC;
+  }
   switch (field) {
-    case daMICROSECOND:
+    case daNANOSECOND: {
       // highest level of granularity
-      return timeval + number;
-    case daMILLISECOND:
-      return timeval + number * MILLISECSPERSEC;
+      if (dimen < 9) {
+        return timeval;
+      } else
+        return timeval + number;
+    }
+    case daMICROSECOND: {
+      int64_t mutimeval = 0;
+      if (dimen == 9) {
+        mutimeval = timeval + number * MILLISECSPERSEC;
+      } else
+        mutimeval = timeval + number;
+      return mutimeval;
+    }
+    case daMILLISECOND: {
+      int64_t mitimeval = 0;
+      if (dimen == 9) {
+        mitimeval = timeval + number * MICROSECSPERSEC;
+      } else if (dimen == 6) {
+        mitimeval = timeval + number * MILLISECSPERSEC;
+      } else
+        mitimeval = timeval + number;
+      return mitimeval;
+    }
     case daSECOND:
-      return timeval + number * MICROSECSPERSEC;
+      return timeval + number * scale_ret;
     case daMINUTE:
-      return timeval + number * SECSPERMIN * MICROSECSPERSEC;
+      return timeval + number * SECSPERMIN * scale_ret;
     case daHOUR:
-      return timeval + number * SECSPERHOUR * MICROSECSPERSEC;
+      return timeval + number * SECSPERHOUR * scale_ret;
     case daDAY:
-      return timeval + number * SECSPERDAY * MICROSECSPERSEC;
+      return timeval + number * SECSPERDAY * scale_ret;
     case daWEEK:
-      return timeval + number * DAYSPERWEEK * SECSPERDAY * MICROSECSPERSEC;
+      return timeval + number * DAYSPERWEEK * SECSPERDAY * scale_ret;
     default:
       break;
   }
@@ -139,18 +168,17 @@ extern "C" NEVER_INLINE DEVICE time_t DateAdd(DateaddField field, int64_t number
 #endif
   }
   months_to_go *= number;
-  time_t stimeval = (int64_t)(timeval / MICROSECSPERSEC);
-  return skip_months(stimeval, months_to_go) * MICROSECSPERSEC;
+  time_t stimeval = (int64_t)(timeval / scale_ret);
+  time_t nfrac = (int)((long)timeval % scale_ret);
+  return (skip_months(stimeval, months_to_go) * scale_ret) + nfrac;
 }
 
-extern "C" DEVICE time_t DateAddNullable(const DateaddField field,
-                                         int64_t number,
-                                         time_t timeval,
-                                         const time_t null_val) {
+extern "C" DEVICE time_t
+DateAddNullable(const DateaddField field, int64_t number, time_t timeval, const int32_t dimen, const time_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }
-  return DateAdd(field, number, timeval);
+  return DateAdd(field, number, timeval, dimen);
 }
 
 #endif  // EXECUTE_INCLUDE

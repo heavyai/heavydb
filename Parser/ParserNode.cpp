@@ -46,6 +46,7 @@
 #include "../Shared/mapd_glob.h"
 #include "../Shared/measure.h"
 #include "../Shared/geo_types.h"
+#include "../Shared/TimeGM.h"
 #include "DataMgr/LockMgr.h"
 #include "ReservedKeywords.h"
 #include "parser.h"
@@ -147,7 +148,7 @@ std::shared_ptr<Analyzer::Expr> TimestampLiteral::analyze(const Catalog_Namespac
 
 std::shared_ptr<Analyzer::Expr> TimestampLiteral::get(const time_t timestampval) {
   Datum d;
-  d.timeval = timestampval * MICROSEC;
+  d.timeval = timestampval;
   return makeExpr<Analyzer::Constant>(kTIMESTAMP, false, d);
 }
 
@@ -851,6 +852,8 @@ std::string extract_field_name(const ExtractField fieldno) {
       return "millisecond";
     case kMICROSECOND:
       return "microsecond";
+    case kNANOSECOND:
+      return "nanosecond";
     case kDOW:
       return "dow";
     case kISODOW:
@@ -887,7 +890,7 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::get(const std::shared_ptr<Analyzer:
   if (c != nullptr) {
     c->set_type_info(ti);
     Datum d;
-    d.bigintval = ExtractFromTime(fieldno, c->get_constval().timeval);
+    d.bigintval = ExtractFromTime(fieldno, c->get_constval().timeval, from_expr->get_type_info().get_dimension());
     c->set_constval(d);
     return c;
   }
@@ -916,6 +919,8 @@ ExtractField ExtractExpr::to_extract_field(const std::string& field) {
     fieldno = kMILLISECOND;
   else if (boost::iequals(field, "microsecond"))
     fieldno = kMICROSECOND;
+  else if (boost::iequals(field, "nanosecond"))
+    fieldno = kNANOSECOND;
   else if (boost::iequals(field, "dow"))
     fieldno = kDOW;
   else if (boost::iequals(field, "isodow"))
@@ -993,6 +998,8 @@ std::string dt_field_name(const DatetruncField fieldno) {
       return "millisecond";
     case dtMICROSECOND:
       return "microsecond";
+    case dtNANOSECOND:
+      return "nanosecond";
     case dtWEEK:
       return "week";
     case dtINVALID:
@@ -1014,12 +1021,13 @@ std::shared_ptr<Analyzer::Expr> DatetruncExpr::get(const std::shared_ptr<Analyze
     default:
       break;
   }
-  SQLTypeInfo ti(kTIMESTAMP, 0, 0, from_expr->get_type_info().get_notnull());
+  // update new datatype according to the input dimension
+  SQLTypeInfo ti(kTIMESTAMP, from_expr->get_type_info().get_dimension(), 0, from_expr->get_type_info().get_notnull());
   auto c = std::dynamic_pointer_cast<Analyzer::Constant>(from_expr);
   if (c != nullptr) {
     c->set_type_info(ti);
     Datum d;
-    d.bigintval = DateTruncate(fieldno, c->get_constval().timeval);
+    d.bigintval = DateTruncate(fieldno, c->get_constval().timeval, from_expr->get_type_info().get_dimension());
     c->set_constval(d);
     return c;
   }
@@ -1055,6 +1063,8 @@ DatetruncField DatetruncExpr::to_date_trunc_field(const std::string& field) {
     fieldno = dtMILLISECOND;
   else if (boost::iequals(field, "microsecond"))
     fieldno = dtMICROSECOND;
+  else if (boost::iequals(field, "nanosecond"))
+    fieldno = dtNANOSECOND;
   else if (boost::iequals(field, "week"))
     fieldno = dtWEEK;
   else

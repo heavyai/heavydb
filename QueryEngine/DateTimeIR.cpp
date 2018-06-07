@@ -34,7 +34,9 @@ llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr, const 
     from_expr = cgen_state_->ir_builder_.CreateCast(
         llvm::Instruction::CastOps::Trunc, from_expr, get_int_type(32, cgen_state_->context_));
   }
-  std::vector<llvm::Value*> extract_args{ll_int(static_cast<int32_t>(extract_expr->get_field())), from_expr};
+  std::vector<llvm::Value*> extract_args{ll_int(static_cast<int32_t>(extract_expr->get_field())),
+                                         from_expr,
+                                         ll_int(static_cast<int32_t>(extract_expr_ti.get_dimension()))};
   std::string extract_fname{"ExtractFromTime"};
   if (!extract_expr_ti.get_notnull()) {
     extract_args.push_back(inlineIntNull(extract_expr_ti));
@@ -55,9 +57,12 @@ llvm::Value* Executor::codegen(const Analyzer::DateaddExpr* dateadd_expr, const 
   }
   auto number = codegen(dateadd_expr->get_number_expr(), true, co).front();
 
-  std::vector<llvm::Value*> dateadd_args{ll_int(static_cast<int32_t>(dateadd_expr->get_field())), number, datetime};
-  std::string dateadd_fname{"DateAdd"};
   const auto& datetime_ti = dateadd_expr->get_datetime_expr()->get_type_info();
+  std::vector<llvm::Value*> dateadd_args{ll_int(static_cast<int32_t>(dateadd_expr->get_field())),
+                                         number,
+                                         datetime,
+                                         ll_int(static_cast<int32_t>(dateadd_expr_ti.get_dimension()))};
+  std::string dateadd_fname{"DateAdd"};
   if (!datetime_ti.get_notnull()) {
     dateadd_args.push_back(inlineIntNull(datetime_ti));
     dateadd_fname += "Nullable";
@@ -79,10 +84,14 @@ llvm::Value* Executor::codegen(const Analyzer::DatediffExpr* datediff_expr, cons
     end = cgen_state_->ir_builder_.CreateCast(
         llvm::Instruction::CastOps::Trunc, end, get_int_type(32, cgen_state_->context_));
   }
-  std::vector<llvm::Value*> datediff_args{ll_int(static_cast<int32_t>(datediff_expr->get_field())), start, end};
-  std::string datediff_fname{"DateDiff"};
   const auto& start_ti = datediff_expr->get_start_expr()->get_type_info();
   const auto& end_ti = datediff_expr->get_end_expr()->get_type_info();
+  std::vector<llvm::Value*> datediff_args{ll_int(static_cast<int32_t>(datediff_expr->get_field())),
+                                          start,
+                                          end,
+                                          ll_int(static_cast<int32_t>(start_ti.get_dimension())),
+                                          ll_int(static_cast<int32_t>(end_ti.get_dimension()))};
+  std::string datediff_fname{"DateDiff"};
   const auto& ret_ti = datediff_expr->get_type_info();
   if (!start_ti.get_notnull() || !end_ti.get_notnull()) {
     datediff_args.push_back(inlineIntNull(ret_ti));
@@ -100,7 +109,9 @@ llvm::Value* Executor::codegen(const Analyzer::DatetruncExpr* datetrunc_expr, co
     from_expr = cgen_state_->ir_builder_.CreateCast(
         llvm::Instruction::CastOps::Trunc, from_expr, get_int_type(32, cgen_state_->context_));
   }
-  std::vector<llvm::Value*> datetrunc_args{ll_int(static_cast<int32_t>(datetrunc_expr->get_field())), from_expr};
+  std::vector<llvm::Value*> datetrunc_args{ll_int(static_cast<int32_t>(datetrunc_expr->get_field())),
+                                           from_expr,
+                                           ll_int(static_cast<int32_t>(datetrunc_expr_ti.get_dimension()))};
   std::string datetrunc_fname{"DateTruncate"};
   if (!datetrunc_expr_ti.get_notnull()) {
     datetrunc_args.push_back(inlineIntNull(datetrunc_expr_ti));

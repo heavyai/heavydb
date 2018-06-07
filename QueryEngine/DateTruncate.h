@@ -54,9 +54,10 @@ enum DatetruncField {
   dtMICROSECOND,
   dtWEEK,
   dtQUARTERDAY,
-  dtINVALID
+  dtINVALID,
+  dtNANOSECOND
 };
 
-extern "C" NEVER_INLINE DEVICE time_t DateTruncate(DatetruncField field, time_t timeval);
+extern "C" NEVER_INLINE DEVICE time_t DateTruncate(DatetruncField field, time_t timeval, const int32_t dimen);
 
 #endif  // QUERYENGINE_DATETRUNCATE_H

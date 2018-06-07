@@ -17,24 +17,17 @@
 
 #ifndef TIMEGM_H
 #define TIMEGM_H
-#include <string>
+#include <string.h>
 #include <time.h>
 #include <sstream>
 #include <math.h>
+#include "sqltypes.h"
 
 class TimeGM {
  public:
   time_t my_timegm(const struct tm* tm);
-  time_t my_timegm(const struct tm* tm, const int& fsc);
-  time_t get_epoch_seconds(const time_t timeval) {
-    std::string stime = std::to_string(timeval / pow(10.0, 6.0));
-    return std::stoll(stime.substr(0, stime.find(".")));
-  }
-  time_t get_epoch_milliseconds(const time_t timeval) {
-    std::string stime = std::to_string(timeval / pow(10.0, 3.0));
-    return std::stoll(stime.substr(0, stime.find(".")));
-  }
-
+  time_t my_timegm(const struct tm* tm, const int& fsc, SQLTypeInfo& ti);
+  int parse_fractional_seconds(std::string sfrac, SQLTypeInfo& ti);
   static TimeGM& instance() {
     static TimeGM timegm{};
     return timegm;
@@ -45,6 +38,8 @@ class TimeGM {
   const int monoff[12] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
   int is_leap_year(int year);
   int leap_days(int y1, int y2);
+  TimeGM(){};
+  virtual ~TimeGM(){};
 };
 
 #endif  // TIMEGM_H

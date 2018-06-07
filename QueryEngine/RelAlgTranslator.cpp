@@ -804,7 +804,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(const RexFunc
 
 namespace {
 
-std::shared_ptr<Analyzer::Constant> makeNumericConstant(const SQLTypeInfo& ti, const int val) {
+std::shared_ptr<Analyzer::Constant> makeNumericConstant(const SQLTypeInfo& ti, const long val) {
   CHECK(ti.is_number());
   Datum datum{0};
   switch (ti.get_type()) {
@@ -875,7 +875,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(const RexFunc
   const auto number_units = translateScalarRex(rex_function->getOperand(1));
   const auto cast_number_units = number_units->add_cast(SQLTypeInfo(kBIGINT, false));
   const auto datetime = translateScalarRex(rex_function->getOperand(2));
-  return makeExpr<Analyzer::DateaddExpr>(SQLTypeInfo(kTIMESTAMP, false),
+  const auto& datetime_ti = datetime->get_type_info();
+  return makeExpr<Analyzer::DateaddExpr>(SQLTypeInfo(kTIMESTAMP, datetime_ti.get_dimension(), 0, false),
                                          to_dateadd_field(*timeunit_lit->get_constval().stringval),
                                          cast_number_units,
                                          datetime);
@@ -891,9 +892,21 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateminus(const RexOp
   const auto rhs = translateScalarRex(rex_operator->getOperand(1));
   const auto rhs_ti = rhs->get_type_info();
   if (rhs_ti.get_type() == kTIMESTAMP || rhs_ti.get_type() == kDATE) {
+    if (datetime_ti.get_dimension() > 0 || rhs_ti.get_dimension() > 0) {
+      throw std::runtime_error("Only timestamp(0) is supported for TIMESTAMPDIFF operation.");
+    }
     const auto& rex_operator_ti = rex_operator->getType();
-    const auto datediff_field = (rex_operator_ti.get_type() == kINTERVAL_DAY_TIME) ? dtMILLISECOND : dtMONTH;
-    return makeExpr<Analyzer::DatediffExpr>(SQLTypeInfo(kBIGINT, false), datediff_field, rhs, datetime);
+    const auto datediff_field = (rex_operator_ti.get_type() == kINTERVAL_DAY_TIME) ? dtNANOSECOND : dtMONTH;
+    if (datediff_field == dtNANOSECOND) {
+      auto bigint_time = SQLTypeInfo(kBIGINT, false);
+      const auto datetime_lit = std::dynamic_pointer_cast<Analyzer::Constant>(fold_expr(datetime.get()));
+      const auto rhs_lit = std::dynamic_pointer_cast<Analyzer::Constant>(fold_expr(rhs.get()));
+      const auto datetime_sec = makeNumericConstant(bigint_time, datetime_lit->get_constval().timeval * 1000);
+      const auto rhs_sec = makeNumericConstant(bigint_time, rhs_lit->get_constval().timeval * 1000);
+      return makeExpr<Analyzer::DatediffExpr>(SQLTypeInfo(kBIGINT, false), datediff_field, rhs_sec, datetime_sec);
+    } else if ((datediff_field == dtMONTH)) {
+      return makeExpr<Analyzer::DatediffExpr>(SQLTypeInfo(kBIGINT, false), datediff_field, rhs, datetime);
+    }
   }
   const auto interval = fold_expr(rhs.get());
   auto interval_ti = interval->get_type_info();

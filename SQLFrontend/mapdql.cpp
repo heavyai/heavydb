@@ -411,14 +411,23 @@ std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_in
       return buf;
     }
     case TDatumType::TIMESTAMP: {
-      std::string t = std::to_string(datum.val.int_val / pow(10.0, 6.0));
-      time_t sec = std::stoll(t.substr(0, t.find(".")));
-      t = t.substr(t.find("."));
       std::tm tm_struct;
-      gmtime_r(&sec, &tm_struct);
-      char buf[20];
-      strftime(buf, 20, "%F %T", &tm_struct);
-      return std::string(buf) += t;
+      if (type_info.precision > 0) {
+        std::string t = std::to_string(datum.val.int_val);
+        int cp = t.length() - type_info.precision;
+        time_t sec = std::stoll(t.substr(0, cp));
+        t = t.substr(cp);
+        gmtime_r(&sec, &tm_struct);
+        char buf[21];
+        strftime(buf, 21, "%F %T.", &tm_struct);
+        return std::string(buf) += t;
+      } else {
+        time_t sec = datum.val.int_val;
+        gmtime_r(&sec, &tm_struct);
+        char buf[20];
+        strftime(buf, 20, "%F %T", &tm_struct);
+        return std::string(buf);
+      }
     }
     case TDatumType::DATE: {
       time_t t = datum.val.int_val;

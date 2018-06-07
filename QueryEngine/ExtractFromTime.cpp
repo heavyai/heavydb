@@ -61,6 +61,11 @@ DEVICE int extract_microsecond(const time_t* tim_p) {
   return (int)((long)lcltime % MICROSECSPERSEC);
 }
 
+DEVICE int extract_nanosecond(const time_t* tim_p) {
+  const time_t lcltime = *tim_p;
+  return (int)((long)lcltime % NANOSECSPERSEC);
+}
+
 DEVICE int extract_dow(const time_t* tim_p) {
   long days, rem;
   int weekday;
@@ -226,9 +231,17 @@ DEVICE tm* gmtime_r_newlib(const time_t* tim_p, tm* res) {
 /*
  * @brief support the SQL EXTRACT function
  */
-extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field, time_t timeval) {
+extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field, time_t timeval, const int32_t dimen) {
   // We have fast paths for the 5 fields below - do not need to do full gmtime
-  time_t stimeval = (int64_t)(timeval / MICROSECSPERSEC);
+  long prec = 1;  // default for 0
+  if (dimen == 3) {
+    prec = MILLISECSPERSEC;
+  } else if (dimen == 6) {
+    prec = MICROSECSPERSEC;
+  } else if (dimen == 9) {
+    prec = NANOSECSPERSEC;
+  }
+  time_t stimeval = (int64_t)(timeval / prec);
   switch (field) {
     case kEPOCH:
       return timeval;
@@ -241,11 +254,31 @@ extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field, time_
     case kSECOND:
       return extract_second(&stimeval);
     case kMILLISECOND: {
-      time_t mtimeval = (int64_t)(timeval / MILLISECSPERSEC);
-      return extract_millisecond(&mtimeval);
+      time_t mitimeval = timeval;
+      if (dimen == 6) {
+        mitimeval = (int64_t)(timeval / MILLISECSPERSEC);
+      } else if (dimen == 9) {
+        mitimeval = (int64_t)(timeval / MICROSECSPERSEC);
+      } else if (dimen == 0) {
+        return 0;
+      }
+      return extract_millisecond(&mitimeval);
     }
-    case kMICROSECOND:
-      return extract_microsecond(&timeval);
+    case kMICROSECOND: {
+      time_t mutimeval = timeval;
+      if (dimen == 9) {
+        mutimeval = (int64_t)(timeval / MILLISECSPERSEC);
+      } else if (dimen == 0 || dimen == 3) {
+        return 0;
+      }
+      return extract_microsecond(&mutimeval);
+    }
+    case kNANOSECOND: {
+      if (dimen == 0 || dimen == 3 || dimen == 6) {
+        return 0;
+      }
+      return extract_nanosecond(&timeval);
+    }
     case kDOW:
       return extract_dow(&stimeval);
     case kISODOW: {
@@ -312,9 +345,12 @@ extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field, time_
   }
 }
 
-extern "C" DEVICE int64_t ExtractFromTimeNullable(ExtractField field, time_t timeval, const int64_t null_val) {
+extern "C" DEVICE int64_t ExtractFromTimeNullable(ExtractField field,
+                                                  time_t timeval,
+                                                  int32_t dimen,
+                                                  const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }
-  return ExtractFromTime(field, timeval);
+  return ExtractFromTime(field, timeval, dimen);
 }

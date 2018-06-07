@@ -538,9 +538,6 @@ class SQLTypeInfo {
         }
         break;
       case kTIMESTAMP:
-        if (dimension != 0 && dimension != 3 && dimension != 6 && dimension != 9)
-          assert(false);  // support milli/micro/nanosec precisions
-        break;
       case kTIME:
       case kINTERVAL_DAY_TIME:
       case kINTERVAL_YEAR_MONTH:

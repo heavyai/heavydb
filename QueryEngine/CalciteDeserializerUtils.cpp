@@ -66,6 +66,8 @@ ExtractField to_datepart_field(const std::string& field) {
     fieldno = kMILLISECOND;
   else if (boost::iequals(field, "microsecond") || boost::iequals(field, "us"))
     fieldno = kMICROSECOND;
+  else if (boost::iequals(field, "nanosecond") || boost::iequals(field, "ns"))
+    fieldno = kNANOSECOND;
   else
     throw std::runtime_error("Unsupported field in DATEPART function: " + field);
   return fieldno;
@@ -91,6 +93,8 @@ DateaddField to_dateadd_field(const std::string& field) {
     fieldno = daMILLISECOND;
   else if (boost::iequals(field, "microsecond") || boost::iequals(field, "us"))
     fieldno = daMICROSECOND;
+  else if (boost::iequals(field, "nanosecond") || boost::iequals(field, "ns"))
+    fieldno = daNANOSECOND;
   else
     throw std::runtime_error("Unsupported field in DATEADD function: " + field);
   return fieldno;
@@ -116,6 +120,8 @@ DatetruncField to_datediff_field(const std::string& field) {
     fieldno = dtMILLISECOND;
   else if (boost::iequals(field, "microsecond") || boost::iequals(field, "us"))
     fieldno = dtMICROSECOND;
+  else if (boost::iequals(field, "nanosecond") || boost::iequals(field, "ns"))
+    fieldno = dtNANOSECOND;
   else
     throw std::runtime_error("Unsupported field in DATEDIFF function: " + field);
   return fieldno;

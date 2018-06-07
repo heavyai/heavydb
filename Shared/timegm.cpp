@@ -48,6 +48,18 @@ int TimeGM::leap_days(int y1, int y2) {
   return (y2 / 4 - y1 / 4) - (y2 / 100 - y1 / 100) + (y2 / 400 - y1 / 400);
 }
 
+int TimeGM::parse_fractional_seconds(std::string sfrac, SQLTypeInfo& ti) {
+  int nfrac = sfrac.length();
+
+  if (nfrac >= 0 && nfrac < ti.get_dimension()) {
+    char d = '0';
+    sfrac += std::string(ti.get_dimension() - nfrac, d);
+  } else if (nfrac > ti.get_dimension()) {
+    sfrac = sfrac.substr(0, 6);
+  }
+  return std::stoi(sfrac);
+}
+
 /*
  * Code adapted from Python 2.4.1 sources (Lib/calendar.py).
  */
@@ -75,12 +87,12 @@ time_t TimeGM::my_timegm(const struct tm* tm) {
   return seconds;
 }
 
-time_t TimeGM::my_timegm(const struct tm* tm, const int& fsc) {
+time_t TimeGM::my_timegm(const struct tm* tm, const int& fsc, SQLTypeInfo& ti) {
   time_t sec;
   time_t fracsec;
 
   sec = my_timegm(tm);
-  fracsec = (sec * pow(10.0, 6.0)) + fsc;
+  fracsec = (sec * pow(10.0, ti.get_dimension())) + fsc;
 
   return fracsec;
 }
