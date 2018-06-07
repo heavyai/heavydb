@@ -2743,23 +2743,20 @@ void MapDHandler::create_table(const TSessionId& session,
     }
 
     std::string col_stmt;
-    col_stmt.append(col.col_name + " " + thrift_to_name(col.col_type) + " ");
+    col_stmt.append(col.col_name + " " + thrift_to_name(col.col_type));
 
     // As of 2016-06-27 the Immerse v1 frontend does not explicitly set the
     // `nullable` argument, leading this to default to false. Uncomment for v2.
-    // if (!col.col_type.nullable) col_stmt.append("NOT NULL ");
+    // if (!col.col_type.nullable) col_stmt.append(" NOT NULL");
 
     if (thrift_to_encoding(col.col_type.encoding) != kENCODING_NONE) {
-      col_stmt.append("ENCODING " + thrift_to_encoding_name(col.col_type) + " ");
-    } else {
-      // deal with special case of non DICT encoded strings and non encoded geo
-      if (col.col_type.type == TDatumType::STR) {
-        col_stmt.append("ENCODING NONE");
-      } else if (col.col_type.type == TDatumType::POINT || col.col_type.type == TDatumType::LINESTRING ||
-                 col.col_type.type == TDatumType::POLYGON || col.col_type.type == TDatumType::MULTIPOLYGON) {
-        if (col.col_type.scale == 4326)
-          col_stmt.append("ENCODING NONE");
-      }
+      col_stmt.append(" ENCODING " + thrift_to_encoding_name(col.col_type));
+      col_stmt.append("(" + std::to_string(col.col_type.comp_param) + ")");
+    } else if (col.col_type.type == TDatumType::STR || col.col_type.type == TDatumType::POINT ||
+               col.col_type.type == TDatumType::LINESTRING || col.col_type.type == TDatumType::POLYGON ||
+               col.col_type.type == TDatumType::MULTIPOLYGON) {
+      // special case of non DICT encoded strings and non encoded geo
+      col_stmt.append(" ENCODING NONE");
     }
     col_stmts.push_back(col_stmt);
   }
@@ -2907,10 +2904,8 @@ void MapDHandler::import_geo_table(const TSessionId& session,
   // should make Immerse more robust and disallow this.
   bool have_geo_column = false;
   for (const auto& r : rd) {
-    if (r.col_type.type == TDatumType::POINT ||
-        r.col_type.type == TDatumType::LINESTRING ||
-        r.col_type.type == TDatumType::POLYGON ||
-        r.col_type.type == TDatumType::MULTIPOLYGON) {
+    if (r.col_type.type == TDatumType::POINT || r.col_type.type == TDatumType::LINESTRING ||
+        r.col_type.type == TDatumType::POLYGON || r.col_type.type == TDatumType::MULTIPOLYGON) {
       have_geo_column = true;
     }
   }
