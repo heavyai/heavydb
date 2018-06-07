@@ -2136,8 +2136,13 @@ static size_t find_end(const char* buffer, size_t size, const CopyParams& copy_p
   for (i = size - 1; i >= 0 && buffer[i] != copy_params.line_delim; i--)
     ;
 
-  if (i < 0)
-    LOG(ERROR) << "No line delimiter in block.";
+  if (i < 0) {
+    int slen = size < 50 ? size : 50;
+    std::string showMsgStr(buffer, buffer + slen);
+    LOG(ERROR) << "No line delimiter in block. Block was of size " << size << " bytes, first few characters "
+               << showMsgStr;
+    return size;
+  }
   return i + 1;
 }
 
