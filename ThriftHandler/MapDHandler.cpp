@@ -109,6 +109,8 @@ using namespace Lock_Namespace;
   LOG(ERROR) << ex.error_msg;        \
   throw ex;
 
+#define SUPPORT_TAR_GEO_ARCHIVES_REQUIRES_GDAL_2_3_1 0
+
 std::string generate_random_string(const size_t len);
 
 MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
@@ -1979,14 +1981,8 @@ TCopyParams MapDHandler::copyparams_to_thrift(const Importer_NS::CopyParams& cp)
   return copy_params;
 }
 
-std::string convert_path_to_vsi(const std::string& path_in,
-                                const Importer_NS::CopyParams& copy_params,
-                                bool& is_archive) {
-  // capture the original name
-  std::string path(path_in);
-
-  is_archive = false;
-
+void add_vsi_network_prefix(std::string& path) {
+  // do we support network file access?
   bool gdal_network = Importer_NS::Importer::gdalSupportsNetworkFileAccess();
 
   // modify head of filename based on source location
@@ -2003,84 +1999,93 @@ std::string convert_path_to_vsi(const std::string& path_in,
     // invoke GDAL S3 virtual file reader
     boost::replace_first(path, "s3://", "/vsis3/");
   }
+}
 
+void add_vsi_geo_prefix(std::string& path) {
+  // single gzip'd file (not an archive)?
+  if (boost::iends_with(path, ".gz") && !boost::iends_with(path, ".tar.gz")) {
+    path = "/vsigzip/" + path;
+  }
+}
+
+void add_vsi_archive_prefix(std::string& path) {
   // check for compressed file or file bundle
   if (boost::iends_with(path, ".zip")) {
     // zip archive
     path = "/vsizip/" + path;
-    is_archive = true;
+#if SUPPORT_TAR_GEO_ARCHIVES_REQUIRES_GDAL_2_3_1
   } else if (boost::iends_with(path, ".tar") || boost::iends_with(path, ".tgz") || boost::iends_with(path, ".tar.gz")) {
     // tar archive (compressed or uncompressed)
     path = "/vsitar/" + path;
-    is_archive = true;
-  } else if (boost::iends_with(path, ".gz")) {
-    // single gzip'd file (not an archive)
-    path = "/vsigzip/" + path;
+#endif
+  }
+}
+
+std::string remove_vsi_prefixes(const std::string& path_in) {
+  std::string path(path_in);
+
+  // these will be first
+  if (boost::istarts_with(path, "/vsizip/")) {
+    boost::replace_first(path, "/vsizip/", "");
+#if SUPPORT_TAR_GEO_ARCHIVES_REQUIRES_GDAL_2_3_1
+  } else if (boost::istarts_with(path, "/vsitar/")) {
+    boost::replace_first(path, "/vsitar/", "");
+#endif
+  } else if (boost::istarts_with(path, "/vsigzip/")) {
+    boost::replace_first(path, "/vsigzip/", "");
+  }
+
+  // then these
+  if (boost::istarts_with(path, "/vsicurl/")) {
+    boost::replace_first(path, "/vsicurl/", "");
+  } else if (boost::istarts_with(path, "/vsis3/")) {
+    boost::replace_first(path, "/vsis3/", "s3://");
   }
 
   return path;
 }
 
-std::string convert_path_from_vsi(const std::string& file_name_in) {
-  std::string file_name(file_name_in);
-
-  // these will be first
-  if (boost::istarts_with(file_name, "/vsizip/")) {
-    boost::replace_first(file_name, "/vsizip/", "");
-  } else if (boost::istarts_with(file_name, "/vsitar/")) {
-    boost::replace_first(file_name, "/vsitar/", "");
-  } else if (boost::istarts_with(file_name, "/vsigzip/")) {
-    boost::replace_first(file_name, "/vsigzip/", "");
-  }
-
-  // then these
-  if (boost::istarts_with(file_name, "/vsicurl/")) {
-    boost::replace_first(file_name, "/vsicurl/", "");
-  } else if (boost::istarts_with(file_name, "/vsis3/")) {
-    boost::replace_first(file_name, "/vsis3/", "s3://");
-  }
-
-  return file_name;
-}
-
-bool path_is_relative(const std::string& path_in) {
-  if (boost::istarts_with(path_in, "s3://") || boost::istarts_with(path_in, "http://") ||
-      boost::istarts_with(path_in, "https://")) {
+bool path_is_relative(const std::string& path) {
+  if (boost::istarts_with(path, "s3://") || boost::istarts_with(path, "http://") ||
+      boost::istarts_with(path, "https://")) {
     return false;
   }
-  return !boost::filesystem::path(path_in).is_absolute();
+  return !boost::filesystem::path(path).is_absolute();
 }
 
-bool is_a_supported_geo_file(const std::string& file_name, bool include_gz) {
+bool is_a_supported_geo_file(const std::string& path, bool include_gz) {
   if (include_gz) {
-    if (boost::iends_with(file_name, ".geojson.gz") || boost::iends_with(file_name, ".json.gz")) {
+    if (boost::iends_with(path, ".geojson.gz") || boost::iends_with(path, ".json.gz")) {
       return true;
     }
   }
-  if (boost::iends_with(file_name, ".shp") || boost::iends_with(file_name, ".geojson") ||
-      boost::iends_with(file_name, ".json") || boost::iends_with(file_name, ".kml") ||
-      boost::iends_with(file_name, ".kmz")) {
+  if (boost::iends_with(path, ".shp") || boost::iends_with(path, ".geojson") || boost::iends_with(path, ".json") ||
+      boost::iends_with(path, ".kml") || boost::iends_with(path, ".kmz")) {
     return true;
   }
   return false;
 }
 
-std::string find_first_geo_file_in_archive(const std::string& archive_path,
-                                           const Importer_NS::CopyParams& copy_params,
-                                           bool throw_exception_if_not_found) {
-  // first check it exists
-  if (!Importer_NS::Importer::gdalFileOrDirectoryExists(archive_path, copy_params)) {
-    THROW_MAPD_EXCEPTION("Archive does not exist: " + convert_path_from_vsi(archive_path));
+bool is_a_supported_archive_file(const std::string& path) {
+  if (boost::iends_with(path, ".zip")) {
+    return true;
+#if SUPPORT_TAR_GEO_ARCHIVES_REQUIRES_GDAL_2_3_1
+  } else if (boost::iends_with(path, ".tar") || boost::iends_with(path, ".tgz") || boost::iends_with(path, ".tar.gz")) {
+    return true;
+#endif
   }
+  return false;
+}
 
+std::string find_first_geo_file_in_archive(const std::string& archive_path,
+                                           const Importer_NS::CopyParams& copy_params) {
   // get the recursive list of all files in the archive
   std::vector<std::string> files = Importer_NS::Importer::gdalGetAllFilesInArchive(archive_path, copy_params);
 
   // report the list
-  LOG(INFO) << "import_geo_table: Found " << files.size() << " files in Archive "
-            << convert_path_from_vsi(archive_path);
+  LOG(INFO) << "Found " << files.size() << " files in Archive " << remove_vsi_prefixes(archive_path);
   for (const auto& file : files) {
-    LOG(INFO) << "import_geo_table:   " << file;
+    LOG(INFO) << "  " << file;
   }
 
   // scan the list for the first candidate file
@@ -2096,13 +2101,8 @@ std::string find_first_geo_file_in_archive(const std::string& archive_path,
 
   // if we didn't find anything
   if (!found_suitable_file) {
-    if (throw_exception_if_not_found) {
-      // if called from detect or import, we throw
-      THROW_MAPD_EXCEPTION("Failed to find any supported geo files in Archive: " + convert_path_from_vsi(archive_path));
-    } else {
-      // if called from get_first_geo, we return an empty string
-      file_name.clear();
-    }
+    LOG(INFO) << "Failed to find any supported geo files in Archive: " + remove_vsi_prefixes(archive_path);
+    file_name.clear();
   }
 
   // done
@@ -2128,13 +2128,25 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
 
   // if it's a geo table, handle alternative paths (S3, HTTP, archive etc.)
   if (copy_params.table_type == Importer_NS::TableType::POLYGON) {
-    bool is_archive = false;
-    file_name = convert_path_to_vsi(file_name, copy_params, is_archive);
-    if (is_archive) {
-      std::string geo_file = find_first_geo_file_in_archive(file_name, copy_params, true);
+    if (is_a_supported_geo_file(file_name, true)) {
+      // prepare to detect geo file directly
+      add_vsi_network_prefix(file_name);
+      add_vsi_geo_prefix(file_name);
+    } else if (is_a_supported_archive_file(file_name)) {
+      // find the archive file
+      add_vsi_network_prefix(file_name);
+      if (!Importer_NS::Importer::gdalFileExists(file_name, copy_params)) {
+        THROW_MAPD_EXCEPTION("Archive does not exist: " + file_name_in);
+      }
+      // find geo file in archive
+      add_vsi_archive_prefix(file_name);
+      std::string geo_file = find_first_geo_file_in_archive(file_name, copy_params);
+      // prepare to detect that geo file
       if (geo_file.size()) {
         file_name = file_name + std::string("/") + geo_file;
       }
+    } else {
+      THROW_MAPD_EXCEPTION("File is not a supported geo or geo archive format: " + file_name_in);
     }
   }
 
@@ -2837,19 +2849,25 @@ void MapDHandler::import_geo_table(const TSessionId& session,
     file_name = file_path.string();
   }
 
-  bool is_archive = false;
-  file_name = convert_path_to_vsi(file_name, copy_params, is_archive);
-  if (is_archive) {
-    std::string geo_file = find_first_geo_file_in_archive(file_name, copy_params, true);
+  if (is_a_supported_geo_file(file_name, true)) {
+    // prepare to load geo file directly
+    add_vsi_network_prefix(file_name);
+    add_vsi_geo_prefix(file_name);
+  } else if (is_a_supported_archive_file(file_name)) {
+    // find the archive file
+    add_vsi_network_prefix(file_name);
+    if (!Importer_NS::Importer::gdalFileExists(file_name, copy_params)) {
+      THROW_MAPD_EXCEPTION("Archive does not exist: " + file_name_in);
+    }
+    // find geo file in archive
+    add_vsi_archive_prefix(file_name);
+    std::string geo_file = find_first_geo_file_in_archive(file_name, copy_params);
+    // prepare to load that geo file
     if (geo_file.size()) {
       file_name = file_name + std::string("/") + geo_file;
     }
-  }
-
-  // if we get here, and we don't have the actual filename
-  // of a supported geo file, something went wrong
-  if (!is_a_supported_geo_file(file_name, true)) {
-    THROW_MAPD_EXCEPTION("File is not a supported geo file: " + file_name_in);
+  } else {
+    THROW_MAPD_EXCEPTION("File is not a supported geo or geo archive file: " + file_name_in);
   }
 
   // log what we're about to try to do
@@ -2954,11 +2972,16 @@ void MapDHandler::get_first_geo_file_in_archive(std::string& _return,
     archive_path = file_path.string();
   }
 
-  bool is_archive = false;
-  archive_path = convert_path_to_vsi(archive_path, thrift_to_copyparams(copy_params), is_archive);
-  if (is_archive) {
-    // find the single most likely file within (do not throw exception if none)
-    std::string geo_file = find_first_geo_file_in_archive(archive_path, thrift_to_copyparams(copy_params), false);
+  if (is_a_supported_archive_file(archive_path)) {
+    // find the archive file
+    add_vsi_network_prefix(archive_path);
+    if (!Importer_NS::Importer::gdalFileExists(archive_path, thrift_to_copyparams(copy_params))) {
+      THROW_MAPD_EXCEPTION("Archive does not exist: " + archive_path_in);
+    }
+    // find geo file in archive
+    add_vsi_archive_prefix(archive_path);
+    std::string geo_file = find_first_geo_file_in_archive(archive_path, thrift_to_copyparams(copy_params));
+    // what did we get?
     if (geo_file.size()) {
       // prepend it with the original path
       _return = archive_path_in + std::string("/") + geo_file;
@@ -2985,10 +3008,14 @@ void MapDHandler::get_all_files_in_archive(std::vector<std::string>& _return,
     archive_path = file_path.string();
   }
 
-  bool is_archive = false;
-  archive_path = convert_path_to_vsi(archive_path, thrift_to_copyparams(copy_params), is_archive);
-  if (is_archive) {
-    // get files within
+  if (is_a_supported_archive_file(archive_path)) {
+    // find the archive file
+    add_vsi_network_prefix(archive_path);
+    if (!Importer_NS::Importer::gdalFileExists(archive_path, thrift_to_copyparams(copy_params))) {
+      THROW_MAPD_EXCEPTION("Archive does not exist: " + archive_path_in);
+    }
+    // find all files in archive
+    add_vsi_archive_prefix(archive_path);
     _return = Importer_NS::Importer::gdalGetAllFilesInArchive(archive_path, thrift_to_copyparams(copy_params));
     // prepend them all with original path
     for (auto& s : _return) {
