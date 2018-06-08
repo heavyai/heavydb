@@ -369,7 +369,7 @@ TEST_F(ImportTest, Geo_CSV_Local_Encoding_NONE) {
 }
 
 TEST_F(ImportTest, Geo_CSV_Local_Encoding_GEOINT32) {
-  EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_encoding='geoint(32)'", 10, 4.5));
+  EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_encoding='compressed(32)'", 10, 4.5));
 }
 
 TEST_F(ImportTest, Geo_CSV_Local_Encoding_Other) {

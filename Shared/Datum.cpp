@@ -56,7 +56,7 @@ std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
                                                      "TINYINT",
                                                      "GEOMETRY",
                                                      "GEOGRAPHY"};
-std::string SQLTypeInfo::comp_name[kENCODING_LAST] = {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "GEOINT"};
+std::string SQLTypeInfo::comp_name[kENCODING_LAST] = {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED"};
 
 int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
   assert(s.length() <= 20);

@@ -2763,12 +2763,19 @@ void MapDHandler::create_table(const TSessionId& session,
 
     if (thrift_to_encoding(col.col_type.encoding) != kENCODING_NONE) {
       col_stmt.append(" ENCODING " + thrift_to_encoding_name(col.col_type));
-      col_stmt.append("(" + std::to_string(col.col_type.comp_param) + ")");
-    } else if (col.col_type.type == TDatumType::STR || col.col_type.type == TDatumType::POINT ||
-               col.col_type.type == TDatumType::LINESTRING || col.col_type.type == TDatumType::POLYGON ||
-               col.col_type.type == TDatumType::MULTIPOLYGON) {
-      // special case of non DICT encoded strings and non encoded geo
+      if (thrift_to_encoding(col.col_type.encoding) == kENCODING_DICT ||
+          thrift_to_encoding(col.col_type.encoding) == kENCODING_FIXED ||
+          thrift_to_encoding(col.col_type.encoding) == kENCODING_GEOINT) {
+        col_stmt.append("(" + std::to_string(col.col_type.comp_param) + ")");
+      }
+    } else if (col.col_type.type == TDatumType::STR) {
+      // non DICT encoded strings
       col_stmt.append(" ENCODING NONE");
+    } else if (col.col_type.type == TDatumType::POINT || col.col_type.type == TDatumType::LINESTRING ||
+               col.col_type.type == TDatumType::POLYGON || col.col_type.type == TDatumType::MULTIPOLYGON) {
+      // non encoded compressable geo
+      if (col.col_type.scale == 4326)
+        col_stmt.append(" ENCODING NONE");
     }
     col_stmts.push_back(col_stmt);
   }

@@ -2020,15 +2020,15 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         cd.columnType.set_compression(kENCODING_SPARSE);
         cd.columnType.set_comp_param(compression->get_encoding_param());
         // throw std::runtime_error("SPARSE encoding not supported yet.");
-      } else if (boost::iequals(comp, "geoint")) {
+      } else if (boost::iequals(comp, "compressed")) {
         if (!cd.columnType.is_geometry() || cd.columnType.get_output_srid() != 4326)
-          throw std::runtime_error(cd.columnName + ": GEOINT encoding is only supported on WGS84 geo columns.");
+          throw std::runtime_error(cd.columnName + ": COMPRESSED encoding is only supported on WGS84 geo columns.");
         if (compression->get_encoding_param() == 0)
           comp_param = 32;  // default to 32-bits
         else
           comp_param = compression->get_encoding_param();
         if (comp_param != 32) {
-          throw std::runtime_error(cd.columnName + ": Only 32-bit integer encoding is supported");
+          throw std::runtime_error(cd.columnName + ": only 32-bit COMPRESSED geo encoding is supported");
         }
         // encoding longitude/latitude as integers
         cd.columnType.set_compression(kENCODING_GEOINT);
@@ -2657,12 +2657,12 @@ void CopyTableStmt::execute(
         if (boost::iequals(*s, "none")) {
           copy_params.geo_coords_encoding = kENCODING_NONE;
           copy_params.geo_coords_comp_param = 0;
-        } else if (boost::iequals(*s, "geoint(32)")) {
+        } else if (boost::iequals(*s, "compressed(32)")) {
           copy_params.geo_coords_encoding = kENCODING_GEOINT;
           copy_params.geo_coords_comp_param = 32;
         } else
           throw std::runtime_error(
-              "Invalid string for 'geo_coords_encoding' option (must be 'NONE' or 'GEOINT(32)'): " + *s);
+              "Invalid string for 'geo_coords_encoding' option (must be 'NONE' or 'COMPRESSED(32)'): " + *s);
       } else if (boost::iequals(*p->get_name(), "geo_coords_srid")) {
         const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
         if (int_literal == nullptr)
