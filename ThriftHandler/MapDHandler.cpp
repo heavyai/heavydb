@@ -2897,19 +2897,55 @@ void MapDHandler::import_geo_table(const TSessionId& session,
   }
 
   TRowDescriptor rd;
-  if (cat.getMetadataForTable(table_name) == nullptr) {
-    TDetectResult cds;
-    // copy input CopyParams in order to retain S3 auth tokens
-    TCopyParams cp_copy = cp;
-    cp_copy.table_type = TTableType::POLYGON;
-    detect_column_types(cds, session, file_name_in, cp_copy);
-    create_table(session, table_name, cds.row_set.row_desc, TTableType::POLYGON);
-    rd = cds.row_set.row_desc;
-  } else if (row_desc.size() > 0) {
+  if (row_desc.size() > 0) {
+    // we have a valid RowDescriptor
+    // this is the case where Immerse has already detected and created
+    // all we need to do is import and trust that the data will match
+    // check that the table DOES exist
+    const TableDescriptor* td = cat.getMetadataForTable(table_name);
+    if (!td) {
+      THROW_MAPD_EXCEPTION("Could not import geo file '" + file_path.filename().string() +
+                           "' to table '" + table_name + "'; table does not exist.");
+    }
     rd = row_desc;
   } else {
-    THROW_MAPD_EXCEPTION("Could not append file " + file_path.filename().string() + " to " + table_name +
-                         ": not currently supported.");
+    // we don't have a RowDescriptor
+    // we have to detect the file ourselves
+    TDetectResult cds;
+    TCopyParams cp_copy = cp; // retain S3 auth tokens
+    cp_copy.table_type = TTableType::POLYGON;
+    detect_column_types(cds, session, file_name_in, cp_copy);
+    rd = cds.row_set.row_desc;
+
+    // then, we check if the table exists
+    const TableDescriptor* td = cat.getMetadataForTable(table_name);
+    if (td == nullptr) {
+      // table does not exist, so we create it to match
+      create_table(session, table_name, rd, TTableType::POLYGON);
+    } else {
+      // table DOES exist, we have to verify that the structure matches
+      // get column descriptors (non-system, non-deleted, logical columns only)
+      const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, false, false, false);
+      // compare the column number, names, and types
+      bool structure_matches = true;
+      if (col_descriptors.size() != rd.size()) {
+        structure_matches = false;
+      } else {
+        int rd_index = 0;
+        for (auto cd : col_descriptors) {
+          TColumnType cd_col_type = populateThriftColumnType(&cat, cd);
+          if (rd[rd_index].col_name != cd->columnName || rd[rd_index].col_type != cd_col_type.col_type) {
+            structure_matches = false;
+            break;
+          }
+          rd_index++;
+        }
+      }
+      if (!structure_matches) {
+        THROW_MAPD_EXCEPTION("Could not append geo file '" + file_path.filename().string() +
+                             "' to table '" + table_name + "'; structure differs.");
+      }
+    }
   }
 
   std::map<std::string, std::string> colname_to_src;

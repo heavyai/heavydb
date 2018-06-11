@@ -2681,23 +2681,20 @@ void CopyTableStmt::execute(
   }
 
   std::string tr;
-
-  // the table MUST not already exist if geo mode is specified
   if (copy_params.table_type == Importer_NS::TableType::POLYGON) {
-    if (td) {
-      // geo append (NOT YET)
-      throw std::runtime_error("COPY FROM of geo file to existing table (append) not yet implemented");
-    } else {
-      // geo import
-      // we do nothing here, except stash the parameters so we can
-      // do the import when we unwind to the top of the handler
-      _geo_copy_from_file_name = file_path;
-      _geo_copy_from_copy_params = copy_params;
-      _was_geo_copy_from = true;
+    // geo import
+    // we do nothing here, except stash the parameters so we can
+    // do the import when we unwind to the top of the handler
+    _geo_copy_from_file_name = file_path;
+    _geo_copy_from_copy_params = copy_params;
+    _was_geo_copy_from = true;
 
-      // the result string
-      // @TODO simon.eves put something more useful in here
-      // except we really can't because we haven't done the import yet!
+    // the result string
+    // @TODO simon.eves put something more useful in here
+    // except we really can't because we haven't done the import yet!
+    if (td) {
+      tr = std::string("Appending geo to table '") + *table + std::string("'...");
+    } else {
       tr = std::string("Creating table '") + *table + std::string("' and importing geo...");
     }
   } else {
