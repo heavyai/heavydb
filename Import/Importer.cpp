@@ -1802,7 +1802,7 @@ static ImportStatus import_thread_delimited(
                   // get a suitable render group for these poly coords
                   auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
                   CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
-                  render_group = (*rga_it).second->insertCoordsAndReturnRenderGroup(coords);
+                  render_group = (*rga_it).second->insertBoundsAndReturnRenderGroup(bounds);
                 }
               }
 
@@ -2000,7 +2000,7 @@ static ImportStatus import_thread_shapefile(
             // get a suitable render group for these poly coords
             auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
             CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
-            render_group = (*rga_it).second->insertCoordsAndReturnRenderGroup(coords);
+            render_group = (*rga_it).second->insertBoundsAndReturnRenderGroup(bounds);
           }
 
           // create coords array value and add it to the physical column
@@ -3867,6 +3867,9 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 
 void RenderGroupAnalyzer::seedFromExistingTableContents(const std::unique_ptr<Loader>& loader,
                                                         const std::string& geoColumnBaseName) {
+  // start timer
+  auto seedTimer = timer_start();
+
   // get the table descriptor
   const auto& cat = loader->get_catalog();
   const std::string& tableName = loader->get_table_desc()->tableName;
@@ -3886,18 +3889,18 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(const std::unique_ptr<Lo
   }
 
   // no seeding possible without these two columns
-  const auto cd_coords = cat.getMetadataForColumn(td->tableId, geoColumnBaseName + "_coords");
+  const auto cd_bounds = cat.getMetadataForColumn(td->tableId, geoColumnBaseName + "_bounds");
   const auto cd_render_group = cat.getMetadataForColumn(td->tableId, geoColumnBaseName + "_render_group");
-  if (!cd_coords || !cd_render_group) {
+  if (!cd_bounds || !cd_render_group) {
     if (DEBUG_RENDER_GROUP_ANALYZER)
-      LOG(INFO) << "DEBUG: Table doesn't have coords or render_group columns!";
+      LOG(INFO) << "DEBUG: Table doesn't have bounds or render_group columns!";
     return;
   }
 
   // and validate their types
-  if (cd_coords->columnType.get_type() != kARRAY || cd_coords->columnType.get_subtype() != kDOUBLE) {
+  if (cd_bounds->columnType.get_type() != kARRAY || cd_bounds->columnType.get_subtype() != kDOUBLE) {
     if (DEBUG_RENDER_GROUP_ANALYZER)
-      LOG(INFO) << "DEBUG: Table coords columns is wrong type!";
+      LOG(INFO) << "DEBUG: Table bounds columns is wrong type!";
     return;
   }
   if (cd_render_group->columnType.get_type() != kINT) {
@@ -3908,13 +3911,11 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(const std::unique_ptr<Lo
 
   // get chunk accessor table
   auto chunkAccessorTable =
-      getChunkAccessorTable(cat, td, {geoColumnBaseName + "_coords", geoColumnBaseName + "_render_group"});
+      getChunkAccessorTable(cat, td, {geoColumnBaseName + "_bounds", geoColumnBaseName + "_render_group"});
   const auto table_count = std::get<0>(chunkAccessorTable.back());
 
   if (DEBUG_RENDER_GROUP_ANALYZER)
     LOG(INFO) << "DEBUG: Scanning existing table geo column set '" << geoColumnBaseName << "'";
-
-  auto scanTimer = timer_start();
 
   for (size_t row = 0; row < table_count; row++) {
     ArrayDatum ad;
@@ -3924,29 +3925,22 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(const std::unique_ptr<Lo
     // get ChunkIters and fragment row offset
     size_t rowOffset = 0;
     auto& chunkIters = getChunkItersAndRowOffset(chunkAccessorTable, row, rowOffset);
-    auto& coordsChunkIter = chunkIters[0];
+    auto& boundsChunkIter = chunkIters[0];
     auto& renderGroupChunkIter = chunkIters[1];
 
-    // get coords
-    ChunkIter_get_nth(&coordsChunkIter, row - rowOffset, &ad, &is_end);
+    // get bounds values
+    ChunkIter_get_nth(&boundsChunkIter, row - rowOffset, &ad, &is_end);
     CHECK(!is_end);
     CHECK(ad.pointer);
-    int numCoords = (int)(ad.length / sizeof(double));
-    CHECK(numCoords % 2 == 0);
+    int numBounds = (int)(ad.length / sizeof(double));
+    CHECK(numBounds == 4);
 
-    // skip row if no coords
-    if (numCoords == 0)
-      continue;
-
-    // build bounding box of these points
-    double* coords = reinterpret_cast<double*>(ad.pointer);
-    Bounds bounds;
-    boost::geometry::assign_inverse(bounds);
-    for (int i = 0; i < numCoords; i += 2) {
-      double x = *coords++;
-      double y = *coords++;
-      boost::geometry::expand(bounds, Point(x, y));
-    }
+    // convert to bounding box
+    double* bounds = reinterpret_cast<double*>(ad.pointer);
+    BoundingBox bounding_box;
+    boost::geometry::assign_inverse(bounding_box);
+    boost::geometry::expand(bounding_box, Point(bounds[0], bounds[1]));
+    boost::geometry::expand(bounding_box, Point(bounds[2], bounds[3]));
 
     // get render group
     ChunkIter_get_nth(&renderGroupChunkIter, row - rowOffset, false, &vd, &is_end);
@@ -3956,37 +3950,38 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(const std::unique_ptr<Lo
     CHECK_GE(renderGroup, 0);
 
     // add to rtree
-    _rtree.insert(std::make_pair(bounds, renderGroup));
+    _rtree.insert(std::make_pair(bounding_box, renderGroup));
 
     // how many render groups do we have now?
     if (renderGroup >= _numRenderGroups)
       _numRenderGroups = renderGroup + 1;
 
     if (DEBUG_RENDER_GROUP_ANALYZER)
-      LOG(INFO) << "DEBUG:   Existing row " << row << " has " << numCoords << " coords, and Render Group "
-                << renderGroup;
+      LOG(INFO) << "DEBUG:   Existing row " << row << " has Render Group " << renderGroup;
   }
 
   if (DEBUG_RENDER_GROUP_ANALYZER)
-    LOG(INFO) << "DEBUG: Done! Now have " << _numRenderGroups << " Render Groups (" << timer_stop(scanTimer) << "ms)";
+    LOG(INFO) << "DEBUG: Done! Now have " << _numRenderGroups << " Render Groups";
+
+  LOG(INFO) << "Scanning existing poly render groups of table '" << tableName << "' took " << timer_stop(seedTimer) << "ms";
 }
 
-int RenderGroupAnalyzer::insertCoordsAndReturnRenderGroup(const std::vector<double>& coords) {
+int RenderGroupAnalyzer::insertBoundsAndReturnRenderGroup(const std::vector<double>& bounds) {
+  // validate
+  CHECK(bounds.size() == 4);
+
   // get bounds
-  Bounds bounds;
-  boost::geometry::assign_inverse(bounds);
-  for (size_t i = 0; i < coords.size(); i += 2) {
-    double x = coords[i];
-    double y = coords[i + 1];
-    boost::geometry::expand(bounds, Point(x, y));
-  }
+  BoundingBox bounding_box;
+  boost::geometry::assign_inverse(bounding_box);
+  boost::geometry::expand(bounding_box, Point(bounds[0], bounds[1]));
+  boost::geometry::expand(bounding_box, Point(bounds[2], bounds[3]));
 
   // remainder under mutex to allow this to be multi-threaded
   std::lock_guard<std::mutex> guard(_rtreeMutex);
 
   // get the intersecting nodes
   std::vector<Node> intersects;
-  _rtree.query(boost::geometry::index::intersects(bounds), std::back_inserter(intersects));
+  _rtree.query(boost::geometry::index::intersects(bounding_box), std::back_inserter(intersects));
 
   // build bitset of render groups of the intersecting rectangles
   // clear bit means available, allows use of find_first()
@@ -3998,7 +3993,7 @@ int RenderGroupAnalyzer::insertCoordsAndReturnRenderGroup(const std::vector<doub
   }
 
   // find first available group
-  int firstAvailableRenderGroup;
+  int firstAvailableRenderGroup = 0;
   size_t firstSetBit = bits.find_first();
   if (firstSetBit == boost::dynamic_bitset<>::npos) {
     // all known groups represented, add a new one
@@ -4009,7 +4004,7 @@ int RenderGroupAnalyzer::insertCoordsAndReturnRenderGroup(const std::vector<doub
   }
 
   // insert new node
-  _rtree.insert(std::make_pair(bounds, firstAvailableRenderGroup));
+  _rtree.insert(std::make_pair(bounding_box, firstAvailableRenderGroup));
 
   // return it
   return firstAvailableRenderGroup;

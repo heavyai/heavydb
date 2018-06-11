@@ -723,12 +723,12 @@ class RenderGroupAnalyzer {
  public:
   RenderGroupAnalyzer() : _numRenderGroups(0) {}
   void seedFromExistingTableContents(const std::unique_ptr<Loader>& loader, const std::string& geoColumnBaseName);
-  int insertCoordsAndReturnRenderGroup(const std::vector<double>& coords);
+  int insertBoundsAndReturnRenderGroup(const std::vector<double>& bounds);
 
  private:
   using Point = boost::geometry::model::point<double, 2, boost::geometry::cs::cartesian>;
-  using Bounds = boost::geometry::model::box<Point>;
-  using Node = std::pair<Bounds, int>;
+  using BoundingBox = boost::geometry::model::box<Point>;
+  using Node = std::pair<BoundingBox, int>;
   boost::geometry::index::rtree<Node, boost::geometry::index::quadratic<16>> _rtree;
   std::mutex _rtreeMutex;
   int _numRenderGroups;
