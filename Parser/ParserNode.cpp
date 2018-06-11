@@ -2331,7 +2331,8 @@ std::shared_ptr<ResultSet> getResultRows(const Catalog_Namespace::SessionInfo& s
       calcite_mgr.process(session, pg_shim(select_stmt), {}, true, false).plan_result;
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
-  ExecutionOptions eo = {false, true, false, true, false, false, false, false, 10000, false};
+  ExecutionOptions eo = {
+      false, true, false, true, false, false, false, false, 10000, false};
   RelAlgExecutor ra_executor(executor.get(), catalog);
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,

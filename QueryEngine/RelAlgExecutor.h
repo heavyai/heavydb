@@ -21,6 +21,7 @@
 #include "Distributed/AggregatedResult.h"
 #include "Execute.h"
 #include "InputMetadata.h"
+#include "JoinFilterPushDown.h"
 #include "QueryRewrite.h"
 #include "RelAlgExecutionDescriptor.h"
 #include "SpeculativeTopN.h"
@@ -62,6 +63,13 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                      const CompilationOptions& co,
                                      const ExecutionOptions& eo,
                                      RenderInfo* render_info);
+
+  ExecutionResult executeRelAlgQueryWithFilterPushDown(
+      std::vector<RaExecutionDesc>& ed_list,
+      const CompilationOptions& co,
+      const ExecutionOptions& eo,
+      RenderInfo* render_info,
+      const int64_t queue_time_ms);
 
   FirstStepExecutionResult executeRelAlgQueryFirstStep(const RelAlgNode* ra,
                                                        const CompilationOptions& co,
@@ -211,20 +219,15 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                               const CompilationOptions& co,
                               const ExecutionOptions& eo);
 
-  struct FilterSelectivity {
-    const float fraction_passing;
-    const size_t total_rows_upper_bound;
+  FilterSelectivity getFilterSelectivity(
+      const std::vector<std::shared_ptr<Analyzer::Expr>>& filter_expressions,
+      const CompilationOptions& co,
+      const ExecutionOptions& eo);
 
-    size_t getRowsPassingUpperBound() const { return fraction_passing * total_rows_upper_bound; }
-
-    static constexpr float kFractionPassingLowThreshold = 0.01;
-    static constexpr float kFractionPassingHighThreshold = 0.4;
-    static constexpr size_t kRowsPassingUpperBoundThreshold = 2000000;
-  };
-
-  FilterSelectivity getFilterSelectivity(const std::vector<std::shared_ptr<Analyzer::Expr>>& filter_expressions,
-                                         const CompilationOptions& co,
-                                         const ExecutionOptions& eo);
+  std::vector<PushedDownFilterInfo> selectFiltersToBePushedDown(
+      const RelAlgExecutor::WorkUnit& work_unit,
+      const CompilationOptions& co,
+      const ExecutionOptions& eo);
 
   bool isRowidLookup(const WorkUnit& work_unit);
 

@@ -78,6 +78,9 @@ extern bool g_null_div_by_zero;
 extern bool g_bigint_count;
 extern bool g_fast_strcmp;
 extern bool g_inner_join_fragment_skipping;
+extern float g_filter_push_down_low_frac;
+extern float g_filter_push_down_high_frac;
+extern size_t g_filter_push_down_passing_row_ubound;
 
 class ExecutionResult;
 

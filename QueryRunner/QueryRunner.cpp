@@ -36,7 +36,7 @@
 #define CALCITEPORT 39093
 
 extern bool g_aggregator;
-
+extern bool g_enable_filter_push_down;
 namespace {
 
 Planner::RootPlan* parse_plan_legacy(
@@ -219,17 +219,96 @@ ExecutionResult run_select_query(
     const bool just_explain) {
   CHECK(!g_aggregator);
 
+  if (g_enable_filter_push_down) {
+    return run_select_query_with_filter_push_down(query_str,
+                                                  session,
+                                                  device_type,
+                                                  hoist_literals,
+                                                  allow_loop_joins,
+                                                  just_explain,
+                                                  g_enable_filter_push_down);
+  }
+
   const auto& cat = session->get_catalog();
   auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
-  ExecutionOptions eo = {
-      false, true, just_explain, allow_loop_joins, false, false, false, false, 10000, false};
+  ExecutionOptions eo = {false,
+                         true,
+                         just_explain,
+                         allow_loop_joins,
+                         false,
+                         false,
+                         false,
+                         false,
+                         10000,
+                         false,
+                         false};
   auto& calcite_mgr = cat.get_calciteMgr();
   const auto query_ra =
       calcite_mgr.process(*session, pg_shim(query_str), {}, true, false).plan_result;
   RelAlgExecutor ra_executor(executor.get(), cat);
   return ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
+}
+
+ExecutionResult run_select_query_with_filter_push_down(
+    const std::string& query_str,
+    const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
+    const ExecutorDeviceType device_type,
+    const bool hoist_literals,
+    const bool allow_loop_joins,
+    const bool just_explain,
+    const bool with_filter_push_down) {
+  const auto& cat = session->get_catalog();
+  auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
+  CompilationOptions co = {
+      device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
+  ExecutionOptions eo = {false,
+                         true,
+                         just_explain,
+                         allow_loop_joins,
+                         false,
+                         false,
+                         false,
+                         false,
+                         10000,
+                         with_filter_push_down,
+                         false};
+  auto& calcite_mgr = cat.get_calciteMgr();
+  const auto query_ra =
+      calcite_mgr.process(*session, pg_shim(query_str), {}, true, false).plan_result;
+  RelAlgExecutor ra_executor(executor.get(), cat);
+
+  auto result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
+  const auto& filter_push_down_requests = result.getPushedDownFilterInfo();
+  if (!filter_push_down_requests.empty()) {
+    std::vector<TFilterPushDownInfo> filter_push_down_info;
+    for (const auto& req : filter_push_down_requests) {
+      TFilterPushDownInfo filter_push_down_info_for_request;
+      filter_push_down_info_for_request.input_prev = req.input_prev;
+      filter_push_down_info_for_request.input_start = req.input_start;
+      filter_push_down_info_for_request.input_next = req.input_next;
+      filter_push_down_info.push_back(filter_push_down_info_for_request);
+    }
+    const auto new_query_ra =
+        calcite_mgr
+            .process(*session, pg_shim(query_str), filter_push_down_info, true, false)
+            .plan_result;
+    const ExecutionOptions eo_modified{eo.output_columnar_hint,
+                                       eo.allow_multifrag,
+                                       eo.just_explain,
+                                       eo.allow_loop_joins,
+                                       eo.with_watchdog,
+                                       eo.jit_debug,
+                                       eo.just_validate,
+                                       eo.with_dynamic_watchdog,
+                                       eo.dynamic_watchdog_time_limit,
+                                       /*find_push_down_candidates=*/false,
+                                       /*just_calcite_explain=*/false};
+    return ra_executor.executeRelAlgQuery(new_query_ra, co, eo_modified, nullptr);
+  } else {
+    return result;
+  }
 }
 
 TExecuteMode::type to_execute_mode(ExecutorDeviceType device_type) {

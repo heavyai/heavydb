@@ -56,6 +56,7 @@
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/GpuMemUtils.h"
+#include "QueryEngine/JoinFilterPushDown.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/StringTransform.h"
@@ -1028,6 +1029,7 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
                                  -1,
                                  false,
                                  true,
+                                 false,
                                  false);
     const auto& row_desc =
         fixup_row_descriptor(result.row_set.row_desc, session_info.get_catalog());
@@ -1377,7 +1379,8 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
                         -1,
                         -1,
                         false,
-                        true, 
+                        true,
+                        false,
                         false);
         _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
       } else {
@@ -1569,6 +1572,7 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
                         -1,
                         false,
                         true,
+                        false,
                         false);
         num_cols = result.row_set.row_desc.size();
         for (const auto col : result.row_set.row_desc) {
@@ -3507,16 +3511,18 @@ void MapDHandler::set_execution_mode_nolock(Catalog_Namespace::SessionInfo* sess
   }
 }
 
-std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(TQueryResult& _return,
-                                  const std::string& query_ra,
-                                  const bool column_format,
-                                  const Catalog_Namespace::SessionInfo& session_info,
-                                  const ExecutorDeviceType executor_device_type,
-                                  const int32_t first_n,
-                                  const int32_t at_most_n,
-                                  const bool just_explain,
-                                  const bool just_validate,
-                                  const bool find_push_down_candidates) const {
+std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
+    TQueryResult& _return,
+    const std::string& query_ra,
+    const bool column_format,
+    const Catalog_Namespace::SessionInfo& session_info,
+    const ExecutorDeviceType executor_device_type,
+    const int32_t first_n,
+    const int32_t at_most_n,
+    const bool just_explain,
+    const bool just_validate,
+    const bool find_push_down_candidates,
+    const bool just_calcite_explain) const {
   INJECT_TIMER(execute_rel_alg);
   const auto& cat = session_info.get_catalog();
   CompilationOptions co = {
@@ -3530,7 +3536,8 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(TQueryResult& _re
                          just_validate,
                          g_enable_dynamic_watchdog,
                          g_dynamic_watchdog_time_limit,
-                         find_push_down_candidates};
+                         find_push_down_candidates,
+                         just_calcite_explain};
   auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
@@ -3553,7 +3560,7 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(TQueryResult& _re
   }
   if (just_explain) {
     convert_explain(_return, *result.getRows(), column_format);
-  } else {
+  } else if (!just_calcite_explain) {
     convert_rows(_return,
                  result.getTargetsMeta(),
                  *result.getRows(),
@@ -3877,10 +3884,16 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         query_ra = parse_to_ra(query_str, {}, session_info, &tableNames);
       });
 
-      if (pw.is_select_calcite_explain) {
+      std::string query_ra_calcite_explain;
+      if (pw.is_select_calcite_explain && (!g_enable_filter_push_down || g_cluster)) {
         // return the ra as the result
         convert_explain(_return, ResultSet(query_ra), true);
         return;
+      } else if (pw.is_select_calcite_explain) {
+        // removing the "explain calcite " from the beginning of the "query_str":
+        std::string temp_query_str =
+            query_str.substr(std::string("explain calcite ").length());
+        query_ra_calcite_explain = parse_to_ra(temp_query_str, {}, session_info);
       }
 
       // UPDATE/DELETE needs to get a checkpoint lock as the first lock
@@ -3897,36 +3910,58 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
                                        tableNames,
                                        upddelLocks,
                                        LockType::UpdateDeleteLock);
-      const auto filter_push_down_requests = execute_rel_alg(_return,
-                                                             query_ra,
-                                                             column_format,
-                                                             session_info,
-                                                             executor_device_type,
-                                                             first_n,
-                                                             at_most_n,
-                                                             pw.is_select_explain,
-                                                             false,
-                                                             g_enable_filter_push_down);
+      const auto filter_push_down_requests = execute_rel_alg(
+          _return,
+          pw.is_select_calcite_explain ? query_ra_calcite_explain : query_ra,
+          column_format,
+          session_info,
+          executor_device_type,
+          first_n,
+          at_most_n,
+          pw.is_select_explain,
+          false,
+          g_enable_filter_push_down && !g_cluster,
+          pw.is_select_calcite_explain);
+      if (pw.is_select_calcite_explain && filter_push_down_requests.empty()) {
+        // we only reach here if filter push down was enabled, but no filter
+        // push down candidate was found
+        convert_explain(_return, ResultSet(query_ra), true);
+        return;
+      }
       if (!filter_push_down_requests.empty()) {
-        std::vector<TFilterPushDownInfo> filter_push_down_info;
-        for (const auto& req : filter_push_down_requests) {
-          TFilterPushDownInfo filter_push_down_info_for_request;
-          filter_push_down_info_for_request.input_start = req.input_start_end.first;
-          filter_push_down_info_for_request.input_end = req.input_start_end.second;
-          filter_push_down_info.push_back(filter_push_down_info_for_request);
-        }
-        _return.execution_time_ms +=
-            measure<>::execution([&]() { query_ra = parse_to_ra(query_str, filter_push_down_info, session_info); });
-        execute_rel_alg(_return,
-                        query_ra,
-                        column_format,
-                        session_info,
-                        executor_device_type,
-                        first_n,
-                        at_most_n,
-                        pw.is_select_explain,
-                        false,
-                        false);
+        execute_rel_alg_with_filter_push_down(_return,
+                                              query_ra,
+                                              column_format,
+                                              session_info,
+                                              executor_device_type,
+                                              first_n,
+                                              at_most_n,
+                                              pw.is_select_explain,
+                                              pw.is_select_calcite_explain,
+                                              query_str,
+                                              filter_push_down_requests);
+      } else if (pw.is_select_calcite_explain && filter_push_down_requests.empty()) {
+        // return the ra as the result:
+        // If we reach here, the 'filter_push_down_request' turned out to be empty, i.e.,
+        // no filter push down so we continue with the initial (unchanged) query's calcite
+        // explanation.
+        query_ra = parse_to_ra(query_str, {}, session_info);
+        convert_explain(_return, ResultSet(query_ra), true);
+        return;
+      }
+      if (pw.is_select_calcite_explain) {
+        // If we reach here, the filter push down candidates has been selected and
+        // proper output result has been already created.
+        return;
+      }
+      if (pw.is_select_calcite_explain) {
+        // return the ra as the result:
+        // If we reach here, the 'filter_push_down_request' turned out to be empty, i.e.,
+        // no filter push down so we continue with the initial (unchanged) query's calcite
+        // explanation.
+        query_ra = parse_to_ra(query_str, {}, session_info);
+        convert_explain(_return, ResultSet(query_ra), true);
+        return;
       }
       return;
     }
@@ -4086,6 +4121,51 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
   }
 }
 
+void MapDHandler::execute_rel_alg_with_filter_push_down(
+    TQueryResult& _return,
+    std::string& query_ra,
+    const bool column_format,
+    const Catalog_Namespace::SessionInfo& session_info,
+    const ExecutorDeviceType executor_device_type,
+    const int32_t first_n,
+    const int32_t at_most_n,
+    const bool just_explain,
+    const bool just_calcite_explain,
+    const std::string& query_str,
+    const std::vector<PushedDownFilterInfo> filter_push_down_requests) {
+  // collecting the selected filters' info to be sent to Calcite:
+  std::vector<TFilterPushDownInfo> filter_push_down_info;
+  for (const auto& req : filter_push_down_requests) {
+    TFilterPushDownInfo filter_push_down_info_for_request;
+    filter_push_down_info_for_request.input_prev = req.input_prev;
+    filter_push_down_info_for_request.input_start = req.input_start;
+    filter_push_down_info_for_request.input_next = req.input_next;
+    filter_push_down_info.push_back(filter_push_down_info_for_request);
+  }
+  // deriving the new relational algebra plan with respect to the pushed down filters
+  _return.execution_time_ms += measure<>::execution(
+      [&]() { query_ra = parse_to_ra(query_str, filter_push_down_info, session_info); });
+
+  if (just_calcite_explain) {
+    // return the new ra as the result
+    convert_explain(_return, ResultSet(query_ra), true);
+    return;
+  }
+
+  // execute the new relational algebra plan:
+  execute_rel_alg(_return,
+                  query_ra,
+                  column_format,
+                  session_info,
+                  executor_device_type,
+                  first_n,
+                  at_most_n,
+                  just_explain,
+                  /*just_validate = */ false,
+                  /*find_push_down_candidates = */ false,
+                  /*just_calcite_explain = */ false);
+}
+
 void MapDHandler::execute_distributed_copy_statement(
     Parser::CopyTableStmt* copy_stmt,
     const Catalog_Namespace::SessionInfo& session_info) {
@@ -4116,7 +4196,7 @@ Planner::RootPlan* MapDHandler::parse_to_plan(
         calcite_
             ->process(session_info,
                       legacy_syntax_ ? pg_shim(actual_query) : actual_query,
-                      {}, 
+                      {},
                       legacy_syntax_,
                       pw.is_select_calcite_explain)
             .plan_result;
@@ -4130,10 +4210,11 @@ Planner::RootPlan* MapDHandler::parse_to_plan(
   return nullptr;
 }
 
-std::string MapDHandler::parse_to_ra(const std::string& query_str,
-                                      const std::vector<TFilterPushDownInfo>& filter_push_down_info,
-                                      const Catalog_Namespace::SessionInfo& session_info,
-                                      std::map<std::string, bool>* tableNames) {
+std::string MapDHandler::parse_to_ra(
+    const std::string& query_str,
+    const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+    const Catalog_Namespace::SessionInfo& session_info,
+    std::map<std::string, bool>* tableNames) {
   INJECT_TIMER(parse_to_ra);
   ParserWrapper pw{query_str};
   const std::string actual_query{

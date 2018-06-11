@@ -117,7 +117,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
     try {
       final List<MapDParser.FilterPushDownInfo> filterPushDownInfo = new ArrayList<>();
       for (final TFilterPushDownInfo req : thriftFilterPushDownInfo) {
-        filterPushDownInfo.add(new MapDParser.FilterPushDownInfo(req.input_start, req.input_end));
+        filterPushDownInfo.add(new MapDParser.FilterPushDownInfo(req.input_prev, req.input_start, req.input_next));
       }
       relAlgebra = parser.getRelAlgebra(sqlText, filterPushDownInfo, legacySyntax, mapDUser, isExplain);
       capturer = parser.captureIdentifiers(sqlText, legacySyntax);

@@ -106,13 +106,15 @@ public final class MapDParser {
   }
 
   public static class FilterPushDownInfo {
-    public FilterPushDownInfo(final int input_start, final int input_end)  {
+    public FilterPushDownInfo(final int input_prev, final int input_start, final int input_next)  {
+      this.input_prev = input_prev;
       this.input_start = input_start;
-      this.input_end = input_end;
+      this.input_next = input_next;
     }
 
+    public int input_prev;
     public int input_start;
-    public int input_end;
+    public int input_next;
   }
 
   public String getRelAlgebra(String sql, final List<FilterPushDownInfo> filterPushDownInfo,

@@ -424,9 +424,28 @@ int main(int argc, char** argv) {
       "Maximum duration of active session.");
   desc_adv.add_options()("enable-filter-push-down",
                          po::value<bool>(&g_enable_filter_push_down)
-                             ->default_value(false)
+                             ->default_value(g_enable_filter_push_down)
                              ->implicit_value(true),
                          "Enable filter push down through joins");
+  desc_adv.add_options()(
+      "filter-push-down-low-frac",
+      po::value<float>(&g_filter_push_down_low_frac)
+          ->default_value(g_filter_push_down_low_frac)
+          ->implicit_value(g_filter_push_down_low_frac),
+      "Lower threshold for selectivity of filters that are pushed down.");
+  desc_adv.add_options()(
+      "filter-push-down-high-frac",
+      po::value<float>(&g_filter_push_down_high_frac)
+          ->default_value(g_filter_push_down_high_frac)
+          ->implicit_value(g_filter_push_down_high_frac),
+      "Higher threshold for selectivity of filters that are pushed down.");
+  desc_adv.add_options()("filter-push-down-passing-row-ubound",
+                         po::value<size_t>(&g_filter_push_down_passing_row_ubound)
+                             ->default_value(g_filter_push_down_passing_row_ubound)
+                             ->implicit_value(g_filter_push_down_passing_row_ubound),
+                         "Upperbound on the number of rows that should pass the filter "
+                         "if the selectivity is less than "
+                         "the high fraction threshold.");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);

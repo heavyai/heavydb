@@ -133,7 +133,6 @@ class OrToInVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::InValue
   }
 };
 
-
 class RecursiveOrToInVisitor : public DeepCopyVisitor {
  protected:
   std::shared_ptr<Analyzer::Expr> visitBinOper(

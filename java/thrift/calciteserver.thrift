@@ -24,8 +24,9 @@ struct TPlanResult {
 }
 
 struct TFilterPushDownInfo {
-  1: i32 input_start
-  2: i32 input_end
+  1: i32 input_prev
+  2: i32 input_start
+  3: i32 input_next
 }
 
 service CalciteServer {

@@ -40,6 +40,7 @@ set(query_engine_source_files
     InValuesBitmap.cpp
     InputMetadata.cpp
     IteratorTable.cpp
+    JoinFilterPushDown.cpp
     LegacyExecute.cpp
     LogicalIR.cpp
     LLVMFunctionAttributesUtil.cpp
