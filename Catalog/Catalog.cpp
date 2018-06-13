@@ -3335,6 +3335,26 @@ void Catalog::replaceDashboard(FrontendViewDescriptor& vd) {
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(this);
 
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query_with_text_params("SELECT id FROM mapd_dashboards WHERE id = ?",
+                                            std::vector<std::string>{std::to_string(vd.viewId)});
+    if (sqliteConnector_.getNumRows() > 0) {
+      sqliteConnector_.query_with_text_params(
+          "UPDATE mapd_dashboards SET name = ?, state = ?, image_hash = ?, metadata = ?, update_time = "
+          "datetime('now') where id = ? ",
+          std::vector<std::string>{
+              vd.viewName, vd.viewState, vd.imageHash, vd.viewMetadata, std::to_string(vd.viewId)});
+    } else {
+      LOG(ERROR) << "Error replacing dashboard id " << vd.viewId << " does not exist in db";
+      throw runtime_error("Error replacing dashboard id " + std::to_string(vd.viewId) + " does not exist in db");
+    }
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+
   bool found{false};
   for (auto descp : dashboardDescriptorMap_) {
     auto dash = descp.second.get();
@@ -3355,26 +3375,6 @@ void Catalog::replaceDashboard(FrontendViewDescriptor& vd) {
     LOG(ERROR) << "Error replacing dashboard id " << vd.viewId << " does not exist in map";
     throw runtime_error("Error replacing dashboard id " + std::to_string(vd.viewId) + " does not exist in map");
   }
-
-  sqliteConnector_.query("BEGIN TRANSACTION");
-  try {
-    sqliteConnector_.query_with_text_params("SELECT id FROM mapd_dashboards WHERE id = ?",
-                                            std::vector<std::string>{std::to_string(vd.viewId)});
-    if (sqliteConnector_.getNumRows() > 0) {
-      sqliteConnector_.query_with_text_params(
-          "UPDATE mapd_dashboards SET name = ?, state = ?, image_hash = ?, metadata = ?, update_time = "
-          "datetime('now') where id = ? ",
-          std::vector<std::string>{
-              vd.viewName, vd.viewState, vd.imageHash, vd.viewMetadata, std::to_string(vd.viewId)});
-    } else {
-      LOG(ERROR) << "Error replacing dashboard id " << vd.viewId << " does not exist in db";
-      throw runtime_error("Error replacing dashboard id " + std::to_string(vd.viewId) + " does not exist in db");
-    }
-  } catch (std::exception& e) {
-    sqliteConnector_.query("ROLLBACK TRANSACTION");
-    throw;
-  }
-  sqliteConnector_.query("END TRANSACTION");
 
   // now reload the object
   sqliteConnector_.query_with_text_params(
