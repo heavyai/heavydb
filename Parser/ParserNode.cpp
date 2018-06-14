@@ -1621,7 +1621,9 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
           }
         }
       }
-      CHECK(wkt);
+      if (!wkt) {
+        throw std::runtime_error("Expecting a WKT string for column " + cd->columnName);
+      }
       std::vector<double> coords;
       std::vector<double> bounds;
       std::vector<int> ring_sizes;
