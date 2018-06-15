@@ -272,9 +272,6 @@ llvm::Value* Executor::codegen(const Analyzer::RegexpExpr* expr, const Compilati
   if (is_unnest(extract_cast_arg(expr->get_arg()))) {
     throw std::runtime_error("REGEXP not supported for unnested expressions");
   }
-  if (co.device_type_ == ExecutorDeviceType::GPU) {
-    throw QueryMustRunOnCpu();
-  }
   char escape_char{'\\'};
   if (expr->get_escape_expr()) {
     auto escape_char_expr = dynamic_cast<const Analyzer::Constant*>(expr->get_escape_expr());
@@ -293,6 +290,10 @@ llvm::Value* Executor::codegen(const Analyzer::RegexpExpr* expr, const Compilati
   CHECK(ti.is_string());
   if (g_enable_watchdog && ti.get_compression() != kENCODING_NONE) {
     throw WatchdogException("Cannot do REGEXP_LIKE on this dictionary encoded column, its cardinality is too high");
+  }
+  // Now we know we are working on NONE ENCODED column. So switch back to CPU
+  if (co.device_type_ == ExecutorDeviceType::GPU) {
+    throw QueryMustRunOnCpu();
   }
   auto str_lv = codegen(expr->get_arg(), true, co);
   if (str_lv.size() != 3) {
@@ -328,7 +329,8 @@ llvm::Value* Executor::codegenDictRegexp(const std::shared_ptr<Analyzer::Expr> p
   const auto& dict_regexp_arg_ti = dict_regexp_arg->get_type_info();
   CHECK(dict_regexp_arg_ti.is_string());
   CHECK_EQ(kENCODING_DICT, dict_regexp_arg_ti.get_compression());
-  const auto sdp = getStringDictionaryProxy(dict_regexp_arg_ti.get_comp_param(), row_set_mem_owner_, true);
+  const auto comp_param = dict_regexp_arg_ti.get_comp_param();
+  const auto sdp = getStringDictionaryProxy(comp_param, row_set_mem_owner_, true);
   if (sdp->storageEntryCount() > 15000000) {
     return nullptr;
   }
