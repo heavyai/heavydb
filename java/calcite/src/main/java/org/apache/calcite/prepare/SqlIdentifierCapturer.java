@@ -74,7 +74,8 @@ public class SqlIdentifierCapturer {
     }
 
     if (root instanceof SqlIdentifier) {
-      currentList.peek().addAll(((SqlIdentifier) root).names);
+      // only the last element!
+      currentList.peek().add(((SqlIdentifier) root).names.reverse().get(0));
       return;
     }
 
