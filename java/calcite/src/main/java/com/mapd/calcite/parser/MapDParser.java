@@ -15,8 +15,6 @@
  */
 package com.mapd.calcite.parser;
 
-import com.mapd.parser.server.ExtensionFunction;
-
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -24,19 +22,20 @@ import java.util.Set;
 
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.plan.RelOptUtil;
+import org.apache.calcite.prepare.MapDPlanner;
+import org.apache.calcite.prepare.SqlIdentifierCapturer;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.SqlAsOperator;
 import org.apache.calcite.sql.SqlBasicCall;
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlDialect;
 import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlLiteral;
-import org.apache.calcite.sql.SqlNodeList;
 import org.apache.calcite.sql.SqlNode;
+import org.apache.calcite.sql.SqlNodeList;
 import org.apache.calcite.sql.SqlNumericLiteral;
 import org.apache.calcite.sql.SqlOperatorTable;
 import org.apache.calcite.sql.SqlOrderBy;
@@ -45,8 +44,6 @@ import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.parser.SqlParserPos;
-import org.apache.calcite.prepare.MapDPlanner;
-import org.apache.calcite.prepare.SqlIdentifierCapturer;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.type.SqlTypeUtil;
 import org.apache.calcite.tools.FrameworkConfig;
@@ -58,12 +55,16 @@ import org.apache.calcite.util.ConversionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.mapd.parser.server.ExtensionFunction;
+
 /**
  *
  * @author michael
  */
 public final class MapDParser {
 
+  public static final ThreadLocal<MapDParser> CURRENT_PARSER = new ThreadLocal<>();
+  
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDParser.class);
 
 //    private SqlTypeFactoryImpl typeFactory;

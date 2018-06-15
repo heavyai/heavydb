@@ -72,6 +72,10 @@ public class MapdTestClient {
   public List<TDBObject> get_db_object_privs(String objectName, TDBObjectType type) throws Exception {
     return client.get_db_object_privs(sessionId, objectName, type);
   }
+  
+  public void disconnect() throws Exception {
+    client.disconnect(sessionId);
+  }
 
   public static MapdTestClient getClient(String host, int port, String db, String user, String password)
       throws Exception {
