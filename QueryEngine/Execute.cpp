@@ -26,6 +26,7 @@
 #include "InPlaceSort.h"
 #include "JsonAccessors.h"
 #include "OutputBufferInitialization.h"
+#include "QueryFragmentDescriptor.h"
 #include "QueryRewrite.h"
 #include "QueryTemplateGenerator.h"
 #include "RuntimeFunctions.h"
@@ -1027,13 +1028,13 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
     std::condition_variable scheduler_cv;
     std::mutex scheduler_mutex;
     auto dispatch = [&execution_dispatch, &available_cpus, &available_gpus, &options, &scheduler_mutex, &scheduler_cv](
-                        const ExecutorDeviceType chosen_device_type,
-                        int chosen_device_id,
-                        const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
-                        const size_t ctx_idx,
-                        const int64_t rowid_lookup_key) {
+        const ExecutorDeviceType chosen_device_type,
+        int chosen_device_id,
+        const FragmentsList& frag_list,
+        const size_t ctx_idx,
+        const int64_t rowid_lookup_key) {
       INJECT_TIMER(execution_dispatch_run);
-      execution_dispatch.run(chosen_device_type, chosen_device_id, options, frag_ids, ctx_idx, rowid_lookup_key);
+      execution_dispatch.run(chosen_device_type, chosen_device_id, options, frag_list, ctx_idx, rowid_lookup_key);
       if (execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid) {
         std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
         if (chosen_device_type == ExecutorDeviceType::CPU) {
@@ -1048,24 +1049,16 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
       }
     };
 
-    const size_t input_desc_count{ra_exe_unit.input_descs.size()};
-    std::map<int, const TableFragments*> selected_tables_fragments;
-    CHECK_EQ(query_infos.size(), (input_desc_count + ra_exe_unit.extra_input_descs.size()));
-    for (size_t table_idx = 0; table_idx < input_desc_count; ++table_idx) {
-      const auto table_id = ra_exe_unit.input_descs[table_idx].getTableId();
-      if (!selected_tables_fragments.count(table_id)) {
-        selected_tables_fragments[ra_exe_unit.input_descs[table_idx].getTableId()] =
-            &query_infos[table_idx].info.fragments;
-      }
-    }
+    QueryFragmentDescriptor fragment_descriptor(ra_exe_unit, query_infos, this);
+
     const QueryMemoryDescriptor& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
     if (!options.just_validate) {
       dispatchFragments(dispatch,
                         execution_dispatch,
                         options,
                         is_agg,
-                        selected_tables_fragments,
                         context_count,
+                        fragment_descriptor,
                         scheduler_cv,
                         scheduler_mutex,
                         available_gpus,
@@ -1328,35 +1321,27 @@ std::unordered_map<int, const Analyzer::BinOper*> Executor::getInnerTabIdToJoinC
   return id_to_cond;
 }
 
-void Executor::dispatchFragments(
-    const std::function<void(const ExecutorDeviceType chosen_device_type,
-                             int chosen_device_id,
-                             const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
-                             const size_t ctx_idx,
-                             const int64_t rowid_lookup_key)> dispatch,
-    const ExecutionDispatch& execution_dispatch,
-    const ExecutionOptions& eo,
-    const bool is_agg,
-    std::map<int, const TableFragments*>& selected_tables_fragments,
-    const size_t context_count,
-    std::condition_variable& scheduler_cv,
-    std::mutex& scheduler_mutex,
-    std::unordered_set<int>& available_gpus,
-    int& available_cpus) {
-  size_t frag_list_idx{0};
-  std::vector<std::thread> query_threads;
-  int64_t rowid_lookup_key{-1};
+void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,
+                                                          int chosen_device_id,
+                                                          const FragmentsList& frag_list,
+                                                          const size_t ctx_idx,
+                                                          const int64_t rowid_lookup_key)> dispatch,
+                                 const ExecutionDispatch& execution_dispatch,
+                                 const ExecutionOptions& eo,
+                                 const bool is_agg,
+                                 const size_t context_count,
+                                 QueryFragmentDescriptor& fragment_descriptor,
+                                 std::condition_variable& scheduler_cv,
+                                 std::mutex& scheduler_mutex,
+                                 std::unordered_set<int>& available_gpus,
+                                 int& available_cpus) {
+  std::vector<std::future<void>> query_threads;
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   CHECK(!ra_exe_unit.input_descs.empty());
-  const auto& outer_table_desc = ra_exe_unit.input_descs.front();
-  const int outer_table_id = outer_table_desc.getTableId();
-  auto it = selected_tables_fragments.find(outer_table_id);
-  CHECK(it != selected_tables_fragments.end());
-  const auto outer_fragments = it->second;
+
   const auto device_type = execution_dispatch.getDeviceType();
 
   const auto& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
-  const auto inner_table_id_to_join_condition = getInnerTabIdToJoinCond();
 
   const bool allow_multifrag =
       eo.allow_multifrag && (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext() ||
@@ -1367,69 +1352,58 @@ void Executor::dispatchFragments(
     // NB: We should never be on this path when the query is retried because of
     //     running out of group by slots; also, for scan only queries (!agg_plan)
     //     we want the high-granularity, fragment by fragment execution instead.
-    std::unordered_map<int, std::vector<std::pair<int, std::vector<size_t>>>> fragments_per_device;
-    // Allocate all the fragments of the tables involved in the query to available
-    // devices. The basic idea: the device is decided by the outer table in the
-    // query (the first table in a join) and we need to broadcast the fragments
-    // in the inner table to each device. Sharding will change this model.
-    for (size_t outer_frag_id = 0; outer_frag_id < outer_fragments->size(); ++outer_frag_id) {
-      const auto& fragment = (*outer_fragments)[outer_frag_id];
-      auto skip_frag =
-          skipFragment(outer_table_desc, fragment, ra_exe_unit.simple_quals, execution_dispatch, outer_frag_id);
-      if (g_inner_join_fragment_skipping && (skip_frag == std::pair<bool, int64_t>(false, -1))) {
-        skip_frag = skipFragmentInnerJoins(outer_table_desc, fragment, execution_dispatch, outer_frag_id);
-      }
-      if (skip_frag.first) {
-        continue;
-      }
-      const auto device_count = catalog_->get_dataMgr().cudaMgr_->getDeviceCount();
-      CHECK_GT(device_count, 0);
-      const int device_id = fragment.shard == -1 ? fragment.deviceIds[static_cast<int>(Data_Namespace::GPU_LEVEL)]
-                                                 : fragment.shard % device_count;
-      for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
-        const auto table_id = ra_exe_unit.input_descs[j].getTableId();
-        auto table_frags_it = selected_tables_fragments.find(table_id);
-        CHECK(table_frags_it != selected_tables_fragments.end());
-        const auto frag_ids = getTableFragmentIndices(
-            ra_exe_unit, device_type, j, outer_frag_id, selected_tables_fragments, inner_table_id_to_join_condition);
-        if (fragments_per_device[device_id].size() < j + 1) {
-          fragments_per_device[device_id].emplace_back(table_id, frag_ids);
-        } else {
-          CHECK_EQ(fragments_per_device[device_id][j].first, table_id);
-          auto& curr_frag_ids = fragments_per_device[device_id][j].second;
-          for (const int frag_id : frag_ids) {
-            if (std::find(curr_frag_ids.begin(), curr_frag_ids.end(), frag_id) == curr_frag_ids.end()) {
-              curr_frag_ids.push_back(frag_id);
-            }
-          }
-        }
-      }
-      rowid_lookup_key = std::max(rowid_lookup_key, skip_frag.second);
-    }
-    if (eo.with_watchdog && rowid_lookup_key < 0) {
+    const auto device_count = catalog_->get_dataMgr().cudaMgr_->getDeviceCount();
+    CHECK_GT(device_count, 0);
+
+    fragment_descriptor.buildFragmentDeviceMap(ra_exe_unit,
+                                               execution_dispatch.getFragOffsets(),
+                                               device_count,
+                                               device_type,
+                                               true,
+                                               g_inner_join_fragment_skipping);
+
+    if (eo.with_watchdog && fragment_descriptor.getRowIdLookupKey() < 0) {
       checkWorkUnitWatchdog(ra_exe_unit, *catalog_);
     }
-    for (const auto& kv : fragments_per_device) {
-      query_threads.push_back(std::thread(
-          dispatch, ExecutorDeviceType::GPU, kv.first, kv.second, kv.first % context_count, rowid_lookup_key));
-    }
+    auto multifrag_kernel_dispatch = [&query_threads, &dispatch, &context_count](
+        const int device_id, const FragmentsList& frag_list, const int64_t rowid_lookup_key) {
+      query_threads.push_back(std::async(std::launch::async,
+                                         dispatch,
+                                         ExecutorDeviceType::GPU,
+                                         device_id,
+                                         frag_list,
+                                         device_id % context_count,
+                                         rowid_lookup_key));
+    };
+    fragment_descriptor.assignFragsToMultiDispatch(multifrag_kernel_dispatch);
+
   } else {
-    for (size_t i = 0; i < outer_fragments->size(); ++i) {
-      const auto& fragment = (*outer_fragments)[i];
-      const auto skip_frag = skipFragment(outer_table_desc, fragment, ra_exe_unit.simple_quals, execution_dispatch, i);
-      if (skip_frag.first) {
+    const auto device_count =
+        device_type == ExecutorDeviceType::CPU ? 1 : catalog_->get_dataMgr().cudaMgr_->getDeviceCount();
+    CHECK_GT(device_count, 0);
+
+    fragment_descriptor.buildFragmentDeviceMap(ra_exe_unit,
+                                               execution_dispatch.getFragOffsets(),
+                                               device_count,
+                                               device_type,
+                                               false,
+                                               g_inner_join_fragment_skipping);
+
+    size_t frag_list_idx{0};
+    for (size_t i = 0; i < fragment_descriptor.getOuterFragmentsSize(); ++i) {
+      if (eo.with_watchdog && fragment_descriptor.getRowIdLookupKey() < 0) {
+        checkWorkUnitWatchdog(ra_exe_unit, *catalog_);
+      }
+
+      const auto frag_list_pair = fragment_descriptor.getFragListForIndex(i);
+      if (!frag_list_pair.first || !frag_list_pair.second->size()) {
         continue;
       }
-      rowid_lookup_key = std::max(rowid_lookup_key, skip_frag.second);
+
       auto chosen_device_type = device_type;
-      const auto device_count =
-          chosen_device_type == ExecutorDeviceType::CPU ? 1 : catalog_->get_dataMgr().cudaMgr_->getDeviceCount();
-      const auto memory_level =
-          chosen_device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL : Data_Namespace::CPU_LEVEL;
-      CHECK_GT(device_count, 0);
-      int chosen_device_id = (chosen_device_type == ExecutorDeviceType::CPU || fragment.shard == -1)
-                                 ? fragment.deviceIds[static_cast<int>(memory_level)]
-                                 : fragment.shard % device_count;
+      auto chosen_device_id = fragment_descriptor.getDeviceForFragment(i);
+      CHECK_GE(chosen_device_id, 0);
+
       if (device_type == ExecutorDeviceType::Hybrid) {
         std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
         scheduler_cv.wait(scheduler_lock,
@@ -1445,33 +1419,29 @@ void Executor::dispatchFragments(
           --available_cpus;
         }
       }
-      std::vector<std::pair<int, std::vector<size_t>>> frag_ids_for_table;
-      for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
-        const auto frag_ids = getTableFragmentIndices(
-            ra_exe_unit, device_type, j, i, selected_tables_fragments, inner_table_id_to_join_condition);
-        const auto table_id = ra_exe_unit.input_descs[j].getTableId();
-        auto table_frags_it = selected_tables_fragments.find(table_id);
-        CHECK(table_frags_it != selected_tables_fragments.end());
-        frag_ids_for_table.emplace_back(table_id, frag_ids);
-      }
-      if (eo.with_watchdog && rowid_lookup_key < 0) {
-        checkWorkUnitWatchdog(ra_exe_unit, *catalog_);
-      }
-      query_threads.push_back(std::thread(dispatch,
-                                          chosen_device_type,
-                                          chosen_device_id,
-                                          frag_ids_for_table,
-                                          frag_list_idx % context_count,
-                                          rowid_lookup_key));
+
+      query_threads.push_back(std::async(std::launch::async,
+                                         dispatch,
+                                         chosen_device_type,
+                                         chosen_device_id,
+                                         *frag_list_pair.second,
+                                         frag_list_idx % context_count,
+                                         fragment_descriptor.getRowIdLookupKey()));
+
       ++frag_list_idx;
       const auto sample_query_limit = ra_exe_unit.sort_info.limit + ra_exe_unit.sort_info.offset;
-      if (is_sample_query(ra_exe_unit) && sample_query_limit > 0 && fragment.getNumTuples() >= sample_query_limit) {
+
+      if (is_sample_query(ra_exe_unit) && sample_query_limit > 0 &&
+          fragment_descriptor.getOuterFragmentTupleSize(i) >= sample_query_limit) {
         break;
       }
     }
   }
   for (auto& child : query_threads) {
-    child.join();
+    child.wait();
+  }
+  for (auto& child : query_threads) {
+    child.get();
   }
 }
 
@@ -1480,7 +1450,7 @@ std::vector<size_t> Executor::getTableFragmentIndices(
     const ExecutorDeviceType device_type,
     const size_t table_idx,
     const size_t outer_frag_idx,
-    std::map<int, const Executor::TableFragments*>& selected_tables_fragments,
+    std::map<int, const TableFragments*>& selected_tables_fragments,
     const std::unordered_map<int, const Analyzer::BinOper*>& inner_table_id_to_join_condition) {
   const int table_id = ra_exe_unit.input_descs[table_idx].getTableId();
   auto table_frags_it = selected_tables_fragments.find(table_id);
@@ -1608,7 +1578,7 @@ const ColumnDescriptor* try_get_column_descriptor(const InputColDescriptor* col_
 
 std::map<size_t, std::vector<uint64_t>> get_table_id_to_frag_offsets(
     const std::vector<InputDescriptor>& input_descs,
-    const std::map<int, const Executor::TableFragments*>& all_tables_fragments) {
+    const std::map<int, const TableFragments*>& all_tables_fragments) {
   std::map<size_t, std::vector<uint64_t>> tab_id_to_frag_offsets;
   for (auto& desc : input_descs) {
     const auto fragments_it = all_tables_fragments.find(desc.getTableId());
@@ -1628,7 +1598,7 @@ std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>>
 Executor::getRowCountAndOffsetForAllFrags(const RelAlgExecutionUnit& ra_exe_unit,
                                           const CartesianProduct<std::vector<std::vector<size_t>>>& frag_ids_crossjoin,
                                           const std::vector<InputDescriptor>& input_descs,
-                                          const std::map<int, const Executor::TableFragments*>& all_tables_fragments,
+                                          const std::map<int, const TableFragments*>& all_tables_fragments,
                                           const bool one_to_all_frags) {
   std::vector<std::vector<int64_t>> all_num_rows;
   std::vector<std::vector<uint64_t>> all_frag_offsets;
@@ -1680,7 +1650,7 @@ Executor::getRowCountAndOffsetForAllFrags(const RelAlgExecutionUnit& ra_exe_unit
 // Only fetch columns of hash-joined inner fact table whose fetch are not deferred from all the table fragments.
 bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
                                      const RelAlgExecutionUnit& ra_exe_unit,
-                                     const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments) const {
+                                     const FragmentsList& selected_fragments) const {
   const auto& input_descs = ra_exe_unit.input_descs;
   const int nest_level = inner_col_desc.getScanDesc().getNestLevel();
   if (nest_level < 1 || inner_col_desc.getScanDesc().getSourceType() != InputSourceType::TABLE ||
@@ -1691,8 +1661,8 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
   }
   const int table_id = inner_col_desc.getScanDesc().getTableId();
   CHECK_LT(static_cast<size_t>(nest_level), selected_fragments.size());
-  CHECK_EQ(table_id, selected_fragments[nest_level].first);
-  const auto& fragments = selected_fragments[nest_level].second;
+  CHECK_EQ(table_id, selected_fragments[nest_level].table_id);
+  const auto& fragments = selected_fragments[nest_level].fragment_ids;
   return fragments.size() > 1;
 }
 #endif
@@ -1702,7 +1672,7 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
                                             const int device_id,
                                             const Data_Namespace::MemoryLevel memory_level,
                                             const std::map<int, const TableFragments*>& all_tables_fragments,
-                                            const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments,
+                                            const FragmentsList& selected_fragments,
                                             const Catalog_Namespace::Catalog& cat,
                                             std::list<ChunkIter>& chunk_iterators,
                                             std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
@@ -1793,31 +1763,30 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
   return {all_frag_col_buffers, all_frag_iter_buffers, all_num_rows, all_frag_offsets};
 }
 
-std::vector<size_t> Executor::getFragmentCount(
-    const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments,
-    const size_t scan_idx,
-    const RelAlgExecutionUnit& ra_exe_unit) {
+std::vector<size_t> Executor::getFragmentCount(const FragmentsList& selected_fragments,
+                                               const size_t scan_idx,
+                                               const RelAlgExecutionUnit& ra_exe_unit) {
   if ((ra_exe_unit.input_descs.size() > size_t(2) || !ra_exe_unit.inner_joins.empty()) && scan_idx > 0 &&
       !plan_state_->join_info_.sharded_range_table_indices_.count(scan_idx) &&
-      !selected_fragments[scan_idx].second.empty()) {
+      !selected_fragments[scan_idx].fragment_ids.empty()) {
     // Fetch all fragments
     return {size_t(0)};
   }
 
-  return selected_fragments[scan_idx].second;
+  return selected_fragments[scan_idx].fragment_ids;
 }
 
 void Executor::buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
                                          std::vector<size_t>& local_col_to_frag_pos,
                                          const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
-                                         const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments,
+                                         const FragmentsList& selected_fragments,
                                          const RelAlgExecutionUnit& ra_exe_unit) {
   local_col_to_frag_pos.resize(plan_state_->global_to_local_col_ids_.size());
   size_t frag_pos{0};
   const auto& input_descs = ra_exe_unit.input_descs;
   for (size_t scan_idx = 0; scan_idx < input_descs.size(); ++scan_idx) {
     const int table_id = input_descs[scan_idx].getTableId();
-    CHECK_EQ(selected_fragments[scan_idx].first, table_id);
+    CHECK_EQ(selected_fragments[scan_idx].table_id, table_id);
     selected_fragments_crossjoin.push_back(getFragmentCount(selected_fragments, scan_idx, ra_exe_unit));
     for (const auto& col_id : col_global_ids) {
       CHECK(col_id);
@@ -2844,7 +2813,7 @@ int Executor::getLocalColumnId(const Analyzer::ColumnVar* col_var, const bool fe
 std::pair<bool, int64_t> Executor::skipFragment(const InputDescriptor& table_desc,
                                                 const Fragmenter_Namespace::FragmentInfo& fragment,
                                                 const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
-                                                const ExecutionDispatch& execution_dispatch,
+                                                const std::vector<uint64_t>& frag_offsets,
                                                 const size_t frag_idx) {
   const int table_id = table_desc.getTableId();
   if (table_desc.getSourceType() == InputSourceType::RESULT &&
@@ -2893,9 +2862,8 @@ std::pair<bool, int64_t> Executor::skipFragment(const InputDescriptor& table_des
         CHECK(cd->columnName == "rowid");
         const auto& table_generation = getTableGeneration(table_id);
         start_rowid = table_generation.start_rowid;
-        const auto& all_frag_row_offsets = execution_dispatch.getFragOffsets();
-        chunk_min = all_frag_row_offsets[frag_idx] + start_rowid;
-        chunk_max = all_frag_row_offsets[frag_idx + 1] - 1 + start_rowid;
+        chunk_min = frag_offsets[frag_idx] + start_rowid;
+        chunk_max = frag_offsets[frag_idx + 1] - 1 + start_rowid;
         is_rowid = true;
       }
     } else {
@@ -2960,12 +2928,11 @@ std::pair<bool, int64_t> Executor::skipFragment(const InputDescriptor& table_des
  *     -  e.g. #2, select * from t1 join t2 on (t1.i=t2.i and A and B); -- intermediate projection, no skipping
  */
 std::pair<bool, int64_t> Executor::skipFragmentInnerJoins(const InputDescriptor& table_desc,
+                                                          const RelAlgExecutionUnit& ra_exe_unit,
                                                           const Fragmenter_Namespace::FragmentInfo& fragment,
-                                                          const ExecutionDispatch& execution_dispatch,
+                                                          const std::vector<uint64_t>& frag_offsets,
                                                           const size_t frag_idx) {
   std::pair<bool, int64_t> skip_frag{false, -1};
-  const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
-
   for (auto& inner_join : ra_exe_unit.inner_joins) {
     if (inner_join.type != JoinType::INNER)
       continue;
@@ -2977,7 +2944,7 @@ std::pair<bool, int64_t> Executor::skipFragmentInnerJoins(const InputDescriptor&
       inner_join_simple_quals.insert(
           inner_join_simple_quals.begin(), temp_qual.simple_quals.begin(), temp_qual.simple_quals.end());
     }
-    auto temp_skip_frag = skipFragment(table_desc, fragment, inner_join_simple_quals, execution_dispatch, frag_idx);
+    auto temp_skip_frag = skipFragment(table_desc, fragment, inner_join_simple_quals, frag_offsets, frag_idx);
     if (temp_skip_frag.second != -1) {
       skip_frag.second = temp_skip_frag.second;
       return skip_frag;

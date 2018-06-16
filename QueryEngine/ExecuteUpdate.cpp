@@ -15,9 +15,12 @@
  */
 
 #include "Execute.h"
+#include "QueryFragmentDescriptor.h"
 
-UpdateLogForFragment::UpdateLogForFragment( FragmentInfoType const& fragment_info, size_t const fragment_index, const std::shared_ptr<ResultSet>& rs )
-    : fragment_info_( fragment_info ), fragment_index_(fragment_index), rs_(rs) {}
+UpdateLogForFragment::UpdateLogForFragment(FragmentInfoType const& fragment_info,
+                                           size_t const fragment_index,
+                                           const std::shared_ptr<ResultSet>& rs)
+    : fragment_info_(fragment_info), fragment_index_(fragment_index), rs_(rs) {}
 
 std::vector<TargetValue> UpdateLogForFragment::getEntryAt(const size_t index) const {
   return rs_->getRowAtNoTranslations(index);
@@ -105,7 +108,8 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
         this, ra_exe_unit, table_infos, cat, co, context_count, row_set_mem_owner, column_cache, &error_code, nullptr);
     current_fragment_execution_dispatch.compile(JoinInfo{JoinImplType::Invalid, {}, {}, ""}, *count_ptr, 8, eo, false);
     // We may want to consider in the future allowing this to execute on devices other than CPU
-    current_fragment_execution_dispatch.run(co.device_type_, 0, eo, {{table_id, {fragment_index}}}, 0, -1);
+    current_fragment_execution_dispatch.run(
+        co.device_type_, 0, eo, {FragmentsPerTable{table_id, {fragment_index}}}, 0, -1);
     const auto& proj_fragment_results = current_fragment_execution_dispatch.getFragmentResults()[0];
     const auto proj_result_set = boost::get<RowSetPtr>(proj_fragment_results.first);
     CHECK(proj_result_set);

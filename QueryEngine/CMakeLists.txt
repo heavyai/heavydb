@@ -52,6 +52,7 @@ set(query_engine_source_files
     QueryPhysicalInputsCollector.cpp
     QueryRewrite.cpp
     QueryTemplateGenerator.cpp
+    QueryFragmentDescriptor.cpp
     RelAlgAbstractInterpreter.cpp
     RelLeftDeepInnerJoin.cpp
     RelAlgExecutionDescriptor.cpp

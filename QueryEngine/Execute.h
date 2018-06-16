@@ -28,11 +28,12 @@
 #include "LLVMGlobalContext.h"
 #include "LoopControlFlow/JoinLoop.h"
 #include "NvidiaKernel.h"
+#include "QueryFragmentDescriptor.h"
 #include "RelAlgExecutionUnit.h"
+#include "RelAlgTranslator.h"
 #include "StringDictionaryGenerations.h"
 #include "TableGenerations.h"
 #include "TargetMetaInfo.h"
-#include "RelAlgTranslator.h"
 
 #include "../Analyzer/Analyzer.h"
 #include "../Chunk/Chunk.h"
@@ -276,13 +277,12 @@ class UpdateLogForFragment {
   std::shared_ptr<ResultSet> rs_;
 };
 
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
 
  public:
-  using TableFragments = std::deque<Fragmenter_Namespace::FragmentInfo>;
-
   Executor(const int db_id,
            const size_t block_size_x,
            const size_t grid_size_x,
@@ -675,7 +675,7 @@ class Executor {
 #ifdef ENABLE_MULTIFRAG_JOIN
   bool needFetchAllFragments(const InputColDescriptor& col_desc,
                              const RelAlgExecutionUnit& ra_exe_unit,
-                             const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments) const;
+                             const FragmentsList& selected_fragments) const;
 #endif
 
   class ExecutionDispatch {
@@ -708,7 +708,7 @@ class Executor {
         columnarized_scan_table_cache_;
 #endif
 
-    uint32_t getFragmentStride(const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids) const;
+    uint32_t getFragmentStride(const FragmentsList& frag_list) const;
 
     std::vector<const ColumnarResults*> getAllScanColumnFrags(
         const int table_id,
@@ -725,7 +725,7 @@ class Executor {
     void runImpl(const ExecutorDeviceType chosen_device_type,
                  int chosen_device_id,
                  const ExecutionOptions& options,
-                 const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
+                 const FragmentsList& frag_list,
                  const size_t ctx_idx,
                  const int64_t rowid_lookup_key);
 
@@ -758,7 +758,7 @@ class Executor {
     void run(const ExecutorDeviceType chosen_device_type,
              int chosen_device_id,
              const ExecutionOptions& options,
-             const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
+             const FragmentsList& frag_ids,
              const size_t ctx_idx,
              const int64_t rowid_lookup_key) noexcept;
 
@@ -862,14 +862,14 @@ class Executor {
 
   void dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,
                                                   int chosen_device_id,
-                                                  const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
+                                                  const FragmentsList& frag_list,
                                                   const size_t ctx_idx,
                                                   const int64_t rowid_lookup_key)> dispatch,
                          const ExecutionDispatch& execution_dispatch,
                          const ExecutionOptions& eo,
                          const bool is_agg,
-                         std::map<int, const TableFragments*>& selected_tables_fragments,
                          const size_t context_count,
+                         QueryFragmentDescriptor& fragment_descriptor,
                          std::condition_variable& scheduler_cv,
                          std::mutex& scheduler_mutex,
                          std::unordered_set<int>& available_gpus,
@@ -880,7 +880,7 @@ class Executor {
       const ExecutorDeviceType device_type,
       const size_t table_idx,
       const size_t outer_frag_idx,
-      std::map<int, const Executor::TableFragments*>& selected_tables_fragments,
+      std::map<int, const TableFragments*>& selected_tables_fragments,
       const std::unordered_map<int, const Analyzer::BinOper*>& inner_table_id_to_join_condition);
 
   bool skipFragmentPair(const Fragmenter_Namespace::FragmentInfo& outer_fragment_info,
@@ -900,7 +900,7 @@ class Executor {
                           const int device_id,
                           const Data_Namespace::MemoryLevel,
                           const std::map<int, const TableFragments*>&,
-                          const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments,
+                          const FragmentsList& selected_fragments,
                           const Catalog_Namespace::Catalog&,
                           std::list<ChunkIter>&,
                           std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
@@ -909,16 +909,16 @@ class Executor {
       const RelAlgExecutionUnit& ra_exe_unit,
       const CartesianProduct<std::vector<std::vector<size_t>>>& frag_ids_crossjoin,
       const std::vector<InputDescriptor>& input_descs,
-      const std::map<int, const Executor::TableFragments*>& all_tables_fragments,
+      const std::map<int, const TableFragments*>& all_tables_fragments,
       const bool one_to_all_frags);
 
   void buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
                                  std::vector<size_t>& local_col_to_frag_pos,
                                  const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
-                                 const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments,
+                                 const FragmentsList& selected_fragments,
                                  const RelAlgExecutionUnit& ra_exe_unit);
 
-  std::vector<size_t> getFragmentCount(const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments,
+  std::vector<size_t> getFragmentCount(const FragmentsList& selected_fragments,
                                        const size_t scan_idx,
                                        const RelAlgExecutionUnit& ra_exe_unit);
 
@@ -1139,12 +1139,13 @@ class Executor {
   std::pair<bool, int64_t> skipFragment(const InputDescriptor& table_desc,
                                         const Fragmenter_Namespace::FragmentInfo& frag_info,
                                         const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
-                                        const ExecutionDispatch& execution_dispatch,
+                                        const std::vector<uint64_t>& frag_offsets,
                                         const size_t frag_idx);
 
   std::pair<bool, int64_t> skipFragmentInnerJoins(const InputDescriptor& table_desc,
+                                                  const RelAlgExecutionUnit& ra_exe_unit,
                                                   const Fragmenter_Namespace::FragmentInfo& fragment,
-                                                  const ExecutionDispatch& execution_dispatch,
+                                                  const std::vector<uint64_t>& frag_offsets,
                                                   const size_t frag_idx);
 
   typedef std::vector<std::string> CodeCacheKey;
@@ -1565,6 +1566,7 @@ class Executor {
   friend class BaselineJoinHashTable;
   friend class GroupByAndAggregate;
   friend struct QueryMemoryDescriptor;
+  friend struct QueryFragmentDescriptor;
   friend class QueryExecutionContext;
   friend class ResultSet;
   friend class IteratorTable;

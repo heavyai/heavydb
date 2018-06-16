@@ -17,6 +17,7 @@
 #include "DynamicWatchdog.h"
 #include "Execute.h"
 #include "ExecutionException.h"
+#include "QueryFragmentDescriptor.h"
 
 #include "DataMgr/BufferMgr/BufferMgr.h"
 
@@ -66,8 +67,7 @@ bool needs_skip_result(const ResultPtr& res) {
 
 }  // namespace
 
-uint32_t Executor::ExecutionDispatch::getFragmentStride(
-    const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids) const {
+uint32_t Executor::ExecutionDispatch::getFragmentStride(const FragmentsList& frag_ids) const {
 #ifdef ENABLE_MULTIFRAG_JOIN
   if (!ra_exe_unit_.inner_joins.empty()) {
     CHECK_EQ(ra_exe_unit_.input_descs.size(), frag_ids.size());
@@ -75,7 +75,7 @@ uint32_t Executor::ExecutionDispatch::getFragmentStride(
     uint32_t stride = 1;
     for (size_t i = 1; i < table_count; ++i) {
       if (executor_->plan_state_->join_info_.sharded_range_table_indices_.count(i)) {
-        stride *= frag_ids[i].second.size();
+        stride *= frag_ids[i].fragment_ids.size();
       }
     }
     return stride;
@@ -85,8 +85,8 @@ uint32_t Executor::ExecutionDispatch::getFragmentStride(
       executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToMany;
   if ((is_hash_join || executor_->isOuterLoopJoin()) && ra_exe_unit_.input_descs.size() == 2) {
     CHECK_EQ(frag_ids.size(), size_t(2));
-    CHECK_EQ(ra_exe_unit_.input_descs.back().getTableId(), frag_ids[1].first);
-    return static_cast<uint32_t>(frag_ids[1].second.size());
+    CHECK_EQ(ra_exe_unit_.input_descs.back().getTableId(), frag_ids[1].table_id);
+    return static_cast<uint32_t>(frag_ids[1].fragment_ids.size());
   }
 #endif
   return 1u;
@@ -185,18 +185,18 @@ bool need_to_hold_chunk(const Chunk_NS::Chunk* chunk, const RelAlgExecutionUnit&
 void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device_type,
                                           int chosen_device_id,
                                           const ExecutionOptions& options,
-                                          const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
+                                          const FragmentsList& frag_list,
                                           const size_t ctx_idx,
                                           const int64_t rowid_lookup_key) {
   const auto memory_level =
       chosen_device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL : Data_Namespace::CPU_LEVEL;
   const int outer_table_id = ra_exe_unit_.input_descs[0].getTableId();
-  CHECK_GE(frag_ids.size(), size_t(1));
+  CHECK_GE(frag_list.size(), size_t(1));
 #ifndef ENABLE_EQUIJOIN_FOLD
-  CHECK_LE(frag_ids.size(), size_t(2));
+  CHECK_LE(frag_list.size(), size_t(2));
 #endif
-  CHECK_EQ(frag_ids[0].first, outer_table_id);
-  const auto& outer_tab_frag_ids = frag_ids[0].second;
+  CHECK_EQ(frag_list[0].table_id, outer_table_id);
+  const auto& outer_tab_frag_ids = frag_list[0].fragment_ids;
   CHECK_GE(chosen_device_id, 0);
   CHECK_LT(chosen_device_id, max_gpu_count);
   // need to own them while query executes
@@ -232,7 +232,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                           chosen_device_id,
                                           memory_level,
                                           all_tables_fragments,
-                                          frag_ids,
+                                          frag_list,
                                           cat_,
                                           *chunk_iterators_ptr,
                                           chunks);
@@ -312,9 +312,9 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
   int32_t err{0};
   uint32_t start_rowid{0};
   if (rowid_lookup_key >= 0) {
-    if (!frag_ids.empty()) {
+    if (!frag_list.empty()) {
       const auto& all_frag_row_offsets = getFragOffsets();
-      start_rowid = rowid_lookup_key - all_frag_row_offsets[frag_ids.begin()->second.front()];
+      start_rowid = rowid_lookup_key - all_frag_row_offsets[frag_list.begin()->fragment_ids.front()];
     }
   }
 
@@ -331,7 +331,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                                query_exe_context,
                                                fetch_result.num_rows,
                                                fetch_result.frag_offsets,
-                                               getFragmentStride(frag_ids),
+                                               getFragmentStride(frag_list),
                                                &cat_.get_dataMgr(),
                                                chosen_device_id,
                                                start_rowid,
@@ -349,7 +349,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                             query_exe_context,
                                             fetch_result.num_rows,
                                             fetch_result.frag_offsets,
-                                            getFragmentStride(frag_ids),
+                                            getFragmentStride(frag_list),
                                             &cat_.get_dataMgr(),
                                             chosen_device_id,
                                             ra_exe_unit_.scan_limit,
@@ -512,11 +512,11 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
 void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_type,
                                       int chosen_device_id,
                                       const ExecutionOptions& options,
-                                      const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
+                                      const FragmentsList& frag_list,
                                       const size_t ctx_idx,
                                       const int64_t rowid_lookup_key) noexcept {
   try {
-    runImpl(chosen_device_type, chosen_device_id, options, frag_ids, ctx_idx, rowid_lookup_key);
+    runImpl(chosen_device_type, chosen_device_id, options, frag_list, ctx_idx, rowid_lookup_key);
   } catch (const std::bad_alloc& e) {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
     LOG(ERROR) << e.what();
