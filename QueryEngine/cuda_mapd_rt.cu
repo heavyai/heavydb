@@ -602,8 +602,9 @@ extern "C" __device__ uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
   VarlenDatum vd;
   bool is_end;
   ChunkIter_get_nth(chunk_iter, pos, false, &vd, &is_end);
-  return vd.is_null ? 0 : (reinterpret_cast<uint64_t>(vd.pointer) & 0xffffffffffff) |
-                              (static_cast<uint64_t>(vd.length) << 48);
+  return vd.is_null
+             ? 0
+             : (reinterpret_cast<uint64_t>(vd.pointer) & 0xffffffffffff) | (static_cast<uint64_t>(vd.length) << 48);
 }
 
 extern "C" __device__ void linear_probabilistic_count(uint8_t* bitmap,
@@ -676,4 +677,10 @@ extern "C" __device__ void agg_approximate_count_distinct_gpu(int64_t* agg,
 
 extern "C" __device__ void force_sync() {
   __threadfence_block();
+}
+
+extern "C" __device__ void sync_warp() {
+#if (CUDA_VERSION >= 9000)
+  __syncwarp();
+#endif
 }

@@ -2755,6 +2755,16 @@ size_t QueryMemoryDescriptor::sharedMemBytes(const ExecutorDeviceType device_typ
   return shared_mem_bytes;
 }
 
+bool QueryMemoryDescriptor::isWarpSyncRequired(const ExecutorDeviceType device_type) const {
+  if (device_type != ExecutorDeviceType::GPU) {
+    return false;
+  } else {
+    auto cuda_manager = executor_->getCatalog()->get_dataMgr().cudaMgr_;
+    CHECK(cuda_manager);
+    return cuda_manager->isArchVoltaForAll();
+  }
+}
+
 bool QueryMemoryDescriptor::canOutputColumnar() const {
   return usesGetGroupValueFast() && threadsShareMemory() && blocksShareMemory() &&
          !interleavedBins(ExecutorDeviceType::GPU) && countDescriptorsLogicallyEmpty(count_distinct_descriptors_);

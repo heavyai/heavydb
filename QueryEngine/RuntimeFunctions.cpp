@@ -623,6 +623,8 @@ extern "C" GPU_RT_STUB void agg_sum_float_skip_val_shared(int32_t* agg, const fl
 
 extern "C" GPU_RT_STUB void force_sync() {}
 
+extern "C" GPU_RT_STUB void sync_warp() {}
+
 // x64 stride functions
 
 extern "C" __attribute__((noinline)) int32_t pos_start_impl(int32_t* error_code) {

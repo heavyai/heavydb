@@ -167,6 +167,8 @@ struct QueryMemoryDescriptor {
 #endif
   }
 
+  bool isWarpSyncRequired(const ExecutorDeviceType) const;
+
  private:
   size_t getTotalBytesOfColumnarBuffers(const std::vector<ColWidths>& col_widths) const;
 };
