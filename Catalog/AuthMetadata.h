@@ -24,6 +24,9 @@ struct AuthMetadata {
   int32_t port;
   std::string uri;
   std::string distinguishedName;
+  std::string ldapQueryUrl;
+  std::string ldapRoleRegex;
+  std::string ldapSuperUserRole;
   std::string domainComp;
   std::string restUrl;
   std::string restToken;

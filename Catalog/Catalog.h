@@ -339,7 +339,15 @@ class SysCatalog {
             AuthMetadata authMetadata,
             std::shared_ptr<Calcite> calcite,
             bool is_new_db,
-            bool check_privileges);
+            bool check_privileges,
+            const std::vector<LeafHostInfo>* string_dict_hosts = nullptr );
+
+  /**
+   * logins (connects) a user against a database.
+   *
+   * throws a std::exception in all error cases! (including wrong password)
+   */
+  std::shared_ptr<Catalog> login(const std::string& db, const std::string& username, const std::string& password, UserMetadata& user_meta, bool check_password = true);
   void createUser(const std::string& name, const std::string& passwd, bool issuper);
   void dropUser(const std::string& name);
   void alterUser(const int32_t userid, const std::string* passwd, bool* issuper);
@@ -471,6 +479,7 @@ class SysCatalog {
   std::unique_ptr<LdapServer> ldap_server_;
   std::unique_ptr<RestServer> rest_server_;
   std::shared_ptr<Calcite> calciteMgr_;
+  const std::vector<LeafHostInfo>* string_dict_hosts_;
 
  public:
   mutable std::mutex sqliteMutex_;

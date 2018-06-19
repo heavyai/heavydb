@@ -205,7 +205,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     case ExecutorDeviceType::Hybrid:
       LOG(INFO) << "Started in Hybrid mode" << std::endl;
   }
-  SysCatalog::instance().init(base_data_path_, data_mgr_, authMetadata, calcite_, false, access_priv_check);
+  SysCatalog::instance().init(base_data_path_, data_mgr_, authMetadata, calcite_, false, access_priv_check, &string_leaves_);
   import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   start_time_ = std::time(nullptr);
 
@@ -275,14 +275,6 @@ void MapDHandler::connect(TSessionId& session,
                           const std::string& dbname) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   Catalog_Namespace::UserMetadata user_meta;
-  if (!SysCatalog::instance().getMetadataForUser(user, user_meta)) {
-    THROW_MAPD_EXCEPTION(std::string("User ") + user + " does not exist.");
-  }
-  if (!super_user_rights_) {
-    if (!SysCatalog::instance().checkPasswordForUser(passwd, user_meta)) {
-      THROW_MAPD_EXCEPTION(std::string("Password for User ") + user + " is incorrect.");
-    }
-  }
   connectImpl(session, user, passwd, dbname, user_meta);
 }
 
@@ -291,31 +283,20 @@ void MapDHandler::connectImpl(TSessionId& session,
                               const std::string& passwd,
                               const std::string& dbname,
                               Catalog_Namespace::UserMetadata& user_meta) {
-  Catalog_Namespace::DBMetadata db_meta;
-  if (!SysCatalog::instance().getMetadataForDB(dbname, db_meta)) {
-    THROW_MAPD_EXCEPTION(std::string("Database ") + dbname + " does not exist.");
+
+  std::shared_ptr<Catalog> cat = nullptr;
+  try {
+    cat = SysCatalog::instance().login(dbname, user, passwd, user_meta, !super_user_rights_);
+  } catch (std::exception& e) {
+    THROW_MAPD_EXCEPTION(e.what());
   }
-  if (!SysCatalog::instance().arePrivilegesOn()) {
-    // insert privilege is being treated as access allowed for now
-    Privileges privs;
-    privs.insert_ = true;
-    privs.select_ = false;
-    // use old style check for DB object level privs code only to check user access to the database
-    if (!SysCatalog::instance().checkPrivileges(user_meta, db_meta, privs)) {
-      THROW_MAPD_EXCEPTION(std::string("User ") + user + " is not authorized to access database " + dbname);
-    }
-  }
+
   session = INVALID_SESSION_ID;
   while (true) {
     session = generate_random_string(32);
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end())
       break;
-  }
-  auto cat = Catalog::get(dbname);
-  if (cat == nullptr) {
-    cat = std::make_shared<Catalog>(base_data_path_, db_meta, data_mgr_, string_leaves_, calcite_);
-    Catalog::set(dbname, cat);
   }
   sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat, user_meta, executor_device_type_, session));
   if (!super_user_rights_) {  // no need to connect to leaf_aggregator_ at this time while doing warmup

@@ -207,7 +207,8 @@ void SysCatalog::init(const std::string& basePath,
                       AuthMetadata authMetadata,
                       std::shared_ptr<Calcite> calcite,
                       bool is_new_db,
-                      bool check_privileges) {
+                      bool check_privileges,
+                      const std::vector<LeafHostInfo>* string_dict_hosts) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
 
@@ -217,6 +218,7 @@ void SysCatalog::init(const std::string& basePath,
   rest_server_.reset(new RestServer(authMetadata));
   calciteMgr_ = calcite;
   check_privileges_ = check_privileges;
+  string_dict_hosts_ = string_dict_hosts;
   sqliteConnector_.reset(new SqliteConnector(MAPD_SYSTEM_DB, basePath + "/mapd_catalogs/"));
   if (is_new_db) {
     initDB();
@@ -555,6 +557,48 @@ void SysCatalog::migratePrivileged_old() {
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
+}
+
+std::shared_ptr<Catalog> SysCatalog::login(const std::string& dbname, const std::string& username, const std::string& password, UserMetadata& user_meta, bool check_password) {
+  Catalog_Namespace::DBMetadata db_meta;
+  if (!getMetadataForDB(dbname, db_meta)) {
+    throw std::runtime_error("Database " + dbname + " does not exist.");
+  }
+
+  sys_write_lock write_lock(this);
+
+  {
+
+    bool userPresent = getMetadataForUser(username, user_meta);
+
+    if (!userPresent) {
+      throw std::runtime_error("Invalid credentials.");
+    }
+    if (check_password) {
+      if (!checkPasswordForUser(password, user_meta)) {
+        throw std::runtime_error("Invalid credentials.");
+      }
+    }
+  }
+
+  if (!arePrivilegesOn()) {
+    // insert privilege is being treated as access allowed for now
+    Privileges privs;
+    privs.insert_ = true;
+    privs.select_ = false;
+    // use old style check for DB object level privs code only to check user access to the database
+    if (!checkPrivileges(user_meta, db_meta, privs)) {
+      throw std::runtime_error("Invalid credentials.");
+    }
+  }
+
+  auto cat = Catalog::get(dbname);
+  if (cat == nullptr) {
+    cat = std::make_shared<Catalog>(basePath_, db_meta, dataMgr_, *string_dict_hosts_, calciteMgr_);
+    Catalog::set(dbname, cat);
+  }
+
+  return cat;
 }
 
 void SysCatalog::createUser(const string& name, const string& passwd, bool issuper) {
