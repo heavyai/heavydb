@@ -15,6 +15,8 @@
  */
 package com.mapd.tests;
 
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -31,11 +33,11 @@ import com.mapd.thrift.server.TTableDetails;
 public class MapdTestClient {
   MapD.Client client;
   String sessionId;
-  
+
   public TTableDetails get_table_details(String table_name) throws Exception {
     return client.get_table_details(sessionId, table_name);
   }
-  
+
   public TQueryResult runSql(String sql) throws Exception {
     return client.sql_execute(sessionId, sql, true, null, -1, -1);
   }
@@ -68,13 +70,18 @@ public class MapdTestClient {
   public List<String> get_roles() throws Exception {
     return client.get_roles(sessionId);
   }
-  
+
   public List<TDBObject> get_db_object_privs(String objectName, TDBObjectType type) throws Exception {
     return client.get_db_object_privs(sessionId, objectName, type);
   }
-  
+
   public void disconnect() throws Exception {
     client.disconnect(sessionId);
+  }
+
+  public Collection<String> get_all_roles_for_user(String username) throws Exception {
+    List<String> roles = client.get_all_roles_for_user(sessionId, username);
+    return new HashSet<String>(roles);
   }
 
   public static MapdTestClient getClient(String host, int port, String db, String user, String password)

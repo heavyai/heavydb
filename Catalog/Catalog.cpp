@@ -559,7 +559,11 @@ void SysCatalog::migratePrivileged_old() {
   sqliteConnector_->query("END TRANSACTION");
 }
 
-std::shared_ptr<Catalog> SysCatalog::login(const std::string& dbname, const std::string& username, const std::string& password, UserMetadata& user_meta, bool check_password) {
+std::shared_ptr<Catalog> SysCatalog::login(const std::string& dbname,
+                                           const std::string& username,
+                                           const std::string& password,
+                                           UserMetadata& user_meta,
+                                           bool check_password) {
   Catalog_Namespace::DBMetadata db_meta;
   if (!getMetadataForDB(dbname, db_meta)) {
     throw std::runtime_error("Database " + dbname + " does not exist.");

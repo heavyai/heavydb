@@ -487,6 +487,8 @@ class SysCatalog {
   mutable std::atomic<std::thread::id> thread_holding_sqlite_lock;
   mutable std::atomic<std::thread::id> thread_holding_write_lock;
   static thread_local bool thread_holds_read_lock;
+
+  friend LdapServer;
 };
 
 /*

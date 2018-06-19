@@ -26,13 +26,13 @@ public class MapdAsserts {
   public static void assertEqual(Object a, Object b) {
     if (a.equals(b))
       return;
-    throw new RuntimeException("assert failed");
+    throw new RuntimeException("assert failed:\nExpected: "+a+"\n     got: " +b);
   }
 
   public static void assertEqual(int a, int b) {
     if (a == b)
       return;
-    throw new RuntimeException("assert failed");
+    throw new RuntimeException("assert failed:\nExpected: "+a+"\n     got: " +b);
   }
 
   public static void assertEqual(String name, TDashboard db) {
