@@ -18,7 +18,6 @@
 #define QUERYENGINE_DATETRUNCATE_H
 
 #include <stdint.h>
-#include <time.h>
 
 #include "../Shared/funcannotations.h"
 #include "ExtractFromTime.h"
@@ -36,6 +35,7 @@
  * decade
  * milliseconds
  * microseconds
+ * nanoseconds
  * week
  * quarterday
  */
@@ -52,10 +52,10 @@ enum DatetruncField {
   dtDECADE,
   dtMILLISECOND,
   dtMICROSECOND,
+  dtNANOSECOND,
   dtWEEK,
   dtQUARTERDAY,
-  dtINVALID,
-  dtNANOSECOND
+  dtINVALID
 };
 
 extern "C" NEVER_INLINE DEVICE time_t DateTruncate(DatetruncField field, time_t timeval, const int32_t dimen);

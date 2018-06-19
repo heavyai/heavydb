@@ -33,7 +33,7 @@
 #include <limits>
 #include <stdexcept>
 #include <typeinfo>
-#include <math.h>
+#include <cmath>
 #include "../Catalog/Catalog.h"
 #include "../Catalog/SharedDictionaryValidator.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
@@ -885,12 +885,13 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::get(const std::shared_ptr<Analyzer:
     default:
       break;
   }
+  auto dimen = from_expr->get_type_info().get_dimension();
   SQLTypeInfo ti(kBIGINT, 0, 0, from_expr->get_type_info().get_notnull());
   auto c = std::dynamic_pointer_cast<Analyzer::Constant>(from_expr);
   if (c != nullptr) {
     c->set_type_info(ti);
     Datum d;
-    d.bigintval = ExtractFromTime(fieldno, c->get_constval().timeval, from_expr->get_type_info().get_dimension());
+    d.bigintval = ExtractFromTime(fieldno, c->get_constval().timeval, dimen);
     c->set_constval(d);
     return c;
   }
@@ -1343,7 +1344,7 @@ std::string SQLType::to_string() const {
       break;
     case kTIMESTAMP:
       str = "TIMESTAMP";
-      if (param1 < 6)
+      if (param1 <= 9)
         str += "(" + boost::lexical_cast<std::string>(param1) + ")";
       break;
     case kDATE:
@@ -1782,7 +1783,7 @@ void SQLType::check_type() {
     case kTIMESTAMP:
       if (param1 == -1)
         param1 = 0;                                                       // set default to 0
-      else if (param1 != 0 && param1 != 3 && param1 != 6 && param1 != 9)  // // support milli/micro/nanosec precision
+      else if (param1 != 0 && param1 != 3 && param1 != 6 && param1 != 9)  // support milli/micro/nanosec precision
         throw std::runtime_error("Only TIMESTAMP(n) where n = (0,3,6,9) are supported now.");
       break;
     case kTIME:

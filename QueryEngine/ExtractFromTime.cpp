@@ -21,57 +21,57 @@
 #include <glog/logging.h>
 #endif
 
-extern "C" NEVER_INLINE DEVICE int extract_hour(const time_t* tim_p) {
-  long days, rem;
+extern "C" NEVER_INLINE DEVICE int64_t extract_hour(const time_t* tim_p) {
+  int64_t days, rem;
   const time_t lcltime = *tim_p;
-  days = ((long)lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
-  rem = ((long)lcltime) % SECSPERDAY;
+  days = static_cast<uint64_t>(lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
+  rem = static_cast<uint64_t>(lcltime) % SECSPERDAY;
   if (rem < 0) {
     rem += SECSPERDAY;
     --days;
   }
-  return (int)(rem / SECSPERHOUR);
+  return static_cast<uint64_t>(rem / SECSPERHOUR);
 }
 
-DEVICE int extract_minute(const time_t* tim_p) {
-  long days, rem;
+DEVICE int64_t extract_minute(const time_t* tim_p) {
+  int64_t days, rem;
   const time_t lcltime = *tim_p;
-  days = ((long)lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
-  rem = ((long)lcltime) % SECSPERDAY;
+  days = static_cast<uint64_t>(lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
+  rem = static_cast<uint64_t>(lcltime) % SECSPERDAY;
   if (rem < 0) {
     rem += SECSPERDAY;
     --days;
   }
   rem %= SECSPERHOUR;
-  return (int)(rem / SECSPERMIN);
+  return static_cast<int64_t>(rem / SECSPERMIN);
 }
 
-DEVICE int extract_second(const time_t* tim_p) {
+DEVICE int64_t extract_second(const time_t* tim_p) {
   const time_t lcltime = *tim_p;
-  return (int)((long)lcltime % SECSPERMIN);
+  return static_cast<int64_t>(lcltime % SECSPERMIN);
 }
 
-DEVICE int extract_millisecond(const time_t* tim_p) {
+DEVICE int64_t extract_millisecond(const time_t* tim_p) {
   const time_t lcltime = *tim_p;
-  return (int)((long)lcltime % MILLISECSPERSEC);
+  return static_cast<int64_t>(lcltime % MILLISECSPERSEC);
 }
 
-DEVICE int extract_microsecond(const time_t* tim_p) {
+DEVICE int64_t extract_microsecond(const time_t* tim_p) {
   const time_t lcltime = *tim_p;
-  return (int)((long)lcltime % MICROSECSPERSEC);
+  return static_cast<int64_t>(lcltime % MICROSECSPERSEC);
 }
 
-DEVICE int extract_nanosecond(const time_t* tim_p) {
+DEVICE int64_t extract_nanosecond(const time_t* tim_p) {
   const time_t lcltime = *tim_p;
-  return (int)((long)lcltime % NANOSECSPERSEC);
+  return static_cast<int64_t>(lcltime % NANOSECSPERSEC);
 }
 
-DEVICE int extract_dow(const time_t* tim_p) {
-  long days, rem;
-  int weekday;
+DEVICE int32_t extract_dow(const time_t* tim_p) {
+  int64_t days, rem;
+  int32_t weekday;
   const time_t lcltime = *tim_p;
-  days = ((long)lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
-  rem = ((long)lcltime) % SECSPERDAY;
+  days = static_cast<int64_t>(lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
+  rem = static_cast<int64_t>(lcltime % SECSPERDAY);
   if (rem < 0) {
     rem += SECSPERDAY;
     --days;
@@ -82,18 +82,19 @@ DEVICE int extract_dow(const time_t* tim_p) {
   return weekday;
 }
 
-DEVICE int extract_quarterday(const time_t* tim_p) {
-  long quarterdays;
+DEVICE int32_t extract_quarterday(const time_t* tim_p) {
+  int32_t quarterdays;
   const time_t lcltime = *tim_p;
-  quarterdays = ((long)lcltime) / SECSPERQUARTERDAY;
-  return (int)(quarterdays % 4) + 1;
+  quarterdays = static_cast<int64_t>(lcltime) / SECSPERQUARTERDAY;
+  return static_cast<int32_t>(quarterdays % 4) + 1;
 }
 
-DEVICE int extract_month_fast(const time_t* tim_p) {
+DEVICE int32_t extract_month_fast(const time_t* tim_p) {
   STATIC_QUAL const uint32_t cumulative_month_epoch_starts[MONSPERYEAR] = {
       0, 2678400, 5270400, 7948800, 10540800, 13219200, 15897600, 18489600, 21168000, 23760000, 26438400, 29116800};
   const time_t lcltime = *tim_p;
-  uint32_t seconds_march_1900 = (int64_t)(lcltime) + EPOCH_OFFSET_YEAR_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900;
+  uint32_t seconds_march_1900 =
+      static_cast<int64_t>(lcltime) + EPOCH_OFFSET_YEAR_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900;
   uint32_t seconds_past_4year_period = seconds_march_1900 % SECONDS_PER_4_YEAR_CYCLE;
   uint32_t year_seconds_past_4year_period =
       (seconds_past_4year_period / SECONDS_PER_NON_LEAP_YEAR) * SECONDS_PER_NON_LEAP_YEAR;
@@ -110,11 +111,11 @@ DEVICE int extract_month_fast(const time_t* tim_p) {
   return (month + 2) % 12 + 1;
 }
 
-DEVICE int extract_quarter_fast(const time_t* tim_p) {
+DEVICE int32_t extract_quarter_fast(const time_t* tim_p) {
   STATIC_QUAL const uint32_t cumulative_quarter_epoch_starts[4] = {0, 7776000, 15638400, 23587200};
   STATIC_QUAL const uint32_t cumulative_quarter_epoch_starts_leap_year[4] = {0, 7862400, 15724800, 23673600};
   const time_t lcltime = *tim_p;
-  uint32_t seconds_1900 = (int64_t)(lcltime) + EPOCH_OFFSET_YEAR_1900;
+  uint32_t seconds_1900 = static_cast<int64_t>(lcltime) + EPOCH_OFFSET_YEAR_1900;
   uint32_t leap_years = (seconds_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900) / SECONDS_PER_4_YEAR_CYCLE;
   uint32_t year = (seconds_1900 - leap_years * SECONDS_PER_DAY) / SECONDS_PER_NON_LEAP_YEAR;
   uint32_t base_year_leap_years = (year - 1) / 4;
@@ -131,36 +132,36 @@ DEVICE int extract_quarter_fast(const time_t* tim_p) {
   return quarter + 1;
 }
 
-DEVICE int extract_year_fast(const time_t* tim_p) {
+DEVICE int32_t extract_year_fast(const time_t* tim_p) {
   const time_t lcltime = *tim_p;
-  uint32_t seconds_1900 = (int64_t)(lcltime) + EPOCH_OFFSET_YEAR_1900;
+  uint32_t seconds_1900 = static_cast<int64_t>(lcltime) + EPOCH_OFFSET_YEAR_1900;
   uint32_t leap_years = (seconds_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900) / SECONDS_PER_4_YEAR_CYCLE;
   uint32_t year = (seconds_1900 - leap_years * SECONDS_PER_DAY) / SECONDS_PER_NON_LEAP_YEAR + 1900;
   return year;
 }
 
 DEVICE tm* gmtime_r_newlib(const time_t* tim_p, tm* res) {
-  const int month_lengths[2][MONSPERYEAR] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
-                                             {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
-  long days, rem;
+  const int64_t month_lengths[2][MONSPERYEAR] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
+                                                 {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
+  int64_t days, rem;
   const time_t lcltime = *tim_p;
-  int year, month, yearday, weekday;
-  int years400, years100, years4, remainingyears;
-  int yearleap;
-  const int* ip;
+  int32_t year, month, yearday, weekday;
+  int32_t years400, years100, years4, remainingyears;
+  int32_t yearleap;
+  const int64_t* ip;
 
-  days = ((long)lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
-  rem = ((long)lcltime) % SECSPERDAY;
+  days = static_cast<int64_t>(lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
+  rem = static_cast<int64_t>(lcltime) % SECSPERDAY;
   if (rem < 0) {
     rem += SECSPERDAY;
     --days;
   }
 
   /* compute hour, min, and sec */
-  res->tm_hour = (int)(rem / SECSPERHOUR);
+  res->tm_hour = static_cast<int32_t>(rem / SECSPERHOUR);
   rem %= SECSPERHOUR;
-  res->tm_min = (int)(rem / SECSPERMIN);
-  res->tm_sec = (int)(rem % SECSPERMIN);
+  res->tm_min = static_cast<int32_t>(rem / SECSPERMIN);
+  res->tm_sec = static_cast<int32_t>(rem % SECSPERMIN);
 
   /* compute day of week */
   if ((weekday = ((ADJUSTED_EPOCH_WDAY + days) % DAYSPERWEEK)) < 0)
@@ -233,7 +234,7 @@ DEVICE tm* gmtime_r_newlib(const time_t* tim_p, tm* res) {
  */
 extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field, time_t timeval, const int32_t dimen) {
   // We have fast paths for the 5 fields below - do not need to do full gmtime
-  long prec = 1;  // default for 0
+  int64_t prec = 1;  // default for 0
   if (dimen == 3) {
     prec = MILLISECSPERSEC;
   } else if (dimen == 6) {
@@ -241,7 +242,7 @@ extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field, time_
   } else if (dimen == 9) {
     prec = NANOSECSPERSEC;
   }
-  time_t stimeval = (int64_t)(timeval / prec);
+  const time_t stimeval = static_cast<int64_t>(timeval / prec);
   switch (field) {
     case kEPOCH:
       return timeval;
@@ -256,9 +257,9 @@ extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field, time_
     case kMILLISECOND: {
       time_t mitimeval = timeval;
       if (dimen == 6) {
-        mitimeval = (int64_t)(timeval / MILLISECSPERSEC);
+        mitimeval = static_cast<int64_t>(timeval / MILLISECSPERSEC);
       } else if (dimen == 9) {
-        mitimeval = (int64_t)(timeval / MICROSECSPERSEC);
+        mitimeval = static_cast<int64_t>(timeval / MICROSECSPERSEC);
       } else if (dimen == 0) {
         return 0;
       }
@@ -267,7 +268,7 @@ extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field, time_
     case kMICROSECOND: {
       time_t mutimeval = timeval;
       if (dimen == 9) {
-        mutimeval = (int64_t)(timeval / MILLISECSPERSEC);
+        mutimeval = static_cast<int64_t>(timeval / MILLISECSPERSEC);
       } else if (dimen == 0 || dimen == 3) {
         return 0;
       }

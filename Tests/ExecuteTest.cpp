@@ -23,6 +23,7 @@
 #include "../QueryEngine/RelAlgExecutionDescriptor.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "../Shared/ConfigResolve.h"
+#include "../Shared/TimeGM.h"
 #include "../SqliteConnector/SqliteConnector.h"
 
 #include <glog/logging.h>
@@ -159,6 +160,10 @@ bool approx_eq(const double v, const double target, const double eps = 0.01) {
   return v_u64 == target_u64 || (target - eps < v && v < target + eps);
 }
 
+int parse_fractional_seconds(std::string sfrac, SQLTypeInfo& mapd_ti) {
+  return TimeGM::instance().parse_fractional_seconds(sfrac, mapd_ti);
+}
+
 class SQLiteComparator {
  public:
   SQLiteComparator() : connector_("sqliteTestDB", "") {}
@@ -218,7 +223,7 @@ class SQLiteComparator {
         const auto mapd_variant = crt_row[col_idx];
         const auto scalar_mapd_variant = boost::get<ScalarTargetValue>(&mapd_variant);
         CHECK(scalar_mapd_variant);
-        const auto mapd_ti = mapd_results->getColType(col_idx);
+        auto mapd_ti = mapd_results->getColType(col_idx);
         const auto mapd_type = mapd_ti.get_type();
         checkTypeConsistency(ref_col_type, mapd_ti);
         const bool ref_is_null = connector_.isNull(row_idx, col_idx);
@@ -289,6 +294,8 @@ class SQLiteComparator {
             const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
             CHECK(mapd_as_int_p);
             const auto mapd_val = *mapd_as_int_p;
+            time_t nsec = 0;
+            const int dimen = mapd_ti.get_dimension();
             if (ref_is_null) {
               CHECK_EQ(inline_int_null_val(mapd_ti), mapd_val);
             } else {
@@ -296,17 +303,33 @@ class SQLiteComparator {
                 0
               };
               const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
-              const auto end_str =
+              auto end_str =
                   strptime(ref_val.c_str(), mapd_type == kTIMESTAMP ? "%Y-%m-%d %H:%M:%S" : "%Y-%m-%d", &tm_struct);
-              if (end_str != nullptr) {
-                ASSERT_EQ(0, *end_str);
+              // handle fractional seconds
+              if (end_str != nullptr && *end_str != '.') {
+                if (end_str) {
+                  ASSERT_EQ(0, *end_str);
+                }
                 ASSERT_EQ(ref_val.size(), static_cast<size_t>(end_str - ref_val.c_str()));
+              }
+              if (dimen > 0 && mapd_type == kTIMESTAMP) {
+                if (*end_str == '.') {
+                  end_str++;
+                  int fs = parse_fractional_seconds(std::string(end_str), mapd_ti);
+                  nsec = timegm(&tm_struct) * pow(10, dimen);
+                  nsec += fs;
+                } else if (*end_str == '\0') {
+                  nsec = timegm(&tm_struct) * pow(10, dimen);
+                } else {
+                  CHECK(false);
+                }
               }
               if (timestamp_approx) {
                 // approximate result give 10 second lee way
-                ASSERT_NEAR(*mapd_as_int_p, timegm(&tm_struct), 10);
+                ASSERT_NEAR(
+                    *mapd_as_int_p, dimen > 0 ? nsec : timegm(&tm_struct), dimen > 0 ? 10 * pow(10, dimen) : 10);
               } else {
-                ASSERT_EQ(*mapd_as_int_p, timegm(&tm_struct));
+                ASSERT_EQ(*mapd_as_int_p, dimen > 0 ? nsec : timegm(&tm_struct));
               }
             }
             break;
@@ -4293,6 +4316,456 @@ TEST(Select, WatchdogTest) {
   }
 }
 
+TEST(Select, TimestampPrecision) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    /* ---DATE TRUNCATE--- */
+    ASSERT_EQ(978307200000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(millennium, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(978307200000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(century, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1293840000000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(decade, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1388534400000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(year, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1417392000000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(month, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1417910400000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(week, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418428800000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(day, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418508000000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(hour, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509380000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(minute, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509395000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(second, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509395323L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(millisecond, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509395323L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(microsecond, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509395323L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(nanosecond, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(-30578688000000000L,
+              v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(millennium, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(-2177452800000000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(century, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(662688000000000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(decade, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(915148800000000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(year, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(930787200000000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(month, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931651200000000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(week, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931651200000000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(day, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931701600000000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(hour, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931701720000000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(minute, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931701773000000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(second, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931701773874000L,
+              v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(millisecond, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931701773874533L,
+              v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(microsecond, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931701773874533L,
+              v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(nanosecond, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(978307200000000000L,
+              v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(millennium, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(978307200000000000L,
+              v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(century, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(978307200000000000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(decade, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1136073600000000000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(year, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1143849600000000000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(month, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1145750400000000000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(week, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146009600000000000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(day, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146020400000000000L, v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(hour, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146023340000000000L,
+              v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(minute, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146023344000000000L,
+              v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(second, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146023344607000000L,
+              v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(millisecond, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146023344607435000L,
+              v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(microsecond, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146023344607435125L,
+              v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(nanosecond, m_9) FROM test limit 1;", dt)));
+    /* ---Extract --- */
+    ASSERT_EQ(1146023344607435125L,
+              v<int64_t>(run_simple_agg("SELECT EXTRACT(epoch from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(607435125L, v<int64_t>(run_simple_agg("SELECT EXTRACT(nanosecond from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(607435L, v<int64_t>(run_simple_agg("SELECT EXTRACT(microsecond from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(607L, v<int64_t>(run_simple_agg("SELECT EXTRACT(millisecond from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(4L, v<int64_t>(run_simple_agg("SELECT EXTRACT(second from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(49L, v<int64_t>(run_simple_agg("SELECT EXTRACT(minute from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(3L, v<int64_t>(run_simple_agg("SELECT EXTRACT(hour from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(3L, v<int64_t>(run_simple_agg("SELECT EXTRACT(dow from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(3L, v<int64_t>(run_simple_agg("SELECT EXTRACT(isodow from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(17L, v<int64_t>(run_simple_agg("SELECT EXTRACT(week from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(26L, v<int64_t>(run_simple_agg("SELECT EXTRACT(day from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(116L, v<int64_t>(run_simple_agg("SELECT EXTRACT(doy from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(4L, v<int64_t>(run_simple_agg("SELECT EXTRACT(month from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(2L, v<int64_t>(run_simple_agg("SELECT EXTRACT(quarter from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1L, v<int64_t>(run_simple_agg("SELECT EXTRACT(quarterday from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(2006L, v<int64_t>(run_simple_agg("SELECT EXTRACT(year from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(931701773874533L, v<int64_t>(run_simple_agg("SELECT EXTRACT(epoch from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(0L, v<int64_t>(run_simple_agg("SELECT EXTRACT(nanosecond from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(874533L, v<int64_t>(run_simple_agg("SELECT EXTRACT(microsecond from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(874L, v<int64_t>(run_simple_agg("SELECT EXTRACT(millisecond from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(53L, v<int64_t>(run_simple_agg("SELECT EXTRACT(second from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(2L, v<int64_t>(run_simple_agg("SELECT EXTRACT(minute from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(14L, v<int64_t>(run_simple_agg("SELECT EXTRACT(hour from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(0L, v<int64_t>(run_simple_agg("SELECT EXTRACT(dow from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(7L, v<int64_t>(run_simple_agg("SELECT EXTRACT(isodow from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(29L, v<int64_t>(run_simple_agg("SELECT EXTRACT(week from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(11L, v<int64_t>(run_simple_agg("SELECT EXTRACT(day from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(192L, v<int64_t>(run_simple_agg("SELECT EXTRACT(doy from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(7L, v<int64_t>(run_simple_agg("SELECT EXTRACT(month from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(3L, v<int64_t>(run_simple_agg("SELECT EXTRACT(quarter from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(3L, v<int64_t>(run_simple_agg("SELECT EXTRACT(quarterday from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(1999L, v<int64_t>(run_simple_agg("SELECT EXTRACT(year from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509395323L, v<int64_t>(run_simple_agg("SELECT EXTRACT(epoch from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(0L, v<int64_t>(run_simple_agg("SELECT EXTRACT(nanosecond from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(0L, v<int64_t>(run_simple_agg("SELECT EXTRACT(microsecond from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(323L, v<int64_t>(run_simple_agg("SELECT EXTRACT(millisecond from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(15L, v<int64_t>(run_simple_agg("SELECT EXTRACT(second from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(23L, v<int64_t>(run_simple_agg("SELECT EXTRACT(minute from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(22L, v<int64_t>(run_simple_agg("SELECT EXTRACT(hour from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(6L, v<int64_t>(run_simple_agg("SELECT EXTRACT(dow from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(6L, v<int64_t>(run_simple_agg("SELECT EXTRACT(isodow from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(50L, v<int64_t>(run_simple_agg("SELECT EXTRACT(week from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(13L, v<int64_t>(run_simple_agg("SELECT EXTRACT(day from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(347L, v<int64_t>(run_simple_agg("SELECT EXTRACT(doy from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(12L, v<int64_t>(run_simple_agg("SELECT EXTRACT(month from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(4L, v<int64_t>(run_simple_agg("SELECT EXTRACT(quarter from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(4L, v<int64_t>(run_simple_agg("SELECT EXTRACT(quarterday from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(2014L, v<int64_t>(run_simple_agg("SELECT EXTRACT(year from m_3) FROM test limit 1;", dt)));
+    /* ---INTERVAL --- */
+    ASSERT_EQ(1177559344607435125L,
+              v<int64_t>(run_simple_agg("SELECT (m_9 + INTERVAL '1' year) from test limit 1;", dt)));
+    ASSERT_EQ(1148615344607435125L,
+              v<int64_t>(run_simple_agg("SELECT (m_9 + INTERVAL '1' month) from test limit 1;", dt)));
+    ASSERT_EQ(1146109744607435125L,
+              v<int64_t>(run_simple_agg("SELECT (m_9 + INTERVAL '1' day) from test limit 1;", dt)));
+    ASSERT_EQ(1146026944607435125L,
+              v<int64_t>(run_simple_agg("SELECT (m_9 + INTERVAL '1' hour) from test limit 1;", dt)));
+    ASSERT_EQ(1146023404607435125L,
+              v<int64_t>(run_simple_agg("SELECT (m_9 + INTERVAL '1' minute) from test limit 1;", dt)));
+    ASSERT_EQ(1146023345607435125L,
+              v<int64_t>(run_simple_agg("SELECT (m_9 + INTERVAL '1' second) from test limit 1;", dt)));
+    ASSERT_EQ(1114487344607435125L,
+              v<int64_t>(run_simple_agg("SELECT (m_9 - INTERVAL '1' year) from test limit 1;", dt)));
+    ASSERT_EQ(1143344944607435125L,
+              v<int64_t>(run_simple_agg("SELECT (m_9 - INTERVAL '1' month) from test limit 1;", dt)));
+    ASSERT_EQ(1145936944607435125L,
+              v<int64_t>(run_simple_agg("SELECT (m_9 - INTERVAL '1' day) from test limit 1;", dt)));
+    ASSERT_EQ(1146019744607435125L,
+              v<int64_t>(run_simple_agg("SELECT (m_9 - INTERVAL '1' hour) from test limit 1;", dt)));
+    ASSERT_EQ(1146023284607435125L,
+              v<int64_t>(run_simple_agg("SELECT (m_9 - INTERVAL '1' minute) from test limit 1;", dt)));
+    ASSERT_EQ(1146023343607435125L,
+              v<int64_t>(run_simple_agg("SELECT (m_9 - INTERVAL '1' second) from test limit 1;", dt)));
+    ASSERT_EQ(963324173874533L, v<int64_t>(run_simple_agg("SELECT (m_6 + INTERVAL '1' year) from test limit 1;", dt)));
+    ASSERT_EQ(934380173874533L, v<int64_t>(run_simple_agg("SELECT (m_6 + INTERVAL '1' month) from test limit 1;", dt)));
+    ASSERT_EQ(931788173874533L, v<int64_t>(run_simple_agg("SELECT (m_6 + INTERVAL '1' day) from test limit 1;", dt)));
+    ASSERT_EQ(931705373874533L, v<int64_t>(run_simple_agg("SELECT (m_6 + INTERVAL '1' hour) from test limit 1;", dt)));
+    ASSERT_EQ(931701833874533L,
+              v<int64_t>(run_simple_agg("SELECT (m_6 + INTERVAL '1' minute) from test limit 1;", dt)));
+    ASSERT_EQ(931701774874533L,
+              v<int64_t>(run_simple_agg("SELECT (m_6 + INTERVAL '1' second) from test limit 1;", dt)));
+    ASSERT_EQ(900165773874533L, v<int64_t>(run_simple_agg("SELECT (m_6 - INTERVAL '1' year) from test limit 1;", dt)));
+    ASSERT_EQ(929109773874533L, v<int64_t>(run_simple_agg("SELECT (m_6 - INTERVAL '1' month) from test limit 1;", dt)));
+    ASSERT_EQ(931615373874533L, v<int64_t>(run_simple_agg("SELECT (m_6 - INTERVAL '1' day) from test limit 1;", dt)));
+    ASSERT_EQ(931698173874533L, v<int64_t>(run_simple_agg("SELECT (m_6 - INTERVAL '1' hour) from test limit 1;", dt)));
+    ASSERT_EQ(931701713874533L,
+              v<int64_t>(run_simple_agg("SELECT (m_6 - INTERVAL '1' minute) from test limit 1;", dt)));
+    ASSERT_EQ(931701772874533L,
+              v<int64_t>(run_simple_agg("SELECT (m_6 - INTERVAL '1' second) from test limit 1;", dt)));
+    ASSERT_EQ(1450045395323L, v<int64_t>(run_simple_agg("SELECT (m_3 + INTERVAL '1' year) from test limit 1;", dt)));
+    ASSERT_EQ(1421187795323L, v<int64_t>(run_simple_agg("SELECT (m_3 + INTERVAL '1' month) from test limit 1;", dt)));
+    ASSERT_EQ(1418595795323L, v<int64_t>(run_simple_agg("SELECT (m_3 + INTERVAL '1' day) from test limit 1;", dt)));
+    ASSERT_EQ(1418512995323L, v<int64_t>(run_simple_agg("SELECT (m_3 + INTERVAL '1' hour) from test limit 1;", dt)));
+    ASSERT_EQ(1418509455323L, v<int64_t>(run_simple_agg("SELECT (m_3 + INTERVAL '1' minute) from test limit 1;", dt)));
+    ASSERT_EQ(1418509396323L, v<int64_t>(run_simple_agg("SELECT (m_3 + INTERVAL '1' second) from test limit 1;", dt)));
+    ASSERT_EQ(1386973395323L, v<int64_t>(run_simple_agg("SELECT (m_3 - INTERVAL '1' year) from test limit 1;", dt)));
+    ASSERT_EQ(1415917395323L, v<int64_t>(run_simple_agg("SELECT (m_3 - INTERVAL '1' month) from test limit 1;", dt)));
+    ASSERT_EQ(1418422995323L, v<int64_t>(run_simple_agg("SELECT (m_3 - INTERVAL '1' day) from test limit 1;", dt)));
+    ASSERT_EQ(1418505795323L, v<int64_t>(run_simple_agg("SELECT (m_3 - INTERVAL '1' hour) from test limit 1;", dt)));
+    ASSERT_EQ(1418509335323L, v<int64_t>(run_simple_agg("SELECT (m_3 - INTERVAL '1' minute) from test limit 1;", dt)));
+    ASSERT_EQ(1418509394323L, v<int64_t>(run_simple_agg("SELECT (m_3 - INTERVAL '1' second) from test limit 1;", dt)));
+    /* ---DATE PART --- */
+    ASSERT_EQ(2014L, v<int64_t>(run_simple_agg("SELECT DATEPART('year', m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(4L, v<int64_t>(run_simple_agg("SELECT DATEPART('quarter', m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(12L, v<int64_t>(run_simple_agg("SELECT DATEPART('month', m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(347L, v<int64_t>(run_simple_agg("SELECT DATEPART('dayofyear', m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(13L, v<int64_t>(run_simple_agg("SELECT DATEPART('day', m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(22L, v<int64_t>(run_simple_agg("SELECT DATEPART('hour', m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(23L, v<int64_t>(run_simple_agg("SELECT DATEPART('minute', m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(15L, v<int64_t>(run_simple_agg("SELECT DATEPART('second', m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(323L, v<int64_t>(run_simple_agg("SELECT DATEPART('millisecond', m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(0L, v<int64_t>(run_simple_agg("SELECT DATEPART('microsecond', m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(0L, v<int64_t>(run_simple_agg("SELECT DATEPART('nanosecond', m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1999L, v<int64_t>(run_simple_agg("SELECT DATEPART('year', m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(3L, v<int64_t>(run_simple_agg("SELECT DATEPART('quarter', m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(7L, v<int64_t>(run_simple_agg("SELECT DATEPART('month', m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(192L, v<int64_t>(run_simple_agg("SELECT DATEPART('dayofyear', m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(11L, v<int64_t>(run_simple_agg("SELECT DATEPART('day', m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(14L, v<int64_t>(run_simple_agg("SELECT DATEPART('hour', m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(2L, v<int64_t>(run_simple_agg("SELECT DATEPART('minute', m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(53L, v<int64_t>(run_simple_agg("SELECT DATEPART('second', m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(874L, v<int64_t>(run_simple_agg("SELECT DATEPART('millisecond', m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(874533L, v<int64_t>(run_simple_agg("SELECT DATEPART('microsecond', m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(0L, v<int64_t>(run_simple_agg("SELECT DATEPART('nanosecond', m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(2006L, v<int64_t>(run_simple_agg("SELECT DATEPART('year', m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(2L, v<int64_t>(run_simple_agg("SELECT DATEPART('quarter', m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(4L, v<int64_t>(run_simple_agg("SELECT DATEPART('month', m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(116L, v<int64_t>(run_simple_agg("SELECT DATEPART('dayofyear', m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(26L, v<int64_t>(run_simple_agg("SELECT DATEPART('day', m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(3L, v<int64_t>(run_simple_agg("SELECT DATEPART('hour', m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(49L, v<int64_t>(run_simple_agg("SELECT DATEPART('minute', m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(4L, v<int64_t>(run_simple_agg("SELECT DATEPART('second', m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(607L, v<int64_t>(run_simple_agg("SELECT DATEPART('millisecond', m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(607435L, v<int64_t>(run_simple_agg("SELECT DATEPART('microsecond', m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(607435125L, v<int64_t>(run_simple_agg("SELECT DATEPART('nanosecond', m_9) FROM test limit 1;", dt)));
+    /* ---DATE ADD --- */
+    ASSERT_EQ(1177559344607435125L, v<int64_t>(run_simple_agg("SELECT DATEADD('year',1, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1153885744607435125L,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('quarter', 1, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1148615344607435125L,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('month', 1, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146109744607435125L, v<int64_t>(run_simple_agg("SELECT DATEADD('day',1, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146026944607435125L,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('hour', 1, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146023404607435125L,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('minute', 1, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146023403607435125L,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('second', 59, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146023344932435125L,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('millisecond', 325 , m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146023344607960125L,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('microsecond', 525, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146023344607436000L,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('nanosecond', 875, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1026396173874533L, v<int64_t>(run_simple_agg("SELECT DATEADD('year',3, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(955461773874533L, v<int64_t>(run_simple_agg("SELECT DATEADD('quarter', 3, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(947599373874533L, v<int64_t>(run_simple_agg("SELECT DATEADD('month', 6, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(932824973874533L, v<int64_t>(run_simple_agg("SELECT DATEADD('day',13, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931734173874533L, v<int64_t>(run_simple_agg("SELECT DATEADD('hour', 9, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931704053874533L, v<int64_t>(run_simple_agg("SELECT DATEADD('minute', 38, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931701783874533L, v<int64_t>(run_simple_agg("SELECT DATEADD('second', 10, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931701773885533L,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('millisecond', 11 , m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931701773874678L,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('microsecond', 145, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931701773874533L,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('nanosecond', 875, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(1734128595323L, v<int64_t>(run_simple_agg("SELECT DATEADD('year',10, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1450045395323L, v<int64_t>(run_simple_agg("SELECT DATEADD('quarter', 4, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1423866195323L, v<int64_t>(run_simple_agg("SELECT DATEADD('month', 2, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1419805395323L, v<int64_t>(run_simple_agg("SELECT DATEADD('day',15, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418516595323L, v<int64_t>(run_simple_agg("SELECT DATEADD('hour', 2, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418510055323L, v<int64_t>(run_simple_agg("SELECT DATEADD('minute', 11, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509415323L, v<int64_t>(run_simple_agg("SELECT DATEADD('second', 20, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509395553,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('millisecond', 230 , m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509395323L,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('microsecond', 145, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509395323L,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('nanosecond', 875, m_3) FROM test limit 1;", dt)));
+    /* ---DATE DIFF --- */
+    ASSERT_EQ(1146023344607435125L - 931701773874533000L,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('nanosecond', m_6, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(931701773874533000L - 1146023344607435125L,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('nanosecond', m_9, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146023344607435125L - 1418509395323000000L,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('nanosecond', m_3, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509395323000000L - 1146023344607435125L,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('nanosecond', m_9, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146023344607435125L - 1418509395000000000L,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('nanosecond', m, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509395000000000L - 1146023344607435125L,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('nanosecond', m_9, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((1146023344607435125L - 931701773874533000L) / 1000L,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('microsecond', m_6, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((931701773874533000L - 1146023344607435125L) / 1000L,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('microsecond', m_9, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ((1146023344607435125L - 1418509395323000000L) / 1000L,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('microsecond', m_3, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395323000000L - 1146023344607435125L) / 1000L,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('microsecond', m_9, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((1146023344607435125L - 1418509395000000000L) / 1000L,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('microsecond', m, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395000000000L - 1146023344607435125L) / 1000L,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('microsecond', m_9, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((1146023344607435125L - 931701773874533000L) / (1000L * 1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('millisecond', m_6, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((931701773874533000L - 1146023344607435125L) / (1000L * 1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('millisecond', m_9, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ((1146023344607435125L - 1418509395323000000L) / (1000L * 1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('millisecond', m_3, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395323000000L - 1146023344607435125L) / (1000L * 1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('millisecond', m_9, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((1146023344607435125L - 1418509395000000000L) / (1000L * 1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('millisecond', m, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395000000000L - 1146023344607435125L) / (1000L * 1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('millisecond', m_9, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((1146023344607435125L - 931701773874533000L) / (1000L * 1000L * 1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('second', m_6, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((931701773874533000L - 1146023344607435125L) / (1000L * 1000L * 1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('second', m_9, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ((1146023344607435125L - 1418509395323000000L) / (1000L * 1000L * 1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('second', m_3, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395323000000L - 1146023344607435125L) / (1000L * 1000L * 1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('second', m_9, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((1146023344607435125L - 1418509395000000000L) / (1000L * 1000L * 1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('second', m, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395000000000L - 1146023344607435125L) / (1000L * 1000L * 1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('second', m_9, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((3572026L), v<int64_t>(run_simple_agg("SELECT DATEDIFF('minute', m_6, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((-3572026L), v<int64_t>(run_simple_agg("SELECT DATEDIFF('minute', m_9, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(-4541434L, v<int64_t>(run_simple_agg("SELECT DATEDIFF('minute', m_3, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((4541434L), v<int64_t>(run_simple_agg("SELECT DATEDIFF('minute', m_9, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((-4541434L), v<int64_t>(run_simple_agg("SELECT DATEDIFF('minute', m, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((4541434L), v<int64_t>(run_simple_agg("SELECT DATEDIFF('minute', m_9, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((59533L), v<int64_t>(run_simple_agg("SELECT DATEDIFF('hour', m_6, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((-59533L), v<int64_t>(run_simple_agg("SELECT DATEDIFF('hour', m_9, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ((-75690L), v<int64_t>(run_simple_agg("SELECT DATEDIFF('hour', m_3, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((75690L), v<int64_t>(run_simple_agg("SELECT DATEDIFF('hour', m_9, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((-75690L), v<int64_t>(run_simple_agg("SELECT DATEDIFF('hour', m, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((75690L), v<int64_t>(run_simple_agg("SELECT DATEDIFF('hour', m_9, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((2480), v<int64_t>(run_simple_agg("SELECT DATEDIFF('day', m_6, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((-2480), v<int64_t>(run_simple_agg("SELECT DATEDIFF('day', m_9, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(-3153, v<int64_t>(run_simple_agg("SELECT DATEDIFF('day', m_3, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((3153), v<int64_t>(run_simple_agg("SELECT DATEDIFF('day', m_9, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((-3153), v<int64_t>(run_simple_agg("SELECT DATEDIFF('day', m, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((3153), v<int64_t>(run_simple_agg("SELECT DATEDIFF('day', m_9, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((81), v<int64_t>(run_simple_agg("SELECT DATEDIFF('month', m_6, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((-81), v<int64_t>(run_simple_agg("SELECT DATEDIFF('month', m_9, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ((-104), v<int64_t>(run_simple_agg("SELECT DATEDIFF('month', m_3, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((104), v<int64_t>(run_simple_agg("SELECT DATEDIFF('month', m_9, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((-104), v<int64_t>(run_simple_agg("SELECT DATEDIFF('month', m, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((104), v<int64_t>(run_simple_agg("SELECT DATEDIFF('month', m_9, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((7), v<int64_t>(run_simple_agg("SELECT DATEDIFF('year', m_6, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((-7), v<int64_t>(run_simple_agg("SELECT DATEDIFF('year', m_9, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(-8, v<int64_t>(run_simple_agg("SELECT DATEDIFF('year', m_3, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((8), v<int64_t>(run_simple_agg("SELECT DATEDIFF('year', m_9, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((-8), v<int64_t>(run_simple_agg("SELECT DATEDIFF('year', m, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ((8), v<int64_t>(run_simple_agg("SELECT DATEDIFF('year', m_9, m) FROM test limit 1;", dt)));
+    ASSERT_EQ(931701773874533L - 1418509395323000L,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('nanosecond', m_3, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509395323000L - 931701773874533L,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('nanosecond', m_6, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(931701773874533L - 1418509395000000L,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('nanosecond', m, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509395000000L - 931701773874533L,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('nanosecond', m_6, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((931701773874533L - 1418509395323000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('microsecond', m_3, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395323000L - 931701773874533L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('microsecond', m_6, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((931701773874533L - 1418509395000000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('microsecond', m, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395000000L - 931701773874533L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('microsecond', m_6, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((931701773874533L - 1418509395323000L) / (1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('millisecond', m_3, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395323000L - 931701773874533L) / (1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('millisecond', m_6, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((931701773874533L - 1418509395000000L) / (1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('millisecond', m, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395000000L - 931701773874533L) / (1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('millisecond', m_6, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((931701773874533L - 1418509395323000L) / (1000L * 1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('second', m_3, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395323000L - 931701773874533L) / (1000L * 1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('second', m_6, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((931701773874533L - 1418509395000000L) / (1000L * 1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('second', m, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395000000L - 931701773874533L) / (1000L * 1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('second', m_6, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((931701773874533L - 1418509395323000L) / (1000L * 1000L * 60L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('minute', m_3, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395323000L - 931701773874533L) / (1000L * 1000L * 60L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('minute', m_6, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((931701773874533L - 1418509395000000L) / (1000L * 1000L * 60L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('minute', m, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395000000L - 931701773874533L) / (1000L * 1000L * 60L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('minute', m_6, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((931701773874533L - 1418509395323000L) / (1000L * 1000L * 60L * 60L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('hour', m_3, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395323000L - 931701773874533L) / (1000L * 1000L * 60L * 60L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('hour', m_6, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((931701773874533L - 1418509395000000L) / (1000L * 1000L * 60L * 60L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('hour', m, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395000000L - 931701773874533L) / (1000L * 1000L * 60L * 60L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('hour', m_6, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((931701773874533L - 1418509395323000L) / (1000L * 1000L * 60L * 60L * 24L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('day', m_3, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395323000L - 931701773874533L) / (1000L * 1000L * 60L * 60L * 24L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('day', m_6, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((931701773874533L - 1418509395000000L) / (1000L * 1000L * 60L * 60L * 24L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('day', m, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395000000L - 931701773874533L) / (1000L * 1000L * 60L * 60L * 24L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('day', m_6, m) FROM test limit 1;", dt)));
+    ASSERT_EQ(185, v<int64_t>(run_simple_agg("SELECT DATEDIFF('month', m_6, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(-185, v<int64_t>(run_simple_agg("SELECT DATEDIFF('month', m_3, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(185, v<int64_t>(run_simple_agg("SELECT DATEDIFF('month', m_6, m) FROM test limit 1;", dt)));
+    ASSERT_EQ(-185, v<int64_t>(run_simple_agg("SELECT DATEDIFF('month', m, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(15, v<int64_t>(run_simple_agg("SELECT DATEDIFF('year', m_6, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(-15, v<int64_t>(run_simple_agg("SELECT DATEDIFF('year', m_3, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(15, v<int64_t>(run_simple_agg("SELECT DATEDIFF('year', m_6, m) FROM test limit 1;", dt)));
+    ASSERT_EQ(-15, v<int64_t>(run_simple_agg("SELECT DATEDIFF('year', m, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509395000L - 1418509395323L,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('nanosecond', m_3, m) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509395323L - 1418509395000L,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('nanosecond', m, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395000L - 1418509395323L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('microsecond', m_3, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395323L - 1418509395000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('microsecond', m, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395000L - 1418509395323L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('millisecond', m_3, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395323L - 1418509395000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('millisecond', m, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395000L - 1418509395323L) / (1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('second', m_3, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395323L - 1418509395000L) / (1000L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('second', m, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395000L - 1418509395323L) / (1000L * 60L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('minute', m_3, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395323L - 1418509395000L) / (1000L * 60L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('minute', m, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395000L - 1418509395323L) / (1000L * 1000L * 60L * 60L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('hour', m_3, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395323L - 1418509395000L) / (1000L * 1000L * 60L * 60L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('hour', m, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395000L - 1418509395323L) / (1000L * 1000L * 60L * 60L * 24L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('day', m_3, m) FROM test limit 1;", dt)));
+    ASSERT_EQ((1418509395323L - 1418509395000L) / (1000L * 1000L * 60L * 60L * 24L),
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('day', m, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT DATEDIFF('month', m_3, m) FROM test limit 1;", dt)));
+    ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT DATEDIFF('month', m, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT DATEDIFF('year', m_3, m) FROM test limit 1;", dt)));
+    ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT DATEDIFF('year', m, m_3) FROM test limit 1;", dt)));
+    /* ---TIMESTAMP ADD --- */
+    ASSERT_EQ(1177559344607435125L,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(YEAR,1, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1153885744607435125L,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(QUARTER, 1, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1148615344607435125L,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(MONTH, 1, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146109744607435125L,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(DAY,1, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146026944607435125L,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(HOUR, 1, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146023404607435125L,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(MINUTE, 1, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146023403607435125L,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(SECOND, 59, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1026396173874533L, v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(YEAR,3, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(955461773874533L,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(QUARTER, 3, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(947599373874533L,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(MONTH, 6, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(932824973874533L, v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(DAY,13, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931734173874533L, v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(HOUR, 9, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931704053874533L,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(MINUTE, 38, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931701783874533L,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(SECOND, 10, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(1734128595323L, v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(YEAR,10, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1450045395323L,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(QUARTER, 4, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1423866195323L, v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(MONTH, 2, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1419805395323L, v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(DAY,15, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418516595323L, v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(HOUR, 2, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418510055323L,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(MINUTE, 11, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509415323L,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(SECOND, 20, m_3) FROM test limit 1;", dt)));
+  }
+}
+
 TEST(Truncate, Count) {
   run_ddl_statement("create table trunc_test (i1 integer, t1 text);");
   run_multiple_agg("insert into trunc_test values(1, '1');", ExecutorDeviceType::CPU);
@@ -5334,8 +5807,7 @@ TEST(Update, ImplicitCastToTimestamp8) {
     EXPECT_EQ(int64_t(1),
               v<int64_t>(run_simple_agg("select count(t1) from tstamp where t1='1990-12-31 23:59:59';", dt)));
 
-    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( '1989-01-01 00:00:00' as timestamp );", dt),
-                 std::runtime_error);
+    EXPECT_NO_THROW(run_multiple_agg("update tstamp set t1=cast( '1989-01-01 00:00:00' as timestamp );", dt));
     EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( '2000' as date );", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 2000.00 as float );", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 2123.444 as double );", dt), std::runtime_error);
@@ -5371,8 +5843,7 @@ TEST(Update, ImplicitCastToTimestamp4) {
     EXPECT_EQ(int64_t(1),
               v<int64_t>(run_simple_agg("select count(t1) from tstamp4 where t1='1990-12-31 23:59:59';", dt)));
 
-    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( '1989-01-01 00:00:00' as timestamp );", dt),
-                 std::runtime_error);
+    EXPECT_NO_THROW(run_multiple_agg("update tstamp4 set t1=cast( '1989-01-01 00:00:00' as timestamp );", dt));
     EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( '2000' as date );", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( 2000.00 as float );", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( 2123.444 as double );", dt), std::runtime_error);
@@ -6972,7 +7443,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
     std::string columns_definition{
         "x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn float, d double, dn double, str "
         "varchar(10), null_str text encoding dict, fixed_str text encoding dict(16), fixed_null_str text encoding "
-        "dict(16), real_str text encoding none, shared_dict text, m timestamp(0), n time(0), o date, o1 date encoding "
+        "dict(16), real_str text encoding none, shared_dict text, m timestamp(0), m_3 timestamp(3), m_6 timestamp(6), "
+        "m_9 timestamp(9), n time(0), o date, o1 date encoding "
         "fixed(32), fx int "
         "encoding fixed(16), dd decimal(10, 2), dd_notnull decimal(10, 2) not null, ss text encoding dict, u int, ofd "
         "int, ufd int not null, ofq bigint, ufq bigint not null"};
@@ -6988,7 +7460,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn float, d "
         "double, dn double, str varchar(10), null_str text, fixed_str text, fixed_null_str text, real_str text, "
         "shared_dict "
-        "text, m timestamp(0), n time(0), o date, o1 date, fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not "
+        "text, m timestamp(0), m_3 timestamp(3), m_6 timestamp(6), m_9 timestamp(9), n time(0), o date, o1 date, "
+        "fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not "
         "null, ss "
         "text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null);");
   } catch (...) {
@@ -7000,8 +7473,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
     const std::string insert_query{
         "INSERT INTO test VALUES(7, 42, 101, 1001, 't', 1.1, 1.1, null, 2.2, null, 'foo', null, 'foo', null, "
         "'real_foo', 'foo',"
-        "'2014-12-13 "
-        "22:23:15', "
+        "'2014-12-13 22:23:15', '2014-12-13 22:23:15.323', '1999-07-11 14:02:53.874533', '2006-04-26 "
+        "03:49:04.607435125', "
         "'15:13:14', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, 'fish', null, 2147483647, -2147483648, null, -1);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
@@ -7009,7 +7482,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
         "INSERT INTO test VALUES(8, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, 2.4, -2002.4, 'bar', null, 'bar', null, "
-        "'real_bar', NULL, '2014-12-13 22:23:15', '15:13:14', NULL, NULL, NULL, 222.2, 222.2, null, null, null, "
+        "'real_bar', NULL, '2014-12-13 22:23:15', '2014-12-13 22:23:15.323', '2014-12-13 22:23:15.874533', "
+        "'2014-12-13 22:23:15.607435763', '15:13:14', NULL, NULL, NULL, 222.2, 222.2, null, null, null, "
         "-2147483647, "
         "9223372036854775807, -9223372036854775808);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
@@ -7018,7 +7492,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
         "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 1000.3, -1000.3, 2.6, -220.6, 'baz', null, null, null, "
-        "'real_baz', 'baz', '2014-12-14 22:23:15', '15:13:14', '1999-09-09', '1999-09-09', 11, 333.3, 333.3, "
+        "'real_baz', 'baz', '2014-12-14 22:23:15', '2014-12-14 22:23:15.750', '2014-12-14 22:23:15.437321', "
+        "'2014-12-14 22:23:15.934567401', '15:13:14', '1999-09-09', '1999-09-09', 11, 333.3, 333.3, "
         "'boat', null, 1, "
         "-1, 1, -9223372036854775808);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);

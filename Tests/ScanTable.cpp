@@ -86,8 +86,9 @@ void scan_chunk(const ChunkMetadata& chunk_metadata, const Chunk& chunk, size_t&
         }
         break;
       case kTIME:
-      case kTIMESTAMP:
-        if (cd->columnType.get_dimension() == 0) {
+      case kTIMESTAMP: {
+        int d = cd->columnType.get_dimension();
+        if (d == 0 || d == 3 || d == 6 || d == 9) {  // add support for timestamp(0,3,6,9)
           if (sizeof(time_t) == 4)
             boost::hash_combine(hash, *(int32_t*)vd.pointer);
           else
@@ -95,6 +96,7 @@ void scan_chunk(const ChunkMetadata& chunk_metadata, const Chunk& chunk, size_t&
         } else
           assert(false);  // not supported yet
         break;
+      }
       case kDATE:
         if (sizeof(time_t) == 4)
           boost::hash_combine(hash, *(int32_t*)vd.pointer);

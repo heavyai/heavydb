@@ -2136,10 +2136,15 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                                            getShardedTopBucket(col_range_info_nosharding, shard_count),
                                            col_range_info_nosharding.has_nulls};
 
+  // For timestamp operations, adjust tollerance as integer overflows for nanosecs precision.
+  const int64_t tol = 130000000 * std::max(col_range_info.bucket, int64_t(1)) < 0
+                          ? 130000 * std::max(col_range_info.bucket, int64_t(1))
+                          : 130000000 * std::max(col_range_info.bucket, int64_t(1));
+
   if (g_enable_watchdog &&
       ((col_range_info.hash_type_ == GroupByColRangeType::MultiCol && max_groups_buffer_entry_count > 120000000) ||
        (col_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange &&
-        col_range_info.max - col_range_info.min > 130000000 * std::max(col_range_info.bucket, int64_t(1))))) {
+        col_range_info.max - col_range_info.min > tol))) {
     throw WatchdogException("Query would use too much memory");
   }
 

@@ -546,6 +546,9 @@ class SQLTypeInfo {
           case kENCODING_NONE:
             return sizeof(time_t);
           case kENCODING_FIXED:
+            if (type == kTIMESTAMP && dimension > 0) {
+              assert(false);  // disable compression for timestamp precisions
+            }
             return comp_param / 8;
           case kENCODING_RL:
           case kENCODING_DIFF:

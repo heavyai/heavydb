@@ -18,16 +18,16 @@
 #ifndef TIMEGM_H
 #define TIMEGM_H
 #include <string.h>
-#include <time.h>
+#include <ctime>
 #include <sstream>
-#include <math.h>
+#include <cmath>
 #include "sqltypes.h"
 
 class TimeGM {
  public:
   time_t my_timegm(const struct tm* tm);
-  time_t my_timegm(const struct tm* tm, const int& fsc, SQLTypeInfo& ti);
-  int parse_fractional_seconds(std::string sfrac, SQLTypeInfo& ti);
+  time_t my_timegm(const struct tm* tm, const time_t& fsc, SQLTypeInfo& ti);
+  time_t parse_fractional_seconds(std::string sfrac, SQLTypeInfo& ti);
   static TimeGM& instance() {
     static TimeGM timegm{};
     return timegm;

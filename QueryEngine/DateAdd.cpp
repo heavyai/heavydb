@@ -112,8 +112,10 @@ extern "C" NEVER_INLINE DEVICE time_t DateAdd(DateaddField field, int64_t number
       int64_t mutimeval = 0;
       if (dimen == 9) {
         mutimeval = timeval + number * MILLISECSPERSEC;
-      } else
+      } else if (dimen == 6) {
         mutimeval = timeval + number;
+      } else
+        mutimeval = timeval;
       return mutimeval;
     }
     case daMILLISECOND: {
@@ -168,8 +170,8 @@ extern "C" NEVER_INLINE DEVICE time_t DateAdd(DateaddField field, int64_t number
 #endif
   }
   months_to_go *= number;
-  time_t stimeval = (int64_t)(timeval / scale_ret);
-  time_t nfrac = (int)((long)timeval % scale_ret);
+  const time_t stimeval = (int64_t)(timeval / scale_ret);
+  const time_t nfrac = (int)((long)timeval % scale_ret);
   return (skip_months(stimeval, months_to_go) * scale_ret) + nfrac;
 }
 

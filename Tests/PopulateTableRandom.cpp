@@ -213,8 +213,9 @@ size_t random_fill(const ColumnDescriptor* cd, DataBlockPtr p, size_t num_elems,
         hash = random_fill_string(*p.stringsPtr, num_elems, MAX_TEXT_LEN, data_volumn);
       break;
     case kTIME:
-    case kTIMESTAMP:
-      if (cd->columnType.get_dimension() == 0) {
+    case kTIMESTAMP: {
+      const int dimen = cd->columnType.get_dimension();
+      if (dimen == 0 || dimen == 3 || dimen == 6 || dimen == 9) {  // add timestamp(0,3,6,9) support
         if (sizeof(time_t) == 4) {
           hash = random_fill_int32(p.numbersPtr, num_elems);
           data_volumn += num_elems * sizeof(int32_t);
@@ -225,6 +226,7 @@ size_t random_fill(const ColumnDescriptor* cd, DataBlockPtr p, size_t num_elems,
       } else
         assert(false);  // not supported yet
       break;
+    }
     case kDATE:
       if (sizeof(time_t) == 4) {
         hash = random_fill_int32(p.numbersPtr, num_elems);

@@ -216,10 +216,12 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = 0;
       // handle fractional seconds
       if (ti.get_dimension() > 0) {  // check for precision
-        int fsc = 0;
+        time_t fsc = 0;
         if (*p == '.') {
           p++;
-          fsc = TimeGM::instance().parse_fractional_seconds(std::string(p), ti);
+          std::string fstr(p);
+          fsc = fstr.length() == (unsigned)ti.get_dimension() ? std::stol(fstr)
+                                                              : TimeGM::instance().parse_fractional_seconds(fstr, ti);
           d.timeval = TimeGM::instance().my_timegm(&tm_struct, fsc, ti);
           break;
         } else if (*p == '\0') {
@@ -306,15 +308,23 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
       return std::string(buf);
     }
     case kTIMESTAMP: {
-      std::tm tm_struct;
-      std::string t = std::to_string(ti.get_dimension());
-      int cp = t.length() - ti.get_dimension();
-      time_t sec = std::stoll(t.substr(0, cp));
-      t = t.substr(cp);
-      gmtime_r(&sec, &tm_struct);
-      char buf[21];
-      strftime(buf, 21, "%F %T.", &tm_struct);
-      return std::string(buf) += t;
+      std::tm tm_struct{0};
+      if (ti.get_dimension() > 0) {
+        std::string t = std::to_string(d.timeval);
+        int cp = t.length() - ti.get_dimension();
+        time_t sec = std::stoll(t.substr(0, cp));
+        t = t.substr(cp);
+        gmtime_r(&sec, &tm_struct);
+        char buf[21];
+        strftime(buf, 21, "%F %T.", &tm_struct);
+        return std::string(buf) += t;
+      } else {
+        time_t sec = d.timeval;
+        gmtime_r(&sec, &tm_struct);
+        char buf[20];
+        strftime(buf, 20, "%F %T", &tm_struct);
+        return std::string(buf);
+      }
     }
     case kDATE: {
       std::tm tm_struct;

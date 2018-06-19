@@ -48,16 +48,16 @@ int TimeGM::leap_days(int y1, int y2) {
   return (y2 / 4 - y1 / 4) - (y2 / 100 - y1 / 100) + (y2 / 400 - y1 / 400);
 }
 
-int TimeGM::parse_fractional_seconds(std::string sfrac, SQLTypeInfo& ti) {
+time_t TimeGM::parse_fractional_seconds(std::string sfrac, SQLTypeInfo& ti) {
   int nfrac = sfrac.length();
 
   if (nfrac >= 0 && nfrac < ti.get_dimension()) {
     char d = '0';
     sfrac += std::string(ti.get_dimension() - nfrac, d);
   } else if (nfrac > ti.get_dimension()) {
-    sfrac = sfrac.substr(0, 6);
+    sfrac = sfrac.substr(0, ti.get_dimension());
   }
-  return std::stoi(sfrac);
+  return std::stol(sfrac);
 }
 
 /*
@@ -87,12 +87,11 @@ time_t TimeGM::my_timegm(const struct tm* tm) {
   return seconds;
 }
 
-time_t TimeGM::my_timegm(const struct tm* tm, const int& fsc, SQLTypeInfo& ti) {
+time_t TimeGM::my_timegm(const struct tm* tm, const time_t& fsc, SQLTypeInfo& ti) {
   time_t sec;
-  time_t fracsec;
 
-  sec = my_timegm(tm);
-  fracsec = (sec * pow(10.0, ti.get_dimension())) + fsc;
+  sec = my_timegm(tm) * pow(10, ti.get_dimension());
+  sec += fsc;
 
-  return fracsec;
+  return sec;
 }
