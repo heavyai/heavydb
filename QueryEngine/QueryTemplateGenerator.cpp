@@ -689,6 +689,13 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   Attributes row_process_pal;
   row_process->setAttributes(row_process_pal);
 
+  // Forcing all threads within a warp to be synchronized (Volta only)
+  if (query_mem_desc.isWarpSyncRequired(device_type)) {
+    auto func_sync_warp = mod->getFunction("sync_warp");
+    CHECK(func_sync_warp);
+    CallInst::Create(func_sync_warp, {}, "", bb_forbody);
+  }
+
   BinaryOperator* pos_inc = BinaryOperator::Create(Instruction::Add, pos, pos_step_i64, "", bb_forbody);
   ICmpInst* loop_or_exit = new ICmpInst(*bb_forbody, ICmpInst::ICMP_SLT, pos_inc, row_count, "");
   if (check_scan_limit) {

@@ -273,6 +273,18 @@ void CudaMgr::checkError(CUresult status) {
 #endif
 }
 
+/**
+ * Returns true if all devices have Volta micro-architecture
+ * Returns false, if there is any non-Volta device available.
+*/
+bool CudaMgr::isArchVoltaForAll() const {
+  for (int i = 0; i < deviceCount_; i++) {
+    if (deviceProperties[i].computeMajor != 7)
+      return false;
+  }
+  return true;
+}
+
 }  // namespace CudaMgr_Namespace
 
 /*
