@@ -3210,6 +3210,30 @@ void Importer::initGDAL() {
   if (!gdal_initialized) {
     // FIXME(andrewseidl): investigate if CPLPushFinderLocation can be public
     setenv("GDAL_DATA", std::string(mapd_root_abs_path() + "/ThirdParty/gdal-data").c_str(), true);
+
+    // configure SSL certificate path (per S3Archive::init_for_read)
+    // in a production build, GDAL and Curl will have been built on
+    // CentOS, so the baked-in system path will be wrong for Ubuntu
+    // and other Linux distros. Unless the user is deliberately
+    // overriding it by setting SSL_CERT_FILE explicitly in the server
+    // environment, we set it to whichever CA bundle directory exists
+    // on the machine we're running on
+    std::list<std::string> v_known_ca_paths({
+        "/etc/ssl/certs/ca-certificates.crt",
+        "/etc/pki/tls/certs/ca-bundle.crt",
+        "/usr/share/ssl/certs/ca-bundle.crt",
+        "/usr/local/share/certs/ca-root.crt",
+        "/etc/ssl/cert.pem",
+        "/etc/ssl/ca-bundle.pem",
+    });
+    for (const auto& known_ca_path : v_known_ca_paths) {
+      if (boost::filesystem::exists(known_ca_path)) {
+        LOG(INFO) << "GDAL SSL Certificate path: " << known_ca_path;
+        setenv("SSL_CERT_FILE", known_ca_path.c_str(), false); // no overwrite
+        break;
+      }
+    }
+
     GDALAllRegister();
     OGRRegisterAll();
     CPLSetErrorHandler(*GDALErrorHandler);
