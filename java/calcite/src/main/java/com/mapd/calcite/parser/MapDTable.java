@@ -78,13 +78,12 @@ public class MapDTable implements Table {
 
   private RelDataType createType(TColumnType value, RelDataTypeFactory typeFactory) {
     RelDataType cType = getRelDataType(value.col_type.type, value.col_type.precision, value.col_type.scale, typeFactory);
+    
     if (value.col_type.is_array) {
-      if (value.col_type.isNullable()) {
-        return typeFactory.createArrayType(typeFactory.createTypeWithNullability(cType, true), -1);
-      } else {
-        return typeFactory.createArrayType(cType, -1);
-      }
-    } else if (value.col_type.isNullable()) {
+      cType = typeFactory.createArrayType(typeFactory.createTypeWithNullability(cType, true), -1);
+    }
+    
+    if (value.col_type.isNullable()) {
       return typeFactory.createTypeWithNullability(cType, true);
     } else {
       return cType;
