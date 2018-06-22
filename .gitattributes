@@ -1,1 +1,35 @@
 ThirdParty/* linguist-vendored
+
+* text=auto
+
+*.c       text
+*.cc      text
+*.cpp     text
+*.cu      text
+*.cuh     text
+*.h       text
+*.hpp     text
+
+*.go      text
+*.java    text
+*.js      text
+*.py      text
+*.rb      text
+*.sh      text
+
+*.html    text
+*.mapd    text
+*.MAPD    text
+*.md      text
+*.txt     text
+*.TXT     text
+
+*.cmake   text
+*.conf    text
+*.service text
+*.sql     text
+*.thrift  text
+
+*.csv     text
+*.json    text
+*.yml     text
