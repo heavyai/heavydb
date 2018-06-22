@@ -14,23 +14,24 @@
  * limitations under the License.
  */
 
-#include <iostream>
-#include <string>
-#include <cstring>
+#include <csignal>
 #include <cstdlib>
+#include <cstring>
 #include <exception>
+#include <iostream>
 #include <memory>
-#include "boost/program_options.hpp"
-#include "boost/filesystem.hpp"
-#include "../Catalog/Catalog.h"
-#include "../Parser/parser.h"
+#include <string>
 #include "../Analyzer/Analyzer.h"
-#include "../Parser/ParserNode.h"
-#include "../Planner/Planner.h"
+#include "../Catalog/Catalog.h"
 #include "../DataMgr/DataMgr.h"
+#include "../Parser/ParserNode.h"
+#include "../Parser/parser.h"
+#include "../Planner/Planner.h"
 #include "../QueryRunner/QueryRunner.h"
-#include "gtest/gtest.h"
+#include "boost/filesystem.hpp"
+#include "boost/program_options.hpp"
 #include "glog/logging.h"
+#include "gtest/gtest.h"
 
 using namespace std;
 using namespace Catalog_Namespace;
@@ -46,6 +47,29 @@ using namespace Planner;
 namespace {
 std::unique_ptr<SessionInfo> gsession;
 
+std::shared_ptr<Calcite> g_calcite = nullptr;
+
+void calcite_shutdown_handler() {
+  if (g_calcite) {
+    g_calcite->close_calcite_server();
+  }
+}
+
+void mapd_signal_handler(int signal_number) {
+  LOG(ERROR) << "Interrupt signal (" << signal_number << ") received.";
+  calcite_shutdown_handler();
+  // shut down logging force a flush
+  google::ShutdownGoogleLogging();
+  // terminate program
+  std::exit(EXIT_FAILURE);
+}
+
+void register_signal_handler() {
+  std::signal(SIGTERM, mapd_signal_handler);
+  std::signal(SIGSEGV, mapd_signal_handler);
+  std::signal(SIGABRT, mapd_signal_handler);
+}
+
 class SQLTestEnv : public ::testing::Environment {
  public:
   virtual void SetUp() {
@@ -55,11 +79,15 @@ class SQLTestEnv : public ::testing::Environment {
     auto data_dir = base_path / "mapd_data";
     UserMetadata user;
     DBMetadata db;
-    auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path.string(), 1024);
+
+    register_signal_handler();
+    google::InstallFailureFunction(&calcite_shutdown_handler);
+
+    g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path.string(), 1024);
     {
       auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
       auto& sys_cat = SysCatalog::instance();
-      sys_cat.init(base_path.string(), dataMgr, {}, calcite, !boost::filesystem::exists(system_db_file), false);
+      sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, !boost::filesystem::exists(system_db_file), false);
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
       if (!sys_cat.getMetadataForUser("gtest", user)) {
         sys_cat.createUser("gtest", "test!test!", false);
@@ -72,7 +100,7 @@ class SQLTestEnv : public ::testing::Environment {
     }
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
     gsession.reset(new SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
-                                       base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, calcite),
+                                       base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
                                    user,
                                    ExecutorDeviceType::GPU,
                                    ""));
@@ -101,19 +129,20 @@ RootPlan* plan_dml(const string& input_str) {
 }  // namespace
 
 TEST(ParseAnalyzePlan, Create) {
-  ASSERT_NO_THROW(run_ddl_statement("create table if not exists fat (a boolean, b char(5), c varchar(10), d numeric(10,2) "
-                          "encoding rl, e decimal(5,3) encoding sparse(16), f int encoding fixed(16), g smallint, "
-                          "h real, i float, j double, k bigint encoding diff, l text not null encoding dict, m "
-                          "timestamp(0), n time(0), o date);"););
+  ASSERT_NO_THROW(
+      run_ddl_statement("create table if not exists fat (a boolean, b char(5), c varchar(10), d numeric(10,2) "
+                        "encoding rl, e decimal(5,3) encoding sparse(16), f int encoding fixed(16), g smallint, "
+                        "h real, i float, j double, k bigint encoding diff, l text not null encoding dict, m "
+                        "timestamp(0), n time(0), o date);"););
   ASSERT_TRUE(gsession->get_catalog().getMetadataForTable("fat") != nullptr);
   ASSERT_NO_THROW(run_ddl_statement("create table if not exists skinny (a smallint, b int, c bigint);"););
   ASSERT_TRUE(gsession->get_catalog().getMetadataForTable("skinny") != nullptr);
   ASSERT_NO_THROW(run_ddl_statement("create table if not exists smallfrag (a int, b text, c bigint) with "
-                          "(fragment_size = 1000, page_size = 512);"););
+                                    "(fragment_size = 1000, page_size = 512);"););
   const TableDescriptor* td = gsession->get_catalog().getMetadataForTable("smallfrag");
   EXPECT_TRUE(td->maxFragRows == 1000 && td->fragPageSize == 512);
   ASSERT_NO_THROW(run_ddl_statement("create table if not exists testdict (a varchar(100) encoding dict(8), c "
-                          "text encoding dict);"););
+                                    "text encoding dict);"););
   td = gsession->get_catalog().getMetadataForTable("testdict");
   const ColumnDescriptor* cd = gsession->get_catalog().getMetadataForColumn(td->tableId, "a");
   const DictDescriptor* dd = gsession->get_catalog().getMetadataForDict(cd->columnType.get_comp_param());
@@ -277,9 +306,11 @@ TEST(ParseAnalyzePlan, Insert) {
 TEST(DISABLED_ParseAnalyzePlan, Views) {
   EXPECT_NO_THROW(run_ddl_statement("create view if not exists voo as select * from skinny where a > 15;"););
   EXPECT_NO_THROW(run_ddl_statement("create view if not exists moo as select * from skinny where a > 15;"););
-  EXPECT_NO_THROW(run_ddl_statement("create view if not exists mic as select c, avg(b) from skinny where a > 10 group by c;"););
-  EXPECT_NO_THROW(run_ddl_statement("create view if not exists fatview as select a, d, g from fat where f > 100 and g is not "
-                          "null or k <= 100000000000 and c = 'xyz';"););
+  EXPECT_NO_THROW(
+      run_ddl_statement("create view if not exists mic as select c, avg(b) from skinny where a > 10 group by c;"););
+  EXPECT_NO_THROW(
+      run_ddl_statement("create view if not exists fatview as select a, d, g from fat where f > 100 and g is not "
+                        "null or k <= 100000000000 and c = 'xyz';"););
   EXPECT_NO_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("select * from fatview;")); });
 }
 

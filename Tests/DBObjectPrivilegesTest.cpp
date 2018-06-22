@@ -6,6 +6,7 @@
 #include <boost/filesystem/operations.hpp>
 #include <gtest/gtest.h>
 #include <glog/logging.h>
+#include <csignal>
 #include <thread>
 
 #ifndef BASE_PATH
@@ -22,6 +23,27 @@ Catalog_Namespace::UserMetadata user;
 Catalog_Namespace::DBMetadata db;
 std::vector<DBObject> privObjects;
 
+void calcite_shutdown_handler() {
+  if (g_calcite) {
+    g_calcite->close_calcite_server();
+  }
+}
+
+void mapd_signal_handler(int signal_number) {
+  LOG(ERROR) << "Interrupt signal (" << signal_number << ") received.";
+  calcite_shutdown_handler();
+  // shut down logging force a flush
+  google::ShutdownGoogleLogging();
+  // terminate program
+  std::exit(EXIT_FAILURE);
+}
+
+void register_signal_handler() {
+  std::signal(SIGTERM, mapd_signal_handler);
+  std::signal(SIGSEGV, mapd_signal_handler);
+  std::signal(SIGABRT, mapd_signal_handler);
+}
+
 class DBObjectPermissionsEnv : public ::testing::Environment {
  public:
   virtual void SetUp() {
@@ -34,6 +56,10 @@ class DBObjectPermissionsEnv : public ::testing::Environment {
     CHECK(boost::filesystem::exists(base_path));
     auto system_db_file = base_path / "mapd_catalogs" / "mapd";
     auto data_dir = base_path / "mapd_data";
+
+    register_signal_handler();
+    google::InstallFailureFunction(&calcite_shutdown_handler);
+
     g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path.string(), 1024);
     {
       auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);

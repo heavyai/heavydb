@@ -26,6 +26,7 @@
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/RelAlgExecutor.h"
 
+#include <csignal>
 #include <random>
 #include <boost/filesystem/operations.hpp>
 
@@ -88,6 +89,29 @@ LeafAggregator* get_leaf_aggregator() {
   return leaf_aggregator;
 }
 
+std::shared_ptr<Calcite> g_calcite = nullptr;
+
+void calcite_shutdown_handler() {
+  if (g_calcite) {
+    g_calcite->close_calcite_server();
+  }
+}
+
+void mapd_signal_handler(int signal_number) {
+  LOG(ERROR) << "Interrupt signal (" << signal_number << ") received.";
+  calcite_shutdown_handler();
+  // shut down logging force a flush
+  google::ShutdownGoogleLogging();
+  // terminate program
+  std::exit(EXIT_FAILURE);
+}
+
+void register_signal_handler() {
+  std::signal(SIGTERM, mapd_signal_handler);
+  std::signal(SIGSEGV, mapd_signal_handler);
+  std::signal(SIGABRT, mapd_signal_handler);
+}
+
 Catalog_Namespace::SessionInfo* get_session(const char* db_path,
                                             std::vector<LeafHostInfo> string_servers,
                                             std::vector<LeafHostInfo> leaf_servers) {
@@ -101,8 +125,12 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path,
   auto data_dir = base_path / "mapd_data";
   Catalog_Namespace::UserMetadata user;
   Catalog_Namespace::DBMetadata db;
-  auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, db_path, 1024);
-  ExtensionFunctionsWhitelist::add(calcite->getExtensionFunctionWhitelist());
+
+  register_signal_handler();
+  google::InstallFailureFunction(&calcite_shutdown_handler);
+
+  g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, db_path, 1024);
+  ExtensionFunctionsWhitelist::add(g_calcite->getExtensionFunctionWhitelist());
 #ifdef HAVE_CUDA
   bool useGpus = true;
 #else
@@ -111,7 +139,7 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path,
   auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, useGpus, -1);
   {
     auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
-    sys_cat.init(base_path.string(), dataMgr, {}, calcite, false, false);
+    sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, false, false);
     CHECK(sys_cat.getMetadataForUser(user_name, user));
     CHECK(bcrypt_checkpw(passwd.c_str(), user.passwd_hash.c_str()) == 0);
     CHECK(sys_cat.getMetadataForDB(db_name, db));
@@ -120,7 +148,7 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path,
 
   g_aggregator = !leaf_servers.empty();
 
-  auto cat = std::make_shared<Catalog_Namespace::Catalog>(base_path.string(), db, dataMgr, string_servers, calcite);
+  auto cat = std::make_shared<Catalog_Namespace::Catalog>(base_path.string(), db, dataMgr, string_servers, g_calcite);
   Catalog_Namespace::SessionInfo* session = new Catalog_Namespace::SessionInfo(cat, user, ExecutorDeviceType::GPU, "");
 
   return session;

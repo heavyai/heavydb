@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <csignal>
+
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
@@ -42,6 +44,29 @@ namespace {
 
 std::unique_ptr<SessionInfo> gsession;
 bool g_hoist_literals{true};
+
+std::shared_ptr<Calcite> g_calcite = nullptr;
+
+void calcite_shutdown_handler() {
+  if (g_calcite) {
+    g_calcite->close_calcite_server();
+  }
+}
+
+void mapd_signal_handler(int signal_number) {
+  LOG(ERROR) << "Interrupt signal (" << signal_number << ") received.";
+  calcite_shutdown_handler();
+  // shut down logging force a flush
+  google::ShutdownGoogleLogging();
+  // terminate program
+  std::exit(EXIT_FAILURE);
+}
+
+void register_signal_handler() {
+  std::signal(SIGTERM, mapd_signal_handler);
+  std::signal(SIGSEGV, mapd_signal_handler);
+  std::signal(SIGABRT, mapd_signal_handler);
+}
 
 inline void run_ddl_statement(const string& input_str) {
   QueryRunner::run_ddl_statement(input_str, gsession);
@@ -213,11 +238,15 @@ class SQLTestEnv : public ::testing::Environment {
     auto data_dir = base_path / "mapd_data";
     UserMetadata user;
     DBMetadata db;
-    auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path.string(), 1024);
+
+    register_signal_handler();
+    google::InstallFailureFunction(&calcite_shutdown_handler);
+
+    g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path.string(), 1024);
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
     // if no catalog create one
     auto& sys_cat = SysCatalog::instance();
-    sys_cat.init(base_path.string(), dataMgr, {}, calcite, !boost::filesystem::exists(system_db_file), false);
+    sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, !boost::filesystem::exists(system_db_file), false);
     CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
     // if no user create one
     if (!sys_cat.getMetadataForUser("gtest", user)) {
@@ -230,7 +259,7 @@ class SQLTestEnv : public ::testing::Environment {
       CHECK(sys_cat.getMetadataForDB("gtest_db", db));
     }
     gsession.reset(new SessionInfo(
-        std::make_shared<Catalog>(base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, calcite),
+        std::make_shared<Catalog>(base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
         user,
         ExecutorDeviceType::GPU,
         ""));
