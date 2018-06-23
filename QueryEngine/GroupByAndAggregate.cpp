@@ -49,7 +49,7 @@
 
 bool g_cluster{false};
 bool g_use_result_set{true};
-bool g_bigint_count{true};
+bool g_bigint_count{false};
 int g_hll_precision_bits{11};
 extern size_t g_leaf_count;
 
