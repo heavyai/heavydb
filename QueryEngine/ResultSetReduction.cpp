@@ -1128,7 +1128,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
       const auto chosen_bytes =
           float_argument_input ? sizeof(float) : query_mem_desc.agg_col_widths[agg_col_idx].compact;
       const auto& chosen_type = get_compact_type(agg_info);
-      if (agg_info.is_agg) {
+      if (agg_info.is_agg && agg_info.agg_kind != kLAST_SAMPLE) {
         try {
           switch (agg_info.agg_kind) {
             case kCOUNT:
