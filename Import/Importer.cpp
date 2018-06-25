@@ -52,6 +52,7 @@
 #include "../Shared/scope.h"
 #include "../Shared/import_helpers.h"
 #include "../Shared/shard_key.h"
+#include "../Shared/geo_types.h"
 
 #include "Importer.h"
 #include "DataMgr/LockMgr.h"
@@ -112,7 +113,8 @@ using FeaturePtrVector = std::vector<OGRFeatureUqPtr>;
 #define DEBUG_AWS_AUTHENTICATION 0
 
 #define DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT 0
-#define PROMOTE_POLYGON_TO_MULTIPOLYGON 1
+
+static constexpr bool PROMOTE_POLYGON_TO_MULTIPOLYGON = true;
 
 static mapd_shared_mutex status_mutex;
 static std::map<std::string, ImportStatus> import_status_map;
@@ -1272,332 +1274,6 @@ ostream& operator<<(ostream& out, const std::vector<T>& v) {
   return out;
 }
 
-bool importGeoFromGeometry(OGRGeometry* geom,
-                           SQLTypeInfo& ti,
-                           std::vector<double>& coords,
-                           std::vector<double>& bounds,
-                           std::vector<int>& ring_sizes,
-                           std::vector<int>& poly_rings) {
-  bool status = true;
-  switch (wkbFlatten(geom->getGeometryType())) {
-    case wkbPoint: {
-      ti.set_type(kPOINT);
-      OGRPoint* point = static_cast<OGRPoint*>(geom);
-      coords.push_back(point->getX());
-      coords.push_back(point->getY());
-      break;
-    }
-    case wkbLineString: {
-      ti.set_type(kLINESTRING);
-      OGRLineString* linestring = static_cast<OGRLineString*>(geom);
-      double minX = DBL_MAX, minY = DBL_MAX, maxX = -DBL_MAX, maxY = -DBL_MAX;
-      // add points
-      for (int i = 0; i < linestring->getNumPoints(); i++) {
-        OGRPoint point;
-        linestring->getPoint(i, &point);
-        double x = point.getX();
-        double y = point.getY();
-        coords.push_back(x);
-        coords.push_back(y);
-        if (x < minX)
-          minX = x;
-        if (y < minY)
-          minY = y;
-        if (x > maxX)
-          maxX = x;
-        if (y > maxY)
-          maxY = y;
-      }
-      // add bounds
-      bounds.push_back(minX);
-      bounds.push_back(minY);
-      bounds.push_back(maxX);
-      bounds.push_back(maxY);
-      break;
-    }
-    case wkbPolygon: {
-      ti.set_type(kPOLYGON);
-      // get the polygon
-      OGRPolygon* polygon = static_cast<OGRPolygon*>(geom);
-      CHECK(polygon);
-      // get the ring
-      OGRLinearRing* exteriorRing = polygon->getExteriorRing();
-      CHECK(exteriorRing);
-      // make it CCW
-      if (exteriorRing->isClockwise()) {
-        exteriorRing->reverseWindingOrder();
-      }
-      // prepare to add the ring
-      double lastX = DBL_MAX, lastY = DBL_MAX;
-      double minX = DBL_MAX, minY = DBL_MAX, maxX = -DBL_MAX, maxY = -DBL_MAX;
-      size_t firstIndex = coords.size();
-      int numPointsAdded = 0;
-      int numPointsInRing = exteriorRing->getNumPoints();
-      // rings must have at least three points
-      if (numPointsInRing < 3)
-        return false;
-      // add ring
-      for (int i = 0; i < numPointsInRing; i++) {
-        OGRPoint point;
-        exteriorRing->getPoint(i, &point);
-        lastX = point.getX();
-        lastY = point.getY();
-        coords.push_back(lastX);
-        coords.push_back(lastY);
-        if (lastX < minX)
-          minX = lastX;
-        if (lastY < minY)
-          minY = lastY;
-        if (lastX > maxX)
-          maxX = lastX;
-        if (lastY > maxY)
-          maxY = lastY;
-        numPointsAdded++;
-      }
-      // if last point is same as first, discard it to leave the ring open
-      if (coords[firstIndex] == lastX && coords[firstIndex + 1] == lastY) {
-        coords.pop_back();
-        coords.pop_back();
-        numPointsAdded--;
-        // ring must still have at least three points
-        if (numPointsAdded < 3)
-          return false;
-      }
-      // add final exterior ring size
-      ring_sizes.push_back(numPointsAdded);
-      // Add sizes and coords of the interior rings
-      for (int r = 0; r < polygon->getNumInteriorRings(); r++) {
-        // get the ring
-        OGRLinearRing* interiorRing = polygon->getInteriorRing(r);
-        CHECK(interiorRing);
-        // make it CW
-        if (!interiorRing->isClockwise()) {
-          interiorRing->reverseWindingOrder();
-        }
-        // prepare to add the ring
-        firstIndex = coords.size();
-        numPointsAdded = 0;
-        numPointsInRing = interiorRing->getNumPoints();
-        // rings must have at least three points
-        if (numPointsInRing < 3)
-          return false;
-        // add ring
-        for (int i = 0; i < numPointsInRing; i++) {
-          OGRPoint point;
-          interiorRing->getPoint(i, &point);
-          lastX = point.getX();
-          lastY = point.getY();
-          coords.push_back(lastX);
-          coords.push_back(lastY);
-          numPointsAdded++;
-        }
-        // if last point is same as first, discard it to leave the ring open
-        if (coords[firstIndex] == lastX && coords[firstIndex + 1] == lastY) {
-          coords.pop_back();
-          coords.pop_back();
-          numPointsAdded--;
-          // ring must still have at least three points
-          if (numPointsAdded < 3)
-            return false;
-        }
-        // add final interior ring size
-        ring_sizes.push_back(numPointsAdded);
-      }
-      // add bounds
-      bounds.push_back(minX);
-      bounds.push_back(minY);
-      bounds.push_back(maxX);
-      bounds.push_back(maxY);
-#if PROMOTE_POLYGON_TO_MULTIPOLYGON
-      // how many rings in this polygon?
-      poly_rings.push_back(1 + polygon->getNumInteriorRings());
-#endif
-      break;
-    }
-    case wkbMultiPolygon: {
-      ti.set_type(kMULTIPOLYGON);
-      // get the multi-polygon
-      OGRMultiPolygon* mpolygon = static_cast<OGRMultiPolygon*>(geom);
-      CHECK(mpolygon);
-      double minX = DBL_MAX, minY = DBL_MAX, maxX = -DBL_MAX, maxY = -DBL_MAX;
-      // for each polygon...
-      for (int p = 0; p < mpolygon->getNumGeometries(); p++) {
-        // get the geom
-        OGRGeometry* mpgeom = mpolygon->getGeometryRef(p);
-        CHECK(mpgeom);
-        // get the polygon
-        OGRPolygon* polygon = dynamic_cast<OGRPolygon*>(mpgeom);
-        if (!polygon) {
-          status = false;
-          break;
-        }
-        // get the ring
-        OGRLinearRing* exteriorRing = polygon->getExteriorRing();
-        CHECK(exteriorRing);
-        // make it CCW
-        if (exteriorRing->isClockwise()) {
-          exteriorRing->reverseWindingOrder();
-        }
-        // prepare to add the ring
-        double lastX = DBL_MAX, lastY = DBL_MAX;
-        size_t firstIndex = coords.size();
-        int numPointsAdded = 0;
-        int numPointsInRing = exteriorRing->getNumPoints();
-        // rings must have at least three points
-        if (numPointsInRing < 3) {
-          status = false;
-          break;
-        }
-        // add ring
-        for (int i = 0; i < numPointsInRing; i++) {
-          OGRPoint point;
-          exteriorRing->getPoint(i, &point);
-          lastX = point.getX();
-          lastY = point.getY();
-          coords.push_back(lastX);
-          coords.push_back(lastY);
-          if (lastX < minX)
-            minX = lastX;
-          if (lastY < minY)
-            minY = lastY;
-          if (lastX > maxX)
-            maxX = lastX;
-          if (lastY > maxY)
-            maxY = lastY;
-          numPointsAdded++;
-        }
-        // if last point is same as first, discard it to leave the ring open
-        if (coords[firstIndex] == lastX && coords[firstIndex + 1] == lastY) {
-          coords.pop_back();
-          coords.pop_back();
-          numPointsAdded--;
-          // ring must still have at least three points
-          if (numPointsAdded < 3) {
-            status = false;
-            break;
-          }
-        }
-        // add final exterior ring size
-        ring_sizes.push_back(numPointsAdded);
-        // Add sizes and coords of the interior rings
-        for (int r = 0; r < polygon->getNumInteriorRings(); r++) {
-          // get the ring
-          OGRLinearRing* interiorRing = polygon->getInteriorRing(r);
-          CHECK(interiorRing);
-          // make it CW
-          if (!interiorRing->isClockwise()) {
-            interiorRing->reverseWindingOrder();
-          }
-          // prepare to add ring
-          firstIndex = coords.size();
-          numPointsAdded = 0;
-          numPointsInRing = interiorRing->getNumPoints();
-          // rings must have at least three points
-          if (numPointsInRing < 3) {
-            status = false;
-            break;
-          }
-          // add ring
-          for (int i = 0; i < numPointsInRing; i++) {
-            OGRPoint point;
-            interiorRing->getPoint(i, &point);
-            lastX = point.getX();
-            lastY = point.getY();
-            coords.push_back(lastX);
-            coords.push_back(lastY);
-            numPointsAdded++;
-          }
-          // if last point is same as first, discard it to leave the ring open
-          if (coords[firstIndex] == lastX && coords[firstIndex + 1] == lastY) {
-            coords.pop_back();
-            coords.pop_back();
-            numPointsAdded--;
-            // ring must still have at least three points
-            if (numPointsAdded < 3) {
-              status = false;
-              break;
-            }
-          }
-          // add final interior ring size
-          ring_sizes.push_back(numPointsAdded);
-        }
-        // how many rings in this polygon?
-        poly_rings.push_back(1 + polygon->getNumInteriorRings());
-      }
-      if (status) {
-        status = (poly_rings.size() == (size_t)mpolygon->getNumGeometries());
-      }
-      // add bounds
-      bounds.push_back(minX);
-      bounds.push_back(minY);
-      bounds.push_back(maxX);
-      bounds.push_back(maxY);
-      break;
-    }
-    default:
-      status = false;
-      break;
-  }
-  return status;
-}
-
-bool importGeoFromWkt(std::string& wkt,
-                      SQLTypeInfo& ti,
-                      std::vector<double>& coords,
-                      std::vector<double>& bounds,
-                      std::vector<int>& ring_sizes,
-                      std::vector<int>& poly_rings) {
-  bool status = true;
-  OGRGeometry* geom = nullptr;
-#if (GDAL_VERSION_MAJOR > 2) || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR >= 3)
-  OGRErr ogr_status = OGRGeometryFactory::createFromWkt(wkt.c_str(), nullptr, &geom);
-#else
-  auto data = (char*)wkt.c_str();
-  OGRErr ogr_status = OGRGeometryFactory::createFromWkt(&data, NULL, &geom);
-#endif
-  if (ogr_status != OGRERR_NONE)
-    status = false;
-  if (status && geom) {
-    int srid;
-    auto sr = geom->getSpatialReference();
-    if (!sr) {
-      srid = 0;
-    } else if (sr->IsGeographic()) {
-      srid = 0;
-      // If GDAL ever supports EWKT (or some equivalent) where an individual
-      // geo string can define its own SRID, then the OGRGeometry returned by
-      // createFromWkt may then invoke this branch, at which point we'd want to
-      // force a conversion back to our standard SRID
-      // For now, the returned SRID will always be zero and we never get here
-      //
-      // srid = GEOGRAPHIC_SPATIAL_REFERENCE;
-      // OGRSpatialReferenceUqPtr poGeographicSR(new OGRSpatialReference());
-      // // the geographic spatial reference we want to put everything in
-      // poGeographicSR->importFromEPSG(GEOGRAPHIC_SPATIAL_REFERENCE);
-      // geom->transformTo(poGeographicSR.get());
-    } else {
-      srid = 0;
-      // Try to guess srid?
-      // srid = sr->GetEPSGGeogCS();
-      // if (srid != -1)
-      //  srid = 0;
-    }
-    ti.set_input_srid(srid);
-    ti.set_output_srid(srid);
-  }
-  if (status == false) {
-    if (geom)
-      OGRGeometryFactory::destroyGeometry(geom);
-    return false;
-  }
-
-  status = importGeoFromGeometry(geom, ti, coords, bounds, ring_sizes, poly_rings);
-
-  if (geom)
-    OGRGeometryFactory::destroyGeometry(geom);
-  return status;
-}
-
 bool importGeoFromLonLat(double lon, double lat, std::vector<double>& coords) {
   if (std::isinf(lat) || std::isnan(lat) || std::isinf(lon) || std::isnan(lon))
     return false;
@@ -1781,22 +1457,18 @@ static ImportStatus import_thread_delimited(
               } else {
                 // import it
                 SQLTypeInfo import_ti;
-                if (!importGeoFromWkt(wkt, import_ti, coords, bounds, ring_sizes, poly_rings)) {
+                if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
+                        wkt, import_ti, coords, bounds, ring_sizes, poly_rings, PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
                   throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
                 }
 
-// validate types
-#if PROMOTE_POLYGON_TO_MULTIPOLYGON
+                // validate types
                 if (col_type != import_ti.get_type()) {
-                  if (!(import_ti.get_type() == SQLTypes::kPOLYGON && col_type == SQLTypes::kMULTIPOLYGON))
+                  if (!PROMOTE_POLYGON_TO_MULTIPOLYGON ||
+                      !(import_ti.get_type() == SQLTypes::kPOLYGON && col_type == SQLTypes::kMULTIPOLYGON)) {
                     throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
+                  }
                 }
-#else
-                if (col_type != import_ti.get_type()) {
-                  throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
-                }
-#endif
-                // TODO: Check if column and wkt SRIDs match. Transform to column SRID: col_ti.get_output_srid()
 
                 if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
                   // get a suitable render group for these poly coords
@@ -1977,24 +1649,19 @@ static ImportStatus import_thread_shapefile(
 
           // extract it
           SQLTypeInfo import_ti;
-          if (!importGeoFromGeometry(pGeometry, import_ti, coords, bounds, ring_sizes, poly_rings)) {
+
+          if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
+                  pGeometry, import_ti, coords, bounds, ring_sizes, poly_rings, PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
             throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
           }
 
-// validate types
-#if PROMOTE_POLYGON_TO_MULTIPOLYGON
+          // validate types
           if (col_type != import_ti.get_type()) {
-            if (!(import_ti.get_type() == SQLTypes::kPOLYGON && col_type == SQLTypes::kMULTIPOLYGON)) {
+            if (!PROMOTE_POLYGON_TO_MULTIPOLYGON ||
+                !(import_ti.get_type() == SQLTypes::kPOLYGON && col_type == SQLTypes::kMULTIPOLYGON)) {
               throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
             }
           }
-#else
-          if (col_type != import_ti.get_type()) {
-            throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
-          }
-#endif
-
-          // TODO: Check if column and wkt SRIDs match. Transform to column SRID: col_ti.get_dimension()
 
           if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
             // get a suitable render group for these poly coords
@@ -2537,11 +2204,11 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
     } else if (str_upper_case.find("LINESTRING") == 0) {
       type = kLINESTRING;
     } else if (str_upper_case.find("POLYGON") == 0) {
-#if PROMOTE_POLYGON_TO_MULTIPOLYGON
-      type = kMULTIPOLYGON;
-#else
-      type = kPOLYGON;
-#endif
+      if (PROMOTE_POLYGON_TO_MULTIPOLYGON) {
+        type = kMULTIPOLYGON;
+      } else {
+        type = kPOLYGON;
+      }
     } else if (str_upper_case.find("MULTIPOLYGON") == 0) {
       type = kMULTIPOLYGON;
     } else if (str_upper_case.find_first_not_of("0123456789ABCDEF") == std::string::npos &&
@@ -3494,9 +3161,9 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::s
     cd.columnName = geo_column_name;
     cd.sourceName = geo_column_name;
     SQLTypes geoType = ogr_to_type(wkbFlatten(poGeometry->getGeometryType()));
-#if PROMOTE_POLYGON_TO_MULTIPOLYGON
-    geoType = (geoType == kPOLYGON) ? kMULTIPOLYGON : geoType;
-#endif
+    if (PROMOTE_POLYGON_TO_MULTIPOLYGON) {
+      geoType = (geoType == kPOLYGON) ? kMULTIPOLYGON : geoType;
+    }
     SQLTypeInfo ti;
     ti.set_type(geoType);
     ti.set_subtype(copy_params.geo_coords_type);

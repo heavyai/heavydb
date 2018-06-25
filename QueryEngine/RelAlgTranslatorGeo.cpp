@@ -15,6 +15,7 @@
  */
 
 #include "RelAlgTranslator.h"
+#include "../Shared/geo_types.h"
 
 std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColumn(const RexInput* rex_input,
                                                                                   SQLTypeInfo& ti,
@@ -59,13 +60,6 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
 
 namespace Importer_NS {
 
-bool importGeoFromWkt(std::string& wkt,
-                      SQLTypeInfo& ti,
-                      std::vector<double>& coords,
-                      std::vector<double>& bounds,
-                      std::vector<int>& ring_sizes,
-                      std::vector<int>& polygon_sizes);
-
 std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeInfo& ti);
 
 }  // namespace Importer_NS
@@ -82,7 +76,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiter
   std::vector<int> ring_sizes;
   std::vector<int> poly_rings;
   int32_t srid = ti.get_output_srid();
-  if (!Importer_NS::importGeoFromWkt(*wkt->get_constval().stringval, ti, coords, bounds, ring_sizes, poly_rings)) {
+  if (!Geo_namespace::GeoTypesFactory::getGeoColumns(*wkt->get_constval().stringval, ti, coords, bounds, ring_sizes, poly_rings)) {
     throw QueryNotSupported("Could not read geometry from text");
   }
   ti.set_subtype(kGEOMETRY);

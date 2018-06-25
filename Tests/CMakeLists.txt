@@ -44,6 +44,7 @@ add_executable(TopKTest TopKTest.cpp)
 add_executable(TokenCompletionHintsTest TokenCompletionHintsTest.cpp)
 add_executable(MapDQLCommandTest MapDQLCommandTest.cpp)
 add_executable(DBObjectPrivilegesTest DBObjectPrivilegesTest.cpp)
+add_executable(GeoTypesTest Shared/GeoTypesTest.cpp)
 
 target_link_libraries(ProfileTest gtest Shared Calcite QueryEngine ${MAPD_RENDERING_LIBRARIES} CsvImport QueryRunner Parser ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROF_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
 target_link_libraries(ResultSetTest gtest gtest QueryEngine ${MAPD_RENDERING_LIBRARIES} ${Boost_LIBRARIES} CsvImport QueryRunner Parser DataMgr Chunk ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
@@ -65,6 +66,7 @@ target_link_libraries(StoragePerfTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TopKTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(MapDQLCommandTest gtest ${EXECUTE_TEST_LIBS} ${Boost_LIBRARIES})
 target_link_libraries(DBObjectPrivilegesTest gtest ${EXECUTE_TEST_LIBS} ${Boost_LIBRARIES})
+target_link_libraries(GeoTypesTest gtest Shared ${GDAL_LIBRARIES} ${CURL_LIBRARIES} ${CMAKE_DL_LIBS} ${Glog_LIBRARIES} ${Boost_LIBRARIES})
 
 set(TEST_ARGS "--gtest_output=xml:../")
 add_test(PlanTest PlanTest ${TEST_ARGS})
@@ -82,6 +84,7 @@ add_test(TopKTest TopKTest ${TEST_ARGS})
 add_test(TokenCompletionHintsTest TokenCompletionHintsTest ${TEST_ARGS})
 add_test(MapDQLCommandTest MapDQLCommandTest ${TEST_ARGS})
 add_test(DBObjectPrivilegesTest DBObjectPrivilegesTest ${TEST_ARGS})
+add_test(GeoTypesTest GeoTypesTest ${TEST_ARGS})
 
 # parse s3 credentials
 file(READ aws/s3client.conf S3CLIENT_CONF)

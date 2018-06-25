@@ -44,6 +44,7 @@
 #include "../QueryEngine/RelAlgExecutor.h"
 #include "../Shared/mapd_glob.h"
 #include "../Shared/measure.h"
+#include "../Shared/geo_types.h"
 #include "DataMgr/LockMgr.h"
 #include "ReservedKeywords.h"
 #include "parser.h"
@@ -55,13 +56,6 @@ using namespace Lock_Namespace;
 using Catalog_Namespace::SysCatalog;
 
 namespace Importer_NS {
-
-bool importGeoFromWkt(std::string& wkt,
-                      SQLTypeInfo& ti,
-                      std::vector<double>& coords,
-                      std::vector<double>& bounds,
-                      std::vector<int>& ring_sizes,
-                      std::vector<int>& poly_rings);
 
 std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeInfo& ti);
 }  // Importer_NS
@@ -1630,7 +1624,7 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
       std::vector<int> poly_rings;
       int render_group = 0;  // @TODO simon.eves where to get render_group from in this context?!
       SQLTypeInfo import_ti;
-      if (!Importer_NS::importGeoFromWkt(*wkt, import_ti, coords, bounds, ring_sizes, poly_rings)) {
+      if (!Geo_namespace::GeoTypesFactory::getGeoColumns(*wkt, import_ti, coords, bounds, ring_sizes, poly_rings)) {
         throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
       }
       if (cd->columnType.get_type() != import_ti.get_type()) {

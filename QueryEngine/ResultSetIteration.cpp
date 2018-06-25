@@ -23,7 +23,7 @@
  */
 
 #include "../Shared/likely.h"
-#include "../Shared/gdal_types.h"
+#include "../Shared/geo_types.h"
 #include "Execute.h"
 #include "ResultRows.h"
 #include "ResultSet.h"
@@ -690,7 +690,7 @@ TargetValue build_geo_target_value(const SQLTypeInfo& geo_ti,
                                    const ResultSet::GeoReturnType return_type) {
   CHECK(geo_ti.is_geometry());
   if (return_type != ResultSet::GeoReturnType::Double) {
-    // Use GDAL to return a geo type serialized to string
+    // Return a geo type serialized to string
     std::vector<double> decompressed_coords;
     if (geo_ti.get_compression() == kENCODING_GEOINT) {
       if (geo_ti.get_comp_param() == 32) {
@@ -702,17 +702,17 @@ TargetValue build_geo_target_value(const SQLTypeInfo& geo_ti,
     }
     switch (geo_ti.get_type()) {
       case kPOINT: {
-        GDAL_namespace::GDALPoint point(decompressed_coords);
+        Geo_namespace::GeoPoint point(decompressed_coords);
         return NullableString(point.getWktString());
       }
       case kLINESTRING: {
-        GDAL_namespace::GDALLineString line(decompressed_coords);
+        Geo_namespace::GeoLineString line(decompressed_coords);
         return NullableString(line.getWktString());
       }
       case kPOLYGON: {
         std::vector<int32_t> ring_sizes_vec;
         unpack_geo_vector(ring_sizes_vec, ring_sizes, ring_sizes_sz);
-        GDAL_namespace::GDALPolygon poly(decompressed_coords, ring_sizes_vec);
+        Geo_namespace::GeoPolygon poly(decompressed_coords, ring_sizes_vec);
         return NullableString(poly.getWktString());
       }
       case kMULTIPOLYGON: {
@@ -720,7 +720,7 @@ TargetValue build_geo_target_value(const SQLTypeInfo& geo_ti,
         unpack_geo_vector(ring_sizes_vec, ring_sizes, ring_sizes_sz);
         std::vector<int32_t> poly_rings_vec;
         unpack_geo_vector(poly_rings_vec, poly_rings, poly_rings_sz);
-        GDAL_namespace::GDALMultiPolygon multipoly(decompressed_coords, ring_sizes_vec, poly_rings_vec);
+        Geo_namespace::GeoMultiPolygon multipoly(decompressed_coords, ring_sizes_vec, poly_rings_vec);
         return NullableString(multipoly.getWktString());
       }
       default:
