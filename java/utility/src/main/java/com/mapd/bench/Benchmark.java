@@ -17,6 +17,7 @@
 package com.mapd.bench;
 
 //STEP 1. Import required packages
+import com.mapd.jdbc.MapDStatement;
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -167,8 +168,8 @@ public class Benchmark {
         long jdbcTime = 0;
 
         // gather internal execute time for MapD as we are interested in that
-        if (driver.equals(JDBC_DRIVER)){
-          executeTime = stmt.getQueryTimeout();
+        if (driver.equals(JDBC_DRIVER)) {
+          executeTime = ((MapDStatement) stmt).getQueryInternalExecuteTime();
           jdbcTime = (System.currentTimeMillis() - timer) - executeTime;
         } else {
           jdbcTime = (System.currentTimeMillis() - timer);
