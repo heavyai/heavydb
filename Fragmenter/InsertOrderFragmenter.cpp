@@ -19,6 +19,7 @@
 #include "../DataMgr/DataMgr.h"
 #include "../DataMgr/AbstractBuffer.h"
 #include <glog/logging.h>
+#include <limits>
 #include <math.h>
 #include <iostream>
 #include <thread>
@@ -52,7 +53,7 @@ InsertOrderFragmenter::InsertOrderFragmenter(const vector<int> chunkKeyPrefix,
       catalog_(catalog),
       physicalTableId_(physicalTableId),
       shard_(shard),
-      maxFragmentRows_(maxFragmentRows),
+      maxFragmentRows_(std::min<size_t>(maxFragmentRows, maxRows)),
       pageSize_(pageSize),
       numTuples_(0),
       maxFragmentId_(-1),
@@ -154,6 +155,10 @@ void InsertOrderFragmenter::getChunkMetadata() {
 void InsertOrderFragmenter::dropFragmentsToSize(const size_t maxRows) {
   // not safe to call from outside insertData
   // b/c depends on insertLock around numTuples_
+
+  // don't ever drop the only fragment!
+  if (numTuples_ == fragmentInfoVec_.back().getPhysicalNumTuples())
+    return;
 
   if (numTuples_ > maxRows) {
     size_t preNumTuples = numTuples_;
