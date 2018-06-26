@@ -456,6 +456,9 @@ void MapDHandler::value_to_thrift_column(const TargetValue& tv, const SQLTypeInf
         case kBOOLEAN:
           column.nulls.push_back(data == NULL_BOOLEAN);
           break;
+        case kTINYINT:
+          column.nulls.push_back(data == NULL_TINYINT);
+          break;
         case kSMALLINT:
           column.nulls.push_back(data == NULL_SMALLINT);
           break;
@@ -527,6 +530,9 @@ TDatum MapDHandler::value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti
     switch (ti.get_type()) {
       case kBOOLEAN:
         datum.is_null = (datum.val.int_val == NULL_BOOLEAN);
+        break;
+      case kTINYINT:
+        datum.is_null = (datum.val.int_val == NULL_TINYINT);
         break;
       case kSMALLINT:
         datum.is_null = (datum.val.int_val == NULL_SMALLINT);
