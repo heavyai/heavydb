@@ -23,6 +23,7 @@ ThirdParty/* linguist-vendored
 *.md      text
 *.txt     text
 *.TXT     text
+*.wkt     text=CRLF
 
 *.cmake   text
 *.conf    text
@@ -32,4 +33,17 @@ ThirdParty/* linguist-vendored
 
 *.csv     text
 *.json    text
+*.toml    text
+*.xml     text
 *.yml     text
+
+*.def     text=CRLF
+*.ini     text=CRLF
+*.props   text=CRLF
+*.reg     text=CRLF
+*.sln     text=CRLF
+*.vcxproj text=CRLF
+*.vcxproj.user text=CRLF
+*.vcxproj.filters text=CRLF
+ODBC/*.rc text=CRLF
+ODBC/*.xml text=CRLF
