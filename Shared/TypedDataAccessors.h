@@ -55,6 +55,8 @@ static inline bool set_string_index(void* ptr, const int size, const uint32_t rv
 
 static inline SQLTypes get_decimal_int_type(const SQLTypeInfo& ti) {
   switch (ti.get_size()) {
+    case 1:
+      return kTINYINT;
     case 2:
       return kSMALLINT;
     case 4:
@@ -82,6 +84,9 @@ static void put_scalar(void* ndptr, const SQLTypes etype, const int esize, const
       break;
     case kBOOLEAN:
       *(int8_t*)ndptr = 0 != rval;
+      break;
+    case kTINYINT:
+      *(int8_t*)ndptr = rval;
       break;
     case kSMALLINT:
       *(int16_t*)ndptr = rval;
@@ -141,6 +146,9 @@ static inline void put_null(void* ndptr, const SQLTypeInfo& ntype, const std::st
     case kBOOLEAN:
       *(int8_t*)ndptr = NULL_BOOLEAN;
       break;
+    case kTINYINT:
+      *(int8_t*)ndptr = NULL_TINYINT;
+      break;
     case kSMALLINT:
       *(int16_t*)ndptr = NULL_SMALLINT;
       break;
@@ -174,6 +182,8 @@ static inline bool get_scalar(void* ndptr, const SQLTypeInfo& ntype, T& v) {
   switch (ntype.get_type()) {
     case kBOOLEAN:
       return NULL_BOOLEAN == (v = *(int8_t*)ndptr);
+    case kTINYINT:
+      return NULL_TINYINT == (v = *(int8_t*)ndptr);
     case kSMALLINT:
       return NULL_SMALLINT == (v = *(int16_t*)ndptr);
     case kINT:
@@ -186,6 +196,8 @@ static inline bool get_scalar(void* ndptr, const SQLTypeInfo& ntype, T& v) {
     case kNUMERIC:
     case kDECIMAL:
       switch (ntype.get_size()) {
+        case 1:
+          return NULL_TINYINT == (v = *(int8_t*)ndptr);
         case 2:
           return NULL_SMALLINT == (v = *(int16_t*)ndptr);
         case 4:
