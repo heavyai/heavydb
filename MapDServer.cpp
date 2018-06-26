@@ -33,11 +33,11 @@
 #include "Shared/measure.h"
 #include "Shared/scope.h"
 
-#include <signal.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/program_options.hpp>
+#include <csignal>
 #include <sstream>
 #include <thread>
 #include <vector>
@@ -77,13 +77,23 @@ std::vector<LeafHostInfo> only_string_leaves(const std::vector<LeafHostInfo>& al
   return string_leaves;
 }
 
+mapd::shared_ptr<MapDHandler> g_warmup_handler = 0;  // global "g_warmup_handler" needed to avoid circular dependency
+                                                     // between "MapDHandler" & function "run_warmup_queries"
+mapd::shared_ptr<MapDHandler> g_mapd_handler = 0;
+
+void calcite_shutdown_handler() {
+  if (g_mapd_handler) {
+    g_mapd_handler->close_calcite_server();
+  }
+}
+
 void mapd_signal_handler(int signal_number) {
   LOG(INFO) << "Interrupt signal (" << signal_number << ") received.\n";
+  calcite_shutdown_handler();
   // shut down logging force a flush
   google::ShutdownGoogleLogging();
-
   // terminate program
-  exit(0);
+  std::exit(EXIT_FAILURE);
 }
 
 void register_signal_handler() {
@@ -91,7 +101,9 @@ void register_signal_handler() {
   // exit the startmapd script.
   // Only catching the SIGTERM(15) to avoid double shut down request
   // register SIGTERM and signal handler
-  signal(SIGTERM, mapd_signal_handler);
+  std::signal(SIGTERM, mapd_signal_handler);
+  std::signal(SIGSEGV, mapd_signal_handler);
+  std::signal(SIGABRT, mapd_signal_handler);
 }
 
 void start_server(TThreadedServer& server) {
@@ -102,13 +114,10 @@ void start_server(TThreadedServer& server) {
   }
 }
 
-mapd::shared_ptr<MapDHandler> warmup_handler = 0;  // global "warmup_handler" needed to avoid circular dependency
-                                                   // between "MapDHandler" & function "run_warmup_queries"
-
 void releaseWarmupSession(TSessionId& sessionId, std::ifstream& query_file) {
   query_file.close();
-  if (sessionId != warmup_handler->getInvalidSessionId()) {
-    warmup_handler->disconnect(sessionId);
+  if (sessionId != g_warmup_handler->getInvalidSessionId()) {
+    g_warmup_handler->disconnect(sessionId);
   }
 }
 
@@ -119,13 +128,13 @@ void run_warmup_queries(mapd::shared_ptr<MapDHandler> handler, std::string base_
   }
   LOG(INFO) << "Running DB warmup with queries from " << query_file_path;
   try {
-    warmup_handler = handler;
+    g_warmup_handler = handler;
     std::string db_info;
     std::string user_keyword, user_name, db_name;
     std::ifstream query_file;
     Catalog_Namespace::UserMetadata user;
     Catalog_Namespace::DBMetadata db;
-    TSessionId sessionId = warmup_handler->getInvalidSessionId();
+    TSessionId sessionId = g_warmup_handler->getInvalidSessionId();
 
     ScopeGuard session_guard = [&] { releaseWarmupSession(sessionId, query_file); };
     query_file.open(query_file_path);
@@ -137,9 +146,9 @@ void run_warmup_queries(mapd::shared_ptr<MapDHandler> handler, std::string base_
       iss >> user_keyword >> user_name >> db_name;
       if (user_keyword.compare(0, 4, "USER") == 0) {
         // connect to DB for given user_name/db_name with super_user_rights (without password), & start session
-        warmup_handler->super_user_rights_ = true;
-        warmup_handler->connect(sessionId, user_name, "", db_name);
-        warmup_handler->super_user_rights_ = false;
+        g_warmup_handler->super_user_rights_ = true;
+        g_warmup_handler->connect(sessionId, user_name, "", db_name);
+        g_warmup_handler->super_user_rights_ = false;
 
         // read and run one query at a time for the DB with the setup connection
         TQueryResult ret;
@@ -152,13 +161,13 @@ void run_warmup_queries(mapd::shared_ptr<MapDHandler> handler, std::string base_
             single_query.clear();
             break;
           }
-          warmup_handler->sql_execute(ret, sessionId, single_query, true, "", -1, -1);
+          g_warmup_handler->sql_execute(ret, sessionId, single_query, true, "", -1, -1);
           single_query.clear();
         }
 
         // stop session and disconnect from the DB
-        warmup_handler->disconnect(sessionId);
-        sessionId = warmup_handler->getInvalidSessionId();
+        g_warmup_handler->disconnect(sessionId);
+        sessionId = g_warmup_handler->getInvalidSessionId();
       } else {
         LOG(WARNING) << "\nSyntax error in the file: " << query_file_path.c_str()
                      << " Missing expected keyword USER. Following line will be ignored: " << db_info.c_str()
@@ -528,30 +537,31 @@ int main(int argc, char** argv) {
   // rudimetary signal handling to try to guarantee the logging gets flushed to files
   // on shutdown
   register_signal_handler();
+  google::InstallFailureFunction(&calcite_shutdown_handler);
 
-  mapd::shared_ptr<MapDHandler> handler(new MapDHandler(db_leaves,
-                                                        string_leaves,
-                                                        base_path,
-                                                        device,
-                                                        allow_multifrag,
-                                                        jit_debug,
-                                                        read_only,
-                                                        allow_loop_joins,
-                                                        enable_rendering,
-                                                        cpu_buffer_mem_bytes,
-                                                        render_mem_bytes,
-                                                        num_gpus,
-                                                        start_gpu,
-                                                        reserved_gpu_mem,
-                                                        num_reader_threads,
-                                                        authMetadata,
-                                                        mapd_parameters,
-                                                        db_convert_dir,
-                                                        enable_legacy_syntax,
-                                                        enable_access_priv_check));
+  g_mapd_handler = mapd::make_shared<MapDHandler>(db_leaves,
+                                                  string_leaves,
+                                                  base_path,
+                                                  device,
+                                                  allow_multifrag,
+                                                  jit_debug,
+                                                  read_only,
+                                                  allow_loop_joins,
+                                                  enable_rendering,
+                                                  cpu_buffer_mem_bytes,
+                                                  render_mem_bytes,
+                                                  num_gpus,
+                                                  start_gpu,
+                                                  reserved_gpu_mem,
+                                                  num_reader_threads,
+                                                  authMetadata,
+                                                  mapd_parameters,
+                                                  db_convert_dir,
+                                                  enable_legacy_syntax,
+                                                  enable_access_priv_check);
 
   if (mapd_parameters.ha_group_id.empty()) {
-    mapd::shared_ptr<TProcessor> processor(new MapDProcessor(handler));
+    mapd::shared_ptr<TProcessor> processor(new MapDProcessor(g_mapd_handler));
 
     mapd::shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(mapd_parameters.mapd_server_port));
 
@@ -568,7 +578,7 @@ int main(int argc, char** argv) {
     std::thread httpThread(start_server, std::ref(httpServer));
 
     // run warm up queries if any exists
-    run_warmup_queries(handler, base_path, db_query_file);
+    run_warmup_queries(g_mapd_handler, base_path, db_query_file);
 
     bufThread.join();
     httpThread.join();

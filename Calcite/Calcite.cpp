@@ -359,14 +359,23 @@ std::string Calcite::getExtensionFunctionWhitelist() {
   return "";
 }
 
+void Calcite::close_calcite_server() {
+  if (server_available_) {
+    LOG(INFO) << "Shutting down Calcite server";
+    try {
+      std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> clientP =
+        get_client(remote_calcite_port_);
+      clientP.first->shutdown();
+      clientP.second->close();
+    } catch (const std::exception& e) {
+      LOG(ERROR) << "Error shutting down Calcite server: " << e.what();
+    }
+    LOG(INFO) << "shut down Calcite";
+  }
+}
+
 Calcite::~Calcite() {
   LOG(INFO) << "Destroy Calcite Class";
-  if (server_available_) {
-    // running server
-    std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> clientP =
-        get_client(remote_calcite_port_);
-    clientP.first->shutdown();
-    clientP.second->close();
-  }
+  close_calcite_server();
   LOG(INFO) << "End of Calcite Destructor ";
 }

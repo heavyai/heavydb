@@ -181,11 +181,12 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
 
   std::string calcite_session_prefix = "calcite-" + generate_random_string(64);
 
-  calcite_.reset(new Calcite(mapd_parameters.mapd_server_port,
-                             mapd_parameters.calcite_port,
-                             base_data_path_,
-                             mapd_parameters_.calcite_max_mem,
-                             calcite_session_prefix));
+  calcite_ = std::make_shared<Calcite>(mapd_parameters.mapd_server_port,
+                                       mapd_parameters.calcite_port,
+                                       base_data_path_,
+                                       mapd_parameters_.calcite_max_mem,
+                                       calcite_session_prefix);
+
   ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
 
   if (!data_mgr_->gpusPresent()) {
@@ -3921,4 +3922,10 @@ void MapDHandler::set_license_key(TLicenseInfo& _return,
 void MapDHandler::get_license_claims(TLicenseInfo& _return, const TSessionId& session, const std::string& nonce) {
   const auto session_info = get_session(session);
   _return.claims.push_back("");
+}
+
+void MapDHandler::close_calcite_server() {
+  if (calcite_) {
+    calcite_->close_calcite_server();
+  }
 }
