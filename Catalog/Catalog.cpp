@@ -1762,6 +1762,7 @@ void Catalog::updateDictionarySchema() {
 void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
   cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
+  std::vector<DBObject> objects;
   try {
     sqliteConnector_.query("SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_record_ownership_marker'");
     if (sqliteConnector_.getNumRows() != 0) {
@@ -1770,8 +1771,6 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
       return;
     }
     sqliteConnector_.query("CREATE TABLE mapd_record_ownership_marker (dummy integer)");
-
-    std::vector<DBObject> objects;
 
     {
       // tables and views
@@ -1823,12 +1822,21 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
         objects.push_back(obj);
       }
     }
-    SysCatalog::instance().populateRoleDbObjects(objects);
   } catch (const std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
+
+  // now apply the objects to the syscat to track the permisisons
+  // moved outside transaction to avoid lock in sqlite
+  try {
+    SysCatalog::instance().populateRoleDbObjects(objects);
+  } catch (const std::exception& e) {
+    LOG(ERROR) << " Issue during migration of DB " << name() << " issue was " << e.what();
+    throw std::runtime_error(" Issue during migration of DB " + name() + " issue was " + e.what());
+    // will need to remove the mapd_record_ownership_marker table and retry
+  }
 }
 
 void Catalog::CheckAndExecuteMigrations() {
