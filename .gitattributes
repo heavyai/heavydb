@@ -40,10 +40,9 @@ ThirdParty/* linguist-vendored
 *.def     text=CRLF
 *.ini     text=CRLF
 *.props   text=CRLF
+*.rc      text=CRLF
 *.reg     text=CRLF
 *.sln     text=CRLF
 *.vcxproj text=CRLF
 *.vcxproj.user text=CRLF
 *.vcxproj.filters text=CRLF
-ODBC/*.rc text=CRLF
-ODBC/*.xml text=CRLF
