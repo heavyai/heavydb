@@ -1760,17 +1760,57 @@ void Catalog::updateDictionarySchema() {
 }
 
 void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
+  // check if migration needs to be performed (privs check)
+  if (!SysCatalog::instance().arePrivilegesOn()) {
+    return;
+  }
   cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   std::vector<DBObject> objects;
   try {
     sqliteConnector_.query("SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_record_ownership_marker'");
-    if (sqliteConnector_.getNumRows() != 0) {
+    // check if mapd catalog - marker exists
+    if (sqliteConnector_.getNumRows() != 0 && currentDB_.dbId == 1) {
       // already done
       sqliteConnector_.query("END TRANSACTION");
       return;
     }
-    sqliteConnector_.query("CREATE TABLE mapd_record_ownership_marker (dummy integer)");
+    // check if different catalog - marker exists
+    else if (sqliteConnector_.getNumRows() != 0 && currentDB_.dbId != 1) {
+      sqliteConnector_.query("SELECT dummy FROM mapd_record_ownership_marker");
+      // Check if migration is being performed on existing non mapd catalogs
+      // Older non mapd dbs will have table but no record in them
+      if (sqliteConnector_.getNumRows() != 0) {
+        return;
+      }
+    }
+    // marker not exists - create one
+    else {
+      sqliteConnector_.query("CREATE TABLE mapd_record_ownership_marker (dummy integer)");
+    }
+
+    std::vector<DBObject> objects;
+    DBMetadata db;
+    CHECK(SysCatalog::instance().getMetadataForDB(currentDB_.dbName, db));
+    // place dbId as a refernce for migration being performed
+    sqliteConnector_.query_with_text_params("INSERT INTO mapd_record_ownership_marker (dummy) VALUES (?1)",
+                                            std::vector<std::string>{std::to_string(db.dbOwner)});
+
+    {
+      // grant owner all permissions on DB
+      DBObjectKey key;
+      DBObjectType type = DBObjectType::DatabaseDBObjectType;
+      key.dbId = currentDB_.dbId;
+      key.objectId = currentDB_.dbId;
+      key.permissionType = type;
+
+      DBObject obj(db.dbName, type);
+      obj.setObjectKey(key);
+      obj.setOwner(db.dbOwner);
+      obj.setPrivileges(AccessPrivileges::ALL_DATABASE);
+
+      objects.push_back(obj);
+    }
 
     {
       // tables and views
@@ -1903,8 +1943,8 @@ void SysCatalog::populateRoleDbObjects(const std::vector<DBObject>& objects) {
       Role* role = getMetadataForUserRole(dbobject.getOwner());
       if (role) {
         Role* groupRole = getMetadataForRole(role->userName());
+        insertOrUpdateObjectPrivileges(sqliteConnector_, role->userName(), true, dbobject);
         if (groupRole) {
-          insertOrUpdateObjectPrivileges(sqliteConnector_, role->userName(), true, dbobject);
           groupRole->grantPrivileges(dbobject);
         }
       }
