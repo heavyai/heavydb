@@ -14,9 +14,12 @@
  * limitations under the License.
  */
 
+#include "TestHelpers.h"
+
 #include "../Import/Importer.h"
 
-#include <csignal>
+#include <algorithm>
+#include <string>
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
@@ -35,51 +38,19 @@
 #define CALCITEPORT 39093
 
 using namespace std;
-using namespace Catalog_Namespace;
+using namespace TestHelpers;
 
 namespace {
 
-std::unique_ptr<SessionInfo> gsession;
+std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
 bool g_hoist_literals{true};
 
-std::shared_ptr<Calcite> g_calcite = nullptr;
-
-void calcite_shutdown_handler() {
-  if (g_calcite) {
-    g_calcite->close_calcite_server();
-  }
-}
-
-void mapd_signal_handler(int signal_number) {
-  LOG(ERROR) << "Interrupt signal (" << signal_number << ") received.";
-  calcite_shutdown_handler();
-  // shut down logging force a flush
-  google::ShutdownGoogleLogging();
-  // terminate program
-  std::exit(EXIT_FAILURE);
-}
-
-void register_signal_handler() {
-  std::signal(SIGTERM, mapd_signal_handler);
-  std::signal(SIGSEGV, mapd_signal_handler);
-  std::signal(SIGABRT, mapd_signal_handler);
-}
-
 inline void run_ddl_statement(const string& input_str) {
-  QueryRunner::run_ddl_statement(input_str, gsession);
-}
-
-template <class T>
-T v(const TargetValue& r) {
-  auto scalar_r = boost::get<ScalarTargetValue>(&r);
-  CHECK(scalar_r);
-  auto p = boost::get<T>(scalar_r);
-  CHECK(p);
-  return *p;
+  QueryRunner::run_ddl_statement(input_str, g_session);
 }
 
 std::shared_ptr<ResultSet> run_query(const string& query_str) {
-  return QueryRunner::run_multiple_agg(query_str, gsession, ExecutorDeviceType::CPU, g_hoist_literals, true);
+  return QueryRunner::run_multiple_agg(query_str, g_session, ExecutorDeviceType::CPU, g_hoist_literals, true);
 }
 
 bool compare_agg(const int64_t cnt, const double avg) {
@@ -93,22 +64,12 @@ bool compare_agg(const int64_t cnt, const double avg) {
 }
 
 bool import_test_common(const string& query_str, const int64_t cnt, const double avg) {
-  SQLParser parser;
-  std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
-  std::string last_parsed;
-  if (parser.parse(query_str, parse_trees, last_parsed))
-    return false;
-  CHECK_EQ(parse_trees.size(), size_t(1));
-  const auto& stmt = parse_trees.front();
-  Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
-  if (!ddl)
-    return false;
-  ddl->execute(*gsession);
-
+  run_ddl_statement(query_str);
   return compare_agg(cnt, avg);
 }
 
 bool import_test_common_geo(const string& query_str, const std::string& table, const int64_t cnt, const double avg) {
+  // TODO(adb): Return ddl from QueryRunner::run_ddl_statement and use that
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;
@@ -119,7 +80,7 @@ bool import_test_common_geo(const string& query_str, const std::string& table, c
   Parser::CopyTableStmt* ddl = dynamic_cast<Parser::CopyTableStmt*>(stmt.get());
   if (!ddl)
     return false;
-  ddl->execute(*gsession);
+  ddl->execute(*g_session);
 
   // was it a geo copy from?
   bool was_geo_copy_from = ddl->was_geo_copy_from();
@@ -142,6 +103,20 @@ bool import_test_common_geo(const string& query_str, const std::string& table, c
 
   // success
   return true;
+}
+
+void import_test_geofile_importer(const std::string& file_str,
+                                  const std::string& table_name,
+                                  const bool compression = false) {
+  Importer_NS::ImportDriver import_driver(QueryRunner::get_catalog(g_session.get()),
+                                          QueryRunner::get_user_metadata(g_session.get()),
+                                          ExecutorDeviceType::CPU);
+
+  auto file_path = boost::filesystem::path("../../Tests/Import/datafiles/" + file_str);
+
+  ASSERT_TRUE(boost::filesystem::exists(file_path));
+
+  ASSERT_NO_THROW(import_driver.import_geo_table(file_path.string(), table_name, compression));
 }
 
 bool import_test_local(const string& filename, const int64_t cnt, const double avg) {
@@ -194,37 +169,15 @@ bool import_test_s3_parquet(const string& filename, const int64_t cnt, const dou
 class SQLTestEnv : public ::testing::Environment {
  public:
   virtual void SetUp() {
-    boost::filesystem::path base_path{BASE_PATH};
-    CHECK(boost::filesystem::exists(base_path));
-    auto system_db_file = base_path / "mapd_catalogs" / MAPD_SYSTEM_DB;
-    auto data_dir = base_path / "mapd_data";
-    UserMetadata user;
-    DBMetadata db;
-
-    register_signal_handler();
-    google::InstallFailureFunction(&calcite_shutdown_handler);
-
-    g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path.string(), 1024);
-    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
-    // if no catalog create one
-    auto& sys_cat = SysCatalog::instance();
-    sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, !boost::filesystem::exists(system_db_file), false);
-    CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
-    // if no user create one
-    if (!sys_cat.getMetadataForUser("gtest", user)) {
-      sys_cat.createUser("gtest", "test!test!", false);
-      CHECK(sys_cat.getMetadataForUser("gtest", user));
-    }
-    // if no db create one
-    if (!sys_cat.getMetadataForDB("gtest_db", db)) {
-      sys_cat.createDatabase("gtest_db", user.userId);
-      CHECK(sys_cat.getMetadataForDB("gtest_db", db));
-    }
-    gsession.reset(new SessionInfo(
-        std::make_shared<Catalog>(base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-        user,
-        ExecutorDeviceType::GPU,
-        ""));
+    g_session.reset(QueryRunner::get_session(BASE_PATH,
+                                             "gtest",
+                                             "test!test!",
+                                             "gtest_db",
+                                             std::vector<LeafHostInfo>{},
+                                             std::vector<LeafHostInfo>{},
+                                             false,
+                                             true,
+                                             true));
   }
 };
 
@@ -372,49 +325,201 @@ TEST_F(ImportTestSharded, One_csv_file) {
   EXPECT_TRUE(import_test_local("sharded_trip_data_9.csv", 100, 1.0));
 }
 
-// geo tests
-// test parser only for now
-// @TODO simon.eves
-// implement proper geo tests at MapDHandler level
+namespace {
+const char* create_table_geo =
+    "  CREATE TABLE geospatial ("
+    "   p1 POINT,"
+    "   l LINESTRING,"
+    "   poly POLYGON,"
+    "   mpoly MULTIPOLYGON,"
+    "   p2 POINT,"
+    "   p3 POINT,"
+    "   p4 POINT,"
+    "   trip_distance DOUBLE"
+    " ) WITH (FRAGMENT_SIZE=65000000);";
 
-TEST_F(ImportTest, Geo_CSV_Local_Default) {
+void check_geo_import() {
+  auto rows =
+      run_query("SELECT p1, l, poly, mpoly, p2, p3, p4, trip_distance FROM geospatial WHERE trip_distance = 1.0");
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(8), crt_row.size());
+  const auto p1 = boost::get<std::string>(v<NullableString>(crt_row[0]));
+  ASSERT_EQ("POINT (1 1)", p1);
+  const auto linestring = boost::get<std::string>(v<NullableString>(crt_row[1]));
+  ASSERT_EQ("LINESTRING (1 0,2 2,3 3)", linestring);
+  const auto poly = boost::get<std::string>(v<NullableString>(crt_row[2]));
+  ASSERT_EQ("POLYGON ((0 0,2 0,0 2,0 0))", poly);
+  const auto mpoly = boost::get<std::string>(v<NullableString>(crt_row[3]));
+  ASSERT_EQ("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))", mpoly);
+  const auto p2 = boost::get<std::string>(v<NullableString>(crt_row[4]));
+  ASSERT_EQ("POINT (1 1)", p2);
+  const auto p3 = boost::get<std::string>(v<NullableString>(crt_row[5]));
+  ASSERT_EQ("POINT (1 1)", p3);
+  const auto p4 = boost::get<std::string>(v<NullableString>(crt_row[6]));
+  ASSERT_EQ("POINT (1 1)", p4);
+  const auto trip_distance = v<double>(crt_row[7]);
+  ASSERT_NEAR(1.0, trip_distance, 1e-7);
+}
+
+void check_geo_gdal_point_import() {
+  auto rows = run_query(
+      "SELECT mapd_geo, trip FROM geospatial WHERE "
+      "trip = 1.0");
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(2), crt_row.size());
+  const auto point = boost::get<std::string>(v<NullableString>(crt_row[0]));
+  ASSERT_EQ("POINT (1 1)", point);
+  const auto trip_distance = v<double>(crt_row[1]);
+  ASSERT_NEAR(1.0, trip_distance, 1e-7);
+}
+
+void check_geo_gdal_mpoly_import() {
+  auto rows = run_query(
+      "SELECT mapd_geo, trip FROM geospatial WHERE "
+      "trip = 1.0");
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(2), crt_row.size());
+  const auto mpoly = boost::get<std::string>(v<NullableString>(crt_row[0]));
+  ASSERT_EQ("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))", mpoly);
+  const auto trip_distance = v<double>(crt_row[1]);
+  ASSERT_NEAR(1.0, trip_distance, 1e-7);
+}
+
+void check_geo_gdal_point_coords_import() {
+  auto rows = run_query(
+      "SELECT mapd_geo, trip FROM geospatial WHERE "
+      "trip = 1.0");
+  rows->setGeoReturnDouble();
+  auto crt_row = rows->getNextRow(true, true);
+  compare_array(crt_row[0], std::vector<double>{1.0, 1.0}, 1e-7);
+  const auto trip_distance = v<double>(crt_row[1]);
+  ASSERT_NEAR(1.0, trip_distance, 1e-7);
+}
+
+void check_geo_gdal_mpoly_coords_import() {
+  auto rows = run_query(
+      "SELECT mapd_geo, trip FROM geospatial WHERE "
+      "trip = 1.0");
+  rows->setGeoReturnDouble();
+  auto crt_row = rows->getNextRow(true, true);
+  compare_array(crt_row[0], std::vector<double>{0.0, 0.0, 2.0, 0.0, 0.0, 2.0}, 1e-7);
+  const auto trip_distance = v<double>(crt_row[1]);
+  ASSERT_NEAR(1.0, trip_distance, 1e-7);
+}
+}
+
+class GeoImportTest : public ::testing::Test {
+ protected:
+  virtual void SetUp() {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
+    ASSERT_NO_THROW(run_ddl_statement(create_table_geo););
+  }
+
+  virtual void TearDown() {
+    ASSERT_NO_THROW(run_ddl_statement("drop table geospatial;"););
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
+  }
+};
+
+TEST_F(GeoImportTest, Geo_CSV_Local_Default) {
   EXPECT_TRUE(import_test_local_geo("geospatial.csv", "", 10, 4.5));
 }
 
-TEST_F(ImportTest, Geo_CSV_Local_Type_Geometry) {
+TEST_F(GeoImportTest, Geo_CSV_Local_Type_Geometry) {
   EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_type='geometry'", 10, 4.5));
 }
 
-TEST_F(ImportTest, Geo_CSV_Local_Type_Geography) {
+TEST_F(GeoImportTest, Geo_CSV_Local_Type_Geography) {
   EXPECT_THROW(import_test_local_geo("geospatial.csv", ", geo_coords_type='geography'", 10, 4.5), std::runtime_error);
 }
 
-TEST_F(ImportTest, Geo_CSV_Local_Type_Other) {
+TEST_F(GeoImportTest, Geo_CSV_Local_Type_Other) {
   EXPECT_THROW(import_test_local_geo("geospatial.csv", ", geo_coords_type='other'", 10, 4.5), std::runtime_error);
 }
 
-TEST_F(ImportTest, Geo_CSV_Local_Encoding_NONE) {
+TEST_F(GeoImportTest, Geo_CSV_Local_Encoding_NONE) {
   EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_encoding='none'", 10, 4.5));
 }
 
-TEST_F(ImportTest, Geo_CSV_Local_Encoding_GEOINT32) {
+TEST_F(GeoImportTest, Geo_CSV_Local_Encoding_GEOINT32) {
   EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_encoding='compressed(32)'", 10, 4.5));
 }
 
-TEST_F(ImportTest, Geo_CSV_Local_Encoding_Other) {
+TEST_F(GeoImportTest, Geo_CSV_Local_Encoding_Other) {
   EXPECT_THROW(import_test_local_geo("geospatial.csv", ", geo_coords_encoding='other'", 10, 4.5), std::runtime_error);
 }
 
-TEST_F(ImportTest, Geo_CSV_Local_SRID_LonLat) {
+TEST_F(GeoImportTest, Geo_CSV_Local_SRID_LonLat) {
   EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_srid=4326", 10, 4.5));
 }
 
-TEST_F(ImportTest, Geo_CSV_Local_SRID_Mercator) {
+TEST_F(GeoImportTest, Geo_CSV_Local_SRID_Mercator) {
   EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_srid=900913", 10, 4.5));
 }
 
-TEST_F(ImportTest, Geo_CSV_Local_SRID_Other) {
+TEST_F(GeoImportTest, Geo_CSV_Local_SRID_Other) {
   EXPECT_THROW(import_test_local_geo("geospatial.csv", ", geo_coords_srid=12345", 10, 4.5), std::runtime_error);
+}
+
+TEST_F(GeoImportTest, CSV_Import) {
+  const auto file_path = boost::filesystem::path("../../Tests/Import/datafiles/geospatial.csv");
+  run_ddl_statement("COPY geospatial FROM '" + file_path.string() + "';");
+  check_geo_import();
+}
+
+class GeoGDALImportTest : public ::testing::Test {
+ protected:
+  virtual void SetUp() { ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;");); }
+
+  virtual void TearDown() { ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;");); }
+};
+
+TEST_F(GeoGDALImportTest, Geojson_Point_Import) {
+  const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point.geojson");
+  import_test_geofile_importer(file_path.string(), "geospatial", false);
+  check_geo_gdal_point_import();
+}
+
+TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import) {
+  const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
+  import_test_geofile_importer(file_path.string(), "geospatial", false);
+  check_geo_gdal_mpoly_import();
+}
+
+TEST_F(GeoGDALImportTest, Shapefile_Point_Import) {
+  const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point.shp");
+  import_test_geofile_importer(file_path.string(), "geospatial", false);
+  check_geo_gdal_point_import();
+}
+
+TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import) {
+  const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.shp");
+  import_test_geofile_importer(file_path.string(), "geospatial", false);
+  check_geo_gdal_mpoly_import();
+}
+
+TEST_F(GeoGDALImportTest, Shapefile_Point_Import_Compressed) {
+  const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point.shp");
+  import_test_geofile_importer(file_path.string(), "geospatial", true);
+  check_geo_gdal_point_coords_import();
+}
+
+TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import_Compressed) {
+  const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.shp");
+  import_test_geofile_importer(file_path.string(), "geospatial", true);
+  check_geo_gdal_mpoly_coords_import();
+}
+
+TEST_F(GeoGDALImportTest, Shapefile_Point_Import_3857) {
+  const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point_3857.shp");
+  import_test_geofile_importer(file_path.string(), "geospatial", false);
+  check_geo_gdal_point_coords_import();
+}
+
+TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import_3857) {
+  const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_3857.shp");
+  import_test_geofile_importer(file_path.string(), "geospatial", false);
+  check_geo_gdal_mpoly_coords_import();
 }
 
 #ifdef HAVE_AWS_S3

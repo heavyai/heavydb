@@ -508,6 +508,7 @@ class SessionInfo {
         executor_device_type_(static_cast<ExecutorDeviceType>(s.executor_device_type_)),
         session_id(s.session_id) {}
   Catalog& get_catalog() const { return *catalog_; }
+  std::shared_ptr<Catalog> get_catalog_ptr() const { return catalog_; }
   const UserMetadata& get_currentUser() const { return currentUser_; }
   const ExecutorDeviceType get_executor_device_type() const { return executor_device_type_; }
   void set_executor_device_type(ExecutorDeviceType t) { executor_device_type_ = t; }

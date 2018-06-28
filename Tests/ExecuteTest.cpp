@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "TestHelpers.h"
+
 #include "../Import/Importer.h"
 #include "../Parser/parser.h"
 #include "../QueryEngine/ArrowResultSet.h"
@@ -36,6 +38,7 @@
 #endif
 
 using namespace std;
+using namespace TestHelpers;
 
 extern bool g_aggregator;
 
@@ -133,31 +136,6 @@ TargetValue get_first_target(const string& query_str,
   auto crt_row = rows->getNextRow(true, true);
   CHECK_GE(crt_row.size(), size_t(1));
   return crt_row[0];
-}
-
-template <class T>
-T v(const TargetValue& r) {
-  auto scalar_r = boost::get<ScalarTargetValue>(&r);
-  CHECK(scalar_r);
-  auto p = boost::get<T>(scalar_r);
-  CHECK(p);
-  return *p;
-}
-
-template <class T>
-void compare_array(const TargetValue& r, const std::vector<T>& arr, const double tol = -1.) {
-  auto scalar_tv_vector = boost::get<std::vector<ScalarTargetValue>>(&r);
-  CHECK(scalar_tv_vector);
-  ASSERT_EQ(scalar_tv_vector->size(), arr.size());
-  size_t ctr = 0;
-  for (const ScalarTargetValue scalar_tv : *scalar_tv_vector) {
-    auto p = boost::get<T>(&scalar_tv);
-    if (tol < 0.) {
-      ASSERT_EQ(*p, arr[ctr++]);
-    } else {
-      ASSERT_NEAR(*p, arr[ctr++], tol);
-    }
-  }
 }
 
 inline void run_ddl_statement(const std::string& create_table_stmt) {

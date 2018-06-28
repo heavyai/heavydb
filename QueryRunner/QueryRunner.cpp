@@ -21,6 +21,7 @@
 #include "Parser/ParserWrapper.h"
 #include "Calcite/Calcite.h"
 #include "Catalog/Catalog.h"
+#include "Shared/ConfigResolve.h"
 #include "bcrypt.h"
 
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
@@ -69,7 +70,8 @@ Planner::RootPlan* parse_plan_calcite(const std::string& query_str,
   const auto query_ra = calcite_mgr.process(*sess,
                                             pg_shim(query_str),
                                             true,
-                                            false).plan_result;  //  if we want to be able to check plans we may want to calc this
+                                            false)
+                            .plan_result;  //  if we want to be able to check plans we may want to calc this
   return translate_query(query_ra, cat);
 }
 
@@ -113,11 +115,14 @@ void register_signal_handler() {
 }
 
 Catalog_Namespace::SessionInfo* get_session(const char* db_path,
-                                            std::vector<LeafHostInfo> string_servers,
-                                            std::vector<LeafHostInfo> leaf_servers) {
-  std::string db_name{MAPD_SYSTEM_DB};
-  std::string user_name{"mapd"};
-  std::string passwd{"HyperInteractive"};
+                                            const std::string& user_name,
+                                            const std::string& passwd,
+                                            const std::string& db_name,
+                                            const std::vector<LeafHostInfo>& string_servers,
+                                            const std::vector<LeafHostInfo>& leaf_servers,
+                                            bool uses_gpus,
+                                            const bool create_user,
+                                            const bool create_db) {
   boost::filesystem::path base_path{db_path};
   CHECK(boost::filesystem::exists(base_path));
   auto system_db_file = base_path / "mapd_catalogs" / "mapd";
@@ -130,21 +135,31 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path,
   google::InstallFailureFunction(&calcite_shutdown_handler);
 
   g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, db_path, 1024);
+
   ExtensionFunctionsWhitelist::add(g_calcite->getExtensionFunctionWhitelist());
-#ifdef HAVE_CUDA
-  bool useGpus = true;
-#else
-  bool useGpus = false;
-#endif
-  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, useGpus, -1);
-  {
-    auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
-    sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, false, false);
-    CHECK(sys_cat.getMetadataForUser(user_name, user));
-    CHECK(bcrypt_checkpw(passwd.c_str(), user.passwd_hash.c_str()) == 0);
-    CHECK(sys_cat.getMetadataForDB(db_name, db));
-    CHECK(user.isSuper || (user.userId == db.dbOwner));
+
+  if (std::is_same<CudaBuildSelector, PreprocessorFalse>::value) {
+    uses_gpus = false;
   }
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, uses_gpus, -1);
+
+  auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
+  sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, false, false);
+  if (create_user) {
+    if (!sys_cat.getMetadataForUser(user_name, user)) {
+      sys_cat.createUser(user_name, passwd, false);
+    }
+  }
+  CHECK(sys_cat.getMetadataForUser(user_name, user));
+  CHECK(bcrypt_checkpw(passwd.c_str(), user.passwd_hash.c_str()) == 0);
+
+  if (create_db) {
+    if (!sys_cat.getMetadataForDB(db_name, db)) {
+      sys_cat.createDatabase(db_name, user.userId);
+    }
+  }
+  CHECK(sys_cat.getMetadataForDB(db_name, db));
+  CHECK(user.isSuper || (user.userId == db.dbOwner));
 
   g_aggregator = !leaf_servers.empty();
 
@@ -154,8 +169,26 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path,
   return session;
 }
 
+Catalog_Namespace::SessionInfo* get_session(const char* db_path,
+                                            const std::vector<LeafHostInfo>& string_servers,
+                                            const std::vector<LeafHostInfo>& leaf_servers) {
+  std::string db_name{MAPD_SYSTEM_DB};
+  std::string user_name{"mapd"};
+  std::string passwd{"HyperInteractive"};
+
+  return get_session(db_path, user_name, passwd, db_name, string_servers, leaf_servers);
+}
+
 Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
   return get_session(db_path, std::vector<LeafHostInfo>{}, std::vector<LeafHostInfo>{});
+}
+
+Catalog_Namespace::UserMetadata get_user_metadata(const Catalog_Namespace::SessionInfo* session) {
+  return session->get_currentUser();
+}
+
+std::shared_ptr<Catalog_Namespace::Catalog> get_catalog(const Catalog_Namespace::SessionInfo* session) {
+  return session->get_catalog_ptr();
 }
 
 ExecutionResult run_select_query(const std::string& query_str,

@@ -3679,13 +3679,19 @@ int RenderGroupAnalyzer::insertBoundsAndReturnRenderGroup(const std::vector<doub
   return firstAvailableRenderGroup;
 }
 
-void ImportDriver::import_geo_table(const std::string& file_path, const std::string& table_name) {
+void ImportDriver::import_geo_table(const std::string& file_path,
+                                    const std::string& table_name,
+                                    const bool compression) {
   const std::string geo_column_name(MAPD_GEO_PREFIX);
 
   CopyParams copy_params;
-  // Import as 32-bit GEOINT encoding by default
-  copy_params.geo_coords_encoding = EncodingType::kENCODING_GEOINT;
-  copy_params.geo_coords_comp_param = 32;
+  if (compression) {
+    copy_params.geo_coords_encoding = EncodingType::kENCODING_GEOINT;
+    copy_params.geo_coords_comp_param = 32;
+  } else {
+    copy_params.geo_coords_encoding = EncodingType::kENCODING_NONE;
+    copy_params.geo_coords_comp_param = 0;
+  }
 
   const auto cds = Importer::gdalToColumnDescriptors(file_path, geo_column_name, copy_params);
   std::map<std::string, std::string> colname_to_src;

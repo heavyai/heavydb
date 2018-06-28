@@ -786,7 +786,7 @@ class ImportDriver {
                const ExecutorDeviceType t = ExecutorDeviceType::GPU)
       : session_(new Catalog_Namespace::SessionInfo(c, user, t, "")) {}
 
-  void import_geo_table(const std::string& file_path, const std::string& table_name);
+  void import_geo_table(const std::string& file_path, const std::string& table_name, const bool compression = true);
 
  private:
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_;
