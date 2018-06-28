@@ -447,7 +447,7 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
   auto& exec_desc = exec_descs[i];
   const auto body = exec_desc.getBody();
   if (body->isNop()) {
-    handleNop(body);
+    handleNop(exec_desc);
     return;
   }
   const ExecutionOptions eo_work_unit{eo.output_columnar_hint,
@@ -538,14 +538,19 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
   }
 }
 
-void RelAlgExecutor::handleNop(const RelAlgNode* body) {
+void RelAlgExecutor::handleNop(RaExecutionDesc& ed) {
+  // just set the result of the previous node as the result of no op
+  auto body = ed.getBody();
   CHECK(dynamic_cast<const RelAggregate*>(body));
   CHECK_EQ(size_t(1), body->inputCount());
   const auto input = body->getInput(0);
   body->setOutputMetainfo(input->getOutputMetainfo());
   const auto it = temporary_tables_.find(-input->getId());
   CHECK(it != temporary_tables_.end());
+  // set up temp table as it could be used by the outer query or next step
   addTemporaryTable(-body->getId(), it->second);
+
+  ed.setResult({boost::get<RowSetPtr>(it->second), input->getOutputMetainfo()});
 }
 
 namespace {

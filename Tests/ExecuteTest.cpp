@@ -3243,6 +3243,13 @@ TEST(Select, GroupByConstrainedByInQueryRewrite) {
   }
 }
 
+TEST(Select, RedundantGroupBy) {
+  for (auto dt: {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT DISTINCT(x) from test where y < 10 and z > 30 GROUP BY x;", dt);
+  }
+}
+
 TEST(Select, BigDecimalRange) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

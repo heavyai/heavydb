@@ -17,14 +17,14 @@
 #ifndef QUERYENGINE_RELALGEXECUTOR_H
 #define QUERYENGINE_RELALGEXECUTOR_H
 
-#include "InputMetadata.h"
+#include "../Shared/scope.h"
+#include "Distributed/AggregatedResult.h"
 #include "Execute.h"
+#include "InputMetadata.h"
 #include "QueryRewrite.h"
 #include "RelAlgExecutionDescriptor.h"
 #include "SpeculativeTopN.h"
 #include "StreamingTopN.h"
-#include "../Shared/scope.h"
-#include "Distributed/AggregatedResult.h"
 
 #include <ctime>
 #include <sstream>
@@ -247,7 +247,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
     CHECK(it_ok.second);
   }
 
-  void handleNop(const RelAlgNode*);
+  void handleNop(RaExecutionDesc& ed);
 
   JoinQualsPerNestingLevel translateLeftDeepJoinFilter(
       const RelLeftDeepInnerJoin* join,
