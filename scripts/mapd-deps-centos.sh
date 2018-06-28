@@ -140,7 +140,7 @@ popd
 
 # llvm
 download_make_install http://thrysoee.dk/editline/libedit-20170329-3.1.tar.gz
-VERS=3.9.1
+VERS=6.0.1
 # http://releases.llvm.org
 download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/llvm-$VERS.src.tar.xz
 download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/cfe-$VERS.src.tar.xz
