@@ -68,7 +68,7 @@ std::vector<int32_t> Executor::getStringIds(const std::string& col_name,
                                             const std::vector<std::string>& col_vals,
                                             const ::QueryRenderer::QueryDataLayout* query_data_layout,
                                             const ResultSet* results,
-                                            const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                            const std::shared_ptr<RowSetMemoryOwner>& row_set_mem_owner,
                                             const bool warn) const {
   CHECK(false);
   return {};
