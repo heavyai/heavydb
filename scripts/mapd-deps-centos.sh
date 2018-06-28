@@ -179,12 +179,10 @@ VERS=7.60.0
 download_make_install https://internal-dependencies.mapd.com/thirdparty/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps"
 
 # thrift
-VERS=0.10.0
+VERS=0.11.0
 download http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
 extract thrift-$VERS.tar.gz
 pushd thrift-$VERS
-patch -p1 < $SCRIPTS_DIR/thrift-3821-tmemorybuffer-overflow-check.patch
-patch -p1 < $SCRIPTS_DIR/thrift-3821-tmemorybuffer-overflow-test.patch
 CFLAGS="-fPIC" CXXFLAGS="-fPIC" JAVA_PREFIX=$PREFIX/lib ./configure \
     --prefix=$PREFIX \
     --with-lua=no \
