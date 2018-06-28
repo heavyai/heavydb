@@ -109,8 +109,6 @@ using namespace Lock_Namespace;
   LOG(ERROR) << ex.error_msg;        \
   throw ex;
 
-#define SUPPORT_TAR_GEO_ARCHIVES_REQUIRES_GDAL_2_3_1 0
-
 std::string generate_random_string(const size_t len);
 
 MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
@@ -1995,11 +1993,9 @@ void add_vsi_archive_prefix(std::string& path) {
   if (boost::iends_with(path, ".zip")) {
     // zip archive
     path = "/vsizip/" + path;
-#if SUPPORT_TAR_GEO_ARCHIVES_REQUIRES_GDAL_2_3_1
   } else if (boost::iends_with(path, ".tar") || boost::iends_with(path, ".tgz") || boost::iends_with(path, ".tar.gz")) {
     // tar archive (compressed or uncompressed)
     path = "/vsitar/" + path;
-#endif
   }
 }
 
@@ -2009,10 +2005,8 @@ std::string remove_vsi_prefixes(const std::string& path_in) {
   // these will be first
   if (boost::istarts_with(path, "/vsizip/")) {
     boost::replace_first(path, "/vsizip/", "");
-#if SUPPORT_TAR_GEO_ARCHIVES_REQUIRES_GDAL_2_3_1
   } else if (boost::istarts_with(path, "/vsitar/")) {
     boost::replace_first(path, "/vsitar/", "");
-#endif
   } else if (boost::istarts_with(path, "/vsigzip/")) {
     boost::replace_first(path, "/vsigzip/", "");
   }
@@ -2051,10 +2045,8 @@ bool is_a_supported_geo_file(const std::string& path, bool include_gz) {
 bool is_a_supported_archive_file(const std::string& path) {
   if (boost::iends_with(path, ".zip")) {
     return true;
-#if SUPPORT_TAR_GEO_ARCHIVES_REQUIRES_GDAL_2_3_1
   } else if (boost::iends_with(path, ".tar") || boost::iends_with(path, ".tgz") || boost::iends_with(path, ".tar.gz")) {
     return true;
-#endif
   }
   return false;
 }
