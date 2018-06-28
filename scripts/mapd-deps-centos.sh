@@ -84,10 +84,11 @@ download_make_install https://internal-dependencies.mapd.com/thirdparty/bisonpp-
 
 CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/gnu/readline/readline-6.3.tar.gz
 
-# http://downloads.sourceforge.net/project/boost/boost/1.62.0/boost_1_62_0.tar.bz2
-download https://internal-dependencies.mapd.com/thirdparty/boost_1_62_0.tar.bz2
-extract boost_1_62_0.tar.bz2
-pushd boost_1_62_0
+VERS=1_67_0
+# http://downloads.sourceforge.net/project/boost/boost/${VERS//_/.}/boost_$VERS.tar.bz2
+download https://internal-dependencies.mapd.com/thirdparty/boost_$VERS.tar.bz2
+extract boost_$VERS.tar.bz2
+pushd boost_$VERS
 ./bootstrap.sh --prefix=$PREFIX
 ./b2 cxxflags=-fPIC install --prefix=$PREFIX || true
 popd
