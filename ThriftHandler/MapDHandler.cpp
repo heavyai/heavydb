@@ -3775,6 +3775,14 @@ void MapDHandler::insert_data(const TSessionId& session, const TInsertData& thri
         }
         p.stringsPtr = none_encoded_strings.get();
       }
+    } else if (ti.is_geometry()) {
+      none_encoded_string_columns.emplace_back(new std::vector<std::string>());
+      auto& none_encoded_strings = none_encoded_string_columns.back();
+      CHECK_EQ(static_cast<size_t>(thrift_insert_data.num_rows), thrift_insert_data.data[col_idx].var_len_data.size());
+      for (const auto& varlen_str : thrift_insert_data.data[col_idx].var_len_data) {
+        none_encoded_strings->push_back(varlen_str.payload);
+      }
+      p.stringsPtr = none_encoded_strings.get();
     } else {
       CHECK(ti.is_array());
       array_columns.emplace_back(new std::vector<ArrayDatum>());

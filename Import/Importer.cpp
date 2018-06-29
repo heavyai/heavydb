@@ -2289,7 +2289,8 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
           break;
         case kPOINT:
         case kLINESTRING:
-        case kPOLYGON: {
+        case kPOLYGON:
+        case kMULTIPOLYGON: {
           CHECK_LT(i, input_buffer->getGeoStringBuffer()->size());
           shard_output_buffers[col_idx]->addGeoString((*input_buffer->getGeoStringBuffer())[i]);
           break;
@@ -3229,7 +3230,7 @@ void Importer::initGDAL() {
     for (const auto& known_ca_path : v_known_ca_paths) {
       if (boost::filesystem::exists(known_ca_path)) {
         LOG(INFO) << "GDAL SSL Certificate path: " << known_ca_path;
-        setenv("SSL_CERT_FILE", known_ca_path.c_str(), false); // no overwrite
+        setenv("SSL_CERT_FILE", known_ca_path.c_str(), false);  // no overwrite
         break;
       }
     }
