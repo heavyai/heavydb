@@ -1197,6 +1197,9 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
         }
       } else {
         if (agg_vals[agg_col_idx]) {
+          if (agg_info.agg_kind == kLAST_SAMPLE) {
+            continue;
+          }
           CHECK_EQ(agg_vals[agg_col_idx], partial_bin_val);
         } else {
           agg_vals[agg_col_idx] = partial_bin_val;

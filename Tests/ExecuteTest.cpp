@@ -97,7 +97,8 @@ std::string build_create_table_statement(const std::string& columns_definition,
   const std::string replicated_def{!replicated ? "" : ", PARTITIONS='REPLICATED' "};
 
   return "CREATE TABLE " + table_name + "(" + columns_definition + shard_key_def +
-         boost::algorithm::join(shared_dict_def, "") + ") WITH (" + with_statement_assembly.str() + replicated_def +");";
+         boost::algorithm::join(shared_dict_def, "") + ") WITH (" + with_statement_assembly.str() + replicated_def +
+         ");";
 }
 
 std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
@@ -1207,9 +1208,10 @@ TEST(Select, Case) {
     c("SELECT x, COUNT(CASE WHEN y BETWEEN 41 AND 42 THEN y END) FROM test GROUP BY x ORDER BY x;", dt);
     SKIP_ON_AGGREGATOR(c("SELECT CASE WHEN x > 8 THEN 'oops' ELSE 'ok' END FROM test LIMIT 1;", dt));
     SKIP_ON_AGGREGATOR(c("SELECT CASE WHEN x < 9 THEN 'ok' ELSE 'oops' END FROM test LIMIT 1;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT CASE WHEN str IN ('foo', 'bar') THEN str END key1, COUNT(*) FROM test GROUP BY str HAVING key1 IS NOT "
-      "NULL ORDER BY key1;",
-      dt));
+    SKIP_ON_AGGREGATOR(c(
+        "SELECT CASE WHEN str IN ('foo', 'bar') THEN str END key1, COUNT(*) FROM test GROUP BY str HAVING key1 IS NOT "
+        "NULL ORDER BY key1;",
+        dt));
     SKIP_ON_AGGREGATOR(
         c("SELECT CASE WHEN str IN ('foo') THEN 'FOO' WHEN str IN ('bar') THEN 'BAR' ELSE 'BAZ' END AS g, COUNT(*) "
           "FROM test GROUP BY g ORDER BY g DESC;",
@@ -3539,7 +3541,8 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
     c("SELECT COUNT(*) FROM test_inner_x a JOIN test_x b ON a.x = b.x;", dt);
     c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str ORDER BY a.x;", dt);
     c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x ORDER BY a.x;", dt);
-    SKIP_ON_AGGREGATOR(c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str GROUP BY a.x ORDER BY a.x;", dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str GROUP BY a.x ORDER BY a.x;", dt));
     c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x GROUP BY a.x ORDER BY a.x;", dt);
     c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x AND test.rowid = test_inner.rowid;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.y = test_inner.y OR (test.y IS NULL AND test_inner.y IS NULL);",
@@ -4294,7 +4297,8 @@ TEST(Select, WatchdogTest) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT x, SUM(f) AS n FROM test GROUP BY x ORDER BY n DESC LIMIT 5;", dt);
-    SKIP_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test WHERE str = 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz';", dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test WHERE str = 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz';", dt));
   }
 }
 
@@ -6114,7 +6118,7 @@ TEST(Select, GeoSpatial) {
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT count(poly) FROM geospatial_test;", dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg("SELECT count(mpoly) FROM geospatial_test;", dt)));          
+              v<int64_t>(run_simple_agg("SELECT count(mpoly) FROM geospatial_test;", dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance('POINT(0 0)', p) < 100.0;", dt)));
@@ -6761,6 +6765,42 @@ TEST(Select, LastSample) {
       const auto empty_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(0), empty_row.size());
     }
+    auto check_last_sample_rowid = [](const int64_t val) {
+      const std::set<int64_t> valid_row_ids{15, 16, 17, 18, 19};
+      ASSERT_TRUE(valid_row_ids.find(val) != valid_row_ids.end()) << "Last sample rowid value " << val << " is invalid";
+    };
+    {
+      const auto rows =
+          run_multiple_agg("SELECT LAST_SAMPLE(rowid), AVG(d), AVG(f), str FROM test WHERE d > 2.4 GROUP BY str;", dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(4), crt_row.size());
+      const auto rowid = v<int64_t>(crt_row[0]);
+      check_last_sample_rowid(rowid);
+      const auto d = v<double>(crt_row[1]);
+      ASSERT_EQ(2.6, d);
+      const auto f = v<double>(crt_row[2]);
+      ASSERT_EQ(1.3, f);
+      const auto nullable_str = v<NullableString>(crt_row[3]);
+      const auto str_ptr = boost::get<std::string>(&nullable_str);
+      ASSERT_TRUE(str_ptr);
+      ASSERT_EQ("baz", boost::get<std::string>(*str_ptr));
+    }
+    {
+      const auto rows =
+          run_multiple_agg("SELECT AVG(d), AVG(f), str, LAST_SAMPLE(rowid) FROM test WHERE d > 2.4 GROUP BY str;", dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(4), crt_row.size());
+      const auto d = v<double>(crt_row[0]);
+      ASSERT_EQ(2.6, d);
+      const auto f = v<double>(crt_row[1]);
+      ASSERT_EQ(1.3, f);
+      const auto nullable_str = v<NullableString>(crt_row[2]);
+      const auto str_ptr = boost::get<std::string>(&nullable_str);
+      ASSERT_TRUE(str_ptr);
+      ASSERT_EQ("baz", boost::get<std::string>(*str_ptr));
+      const auto rowid = v<int64_t>(crt_row[3]);
+      check_last_sample_rowid(rowid);
+    }
   }
 }
 
@@ -6808,8 +6848,13 @@ int create_and_populate_tables(bool with_delete_support = true) {
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{"x int not null, y int, str text encoding dict"};
-    const auto create_test_inner = build_create_table_statement(
-        columns_definition, "test_inner", {g_shard_count ? "str" : "", g_shard_count}, {}, 2, with_delete_support, g_aggregator);
+    const auto create_test_inner = build_create_table_statement(columns_definition,
+                                                                "test_inner",
+                                                                {g_shard_count ? "str" : "", g_shard_count},
+                                                                {},
+                                                                2,
+                                                                with_delete_support,
+                                                                g_aggregator);
     run_ddl_statement(create_test_inner);
     g_sqlite_comparator.query("CREATE TABLE test_inner(x int not null, y int, str text);");
   } catch (...) {
@@ -6889,8 +6934,13 @@ int create_and_populate_tables(bool with_delete_support = true) {
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{"x int not null, y int, str text encoding dict"};
-    const auto create_test_inner = build_create_table_statement(
-        columns_definition, "test_inner_x", {g_shard_count ? "x" : "", g_shard_count}, {}, 2, with_delete_support, g_aggregator);
+    const auto create_test_inner = build_create_table_statement(columns_definition,
+                                                                "test_inner_x",
+                                                                {g_shard_count ? "x" : "", g_shard_count},
+                                                                {},
+                                                                2,
+                                                                with_delete_support,
+                                                                g_aggregator);
     run_ddl_statement(create_test_inner);
     g_sqlite_comparator.query("CREATE TABLE test_inner_x(x int not null, y int, str text);");
   } catch (...) {
