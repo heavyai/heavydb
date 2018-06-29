@@ -176,19 +176,24 @@ static TypePtr get_arrow_type(const SQLTypeInfo& mapd_type, const std::shared_pt
       return float32();
     case kDOUBLE:
       return float64();
+    case kCHAR:
+    case kVARCHAR:
     case kTEXT:
       if (is_dict_enc_str(mapd_type)) {
         CHECK(dict_values);
         const auto index_type = get_arrow_type(get_dict_index_type_info(mapd_type), nullptr);
         return dictionary(index_type, dict_values);
       }
+      return utf8();
     case kDECIMAL:
     case kNUMERIC:
-    case kCHAR:
-    case kVARCHAR:
+      return decimal(mapd_type.get_precision(), mapd_type.get_scale());
     case kTIME:
-    case kTIMESTAMP:
+      return time32(TimeUnit::SECOND);
     case kDATE:
+      return date32();
+    case kTIMESTAMP:
+      return timestamp(TimeUnit::SECOND);
     case kARRAY:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
