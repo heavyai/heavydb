@@ -2289,7 +2289,8 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
           break;
         case kPOINT:
         case kLINESTRING:
-        case kPOLYGON: {
+        case kPOLYGON:
+        case kMULTIPOLYGON: {
           CHECK_LT(i, input_buffer->getGeoStringBuffer()->size());
           shard_output_buffers[col_idx]->addGeoString((*input_buffer->getGeoStringBuffer())[i]);
           break;
@@ -3229,7 +3230,7 @@ void Importer::initGDAL() {
     for (const auto& known_ca_path : v_known_ca_paths) {
       if (boost::filesystem::exists(known_ca_path)) {
         LOG(INFO) << "GDAL SSL Certificate path: " << known_ca_path;
-        setenv("SSL_CERT_FILE", known_ca_path.c_str(), false); // no overwrite
+        setenv("SSL_CERT_FILE", known_ca_path.c_str(), false);  // no overwrite
         break;
       }
     }
@@ -3963,7 +3964,8 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(const std::unique_ptr<Lo
   if (DEBUG_RENDER_GROUP_ANALYZER)
     LOG(INFO) << "DEBUG: Done! Now have " << _numRenderGroups << " Render Groups";
 
-  LOG(INFO) << "Scanning existing poly render groups of table '" << tableName << "' took " << timer_stop(seedTimer) << "ms";
+  LOG(INFO) << "Scanning existing poly render groups of table '" << tableName << "' took " << timer_stop(seedTimer)
+            << "ms";
 }
 
 int RenderGroupAnalyzer::insertBoundsAndReturnRenderGroup(const std::vector<double>& bounds) {

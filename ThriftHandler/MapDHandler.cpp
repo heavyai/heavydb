@@ -203,7 +203,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     case ExecutorDeviceType::Hybrid:
       LOG(INFO) << "Started in Hybrid mode" << std::endl;
   }
-  SysCatalog::instance().init(base_data_path_, data_mgr_, authMetadata, calcite_, false, access_priv_check, &string_leaves_);
+  SysCatalog::instance().init(
+      base_data_path_, data_mgr_, authMetadata, calcite_, false, access_priv_check, &string_leaves_);
   import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   start_time_ = std::time(nullptr);
 
@@ -281,7 +282,6 @@ void MapDHandler::connectImpl(TSessionId& session,
                               const std::string& passwd,
                               const std::string& dbname,
                               Catalog_Namespace::UserMetadata& user_meta) {
-
   std::shared_ptr<Catalog> cat = nullptr;
   try {
     cat = SysCatalog::instance().login(dbname, user, passwd, user_meta, !super_user_rights_);
@@ -2877,15 +2877,15 @@ void MapDHandler::import_geo_table(const TSessionId& session,
     // check that the table DOES exist
     const TableDescriptor* td = cat.getMetadataForTable(table_name);
     if (!td) {
-      THROW_MAPD_EXCEPTION("Could not import geo file '" + file_path.filename().string() +
-                           "' to table '" + table_name + "'; table does not exist.");
+      THROW_MAPD_EXCEPTION("Could not import geo file '" + file_path.filename().string() + "' to table '" + table_name +
+                           "'; table does not exist.");
     }
     rd = row_desc;
   } else {
     // we don't have a RowDescriptor
     // we have to detect the file ourselves
     TDetectResult cds;
-    TCopyParams cp_copy = cp; // retain S3 auth tokens
+    TCopyParams cp_copy = cp;  // retain S3 auth tokens
     cp_copy.table_type = TTableType::POLYGON;
     detect_column_types(cds, session, file_name_in, cp_copy);
     rd = cds.row_set.row_desc;
@@ -2915,8 +2915,8 @@ void MapDHandler::import_geo_table(const TSessionId& session,
         }
       }
       if (!structure_matches) {
-        THROW_MAPD_EXCEPTION("Could not append geo file '" + file_path.filename().string() +
-                             "' to table '" + table_name + "'; structure differs.");
+        THROW_MAPD_EXCEPTION("Could not append geo file '" + file_path.filename().string() + "' to table '" +
+                             table_name + "'; structure differs.");
       }
     }
   }
@@ -3785,6 +3785,14 @@ void MapDHandler::insert_data(const TSessionId& session, const TInsertData& thri
         }
         p.stringsPtr = none_encoded_strings.get();
       }
+    } else if (ti.is_geometry()) {
+      none_encoded_string_columns.emplace_back(new std::vector<std::string>());
+      auto& none_encoded_strings = none_encoded_string_columns.back();
+      CHECK_EQ(static_cast<size_t>(thrift_insert_data.num_rows), thrift_insert_data.data[col_idx].var_len_data.size());
+      for (const auto& varlen_str : thrift_insert_data.data[col_idx].var_len_data) {
+        none_encoded_strings->push_back(varlen_str.payload);
+      }
+      p.stringsPtr = none_encoded_strings.get();
     } else {
       CHECK(ti.is_array());
       array_columns.emplace_back(new std::vector<ArrayDatum>());
