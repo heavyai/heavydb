@@ -2601,12 +2601,12 @@ void CopyTableStmt::execute(
           copy_params.plain_text = false;
         else
           throw std::runtime_error("Invalid string for boolean " + *s);
-      } else if (boost::iequals(*p->get_name(), "array")) {
+      } else if (boost::iequals(*p->get_name(), "array_marker")) {
         const StringLiteral* str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr)
-          throw std::runtime_error("Array option must be a string.");
+          throw std::runtime_error("Array Marker option must be a string.");
         else if (str_literal->get_stringval()->length() != 2)
-          throw std::runtime_error("Array option must be exactly two characters.  Default is {}.");
+          throw std::runtime_error("Array Marker option must be exactly two characters.  Default is {}.");
         copy_params.array_begin = (*str_literal->get_stringval())[0];
         copy_params.array_end = (*str_literal->get_stringval())[1];
       } else if (boost::iequals(*p->get_name(), "array_delimiter")) {
