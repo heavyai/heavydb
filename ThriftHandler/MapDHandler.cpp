@@ -650,11 +650,6 @@ void MapDHandler::sql_execute(TQueryResult& _return,
     // this function any other way, such as an exception from the code above!
     _was_geo_copy_from = false;
 
-    // distributed geo import not yet supported
-    if (leaf_aggregator_.leafCount() > 0) {
-      THROW_MAPD_EXCEPTION("Distributed geo import is not yet supported");
-    }
-
     // now do (and time) the import
     _return.total_time_ms = measure<>::execution([&]() {
       import_geo_table(session,
