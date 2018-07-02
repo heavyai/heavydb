@@ -1574,6 +1574,9 @@ void MapDHandler::load_table_binary(const TSessionId& session,
     THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
   }
   check_table_load_privileges(session_info, table_name);
+  if (rows.empty()) {
+    return;
+  }
   std::unique_ptr<Importer_NS::Loader> loader;
   if (leaf_aggregator_.leafCount() > 0) {
     loader.reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
@@ -1772,6 +1775,9 @@ void MapDHandler::load_table(const TSessionId& session,
     THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
   }
   check_table_load_privileges(session_info, table_name);
+  if (rows.empty()) {
+    return;
+  }
   std::unique_ptr<Importer_NS::Loader> loader;
   if (leaf_aggregator_.leafCount() > 0) {
     loader.reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
