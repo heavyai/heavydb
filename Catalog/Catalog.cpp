@@ -1789,7 +1789,6 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
       sqliteConnector_.query("CREATE TABLE mapd_record_ownership_marker (dummy integer)");
     }
 
-    std::vector<DBObject> objects;
     DBMetadata db;
     CHECK(SysCatalog::instance().getMetadataForDB(currentDB_.dbName, db));
     // place dbId as a refernce for migration being performed
@@ -1967,6 +1966,13 @@ void SysCatalog::buildUserRoleMap() {
   for (size_t r = 0; r < numRows; ++r) {
     std::string roleName = sqliteConnector_->getData<string>(r, 0);
     std::string userName = sqliteConnector_->getData<string>(r, 1);
+    // required for declared nomenclature before v4.0.0
+    if ((boost::equals(roleName, "mapd_default_suser_role") && boost::equals(userName, "mapd")) ||
+        (boost::equals(roleName, "mapd_default_user_role") && !boost::equals(userName, "mapd_default_user_role"))) {
+      // grouprole already exists with roleName==userName in mapd_roles table
+      // ignore duplicate instances of userRole which exists before v4.0.0
+      continue;
+    }
     Role* rl = getMetadataForRole(roleName);
     if (!rl) {
       throw runtime_error("Data inconsistency when building role map. Role " + roleName + " not found in the map.");
@@ -3581,9 +3587,16 @@ bool SessionInfo::checkDBAccessPrivileges(const DBObjectType& permissionType,
     auto currentUser = static_cast<Catalog_Namespace::UserMetadata>(get_currentUser());
     return SysCatalog::instance().checkPrivileges(currentUser, currentDB, wants_privs);
   } else {
+    // db owner has all access on db
+    // TODO(wamsi): Privileges are being granted to user at base
+    // need to make sure rolemaps are being updated
+    DBMetadata db;
+    CHECK(SysCatalog::instance().getMetadataForDB(cat.get_currentDB().dbName, db));
+    if (get_currentUser().userId == db.dbOwner) {
+      return true;
+    }
     // run flow with DB object level access permission checks
     DBObject object(objectName, permissionType);
-
     if (permissionType == DBObjectType::DatabaseDBObjectType) {
       object.setName(cat.get_currentDB().dbName);
     }
