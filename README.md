@@ -239,9 +239,20 @@ Be sure to reboot after installing in order to activate the NVIDIA drivers.
 
 `mapd-deps-osx.sh` will automatically install Java and Maven via Homebrew and add the correct environment variables to `~/.bash_profile`.
 
-## Ubuntu 16.04 - 17.10
+## Ubuntu 16.04 - 18.04
 
 Most build dependencies required by MapD Core are available via APT. Certain dependencies such as Thrift, Blosc, and Folly must be built as they either do not exist in the default repositories or have outdated versions. The provided [scripts/mapd-deps-ubuntu.sh](scripts/mapd-deps-ubuntu.sh) script will install all required dependencies (except CUDA) and build the dependencies which require it. The built dependencies will be installed to `/usr/local/mapd-deps/` by default; see the Environment Variables section below for how to add these dependencies to your environment.
+
+### Ubuntu 18.04
+
+Some installs of Ubuntu 18.04 may fail while building with a message similar to:
+
+    java.security.InvalidAlgorithmParameterException: the trustAnchors parameter must be non-empty
+
+This is a known issue in 18.04 which will be resolved in [Ubuntu 18.04.1](https://bugs.launchpad.net/ubuntu/+source/ca-certificates-java/+bug/1739631). To resolve on 18.04:
+
+    sudo rm /etc/ssl/certs/java/cacerts
+    sudo update-ca-certificates -f
 
 ### Environment Variables
 
