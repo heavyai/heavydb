@@ -1795,24 +1795,39 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
     sqliteConnector_.query_with_text_params("INSERT INTO mapd_record_ownership_marker (dummy) VALUES (?1)",
                                             std::vector<std::string>{std::to_string(db.dbOwner)});
 
+    // grant owner all permissions on DB
     {
-      // grant owner all permissions on DB
       DBObjectKey key;
-      DBObjectType type = DBObjectType::DatabaseDBObjectType;
+      DBObjectType type = DBObjectType::TableDBObjectType;
       key.dbId = currentDB_.dbId;
-      key.objectId = currentDB_.dbId;
       key.permissionType = type;
 
-      DBObject obj(db.dbName, type);
-      obj.setObjectKey(key);
-      obj.setOwner(db.dbOwner);
-      obj.setPrivileges(AccessPrivileges::ALL_DATABASE);
-
+      DBObject obj(key, AccessPrivileges::ALL_TABLE, db.dbOwner);
       objects.push_back(obj);
     }
 
     {
-      // tables and views
+      DBObjectKey key;
+      DBObjectType type = DBObjectType::DashboardDBObjectType;
+      key.dbId = currentDB_.dbId;
+      key.permissionType = type;
+
+      DBObject obj(key, AccessPrivileges::ALL_DASHBOARD, db.dbOwner);
+      objects.push_back(obj);
+    }
+
+    {
+      DBObjectKey key;
+      DBObjectType type = DBObjectType::ViewDBObjectType;
+      key.dbId = currentDB_.dbId;
+      key.permissionType = type;
+
+      DBObject obj(key, AccessPrivileges::ALL_VIEW, db.dbOwner);
+      objects.push_back(obj);
+    }
+
+    {
+      // other users tables and views
       string tableQuery("SELECT tableid, name, userid, isview FROM mapd_tables WHERE userid > 0");
       sqliteConnector_.query(tableQuery);
       size_t numRows = sqliteConnector_.getNumRows();
@@ -1838,7 +1853,7 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
     }
 
     {
-      // dashboards
+      // other users dashboards
       string tableQuery("SELECT id, name, userid FROM mapd_dashboards WHERE userid > 0");
       sqliteConnector_.query(tableQuery);
       size_t numRows = sqliteConnector_.getNumRows();
@@ -3587,14 +3602,6 @@ bool SessionInfo::checkDBAccessPrivileges(const DBObjectType& permissionType,
     auto currentUser = static_cast<Catalog_Namespace::UserMetadata>(get_currentUser());
     return SysCatalog::instance().checkPrivileges(currentUser, currentDB, wants_privs);
   } else {
-    // db owner has all access on db
-    // TODO(wamsi): Privileges are being granted to user at base
-    // need to make sure rolemaps are being updated
-    DBMetadata db;
-    CHECK(SysCatalog::instance().getMetadataForDB(cat.get_currentDB().dbName, db));
-    if (get_currentUser().userId == db.dbOwner) {
-      return true;
-    }
     // run flow with DB object level access permission checks
     DBObject object(objectName, permissionType);
     if (permissionType == DBObjectType::DatabaseDBObjectType) {
