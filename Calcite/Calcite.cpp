@@ -68,6 +68,8 @@ static void start_calcite_server_as_daemon(const int mapd_port,
   std::string localPortD = std::to_string(port);
   std::string mapdPortP = "-m";
   std::string mapdPortD = std::to_string(mapd_port);
+  std::string mapdLogDirectory = "-DMAPD_LOG_DIR="+data_dir;
+
 
   int pid = fork();
   if (pid == 0) {
@@ -75,6 +77,7 @@ static void start_calcite_server_as_daemon(const int mapd_port,
                           xDebug.c_str(),
                           remoteDebug.c_str(),
                           xmxP.c_str(),
+                          mapdLogDirectory.c_str(),
                           jarP.c_str(),
                           jarD.c_str(),
                           extensionsP.c_str(),
