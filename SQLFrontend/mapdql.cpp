@@ -201,7 +201,11 @@ void detect_table(char* file_name, TCopyParams& copy_params, ClientContext& cont
         oss << " ENCODING DICT";
       }
       if (type_info_from_thrift(tct.col_type).is_array()) {
-        oss << "[]";
+        oss << "[";
+        if (type_info_from_thrift(tct.col_type).get_size() > 0) {
+          oss << type_info_from_thrift(tct.col_type).get_size();
+        }
+        oss << "]";
       }
     }
     oss << ");";

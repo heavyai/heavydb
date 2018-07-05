@@ -624,10 +624,14 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
     const auto& array_ti = arr_expr->get_type_info();
     CHECK(array_ti.is_array());
     const auto& elem_ti = array_ti.get_elem_type();
-    auto array_len = cgen_state_->emitExternalCall(
-        "array_size",
-        ret_ty,
-        {group_key, posArg(arr_expr), ll_int(log2_bytes(elem_ti.get_logical_size()))});
+    auto array_len = (array_ti.get_size() > 0)
+                         ? ll_int(array_ti.get_size() / elem_ti.get_size())
+                         : cgen_state_->emitExternalCall(
+                               "array_size",
+                               ret_ty,
+                               {group_key,
+                                posArg(arr_expr),
+                                ll_int(log2_bytes(elem_ti.get_logical_size()))});
     cgen_state_->ir_builder_.CreateBr(array_loop_head);
     cgen_state_->ir_builder_.SetInsertPoint(array_loop_head);
     CHECK(array_len);

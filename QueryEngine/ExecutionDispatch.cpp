@@ -614,7 +614,9 @@ const int8_t* Executor::ExecutionDispatch::getScanColumn(
       get_column_type(col_id, table_id, cd, executor_->temporary_tables_);
   const bool is_real_string =
       col_type.is_string() && col_type.get_compression() == kENCODING_NONE;
-  const bool is_varlen = is_real_string || col_type.is_array();
+  const bool is_varlen =
+      is_real_string ||
+      col_type.is_array();  // TODO: should it be col_type.is_varlen_array() ?
   {
     ChunkKey chunk_key{
         cat_.get_currentDB().dbId, fragment.physicalTableId, col_id, fragment.fragmentId};

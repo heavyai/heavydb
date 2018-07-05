@@ -1198,6 +1198,14 @@ data_type:
 		  throw std::runtime_error("array of array not supported.");
 		dynamic_cast<SQLType*>($<nodeval>$)->set_is_array(true);
 	}
+	| data_type '[' non_neg_int ']'
+	{
+		$<nodeval>$ = $<nodeval>1;
+		if (dynamic_cast<SQLType*>($<nodeval>$)->get_is_array())
+		  throw std::runtime_error("array of array not supported.");
+		dynamic_cast<SQLType*>($<nodeval>$)->set_is_array(true);
+		dynamic_cast<SQLType*>($<nodeval>$)->set_array_size($<intval>3);
+	}
 	;
 
 geo_type:	POINT { $<intval>$ = kPOINT; }

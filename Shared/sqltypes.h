@@ -311,8 +311,13 @@ class SQLTypeInfo {
     } else if (type == kTIMESTAMP) {
       ps = "(" + std::to_string(dimension) + ")";
     }
-    return (type == kARRAY) ? type_name[(int)subtype] + ps + "[]"
-                            : type_name[(int)type] + ps;
+    if (type == kARRAY) {
+      auto num_elems =
+          (size > 0) ? std::to_string(size / (SQLTypeInfo(subtype, true).get_size()))
+                     : "";
+      return type_name[(int)subtype] + ps + "[" + num_elems + "]";
+    }
+    return type_name[(int)type] + ps;
   }
   inline std::string get_compression_name() const { return comp_name[(int)compression]; }
 #endif
@@ -325,12 +330,14 @@ class SQLTypeInfo {
   inline bool is_time() const { return IS_TIME(type); }
   inline bool is_boolean() const { return type == kBOOLEAN; }
   inline bool is_array() const { return type == kARRAY; }
+  inline bool is_varlen_array() const { return type == kARRAY && size <= 0; }
+  inline bool is_fixlen_array() const { return type == kARRAY && size > 0; }
   inline bool is_timeinterval() const {
     return type == kINTERVAL_DAY_TIME || type == kINTERVAL_YEAR_MONTH;
   }
   inline bool is_geometry() const { return IS_GEO(type); }
 
-  inline bool is_varlen() const {
+  inline bool is_varlen() const {  // TODO: logically this should ignore fixlen arrays
     return (IS_STRING(type) && compression != kENCODING_DICT) || type == kARRAY ||
            IS_GEO(type);
   }
@@ -579,6 +586,9 @@ class SQLTypeInfo {
       case kCHAR:
         if (compression == kENCODING_DICT)
           return sizeof(int32_t);  // @TODO(wei) must check DictDescriptor
+        break;
+      case kARRAY:
+        // TODO: return size for fixlen arrays?
         break;
       case kPOINT:
       case kLINESTRING:

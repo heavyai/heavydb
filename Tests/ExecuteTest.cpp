@@ -3967,6 +3967,22 @@ TEST(Select, ArrayUnnest) {
       ASSERT_EQ(1, v<int64_t>(result_rows->getRowAt(0, 0, true)));
       ASSERT_EQ(power10,
                 v<int64_t>(result_rows->getRowAt(g_array_test_row_count + 1, 1, true)));
+
+      auto fixed_result_rows =
+          run_multiple_agg("SELECT COUNT(*), UNNEST(arr3_i" + std::to_string(int_width) +
+                               ") AS a FROM array_test GROUP BY a ORDER BY a DESC;",
+                           dt);
+      ASSERT_EQ(g_array_test_row_count + 2, fixed_result_rows->rowCount());
+      ASSERT_EQ(int64_t(g_array_test_row_count + 2) * power10,
+                v<int64_t>(fixed_result_rows->getRowAt(0, 1, true)));
+      ASSERT_EQ(
+          1,
+          v<int64_t>(fixed_result_rows->getRowAt(g_array_test_row_count + 1, 0, true)));
+      ASSERT_EQ(1, v<int64_t>(fixed_result_rows->getRowAt(0, 0, true)));
+      ASSERT_EQ(
+          power10,
+          v<int64_t>(fixed_result_rows->getRowAt(g_array_test_row_count + 1, 1, true)));
+
       power10 *= 10;
     }
     for (const std::string float_type : {"float", "double"}) {
@@ -3978,6 +3994,16 @@ TEST(Select, ArrayUnnest) {
       ASSERT_EQ(1,
                 v<int64_t>(result_rows->getRowAt(g_array_test_row_count + 1, 0, true)));
       ASSERT_EQ(1, v<int64_t>(result_rows->getRowAt(0, 0, true)));
+
+      auto fixed_result_rows =
+          run_multiple_agg("SELECT COUNT(*), UNNEST(arr3_" + float_type +
+                               ") AS a FROM array_test GROUP BY a ORDER BY a DESC;",
+                           dt);
+      ASSERT_EQ(g_array_test_row_count + 2, fixed_result_rows->rowCount());
+      ASSERT_EQ(
+          1,
+          v<int64_t>(fixed_result_rows->getRowAt(g_array_test_row_count + 1, 0, true)));
+      ASSERT_EQ(1, v<int64_t>(fixed_result_rows->getRowAt(0, 0, true)));
     }
     {
       auto result_rows = run_multiple_agg(
@@ -4001,6 +4027,18 @@ TEST(Select, ArrayUnnest) {
                 v<int64_t>(result_rows->getRowAt(1, 0, true)));
       ASSERT_EQ(1, v<int64_t>(result_rows->getRowAt(0, 1, true)));
       ASSERT_EQ(0, v<int64_t>(result_rows->getRowAt(1, 1, true)));
+
+      auto fixed_result_rows = run_multiple_agg(
+          "SELECT COUNT(*), UNNEST(arr6_bool) AS a FROM array_test GROUP BY a ORDER BY a "
+          "DESC;",
+          dt);
+      ASSERT_EQ(size_t(2), fixed_result_rows->rowCount());
+      ASSERT_EQ(int64_t(g_array_test_row_count * 3),
+                v<int64_t>(fixed_result_rows->getRowAt(0, 0, true)));
+      ASSERT_EQ(int64_t(g_array_test_row_count * 3),
+                v<int64_t>(fixed_result_rows->getRowAt(1, 0, true)));
+      ASSERT_EQ(1, v<int64_t>(fixed_result_rows->getRowAt(0, 1, true)));
+      ASSERT_EQ(0, v<int64_t>(fixed_result_rows->getRowAt(1, 1, true)));
     }
   }
 }
@@ -4016,23 +4054,27 @@ TEST(Select, ArrayIndex) {
                     "SELECT COUNT(*) FROM array_test WHERE arr_i32[2] = " +
                         std::to_string(10 * (row_idx + 2)) +
                         " AND x = " + std::to_string(7 + row_idx) +
+                        " AND arr3_i32[2] = " + std::to_string(10 * (row_idx + 2)) +
                         " AND real_str LIKE 'real_str" + std::to_string(row_idx) + "';",
                     dt)));
-      ASSERT_EQ(
-          0,
-          v<int64_t>(run_simple_agg(
-              "SELECT COUNT(*) FROM array_test WHERE arr_i32[4] > 0 OR arr_i32[4] <= 0;",
-              dt)));
-      ASSERT_EQ(
-          0,
-          v<int64_t>(run_simple_agg(
-              "SELECT COUNT(*) FROM array_test WHERE arr_i32[0] > 0 OR arr_i32[0] <= 0;",
-              dt)));
+      ASSERT_EQ(0,
+                v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM array_test WHERE "
+                                          "arr_i32[4] > 0 OR arr_i32[4] <= 0 OR "
+                                          "arr3_i32[4] > 0 OR arr3_i32[4] <= 0;",
+                                          dt)));
+      ASSERT_EQ(0,
+                v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM array_test WHERE "
+                                          "arr_i32[0] > 0 OR arr_i32[0] <= 0 OR "
+                                          "arr3_i32[0] > 0 OR arr3_i32[0] <= 0;",
+                                          dt)));
     }
     for (size_t i = 1; i <= 6; ++i) {
       ASSERT_EQ(
           int64_t(g_array_test_row_count / 2),
           v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM array_test WHERE arr_bool[" +
+                                        std::to_string(i) +
+                                        "] AND "
+                                        "arr6_bool[" +
                                         std::to_string(i) + "];",
                                     dt)));
     }
@@ -4041,14 +4083,22 @@ TEST(Select, ArrayIndex) {
                   "SELECT COUNT(*) FROM array_test WHERE arr_bool[7];", dt)));
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM array_test WHERE arr6_bool[7];", dt)));
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM array_test WHERE arr_bool[0];", dt)));
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM array_test WHERE arr6_bool[0];", dt)));
     ASSERT_EQ(int64_t(0),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM array_test WHERE NOT "
-                                        "(arr_i16[7] > 0 AND arr_i16[7] <= 0);",
+                                        "(arr_i16[7] > 0 AND arr_i16[7] <= 0 AND "
+                                        "arr3_i16[7] > 0 AND arr3_i16[7] <= 0);",
                                         dt)));
     ASSERT_EQ(int64_t(g_array_test_row_count),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM array_test WHERE NOT "
-                                        "(arr_i16[2] > 0 AND arr_i16[2] <= 0);",
+                                        "(arr_i16[2] > 0 AND arr_i16[2] <= 0 AND "
+                                        "arr3_i16[2] > 0 AND arr3_i16[2] <= 0);",
                                         dt)));
   }
 }
@@ -4072,12 +4122,30 @@ TEST(Select, ArrayCountDistinct) {
       for (size_t row_idx = 0; row_idx < g_array_test_row_count; ++row_idx) {
         ASSERT_EQ(3, v<int64_t>(result_rows->getRowAt(row_idx, 0, true)));
       }
+
+      ASSERT_EQ(
+          int64_t(g_array_test_row_count + 2),
+          v<int64_t>(run_simple_agg("SELECT COUNT(distinct arr3_i" +
+                                        std::to_string(int_width) + ") FROM array_test;",
+                                    dt)));
+      auto fixed_result_rows =
+          run_multiple_agg("SELECT COUNT(distinct arr3_i" + std::to_string(int_width) +
+                               ") FROM array_test GROUP BY x;",
+                           dt);
+      ASSERT_EQ(g_array_test_row_count, fixed_result_rows->rowCount());
+      for (size_t row_idx = 0; row_idx < g_array_test_row_count; ++row_idx) {
+        ASSERT_EQ(3, v<int64_t>(fixed_result_rows->getRowAt(row_idx, 0, true)));
+      }
     }
     for (const std::string float_type : {"float", "double"}) {
       ASSERT_EQ(
           int64_t(g_array_test_row_count + 2),
           v<int64_t>(run_simple_agg(
               "SELECT COUNT(distinct arr_" + float_type + ") FROM array_test;", dt)));
+      ASSERT_EQ(
+          int64_t(g_array_test_row_count + 2),
+          v<int64_t>(run_simple_agg(
+              "SELECT COUNT(distinct arr3_" + float_type + ") FROM array_test;", dt)));
     }
     ASSERT_EQ(int64_t(g_array_test_row_count + 2),
               v<int64_t>(
@@ -4085,6 +4153,9 @@ TEST(Select, ArrayCountDistinct) {
     ASSERT_EQ(2,
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(distinct arr_bool) FROM array_test;", dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(distinct arr6_bool) FROM array_test;", dt)));
   }
 }
 
@@ -4099,12 +4170,16 @@ TEST(Select, ArrayAnyAndAll) {
           2,
           v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM array_test WHERE " +
                                         std::to_string(2 * power10) + " = ANY arr_i" +
+                                        std::to_string(int_width) + " AND " +
+                                        std::to_string(2 * power10) + " = ANY arr3_i" +
                                         std::to_string(int_width) + ";",
                                     dt)));
       ASSERT_EQ(
           int64_t(g_array_test_row_count) - 2,
           v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM array_test WHERE " +
                                         std::to_string(2 * power10) + " < ALL arr_i" +
+                                        std::to_string(int_width) + " AND " +
+                                        std::to_string(2 * power10) + " < ALL arr3_i" +
                                         std::to_string(int_width) + ";",
                                     dt)));
       power10 *= 10;
@@ -4125,10 +4200,18 @@ TEST(Select, ArrayAnyAndAll) {
           v<int64_t>(run_simple_agg(
               "SELECT COUNT(*) FROM array_test WHERE 0 < ALL arr_" + float_type + ";",
               dt)));
+      ASSERT_EQ(
+          int64_t(g_array_test_row_count),
+          v<int64_t>(run_simple_agg(
+              "SELECT COUNT(*) FROM array_test WHERE 0 < ALL arr3_" + float_type + ";",
+              dt)));
     }
     ASSERT_EQ(int64_t(g_array_test_row_count),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM array_test WHERE x - 5 = ANY arr_i16;", dt)));
+    ASSERT_EQ(int64_t(g_array_test_row_count),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM array_test WHERE x - 5 = ANY arr3_i16;", dt)));
     ASSERT_EQ(1,
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM array_test WHERE 'aa' = ANY arr_str;", dt)));
@@ -4139,6 +4222,11 @@ TEST(Select, ArrayAnyAndAll) {
         int64_t(g_array_test_row_count),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM array_test WHERE CAST('t' AS boolean) = ANY arr_bool;",
+            dt)));
+    ASSERT_EQ(
+        int64_t(g_array_test_row_count),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM array_test WHERE CAST('t' AS boolean) = ANY arr6_bool;",
             dt)));
     ASSERT_EQ(
         int64_t(0),
@@ -4183,6 +4271,8 @@ TEST(Select, ArrayUnsupported) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     EXPECT_THROW(run_multiple_agg("SELECT MIN(arr_i64) FROM array_test;", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT MIN(arr3_i64) FROM array_test;", dt),
                  std::runtime_error);
     EXPECT_THROW(
         run_multiple_agg(
@@ -10153,7 +10243,10 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "CREATE TABLE array_test(x int not null, arr_i16 smallint[], arr_i32 int[], "
         "arr_i64 bigint[], arr_str text[] "
         "encoding dict, arr_float float[], arr_double double[], arr_bool boolean[], "
-        "real_str text encoding none);"};
+        "real_str text encoding none, "
+        "arr3_i8 tinyint[3], arr3_i16 smallint[3], arr3_i32 int[3], arr3_i64 bigint[3], "
+        "arr3_float float[3], "
+        "arr3_double double[3], arr6_bool boolean[6]);"};
     run_ddl_statement(create_array_test);
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'array_test'";

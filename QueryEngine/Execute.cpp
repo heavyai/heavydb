@@ -2539,8 +2539,14 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
       case kARRAY: {
         const auto l = col_cv->get_value_list();
         SQLTypeInfo elem_ti = cd->columnType.get_elem_type();
-        CHECK(!elem_ti.is_string());
         size_t len = l.size() * elem_ti.get_size();
+        auto size = cd->columnType.get_size();
+        if (size > 0 && size != len) {
+          throw std::runtime_error("Array column " + cd->columnName + " expects " +
+                                   std::to_string(size / elem_ti.get_size()) + " values, " + "received " +
+                                   std::to_string(l.size()));
+        }
+        CHECK(!elem_ti.is_string());
         int8_t* buf = (int8_t*)checked_malloc(len);
         int8_t* p = buf;
         for (auto& e : l) {

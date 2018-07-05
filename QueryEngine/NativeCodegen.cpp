@@ -873,15 +873,16 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
     CHECK(target_expr);
     const auto target_type_info = target_expr->get_type_info();
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
-    const bool is_varlen = (target_type_info.is_string() &&
-                            target_type_info.get_compression() == kENCODING_NONE) ||
-                           target_type_info.is_array();
+    const bool is_varlen =
+        (target_type_info.is_string() &&
+         target_type_info.get_compression() == kENCODING_NONE) ||
+        target_type_info.is_array();  // TODO: should it use is_varlen_array() ?
     if (!agg_expr || agg_expr->get_aggtype() == kLAST_SAMPLE) {
       result.push_back(target_type_info.is_fp() ? "agg_id_double" : "agg_id");
       if (is_varlen) {
         result.push_back("agg_id");
       }
-      if (target_type_info.is_geometry()) {
+      if (target_type_info.is_geometry()) {  // TODO: POINT coord is not is_varlen_array()
         result.push_back("agg_id");
         for (auto i = 1; i < 2 * target_type_info.get_physical_coord_cols(); ++i) {
           result.push_back("agg_id");

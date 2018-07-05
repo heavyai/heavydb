@@ -1541,7 +1541,10 @@ std::string SQLType::to_string() const {
       break;
   }
   if (is_array) {
-    str += "[]";
+    str += "[";
+    if (array_size > 0)
+      str += boost::lexical_cast<std::string>(array_size);
+    str += "]";
   }
   return str;
 }
@@ -2801,7 +2804,17 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
         cd.columnName +
         ": Array of strings must be dictionary encoded. Specify ENCODING DICT");
   }
-  cd.columnType.set_fixed_size();
+  if (t->get_is_array()) {
+    int s = -1;
+    auto array_size = t->get_array_size();
+    if (array_size > 0) {
+      SQLTypeInfo sti(cd.columnType.get_subtype(), true);
+      s = array_size * sti.get_size();
+    }
+    cd.columnType.set_size(s);
+  } else {
+    cd.columnType.set_fixed_size();
+  }
   cd.isSystemCol = false;
   cd.isVirtualCol = false;
 }

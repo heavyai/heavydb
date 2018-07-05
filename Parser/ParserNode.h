@@ -55,15 +55,19 @@ class Node {
  */
 class SQLType : public Node {
  public:
-  explicit SQLType(SQLTypes t) : type(t), param1(-1), param2(0), is_array(false) {}
-  SQLType(SQLTypes t, int p1) : type(t), param1(p1), param2(0), is_array(false) {}
+  explicit SQLType(SQLTypes t)
+      : type(t), param1(-1), param2(0), is_array(false), array_size(-1) {}
+  SQLType(SQLTypes t, int p1)
+      : type(t), param1(p1), param2(0), is_array(false), array_size(-1) {}
   SQLType(SQLTypes t, int p1, int p2, bool a)
-      : type(t), param1(p1), param2(p2), is_array(a) {}
+      : type(t), param1(p1), param2(p2), is_array(a), array_size(-1) {}
   SQLTypes get_type() const { return type; }
   int get_param1() const { return param1; }
   int get_param2() const { return param2; }
   bool get_is_array() const { return is_array; }
   void set_is_array(bool a) { is_array = a; }
+  int get_array_size() const { return array_size; }
+  void set_array_size(int s) { array_size = s; }
   std::string to_string() const;
   void check_type();
 
@@ -72,6 +76,7 @@ class SQLType : public Node {
   int param1;  // e.g. for NUMERIC(10).  -1 means unspecified.
   int param2;  // e.g. for NUMERIC(10,3). 0 is default value.
   bool is_array;
+  int array_size;
 };
 
 /*

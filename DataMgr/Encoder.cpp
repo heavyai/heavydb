@@ -17,6 +17,7 @@
 #include "Encoder.h"
 #include <glog/logging.h>
 #include "ArrayNoneEncoder.h"
+#include "FixedLengthArrayNoneEncoder.h"
 #include "FixedLengthEncoder.h"
 #include "NoneEncoder.h"
 #include "StringNoneEncoder.h"
@@ -60,8 +61,12 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
         case kVARCHAR:
         case kCHAR:
           return new StringNoneEncoder(buffer);
-        case kARRAY:
+        case kARRAY: {
+          if (sqlType.get_size() > 0) {
+            return new FixedLengthArrayNoneEncoder(buffer, sqlType.get_size());
+          }
           return new ArrayNoneEncoder(buffer);
+        }
         case kTIME:
         case kTIMESTAMP:
         case kDATE:

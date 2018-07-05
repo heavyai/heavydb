@@ -175,6 +175,13 @@ inline std::string thrift_to_name(const TTypeInfo& ti) {
                                  kENCODING_NONE,
                                  0,
                                  ti.is_array ? type : kNULLT);
+  if (ti.is_array) {
+    // Array size is currently stored in scale which means no support for decimal/numeric
+    // arrays
+    // TODO: pass the size in a dedicated field and remove this limiation
+    internal_ti.set_size(ti.scale);
+    CHECK(type != kDECIMAL && type != kNUMERIC && !IS_GEO(type));
+  }
   if (type == kDECIMAL || type == kNUMERIC) {
     internal_ti.set_precision(ti.precision);
     internal_ti.set_scale(ti.scale);
@@ -214,15 +221,25 @@ inline SQLTypeInfo type_info_from_thrift(const TTypeInfo& thrift_ti) {
                        thrift_ti.comp_param,
                        base_type);
   }
-  const auto base_type = thrift_ti.is_array ? ti : kNULLT;
-  const auto type = thrift_ti.is_array ? kARRAY : ti;
-  return SQLTypeInfo(type,
+  if (thrift_ti.is_array) {
+    auto ati = SQLTypeInfo(kARRAY,
+                           thrift_ti.precision,
+                           thrift_ti.scale,
+                           !thrift_ti.nullable,
+                           thrift_to_encoding(thrift_ti.encoding),
+                           thrift_ti.comp_param,
+                           ti);
+    // TODO: array size should be passed in the to-be-added thrift_ti.array_size
+    ati.set_size(thrift_ti.scale);
+    return ati;
+  }
+  return SQLTypeInfo(ti,
                      thrift_ti.precision,
                      thrift_ti.scale,
                      !thrift_ti.nullable,
                      thrift_to_encoding(thrift_ti.encoding),
                      thrift_ti.comp_param,
-                     base_type);
+                     kNULLT);
 }
 
 #endif  // THRIFT_TYPE_CONVERT_H

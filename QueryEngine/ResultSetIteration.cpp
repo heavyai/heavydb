@@ -1296,8 +1296,9 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
 
   int8_t compact_sz1 = 0;
   if (target_info.is_agg) {
-    compact_sz1 =
-        std::max(target_info.sql_type.get_size(), target_info.agg_arg_type.get_size());
+    compact_sz1 = std::max(
+        target_info.sql_type.get_size(),
+        (target_info.agg_arg_type.is_array()) ? -1 : target_info.agg_arg_type.get_size());
   } else {
     compact_sz1 = target_info.sql_type.get_size();
   }

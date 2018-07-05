@@ -21,6 +21,7 @@
 
 #include "Chunk.h"
 #include "../DataMgr/ArrayNoneEncoder.h"
+#include "../DataMgr/FixedLengthArrayNoneEncoder.h"
 #include "../DataMgr/StringNoneEncoder.h"
 
 namespace Chunk_NS {
@@ -40,7 +41,7 @@ bool Chunk::isChunkOnDevice(DataMgr* data_mgr,
                             const ChunkKey& key,
                             const MemoryLevel mem_level,
                             const int device_id) {
-  if (column_desc->columnType.is_varlen()) {
+  if (column_desc->columnType.is_varlen() && !column_desc->columnType.is_fixlen_array()) {
     ChunkKey subKey = key;
     ChunkKey indexKey(subKey);
     indexKey.push_back(1);
@@ -61,7 +62,7 @@ void Chunk::getChunkBuffer(DataMgr* data_mgr,
                            const size_t num_elems) {
   OOM_TRACE_PUSH(+": chunk key [" + showChunk(key) + "], level " +
                  std::to_string(static_cast<int>(mem_level)));
-  if (column_desc->columnType.is_varlen()) {
+  if (column_desc->columnType.is_varlen() && !column_desc->columnType.is_fixlen_array()) {
     ChunkKey subKey = key;
     subKey.push_back(1);  // 1 for the main buffer
     buffer = data_mgr->getChunkBuffer(subKey, mem_level, device_id, num_bytes);
@@ -113,7 +114,7 @@ void Chunk::createChunkBuffer(DataMgr* data_mgr,
                               const size_t page_size) {
   OOM_TRACE_PUSH(+": chunk key [" + showChunk(key) + "], level " +
                  std::to_string(static_cast<int>(mem_level)));
-  if (column_desc->columnType.is_varlen()) {
+  if (column_desc->columnType.is_varlen() && !column_desc->columnType.is_fixlen_array()) {
     ChunkKey subKey = key;
     subKey.push_back(1);  // 1 for the main buffer
     buffer = data_mgr->createChunkBuffer(subKey, mem_level, device_id, page_size);
@@ -133,6 +134,12 @@ size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
   CHECK(column_desc->columnType.is_varlen());
   switch (column_desc->columnType.get_type()) {
     case kARRAY: {
+      if (column_desc->columnType.get_size() > 0) {
+        FixedLengthArrayNoneEncoder* array_encoder =
+            dynamic_cast<FixedLengthArrayNoneEncoder*>(buffer->encoder.get());
+        return array_encoder->getNumElemsForBytesInsertData(
+            src_data.arraysPtr, start_idx, num_elems, byte_limit, replicating);
+      }
       ArrayNoneEncoder* array_encoder =
           dynamic_cast<ArrayNoneEncoder*>(buffer->encoder.get());
       return array_encoder->getNumElemsForBytesInsertData(
@@ -169,6 +176,12 @@ ChunkMetadata Chunk::appendData(DataBlockPtr& src_data,
   if (column_desc->columnType.is_varlen()) {
     switch (column_desc->columnType.get_type()) {
       case kARRAY: {
+        if (column_desc->columnType.get_size() > 0) {
+          FixedLengthArrayNoneEncoder* array_encoder =
+              dynamic_cast<FixedLengthArrayNoneEncoder*>(buffer->encoder.get());
+          return array_encoder->appendData(
+              src_data.arraysPtr, start_idx, num_elems, replicating);
+        }
         ArrayNoneEncoder* array_encoder =
             dynamic_cast<ArrayNoneEncoder*>(buffer->encoder.get());
         return array_encoder->appendData(
@@ -209,7 +222,7 @@ void Chunk::unpin_buffer() {
 
 void Chunk::init_encoder() {
   buffer->initEncoder(column_desc->columnType);
-  if (column_desc->columnType.is_varlen()) {
+  if (column_desc->columnType.is_varlen() && !column_desc->columnType.is_fixlen_array()) {
     switch (column_desc->columnType.get_type()) {
       case kARRAY: {
         ArrayNoneEncoder* array_encoder =
