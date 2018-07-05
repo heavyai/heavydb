@@ -3125,6 +3125,14 @@ void Catalog::createTable(
           SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, true);
           // Raw data: compressed/uncompressed coords
           coords_ti.set_subtype(kTINYINT);
+          size_t unit_size;
+          if (col_ti.get_compression() == kENCODING_GEOINT && col_ti.get_comp_param() == 32) {
+            unit_size = 4 * sizeof(int8_t);
+          } else {
+            CHECK(col_ti.get_compression() == kENCODING_NONE);
+            unit_size = 8 * sizeof(int8_t);
+          }
+          coords_ti.set_size(2 * unit_size);
           physical_cd_coords.columnType = coords_ti;
           columns.push_back(physical_cd_coords);
 
@@ -3147,6 +3155,7 @@ void Catalog::createTable(
           physical_cd_bounds.columnName = cd.columnName + "_bounds";
           SQLTypeInfo bounds_ti = SQLTypeInfo(kARRAY, true);
           bounds_ti.set_subtype(kDOUBLE);
+          bounds_ti.set_size(4 * sizeof(double));
           physical_cd_bounds.columnType = bounds_ti;
           columns.push_back(physical_cd_bounds);
 
@@ -3176,6 +3185,7 @@ void Catalog::createTable(
           physical_cd_bounds.columnName = cd.columnName + "_bounds";
           SQLTypeInfo bounds_ti = SQLTypeInfo(kARRAY, true);
           bounds_ti.set_subtype(kDOUBLE);
+          bounds_ti.set_size(4 * sizeof(double));
           physical_cd_bounds.columnType = bounds_ti;
           columns.push_back(physical_cd_bounds);
 
@@ -3218,6 +3228,7 @@ void Catalog::createTable(
           physical_cd_bounds.columnName = cd.columnName + "_bounds";
           SQLTypeInfo bounds_ti = SQLTypeInfo(kARRAY, true);
           bounds_ti.set_subtype(kDOUBLE);
+          bounds_ti.set_size(4 * sizeof(double));
           physical_cd_bounds.columnType = bounds_ti;
           columns.push_back(physical_cd_bounds);
 
