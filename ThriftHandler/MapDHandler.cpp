@@ -1076,6 +1076,9 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
     THROW_MAPD_EXCEPTION("Object with name " + objectName + " does not exist.");
   }
 
+  // object type on database level
+  DBObject object_to_find_dblevel("", object_type);
+  object_to_find_dblevel.loadKey(session_info_ptr->get_catalog());
   // if user is superuser respond with a full priv
   if (session_info_ptr->get_currentUser().isSuper) {
     // using ALL_TABLE here to set max permissions
@@ -1091,6 +1094,10 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
     DBObject* object_found;
     Role* rl = SysCatalog::instance().getMetadataForRole(role);
     if (rl && (object_found = rl->findDbObject(object_to_find.getObjectKey()))) {
+      TDBObjects.push_back(serialize_db_object(role, *object_found));
+    }
+    // check object permissions on Database level
+    if (rl && (object_found = rl->findDbObject(object_to_find_dblevel.getObjectKey()))) {
       TDBObjects.push_back(serialize_db_object(role, *object_found));
     }
   }
