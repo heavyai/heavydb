@@ -68,7 +68,11 @@ void mapd_signal_handler(int signal_number) {
   // shut down logging force a flush
   google::ShutdownGoogleLogging();
   // terminate program
-  std::exit(EXIT_FAILURE);
+  if (signal_number == SIGTERM) {
+    std::exit(EXIT_SUCCESS);
+  } else {
+    std::exit(signal_number);
+  }
 }
 
 void register_signal_handler() {
