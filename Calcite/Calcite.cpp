@@ -374,6 +374,7 @@ void Calcite::close_calcite_server() {
       LOG(ERROR) << "Error shutting down Calcite server: " << e.what();
     }
     LOG(INFO) << "shut down Calcite";
+    server_available_ = false;
   }
 }
 
