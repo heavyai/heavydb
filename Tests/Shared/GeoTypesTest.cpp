@@ -70,6 +70,11 @@ TEST(GeoPoint, ExportColumns) {
   compare_arrays(coords, sample_pt.coords);
 }
 
+TEST(GeoPoint, EqualsOperator) {
+  const auto sample_pt = SamplePointData();
+  ASSERT_TRUE(GeoPoint(sample_pt.coords) == GeoPoint(sample_pt.wkt));
+}
+
 TEST(GeoPoint, OGRError) {
   EXPECT_THROW(GeoPoint("POINT (0)"), GeoTypesError);
 }
@@ -124,6 +129,11 @@ TEST(GeoLineString, ExportColumns) {
   gdal_linestr.getColumns(coords, bounds);
   compare_arrays(coords, sample_linestr.coords);
   compare_arrays(bounds, sample_linestr.bounds);
+}
+
+TEST(GeoLineString, EqualsOperator) {
+  const auto sample_linestr = SampleLineStringData();
+  ASSERT_TRUE(GeoLineString(sample_linestr.coords) == GeoLineString(sample_linestr.wkt));
 }
 
 TEST(GeoLineString, OGRError) {
@@ -183,6 +193,11 @@ TEST(GeoPolygon, ExportColumns) {
   compare_arrays(coords, sample_poly.coords);
   compare_arrays(ring_sizes, sample_poly.ring_sizes);
   compare_arrays(bounds, sample_poly.bounds);
+}
+
+TEST(GeoPolygon, EqualsOperator) {
+  const auto sample_poly = SamplePolygonData();
+  ASSERT_TRUE(GeoPolygon(sample_poly.coords, sample_poly.ring_sizes) == GeoPolygon(sample_poly.wkt));
 }
 
 TEST(GeoPolygon, OGRError) {
@@ -249,6 +264,12 @@ TEST(GeoMultiPolygon, ExportColumns) {
   compare_arrays(bounds, sample_mpoly.bounds);
 }
 
+TEST(GeoMultiPolygon, EqualsOperator) {
+  const auto sample_mpoly = SampleMultiPolygonData();
+  ASSERT_TRUE(GeoMultiPolygon(sample_mpoly.coords, sample_mpoly.ring_sizes, sample_mpoly.poly_rings) ==
+              GeoMultiPolygon(sample_mpoly.wkt));
+}
+
 TEST(GeoMultiPolygon, OGRError) {
   EXPECT_THROW(GeoMultiPolygon("MULTIPOYLGON ((0))"), GeoTypesError);
 }
@@ -261,6 +282,15 @@ TEST(GeoMultiPolygon, BadWktType) {
   } catch (...) {
     FAIL();
   }
+}
+
+TEST(GeoMisc, Inequality) {
+  const auto sample_pt = SamplePointData();
+  const auto sample_linestring = SampleLineStringData();
+  ASSERT_FALSE(GeoPoint(sample_pt.wkt) == GeoLineString(sample_linestring.wkt));
+
+  const auto sample_mpoly = SampleMultiPolygonData();
+  ASSERT_FALSE(GeoLineString(sample_linestring.coords) == GeoMultiPolygon(sample_mpoly.wkt));
 }
 
 int main(int argc, char** argv) {

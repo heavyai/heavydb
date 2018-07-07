@@ -157,6 +157,14 @@ std::string GeoBase::getWktString() const {
   return wkt_str;
 }
 
+bool GeoBase::operator==(const GeoBase& other) const {
+  if (!this->geom_ || !other.geom_) {
+    return false;
+  }
+  return this->geom_->Equals(other.geom_);
+  // return const_cast<const OGRGeometry*>(this->geom_) == const_cast<const OGRGeometry*>(other.geom_);
+}
+
 GeoPoint::GeoPoint(const std::vector<double>& coords) {
   if (coords.size() != 2) {
     throw GeoTypesError("Point", "Incorrect coord size of " + std::to_string(coords.size()) + " supplied. Expected 2.");

@@ -49,6 +49,8 @@ class GeoBase {
   enum class GeoType { kPOINT, kLINESTRING, kPOLYGON, kMULTIPOLYGON };
   virtual GeoType getType() const = 0;
 
+  virtual bool operator==(const GeoBase& other) const;
+
  protected:
   GeoBase(OGRGeometry* geom, const bool owns_geom_obj) : geom_(geom), owns_geom_obj_(owns_geom_obj) {}
   OGRGeometry* geom_ = nullptr;
