@@ -41,6 +41,7 @@ Debug/
 java/src/gen/
 gen-js/
 java/target/
+java/**/mapd_log/
 
 # go files
 ThirdParty/go/bin/

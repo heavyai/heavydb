@@ -103,6 +103,16 @@
           </execution>
         </executions>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>2.22.0</version>
+        <configuration>
+          <systemPropertyVariables>
+            <MAPD_LOG_DIR>.</MAPD_LOG_DIR>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
       <!-- plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-checkstyle-plugin</artifactId>
