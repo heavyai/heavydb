@@ -1781,6 +1781,8 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
       // Check if migration is being performed on existing non mapd catalogs
       // Older non mapd dbs will have table but no record in them
       if (sqliteConnector_.getNumRows() != 0) {
+        // already done
+        sqliteConnector_.query("END TRANSACTION");
         return;
       }
     }
