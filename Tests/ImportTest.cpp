@@ -25,11 +25,12 @@
 #include <gtest/gtest.h>
 
 #include <boost/algorithm/string.hpp>
-#include "boost/filesystem.hpp"
 #include "../Catalog/Catalog.h"
 #include "../Parser/parser.h"
 #include "../QueryEngine/ResultSet.h"
 #include "../QueryRunner/QueryRunner.h"
+#include "../Shared/geo_types.h"
+#include "boost/filesystem.hpp"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -344,19 +345,20 @@ void check_geo_import() {
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(8), crt_row.size());
   const auto p1 = boost::get<std::string>(v<NullableString>(crt_row[0]));
-  ASSERT_EQ("POINT (1 1)", p1);
+  ASSERT_TRUE(Geo_namespace::GeoPoint("POINT (1 1)") == Geo_namespace::GeoPoint(p1));
   const auto linestring = boost::get<std::string>(v<NullableString>(crt_row[1]));
-  ASSERT_EQ("LINESTRING (1 0,2 2,3 3)", linestring);
+  ASSERT_TRUE(Geo_namespace::GeoLineString("LINESTRING (1 0,2 2,3 3)") == Geo_namespace::GeoLineString(linestring));
   const auto poly = boost::get<std::string>(v<NullableString>(crt_row[2]));
-  ASSERT_EQ("POLYGON ((0 0,2 0,0 2,0 0))", poly);
+  ASSERT_TRUE(Geo_namespace::GeoPolygon("POLYGON ((0 0,2 0,0 2,0 0))") == Geo_namespace::GeoPolygon(poly));
   const auto mpoly = boost::get<std::string>(v<NullableString>(crt_row[3]));
-  ASSERT_EQ("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))", mpoly);
+  ASSERT_TRUE(Geo_namespace::GeoMultiPolygon("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))") ==
+              Geo_namespace::GeoMultiPolygon(mpoly));
   const auto p2 = boost::get<std::string>(v<NullableString>(crt_row[4]));
-  ASSERT_EQ("POINT (1 1)", p2);
+  ASSERT_TRUE(Geo_namespace::GeoPoint("POINT (1 1)") == Geo_namespace::GeoPoint(p2));
   const auto p3 = boost::get<std::string>(v<NullableString>(crt_row[5]));
-  ASSERT_EQ("POINT (1 1)", p3);
+  ASSERT_TRUE(Geo_namespace::GeoPoint("POINT (1 1)") == Geo_namespace::GeoPoint(p3));
   const auto p4 = boost::get<std::string>(v<NullableString>(crt_row[6]));
-  ASSERT_EQ("POINT (1 1)", p4);
+  ASSERT_TRUE(Geo_namespace::GeoPoint("POINT (1 1)") == Geo_namespace::GeoPoint(p4));
   const auto trip_distance = v<double>(crt_row[7]);
   ASSERT_NEAR(1.0, trip_distance, 1e-7);
 }
@@ -368,7 +370,7 @@ void check_geo_gdal_point_import() {
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(2), crt_row.size());
   const auto point = boost::get<std::string>(v<NullableString>(crt_row[0]));
-  ASSERT_EQ("POINT (1 1)", point);
+  ASSERT_TRUE(Geo_namespace::GeoPoint("POINT (1 1)") == Geo_namespace::GeoPoint(point));
   const auto trip_distance = v<double>(crt_row[1]);
   ASSERT_NEAR(1.0, trip_distance, 1e-7);
 }
@@ -380,7 +382,8 @@ void check_geo_gdal_mpoly_import() {
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(2), crt_row.size());
   const auto mpoly = boost::get<std::string>(v<NullableString>(crt_row[0]));
-  ASSERT_EQ("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))", mpoly);
+  ASSERT_TRUE(Geo_namespace::GeoMultiPolygon("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))") ==
+              Geo_namespace::GeoMultiPolygon(mpoly));
   const auto trip_distance = v<double>(crt_row[1]);
   ASSERT_NEAR(1.0, trip_distance, 1e-7);
 }
@@ -406,7 +409,7 @@ void check_geo_gdal_mpoly_coords_import() {
   const auto trip_distance = v<double>(crt_row[1]);
   ASSERT_NEAR(1.0, trip_distance, 1e-7);
 }
-}
+}  // namespace
 
 class GeoImportTest : public ::testing::Test {
  protected:
@@ -560,7 +563,7 @@ TEST_F(ImportTest, S3_All_files) {
   EXPECT_TRUE(import_test_s3_compressed("", 105200, 1.0));
 }
 #endif  // HAVE_AWS_S3
-}
+}  // namespace
 
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
