@@ -32,6 +32,12 @@ inline std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targ
     CHECK_LT(agg_col_idx, query_mem_desc.agg_col_widths.size());
     const auto agg_info = targets[target_idx];
     if (!agg_info.is_agg || agg_info.agg_kind == kLAST_SAMPLE) {
+      if (agg_info.agg_kind == kLAST_SAMPLE && agg_info.sql_type.is_string() &&
+          agg_info.sql_type.get_compression() != kENCODING_NONE) {
+        agg_init_vals.push_back(get_agg_initial_val(
+            agg_info.agg_kind, agg_info.sql_type, is_group_by, query_mem_desc.getCompactByteWidth()));
+        continue;
+      }
       if (query_mem_desc.agg_col_widths[agg_col_idx].compact > 0) {
         agg_init_vals.push_back(0);
       }
