@@ -27,8 +27,8 @@
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
-#include <boost/any.hpp>
 #include <boost/algorithm/string.hpp>
+#include <boost/any.hpp>
 #include <boost/program_options.hpp>
 #include <cmath>
 #include <sstream>
@@ -6778,6 +6778,13 @@ TEST(Select, LastSample) {
       ASSERT_EQ("baz", boost::get<std::string>(*str_ptr));
       const auto rowid = v<int64_t>(crt_row[3]);
       check_last_sample_rowid(rowid);
+    }
+    {
+      const auto rows = run_multiple_agg("SELECT LAST_SAMPLE(str) FROM test WHERE x > 8;", dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(1), crt_row.size());
+      const auto nullable_str = v<NullableString>(crt_row[0]);
+      ASSERT_FALSE(boost::get<void*>(nullable_str));
     }
   }
 }

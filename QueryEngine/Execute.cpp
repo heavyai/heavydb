@@ -1141,7 +1141,7 @@ ExecutorDeviceType Executor::getDeviceTypeForTargets(const RelAlgExecutionUnit& 
 namespace {
 
 int64_t inline_null_val(const SQLTypeInfo& ti, const bool float_argument_input) {
-  CHECK(ti.is_number() || ti.is_time() || ti.is_boolean());
+  CHECK(ti.is_number() || ti.is_time() || ti.is_boolean() || ti.is_string());
   if (ti.is_fp()) {
     if (float_argument_input && ti.get_type() == kFLOAT) {
       int64_t float_null_val = 0;
