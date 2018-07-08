@@ -24,6 +24,14 @@
 
 #include <limits>
 
+/**
+ * Note: We use dynamic_cast to convert the OGRGeometry pointer from the base class into appropriate OGR<<type>> objects
+ * in derived clases to ensure GDAL is creating the proper geometry type for all possibly inputs. Since we check the
+ * output type after creating a new OGRGeometry object via the OGRGeometryFactor, we could theoretically move some
+ * dynamic_cast to static_cast. The performance impact and safety of going from RTTI to compile time casting needs to be
+ * investigated.
+ */
+
 namespace {
 constexpr auto DOUBLE_MAX = std::numeric_limits<double>::max();
 constexpr auto DOUBLE_MIN = std::numeric_limits<double>::lowest();
@@ -155,6 +163,7 @@ GeoPoint::GeoPoint(const std::vector<double>& coords) {
   }
   geom_ = OGRGeometryFactory::createGeometry(OGRwkbGeometryType::wkbPoint);
   OGRPoint* point = dynamic_cast<OGRPoint*>(geom_);
+  CHECK(point);
   point->setX(coords[0]);
   point->setY(coords[1]);
 }
@@ -173,7 +182,7 @@ GeoPoint::GeoPoint(const std::string& wkt) {
 }
 
 void GeoPoint::getColumns(std::vector<double>& coords) const {
-  const auto point_geom = static_cast<OGRPoint*>(geom_);
+  const auto point_geom = dynamic_cast<OGRPoint*>(geom_);
   CHECK(point_geom);
   coords.push_back(point_geom->getX());
   coords.push_back(point_geom->getY());
@@ -202,7 +211,8 @@ GeoLineString::GeoLineString(const std::string& wkt) {
 }
 
 void GeoLineString::getColumns(std::vector<double>& coords, std::vector<double>& bounds) const {
-  auto linestring_geom = static_cast<OGRLineString*>(geom_);
+  auto linestring_geom = dynamic_cast<OGRLineString*>(geom_);
+  CHECK(linestring_geom);
   BoundingBox bbox;
   for (auto i = 0; i < linestring_geom->getNumPoints(); i++) {
     OGRPoint point;
@@ -253,7 +263,7 @@ GeoPolygon::GeoPolygon(const std::string& wkt) {
 void GeoPolygon::getColumns(std::vector<double>& coords,
                             std::vector<int32_t>& ring_sizes,
                             std::vector<double>& bounds) const {
-  const auto poly_geom = static_cast<OGRPolygon*>(geom_);
+  const auto poly_geom = dynamic_cast<OGRPolygon*>(geom_);
   CHECK(poly_geom);
   BoundingBox bbox;
 
@@ -282,7 +292,7 @@ void GeoPolygon::getColumns(std::vector<double>& coords,
 }
 
 int32_t GeoPolygon::getNumInteriorRings() const {
-  const auto poly_geom = static_cast<OGRPolygon*>(geom_);
+  const auto poly_geom = dynamic_cast<OGRPolygon*>(geom_);
   CHECK(poly_geom);
   return poly_geom->getNumInteriorRings();
 }
@@ -330,7 +340,7 @@ void GeoMultiPolygon::getColumns(std::vector<double>& coords,
                                  std::vector<int32_t>& ring_sizes,
                                  std::vector<int32_t>& poly_rings,
                                  std::vector<double>& bounds) const {
-  const auto mpoly = static_cast<OGRMultiPolygon*>(geom_);
+  const auto mpoly = dynamic_cast<OGRMultiPolygon*>(geom_);
   CHECK(mpoly);
   BoundingBox bbox;
   for (auto p = 0; p < mpoly->getNumGeometries(); p++) {
