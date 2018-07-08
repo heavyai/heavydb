@@ -42,7 +42,7 @@ class GeoTypesFactory;
 
 class GeoBase {
  public:
-  GeoBase() {}
+  GeoBase() : owns_geom_obj_(true) {}
   virtual ~GeoBase();
 
   std::string getWktString() const;
@@ -52,7 +52,7 @@ class GeoBase {
  protected:
   GeoBase(OGRGeometry* geom, const bool owns_geom_obj) : geom_(geom), owns_geom_obj_(owns_geom_obj) {}
   OGRGeometry* geom_ = nullptr;
-  bool owns_geom_obj_ = true;
+  bool owns_geom_obj_;
 
   static int createFromWktString(const std::string& wkt, OGRGeometry** geom);
 

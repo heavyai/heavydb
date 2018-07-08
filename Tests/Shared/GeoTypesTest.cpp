@@ -74,6 +74,16 @@ TEST(GeoPoint, OGRError) {
   EXPECT_THROW(GeoPoint("POINT (0)"), GeoTypesError);
 }
 
+TEST(GeoPoint, BadWktType) {
+  try {
+    auto pt = GeoPoint("LINESTRING (1 1)");
+  } catch (const GeoTypesError& e) {
+    ASSERT_STREQ("GeoPoint Error: Unexpected geometry type from WKT string: Line String", e.what());
+  } catch (...) {
+    FAIL();
+  }
+}
+
 struct SampleLineStringData {
   const std::vector<double> coords{1.0, 2.0, 3.0, 4.0, 5.1, 5.2};
   const std::vector<double> bounds{1.0, 2.0, 5.1, 5.2};
@@ -118,6 +128,16 @@ TEST(GeoLineString, ExportColumns) {
 
 TEST(GeoLineString, OGRError) {
   EXPECT_THROW(GeoLineString("LINESTRING (0)"), GeoTypesError);
+}
+
+TEST(GeoLineString, BadWktType) {
+  try {
+    auto pt = GeoLineString("POINT (1 1)");
+  } catch (const GeoTypesError& e) {
+    ASSERT_STREQ("GeoLineString Error: Unexpected geometry type from WKT string: Point", e.what());
+  } catch (...) {
+    FAIL();
+  }
 }
 
 struct SamplePolygonData {
@@ -167,6 +187,16 @@ TEST(GeoPolygon, ExportColumns) {
 
 TEST(GeoPolygon, OGRError) {
   EXPECT_THROW(GeoPolygon("POYLGON ((0))"), GeoTypesError);
+}
+
+TEST(GeoPolygon, BadWktType) {
+  try {
+    auto pt = GeoPolygon("POINT (1 1)");
+  } catch (const GeoTypesError& e) {
+    ASSERT_STREQ("GeoPolygon Error: Unexpected geometry type from WKT string: Point", e.what());
+  } catch (...) {
+    FAIL();
+  }
 }
 
 struct SampleMultiPolygonData {
@@ -221,6 +251,16 @@ TEST(GeoMultiPolygon, ExportColumns) {
 
 TEST(GeoMultiPolygon, OGRError) {
   EXPECT_THROW(GeoMultiPolygon("MULTIPOYLGON ((0))"), GeoTypesError);
+}
+
+TEST(GeoMultiPolygon, BadWktType) {
+  try {
+    auto pt = GeoMultiPolygon("POINT (1 1)");
+  } catch (const GeoTypesError& e) {
+    ASSERT_STREQ("GeoMultiPolygon Error: Unexpected geometry type from WKT string: Point", e.what());
+  } catch (...) {
+    FAIL();
+  }
 }
 
 int main(int argc, char** argv) {

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "sqltypes.h"
 #include "geo_types.h"
+#include "sqltypes.h"
 
 #include <gdal.h>
 #include <glog/logging.h>
@@ -113,7 +113,7 @@ std::string GeoTypesError::OGRErrorToStr(const int ogr_err) {
       return std::string("unsupported spatial reference system");
     case OGRERR_INVALID_HANDLE:
       return std::string("invalid file handle");
-#if (GDAL_VERSION_MAJOR > 1) 
+#if (GDAL_VERSION_MAJOR > 1)
     case OGRERR_NON_EXISTING_FEATURE:
       return std::string("feature does not exist in input geometry");
 #endif
@@ -160,10 +160,15 @@ GeoPoint::GeoPoint(const std::vector<double>& coords) {
 }
 
 GeoPoint::GeoPoint(const std::string& wkt) {
-  geom_ = OGRGeometryFactory::createGeometry(OGRwkbGeometryType::wkbPoint);
   const auto err = GeoBase::createFromWktString(wkt, &geom_);
   if (err != OGRERR_NONE) {
     throw GeoTypesError("Point", err);
+  }
+  CHECK(geom_);
+  if (wkbFlatten(geom_->getGeometryType()) != OGRwkbGeometryType::wkbPoint) {
+    throw GeoTypesError(
+        "Point",
+        "Unexpected geometry type from WKT string: " + std::string(OGRGeometryTypeToName(geom_->getGeometryType())));
   }
 }
 
@@ -177,16 +182,22 @@ void GeoPoint::getColumns(std::vector<double>& coords) const {
 GeoLineString::GeoLineString(const std::vector<double>& coords) {
   geom_ = OGRGeometryFactory::createGeometry(OGRwkbGeometryType::wkbLineString);
   OGRLineString* line = dynamic_cast<OGRLineString*>(geom_);
+  CHECK(line);
   for (size_t i = 0; i < coords.size(); i += 2) {
     line->addPoint(coords[i], coords[i + 1]);
   }
 }
 
 GeoLineString::GeoLineString(const std::string& wkt) {
-  geom_ = OGRGeometryFactory::createGeometry(OGRwkbGeometryType::wkbLineString);
   const auto err = GeoBase::createFromWktString(wkt, &geom_);
   if (err != OGRERR_NONE) {
     throw GeoTypesError("LineString", err);
+  }
+  CHECK(geom_);
+  if (wkbFlatten(geom_->getGeometryType()) != OGRwkbGeometryType::wkbLineString) {
+    throw GeoTypesError(
+        "LineString",
+        "Unexpected geometry type from WKT string: " + std::string(OGRGeometryTypeToName(geom_->getGeometryType())));
   }
 }
 
@@ -227,10 +238,15 @@ GeoPolygon::GeoPolygon(const std::vector<double>& coords, const std::vector<int3
 }
 
 GeoPolygon::GeoPolygon(const std::string& wkt) {
-  geom_ = OGRGeometryFactory::createGeometry(OGRwkbGeometryType::wkbPolygon);
   const auto err = GeoBase::createFromWktString(wkt, &geom_);
   if (err != OGRERR_NONE) {
     throw GeoTypesError("Polygon", err);
+  }
+  CHECK(geom_);
+  if (wkbFlatten(geom_->getGeometryType()) != OGRwkbGeometryType::wkbPolygon) {
+    throw GeoTypesError(
+        "Polygon",
+        "Unexpected geometry type from WKT string: " + std::string(OGRGeometryTypeToName(geom_->getGeometryType())));
   }
 }
 
@@ -298,10 +314,15 @@ GeoMultiPolygon::GeoMultiPolygon(const std::vector<double>& coords,
 }
 
 GeoMultiPolygon::GeoMultiPolygon(const std::string& wkt) {
-  geom_ = OGRGeometryFactory::createGeometry(OGRwkbGeometryType::wkbMultiPolygon);
   const auto err = GeoBase::createFromWktString(wkt, &geom_);
   if (err != OGRERR_NONE) {
     throw GeoTypesError("MultiPolygon", err);
+  }
+  CHECK(geom_);
+  if (wkbFlatten(geom_->getGeometryType()) != OGRwkbGeometryType::wkbMultiPolygon) {
+    throw GeoTypesError(
+        "MultiPolygon",
+        "Unexpected geometry type from WKT string: " + std::string(OGRGeometryTypeToName(geom_->getGeometryType())));
   }
 }
 
