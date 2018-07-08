@@ -265,7 +265,6 @@ TEST(GeoMultiPolygon, BadWktType) {
 
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
-  google::InstallFailureSignalHandler();
   testing::InitGoogleTest(&argc, argv);
 
   int err{0};
