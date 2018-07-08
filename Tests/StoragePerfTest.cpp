@@ -14,29 +14,30 @@
  * limitations under the License.
  */
 
-#include <iostream>
-#include <string>
-#include <csignal>
-#include <cstring>
-#include <cstdlib>
-#include <exception>
-#include <memory>
-#include "boost/program_options.hpp"
-#include "boost/filesystem.hpp"
 #include <boost/functional/hash.hpp>
-#include "../Catalog/Catalog.h"
-#include "../Parser/parser.h"
+#include <csignal>
+#include <cstdlib>
+#include <cstring>
+#include <exception>
+#include <future>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <thread>
 #include "../Analyzer/Analyzer.h"
-#include "../Parser/ParserNode.h"
+#include "../Catalog/Catalog.h"
 #include "../DataMgr/DataMgr.h"
 #include "../Fragmenter/Fragmenter.h"
+#include "../Parser/ParserNode.h"
+#include "../Parser/parser.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "PopulateTableRandom.h"
 #include "ScanTable.h"
-#include "gtest/gtest.h"
+#include "Shared/MapDParameters.h"
+#include "boost/filesystem.hpp"
+#include "boost/program_options.hpp"
 #include "glog/logging.h"
-#include <thread>
-#include <future>
+#include "gtest/gtest.h"
 
 using namespace std;
 using namespace Catalog_Namespace;
@@ -99,7 +100,8 @@ class SQLTestEnv : public ::testing::Environment {
 
     g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, data_dir.string(), 1024);
     {
-      auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+      MapDParameters mapd_parms;
+      auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
       auto& sys_cat = SysCatalog::instance();
       sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, !boost::filesystem::exists(system_db_file), false);
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
@@ -112,7 +114,8 @@ class SQLTestEnv : public ::testing::Environment {
         CHECK(sys_cat.getMetadataForDB("gtest_db", db));
       }
     }
-    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+    MapDParameters mapd_parms;
+    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
     gsession.reset(new SessionInfo(
         std::make_shared<Catalog>(base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
         user,
@@ -153,7 +156,7 @@ static size_t load_data_for_thread_test_2(int num_rows, string table_name) {
 TEST(DataLoad, Numbers) {
   ASSERT_NO_THROW(run_ddl_statement("drop table if exists numbers;"););
   ASSERT_NO_THROW(run_ddl_statement("create table numbers (a smallint, b int, c bigint, d numeric(7,3), e "
-                          "double, f float);"););
+                                    "double, f float);"););
   EXPECT_TRUE(load_data_test("numbers", LARGE));
   ASSERT_NO_THROW(run_ddl_statement("drop table numbers;"););
 }
@@ -167,8 +170,9 @@ TEST(DataLoad, Strings) {
 
 TEST(StorageSmall, AllTypes) {
   ASSERT_NO_THROW(run_ddl_statement("drop table if exists alltypes;"););
-  ASSERT_NO_THROW(run_ddl_statement("create table alltypes (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
-                          "g timestamp(0), h time(0), i date, x varchar(10), y text);"););
+  ASSERT_NO_THROW(
+      run_ddl_statement("create table alltypes (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
+                        "g timestamp(0), h time(0), i date, x varchar(10), y text);"););
   EXPECT_TRUE(load_data_test("alltypes", SMALL));
   ASSERT_NO_THROW(run_ddl_statement("drop table alltypes;"););
 }
@@ -182,15 +186,15 @@ TEST(DataLoad, Numbers_Parallel_Load) {
 
   /* create tables in single thread */
   ASSERT_NO_THROW(run_ddl_statement("create table numbers_1 (a smallint, b int, c bigint, d numeric(7,3), e "
-                          "double, f float);"););
+                                    "double, f float);"););
   ASSERT_NO_THROW(run_ddl_statement("create table numbers_2 (a smallint, b int, c bigint, d numeric(7,3), e "
-                          "double, f float);"););
+                                    "double, f float);"););
   ASSERT_NO_THROW(run_ddl_statement("create table numbers_3 (a smallint, b int, c bigint, d numeric(7,3), e "
-                          "double, f float);"););
+                                    "double, f float);"););
   ASSERT_NO_THROW(run_ddl_statement("create table numbers_4 (a smallint, b int, c bigint, d numeric(7,3), e "
-                          "double, f float);"););
+                                    "double, f float);"););
   ASSERT_NO_THROW(run_ddl_statement("create table numbers_5 (a smallint, b int, c bigint, d numeric(7,3), e "
-                          "double, f float);"););
+                                    "double, f float);"););
 
   /* load data into tables using parallel threads */
   int numThreads = 5;
@@ -227,15 +231,15 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropTable) {
 
   /* create tables in single thread */
   ASSERT_NO_THROW(run_ddl_statement("create table numbers_1 (a smallint, b int, c bigint, d numeric(7,3), e "
-                          "double, f float);"););
+                                    "double, f float);"););
   ASSERT_NO_THROW(run_ddl_statement("create table numbers_2 (a smallint, b int, c bigint, d numeric(7,3), e "
-                          "double, f float);"););
+                                    "double, f float);"););
   ASSERT_NO_THROW(run_ddl_statement("create table numbers_3 (a smallint, b int, c bigint, d numeric(7,3), e "
-                          "double, f float);"););
+                                    "double, f float);"););
   ASSERT_NO_THROW(run_ddl_statement("create table numbers_4 (a smallint, b int, c bigint, d numeric(7,3), e "
-                          "double, f float);"););
+                                    "double, f float);"););
   ASSERT_NO_THROW(run_ddl_statement("create table numbers_5 (a smallint, b int, c bigint, d numeric(7,3), e "
-                          "double, f float);"););
+                                    "double, f float);"););
 
   /* Load table numbers_4 with data in the main thread, so it will be available for sure when drop_table on it will be
    * executed later. Don't use new thread for loading table numbers_4 (see commented out), as one can't be sure that
@@ -266,7 +270,7 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropTable) {
 
   /* create table numbers_6 and load it with data */
   ASSERT_NO_THROW(run_ddl_statement("create table numbers_6 (a smallint, b int, c bigint, d numeric(7,3), e "
-                          "double, f float);"););
+                                    "double, f float);"););
   int num_table_rows = SMALL;
   db_table.push_back(table_name + to_string(6));
   threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, num_table_rows, db_table[5]));
@@ -292,15 +296,15 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropCreateTable_InsertRows) {
 
   /* create tables in single thread */
   ASSERT_NO_THROW(run_ddl_statement("create table numbers_1 (a smallint, b int, c bigint, d numeric(7,3), e "
-                          "double, f float);"););
+                                    "double, f float);"););
   ASSERT_NO_THROW(run_ddl_statement("create table numbers_2 (a smallint, b int, c bigint, d numeric(7,3), e "
-                          "double, f float);"););
+                                    "double, f float);"););
   ASSERT_NO_THROW(run_ddl_statement("create table numbers_3 (a smallint, b int, c bigint, d numeric(7,3), e "
-                          "double, f float);"););
+                                    "double, f float);"););
   ASSERT_NO_THROW(run_ddl_statement("create table numbers_4 (a smallint, b int, c bigint, d numeric(7,3), e "
-                          "double, f float);"););
+                                    "double, f float);"););
   ASSERT_NO_THROW(run_ddl_statement("create table numbers_5 (a smallint, b int, c bigint, d numeric(7,3), e "
-                          "double, f float);"););
+                                    "double, f float);"););
 
   /* Load table numbers_2 with data in the main thread, so it will be available for sure when drop_table on it will be
    * executed later. Don't use new thread for loading table numbers_2 (see commented out), as one can't be sure that
@@ -332,7 +336,7 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropCreateTable_InsertRows) {
 
   /* create table numbers_6 and load it with data */
   ASSERT_NO_THROW(run_ddl_statement("create table numbers_6 (a smallint, b int, c bigint, d numeric(7,3), e "
-                          "double, f float);"););
+                                    "double, f float);"););
   int num_table_rows = SMALL;
   db_table.push_back(table_name + to_string(6));
   threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, num_table_rows, db_table[5]));
@@ -342,7 +346,7 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropCreateTable_InsertRows) {
    * this is true when new table's schema is same and/or is different than the one for the dropped table.
    */
   ASSERT_NO_THROW(run_ddl_statement("create table numbers_2 (e "
-                          "double, f double, g double, h double, i double, j double);"););
+                                    "double, f double, g double, h double, i double, j double);"););
   /* insert rows in table numbers_2, this table have been dropped and recreated, so data can be loaded */
   int num_rows_for_dropped_table = SMALL * 2;
   threads.push_back(

@@ -21,12 +21,13 @@
 #ifndef DATAMGR_H
 #define DATAMGR_H
 
+#include "../Shared/MapDParameters.h"
+#include "../Shared/mapd_shared_mutex.h"
 #include "AbstractBuffer.h"
 #include "AbstractBufferMgr.h"
 #include "BufferMgr/Buffer.h"
 #include "BufferMgr/BufferMgr.h"
 #include "MemoryLevel.h"
-#include "../Shared/mapd_shared_mutex.h"
 
 #include <iomanip>
 #include <iostream>
@@ -66,7 +67,7 @@ class DataMgr {
 
  public:
   DataMgr(const std::string& dataDir,
-          const size_t cpuBufferSize /* 0 means auto set size */,
+          const MapDParameters& mapd_parameters,
           const bool useGpus,
           const int numGpus,
           const std::string& dbConvertDir = "",
@@ -112,7 +113,7 @@ class DataMgr {
 
  private:
   size_t getTotalSystemMemory();
-  void populateMgrs(const size_t userSpecifiedCpuBufferSize, const size_t userSpecifiedNumReaderThreads);
+  void populateMgrs(const MapDParameters& mapd_parameters, const size_t userSpecifiedNumReaderThreads);
   void convertDB(const std::string basePath);
   void checkpoint();  // checkpoint for whole DB, called from convertDB proc only
   void createTopLevelMetadata() const;
@@ -124,6 +125,6 @@ class DataMgr {
   std::map<ChunkKey, std::shared_ptr<mapd_shared_mutex>> chunkMutexMap_;
   mapd_shared_mutex chunkMutexMapMutex_;
 };
-}  // Data_Namespace
+}  // namespace Data_Namespace
 
 #endif  // DATAMGR_H

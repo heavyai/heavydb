@@ -205,7 +205,6 @@ int main(int argc, char** argv) {
   bool enable_dynamic_watchdog = false;
   unsigned dynamic_watchdog_time_limit = 10000;
 
-  size_t cpu_buffer_mem_bytes = 0;  // 0 will cause DataMgr to auto set this based on available memory
   size_t render_mem_bytes = 500000000;
   int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1 means do not override
   int start_gpu = 0;
@@ -236,9 +235,15 @@ int main(int argc, char** argv) {
   desc.add_options()("flush-log",
                      po::value<bool>(&flush_log)->default_value(flush_log)->implicit_value(true),
                      "Immediately flush logs to disk. Set to false if this is a performance bottleneck.");
-  desc.add_options()("cpu-buffer-mem-bytes",
-                     po::value<size_t>(&cpu_buffer_mem_bytes)->default_value(cpu_buffer_mem_bytes),
-                     "Size of memory reserved for CPU buffers [bytes]");
+  desc.add_options()(
+      "cpu-buffer-mem-bytes",
+      po::value<size_t>(&mapd_parameters.cpu_buffer_mem_bytes)->default_value(mapd_parameters.cpu_buffer_mem_bytes),
+      "Size of memory reserved for CPU buffers [bytes]");
+  desc.add_options()(
+      "gpu-buffer-mem-bytes",
+      po::value<size_t>(&mapd_parameters.gpu_buffer_mem_bytes)->default_value(mapd_parameters.gpu_buffer_mem_bytes),
+      "Size of memory reserved for GPU buffers [bytes] (per GPU)");
+
   desc.add_options()("num-gpus", po::value<int>(&num_gpus)->default_value(num_gpus), "Number of gpus to use");
   desc.add_options()("start-gpu", po::value<int>(&start_gpu)->default_value(start_gpu), "First gpu to use");
   desc.add_options()("version,v", "Print Release Version Number");
@@ -564,7 +569,6 @@ int main(int argc, char** argv) {
                                                   read_only,
                                                   allow_loop_joins,
                                                   enable_rendering,
-                                                  cpu_buffer_mem_bytes,
                                                   render_mem_bytes,
                                                   num_gpus,
                                                   start_gpu,

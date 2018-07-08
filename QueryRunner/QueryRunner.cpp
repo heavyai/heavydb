@@ -16,20 +16,21 @@
 
 #include "QueryRunner.h"
 
-#include "Parser/parser.h"
-#include "QueryEngine/CalciteAdapter.h"
-#include "Parser/ParserWrapper.h"
 #include "Calcite/Calcite.h"
 #include "Catalog/Catalog.h"
+#include "Parser/ParserWrapper.h"
+#include "Parser/parser.h"
+#include "QueryEngine/CalciteAdapter.h"
 #include "Shared/ConfigResolve.h"
+#include "Shared/MapDParameters.h"
 #include "bcrypt.h"
 
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/RelAlgExecutor.h"
 
+#include <boost/filesystem/operations.hpp>
 #include <csignal>
 #include <random>
-#include <boost/filesystem/operations.hpp>
 
 #define CALCITEPORT 39093
 
@@ -145,7 +146,8 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path,
   if (std::is_same<CudaBuildSelector, PreprocessorFalse>::value) {
     uses_gpus = false;
   }
-  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, uses_gpus, -1);
+  MapDParameters mapd_parms;
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, uses_gpus, -1);
 
   auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
   sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, false, false);
@@ -282,4 +284,4 @@ void run_ddl_statement(const std::string& create_table_stmt,
     ddl->execute(*session);
 }
 
-}  // namespace QueryRUnner
+}  // namespace QueryRunner

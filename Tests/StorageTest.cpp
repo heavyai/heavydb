@@ -15,9 +15,9 @@
  */
 
 #include <csignal>
+#include <cstring>
 #include <iostream>
 #include <string>
-#include <cstring>
 
 #include <cstdlib>
 #include <exception>
@@ -25,20 +25,21 @@
 
 #include <thread>
 
-#include "boost/program_options.hpp"
-#include "boost/filesystem.hpp"
 #include <boost/functional/hash.hpp>
-#include "../Catalog/Catalog.h"
-#include "../Parser/parser.h"
 #include "../Analyzer/Analyzer.h"
-#include "../Parser/ParserNode.h"
+#include "../Catalog/Catalog.h"
 #include "../DataMgr/DataMgr.h"
 #include "../Fragmenter/Fragmenter.h"
+#include "../Parser/ParserNode.h"
+#include "../Parser/parser.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "PopulateTableRandom.h"
 #include "ScanTable.h"
-#include "gtest/gtest.h"
+#include "Shared/MapDParameters.h"
+#include "boost/filesystem.hpp"
+#include "boost/program_options.hpp"
 #include "glog/logging.h"
+#include "gtest/gtest.h"
 
 using namespace std;
 using namespace Catalog_Namespace;
@@ -99,7 +100,8 @@ class SQLTestEnv : public ::testing::Environment {
     google::InstallFailureFunction(&calcite_shutdown_handler);
 
     g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, data_dir.string(), 1024);
-    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+    MapDParameters mapd_parms;
+    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
     // if no catalog create one
     auto& sys_cat = SysCatalog::instance();
     sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, !boost::filesystem::exists(system_db_file), false);

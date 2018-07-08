@@ -20,16 +20,17 @@
 #include <gtest/gtest.h>
 
 #include <boost/algorithm/string.hpp>
-#include "boost/filesystem.hpp"
 #include <boost/iterator/counting_iterator.hpp>
+#include "boost/filesystem.hpp"
 
 #include "Catalog/Catalog.h"
+#include "Fragmenter/InsertOrderFragmenter.h"
+#include "Import/Importer.h"
 #include "Parser/parser.h"
 #include "QueryEngine/ResultSet.h"
-#include "Import/Importer.h"
-#include "Shared/UpdelRoll.h"
-#include "Fragmenter/InsertOrderFragmenter.h"
 #include "QueryRunner/QueryRunner.h"
+#include "Shared/MapDParameters.h"
+#include "Shared/UpdelRoll.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -258,7 +259,8 @@ class SQLTestEnv : public ::testing::Environment {
     google::InstallFailureFunction(&calcite_shutdown_handler);
 
     g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path.string(), 1024);
-    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+    MapDParameters mapd_parms;
+    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
     // if no catalog create one
     auto& sys_cat = SysCatalog::instance();
     sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, !boost::filesystem::exists(system_db_file), false);
@@ -590,7 +592,7 @@ TEST(UpdateStorageTest_Times, Update_times) {
   EXPECT_TRUE(update_a_datetime_column("times", "t_datetime", 1, 1, "2018-1-1 18:01:01"));
   EXPECT_NO_THROW(run_ddl_statement("drop table times;"););
 }
-}
+}  // namespace
 
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);

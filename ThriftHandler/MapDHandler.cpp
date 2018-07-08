@@ -97,8 +97,8 @@
 
 #include "QueryEngine/ArrowUtil.h"
 
-using Catalog_Namespace::SysCatalog;
 using Catalog_Namespace::Catalog;
+using Catalog_Namespace::SysCatalog;
 using namespace Lock_Namespace;
 
 #define INVALID_SESSION_ID ""
@@ -120,7 +120,6 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const bool read_only,
                          const bool allow_loop_joins,
                          const bool enable_rendering,
-                         const size_t cpu_buffer_mem_bytes,
                          const size_t render_mem_bytes,
                          const int num_gpus,
                          const int start_gpu,
@@ -169,7 +168,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     total_reserved += render_mem_bytes;
   }
   data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(),
-                                              cpu_buffer_mem_bytes,
+                                              mapd_parameters,
                                               !cpu_mode_only_,
                                               num_gpus,
                                               db_convert_dir,

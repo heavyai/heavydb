@@ -44,7 +44,7 @@ using namespace File_Namespace;
 namespace Data_Namespace {
 
 DataMgr::DataMgr(const string& dataDir,
-                 const size_t cpuBufferSize,
+                 const MapDParameters& mapd_parameters,
                  const bool useGpus,
                  const int numGpus,
                  const string& dbConvertDir,
@@ -66,7 +66,7 @@ DataMgr::DataMgr(const string& dataDir,
     cudaMgr_ = 0;
   }
 
-  populateMgrs(cpuBufferSize, numReaderThreads);
+  populateMgrs(mapd_parameters, numReaderThreads);
   createTopLevelMetadata();
 
   if (dbConvertDir_.size() > 0) {  // i.e. "--db_convert" option was used
@@ -107,11 +107,11 @@ size_t DataMgr::getTotalSystemMemory() {
 #endif
 }
 
-void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize, const size_t userSpecifiedNumReaderThreads) {
+void DataMgr::populateMgrs(const MapDParameters& mapd_parameters, const size_t userSpecifiedNumReaderThreads) {
   bufferMgrs_.resize(2);
   bufferMgrs_[0].push_back(new GlobalFileMgr(0, dataDir_, userSpecifiedNumReaderThreads));
   levelSizes_.push_back(1);
-  size_t cpuBufferSize = userSpecifiedCpuBufferSize;
+  size_t cpuBufferSize = mapd_parameters.cpu_buffer_mem_bytes;
   if (cpuBufferSize == 0)                          // if size is not specified
     cpuBufferSize = getTotalSystemMemory() * 0.8;  // should get free memory instead of this ugly heuristic
   size_t cpuSlabSize = std::min(static_cast<size_t>(1L << 32), cpuBufferSize);
@@ -126,7 +126,9 @@ void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize, const size_t
     levelSizes_.push_back(1);
     int numGpus = cudaMgr_->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
-      size_t gpuMaxMemSize = (cudaMgr_->deviceProperties[gpuNum].globalMem) - (reservedGpuMem_);
+      size_t gpuMaxMemSize = mapd_parameters.gpu_buffer_mem_bytes != 0
+                                 ? mapd_parameters.gpu_buffer_mem_bytes
+                                 : (cudaMgr_->deviceProperties[gpuNum].globalMem) - (reservedGpuMem_);
       size_t gpuSlabSize = std::min(static_cast<size_t>(1L << 31), gpuMaxMemSize);
       gpuSlabSize -= gpuSlabSize % 512 == 0 ? 0 : 512 - (gpuSlabSize % 512);
       LOG(INFO) << "gpuSlabSize is " << (float)gpuSlabSize / (1024 * 1024) << "M";
@@ -407,4 +409,4 @@ size_t DataMgr::getTableEpoch(const int db_id, const int tb_id) {
   return dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->getTableEpoch(db_id, tb_id);
 }
 
-}  // Data_Namespace
+}  // namespace Data_Namespace

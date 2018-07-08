@@ -37,6 +37,8 @@ struct MapDParameters {
   std::string ha_brokers;           // name of the HA broker
   std::string ha_shared_data;       // name of shared data directory base
   bool is_decr_start_epoch;         // are we doing a start epoch decrement?
+  size_t cpu_buffer_mem_bytes = 0;  // max size of memory reserved for CPU buffers [bytes]
+  size_t gpu_buffer_mem_bytes = 0;  // max size of memory reserved for GPU buffers [bytes]
 
   MapDParameters() : cuda_block_size(0), cuda_grid_size(0), calcite_max_mem(1024) {}
 };

@@ -1,13 +1,14 @@
-#include "../Parser/parser.h"
+#include <glog/logging.h>
+#include <gtest/gtest.h>
+#include <boost/filesystem/operations.hpp>
+#include <csignal>
+#include <thread>
 #include "../Catalog/Catalog.h"
 #include "../Catalog/DBObject.h"
 #include "../DataMgr/DataMgr.h"
+#include "../Parser/parser.h"
 #include "../QueryRunner/QueryRunner.h"
-#include <boost/filesystem/operations.hpp>
-#include <gtest/gtest.h>
-#include <glog/logging.h>
-#include <csignal>
-#include <thread>
+#include "Shared/MapDParameters.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -66,7 +67,8 @@ class DBObjectPermissionsEnv : public ::testing::Environment {
 
     g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path.string(), 1024);
     {
-      auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+      MapDParameters mapd_parms;
+      auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
       CHECK(boost::filesystem::exists(system_db_file));
       sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, false, true);
       CHECK(sys_cat.getMetadataForDB(db_name, db));
@@ -78,7 +80,8 @@ class DBObjectPermissionsEnv : public ::testing::Environment {
       }
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
     }
-    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+    MapDParameters mapd_parms;
+    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
     g_session.reset(
         new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
                                                base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
@@ -283,7 +286,8 @@ TEST_F(DatabaseObject, TableAccessTest) {
   boost::filesystem::path base_path{BASE_PATH};
   auto system_db_file = base_path / "mapd_catalogs" / "mapd";
   auto data_dir = base_path / "mapd_data";
-  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+  MapDParameters mapd_parms;
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   sys_cat.getMetadataForDB("mapd", db_meta);
   sys_cat.getMetadataForUser("Arsenal", user_meta);
   session_ars.reset(
@@ -327,7 +331,8 @@ TEST_F(DatabaseObject, ViewAccessTest) {
   boost::filesystem::path base_path{BASE_PATH};
   auto system_db_file = base_path / "mapd_catalogs" / "mapd";
   auto data_dir = base_path / "mapd_data";
-  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+  MapDParameters mapd_parms;
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   sys_cat.getMetadataForDB("mapd", db_meta);
   sys_cat.getMetadataForUser("Arsenal", user_meta);
   session_ars.reset(
@@ -381,7 +386,8 @@ TEST_F(DatabaseObject, DashboardAccessTest) {
   boost::filesystem::path base_path{BASE_PATH};
   auto system_db_file = base_path / "mapd_catalogs" / "mapd";
   auto data_dir = base_path / "mapd_data";
-  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+  MapDParameters mapd_parms;
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   sys_cat.getMetadataForDB("mapd", db_meta);
   sys_cat.getMetadataForUser("Arsenal", user_meta);
   session_ars.reset(
@@ -434,7 +440,8 @@ TEST_F(DatabaseObject, DatabaseAllTest) {
   boost::filesystem::path base_path{BASE_PATH};
   auto system_db_file = base_path / "mapd_catalogs" / "mapd";
   auto data_dir = base_path / "mapd_data";
-  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+  MapDParameters mapd_parms;
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   sys_cat.getMetadataForDB("mapd", db_meta);
   sys_cat.getMetadataForUser("Arsenal", user_meta);
   session_ars.reset(

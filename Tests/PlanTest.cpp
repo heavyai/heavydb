@@ -28,6 +28,7 @@
 #include "../Parser/parser.h"
 #include "../Planner/Planner.h"
 #include "../QueryRunner/QueryRunner.h"
+#include "Shared/MapDParameters.h"
 #include "boost/filesystem.hpp"
 #include "boost/program_options.hpp"
 #include "glog/logging.h"
@@ -89,7 +90,8 @@ class SQLTestEnv : public ::testing::Environment {
 
     g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path.string(), 1024);
     {
-      auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+      MapDParameters mapd_parms;
+      auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
       auto& sys_cat = SysCatalog::instance();
       sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, !boost::filesystem::exists(system_db_file), false);
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
@@ -102,7 +104,8 @@ class SQLTestEnv : public ::testing::Environment {
         CHECK(sys_cat.getMetadataForDB("gtest_db", db));
       }
     }
-    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+    MapDParameters mapd_parms;
+    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
     gsession.reset(new SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
                                        base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
                                    user,

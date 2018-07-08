@@ -40,8 +40,8 @@
 #include "MapDRelease.h"
 
 #include "Calcite/Calcite.h"
-#include "DataMgr/LockMgr.h"
 #include "Catalog/Catalog.h"
+#include "DataMgr/LockMgr.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Import/Importer.h"
 #include "Parser/ParserWrapper.h"
@@ -54,6 +54,7 @@
 #include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/TableGenerations.h"
+#include "Shared/ConfigResolve.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/StringTransform.h"
 #include "Shared/geosupport.h"
@@ -61,7 +62,6 @@
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
-#include "Shared/ConfigResolve.h"
 
 #include <fcntl.h>
 #include <glog/logging.h>
@@ -110,7 +110,6 @@ class MapDHandler : public MapDIf {
               const bool read_only,
               const bool allow_loop_joins,
               const bool enable_rendering,
-              const size_t cpu_buffer_mem_bytes,
               const size_t render_mem_bytes,
               const int num_gpus,
               const int start_gpu,
