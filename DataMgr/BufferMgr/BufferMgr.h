@@ -26,13 +26,13 @@
 #define DATAMGR_MEMORY_BUFFER_BUFFERMGR_H
 
 #include <iostream>
-#include <map>
 #include <list>
-#include "../Shared/types.h"
+#include <map>
+#include <mutex>
 #include "../AbstractBuffer.h"
 #include "../AbstractBufferMgr.h"
+#include "../Shared/types.h"
 #include "BufferSeg.h"
-#include <mutex>
 
 class OutOfMemory : public std::runtime_error {
  public:
@@ -81,6 +81,7 @@ class BufferMgr : public AbstractBufferMgr {  // implements
 
   /// Destructor
   virtual ~BufferMgr();
+  void reinit();
 
   void clear();
 
@@ -194,6 +195,6 @@ class BufferMgr : public AbstractBufferMgr {  // implements
    */
 };
 
-}  // Buffer_Namespace
+}  // namespace Buffer_Namespace
 
 #endif  // DATAMGR_MEMORY_BUFFER_BUFFERMGR_H

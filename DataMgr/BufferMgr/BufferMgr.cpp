@@ -23,10 +23,10 @@
 #include "Buffer.h"
 #include "Shared/measure.h"
 
-#include <algorithm>
-#include <limits>
-#include <iomanip>
 #include <glog/logging.h>
+#include <algorithm>
+#include <iomanip>
+#include <limits>
 
 using namespace std;
 
@@ -84,6 +84,13 @@ BufferMgr::BufferMgr(const int deviceId,
 /// Frees the heap-allocated buffer pool memory
 BufferMgr::~BufferMgr() {
   clear();
+}
+
+void BufferMgr::reinit() {
+  numPagesAllocated_ = 0;
+  currentMaxSlabPageSize_ =
+      maxNumPagesPerSlab_;  // currentMaxSlabPageSize_ will drop as allocations fail - this is the high water mark
+  allocationsCapped_ = false;
 }
 
 void BufferMgr::clear() {
@@ -439,6 +446,7 @@ std::string BufferMgr::printSlabs() {
 }
 
 void BufferMgr::clearSlabs() {
+  bool pinnedExists = false;
   size_t numSlabs = slabSegments_.size();
   for (size_t slabNum = 0; slabNum != numSlabs; ++slabNum) {
     for (auto segIt = slabSegments_[slabNum].begin(); segIt != slabSegments_[slabNum].end(); ++segIt) {
@@ -446,8 +454,16 @@ void BufferMgr::clearSlabs() {
         // no need to free
       } else if (segIt->buffer->getPinCount() < 1) {
         deleteBuffer(segIt->chunkKey, true);
+      } else {
+        pinnedExists = true;
       }
     }
+  }
+  if (!pinnedExists) {
+    // lets actually clear the buffer from memory
+    freeAllMem();
+    clear();
+    reinit();
   }
 }
 
@@ -580,10 +596,10 @@ void BufferMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool pu
   }
 
   auto bufferIt = startChunkIt;
-  while (bufferIt != chunkIndex_.end() &&
-         std::search(
-             bufferIt->first.begin(), bufferIt->first.begin() + keyPrefix.size(), keyPrefix.begin(), keyPrefix.end()) !=
-             bufferIt->first.begin() + keyPrefix.size()) {
+  while (bufferIt != chunkIndex_.end() && std::search(bufferIt->first.begin(),
+                                                      bufferIt->first.begin() + keyPrefix.size(),
+                                                      keyPrefix.begin(),
+                                                      keyPrefix.end()) != bufferIt->first.begin() + keyPrefix.size()) {
     auto segIt = bufferIt->second;
     if (segIt->buffer) {
       delete segIt->buffer;  // Delete Buffer for segment
@@ -649,10 +665,10 @@ void BufferMgr::checkpoint(const int db_id, const int tb_id) {
   }
 
   auto bufferIt = startChunkIt;
-  while (bufferIt != chunkIndex_.end() &&
-         std::search(
-             bufferIt->first.begin(), bufferIt->first.begin() + keyPrefix.size(), keyPrefix.begin(), keyPrefix.end()) !=
-             bufferIt->first.begin() + keyPrefix.size()) {
+  while (bufferIt != chunkIndex_.end() && std::search(bufferIt->first.begin(),
+                                                      bufferIt->first.begin() + keyPrefix.size(),
+                                                      keyPrefix.begin(),
+                                                      keyPrefix.end()) != bufferIt->first.begin() + keyPrefix.size()) {
     if (bufferIt->second->chunkKey[0] != -1 &&
         bufferIt->second->buffer->isDirty_) {  // checks that buffer is actual chunk (not just buffer) and is dirty
 
@@ -823,4 +839,4 @@ void BufferMgr::getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey, 
 const std::vector<BufferList>& BufferMgr::getSlabSegments() {
   return slabSegments_;
 }
-}
+}  // namespace Buffer_Namespace
