@@ -110,6 +110,7 @@ set(SANITY_TESTS
   TokenCompletionHintsTest
   MapDQLCommandTest
   DBObjectPrivilegesTest
+  GeoTypesTest
 )
 set_tests_properties(${SANITY_TESTS} PROPERTIES LABELS "sanity")
 
