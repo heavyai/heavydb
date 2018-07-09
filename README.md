@@ -142,13 +142,13 @@ Note: usage of MapD Immerse is governed by a separate license agreement, provide
 
 # Code Style
 
-A [`.clang-format`](http://clang.llvm.org/docs/ClangFormat.html) style configuration, based on the Chromium style guide, is provided at the top level of the repository. Please format your code using a recent version (3.8+) of ClangFormat before submitting.
+A [`.clang-format`](http://clang.llvm.org/docs/ClangFormat.html) style configuration, based on the Chromium style guide, is provided at the top level of the repository. Please format your code using a recent version (6.0+ preferred) of ClangFormat before submitting.
 
 To use:
 
     clang-format -i File.cpp
 
-Contributed code should compile without generating warnings by recent compilers (gcc 4.9, gcc 5.3, clang 3.8) on most Linux distributions. Changes to the code should follow the [C++ Core Guidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines).
+Contributed code should compile without generating warnings by recent compilers on most Linux distributions. Changes to the code should follow the [C++ Core Guidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines).
 
 # Dependencies
 
@@ -157,12 +157,12 @@ MapD has the following dependencies:
 | Package | Min Version | Required |
 | ------- | ----------- | -------- |
 | [CMake](https://cmake.org/) | 3.3 | yes |
-| [LLVM](http://llvm.org/) | 3.8-4.0 | yes |
-| [GCC](http://gcc.gnu.org/) | 4.9 | no, if building with clang |
+| [LLVM](http://llvm.org/) | 3.8-4.0, 6.0 | yes |
+| [GCC](http://gcc.gnu.org/) | 5.1 | no, if building with clang |
 | [Go](https://golang.org/) | 1.6 | yes |
 | [Boost](http://www.boost.org/) | 1.57.0 | yes |
 | [OpenJDK](http://openjdk.java.net/) | 1.7 | yes |
-| [CUDA](http://nvidia.com/cuda) | 7.5 | yes, if compiling with GPU support |
+| [CUDA](http://nvidia.com/cuda) | 8.0 | yes, if compiling with GPU support |
 | [gperftools](https://github.com/gperftools/gperftools) | | yes |
 | [gdal](http://gdal.org/) | | yes |
 | [Arrow](https://arrow.apache.org/) | 0.7.0 | yes |
