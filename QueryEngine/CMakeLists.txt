@@ -298,6 +298,7 @@ add_custom_command(
         ${MAPD_DEFINITIONS}
         -arch sm_30
         -std=c++11
+        -Xcudafe "--diag_suppress=virtual_function_decl_hidden"
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/ThrustPolygons.cu
     )
