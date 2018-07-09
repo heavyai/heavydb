@@ -94,6 +94,23 @@ Finally run the tests:
 
     make sanity_tests
 
+# Generating Packages
+
+MapD Core uses [CPack](https://cmake.org/cmake/help/latest/manual/cpack.1.html) to generate packages for distribution. Packages generated on CentOS with static linking enabled can be used on most other recent Linux distributions.
+
+To generate packages on CentOS (assuming starting from top level of the mapd-core repository):
+
+    mkdir build-package && cd build-package
+    cmake -DPREFER_STATIC_LIBS=on -DCMAKE_BUILD_TYPE=release ..
+    make -j 4
+    cpack -G TGZ
+
+The first command creates a fresh build directory, to ensure there is nothing left over from a previous build.
+
+The second command configures the build to prefer linking to the dependencies' static libraries instead of the (default) shared libraries, and to build using CMake's `release` configuration (enables compiler optimizations). Linking to the static versions of the libraries libraries reduces the number of dependencies that must be installed on target systems.
+
+The last command generates a `.tar.gz` package. The `TGZ` can be replaced with, for example, `RPM` or `DEB` to generate a `.rpm` or `.deb`, respectively.
+
 # Using
 
 The [`startmapd`](startmapd) wrapper script may be used to start MapD Core in a testing environment. This script performs the following tasks:
