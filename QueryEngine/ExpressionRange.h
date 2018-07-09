@@ -225,6 +225,8 @@ inline double getMax<double>(const ExpressionRange& e) {
 template <>
 inline int64_t get_value_from_datum(const Datum datum, const SQLTypes type_info) noexcept {
   switch (type_info) {
+    case kBOOLEAN:
+      return datum.boolval;
     case kTINYINT:
       return datum.tinyintval;
     case kSMALLINT:

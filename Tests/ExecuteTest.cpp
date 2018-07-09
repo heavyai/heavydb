@@ -1104,6 +1104,21 @@ TEST(Select, ComplexQueries) {
   }
 }
 
+TEST(Select, GroupByPushDownFilterIntoExprRange) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    const auto rows = run_multiple_agg("SELECT b, COUNT(*) AS n FROM test WHERE b GROUP BY b ORDER BY b", dt);
+    ASSERT_EQ(size_t(1), rows->rowCount());  // Sqlite does not have a boolean type, so do this for now
+    c("SELECT x, COUNT(*) AS n FROM test WHERE x > 7 GROUP BY x ORDER BY x", dt);
+    c("SELECT y, COUNT(*) AS n FROM test WHERE y <= 43 GROUP BY y ORDER BY n DESC", dt);
+    c("SELECT z, COUNT(*) AS n FROM test WHERE z <= 43 AND y > 10 GROUP BY z ORDER BY n DESC", dt);
+    c("SELECT t, SUM(y) AS sum_y FROM test WHERE t < 2000 GROUP BY t ORDER BY t DESC", dt);
+    c("SELECT t, SUM(y) AS sum_y FROM test WHERE t < 2000 GROUP BY t ORDER BY sum_y", dt);
+    c("SELECT o, COUNT(*) as n FROM test WHERE o <= '1999-09-09' GROUP BY o ORDER BY n", dt);
+    c("SELECT t + x, AVG(x) AS avg_x FROM test WHERE z <= 50 and t < 2000 GROUP BY t + x ORDER BY avg_x DESC", dt);
+  }
+}
+
 TEST(Select, GroupByExprNoFilterNoAggregate) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
