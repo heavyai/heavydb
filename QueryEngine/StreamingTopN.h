@@ -25,6 +25,7 @@
 #ifndef QUERYENGINE_STREAMINGTOPN_H
 #define QUERYENGINE_STREAMINGTOPN_H
 
+#include <cstdint>
 #include <vector>
 
 namespace streaming_top_n {
