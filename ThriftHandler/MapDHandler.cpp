@@ -986,6 +986,7 @@ static TDBObject serialize_db_object(const std::string& roleName, const DBObject
       outObject.privs.push_back(ap.hasPermission(TablePrivileges::UPDATE_IN_TABLE));
       outObject.privs.push_back(ap.hasPermission(TablePrivileges::DELETE_FROM_TABLE));
       outObject.privs.push_back(ap.hasPermission(TablePrivileges::TRUNCATE_TABLE));
+      outObject.privs.push_back(ap.hasPermission(TablePrivileges::ALTER_TABLE));
 
       break;
     case DashboardDBObjectType:
@@ -1205,7 +1206,7 @@ void MapDHandler::get_table_descriptor(TTableDescriptor& _return,
 void MapDHandler::get_internal_table_details(TTableDetails& _return,
                                              const TSessionId& session,
                                              const std::string& table_name) {
-  get_table_details_impl(_return, session, table_name, true, true);
+  get_table_details_impl(_return, session, table_name, true, false);
 }
 
 void MapDHandler::get_table_details(TTableDetails& _return, const TSessionId& session, const std::string& table_name) {
@@ -3572,6 +3573,11 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
             // [ write UpdateDeleteLocks ] lock is deferred in InsertOrderFragmenter::deleteFragments
           }
         } else if (auto stmtp = dynamic_cast<Parser::TruncateTableStmt*>(stmt.get())) {
+          chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+              session_info.get_catalog(), *stmtp->get_table(), LockType::CheckpointLock);
+          upddelLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+              session_info.get_catalog(), *stmtp->get_table(), LockType::UpdateDeleteLock);
+        } else if (auto stmtp = dynamic_cast<Parser::AddColumnStmt*>(stmt.get())) {
           chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
               session_info.get_catalog(), *stmtp->get_table(), LockType::CheckpointLock);
           upddelLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(

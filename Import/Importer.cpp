@@ -410,7 +410,9 @@ static size_t find_beginning(const char* buffer, size_t begin, size_t end, const
 void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
                                   const std::string& val,
                                   const bool is_null,
-                                  const CopyParams& copy_params) {
+                                  const CopyParams& copy_params,
+                                  const int64_t replicate_count) {
+  set_replicate_count(replicate_count);
   const auto type = cd->columnType.get_type();
   switch (type) {
     case kBOOLEAN: {
@@ -1902,14 +1904,34 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
     CHECK(payloads_ptr);
     shard_column_input_buffer->addDictEncodedString(*payloads_ptr);
   }
-  for (size_t i = 0; i < row_count; ++i) {
-    const auto val = int_value_at(*shard_column_input_buffer, i);
+
+  int64_t rows_per_shard = (row_count + shard_count + 1) / shard_count;
+  int64_t rows_left = row_count;
+
+  for (size_t i = 0; i < row_count; ++i, rows_left -= rows_per_shard) {
+    const auto val = get_replicating() ? i : int_value_at(*shard_column_input_buffer, i);
     const size_t shard = SHARD_FOR_KEY(val, shard_count);
     auto& shard_output_buffers = all_shard_import_buffers[shard];
+
+    // when replicate a column, populate 'rows' to all shards only once
+    if (get_replicating())
+      if (i >= shard_count)
+        break;
+
     for (size_t col_idx = 0; col_idx < import_buffers.size(); ++col_idx) {
       const auto& input_buffer = import_buffers[col_idx];
       const auto& col_ti = input_buffer->getTypeInfo();
       const auto type = col_ti.is_decimal() ? decimal_to_int_type(col_ti) : col_ti.get_type();
+
+      // for a replicated (added) column, populate rows_per_shard as per-shard replicate count.
+      // and, bypass non-replicated column.
+      if (get_replicating()) {
+        if (input_buffer->get_replicate_count() > 0)
+          shard_output_buffers[col_idx]->set_replicate_count(std::min<int64_t>(rows_left, rows_per_shard));
+        else
+          continue;
+      }
+
       switch (type) {
         case kBOOLEAN:
           shard_output_buffers[col_idx]->addBoolean(int_value_at(*input_buffer, i));
@@ -1967,6 +1989,9 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
       }
     }
     ++all_shard_row_counts[shard];
+    // when replicating a column, row count of a shard == replicate count of the column on the shard
+    if (get_replicating())
+      all_shard_row_counts[shard] = std::min<int64_t>(rows_left, rows_per_shard);
   }
 }
 
@@ -1998,6 +2023,12 @@ bool Loader::loadToShard(const std::vector<std::unique_ptr<TypedImportBuffer>>& 
                          const TableDescriptor* shard_table,
                          bool checkpoint) {
   std::lock_guard<std::mutex> loader_lock(loader_mutex_);
+  // patch insert_data with new column
+  if (this->get_replicating())
+    for (const auto& import_buff : import_buffers) {
+      insert_data.replicate_count = import_buff->get_replicate_count();
+      insert_data.columnDescriptors[import_buff->getColumnDesc()->columnId] = import_buff->getColumnDesc();
+    }
 
   Fragmenter_Namespace::InsertData ins_data(insert_data);
   ins_data.numRows = row_count;
@@ -2029,6 +2060,7 @@ bool Loader::loadToShard(const std::vector<std::unique_ptr<TypedImportBuffer>>& 
         p.arraysPtr = import_buff->getArrayBuffer();
     }
     ins_data.data.push_back(p);
+    ins_data.bypass.push_back(0 == import_buff->get_replicate_count());
   }
   {
     try {

@@ -264,6 +264,26 @@ public class MetaConnect {
     }
   }
 
+  public static final int get_physical_cols(int type){
+    switch (type) {
+      case KPOINT:
+        return 1;  // coords
+      case KLINESTRING:
+        return 2;  // coords, bounds
+      case KPOLYGON:
+        return 4;  // coords, ring_sizes, bounds, render_group
+      case KMULTIPOLYGON:
+        return 5;  // coords, ring_sizes, poly_rings, bounds, render_group
+      default:
+        break;
+    }
+    return 0;
+  }
+
+  public static final boolean is_geometry(int type){
+    return type == KPOINT || type == KLINESTRING || type == KPOLYGON || type == KMULTIPOLYGON;
+  }
+
   private TTableDetails get_table_detail_SQL(String tableName) {
     TTableDetails td = new TTableDetails();
     td.getRow_descIterator();
@@ -285,6 +305,7 @@ public class MetaConnect {
           .format("SELECT * FROM mapd_columns where tableid = %d and not is_deletedcol order by columnid;", id);
       MAPDLOGGER.debug(query);
       rs = stmt.executeQuery(query);
+      int skip_physical_cols = 0;
       while (rs.next()) {
         String colName = rs.getString("name");
         MAPDLOGGER.debug("name = " + colName);
@@ -323,7 +344,11 @@ public class MetaConnect {
 
         tct.col_name = colName;
         tct.col_type = tti;
-        td.addToRow_desc(tct);
+
+        if (skip_physical_cols <= 0)
+          skip_physical_cols = get_physical_cols(colType);
+        if (is_geometry(colType) || skip_physical_cols-- <= 0)
+          td.addToRow_desc(tct);
       }
     } catch (Exception e) {
       String err = "error trying to read from mapd_columns, error was " + e.getMessage();

@@ -164,7 +164,7 @@ using namespace Parser;
 
 	/* literal keyword tokens */
 
-%token ALL ALTER AMMSC ANY ARRAY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
+%token ADD ALL ALTER AMMSC ANY ARRAY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
 %token CASE CAST CHAR_LENGTH CHARACTER CHECK CLOSE COLUMN COMMIT CONTINUE COPY CREATE CURRENT
 %token CURSOR DATABASE DATE DATETIME DATE_TRUNC DECIMAL DECLARE DEFAULT DELETE DESC DICTIONARY DISTINCT DOUBLE DROP
 %token ELSE END EXISTS EXPLAIN EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM
@@ -198,6 +198,7 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| truncate_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| rename_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| rename_column_statement { $<nodeval>$ = $<nodeval>1; }
+	| add_column_statement { $<nodeval>$ = $<nodeval>1; }
   | copy_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_database_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_database_statement { $<nodeval>$ = $<nodeval>1; }
@@ -336,6 +337,29 @@ rename_column_statement:
 		ALTER TABLE table RENAME COLUMN column TO column
 		{
 		   $<nodeval>$ = new RenameColumnStmt($<stringval>3, $<stringval>6, $<stringval>8);
+		}
+		;
+
+opt_column:
+		| COLUMN;
+
+column_defs:
+		 column_def	{ $<listval>$ = new std::list<Node*>(1, $<nodeval>1); }
+		|column_defs ',' column_def
+		{
+			$<listval>$ = $<listval>1;
+			$<listval>$->push_back($<nodeval>3);
+		}
+		;
+
+add_column_statement:
+		 ALTER TABLE table ADD opt_column column_def
+		{
+		   $<nodeval>$ = new AddColumnStmt($<stringval>3, dynamic_cast<ColumnDef*>($<nodeval>6));
+		}
+		|ALTER TABLE table ADD '(' column_defs ')' 
+		{
+		   $<nodeval>$ = new AddColumnStmt($<stringval>3, reinterpret_cast<std::list<ColumnDef*>*>($<nodeval>6));
 		}
 		;
 

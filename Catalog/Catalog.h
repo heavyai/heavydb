@@ -32,7 +32,9 @@
 #include <atomic>
 #include <cstdint>
 #include <ctime>
+#include <limits>
 #include <list>
+#include <vector>
 #include <map>
 #include <mutex>
 #include <string>
@@ -67,6 +69,16 @@ namespace Parser {
 class SharedDictionaryDef;
 
 }  // namespace Parser
+
+namespace Importer_NS {
+class Loader;
+class TypedImportBuffer;
+}
+
+// SPI means Sequential Positional Index which is equivalent to the input index in a RexInput node
+#define SPIMAP_MAGIC1 (std::numeric_limits<unsigned>::max() / 4)
+#define SPIMAP_MAGIC2 8
+#define SPIMAP_GEO_PHYSICAL_INPUT(c, i) (SPIMAP_MAGIC1 + (unsigned)(SPIMAP_MAGIC2 * ((c) + 1) + (i)))
 
 namespace Catalog_Namespace {
 
@@ -163,7 +175,7 @@ class Catalog {
   void truncateTable(const TableDescriptor* td);
   void renameTable(const TableDescriptor* td, const std::string& newTableName);
   void renameColumn(const TableDescriptor* td, const ColumnDescriptor* cd, const std::string& newColumnName);
-
+  void addColumn(const TableDescriptor& td, ColumnDescriptor& cd);
   void removeChunks(const int table_id);
 
   /**
@@ -178,6 +190,9 @@ class Catalog {
 
   const ColumnDescriptor* getMetadataForColumn(int tableId, const std::string& colName) const;
   const ColumnDescriptor* getMetadataForColumn(int tableId, int columnId) const;
+
+  const int getColumnIdBySpi(const int tableId, const size_t spi) const;
+  const ColumnDescriptor* getMetadataForColumnBySpi(const int tableId, const size_t spi) const;
 
   const FrontendViewDescriptor* getMetadataForFrontendView(const std::string& userId,
                                                            const std::string& viewName) const;
@@ -220,6 +235,12 @@ class Catalog {
   int32_t getTableEpoch(const int32_t db_id, const int32_t table_id) const;
   void setTableEpoch(const int db_id, const int table_id, const int new_epoch);
   int getDatabaseId() const { return currentDB_.dbId; }
+
+  SqliteConnector& getSqliteConnector() { return sqliteConnector_; }
+  void roll(const bool forward);
+  DictRef addDictionary(ColumnDescriptor& cd);
+  void delDictionary(const ColumnDescriptor& cd);
+  void getDictionary(const ColumnDescriptor& cd, std::map<int, StringDictionary*>& stringDicts);
 
   static void set(const std::string& dbName, std::shared_ptr<Catalog> cat);
   static std::shared_ptr<Catalog> get(const std::string& dbName);
@@ -314,6 +335,12 @@ class Catalog {
   static const std::string physicalTableNameTag_;  // extra component added to the name of each physical table
   int nextTempTableId_;
   int nextTempDictId_;
+
+  // this tuple is for rolling forw/back once after ALTER ADD/DEL/MODIFY columns succeeds/fails
+  //	get(0) = old ColumnDescriptor*
+  //	get(1) = new ColumnDescriptor*
+  using ColumnDescriptorsForRoll = std::vector<std::pair<ColumnDescriptor*, ColumnDescriptor*>>;
+  ColumnDescriptorsForRoll columnDescriptorsForRoll;
 
  private:
   static std::map<std::string, std::shared_ptr<Catalog>> mapd_cat_map_;
@@ -491,22 +518,45 @@ class SysCatalog {
   friend LdapServer;
 };
 
+// this class is defined to accommodate both Thrift and non-Thrift builds.
+class MapDHandler {
+ public:
+  virtual void prepare_columnar_loader(const std::string& session,
+                                       const std::string& table_name,
+                                       size_t num_cols,
+                                       std::unique_ptr<Importer_NS::Loader>* loader,
+                                       std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>* import_buffers);
+};
+
 /*
  * @type SessionInfo
  * @brief a user session
  */
 class SessionInfo {
  public:
+  SessionInfo(std::shared_ptr<MapDHandler> mapdHandler,
+              std::shared_ptr<Catalog> cat,
+              const UserMetadata& user,
+              const ExecutorDeviceType t,
+              const std::string& sid)
+      : mapdHandler_(mapdHandler),
+        catalog_(cat),
+        currentUser_(user),
+        executor_device_type_(t),
+        session_id(sid),
+        last_used_time(time(0)) {}
   SessionInfo(std::shared_ptr<Catalog> cat,
               const UserMetadata& user,
               const ExecutorDeviceType t,
               const std::string& sid)
-      : catalog_(cat), currentUser_(user), executor_device_type_(t), session_id(sid), last_used_time(time(0)) {}
+      : SessionInfo(std::make_shared<MapDHandler>(), cat, user, t, sid) {}
   SessionInfo(const SessionInfo& s)
-      : catalog_(s.catalog_),
+      : mapdHandler_(s.mapdHandler_),
+        catalog_(s.catalog_),
         currentUser_(s.currentUser_),
         executor_device_type_(static_cast<ExecutorDeviceType>(s.executor_device_type_)),
         session_id(s.session_id) {}
+  MapDHandler* get_mapdHandler() const { return mapdHandler_.get(); };
   Catalog& get_catalog() const { return *catalog_; }
   std::shared_ptr<Catalog> get_catalog_ptr() const { return catalog_; }
   const UserMetadata& get_currentUser() const { return currentUser_; }
@@ -522,6 +572,7 @@ class SessionInfo {
                                const std::string& objectName = "") const;
 
  private:
+  std::shared_ptr<MapDHandler> mapdHandler_;
   std::shared_ptr<Catalog> catalog_;
   UserMetadata currentUser_;
   std::atomic<ExecutorDeviceType> executor_device_type_;

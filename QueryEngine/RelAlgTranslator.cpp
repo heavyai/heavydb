@@ -298,7 +298,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(const RexInput*
     // the name and type information come directly from the catalog.
     CHECK(in_metainfo.empty());
     const auto table_desc = scan_source->getTableDescriptor();
-    const auto cd = cat_.getMetadataForColumn(table_desc->tableId, rex_input->getIndex() + 1);
+    const auto cd = cat_.getMetadataForColumnBySpi(table_desc->tableId, rex_input->getIndex() + 1);
     CHECK(cd);
     auto col_ti = cd->columnType;
     if (col_ti.is_string()) {

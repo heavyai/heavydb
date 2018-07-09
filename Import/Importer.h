@@ -517,9 +517,16 @@ class TypedImportBuffer : boost::noncopyable {
 
   size_t add_arrow_values(const ColumnDescriptor* cd, const arrow::Array& data);
 
-  void add_value(const ColumnDescriptor* cd, const std::string& val, const bool is_null, const CopyParams& copy_params);
+  void add_value(const ColumnDescriptor* cd,
+                 const std::string& val,
+                 const bool is_null,
+                 const CopyParams& copy_params,
+                 const int64_t replicate_count = 0);
   void add_value(const ColumnDescriptor* cd, const TDatum& val, const bool is_null);
   void pop_value();
+
+  inline int64_t get_replicate_count() const { return replicate_count_; }
+  inline void set_replicate_count(const int64_t replicate_count) { replicate_count_ = replicate_count; }
 
  private:
   union {
@@ -544,6 +551,7 @@ class TypedImportBuffer : boost::noncopyable {
   };
   const ColumnDescriptor* column_desc_;
   StringDictionary* string_dict_;
+  size_t replicate_count_ = 0;
 };
 
 class Loader {
@@ -571,6 +579,8 @@ class Loader {
   virtual void checkpoint();
   virtual int32_t getTableEpoch();
   virtual void setTableEpoch(const int32_t new_epoch);
+  inline void set_replicating(const bool replicating) { replicating_ = replicating; }
+  inline bool get_replicating() const { return replicating_; }
 
  protected:
   Catalog_Namespace::Catalog& catalog;
@@ -591,6 +601,7 @@ class Loader {
                    size_t row_count,
                    const TableDescriptor* shard_table,
                    bool checkpoint);
+  bool replicating_ = false;
   std::mutex loader_mutex_;
 };
 
@@ -710,9 +721,9 @@ class ImporterUtils {
     }
     if (s.size() - 1 > last) {  // if not empty string - disallow empty strings for now
       if (s.substr(last, s.size() - 1 - last).length() > StringDictionary::MAX_STRLEN)
-        throw std::runtime_error(
-            "Array String too long : " + std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
-            std::to_string(StringDictionary::MAX_STRLEN));
+        throw std::runtime_error("Array String too long : " +
+                                 std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
+                                 std::to_string(StringDictionary::MAX_STRLEN));
 
       string_vec.push_back(s.substr(last, s.size() - 1 - last));
     }

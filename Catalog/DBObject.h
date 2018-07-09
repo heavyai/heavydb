@@ -83,6 +83,7 @@ struct TablePrivileges {
   static const int32_t UPDATE_IN_TABLE = 1 << 4;
   static const int32_t DELETE_FROM_TABLE = 1 << 5;
   static const int32_t TRUNCATE_TABLE = 1 << 6;
+  static const int32_t ALTER_TABLE = 1 << 7;
 
   static const int32_t ALL_MIGRATE = CREATE_TABLE | DROP_TABLE | SELECT_FROM_TABLE | INSERT_INTO_TABLE;
 };
@@ -108,7 +109,6 @@ struct ViewPrivileges {
   static const int32_t TRUNCATE_VIEW = 1 << 6;
 
   static const int32_t ALL_MIGRATE = CREATE_VIEW | DROP_VIEW | SELECT_FROM_VIEW | INSERT_INTO_VIEW;
-
 };
 
 struct AccessPrivileges {
@@ -140,6 +140,7 @@ struct AccessPrivileges {
   static const AccessPrivileges UPDATE_IN_TABLE;
   static const AccessPrivileges DELETE_FROM_TABLE;
   static const AccessPrivileges TRUNCATE_TABLE;
+  static const AccessPrivileges ALTER_TABLE;
 
   // dashboard permissions
   static const AccessPrivileges ALL_DASHBOARD_MIGRATE;
@@ -148,7 +149,6 @@ struct AccessPrivileges {
   static const AccessPrivileges VIEW_DASHBOARD;
   static const AccessPrivileges EDIT_DASHBOARD;
   static const AccessPrivileges DELETE_DASHBOARD;
-
 
   // view permissions
   static const AccessPrivileges ALL_VIEW_MIGRATE;

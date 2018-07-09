@@ -24,7 +24,8 @@ static std::set<std::string> reserved_keywords{
 
     // MapD reserved keywords
 
-    "AMMSC",        // legacy
+    "ADD",  // legacy
+    "AMMSC",
     "ASC",
     "CONTINUE",
     "COPY",
@@ -34,26 +35,26 @@ static std::set<std::string> reserved_keywords{
     "DESC",
     "FIRST",
     "FOUND",
-    "GEOGRAPHY",    // geo type
-    "GEOMETRY",     // geo type
+    "GEOGRAPHY",  // geo type
+    "GEOMETRY",   // geo type
     "IF",
     "ILIKE",
     "LAST",
     "LENGTH",
-    "LINESTRING",   // geo type
-    "MULTIPOLYGON", // geo type
+    "LINESTRING",    // geo type
+    "MULTIPOLYGON",  // geo type
     "NOW",
     "NULLX",
     "OPTION",
-    "POINT",        // geo type
-    "POLYGON",      // geo type
+    "POINT",    // geo type
+    "POLYGON",  // geo type
     "PRIVILEGES",
     "PUBLIC",
     "RENAME",
-    "ROLE",         // permissions
-    "ROWID",        // hidden column name
+    "ROLE",   // permissions
+    "ROWID",  // hidden column name
     "SCHEMA",
-    "TEMPORARY",    // in-memory tables
+    "TEMPORARY",  // in-memory tables
     "TEXT",
     "VIEW",
     "WORK",

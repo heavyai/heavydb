@@ -118,19 +118,22 @@ void Chunk::createChunkBuffer(DataMgr* data_mgr,
 size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
                                             const size_t num_elems,
                                             const size_t start_idx,
-                                            const size_t byte_limit) {
+                                            const size_t byte_limit,
+                                            const bool replicating) {
   CHECK(column_desc->columnType.is_varlen());
   switch (column_desc->columnType.get_type()) {
     case kARRAY: {
       ArrayNoneEncoder* array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer->encoder.get());
-      return array_encoder->getNumElemsForBytesInsertData(src_data.arraysPtr, start_idx, num_elems, byte_limit);
+      return array_encoder->getNumElemsForBytesInsertData(
+          src_data.arraysPtr, start_idx, num_elems, byte_limit, replicating);
     }
     case kTEXT:
     case kVARCHAR:
     case kCHAR: {
       CHECK_EQ(kENCODING_NONE, column_desc->columnType.get_compression());
       StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
-      return str_encoder->getNumElemsForBytesInsertData(src_data.stringsPtr, start_idx, num_elems, byte_limit);
+      return str_encoder->getNumElemsForBytesInsertData(
+          src_data.stringsPtr, start_idx, num_elems, byte_limit, replicating);
     }
     case kPOINT:
     case kLINESTRING:
@@ -145,19 +148,22 @@ size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
   }
 }
 
-ChunkMetadata Chunk::appendData(DataBlockPtr& src_data, const size_t num_elems, const size_t start_idx) {
+ChunkMetadata Chunk::appendData(DataBlockPtr& src_data,
+                                const size_t num_elems,
+                                const size_t start_idx,
+                                const bool replicating) {
   if (column_desc->columnType.is_varlen()) {
     switch (column_desc->columnType.get_type()) {
       case kARRAY: {
         ArrayNoneEncoder* array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer->encoder.get());
-        return array_encoder->appendData(src_data.arraysPtr, start_idx, num_elems);
+        return array_encoder->appendData(src_data.arraysPtr, start_idx, num_elems, replicating);
       }
       case kTEXT:
       case kVARCHAR:
       case kCHAR: {
         CHECK_EQ(kENCODING_NONE, column_desc->columnType.get_compression());
         StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
-        return str_encoder->appendData(src_data.stringsPtr, start_idx, num_elems);
+        return str_encoder->appendData(src_data.stringsPtr, start_idx, num_elems, replicating);
       }
       case kPOINT:
       case kLINESTRING:
@@ -170,7 +176,7 @@ ChunkMetadata Chunk::appendData(DataBlockPtr& src_data, const size_t num_elems, 
         CHECK(false);
     }
   }
-  return buffer->encoder->appendData(src_data.numbersPtr, num_elems);
+  return buffer->encoder->appendData(src_data.numbersPtr, num_elems, replicating);
 }
 
 void Chunk::unpin_buffer() {

@@ -58,8 +58,12 @@ class Chunk {
   size_t getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
                                        const size_t num_elems,
                                        const size_t start_idx,
-                                       const size_t byte_limit);
-  ChunkMetadata appendData(DataBlockPtr& srcData, const size_t numAppendElems, const size_t startIdx);
+                                       const size_t byte_limit,
+                                       const bool replicating = false);
+  ChunkMetadata appendData(DataBlockPtr& srcData,
+                           const size_t numAppendElems,
+                           const size_t startIdx,
+                           const bool replicating = false);
   void createChunkBuffer(DataMgr* data_mgr,
                          const ChunkKey& key,
                          const MemoryLevel mem_level,

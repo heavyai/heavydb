@@ -53,6 +53,8 @@ struct TableDescriptor {
   Data_Namespace::MemoryLevel persistenceLevel;
   bool hasDeletedCol;  // Does table has a delete col, Yes (VACUUM = DELAYED)
                        //                              No  (VACUUM = IMMEDIATE)
+  // Spi means Sequential Positional Index which is equivalent to the input index in a RexInput node
+  std::vector<int> columnIdBySpi_;  // spi = 1,2,3,...
 
   TableDescriptor()
       : tableId(-1),

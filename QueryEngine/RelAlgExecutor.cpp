@@ -180,11 +180,19 @@ std::unordered_set<int> get_physical_table_ids(const std::unordered_set<Physical
   return physical_table_ids;
 }
 
+std::unordered_set<PhysicalInput> get_physical_inputs(const Catalog_Namespace::Catalog& cat, const RelAlgNode* ra) {
+  auto phys_inputs = get_physical_inputs(ra);
+  std::unordered_set<PhysicalInput> phys_inputs2;
+  for (auto& phi : phys_inputs)
+    phys_inputs2.insert(PhysicalInput{cat.getColumnIdBySpi(phi.table_id, phi.col_id), phi.table_id});
+  return phys_inputs2;
+}
+
 }  // namespace
 
 AggregatedColRange RelAlgExecutor::computeColRangesCache(const RelAlgNode* ra) {
   AggregatedColRange agg_col_range_cache;
-  const auto phys_inputs = get_physical_inputs(ra);
+  const auto phys_inputs = get_physical_inputs(cat_, ra);
   const auto phys_table_ids = get_physical_table_ids(phys_inputs);
   std::vector<InputTableInfo> query_infos;
   executor_->catalog_ = &cat_;
@@ -208,7 +216,7 @@ AggregatedColRange RelAlgExecutor::computeColRangesCache(const RelAlgNode* ra) {
 
 StringDictionaryGenerations RelAlgExecutor::computeStringDictionaryGenerations(const RelAlgNode* ra) {
   StringDictionaryGenerations string_dictionary_generations;
-  const auto phys_inputs = get_physical_inputs(ra);
+  const auto phys_inputs = get_physical_inputs(cat_, ra);
   for (const auto& phys_input : phys_inputs) {
     const auto cd = cat_.getMetadataForColumn(phys_input.table_id, phys_input.col_id);
     CHECK(cd);
@@ -550,13 +558,13 @@ class RexUsedInputsVisitor : public RexVisitor<std::unordered_set<const RexInput
       const auto td = scan_ra->getTableDescriptor();
       if (td) {
         const auto col_id = rex_input->getIndex();
-        const auto cd = cat_.getMetadataForColumn(td->tableId, col_id + 1);
+        const auto cd = cat_.getMetadataForColumnBySpi(td->tableId, col_id + 1);
         if (cd && cd->columnType.get_physical_coord_cols() > 0) {
           CHECK(IS_GEO(cd->columnType.get_type()));
           auto bounds_col = cd->columnType.has_bounds() ? 1 : 0;
           std::unordered_set<const RexInput*> synthesized_physical_inputs;
           for (auto i = 0; i < cd->columnType.get_physical_coord_cols() + bounds_col; i++) {
-            auto physical_input = new RexInput(scan_ra, col_id + 1 + i);
+            auto physical_input = new RexInput(scan_ra, SPIMAP_GEO_PHYSICAL_INPUT(col_id, i));
             synthesized_physical_inputs_owned.emplace_back(physical_input);
             synthesized_physical_inputs.insert(physical_input);
           }
@@ -844,6 +852,7 @@ std::pair<const RelAlgNode*, int> get_non_join_source_node(const RelAlgNode* crt
 }
 
 void collect_used_input_desc(std::vector<InputDescriptor>& input_descs,
+                             const Catalog_Namespace::Catalog& cat,
                              std::unordered_set<std::shared_ptr<const InputColDescriptor>>& input_col_descs_unique,
                              const RelAlgNode* ra_node,
                              const std::unordered_set<const RexInput*>& source_used_inputs,
@@ -870,7 +879,9 @@ void collect_used_input_desc(std::vector<InputDescriptor>& input_descs,
     if (indirect_input_ra == input_ra) {
       CHECK_EQ(indirect_col_id, static_cast<ssize_t>(col_id));
       input_col_descs_unique.insert(std::make_shared<const InputColDescriptor>(
-          dynamic_cast<const RelScan*>(input_ra) ? col_id + 1 : col_id, table_id, input_desc));
+          dynamic_cast<const RelScan*>(input_ra) ? cat.getColumnIdBySpi(table_id, col_id + 1) : col_id,
+          table_id,
+          input_desc));
       continue;
     }
 
@@ -888,7 +899,7 @@ void collect_used_input_desc(std::vector<InputDescriptor>& input_descs,
     CHECK_EQ(size_t(0), static_cast<size_t>(input_desc));
     // Physical columns from a scan node are numbered from 1 in our system.
     input_col_descs_unique.insert(std::make_shared<const IndirectInputColDescriptor>(
-        col_id,
+        cat.getColumnIdBySpi(table_id, col_id),
         table_id,
         input_desc,
         nest_level,
@@ -919,11 +930,12 @@ std::pair<std::vector<InputDescriptor>, std::list<std::shared_ptr<const InputCol
     return lhs.getNestLevel() < rhs.getNestLevel();
   });
   std::unordered_set<std::shared_ptr<const InputColDescriptor>> input_col_descs_unique;
-  collect_used_input_desc(input_descs, input_col_descs_unique, ra_node, used_inputs, input_to_nest_level);
+  collect_used_input_desc(input_descs, cat, input_col_descs_unique, ra_node, used_inputs, input_to_nest_level);
   std::unordered_set<const RexInput*> join_source_used_inputs;
   std::vector<std::shared_ptr<RexInput>> join_source_used_inputs_owned;
   std::tie(join_source_used_inputs, join_source_used_inputs_owned) = get_join_source_used_inputs(ra_node, cat);
-  collect_used_input_desc(input_descs, input_col_descs_unique, ra_node, join_source_used_inputs, input_to_nest_level);
+  collect_used_input_desc(
+      input_descs, cat, input_col_descs_unique, ra_node, join_source_used_inputs, input_to_nest_level);
   std::vector<std::shared_ptr<const InputColDescriptor>> input_col_descs(input_col_descs_unique.begin(),
                                                                          input_col_descs_unique.end());
 

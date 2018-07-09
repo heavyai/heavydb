@@ -690,9 +690,11 @@ class DMLStmt : public Stmt {
  * @type DDLStmt
  * @brief DDL Statements
  */
+class ColumnDef;
 class DDLStmt : public Stmt {
  public:
   virtual void execute(const Catalog_Namespace::SessionInfo& session) = 0;
+  void setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef);
 };
 
 /*
@@ -990,6 +992,23 @@ class RenameColumnStmt : public DDLStmt {
   std::unique_ptr<std::string> table;
   std::unique_ptr<std::string> column;
   std::unique_ptr<std::string> new_column_name;
+};
+
+class AddColumnStmt : public DDLStmt {
+ public:
+  AddColumnStmt(std::string* tab, ColumnDef* coldef) : table(tab), coldef(coldef) {}
+  AddColumnStmt(std::string* tab, std::list<ColumnDef*>* coldefs) : table(tab) {
+    for (const auto coldef : *coldefs)
+      this->coldefs.emplace_back(coldef);
+    delete coldefs;
+  }
+  virtual void execute(const Catalog_Namespace::SessionInfo& session);
+  const std::string* get_table() const { return table.get(); }
+
+ private:
+  std::unique_ptr<std::string> table;
+  std::unique_ptr<ColumnDef> coldef;
+  std::list<std::unique_ptr<ColumnDef>> coldefs;
 };
 
 /*

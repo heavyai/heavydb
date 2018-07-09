@@ -18,12 +18,14 @@
 #include "../DataMgr/LockMgr.h"
 #include "../DataMgr/DataMgr.h"
 #include "../DataMgr/AbstractBuffer.h"
+#include "../Shared/checked_alloc.h"
+#include "../Shared/thread_count.h"
 #include <glog/logging.h>
 #include <limits>
 #include <math.h>
 #include <iostream>
 #include <thread>
-
+#include <type_traits>
 #include <assert.h>
 #include <boost/lexical_cast.hpp>
 
@@ -61,7 +63,8 @@ InsertOrderFragmenter::InsertOrderFragmenter(const vector<int> chunkKeyPrefix,
       maxRows_(maxRows),
       fragmenterType_("insert_order"),
       defaultInsertLevel_(defaultInsertLevel),
-      hasMaterializedRowId_(false) {
+      hasMaterializedRowId_(false),
+      mutex_access_inmem_states(new std::mutex) {
   // Note that Fragmenter is not passed virtual columns and so should only
   // find row id column if it is non virtual
 
@@ -227,6 +230,72 @@ void InsertOrderFragmenter::insertDataNoCheckpoint(InsertData& insertDataStruct)
   insertDataImpl(insertDataStruct);
 }
 
+void InsertOrderFragmenter::replicateData(const InsertData& insertDataStruct) {
+  size_t numRowsLeft = insertDataStruct.numRows;
+  for (auto& fragmentInfo : fragmentInfoVec_) {
+    fragmentInfo.shadowChunkMetadataMap = fragmentInfo.getChunkMetadataMapPhysical();
+    auto numRowsToInsert = fragmentInfo.getPhysicalNumTuples();  // not getNumTuples()
+    size_t numRowsCanBeInserted;
+    for (size_t i = 0; i < insertDataStruct.columnIds.size(); i++) {
+      if (insertDataStruct.bypass[i])
+        continue;
+      auto columnId = insertDataStruct.columnIds[i];
+      auto colDesc = insertDataStruct.columnDescriptors.at(columnId);
+      CHECK(columnMap_.find(columnId) != columnMap_.end());
+
+      ChunkKey chunkKey = chunkKeyPrefix_;
+      chunkKey.push_back(columnId);
+      chunkKey.push_back(fragmentInfo.fragmentId);
+
+      auto colMapIt = columnMap_.find(columnId);
+      auto& chunk = colMapIt->second;
+      if (chunk.isChunkOnDevice(
+              dataMgr_, chunkKey, defaultInsertLevel_, fragmentInfo.deviceIds[static_cast<int>(defaultInsertLevel_)]))
+        dataMgr_->deleteChunksWithPrefix(chunkKey);
+      chunk.createChunkBuffer(
+          dataMgr_, chunkKey, defaultInsertLevel_, fragmentInfo.deviceIds[static_cast<int>(defaultInsertLevel_)]);
+      chunk.init_encoder();
+
+      try {
+        DataBlockPtr dataCopy = insertDataStruct.data[i];
+        auto size = colDesc->columnType.get_size();
+        if (0 > size) {
+          std::unique_lock<std::mutex> lck(*mutex_access_inmem_states);
+          varLenColInfo_[columnId] = 0;
+          numRowsCanBeInserted = chunk.getNumElemsForBytesInsertData(dataCopy, numRowsToInsert, 0, maxChunkSize_, true);
+        } else
+          numRowsCanBeInserted = maxChunkSize_ / size;
+
+        // FIXME: abort a case in which new column is wider than existing columns
+        if (numRowsCanBeInserted < numRowsToInsert)
+          throw std::runtime_error("new column '" + colDesc->columnName +
+                                   "' wider than existing columns is not supported");
+
+        auto chunkMetadata = chunk.appendData(dataCopy, numRowsToInsert, 0, true);
+        {
+          std::unique_lock<std::mutex> lck(*fragmentInfo.mutex_access_inmem_states);
+          fragmentInfo.shadowChunkMetadataMap[columnId] = chunkMetadata;
+        }
+
+        // update total size of var-len column in (actually the last) fragment
+        if (0 > size) {
+          std::unique_lock<std::mutex> lck(*mutex_access_inmem_states);
+          varLenColInfo_[columnId] = chunk.get_buffer()->size();
+        }
+      } catch (...) {
+        dataMgr_->deleteChunksWithPrefix(chunkKey);
+        throw;
+      }
+    }
+    numRowsLeft -= numRowsToInsert;
+  }
+  CHECK(0 == numRowsLeft);
+
+  mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
+  for (auto& fragmentInfo : fragmentInfoVec_)
+    fragmentInfo.setChunkMetadataMap(fragmentInfo.shadowChunkMetadataMap);
+}
+
 void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
   // populate deleted system column of it exists, as it will not come from client
   std::unique_ptr<int8_t[]> data_for_deleted_column;
@@ -236,10 +305,23 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
       memset(data_for_deleted_column.get(), 0, insertDataStruct.numRows);
       insertDataStruct.data.emplace_back(DataBlockPtr{data_for_deleted_column.get()});
       insertDataStruct.columnIds.push_back(cit.second.get_column_desc()->columnId);
+      insertDataStruct.columnDescriptors[cit.first] = cit.second.get_column_desc();
       break;
     }
   // MAT we need to add a removal of the empty column we pushed onto here
   // for upstream safety.  Should not be a problem but need to fix.
+
+  // insert column to columnMap_ if not yet (ALTER ADD COLUMN)
+  for (const auto columnId : insertDataStruct.columnIds) {
+    if (columnMap_.end() == columnMap_.find(columnId))
+      columnMap_.emplace(columnId, Chunk_NS::Chunk(insertDataStruct.columnDescriptors.at(columnId)));
+  }
+
+  // when replicate (add) column(s), this path seems wont work; go separate route...
+  if (insertDataStruct.replicate_count > 0) {
+    replicateData(insertDataStruct);
+    return;
+  }
 
   std::unordered_map<int, int> inverseInsertDataColIdMap;
   for (size_t insertId = 0; insertId < insertDataStruct.columnIds.size(); ++insertId) {

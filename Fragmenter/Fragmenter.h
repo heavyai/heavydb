@@ -61,6 +61,9 @@ struct InsertData {
   std::vector<int> columnIds;      /// a vector of column ids for the row(s) being inserted
   size_t numRows;                  /// the number of rows being inserted
   std::vector<DataBlockPtr> data;  /// points to the start of the data block per column for the row(s) being inserted
+  int64_t replicate_count = 0;     /// count to replicate values of column(s); used only for ALTER ADD column
+  std::vector<bool> bypass;        // bypass corresponding columnIds[]
+  std::map<int, const ColumnDescriptor*> columnDescriptors;
 };
 
 /**
@@ -77,6 +80,7 @@ class FragmentInfo {
         shadowNumTuples(0),
         physicalTableId(-1),
         shard(-1),
+        mutex_access_inmem_states(new std::mutex),
         resultSet(nullptr),
         numTuples(0),
         synthesizedNumTuplesIsValid(false),
@@ -109,6 +113,7 @@ class FragmentInfo {
   int physicalTableId;
   int shard;
   std::map<int, ChunkMetadata> shadowChunkMetadataMap;
+  mutable std::shared_ptr<std::mutex> mutex_access_inmem_states;
   mutable ResultSet* resultSet;
   mutable std::shared_ptr<std::mutex> resultSetMutex;
 

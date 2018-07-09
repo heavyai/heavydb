@@ -37,7 +37,7 @@ class Encoder {
  public:
   static Encoder* Create(Data_Namespace::AbstractBuffer* buffer, const SQLTypeInfo sqlType);
   Encoder(Data_Namespace::AbstractBuffer* buffer) : numElems(0), buffer_(buffer) {}
-  virtual ChunkMetadata appendData(int8_t*& srcData, const size_t numAppendElems) = 0;
+  virtual ChunkMetadata appendData(int8_t*& srcData, const size_t numAppendElems, const bool replicating = false) = 0;
   virtual void getMetadata(ChunkMetadata& chunkMetadata);
   // Only called from the executor for synthesized meta-information.
   virtual ChunkMetadata getMetadata(const SQLTypeInfo& ti);

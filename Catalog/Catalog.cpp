@@ -23,6 +23,7 @@
  **/
 
 #include "Catalog.h"
+#include <algorithm>
 #include <cassert>
 #include <exception>
 #include <list>
@@ -60,6 +61,8 @@ using std::string;
 using std::vector;
 
 bool g_aggregator{false};
+
+int g_test_against_columnId_gap = 0;
 
 namespace {
 
@@ -2107,9 +2110,11 @@ void Catalog::buildMaps() {
   }
   string columnQuery(
       "SELECT tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, compression, comp_param, "
-      "size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_deletedcol from mapd_columns");
+      "size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_deletedcol from mapd_columns ORDER BY tableid, "
+      "columnid");
   sqliteConnector_.query(columnQuery);
   numRows = sqliteConnector_.getNumRows();
+  int32_t skip_physical_cols = 0;
   for (size_t r = 0; r < numRows; ++r) {
     ColumnDescriptor* cd = new ColumnDescriptor();
     cd->tableId = sqliteConnector_.getData<int>(r, 0);
@@ -2132,13 +2137,25 @@ void Catalog::buildMaps() {
     columnDescriptorMap_[columnKey] = cd;
     ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
     columnDescriptorMapById_[columnIdKey] = cd;
+
+    if (skip_physical_cols <= 0)
+      skip_physical_cols = cd->columnType.get_physical_cols();
+
+    auto td_itr = tableDescriptorMapById_.find(cd->tableId);
+    CHECK(td_itr != tableDescriptorMapById_.end());
+
     if (cd->isDeletedCol) {
-      auto td_itr = tableDescriptorMapById_.find(cd->tableId);
-      CHECK(td_itr != tableDescriptorMapById_.end());
       td_itr->second->hasDeletedCol = true;
       setDeletedColumnUnlocked(td_itr->second, cd);
-    }
+    } else if (cd->columnType.is_geometry() || skip_physical_cols-- <= 0)
+      tableDescriptorMapById_[cd->tableId]->columnIdBySpi_.push_back(cd->columnId);
   }
+  // sort columnIdBySpi_ based on columnId
+  for (auto& tit : tableDescriptorMapById_)
+    std::sort(tit.second->columnIdBySpi_.begin(),
+              tit.second->columnIdBySpi_.end(),
+              [](const size_t a, const size_t b) -> bool { return a < b; });
+
   string viewQuery("SELECT tableid, sql FROM mapd_views");
   sqliteConnector_.query(viewQuery);
   numRows = sqliteConnector_.getNumRows();
@@ -2230,6 +2247,11 @@ void Catalog::addTableToMap(TableDescriptor& td,
       setDeletedColumnUnlocked(new_td, new_cd);
     }
   }
+
+  std::sort(new_td->columnIdBySpi_.begin(), new_td->columnIdBySpi_.end(), [](const size_t a, const size_t b) -> bool {
+    return a < b;
+  });
+
   std::unique_ptr<StringDictionaryClient> client;
   DictRef dict_ref(currentDB_.dbId, -1);
   if (!string_dict_hosts_.empty()) {
@@ -2264,7 +2286,6 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
     CHECK_EQ(ret, size_t(1));
   }
 
-  int ncolumns = td->nColumns;
   tableDescriptorMapById_.erase(tableDescIt);
   tableDescriptorMap_.erase(to_upper(tableName));
   if (td->fragmenter != nullptr)
@@ -2280,35 +2301,40 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
   }
 
   // delete all column descriptors for the table
-  for (int i = 1; i <= ncolumns; i++) {
-    ColumnIdKey cidKey(tableId, i);
-    ColumnDescriptorMapById::iterator colDescIt = columnDescriptorMapById_.find(cidKey);
-    ColumnDescriptor* cd = colDescIt->second;
-    columnDescriptorMapById_.erase(colDescIt);
-    ColumnKey cnameKey(tableId, to_upper(cd->columnName));
-    columnDescriptorMap_.erase(cnameKey);
-    const int dictId = cd->columnType.get_comp_param();
-    // Dummy dictionaries created for a shard of a logical table have the id set to zero.
-    if (cd->columnType.get_compression() == kENCODING_DICT && dictId) {
-      DictRef dict_ref(currentDB_.dbId, dictId);
-      const auto dictIt = dictDescriptorMapByRef_.find(dict_ref);
-      CHECK(dictIt != dictDescriptorMapByRef_.end());
-      const auto& dd = dictIt->second;
-      CHECK_GE(dd->refcount, 1);
-      --dd->refcount;
-      if (!dd->refcount) {
-        dd->stringDict.reset();
-        if (!isTemp) {
-          boost::filesystem::remove_all(dd->dictFolderPath);
+  // no more link columnIds to sequential indexes!
+  for (auto cit = columnDescriptorMapById_.begin(); cit != columnDescriptorMapById_.end();)
+    if (tableId != std::get<0>(cit->first))
+      ++cit;
+    else {
+      int i = std::get<1>(cit++->first);
+      ColumnIdKey cidKey(tableId, i);
+      ColumnDescriptorMapById::iterator colDescIt = columnDescriptorMapById_.find(cidKey);
+      ColumnDescriptor* cd = colDescIt->second;
+      columnDescriptorMapById_.erase(colDescIt);
+      ColumnKey cnameKey(tableId, to_upper(cd->columnName));
+      columnDescriptorMap_.erase(cnameKey);
+      const int dictId = cd->columnType.get_comp_param();
+      // Dummy dictionaries created for a shard of a logical table have the id set to zero.
+      if (cd->columnType.get_compression() == kENCODING_DICT && dictId) {
+        DictRef dict_ref(currentDB_.dbId, dictId);
+        const auto dictIt = dictDescriptorMapByRef_.find(dict_ref);
+        CHECK(dictIt != dictDescriptorMapByRef_.end());
+        const auto& dd = dictIt->second;
+        CHECK_GE(dd->refcount, 1);
+        --dd->refcount;
+        if (!dd->refcount) {
+          dd->stringDict.reset();
+          if (!isTemp) {
+            boost::filesystem::remove_all(dd->dictFolderPath);
+          }
+          if (client) {
+            client->drop(dict_ref);
+          }
+          dictDescriptorMapByRef_.erase(dictIt);
         }
-        if (client) {
-          client->drop(dict_ref);
-        }
-        dictDescriptorMapByRef_.erase(dictIt);
       }
+      delete cd;
     }
-    delete cd;
-  }
 }
 
 void Catalog::addFrontendViewToMap(FrontendViewDescriptor& vd) {
@@ -2439,6 +2465,30 @@ const ColumnDescriptor* Catalog::getMetadataForColumn(int tableId, int columnId)
   return colDescIt->second;
 }
 
+const int Catalog::getColumnIdBySpi(const int tableId, const size_t spi) const {
+  const auto tabDescIt = tableDescriptorMapById_.find(tableId);
+  CHECK(tableDescriptorMapById_.end() != tabDescIt);
+  const auto& columnIdBySpi = tabDescIt->second->columnIdBySpi_;
+
+  auto spx = spi;
+  int phi = 0;
+  if (spx >= SPIMAP_MAGIC1)  // see Catalog.h
+  {
+    phi = (spx - SPIMAP_MAGIC1) % SPIMAP_MAGIC2;
+    spx = (spx - SPIMAP_MAGIC1) / SPIMAP_MAGIC2;
+  }
+
+  CHECK(0 < spx && spx <= columnIdBySpi.size());
+  return columnIdBySpi[spx - 1] + phi;
+}
+
+const ColumnDescriptor* Catalog::getMetadataForColumnBySpi(const int tableId, const size_t spi) const {
+  const auto columnId = getColumnIdBySpi(tableId, spi);
+  ColumnIdKey columnIdKey(tableId, columnId);
+  const auto colDescIt = columnDescriptorMapById_.find(columnIdKey);
+  return columnDescriptorMapById_.end() == colDescIt ? nullptr : colDescIt->second;
+}
+
 void Catalog::deleteMetadataForFrontendView(const std::string& userId, const std::string& viewName) {
   cat_write_lock write_lock(this);
 
@@ -2548,13 +2598,14 @@ void Catalog::getAllColumnMetadataForTable(const TableDescriptor* td,
                                            const bool fetchPhysicalColumns) const {
   cat_read_lock read_lock(this);
   int32_t skip_physical_cols = 0;
-  for (int i = 1; i <= td->nColumns; i++) {
+  for (const auto& columnDescriptor : columnDescriptorMapById_) {
     if (!fetchPhysicalColumns && skip_physical_cols > 0) {
       --skip_physical_cols;
       continue;
     }
-    const ColumnDescriptor* cd = getMetadataForColumn(td->tableId, i);
-    assert(cd != nullptr);
+    auto cd = columnDescriptor.second;
+    if (cd->tableId != td->tableId)
+      continue;
     if (!fetchSystemColumns && cd->isSystemCol)
       continue;
     if (!fetchVirtualColumns && cd->isVirtualCol)
@@ -2593,6 +2644,164 @@ list<const FrontendViewDescriptor*> Catalog::getAllFrontendViewMetadata() const 
   return view_list;
 }
 
+DictRef Catalog::addDictionary(ColumnDescriptor& cd) {
+  const auto& td = *tableDescriptorMapById_[cd.tableId];
+  list<DictDescriptor> dds;
+  setColumnDictionary(cd, dds, td, true);
+  auto& dd = dds.back();
+  CHECK(dd.dictRef.dictId);
+
+  std::unique_ptr<StringDictionaryClient> client;
+  if (!string_dict_hosts_.empty())
+    client.reset(new StringDictionaryClient(string_dict_hosts_.front(), DictRef(currentDB_.dbId, -1), true));
+  if (client)
+    client->create(dd.dictRef, dd.dictIsTemp);
+
+  DictDescriptor* new_dd = new DictDescriptor(dd);
+  dictDescriptorMapByRef_[dd.dictRef].reset(new_dd);
+  if (!dd.dictIsTemp)
+    boost::filesystem::create_directory(new_dd->dictFolderPath);
+  return dd.dictRef;
+}
+
+void Catalog::delDictionary(const ColumnDescriptor& cd) {
+  if (!(cd.columnType.is_string() || cd.columnType.is_string_array()))
+    return;
+  if (!(cd.columnType.get_compression() == kENCODING_DICT))
+    return;
+  if (!(cd.columnType.get_comp_param() > 0))
+    return;
+
+  const auto& td = *tableDescriptorMapById_[cd.tableId];
+  const auto dictId = cd.columnType.get_comp_param();
+  const DictRef dictRef(currentDB_.dbId, dictId);
+  const auto dictName = td.tableName + "_" + cd.columnName + "_dict" + std::to_string(dictId);
+  sqliteConnector_.query_with_text_param("DELETE FROM mapd_dictionaries WHERE name = ?", dictName);
+  boost::filesystem::remove_all(basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) + "_DICT_" +
+                                std::to_string(dictId));
+
+  std::unique_ptr<StringDictionaryClient> client;
+  if (!string_dict_hosts_.empty())
+    client.reset(new StringDictionaryClient(string_dict_hosts_.front(), dictRef, true));
+  if (client)
+    client->drop(dictRef);
+
+  dictDescriptorMapByRef_.erase(dictRef);
+}
+
+void Catalog::getDictionary(const ColumnDescriptor& cd, std::map<int, StringDictionary*>& stringDicts) {
+  // learn 'committed' ColumnDescriptor of this column
+  auto cit = columnDescriptorMap_.find(ColumnKey(cd.tableId, to_upper(cd.columnName)));
+  CHECK(cit != columnDescriptorMap_.end());
+  auto& ccd = *cit->second;
+
+  if (!(ccd.columnType.is_string() || ccd.columnType.is_string_array()))
+    return;
+  if (!(ccd.columnType.get_compression() == kENCODING_DICT))
+    return;
+  if (!(ccd.columnType.get_comp_param() > 0))
+    return;
+
+  auto dictId = ccd.columnType.get_comp_param();
+  getMetadataForDict(dictId);
+
+  const DictRef dictRef(currentDB_.dbId, dictId);
+  auto dit = dictDescriptorMapByRef_.find(dictRef);
+  CHECK(dit != dictDescriptorMapByRef_.end());
+  CHECK(dit->second);
+  CHECK(dit->second.get()->stringDict);
+  stringDicts[ccd.columnId] = dit->second.get()->stringDict.get();
+}
+
+void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
+  // caller must handle sqlite/chunk transaction TOGETHER
+  cd.tableId = td.tableId;
+  if (cd.columnType.get_compression() == kENCODING_DICT)
+    addDictionary(cd);
+
+  sqliteConnector_.query_with_text_params(
+      "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, "
+      "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr) VALUES (?, "
+      "(SELECT max(columnid) + 1 FROM mapd_columns WHERE tableid = ?), "
+      "?, ?, ?, "
+      "?, "
+      "?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      std::vector<std::string>{std::to_string(td.tableId),
+                               std::to_string(td.tableId),
+                               cd.columnName,
+                               std::to_string(cd.columnType.get_type()),
+                               std::to_string(cd.columnType.get_subtype()),
+                               std::to_string(cd.columnType.get_dimension()),
+                               std::to_string(cd.columnType.get_scale()),
+                               std::to_string(cd.columnType.get_notnull()),
+                               std::to_string(cd.columnType.get_compression()),
+                               std::to_string(cd.columnType.get_comp_param()),
+                               std::to_string(cd.columnType.get_size()),
+                               "",
+                               std::to_string(cd.isSystemCol),
+                               std::to_string(cd.isVirtualCol),
+                               cd.virtualExpr});
+
+  sqliteConnector_.query_with_text_params("UPDATE mapd_tables SET ncolumns = ncolumns + 1 WHERE tableid = ?",
+                                          std::vector<std::string>{std::to_string(td.tableId)});
+
+  sqliteConnector_.query_with_text_params("SELECT columnid FROM mapd_columns WHERE tableid = ? AND name = ?",
+                                          std::vector<std::string>{std::to_string(td.tableId), cd.columnName});
+  cd.columnId = sqliteConnector_.getData<int>(0, 0);
+
+  ++tableDescriptorMapById_[td.tableId]->nColumns;
+  auto ncd = new ColumnDescriptor(cd);
+  columnDescriptorMap_[ColumnKey(cd.tableId, to_upper(cd.columnName))] = ncd;
+  columnDescriptorMapById_[ColumnIdKey(cd.tableId, cd.columnId)] = ncd;
+  columnDescriptorsForRoll.emplace_back(nullptr, ncd);
+}
+
+void Catalog::roll(const bool forward) {
+  std::set<const TableDescriptor*> tds;
+
+  for (const auto& cdr : columnDescriptorsForRoll) {
+    auto ocd = cdr.first;
+    auto ncd = cdr.second;
+    CHECK(ocd || ncd);
+    auto tabDescIt = tableDescriptorMapById_.find((ncd ? ncd : ocd)->tableId);
+    CHECK(tableDescriptorMapById_.end() != tabDescIt);
+    auto td = tabDescIt->second;
+    auto& vc = td->columnIdBySpi_;
+    if (forward) {
+      if (ocd) {
+        if (nullptr == ncd || ncd->columnType.get_comp_param() != ocd->columnType.get_comp_param())
+          delDictionary(*ocd);
+
+        vc.erase(std::remove(vc.begin(), vc.end(), ocd->columnId), vc.end());
+
+        delete ocd;
+      }
+      if (ncd) {
+        // append columnId if its new
+        if (vc.end() == std::find(vc.begin(), vc.end(), ncd->columnId))
+          vc.push_back(ncd->columnId);
+      }
+      tds.insert(td);
+    } else {
+      if (ocd) {
+        columnDescriptorMap_[ColumnKey(ocd->tableId, to_upper(ocd->columnName))] = ocd;
+        columnDescriptorMapById_[ColumnIdKey(ocd->tableId, ocd->columnId)] = ocd;
+      }
+      // roll back the dict of new column
+      if (ncd) {
+        if (nullptr == ocd || ocd->columnType.get_comp_param() != ncd->columnType.get_comp_param())
+          delDictionary(*ncd);
+        delete ncd;
+      }
+    }
+  }
+  columnDescriptorsForRoll.clear();
+
+  if (forward)
+    for (const auto td : tds)
+      calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
+}
+
 void Catalog::createTable(TableDescriptor& td,
                           const list<ColumnDescriptor>& cols,
                           const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs,
@@ -2600,7 +2809,7 @@ void Catalog::createTable(TableDescriptor& td,
   cat_write_lock write_lock(this);
   list<ColumnDescriptor> cds;
   list<DictDescriptor> dds;
-
+  std::set<std::string> toplevel_column_names;
   list<ColumnDescriptor> columns;
   for (auto cd : cols) {
     if (cd.columnName == "rowid") {
@@ -2727,10 +2936,10 @@ void Catalog::createTable(TableDescriptor& td,
           throw runtime_error("Unrecognized geometry type.");
           break;
       }
-      continue;
-    }
+    } else
+      columns.push_back(cd);
 
-    columns.push_back(cd);
+    toplevel_column_names.insert(cd.columnName);
   }
 
   ColumnDescriptor cd;
@@ -2745,6 +2954,7 @@ void Catalog::createTable(TableDescriptor& td,
   cd.virtualExpr = "MAPD_FRAG_ID * MAPD_ROWS_PER_FRAG + MAPD_FRAG_ROW_ID";
 #endif
   columns.push_back(cd);
+  toplevel_column_names.insert(cd.columnName);
 
   if (td.hasDeletedCol) {
     ColumnDescriptor cd_del;
@@ -2795,6 +3005,14 @@ void Catalog::createTable(TableDescriptor& td,
             setColumnDictionary(cd, dds, td, isLogicalTable);
           }
         }
+
+        if (toplevel_column_names.count(cd.columnName)) {
+          // make up colId gap for sanity test (begin with 1 bc much code depends on it!)
+          if (colId > 1)
+            colId += g_test_against_columnId_gap;
+          td.columnIdBySpi_.push_back(colId);
+        }
+
         sqliteConnector_.query_with_text_params(
             "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, "
             "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_deletedcol) "
@@ -3189,10 +3407,10 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
   }
   // clean up any dictionaries
   // delete all column descriptors for the table
-  for (int i = 1; i <= td->nColumns; i++) {
-    ColumnIdKey cidKey(tableId, i);
-    ColumnDescriptorMapById::iterator colDescIt = columnDescriptorMapById_.find(cidKey);
-    ColumnDescriptor* cd = colDescIt->second;
+  for (const auto& columnDescriptor : columnDescriptorMapById_) {
+    auto cd = columnDescriptor.second;
+    if (cd->tableId != td->tableId)
+      continue;
     const int dict_id = cd->columnType.get_comp_param();
     // Dummy dictionaries created for a shard of a logical table have the id set to zero.
     if (cd->columnType.get_compression() == kENCODING_DICT && dict_id) {

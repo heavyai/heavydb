@@ -24,6 +24,7 @@ using namespace std;
 
 ALL		{ yylval.qualval = kALL; TOK(ALL) }
 ALTER         TOK(ALTER)
+ADD           TOK(ADD)
 AND           TOK(AND)
 ANY           { yylval.qualval = kANY; TOK(ANY) }
 ARRAY         TOK(ARRAY)

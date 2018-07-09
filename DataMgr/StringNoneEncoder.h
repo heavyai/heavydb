@@ -41,16 +41,20 @@ class StringNoneEncoder : public Encoder {
   size_t getNumElemsForBytesInsertData(const std::vector<std::string>* srcData,
                                        const int start_idx,
                                        const size_t numAppendElems,
-                                       const size_t byteLimit);
+                                       const size_t byteLimit,
+                                       const bool replicating = false);
 
-  ChunkMetadata appendData(int8_t*& srcData, const size_t numAppendElems) {
+  ChunkMetadata appendData(int8_t*& srcData, const size_t numAppendElems, const bool replicating = false) {
     assert(false);  // should never be called for strings
     ChunkMetadata chunkMetadata;
     getMetadata(chunkMetadata);
     return chunkMetadata;
   }
 
-  ChunkMetadata appendData(const std::vector<std::string>* srcData, const int start_idx, const size_t numAppendElems);
+  ChunkMetadata appendData(const std::vector<std::string>* srcData,
+                           const int start_idx,
+                           const size_t numAppendElems,
+                           const bool replicating = false);
 
   void getMetadata(ChunkMetadata& chunkMetadata) {
     Encoder::getMetadata(chunkMetadata);  // call on parent class

@@ -97,6 +97,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
    * @brief get fragmenter's type (as string
    */
   inline std::string getFragmenterType() { return fragmenterType_; }
+  size_t getNumRows() { return numTuples_; }
 
   static void updateColumn(const Catalog_Namespace::Catalog* catalog,
                            const std::string& tabName,
@@ -164,6 +165,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   bool hasMaterializedRowId_;
   int rowIdColId_;
   std::unordered_map<int, size_t> varLenColInfo_;
+  std::shared_ptr<std::mutex> mutex_access_inmem_states;
 
   /**
    * @brief creates new fragment, calling createChunk()
@@ -180,6 +182,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
 
   void lockInsertCheckpointData(const InsertData& insertDataStruct);
   void insertDataImpl(InsertData& insertDataStruct);
+  void replicateData(const InsertData& insertDataStruct);
 
   InsertOrderFragmenter(const InsertOrderFragmenter&);
   InsertOrderFragmenter& operator=(const InsertOrderFragmenter&);

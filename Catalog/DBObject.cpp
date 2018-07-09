@@ -21,6 +21,7 @@ const AccessPrivileges AccessPrivileges::INSERT_INTO_TABLE = AccessPrivileges(Ta
 const AccessPrivileges AccessPrivileges::UPDATE_IN_TABLE = AccessPrivileges(TablePrivileges::UPDATE_IN_TABLE);
 const AccessPrivileges AccessPrivileges::DELETE_FROM_TABLE = AccessPrivileges(TablePrivileges::DELETE_FROM_TABLE);
 const AccessPrivileges AccessPrivileges::TRUNCATE_TABLE = AccessPrivileges(TablePrivileges::TRUNCATE_TABLE);
+const AccessPrivileges AccessPrivileges::ALTER_TABLE = AccessPrivileges(TablePrivileges::ALTER_TABLE);
 
 const AccessPrivileges AccessPrivileges::ALL_DASHBOARD = AccessPrivileges(DashboardPrivileges::ALL);
 const AccessPrivileges AccessPrivileges::ALL_DASHBOARD_MIGRATE = AccessPrivileges(DashboardPrivileges::ALL_MIGRATE);

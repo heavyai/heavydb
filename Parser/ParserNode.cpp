@@ -1891,152 +1891,8 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     if (!it_ok.second) {
       throw std::runtime_error("Column '" + cd.columnName + "' defined more than once");
     }
-    SQLType* t = coldef->get_column_type();
-    t->check_type();
-    if (t->get_is_array()) {
-      cd.columnType.set_type(kARRAY);
-      cd.columnType.set_subtype(t->get_type());
-    } else
-      cd.columnType.set_type(t->get_type());
-    if (IS_GEO(t->get_type())) {
-      cd.columnType.set_subtype(static_cast<SQLTypes>(t->get_param1()));
-      cd.columnType.set_input_srid(t->get_param2());
-      cd.columnType.set_output_srid(t->get_param2());
-    } else {
-      cd.columnType.set_dimension(t->get_param1());
-      cd.columnType.set_scale(t->get_param2());
-    }
-    const ColumnConstraintDef* cc = coldef->get_column_constraint();
-    if (cc == nullptr)
-      cd.columnType.set_notnull(false);
-    else {
-      cd.columnType.set_notnull(cc->get_notnull());
-    }
-    const CompressDef* compression = coldef->get_compression();
-    if (compression == nullptr) {
-      // Change default TEXT column behaviour to be DICT encoded
-      if (cd.columnType.is_string() || cd.columnType.is_string_array()) {
-        // default to 32-bits
-        cd.columnType.set_compression(kENCODING_DICT);
-        cd.columnType.set_comp_param(32);
-      } else if (cd.columnType.is_geometry() && cd.columnType.get_output_srid() == 4326) {
-        // default to GEOINT 32-bits
-        cd.columnType.set_compression(kENCODING_GEOINT);
-        cd.columnType.set_comp_param(32);
-      } else {
-        cd.columnType.set_compression(kENCODING_NONE);
-        cd.columnType.set_comp_param(0);
-      }
-    } else {
-      const std::string& comp = *compression->get_encoding_name();
-      int comp_param;
-      if (boost::iequals(comp, "fixed")) {
-        if (!cd.columnType.is_integer() && !cd.columnType.is_time())
-          throw std::runtime_error(cd.columnName + ": Fixed encoding is only supported for integer or time columns.");
-        // fixed-bits encoding
-        SQLTypes type = cd.columnType.get_type();
-        if (type == kARRAY)
-          type = cd.columnType.get_subtype();
-        switch (type) {
-          case kSMALLINT:
-            if (compression->get_encoding_param() != 8)
-              throw std::runtime_error(cd.columnName +
-                                       ": Compression parameter for Fixed encoding on SMALLINT must be 8.");
-            break;
-          case kINT:
-            if (compression->get_encoding_param() != 8 && compression->get_encoding_param() != 16)
-              throw std::runtime_error(cd.columnName +
-                                       ": Compression parameter for Fixed encoding on INTEGER must be 8 or 16.");
-            break;
-          case kBIGINT:
-            if (compression->get_encoding_param() != 8 && compression->get_encoding_param() != 16 &&
-                compression->get_encoding_param() != 32)
-              throw std::runtime_error(cd.columnName +
-                                       ": Compression parameter for Fixed encoding on BIGINT must be 8 or 16 or 32.");
-            break;
-          case kTIMESTAMP:
-          case kDATE:
-          case kTIME:
-            if (compression->get_encoding_param() != 32)
-              throw std::runtime_error(
-                  cd.columnName + ": Compression parameter for Fixed encoding on TIME, DATE or TIMESTAMP must 32.");
-            break;
-          default:
-            throw std::runtime_error(cd.columnName + ": Cannot apply FIXED encoding to " + t->to_string());
-        }
-        cd.columnType.set_compression(kENCODING_FIXED);
-        cd.columnType.set_comp_param(compression->get_encoding_param());
-      } else if (boost::iequals(comp, "rl")) {
-        // run length encoding
-        cd.columnType.set_compression(kENCODING_RL);
-        cd.columnType.set_comp_param(0);
-        // throw std::runtime_error("RL(Run Length) encoding not supported yet.");
-      } else if (boost::iequals(comp, "diff")) {
-        // differential encoding
-        cd.columnType.set_compression(kENCODING_DIFF);
-        cd.columnType.set_comp_param(0);
-        // throw std::runtime_error("DIFF(differential) encoding not supported yet.");
-      } else if (boost::iequals(comp, "dict")) {
-        if (!cd.columnType.is_string() && !cd.columnType.is_string_array())
-          throw std::runtime_error(cd.columnName +
-                                   ": Dictionary encoding is only supported on string or string array columns.");
-        if (compression->get_encoding_param() == 0)
-          comp_param = 32;  // default to 32-bits
-        else
-          comp_param = compression->get_encoding_param();
-        if (cd.columnType.is_string_array() && comp_param != 32) {
-          throw std::runtime_error(cd.columnName + ": Compression parameter for string arrays must be 32");
-        }
-        if (comp_param != 8 && comp_param != 16 && comp_param != 32)
-          throw std::runtime_error(cd.columnName +
-                                   ": Compression parameter for Dictionary encoding must be 8 or 16 or 32.");
-        // diciontary encoding
-        cd.columnType.set_compression(kENCODING_DICT);
-        cd.columnType.set_comp_param(comp_param);
-      } else if (boost::iequals(comp, "NONE")) {
-        if (cd.columnType.is_geometry()) {
-          cd.columnType.set_compression(kENCODING_NONE);
-          cd.columnType.set_comp_param(64);
-        } else {
-          if (!cd.columnType.is_string() && !cd.columnType.is_string_array())
-            throw std::runtime_error(cd.columnName +
-                                     ": None encoding is only supported on string or string array columns.");
-          cd.columnType.set_compression(kENCODING_NONE);
-          cd.columnType.set_comp_param(0);
-        }
-      } else if (boost::iequals(comp, "sparse")) {
-        // sparse column encoding with mostly NULL values
-        if (cd.columnType.get_notnull())
-          throw std::runtime_error(cd.columnName + ": Cannot do sparse column encoding on a NOT NULL column.");
-        if (compression->get_encoding_param() == 0 || compression->get_encoding_param() % 8 != 0 ||
-            compression->get_encoding_param() > 48)
-          throw std::runtime_error(cd.columnName +
-                                   "Must specify number of bits as 8, 16, 24, 32 or 48 as the parameter to "
-                                   "sparse-column encoding.");
-        cd.columnType.set_compression(kENCODING_SPARSE);
-        cd.columnType.set_comp_param(compression->get_encoding_param());
-        // throw std::runtime_error("SPARSE encoding not supported yet.");
-      } else if (boost::iequals(comp, "compressed")) {
-        if (!cd.columnType.is_geometry() || cd.columnType.get_output_srid() != 4326)
-          throw std::runtime_error(cd.columnName + ": COMPRESSED encoding is only supported on WGS84 geo columns.");
-        if (compression->get_encoding_param() == 0)
-          comp_param = 32;  // default to 32-bits
-        else
-          comp_param = compression->get_encoding_param();
-        if (comp_param != 32) {
-          throw std::runtime_error(cd.columnName + ": only 32-bit COMPRESSED geo encoding is supported");
-        }
-        // encoding longitude/latitude as integers
-        cd.columnType.set_compression(kENCODING_GEOINT);
-        cd.columnType.set_comp_param(comp_param);
-      } else
-        throw std::runtime_error(cd.columnName + ": Invalid column compression scheme " + comp);
-    }
-    if (cd.columnType.is_string_array() && cd.columnType.get_compression() != kENCODING_DICT)
-      throw std::runtime_error(cd.columnName + ": Array of strings must be dictionary encoded. Specify ENCODING DICT");
-    cd.columnType.set_fixed_size();
-    cd.isSystemCol = false;
-    cd.isVirtualCol = false;
+
+    setColumnDescriptor(cd, coldef);
     columns.push_back(cd);
   }
 
@@ -2395,7 +2251,7 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     dbObject.setPrivileges(AccessPrivileges::TRUNCATE_TABLE);
     privObjects.push_back(dbObject);
     if (!SysCatalog::instance().checkPrivileges(session.get_currentUser(), privObjects)) {
-      throw std::runtime_error("Table " + *table + " will not be trancated. User " +
+      throw std::runtime_error("Table " + *table + " will not be truncated. User " +
                                session.get_currentUser().userName + " has no proper privileges.");
     }
   }
@@ -2420,6 +2276,238 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Table or View " + *new_table_name + " already exists.");
   }
   catalog.renameTable(td, *new_table_name);
+}
+
+void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef) {
+  cd.columnName = *coldef->get_column_name();
+  SQLType* t = coldef->get_column_type();
+  t->check_type();
+  if (t->get_is_array()) {
+    cd.columnType.set_type(kARRAY);
+    cd.columnType.set_subtype(t->get_type());
+  } else
+    cd.columnType.set_type(t->get_type());
+  if (IS_GEO(t->get_type())) {
+    cd.columnType.set_subtype(static_cast<SQLTypes>(t->get_param1()));
+    cd.columnType.set_input_srid(t->get_param2());
+    cd.columnType.set_output_srid(t->get_param2());
+  } else {
+    cd.columnType.set_dimension(t->get_param1());
+    cd.columnType.set_scale(t->get_param2());
+  }
+  const ColumnConstraintDef* cc = coldef->get_column_constraint();
+  if (cc == nullptr)
+    cd.columnType.set_notnull(false);
+  else {
+    cd.columnType.set_notnull(cc->get_notnull());
+  }
+  const CompressDef* compression = coldef->get_compression();
+  if (compression == nullptr) {
+    // Change default TEXT column behaviour to be DICT encoded
+    if (cd.columnType.is_string() || cd.columnType.is_string_array()) {
+      // default to 32-bits
+      cd.columnType.set_compression(kENCODING_DICT);
+      cd.columnType.set_comp_param(32);
+    } else if (cd.columnType.is_geometry() && cd.columnType.get_output_srid() == 4326) {
+      // default to GEOINT 32-bits
+      cd.columnType.set_compression(kENCODING_GEOINT);
+      cd.columnType.set_comp_param(32);
+    } else {
+      cd.columnType.set_compression(kENCODING_NONE);
+      cd.columnType.set_comp_param(0);
+    }
+  } else {
+    const std::string& comp = *compression->get_encoding_name();
+    int comp_param;
+    if (boost::iequals(comp, "fixed")) {
+      if (!cd.columnType.is_integer() && !cd.columnType.is_time())
+        throw std::runtime_error(cd.columnName + ": Fixed encoding is only supported for integer or time columns.");
+      // fixed-bits encoding
+      SQLTypes type = cd.columnType.get_type();
+      if (type == kARRAY)
+        type = cd.columnType.get_subtype();
+      switch (type) {
+        case kSMALLINT:
+          if (compression->get_encoding_param() != 8)
+            throw std::runtime_error(cd.columnName +
+                                     ": Compression parameter for Fixed encoding on SMALLINT must be 8.");
+          break;
+        case kINT:
+          if (compression->get_encoding_param() != 8 && compression->get_encoding_param() != 16)
+            throw std::runtime_error(cd.columnName +
+                                     ": Compression parameter for Fixed encoding on INTEGER must be 8 or 16.");
+          break;
+        case kBIGINT:
+          if (compression->get_encoding_param() != 8 && compression->get_encoding_param() != 16 &&
+              compression->get_encoding_param() != 32)
+            throw std::runtime_error(cd.columnName +
+                                     ": Compression parameter for Fixed encoding on BIGINT must be 8 or 16 or 32.");
+          break;
+        case kTIMESTAMP:
+        case kDATE:
+        case kTIME:
+          if (compression->get_encoding_param() != 32)
+            throw std::runtime_error(cd.columnName +
+                                     ": Compression parameter for Fixed encoding on TIME, DATE or TIMESTAMP must 32.");
+          break;
+        default:
+          throw std::runtime_error(cd.columnName + ": Cannot apply FIXED encoding to " + t->to_string());
+      }
+      cd.columnType.set_compression(kENCODING_FIXED);
+      cd.columnType.set_comp_param(compression->get_encoding_param());
+    } else if (boost::iequals(comp, "rl")) {
+      // run length encoding
+      cd.columnType.set_compression(kENCODING_RL);
+      cd.columnType.set_comp_param(0);
+      // throw std::runtime_error("RL(Run Length) encoding not supported yet.");
+    } else if (boost::iequals(comp, "diff")) {
+      // differential encoding
+      cd.columnType.set_compression(kENCODING_DIFF);
+      cd.columnType.set_comp_param(0);
+      // throw std::runtime_error("DIFF(differential) encoding not supported yet.");
+    } else if (boost::iequals(comp, "dict")) {
+      if (!cd.columnType.is_string() && !cd.columnType.is_string_array())
+        throw std::runtime_error(cd.columnName +
+                                 ": Dictionary encoding is only supported on string or string array columns.");
+      if (compression->get_encoding_param() == 0)
+        comp_param = 32;  // default to 32-bits
+      else
+        comp_param = compression->get_encoding_param();
+      if (cd.columnType.is_string_array() && comp_param != 32) {
+        throw std::runtime_error(cd.columnName + ": Compression parameter for string arrays must be 32");
+      }
+      if (comp_param != 8 && comp_param != 16 && comp_param != 32)
+        throw std::runtime_error(cd.columnName +
+                                 ": Compression parameter for Dictionary encoding must be 8 or 16 or 32.");
+      // diciontary encoding
+      cd.columnType.set_compression(kENCODING_DICT);
+      cd.columnType.set_comp_param(comp_param);
+    } else if (boost::iequals(comp, "NONE")) {
+      if (cd.columnType.is_geometry()) {
+        cd.columnType.set_compression(kENCODING_NONE);
+        cd.columnType.set_comp_param(64);
+      } else {
+        if (!cd.columnType.is_string() && !cd.columnType.is_string_array())
+          throw std::runtime_error(cd.columnName +
+                                   ": None encoding is only supported on string or string array columns.");
+        cd.columnType.set_compression(kENCODING_NONE);
+        cd.columnType.set_comp_param(0);
+      }
+    } else if (boost::iequals(comp, "sparse")) {
+      // sparse column encoding with mostly NULL values
+      if (cd.columnType.get_notnull())
+        throw std::runtime_error(cd.columnName + ": Cannot do sparse column encoding on a NOT NULL column.");
+      if (compression->get_encoding_param() == 0 || compression->get_encoding_param() % 8 != 0 ||
+          compression->get_encoding_param() > 48)
+        throw std::runtime_error(cd.columnName +
+                                 "Must specify number of bits as 8, 16, 24, 32 or 48 as the parameter to "
+                                 "sparse-column encoding.");
+      cd.columnType.set_compression(kENCODING_SPARSE);
+      cd.columnType.set_comp_param(compression->get_encoding_param());
+      // throw std::runtime_error("SPARSE encoding not supported yet.");
+    } else if (boost::iequals(comp, "compressed")) {
+      if (!cd.columnType.is_geometry() || cd.columnType.get_output_srid() != 4326)
+        throw std::runtime_error(cd.columnName + ": COMPRESSED encoding is only supported on WGS84 geo columns.");
+      if (compression->get_encoding_param() == 0)
+        comp_param = 32;  // default to 32-bits
+      else
+        comp_param = compression->get_encoding_param();
+      if (comp_param != 32) {
+        throw std::runtime_error(cd.columnName + ": only 32-bit COMPRESSED geo encoding is supported");
+      }
+      // encoding longitude/latitude as integers
+      cd.columnType.set_compression(kENCODING_GEOINT);
+      cd.columnType.set_comp_param(comp_param);
+    } else
+      throw std::runtime_error(cd.columnName + ": Invalid column compression scheme " + comp);
+  }
+  if (cd.columnType.is_string_array() && cd.columnType.get_compression() != kENCODING_DICT)
+    throw std::runtime_error(cd.columnName + ": Array of strings must be dictionary encoded. Specify ENCODING DICT");
+  cd.columnType.set_fixed_size();
+  cd.isSystemCol = false;
+  cd.isVirtualCol = false;
+}
+
+void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session, const TableDescriptor* td) {
+  if (!SysCatalog::instance().arePrivilegesOn())
+    return;
+  if (session.get_currentUser().isSuper || session.get_currentUser().userId == td->userId)
+    return;
+  std::vector<DBObject> privObjects;
+  DBObject dbObject(td->tableName, TableDBObjectType);
+  dbObject.loadKey(session.get_catalog());
+  dbObject.setPrivileges(AccessPrivileges::ALTER_TABLE);
+  privObjects.push_back(dbObject);
+  if (!SysCatalog::instance().checkPrivileges(session.get_currentUser(), privObjects))
+    throw std::runtime_error("Current user doesn't have the privilege to alter columns of table: " + td->tableName);
+}
+
+void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.get_catalog();
+  const TableDescriptor* td = catalog.getMetadataForTable(*table);
+  if (nullptr == td)
+    throw std::runtime_error("Table " + *table + " does not exist.");
+
+  check_alter_table_privilege(session, td);
+
+  if (0 == coldefs.size())
+    coldefs.push_back(std::move(coldef));
+
+  for (const auto& coldef : coldefs) {
+    auto& new_column_name = *coldef->get_column_name();
+    if (catalog.getMetadataForColumn(td->tableId, new_column_name) != nullptr)
+      throw std::runtime_error("Column " + new_column_name + " already exists.");
+    if (reserved_keywords.find(boost::to_upper_copy<std::string>(new_column_name)) != reserved_keywords.end())
+      throw std::runtime_error("Cannot add column with reserved keyword '" + new_column_name + "'");
+  }
+
+  catalog.getSqliteConnector().query("BEGIN TRANSACTION");
+  try {
+    std::map<const std::string, const ColumnDescriptor> cds;
+    for (const auto& coldef : coldefs) {
+      ColumnDescriptor cd;
+      setColumnDescriptor(cd, coldef.get());
+      catalog.addColumn(*td, cd);
+      cds.emplace(*coldef->get_column_name(), cd);
+    }
+
+    std::unique_ptr<Importer_NS::Loader> loader(new Importer_NS::Loader(catalog, td));
+    std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+
+    // a call of Catalog_Namespace::MapDHandler::prepare_columnar_loader
+    session.get_mapdHandler()->prepare_columnar_loader(
+        session.get_session_id(), td->tableName, td->nColumns - 1, &loader, &import_buffers);
+    loader->set_replicating(true);
+
+    auto nrows = td->fragmenter->getNumRows();
+    for (const auto& coldef : coldefs) {
+      auto& cd = cds[*coldef->get_column_name()];
+      auto column_constraint = coldef->get_column_constraint();
+      std::string defaultval = "";
+      if (column_constraint) {
+        auto defaultlp = column_constraint->get_defaultval();
+        auto defaultsp = dynamic_cast<const StringLiteral*>(defaultlp);
+        defaultval = (nullptr != defaultsp) ? *defaultsp->get_stringval() : defaultlp->to_string();
+      }
+      bool isnull = column_constraint ? (0 == defaultval.size()) : true;
+      if (boost::to_upper_copy<std::string>(defaultval) == "NULL")
+        isnull = true;
+
+      for (auto& import_buffer : import_buffers)
+        if (cd.columnId == import_buffer->getColumnDesc()->columnId)
+          import_buffer->add_value(&cd, defaultval, isnull, Importer_NS::CopyParams(), nrows);
+    }
+
+    if (!loader->loadNoCheckpoint(import_buffers, nrows))
+      throw std::runtime_error("loadNoCheckpoint failed!");
+    loader->checkpoint();
+  } catch (...) {
+    catalog.roll(false);
+    catalog.getSqliteConnector().query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  catalog.getSqliteConnector().query("END TRANSACTION");
+  catalog.roll(true);
 }
 
 void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -3001,6 +3089,9 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) 
     if (privs.hasPermission(TablePrivileges::TRUNCATE_TABLE)) {
       printf(" TRUNCATE");
     }
+    if (privs.hasPermission(TablePrivileges::ALTER_TABLE)) {
+      printf(" ALTER");
+    }
   } else if (objectType == DBObjectType::DashboardDBObjectType) {
     if (privs.hasPermission(DashboardPrivileges::CREATE_DASHBOARD)) {
       printf(" CREATE");
@@ -3499,3 +3590,17 @@ void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   SysCatalog::instance().dropUser(*user_name);
 }
 }  // namespace Parser
+
+// this is a non-clustered version of MapDHandler::prepare_columnar_loader,
+// exists for non-thrift builds, specifically for test cases and bin/initdb.
+void Catalog_Namespace::MapDHandler::prepare_columnar_loader(
+    const std::string& session,
+    const std::string& table_name,
+    size_t num_cols,
+    std::unique_ptr<Importer_NS::Loader>* loader,
+    std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>* import_buffers) {
+  auto col_descs = (*loader)->get_column_descs();
+  for (auto cd : col_descs)
+    import_buffers->push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
+        new Importer_NS::TypedImportBuffer(cd, (*loader)->get_string_dict(cd))));
+}

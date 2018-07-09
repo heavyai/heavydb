@@ -41,6 +41,7 @@ using namespace std;
 using namespace TestHelpers;
 
 extern bool g_aggregator;
+extern int g_test_against_columnId_gap;
 
 namespace {
 
@@ -6086,7 +6087,6 @@ TEST(Select, GeoSpatial) {
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(p,p) < 0.1;", dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
@@ -7455,6 +7455,10 @@ int main(int argc, char** argv) {
 
   if (vm.count("with-sharding"))
     g_shard_count = choose_shard_count();
+
+  // insert artificial gap of columnId so as to test against the gap w/o
+  // need of ALTER ADD/DROP COLUMN before doing query test...
+  g_test_against_columnId_gap = 99;
 
   const bool use_existing_data = vm.count("use-existing-data");
   int err{0};

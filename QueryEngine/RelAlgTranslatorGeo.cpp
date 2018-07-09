@@ -33,7 +33,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
   // the name and type information come directly from the catalog.
   CHECK(in_metainfo.empty());
   const auto table_desc = scan_source->getTableDescriptor();
-  const auto gcd = cat_.getMetadataForColumn(table_desc->tableId, rex_input->getIndex() + 1);
+  const auto gcd = cat_.getMetadataForColumnBySpi(table_desc->tableId, rex_input->getIndex() + 1);
   CHECK(gcd);
   ti = gcd->columnType;
   CHECK(IS_GEO(ti.get_type()));
@@ -42,7 +42,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
   // added if present and requested.
   if (expand_geo_col) {
     for (auto i = 0; i < ti.get_physical_coord_cols(); i++) {
-      const auto pcd = cat_.getMetadataForColumn(table_desc->tableId, rex_input->getIndex() + 1 + i + 1);
+      const auto pcd =
+          cat_.getMetadataForColumnBySpi(table_desc->tableId, SPIMAP_GEO_PHYSICAL_INPUT(rex_input->getIndex(), i + 1));
       auto pcol_ti = pcd->columnType;
       args.push_back(std::make_shared<Analyzer::ColumnVar>(pcol_ti, table_desc->tableId, pcd->columnId, rte_idx));
     }
@@ -50,8 +51,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
     args.push_back(std::make_shared<Analyzer::ColumnVar>(ti, table_desc->tableId, gcd->columnId, rte_idx));
   }
   if (with_bounds && ti.has_bounds()) {
-    const auto bounds_cd =
-        cat_.getMetadataForColumn(table_desc->tableId, rex_input->getIndex() + ti.get_physical_coord_cols() + 2);
+    const auto bounds_cd = cat_.getMetadataForColumnBySpi(
+        table_desc->tableId, SPIMAP_GEO_PHYSICAL_INPUT(rex_input->getIndex(), ti.get_physical_coord_cols() + 1));
     auto bounds_ti = bounds_cd->columnType;
     args.push_back(std::make_shared<Analyzer::ColumnVar>(bounds_ti, table_desc->tableId, bounds_cd->columnId, rte_idx));
   }

@@ -23,6 +23,7 @@
 #define _ABSTRACT_FRAGMENTER_H
 
 #include "../Shared/sqltypes.h"
+#include "../StringDictionary/StringDictionary.h"
 #include "../Shared/UpdelRoll.h"
 #include "Fragmenter.h"
 #include <vector>
@@ -35,6 +36,10 @@
 namespace Data_Namespace {
 class AbstractBuffer;
 class AbstractDataMgr;
+};
+
+namespace Importer_NS {
+class TypedImportBuffer;
 };
 
 namespace Catalog_Namespace {
@@ -106,6 +111,8 @@ class AbstractFragmenter {
    */
 
   virtual std::string getFragmenterType() = 0;
+
+  virtual size_t getNumRows() = 0;
 
   virtual void updateColumn(const Catalog_Namespace::Catalog* catalog,
                             const TableDescriptor* td,
