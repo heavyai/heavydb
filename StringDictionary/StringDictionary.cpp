@@ -31,7 +31,7 @@
 #include <thread>
 
 namespace {
-const int PAGE_SIZE = getpagesize();
+const int SYSTEM_PAGE_SIZE = getpagesize();
 
 size_t file_size(const int fd) {
   struct stat buf;
@@ -887,7 +887,7 @@ void StringDictionary::addOffsetCapacity() noexcept {
 }
 
 size_t StringDictionary::addStorageCapacity(int fd) noexcept {
-  static const ssize_t CANARY_BUFF_SIZE = 1024 * PAGE_SIZE;
+  static const ssize_t CANARY_BUFF_SIZE = 1024 * SYSTEM_PAGE_SIZE;
   if (!CANARY_BUFFER) {
     CANARY_BUFFER = static_cast<char*>(malloc(CANARY_BUFF_SIZE));
     CHECK(CANARY_BUFFER);
@@ -899,7 +899,7 @@ size_t StringDictionary::addStorageCapacity(int fd) noexcept {
 }
 
 void* StringDictionary::addMemoryCapacity(void* addr, size_t& mem_size) noexcept {
-  static const ssize_t CANARY_BUFF_SIZE = 1024 * PAGE_SIZE;
+  static const ssize_t CANARY_BUFF_SIZE = 1024 * SYSTEM_PAGE_SIZE;
   if (!CANARY_BUFFER) {
     CANARY_BUFFER = reinterpret_cast<char*>(malloc(CANARY_BUFF_SIZE));
     CHECK(CANARY_BUFFER);
