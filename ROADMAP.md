@@ -5,14 +5,14 @@ We welcome and encourage developer contributions to the project. Please see the 
 ## Database
 
 #### Completed
-- Top k sort on GPU. Ability to efficiently order by a projected column. (Completed 3.2.2)
-- JOIN improvements. Additional join types and performance improvements. (Completed 3.2)
-- JOIN improvements.  Table orderings and optimizations for larger numbers of tables. (Ongoing improvements)
-- TRUNCATE. Efficiently remove contents of table or part of table. (Completed v3.2)
-- Batched UPDATE and DELETE. (Completed 4.0)
-- Interval type, and TIMESTAMP_ADD, TIMESTAMP_DIFF. (Completed v3.2)
-- Table Sharding. Table sharding types in addition to the existing round robin. (Completed v3.2)
-- Table-level security, GRANT, REVOKE. Ability to grant and revoke table access to users/roles. (Testing in 3.2.3, released in 4.0)
+- Top k sort on GPU. Ability to efficiently order by a projected column (Completed 3.2.2)
+- JOIN improvements. Additional join types and performance improvements (Completed 3.2)
+- JOIN improvements.  Table orderings and optimizations for larger numbers of tables (Ongoing improvements)
+- TRUNCATE. Efficiently remove contents of table or part of table (Completed v3.2)
+- Batched UPDATE and DELETE (Completed 4.0)
+- Interval type, and TIMESTAMP_ADD, TIMESTAMP_DIFF (Completed v3.2)
+- Table Sharding. Table sharding types in addition to the existing round robin (Completed v3.2)
+- Table-level security, GRANT, REVOKE. Ability to grant and revoke table access to users/roles (Testing in 3.2.3, released in 4.0)
 
 #### Upcoming
 
@@ -29,21 +29,22 @@ We welcome and encourage developer contributions to the project. Please see the 
 ## GIS
 
 #### Completed
-- Geo Types. Point, Line, Polygon. (Completed 4.0)
-- Basic Geo functions (st_contains, st_distance) (Completed 4.0)
+- Geo Types. Point, Line, Polygon (Completed 4.0)
+- Basic Geo functions (ST_Contains, ST_Distance) (Completed 4.0)
 
 #### Upcoming
-- Additional geospatial operators (ST_INTERSECTS, ST_WITHIN, ST_AREA, etc)
-- Support for geometric constructors (ST_MKPOINT, etc)
+- Additional OGC geospatial types: Multi(Point|Line|Polygon)
+- Additional OGC geospatial operators (ST_Intersects, ST_Within, ST_Area, ST_Perimiter, etc)
+- Support for geometric constructors (ST_MakePoint, etc)
 - Accelerated geospatial joins (with dynamic spatial hashing, not relying purely on brute force loop joins)
 - Fixed length arrays for POINT datatype to conserve memory
-- Geodatabase import
+- Geodatabase/geopackage import
 - WMS support
 
-## Data Science/Gpu Data Frame (GDF)/Apache Arrow
+## Data Science/[GPU Data Frame (GDF)](http://gpuopenanalytics.com/#/)/[Apache Arrow](https://arrow.apache.org/)
 
 #### Completed
-- Data frame as input to MapD. Ability to insert into a table from a data frame. (Completed 3.2.4)
+- Data frame as input to MapD. Ability to insert into a table from a data frame (Completed 3.2.4)
 - [PyMapD DB-API Python client](https://github.com/mapd/pymapd)
 - [Ibis backend for MapD](https://github.com/ibis-project/ibis)
 
