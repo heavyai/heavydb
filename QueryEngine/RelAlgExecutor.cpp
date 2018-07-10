@@ -738,6 +738,8 @@ std::unordered_map<const RelAlgNode*, int> get_input_nest_levels(const RelAlgNod
     const auto input_ra = data_sink_node->getInput(input_node_idx);
     const auto it_ok = input_to_nest_level.emplace(input_ra, input_idx);
     CHECK(it_ok.second);
+    LOG_IF(INFO, !input_permutation.empty())
+        << "Assigned input " << input_ra->toString() << " to nest level " << input_node_idx;
   }
   return input_to_nest_level;
 }

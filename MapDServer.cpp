@@ -507,6 +507,10 @@ int main(int argc, char** argv) {
 
   LOG(INFO) << " Debug Timer is set to " << g_enable_debug_timer;
 
+  if (!g_from_table_reordering) {
+    LOG(INFO) << " From clause table reordering is disabled";
+  }
+
   if (!mapd_parameters.ha_group_id.empty()) {
     LOG(INFO) << " HA group id " << mapd_parameters.ha_group_id;
     if (mapd_parameters.ha_unique_server_id.empty()) {
