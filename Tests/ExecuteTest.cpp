@@ -999,7 +999,7 @@ TEST(Select, OrderBy) {
     c("SELECT x x1, x, COUNT(*) AS val FROM test GROUP BY x HAVING val > 5 ORDER BY val DESC LIMIT 5;", dt);
     c("SELECT ufd, COUNT(*) n FROM test GROUP BY ufd, str ORDER BY ufd, n;", dt);
     c("SELECT -x, COUNT(*) FROM test GROUP BY x ORDER BY x DESC;", dt);
-    SKIP_ON_AGGREGATOR(c("SELECT real_str FROM test WHERE real_str LIKE '%real%' ORDER BY real_str ASC;", dt));
+    c("SELECT real_str FROM test WHERE real_str LIKE '%real%' ORDER BY real_str ASC;", dt);
     c("SELECT ss FROM test GROUP by ss ORDER BY ss ASC NULLS FIRST;",
       "SELECT ss FROM test GROUP by ss ORDER BY ss ASC;",
       dt);
@@ -1166,43 +1166,35 @@ TEST(Select, Case) {
                   "SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1.1 WHEN x BETWEEN 8 AND 9 THEN 2.2 ELSE 3.3 END) FROM "
                   "test WHERE CASE WHEN y BETWEEN 44 AND 45 THEN 5.1 ELSE 3.9 END > 4;",
                   dt)));
-    SKIP_ON_AGGREGATOR(
-        c("SELECT CASE WHEN x BETWEEN 1 AND 3 THEN 'oops 1' WHEN x BETWEEN 4 AND 6 THEN 'oops 2' ELSE real_str END c "
-          "FROM "
-          "test ORDER BY c ASC;",
-          dt));
-    SKIP_ON_AGGREGATOR(
-        c("SELECT CASE WHEN x BETWEEN 1 AND 3 THEN 'oops 1' WHEN x BETWEEN 4 AND 6 THEN 'oops 2' ELSE str END c FROM "
-          "test "
-          "ORDER BY c ASC;",
-          dt));
-    SKIP_ON_AGGREGATOR(c(
-        "SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN 'eight' ELSE 'ooops' END c FROM "
-        "test ORDER BY c ASC;",
-        dt));
-    SKIP_ON_AGGREGATOR(
-        c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN real_str ELSE 'ooops' END AS g "
-          "FROM test ORDER BY g ASC;",
-          dt));
-    SKIP_ON_AGGREGATOR(c(
-        "SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN str ELSE 'ooops' END c FROM test "
-        "ORDER BY c ASC;",
-        dt));
-    SKIP_ON_AGGREGATOR(c(
-        "SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN 'eight' ELSE 'ooops' END c FROM "
-        "test ORDER BY c ASC;",
-        dt));
-    SKIP_ON_AGGREGATOR(
-        c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN str WHEN x BETWEEN 7 AND 10 THEN 'eight' ELSE 'ooops' END AS g, "
-          "COUNT(*) FROM test GROUP BY g ORDER BY g;",
-          dt));
-    SKIP_ON_AGGREGATOR(
-        c("SELECT y AS key0, SUM(CASE WHEN x > 7 THEN x / (x - 7) ELSE 99 END) FROM test GROUP BY key0 ORDER BY key0;",
-          dt);
-        c("SELECT CASE WHEN str IN ('str1', 'str3', 'str8') THEN 'foo' WHEN str IN ('str2', 'str4', 'str9') THEN 'bar' "
-          "ELSE 'baz' END AS bucketed_str, COUNT(*) AS n FROM query_rewrite_test GROUP BY bucketed_str ORDER BY n "
-          "DESC;",
-          dt));
+    c("SELECT CASE WHEN x BETWEEN 1 AND 3 THEN 'oops 1' WHEN x BETWEEN 4 AND 6 THEN 'oops 2' ELSE real_str END c "
+      "FROM "
+      "test ORDER BY c ASC;",
+      dt);
+
+    c("SELECT CASE WHEN x BETWEEN 1 AND 3 THEN 'oops 1' WHEN x BETWEEN 4 AND 6 THEN 'oops 2' ELSE str END c FROM "
+      "test "
+      "ORDER BY c ASC;",
+      dt);
+    c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN 'eight' ELSE 'ooops' END c FROM "
+      "test ORDER BY c ASC;",
+      dt);
+    c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN real_str ELSE 'ooops' END AS g "
+      "FROM test ORDER BY g ASC;",
+      dt);
+    c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN str ELSE 'ooops' END c FROM test "
+      "ORDER BY c ASC;",
+      dt);
+    c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN 'eight' ELSE 'ooops' END c FROM "
+      "test ORDER BY c ASC;",
+      dt);
+    c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN str WHEN x BETWEEN 7 AND 10 THEN 'eight' ELSE 'ooops' END AS g, "
+      "COUNT(*) FROM test GROUP BY g ORDER BY g;",
+      dt);
+    c("SELECT y AS key0, SUM(CASE WHEN x > 7 THEN x / (x - 7) ELSE 99 END) FROM test GROUP BY key0 ORDER BY key0;", dt);
+    c("SELECT CASE WHEN str IN ('str1', 'str3', 'str8') THEN 'foo' WHEN str IN ('str2', 'str4', 'str9') THEN 'bar' "
+      "ELSE 'baz' END AS bucketed_str, COUNT(*) AS n FROM query_rewrite_test GROUP BY bucketed_str ORDER BY n "
+      "DESC;",
+      dt);
     c("SELECT CASE WHEN y > 40 THEN x END c, x FROM test ORDER BY c ASC;", dt);
     c("SELECT COUNT(CASE WHEN str = 'foo' THEN 1 END) FROM test;", dt);
     c("SELECT COUNT(CASE WHEN str = 'foo' THEN 1 ELSE NULL END) FROM test;", dt);
@@ -1210,22 +1202,19 @@ TEST(Select, Case) {
     c("SELECT x, AVG(CASE WHEN y BETWEEN 41 AND 42 THEN y END) FROM test GROUP BY x ORDER BY x;", dt);
     c("SELECT x, SUM(CASE WHEN y BETWEEN 41 AND 42 THEN y END) FROM test GROUP BY x ORDER BY x;", dt);
     c("SELECT x, COUNT(CASE WHEN y BETWEEN 41 AND 42 THEN y END) FROM test GROUP BY x ORDER BY x;", dt);
-    SKIP_ON_AGGREGATOR(c("SELECT CASE WHEN x > 8 THEN 'oops' ELSE 'ok' END FROM test LIMIT 1;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT CASE WHEN x < 9 THEN 'ok' ELSE 'oops' END FROM test LIMIT 1;", dt));
-    SKIP_ON_AGGREGATOR(c(
-        "SELECT CASE WHEN str IN ('foo', 'bar') THEN str END key1, COUNT(*) FROM test GROUP BY str HAVING key1 IS NOT "
-        "NULL ORDER BY key1;",
-        dt));
-    SKIP_ON_AGGREGATOR(
-        c("SELECT CASE WHEN str IN ('foo') THEN 'FOO' WHEN str IN ('bar') THEN 'BAR' ELSE 'BAZ' END AS g, COUNT(*) "
-          "FROM test GROUP BY g ORDER BY g DESC;",
-          dt));
+    c("SELECT CASE WHEN x > 8 THEN 'oops' ELSE 'ok' END FROM test LIMIT 1;", dt);
+    c("SELECT CASE WHEN x < 9 THEN 'ok' ELSE 'oops' END FROM test LIMIT 1;", dt);
+    c("SELECT CASE WHEN str IN ('foo', 'bar') THEN str END key1, COUNT(*) FROM test GROUP BY str HAVING key1 IS NOT "
+      "NULL ORDER BY key1;",
+      dt);
+
+    c("SELECT CASE WHEN str IN ('foo') THEN 'FOO' WHEN str IN ('bar') THEN 'BAR' ELSE 'BAZ' END AS g, COUNT(*) "
+      "FROM test GROUP BY g ORDER BY g DESC;",
+      dt);
     c("SELECT x, COUNT(case when y = 42 then 1 else 0 end) AS n1, COUNT(*) AS n2 FROM test GROUP BY x ORDER BY n2 "
       "DESC;",
       dt);
-    SKIP_ON_AGGREGATOR(
-        c("SELECT CASE WHEN test.str = 'foo' THEN 'foo' ELSE test.str END AS g FROM test GROUP BY g ORDER BY g ASC;",
-          dt));
+    c("SELECT CASE WHEN test.str = 'foo' THEN 'foo' ELSE test.str END AS g FROM test GROUP BY g ORDER BY g ASC;", dt);
     ASSERT_EQ(int64_t(1418428800),
               v<int64_t>(run_simple_agg("SELECT CASE WHEN 1 > 0 THEN DATE_TRUNC(day, m) ELSE DATE_TRUNC(year, m) END "
                                         "AS date_bin FROM test GROUP BY date_bin;",
@@ -1247,10 +1236,6 @@ TEST(Select, Case) {
 TEST(Select, Strings) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-
-    if (ExecutorDeviceType::GPU == dt && g_aggregator) {
-      continue;
-    }
 
     c("SELECT str, COUNT(*) FROM test GROUP BY str HAVING COUNT(*) > 5 ORDER BY str;", dt);
     c("SELECT str, COUNT(*) FROM test WHERE str = 'bar' GROUP BY str HAVING COUNT(*) > 4 ORDER BY str;", dt);
@@ -1336,10 +1321,6 @@ TEST(Select, Strings) {
 TEST(Select, SharedDictionary) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-
-    if (ExecutorDeviceType::GPU == dt && g_aggregator) {
-      continue;
-    }
 
     c("SELECT shared_dict, COUNT(*) FROM test GROUP BY shared_dict HAVING COUNT(*) > 5 ORDER BY shared_dict;", dt);
     c("SELECT shared_dict, COUNT(*) FROM test WHERE shared_dict = 'bar' GROUP BY shared_dict HAVING COUNT(*) > 4 ORDER "
@@ -1493,10 +1474,6 @@ TEST(Select, StringsNoneEncoding) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    if (ExecutorDeviceType::GPU == dt && g_aggregator) {
-      continue;
-    }
-
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE 'real_%%%';", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE 'real_ba%';", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE '%eal_bar';", dt);
@@ -1524,14 +1501,17 @@ TEST(Select, StringsNoneEncoding) {
     c("SELECT COUNT(*) FROM test WHERE LENGTH(real_str) = 8;", dt);
     ASSERT_EQ(2 * g_num_rows,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(real_str) = 8;", dt)));
-    ASSERT_EQ(2 * g_num_rows,
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(real_str,'real_.*.*.*');", dt)));
-    ASSERT_EQ(g_num_rows,
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_ba.*';", dt)));
-    ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str REGEXP '.*';", dt)));
-    ASSERT_EQ(g_num_rows,
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_f.*.*';", dt)));
-    ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_f.+\%';", dt)));
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
+        2 * g_num_rows,
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(real_str,'real_.*.*.*');", dt))));
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
+        g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_ba.*';", dt))));
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
+        2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str REGEXP '.*';", dt))));
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
+        g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_f.*.*';", dt))));
+    SKIP_ON_AGGREGATOR(
+        ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_f.+\%';", dt))));
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE real_str LIKE str;", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(real_str, str);", dt),
                  std::runtime_error);
@@ -7488,7 +7468,7 @@ int main(int argc, char** argv) {
   // insert artificial gap of columnId so as to test against the gap w/o
   // need of ALTER ADD/DROP COLUMN before doing query test.
   // Note: Temporarily disabling for distributed tests.
-  g_test_against_columnId_gap = g_aggregator ?  0 : 99;
+  g_test_against_columnId_gap = g_aggregator ? 0 : 99;
 
   const bool use_existing_data = vm.count("use-existing-data");
   int err{0};
