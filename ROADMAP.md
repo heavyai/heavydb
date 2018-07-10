@@ -15,8 +15,11 @@ We welcome and encourage developer contributions to the project. Please see the 
 - Rendering for graphs and lines
 
 ## GIS
-- Geo Types. Point, Line, Polygon.
-- Basic Geo functions (st_contains, st_distance)
+- Open FileGDB support
+- CTAS (create table as select) support for LINESTRING, MULTIPOLYGON
+- ST_POINT()
+- ST_LINESTRING()
+- ST_POLYGON()
 
 ## GOAI - GPU data frame
 - Multi-GPU. Return data frame on multiple GPUs without a final reduction phase.
