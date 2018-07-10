@@ -389,9 +389,9 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
                 CHECK_EQ(-1, i1);
                 return InternalTargetValue(static_cast<const std::string*>(nullptr));
               }
-              CHECK_LT(i1, none_encoded_strings_.size());
               CHECK_LT(storage_lookup_result.storage_idx, none_encoded_strings_.size());
               const auto& none_encoded_strings_for_fragment = none_encoded_strings_[storage_lookup_result.storage_idx];
+              CHECK_LT(i1, none_encoded_strings_for_fragment.size());
               return InternalTargetValue(&none_encoded_strings_for_fragment[i1]);
             }
             CHECK(ptr2);
