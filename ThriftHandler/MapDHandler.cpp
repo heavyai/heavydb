@@ -420,7 +420,7 @@ void MapDHandler::value_to_thrift_column(const TargetValue& tv, const SQLTypeInf
       value_to_thrift_column(elem_tv, ti.get_elem_type(), tColumn);
     }
     column.data.arr_col.push_back(tColumn);
-    column.nulls.push_back(list_tv->size() == 0);
+    column.nulls.push_back(list_tv->size() == 0 && !ti.get_notnull());
   } else if (ti.is_geometry()) {
     const auto list_tv = boost::get<std::vector<ScalarTargetValue>>(&tv);
     if (list_tv) {
@@ -430,7 +430,7 @@ void MapDHandler::value_to_thrift_column(const TargetValue& tv, const SQLTypeInf
         value_to_thrift_column(elem_tv, elem_type, tColumn);
       }
       column.data.arr_col.push_back(tColumn);
-      column.nulls.push_back(list_tv->size() == 0);
+      column.nulls.push_back(list_tv->size() == 0 && !ti.get_notnull());
     } else {
       const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
       CHECK(scalar_tv);
@@ -443,7 +443,7 @@ void MapDHandler::value_to_thrift_column(const TargetValue& tv, const SQLTypeInf
         auto null_p = boost::get<void*>(s_n);
         CHECK(null_p && !*null_p);
       }
-      column.nulls.push_back(!s);
+      column.nulls.push_back(!s && !ti.get_notnull());
     }
   } else {
     const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
@@ -453,19 +453,19 @@ void MapDHandler::value_to_thrift_column(const TargetValue& tv, const SQLTypeInf
       column.data.int_col.push_back(data);
       switch (ti.get_type()) {
         case kBOOLEAN:
-          column.nulls.push_back(data == NULL_BOOLEAN);
+          column.nulls.push_back(data == NULL_BOOLEAN && !ti.get_notnull());
           break;
         case kTINYINT:
           column.nulls.push_back(data == NULL_TINYINT);
           break;
         case kSMALLINT:
-          column.nulls.push_back(data == NULL_SMALLINT);
+          column.nulls.push_back(data == NULL_SMALLINT && !ti.get_notnull());
           break;
         case kINT:
-          column.nulls.push_back(data == NULL_INT);
+          column.nulls.push_back(data == NULL_INT && !ti.get_notnull());
           break;
         case kBIGINT:
-          column.nulls.push_back(data == NULL_BIGINT);
+          column.nulls.push_back(data == NULL_BIGINT && !ti.get_notnull());
           break;
         case kTIME:
         case kTIMESTAMP:
@@ -473,9 +473,9 @@ void MapDHandler::value_to_thrift_column(const TargetValue& tv, const SQLTypeInf
         case kINTERVAL_DAY_TIME:
         case kINTERVAL_YEAR_MONTH:
           if (sizeof(time_t) == 4)
-            column.nulls.push_back(data == NULL_INT);
+            column.nulls.push_back(data == NULL_INT && !ti.get_notnull());
           else
-            column.nulls.push_back(data == NULL_BIGINT);
+            column.nulls.push_back(data == NULL_BIGINT && !ti.get_notnull());
           break;
         default:
           column.nulls.push_back(false);
@@ -484,15 +484,15 @@ void MapDHandler::value_to_thrift_column(const TargetValue& tv, const SQLTypeInf
       double data = *(boost::get<double>(scalar_tv));
       column.data.real_col.push_back(data);
       if (ti.get_type() == kFLOAT) {
-        column.nulls.push_back(data == NULL_FLOAT);
+        column.nulls.push_back(data == NULL_FLOAT && !ti.get_notnull());
       } else {
-        column.nulls.push_back(data == NULL_DOUBLE);
+        column.nulls.push_back(data == NULL_DOUBLE && !ti.get_notnull());
       }
     } else if (boost::get<float>(scalar_tv)) {
       CHECK_EQ(kFLOAT, ti.get_type());
       float data = *(boost::get<float>(scalar_tv));
       column.data.real_col.push_back(data);
-      column.nulls.push_back(data == NULL_FLOAT);
+      column.nulls.push_back(data == NULL_FLOAT && !ti.get_notnull());
     } else if (boost::get<NullableString>(scalar_tv)) {
       auto s_n = boost::get<NullableString>(scalar_tv);
       auto s = boost::get<std::string>(s_n);
@@ -503,7 +503,7 @@ void MapDHandler::value_to_thrift_column(const TargetValue& tv, const SQLTypeInf
         auto null_p = boost::get<void*>(s_n);
         CHECK(null_p && !*null_p);
       }
-      column.nulls.push_back(!s);
+      column.nulls.push_back(!s && !ti.get_notnull());
     } else {
       CHECK(false);
     }
