@@ -7472,8 +7472,9 @@ int main(int argc, char** argv) {
     g_shard_count = choose_shard_count();
 
   // insert artificial gap of columnId so as to test against the gap w/o
-  // need of ALTER ADD/DROP COLUMN before doing query test...
-  g_test_against_columnId_gap = 99;
+  // need of ALTER ADD/DROP COLUMN before doing query test.
+  // Note: Temporarily disabling for distributed tests.
+  g_test_against_columnId_gap = g_aggregator ?  0 : 99;
 
   const bool use_existing_data = vm.count("use-existing-data");
   int err{0};
