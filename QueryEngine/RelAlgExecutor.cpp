@@ -141,8 +141,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const std::string& que
       // string id lookups during render vega validation
       render_info->row_set_mem_owner = executor_->row_set_mem_owner_;
     }
-    executor_->row_set_mem_owner_ = nullptr;
-    executor_->lit_str_dict_proxy_ = nullptr;
+    cleanupPostExecution();
   };
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   executor_->catalog_ = &cat_;
@@ -243,6 +242,12 @@ TableGenerations RelAlgExecutor::computeTableGenerations(const RelAlgNode* ra) {
 
 Executor* RelAlgExecutor::getExecutor() const {
   return executor_;
+}
+
+void RelAlgExecutor::cleanupPostExecution() {
+  CHECK(executor_);
+  executor_->row_set_mem_owner_ = nullptr;
+  executor_->lit_str_dict_proxy_ = nullptr;
 }
 
 FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const RelAlgNode* ra,

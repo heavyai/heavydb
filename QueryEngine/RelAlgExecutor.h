@@ -95,6 +95,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
 
   Executor* getExecutor() const;
 
+  void cleanupPostExecution();
+
  private:
   ExecutionResult executeRelAlgQueryNoRetry(const std::string& query_ra,
                                             const CompilationOptions& co,
