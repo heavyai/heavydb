@@ -2840,7 +2840,8 @@ void DropRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!currentUser.isSuper) {
     throw std::runtime_error("DROP ROLE " + get_role() + "failed. It can only be executed by super user.");
   }
-  if (SysCatalog::instance().getMetadataForRole(get_role()) == nullptr) {
+  Role* rl = SysCatalog::instance().getMetadataForRole(get_role());
+  if (!rl || rl->isUserPrivateRole()) {
     throw std::runtime_error("DROP ROLE " + get_role() + " failed because role with this name does not exist.");
   }
   SysCatalog::instance().dropRole(get_role());
