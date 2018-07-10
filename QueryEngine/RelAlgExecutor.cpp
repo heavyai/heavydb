@@ -1429,6 +1429,11 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   const bool is_aggregate = node_is_aggregate(source);
   auto it = leaf_results_.find(sort->getId());
   if (it != leaf_results_.end()) {
+    // Add any transient string literals to the sdp on the agg
+    const auto source_work_unit = createSortInputWorkUnit(sort, eo.just_explain);
+    GroupByAndAggregate::addTransientStringLiterals(
+        source_work_unit.exe_unit, executor_, executor_->row_set_mem_owner_);
+
     // Handle push-down for LIMIT for multi-node
     auto& aggregated_result = it->second;
     auto& result_rows = aggregated_result.rs;
