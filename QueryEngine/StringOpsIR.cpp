@@ -141,7 +141,7 @@ llvm::Value* Executor::codegenDictLike(const std::shared_ptr<Analyzer::Expr> lik
   const auto& dict_like_arg_ti = dict_like_arg->get_type_info();
   if (!dict_like_arg_ti.is_string()) {
     throw(std::runtime_error("Cast from " + dict_like_arg_ti.get_type_name() + " to " +
-                             pattern->get_type_info().get_type_name() + " not supported"));
+                             cast_oper->get_type_info().get_type_name() + " not supported"));
   }
   CHECK_EQ(kENCODING_DICT, dict_like_arg_ti.get_compression());
   const auto sdp = getStringDictionaryProxy(dict_like_arg_ti.get_comp_param(), row_set_mem_owner_, true);
