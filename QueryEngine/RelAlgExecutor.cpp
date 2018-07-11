@@ -2283,6 +2283,30 @@ std::vector<JoinType> left_deep_join_types(const RelLeftDeepInnerJoin* left_deep
   return join_types;
 }
 
+template <class RA>
+void do_table_reordering_maybe(std::vector<InputDescriptor>& input_descs,
+                               std::list<std::shared_ptr<const InputColDescriptor>>& input_col_descs,
+                               std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+                               const RA* node,
+                               const std::vector<InputTableInfo>& query_infos,
+                               const Catalog_Namespace::Catalog& cat) {
+  for (const auto& table_info : query_infos) {
+    if (table_info.table_id < 0) {
+      continue;
+    }
+    const auto td = cat.getMetadataForTable(table_info.table_id);
+    CHECK(td);
+    if (table_is_replicated(td)) {
+      return;
+    }
+  }
+  const auto input_permutation = get_node_input_permutation(query_infos);
+  input_to_nest_level = get_input_nest_levels(node, input_permutation);
+  std::tie(input_descs, input_col_descs, std::ignore) =
+      get_input_desc(node, input_to_nest_level, input_permutation, cat);
+  return;
+}
+
 }  // namespace
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(const RelCompound* compound,
@@ -2301,10 +2325,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(const RelC
   if (left_deep_join) {
     if (g_from_table_reordering &&
         std::find(join_types.begin(), join_types.end(), JoinType::LEFT) == join_types.end()) {
-      const auto input_permutation = get_node_input_permutation(query_infos);
-      input_to_nest_level = get_input_nest_levels(compound, input_permutation);
-      std::tie(input_descs, input_col_descs, std::ignore) =
-          get_input_desc(compound, input_to_nest_level, input_permutation, cat_);
+      do_table_reordering_maybe(input_descs, input_col_descs, input_to_nest_level, compound, query_infos, cat_);
     }
     left_deep_inner_joins = translateLeftDeepJoinFilter(left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
@@ -2395,10 +2416,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   if (left_deep_join) {
     if (g_from_table_reordering &&
         std::find(join_types.begin(), join_types.end(), JoinType::LEFT) == join_types.end()) {
-      const auto input_permutation = get_node_input_permutation(query_infos);
-      input_to_nest_level = get_input_nest_levels(compound, input_permutation);
-      std::tie(input_descs, input_col_descs, std::ignore) =
-          get_input_desc(compound, input_to_nest_level, input_permutation, cat_);
+      do_table_reordering_maybe(input_descs, input_col_descs, input_to_nest_level, compound, query_infos, cat_);
     }
     left_deep_inner_joins = translateLeftDeepJoinFilter(left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
@@ -2788,10 +2806,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(const RelPr
     const auto query_infos = get_table_infos(input_descs, executor_);
     if (g_from_table_reordering &&
         std::find(join_types.begin(), join_types.end(), JoinType::LEFT) == join_types.end()) {
-      const auto input_permutation = get_node_input_permutation(query_infos);
-      input_to_nest_level = get_input_nest_levels(project, input_permutation);
-      std::tie(input_descs, input_col_descs, std::ignore) =
-          get_input_desc(project, input_to_nest_level, input_permutation, cat_);
+      do_table_reordering_maybe(input_descs, input_col_descs, input_to_nest_level, project, query_infos, cat_);
     }
     left_deep_inner_joins = translateLeftDeepJoinFilter(left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
@@ -2860,10 +2875,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
     const auto query_infos = get_table_infos(input_descs, executor_);
     if (g_from_table_reordering &&
         std::find(join_types.begin(), join_types.end(), JoinType::LEFT) == join_types.end()) {
-      const auto input_permutation = get_node_input_permutation(query_infos);
-      input_to_nest_level = get_input_nest_levels(project, input_permutation);
-      std::tie(input_descs, input_col_descs, std::ignore) =
-          get_input_desc(project, input_to_nest_level, input_permutation, cat_);
+      do_table_reordering_maybe(input_descs, input_col_descs, input_to_nest_level, project, query_infos, cat_);
     }
     left_deep_inner_joins = translateLeftDeepJoinFilter(left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
