@@ -33,24 +33,26 @@ import (
 )
 
 var (
-	port          int
-	backendUrl    *url.URL
-	frontend      string
-	serversJson   string
-	dataDir       string
-	tmpDir        string
-	certFile      string
-	keyFile       string
-	docsDir       string
-	readOnly      bool
-	verbose       bool
-	enableHttps   bool
-	profile       bool
-	compress      bool
-	enableMetrics bool
-	connTimeout   time.Duration
-	version       string
-	proxies       []ReverseProxy
+	port                int
+	httpsRedirectPort   int
+	backendUrl          *url.URL
+	frontend            string
+	serversJson         string
+	dataDir             string
+	tmpDir              string
+	certFile            string
+	keyFile             string
+	docsDir             string
+	readOnly            bool
+	verbose             bool
+	enableHttps         bool
+	enableHttpsRedirect bool
+	profile             bool
+	compress            bool
+	enableMetrics       bool
+	connTimeout         time.Duration
+	version             string
+	proxies             []ReverseProxy
 )
 
 var (
@@ -98,6 +100,7 @@ func getLogName(lvl string) string {
 func init() {
 	var err error
 	pflag.IntP("port", "p", 9092, "frontend server port")
+	pflag.IntP("http-to-https-redirect-port", "", 9094, "frontend server port for http redirect, when https enabled")
 	pflag.StringP("backend-url", "b", "", "url to http-port on mapd_server [http://localhost:9090]")
 	pflag.StringSliceP("reverse-proxy", "", nil, "additional endpoints to act as reverse proxies, format '/endpoint/:http://target.example.com'")
 	pflag.StringP("frontend", "f", "frontend", "path to frontend directory")
@@ -110,6 +113,7 @@ func init() {
 	pflag.BoolP("quiet", "q", true, "suppress non-error messages")
 	pflag.BoolP("verbose", "v", false, "print all log messages to stdout")
 	pflag.BoolP("enable-https", "", false, "enable HTTPS support")
+	pflag.BoolP("enable-https-redirect", "", false, "enable HTTP to HTTPS redirect")
 	pflag.StringP("cert", "", "cert.pem", "certificate file for HTTPS")
 	pflag.StringP("key", "", "key.pem", "key file for HTTPS")
 	pflag.DurationP("timeout", "", 60*time.Minute, "maximum request duration")
@@ -126,11 +130,13 @@ func init() {
 	pflag.Parse()
 
 	viper.BindPFlag("web.port", pflag.CommandLine.Lookup("port"))
+	viper.BindPFlag("web.http-to-https-redirect-port", pflag.CommandLine.Lookup("http-to-https-redirect-port"))
 	viper.BindPFlag("web.backend-url", pflag.CommandLine.Lookup("backend-url"))
 	viper.BindPFlag("web.reverse-proxy", pflag.CommandLine.Lookup("reverse-proxy"))
 	viper.BindPFlag("web.frontend", pflag.CommandLine.Lookup("frontend"))
 	viper.BindPFlag("web.servers-json", pflag.CommandLine.Lookup("servers-json"))
 	viper.BindPFlag("web.enable-https", pflag.CommandLine.Lookup("enable-https"))
+	viper.BindPFlag("web.enable-https-redirect", pflag.CommandLine.Lookup("enable-https-redirect"))
 	viper.BindPFlag("web.cert", pflag.CommandLine.Lookup("cert"))
 	viper.BindPFlag("web.key", pflag.CommandLine.Lookup("key"))
 	viper.BindPFlag("web.timeout", pflag.CommandLine.Lookup("timeout"))
@@ -173,6 +179,7 @@ func init() {
 	}
 
 	port = viper.GetInt("web.port")
+	httpsRedirectPort = viper.GetInt("web.http-to-https-redirect-port")
 	frontend = viper.GetString("web.frontend")
 	docsDir = viper.GetString("web.docs")
 	serversJson = viper.GetString("web.servers-json")
@@ -237,6 +244,7 @@ func init() {
 	}
 
 	enableHttps = viper.GetBool("web.enable-https")
+	enableHttpsRedirect = viper.GetBool("web.enable-https-redirect")
 	certFile = viper.GetString("web.cert")
 	keyFile = viper.GetString("web.key")
 
@@ -506,6 +514,15 @@ func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 	h.ServeHTTP(rw, r)
 }
 
+func httpToHTTPSRedirectHandler(rw http.ResponseWriter, r *http.Request) {
+	// Redirect HTTP request to same URL with only two changes: https scheme,
+	// and the main server port configured in the 'port' param, rather than the
+	// incoming port ('http-to-https-redirect-port')
+	requestHost, _, _ := net.SplitHostPort(r.Host)
+	redirectURL := url.URL{Scheme: "https", Host: requestHost + ":" + strconv.Itoa(port), Path: r.URL.Path, RawQuery: r.URL.RawQuery}
+	http.Redirect(rw, r, redirectURL.String(), http.StatusTemporaryRedirect)
+}
+
 func (rp *ReverseProxy) proxyHandler(rw http.ResponseWriter, r *http.Request) {
 	h := http.StripPrefix(rp.Path, httputil.NewSingleHostReverseProxy(rp.Target))
 	h.ServeHTTP(rw, r)
@@ -680,6 +697,17 @@ func main() {
 		if _, err := os.Stat(keyFile); err != nil {
 			log.Fatalln("Error opening keyfile:", err)
 		}
+
+		if enableHttpsRedirect {
+			go func() {
+				err := http.ListenAndServe(":"+strconv.Itoa(httpsRedirectPort), http.HandlerFunc(httpToHTTPSRedirectHandler))
+
+				if err != nil {
+					log.Fatalln("Error starting http redirect listener:", err)
+				}
+			}()
+		}
+
 		err = srv.ListenAndServeTLS(certFile, keyFile)
 	} else {
 		err = srv.ListenAndServe()
