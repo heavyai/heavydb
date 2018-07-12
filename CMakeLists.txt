@@ -659,7 +659,8 @@ install(FILES "${EULA_FILE}" DESTINATION ".")
 install(PROGRAMS startmapd DESTINATION ".")
 install(PROGRAMS insert_sample_data DESTINATION ".")
 
-install(DIRECTORY docker/ DESTINATION "docker")
+install(DIRECTORY docker/sds DESTINATION "docker/sds")
+install(FILES docker/Dockerfile docker/README.md DESTINATION "docker")
 
 exec_program(uname ARGS -m OUTPUT_VARIABLE MAPD_HOST_SYSTEM_ARCHITECTURE) # does not account for cross-compiling or Windows
 set(CPACK_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${MAPD_EDITION_LOWER}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${MAPD_HOST_SYSTEM_ARCHITECTURE}${MAPD_PACKAGE_FLAGS}")
