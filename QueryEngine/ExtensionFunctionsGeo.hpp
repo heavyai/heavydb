@@ -18,14 +18,14 @@ DEVICE ALWAYS_INLINE bool tol_ge(double x, double y) {
   return (x + TOLERANCE) >= y;
 }
 
-DEVICE
-double decompress_coord(int8_t* data, int32_t index, int32_t ic, bool x) {
+DEVICE ALWAYS_INLINE double decompress_coord(int8_t* data, int32_t index, int32_t ic, bool x) {
   if (ic == COMPRESSION_GEOINT32) {
     auto compressed_coords = reinterpret_cast<int32_t*>(data);
     auto compressed_coord = compressed_coords[index];
     // decompress longitude: -2,147,483,647..2,147,483,647  --->  -180..180
     // decompress latitude: -2,147,483,647..2,147,483,647  --->  -90..90
-    return (x ? 180.0 : 90.0) * (static_cast<double>(compressed_coord) / 2147483647.0);
+    return static_cast<double>(compressed_coord) * (x ? 8.3819031754424345e-08    // (180.0 / 2147483647.0)
+                                                      : 4.1909515877212172e-08);  // (90.0 / 2147483647.0)
   }
   auto double_coords = reinterpret_cast<double*>(data);
   return double_coords[index];
@@ -38,8 +38,7 @@ DEVICE ALWAYS_INLINE int32_t compression_unit_size(int32_t ic) {
   return 8;
 }
 
-DEVICE
-double transform_coord(double coord, int32_t isr, int32_t osr, bool x) {
+DEVICE ALWAYS_INLINE double transform_coord(double coord, int32_t isr, int32_t osr, bool x) {
   if (isr == 4326) {
     if (osr == 900913) {
       // WGS 84 --> Web Mercator
@@ -53,23 +52,20 @@ double transform_coord(double coord, int32_t isr, int32_t osr, bool x) {
 }
 
 // X coord accessor handling on-the-fly decommpression and transforms
-DEVICE
-double coord_x(int8_t* data, int32_t index, int32_t ic, int32_t isr, int32_t osr) {
+DEVICE ALWAYS_INLINE double coord_x(int8_t* data, int32_t index, int32_t ic, int32_t isr, int32_t osr) {
   auto decompressed_coord_x = decompress_coord(data, index, ic, true);
   auto decompressed_transformed_coord_x = transform_coord(decompressed_coord_x, isr, osr, true);
   return decompressed_transformed_coord_x;
 }
 
 // Y coord accessor handling on-the-fly decommpression and transforms
-DEVICE
-double coord_y(int8_t* data, int32_t index, int32_t ic, int32_t isr, int32_t osr) {
+DEVICE ALWAYS_INLINE double coord_y(int8_t* data, int32_t index, int32_t ic, int32_t isr, int32_t osr) {
   auto decompressed_coord_y = decompress_coord(data, index, ic, false);
   auto decompressed_transformed_coord_y = transform_coord(decompressed_coord_y, isr, osr, false);
   return decompressed_transformed_coord_y;
 }
 
-DEVICE
-double hypotenuse(double x, double y) {
+DEVICE ALWAYS_INLINE double hypotenuse(double x, double y) {
   x = fabs(x);
   y = fabs(y);
   if (x < y) {
