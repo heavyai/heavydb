@@ -691,6 +691,7 @@ TEST(Select, FilterAndSimpleAggregation) {
       c("SELECT y, COUNT(*) FROM test GROUP BY y ORDER BY y DESC;", dt);
       c("SELECT str, COUNT(*) FROM test GROUP BY str ORDER BY str DESC;", dt);
       c("SELECT COUNT(*), z FROM test where x = 7 GROUP BY z ORDER BY z DESC;", dt);
+      c("SELECT z as z0, z as z1, COUNT(*) FROM test GROUP BY z0, z1 ORDER BY z0 DESC;", dt);;
     }
   }
 }

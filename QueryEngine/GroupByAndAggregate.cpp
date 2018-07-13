@@ -2171,6 +2171,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                                             (cuda_manager->maxSharedMemoryForAll / sizeof(int64_t) - 1));
         }
       }
+
       const auto group_expr = ra_exe_unit_.groupby_exprs.front().get();
       bool shared_mem_for_group_by = g_enable_smem_group_by && keyless && keyless_info.shared_mem_support &&
                                      (bin_count <= gpu_smem_max_threshold) &&
@@ -2217,6 +2218,13 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
           {},
           {},
           must_use_baseline_sort};
+      // TODO(Saman): should remove this after implementing shared memory path completely through codegen
+      if (shared_mem_for_group_by && (query_mem_desc_.getRowSize() > sizeof(int64_t))) {
+        // We should not use the current shared memory path if more than 8 bytes per group is required
+        query_mem_desc_.sharing = GroupByMemSharing::Shared;  // disable the new shared memory path
+        query_mem_desc_.interleaved_bins_on_gpu = keyless && (bin_count <= interleaved_max_threshold) &&
+                                                  countDescriptorsLogicallyEmpty(count_distinct_descriptors);
+      }
       return;
     }
     case GroupByColRangeType::OneColGuessedRange: {
@@ -2708,11 +2716,13 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
   // shouldn't use keyless for projection only
   /**
    * Currently just support shared memory usage when dealing with one keyless aggregate operation.
+   * Currently just support shared memory usage for up to two target expressions.
    */
   return {keyless && found,
           index,
           init_val,
-          (num_agg_expr == 1) ? shared_mem_support && shared_mem_valid_data_type : false};
+          ((num_agg_expr == 1) && (target_expr_list.size() <= 2)) ? shared_mem_support && shared_mem_valid_data_type
+                                                                  : false};
 }
 
 /**
