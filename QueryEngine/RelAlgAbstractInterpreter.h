@@ -17,18 +17,18 @@
 #ifndef QUERYENGINE_RELALGABSTRACTINTERPRETER_H
 #define QUERYENGINE_RELALGABSTRACTINTERPRETER_H
 
+#include "../Catalog/Catalog.h"
 #include "TargetMetaInfo.h"
 #include "TypePunning.h"
-#include "../Catalog/Catalog.h"
 
-#include <boost/variant.hpp>
+#include <rapidjson/document.h>
 #include <boost/make_unique.hpp>
 #include <boost/utility.hpp>
-#include <rapidjson/document.h>
+#include <boost/variant.hpp>
 
+#include <iterator>
 #include <memory>
 #include <unordered_map>
-#include <iterator>
 
 using ColumnNameList = std::vector<std::string>;
 
@@ -321,7 +321,7 @@ struct hash<RexInput> {
   }
 };
 
-}  // std
+}  // namespace std
 
 // Not a real node created by Calcite. Created by us because CaseExpr is a node in our Analyzer.
 class RexCase : public RexScalar {
@@ -1153,7 +1153,7 @@ class RelModify : public RelAlgNode {
 
     RelProject::ConstRexScalarPtrVector transform_stash;
     auto capped_cast_visitor = [this, &transform_stash, target_update_column_expr_start, target_update_column_expr_end](
-        int index, RelProject::ConstRexScalarPtr& expr_ptr) {
+                                   int index, RelProject::ConstRexScalarPtr& expr_ptr) {
       if (index >= target_update_column_expr_start && index <= target_update_column_expr_end) {
         RelProject::ConstRexScalarPtrVector operand_stash;
         operand_stash.emplace_back(std::move(expr_ptr));
@@ -1169,17 +1169,17 @@ class RelModify : public RelAlgNode {
         }
 
         // Check for valid types
-        auto cast_target_type = column_desc->columnType;
-        if (cast_target_type.is_varlen()) {
+        if (column_desc->columnType.is_varlen()) {
           throw std::runtime_error("UPDATE of a none-encoded string, geo, or array column is unsupported.");
         }
 
+        // Type needs to be scrubbed because otherwise NULL values could get cut off or truncated
+        auto cast_target_type = get_logical_type_info(column_desc->columnType);
         auto capped_result_expr_ptr = boost::make_unique<RexOperator const>(kCAST, operand_stash, cast_target_type);
         transform_stash.emplace_back(std::move(capped_result_expr_ptr));
       } else {
         transform_stash.emplace_back(std::move(expr_ptr));
       }
-
     };
 
     previous_project_node->visitAndStealScalarExprs(capped_cast_visitor);
