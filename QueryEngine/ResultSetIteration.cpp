@@ -27,6 +27,7 @@
 #include "Execute.h"
 #include "ResultRows.h"
 #include "ResultSet.h"
+#include "ResultSetGeoSerialization.h"
 #include "RuntimeFunctions.h"
 #include "SqlTypesLayout.h"
 #include "TypePunning.h"
@@ -705,124 +706,25 @@ TargetValue build_array_target_value(const SQLTypeInfo& array_ti,
   return TargetValue(nullptr);
 }
 
-template <typename T>
-void unpack_geo_vector(std::vector<T>& output, const int8_t* input_ptr, const size_t sz) {
-  auto elems = reinterpret_cast<const T*>(input_ptr);
-  CHECK_EQ(size_t(0), sz % sizeof(T));
-  const size_t num_elems = sz / sizeof(T);
-  output.resize(num_elems);
-  for (size_t i = 0; i < num_elems; i++) {
-    output[i] = elems[i];
-  }
-}
-
-template <>
-void unpack_geo_vector(std::vector<ScalarTargetValue>& output,
-                       const int8_t* input_ptr,
-                       const size_t sz) {
-  auto elems = reinterpret_cast<const double*>(input_ptr);
-  CHECK_EQ(size_t(0), sz % sizeof(double));
-  const size_t num_elems = sz / sizeof(double);
-  output.resize(num_elems);
-  for (size_t i = 0; i < num_elems; i++) {
-    output[i] = ScalarTargetValue(elems[i]);
-  }
-}
-
-template <class T>
-T wrap_decompressed_coord(const double val) {
-  return static_cast<T>(val);
-}
-
-template <>
-double wrap_decompressed_coord(const double val) {
-  return val;
-}
-
-template <>
-ScalarTargetValue wrap_decompressed_coord(const double val) {
-  return ScalarTargetValue(val);
-}
-
-// TODO(adb): Move this to a common geo compression file / class
-template <typename T>
-void decompress_geo_coords_geoint32(std::vector<T>& dec,
-                                    const int8_t* enc,
-                                    const size_t sz) {
-  const auto compressed_coords = reinterpret_cast<const int32_t*>(enc);
-  bool x = true;
-  dec.reserve(sz / sizeof(int32_t));
-  for (size_t i = 0; i < sz / sizeof(int32_t); i++) {
-    // decompress longitude: -2,147,483,647..2,147,483,647  --->  -180..180
-    // decompress latitude:  -2,147,483,647..2,147,483,647  --->   -90..90
-    double decompressed_coord =
-        (x ? 180.0 : 90.0) * (compressed_coords[i] / 2147483647.0);
-    dec.push_back(wrap_decompressed_coord<T>(decompressed_coord));
-    x = !x;
-  }
-}
-
+template <SQLTypes GEO_SOURCE_TYPE, typename... T>
 TargetValue build_geo_target_value(const SQLTypeInfo& geo_ti,
-                                   const int8_t* coords,
-                                   const size_t coords_sz,
-                                   const int8_t* ring_sizes,
-                                   const size_t ring_sizes_sz,
-                                   const int8_t* poly_rings,
-                                   const size_t poly_rings_sz,
-                                   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                   const Executor* executor,
-                                   const ResultSet::GeoReturnType return_type) {
-  CHECK(geo_ti.is_geometry());
-  if (return_type != ResultSet::GeoReturnType::Double) {
-    // Return a geo type serialized to string
-    std::vector<double> decompressed_coords;
-    if (geo_ti.get_compression() == kENCODING_GEOINT) {
-      if (geo_ti.get_comp_param() == 32) {
-        decompress_geo_coords_geoint32(decompressed_coords, coords, coords_sz);
-      }
-    } else {
-      CHECK_EQ(geo_ti.get_compression(), kENCODING_NONE);
-      unpack_geo_vector(decompressed_coords, coords, coords_sz);
+                                   const ResultSet::GeoReturnType return_type,
+                                   T&&... vals) {
+  switch (return_type) {
+    case ResultSet::GeoReturnType::GeoTargetValue: {
+      return GeoReturnTypeTraits<ResultSet::GeoReturnType::GeoTargetValue,
+                                 GEO_SOURCE_TYPE>::GeoSerializerType::serialize(geo_ti,
+                                                                                vals...);
     }
-    switch (geo_ti.get_type()) {
-      case kPOINT: {
-        Geo_namespace::GeoPoint point(decompressed_coords);
-        return NullableString(point.getWktString());
-      }
-      case kLINESTRING: {
-        Geo_namespace::GeoLineString line(decompressed_coords);
-        return NullableString(line.getWktString());
-      }
-      case kPOLYGON: {
-        std::vector<int32_t> ring_sizes_vec;
-        unpack_geo_vector(ring_sizes_vec, ring_sizes, ring_sizes_sz);
-        Geo_namespace::GeoPolygon poly(decompressed_coords, ring_sizes_vec);
-        return NullableString(poly.getWktString());
-      }
-      case kMULTIPOLYGON: {
-        std::vector<int32_t> ring_sizes_vec;
-        unpack_geo_vector(ring_sizes_vec, ring_sizes, ring_sizes_sz);
-        std::vector<int32_t> poly_rings_vec;
-        unpack_geo_vector(poly_rings_vec, poly_rings, poly_rings_sz);
-        Geo_namespace::GeoMultiPolygon multipoly(
-            decompressed_coords, ring_sizes_vec, poly_rings_vec);
-        return NullableString(multipoly.getWktString());
-      }
-      default:
-        throw std::runtime_error("Unknown Geometry type encountered: " +
-                                 geo_ti.get_type_name());
+    case ResultSet::GeoReturnType::WktString: {
+      return GeoReturnTypeTraits<ResultSet::GeoReturnType::WktString,
+                                 GEO_SOURCE_TYPE>::GeoSerializerType::serialize(geo_ti,
+                                                                                vals...);
     }
-  } else {
-    std::vector<ScalarTargetValue> decompressed_coords;
-    if (geo_ti.get_compression() == kENCODING_GEOINT) {
-      if (geo_ti.get_comp_param() == 32) {
-        decompress_geo_coords_geoint32(decompressed_coords, coords, coords_sz);
-      }
-    } else {
-      CHECK_EQ(geo_ti.get_compression(), kENCODING_NONE);
-      unpack_geo_vector(decompressed_coords, coords, coords_sz);
+    default: {
+      CHECK(false);
+      return TargetValue(nullptr);
     }
-    return TargetValue(decompressed_coords);
   }
 }
 
@@ -985,59 +887,48 @@ TargetValue ResultSet::makeGeoTargetValue(const VarlenTargetPtrPair& coords,
 
       // If encoding geo types as WKT strings, step through the encoding anyway to return
       // proper WKT string syntax for empty geo type.
-      if (coords_ad.is_null && (geo_return_type_ == GeoReturnType::Double)) {
+      if (coords_ad.is_null && (geo_return_type_ == GeoReturnType::GeoTargetValue)) {
         std::vector<ScalarTargetValue> empty_array;
         return TargetValue(empty_array);
       }
 
       switch (target_info.sql_type.get_type()) {
         case kPOINT:
+          return build_geo_target_value<kPOINT>(target_info.sql_type,
+                                                geo_return_type_,
+                                                coords_ad.pointer,
+                                                coords_ad.length);
         case kLINESTRING:
-          return build_geo_target_value(target_info.sql_type,
-                                        coords_ad.pointer,
-                                        coords_ad.length,
-                                        nullptr,
-                                        0,
-                                        nullptr,
-                                        0,
-                                        row_set_mem_owner_,
-                                        executor_,
-                                        geo_return_type_);
-          break;
+          return build_geo_target_value<kLINESTRING>(target_info.sql_type,
+                                                     geo_return_type_,
+                                                     coords_ad.pointer,
+                                                     coords_ad.length);
         case kPOLYGON: {
           const auto ring_sizes_id = col_lazy_fetch.local_col_id + 1;
-          ArrayDatum ring_sizes_ad =
+          const ArrayDatum ring_sizes_ad =
               lazy_fetch_chunk(frag_col_buffers[ring_sizes_id], varlen_ptr);
-          return build_geo_target_value(target_info.sql_type,
-                                        coords_ad.pointer,
-                                        coords_ad.length,
-                                        ring_sizes_ad.pointer,
-                                        ring_sizes_ad.length,
-                                        nullptr,
-                                        0,
-                                        row_set_mem_owner_,
-                                        executor_,
-                                        geo_return_type_);
-          break;
+          return build_geo_target_value<kPOLYGON>(target_info.sql_type,
+                                                  geo_return_type_,
+                                                  coords_ad.pointer,
+                                                  coords_ad.length,
+                                                  ring_sizes_ad.pointer,
+                                                  ring_sizes_ad.length);
         }
         case kMULTIPOLYGON: {
           const auto ring_sizes_id = col_lazy_fetch.local_col_id + 1;
-          ArrayDatum ring_sizes_ad =
+          const ArrayDatum ring_sizes_ad =
               lazy_fetch_chunk(frag_col_buffers[ring_sizes_id], varlen_ptr);
           const auto poly_rings_id = col_lazy_fetch.local_col_id + 2;
-          ArrayDatum poly_rings_ad =
+          const ArrayDatum poly_rings_ad =
               lazy_fetch_chunk(frag_col_buffers[poly_rings_id], varlen_ptr);
-          return build_geo_target_value(target_info.sql_type,
-                                        coords_ad.pointer,
-                                        coords_ad.length,
-                                        ring_sizes_ad.pointer,
-                                        ring_sizes_ad.length,
-                                        poly_rings_ad.pointer,
-                                        poly_rings_ad.length,
-                                        row_set_mem_owner_,
-                                        executor_,
-                                        geo_return_type_);
-          break;
+          return build_geo_target_value<kMULTIPOLYGON>(target_info.sql_type,
+                                                       geo_return_type_,
+                                                       coords_ad.pointer,
+                                                       coords_ad.length,
+                                                       ring_sizes_ad.pointer,
+                                                       ring_sizes_ad.length,
+                                                       poly_rings_ad.pointer,
+                                                       poly_rings_ad.length);
         }
         default:
           throw std::runtime_error("Unknown Geometry type encountered: " +
@@ -1071,17 +962,17 @@ TargetValue ResultSet::makeGeoTargetValue(const VarlenTargetPtrPair& coords,
   // TODO(adb): How to handle empty cols / null types?
   switch (target_info.sql_type.get_type()) {
     case kPOINT:
+      return build_geo_target_value<kPOINT>(
+          target_info.sql_type,
+          geo_return_type_,
+          reinterpret_cast<const int8_t*>(coords_varlen_ptr),
+          coords_length);
     case kLINESTRING:
-      return build_geo_target_value(target_info.sql_type,
-                                    reinterpret_cast<const int8_t*>(coords_varlen_ptr),
-                                    coords_length,
-                                    nullptr,
-                                    0,
-                                    nullptr,
-                                    0,
-                                    row_set_mem_owner_,
-                                    executor_,
-                                    geo_return_type_);
+      return build_geo_target_value<kLINESTRING>(
+          target_info.sql_type,
+          geo_return_type_,
+          reinterpret_cast<const int8_t*>(coords_varlen_ptr),
+          coords_length);
     case kPOLYGON: {
       auto ring_sizes_varlen_ptr =
           read_int_from_buff(ring_sizes.ptr1, ring_sizes.compact_sz1);
@@ -1097,16 +988,13 @@ TargetValue ResultSet::makeGeoTargetValue(const VarlenTargetPtrPair& coords,
                             device_id_);
         ring_sizes_varlen_ptr = reinterpret_cast<int64_t>(&ring_sizes_cpu_buffer[0]);
       }
-      return build_geo_target_value(target_info.sql_type,
-                                    reinterpret_cast<const int8_t*>(coords_varlen_ptr),
-                                    coords_length,
-                                    reinterpret_cast<int8_t*>(ring_sizes_varlen_ptr),
-                                    ring_sizes_length,
-                                    nullptr,
-                                    0,
-                                    row_set_mem_owner_,
-                                    executor_,
-                                    geo_return_type_);
+      return build_geo_target_value<kPOLYGON>(
+          target_info.sql_type,
+          geo_return_type_,
+          reinterpret_cast<const int8_t*>(coords_varlen_ptr),
+          coords_length,
+          reinterpret_cast<int8_t*>(ring_sizes_varlen_ptr),
+          ring_sizes_length);
     } break;
     case kMULTIPOLYGON: {
       auto ring_sizes_varlen_ptr =
@@ -1139,16 +1027,15 @@ TargetValue ResultSet::makeGeoTargetValue(const VarlenTargetPtrPair& coords,
         poly_rings_varlen_ptr = reinterpret_cast<int64_t>(&poly_rings_cpu_buffer[0]);
       }
 
-      return build_geo_target_value(target_info.sql_type,
-                                    reinterpret_cast<const int8_t*>(coords_varlen_ptr),
-                                    coords_length,
-                                    reinterpret_cast<int8_t*>(ring_sizes_varlen_ptr),
-                                    ring_sizes_length,
-                                    reinterpret_cast<int8_t*>(poly_rings_varlen_ptr),
-                                    poly_rings_length,
-                                    row_set_mem_owner_,
-                                    executor_,
-                                    geo_return_type_);
+      return build_geo_target_value<kMULTIPOLYGON>(
+          target_info.sql_type,
+          geo_return_type_,
+          reinterpret_cast<const int8_t*>(coords_varlen_ptr),
+          coords_length,
+          reinterpret_cast<int8_t*>(ring_sizes_varlen_ptr),
+          ring_sizes_length,
+          reinterpret_cast<int8_t*>(poly_rings_varlen_ptr),
+          poly_rings_length);
     } break;
     default:
       throw std::runtime_error("Unknown Geometry type encountered: " +

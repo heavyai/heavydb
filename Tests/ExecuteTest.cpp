@@ -127,10 +127,10 @@ std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
 
 TargetValue run_simple_agg(const string& query_str,
                            const ExecutorDeviceType device_type,
-                           const bool geo_return_double = true) {
+                           const bool geo_return_geo_tv = true) {
   auto rows = run_multiple_agg(query_str, device_type);
-  if (geo_return_double) {
-    rows->setGeoReturnDouble();
+  if (geo_return_geo_tv) {
+    rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
   }
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(1), crt_row.size());
@@ -139,10 +139,10 @@ TargetValue run_simple_agg(const string& query_str,
 
 TargetValue get_first_target(const string& query_str,
                              const ExecutorDeviceType device_type,
-                             const bool geo_return_double = true) {
+                             const bool geo_return_geo_tv = true) {
   auto rows = run_multiple_agg(query_str, device_type);
-  if (geo_return_double) {
-    rows->setGeoReturnDouble();
+  if (geo_return_geo_tv) {
+    rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
   }
   auto crt_row = rows->getNextRow(true, true);
   CHECK_GE(crt_row.size(), size_t(1));
@@ -8910,9 +8910,7 @@ TEST(Select, Deleted) {
 }
 #endif
 
-TEST(Select, GeoSpatial) {
-  SKIP_ALL_ON_AGGREGATOR();
-
+TEST(Select, GeoSpatial_Basics) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     ASSERT_EQ(
@@ -8956,42 +8954,55 @@ TEST(Select, GeoSpatial) {
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
                                   "WHERE ST_Distance(p, 'LINESTRING(-1 0, 0 1)') < 2.5;",
                                   dt)));
-    // Projection (return doubles)
-    compare_array(run_simple_agg("SELECT p FROM geospatial_test WHERE rowid = 1;", dt),
-                  std::vector<double>{1., 1.});
-    compare_array(run_simple_agg("SELECT l FROM geospatial_test WHERE rowid = 1;", dt),
-                  std::vector<double>{1., 0., 2., 2., 3., 3.});
-    compare_array(run_simple_agg("SELECT poly FROM geospatial_test WHERE rowid = 1;", dt),
-                  std::vector<double>{0., 0., 2., 0., 0., 2.});
-    compare_array(
+  }
+}
+
+TEST(Select, GeoSpatial_Projection) {
+  SKIP_ALL_ON_AGGREGATOR();
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // Projection (return GeoTargetValue)
+    compare_geo_target(
+        run_simple_agg("SELECT p FROM geospatial_test WHERE rowid = 1;", dt),
+        GeoPointTargetValue({1., 1.}));
+    compare_geo_target(
+        run_simple_agg("SELECT l FROM geospatial_test WHERE rowid = 1;", dt),
+        GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.}));
+    compare_geo_target(
+        run_simple_agg("SELECT poly FROM geospatial_test WHERE rowid = 1;", dt),
+        GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}));
+    compare_geo_target(
         run_simple_agg("SELECT mpoly FROM geospatial_test WHERE rowid = 1;", dt),
-        std::vector<double>{0., 0., 2., 0., 0., 2.});
+        GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1}));
     ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
                                   "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
                                   dt)));
-    compare_array(run_simple_agg("SELECT p FROM geospatial_test WHERE "
-                                 "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
-                                 dt),
-                  std::vector<double>{0., 0.});
+    compare_geo_target(
+        run_simple_agg("SELECT p FROM geospatial_test WHERE "
+                       "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
+                       dt),
+        GeoPointTargetValue({0, 0}));
 
-    compare_array(get_first_target("SELECT p, l FROM geospatial_test WHERE "
-                                   "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
-                                   dt),
-                  std::vector<double>{0., 0.});
-    compare_array(
+    compare_geo_target(
+        get_first_target("SELECT p, l FROM geospatial_test WHERE "
+                         "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
+                         dt),
+        GeoPointTargetValue({0, 0}));
+    compare_geo_target(
         get_first_target("SELECT p, ST_Distance(ST_GeomFromText('POINT(0 0)'), p), l "
                          "FROM geospatial_test "
                          "WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
                          dt),
-        std::vector<double>{0., 0.});
-    compare_array(
+        GeoPointTargetValue({0, 0}));
+    compare_geo_target(
         get_first_target("SELECT l, ST_Distance(ST_GeomFromText('POINT(0 0)'), p), p "
                          "FROM geospatial_test "
                          "WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
                          dt),
-        std::vector<double>{0., 0., 0., 0.});
+        GeoLineStringTargetValue({0., 0., 0., 0.}));
     ASSERT_EQ(
         static_cast<double>(0.),
         v<double>(get_first_target("SELECT ST_Distance(ST_GeomFromText('POINT(0 0)'), "
@@ -8999,21 +9010,22 @@ TEST(Select, GeoSpatial) {
                                    "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
                                    dt)));
 
-    compare_array(run_simple_agg("SELECT l FROM geospatial_test WHERE "
-                                 "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
-                                 dt),
-                  std::vector<double>{0., 0., 0., 0.});
-    compare_array(
+    compare_geo_target(
+        run_simple_agg("SELECT l FROM geospatial_test WHERE "
+                       "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
+                       dt),
+        GeoLineStringTargetValue({0., 0., 0., 0.}));
+    compare_geo_target(
         run_simple_agg("SELECT l FROM geospatial_test WHERE "
                        "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) BETWEEN 7 AND 8;",
                        dt),
-        std::vector<double>{5., 0., 10., 10., 11., 11.});
-    compare_array(
+        GeoLineStringTargetValue({5., 0., 10., 10., 11., 11.}));
+    compare_geo_target(
         run_simple_agg("SELECT gp4326 FROM geospatial_test WHERE "
                        "ST_Distance(ST_GeomFromText('POINT(0 0)'), "
                        "p) > 1 AND ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 2",
                        dt),
-        std::vector<double>{0.9999, 0.9999},
+        GeoPointTargetValue({0.9999, 0.9999}),
         0.01);
 
     // Projection (return WKT strings)
@@ -9323,22 +9335,26 @@ TEST(Select, GeoSpatial) {
                     dt)),
                 static_cast<double>(0.01));
 
-    ASSERT_NEAR(static_cast<double>(5),
-                v<double>(run_simple_agg(
-                    "SELECT ST_XMax(p) from geospatial_test limit 1 offset 5;", dt)),
-                static_cast<double>(0.0));
-    ASSERT_NEAR(static_cast<double>(1.0),
-                v<double>(run_simple_agg(
-                    "SELECT ST_YMin(gp4326) from geospatial_test limit 1 offset 1;", dt)),
-                static_cast<double>(0.001));
-    ASSERT_NEAR(static_cast<double>(2 * 7 + 1),
-                v<double>(run_simple_agg(
-                    "SELECT ST_XMax(l) from geospatial_test limit 1 offset 7;", dt)),
-                static_cast<double>(0.0));
-    ASSERT_NEAR(static_cast<double>(2 + 1),
-                v<double>(run_simple_agg(
-                    "SELECT ST_YMax(mpoly) from geospatial_test limit 1 offset 2;", dt)),
-                static_cast<double>(0.0));
+    SKIP_ON_AGGREGATOR(
+        ASSERT_NEAR(static_cast<double>(5),
+                    v<double>(run_simple_agg(
+                        "SELECT ST_XMax(p) from geospatial_test limit 1 offset 5;", dt)),
+                    static_cast<double>(0.0)));
+    SKIP_ON_AGGREGATOR(ASSERT_NEAR(
+        static_cast<double>(1.0),
+        v<double>(run_simple_agg(
+            "SELECT ST_YMin(gp4326) from geospatial_test limit 1 offset 1;", dt)),
+        static_cast<double>(0.001)));
+    SKIP_ON_AGGREGATOR(
+        ASSERT_NEAR(static_cast<double>(2 * 7 + 1),
+                    v<double>(run_simple_agg(
+                        "SELECT ST_XMax(l) from geospatial_test limit 1 offset 7;", dt)),
+                    static_cast<double>(0.0)));
+    SKIP_ON_AGGREGATOR(ASSERT_NEAR(
+        static_cast<double>(2 + 1),
+        v<double>(run_simple_agg(
+            "SELECT ST_YMax(mpoly) from geospatial_test limit 1 offset 2;", dt)),
+        static_cast<double>(0.0)));
 
     // Point accessors, Linestring indexing
     ASSERT_NEAR(

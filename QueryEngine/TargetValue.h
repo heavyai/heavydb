@@ -93,8 +93,50 @@ struct InternalTargetValue {
   }
 };
 
-typedef boost::variant<std::string, void*> NullableString;
-typedef boost::variant<int64_t, double, float, NullableString> ScalarTargetValue;
-typedef boost::variant<ScalarTargetValue, std::vector<ScalarTargetValue>> TargetValue;
+struct GeoPointTargetValue {
+  std::shared_ptr<std::vector<double>> coords;
+
+  GeoPointTargetValue(const std::vector<double>& coords)
+      : coords(std::make_shared<std::vector<double>>(coords)) {}
+};
+
+struct GeoLineStringTargetValue {
+  std::shared_ptr<std::vector<double>> coords;
+
+  GeoLineStringTargetValue(const std::vector<double>& coords)
+      : coords(std::make_shared<std::vector<double>>(coords)) {}
+};
+
+struct GeoPolyTargetValue {
+  std::shared_ptr<std::vector<double>> coords;
+  std::shared_ptr<std::vector<int32_t>> ring_sizes;
+
+  GeoPolyTargetValue(const std::vector<double>& coords,
+                     const std::vector<int32_t>& ring_sizes)
+      : coords(std::make_shared<std::vector<double>>(coords))
+      , ring_sizes(std::make_shared<std::vector<int32_t>>(ring_sizes)) {}
+};
+
+struct GeoMultiPolyTargetValue {
+  std::shared_ptr<std::vector<double>> coords;
+  std::shared_ptr<std::vector<int32_t>> ring_sizes;
+  std::shared_ptr<std::vector<int32_t>> poly_rings;
+
+  GeoMultiPolyTargetValue(const std::vector<double>& coords,
+                          const std::vector<int32_t>& ring_sizes,
+                          const std::vector<int32_t>& poly_rings)
+      : coords(std::make_shared<std::vector<double>>(coords))
+      , ring_sizes(std::make_shared<std::vector<int32_t>>(ring_sizes))
+      , poly_rings(std::make_shared<std::vector<int32_t>>(poly_rings)) {}
+};
+
+using NullableString = boost::variant<std::string, void*>;
+using ScalarTargetValue = boost::variant<int64_t, double, float, NullableString>;
+using GeoTargetValue = boost::variant<GeoPointTargetValue,
+                                      GeoLineStringTargetValue,
+                                      GeoPolyTargetValue,
+                                      GeoMultiPolyTargetValue>;
+using TargetValue =
+    boost::variant<ScalarTargetValue, std::vector<ScalarTargetValue>, GeoTargetValue>;
 
 #endif  // QUERYENGINE_TARGETVALUE_H

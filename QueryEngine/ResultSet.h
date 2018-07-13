@@ -372,10 +372,9 @@ class ResultSet {
 
   size_t getLimit();
 
-  enum class GeoReturnType { Double, WktString };
+  enum class GeoReturnType { GeoTargetValue, WktString };
   GeoReturnType getGeoReturnType() const { return geo_return_type_; }
-  void setGeoReturnWKtString() { geo_return_type_ = GeoReturnType::WktString; }
-  void setGeoReturnDouble() { geo_return_type_ = GeoReturnType::Double; }
+  void setGeoReturnType(const GeoReturnType val) { geo_return_type_ = val; }
 
  private:
   std::vector<TargetValue> getNextRowImpl(const bool translate_strings,
