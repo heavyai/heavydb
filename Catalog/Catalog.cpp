@@ -958,6 +958,12 @@ void SysCatalog::createDBObject(const UserMetadata& user,
 void SysCatalog::grantDBObjectPrivileges_unsafe(const std::string& roleName,
                                                 DBObject& object,
                                                 const Catalog_Namespace::Catalog& catalog) {
+  object.loadKey(catalog);
+  if (object.getPrivileges().hasPermission(DatabasePrivileges::ALL) &&
+      object.getObjectKey().permissionType == DatabaseDBObjectType) {
+    return grantAllOnDatabase_unsafe(roleName, object, catalog);
+  }
+
   sys_write_lock write_lock(this);
 
   if (!roleName.compare(MAPD_ROOT_USER)) {
@@ -969,7 +975,6 @@ void SysCatalog::grantDBObjectPrivileges_unsafe(const std::string& roleName,
     throw runtime_error("Request to grant privileges to " + roleName +
                         " failed because role or user with this name does not exist.");
   }
-  object.loadKey(catalog);
   rl->grantPrivileges(object);
 
   /* apply grant privileges statement to sqlite DB */
@@ -980,6 +985,24 @@ void SysCatalog::grantDBObjectPrivileges_unsafe(const std::string& roleName,
   sys_sqlite_lock sqlite_lock(this);
   insertOrUpdateObjectPrivileges(sqliteConnector_, roleName, rl->isUserPrivateRole(), object);
   updateObjectDescriptorMap(roleName, object, rl->isUserPrivateRole(), catalog);
+}
+
+void SysCatalog::grantAllOnDatabase_unsafe(const std::string& roleName,
+                                           DBObject& object,
+                                           const Catalog_Namespace::Catalog& catalog) {
+  // It's a separate use case because it's easier for implementation to convert ALL ON DATABASE
+  // into ALL ON DASHBOARDS, ALL ON VIEWS and ALL ON TABLES
+  DBObject tmp_object = object;
+  tmp_object.setPrivileges(AccessPrivileges::ALL_TABLE);
+  tmp_object.setPermissionType(TableDBObjectType);
+  grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
+  tmp_object.setPrivileges(AccessPrivileges::ALL_VIEW);
+  tmp_object.setPermissionType(ViewDBObjectType);
+  grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
+  tmp_object.setPrivileges(AccessPrivileges::ALL_DASHBOARD);
+  tmp_object.setPermissionType(DashboardDBObjectType);
+  grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
+  return;
 }
 
 // REVOKE INSERT ON TABLE payroll_table FROM payroll_dept_role;
@@ -998,6 +1021,12 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
                         " failed because role or user with this name does not exist.");
   }
   object.loadKey(catalog);
+
+  if (object.getPrivileges().hasPermission(DatabasePrivileges::ALL) &&
+      object.getObjectKey().permissionType == DatabaseDBObjectType) {
+    return revokeAllOnDatabase_unsafe(roleName, object.getObjectKey().dbId, rl);
+  }
+
   auto ret_object = rl->revokePrivileges(object);
   if (ret_object) {
     sys_sqlite_lock sqlite_lock(this);
@@ -1007,6 +1036,21 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
     sys_sqlite_lock sqlite_lock(this);
     deleteObjectPrivileges(sqliteConnector_, roleName, rl->isUserPrivateRole(), object);
     deleteObjectDescriptorMap(roleName, object, catalog);
+  }
+}
+
+void SysCatalog::revokeAllOnDatabase_unsafe(const std::string& roleName, int32_t dbId, Role* rl) {
+  sys_sqlite_lock sqlite_lock(this);
+  sqliteConnector_->query_with_text_params("DELETE FROM mapd_object_permissions WHERE roleName = ?1 and dbId = ?2",
+                                           std::vector<std::string>{roleName, std::to_string(dbId)});
+  rl->revokeAllOnDatabase(dbId);
+  for (auto d = objectDescriptorMap_.begin(); d != objectDescriptorMap_.end();) {
+    if (d->second->roleName == roleName && d->second->dbId == dbId) {
+      delete d->second;
+      d = objectDescriptorMap_.erase(d);
+    } else {
+      d++;
+    }
   }
 }
 

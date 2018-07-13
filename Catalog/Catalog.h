@@ -367,14 +367,18 @@ class SysCatalog {
             std::shared_ptr<Calcite> calcite,
             bool is_new_db,
             bool check_privileges,
-            const std::vector<LeafHostInfo>* string_dict_hosts = nullptr );
+            const std::vector<LeafHostInfo>* string_dict_hosts = nullptr);
 
   /**
    * logins (connects) a user against a database.
    *
    * throws a std::exception in all error cases! (including wrong password)
    */
-  std::shared_ptr<Catalog> login(const std::string& db, const std::string& username, const std::string& password, UserMetadata& user_meta, bool check_password = true);
+  std::shared_ptr<Catalog> login(const std::string& db,
+                                 const std::string& username,
+                                 const std::string& password,
+                                 UserMetadata& user_meta,
+                                 bool check_password = true);
   void createUser(const std::string& name, const std::string& passwd, bool issuper);
   void dropUser(const std::string& name);
   void alterUser(const int32_t userid, const std::string* passwd, bool* issuper);
@@ -481,6 +485,10 @@ class SysCatalog {
   void revokeDBObjectPrivileges_unsafe(const std::string& roleName,
                                        DBObject object,
                                        const Catalog_Namespace::Catalog& catalog);
+  void grantAllOnDatabase_unsafe(const std::string& roleName,
+                                 DBObject& object,
+                                 const Catalog_Namespace::Catalog& catalog);
+  void revokeAllOnDatabase_unsafe(const std::string& roleName, int32_t dbId, Role* rl);
 
   template <typename F, typename... Args>
   void execInTransaction(F&& f, Args&&... args) {

@@ -171,6 +171,10 @@ DBObject* UserRole::revokePrivileges(const DBObject& object) {
   throw runtime_error("revokePrivileges() api should not be used with objects of the UserRole class.");
 }
 
+void UserRole::revokeAllOnDatabase(int32_t dbId) {
+  throw runtime_error("revokeAllOnDatabase() api should not be used with objects of the UserRole class.");
+}
+
 void UserRole::getPrivileges(DBObject& object) {
   throw runtime_error("getPrivileges() api should not be used with objects of the UserRole class.");
 }
@@ -365,6 +369,20 @@ DBObject* GroupRole::revokePrivileges(const DBObject& object) {
   }
 
   return dbObject;
+}
+
+void GroupRole::revokeAllOnDatabase(int32_t dbId) {
+  for (auto iter = dbObjectMap_.begin(); iter != dbObjectMap_.end();) {
+    if (iter->first.dbId == dbId) {
+      for (auto roleIt = userRole_.begin(); roleIt != userRole_.end(); ++roleIt) {
+        (*roleIt)->dropDbObject(iter->first);
+      }
+      iter = dbObjectMap_.erase(iter);
+    } else {
+      ++iter;
+    }
+  }
+  updatePrivileges();
 }
 
 bool GroupRole::hasRole(Role* role) {

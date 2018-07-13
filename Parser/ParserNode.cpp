@@ -2888,9 +2888,9 @@ static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(const std::str
                                                                   const DBObjectType& objectType,
                                                                   const std::string& object_name) {
   if (privs.compare("ALL") == 0) {
-    // all on database not supported right now!
-
-    if (objectType == TableDBObjectType) {
+    if (objectType == DatabaseDBObjectType) {
+      return {AccessPrivileges::ALL_DATABASE, DatabaseDBObjectType};
+    } else if (objectType == TableDBObjectType) {
       return {AccessPrivileges::ALL_TABLE, TableDBObjectType};
     } else if (objectType == DashboardDBObjectType) {
       return {AccessPrivileges::ALL_DASHBOARD, DashboardDBObjectType};

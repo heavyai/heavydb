@@ -60,6 +60,7 @@ class Role {
 
   virtual void grantPrivileges(const DBObject& object) = 0;
   virtual DBObject* revokePrivileges(const DBObject& object) = 0;
+  virtual void revokeAllOnDatabase(int32_t dbId) = 0;
   virtual void getPrivileges(DBObject& object) = 0;
   virtual void grantRole(Role* role) = 0;
   virtual void revokeRole(Role* role) = 0;
@@ -98,6 +99,7 @@ class UserRole : public Role {
 
   virtual void grantPrivileges(const DBObject& object);
   virtual DBObject* revokePrivileges(const DBObject& object);
+  virtual void revokeAllOnDatabase(int32_t dbId);
   virtual void getPrivileges(DBObject& object);
   virtual void grantRole(Role* role);
   virtual void revokeRole(Role* role);
@@ -108,7 +110,7 @@ class UserRole : public Role {
   virtual bool isUserPrivateRole() const;
   virtual std::vector<std::string> getRoles() const;
   virtual void dropDbObject(const DBObjectKey& objectKey);
-  virtual std::string userName() const { return userName_; };
+  virtual std::string userName() const { return userName_; }
 
  private:
   int32_t userId_;
@@ -132,6 +134,7 @@ class GroupRole : public Role {
 
   virtual void grantPrivileges(const DBObject& object);
   virtual DBObject* revokePrivileges(const DBObject& object);
+  virtual void revokeAllOnDatabase(int32_t dbId);
   virtual void getPrivileges(DBObject& object);
   virtual void grantRole(Role* role);
   virtual void revokeRole(Role* role);

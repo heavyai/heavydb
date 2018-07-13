@@ -295,6 +295,7 @@ TEST_F(DatabaseObject, TableAccessTest) {
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
+  mapd_object.setPermissionType(TableDBObjectType);
   mapd_object.resetPrivileges();
   ASSERT_NO_THROW(mapd_object.setPrivileges(arsenal_privs));
   ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Arsenal", mapd_object, cat_mapd));
@@ -337,6 +338,7 @@ TEST_F(DatabaseObject, ViewAccessTest) {
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
+  mapd_object.setPermissionType(ViewDBObjectType);
   mapd_object.resetPrivileges();
   ASSERT_NO_THROW(mapd_object.setPrivileges(arsenal_privs));
   ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Arsenal", mapd_object, cat_mapd));
@@ -390,6 +392,7 @@ TEST_F(DatabaseObject, DashboardAccessTest) {
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
+  mapd_object.setPermissionType(DashboardDBObjectType);
   mapd_object.resetPrivileges();
   ASSERT_NO_THROW(mapd_object.setPrivileges(arsenal_privs));
   ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Arsenal", mapd_object, cat_mapd));
@@ -420,6 +423,101 @@ TEST_F(DatabaseObject, DashboardAccessTest) {
   ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::EDIT_DASHBOARD));
   privObjects.push_back(mapd_object);
   EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+}
+
+TEST_F(DatabaseObject, DatabaseAllTest) {
+  std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
+  boost::filesystem::path base_path{BASE_PATH};
+  auto system_db_file = base_path / "mapd_catalogs" / "mapd";
+  auto data_dir = base_path / "mapd_data";
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+  sys_cat.getMetadataForDB("mapd", db_meta);
+  sys_cat.getMetadataForUser("Arsenal", user_meta);
+  session_ars.reset(
+      new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
+                                             base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
+                                         user_meta,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
+  auto& cat_mapd = session_ars->get_catalog();
+  AccessPrivileges arsenal_privs;
+  ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DATABASE));
+  DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
+  privObjects.clear();
+  mapd_object.loadKey(cat_mapd);
+  mapd_object.resetPrivileges();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(arsenal_privs));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Arsenal", mapd_object, cat_mapd));
+
+  mapd_object.resetPrivileges();
+  mapd_object.setPermissionType(TableDBObjectType);
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::ALL_TABLE));
+  privObjects.push_back(mapd_object);
+  mapd_object.setPermissionType(ViewDBObjectType);
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::ALL_VIEW));
+  privObjects.push_back(mapd_object);
+  mapd_object.setPermissionType(DashboardDBObjectType);
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::ALL_DASHBOARD));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  mapd_object.setPermissionType(TableDBObjectType);
+  ASSERT_NO_THROW(arsenal_privs.remove(AccessPrivileges::SELECT_FROM_TABLE));
+  ASSERT_NO_THROW(mapd_object.setPrivileges(arsenal_privs));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Arsenal", mapd_object, cat_mapd));
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  arsenal_privs.reset();
+  mapd_object.setPermissionType(DashboardDBObjectType);
+  ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::DELETE_DASHBOARD));
+  ASSERT_NO_THROW(mapd_object.setPrivileges(arsenal_privs));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Arsenal", mapd_object, cat_mapd));
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  mapd_object.setPermissionType(ViewDBObjectType);
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::ALL_VIEW));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  mapd_object.setPermissionType(DashboardDBObjectType);
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::DELETE_DASHBOARD));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  mapd_object.setPermissionType(TableDBObjectType);
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::SELECT_FROM_TABLE));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  arsenal_privs.reset();
+  mapd_object.setPermissionType(DatabaseDBObjectType);
+  ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DATABASE));
+  ASSERT_NO_THROW(mapd_object.setPrivileges(arsenal_privs));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Arsenal", mapd_object, cat_mapd));
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  mapd_object.setPermissionType(ViewDBObjectType);
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::ALL_VIEW));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  mapd_object.setPermissionType(TableDBObjectType);
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::INSERT_INTO_TABLE));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
 }
 
 TEST_F(TableObject, AccessDefaultsTest) {
