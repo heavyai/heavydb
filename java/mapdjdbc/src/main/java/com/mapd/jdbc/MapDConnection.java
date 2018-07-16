@@ -60,12 +60,14 @@ public class MapDConnection implements java.sql.Connection {
   protected String url = null;
   protected Properties properties = null;
   protected String user;
+  protected String catalog;
   protected TTransport transport;
   protected SQLWarning warnings;
 
   public MapDConnection(String url, Properties info) throws SQLException { //logger.debug("Entered");
     this.url = url;
     this.properties = info;
+    this.user = info.getProperty("user");
     boolean http_session = false;
 
     //logger.debug("We got to here " + url + " info: " + info.toString());
@@ -83,8 +85,8 @@ public class MapDConnection implements java.sql.Connection {
 
     //logger.debug("machine : " + machine);
     int port = Integer.valueOf(temp[3]);
-    String db = temp[4];
-    //test for http protocol request (we could consider usinig properties)
+    this.catalog = temp[4];
+    //test for http protocol request (we could consider using properties)
     if (temp.length == 6) {
       if (temp[5].equals("http")) {
         http_session = true;
@@ -105,7 +107,7 @@ public class MapDConnection implements java.sql.Connection {
       }
       client = new MapD.Client(protocol);
 
-      session = client.connect(info.getProperty("user"), info.getProperty("password"), db);
+      session = client.connect(info.getProperty("user"), info.getProperty("password"), this.catalog);
 
       logger.debug("Connected session is " + session);
 
@@ -226,7 +228,7 @@ public class MapDConnection implements java.sql.Connection {
 
   @Override
   public String getCatalog() throws SQLException { //logger.debug("Entered");
-    return user;
+    return catalog;
   }
 
   @Override

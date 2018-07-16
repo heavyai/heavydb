@@ -33,10 +33,8 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.RowIdLifetime;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1218,98 +1216,104 @@ SQLException - if a database access error occurs
     return new MapDResultSet();
   }
 
+  private void
+  tablePermProcess(
+          List<String> tables,
+          Map<String, MapDData> dataMap,
+          String tableNamePattern) throws TException {
+
+    for (String table : tables) {
+      if (tableNamePattern != null && !table.matches(tableNamePattern)) {
+        continue;
+      }
+      List<TDBObject> db_objects = con.client.get_db_object_privs(con.session, table, TDBObjectType.TableDBObjectType);
+
+      // check if the table matches the input pattern
+      for (TDBObject db_object : db_objects) {
+        // A bunch of db objects come back.  Any with out a name throw away
+        //  If the user is a super user then the  objectName will be super
+        //  and needs to be changed to something sensible.
+        if(db_object.objectName.equals("")) {
+          continue;
+        }
+
+        if(db_object.objectName.toLowerCase().equals("super")) {
+          db_object.objectName = table;
+        }
+
+        // Create  set of table permissions based ont he db_object.  This seems to
+        // be the only way - though being hardwired on the number of privs is not great.
+        TTablePermissions tt = new TTablePermissions(
+                db_object.privs.get(0),
+                db_object.privs.get(1),
+                db_object.privs.get(2),
+                db_object.privs.get(3),
+                db_object.privs.get(4),
+                db_object.privs.get(5),
+                db_object.privs.get(6));
+
+        int ordinal = 1;
+        for (TTablePermissions._Fields field = tt.fieldForId(ordinal); field != null; field = tt.fieldForId(++ordinal)) {
+          Boolean x = (Boolean)tt.getFieldValue(field);
+          if(x == false){
+            continue;
+          }
+          // standardise the fieldName upper case and remove trailing '_'.  create_ => CREATE
+          dataMap.get("PRIVILEGE").add(field.getFieldName().toUpperCase().replace("_", ""));
+          dataMap.get("TABLE_CAT").setNull(true);
+          dataMap.get("TABLE_SCHEM").setNull(true);
+          dataMap.get("TABLE_NAME").add(db_object.objectName);
+          dataMap.get("GRANTOR").setNull(true);
+          dataMap.get("GRANTEE").add(db_object.grantee);
+          dataMap.get("IS_GRANTABLE").add("NO");
+        }
+      }
+    }
+  }
+
   @Override
   public ResultSet getTablePrivileges(String catalog, String schemaPattern, String tableNamePattern) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    MAPDLOGGER.debug("TablePattern " + tableNamePattern + " tableNamePattern " + tableNamePattern);
-    String modifiedTablePattern = tableNamePattern.replaceAll("%", ".*");
-  
+
+    String modifiedTablePattern = (tableNamePattern == null) ? null : tableNamePattern.replaceAll("%", ".*");
+
+    MAPDLOGGER.debug("TablePattern " + tableNamePattern + " modifiedTableNamePattern " + modifiedTablePattern);
+
     // declare the columns in the result set
-    TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
-    TColumnType columns[] = {
-      createTColumnType("TABLE_CAT", new TTypeInfo(strTTI)),
-      createTColumnType("TABLE_SCHEM", new TTypeInfo(strTTI)),
-      createTColumnType("TABLE_NAME", new TTypeInfo(strTTI)),
-      createTColumnType("GRANTOR", new TTypeInfo(strTTI)),
-      createTColumnType("GRANTEE", new TTypeInfo(strTTI)),
-      createTColumnType("PRIVILEGE", new TTypeInfo(strTTI)),
-      createTColumnType("IS_GRANTABLE", new TTypeInfo(strTTI)),
-    };
-  
-    Map<String, MapDData> dataMap = new HashMap(columns.length);
-  
-    // create component to contain the meta data for the rows
-    // and create  a container to store the data and the nul indicators
-    List<TColumnType> rowDesc = new ArrayList(columns.length);
-    for (TColumnType col : columns) {
-      rowDesc.add(col);
-      dataMap.put(col.col_name, new MapDData(col.col_type.type));
-    }
-    List<String> roles;
-    List<TDBObject> db_objects = new ArrayList();
-    List<String> tables;
+    final TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
+    final TDatumType datumType = strTTI.type;
+
+    Map<String, MapDData> dataMap = new HashMap() {{
+      put("TABLE_CAT", new MapDData(datumType));
+      put("TABLE_SCHEM", new MapDData(datumType));
+      put("TABLE_NAME", new MapDData(datumType));
+      put("GRANTOR", new MapDData(datumType));
+      put("GRANTEE", new MapDData(datumType));
+      put("PRIVILEGE", new MapDData(datumType));
+      put("IS_GRANTABLE", new MapDData(datumType));
+    }};
+
     try {
-      tables = con.client.get_tables(con.session);
-
-
-        for (String table : tables) {
-          db_objects = con.client.get_db_object_privs(con.session, table, 
-             TDBObjectType.TableDBObjectType); 
-          
-          // check if the table matches the input pattern
-          for (TDBObject db_object : db_objects) {
-            if (db_object.objectType == TDBObjectType.TableDBObjectType) {
-              if (tableNamePattern == null || tableNamePattern.equals(table)) {
-                Boolean priv[] = db_object.privs.toArray(new Boolean[db_object.privs.size()]);
-                TTablePermissions tt = new TTablePermissions(priv[0],priv[1], priv[2], priv[3],priv[4], false, false);
-                int ordinal = 1;
-                for (Boolean prv : priv) {
-                  if (prv == true) {
-                    switch (tt.fieldForId(ordinal)) {
-                    case CREATE_:
-                      dataMap.get("PRIVILEGE").add("CREATE");
-                      break;
-                    case DROP_:
-                      dataMap.get("PRIVILEGE").add("DROP");
-                      break;
-                    case SELECT_:
-                      dataMap.get("PRIVILEGE").add("SELECT");
-                      break;
-                    case INSERT_:
-                      dataMap.get("PRIVILEGE").add("INSERT");
-                      break;
-                    case DELETE_:
-                      dataMap.get("PRIVILEGE").add("DELETE");
-                      break;
-                    }
-                    dataMap.get("TABLE_CAT").setNull(true);
-                    dataMap.get("TABLE_SCHEM").setNull(true);
-                    dataMap.get("TABLE_NAME").add(table);
-                    dataMap.get("GRANTOR").setNull(true);
-                    dataMap.get("GRANTEE").add(db_object.grantee);
-                    dataMap.get("IS_GRANTABLE").add("NO");
-                  }
-                  ordinal++;
-                }
-              }   
-            }
-          }
-        } 
-
-      
+      // Get all the tables and then pattern match them in tablePermProcess
+      List<String> tables = con.client.get_tables(con.session);
+      tablePermProcess(tables, dataMap, modifiedTablePattern);
     }
     catch (TException ex) {
       throw new SQLException("get_privileges failed " + ex.toString());
-    } 
-  
-    List<TColumn> columnsList = new ArrayList(columns.length);
-  
-    for (TColumnType col : columns){
-      TColumn schemaCol = dataMap.get(col.col_name).getTColumn();
-    //logger.info("Tcolumn is "+ schemaCol.toString());
-      columnsList.add(schemaCol);
     }
-  
+
+    // create component to contain the meta data for the rows
+    // and create  a container to store the data and the nul indicators
+    //List<TColumnType> rowDesc = new ArrayList(columns.length);
+
+    List<TColumnType> rowDesc = new ArrayList(dataMap.size());
+    List<TColumn> columnsList = new ArrayList(dataMap.size());
+
+    for(Map.Entry<String, MapDData> pair : dataMap.entrySet()){
+      columnsList.add(pair.getValue().getTColumn());
+      rowDesc.add(createTColumnType(pair.getKey(), new TTypeInfo(strTTI)));
+    }
+
     // create a rowset for the result
     TRowSet rowSet = new TRowSet(rowDesc, null, columnsList, true);
   
