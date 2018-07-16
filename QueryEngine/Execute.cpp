@@ -1028,11 +1028,11 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
     std::condition_variable scheduler_cv;
     std::mutex scheduler_mutex;
     auto dispatch = [&execution_dispatch, &available_cpus, &available_gpus, &options, &scheduler_mutex, &scheduler_cv](
-        const ExecutorDeviceType chosen_device_type,
-        int chosen_device_id,
-        const FragmentsList& frag_list,
-        const size_t ctx_idx,
-        const int64_t rowid_lookup_key) {
+                        const ExecutorDeviceType chosen_device_type,
+                        int chosen_device_id,
+                        const FragmentsList& frag_list,
+                        const size_t ctx_idx,
+                        const int64_t rowid_lookup_key) {
       INJECT_TIMER(execution_dispatch_run);
       execution_dispatch.run(chosen_device_type, chosen_device_id, options, frag_list, ctx_idx, rowid_lookup_key);
       if (execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid) {
@@ -1365,8 +1365,9 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
     if (eo.with_watchdog && fragment_descriptor.getRowIdLookupKey() < 0) {
       checkWorkUnitWatchdog(ra_exe_unit, *catalog_);
     }
-    auto multifrag_kernel_dispatch = [&query_threads, &dispatch, &context_count](
-        const int device_id, const FragmentsList& frag_list, const int64_t rowid_lookup_key) {
+    auto multifrag_kernel_dispatch = [&query_threads, &dispatch, &context_count](const int device_id,
+                                                                                 const FragmentsList& frag_list,
+                                                                                 const int64_t rowid_lookup_key) {
       query_threads.push_back(std::async(std::launch::async,
                                          dispatch,
                                          ExecutorDeviceType::GPU,
@@ -1676,6 +1677,7 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
                                             const Catalog_Namespace::Catalog& cat,
                                             std::list<ChunkIter>& chunk_iterators,
                                             std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
+  INJECT_TIMER(fetchChunks);
   const auto& col_global_ids = ra_exe_unit.input_col_descs;
   std::vector<std::vector<size_t>> selected_fragments_crossjoin;
   std::vector<size_t> local_col_to_frag_pos;
