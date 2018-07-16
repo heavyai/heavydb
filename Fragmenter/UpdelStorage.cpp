@@ -164,7 +164,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
 
           for (size_t r = rbegin; r < std::min(rbegin + segsz, nrow); r++) {
             const auto roffs = fragOffsets[r];
-            auto dptr = d0 + roffs * get_uncompressed_element_size(lctype);
+            auto dptr = d0 + roffs * get_element_size(lctype);
             auto sv = &rhsValues[1 == nval ? 0 : r];
             ScalarTargetValue sv2;
 

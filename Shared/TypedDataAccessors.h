@@ -13,60 +13,101 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <math.h>
-#include "sqltypes.h"
-#include "always_assert.h"
+#ifndef H_TypedDataAccessors__
+#define H_TypedDataAccessors__
 
-static inline int get_uncompressed_element_size(const SQLTypeInfo& t) {
+#include <math.h>
+#include <string.h>
+#include "Shared/sqltypes.h"
+
+#ifndef CHECK  // if not collide with the one in glog/logging.h
+#include "always_assert.h"
+#endif
+
+namespace {
+
+template <typename LHT, typename RHT>
+inline void value_truncated(const LHT& lhs, const RHT& rhs) {
+  std::ostringstream os;
+  os << "Value " << rhs << " would be truncated to "
+     << (std::is_same<LHT, uint8_t>::value || std::is_same<LHT, int8_t>::value ? (int64_t)lhs : lhs);
+  throw std::runtime_error(os.str());
+};
+
+template <typename T>
+inline bool is_null(const T& v, const SQLTypeInfo& t) {
+  switch (t.get_logical_size()) {
+    case 1:
+      return v == inline_int_null_value<int8_t>();
+    case 2:
+      return v == inline_int_null_value<int16_t>();
+    case 4:
+      return v == inline_int_null_value<int32_t>();
+    case 8:
+      return v == inline_int_null_value<int64_t>();
+    default:
+      abort();
+  }
+}
+
+template <typename LHT, typename RHT>
+inline bool integer_setter(LHT& lhs, const RHT& rhs, const SQLTypeInfo& t) {
+  const int64_t r = is_null(rhs, t) ? inline_int_null_value<LHT>() : rhs;
+  if ((lhs = r) != r)
+    value_truncated(lhs, r);
+  return true;
+}
+
+inline int get_element_size(const SQLTypeInfo& t) {
   if (t.is_string_array())
     return sizeof(int32_t);
   if (!t.is_array())
     return t.get_size();
-  return SQLTypeInfo(t.get_subtype(), t.get_dimension(), t.get_scale(), false).get_size();
+  return SQLTypeInfo(
+             t.get_subtype(), t.get_dimension(), t.get_scale(), false, t.get_compression(), t.get_comp_param(), kNULLT)
+      .get_size();
 }
 
-static inline uint32_t get_string_index(void* ptr, const int size) {
+inline bool is_null_string_index(const int size, const int32_t sidx) {
+  switch (size) {
+    case 1:
+      return sidx == inline_int_null_value<uint8_t>();
+    case 2:
+      return sidx == inline_int_null_value<uint16_t>();
+    case 4:
+      return sidx == inline_int_null_value<int32_t>();
+    default:
+      abort();
+  }
+}
+
+inline int32_t get_string_index(void* ptr, const int size) {
   switch (size) {
     case 1:
       return *(uint8_t*)ptr;
     case 2:
       return *(uint16_t*)ptr;
     case 4:
-      return *(uint32_t*)ptr;
+      return *(int32_t*)ptr;
     default:
-      CHECK(false);
-      return 0;
+      abort();
   }
 }
 
-static inline bool set_string_index(void* ptr, const int size, const uint32_t rval) {
+inline bool set_string_index(void* ptr, const int size, int32_t sidx) {
   switch (size) {
     case 1:
-      return (*(uint8_t*)ptr = rval) == rval;
+      return integer_setter(*(uint8_t*)ptr, sidx, SQLTypeInfo(kTEXT, false, kENCODING_DICT));
+      break;
     case 2:
-      return (*(uint16_t*)ptr = rval) == rval;
+      return integer_setter(*(uint16_t*)ptr, sidx, SQLTypeInfo(kTEXT, false, kENCODING_DICT));
+      break;
     case 4:
-      return (*(uint32_t*)ptr = rval) == rval;
+      return integer_setter(*(int32_t*)ptr, sidx, SQLTypeInfo(kTEXT, false, kENCODING_DICT));
+      break;
     default:
-      CHECK(false);
-      return false;
+      abort();
   }
-}
-
-static inline SQLTypes get_decimal_int_type(const SQLTypeInfo& ti) {
-  switch (ti.get_size()) {
-    case 1:
-      return kTINYINT;
-    case 2:
-      return kSMALLINT;
-    case 4:
-      return kINT;
-    case 8:
-      return kBIGINT;
-    default:
-      CHECK(false);
-  }
-  return kNULLT;
 }
 
 template <typename T>
@@ -74,28 +115,38 @@ static void put_scalar(void* ndptr, const SQLTypes etype, const int esize, const
   // round floating oval to nearest integer
   auto rval = oval;
   if (std::is_floating_point<T>::value)
-    if (IS_INTEGER(etype) || IS_TIME(etype))
+    if (IS_INTEGER(etype) || IS_TIME(etype) || IS_INTERVAL(etype) || IS_DECIMAL(etype))
       rval = round(rval);
   switch (etype) {
+    case kBOOLEAN:
+      rval = rval != 0;
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      *(int64_t*)ndptr = rval;
-      break;
-    case kBOOLEAN:
-      *(int8_t*)ndptr = 0 != rval;
-      break;
     case kTINYINT:
-      *(int8_t*)ndptr = rval;
-      break;
     case kSMALLINT:
-      *(int16_t*)ndptr = rval;
-      break;
     case kINT:
-      *(int32_t*)ndptr = rval;
-      break;
     case kBIGINT:
-      *(int64_t*)ndptr = rval;
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH:
+    case kNUMERIC:
+    case kDECIMAL:
+      switch (esize) {
+        case 1:
+          integer_setter(*(int8_t*)ndptr, rval, SQLTypeInfo(etype, false));
+          break;
+        case 2:
+          integer_setter(*(int16_t*)ndptr, rval, SQLTypeInfo(etype, false));
+          break;
+        case 4:
+          integer_setter(*(int32_t*)ndptr, rval, SQLTypeInfo(etype, false));
+          break;
+        case 8:
+          integer_setter(*(int64_t*)ndptr, rval, SQLTypeInfo(etype, false));
+          break;
+        default:
+          abort();
+      }
       break;
     case kFLOAT:
       *(float*)ndptr = rval;
@@ -104,125 +155,147 @@ static void put_scalar(void* ndptr, const SQLTypes etype, const int esize, const
       *(double*)ndptr = rval;
       break;
     default:
-      if (IS_STRING(etype)) {
-        if (!set_string_index(ndptr, esize, rval))
-          throw std::runtime_error("Dictionary index " + std::to_string(rval) + " can't fit in " +
-                                   std::to_string(esize) + " bytes.");
-      } else
+      if (IS_STRING(etype))
+        set_string_index(ndptr, esize, rval);
+      else
         CHECK(false);
       break;
   }
 }
 
-static inline double decimal_to_double(const SQLTypeInfo& otype, int64_t oval) {
+inline double decimal_to_double(const SQLTypeInfo& otype, int64_t oval) {
   return oval / pow(10, otype.get_scale());
 }
 
 template <typename T>
-static inline void put_scalar(void* ndptr, const SQLTypeInfo& ntype, const T oval, const SQLTypeInfo* otype = nullptr) {
-  auto etype = ntype.is_array() ? ntype.get_subtype() : ntype.get_type();
-  switch (etype) {
+inline void put_scalar(void* ndptr, const SQLTypeInfo& ntype, const T oval, const SQLTypeInfo* otype = nullptr) {
+  const auto& etype = ntype.is_array() ? SQLTypeInfo(ntype.get_subtype(),
+                                                     ntype.get_dimension(),
+                                                     ntype.get_scale(),
+                                                     ntype.get_notnull(),
+                                                     ntype.get_compression(),
+                                                     ntype.get_comp_param(),
+                                                     kNULLT)
+                                       : ntype;
+  switch (etype.get_type()) {
     case kNUMERIC:
-    case kDECIMAL:
+    case kDECIMAL: {
+      const auto esize = get_element_size(etype);
+      const auto isnull = is_null(oval, etype);
       if (otype && otype->is_decimal())
-        put_scalar<int64_t>(ndptr, get_decimal_int_type(ntype), 0, convert_decimal_value_to_scale(oval, *otype, ntype));
+        put_scalar<int64_t>(
+            ndptr,
+            kDECIMAL,
+            esize,
+            isnull ? inline_int_null_value<int64_t>() : convert_decimal_value_to_scale(oval, *otype, etype));
       else
-        put_scalar<T>(ndptr, get_decimal_int_type(ntype), 0, oval * pow(10, ntype.get_scale()));
-      break;
+        put_scalar<T>(
+            ndptr, kDECIMAL, esize, isnull ? inline_int_null_value<int64_t>() : oval * pow(10, etype.get_scale()));
+    } break;
     default:
       if (otype && otype->is_decimal())
-        put_scalar<double>(ndptr, ntype, decimal_to_double(*otype, oval));
+        put_scalar<double>(ndptr, etype, decimal_to_double(*otype, oval));
       else
-        put_scalar<T>(ndptr, etype, get_uncompressed_element_size(ntype), oval);
+        put_scalar<T>(ndptr, etype.get_type(), get_element_size(etype), oval);
       break;
   }
 }
 
-static inline void put_null(void* ndptr, const SQLTypeInfo& ntype, const std::string col_name) {
+inline void put_null(void* ndptr, const SQLTypeInfo& ntype, const std::string col_name) {
   if (ntype.get_notnull())
     throw std::runtime_error("NULL value on NOT NULL column '" + col_name + "'");
 
   switch (ntype.get_type()) {
     case kBOOLEAN:
-      *(int8_t*)ndptr = NULL_BOOLEAN;
-      break;
     case kTINYINT:
-      *(int8_t*)ndptr = NULL_TINYINT;
-      break;
     case kSMALLINT:
-      *(int16_t*)ndptr = NULL_SMALLINT;
-      break;
     case kINT:
-      *(int32_t*)ndptr = NULL_INT;
-      break;
     case kBIGINT:
-    case kNUMERIC:
-    case kDECIMAL:
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      *(int64_t*)ndptr = NULL_BIGINT;
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH:
+    case kNUMERIC:
+    case kDECIMAL:
+      switch (ntype.get_size()) {
+        case 1:
+          *(int8_t*)ndptr = inline_int_null_value<int8_t>();
+          break;
+        case 2:
+          *(int16_t*)ndptr = inline_int_null_value<int16_t>();
+          break;
+        case 4:
+          *(int32_t*)ndptr = inline_int_null_value<int32_t>();
+          break;
+        case 8:
+          *(int64_t*)ndptr = inline_int_null_value<int64_t>();
+          break;
+        default:
+          abort();
+      }
       break;
     case kFLOAT:
-      *(float*)ndptr = NULL_FLOAT;
+      *(float*)ndptr = inline_fp_null_value<float>();
       break;
     case kDOUBLE:
-      *(double*)ndptr = NULL_DOUBLE;
+      *(double*)ndptr = inline_fp_null_value<double>();
       break;
     default:
       //! this f is currently only for putting fixed-size data in place
       //! this f is not yet for putting var-size or dict-encoded data
       CHECK(false);
-      break;
   }
 }
 
 template <typename T>
-static inline bool get_scalar(void* ndptr, const SQLTypeInfo& ntype, T& v) {
+inline bool get_scalar(void* ndptr, const SQLTypeInfo& ntype, T& v) {
   switch (ntype.get_type()) {
     case kBOOLEAN:
-      return NULL_BOOLEAN == (v = *(int8_t*)ndptr);
     case kTINYINT:
-      return NULL_TINYINT == (v = *(int8_t*)ndptr);
     case kSMALLINT:
-      return NULL_SMALLINT == (v = *(int16_t*)ndptr);
     case kINT:
-      return NULL_INT == (v = *(int32_t*)ndptr);
     case kBIGINT:
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      return NULL_BIGINT == (v = *(int64_t*)ndptr);
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH:
     case kNUMERIC:
     case kDECIMAL:
       switch (ntype.get_size()) {
         case 1:
-          return NULL_TINYINT == (v = *(int8_t*)ndptr);
+          return inline_int_null_value<int8_t>() == (v = *(int8_t*)ndptr);
         case 2:
-          return NULL_SMALLINT == (v = *(int16_t*)ndptr);
+          return inline_int_null_value<int16_t>() == (v = *(int16_t*)ndptr);
         case 4:
-          return NULL_INT == (v = *(int32_t*)ndptr);
+          return inline_int_null_value<int32_t>() == (v = *(int32_t*)ndptr);
         case 8:
-          return NULL_BIGINT == (v = *(int64_t*)ndptr);
+          return inline_int_null_value<int64_t>() == (v = *(int64_t*)ndptr);
+          break;
         default:
-          CHECK(false);
+          abort();
       }
+      break;
     case kFLOAT:
-      return NULL_FLOAT == (v = *(float*)ndptr);
+      return inline_fp_null_value<float>() == (v = *(float*)ndptr);
     case kDOUBLE:
-      return NULL_DOUBLE == (v = *(double*)ndptr);
+      return inline_fp_null_value<double>() == (v = *(double*)ndptr);
     case kTEXT:
-      return NULL_BIGINT == (v = get_string_index(ndptr, get_uncompressed_element_size(ntype)));
+      v = get_string_index(ndptr, ntype.get_size());
+      return is_null_string_index(ntype.get_size(), v);
     default:
-      CHECK(false);
-      return false;
+      abort();
   }
 }
 
 template <typename T>
-static inline void set_minmax(T& min, T& max, const T val) {
+inline void set_minmax(T& min, T& max, const T val) {
   if (val < min)
     min = val;
   if (val > max)
     max = val;
 }
+
+}  // namespace
+#endif

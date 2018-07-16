@@ -135,6 +135,8 @@ enum EncodingType {
 #define IS_STRING(T) (((T) == kTEXT) || ((T) == kVARCHAR) || ((T) == kCHAR))
 #define IS_TIME(T) (((T) == kTIME) || ((T) == kTIMESTAMP) || ((T) == kDATE))
 #define IS_GEO(T) (((T) == kPOINT) || ((T) == kLINESTRING) || ((T) == kPOLYGON) || ((T) == kMULTIPOLYGON))
+#define IS_INTERVAL(T) ((T) == kINTERVAL_DAY_TIME || (T) == kINTERVAL_YEAR_MONTH)
+#define IS_DECIMAL(T) ((T) == kNUMERIC || (T) == kDECIMAL)
 
 #define NULL_BOOLEAN INT8_MIN
 #define NULL_TINYINT INT8_MIN

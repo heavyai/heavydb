@@ -152,6 +152,17 @@ bool update_a_numeric_column(const string& table,
   return compare_agg(table, column, cnt, avg);
 }
 
+template <typename T>
+bool nullize_a_fixed_encoded_column(const string& table, const string& column, const int64_t cnt) {
+  update_common<int64_t>(table, column, cnt, 1, inline_int_null_value<T>(), SQLTypeInfo());
+  std::string query_str = "SELECT count() FROM " + table + " WHERE " + column + " IS NULL;";
+  auto rows = run_query(query_str);
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(1), crt_row.size());
+  auto r_cnt = v<int64_t>(crt_row[0]);
+  return r_cnt == cnt;
+}
+
 bool update_a_encoded_string_column(const string& table,
                                     const string& column,
                                     const int64_t cnt,
@@ -273,23 +284,23 @@ class SQLTestEnv : public ::testing::Environment {
 // don't use R"()" format; somehow it causes many blank lines
 // to be output on console. how come?
 const char* create_table_trips =
-    "	CREATE TABLE trips (								"
-    "			medallion               TEXT ENCODING DICT,	"
-    "			hack_license            TEXT ENCODING DICT,	"
-    "			vendor_id               TEXT ENCODING DICT,	"
-    "			rate_code_id            SMALLINT,			"
-    "			store_and_fwd_flag      TEXT ENCODING DICT,	"
-    "			pickup_datetime         TIMESTAMP,			"
-    "			dropoff_datetime        TIMESTAMP,			"
-    "			passenger_count         SMALLINT,			"
-    "			trip_time_in_secs       INTEGER,			"
-    "			trip_distance           FLOAT,				"
-    "			pickup_longitude        DECIMAL(14,7),		"
-    "			pickup_latitude         DECIMAL(14,7),		"
-    "			dropoff_longitude       DOUBLE,				"
-    "			dropoff_latitude        DECIMAL(19,5),		"
-    "			deleted                 BOOLEAN				"
-    "			) WITH (FRAGMENT_SIZE=75000000);			";
+    "	CREATE TABLE trips ("
+    "			medallion               TEXT ENCODING DICT,"
+    "			hack_license            TEXT ENCODING DICT,"
+    "			vendor_id               TEXT ENCODING DICT,"
+    "			rate_code_id            SMALLINT ENCODING FIXED(8),"
+    "			store_and_fwd_flag      TEXT ENCODING DICT,"
+    "			pickup_datetime         TIMESTAMP,"
+    "			dropoff_datetime        TIMESTAMP,"
+    "			passenger_count         INTEGER ENCODING FIXED(16),"
+    "			trip_time_in_secs       INTEGER,"
+    "			trip_distance           FLOAT,"
+    "			pickup_longitude        DECIMAL(14,7),"
+    "			pickup_latitude         DECIMAL(14,7),"
+    "			dropoff_longitude       DOUBLE,"
+    "			dropoff_latitude        DECIMAL(19,5),"
+    "			deleted                 BOOLEAN"
+    "			) WITH (FRAGMENT_SIZE=75000000);";
 
 void init_table_data(const string& table = "trips",
                      const string& create_table_cmd = create_table_trips,
@@ -331,6 +342,42 @@ class UpdateStorageTest : public ::testing::Test {
 
   virtual void TearDown() { ASSERT_NO_THROW(run_ddl_statement("drop table trips;");); }
 };
+
+TEST_F(UpdateStorageTest, All_fixed_encoded_smallint_rate_code_id_null_8) {
+  EXPECT_TRUE(nullize_a_fixed_encoded_column<int8_t>("trips", "rate_code_id", 100));
+}
+TEST_F(UpdateStorageTest, All_fixed_encoded_smallint_rate_code_id_null_16) {
+  EXPECT_TRUE(nullize_a_fixed_encoded_column<int16_t>("trips", "rate_code_id", 100));
+}
+TEST_F(UpdateStorageTest, All_fixed_encoded_smallint_rate_code_id_null_32_throw) {
+  EXPECT_THROW(nullize_a_fixed_encoded_column<int32_t>("trips", "rate_code_id", 100), std::runtime_error);
+}
+TEST_F(UpdateStorageTest, All_fixed_encoded_smallint_rate_code_id_null_64_throw) {
+  EXPECT_THROW(nullize_a_fixed_encoded_column<int64_t>("trips", "rate_code_id", 100), std::runtime_error);
+}
+
+TEST_F(UpdateStorageTest, All_fixed_encoded_integer_passenger_count_null_16) {
+  EXPECT_TRUE(nullize_a_fixed_encoded_column<int16_t>("trips", "passenger_count", 100));
+}
+TEST_F(UpdateStorageTest, All_fixed_encoded_integer_passenger_count_null_32) {
+  EXPECT_TRUE(nullize_a_fixed_encoded_column<int32_t>("trips", "passenger_count", 100));
+}
+TEST_F(UpdateStorageTest, All_fixed_encoded_integer_passenger_count_null_64_throw) {
+  EXPECT_THROW(nullize_a_fixed_encoded_column<int64_t>("trips", "passenger_count", 100), std::runtime_error);
+}
+
+TEST_F(UpdateStorageTest, All_integer_trip_time_in_secs_null_32) {
+  EXPECT_TRUE(nullize_a_fixed_encoded_column<int32_t>("trips", "trip_time_in_secs", 100));
+}
+TEST_F(UpdateStorageTest, All_integer_trip_time_in_secs_null_64_throw) {
+  EXPECT_THROW(nullize_a_fixed_encoded_column<int64_t>("trips", "trip_time_in_secs", 100), std::runtime_error);
+}
+
+TEST_F(UpdateStorageTest, All_fixed_encoded_smallint_rate_code_id_throw) {
+  EXPECT_TRUE(update_a_numeric_column("trips", "rate_code_id", 100, 1, 44 * 2, 44 * 2.0));
+  EXPECT_THROW(update_a_numeric_column("trips", "rate_code_id", 100, 1, +257, +257), std::runtime_error);
+  EXPECT_THROW(update_a_numeric_column("trips", "rate_code_id", 100, 1, -256, -256), std::runtime_error);
+}
 
 #define SQLTypeInfo_dropoff_latitude SQLTypeInfo(kDECIMAL, 19, 5, false)
 TEST_F(UpdateStorageTest, All_RHS_decimal_10_0_LHS_decimal_19_5) {
@@ -429,17 +476,19 @@ TEST_F(UpdateStorageTest, All_RHS_decimal_15_5_LHS_integer) {
                                                   1));
 }
 
-TEST_F(UpdateStorageTest, All_smallint_passenger_count_x2) {
+TEST_F(UpdateStorageTest, All_fixed_encoded_integer_passenger_count_x1_throw) {
   EXPECT_TRUE(update_a_numeric_column("trips", "passenger_count", 100, 1, 4 * 2, 4 * 2.0));
+  EXPECT_THROW(update_a_numeric_column("trips", "passenger_count", 100, 1, +65537, +65537), std::runtime_error);
+  EXPECT_THROW(update_a_numeric_column("trips", "passenger_count", 100, 1, -65536, -65536), std::runtime_error);
 }
-TEST_F(UpdateStorageTest, All_smallint_passenger_count_x2_rollback) {
+TEST_F(UpdateStorageTest, All_fixed_encoded_integer_passenger_count_x1_rollback) {
   EXPECT_TRUE(update_a_numeric_column("trips", "passenger_count", 100, 1, 4 * 2, 4 * 1.0, false));
 }
 
-TEST_F(UpdateStorageTest, Half_smallint_passenger_count_x2) {
+TEST_F(UpdateStorageTest, Half_fixed_encoded_integer_passenger_count_x2) {
   EXPECT_TRUE(update_a_numeric_column("trips", "passenger_count", 100, 2, 4 * 2, 4. * 1.5));
 }
-TEST_F(UpdateStorageTest, Half_smallint_passenger_count_x2_rollback) {
+TEST_F(UpdateStorageTest, Half_fixed_encoded_integer_passenger_count_x2_rollback) {
   EXPECT_TRUE(update_a_numeric_column("trips", "passenger_count", 100, 2, 4 * 2, 4. * 1.0, false));
 }
 
