@@ -41,7 +41,9 @@ using namespace std;
 using namespace TestHelpers;
 
 extern bool g_aggregator;
+
 extern int g_test_against_columnId_gap;
+extern bool g_enable_smem_group_by;
 
 namespace {
 
@@ -682,6 +684,14 @@ TEST(Select, FilterAndSimpleAggregation) {
                                          "(stddev_pop(x) * stddev_pop(y)) FROM test;",
                                          dt)),
                 static_cast<double>(0.01));
+
+    // == Tests related to GPU shared-memory support
+    if ((dt == ExecutorDeviceType::GPU) && g_enable_smem_group_by) {
+      c("SELECT COUNT(*) FROM test GROUP BY x ORDER BY x DESC;", dt);
+      c("SELECT y, COUNT(*) FROM test GROUP BY y ORDER BY y DESC;", dt);
+      c("SELECT str, COUNT(*) FROM test GROUP BY str ORDER BY str DESC;", dt);
+      c("SELECT COUNT(*), z FROM test where x = 7 GROUP BY z ORDER BY z DESC;", dt);
+    }
   }
 }
 
@@ -7452,6 +7462,10 @@ int main(int argc, char** argv) {
   desc.add_options()("bigint-count",
                      po::value<bool>(&g_bigint_count)->default_value(g_bigint_count)->implicit_value(false),
                      "Use 64-bit count");
+  desc.add_options()(
+      "disable-shared-mem-group-by",
+      po::value<bool>(&g_enable_smem_group_by)->default_value(g_enable_smem_group_by)->implicit_value(false),
+      "Enable/disable using GPU shared memory for GROUP BY.");
   desc.add_options()("keep-data", "Don't drop tables at the end of the tests");
   desc.add_options()("use-existing-data",
                      "Don't create and drop tables and only run select tests (it implies --keep-data).");

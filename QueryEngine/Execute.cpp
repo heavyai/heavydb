@@ -36,8 +36,8 @@
 #include "Parser/ParserNode.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/checked_alloc.h"
-#include "Shared/scope.h"
 #include "Shared/measure.h"
+#include "Shared/scope.h"
 #include "Shared/shard_key.h"
 
 #include "AggregatedColRange.h"
@@ -66,6 +66,7 @@ unsigned g_trivial_loop_join_threshold{1000};
 bool g_left_deep_join_optimization{true};
 bool g_from_table_reordering{true};
 bool g_inner_join_fragment_skipping{false};
+extern bool g_enable_smem_group_by;
 
 Executor::Executor(const int db_id,
                    const size_t block_size_x,
@@ -848,9 +849,10 @@ std::unordered_set<int> get_available_gpus(const Catalog_Namespace::Catalog& cat
 }
 
 size_t get_context_count(const ExecutorDeviceType device_type, const size_t cpu_count, const size_t gpu_count) {
-  return device_type == ExecutorDeviceType::GPU ? gpu_count : device_type == ExecutorDeviceType::Hybrid
-                                                                  ? std::max(static_cast<size_t>(cpu_count), gpu_count)
-                                                                  : static_cast<size_t>(cpu_count);
+  return device_type == ExecutorDeviceType::GPU
+             ? gpu_count
+             : device_type == ExecutorDeviceType::Hybrid ? std::max(static_cast<size_t>(cpu_count), gpu_count)
+                                                         : static_cast<size_t>(cpu_count);
 }
 
 namespace {
@@ -1025,11 +1027,11 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
     std::condition_variable scheduler_cv;
     std::mutex scheduler_mutex;
     auto dispatch = [&execution_dispatch, &available_cpus, &available_gpus, &options, &scheduler_mutex, &scheduler_cv](
-        const ExecutorDeviceType chosen_device_type,
-        int chosen_device_id,
-        const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
-        const size_t ctx_idx,
-        const int64_t rowid_lookup_key) {
+                        const ExecutorDeviceType chosen_device_type,
+                        int chosen_device_id,
+                        const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
+                        const size_t ctx_idx,
+                        const int64_t rowid_lookup_key) {
       INJECT_TIMER(execution_dispatch_run);
       execution_dispatch.run(chosen_device_type, chosen_device_id, options, frag_ids, ctx_idx, rowid_lookup_key);
       if (execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid) {
@@ -2183,7 +2185,7 @@ namespace Importer_NS {
 
 int8_t* appendDatum(int8_t* buf, Datum d, const SQLTypeInfo& ti);
 
-}  // Importer_NS
+}  // namespace Importer_NS
 
 void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   const auto plan = root_plan->get_plan();
@@ -2938,25 +2940,25 @@ std::pair<bool, int64_t> Executor::skipFragment(const InputDescriptor& table_des
 }
 
 /*
-*   The skipFragmentInnerJoins process all quals stored in the execution unit's inner_joins
-*   and gather all the ones that meet the "simple_qual" characteristics (logical expressions
-*   with AND operations, etc.). It then uses the skipFragment function to decide whether the
-*   fragment should be skipped or not.
-*   The fragment will be skipped if at least one of these skipFragment calls
-*   return a true statment in its first value.
-*   - The code depends on skipFragment's output to have a meaningful (anything but -1) second value
-*     only if its first value is "false".
-*   - It is assumed that {false, n  > -1} has higher priority than {true, -1},
-*     i.e., we only skip if none of the quals trigger the code to update the rowid_lookup_key
-*   - Only AND operations are valid and considered:
-*     - `select * from t1,t2 where A and B and C`: A, B, and C are considered for causing the skip
-*     - `select * from t1,t2 where (A or B) and C`: only C is considered
-*     - `select * from t1,t2 where A or B`: none are considered (no skipping).
-*   - NOTE: (re: intermediate projections) the following two queries are fundamentally implemented differently,
-*     which cause the first one to skip correctly, but the second one will not skip.
-*     -  e.g. #1, select * from t1 join t2 on (t1.i=t2.i) where (A and B); -- skips if possible
-*     -  e.g. #2, select * from t1 join t2 on (t1.i=t2.i and A and B); -- intermediate projection, no skipping
-*/
+ *   The skipFragmentInnerJoins process all quals stored in the execution unit's inner_joins
+ *   and gather all the ones that meet the "simple_qual" characteristics (logical expressions
+ *   with AND operations, etc.). It then uses the skipFragment function to decide whether the
+ *   fragment should be skipped or not.
+ *   The fragment will be skipped if at least one of these skipFragment calls
+ *   return a true statment in its first value.
+ *   - The code depends on skipFragment's output to have a meaningful (anything but -1) second value
+ *     only if its first value is "false".
+ *   - It is assumed that {false, n  > -1} has higher priority than {true, -1},
+ *     i.e., we only skip if none of the quals trigger the code to update the rowid_lookup_key
+ *   - Only AND operations are valid and considered:
+ *     - `select * from t1,t2 where A and B and C`: A, B, and C are considered for causing the skip
+ *     - `select * from t1,t2 where (A or B) and C`: only C is considered
+ *     - `select * from t1,t2 where A or B`: none are considered (no skipping).
+ *   - NOTE: (re: intermediate projections) the following two queries are fundamentally implemented differently,
+ *     which cause the first one to skip correctly, but the second one will not skip.
+ *     -  e.g. #1, select * from t1 join t2 on (t1.i=t2.i) where (A and B); -- skips if possible
+ *     -  e.g. #2, select * from t1 join t2 on (t1.i=t2.i and A and B); -- intermediate projection, no skipping
+ */
 std::pair<bool, int64_t> Executor::skipFragmentInnerJoins(const InputDescriptor& table_desc,
                                                           const Fragmenter_Namespace::FragmentInfo& fragment,
                                                           const ExecutionDispatch& execution_dispatch,

@@ -466,9 +466,16 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   CHECK(func_row_process);
   auto func_init_shared_mem = query_mem_desc.sharedMemBytes(device_type) ? mod->getFunction("init_shared_mem")
                                                                          : mod->getFunction("init_shared_mem_nop");
+  if (query_mem_desc.sharing == GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
+    func_init_shared_mem = mod->getFunction("init_shared_mem_dynamic");
+  }
   CHECK(func_init_shared_mem);
+
   auto func_write_back =
       query_mem_desc.sharedMemBytes(device_type) ? mod->getFunction("write_back") : mod->getFunction("write_back_nop");
+  if (query_mem_desc.sharing == GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
+    func_write_back = mod->getFunction("write_back_smem_nop");
+  }
   CHECK(func_write_back);
 
   auto i32_type = IntegerType::get(mod->getContext(), 32);
@@ -648,9 +655,22 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
     small_buffer = new LoadInst(small_buffer_gep, "", false, bb_entry);
     small_buffer->setAlignment(8);
   }
-  auto shared_mem_bytes_lv = ConstantInt::get(i32_type, query_mem_desc.sharedMemBytes(device_type));
-  auto result_buffer =
-      CallInst::Create(func_init_shared_mem, std::vector<llvm::Value*>{col_buffer, shared_mem_bytes_lv}, "", bb_entry);
+
+  llvm::ConstantInt* shared_mem_num_elements_lv = nullptr;
+  llvm::ConstantInt* shared_mem_bytes_lv = nullptr;
+  llvm::CallInst* result_buffer = nullptr;
+  if (query_mem_desc.sharing == GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
+    int32_t num_shared_mem_buckets = query_mem_desc.entry_count + 1;
+    shared_mem_bytes_lv = ConstantInt::get(i32_type, query_mem_desc.sharedMemBytes(device_type));
+    shared_mem_num_elements_lv = ConstantInt::get(i32_type, num_shared_mem_buckets);
+    result_buffer = CallInst::Create(
+        func_init_shared_mem, std::vector<llvm::Value*>{col_buffer, shared_mem_num_elements_lv}, "", bb_entry);
+  } else {
+    shared_mem_bytes_lv = ConstantInt::get(i32_type, query_mem_desc.sharedMemBytes(device_type));
+    result_buffer = CallInst::Create(
+        func_init_shared_mem, std::vector<llvm::Value*>{col_buffer, shared_mem_bytes_lv}, "", bb_entry);
+  }
+
   ICmpInst* enter_or_not = new ICmpInst(*bb_entry, ICmpInst::ICMP_SLT, pos_start_i64, row_count, "");
   BranchInst::Create(bb_preheader, bb_exit, enter_or_not, bb_entry);
 
@@ -691,9 +711,18 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
 
   // Forcing all threads within a warp to be synchronized (Volta only)
   if (query_mem_desc.isWarpSyncRequired(device_type)) {
-    auto func_sync_warp = mod->getFunction("sync_warp");
-    CHECK(func_sync_warp);
-    CallInst::Create(func_sync_warp, {}, "", bb_forbody);
+    if (query_mem_desc.sharing == GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
+      // The shared memory path requires __syncthreads to sync all threads within a block,
+      // so __syncwarp can make trouble if not propoerly handled; making sure either all or none of
+      // threads within a warp hit the same barrier.
+      auto func_sync_warp_protected = mod->getFunction("sync_warp_protected");
+      CHECK(func_sync_warp_protected);
+      CallInst::Create(func_sync_warp_protected, std::vector<llvm::Value*>{pos, row_count}, "", bb_forbody);
+    } else {
+      auto func_sync_warp = mod->getFunction("sync_warp");
+      CHECK(func_sync_warp);
+      CallInst::Create(func_sync_warp, {}, "", bb_forbody);
+    }
   }
 
   BinaryOperator* pos_inc = BinaryOperator::Create(Instruction::Add, pos, pos_step_i64, "", bb_forbody);
@@ -727,6 +756,19 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   BranchInst::Create(bb_exit, bb_crit_edge);
 
   // Block .exit
+  if (query_mem_desc.sharing == GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
+    CHECK_LT(query_mem_desc.idx_target_as_key, 2);  // Saman: not expected for the shared memory design if more than 1
+    // Depending on the aggregate's target expression index, we choose different memory layout for the shared memory
+    auto func_agg_from_smem_to_gmem = (query_mem_desc.idx_target_as_key == 0)
+                                          ? mod->getFunction("agg_from_smem_to_gmem_count_binId")
+                                          : mod->getFunction("agg_from_smem_to_gmem_binId_count");
+    CHECK(func_agg_from_smem_to_gmem);
+    CallInst::Create(func_agg_from_smem_to_gmem,
+                     std::vector<Value*>{col_buffer, result_buffer, (shared_mem_num_elements_lv)},
+                     "",
+                     bb_exit);
+  }
+
   CallInst::Create(func_write_back, std::vector<Value*>{col_buffer, result_buffer, shared_mem_bytes_lv}, "", bb_exit);
   ReturnInst::Create(mod->getContext(), bb_exit);
 

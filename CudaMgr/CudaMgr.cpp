@@ -26,7 +26,7 @@
 namespace CudaMgr_Namespace {
 
 #ifdef HAVE_CUDA
-CudaMgr::CudaMgr(const int numGpus, const int startGpu) : startGpu_(startGpu) {
+CudaMgr::CudaMgr(const int numGpus, const int startGpu) : maxSharedMemoryForAll(0), startGpu_(startGpu) {
   checkError(cuInit(0));
   checkError(cuDeviceGetCount(&deviceCount_));
 
@@ -84,8 +84,11 @@ void CudaMgr::fillDeviceProperties() {
     checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].constantMem,
                                     CU_DEVICE_ATTRIBUTE_TOTAL_CONSTANT_MEMORY,
                                     deviceProperties[deviceNum].device));
-    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].sharedMemPerBlock,
+    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].sharedMemPerMP,
                                     CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_MULTIPROCESSOR,
+                                    deviceProperties[deviceNum].device));
+    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].sharedMemPerBlock,
+                                    CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK,
                                     deviceProperties[deviceNum].device));
     checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].numMPs,
                                     CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT,
@@ -117,7 +120,20 @@ void CudaMgr::fillDeviceProperties() {
     deviceProperties[deviceNum].memoryBandwidthGBs =
         deviceProperties[deviceNum].memoryClockKhz / 1000000.0 / 8.0 * deviceProperties[deviceNum].memoryBusWidth;
   }
+  maxSharedMemoryForAll = computeMaxSharedMemoryForAll();
 #endif
+}
+
+/**
+ * This function returns the maximum available dynamic shared memory that is available for all GPU devices
+ * (i.e., minimum of all available dynamic shared memory per blocks, for all GPU devices).
+ */
+size_t CudaMgr::computeMaxSharedMemoryForAll() const {
+  int sharedMemSize = deviceCount_ > 0 ? deviceProperties.front().sharedMemPerBlock : 0;
+  for (int d = 1; d < deviceCount_; d++) {
+    sharedMemSize = std::min(sharedMemSize, deviceProperties[d].sharedMemPerBlock);
+  }
+  return sharedMemSize;
 }
 
 void CudaMgr::createDeviceContexts() {
@@ -155,6 +171,7 @@ void CudaMgr::printDeviceProperties() const {
     VLOG(1) << "Memory bandwidth: " << deviceProperties[d].memoryBandwidthGBs << " GB/sec";
 
     VLOG(1) << "Constant Memory: " << deviceProperties[d].constantMem;
+    VLOG(1) << "Shared memory per multiprocessor: " << deviceProperties[d].sharedMemPerMP;
     VLOG(1) << "Shared memory per block: " << deviceProperties[d].sharedMemPerBlock;
     VLOG(1) << "Number of MPs: " << deviceProperties[d].numMPs;
     VLOG(1) << "Warp Size: " << deviceProperties[d].warpSize;
@@ -272,11 +289,22 @@ void CudaMgr::checkError(CUresult status) {
   }
 #endif
 }
+/**
+ * Returns true if all devices have Maxwell micro-architecture, or later.
+ * Returns false, if there is any device with compute capability of < 5.0
+ */
+bool CudaMgr::isArchMaxwellOrLaterForAll() const {
+  for (int i = 0; i < deviceCount_; i++) {
+    if (deviceProperties[i].computeMajor < 5)
+      return false;
+  }
+  return true;
+}
 
 /**
  * Returns true if all devices have Volta micro-architecture
  * Returns false, if there is any non-Volta device available.
-*/
+ */
 bool CudaMgr::isArchVoltaForAll() const {
   for (int i = 0; i < deviceCount_; i++) {
     if (deviceProperties[i].computeMajor != 7)

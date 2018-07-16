@@ -18,20 +18,20 @@
 #error This code is not intended to be compiled with a CUDA C++ compiler
 #endif  // __CUDACC__
 
+#include "RuntimeFunctions.h"
+#include "../Shared/funcannotations.h"
 #include "BufferCompaction.h"
 #include "HyperLogLogRank.h"
 #include "MurmurHash.h"
-#include "RuntimeFunctions.h"
 #include "TypePunning.h"
-#include "../Shared/funcannotations.h"
 
 #include <algorithm>
-#include <cstring>
-#include <set>
-#include <tuple>
-#include <thread>
 #include <chrono>
 #include <cmath>
+#include <cstring>
+#include <set>
+#include <thread>
+#include <tuple>
 
 // decoder implementations
 
@@ -624,6 +624,7 @@ extern "C" GPU_RT_STUB void agg_sum_float_skip_val_shared(int32_t* agg, const fl
 extern "C" GPU_RT_STUB void force_sync() {}
 
 extern "C" GPU_RT_STUB void sync_warp() {}
+extern "C" GPU_RT_STUB void sync_warp_protected(int64_t thread_pos, int64_t row_count) {}
 
 // x64 stride functions
 
@@ -680,8 +681,33 @@ extern "C" __attribute__((noinline)) const int64_t* init_shared_mem(const int64_
   return init_shared_mem_nop(groups_buffer, groups_buffer_size);
 }
 
+extern "C" __attribute__((noinline)) const int64_t* init_shared_mem_dynamic(const int64_t* groups_buffer,
+                                                                            const int32_t groups_buffer_size) {
+  return nullptr;
+}
+
 extern "C" __attribute__((noinline)) void write_back(int64_t* dest, int64_t* src, const int32_t sz) {
   write_back_nop(dest, src, sz);
+}
+
+extern "C" __attribute__((noinline)) void write_back_smem_nop(int64_t* dest, int64_t* src, const int32_t sz) {
+  assert(dest);
+}
+
+extern "C" __attribute__((noinline)) void agg_from_smem_to_gmem_nop(int64_t* dest, int64_t* src, const int32_t sz) {
+  assert(dest);
+}
+
+extern "C" __attribute__((noinline)) void agg_from_smem_to_gmem_count_binId(int64_t* dest,
+                                                                            int64_t* src,
+                                                                            const int32_t sz) {
+  return agg_from_smem_to_gmem_nop(dest, src, sz);
+}
+
+extern "C" __attribute__((noinline)) void agg_from_smem_to_gmem_binId_count(int64_t* dest,
+                                                                            int64_t* src,
+                                                                            const int32_t sz) {
+  return agg_from_smem_to_gmem_nop(dest, src, sz);
 }
 
 extern "C" __attribute__((noinline)) void init_group_by_buffer_gpu(int64_t* groups_buffer,

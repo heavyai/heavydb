@@ -338,6 +338,11 @@ int main(int argc, char** argv) {
                              ->default_value(g_inner_join_fragment_skipping)
                              ->implicit_value(true),
                          "Enable/disable inner join fragment skipping.");
+  desc_adv.add_options()("disable-shared-mem-group-by",
+                         po::value<bool>(&g_enable_smem_group_by)
+                             ->default_value(g_enable_smem_group_by)
+                             ->implicit_value(false), 
+                         "Enable/disable using GPU shared memory for GROUP BY.");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);

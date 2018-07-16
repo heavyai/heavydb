@@ -1,6 +1,6 @@
-#include <stdint.h>
-#include <float.h>
 #include <cuda.h>
+#include <float.h>
+#include <stdint.h>
 #include <limits>
 #include "BufferCompaction.h"
 #include "ExtensionFunctions.hpp"
@@ -39,10 +39,97 @@ extern "C" __device__ const int64_t* init_shared_mem(const int64_t* groups_buffe
   return fast_bins;
 }
 
+/**
+ * Dynamically allocates shared memory per block.
+ * The amount of shared memory allocated is defined at kernel launch time.
+ * Returns a pointer to the beginning of allocated shared memory
+ */
+extern "C" __device__ int64_t* alloc_shared_mem_dynamic() {
+  extern __shared__ int64_t groups_buffer_smem[];
+  return groups_buffer_smem;
+}
+
+/**
+ * Set the allocated shared memory elements to be equal to the 'identity_element'.
+ * groups_buffer_size: number of 64-bit elements in shared memory per thread-block
+ * NOTE: groups_buffer_size is in units of 64-bit elements.
+ */
+extern "C" __device__ void set_shared_mem_to_identity(int64_t* groups_buffer_smem,
+                                                      const int32_t groups_buffer_size,
+                                                      const int64_t identity_element = 0) {
+#pragma unroll
+  for (int i = threadIdx.x; i < groups_buffer_size; i += blockDim.x) {
+    groups_buffer_smem[i] = identity_element;
+  }
+  __syncthreads();
+}
+
+/**
+ * Initialize dynamic shared memory:
+ * 1. Allocates dynamic shared memory
+ * 2. Set every allocated element to be equal to the 'identity element', by default zero.
+ */
+extern "C" __device__ const int64_t* init_shared_mem_dynamic(const int64_t* groups_buffer,
+                                                             const int32_t groups_buffer_size) {
+  int64_t* groups_buffer_smem = alloc_shared_mem_dynamic();
+  set_shared_mem_to_identity(groups_buffer_smem, groups_buffer_size);
+  return groups_buffer_smem;
+}
+
 extern "C" __device__ void write_back(int64_t* dest, int64_t* src, const int32_t sz) {
   __syncthreads();
   if (threadIdx.x == 0) {
     memcpy(dest, src, sz);
+  }
+}
+
+extern "C" __device__ void write_back_smem_nop(int64_t* dest, int64_t* src, const int32_t sz) {}
+
+extern "C" __device__ void agg_from_smem_to_gmem_nop(int64_t* gmem_dest,
+                                                     int64_t* smem_src,
+                                                     const int32_t num_elements) {}
+
+/**
+ * Aggregate the result stored into shared memory back into global memory.
+ * It also writes back the stored binId, if any, back into global memory.
+ * Memory layout assumption: each 64-bit shared memory unit of data is as follows:
+ * [0..31: the stored bin ID, to be written back][32..63: the count result, to be aggregated]
+ */
+extern "C" __device__ void agg_from_smem_to_gmem_binId_count(int64_t* gmem_dest,
+                                                             int64_t* smem_src,
+                                                             const int32_t num_elements) {
+  __syncthreads();
+#pragma unroll
+  for (int i = threadIdx.x; i < num_elements; i += blockDim.x) {
+    int32_t bin_id = *reinterpret_cast<int32_t*>(smem_src + i);
+    int32_t count_result = *(reinterpret_cast<int32_t*>(smem_src + i) + 1);
+    if (count_result) {  // non-zero count
+      atomicAdd(reinterpret_cast<unsigned int*>(gmem_dest + i) + 1, static_cast<int32_t>(count_result));
+      // writing back the binId, only if count_result is non-zero
+      *reinterpret_cast<unsigned int*>(gmem_dest + i) = static_cast<int32_t>(bin_id);
+    }
+  }
+}
+
+/**
+ * Aggregate the result stored into shared memory back into global memory.
+ * It also writes back the stored binId, if any, back into global memory.
+ * Memory layout assumption: each 64-bit shared memory unit of data is as follows:
+ * [0..31: the count result, to be aggregated][32..63: the stored bin ID, to be written back]
+ */
+extern "C" __device__ void agg_from_smem_to_gmem_count_binId(int64_t* gmem_dest,
+                                                             int64_t* smem_src,
+                                                             const int32_t num_elements) {
+  __syncthreads();
+#pragma unroll
+  for (int i = threadIdx.x; i < num_elements; i += blockDim.x) {
+    int32_t count_result = *reinterpret_cast<int32_t*>(smem_src + i);
+    int32_t bin_id = *(reinterpret_cast<int32_t*>(smem_src + i) + 1);
+    if (count_result) {  // non-zero count
+      atomicAdd(reinterpret_cast<unsigned int*>(gmem_dest + i), static_cast<int32_t>(count_result));
+      // writing back the binId, only if count_result is non-zero
+      *(reinterpret_cast<unsigned int*>(gmem_dest + i) + 1) = static_cast<int32_t>(bin_id);
+    }
   }
 }
 
@@ -188,9 +275,9 @@ extern "C" __device__ int64_t* get_matching_group_value_columnar(int64_t* groups
   return &groups_buffer[off];
 }
 
-#include "MurmurHash.cpp"
 #include "GroupByRuntime.cpp"
 #include "JoinHashTableQueryRuntime.cpp"
+#include "MurmurHash.cpp"
 #include "TopKRuntime.cpp"
 
 __device__ int64_t atomicMax64(int64_t* address, int64_t val) {
@@ -585,16 +672,16 @@ extern "C" __device__ void agg_max_double_skip_val_shared(int64_t* agg, const do
 
 #undef DEF_SKIP_AGG
 
-#include "ExtractFromTime.cpp"
-#include "DateTruncate.cpp"
 #include "../Utils/ChunkIter.cpp"
+#include "DateTruncate.cpp"
+#include "ExtractFromTime.cpp"
 #define EXECUTE_INCLUDE
-#include "DateAdd.cpp"
 #include "ArrayOps.cpp"
+#include "DateAdd.cpp"
 #include "StringFunctions.cpp"
 #undef EXECUTE_INCLUDE
-#include "../Utils/StringLike.cpp"
 #include "../Utils/Regexp.cpp"
+#include "../Utils/StringLike.cpp"
 
 extern "C" __device__ uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
   // TODO(alex): de-dup, the x64 version is basically identical
@@ -682,5 +769,21 @@ extern "C" __device__ void force_sync() {
 extern "C" __device__ void sync_warp() {
 #if (CUDA_VERSION >= 9000)
   __syncwarp();
+#endif
+}
+
+/**
+ * Protected warp synchornization to make sure all (or none) threads within a warp go through a synchronization barrier.
+ * thread_pos: the current thread position to be used for a memory access
+ * row_count: maximum number of rows to be processed
+ * The function performs warp sync iff all 32 threads within that warp will process valid data
+ * NOTE: it currently assumes that warp size is 32.
+ */
+extern "C" __device__ void sync_warp_protected(int64_t thread_pos, int64_t row_count) {
+#if (CUDA_VERSION >= 9000)
+  // only syncing if NOT within the same warp as those threads experiencing the critical edge
+  if ((((row_count - 1) | 0x1F) - thread_pos) >= 32) {
+    __syncwarp();
+  }
 #endif
 }

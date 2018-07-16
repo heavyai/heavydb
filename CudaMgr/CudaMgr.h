@@ -18,8 +18,8 @@
 #define CUDAMGR_H
 
 #include <cstdlib>
-#include <vector>
 #include <string>
+#include <vector>
 #ifdef HAVE_CUDA
 #include <cuda.h>
 #else
@@ -35,6 +35,7 @@ struct DeviceProperties {
   size_t globalMem;
   int constantMem;
   int sharedMemPerBlock;
+  int sharedMemPerMP;
   int numMPs;
   int warpSize;
   int maxThreadsPerBlock;
@@ -79,12 +80,17 @@ class CudaMgr {
 #endif
   }
   inline bool isArchMaxwell() const { return (getDeviceCount() > 0 && deviceProperties[0].computeMajor == 5); }
+  inline bool isArchMaxwellOrLater() const { return (getDeviceCount() > 0 && deviceProperties[0].computeMajor >= 5); }
   inline bool isArchPascal() const { return (getDeviceCount() > 0 && deviceProperties[0].computeMajor == 6); }
   inline bool isArchPascalOrLater() const { return (getDeviceCount() > 0 && deviceProperties[0].computeMajor >= 6); }
 
+  bool isArchMaxwellOrLaterForAll() const;
   bool isArchVoltaForAll() const;
 
   std::vector<DeviceProperties> deviceProperties;
+
+  size_t maxSharedMemoryForAll;
+  size_t computeMaxSharedMemoryForAll() const;
 
   const std::vector<CUcontext>& getDeviceContexts() const { return deviceContexts; }
 

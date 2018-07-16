@@ -51,6 +51,7 @@ bool g_cluster{false};
 bool g_use_result_set{true};
 bool g_bigint_count{false};
 int g_hll_precision_bits{11};
+bool g_enable_smem_group_by{true};
 extern size_t g_leaf_count;
 
 namespace {
@@ -2152,7 +2153,32 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
           !col_range_info.bucket && !must_use_baseline_sort && keyless_info.keyless;
       size_t bin_count = std::max(getBucketedCardinality(col_range_info), int64_t(1));
       const size_t interleaved_max_threshold{512};
-      bool interleaved_bins = keyless && (bin_count <= interleaved_max_threshold) &&
+
+      size_t gpu_smem_max_threshold{0};
+      if (device_type_ == ExecutorDeviceType::GPU) {
+        const auto cuda_manager = executor_->getCatalog()->get_dataMgr().cudaMgr_;
+        CHECK(cuda_manager);
+        /*
+         *  We only use shared memory strategy if GPU hardware provides native shared memory atomics support.
+         *  From CUDA Toolkit documentation: https://docs.nvidia.com/cuda/pascal-tuning-guide/index.html#atomic-ops
+         *  "Like Maxwell, Pascal [and Volta] provides native shared memory atomic operations for 32-bit integer
+         *arithmetic, along with native 32 or 64-bit compare-and-swap (CAS)."
+         *
+         **/
+        if (cuda_manager->isArchMaxwellOrLaterForAll()) {
+          // TODO(Saman): threshold should be eventually set as an optimized policy per architecture.
+          gpu_smem_max_threshold = std::min((cuda_manager->isArchVoltaForAll()) ? 4095LU : 2047LU,
+                                            (cuda_manager->maxSharedMemoryForAll / sizeof(int64_t) - 1));
+        }
+      }
+      const auto group_expr = ra_exe_unit_.groupby_exprs.front().get();
+      bool shared_mem_for_group_by = g_enable_smem_group_by && keyless && keyless_info.shared_mem_support &&
+                                     (bin_count <= gpu_smem_max_threshold) &&
+                                     (supportedExprForGpuSharedMemUsage(group_expr)) &&
+                                     countDescriptorsLogicallyEmpty(count_distinct_descriptors);
+
+      // No need to interleave results if we use shared memory.
+      bool interleaved_bins = !shared_mem_for_group_by && keyless && (bin_count <= interleaved_max_threshold) &&
                               countDescriptorsLogicallyEmpty(count_distinct_descriptors);
       std::vector<ssize_t> target_group_by_indices;
       if (must_use_baseline_sort) {
@@ -2162,34 +2188,35 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
           agg_col_widths.push_back({wid, static_cast<int8_t>(wid ? 8 : 0)});
         }
       }
-      query_mem_desc_ = {executor_,
-                         allow_multifrag,
-                         col_range_info.hash_type_,
-                         keyless,
-                         interleaved_bins,
-                         keyless_info.target_index,
-                         keyless_info.init_val,
-                         group_col_widths,
+      query_mem_desc_ = {
+          executor_,
+          allow_multifrag,
+          col_range_info.hash_type_,
+          keyless,
+          interleaved_bins,
+          keyless_info.target_index,
+          keyless_info.init_val,
+          group_col_widths,
 #ifdef ENABLE_KEY_COMPACTION
-                         0,
+          0,
 #endif
-                         agg_col_widths,
-                         target_group_by_indices,
-                         bin_count,
-                         0,
-                         col_range_info.min,
-                         col_range_info.max,
-                         col_range_info.bucket,
-                         col_range_info.has_nulls,
-                         GroupByMemSharing::Shared,
-                         count_distinct_descriptors,
-                         false,
-                         false,
-                         false,
-                         false,
-                         {},
-                         {},
-                         must_use_baseline_sort};
+          agg_col_widths,
+          target_group_by_indices,
+          bin_count,
+          0,
+          col_range_info.min,
+          col_range_info.max,
+          col_range_info.bucket,
+          col_range_info.has_nulls,
+          shared_mem_for_group_by ? GroupByMemSharing::SharedForKeylessOneColumnKnownRange : GroupByMemSharing::Shared,
+          count_distinct_descriptors,
+          false,
+          false,
+          false,
+          false,
+          {},
+          {},
+          must_use_baseline_sort};
       return;
     }
     case GroupByColRangeType::OneColGuessedRange: {
@@ -2514,12 +2541,22 @@ bool GroupByAndAggregate::outputColumnar() const {
 GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
     const std::vector<Analyzer::Expr*>& target_expr_list,
     const bool is_group_by) const {
-  bool keyless{true}, found{false};
+  bool keyless{true}, found{false}, shared_mem_support{false}, shared_mem_valid_data_type{true};
+  /* Currently support shared memory usage for a limited subset of possible aggregate operations. shared_mem_support and
+   * shared_mem_valid_data_type are declared to ensure such support. */
+  int32_t num_agg_expr{0};  // used for shared memory support on the GPU
   int32_t index{0};
   int64_t init_val{0};
   for (const auto target_expr : target_expr_list) {
     const auto agg_info = target_info(target_expr);
     const auto& chosen_type = get_compact_type(agg_info);
+    // TODO(Saman): should be eventually removed, once I make sure what data types can be used in this shared memory
+    // setting.
+
+    shared_mem_valid_data_type = shared_mem_valid_data_type && supportedTypeForGpuSharedMemUsage(chosen_type);
+
+    if (agg_info.is_agg)
+      num_agg_expr++;
     if (!found && agg_info.is_agg && !is_distinct_target(agg_info)) {
       auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
       CHECK(agg_expr);
@@ -2550,6 +2587,8 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
           }
           init_val = 0;
           found = true;
+          if (!agg_info.skip_null_val)
+            shared_mem_support = true;  // currently just support 8 bytes per group
           break;
         case kSUM: {
           auto arg_ti = arg_expr->get_type_info();
@@ -2667,7 +2706,48 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
   }
 
   // shouldn't use keyless for projection only
-  return {keyless && found, index, init_val};
+  /**
+   * Currently just support shared memory usage when dealing with one keyless aggregate operation.
+   */
+  return {keyless && found,
+          index,
+          init_val,
+          (num_agg_expr == 1) ? shared_mem_support && shared_mem_valid_data_type : false};
+}
+
+/**
+ * Supported data types for the current shared memory usage for keyless aggregates with COUNT(*)
+ * Currently only for OneColKnownRange hash type.
+ */
+bool GroupByAndAggregate::supportedTypeForGpuSharedMemUsage(const SQLTypeInfo& target_type_info) const {
+  bool result = false;
+  switch (target_type_info.get_type()) {
+    case SQLTypes::kTINYINT:
+    case SQLTypes::kSMALLINT:
+    case SQLTypes::kINT:
+      result = true;
+      break;
+    case SQLTypes::kTEXT:
+      if (target_type_info.get_compression() == EncodingType::kENCODING_DICT) {
+        result = true;
+      }
+      break;
+    default:
+      break;
+  }
+  return result;
+}
+
+// TODO(Saman): this function is temporary and all these limitations should eventually be removed.
+bool GroupByAndAggregate::supportedExprForGpuSharedMemUsage(Analyzer::Expr* expr) const {
+  /*
+  UNNEST operations follow a slightly different internal memory layout compared to other keyless aggregates
+  Currently, we opt out of using shared memory if there is any UNNEST operation involved.
+  */
+  if (dynamic_cast<Analyzer::UOper*>(expr) && static_cast<Analyzer::UOper*>(expr)->get_optype() == kUNNEST) {
+    return false;
+  }
+  return true;
 }
 
 bool GroupByAndAggregate::gpuCanHandleOrderEntries(const std::list<Analyzer::OrderEntry>& order_entries) {
@@ -2716,7 +2796,7 @@ bool QueryMemoryDescriptor::usesCachedContext() const {
 }
 
 bool QueryMemoryDescriptor::threadsShareMemory() const {
-  return sharing == GroupByMemSharing::Shared;
+  return sharing == GroupByMemSharing::Shared || sharing == GroupByMemSharing::SharedForKeylessOneColumnKnownRange;
 }
 
 bool QueryMemoryDescriptor::blocksShareMemory() const {
@@ -2746,6 +2826,13 @@ size_t QueryMemoryDescriptor::sharedMemBytes(const ExecutorDeviceType device_typ
   CHECK(device_type == ExecutorDeviceType::CPU || device_type == ExecutorDeviceType::GPU);
   if (device_type == ExecutorDeviceType::CPU) {
     return 0;
+  }
+  // if performing keyless aggregate query with a single column group-by:
+  if (sharing == GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
+    CHECK_EQ(getRowSize(), sizeof(int64_t));  // Currently just designed for this scenario
+    size_t shared_mem_size = (/*bin_count=*/entry_count + 1) * sizeof(int64_t);  // one extra for NULL values
+    CHECK(shared_mem_size <= executor_->getCatalog()->get_dataMgr().cudaMgr_->maxSharedMemoryForAll);
+    return shared_mem_size;
   }
   const size_t shared_mem_threshold{0};
   const size_t shared_mem_bytes{getBufferSizeBytes(ExecutorDeviceType::GPU)};
@@ -3482,7 +3569,14 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
         }
       } else {
         const auto acc_i32 = (is_group_by ? agg_col_ptr : agg_out_vec[agg_out_off]);
-        LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add, acc_i32, LL_INT(1), llvm::AtomicOrdering::Monotonic);
+        if (query_mem_desc_.sharing == GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
+          // Atomic operation on address space level 3 (Shared):
+          const auto shared_acc_i32 = LL_BUILDER.CreatePointerCast(acc_i32, llvm::Type::getInt32PtrTy(LL_CONTEXT, 3));
+          LL_BUILDER.CreateAtomicRMW(
+              llvm::AtomicRMWInst::Add, shared_acc_i32, LL_INT(1), llvm::AtomicOrdering::Monotonic);
+        } else {
+          LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add, acc_i32, LL_INT(1), llvm::AtomicOrdering::Monotonic);
+        }
       }
       ++agg_out_off;
       continue;

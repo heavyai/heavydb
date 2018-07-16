@@ -18,26 +18,28 @@
 #define QUERYENGINE_GROUPBYANDAGGREGATE_H
 
 #include "BufferCompaction.h"
+#include "ColumnarResults.h"
 #include "CompilationOptions.h"
 #include "GpuMemUtils.h"
 #include "InputMetadata.h"
 #include "IteratorTable.h"
-#include "ColumnarResults.h"
-#include "RuntimeFunctions.h"
 #include "Rendering/RenderInfo.h"
+#include "RuntimeFunctions.h"
 
 #include "../Planner/Planner.h"
 #include "../Shared/sqltypes.h"
 
-#include <boost/algorithm/string/join.hpp>
-#include <boost/make_unique.hpp>
 #include <glog/logging.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Value.h>
+#include <boost/algorithm/string/join.hpp>
+#include <boost/make_unique.hpp>
 
 #include <stack>
 #include <vector>
+
+extern bool g_enable_smem_group_by;
 
 class ReductionRanOutOfSlots : public std::runtime_error {
  public:
@@ -353,6 +355,10 @@ class GroupByAndAggregate {
     DiamondCodegen* parent_;
   };
 
+  bool supportedTypeForGpuSharedMemUsage(const SQLTypeInfo& target_type_info) const;
+
+  bool supportedExprForGpuSharedMemUsage(Analyzer::Expr* expr) const;
+
   bool gpuCanHandleOrderEntries(const std::list<Analyzer::OrderEntry>& order_entries);
 
   void initQueryMemoryDescriptor(const bool allow_multifrag,
@@ -387,6 +393,9 @@ class GroupByAndAggregate {
     const bool keyless;
     const int32_t target_index;
     const int64_t init_val;
+    const bool shared_mem_support;  // TODO(Saman) remove, all aggregate operations should eventually be potentially
+                                    // done with shared memory. The decision will be made when the query memory
+                                    // descriptor is created, not here. This member just indicates the possibility.
   };
 
   KeylessInfo getKeylessInfo(const std::vector<Analyzer::Expr*>& target_expr_list, const bool is_group_by) const;
