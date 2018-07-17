@@ -15,11 +15,14 @@
  */
 package com.mapd.calcite.parser;
 
+import java.lang.reflect.Field;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Multimap;
 import com.mapd.parser.server.ExtensionFunction;
 import java.util.List;
 import org.apache.calcite.rel.type.RelDataType;
@@ -33,11 +36,13 @@ import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlOperatorBinding;
 import org.apache.calcite.sql.SqlOperatorTable;
 import org.apache.calcite.sql.SqlSyntax;
+import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.type.OperandTypes;
 import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.util.ChainedSqlOperatorTable;
 import org.apache.calcite.sql.util.ListSqlOperatorTable;
+import org.apache.calcite.sql.util.ReflectiveSqlOperatorTable;
 
 class CaseInsensitiveListSqlOperatorTable extends ListSqlOperatorTable {
 
@@ -74,6 +79,27 @@ class CaseInsensitiveListSqlOperatorTable extends ListSqlOperatorTable {
  * @author michael
  */
 public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
+
+  static {
+    try {
+      // some nasty bit to remove the std APPROX_COUNT_DISTINCT function definition
+      
+      Field f = ReflectiveSqlOperatorTable.class.getDeclaredField("operators");
+      f.setAccessible(true);
+      Multimap operators = (Multimap) f.get(SqlStdOperatorTable.instance());
+      for (Iterator i = operators.entries().iterator(); i.hasNext(); ) {
+        Map.Entry entry = (Map.Entry) i.next();
+        if (entry.getValue() == SqlStdOperatorTable.APPROX_COUNT_DISTINCT) {
+          i.remove();
+        }
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+    
+    // register our approx count distinct against std table
+    SqlStdOperatorTable.instance().register(new ApproxCountDistinct());
+  }
 
   /**
    * Mock operator table for testing purposes. Contains the standard SQL
