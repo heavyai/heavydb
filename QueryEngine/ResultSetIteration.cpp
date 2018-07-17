@@ -1046,7 +1046,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
 
   // For double we simply pick sizeof(double)
   auto actual_compact_sz = compact_sz;
-  if (target_info.sql_type.get_type() == kFLOAT) {
+  if (target_info.sql_type.get_type() == kFLOAT && !query_mem_desc_.force_4byte_float_) {
     actual_compact_sz = sizeof(double);
     if (target_info.is_agg && (target_info.agg_kind == kAVG || target_info.agg_kind == kSUM ||
                                target_info.agg_kind == kMIN || target_info.agg_kind == kMAX)) {

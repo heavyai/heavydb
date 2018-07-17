@@ -104,6 +104,8 @@ struct QueryMemoryDescriptor {
   std::vector<int8_t> target_column_pad_bytes;
   bool must_use_baseline_sort;
 
+  bool force_4byte_float_ = false;
+
   std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
       const RelAlgExecutionUnit&,
       const std::vector<int64_t>& init_agg_vals,

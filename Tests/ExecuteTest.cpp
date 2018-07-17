@@ -691,7 +691,8 @@ TEST(Select, FilterAndSimpleAggregation) {
       c("SELECT y, COUNT(*) FROM test GROUP BY y ORDER BY y DESC;", dt);
       c("SELECT str, COUNT(*) FROM test GROUP BY str ORDER BY str DESC;", dt);
       c("SELECT COUNT(*), z FROM test where x = 7 GROUP BY z ORDER BY z DESC;", dt);
-      c("SELECT z as z0, z as z1, COUNT(*) FROM test GROUP BY z0, z1 ORDER BY z0 DESC;", dt);;
+      c("SELECT z as z0, z as z1, COUNT(*) FROM test GROUP BY z0, z1 ORDER BY z0 DESC;", dt);
+      ;
     }
   }
 }
@@ -770,11 +771,11 @@ TEST(Select, FloatAndDoubleTests) {
     c("SELECT f + 1 AS s, AVG(u * f) FROM test GROUP BY s ORDER BY s DESC;", dt);
     c("SELECT (CAST(dd AS float) * 0.5) AS key FROM test GROUP BY key ORDER BY key DESC;", dt);
     c("SELECT (CAST(dd AS double) * 0.5) AS key FROM test GROUP BY key ORDER BY key DESC;", dt);
-    SKIP_ON_AGGREGATOR(
-        c("SELECT fn FROM test ORDER BY fn ASC NULLS FIRST;", "SELECT fn FROM test ORDER BY fn ASC;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT fn FROM test WHERE fn < 0 OR fn IS NULL ORDER BY fn ASC NULLS FIRST;",
-                         "SELECT fn FROM test WHERE fn < 0 OR fn IS NULL ORDER BY fn ASC;",
-                         dt));
+
+    c("SELECT fn FROM test ORDER BY fn ASC NULLS FIRST;", "SELECT fn FROM test ORDER BY fn ASC;", dt);
+    c("SELECT fn FROM test WHERE fn < 0 OR fn IS NULL ORDER BY fn ASC NULLS FIRST;",
+      "SELECT fn FROM test WHERE fn < 0 OR fn IS NULL ORDER BY fn ASC;",
+      dt);
     ASSERT_NEAR(
         static_cast<double>(1.3),
         v<double>(run_simple_agg("SELECT AVG(f) AS n FROM test WHERE x = 7 GROUP BY z HAVING AVG(y) + STDDEV(y) "
@@ -1009,26 +1010,26 @@ TEST(Select, OrderBy) {
     c("SELECT x FROM test ORDER BY x LIMIT 5;", dt);
     c("SELECT x FROM test ORDER BY x ASC LIMIT 20;", dt);
     c("SELECT dd FROM test ORDER BY dd ASC LIMIT 20;", dt);
-    SKIP_ON_AGGREGATOR(c("SELECT f FROM test ORDER BY f ASC LIMIT 5;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT f FROM test ORDER BY f ASC LIMIT 20;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT fn as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 5;",
-                         "SELECT fn as k FROM test ORDER BY k ASC LIMIT 5;",
-                         dt));
-    SKIP_ON_AGGREGATOR(c("SELECT fn as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
-                         "SELECT fn as k FROM test ORDER BY k ASC LIMIT 20;",
-                         dt));
+    c("SELECT f FROM test ORDER BY f ASC LIMIT 5;", dt);
+    c("SELECT f FROM test ORDER BY f ASC LIMIT 20;", dt);
+    c("SELECT fn as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 5;",
+      "SELECT fn as k FROM test ORDER BY k ASC LIMIT 5;",
+      dt);
+    c("SELECT fn as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
+      "SELECT fn as k FROM test ORDER BY k ASC LIMIT 20;",
+      dt);
     c("SELECT dn as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 5;",
       "SELECT dn as k FROM test ORDER BY k ASC LIMIT 5;",
       dt);
     c("SELECT dn as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
       "SELECT dn as k FROM test ORDER BY k ASC LIMIT 20;",
       dt);
-    SKIP_ON_AGGREGATOR(c("SELECT ff as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 5;",
-                         "SELECT ff as k FROM test ORDER BY k ASC LIMIT 5;",
-                         dt));
-    SKIP_ON_AGGREGATOR(c("SELECT ff as k FROM test ORDER BY k ASC NULLS FIRST  LIMIT 20;",
-                         "SELECT ff as k FROM test ORDER BY k ASC LIMIT 20;",
-                         dt));
+    c("SELECT ff as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 5;",
+      "SELECT ff as k FROM test ORDER BY k ASC LIMIT 5;",
+      dt);
+    c("SELECT ff as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
+      "SELECT ff as k FROM test ORDER BY k ASC LIMIT 20;",
+      dt);
     c("SELECT d as k FROM test ORDER BY k ASC LIMIT 5;", dt);
     c("SELECT d as k FROM test ORDER BY k ASC LIMIT 20;", dt);
     c("SELECT dn as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 5;",
@@ -1049,18 +1050,18 @@ TEST(Select, OrderBy) {
     c("SELECT ufq as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
       "SELECT ufq as k FROM test ORDER BY k ASC LIMIT 20;",
       dt);
-    SKIP_ON_AGGREGATOR(c("SELECT CAST(ofd AS FLOAT) as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 5;",
-                         "SELECT CAST(ofd AS FLOAT) as k FROM test ORDER BY k ASC LIMIT 5;",
-                         dt));
-    SKIP_ON_AGGREGATOR(c("SELECT CAST(ofd AS FLOAT) as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
-                         "SELECT CAST(ofd AS FLOAT) as k FROM test ORDER BY k ASC LIMIT 20;",
-                         dt));
-    SKIP_ON_AGGREGATOR(c("SELECT CAST(ufd AS FLOAT) as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 5;",
-                         "SELECT CAST(ufd AS FLOAT) as k FROM test ORDER BY k ASC LIMIT 5;",
-                         dt));
-    SKIP_ON_AGGREGATOR(c("SELECT CAST(ufd AS FLOAT) as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
-                         "SELECT CAST(ufd AS FLOAT) as k FROM test ORDER BY k ASC LIMIT 20;",
-                         dt));
+    c("SELECT CAST(ofd AS FLOAT) as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 5;",
+      "SELECT CAST(ofd AS FLOAT) as k FROM test ORDER BY k ASC LIMIT 5;",
+      dt);
+    c("SELECT CAST(ofd AS FLOAT) as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
+      "SELECT CAST(ofd AS FLOAT) as k FROM test ORDER BY k ASC LIMIT 20;",
+      dt);
+    c("SELECT CAST(ufd AS FLOAT) as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 5;",
+      "SELECT CAST(ufd AS FLOAT) as k FROM test ORDER BY k ASC LIMIT 5;",
+      dt);
+    c("SELECT CAST(ufd AS FLOAT) as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
+      "SELECT CAST(ufd AS FLOAT) as k FROM test ORDER BY k ASC LIMIT 20;",
+      dt);
     c("SELECT m AS k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
       "SELECT m AS k FROM test ORDER BY k ASC LIMIT 20;",
       dt);
@@ -1251,10 +1252,10 @@ TEST(Select, Strings) {
     c("SELECT COUNT(*) FROM test WHERE str LIKE '%eal_bar';", dt);
     c("SELECT COUNT(*) FROM test WHERE str LIKE '%ba%';", dt);
     SKIP_ON_AGGREGATOR(c("SELECT * FROM test WHERE str LIKE '%' ORDER BY x ASC, y ASC;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT * FROM test WHERE str LIKE 'f%%' ORDER BY x ASC, y ASC;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT * FROM test WHERE str LIKE 'f%\%' ORDER BY x ASC, y ASC;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT * FROM test WHERE ss LIKE 'f%\%' ORDER BY x ASC, y ASC;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT * FROM test WHERE str LIKE '@f%%' ESCAPE '@' ORDER BY x ASC, y ASC;", dt));
+    c("SELECT * FROM test WHERE str LIKE 'f%%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE str LIKE 'f%\%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE ss LIKE 'f%\%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE str LIKE '@f%%' ESCAPE '@' ORDER BY x ASC, y ASC;", dt);
     c("SELECT COUNT(*) FROM test WHERE str LIKE 'ba_' or str LIKE 'fo_';", dt);
     c("SELECT COUNT(*) FROM test WHERE str IS NULL;", dt);
     c("SELECT COUNT(*) FROM test WHERE str IS NOT NULL;", dt);
@@ -1340,11 +1341,11 @@ TEST(Select, SharedDictionary) {
     c("SELECT COUNT(*) FROM test WHERE shared_dict LIKE 'ba%';", dt);
     c("SELECT COUNT(*) FROM test WHERE shared_dict LIKE '%eal_bar';", dt);
     c("SELECT COUNT(*) FROM test WHERE shared_dict LIKE '%ba%';", dt);
-    SKIP_ON_AGGREGATOR(c("SELECT * FROM test WHERE shared_dict LIKE '%' ORDER BY x ASC, y ASC;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT * FROM test WHERE shared_dict LIKE 'f%%' ORDER BY x ASC, y ASC;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT * FROM test WHERE shared_dict LIKE 'f%\%' ORDER BY x ASC, y ASC;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT * FROM test WHERE ss LIKE 'f%\%' ORDER BY x ASC, y ASC;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT * FROM test WHERE shared_dict LIKE '@f%%' ESCAPE '@' ORDER BY x ASC, y ASC;", dt));
+    c("SELECT * FROM test WHERE shared_dict LIKE '%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE shared_dict LIKE 'f%%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE shared_dict LIKE 'f%\%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE ss LIKE 'f%\%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE shared_dict LIKE '@f%%' ESCAPE '@' ORDER BY x ASC, y ASC;", dt);
     c("SELECT COUNT(*) FROM test WHERE shared_dict LIKE 'ba_' or shared_dict LIKE 'fo_';", dt);
     c("SELECT COUNT(*) FROM test WHERE shared_dict IS NULL;", dt);
     c("SELECT COUNT(*) FROM test WHERE shared_dict IS NOT NULL;", dt);
@@ -1479,9 +1480,9 @@ TEST(Select, StringsNoneEncoding) {
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE 'real_ba%';", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE '%eal_bar';", dt);
     SKIP_ON_AGGREGATOR(c("SELECT * FROM test WHERE real_str LIKE '%' ORDER BY x ASC, y ASC;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT * FROM test WHERE real_str LIKE 'real_f%%' ORDER BY x ASC, y ASC;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT * FROM test WHERE real_str LIKE 'real_f%\%' ORDER BY x ASC, y ASC;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT * FROM test WHERE real_str LIKE 'real_@f%%' ESCAPE '@' ORDER BY x ASC, y ASC;", dt));
+    c("SELECT * FROM test WHERE real_str LIKE 'real_f%%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE real_str LIKE 'real_f%\%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE real_str LIKE 'real_@f%%' ESCAPE '@' ORDER BY x ASC, y ASC;", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE 'real_ba_' or real_str LIKE 'real_fo_';", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str IS NULL;", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str IS NOT NULL;", dt);
@@ -2468,11 +2469,11 @@ TEST(Select, CastFromLiteral) {
     c("SELECT CAST(2.3 AS SMALLINT) FROM test;", dt);
     c("SELECT CAST(2.3 AS INT) FROM test;", dt);
     c("SELECT CAST(2.3 AS BIGINT) FROM test;", dt);
-    SKIP_ON_AGGREGATOR(c("SELECT CAST(2.3 AS FLOAT) FROM test;", dt));
+    c("SELECT CAST(2.3 AS FLOAT) FROM test;", dt);
     c("SELECT CAST(2.3 AS DOUBLE) FROM test;", dt);
     c("SELECT CAST(2.3 AS DECIMAL(2, 1)) FROM test;", dt);
     c("SELECT CAST(2.3 AS NUMERIC(2, 1)) FROM test;", dt);
-    SKIP_ON_AGGREGATOR(c("SELECT CAST(CAST(10 AS float) / CAST(3600 as float) AS float) FROM test LIMIT 1;", dt));
+    c("SELECT CAST(CAST(10 AS float) / CAST(3600 as float) AS float) FROM test LIMIT 1;", dt);
     c("SELECT CAST(CAST(10 AS double) / CAST(3600 as double) AS double) FROM test LIMIT 1;", dt);
     c("SELECT z from test where z = -78;", dt);
   }
@@ -2485,7 +2486,7 @@ TEST(Select, CastFromNull) {
     c("SELECT CAST(NULL AS SMALLINT) FROM test;", dt);
     c("SELECT CAST(NULL AS INT) FROM test;", dt);
     c("SELECT CAST(NULL AS BIGINT) FROM test;", dt);
-    SKIP_ON_AGGREGATOR(c("SELECT CAST(NULL AS FLOAT) FROM test;", dt));
+    c("SELECT CAST(NULL AS FLOAT) FROM test;", dt);
     c("SELECT CAST(NULL AS DOUBLE) FROM test;", dt);
     c("SELECT CAST(NULL AS DECIMAL) FROM test;", dt);
     c("SELECT CAST(NULL AS NUMERIC) FROM test;", dt);
@@ -2497,7 +2498,7 @@ TEST(Select, ColumnWidths) {
     SKIP_NO_GPU();
     c("SELECT DISTINCT x FROM test_inner ORDER BY x;", dt);
     c("SELECT DISTINCT str from test_inner ORDER BY str;", dt);
-    SKIP_ON_AGGREGATOR(c("SELECT fn from test where fn < -100.7;", dt));
+    c("SELECT fn from test where fn < -100.7 ORDER BY fn;", dt);
     c("SELECT fixed_str, SUM(f)/SUM(t)  FROM test WHERE fixed_str IN ('foo','bar') GROUP BY fixed_str ORDER BY "
       "fixed_str;",
       dt);
@@ -3232,20 +3233,20 @@ TEST(Select, GroupByConstrainedByInQueryRewrite) {
     c("SELECT COUNT(*) AS n, x FROM query_rewrite_test WHERE x IN (2, 5) GROUP BY x HAVING n > 0 ORDER BY n DESC;", dt);
     c("SELECT COUNT(*) AS n, x FROM query_rewrite_test WHERE x IN (2, 99) GROUP BY x HAVING n > 0 ORDER BY n DESC;",
       dt);
-    SKIP_ON_AGGREGATOR(
-        c("SELECT COUNT(*) AS n, str FROM query_rewrite_test WHERE str IN ('str2', 'str5') GROUP BY str HAVING n > 0 "
-          "ORDER "
-          "BY n DESC;",
-          dt));
-    SKIP_ON_AGGREGATOR(
-        c("SELECT COUNT(*) AS n, str FROM query_rewrite_test WHERE str IN ('str2', 'str99') GROUP BY str HAVING n > 0 "
-          "ORDER BY n DESC;",
-          dt));
+
+    c("SELECT COUNT(*) AS n, str FROM query_rewrite_test WHERE str IN ('str2', 'str5') GROUP BY str HAVING n > 0 "
+      "ORDER "
+      "BY n DESC;",
+      dt);
+
+    c("SELECT COUNT(*) AS n, str FROM query_rewrite_test WHERE str IN ('str2', 'str99') GROUP BY str HAVING n > 0 "
+      "ORDER BY n DESC;",
+      dt);
   }
 }
 
 TEST(Select, RedundantGroupBy) {
-  for (auto dt: {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT DISTINCT(x) from test where y < 10 and z > 30 GROUP BY x;", dt);
   }
@@ -3352,6 +3353,7 @@ TEST(Select, Subqueries) {
     SKIP_NO_GPU();
     c("SELECT str, SUM(y) AS n FROM test WHERE x > (SELECT COUNT(*) FROM test) - 14 GROUP BY str ORDER BY str ASC;",
       dt);
+    // Throws join table must be replicated in distributed
     SKIP_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM test, (SELECT x FROM test_inner) AS inner_x WHERE test.x = inner_x.x;", dt));
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test WHERE y > 42);", dt);
@@ -3373,6 +3375,7 @@ TEST(Select, Subqueries) {
       "emptytab. y END yy, sum(x) "
       "FROM emptytab GROUP BY emptytab. x, yy;",
       dt);
+    // Throws join table must be replicated in distributed
     SKIP_ON_AGGREGATOR(
         c("WITH d1 AS (SELECT deptno, dname FROM dept LIMIT 10) SELECT ename, dname FROM emp, d1 WHERE emp.deptno = "
           "d1.deptno ORDER BY ename ASC LIMIT 10;",
@@ -3388,9 +3391,8 @@ TEST(Select, Subqueries) {
     c("SELECT COUNT(*) FROM test WHERE ofd NOT IN (SELECT ofd FROM test GROUP BY ofd);", dt);
     c("SELECT COUNT(*) FROM test WHERE ss IN (SELECT ss FROM test GROUP BY ss);", dt);
     c("SELECT COUNT(*) FROM test WHERE ss NOT IN (SELECT ss FROM test GROUP BY ss);", dt);
-    SKIP_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test WHERE str IN (SELECT str FROM test_in_bitmap GROUP BY str);", dt));
-    SKIP_ON_AGGREGATOR(
-        c("SELECT COUNT(*) FROM test WHERE str NOT IN (SELECT str FROM test_in_bitmap GROUP BY str);", dt));
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT str FROM test_in_bitmap GROUP BY str);", dt);
+    c("SELECT COUNT(*) FROM test WHERE str NOT IN (SELECT str FROM test_in_bitmap GROUP BY str);", dt);
     c("SELECT COUNT(*) FROM test WHERE str IN (SELECT ss FROM test GROUP BY ss);", dt);
     c("SELECT COUNT(*) FROM test WHERE str NOT IN (SELECT ss FROM test GROUP BY ss);", dt);
     c("SELECT COUNT(*) FROM test WHERE ss IN (SELECT str FROM test GROUP BY str);", dt);
@@ -3533,8 +3535,8 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
     c("SELECT COUNT(*) FROM test_inner_x a JOIN test_x b ON a.x = b.x;", dt);
     c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str ORDER BY a.x;", dt);
     c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x ORDER BY a.x;", dt);
-    SKIP_ON_AGGREGATOR(
-        c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str GROUP BY a.x ORDER BY a.x;", dt));
+
+    c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str GROUP BY a.x ORDER BY a.x;", dt);
     c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x GROUP BY a.x ORDER BY a.x;", dt);
     c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x AND test.rowid = test_inner.rowid;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.y = test_inner.y OR (test.y IS NULL AND test_inner.y IS NULL);",
@@ -4147,8 +4149,8 @@ TEST(Select, RuntimeFunctions) {
                     v<double>(run_simple_agg("SELECT SUM(SIN(dd) * SIN(dd) + COS(dd) * COS(dd)) FROM test;", dt)));
     ASSERT_FLOAT_EQ(static_cast<double>(2),
                     v<double>(run_simple_agg("SELECT FLOOR(CAST(2.3 AS double)) FROM test LIMIT 1;", dt)));
-    SKIP_ON_AGGREGATOR(ASSERT_FLOAT_EQ(
-        static_cast<float>(2), v<float>(run_simple_agg("SELECT FLOOR(CAST(2.3 AS float)) FROM test LIMIT 1;", dt))));
+    ASSERT_FLOAT_EQ(static_cast<float>(2),
+                    v<float>(run_simple_agg("SELECT FLOOR(CAST(2.3 AS float)) FROM test LIMIT 1;", dt)));
     ASSERT_EQ(static_cast<int64_t>(2),
               v<int64_t>(run_simple_agg("SELECT FLOOR(CAST(2.3 AS BIGINT)) FROM test LIMIT 1;", dt)));
     ASSERT_EQ(static_cast<int64_t>(2),
@@ -4161,8 +4163,8 @@ TEST(Select, RuntimeFunctions) {
     ASSERT_FLOAT_EQ(static_cast<double>(-2), v<double>(run_simple_agg("SELECT FLOOR(-2.0) FROM test LIMIT 1;", dt)));
     ASSERT_FLOAT_EQ(static_cast<double>(3),
                     v<double>(run_simple_agg("SELECT CEIL(CAST(2.3 AS double)) FROM test LIMIT 1;", dt)));
-    SKIP_ON_AGGREGATOR(ASSERT_FLOAT_EQ(
-        static_cast<float>(3), v<float>(run_simple_agg("SELECT CEIL(CAST(2.3 AS float)) FROM test LIMIT 1;", dt))));
+    ASSERT_FLOAT_EQ(static_cast<float>(3),
+                    v<float>(run_simple_agg("SELECT CEIL(CAST(2.3 AS float)) FROM test LIMIT 1;", dt)));
     ASSERT_EQ(static_cast<int64_t>(2),
               v<int64_t>(run_simple_agg("SELECT CEIL(CAST(2.3 AS BIGINT)) FROM test LIMIT 1;", dt)));
     ASSERT_EQ(static_cast<int64_t>(2),
@@ -4179,16 +4181,14 @@ TEST(Select, RuntimeFunctions) {
             "SELECT DISTANCE_IN_METERS(-74.0059, 40.7217,-122.416667 , 37.783333) FROM test LIMIT 1;", dt)));
     ASSERT_FLOAT_EQ(static_cast<int64_t>(1000),
                     v<int64_t>(run_simple_agg("SELECT TRUNCATE(CAST(1171 AS SMALLINT),-3) FROM test LIMIT 1;", dt)));
-    SKIP_ON_AGGREGATOR(ASSERT_FLOAT_EQ(
-        static_cast<float>(1000),
-        v<float>(run_simple_agg("SELECT TRUNCATE(CAST(1171.123 AS FLOAT),-3) FROM test LIMIT 1;", dt))));
+    ASSERT_FLOAT_EQ(static_cast<float>(1000),
+                    v<float>(run_simple_agg("SELECT TRUNCATE(CAST(1171.123 AS FLOAT),-3) FROM test LIMIT 1;", dt)));
     ASSERT_FLOAT_EQ(static_cast<double>(1000),
                     v<double>(run_simple_agg("SELECT TRUNCATE(CAST(1171.123 AS DOUBLE),-3) FROM test LIMIT 1;", dt)));
     ASSERT_FLOAT_EQ(static_cast<double>(1171.10),
                     v<double>(run_simple_agg("SELECT TRUNCATE(CAST(1171.123 AS DOUBLE),1) FROM test LIMIT 1;", dt)));
-    SKIP_ON_AGGREGATOR(
-        ASSERT_FLOAT_EQ(static_cast<float>(1171.11),
-                        v<float>(run_simple_agg("SELECT TRUNCATE(CAST(1171.113 AS FLOAT),2) FROM test LIMIT 1;", dt))));
+    ASSERT_FLOAT_EQ(static_cast<float>(1171.11),
+                    v<float>(run_simple_agg("SELECT TRUNCATE(CAST(1171.113 AS FLOAT),2) FROM test LIMIT 1;", dt)));
   }
 }
 
@@ -4289,8 +4289,7 @@ TEST(Select, WatchdogTest) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT x, SUM(f) AS n FROM test GROUP BY x ORDER BY n DESC LIMIT 5;", dt);
-    SKIP_ON_AGGREGATOR(
-        c("SELECT COUNT(*) FROM test WHERE str = 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz';", dt));
+    c("SELECT COUNT(*) FROM test WHERE str = 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz';", dt);
   }
 }
 
