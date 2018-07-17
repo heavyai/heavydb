@@ -544,6 +544,9 @@ int main(int argc, char** argv) {
 
   boost::algorithm::trim_if(authMetadata.distinguishedName, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.uri, boost::is_any_of("\"'"));
+  boost::algorithm::trim_if(authMetadata.ldapQueryUrl, boost::is_any_of("\"'"));
+  boost::algorithm::trim_if(authMetadata.ldapRoleRegex, boost::is_any_of("\"'"));
+  boost::algorithm::trim_if(authMetadata.ldapSuperUserRole, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.restToken, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.restUrl, boost::is_any_of("\"'"));
 
