@@ -1362,7 +1362,7 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
                                                true,
                                                g_inner_join_fragment_skipping);
 
-    if (eo.with_watchdog && fragment_descriptor.getRowIdLookupKey() < 0) {
+    if (eo.with_watchdog && fragment_descriptor.shouldCheckWorkUnitWatchdog()) {
       checkWorkUnitWatchdog(ra_exe_unit, *catalog_);
     }
     auto multifrag_kernel_dispatch = [&query_threads, &dispatch, &context_count](const int device_id,
@@ -1390,12 +1390,12 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
                                                false,
                                                g_inner_join_fragment_skipping);
 
+    if (eo.with_watchdog && fragment_descriptor.shouldCheckWorkUnitWatchdog()) {
+      checkWorkUnitWatchdog(ra_exe_unit, *catalog_);
+    }
+
     size_t frag_list_idx{0};
     for (size_t i = 0; i < fragment_descriptor.getOuterFragmentsSize(); ++i) {
-      if (eo.with_watchdog && fragment_descriptor.getRowIdLookupKey() < 0) {
-        checkWorkUnitWatchdog(ra_exe_unit, *catalog_);
-      }
-
       const auto frag_list_pair = fragment_descriptor.getFragListForIndex(i);
       if (!frag_list_pair.first || !frag_list_pair.second->size()) {
         continue;

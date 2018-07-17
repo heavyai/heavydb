@@ -75,6 +75,9 @@ class QueryFragmentDescriptor {
   int64_t getRowIdLookupKey() const { return rowid_lookup_key_; }
 
   size_t getOuterFragmentsSize() const { return outer_fragments_size_; }
+  bool shouldCheckWorkUnitWatchdog() const {
+    return getRowIdLookupKey() < 0 && fragments_per_device_.size() > 0;
+  }
 
   const std::pair<bool, std::shared_ptr<const FragmentsList>> getFragListForIndex(const size_t i) const {
     const auto frag_itr = fragments_per_device_.find(i);
