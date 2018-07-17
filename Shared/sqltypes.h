@@ -601,9 +601,9 @@ inline SQLTypeInfo get_logical_type_info(const SQLTypeInfo& type_info) {
   return SQLTypeInfo(type_info.get_type(),
                      type_info.get_dimension(),
                      type_info.get_scale(),
-                     false,
+                     type_info.get_notnull(),
                      encoding,
-                     0,
+                     type_info.get_comp_param(),
                      type_info.get_subtype());
 }
 

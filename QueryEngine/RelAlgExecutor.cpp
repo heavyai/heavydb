@@ -1139,9 +1139,10 @@ std::vector<TargetMetaInfo> get_targets_meta(const RA* ra_node, const std::vecto
   for (size_t i = 0; i < ra_node->size(); ++i) {
     CHECK(target_exprs[i]);
     // TODO(alex): remove the count distinct type fixup.
-    targets_meta.emplace_back(
-        ra_node->getFieldName(i),
-        is_count_distinct(target_exprs[i]) ? SQLTypeInfo(kBIGINT, false) : target_exprs[i]->get_type_info());
+    targets_meta.emplace_back(ra_node->getFieldName(i),
+                              is_count_distinct(target_exprs[i])
+                                  ? SQLTypeInfo(kBIGINT, false)
+                                  : get_logical_type_info(target_exprs[i]->get_type_info()));
   }
   return targets_meta;
 }

@@ -863,6 +863,7 @@ TEST(Select, FilterAndGroupBy) {
     c("SELECT x, AVG(u), COUNT(*) AS n FROM test GROUP BY x ORDER BY n DESC;", dt);
     c("SELECT f, ss FROM test GROUP BY f, ss ORDER BY f DESC;", dt);
     c("SELECT fx, COUNT(*) FROM test GROUP BY fx HAVING COUNT(*) > 5;", dt);
+    c("SELECT fx, COUNT(*) n FROM test GROUP BY fx ORDER BY n DESC, fx IS NULL DESC;", dt);
     c("SELECT CASE WHEN x > 8 THEN 100000000 ELSE 42 END AS c, COUNT(*) FROM test GROUP BY c;", dt);
     c("SELECT COUNT(*) FROM test WHERE CAST((CAST(x AS FLOAT) - 0) * 0.2 AS INT) = 1;", dt);
     c("SELECT CAST(CAST(d AS FLOAT) AS INTEGER) AS key, COUNT(*) FROM test GROUP BY key;", dt);
@@ -1003,6 +1004,7 @@ TEST(Select, ScanNoAggregation) {
     c("SELECT x, y, x + 1 FROM test ORDER BY x ASC, y ASC;", dt);
     c("SELECT x + z, t FROM test WHERE x <> 7 AND y > 42;", dt);
     c("SELECT * FROM test WHERE x > 8;", dt);
+    c("SELECT fx FROM test WHERE fx IS NULL;", dt);
   }
 }
 
