@@ -413,6 +413,8 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
                                   const CopyParams& copy_params,
                                   const int64_t replicate_count) {
   set_replicate_count(replicate_count);
+  if (0 == replicate_count)
+    return;
   const auto type = cd->columnType.get_type();
   switch (type) {
     case kBOOLEAN: {

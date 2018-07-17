@@ -2509,7 +2509,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       if (column_constraint) {
         auto defaultlp = column_constraint->get_defaultval();
         auto defaultsp = dynamic_cast<const StringLiteral*>(defaultlp);
-        defaultval = (nullptr != defaultsp) ? *defaultsp->get_stringval() : defaultlp->to_string();
+        defaultval = defaultsp ? *defaultsp->get_stringval() : defaultlp ? defaultlp->to_string() : "";
       }
       bool isnull = column_constraint ? (0 == defaultval.size()) : true;
       if (boost::to_upper_copy<std::string>(defaultval) == "NULL")
