@@ -38,7 +38,7 @@
 
 TEST(Construct, Allocate) {
   std::vector<TargetInfo> target_infos;
-  QueryMemoryDescriptor query_mem_desc{};
+  QueryMemoryDescriptor query_mem_desc;
   ResultSet result_set(target_infos,
                        ExecutorDeviceType::CPU,
                        query_mem_desc,
@@ -497,7 +497,7 @@ void fill_storage_buffer(int8_t* buff,
 QueryMemoryDescriptor perfect_hash_one_col_desc_small(
     const std::vector<TargetInfo>& target_infos,
     const int8_t num_bytes) {
-  QueryMemoryDescriptor query_mem_desc{};
+  QueryMemoryDescriptor query_mem_desc;
   query_mem_desc.hash_type = GroupByColRangeType::OneColKnownRange;
   query_mem_desc.min_val = 0;
   query_mem_desc.max_val = 19;
@@ -521,7 +521,7 @@ QueryMemoryDescriptor perfect_hash_one_col_desc(
     const int8_t num_bytes,
     const size_t min_val,
     const size_t max_val) {
-  QueryMemoryDescriptor query_mem_desc{};
+  QueryMemoryDescriptor query_mem_desc;
   query_mem_desc.hash_type = GroupByColRangeType::OneColKnownRange;
   query_mem_desc.min_val = min_val;
   query_mem_desc.max_val = max_val;
@@ -543,7 +543,7 @@ QueryMemoryDescriptor perfect_hash_one_col_desc(
 QueryMemoryDescriptor perfect_hash_two_col_desc(
     const std::vector<TargetInfo>& target_infos,
     const int8_t num_bytes) {
-  QueryMemoryDescriptor query_mem_desc{};
+  QueryMemoryDescriptor query_mem_desc;
   query_mem_desc.hash_type = GroupByColRangeType::MultiColPerfectHash;
   query_mem_desc.min_val = 0;
   query_mem_desc.max_val = 36;
@@ -566,7 +566,7 @@ QueryMemoryDescriptor perfect_hash_two_col_desc(
 QueryMemoryDescriptor baseline_hash_two_col_desc_large(
     const std::vector<TargetInfo>& target_infos,
     const int8_t num_bytes) {
-  QueryMemoryDescriptor query_mem_desc{};
+  QueryMemoryDescriptor query_mem_desc;
   query_mem_desc.hash_type = GroupByColRangeType::MultiCol;
   query_mem_desc.min_val = 0;
   query_mem_desc.max_val = 19;
@@ -589,7 +589,7 @@ QueryMemoryDescriptor baseline_hash_two_col_desc_large(
 QueryMemoryDescriptor baseline_hash_two_col_desc(
     const std::vector<TargetInfo>& target_infos,
     const int8_t num_bytes) {
-  QueryMemoryDescriptor query_mem_desc{};
+  QueryMemoryDescriptor query_mem_desc;
   query_mem_desc.hash_type = GroupByColRangeType::MultiCol;
   query_mem_desc.min_val = 0;
   query_mem_desc.max_val = 3;

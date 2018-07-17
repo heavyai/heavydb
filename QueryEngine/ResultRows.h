@@ -45,7 +45,7 @@
 
 extern bool g_bigint_count;
 
-struct QueryMemoryDescriptor;
+class QueryMemoryDescriptor;
 struct RelAlgExecutionUnit;
 class RowSetMemoryOwner;
 

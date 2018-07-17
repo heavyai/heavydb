@@ -43,6 +43,7 @@ class Executor;
 class QueryExecutionContext;
 class RenderInfo;
 class RowSetMemoryOwner;
+struct InputTableInfo;
 
 enum class GroupByColRangeType {
   OneColKnownRange,    // statically known range, only possible for column expressions
@@ -71,8 +72,80 @@ enum class GroupByMemSharing { Private, Shared, SharedForKeylessOneColumnKnownRa
 
 struct RelAlgExecutionUnit;
 
-struct QueryMemoryDescriptor {
-  const Executor* executor_;
+class QueryMemoryDescriptor {
+ public:
+  QueryMemoryDescriptor();
+
+  QueryMemoryDescriptor(const Executor* executor, const size_t entry_count, const GroupByColRangeType hash_type);
+
+  QueryMemoryDescriptor(const Executor* executor,
+                        const bool allow_multifrag,
+                        const GroupByColRangeType hash_type,
+                        const bool keyless_hash,
+                        const bool interleaved_bins_on_gpu,
+                        const int32_t idx_target_as_key,
+                        const int64_t init_val,
+                        const std::vector<int8_t>& group_col_widths,
+#ifdef ENABLE_KEY_COMPACTION
+                        const int8_t group_col_compact_width,
+#endif
+                        const std::vector<ColWidths>& agg_col_widths,
+                        const std::vector<ssize_t>& target_groupby_indices,
+                        const size_t entry_count,
+                        const size_t entry_count_small,
+                        const int64_t min_val,
+                        const int64_t max_val,
+                        const int64_t bucket,
+                        const bool hash_nulls,
+                        const GroupByMemSharing sharing,
+                        const CountDistinctDescriptors count_distinct_descriptors,
+                        const bool sort_on_gpu,
+                        const bool is_sort_plan,
+                        const bool output_columnar,
+                        const bool reder_output,
+                        const std::vector<int8_t>& key_column_pad_bytes,
+                        const std::vector<int8_t>& target_column_pad_bytes,
+                        const bool must_use_baseline_sort);
+
+  std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
+      const RelAlgExecutionUnit&,
+      const std::vector<int64_t>& init_agg_vals,
+      const Executor* executor,
+      const ExecutorDeviceType device_type,
+      const int device_id,
+      const std::vector<std::vector<const int8_t*>>& col_buffers,
+      const std::vector<std::vector<const int8_t*>>& iter_buffers,
+      const std::vector<std::vector<uint64_t>>& frag_offsets,
+      std::shared_ptr<RowSetMemoryOwner>,
+      const bool output_columnar,
+      const bool sort_on_gpu,
+      RenderInfo*) const;
+
+  const Executor* getExecutor() const { return executor_; }
+
+  // shared, static methods attached to QMD for now
+  static bool many_entries(const int64_t max_val, const int64_t min_val, const int64_t bucket) {
+    return max_val - min_val > 10000 * std::max(bucket, int64_t(1));
+  }
+  
+  static bool countDescriptorsLogicallyEmpty(const CountDistinctDescriptors& count_distinct_descriptors) {
+    return std::all_of(
+        count_distinct_descriptors.begin(), count_distinct_descriptors.end(), [](const CountDistinctDescriptor& desc) {
+          return desc.impl_type_ == CountDistinctImplType::Invalid;
+        });
+  }
+
+  static int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
+                                          const std::vector<InputTableInfo>& query_infos,
+                                          const int8_t crt_min_byte_width);
+
+  // TODO(adb): remove need for static version above
+  bool countDistinctDescriptorsLogicallyEmpty() const {
+    return countDescriptorsLogicallyEmpty(count_distinct_descriptors_);
+  }
+
+  // old / to be sorted
+
   bool allow_multifrag;
   GroupByColRangeType hash_type;
 
@@ -106,20 +179,6 @@ struct QueryMemoryDescriptor {
   bool must_use_baseline_sort;
 
   bool force_4byte_float_ = false;
-
-  std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
-      const RelAlgExecutionUnit&,
-      const std::vector<int64_t>& init_agg_vals,
-      const Executor* executor,
-      const ExecutorDeviceType device_type,
-      const int device_id,
-      const std::vector<std::vector<const int8_t*>>& col_buffers,
-      const std::vector<std::vector<const int8_t*>>& iter_buffers,
-      const std::vector<std::vector<uint64_t>>& frag_offsets,
-      std::shared_ptr<RowSetMemoryOwner>,
-      const bool output_columnar,
-      const bool sort_on_gpu,
-      RenderInfo*) const;
 
   size_t getBufferSizeQuad(const ExecutorDeviceType device_type) const;
   size_t getSmallBufferSizeQuad() const;
@@ -176,6 +235,8 @@ struct QueryMemoryDescriptor {
   bool isWarpSyncRequired(const ExecutorDeviceType) const;
 
  private:
+  const Executor* executor_;
+
   size_t getTotalBytesOfColumnarBuffers(const std::vector<ColWidths>& col_widths) const;
 };
 

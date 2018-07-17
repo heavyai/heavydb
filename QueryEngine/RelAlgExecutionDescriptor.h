@@ -126,7 +126,7 @@ class RaExecutionDesc {
       : body_(body)
       , result_(std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                             ExecutorDeviceType::CPU,
-                                            QueryMemoryDescriptor{},
+                                            QueryMemoryDescriptor(),
                                             nullptr,
                                             nullptr),
                 {}) {}

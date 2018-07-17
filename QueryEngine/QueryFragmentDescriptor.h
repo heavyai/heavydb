@@ -15,7 +15,7 @@
  */
 
 /**
- * @file    QueryMemoryDescriptor.h
+ * @file    QueryFragmentDescriptor.h
  * @author  Alex Baden <alex.baden@mapd.com>
  * @brief   Descriptor for the fragments required for a query.
  */

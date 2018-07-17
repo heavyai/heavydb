@@ -19,6 +19,7 @@
 
 #include "InputDescriptors.h"
 #include "IteratorTable.h"
+#include "RelAlgExecutionUnit.h"
 
 #include <unordered_map>
 
@@ -28,7 +29,7 @@ class Catalog;
 
 class Executor;
 
-typedef std::unordered_map<int, const ResultPtr&> TemporaryTables;
+using TemporaryTables = std::unordered_map<int, const ResultPtr&>;
 
 struct InputTableInfo {
   int table_id;

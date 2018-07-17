@@ -47,7 +47,7 @@ struct SpeculativeTopNEntry {
 };
 
 class Executor;
-struct QueryMemoryDescriptor;
+class QueryMemoryDescriptor;
 class ResultSet;
 typedef std::shared_ptr<ResultSet> RowSetPtr;
 struct RelAlgExecutionUnit;

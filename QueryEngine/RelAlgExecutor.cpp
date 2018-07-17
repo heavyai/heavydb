@@ -1505,7 +1505,7 @@ ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify,
 
   auto rs = std::make_shared<ResultSet>(TargetInfoList{},
                                         ExecutorDeviceType::CPU,
-                                        QueryMemoryDescriptor{},
+                                        QueryMemoryDescriptor(),
                                         executor_->getRowSetMemoryOwner(),
                                         executor_);
 
@@ -1519,10 +1519,7 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
   if (eo.just_explain) {
     throw std::runtime_error("EXPLAIN not supported for LogicalValues");
   }
-  QueryMemoryDescriptor query_mem_desc{0};
-  query_mem_desc.executor_ = executor_;
-  query_mem_desc.entry_count = 1;
-  query_mem_desc.hash_type = GroupByColRangeType::Scan;
+  QueryMemoryDescriptor query_mem_desc(executor_, 1, GroupByColRangeType::Scan);
 
   const auto& tuple_type = logical_values->getTupleType();
   for (size_t i = 0; i < tuple_type.size(); ++i) {
@@ -1674,7 +1671,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   CHECK(false);
   return {std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                       co.device_type_,
-                                      QueryMemoryDescriptor{},
+                                      QueryMemoryDescriptor(),
                                       nullptr,
                                       executor_),
           {}};
@@ -1899,7 +1896,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
 
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      co.device_type_,
-                                                     QueryMemoryDescriptor{},
+                                                     QueryMemoryDescriptor(),
                                                      nullptr,
                                                      executor_),
                          {}};
@@ -2117,7 +2114,7 @@ ExecutionResult RelAlgExecutor::handleRetry(
                                    eo.dynamic_watchdog_time_limit};
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      co.device_type_,
-                                                     QueryMemoryDescriptor{},
+                                                     QueryMemoryDescriptor(),
                                                      nullptr,
                                                      executor_),
                          {}};

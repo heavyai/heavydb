@@ -1280,7 +1280,7 @@ TEST(Reduction, Baseline) {
   std::reverse(target_infos.begin(), target_infos.end());
 
   const auto device_type = ExecutorDeviceType::CPU;
-  QueryMemoryDescriptor query_mem_desc{};
+  QueryMemoryDescriptor query_mem_desc;
   query_mem_desc.keyless_hash = false;
   query_mem_desc.has_nulls = false;
   CHECK_GT(key_count, 1);
@@ -1549,7 +1549,7 @@ TEST(Reduction, PerfectHash) {
   std::reverse(target_infos.begin(), target_infos.end());
 
   const auto device_type = ExecutorDeviceType::CPU;
-  QueryMemoryDescriptor query_mem_desc{};
+  QueryMemoryDescriptor query_mem_desc;
   query_mem_desc.keyless_hash = false;
   query_mem_desc.has_nulls = false;
   query_mem_desc.hash_type = key_count == 1 ? GroupByColRangeType::OneColKnownRange

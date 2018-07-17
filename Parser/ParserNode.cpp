@@ -2335,7 +2335,7 @@ std::shared_ptr<ResultSet> getResultRows(const Catalog_Namespace::SessionInfo& s
   RelAlgExecutor ra_executor(executor.get(), catalog);
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
-                                                     QueryMemoryDescriptor{},
+                                                     QueryMemoryDescriptor(),
                                                      nullptr,
                                                      nullptr),
                          {}};

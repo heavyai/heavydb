@@ -407,7 +407,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
   if (*error_code) {
     return std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                        ExecutorDeviceType::CPU,
-                                       QueryMemoryDescriptor{},
+                                       QueryMemoryDescriptor(),
                                        nullptr,
                                        this);
   }
@@ -441,7 +441,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
   if (!row_count) {
     return std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                        ExecutorDeviceType::CPU,
-                                       QueryMemoryDescriptor{},
+                                       QueryMemoryDescriptor(),
                                        nullptr,
                                        this);
   }
@@ -449,10 +449,11 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
   for (auto wid : get_col_byte_widths(target_exprs, {})) {
     agg_col_widths.push_back(
         {wid,
-         int8_t(compact_byte_width(
-             wid, pick_target_compact_width(res_ra_unit, {}, get_min_byte_width())))});
+         int8_t(compact_byte_width(wid,
+                                   QueryMemoryDescriptor::pick_target_compact_width(
+                                       res_ra_unit, {}, get_min_byte_width())))});
   }
-  QueryMemoryDescriptor query_mem_desc{this,
+  QueryMemoryDescriptor query_mem_desc(this,
                                        allow_multifrag,
                                        GroupByColRangeType::Projection,
                                        false,
@@ -479,7 +480,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                        false,
                                        {},
                                        {},
-                                       false};
+                                       false);
   ColumnCacheMap column_cache;
   OOM_TRACE_PUSH();
   auto compilation_result = compileWorkUnit(
@@ -737,7 +738,7 @@ std::shared_ptr<ResultSet> Executor::execute(
       executeSimpleInsert(root_plan);
       auto empty_rs = std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                   ExecutorDeviceType::CPU,
-                                                  QueryMemoryDescriptor{},
+                                                  QueryMemoryDescriptor(),
                                                   nullptr,
                                                   this);
       empty_rs->setQueueTime(queue_time_ms);

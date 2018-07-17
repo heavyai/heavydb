@@ -749,7 +749,7 @@ ResultPtr Executor::resultsUnion(ExecutionDispatch& execution_dispatch) {
       targets.push_back(target_info(target_expr));
     }
     return std::make_shared<ResultSet>(
-        targets, ExecutorDeviceType::CPU, QueryMemoryDescriptor{}, nullptr, nullptr);
+        targets, ExecutorDeviceType::CPU, QueryMemoryDescriptor(), nullptr, nullptr);
   }
   typedef std::pair<ResultPtr, std::vector<size_t>> IndexedResultRows;
   std::sort(results_per_device.begin(),
@@ -812,7 +812,7 @@ RowSetPtr Executor::reduceMultiDeviceResults(
       targets.push_back(target_info(target_expr));
     }
     return std::make_shared<ResultSet>(
-        targets, ExecutorDeviceType::CPU, QueryMemoryDescriptor{}, nullptr, this);
+        targets, ExecutorDeviceType::CPU, QueryMemoryDescriptor(), nullptr, this);
   }
 
   return reduceMultiDeviceResultSets(
@@ -1178,7 +1178,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
     if (*error_code != 0) {
       return std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                          ExecutorDeviceType::CPU,
-                                         QueryMemoryDescriptor{},
+                                         QueryMemoryDescriptor(),
                                          nullptr,
                                          this);
     }
@@ -1209,7 +1209,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
 
   return std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                      ExecutorDeviceType::CPU,
-                                     QueryMemoryDescriptor{},
+                                     QueryMemoryDescriptor(),
                                      nullptr,
                                      this);
 }
@@ -1276,8 +1276,9 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
     CHECK(agg_info.is_agg);
     target_infos.push_back(agg_info);
     if (g_cluster) {
-      CHECK(query_mem_desc.executor_);
-      auto row_set_mem_owner = query_mem_desc.executor_->getRowSetMemoryOwner();
+      const auto executor = query_mem_desc.getExecutor();
+      CHECK(executor);
+      auto row_set_mem_owner = executor->getRowSetMemoryOwner();
       CHECK(row_set_mem_owner);
       CHECK_LT(target_idx, query_mem_desc.count_distinct_descriptors_.size());
       const auto& count_distinct_desc =
@@ -1341,7 +1342,7 @@ RowSetPtr build_row_for_empty_input(const std::vector<Analyzer::Expr*>& target_e
   std::vector<TargetInfo> target_infos;
   std::vector<int64_t> entry;
   fill_entries_for_empty_input(target_infos, entry, target_exprs, query_mem_desc);
-  const auto executor = query_mem_desc.executor_;
+  const auto executor = query_mem_desc.getExecutor();
   CHECK(executor);
   auto row_set_mem_owner = executor->getRowSetMemoryOwner();
   CHECK(row_set_mem_owner);

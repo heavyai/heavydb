@@ -33,7 +33,7 @@ namespace Analyzer {
 class Expr;
 }  // namespace Analyzer
 
-struct QueryMemoryDescriptor;
+class QueryMemoryDescriptor;
 
 std::pair<int64_t, int64_t> inline_int_max_min(const size_t byte_width);
 

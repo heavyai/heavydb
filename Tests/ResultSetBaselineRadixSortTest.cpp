@@ -52,7 +52,7 @@ std::vector<TargetInfo> get_sort_int_target_infos() {
 QueryMemoryDescriptor baseline_sort_desc(const std::vector<TargetInfo>& target_infos,
                                          const size_t hash_entry_count,
                                          const size_t key_bytewidth) {
-  QueryMemoryDescriptor query_mem_desc{};
+  QueryMemoryDescriptor query_mem_desc;
   query_mem_desc.hash_type = GroupByColRangeType::MultiCol;
   query_mem_desc.group_col_widths.emplace_back(8);
   query_mem_desc.group_col_widths.emplace_back(8);

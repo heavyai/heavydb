@@ -479,7 +479,9 @@ InternalTargetValue ResultSet::getVarlenOrderEntry(const int64_t str_ptr,
   std::vector<int8_t> cpu_buffer;
   if (device_type_ == ExecutorDeviceType::GPU) {
     cpu_buffer.resize(str_len);
-    auto& data_mgr = query_mem_desc_.executor_->catalog_->get_dataMgr();
+    const auto executor = query_mem_desc_.getExecutor();
+    CHECK(executor);
+    auto& data_mgr = executor->catalog_->get_dataMgr();
     copy_from_gpu(&data_mgr,
                   &cpu_buffer[0],
                   static_cast<CUdeviceptr>(str_ptr),
@@ -840,7 +842,9 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
   std::vector<int8_t> cpu_buffer;
   if (varlen_ptr && device_type_ == ExecutorDeviceType::GPU) {
     cpu_buffer.resize(length);
-    auto& data_mgr = query_mem_desc_.executor_->catalog_->get_dataMgr();
+    const auto executor = query_mem_desc_.getExecutor();
+    CHECK(executor);
+    auto& data_mgr = executor->catalog_->get_dataMgr();
     copy_from_gpu(&data_mgr,
                   &cpu_buffer[0],
                   static_cast<CUdeviceptr>(varlen_ptr),
@@ -959,7 +963,9 @@ TargetValue ResultSet::makeGeoTargetValue(const VarlenTargetPtrPair& coords,
   auto coords_length = read_int_from_buff(coords.ptr2, coords.compact_sz2);
   std::vector<int8_t> coords_cpu_buffer;
   if (device_type_ == ExecutorDeviceType::GPU) {
-    auto& data_mgr = query_mem_desc_.executor_->catalog_->get_dataMgr();
+    const auto executor = query_mem_desc_.getExecutor();
+    CHECK(executor);
+    auto& data_mgr = executor->catalog_->get_dataMgr();
     fetch_data_from_gpu(
         coords_cpu_buffer, coords_varlen_ptr, coords_length, data_mgr, device_id_);
     coords_varlen_ptr = reinterpret_cast<int64_t>(&coords_cpu_buffer[0]);
@@ -986,7 +992,9 @@ TargetValue ResultSet::makeGeoTargetValue(const VarlenTargetPtrPair& coords,
           read_int_from_buff(ring_sizes.ptr2, ring_sizes.compact_sz2) * 4;
       std::vector<int8_t> ring_sizes_cpu_buffer;
       if (device_type_ == ExecutorDeviceType::GPU) {
-        auto& data_mgr = query_mem_desc_.executor_->catalog_->get_dataMgr();
+        const auto executor = query_mem_desc_.getExecutor();
+        CHECK(executor);
+        auto& data_mgr = executor->catalog_->get_dataMgr();
         fetch_data_from_gpu(ring_sizes_cpu_buffer,
                             ring_sizes_varlen_ptr,
                             ring_sizes_length,
@@ -1009,7 +1017,9 @@ TargetValue ResultSet::makeGeoTargetValue(const VarlenTargetPtrPair& coords,
           read_int_from_buff(ring_sizes.ptr2, ring_sizes.compact_sz2) * 4;
       std::vector<int8_t> ring_sizes_cpu_buffer;
       if (device_type_ == ExecutorDeviceType::GPU) {
-        auto& data_mgr = query_mem_desc_.executor_->catalog_->get_dataMgr();
+        const auto executor = query_mem_desc_.getExecutor();
+        CHECK(executor);
+        auto& data_mgr = executor->catalog_->get_dataMgr();
         fetch_data_from_gpu(ring_sizes_cpu_buffer,
                             ring_sizes_varlen_ptr,
                             ring_sizes_length,
@@ -1024,7 +1034,9 @@ TargetValue ResultSet::makeGeoTargetValue(const VarlenTargetPtrPair& coords,
           read_int_from_buff(poly_rings.ptr2, poly_rings.compact_sz2) * 4;
       std::vector<int8_t> poly_rings_cpu_buffer;
       if (device_type_ == ExecutorDeviceType::GPU) {
-        auto& data_mgr = query_mem_desc_.executor_->catalog_->get_dataMgr();
+        const auto executor = query_mem_desc_.getExecutor();
+        CHECK(executor);
+        auto& data_mgr = executor->catalog_->get_dataMgr();
         fetch_data_from_gpu(poly_rings_cpu_buffer,
                             poly_rings_varlen_ptr,
                             poly_rings_length,

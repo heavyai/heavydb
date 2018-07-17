@@ -3513,7 +3513,7 @@ void MapDHandler::execute_rel_alg(TQueryResult& _return,
   RelAlgExecutor ra_executor(executor.get(), cat);
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
-                                                     QueryMemoryDescriptor{},
+                                                     QueryMemoryDescriptor(),
                                                      nullptr,
                                                      nullptr),
                          {}};
