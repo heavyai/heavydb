@@ -1167,6 +1167,15 @@ void MapDHandler::get_result_row_for_pixel(TPixelTableRowResult& _return,
   LOG(INFO) << "get_result_row_for_pixel-COMPLETED nonce: " << nonce << ", Execute Time: " << time_ms << " (ms)";
 }
 
+namespace {
+
+inline void fixup_geo_column_descriptor(TColumnType& col_type, const SQLTypes subtype, const int output_srid) {
+  col_type.col_type.precision = static_cast<int>(subtype);
+  col_type.col_type.scale = output_srid;
+}
+
+} // namespace
+
 TColumnType MapDHandler::populateThriftColumnType(const Catalog* cat, const ColumnDescriptor* cd) {
   TColumnType col_type;
   col_type.col_name = cd->columnName;
@@ -1176,8 +1185,7 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog* cat, const Colu
   col_type.col_type.nullable = !cd->columnType.get_notnull();
   col_type.col_type.is_array = cd->columnType.get_type() == kARRAY;
   if (IS_GEO(cd->columnType.get_type())) {
-    col_type.col_type.precision = static_cast<int>(cd->columnType.get_subtype());
-    col_type.col_type.scale = cd->columnType.get_output_srid();
+    fixup_geo_column_descriptor(col_type, cd->columnType.get_subtype(), cd->columnType.get_output_srid());
   } else {
     col_type.col_type.precision = cd->columnType.get_precision();
     col_type.col_type.scale = cd->columnType.get_scale();
@@ -3325,8 +3333,12 @@ TRowDescriptor MapDHandler::convert_target_metainfo(const std::vector<TargetMeta
     proj_info.col_type.encoding = encoding_to_thrift(target_ti);
     proj_info.col_type.nullable = !target_ti.get_notnull();
     proj_info.col_type.is_array = target_ti.get_type() == kARRAY;
-    proj_info.col_type.precision = target_ti.get_precision();
-    proj_info.col_type.scale = target_ti.get_scale();
+    if (IS_GEO(target_ti.get_type())) {
+      fixup_geo_column_descriptor(proj_info, target_ti.get_subtype(), target_ti.get_output_srid());
+    } else {
+      proj_info.col_type.precision = target_ti.get_precision();
+      proj_info.col_type.scale = target_ti.get_scale();
+    }
     proj_info.col_type.comp_param = target_ti.get_comp_param();
     row_desc.push_back(proj_info);
     ++i;
