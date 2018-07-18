@@ -2502,23 +2502,24 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     loader->set_replicating(true);
 
     auto nrows = td->fragmenter->getNumRows();
-    for (const auto& coldef : coldefs) {
-      auto& cd = cds[*coldef->get_column_name()];
-      auto column_constraint = coldef->get_column_constraint();
-      std::string defaultval = "";
-      if (column_constraint) {
-        auto defaultlp = column_constraint->get_defaultval();
-        auto defaultsp = dynamic_cast<const StringLiteral*>(defaultlp);
-        defaultval = defaultsp ? *defaultsp->get_stringval() : defaultlp ? defaultlp->to_string() : "";
-      }
-      bool isnull = column_constraint ? (0 == defaultval.size()) : true;
-      if (boost::to_upper_copy<std::string>(defaultval) == "NULL")
-        isnull = true;
+    if (nrows > 0)
+      for (const auto& coldef : coldefs) {
+        auto& cd = cds[*coldef->get_column_name()];
+        auto column_constraint = coldef->get_column_constraint();
+        std::string defaultval = "";
+        if (column_constraint) {
+          auto defaultlp = column_constraint->get_defaultval();
+          auto defaultsp = dynamic_cast<const StringLiteral*>(defaultlp);
+          defaultval = defaultsp ? *defaultsp->get_stringval() : defaultlp ? defaultlp->to_string() : "";
+        }
+        bool isnull = column_constraint ? (0 == defaultval.size()) : true;
+        if (boost::to_upper_copy<std::string>(defaultval) == "NULL")
+          isnull = true;
 
-      for (auto& import_buffer : import_buffers)
-        if (cd.columnId == import_buffer->getColumnDesc()->columnId)
-          import_buffer->add_value(&cd, defaultval, isnull, Importer_NS::CopyParams(), nrows);
-    }
+        for (auto& import_buffer : import_buffers)
+          if (cd.columnId == import_buffer->getColumnDesc()->columnId)
+            import_buffer->add_value(&cd, defaultval, isnull, Importer_NS::CopyParams(), nrows);
+      }
 
     if (!loader->loadNoCheckpoint(import_buffers, nrows))
       throw std::runtime_error("loadNoCheckpoint failed!");
