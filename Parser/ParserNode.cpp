@@ -2838,7 +2838,7 @@ void DropRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
-    throw std::runtime_error("DROP ROLE " + get_role() + "failed. It can only be executed by super user.");
+    throw std::runtime_error("DROP ROLE " + get_role() + " failed. It can only be executed by super user.");
   }
   Role* rl = SysCatalog::instance().getMetadataForRole(get_role());
   if (!rl || rl->isUserPrivateRole()) {
