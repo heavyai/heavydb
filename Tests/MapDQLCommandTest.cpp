@@ -639,7 +639,7 @@ TEST(MapDQLTest, ImportDashboardCommandTest_SimpleDashSimpleFilename) {
   auto extracted_tokens = TokenExtractor().extract_tokens(output_back_to_input);
   using TokenCount = decltype(extracted_tokens)::size_type;
   EXPECT_EQ(extracted_tokens.size(), 5u);
-  EXPECT_EQ(extracted_tokens[4], "unlikely_file_to_over_be_opened_1234.txt");
+  EXPECT_EQ(extracted_tokens[4], "`unlikely_file_to_over_be_opened_1234.txt`");
 }
 
 TEST(MapDQLTest, ImportDashboardCommandTest_SimpleDashComplexFilename) {
@@ -667,9 +667,9 @@ TEST(MapDQLTest, ImportDashboardCommandTest_SimpleDashComplexFilename) {
   auto extracted_tokens = TokenExtractor().extract_tokens(output_back_to_input);
   using TokenCount = decltype(extracted_tokens)::size_type;
   EXPECT_EQ(extracted_tokens.size(), 7u);  // Inflated because of spaces in standard output
-  EXPECT_EQ(extracted_tokens[4], "C:\\Windows");
+  EXPECT_EQ(extracted_tokens[4], "`C:\\Windows");
   EXPECT_EQ(extracted_tokens[5], "is");
-  EXPECT_EQ(extracted_tokens[6], "Terrible\\lol.txt");
+  EXPECT_EQ(extracted_tokens[6], "Terrible\\lol.txt`");
 }
 
 TEST(MapDQLTest, ImportDashboardCommandTest_ComplexDashSimpleFilename) {
@@ -697,7 +697,7 @@ TEST(MapDQLTest, ImportDashboardCommandTest_ComplexDashSimpleFilename) {
   auto extracted_tokens = TokenExtractor().extract_tokens(output_back_to_input);
   using TokenCount = decltype(extracted_tokens)::size_type;
   EXPECT_EQ(extracted_tokens.size(), 5u);  // Inflated because of spaces in standard output
-  EXPECT_EQ(extracted_tokens[4], "simpledash.txt");
+  EXPECT_EQ(extracted_tokens[4], "`simpledash.txt`");
 }
 
 TEST(MapDQLTest, ImportDashboardCommandTest_ComplexDashComplexFilename) {
@@ -727,9 +727,9 @@ TEST(MapDQLTest, ImportDashboardCommandTest_ComplexDashComplexFilename) {
   auto extracted_tokens = TokenExtractor().extract_tokens(output_back_to_input);
   using TokenCount = decltype(extracted_tokens)::size_type;
   EXPECT_EQ(extracted_tokens.size(), 7u);  // Inflated because of spaces in standard output
-  EXPECT_EQ(extracted_tokens[4], "C:\\Windows");
+  EXPECT_EQ(extracted_tokens[4], "`C:\\Windows");
   EXPECT_EQ(extracted_tokens[5], "is");
-  EXPECT_EQ(extracted_tokens[6], "Terrible\\lol.txt");
+  EXPECT_EQ(extracted_tokens[6], "Terrible\\lol.txt`");
 }
 
 //

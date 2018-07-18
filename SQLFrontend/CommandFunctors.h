@@ -397,7 +397,7 @@ StandardCommand(ExportDashboard, {
                                    dashfile << decode64(lambda_context.view_return.view_state);
                                    dashfile.close();
                                  } else {
-                                   output_stream << "Could not open file " << filename << std::endl;
+                                   output_stream << "Could not open file `" << filename << "`" << std::endl;
                                  }
                                },
                                [&](ContextType&) { output_stream << "Failed to export dashboard." << std::endl; });
@@ -422,7 +422,7 @@ StandardCommand(ImportDashboard, {
     std::getline(dashfile, state);
     dashfile.close();
   } else {
-    output_stream << "Could not open file " << filename << std::endl;
+    output_stream << "Could not open file `" << filename << "`" << std::endl;
     return;
   }
 
