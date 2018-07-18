@@ -6726,14 +6726,12 @@ TEST(Rounding, ROUND) {
 }
 
 TEST(Select, LastSample) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     ASSERT_EQ("else",
               boost::get<std::string>(v<NullableString>(
                   run_simple_agg("SELECT LAST_SAMPLE(CASE WHEN x IN (9) THEN str ELSE 'else' END) FROM test;", dt))));
-    {
+    SKIP_ON_AGGREGATOR({
       const auto rows = run_multiple_agg("SELECT LAST_SAMPLE(real_str), COUNT(*) FROM test WHERE x > 8;", dt);
       const auto crt_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(2), crt_row.size());
@@ -6743,8 +6741,8 @@ TEST(Select, LastSample) {
       ASSERT_EQ(0, v<int64_t>(crt_row[1]));
       const auto empty_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(0), empty_row.size());
-    }
-    {
+    });
+    SKIP_ON_AGGREGATOR({
       const auto rows = run_multiple_agg("SELECT LAST_SAMPLE(real_str), COUNT(*) FROM test WHERE x > 7;", dt);
       const auto crt_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(2), crt_row.size());
@@ -6755,12 +6753,12 @@ TEST(Select, LastSample) {
       ASSERT_EQ(g_num_rows / 2, v<int64_t>(crt_row[1]));
       const auto empty_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(0), empty_row.size());
-    }
+    });
     auto check_last_sample_rowid = [](const int64_t val) {
       const std::set<int64_t> valid_row_ids{15, 16, 17, 18, 19};
       ASSERT_TRUE(valid_row_ids.find(val) != valid_row_ids.end()) << "Last sample rowid value " << val << " is invalid";
     };
-    {
+    SKIP_ON_AGGREGATOR({
       const auto rows =
           run_multiple_agg("SELECT LAST_SAMPLE(rowid), AVG(d), AVG(f), str FROM test WHERE d > 2.4 GROUP BY str;", dt);
       const auto crt_row = rows->getNextRow(true, true);
@@ -6775,8 +6773,8 @@ TEST(Select, LastSample) {
       const auto str_ptr = boost::get<std::string>(&nullable_str);
       ASSERT_TRUE(str_ptr);
       ASSERT_EQ("baz", boost::get<std::string>(*str_ptr));
-    }
-    {
+    });
+    SKIP_ON_AGGREGATOR({
       const auto rows =
           run_multiple_agg("SELECT AVG(d), AVG(f), str, LAST_SAMPLE(rowid) FROM test WHERE d > 2.4 GROUP BY str;", dt);
       const auto crt_row = rows->getNextRow(true, true);
@@ -6791,7 +6789,7 @@ TEST(Select, LastSample) {
       ASSERT_EQ("baz", boost::get<std::string>(*str_ptr));
       const auto rowid = v<int64_t>(crt_row[3]);
       check_last_sample_rowid(rowid);
-    }
+    });
     {
       const auto rows = run_multiple_agg("SELECT LAST_SAMPLE(str) FROM test WHERE x > 8;", dt);
       const auto crt_row = rows->getNextRow(true, true);
