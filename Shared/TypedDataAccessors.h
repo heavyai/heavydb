@@ -36,6 +36,8 @@ inline void value_truncated(const LHT& lhs, const RHT& rhs) {
 
 template <typename T>
 inline bool is_null(const T& v, const SQLTypeInfo& t) {
+  if (std::is_floating_point<T>::value)
+    return v == inline_fp_null_value<T>();
   switch (t.get_logical_size()) {
     case 1:
       return v == inline_int_null_value<int8_t>();
@@ -94,16 +96,16 @@ inline int32_t get_string_index(void* ptr, const int size) {
   }
 }
 
-inline bool set_string_index(void* ptr, const int size, int32_t sidx) {
-  switch (size) {
+inline bool set_string_index(void* ptr, const SQLTypeInfo& etype, int32_t sidx) {
+  switch (get_element_size(etype)) {
     case 1:
-      return integer_setter(*(uint8_t*)ptr, sidx, SQLTypeInfo(kTEXT, false, kENCODING_DICT));
+      return integer_setter(*(uint8_t*)ptr, sidx, etype);
       break;
     case 2:
-      return integer_setter(*(uint16_t*)ptr, sidx, SQLTypeInfo(kTEXT, false, kENCODING_DICT));
+      return integer_setter(*(uint16_t*)ptr, sidx, etype);
       break;
     case 4:
-      return integer_setter(*(int32_t*)ptr, sidx, SQLTypeInfo(kTEXT, false, kENCODING_DICT));
+      return integer_setter(*(int32_t*)ptr, sidx, etype);
       break;
     default:
       abort();
@@ -111,15 +113,14 @@ inline bool set_string_index(void* ptr, const int size, int32_t sidx) {
 }
 
 template <typename T>
-static void put_scalar(void* ndptr, const SQLTypes etype, const int esize, const T oval) {
+static void put_scalar(void* ndptr, const SQLTypeInfo& etype, const int esize, const T oval) {
   // round floating oval to nearest integer
   auto rval = oval;
   if (std::is_floating_point<T>::value)
-    if (IS_INTEGER(etype) || IS_TIME(etype) || IS_INTERVAL(etype) || IS_DECIMAL(etype))
+    if (etype.is_integer() || etype.is_time() || etype.is_timeinterval() || etype.is_decimal())
       rval = round(rval);
-  switch (etype) {
+  switch (etype.get_type()) {
     case kBOOLEAN:
-      rval = rval != 0;
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
@@ -133,16 +134,16 @@ static void put_scalar(void* ndptr, const SQLTypes etype, const int esize, const
     case kDECIMAL:
       switch (esize) {
         case 1:
-          integer_setter(*(int8_t*)ndptr, rval, SQLTypeInfo(etype, false));
+          integer_setter(*(int8_t*)ndptr, rval, etype);
           break;
         case 2:
-          integer_setter(*(int16_t*)ndptr, rval, SQLTypeInfo(etype, false));
+          integer_setter(*(int16_t*)ndptr, rval, etype);
           break;
         case 4:
-          integer_setter(*(int32_t*)ndptr, rval, SQLTypeInfo(etype, false));
+          integer_setter(*(int32_t*)ndptr, rval, etype);
           break;
         case 8:
-          integer_setter(*(int64_t*)ndptr, rval, SQLTypeInfo(etype, false));
+          integer_setter(*(int64_t*)ndptr, rval, etype);
           break;
         default:
           abort();
@@ -155,10 +156,10 @@ static void put_scalar(void* ndptr, const SQLTypes etype, const int esize, const
       *(double*)ndptr = rval;
       break;
     default:
-      if (IS_STRING(etype))
-        set_string_index(ndptr, esize, rval);
+      if (etype.is_string() && !etype.is_varlen())
+        set_string_index(ndptr, etype, rval);
       else
-        CHECK(false);
+        abort();
       break;
   }
 }
@@ -168,7 +169,11 @@ inline double decimal_to_double(const SQLTypeInfo& otype, int64_t oval) {
 }
 
 template <typename T>
-inline void put_scalar(void* ndptr, const SQLTypeInfo& ntype, const T oval, const SQLTypeInfo* otype = nullptr) {
+inline void put_scalar(void* ndptr,
+                       const SQLTypeInfo& ntype,
+                       const T oval,
+                       const std::string col_name,
+                       const SQLTypeInfo* otype = nullptr) {
   const auto& etype = ntype.is_array() ? SQLTypeInfo(ntype.get_subtype(),
                                                      ntype.get_dimension(),
                                                      ntype.get_scale(),
@@ -177,26 +182,29 @@ inline void put_scalar(void* ndptr, const SQLTypeInfo& ntype, const T oval, cons
                                                      ntype.get_comp_param(),
                                                      kNULLT)
                                        : ntype;
+  const auto esize = get_element_size(etype);
+  const auto isnull = is_null(oval, etype);
+  if (etype.get_notnull() && isnull)
+    throw std::runtime_error("NULL value on NOT NULL column '" + col_name + "'");
+
   switch (etype.get_type()) {
     case kNUMERIC:
-    case kDECIMAL: {
-      const auto esize = get_element_size(etype);
-      const auto isnull = is_null(oval, etype);
+    case kDECIMAL:
       if (otype && otype->is_decimal())
         put_scalar<int64_t>(
             ndptr,
-            kDECIMAL,
+            etype,
             esize,
             isnull ? inline_int_null_value<int64_t>() : convert_decimal_value_to_scale(oval, *otype, etype));
       else
         put_scalar<T>(
-            ndptr, kDECIMAL, esize, isnull ? inline_int_null_value<int64_t>() : oval * pow(10, etype.get_scale()));
-    } break;
+            ndptr, etype, esize, isnull ? inline_int_null_value<int64_t>() : oval * pow(10, etype.get_scale()));
+      break;
     default:
       if (otype && otype->is_decimal())
-        put_scalar<double>(ndptr, etype, decimal_to_double(*otype, oval));
+        put_scalar<double>(ndptr, etype, decimal_to_double(*otype, oval), col_name);
       else
-        put_scalar<T>(ndptr, etype.get_type(), get_element_size(etype), oval);
+        put_scalar<T>(ndptr, etype, get_element_size(etype), oval);
       break;
   }
 }

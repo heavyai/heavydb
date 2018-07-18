@@ -193,7 +193,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
 #else
                 throw std::runtime_error("UPDATE does not support cast to string.");
 #endif
-              put_scalar<int64_t>(dptr, lctype, v, &rhsType);
+              put_scalar<int64_t>(dptr, lctype, v, cd->columnName, &rhsType);
               if (lctype.is_decimal()) {
                 int64_t decimal;
                 get_scalar<int64_t>(dptr, lctype, decimal);
@@ -215,7 +215,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
 #else
                 throw std::runtime_error("UPDATE does not support cast to string.");
 #endif
-              put_scalar<double>(dptr, lctype, v);
+              put_scalar<double>(dptr, lctype, v, cd->columnName);
               if (lctype.is_integer())
                 set_minmax<int64_t>(lmin[c], lmax[c], v);
               else
@@ -228,7 +228,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
 #else
                 throw std::runtime_error("UPDATE does not support cast to string.");
 #endif
-              put_scalar<float>(dptr, lctype, v);
+              put_scalar<float>(dptr, lctype, v, cd->columnName);
               if (lctype.is_integer())
                 set_minmax<int64_t>(lmin[c], lmax[c], v);
               else
@@ -242,7 +242,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                   std::unique_lock<std::mutex> lock(temp_mutex_);
                   sidx = stringDict->getOrAdd(sval);
                 }
-                put_scalar<int32_t>(dptr, lctype, sidx);
+                put_scalar<int32_t>(dptr, lctype, sidx, cd->columnName);
                 set_minmax<int64_t>(lmin[c], lmax[c], sidx);
               } else if (sval.size() > 0) {
                 auto dval = std::atof(sval.data());
@@ -251,10 +251,10 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                 else if (lctype.is_time())
                   dval = StringToDatum(sval, lctype).timeval;
                 if (lctype.is_fp() || lctype.is_decimal()) {
-                  put_scalar<double>(dptr, lctype, dval);
+                  put_scalar<double>(dptr, lctype, dval, cd->columnName);
                   set_minmax<double>(dmin[c], dmax[c], dval);
                 } else {
-                  put_scalar<int64_t>(dptr, lctype, dval);
+                  put_scalar<int64_t>(dptr, lctype, dval, cd->columnName);
                   set_minmax<int64_t>(lmin[c], lmax[c], dval);
                 }
               } else {
