@@ -29,6 +29,7 @@ install_manifest.txt
 _build/
 build/
 build3.6/
+!docker/build/
 
 # Eclipse build files
 Debug/
