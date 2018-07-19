@@ -273,7 +273,8 @@ class MapDHandler : public MapDIf {
   void create_table(const TSessionId& session,
                     const std::string& table_name,
                     const TRowDescriptor& row_desc,
-                    const TTableType::type table_type);
+                    const TTableType::type table_type,
+                    const bool is_replicated);
   void import_table(const TSessionId& session,
                     const std::string& table_name,
                     const std::string& file_name,

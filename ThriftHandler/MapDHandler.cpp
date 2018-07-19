@@ -2715,7 +2715,8 @@ void MapDHandler::check_geospatial_files(const boost::filesystem::path file_path
 void MapDHandler::create_table(const TSessionId& session,
                                const std::string& table_name,
                                const TRowDescriptor& rd,
-                               const TTableType::type table_type) {
+                               const TTableType::type table_type,
+                               const bool is_replicated) {
   check_read_only("create_table");
 
   if (ImportHelpers::is_reserved_name(table_name)) {
@@ -2777,7 +2778,13 @@ void MapDHandler::create_table(const TSessionId& session,
     col_stmts.push_back(col_stmt);
   }
 
-  stmt.append(" (" + boost::algorithm::join(col_stmts, ", ") + ");");
+  stmt.append(" (" + boost::algorithm::join(col_stmts, ", ") + ")");
+
+  if (is_replicated) {
+    stmt.append(" WITH (PARTITIONS = 'REPLICATED')");
+  }
+
+  stmt.append(";");
 
   TQueryResult ret;
   sql_execute(ret, session, stmt, true, "", -1, -1);
@@ -2917,7 +2924,7 @@ void MapDHandler::import_geo_table(const TSessionId& session,
     const TableDescriptor* td = cat.getMetadataForTable(table_name);
     if (td == nullptr) {
       // table does not exist, so we create it to match
-      create_table(session, table_name, rd, TTableType::POLYGON);
+      create_table(session, table_name, rd, TTableType::POLYGON, true);
     } else {
       // table DOES exist, we have to verify that the structure matches
       // get column descriptors (non-system, non-deleted, logical columns only)
