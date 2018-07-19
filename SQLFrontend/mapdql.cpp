@@ -53,10 +53,9 @@
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "MapDRelease.h"
 #include "MapDServer.h"
-#include "Shared/checked_alloc.h"
-#include "Shared/mapd_shared_ptr.h"
 #include "Shared/ThriftTypesConvert.h"
 #include "Shared/checked_alloc.h"
+#include "Shared/mapd_shared_ptr.h"
 #include "gen-cpp/MapD.h"
 
 #include "linenoise.h"
@@ -413,14 +412,15 @@ std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_in
     case TDatumType::TIMESTAMP: {
       std::tm tm_struct;
       if (type_info.precision > 0) {
-        std::string t = std::to_string(datum.val.int_val);
-        int cp = t.length() - type_info.precision;
-        time_t sec = std::stoll(t.substr(0, cp));
-        t = t.substr(cp);
+        auto scale = static_cast<int64_t>(std::pow(10, type_info.precision));
+        auto dv = std::div(datum.val.int_val, scale);
+        auto modulus = (dv.rem + scale) % scale;
+        time_t sec = dv.quot - (dv.quot < 0 && modulus > 0);
         gmtime_r(&sec, &tm_struct);
         char buf[21];
         strftime(buf, 21, "%F %T.", &tm_struct);
-        return std::string(buf) += t;
+        auto subsecond = std::to_string(modulus);
+        return std::string(buf) + std::string(type_info.precision - subsecond.length(), '0') + subsecond;
       } else {
         time_t sec = datum.val.int_val;
         gmtime_r(&sec, &tm_struct);
