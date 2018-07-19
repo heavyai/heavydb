@@ -197,7 +197,19 @@ static TypePtr get_arrow_type(const SQLTypeInfo& mapd_type, const std::shared_pt
     case kDATE:
       return date32();
     case kTIMESTAMP:
-      return timestamp(TimeUnit::SECOND);
+      switch (mapd_type.get_precision()) {
+        case 0:
+          return timestamp(TimeUnit::SECOND);
+        case 3:
+          return timestamp(TimeUnit::MILLI);
+        case 6:
+          return timestamp(TimeUnit::MICRO);
+        case 9:
+          return timestamp(TimeUnit::NANO);
+        default:
+          throw std::runtime_error("Unsupported timestamp precision for Arrow result sets: " +
+                                   std::to_string(mapd_type.get_precision()));
+      }
     case kARRAY:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
