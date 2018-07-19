@@ -2716,7 +2716,7 @@ void MapDHandler::create_table(const TSessionId& session,
                                const std::string& table_name,
                                const TRowDescriptor& rd,
                                const TTableType::type table_type,
-                               const bool is_replicated) {
+                               const TCreateParams& create_params) {
   check_read_only("create_table");
 
   if (ImportHelpers::is_reserved_name(table_name)) {
@@ -2780,7 +2780,7 @@ void MapDHandler::create_table(const TSessionId& session,
 
   stmt.append(" (" + boost::algorithm::join(col_stmts, ", ") + ")");
 
-  if (is_replicated) {
+  if (create_params.is_replicated) {
     stmt.append(" WITH (PARTITIONS = 'REPLICATED')");
   }
 
@@ -2924,7 +2924,9 @@ void MapDHandler::import_geo_table(const TSessionId& session,
     const TableDescriptor* td = cat.getMetadataForTable(table_name);
     if (td == nullptr) {
       // table does not exist, so we create it to match
-      create_table(session, table_name, rd, TTableType::POLYGON, true);
+      TCreateParams create_params;
+      create_params.is_replicated = false;
+      create_table(session, table_name, rd, TTableType::POLYGON, create_params);
     } else {
       // table DOES exist, we have to verify that the structure matches
       // get column descriptors (non-system, non-deleted, logical columns only)
@@ -3628,6 +3630,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
           _was_geo_copy_from = copy_stmt->was_geo_copy_from();
           copy_stmt->get_geo_copy_from_payload(
               _geo_copy_from_table, _geo_copy_from_file_name, _geo_copy_from_copy_params);
+
+          // @TODO Get and store replicated (create_params)
         }
       } else {
         const Parser::DMLStmt* dml;

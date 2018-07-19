@@ -187,6 +187,10 @@ struct TCopyParams {
   20: bool sanitize_column_names=true
 }
 
+struct TCreateParams {
+  1: bool is_replicated
+}
+
 struct TDetectResult {
   1: TRowSet row_set
   2: TCopyParams copy_params
@@ -527,7 +531,7 @@ service MapD {
   void load_table_binary_arrow(1: TSessionId session, 2: string table_name, 3: binary arrow_stream) throws (1: TMapDException e)
   void load_table(1: TSessionId session, 2: string table_name, 3: list<TStringRow> rows) throws (1: TMapDException e)
   TDetectResult detect_column_types(1: TSessionId session, 2: string file_name, 3: TCopyParams copy_params) throws (1: TMapDException e)
-  void create_table(1: TSessionId session, 2: string table_name, 3: TRowDescriptor row_desc, 4: TTableType table_type=TTableType.DELIMITED, 5: bool is_replicated) throws (1: TMapDException e)
+  void create_table(1: TSessionId session, 2: string table_name, 3: TRowDescriptor row_desc, 4: TTableType table_type=TTableType.DELIMITED, 5: TCreateParams create_params) throws (1: TMapDException e)
   void import_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: TCopyParams copy_params) throws (1: TMapDException e)
   void import_geo_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: TCopyParams copy_params, 5: TRowDescriptor row_desc) throws (1: TMapDException e)
   TImportStatus import_table_status(1: TSessionId session, 2: string import_id) throws (1: TMapDException e)
