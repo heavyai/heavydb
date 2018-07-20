@@ -233,8 +233,6 @@ ExecutionResult run_select_query(
 
 TExecuteMode::type to_execute_mode(ExecutorDeviceType device_type) {
   switch (device_type) {
-    case ExecutorDeviceType::Hybrid:
-      return TExecuteMode::type::HYBRID;
     case ExecutorDeviceType::GPU:
       return TExecuteMode::type::GPU;
     case ExecutorDeviceType::CPU:
@@ -242,7 +240,7 @@ TExecuteMode::type to_execute_mode(ExecutorDeviceType device_type) {
   }
 
   CHECK(false);
-  return TExecuteMode::type::HYBRID;
+  return TExecuteMode::type::GPU;
 }
 
 std::shared_ptr<ResultSet> run_sql_distributed(

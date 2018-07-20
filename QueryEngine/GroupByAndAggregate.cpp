@@ -573,20 +573,19 @@ int64_t QueryExecutionContext::allocateCountDistinctSet() {
   return reinterpret_cast<int64_t>(count_distinct_set);
 }
 
-RowSetPtr QueryExecutionContext::getRowSet(const RelAlgExecutionUnit& ra_exe_unit,
-                                           const QueryMemoryDescriptor& query_mem_desc,
-                                           const bool was_auto_device) const {
+RowSetPtr QueryExecutionContext::getRowSet(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const QueryMemoryDescriptor& query_mem_desc) const {
   std::vector<std::pair<ResultPtr, std::vector<size_t>>> results_per_sm;
   CHECK_EQ(num_buffers_, group_by_buffers_.size());
   if (device_type_ == ExecutorDeviceType::CPU) {
     CHECK_EQ(size_t(1), num_buffers_);
-    return groupBufferToResults(0, ra_exe_unit.target_exprs, was_auto_device);
+    return groupBufferToResults(0, ra_exe_unit.target_exprs);
   }
   size_t step{query_mem_desc_.threadsShareMemory() ? executor_->blockSize() : 1};
   for (size_t i = 0; i < group_by_buffers_.size(); i += step) {
-    results_per_sm.emplace_back(
-        groupBufferToResults(i, ra_exe_unit.target_exprs, was_auto_device),
-        std::vector<size_t>{});
+    results_per_sm.emplace_back(groupBufferToResults(i, ra_exe_unit.target_exprs),
+                                std::vector<size_t>{});
   }
   CHECK(device_type_ == ExecutorDeviceType::GPU);
   return executor_->reduceMultiDeviceResults(

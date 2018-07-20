@@ -17,7 +17,7 @@
 #ifndef QUERYENGINE_COMPILATIONOPTIONS_H
 #define QUERYENGINE_COMPILATIONOPTIONS_H
 
-enum class ExecutorDeviceType { CPU, GPU, Hybrid };
+enum class ExecutorDeviceType { CPU, GPU };
 
 enum class ExecutorOptLevel { Default, LoopStrengthReduction };
 

@@ -36,8 +36,7 @@ enum TEncodingType {
 }
 
 enum TExecuteMode {
-  HYBRID,
-  GPU,
+  GPU = 1,
   CPU
 }
 

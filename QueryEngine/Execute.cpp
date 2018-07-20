@@ -918,11 +918,8 @@ std::unordered_set<int> get_available_gpus(const Catalog_Namespace::Catalog& cat
 size_t get_context_count(const ExecutorDeviceType device_type,
                          const size_t cpu_count,
                          const size_t gpu_count) {
-  return device_type == ExecutorDeviceType::GPU
-             ? gpu_count
-             : device_type == ExecutorDeviceType::Hybrid
-                   ? std::max(static_cast<size_t>(cpu_count), gpu_count)
-                   : static_cast<size_t>(cpu_count);
+  return device_type == ExecutorDeviceType::GPU ? gpu_count
+                                                : static_cast<size_t>(cpu_count);
 }
 
 namespace {
@@ -1118,18 +1115,12 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
       plan_state_->target_exprs_.push_back(target_expr);
     }
 
-    std::condition_variable scheduler_cv;
-    std::mutex scheduler_mutex;
-    auto dispatch = [&execution_dispatch,
-                     &available_cpus,
-                     &available_gpus,
-                     &options,
-                     &scheduler_mutex,
-                     &scheduler_cv](const ExecutorDeviceType chosen_device_type,
-                                    int chosen_device_id,
-                                    const FragmentsList& frag_list,
-                                    const size_t ctx_idx,
-                                    const int64_t rowid_lookup_key) {
+    auto dispatch = [&execution_dispatch, &options](
+                        const ExecutorDeviceType chosen_device_type,
+                        int chosen_device_id,
+                        const FragmentsList& frag_list,
+                        const size_t ctx_idx,
+                        const int64_t rowid_lookup_key) {
       INJECT_TIMER(execution_dispatch_run);
       execution_dispatch.run(chosen_device_type,
                              chosen_device_id,
@@ -1137,18 +1128,6 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                              frag_list,
                              ctx_idx,
                              rowid_lookup_key);
-      if (execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid) {
-        std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
-        if (chosen_device_type == ExecutorDeviceType::CPU) {
-          ++available_cpus;
-        } else {
-          CHECK(chosen_device_type == ExecutorDeviceType::GPU);
-          auto it_ok = available_gpus.insert(chosen_device_id);
-          CHECK(it_ok.second);
-        }
-        scheduler_lock.unlock();
-        scheduler_cv.notify_one();
-      }
     };
 
     QueryFragmentDescriptor fragment_descriptor(ra_exe_unit, query_infos, this);
@@ -1162,8 +1141,6 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                         is_agg,
                         context_count,
                         fragment_descriptor,
-                        scheduler_cv,
-                        scheduler_mutex,
                         available_gpus,
                         available_cpus);
     }
@@ -1365,11 +1342,7 @@ RowSetPtr Executor::collectAllDeviceResults(
       continue;
     }
     execution_dispatch.getFragmentResults().emplace_back(
-        query_exe_context->getRowSet(
-            ra_exe_unit,
-            query_mem_desc,
-            execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid),
-        std::vector<size_t>{});
+        query_exe_context->getRowSet(ra_exe_unit, query_mem_desc), std::vector<size_t>{});
   }
   auto& result_per_device = execution_dispatch.getFragmentResults();
   if (result_per_device.empty() &&
@@ -1464,8 +1437,6 @@ void Executor::dispatchFragments(
     const bool is_agg,
     const size_t context_count,
     QueryFragmentDescriptor& fragment_descriptor,
-    std::condition_variable& scheduler_cv,
-    std::mutex& scheduler_mutex,
     std::unordered_set<int>& available_gpus,
     int& available_cpus) {
   std::vector<std::future<void>> query_threads;
@@ -1540,23 +1511,6 @@ void Executor::dispatchFragments(
       auto chosen_device_type = device_type;
       auto chosen_device_id = fragment_descriptor.getDeviceForFragment(i);
       CHECK_GE(chosen_device_id, 0);
-
-      if (device_type == ExecutorDeviceType::Hybrid) {
-        std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
-        scheduler_cv.wait(scheduler_lock, [&available_cpus, &available_gpus] {
-          return available_cpus || !available_gpus.empty();
-        });
-        if (!available_gpus.empty()) {
-          chosen_device_type = ExecutorDeviceType::GPU;
-          auto device_id_it = available_gpus.begin();
-          chosen_device_id = *device_id_it;
-          available_gpus.erase(device_id_it);
-        } else {
-          chosen_device_type = ExecutorDeviceType::CPU;
-          CHECK_GT(available_cpus, 0);
-          --available_cpus;
-        }
-      }
 
       query_threads.push_back(std::async(std::launch::async,
                                          dispatch,
@@ -2205,7 +2159,6 @@ int32_t Executor::executePlanWithGroupBy(
     Data_Namespace::DataMgr* data_mgr,
     const int device_id,
     const int64_t scan_limit,
-    const bool was_auto_device,
     const uint32_t start_rowid,
     const uint32_t num_tables,
     RenderInfo* render_info) {
@@ -2294,8 +2247,7 @@ int32_t Executor::executePlanWithGroupBy(
       !query_exe_context->query_mem_desc_.usesCachedContext() &&
       !render_allocator_map_ptr) {
     CHECK(!query_exe_context->query_mem_desc_.sortOnGpu());
-    results =
-        query_exe_context->getResult(ra_exe_unit, outer_tab_frag_ids, was_auto_device);
+    results = query_exe_context->getResult(ra_exe_unit, outer_tab_frag_ids);
     if (auto rows = boost::get<RowSetPtr>(&results)) {
       (*rows)->holdLiterals(hoist_buf);
     }
@@ -2858,7 +2810,6 @@ Executor::JoinInfo Executor::chooseJoinType(
     const RelAlgExecutionUnit& ra_exe_unit,
     const ExecutorDeviceType device_type,
     ColumnCacheMap& column_cache) {
-  CHECK(device_type != ExecutorDeviceType::Hybrid);
   std::string hash_join_fail_reason{"No equijoin expression found"};
 
   const MemoryLevel memory_level{device_type == ExecutorDeviceType::GPU

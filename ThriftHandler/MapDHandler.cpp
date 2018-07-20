@@ -158,9 +158,6 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     LOG(ERROR) << "This build isn't CUDA enabled, will run on CPU";
     cpu_mode_only_ = true;
 #endif  // HAVE_CUDA
-  } else if (executor_device == "hybrid") {
-    executor_device_type_ = ExecutorDeviceType::Hybrid;
-    cpu_mode_only_ = false;
   } else {
     executor_device_type_ = ExecutorDeviceType::CPU;
     cpu_mode_only_ = true;
@@ -204,8 +201,6 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     case ExecutorDeviceType::CPU:
       LOG(INFO) << "Started in CPU mode" << std::endl;
       break;
-    case ExecutorDeviceType::Hybrid:
-      LOG(INFO) << "Started in Hybrid mode" << std::endl;
   }
   SysCatalog::instance().init(base_data_path_,
                               data_mgr_,
@@ -3505,15 +3500,6 @@ void MapDHandler::set_execution_mode_nolock(Catalog_Namespace::SessionInfo* sess
       session_ptr->set_executor_device_type(ExecutorDeviceType::CPU);
       LOG(INFO) << "User " << user_name << " sets CPU mode.";
       break;
-    case TExecuteMode::HYBRID:
-      if (cpu_mode_only_) {
-        TMapDException e;
-        e.error_msg =
-            "Cannot switch to Hybrid mode in a server started in CPU-only mode.";
-        throw e;
-      }
-      session_ptr->set_executor_device_type(ExecutorDeviceType::Hybrid);
-      LOG(INFO) << "User " << user_name << " sets HYBRID mode.";
   }
 }
 

@@ -121,16 +121,13 @@ class QueryExecutionContext : boost::noncopyable {
                         RenderInfo*);
 
   ResultPtr getResult(const RelAlgExecutionUnit& ra_exe_unit,
-                      const std::vector<size_t>& outer_tab_frag_ids,
-                      const bool was_auto_device) const;
+                      const std::vector<size_t>& outer_tab_frag_ids) const;
 
   // TOOD(alex): get rid of targets parameter
   RowSetPtr getRowSet(const RelAlgExecutionUnit& ra_exe_unit,
-                      const QueryMemoryDescriptor& query_mem_desc,
-                      const bool was_auto_device) const;
+                      const QueryMemoryDescriptor& query_mem_desc) const;
   RowSetPtr groupBufferToResults(const size_t i,
-                                 const std::vector<Analyzer::Expr*>& targets,
-                                 const bool was_auto_device) const;
+                                 const std::vector<Analyzer::Expr*>& targets) const;
 
   IterTabPtr getIterTab(const std::vector<Analyzer::Expr*>& targets,
                         const ssize_t frag_idx) const;

@@ -1293,8 +1293,7 @@ int main(int argc, char** argv) {
       context.execution_mode = TExecuteMode::GPU;
       (void)thrift_with_retry(kSET_EXECUTION_MODE, context, nullptr);
     } else if (!strncmp(line, "\\hybrid", 5)) {
-      context.execution_mode = TExecuteMode::HYBRID;
-      (void)thrift_with_retry(kSET_EXECUTION_MODE, context, nullptr);
+      std::cout << "Hybrid execution mode has been deprecated." << std::endl;
     } else if (!strncmp(line, "\\version", 8)) {
       if (thrift_with_retry(kGET_VERSION, context, nullptr)) {
         std::cout << "MapD Server Version: " << context.version << std::endl;

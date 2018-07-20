@@ -949,8 +949,6 @@ class Executor {
       const bool is_agg,
       const size_t context_count,
       QueryFragmentDescriptor& fragment_descriptor,
-      std::condition_variable& scheduler_cv,
-      std::mutex& scheduler_mutex,
       std::unordered_set<int>& available_gpus,
       int& available_cpus);
 
@@ -1044,7 +1042,6 @@ class Executor {
                                  Data_Namespace::DataMgr*,
                                  const int device_id,
                                  const int64_t limit,
-                                 const bool was_auto_device,
                                  const uint32_t start_rowid,
                                  const uint32_t num_tables,
                                  RenderInfo* render_info);

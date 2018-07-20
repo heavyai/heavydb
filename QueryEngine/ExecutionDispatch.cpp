@@ -267,7 +267,6 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
     *error_code_ = ERR_OUT_OF_GPU_MEM;
     return;
   }
-  CHECK(chosen_device_type != ExecutorDeviceType::Hybrid);
   const CompilationResult& compilation_result =
       chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu_
                                                     : compilation_result_cpu_;
@@ -362,25 +361,23 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                                do_render ? render_info_ : nullptr);
   } else {
     OOM_TRACE_PUSH();
-    err =
-        executor_->executePlanWithGroupBy(ra_exe_unit_,
-                                          compilation_result,
-                                          co_.hoist_literals_,
-                                          device_results,
-                                          chosen_device_type,
-                                          fetch_result.col_buffers,
-                                          outer_tab_frag_ids,
-                                          query_exe_context,
-                                          fetch_result.num_rows,
-                                          fetch_result.frag_offsets,
-                                          getFragmentStride(frag_list),
-                                          &cat_.get_dataMgr(),
-                                          chosen_device_id,
-                                          ra_exe_unit_.scan_limit,
-                                          co_.device_type_ == ExecutorDeviceType::Hybrid,
-                                          start_rowid,
-                                          ra_exe_unit_.input_descs.size(),
-                                          do_render ? render_info_ : nullptr);
+    err = executor_->executePlanWithGroupBy(ra_exe_unit_,
+                                            compilation_result,
+                                            co_.hoist_literals_,
+                                            device_results,
+                                            chosen_device_type,
+                                            fetch_result.col_buffers,
+                                            outer_tab_frag_ids,
+                                            query_exe_context,
+                                            fetch_result.num_rows,
+                                            fetch_result.frag_offsets,
+                                            getFragmentStride(frag_list),
+                                            &cat_.get_dataMgr(),
+                                            chosen_device_id,
+                                            ra_exe_unit_.scan_limit,
+                                            start_rowid,
+                                            ra_exe_unit_.input_descs.size(),
+                                            do_render ? render_info_ : nullptr);
   }
   if (auto rows_pp = boost::get<RowSetPtr>(&device_results)) {
     if (auto& rows_ptr = *rows_pp) {
@@ -485,14 +482,11 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
             actual_min_byte_width);
   };
 
-  if (co_.device_type_ == ExecutorDeviceType::CPU ||
-      co_.device_type_ == ExecutorDeviceType::Hybrid) {
+  if (co_.device_type_ == ExecutorDeviceType::CPU) {
     compile_on_cpu();
   }
 
-  if (co_.device_type_ == ExecutorDeviceType::GPU ||
-      (co_.device_type_ == ExecutorDeviceType::Hybrid &&
-       cat_.get_dataMgr().gpusPresent())) {
+  if (co_.device_type_ == ExecutorDeviceType::GPU) {
     const CompilationOptions co_gpu{ExecutorDeviceType::GPU,
                                     co_.hoist_literals_,
                                     co_.opt_level_,

@@ -540,7 +540,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                    1,
                                    {});
   CHECK_GE(*error_code, 0);
-  return query_exe_context->groupBufferToResults(0, target_exprs, false);
+  return query_exe_context->groupBufferToResults(0, target_exprs);
 }
 
 RowSetPtr Executor::executeSortPlan(const Planner::Sort* sort_plan,

@@ -93,8 +93,7 @@ const std::vector<const int8_t*>& QueryExecutionContext::getColumnFrag(
 
 RowSetPtr QueryExecutionContext::groupBufferToResults(
     const size_t i,
-    const std::vector<Analyzer::Expr*>& targets,
-    const bool was_auto_device) const {
+    const std::vector<Analyzer::Expr*>& targets) const {
   if (query_mem_desc_.interleavedBins(device_type_)) {
     return groupBufferToDeinterleavedResults(i);
   }

@@ -292,13 +292,13 @@ IterTabPtr QueryExecutionContext::getIterTab(const std::vector<Analyzer::Expr*>&
   return table;
 }
 
-ResultPtr QueryExecutionContext::getResult(const RelAlgExecutionUnit& ra_exe_unit,
-                                           const std::vector<size_t>& outer_tab_frag_ids,
-                                           const bool was_auto_device) const {
+ResultPtr QueryExecutionContext::getResult(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<size_t>& outer_tab_frag_ids) const {
   if (contains_iter_expr(ra_exe_unit.target_exprs)) {
     CHECK_EQ(size_t(1), outer_tab_frag_ids.size());
     return getIterTab(ra_exe_unit.orig_target_exprs, outer_tab_frag_ids[0]);
   } else {
-    return getRowSet(ra_exe_unit, query_mem_desc_, was_auto_device);
+    return getRowSet(ra_exe_unit, query_mem_desc_);
   }
 }
