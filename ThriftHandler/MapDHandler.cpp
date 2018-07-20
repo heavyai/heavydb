@@ -1290,15 +1290,10 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog* cat,
   col_type.col_type.encoding = encoding_to_thrift(cd->columnType);
   col_type.col_type.nullable = !cd->columnType.get_notnull();
   col_type.col_type.is_array = cd->columnType.get_type() == kARRAY;
+  col_type.col_type.size = cd->columnType.get_size();
   if (IS_GEO(cd->columnType.get_type())) {
     fixup_geo_column_descriptor(
         col_type, cd->columnType.get_subtype(), cd->columnType.get_output_srid());
-  } else if (cd->columnType.get_type() == kARRAY) {
-    // TODO: pass the array_size in a separate TColumnType field
-    // col_type.col_type.array_size = cd->columnType.get_size();
-    col_type.col_type.precision = cd->columnType.get_precision();
-    // TODO: get back to setting scale properly once size is passed through its own field
-    col_type.col_type.scale = cd->columnType.get_size();
   } else {
     col_type.col_type.precision = cd->columnType.get_precision();
     col_type.col_type.scale = cd->columnType.get_scale();

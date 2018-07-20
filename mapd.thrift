@@ -82,7 +82,8 @@ struct TTypeInfo {
   3: bool is_array,
   5: i32 precision,
   6: i32 scale,
-  7: i32 comp_param
+  7: i32 comp_param,
+  8: i32 size
 }
 
 struct TColumnType {

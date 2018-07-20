@@ -854,7 +854,7 @@ SQLException - if a database access error occurs
       throw new SQLException("get_tables failed " + ex.toString());
     }
 
-    TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
+    TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0, -1);
     TColumnType columns[] = {
       createTColumnType("TABLE_CAT", new TTypeInfo(strTTI)),
       createTColumnType("TABLE_SCHEM", new TTypeInfo(strTTI)),
@@ -935,7 +935,7 @@ SQLException - if a database access error occurs
     }
 
     // process info from databses into the resultset, then place in regular return from MapD
-    TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
+    TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0, -1);
     TColumnType columns[] = {
       createTColumnType("TABLE_SCHEM", new TTypeInfo(strTTI)),
       createTColumnType("TABLE_CATALOG", new TTypeInfo(strTTI))
@@ -986,7 +986,7 @@ SQLException - if a database access error occurs
   public ResultSet getTableTypes() throws SQLException {
     MAPDLOGGER.debug("Entered");
 
-    TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
+    TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0, -1);
     TColumnType columns[] = {
       createTColumnType("TABLE_TYPE", new TTypeInfo(strTTI))
     };
@@ -1087,9 +1087,9 @@ SQLException - if a database access error occurs
     MAPDLOGGER.debug("TablePattern " + tableNamePattern + " modifiedColumnPattern " + modifiedColumnPattern);
 
     // declare the columns in the result set
-    TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
-    TTypeInfo intTTI = new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false, 0, 0, 0);
-    TTypeInfo smallIntTTI = new TTypeInfo(TDatumType.SMALLINT, TEncodingType.NONE, false, false, 0, 0, 0);
+    TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0, -1);
+    TTypeInfo intTTI = new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false, 0, 0, 0, 4);
+    TTypeInfo smallIntTTI = new TTypeInfo(TDatumType.SMALLINT, TEncodingType.NONE, false, false, 0, 0, 0, 2);
     TColumnType columns[] = {
       createTColumnType("TABLE_CAT", new TTypeInfo(strTTI)),
       createTColumnType("TABLE_SCHEM", new TTypeInfo(strTTI)),
@@ -1416,10 +1416,10 @@ SQLException - if a database access error occurs
     MAPDLOGGER.debug("Entered");
 
     // declare the columns in the result set
-    TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
-    TTypeInfo intTTI = new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false, 0, 0, 0);
-    TTypeInfo smallIntTTI = new TTypeInfo(TDatumType.SMALLINT, TEncodingType.NONE, false, false, 0, 0, 0);
-    TTypeInfo boolTTI = new TTypeInfo(TDatumType.BOOL, TEncodingType.NONE, false, false, 0, 0, 0);
+    TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0, -1);
+    TTypeInfo intTTI = new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false, 0, 0, 0, 4);
+    TTypeInfo smallIntTTI = new TTypeInfo(TDatumType.SMALLINT, TEncodingType.NONE, false, false, 0, 0, 0, 2);
+    TTypeInfo boolTTI = new TTypeInfo(TDatumType.BOOL, TEncodingType.NONE, false, false, 0, 0, 0, 1);
     TColumnType columns[] = {
       createTColumnType("TYPE_NAME", new TTypeInfo(strTTI)),
       createTColumnType("DATA_TYPE", new TTypeInfo(intTTI)),

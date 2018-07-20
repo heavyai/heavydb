@@ -229,8 +229,7 @@ inline SQLTypeInfo type_info_from_thrift(const TTypeInfo& thrift_ti) {
                            thrift_to_encoding(thrift_ti.encoding),
                            thrift_ti.comp_param,
                            ti);
-    // TODO: array size should be passed in the to-be-added thrift_ti.array_size
-    ati.set_size(thrift_ti.scale);
+    ati.set_size(thrift_ti.size);
     return ati;
   }
   return SQLTypeInfo(ti,
