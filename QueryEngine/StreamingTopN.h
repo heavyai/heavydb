@@ -25,6 +25,7 @@
 #ifndef QUERYENGINE_STREAMINGTOPN_H
 #define QUERYENGINE_STREAMINGTOPN_H
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
