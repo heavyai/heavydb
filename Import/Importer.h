@@ -22,9 +22,14 @@
 #ifndef _IMPORTER_H_
 #define _IMPORTER_H_
 
+#include "../Shared/fixautotools.h"
+
 #include <gdal.h>
 #include <glog/logging.h>
 #include <ogrsf_frmts.h>
+
+#include "../Shared/fixautotools.h"
+
 #include <boost/filesystem.hpp>
 #include <boost/noncopyable.hpp>
 #include <boost/tokenizer.hpp>
@@ -41,7 +46,6 @@
 #include "../Fragmenter/Fragmenter.h"
 #include "../Shared/ShapeDrawData.h"
 #include "../Shared/checked_alloc.h"
-#include "../Shared/fixautotools.h"
 
 // Some builds of boost::geometry require iostream, but don't explicitly include it.
 // Placing in own section to ensure it's included after iostream.

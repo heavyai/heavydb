@@ -24,9 +24,14 @@
 #ifndef CALCITE_H
 #define CALCITE_H
 
+#include "Shared/fixautotools.h"
+
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TSocket.h>
 #include <thrift/transport/TTransportUtils.h>
+
+#include "Shared/fixautotools.h"
+
 #include <thread>
 #include "gen-cpp/CalciteServer.h"
 #include "rapidjson/document.h"
