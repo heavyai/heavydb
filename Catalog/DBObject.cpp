@@ -181,7 +181,7 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
       objectKey_.dbId = catalog.get_currentDB().dbId;
 
       if (!getName().empty()) {
-        auto table = catalog.getMetadataForTable(getName());
+        auto table = catalog.getMetadataForTable(getName(), false /* do not populate fragments */);
         if (!table) {
           throw std::runtime_error("Failure generating DB object key. Table/View " +
                                    getName() + " does not exist.");

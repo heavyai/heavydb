@@ -1153,6 +1153,14 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
       } else {
         object_to_find = DBObject(std::stoi(objectName), object_type);
       }
+    } else if ((object_type == TableDBObjectType || object_type == ViewDBObjectType) && !objectName.empty()) {
+      // special handling for view / table
+      auto& cat = session_info_ptr->get_catalog();
+      auto td = cat.getMetadataForTable(objectName, false);
+      if (td) {
+        object_type = td->isView ? ViewDBObjectType : TableDBObjectType;
+        object_to_find = DBObject(objectName, object_type);
+      }
     }
     object_to_find.loadKey(session_info_ptr->get_catalog());
   } catch (const std::exception&) {
@@ -1333,7 +1341,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
                                          const std::string& table_name,
                                          const bool get_system,
                                          const bool get_physical) {
-  const auto session_info = get_session(session);
+  auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
   auto td = cat.getMetadataForTable(
       table_name,
@@ -1343,18 +1351,25 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
   }
   if (td->isView) {
     try {
-      const auto query_ra = parse_to_ra(td->viewSQL, session_info);
-      TQueryResult result;
-      execute_rel_alg(result,
-                      query_ra,
-                      true,
-                      session_info,
-                      ExecutorDeviceType::CPU,
-                      -1,
-                      -1,
-                      false,
-                      true);
-      _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
+      if (!SysCatalog::instance().arePrivilegesOn() ||
+          hasTableAccessPrivileges(td, session)) {
+
+        session_info.make_superuser();
+        const auto query_ra = parse_to_ra(td->viewSQL, session_info);
+        TQueryResult result;
+        execute_rel_alg(result,
+                        query_ra,
+                        true,
+                        session_info,
+                        ExecutorDeviceType::CPU,
+                        -1,
+                        -1,
+                        false,
+                        true);
+        _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
+      } else {
+        THROW_MAPD_EXCEPTION("User has no access privileges to table " + table_name);
+      }
     } catch (std::exception& e) {
       TColumnType tColumnType;
       tColumnType.col_name = "BROKEN_VIEW_PLEASE_FIX";
@@ -1445,7 +1460,7 @@ bool MapDHandler::hasTableAccessPrivileges(const TableDescriptor* td,
     return true;
   }
 
-  DBObject dbObject(td->tableName, TableDBObjectType);
+  DBObject dbObject(td->tableName, td->isView ? ViewDBObjectType : TableDBObjectType);
   dbObject.loadKey(cat);
   std::vector<DBObject> privObjects = {dbObject};
 
