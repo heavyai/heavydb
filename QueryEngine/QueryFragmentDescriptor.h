@@ -26,9 +26,10 @@
 #include <deque>
 #include <map>
 #include <memory>
-#include <unordered_map>
+#include <set>
 #include <vector>
 
+#include <glog/logging.h>
 #include "CompilationOptions.h"
 
 namespace Fragmenter_Namespace {
@@ -50,54 +51,70 @@ using TableFragments = std::deque<Fragmenter_Namespace::FragmentInfo>;
 class QueryFragmentDescriptor {
  public:
   QueryFragmentDescriptor(const RelAlgExecutionUnit& ra_exe_unit,
-                          const std::vector<InputTableInfo>& query_infos,
-                          Executor* executor);
+                          const std::vector<InputTableInfo>& query_infos);
 
-  void buildFragmentDeviceMap(const RelAlgExecutionUnit& ra_exe_unit,
+  void buildFragmentKernelMap(const RelAlgExecutionUnit& ra_exe_unit,
                               const std::vector<uint64_t>& frag_offsets,
                               const int device_count,
                               const ExecutorDeviceType& device_type,
                               const bool enable_multifrag_kernels,
-                              const bool enable_inner_join_fragment_skipping);
+                              const bool enable_inner_join_fragment_skipping,
+                              Executor* executor);
 
-  template <typename FUNCTOR_TYPE>
-  void assignFragsToMultiDispatch(FUNCTOR_TYPE f) const {
-    for (const auto& kv : fragments_per_device_) {
-      f(kv.first, kv.second, rowid_lookup_key_);
+  template <typename DISPATCH_FCN>
+  void assignFragsToMultiDispatch(DISPATCH_FCN f) const {
+    for (const auto& kv : kernels_per_device_) {
+      CHECK_EQ(kv.second.size(), size_t(1));
+      const auto kernel_id = *kv.second.begin();
+      CHECK_LT(kernel_id, fragments_per_kernel_.size());
+
+      f(kv.first, fragments_per_kernel_[kernel_id], rowid_lookup_key_);
     }
   }
 
-  template <typename FUNCTOR_TYPE>
-  void assignFragsToDispatch(FUNCTOR_TYPE f) const {
-    f(fragments_per_device_, outer_fragments_to_device_id_, rowid_lookup_key_);
+  template <typename DISPATCH_FCN>
+  void assignFragsToKernelDispatch(DISPATCH_FCN f,
+                                   const RelAlgExecutionUnit& ra_exe_unit) const {
+    for (const auto& kv : kernels_per_device_) {
+      for (const auto& kernel_id : kv.second) {
+        CHECK_LT(kernel_id, fragments_per_kernel_.size());
+
+        const auto frag_list = fragments_per_kernel_[kernel_id];
+        f(kv.first, frag_list, rowid_lookup_key_);
+
+        if (terminateDispatchMaybe(ra_exe_unit, kernel_id)) {
+          return;
+        }
+      }
+    }
   }
 
-  int64_t getRowIdLookupKey() const { return rowid_lookup_key_; }
-
-  size_t getOuterFragmentsSize() const { return outer_fragments_size_; }
   bool shouldCheckWorkUnitWatchdog() const {
-    return getRowIdLookupKey() < 0 && fragments_per_device_.size() > 0;
+    return rowid_lookup_key_ < 0 && fragments_per_kernel_.size() > 0;
   }
 
-  const std::pair<bool, std::shared_ptr<const FragmentsList>> getFragListForIndex(
-      const size_t i) const {
-    const auto frag_itr = fragments_per_device_.find(i);
-    if (frag_itr == fragments_per_device_.end()) {
-      return std::make_pair(false, nullptr);
-    } else {
-      return std::make_pair(true,
-                            std::make_shared<const FragmentsList>(frag_itr->second));
-    }
-  }
+ protected:
+  size_t outer_fragments_size_ = 0;
+  int64_t rowid_lookup_key_ = -1;
 
-  const int getDeviceForFragment(const size_t i) const {
-    const auto device_itr = outer_fragments_to_device_id_.find(i);
-    if (device_itr == outer_fragments_to_device_id_.end()) {
-      return -1;
-    } else {
-      return device_itr->second;
-    }
-  }
+  std::map<int, const TableFragments*> selected_tables_fragments_;
+
+  std::vector<FragmentsList> fragments_per_kernel_;
+  std::map<int, std::set<size_t>> kernels_per_device_;
+  std::vector<size_t> outer_fragment_tuple_sizes_;
+
+  void buildFragmentPerKernelMap(const RelAlgExecutionUnit& ra_exe_unit,
+                                 const std::vector<uint64_t>& frag_offsets,
+                                 const int device_count,
+                                 const ExecutorDeviceType& device_type,
+                                 Executor* executor);
+
+  void buildMultifragKernelMap(const RelAlgExecutionUnit& ra_exe_unit,
+                               const std::vector<uint64_t>& frag_offsets,
+                               const int device_count,
+                               const ExecutorDeviceType& device_type,
+                               const bool enable_inner_join_fragment_skipping,
+                               Executor* executor);
 
   const size_t getOuterFragmentTupleSize(const size_t frag_index) const {
     if (frag_index < outer_fragment_tuple_sizes_.size()) {
@@ -107,27 +124,8 @@ class QueryFragmentDescriptor {
     }
   }
 
- protected:
-  size_t outer_fragments_size_ = 0;
-  int64_t rowid_lookup_key_ = -1;
-
-  std::map<int, const TableFragments*> selected_tables_fragments_;
-  std::unordered_map<int, FragmentsList> fragments_per_device_;
-  std::unordered_map<int, int> outer_fragments_to_device_id_;
-  std::vector<size_t> outer_fragment_tuple_sizes_;
-
-  Executor* executor_;
-
-  void buildFragmentPerKernelMap(const RelAlgExecutionUnit& ra_exe_unit,
-                                 const std::vector<uint64_t>& frag_offsets,
-                                 const int device_count,
-                                 const ExecutorDeviceType& device_type);
-
-  void buildMultifragKernelMap(const RelAlgExecutionUnit& ra_exe_unit,
-                               const std::vector<uint64_t>& frag_offsets,
-                               const int device_count,
-                               const ExecutorDeviceType& device_type,
-                               const bool enable_inner_join_fragment_skipping);
+  bool terminateDispatchMaybe(const RelAlgExecutionUnit& ra_exe_unit,
+                              const size_t kernel_id) const;
 };
 
 #endif  // QUERYENGINE_QUERYFRAGMENTDESCRIPTOR_H

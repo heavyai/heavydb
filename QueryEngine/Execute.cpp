@@ -971,21 +971,6 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
   }
 }
 
-bool is_sample_query(const RelAlgExecutionUnit& ra_exe_unit) {
-  const bool result = ra_exe_unit.input_descs.size() == 1 &&
-                      ra_exe_unit.simple_quals.empty() && ra_exe_unit.quals.empty() &&
-                      ra_exe_unit.sort_info.order_entries.empty() &&
-                      ra_exe_unit.scan_limit;
-  if (result) {
-    CHECK(ra_exe_unit.join_type == JoinType::INVALID);
-    CHECK(ra_exe_unit.inner_join_quals.empty());
-    CHECK(ra_exe_unit.outer_join_quals.empty());
-    CHECK_EQ(size_t(1), ra_exe_unit.groupby_exprs.size());
-    CHECK(!ra_exe_unit.groupby_exprs.front());
-  }
-  return result;
-}
-
 }  // namespace
 
 bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos,
@@ -1130,7 +1115,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                              rowid_lookup_key);
     };
 
-    QueryFragmentDescriptor fragment_descriptor(ra_exe_unit, query_infos, this);
+    QueryFragmentDescriptor fragment_descriptor(ra_exe_unit, query_infos);
 
     const QueryMemoryDescriptor& query_mem_desc =
         execution_dispatch.getQueryMemoryDescriptor();
@@ -1450,26 +1435,32 @@ void Executor::dispatchFragments(
   const bool allow_multifrag =
       eo.allow_multifrag &&
       (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext() ||
+
        query_mem_desc.getGroupByColRangeType() == GroupByColRangeType::MultiCol ||
        query_mem_desc.getGroupByColRangeType() == GroupByColRangeType::Projection);
+  const bool use_multifrag_kernel =
+      (device_type == ExecutorDeviceType::GPU) && allow_multifrag && is_agg;
 
-  if ((device_type == ExecutorDeviceType::GPU) && allow_multifrag && is_agg) {
+  const auto device_count = device_type == ExecutorDeviceType::CPU
+                                ? 1
+                                : catalog_->get_dataMgr().cudaMgr_->getDeviceCount();
+  CHECK_GT(device_count, 0);
+
+  fragment_descriptor.buildFragmentKernelMap(ra_exe_unit,
+                                             execution_dispatch.getFragOffsets(),
+                                             device_count,
+                                             device_type,
+                                             use_multifrag_kernel,
+                                             g_inner_join_fragment_skipping,
+                                             this);
+  if (eo.with_watchdog && fragment_descriptor.shouldCheckWorkUnitWatchdog()) {
+    checkWorkUnitWatchdog(ra_exe_unit, *catalog_);
+  }
+
+  if (use_multifrag_kernel) {
     // NB: We should never be on this path when the query is retried because of
     //     running out of group by slots; also, for scan only queries (!agg_plan)
     //     we want the high-granularity, fragment by fragment execution instead.
-    const auto device_count = catalog_->get_dataMgr().cudaMgr_->getDeviceCount();
-    CHECK_GT(device_count, 0);
-
-    fragment_descriptor.buildFragmentDeviceMap(ra_exe_unit,
-                                               execution_dispatch.getFragOffsets(),
-                                               device_count,
-                                               device_type,
-                                               true,
-                                               g_inner_join_fragment_skipping);
-
-    if (eo.with_watchdog && fragment_descriptor.shouldCheckWorkUnitWatchdog()) {
-      checkWorkUnitWatchdog(ra_exe_unit, *catalog_);
-    }
     auto multifrag_kernel_dispatch = [&query_threads, &dispatch, &context_count](
                                          const int device_id,
                                          const FragmentsList& frag_list,
@@ -1485,50 +1476,31 @@ void Executor::dispatchFragments(
     fragment_descriptor.assignFragsToMultiDispatch(multifrag_kernel_dispatch);
 
   } else {
-    const auto device_count = device_type == ExecutorDeviceType::CPU
-                                  ? 1
-                                  : catalog_->get_dataMgr().cudaMgr_->getDeviceCount();
-    CHECK_GT(device_count, 0);
-
-    fragment_descriptor.buildFragmentDeviceMap(ra_exe_unit,
-                                               execution_dispatch.getFragOffsets(),
-                                               device_count,
-                                               device_type,
-                                               false,
-                                               g_inner_join_fragment_skipping);
-
-    if (eo.with_watchdog && fragment_descriptor.shouldCheckWorkUnitWatchdog()) {
-      checkWorkUnitWatchdog(ra_exe_unit, *catalog_);
-    }
-
     size_t frag_list_idx{0};
-    for (size_t i = 0; i < fragment_descriptor.getOuterFragmentsSize(); ++i) {
-      const auto frag_list_pair = fragment_descriptor.getFragListForIndex(i);
-      if (!frag_list_pair.first || !frag_list_pair.second->size()) {
-        continue;
-      }
 
-      auto chosen_device_type = device_type;
-      auto chosen_device_id = fragment_descriptor.getDeviceForFragment(i);
-      CHECK_GE(chosen_device_id, 0);
+    auto fragment_per_kernel_dispatch =
+        [&query_threads, &dispatch, &context_count, &frag_list_idx, &device_type](
+            const int device_id,
+            const FragmentsList& frag_list,
+            const int64_t rowid_lookup_key) {
+          if (!frag_list.size()) {
+            return;
+          }
+          CHECK_GE(device_id, 0);
 
-      query_threads.push_back(std::async(std::launch::async,
-                                         dispatch,
-                                         chosen_device_type,
-                                         chosen_device_id,
-                                         *frag_list_pair.second,
-                                         frag_list_idx % context_count,
-                                         fragment_descriptor.getRowIdLookupKey()));
+          query_threads.push_back(std::async(std::launch::async,
+                                             dispatch,
+                                             device_type,
+                                             device_id,
+                                             frag_list,
+                                             frag_list_idx % context_count,
+                                             rowid_lookup_key));
 
-      ++frag_list_idx;
-      const auto sample_query_limit =
-          ra_exe_unit.sort_info.limit + ra_exe_unit.sort_info.offset;
+          ++frag_list_idx;
+        };
 
-      if (is_sample_query(ra_exe_unit) && sample_query_limit > 0 &&
-          fragment_descriptor.getOuterFragmentTupleSize(i) >= sample_query_limit) {
-        break;
-      }
-    }
+    fragment_descriptor.assignFragsToKernelDispatch(fragment_per_kernel_dispatch,
+                                                    ra_exe_unit);
   }
   for (auto& child : query_threads) {
     child.wait();

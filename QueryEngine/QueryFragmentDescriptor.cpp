@@ -20,9 +20,7 @@
 
 QueryFragmentDescriptor::QueryFragmentDescriptor(
     const RelAlgExecutionUnit& ra_exe_unit,
-    const std::vector<InputTableInfo>& query_infos,
-    Executor* executor)
-    : executor_(executor) {
+    const std::vector<InputTableInfo>& query_infos) {
   const size_t input_desc_count{ra_exe_unit.input_descs.size()};
   CHECK_EQ(query_infos.size(), (input_desc_count + ra_exe_unit.extra_input_descs.size()));
   for (size_t table_idx = 0; table_idx < input_desc_count; ++table_idx) {
@@ -34,21 +32,24 @@ QueryFragmentDescriptor::QueryFragmentDescriptor(
   }
 }
 
-void QueryFragmentDescriptor::buildFragmentDeviceMap(
+void QueryFragmentDescriptor::buildFragmentKernelMap(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<uint64_t>& frag_offsets,
     const int device_count,
     const ExecutorDeviceType& device_type,
     const bool enable_multifrag_kernels,
-    const bool enable_inner_join_fragment_skipping) {
+    const bool enable_inner_join_fragment_skipping,
+    Executor* executor) {
   if (enable_multifrag_kernels) {
     buildMultifragKernelMap(ra_exe_unit,
                             frag_offsets,
                             device_count,
                             device_type,
-                            enable_inner_join_fragment_skipping);
+                            enable_inner_join_fragment_skipping,
+                            executor);
   } else {
-    buildFragmentPerKernelMap(ra_exe_unit, frag_offsets, device_count, device_type);
+    buildFragmentPerKernelMap(
+        ra_exe_unit, frag_offsets, device_count, device_type, executor);
   }
 }
 
@@ -56,7 +57,8 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<uint64_t>& frag_offsets,
     const int device_count,
-    const ExecutorDeviceType& device_type) {
+    const ExecutorDeviceType& device_type,
+    Executor* executor) {
   const auto& outer_table_desc = ra_exe_unit.input_descs.front();
   const int outer_table_id = outer_table_desc.getTableId();
   auto it = selected_tables_fragments_.find(outer_table_id);
@@ -66,12 +68,13 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
 
   for (size_t i = 0; i < outer_fragments->size(); ++i) {
     const auto& fragment = (*outer_fragments)[i];
-    outer_fragment_tuple_sizes_.push_back(fragment.getNumTuples());
-    const auto skip_frag = executor_->skipFragment(
+    const auto skip_frag = executor->skipFragment(
         outer_table_desc, fragment, ra_exe_unit.simple_quals, frag_offsets, i);
     if (skip_frag.first) {
       continue;
     }
+    // NOTE: Using kernel index instead of frag index now
+    outer_fragment_tuple_sizes_.push_back(fragment.getNumTuples());
     rowid_lookup_key_ = std::max(rowid_lookup_key_, skip_frag.second);
     const int chosen_device_count =
         device_type == ExecutorDeviceType::CPU ? 1 : device_count;
@@ -83,23 +86,27 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
                         ? fragment.deviceIds[static_cast<int>(memory_level)]
                         : fragment.shard % chosen_device_count;
 
-    // TODO(adb): Need to better index the kernel per fragment case
-    CHECK_EQ(fragments_per_device_[i].size(), 0);
-    outer_fragments_to_device_id_.insert(std::make_pair(i, device_id));
+    // Since we may have skipped fragments, the fragments_per_kernel_ vector may be
+    // smaller than the outer_fragments size
+    CHECK_LE(fragments_per_kernel_.size(), i);
+    fragments_per_kernel_.emplace_back(FragmentsList{});
+    const auto kernel_id = fragments_per_kernel_.size() - 1;
+    CHECK(kernels_per_device_[device_id].insert(kernel_id).second);
 
     for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
       const auto frag_ids =
-          executor_->getTableFragmentIndices(ra_exe_unit,
-                                             device_type,
-                                             j,
-                                             i,
-                                             selected_tables_fragments_,
-                                             executor_->getInnerTabIdToJoinCond());
+          executor->getTableFragmentIndices(ra_exe_unit,
+                                            device_type,
+                                            j,
+                                            i,
+                                            selected_tables_fragments_,
+                                            executor->getInnerTabIdToJoinCond());
       const auto table_id = ra_exe_unit.input_descs[j].getTableId();
       auto table_frags_it = selected_tables_fragments_.find(table_id);
       CHECK(table_frags_it != selected_tables_fragments_.end());
 
-      fragments_per_device_[i].emplace_back(FragmentsPerTable{table_id, frag_ids});
+      fragments_per_kernel_[kernel_id].emplace_back(
+          FragmentsPerTable{table_id, frag_ids});
     }
   }
 }
@@ -109,7 +116,8 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
     const std::vector<uint64_t>& frag_offsets,
     const int device_count,
     const ExecutorDeviceType& device_type,
-    const bool enable_inner_join_fragment_skipping) {
+    const bool enable_inner_join_fragment_skipping,
+    Executor* executor) {
   // Allocate all the fragments of the tables involved in the query to available
   // devices. The basic idea: the device is decided by the outer table in the
   // query (the first table in a join) and we need to broadcast the fragments
@@ -121,19 +129,19 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
   const auto outer_fragments = it->second;
   outer_fragments_size_ = outer_fragments->size();
 
-  const auto inner_table_id_to_join_condition = executor_->getInnerTabIdToJoinCond();
+  const auto inner_table_id_to_join_condition = executor->getInnerTabIdToJoinCond();
 
   for (size_t outer_frag_id = 0; outer_frag_id < outer_fragments->size();
        ++outer_frag_id) {
     const auto& fragment = (*outer_fragments)[outer_frag_id];
-    auto skip_frag = executor_->skipFragment(outer_table_desc,
-                                             fragment,
-                                             ra_exe_unit.simple_quals,
-                                             frag_offsets,
-                                             outer_frag_id);
+    auto skip_frag = executor->skipFragment(outer_table_desc,
+                                            fragment,
+                                            ra_exe_unit.simple_quals,
+                                            frag_offsets,
+                                            outer_frag_id);
     if (enable_inner_join_fragment_skipping &&
         (skip_frag == std::pair<bool, int64_t>(false, -1))) {
-      skip_frag = executor_->skipFragmentInnerJoins(
+      skip_frag = executor->skipFragmentInnerJoins(
           outer_table_desc, ra_exe_unit, fragment, frag_offsets, outer_frag_id);
     }
     if (skip_frag.first) {
@@ -148,18 +156,26 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
       auto table_frags_it = selected_tables_fragments_.find(table_id);
       CHECK(table_frags_it != selected_tables_fragments_.end());
       const auto frag_ids =
-          executor_->getTableFragmentIndices(ra_exe_unit,
-                                             device_type,
-                                             j,
-                                             outer_frag_id,
-                                             selected_tables_fragments_,
-                                             inner_table_id_to_join_condition);
-      if (fragments_per_device_[device_id].size() < j + 1) {
-        fragments_per_device_[device_id].emplace_back(
+          executor->getTableFragmentIndices(ra_exe_unit,
+                                            device_type,
+                                            j,
+                                            outer_frag_id,
+                                            selected_tables_fragments_,
+                                            inner_table_id_to_join_condition);
+
+      if (kernels_per_device_.find(device_id) == kernels_per_device_.end()) {
+        fragments_per_kernel_.emplace_back(FragmentsList{});
+        kernels_per_device_.insert(std::make_pair(
+            device_id, std::set<size_t>({fragments_per_kernel_.size() - 1})));
+      }
+      const auto kernel_id = *kernels_per_device_[device_id].begin();
+      CHECK_LT(kernel_id, fragments_per_kernel_.size());
+      if (fragments_per_kernel_[kernel_id].size() < j + 1) {
+        fragments_per_kernel_[kernel_id].emplace_back(
             FragmentsPerTable{table_id, frag_ids});
       } else {
-        CHECK_EQ(fragments_per_device_[device_id][j].table_id, table_id);
-        auto& curr_frag_ids = fragments_per_device_[device_id][j].fragment_ids;
+        CHECK_EQ(fragments_per_kernel_[kernel_id][j].table_id, table_id);
+        auto& curr_frag_ids = fragments_per_kernel_[kernel_id][j].fragment_ids;
         for (const int frag_id : frag_ids) {
           if (std::find(curr_frag_ids.begin(), curr_frag_ids.end(), frag_id) ==
               curr_frag_ids.end()) {
@@ -170,4 +186,35 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
     }
     rowid_lookup_key_ = std::max(rowid_lookup_key_, skip_frag.second);
   }
+}
+
+namespace {
+
+bool is_sample_query(const RelAlgExecutionUnit& ra_exe_unit) {
+  const bool result = ra_exe_unit.input_descs.size() == 1 &&
+                      ra_exe_unit.simple_quals.empty() && ra_exe_unit.quals.empty() &&
+                      ra_exe_unit.sort_info.order_entries.empty() &&
+                      ra_exe_unit.scan_limit;
+  if (result) {
+    CHECK(ra_exe_unit.join_type == JoinType::INVALID);
+    CHECK(ra_exe_unit.inner_join_quals.empty());
+    CHECK(ra_exe_unit.outer_join_quals.empty());
+    CHECK_EQ(size_t(1), ra_exe_unit.groupby_exprs.size());
+    CHECK(!ra_exe_unit.groupby_exprs.front());
+  }
+  return result;
+}
+
+}  // namespace
+
+bool QueryFragmentDescriptor::terminateDispatchMaybe(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const size_t kernel_id) const {
+  const auto sample_query_limit =
+      ra_exe_unit.sort_info.limit + ra_exe_unit.sort_info.offset;
+  if (is_sample_query(ra_exe_unit) && sample_query_limit > 0 &&
+      getOuterFragmentTupleSize(kernel_id) >= sample_query_limit) {
+    return true;
+  }
+  return false;
 }
