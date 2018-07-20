@@ -25,6 +25,7 @@
 #include <string>
 #include <cstdio>
 #include <cstdlib>
+#include <iostream>
 #include <list>
 #include <map>
 #include <memory>
@@ -42,6 +43,9 @@
 #include "../Fragmenter/Fragmenter.h"
 #include "../Shared/checked_alloc.h"
 #include "../Chunk/Chunk.h"
+
+// Some builds of boost::geometry require iostream, but don't explicitly include it.
+// Placing in own section to ensure it's included after iostream.
 #include <boost/geometry/index/rtree.hpp>
 
 class TDatum;
