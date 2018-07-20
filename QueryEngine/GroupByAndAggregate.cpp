@@ -1399,20 +1399,20 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
           ? reinterpret_cast<int64_t*>(join_hash_tables[0])
           : (join_hash_tables.size() > 1 ? &join_hash_tables[0] : nullptr);
   if (hoist_literals) {
-    using agg_query = void (*)(const int8_t***,
-                               const uint32_t*,
-                               const uint32_t*,
-                               const int8_t*,
-                               const int64_t*,
-                               const uint64_t*,
-                               const int32_t*,
-                               int32_t*,
-                               const int64_t*,
-                               int64_t**,
-                               int64_t**,
-                               int32_t*,
-                               const uint32_t*,
-                               const int64_t*);
+    using agg_query = void (*)(const int8_t***,  // col_buffers
+                               const uint32_t*,  // num_fragments
+                               const uint32_t*,  // frag_stride
+                               const int8_t*,    // literals
+                               const int64_t*,   // num_rows
+                               const uint64_t*,  // frag_row_offsets
+                               const int32_t*,   // max_matched
+                               int32_t*,         // total_matched
+                               const int64_t*,   // init_agg_value
+                               int64_t**,        // out
+                               int64_t**,        // out2
+                               int32_t*,         // error_code
+                               const uint32_t*,  // num_tables
+                               const int64_t*);  // join_hash_tables_ptr
     if (is_group_by) {
       OOM_TRACE_PUSH();
       reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
@@ -1447,19 +1447,19 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
                                                     join_hash_tables_ptr);
     }
   } else {
-    using agg_query = void (*)(const int8_t***,
-                               const uint32_t*,
-                               const uint32_t*,
-                               const int64_t*,
-                               const uint64_t*,
-                               const int32_t*,
-                               int32_t*,
-                               const int64_t*,
-                               int64_t**,
-                               int64_t**,
-                               int32_t*,
-                               const uint32_t*,
-                               const int64_t*);
+    using agg_query = void (*)(const int8_t***,  // col_buffers
+                               const uint32_t*,  // num_fragments
+                               const uint32_t*,  // frag_stride
+                               const int64_t*,   // num_rows
+                               const uint64_t*,  // frag_row_offsets
+                               const int32_t*,   // max_matched
+                               int32_t*,         // total_matched
+                               const int64_t*,   // init_agg_value
+                               int64_t**,        // out
+                               int64_t**,        // out2
+                               int32_t*,         // error_code
+                               const uint32_t*,  // num_tables
+                               const int64_t*);  // join_hash_tables_ptr
     if (is_group_by) {
       OOM_TRACE_PUSH();
       reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
