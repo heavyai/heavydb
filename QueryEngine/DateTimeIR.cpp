@@ -41,10 +41,12 @@ llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr,
                                             get_int_type(32, cgen_state_->context_));
   }
   std::vector<llvm::Value*> extract_args{
-      ll_int(static_cast<int32_t>(extract_expr->get_field())),
-      from_expr,
-      ll_int(static_cast<int32_t>(extract_expr_ti.get_dimension()))};
+      ll_int(static_cast<int32_t>(extract_expr->get_field())), from_expr};
+  if (extract_expr_ti.get_dimension() > 0) {
+    extract_args.push_back(ll_int(static_cast<int32_t>(extract_expr_ti.get_dimension())));
+  }
   std::string extract_fname{"ExtractFromTime"};
+  extract_fname += (extract_expr_ti.get_dimension() > 0) ? "HighPrecision" : "";
   if (!extract_expr_ti.get_notnull()) {
     extract_args.push_back(inlineIntNull(extract_expr_ti));
     extract_fname += "Nullable";
@@ -130,10 +132,13 @@ llvm::Value* Executor::codegen(const Analyzer::DatetruncExpr* datetrunc_expr,
                                             get_int_type(32, cgen_state_->context_));
   }
   std::vector<llvm::Value*> datetrunc_args{
-      ll_int(static_cast<int32_t>(datetrunc_expr->get_field())),
-      from_expr,
-      ll_int(static_cast<int32_t>(datetrunc_expr_ti.get_dimension()))};
+      ll_int(static_cast<int32_t>(datetrunc_expr->get_field())), from_expr};
+  if (datetrunc_expr_ti.get_dimension() > 0) {
+    datetrunc_args.push_back(
+        ll_int(static_cast<int32_t>(datetrunc_expr_ti.get_dimension())));
+  }
   std::string datetrunc_fname{"DateTruncate"};
+  datetrunc_fname += (datetrunc_expr_ti.get_dimension() > 0) ? "HighPrecision" : "";
   if (!datetrunc_expr_ti.get_notnull()) {
     datetrunc_args.push_back(inlineIntNull(datetrunc_expr_ti));
     datetrunc_fname += "Nullable";

@@ -1040,11 +1040,14 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
     type_info = new_type_info;
   } else if (new_type_info.get_type() == kDATE && type_info.get_type() == kTIMESTAMP) {
     type_info = new_type_info;
-    constval.timeval = DateTruncate(dtDAY, constval.timeval, type_info.get_dimension());
+    auto dimen = type_info.get_dimension();
+    constval.timeval = (dimen > 0)
+                           ? DateTruncateHighPrecision(dtDAY, constval.timeval, dimen)
+                           : DateTruncate(dtDAY, constval.timeval);
   } else if (type_info.get_type() == kTIMESTAMP &&
              new_type_info.get_type() == kTIMESTAMP) {
     type_info = new_type_info;
-    constval.timeval *= pow(10, type_info.get_dimension());
+    constval.timeval *= static_cast<int64_t>(pow(10, type_info.get_dimension()));
   } else if (new_type_info.is_array() && type_info.is_array()) {
     auto new_sub_ti =
         SQLTypeInfo(new_type_info.get_subtype(), new_type_info.get_notnull());

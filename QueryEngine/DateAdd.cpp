@@ -25,7 +25,7 @@
 #endif
 
 DEVICE
-int is_leap(int64_t year) {
+int32_t is_leap(int64_t year) {
   return (((year % 400) == 0) || ((year % 4) == 0 && ((year % 100) != 0))) ? 1 : 0;
 }
 
@@ -36,17 +36,17 @@ time_t skip_months(time_t timeval, int64_t months_to_go) {
       {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
   tm tm_struct;
   gmtime_r_newlib(&timeval, &tm_struct);
-  long dimen = 1;  // placeholder
+  int32_t dimen = 1;  // placeholder
   auto tod = (timeval % SECSPERDAY);
   auto day = (timeval / SECSPERDAY) * SECSPERDAY;
   // calculate the day of month offset
-  int dom = tm_struct.tm_mday;
+  int32_t dom = tm_struct.tm_mday;
   time_t month = day - (dom * SECSPERDAY);
   // find what month we are
-  int mon = tm_struct.tm_mon;
+  int32_t mon = tm_struct.tm_mon;
   int64_t months_covered = 0;
   while (months_to_go != 0) {
-    int leap_year = 0;
+    int32_t leap_year = 0;
     if (months_to_go >= 48) {
       month += (months_to_go / 48) * DAYS_PER_4_YEARS * SECSPERDAY;
       months_to_go = months_to_go % 48;
@@ -55,8 +55,11 @@ time_t skip_months(time_t timeval, int64_t months_to_go) {
     }
     if (months_to_go > 0) {
       auto m = (mon + months_covered) % MONSPERYEAR;
-      if (m == 1)
-        leap_year = is_leap(ExtractFromTime(kYEAR, month, dimen));
+      if (m == 1) {
+        int32_t eyr = (dimen > 0) ? ExtractFromTimeHighPrecision(kYEAR, month, dimen)
+                                  : ExtractFromTime(kYEAR, month);
+        leap_year = is_leap(eyr);
+      }
       month += (month_lengths[0 + leap_year][m] * SECSPERDAY);
       months_to_go--;
       months_covered++;
@@ -70,8 +73,11 @@ time_t skip_months(time_t timeval, int64_t months_to_go) {
     }
     if (months_to_go < 0) {
       auto m = (((mon - 1 - months_covered) % MONSPERYEAR) + MONSPERYEAR) % MONSPERYEAR;
-      if (m == 1)
-        leap_year = is_leap(ExtractFromTime(kYEAR, month, dimen));
+      if (m == 1) {
+        int32_t eyr = (dimen > 0) ? ExtractFromTimeHighPrecision(kYEAR, month, dimen)
+                                  : ExtractFromTime(kYEAR, month);
+        leap_year = is_leap(eyr);
+      }
       month -= (month_lengths[0 + leap_year][m] * SECSPERDAY);
       months_to_go++;
       months_covered++;
@@ -81,7 +87,7 @@ time_t skip_months(time_t timeval, int64_t months_to_go) {
   auto new_timeval = month + dom * SECSPERDAY + tod;
   tm new_tm_struct;
   gmtime_r_newlib(&new_timeval, &new_tm_struct);
-  int new_dom = new_tm_struct.tm_mday;
+  int32_t new_dom = new_tm_struct.tm_mday;
   if (dom > new_dom) {
     // Landed on a month with fewer days, overshot by a few days,
     // e.g. 2008-1-31 + INTERVAL '1' MONTH should yield 2008-2-29 and
@@ -174,8 +180,9 @@ extern "C" NEVER_INLINE DEVICE time_t DateAdd(DateaddField field,
 #endif
   }
   months_to_go *= number;
-  const time_t stimeval = (int64_t)(timeval / scale_ret);
-  const time_t nfrac = (int)((long)timeval % scale_ret);
+  const time_t stimeval =
+      dimen == 0 ? timeval : static_cast<int64_t>(timeval) / scale_ret;
+  const time_t nfrac = static_cast<int64_t>(timeval) % scale_ret;
   return (skip_months(stimeval, months_to_go) * scale_ret) + nfrac;
 }
 

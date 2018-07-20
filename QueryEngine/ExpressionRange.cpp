@@ -772,10 +772,13 @@ ExpressionRange getExpressionRange(
         return ExpressionRange::makeInvalidRange();
       }
       CHECK(arg_range.getType() == ExpressionRangeType::Integer);
+      const int32_t dimen = extract_expr_ti.get_dimension();
       const int64_t year_range_min =
-          ExtractFromTime(kYEAR, arg_range.getIntMin(), extract_expr_ti.get_dimension());
+          (dimen > 0) ? ExtractFromTimeHighPrecision(kYEAR, arg_range.getIntMin(), dimen)
+                      : ExtractFromTime(kYEAR, arg_range.getIntMin());
       const int64_t year_range_max =
-          ExtractFromTime(kYEAR, arg_range.getIntMax(), extract_expr_ti.get_dimension());
+          (dimen > 0) ? ExtractFromTimeHighPrecision(kYEAR, arg_range.getIntMax(), dimen)
+                      : ExtractFromTime(kYEAR, arg_range.getIntMax());
       return ExpressionRange::makeIntRange(
           year_range_min, year_range_max, 0, arg_range.hasNulls());
     }
@@ -825,17 +828,19 @@ ExpressionRange getExpressionRange(
     return ExpressionRange::makeInvalidRange();
   }
   const auto& datetrunc_expr_ti = datetrunc_expr->get_from_expr()->get_type_info();
-  const auto dimen = datetrunc_expr_ti.get_dimension();
-  const int64_t min_ts = DateTruncate(datetrunc_expr->get_field(),
-                                      arg_range.getIntMin(),
-                                      datetrunc_expr_ti.get_dimension());
-  const int64_t max_ts = DateTruncate(datetrunc_expr->get_field(),
-                                      arg_range.getIntMax(),
-                                      datetrunc_expr_ti.get_dimension());
+  const int32_t dimen = datetrunc_expr_ti.get_dimension();
+  const int64_t min_ts =
+      (dimen > 0) ? DateTruncateHighPrecision(
+                        datetrunc_expr->get_field(), arg_range.getIntMin(), dimen)
+                  : DateTruncate(datetrunc_expr->get_field(), arg_range.getIntMin());
+  const int64_t max_ts =
+      (dimen > 0) ? DateTruncateHighPrecision(
+                        datetrunc_expr->get_field(), arg_range.getIntMax(), dimen)
+                  : DateTruncate(datetrunc_expr->get_field(), arg_range.getIntMax());
   const int64_t bucket =
       datetrunc_expr_ti.get_type() == kTIMESTAMP && dimen > 0
           ? get_conservative_datetrunc_bucket(datetrunc_expr->get_field()) *
-                pow(10, dimen)
+                static_cast<int64_t>(pow(10, dimen))
           : get_conservative_datetrunc_bucket(datetrunc_expr->get_field());
   return ExpressionRange::makeIntRange(min_ts, max_ts, bucket, arg_range.hasNulls());
 }

@@ -64,7 +64,7 @@ time_t TimeGM::parse_fractional_seconds(std::string sfrac, SQLTypeInfo& ti) {
  * Code adapted from Python 2.4.1 sources (Lib/calendar.py).
  */
 time_t TimeGM::my_timegm(const struct tm* tm) {
-  int year;
+  int32_t year;
   time_t days;
   time_t hours;
   time_t minutes;
@@ -91,7 +91,7 @@ time_t TimeGM::my_timegm(const struct tm* tm) {
 time_t TimeGM::my_timegm(const struct tm* tm, const time_t& fsc, SQLTypeInfo& ti) {
   time_t sec;
 
-  sec = my_timegm(tm) * pow(10, ti.get_dimension());
+  sec = my_timegm(tm) * static_cast<int64_t>(pow(10, ti.get_dimension()));
   sec += fsc;
 
   return sec;

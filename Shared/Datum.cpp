@@ -241,7 +241,7 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
         if (*p == '.') {
           p++;
           std::string fstr(p);
-          fsc = fstr.length() == (unsigned)ti.get_dimension()
+          fsc = fstr.length() == static_cast<uint32_t>(ti.get_dimension())
                     ? std::stol(fstr)
                     : TimeGM::instance().parse_fractional_seconds(fstr, ti);
           d.timeval = TimeGM::instance().my_timegm(&tm_struct, fsc, ti);

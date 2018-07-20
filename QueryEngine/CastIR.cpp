@@ -90,9 +90,12 @@ llvm::Value* Executor::codegenCastTimestampToDate(llvm::Value* ts_lv,
                                                 ts_lv,
                                                 get_int_type(32, cgen_state_->context_));
   }
-  std::vector<llvm::Value*> datetrunc_args{
-      ll_int(static_cast<int32_t>(dtDAY)), ts_lv, ll_int(static_cast<int32_t>(dimen))};
+  std::vector<llvm::Value*> datetrunc_args{ll_int(static_cast<int32_t>(dtDAY)), ts_lv};
+  if (dimen > 0) {
+    datetrunc_args.push_back(ll_int(static_cast<int32_t>(dimen)));
+  }
   std::string datetrunc_fname{"DateTruncate"};
+  datetrunc_fname += (dimen > 0) ? "HighPrecision" : "";
   if (nullable) {
     datetrunc_args.push_back(inlineIntNull(
         SQLTypeInfo(ts_lv->getType()->isIntegerTy(64) ? kBIGINT : kINT, false)));

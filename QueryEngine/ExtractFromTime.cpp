@@ -21,49 +21,49 @@
 #include <glog/logging.h>
 #endif
 
-extern "C" NEVER_INLINE DEVICE int64_t extract_hour(const time_t* tim_p) {
+extern "C" NEVER_INLINE DEVICE int32_t extract_hour(const time_t* tim_p) {
   int64_t days, rem;
   const time_t lcltime = *tim_p;
-  days = static_cast<uint64_t>(lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
-  rem = static_cast<uint64_t>(lcltime) % SECSPERDAY;
+  days = static_cast<int64_t>(lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
+  rem = static_cast<int64_t>(lcltime) % SECSPERDAY;
   if (rem < 0) {
     rem += SECSPERDAY;
     --days;
   }
-  return static_cast<uint64_t>(rem / SECSPERHOUR);
+  return static_cast<int32_t>(rem / SECSPERHOUR);
 }
 
-DEVICE int64_t extract_minute(const time_t* tim_p) {
+DEVICE int32_t extract_minute(const time_t* tim_p) {
   int64_t days, rem;
   const time_t lcltime = *tim_p;
-  days = static_cast<uint64_t>(lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
-  rem = static_cast<uint64_t>(lcltime) % SECSPERDAY;
+  days = static_cast<int64_t>(lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
+  rem = static_cast<int64_t>(lcltime) % SECSPERDAY;
   if (rem < 0) {
     rem += SECSPERDAY;
     --days;
   }
   rem %= SECSPERHOUR;
-  return static_cast<int64_t>(rem / SECSPERMIN);
+  return static_cast<int32_t>(rem / SECSPERMIN);
 }
 
-DEVICE int64_t extract_second(const time_t* tim_p) {
+DEVICE int32_t extract_second(const time_t* tim_p) {
   const time_t lcltime = *tim_p;
-  return static_cast<int64_t>(lcltime % SECSPERMIN);
+  return static_cast<int32_t>(static_cast<int64_t>(lcltime) % SECSPERMIN);
 }
 
-DEVICE int64_t extract_millisecond(const time_t* tim_p) {
+DEVICE int32_t extract_millisecond(const time_t* tim_p) {
   const time_t lcltime = *tim_p;
-  return static_cast<int64_t>(lcltime % MILLISECSPERSEC);
+  return static_cast<int32_t>(static_cast<int64_t>(lcltime) % MILLISECSPERSEC);
 }
 
-DEVICE int64_t extract_microsecond(const time_t* tim_p) {
+DEVICE int32_t extract_microsecond(const time_t* tim_p) {
   const time_t lcltime = *tim_p;
-  return static_cast<int64_t>(lcltime % MICROSECSPERSEC);
+  return static_cast<int32_t>(static_cast<int64_t>(lcltime) % MICROSECSPERSEC);
 }
 
-DEVICE int64_t extract_nanosecond(const time_t* tim_p) {
+DEVICE int32_t extract_nanosecond(const time_t* tim_p) {
   const time_t lcltime = *tim_p;
-  return static_cast<int64_t>(lcltime % NANOSECSPERSEC);
+  return static_cast<int32_t>(static_cast<int64_t>(lcltime) % NANOSECSPERSEC);
 }
 
 DEVICE int32_t extract_dow(const time_t* tim_p) {
@@ -71,7 +71,7 @@ DEVICE int32_t extract_dow(const time_t* tim_p) {
   int32_t weekday;
   const time_t lcltime = *tim_p;
   days = static_cast<int64_t>(lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
-  rem = static_cast<int64_t>(lcltime % SECSPERDAY);
+  rem = static_cast<int64_t>(lcltime) % SECSPERDAY;
   if (rem < 0) {
     rem += SECSPERDAY;
     --days;
@@ -84,7 +84,7 @@ DEVICE int32_t extract_dow(const time_t* tim_p) {
 }
 
 DEVICE int32_t extract_quarterday(const time_t* tim_p) {
-  int32_t quarterdays;
+  int64_t quarterdays;
   const time_t lcltime = *tim_p;
   quarterdays = static_cast<int64_t>(lcltime) / SECSPERQUARTERDAY;
   return static_cast<int32_t>(quarterdays % 4) + 1;
@@ -163,7 +163,7 @@ DEVICE int32_t extract_year_fast(const time_t* tim_p) {
 }
 
 DEVICE tm* gmtime_r_newlib(const time_t* tim_p, tm* res) {
-  const int64_t month_lengths[2][MONSPERYEAR] = {
+  const int32_t month_lengths[2][MONSPERYEAR] = {
       {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
       {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
   int64_t days, rem;
@@ -171,9 +171,9 @@ DEVICE tm* gmtime_r_newlib(const time_t* tim_p, tm* res) {
   int32_t year, month, yearday, weekday;
   int32_t years400, years100, years4, remainingyears;
   int32_t yearleap;
-  const int64_t* ip;
+  const int32_t* ip;
 
-  days = static_cast<int64_t>(lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
+  days = (static_cast<int64_t>(lcltime) / SECSPERDAY) - EPOCH_ADJUSTMENT_DAYS;
   rem = static_cast<int64_t>(lcltime) % SECSPERDAY;
   if (rem < 0) {
     rem += SECSPERDAY;
@@ -257,80 +257,60 @@ DEVICE tm* gmtime_r_newlib(const time_t* tim_p, tm* res) {
   return (res);
 }
 
+DEVICE int64_t get_scale(const int32_t dimen) {
+  int64_t scale_ret = 1;
+  if (dimen == 3) {
+    scale_ret = MILLISECSPERSEC;
+  } else if (dimen == 6) {
+    scale_ret = MICROSECSPERSEC;
+  } else if (dimen == 9) {
+    scale_ret = NANOSECSPERSEC;
+  }
+  return scale_ret;
+}
+
 /*
  * @brief support the SQL EXTRACT function
  */
 extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field,
-                                                       time_t timeval,
-                                                       const int32_t dimen) {
+                                                       time_t timeval) {
   // We have fast paths for the 5 fields below - do not need to do full gmtime
-  int64_t prec = 1;  // default for 0
-  if (dimen == 3) {
-    prec = MILLISECSPERSEC;
-  } else if (dimen == 6) {
-    prec = MICROSECSPERSEC;
-  } else if (dimen == 9) {
-    prec = NANOSECSPERSEC;
-  }
-  const time_t stimeval = static_cast<int64_t>(timeval / prec);
   switch (field) {
     case kEPOCH:
       return timeval;
     case kQUARTERDAY:
-      return extract_quarterday(&stimeval);
+      return extract_quarterday(&timeval);
     case kHOUR:
-      return extract_hour(&stimeval);
+      return extract_hour(&timeval);
     case kMINUTE:
-      return extract_minute(&stimeval);
+      return extract_minute(&timeval);
     case kSECOND:
-      return extract_second(&stimeval);
-    case kMILLISECOND: {
-      time_t mitimeval = timeval;
-      if (dimen == 6) {
-        mitimeval = static_cast<int64_t>(timeval / MILLISECSPERSEC);
-      } else if (dimen == 9) {
-        mitimeval = static_cast<int64_t>(timeval / MICROSECSPERSEC);
-      } else if (dimen == 0) {
-        return 0;
-      }
-      return extract_millisecond(&mitimeval);
-    }
-    case kMICROSECOND: {
-      time_t mutimeval = timeval;
-      if (dimen == 9) {
-        mutimeval = static_cast<int64_t>(timeval / MILLISECSPERSEC);
-      } else if (dimen == 0 || dimen == 3) {
-        return 0;
-      }
-      return extract_microsecond(&mutimeval);
-    }
-    case kNANOSECOND: {
-      if (dimen == 0 || dimen == 3 || dimen == 6) {
-        return 0;
-      }
-      return extract_nanosecond(&timeval);
-    }
+      return extract_second(&timeval);
+    case kMILLISECOND:
+    case kMICROSECOND:
+    case kNANOSECOND:
+      return 0;
     case kDOW:
-      return extract_dow(&stimeval);
+      return extract_dow(&timeval);
     case kISODOW: {
-      int64_t dow = extract_dow(&stimeval);
+      int64_t dow = extract_dow(&timeval);
       return (dow == 0 ? 7 : dow);
     }
     case kMONTH: {
-      if (stimeval >= 0L && stimeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
-        return extract_month_fast(&stimeval);
+      if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
+        return extract_month_fast(&timeval);
       }
       break;
     }
     case kQUARTER: {
-      if (stimeval >= 0L && stimeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
-        return extract_quarter_fast(&stimeval);
+      if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
+        return extract_quarter_fast(&timeval);
       }
       break;
     }
     case kYEAR: {
-      if (stimeval >= 0L && stimeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
-        return extract_year_fast(&stimeval);
+      if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
+        return extract_year_fast(&timeval);
       }
       break;
     }
@@ -339,7 +319,7 @@ extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field,
   }
 
   tm tm_struct;
-  gmtime_r_newlib(&stimeval, &tm_struct);
+  gmtime_r_newlib(&timeval, &tm_struct);
   switch (field) {
     case kYEAR:
       return 1900 + tm_struct.tm_year;
@@ -352,9 +332,9 @@ extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field,
     case kDOY:
       return tm_struct.tm_yday + 1;
     case kWEEK: {
-      int64_t doy = tm_struct.tm_yday;           // numbered from 0
-      int64_t dow = extract_dow(&stimeval) + 1;  // use Sunday 1 - Saturday 7
-      int64_t week = (doy / 7) + 1;
+      int32_t doy = tm_struct.tm_yday;          // numbered from 0
+      int32_t dow = extract_dow(&timeval) + 1;  // use Sunday 1 - Saturday 7
+      int32_t week = (doy / 7) + 1;
       // now adjust for offset at start of year
       //      S M T W T F S
       // doy      0 1 2 3 4
@@ -376,12 +356,57 @@ extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field,
   }
 }
 
+extern "C" DEVICE int64_t ExtractFromTimeHighPrecision(ExtractField field,
+                                                       time_t timeval,
+                                                       int32_t dimen) {
+  switch (field) {
+    case kMILLISECOND: {
+      time_t mtime = timeval;
+      if (dimen == 6) {
+        mtime = static_cast<int64_t>(timeval) / MILLISECSPERSEC;
+      } else if (dimen == 9) {
+        mtime = static_cast<int64_t>(timeval) / MICROSECSPERSEC;
+      }
+      return extract_millisecond(&mtime);
+    }
+    case kMICROSECOND: {
+      time_t mtime = timeval;
+      if (dimen == 9) {
+        mtime = static_cast<int64_t>(timeval) / MILLISECSPERSEC;
+      } else if (dimen == 3) {
+        return 0;
+      }
+      return extract_microsecond(&mtime);
+    }
+    case kNANOSECOND: {
+      if (dimen == 3 || dimen == 6) {
+        return 0;
+      } else {
+        return extract_nanosecond(&timeval);
+      }
+    }
+    default:
+      break;
+  }
+  const time_t stimeval = static_cast<int64_t>(timeval) / get_scale(dimen);
+  return ExtractFromTime(field, stimeval);
+}
+
 extern "C" DEVICE int64_t ExtractFromTimeNullable(ExtractField field,
                                                   time_t timeval,
-                                                  int32_t dimen,
                                                   const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }
-  return ExtractFromTime(field, timeval, dimen);
+  return ExtractFromTime(field, timeval);
+}
+
+extern "C" DEVICE int64_t ExtractFromTimeHighPrecisionNullable(ExtractField field,
+                                                               time_t timeval,
+                                                               int32_t dimen,
+                                                               const int64_t null_val) {
+  if (timeval == null_val) {
+    return null_val;
+  }
+  return ExtractFromTimeHighPrecision(field, timeval, dimen);
 }
