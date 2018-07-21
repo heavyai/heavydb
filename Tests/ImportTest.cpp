@@ -51,7 +51,8 @@ inline void run_ddl_statement(const string& input_str) {
 }
 
 std::shared_ptr<ResultSet> run_query(const string& query_str) {
-  return QueryRunner::run_multiple_agg(query_str, g_session, ExecutorDeviceType::CPU, g_hoist_literals, true);
+  return QueryRunner::run_multiple_agg(
+      query_str, g_session, ExecutorDeviceType::CPU, g_hoist_literals, true);
 }
 
 bool compare_agg(const int64_t cnt, const double avg) {
@@ -69,33 +70,41 @@ bool import_test_common(const string& query_str, const int64_t cnt, const double
   return compare_agg(cnt, avg);
 }
 
-bool import_test_common_geo(const string& query_str, const std::string& table, const int64_t cnt, const double avg) {
+bool import_test_common_geo(const string& query_str,
+                            const std::string& table,
+                            const int64_t cnt,
+                            const double avg) {
   // TODO(adb): Return ddl from QueryRunner::run_ddl_statement and use that
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;
-  if (parser.parse(query_str, parse_trees, last_parsed))
+  if (parser.parse(query_str, parse_trees, last_parsed)) {
     return false;
+  }
   CHECK_EQ(parse_trees.size(), size_t(1));
   const auto& stmt = parse_trees.front();
   Parser::CopyTableStmt* ddl = dynamic_cast<Parser::CopyTableStmt*>(stmt.get());
-  if (!ddl)
+  if (!ddl) {
     return false;
+  }
   ddl->execute(*g_session);
 
   // was it a geo copy from?
   bool was_geo_copy_from = ddl->was_geo_copy_from();
-  if (!was_geo_copy_from)
+  if (!was_geo_copy_from) {
     return false;
+  }
 
   // get the rest of the payload
   std::string geo_copy_from_table, geo_copy_from_file_name;
   Importer_NS::CopyParams geo_copy_from_copy_params;
-  ddl->get_geo_copy_from_payload(geo_copy_from_table, geo_copy_from_file_name, geo_copy_from_copy_params);
+  ddl->get_geo_copy_from_payload(
+      geo_copy_from_table, geo_copy_from_file_name, geo_copy_from_copy_params);
 
   // was it the right table?
-  if (geo_copy_from_table != "geo")
+  if (geo_copy_from_table != "geo") {
     return false;
+  }
 
   // @TODO simon.eves
   // test other stuff
@@ -117,16 +126,24 @@ void import_test_geofile_importer(const std::string& file_str,
 
   ASSERT_TRUE(boost::filesystem::exists(file_path));
 
-  ASSERT_NO_THROW(import_driver.import_geo_table(file_path.string(), table_name, compression));
+  ASSERT_NO_THROW(
+      import_driver.import_geo_table(file_path.string(), table_name, compression));
 }
 
 bool import_test_local(const string& filename, const int64_t cnt, const double avg) {
-  return import_test_common(
-      string("COPY trips FROM '") + "../../Tests/Import/datafiles/" + filename + "' WITH (header='true');", cnt, avg);
+  return import_test_common(string("COPY trips FROM '") +
+                                "../../Tests/Import/datafiles/" + filename +
+                                "' WITH (header='true');",
+                            cnt,
+                            avg);
 }
 
-bool import_test_local_geo(const string& filename, const string& other_options, const int64_t cnt, const double avg) {
-  return import_test_common_geo(string("COPY geo FROM '") + "../../Tests/Import/datafiles/" + filename +
+bool import_test_local_geo(const string& filename,
+                           const string& other_options,
+                           const int64_t cnt,
+                           const double avg) {
+  return import_test_common_geo(string("COPY geo FROM '") +
+                                    "../../Tests/Import/datafiles/" + filename +
                                     "' WITH (geo='true'" + other_options + ");",
                                 "geo",
                                 cnt,
@@ -134,7 +151,10 @@ bool import_test_local_geo(const string& filename, const string& other_options, 
 }
 
 #ifdef HAVE_AWS_S3
-bool import_test_s3(const string& prefix, const string& filename, const int64_t cnt, const double avg) {
+bool import_test_s3(const string& prefix,
+                    const string& filename,
+                    const int64_t cnt,
+                    const double avg) {
   // unlikely we will expose any credentials in clear text here.
   // likely credentials will be passed as the "tester"'s env.
   // though s3 sdk should by default access the env, if any,
@@ -142,23 +162,29 @@ bool import_test_s3(const string& prefix, const string& filename, const int64_t 
   // that passes credentials on per user basis.
   char* env;
   std::string s3_region, s3_access_key, s3_secret_key;
-  if (0 != (env = getenv("AWS_REGION")))
+  if (0 != (env = getenv("AWS_REGION"))) {
     s3_region = env;
-  if (0 != (env = getenv("AWS_ACCESS_KEY_ID")))
+  }
+  if (0 != (env = getenv("AWS_ACCESS_KEY_ID"))) {
     s3_access_key = env;
-  if (0 != (env = getenv("AWS_SECRET_ACCESS_KEY")))
+  }
+  if (0 != (env = getenv("AWS_SECRET_ACCESS_KEY"))) {
     s3_secret_key = env;
+  }
 
-  return import_test_common(string("COPY trips FROM '") + "s3://mapd-parquet-testdata/" + prefix + "/" + filename +
-                                "' WITH (header='true'" +
-                                (s3_access_key.size() ? ",s3_access_key='" + s3_access_key + "'" : "") +
-                                (s3_secret_key.size() ? ",s3_secret_key='" + s3_secret_key + "'" : "") +
-                                (s3_region.size() ? ",s3_region='" + s3_region + "'" : "") + ");",
-                            cnt,
-                            avg);
+  return import_test_common(
+      string("COPY trips FROM '") + "s3://mapd-parquet-testdata/" + prefix + "/" +
+          filename + "' WITH (header='true'" +
+          (s3_access_key.size() ? ",s3_access_key='" + s3_access_key + "'" : "") +
+          (s3_secret_key.size() ? ",s3_secret_key='" + s3_secret_key + "'" : "") +
+          (s3_region.size() ? ",s3_region='" + s3_region + "'" : "") + ");",
+      cnt,
+      avg);
 }
 
-bool import_test_s3_compressed(const string& filename, const int64_t cnt, const double avg) {
+bool import_test_s3_compressed(const string& filename,
+                               const int64_t cnt,
+                               const double avg) {
   return import_test_s3("trip.compressed", filename, cnt, avg);
 }
 #if 0
@@ -188,7 +214,8 @@ std::string TypeToString(SQLTypes type) {
 
 void d(const SQLTypes expected_type, const std::string& str) {
   auto detected_type = Importer_NS::Detector::detect_sqltype(str);
-  EXPECT_EQ(TypeToString(expected_type), TypeToString(detected_type)) << "String: " << str;
+  EXPECT_EQ(TypeToString(expected_type), TypeToString(detected_type))
+      << "String: " << str;
 }
 
 TEST(Detect, DateTime) {
@@ -223,7 +250,8 @@ TEST(Detect, Numeric) {
 // don't use R"()" format; somehow it causes many blank lines
 // to be output on console. how come?
 const char* create_table_trips =
-    "	CREATE TABLE trips (									"
+    "	CREATE TABLE trips (								"
+    "	"
     "			medallion               TEXT ENCODING DICT,	"
     "			hack_license            TEXT ENCODING DICT,	"
     "			vendor_id               TEXT ENCODING DICT,	"
@@ -291,7 +319,8 @@ TEST_F(ImportTest, One_7z_with_many_csv_files) {
 
 // Sharding tests
 const char* create_table_trips_sharded =
-    "	CREATE TABLE trips (									"
+    "	CREATE TABLE trips (								"
+    "	"
     "     id                      INTEGER,            "
     "			medallion               TEXT ENCODING DICT,	"
     "			hack_license            TEXT ENCODING DICT,	"
@@ -340,16 +369,19 @@ const char* create_table_geo =
     " ) WITH (FRAGMENT_SIZE=65000000);";
 
 void check_geo_import() {
-  auto rows =
-      run_query("SELECT p1, l, poly, mpoly, p2, p3, p4, trip_distance FROM geospatial WHERE trip_distance = 1.0");
+  auto rows = run_query(
+      "SELECT p1, l, poly, mpoly, p2, p3, p4, trip_distance FROM geospatial WHERE "
+      "trip_distance = 1.0");
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(8), crt_row.size());
   const auto p1 = boost::get<std::string>(v<NullableString>(crt_row[0]));
   ASSERT_TRUE(Geo_namespace::GeoPoint("POINT (1 1)") == Geo_namespace::GeoPoint(p1));
   const auto linestring = boost::get<std::string>(v<NullableString>(crt_row[1]));
-  ASSERT_TRUE(Geo_namespace::GeoLineString("LINESTRING (1 0,2 2,3 3)") == Geo_namespace::GeoLineString(linestring));
+  ASSERT_TRUE(Geo_namespace::GeoLineString("LINESTRING (1 0,2 2,3 3)") ==
+              Geo_namespace::GeoLineString(linestring));
   const auto poly = boost::get<std::string>(v<NullableString>(crt_row[2]));
-  ASSERT_TRUE(Geo_namespace::GeoPolygon("POLYGON ((0 0,2 0,0 2,0 0))") == Geo_namespace::GeoPolygon(poly));
+  ASSERT_TRUE(Geo_namespace::GeoPolygon("POLYGON ((0 0,2 0,0 2,0 0))") ==
+              Geo_namespace::GeoPolygon(poly));
   const auto mpoly = boost::get<std::string>(v<NullableString>(crt_row[3]));
   ASSERT_TRUE(Geo_namespace::GeoMultiPolygon("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))") ==
               Geo_namespace::GeoMultiPolygon(mpoly));
@@ -429,27 +461,36 @@ TEST_F(GeoImportTest, Geo_CSV_Local_Default) {
 }
 
 TEST_F(GeoImportTest, Geo_CSV_Local_Type_Geometry) {
-  EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_type='geometry'", 10, 4.5));
+  EXPECT_TRUE(
+      import_test_local_geo("geospatial.csv", ", geo_coords_type='geometry'", 10, 4.5));
 }
 
 TEST_F(GeoImportTest, Geo_CSV_Local_Type_Geography) {
-  EXPECT_THROW(import_test_local_geo("geospatial.csv", ", geo_coords_type='geography'", 10, 4.5), std::runtime_error);
+  EXPECT_THROW(
+      import_test_local_geo("geospatial.csv", ", geo_coords_type='geography'", 10, 4.5),
+      std::runtime_error);
 }
 
 TEST_F(GeoImportTest, Geo_CSV_Local_Type_Other) {
-  EXPECT_THROW(import_test_local_geo("geospatial.csv", ", geo_coords_type='other'", 10, 4.5), std::runtime_error);
+  EXPECT_THROW(
+      import_test_local_geo("geospatial.csv", ", geo_coords_type='other'", 10, 4.5),
+      std::runtime_error);
 }
 
 TEST_F(GeoImportTest, Geo_CSV_Local_Encoding_NONE) {
-  EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_encoding='none'", 10, 4.5));
+  EXPECT_TRUE(
+      import_test_local_geo("geospatial.csv", ", geo_coords_encoding='none'", 10, 4.5));
 }
 
 TEST_F(GeoImportTest, Geo_CSV_Local_Encoding_GEOINT32) {
-  EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_encoding='compressed(32)'", 10, 4.5));
+  EXPECT_TRUE(import_test_local_geo(
+      "geospatial.csv", ", geo_coords_encoding='compressed(32)'", 10, 4.5));
 }
 
 TEST_F(GeoImportTest, Geo_CSV_Local_Encoding_Other) {
-  EXPECT_THROW(import_test_local_geo("geospatial.csv", ", geo_coords_encoding='other'", 10, 4.5), std::runtime_error);
+  EXPECT_THROW(
+      import_test_local_geo("geospatial.csv", ", geo_coords_encoding='other'", 10, 4.5),
+      std::runtime_error);
 }
 
 TEST_F(GeoImportTest, Geo_CSV_Local_SRID_LonLat) {
@@ -457,34 +498,44 @@ TEST_F(GeoImportTest, Geo_CSV_Local_SRID_LonLat) {
 }
 
 TEST_F(GeoImportTest, Geo_CSV_Local_SRID_Mercator) {
-  EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_srid=900913", 10, 4.5));
+  EXPECT_TRUE(
+      import_test_local_geo("geospatial.csv", ", geo_coords_srid=900913", 10, 4.5));
 }
 
 TEST_F(GeoImportTest, Geo_CSV_Local_SRID_Other) {
-  EXPECT_THROW(import_test_local_geo("geospatial.csv", ", geo_coords_srid=12345", 10, 4.5), std::runtime_error);
+  EXPECT_THROW(
+      import_test_local_geo("geospatial.csv", ", geo_coords_srid=12345", 10, 4.5),
+      std::runtime_error);
 }
 
 TEST_F(GeoImportTest, CSV_Import) {
-  const auto file_path = boost::filesystem::path("../../Tests/Import/datafiles/geospatial.csv");
+  const auto file_path =
+      boost::filesystem::path("../../Tests/Import/datafiles/geospatial.csv");
   run_ddl_statement("COPY geospatial FROM '" + file_path.string() + "';");
   check_geo_import();
 }
 
 class GeoGDALImportTest : public ::testing::Test {
  protected:
-  virtual void SetUp() { ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;");); }
+  virtual void SetUp() {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
+  }
 
-  virtual void TearDown() { ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;");); }
+  virtual void TearDown() {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
+  }
 };
 
 TEST_F(GeoGDALImportTest, Geojson_Point_Import) {
-  const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point.geojson");
+  const auto file_path =
+      boost::filesystem::path("geospatial_point/geospatial_point.geojson");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
   check_geo_gdal_point_import();
 }
 
 TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import) {
-  const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
+  const auto file_path =
+      boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
   check_geo_gdal_mpoly_import();
 }
@@ -514,13 +565,15 @@ TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import_Compressed) {
 }
 
 TEST_F(GeoGDALImportTest, Shapefile_Point_Import_3857) {
-  const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point_3857.shp");
+  const auto file_path =
+      boost::filesystem::path("geospatial_point/geospatial_point_3857.shp");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
   check_geo_gdal_point_coords_import();
 }
 
 TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import_3857) {
-  const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_3857.shp");
+  const auto file_path =
+      boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_3857.shp");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
   check_geo_gdal_mpoly_coords_import();
 }

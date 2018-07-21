@@ -83,7 +83,8 @@ void SpeculativeTopNMap::reduce(SpeculativeTopNMap& that) {
     }
   }
   for (const auto& kv : that.map_) {
-    const auto it_ok = map_.emplace(kv.first, SpeculativeTopNVal{kv.second.val + unknown_, unknown_ != 0});
+    const auto it_ok = map_.emplace(
+        kv.first, SpeculativeTopNVal{kv.second.val + unknown_, unknown_ != 0});
     CHECK(it_ok.second);
   }
   unknown_ += that.unknown_;
@@ -116,14 +117,16 @@ RowSetPtr SpeculativeTopNMap::asRows(const RelAlgExecutionUnit& ra_exe_unit,
   query_mem_desc_rs.output_columnar = false;
   query_mem_desc_rs.entry_count = num_rows;
   query_mem_desc_rs.agg_col_widths = {{8, 8}, {8, 8}};
-  auto rs = std::make_shared<ResultSet>(target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc_rs),
-                                        ExecutorDeviceType::CPU,
-                                        query_mem_desc_rs,
-                                        row_set_mem_owner,
-                                        executor);
+  auto rs = std::make_shared<ResultSet>(
+      target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc_rs),
+      ExecutorDeviceType::CPU,
+      query_mem_desc_rs,
+      row_set_mem_owner,
+      executor);
   auto rs_storage = rs->allocateStorage();
   auto rs_buff = reinterpret_cast<int64_t*>(rs_storage->getUnderlyingBuffer());
-  const bool count_first = dynamic_cast<const Analyzer::AggExpr*>(ra_exe_unit.target_exprs[0]);
+  const bool count_first =
+      dynamic_cast<const Analyzer::AggExpr*>(ra_exe_unit.target_exprs[0]);
   for (size_t i = 0; i < num_rows; ++i) {
     rs_buff[0] = vec[i].key;
     int64_t col0 = vec[i].key;
@@ -138,14 +141,16 @@ RowSetPtr SpeculativeTopNMap::asRows(const RelAlgExecutionUnit& ra_exe_unit,
   return rs;
 }
 
-void SpeculativeTopNBlacklist::add(const std::shared_ptr<Analyzer::Expr> expr, const bool desc) {
+void SpeculativeTopNBlacklist::add(const std::shared_ptr<Analyzer::Expr> expr,
+                                   const bool desc) {
   for (const auto e : blacklist_) {
     CHECK(!(*e.first == *expr) || e.second != desc);
   }
   blacklist_.emplace_back(expr, desc);
 }
 
-bool SpeculativeTopNBlacklist::contains(const std::shared_ptr<Analyzer::Expr> expr, const bool desc) const {
+bool SpeculativeTopNBlacklist::contains(const std::shared_ptr<Analyzer::Expr> expr,
+                                        const bool desc) const {
   for (const auto e : blacklist_) {
     if (*e.first == *expr && e.second == desc) {
       return true;
@@ -154,7 +159,8 @@ bool SpeculativeTopNBlacklist::contains(const std::shared_ptr<Analyzer::Expr> ex
   return false;
 }
 
-bool use_speculative_top_n(const RelAlgExecutionUnit& ra_exe_unit, const QueryMemoryDescriptor& query_mem_desc) {
+bool use_speculative_top_n(const RelAlgExecutionUnit& ra_exe_unit,
+                           const QueryMemoryDescriptor& query_mem_desc) {
   if (g_cluster) {
     return false;
   }

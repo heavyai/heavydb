@@ -39,8 +39,9 @@ inline bool is_distinct_target(const TargetInfo& target_info) {
 }
 
 inline bool takes_float_argument(const TargetInfo& target_info) {
-  return target_info.is_agg && (target_info.agg_kind == kAVG || target_info.agg_kind == kSUM ||
-                                target_info.agg_kind == kMIN || target_info.agg_kind == kMAX) &&
+  return target_info.is_agg &&
+         (target_info.agg_kind == kAVG || target_info.agg_kind == kSUM ||
+          target_info.agg_kind == kMIN || target_info.agg_kind == kMAX) &&
          target_info.agg_arg_type.get_type() == kFLOAT;
 }
 

@@ -17,14 +17,14 @@
 #ifndef FRAGMENTER_H
 #define FRAGMENTER_H
 
-#include <map>
 #include <deque>
 #include <list>
+#include <map>
 #include <mutex>
-#include "../Shared/types.h"
-#include "../Shared/mapd_shared_mutex.h"
-#include "../DataMgr/ChunkMetadata.h"
 #include "../Catalog/ColumnDescriptor.h"
+#include "../DataMgr/ChunkMetadata.h"
+#include "../Shared/mapd_shared_mutex.h"
+#include "../Shared/types.h"
 
 namespace Data_Namespace {
 class AbstractBuffer;
@@ -56,13 +56,15 @@ enum FragmenterType {
  */
 
 struct InsertData {
-  int databaseId;                  /// identifies the database into which the data is being inserted
-  int tableId;                     /// identifies the table into which the data is being inserted
-  std::vector<int> columnIds;      /// a vector of column ids for the row(s) being inserted
-  size_t numRows;                  /// the number of rows being inserted
-  std::vector<DataBlockPtr> data;  /// points to the start of the data block per column for the row(s) being inserted
-  int64_t replicate_count = 0;     /// count to replicate values of column(s); used only for ALTER ADD column
-  std::vector<bool> bypass;        // bypass corresponding columnIds[]
+  int databaseId;  /// identifies the database into which the data is being inserted
+  int tableId;     /// identifies the table into which the data is being inserted
+  std::vector<int> columnIds;  /// a vector of column ids for the row(s) being inserted
+  size_t numRows;              /// the number of rows being inserted
+  std::vector<DataBlockPtr> data;  /// points to the start of the data block per column
+                                   /// for the row(s) being inserted
+  int64_t replicate_count =
+      0;  /// count to replicate values of column(s); used only for ALTER ADD column
+  std::vector<bool> bypass;  // bypass corresponding columnIds[]
   std::map<int, const ColumnDescriptor*> columnDescriptors;
 };
 
@@ -76,25 +78,29 @@ struct InsertData {
 class FragmentInfo {
  public:
   FragmentInfo()
-      : fragmentId(-1),
-        shadowNumTuples(0),
-        physicalTableId(-1),
-        shard(-1),
-        mutex_access_inmem_states(new std::mutex),
-        resultSet(nullptr),
-        numTuples(0),
-        synthesizedNumTuplesIsValid(false),
-        synthesizedMetadataIsValid(false) {}
+      : fragmentId(-1)
+      , shadowNumTuples(0)
+      , physicalTableId(-1)
+      , shard(-1)
+      , mutex_access_inmem_states(new std::mutex)
+      , resultSet(nullptr)
+      , numTuples(0)
+      , synthesizedNumTuplesIsValid(false)
+      , synthesizedMetadataIsValid(false) {}
 
   void setChunkMetadataMap(const std::map<int, ChunkMetadata>& chunkMetadataMap) {
     this->chunkMetadataMap = chunkMetadataMap;
   }
 
-  void setChunkMetadata(const int col, const ChunkMetadata& chunkMetadata) { chunkMetadataMap[col] = chunkMetadata; }
+  void setChunkMetadata(const int col, const ChunkMetadata& chunkMetadata) {
+    chunkMetadataMap[col] = chunkMetadata;
+  }
 
   const std::map<int, ChunkMetadata>& getChunkMetadataMap() const;
 
-  const std::map<int, ChunkMetadata>& getChunkMetadataMapPhysical() const { return chunkMetadataMap; }
+  const std::map<int, ChunkMetadata>& getChunkMetadataMapPhysical() const {
+    return chunkMetadataMap;
+  }
 
   size_t getNumTuples() const;
 
@@ -154,6 +160,6 @@ class TableInfo {
   mutable size_t numTuples;
 };
 
-}  // Fragmenter_Namespace
+}  // namespace Fragmenter_Namespace
 
 #endif  // FRAGMENTER_H

@@ -23,9 +23,9 @@
 //
 //  Copyright (c) 2014 MapD Technologies, Inc. All rights reserved.
 //
+#include <glog/logging.h>
 #include <cassert>
 #include <stdexcept>
-#include <glog/logging.h>
 
 #include "Buffer.h"
 #include "BufferMgr.h"
@@ -37,7 +37,13 @@ Buffer::Buffer(BufferMgr* bm,
                const int deviceId,
                const size_t pageSize,
                const size_t numBytes)
-    : AbstractBuffer(deviceId), mem_(0), bm_(bm), segIt_(segIt), pageSize_(pageSize), numPages_(0), pinCount_(0) {
+    : AbstractBuffer(deviceId)
+    , mem_(0)
+    , bm_(bm)
+    , segIt_(segIt)
+    , pageSize_(pageSize)
+    , numPages_(0)
+    , pinCount_(0) {
   pin();
   // so that the pointer value of this Buffer is stored
   segIt_->buffer = this;
@@ -47,8 +53,8 @@ Buffer::Buffer(BufferMgr* bm,
 }
 
 /*
- Buffer::Buffer(const int8_t * mem, const size_t numPages, const size_t pageSize, const int epoch):
-  mem_(mem), pageSize_(pageSize), used_(0), epoch_(epoch), dirty_(false)
+ Buffer::Buffer(const int8_t * mem, const size_t numPages, const size_t pageSize, const
+ int epoch): mem_(mem), pageSize_(pageSize), used_(0), epoch_(epoch), dirty_(false)
  {
      assert(pageSize_ > 0);
      pageDirtyFlags_.resize(numPages);
@@ -127,10 +133,15 @@ void Buffer::write(int8_t* src,
   }
 }
 
-void Buffer::append(int8_t* src, const size_t numBytes, const MemoryLevel srcBufferType, const int srcDeviceId) {
+void Buffer::append(int8_t* src,
+                    const size_t numBytes,
+                    const MemoryLevel srcBufferType,
+                    const int srcDeviceId) {
 #ifdef BUFFER_MUTEX
-  boost::shared_lock<boost::shared_mutex> readLock(readWriteMutex_);  // keep another thread from getting a write lock
-  boost::unique_lock<boost::shared_mutex> appendLock(appendMutex_);   // keep another thread from getting an append lock
+  boost::shared_lock<boost::shared_mutex> readLock(
+      readWriteMutex_);  // keep another thread from getting a write lock
+  boost::unique_lock<boost::shared_mutex> appendLock(
+      appendMutex_);  // keep another thread from getting an append lock
 #endif
 
   isDirty_ = true;
@@ -148,4 +159,4 @@ void Buffer::append(int8_t* src, const size_t numBytes, const MemoryLevel srcBuf
 int8_t* Buffer::getMemoryPtr() {
   return mem_;
 }
-}
+}  // namespace Buffer_Namespace

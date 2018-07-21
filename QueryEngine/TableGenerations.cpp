@@ -18,7 +18,8 @@
 
 #include <glog/logging.h>
 
-void TableGenerations::setGeneration(const uint32_t id, const TableGeneration& generation) {
+void TableGenerations::setGeneration(const uint32_t id,
+                                     const TableGeneration& generation) {
   const auto it_ok = id_to_generation_.emplace(id, generation);
   CHECK(it_ok.second);
 }

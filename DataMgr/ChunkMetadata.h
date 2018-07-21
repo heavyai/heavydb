@@ -17,8 +17,8 @@
 #ifndef CHUNKMETADATA_H
 #define CHUNKMETADATA_H
 
-#include "../Shared/sqltypes.h"
 #include <stddef.h>
+#include "../Shared/sqltypes.h"
 
 struct ChunkStats {
   Datum min;

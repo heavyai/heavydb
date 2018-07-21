@@ -122,17 +122,21 @@ std::string string_cmp_func(const SQLOps optype) {
 }
 
 std::shared_ptr<Analyzer::BinOper> lower_bw_eq(const Analyzer::BinOper* bw_eq) {
-  const auto eq_oper = std::make_shared<Analyzer::BinOper>(bw_eq->get_type_info(),
-                                                           bw_eq->get_contains_agg(),
-                                                           kEQ,
-                                                           bw_eq->get_qualifier(),
-                                                           bw_eq->get_own_left_operand(),
-                                                           bw_eq->get_own_right_operand());
-  const auto lhs_is_null = std::make_shared<Analyzer::UOper>(kBOOLEAN, kISNULL, bw_eq->get_own_left_operand());
-  const auto rhs_is_null = std::make_shared<Analyzer::UOper>(kBOOLEAN, kISNULL, bw_eq->get_own_right_operand());
-  const auto both_are_null = Parser::OperExpr::normalize(kAND, kONE, lhs_is_null, rhs_is_null);
-  const auto bw_eq_oper =
-      std::dynamic_pointer_cast<Analyzer::BinOper>(Parser::OperExpr::normalize(kOR, kONE, eq_oper, both_are_null));
+  const auto eq_oper =
+      std::make_shared<Analyzer::BinOper>(bw_eq->get_type_info(),
+                                          bw_eq->get_contains_agg(),
+                                          kEQ,
+                                          bw_eq->get_qualifier(),
+                                          bw_eq->get_own_left_operand(),
+                                          bw_eq->get_own_right_operand());
+  const auto lhs_is_null =
+      std::make_shared<Analyzer::UOper>(kBOOLEAN, kISNULL, bw_eq->get_own_left_operand());
+  const auto rhs_is_null = std::make_shared<Analyzer::UOper>(
+      kBOOLEAN, kISNULL, bw_eq->get_own_right_operand());
+  const auto both_are_null =
+      Parser::OperExpr::normalize(kAND, kONE, lhs_is_null, rhs_is_null);
+  const auto bw_eq_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(
+      Parser::OperExpr::normalize(kOR, kONE, eq_oper, both_are_null));
   CHECK(bw_eq_oper);
   return bw_eq_oper;
 }
@@ -143,33 +147,41 @@ std::shared_ptr<Analyzer::BinOper> make_eq(const std::shared_ptr<Analyzer::Expr>
   CHECK(IS_EQUIVALENCE(optype));
   // Sides of a tuple equality are stripped of cast operators to simplify the logic
   // in the hash table construction algorithm. Add them back here.
-  auto eq_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(Parser::OperExpr::normalize(optype, kONE, lhs, rhs));
+  auto eq_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(
+      Parser::OperExpr::normalize(optype, kONE, lhs, rhs));
   CHECK(eq_oper);
   return optype == kBW_EQ ? lower_bw_eq(eq_oper.get()) : eq_oper;
 }
 
 // Convert a column tuple equality expression back to a conjunction of comparisons
 // so that it can be handled by the regular code generation methods.
-std::shared_ptr<Analyzer::BinOper> lower_multicol_compare(const Analyzer::BinOper* multicol_compare) {
-  const auto left_tuple_expr = dynamic_cast<const Analyzer::ExpressionTuple*>(multicol_compare->get_left_operand());
-  const auto right_tuple_expr = dynamic_cast<const Analyzer::ExpressionTuple*>(multicol_compare->get_right_operand());
+std::shared_ptr<Analyzer::BinOper> lower_multicol_compare(
+    const Analyzer::BinOper* multicol_compare) {
+  const auto left_tuple_expr = dynamic_cast<const Analyzer::ExpressionTuple*>(
+      multicol_compare->get_left_operand());
+  const auto right_tuple_expr = dynamic_cast<const Analyzer::ExpressionTuple*>(
+      multicol_compare->get_right_operand());
   CHECK(left_tuple_expr && right_tuple_expr);
   const auto& left_tuple = left_tuple_expr->getTuple();
   const auto& right_tuple = right_tuple_expr->getTuple();
   CHECK_EQ(left_tuple.size(), right_tuple.size());
   CHECK_GT(left_tuple.size(), size_t(1));
-  auto acc = make_eq(left_tuple.front(), right_tuple.front(), multicol_compare->get_optype());
+  auto acc =
+      make_eq(left_tuple.front(), right_tuple.front(), multicol_compare->get_optype());
   for (size_t i = 1; i < left_tuple.size(); ++i) {
     auto crt = make_eq(left_tuple[i], right_tuple[i], multicol_compare->get_optype());
-    const bool not_null = acc->get_type_info().get_notnull() && crt->get_type_info().get_notnull();
-    acc = makeExpr<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, not_null), false, kAND, kONE, acc, crt);
+    const bool not_null =
+        acc->get_type_info().get_notnull() && crt->get_type_info().get_notnull();
+    acc = makeExpr<Analyzer::BinOper>(
+        SQLTypeInfo(kBOOLEAN, not_null), false, kAND, kONE, acc, crt);
   }
   return acc;
 }
 
 }  // namespace
 
-llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const CompilationOptions& co) {
+llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper,
+                                  const CompilationOptions& co) {
   for (size_t i = 0; i < plan_state_->join_info_.equi_join_tautologies_.size(); ++i) {
     const auto& equi_join_tautology = plan_state_->join_info_.equi_join_tautologies_[i];
     if (*equi_join_tautology == *bin_oper) {
@@ -197,18 +209,24 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const Compi
   const auto& lhs_ti = lhs->get_type_info();
   const auto& rhs_ti = rhs->get_type_info();
 
-  if (g_fast_strcmp && lhs_ti.is_string() && rhs_ti.is_string() && !(IS_EQUIVALENCE(optype) || optype == kNE)) {
-    auto cmp_str =
-        codegenStrCmp(optype, qualifier, bin_oper->get_own_left_operand(), bin_oper->get_own_right_operand(), co);
+  if (g_fast_strcmp && lhs_ti.is_string() && rhs_ti.is_string() &&
+      !(IS_EQUIVALENCE(optype) || optype == kNE)) {
+    auto cmp_str = codegenStrCmp(optype,
+                                 qualifier,
+                                 bin_oper->get_own_left_operand(),
+                                 bin_oper->get_own_right_operand(),
+                                 co);
     if (cmp_str) {
       return cmp_str;
     }
   }
 
   if (lhs_ti.is_decimal()) {
-    auto cmp_decimal_const = codegenCmpDecimalConst(optype, qualifier, lhs, lhs_ti, rhs, co);
-    if (cmp_decimal_const)
+    auto cmp_decimal_const =
+        codegenCmpDecimalConst(optype, qualifier, lhs, lhs_ti, rhs, co);
+    if (cmp_decimal_const) {
       return cmp_decimal_const;
+    }
   }
 
   auto lhs_lvs = codegen(lhs, true, co);
@@ -227,7 +245,8 @@ llvm::Value* Executor::codegenStrCmp(const SQLOps optype,
   CHECK(rhs_ti.is_string());
 
   const auto null_check_suffix = get_null_check_suffix(lhs_ti, rhs_ti);
-  if (lhs_ti.get_compression() == kENCODING_DICT && rhs_ti.get_compression() == kENCODING_DICT) {
+  if (lhs_ti.get_compression() == kENCODING_DICT &&
+      rhs_ti.get_compression() == kENCODING_DICT) {
     if (lhs_ti.get_comp_param() == rhs_ti.get_comp_param()) {
       // Both operands share a dictionary
 
@@ -251,11 +270,13 @@ llvm::Value* Executor::codegenCmpDecimalConst(const SQLOps optype,
                                               const Analyzer::Expr* rhs,
                                               const CompilationOptions& co) {
   auto u_oper = dynamic_cast<const Analyzer::UOper*>(lhs);
-  if (!u_oper || u_oper->get_optype() != kCAST)
+  if (!u_oper || u_oper->get_optype() != kCAST) {
     return nullptr;
+  }
   auto rhs_constant = dynamic_cast<const Analyzer::Constant*>(rhs);
-  if (!rhs_constant)
+  if (!rhs_constant) {
     return nullptr;
+  }
   const auto operand = u_oper->get_operand();
   const auto& operand_ti = operand->get_type_info();
   if (operand_ti.is_decimal() && operand_ti.get_scale() < lhs_ti.get_scale()) {
@@ -275,14 +296,18 @@ llvm::Value* Executor::codegenCmpDecimalConst(const SQLOps optype,
   }
   int64_t truncated_decimal = bigintval / exp_to_scale(scale_diff);
   int64_t decimal_tail = bigintval % exp_to_scale(scale_diff);
-  if (truncated_decimal % 10 == 0 && decimal_tail > 0)
+  if (truncated_decimal % 10 == 0 && decimal_tail > 0) {
     truncated_decimal += 1;
-  SQLTypeInfo new_ti = SQLTypeInfo(kDECIMAL, 19, lhs_ti.get_scale() - scale_diff, operand_ti.get_notnull());
-  if (negative)
+  }
+  SQLTypeInfo new_ti = SQLTypeInfo(
+      kDECIMAL, 19, lhs_ti.get_scale() - scale_diff, operand_ti.get_notnull());
+  if (negative) {
     truncated_decimal = -truncated_decimal;
+  }
   Datum d;
   d.bigintval = truncated_decimal;
-  const auto new_rhs_lit = makeExpr<Analyzer::Constant>(new_ti, operand_ti.get_notnull(), d);
+  const auto new_rhs_lit =
+      makeExpr<Analyzer::Constant>(new_ti, operand_ti.get_notnull(), d);
   const auto operand_lv = codegen(operand, true, co).front();
   const auto lhs_lv = codegenCast(operand_lv, operand_ti, new_ti, false, co);
   return codegenCmp(optype, qualifier, {lhs_lv}, new_ti, new_rhs_lit.get(), co);
@@ -301,10 +326,11 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
   }
   auto rhs_lvs = codegen(rhs, true, co);
   CHECK_EQ(kONE, qualifier);
-  CHECK((lhs_ti.get_type() == rhs_ti.get_type()) || (lhs_ti.is_string() && rhs_ti.is_string()));
+  CHECK((lhs_ti.get_type() == rhs_ti.get_type()) ||
+        (lhs_ti.is_string() && rhs_ti.is_string()));
   const auto null_check_suffix = get_null_check_suffix(lhs_ti, rhs_ti);
-  if (lhs_ti.is_integer() || lhs_ti.is_decimal() || lhs_ti.is_time() || lhs_ti.is_boolean() || lhs_ti.is_string() ||
-      lhs_ti.is_timeinterval()) {
+  if (lhs_ti.is_integer() || lhs_ti.is_decimal() || lhs_ti.is_time() ||
+      lhs_ti.is_boolean() || lhs_ti.is_string() || lhs_ti.is_timeinterval()) {
     if (lhs_ti.is_string()) {
       CHECK(rhs_ti.is_string());
       CHECK_EQ(lhs_ti.get_compression(), rhs_ti.get_compression());
@@ -320,19 +346,23 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
           rhs_lvs.push_back(cgen_state_->emitCall("extract_str_ptr", {rhs_lvs.front()}));
           rhs_lvs.push_back(cgen_state_->emitCall("extract_str_len", {rhs_lvs.front()}));
         }
-        std::vector<llvm::Value*> str_cmp_args{lhs_lvs[1], lhs_lvs[2], rhs_lvs[1], rhs_lvs[2]};
+        std::vector<llvm::Value*> str_cmp_args{
+            lhs_lvs[1], lhs_lvs[2], rhs_lvs[1], rhs_lvs[2]};
         if (!null_check_suffix.empty()) {
           str_cmp_args.push_back(inlineIntNull(SQLTypeInfo(kBOOLEAN, false)));
         }
-        return cgen_state_->emitCall(string_cmp_func(optype) + (null_check_suffix.empty() ? "" : "_nullable"),
-                                     str_cmp_args);
+        return cgen_state_->emitCall(
+            string_cmp_func(optype) + (null_check_suffix.empty() ? "" : "_nullable"),
+            str_cmp_args);
       } else {
         CHECK(optype == kEQ || optype == kNE);
       }
     }
     return null_check_suffix.empty()
-               ? cgen_state_->ir_builder_.CreateICmp(llvm_icmp_pred(optype), lhs_lvs.front(), rhs_lvs.front())
-               : cgen_state_->emitCall(icmp_name(optype) + "_" + numeric_type_name(lhs_ti) + null_check_suffix,
+               ? cgen_state_->ir_builder_.CreateICmp(
+                     llvm_icmp_pred(optype), lhs_lvs.front(), rhs_lvs.front())
+               : cgen_state_->emitCall(icmp_name(optype) + "_" +
+                                           numeric_type_name(lhs_ti) + null_check_suffix,
                                        {lhs_lvs.front(),
                                         rhs_lvs.front(),
                                         ll_int(inline_int_null_val(lhs_ti)),
@@ -340,11 +370,14 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
   }
   if (lhs_ti.get_type() == kFLOAT || lhs_ti.get_type() == kDOUBLE) {
     return null_check_suffix.empty()
-               ? cgen_state_->ir_builder_.CreateFCmp(llvm_fcmp_pred(optype), lhs_lvs.front(), rhs_lvs.front())
-               : cgen_state_->emitCall(icmp_name(optype) + "_" + numeric_type_name(lhs_ti) + null_check_suffix,
+               ? cgen_state_->ir_builder_.CreateFCmp(
+                     llvm_fcmp_pred(optype), lhs_lvs.front(), rhs_lvs.front())
+               : cgen_state_->emitCall(icmp_name(optype) + "_" +
+                                           numeric_type_name(lhs_ti) + null_check_suffix,
                                        {lhs_lvs.front(),
                                         rhs_lvs.front(),
-                                        lhs_ti.get_type() == kFLOAT ? ll_fp(NULL_FLOAT) : ll_fp(NULL_DOUBLE),
+                                        lhs_ti.get_type() == kFLOAT ? ll_fp(NULL_FLOAT)
+                                                                    : ll_fp(NULL_DOUBLE),
                                         inlineIntNull(SQLTypeInfo(kBOOLEAN, false))});
   }
   CHECK(false);
@@ -367,16 +400,21 @@ llvm::Value* Executor::codegenQualifierCmp(const SQLOps optype,
   const auto& elem_ti = arr_ti.get_elem_type();
   auto rhs_lvs = codegen(arr_expr, true, co);
   CHECK_NE(kONE, qualifier);
-  std::string fname{std::string("array_") + (qualifier == kANY ? "any" : "all") + "_" + icmp_arr_name(optype)};
+  std::string fname{std::string("array_") + (qualifier == kANY ? "any" : "all") + "_" +
+                    icmp_arr_name(optype)};
   const auto& target_ti = rhs_ti.get_elem_type();
-  const bool is_real_string{target_ti.is_string() && target_ti.get_compression() != kENCODING_DICT};
+  const bool is_real_string{target_ti.is_string() &&
+                            target_ti.get_compression() != kENCODING_DICT};
   if (is_real_string) {
     if (g_cluster) {
       throw std::runtime_error(
-          "Comparison between a dictionary-encoded and a none-encoded string not supported for distributed queries");
+          "Comparison between a dictionary-encoded and a none-encoded string not "
+          "supported for distributed queries");
     }
     if (g_enable_watchdog) {
-      throw WatchdogException("Comparison between a dictionary-encoded and a none-encoded string would be slow");
+      throw WatchdogException(
+          "Comparison between a dictionary-encoded and a none-encoded string would be "
+          "slow");
     }
     if (co.device_type_ == ExecutorDeviceType::GPU) {
       throw QueryMustRunOnCpu();
@@ -399,7 +437,8 @@ llvm::Value* Executor::codegenQualifierCmp(const SQLOps optype,
          posArg(arr_expr),
          lhs_lvs[1],
          lhs_lvs[2],
-         ll_int(int64_t(getStringDictionaryProxy(elem_ti.get_comp_param(), row_set_mem_owner_, true))),
+         ll_int(int64_t(getStringDictionaryProxy(
+             elem_ti.get_comp_param(), row_set_mem_owner_, true))),
          inlineIntNull(elem_ti)});
   }
   if (target_ti.is_integer() || target_ti.is_boolean() || target_ti.is_string()) {
@@ -408,11 +447,12 @@ llvm::Value* Executor::codegenQualifierCmp(const SQLOps optype,
     CHECK(target_ti.is_fp());
     fname += target_ti.get_type() == kDOUBLE ? "_double" : "_float";
   }
-  return cgen_state_->emitExternalCall(fname,
-                                       get_int_type(1, cgen_state_->context_),
-                                       {rhs_lvs.front(),
-                                        posArg(arr_expr),
-                                        lhs_lvs.front(),
-                                        elem_ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(elem_ti))
-                                                        : static_cast<llvm::Value*>(inlineIntNull(elem_ti))});
+  return cgen_state_->emitExternalCall(
+      fname,
+      get_int_type(1, cgen_state_->context_),
+      {rhs_lvs.front(),
+       posArg(arr_expr),
+       lhs_lvs.front(),
+       elem_ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(elem_ti))
+                       : static_cast<llvm::Value*>(inlineIntNull(elem_ti))});
 }

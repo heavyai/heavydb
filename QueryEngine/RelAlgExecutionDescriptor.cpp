@@ -20,10 +20,13 @@
 
 namespace {
 
-typedef boost::adjacency_list<boost::setS, boost::vecS, boost::bidirectionalS, const RelAlgNode*> DAG;
-typedef DAG::vertex_descriptor Vertex;
+typedef boost::
+    adjacency_list<boost::setS, boost::vecS, boost::bidirectionalS, const RelAlgNode*>
+        DAG;
+using Vertex = DAG::vertex_descriptor;
 
-std::vector<Vertex> merge_sort_with_input(const std::vector<Vertex>& vertices, const DAG& graph) {
+std::vector<Vertex> merge_sort_with_input(const std::vector<Vertex>& vertices,
+                                          const DAG& graph) {
   DAG::in_edge_iterator ie_iter, ie_end;
   std::unordered_set<Vertex> inputs;
   for (const auto vert : vertices) {
@@ -52,11 +55,13 @@ std::vector<Vertex> merge_sort_with_input(const std::vector<Vertex>& vertices, c
   return new_vertices;
 }
 
-std::vector<Vertex> merge_join_with_non_join(const std::vector<Vertex>& vertices, const DAG& graph) {
+std::vector<Vertex> merge_join_with_non_join(const std::vector<Vertex>& vertices,
+                                             const DAG& graph) {
   DAG::out_edge_iterator oe_iter, oe_end;
   std::unordered_set<Vertex> joins;
   for (const auto vert : vertices) {
-    if (dynamic_cast<const RelMultiJoin*>(graph[vert]) || dynamic_cast<const RelLeftDeepInnerJoin*>(graph[vert])) {
+    if (dynamic_cast<const RelMultiJoin*>(graph[vert]) ||
+        dynamic_cast<const RelLeftDeepInnerJoin*>(graph[vert])) {
       joins.insert(vert);
       continue;
     }
@@ -69,7 +74,8 @@ std::vector<Vertex> merge_join_with_non_join(const std::vector<Vertex>& vertices
     boost::tie(oe_iter, oe_end) = boost::out_edges(vert, graph);
     CHECK(boost::next(oe_iter) == oe_end);
     const auto out_vert = boost::target(*oe_iter, graph);
-    if (!dynamic_cast<const RelJoin*>(graph[out_vert]) && !dynamic_cast<const RelMultiJoin*>(graph[out_vert])) {
+    if (!dynamic_cast<const RelJoin*>(graph[out_vert]) &&
+        !dynamic_cast<const RelMultiJoin*>(graph[out_vert])) {
       joins.insert(vert);
     }
   }
@@ -87,7 +93,8 @@ std::vector<Vertex> merge_join_with_non_join(const std::vector<Vertex>& vertices
 DAG build_dag(const RelAlgNode* sink) {
   DAG graph(1);
   graph[0] = sink;
-  std::unordered_map<const RelAlgNode*, int> node_ptr_to_vert_idx{std::make_pair(sink, 0)};
+  std::unordered_map<const RelAlgNode*, int> node_ptr_to_vert_idx{
+      std::make_pair(sink, 0)};
   std::vector<const RelAlgNode*> stack(1, sink);
   while (!stack.empty()) {
     const auto node = stack.back();
@@ -97,11 +104,13 @@ DAG build_dag(const RelAlgNode* sink) {
     }
 
     const auto input_num = node->inputCount();
-    CHECK(input_num == 1 || (dynamic_cast<const RelLogicalValues*>(node) && input_num == 0) ||
-	  (dynamic_cast<const RelModify*>(node) && input_num == 1) ||
-          (input_num == 2 && (dynamic_cast<const RelJoin*>(node) || dynamic_cast<const RelLeftDeepInnerJoin*>(node))) ||
-          (input_num > 2 &&
-           (dynamic_cast<const RelMultiJoin*>(node) || dynamic_cast<const RelLeftDeepInnerJoin*>(node))));
+    CHECK(input_num == 1 ||
+          (dynamic_cast<const RelLogicalValues*>(node) && input_num == 0) ||
+          (dynamic_cast<const RelModify*>(node) && input_num == 1) ||
+          (input_num == 2 && (dynamic_cast<const RelJoin*>(node) ||
+                              dynamic_cast<const RelLeftDeepInnerJoin*>(node))) ||
+          (input_num > 2 && (dynamic_cast<const RelMultiJoin*>(node) ||
+                             dynamic_cast<const RelLeftDeepInnerJoin*>(node))));
     for (size_t i = 0; i < input_num; ++i) {
       const auto input = node->getInput(i);
       CHECK(input);
@@ -166,7 +175,8 @@ std::vector<RaExecutionDesc> get_execution_descriptors(const RelAlgNode* ra_node
   return descs;
 }
 
-std::vector<RaExecutionDesc> get_execution_descriptors(const std::vector<const RelAlgNode*>& ra_nodes) {
+std::vector<RaExecutionDesc> get_execution_descriptors(
+    const std::vector<const RelAlgNode*>& ra_nodes) {
   CHECK(!ra_nodes.empty());
 
   std::vector<RaExecutionDesc> descs;
@@ -176,7 +186,8 @@ std::vector<RaExecutionDesc> get_execution_descriptors(const std::vector<const R
     }
     CHECK_GT(node->inputCount(), size_t(0));
 #ifdef ENABLE_JOIN_EXEC
-    CHECK((dynamic_cast<const RelJoin*>(node) && 2 == node->inputCount()) || (1 == node->inputCount()));
+    CHECK((dynamic_cast<const RelJoin*>(node) && 2 == node->inputCount()) ||
+          (1 == node->inputCount()));
 #endif
     descs.emplace_back(node);
   }

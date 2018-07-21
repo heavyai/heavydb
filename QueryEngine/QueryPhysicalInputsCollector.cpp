@@ -22,7 +22,7 @@
 
 namespace {
 
-typedef std::unordered_set<PhysicalInput> PhysicalInputSet;
+using PhysicalInputSet = std::unordered_set<PhysicalInput>;
 
 class RelAlgPhysicalInputsVisitor : public RelAlgVisitor<PhysicalInputSet> {
  public:
@@ -82,7 +82,8 @@ class RexPhysicalInputsVisitor : public RexVisitor<PhysicalInputSet> {
   }
 };
 
-PhysicalInputSet RelAlgPhysicalInputsVisitor::visitCompound(const RelCompound* compound) const {
+PhysicalInputSet RelAlgPhysicalInputsVisitor::visitCompound(
+    const RelCompound* compound) const {
   PhysicalInputSet result;
   for (size_t i = 0; i < compound->getScalarSourcesSize(); ++i) {
     const auto rex = compound->getScalarSource(i);
@@ -116,7 +117,8 @@ PhysicalInputSet RelAlgPhysicalInputsVisitor::visitJoin(const RelJoin* join) con
   return visitor.visit(condition);
 }
 
-PhysicalInputSet RelAlgPhysicalInputsVisitor::visitMultiJoin(const RelMultiJoin* multi_join) const {
+PhysicalInputSet RelAlgPhysicalInputsVisitor::visitMultiJoin(
+    const RelMultiJoin* multi_join) const {
   PhysicalInputSet result;
   RexPhysicalInputsVisitor visitor;
   for (size_t i = 0; i < multi_join->joinCount(); ++i) {
@@ -139,7 +141,8 @@ PhysicalInputSet RelAlgPhysicalInputsVisitor::visitLeftDeepInnerJoin(
     result = visitor.visit(condition);
   }
   CHECK_GE(left_deep_inner_join->inputCount(), size_t(2));
-  for (size_t nesting_level = 1; nesting_level <= left_deep_inner_join->inputCount() - 1; ++nesting_level) {
+  for (size_t nesting_level = 1; nesting_level <= left_deep_inner_join->inputCount() - 1;
+       ++nesting_level) {
     const auto outer_condition = left_deep_inner_join->getOuterCondition(nesting_level);
     if (outer_condition) {
       const auto outer_result = visitor.visit(outer_condition);
@@ -149,7 +152,8 @@ PhysicalInputSet RelAlgPhysicalInputsVisitor::visitLeftDeepInnerJoin(
   return result;
 }
 
-PhysicalInputSet RelAlgPhysicalInputsVisitor::visitProject(const RelProject* project) const {
+PhysicalInputSet RelAlgPhysicalInputsVisitor::visitProject(
+    const RelProject* project) const {
   PhysicalInputSet result;
   for (size_t i = 0; i < project->size(); ++i) {
     const auto rex = project->getProjectAt(i);
@@ -161,8 +165,9 @@ PhysicalInputSet RelAlgPhysicalInputsVisitor::visitProject(const RelProject* pro
   return result;
 }
 
-PhysicalInputSet RelAlgPhysicalInputsVisitor::aggregateResult(const PhysicalInputSet& aggregate,
-                                                              const PhysicalInputSet& next_result) const {
+PhysicalInputSet RelAlgPhysicalInputsVisitor::aggregateResult(
+    const PhysicalInputSet& aggregate,
+    const PhysicalInputSet& next_result) const {
   auto result = aggregate;
   result.insert(next_result.begin(), next_result.end());
   return result;
@@ -175,8 +180,9 @@ class RelAlgPhysicalTableInputsVisitor : public RelAlgVisitor<std::unordered_set
   }
 
  protected:
-  std::unordered_set<int> aggregateResult(const std::unordered_set<int>& aggregate,
-                                          const std::unordered_set<int>& next_result) const override {
+  std::unordered_set<int> aggregateResult(
+      const std::unordered_set<int>& aggregate,
+      const std::unordered_set<int>& next_result) const override {
     auto result = aggregate;
     result.insert(next_result.begin(), next_result.end());
     return result;

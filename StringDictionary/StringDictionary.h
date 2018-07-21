@@ -44,7 +44,10 @@ class DictPayloadUnavailable : public std::runtime_error {
 
 class StringDictionary {
  public:
-  StringDictionary(const std::string& folder, const bool isTemp, const bool recover, size_t initial_capacity = 256);
+  StringDictionary(const std::string& folder,
+                   const bool isTemp,
+                   const bool recover,
+                   size_t initial_capacity = 256);
   StringDictionary(const LeafHostInfo& host, const DictRef dict_ref);
   ~StringDictionary() noexcept;
 
@@ -66,7 +69,9 @@ class StringDictionary {
                                   const std::string& comp_operator,
                                   const size_t generation);
 
-  std::vector<int32_t> getRegexpLike(const std::string& pattern, const char escape, const size_t generation) const;
+  std::vector<int32_t> getRegexpLike(const std::string& pattern,
+                                     const char escape,
+                                     const size_t generation) const;
 
   std::shared_ptr<const std::vector<std::string>> copyStrings() const;
 
@@ -82,15 +87,17 @@ class StringDictionary {
   };
 
   // In the compare_cache_value_t index represents the index of the sorted cache.
-  // The diff component represents whether the index the cache is pointing to is equal to the pattern it is cached for.
-  // We want to use diff so we don't have compare string again when we are retrieving it from the cache.
+  // The diff component represents whether the index the cache is pointing to is equal to
+  // the pattern it is cached for. We want to use diff so we don't have compare string
+  // again when we are retrieving it from the cache.
   typedef struct {
     int32_t index;
     int32_t diff;
   } compare_cache_value_t;
 
   void processDictionaryFutures(
-      std::vector<std::future<std::vector<std::pair<unsigned int, unsigned int>>>>& dictionary_futures);
+      std::vector<std::future<std::vector<std::pair<unsigned int, unsigned int>>>>&
+          dictionary_futures);
   bool fillRateIsHigh() const noexcept;
   void increaseCapacity() noexcept;
   int32_t getOrAddImpl(const std::string& str) noexcept;
@@ -104,15 +111,19 @@ class StringDictionary {
                         const std::string str,
                         const std::vector<int32_t>& data,
                         const bool unique) const noexcept;
-  int32_t computeUniqueBucketWithHash(const size_t hash, const std::vector<int32_t>& data) const noexcept;
+  int32_t computeUniqueBucketWithHash(const size_t hash,
+                                      const std::vector<int32_t>& data) const noexcept;
   void appendToStorage(const std::string& str) noexcept;
-  std::tuple<char*, size_t, bool> getStringFromStorage(const int string_id) const noexcept;
+  std::tuple<char*, size_t, bool> getStringFromStorage(const int string_id) const
+      noexcept;
   void addPayloadCapacity() noexcept;
   void addOffsetCapacity() noexcept;
   size_t addStorageCapacity(int fd) noexcept;
   void* addMemoryCapacity(void* addr, size_t& mem_size) noexcept;
   void invalidateInvertedIndex() noexcept;
-  std::vector<int32_t> getEquals(std::string pattern, std::string comp_operator, size_t generation);
+  std::vector<int32_t> getEquals(std::string pattern,
+                                 std::string comp_operator,
+                                 size_t generation);
   void buildSortedCache();
   void insertInSortedCache(std::string str, int32_t str_id);
   void sortCache(std::vector<int32_t>& cache);
@@ -132,7 +143,8 @@ class StringDictionary {
   size_t payload_file_size_;
   size_t payload_file_off_;
   mutable mapd_shared_mutex rw_mutex_;
-  mutable std::map<std::tuple<std::string, bool, bool, char>, std::vector<int32_t>> like_cache_;
+  mutable std::map<std::tuple<std::string, bool, bool, char>, std::vector<int32_t>>
+      like_cache_;
   mutable std::map<std::pair<std::string, char>, std::vector<int32_t>> regex_cache_;
   mutable std::map<std::string, int32_t> equal_cache_;
   mutable DictionaryCache<std::string, compare_cache_value_t> compare_cache_;

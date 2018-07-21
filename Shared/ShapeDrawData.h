@@ -33,7 +33,10 @@ struct IndirectDrawVertexData {
                          const unsigned int firstIndex = 0,
                          const unsigned int instanceCount = 1,
                          const unsigned int baseInstance = 0)
-      : count(count), instanceCount(instanceCount), firstIndex(firstIndex), baseInstance(baseInstance) {}
+      : count(count)
+      , instanceCount(instanceCount)
+      , firstIndex(firstIndex)
+      , baseInstance(baseInstance) {}
 
   void set(const unsigned int inCount,
            const unsigned int inFirstIndex = 0,
@@ -53,18 +56,19 @@ struct IndirectDrawIndexData {
   unsigned int baseVertex;
   unsigned int baseInstance;
 
-  IndirectDrawIndexData() : count(0), instanceCount(0), firstIndex(0), baseVertex(0), baseInstance(0) {}
+  IndirectDrawIndexData()
+      : count(0), instanceCount(0), firstIndex(0), baseVertex(0), baseInstance(0) {}
 
   IndirectDrawIndexData(const unsigned int count,
                         const unsigned int firstIndex = 0,
                         const unsigned int baseVertex = 0,
                         const unsigned int instanceCount = 1,
                         const unsigned int baseInstance = 0)
-      : count(count),
-        instanceCount(instanceCount),
-        firstIndex(firstIndex),
-        baseVertex(baseVertex),
-        baseInstance(baseInstance) {}
+      : count(count)
+      , instanceCount(instanceCount)
+      , firstIndex(firstIndex)
+      , baseVertex(baseVertex)
+      , baseInstance(baseInstance) {}
 
   void set(const unsigned int inCount,
            const unsigned int inFirstIndex = 0,
@@ -79,8 +83,8 @@ struct IndirectDrawIndexData {
   }
 };
 
-}  // namespace GL
 }  // namespace Resources
+}  // namespace GL
 }  // namespace Rendering
 
 #endif  // SHARED_SHAPEDRAWDATA_H_

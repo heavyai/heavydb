@@ -16,8 +16,8 @@
 
 #include "ThrustAllocator.h"
 
-#include <cstdint>
 #include <glog/logging.h>
+#include <cstdint>
 
 #ifdef HAVE_CUDA
 #include "InPlaceSortImpl.h"

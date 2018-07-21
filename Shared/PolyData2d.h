@@ -23,8 +23,8 @@
 #include <Rendering/Math/Point.h>
 
 #include <boost/geometry.hpp>
-#include <boost/geometry/geometries/point.hpp>
 #include <boost/geometry/geometries/box.hpp>
+#include <boost/geometry/geometries/point.hpp>
 
 template <typename T, bool SEQUENTIAL>
 struct PolyData2d {
@@ -109,8 +109,10 @@ struct PolyData2d {
   BoostBox getBoostBox() {
     BoostBox box;
     boost::geometry::assign_inverse(box);
-    boost::geometry::expand(box, BoostPoint(bounds.getMinPoint()[0], bounds.getMinPoint()[1]));
-    boost::geometry::expand(box, BoostPoint(bounds.getMaxPoint()[0], bounds.getMaxPoint()[1]));
+    boost::geometry::expand(box,
+                            BoostPoint(bounds.getMinPoint()[0], bounds.getMinPoint()[1]));
+    boost::geometry::expand(box,
+                            BoostPoint(bounds.getMaxPoint()[0], bounds.getMaxPoint()[1]));
     return box;
   }
 

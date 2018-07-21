@@ -16,9 +16,9 @@
 #ifndef QUERYENGINE_JOINHASHTABLEINTERFACE_H
 #define QUERYENGINE_JOINHASHTABLEINTERFACE_H
 
-#include "CompilationOptions.h"
 #include <llvm/IR/Value.h>
 #include <cstdint>
+#include "CompilationOptions.h"
 
 struct HashJoinMatchingSet {
   llvm::Value* elements;
@@ -28,13 +28,15 @@ struct HashJoinMatchingSet {
 
 class JoinHashTableInterface {
  public:
-  virtual int64_t getJoinHashBuffer(const ExecutorDeviceType device_type, const int device_id) noexcept = 0;
+  virtual int64_t getJoinHashBuffer(const ExecutorDeviceType device_type,
+                                    const int device_id) noexcept = 0;
 
   virtual llvm::Value* codegenSlotIsValid(const CompilationOptions&, const size_t) = 0;
 
   virtual llvm::Value* codegenSlot(const CompilationOptions&, const size_t) = 0;
 
-  virtual HashJoinMatchingSet codegenMatchingSet(const CompilationOptions&, const size_t) = 0;
+  virtual HashJoinMatchingSet codegenMatchingSet(const CompilationOptions&,
+                                                 const size_t) = 0;
 
   virtual int getInnerTableId() const noexcept = 0;
 

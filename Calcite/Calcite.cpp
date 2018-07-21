@@ -38,13 +38,16 @@ using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
 
 namespace {
-template <typename XDEBUG_OPTION, typename REMOTE_DEBUG_OPTION, typename... REMAINING_ARGS>
+template <typename XDEBUG_OPTION,
+          typename REMOTE_DEBUG_OPTION,
+          typename... REMAINING_ARGS>
 int wrapped_execl(char const* path,
                   XDEBUG_OPTION&& x_debug,
                   REMOTE_DEBUG_OPTION&& remote_debug,
                   REMAINING_ARGS&&... standard_args) {
   if (std::is_same<JVMRemoteDebugSelector, PreprocessorTrue>::value) {
-    return execl(path, x_debug, remote_debug, std::forward<REMAINING_ARGS>(standard_args)...);
+    return execl(
+        path, x_debug, remote_debug, std::forward<REMAINING_ARGS>(standard_args)...);
   }
   return execl(path, std::forward<REMAINING_ARGS>(standard_args)...);
 }
@@ -54,12 +57,15 @@ static void start_calcite_server_as_daemon(const int mapd_port,
                                            const int port,
                                            const std::string& data_dir,
                                            const size_t calcite_max_mem) {
-  // todo MAT all platforms seem to respect /usr/bin/java - this could be a gotcha on some weird thing
+  // todo MAT all platforms seem to respect /usr/bin/java - this could be a gotcha on some
+  // weird thing
   std::string const xDebug = "-Xdebug";
-  std::string const remoteDebug = "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005";
+  std::string const remoteDebug =
+      "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005";
   std::string xmxP = "-Xmx" + std::to_string(calcite_max_mem) + "m";
   std::string jarP = "-jar";
-  std::string jarD = mapd_root_abs_path() + "/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar";
+  std::string jarD =
+      mapd_root_abs_path() + "/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar";
   std::string extensionsP = "-e";
   std::string extensionsD = mapd_root_abs_path() + "/QueryEngine/";
   std::string dataP = "-d";
@@ -68,8 +74,7 @@ static void start_calcite_server_as_daemon(const int mapd_port,
   std::string localPortD = std::to_string(port);
   std::string mapdPortP = "-m";
   std::string mapdPortD = std::to_string(mapd_port);
-  std::string mapdLogDirectory = "-DMAPD_LOG_DIR="+data_dir;
-
+  std::string mapdLogDirectory = "-DMAPD_LOG_DIR=" + data_dir;
 
   int pid = fork();
   if (pid == 0) {
@@ -93,7 +98,8 @@ static void start_calcite_server_as_daemon(const int mapd_port,
   }
 }
 
-std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> get_client(int port) {
+std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> get_client(
+    int port) {
   mapd::shared_ptr<TTransport> socket(new TSocket("localhost", port));
   mapd::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
   try {
@@ -119,12 +125,13 @@ void Calcite::runServer(const int mapd_port,
   int ping_time = ping();
   if (ping_time > -1) {
     // we have an orphaned server shut it down
-    LOG(ERROR) << "Appears to be orphaned Calcite serve already running, shutting it down";
+    LOG(ERROR)
+        << "Appears to be orphaned Calcite serve already running, shutting it down";
     LOG(ERROR) << "Please check that you are not trying to run two servers on same port";
     LOG(ERROR) << "Attempting to shutdown orphaned Calcite server";
     try {
-      std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> clientP =
-          get_client(remote_calcite_port_);
+      std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
+          clientP = get_client(remote_calcite_port_);
       clientP.first->shutdown();
       clientP.second->close();
       LOG(ERROR) << "orphaned Calcite server shutdown";
@@ -160,8 +167,8 @@ void Calcite::runServer(const int mapd_port,
 int Calcite::ping() {
   try {
     auto ms = measure<>::execution([&]() {
-      std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> clientP =
-          get_client(remote_calcite_port_);
+      std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
+          clientP = get_client(remote_calcite_port_);
       clientP.first->ping();
       clientP.second->close();
     });
@@ -178,7 +185,8 @@ Calcite::Calcite(const int mapd_port,
                  const size_t calcite_max_mem,
                  const std::string& session_prefix)
     : server_available_(false), session_prefix_(session_prefix) {
-  LOG(INFO) << "Creating Calcite Handler,  Calcite Port is " << port << " base data dir is " << data_dir;
+  LOG(INFO) << "Creating Calcite Handler,  Calcite Port is " << port
+            << " base data dir is " << data_dir;
   if (port < 0) {
     CHECK(false) << "JNI mode no longer supported.";
   }
@@ -196,8 +204,8 @@ Calcite::Calcite(const int mapd_port,
 void Calcite::updateMetadata(std::string catalog, std::string table) {
   if (server_available_) {
     auto ms = measure<>::execution([&]() {
-      std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> clientP =
-          get_client(remote_calcite_port_);
+      std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
+          clientP = get_client(remote_calcite_port_);
       clientP.first->updateMetadata(catalog, table);
       clientP.second->close();
     });
@@ -214,7 +222,8 @@ void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info
   Catalog_Namespace::Catalog& catalog = session_info.get_catalog();
 
   for (auto tableOrViewName : tableOrViewNames) {
-    const TableDescriptor* tableMeta = catalog.getMetadataForTable(tableOrViewName, false);
+    const TableDescriptor* tableMeta =
+        catalog.getMetadataForTable(tableOrViewName, false);
 
     if (!tableMeta) {
       throw std::runtime_error("unknown table of view: " + tableOrViewName);
@@ -222,7 +231,8 @@ void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info
 
     DBObjectKey key;
     key.dbId = catalog.get_currentDB().dbId;
-    key.permissionType = tableMeta->isView ? DBObjectType::ViewDBObjectType : DBObjectType::TableDBObjectType;
+    key.permissionType = tableMeta->isView ? DBObjectType::ViewDBObjectType
+                                           : DBObjectType::TableDBObjectType;
     key.objectId = tableMeta->tableId;
     AccessPrivileges privs = tableMeta->isView ? viewPrivs : tablePrivs;
     DBObject dbobject(key, privs, tableMeta->userId);
@@ -232,8 +242,10 @@ void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info
       throw std::runtime_error("Operation not supported for object " + tableOrViewName);
     }
 
-    if (!Catalog_Namespace::SysCatalog::instance().checkPrivileges(session_info.get_currentUser(), privObjects)) {
-      throw std::runtime_error("Violation of access privileges: user " + session_info.get_currentUser().userName +
+    if (!Catalog_Namespace::SysCatalog::instance().checkPrivileges(
+            session_info.get_currentUser(), privObjects)) {
+      throw std::runtime_error("Violation of access privileges: user " +
+                               session_info.get_currentUser().userName +
                                " has no proper privileges for object " + tableOrViewName);
     }
   }
@@ -270,17 +282,19 @@ TPlanResult Calcite::process(const Catalog_Namespace::SessionInfo& session_info,
   return result;
 }
 
-std::vector<TCompletionHint> Calcite::getCompletionHints(const Catalog_Namespace::SessionInfo& session_info,
-                                                         const std::vector<std::string>& visible_tables,
-                                                         const std::string sql_string,
-                                                         const int cursor) {
+std::vector<TCompletionHint> Calcite::getCompletionHints(
+    const Catalog_Namespace::SessionInfo& session_info,
+    const std::vector<std::string>& visible_tables,
+    const std::string sql_string,
+    const int cursor) {
   std::vector<TCompletionHint> hints;
   auto& cat = session_info.get_catalog();
   const auto user = session_info.get_currentUser().userName;
   const auto session = session_info.get_session_id();
   const auto catalog = cat.get_currentDB().dbName;
   auto client = get_client(remote_calcite_port_);
-  client.first->getCompletionHints(hints, user, session, catalog, visible_tables, sql_string, cursor);
+  client.first->getCompletionHints(
+      hints, user, session, catalog, visible_tables, sql_string, cursor);
   return hints;
 }
 
@@ -321,16 +335,18 @@ TPlanResult Calcite::processImpl(const Catalog_Namespace::SessionInfo& session_i
     TPlanResult ret;
     try {
       auto ms = measure<>::execution([&]() {
-
-        std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> clientP =
-            get_client(remote_calcite_port_);
-        clientP.first->process(ret, user, session, catalog, sql_string, legacy_syntax, is_explain);
+        std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
+            clientP = get_client(remote_calcite_port_);
+        clientP.first->process(
+            ret, user, session, catalog, sql_string, legacy_syntax, is_explain);
         clientP.second->close();
       });
 
       // LOG(INFO) << ret.plan_result;
-      LOG(INFO) << "Time in Thrift " << (ms > ret.execution_time_ms ? ms - ret.execution_time_ms : 0)
-                << " (ms), Time in Java Calcite server " << ret.execution_time_ms << " (ms)";
+      LOG(INFO) << "Time in Thrift "
+                << (ms > ret.execution_time_ms ? ms - ret.execution_time_ms : 0)
+                << " (ms), Time in Java Calcite server " << ret.execution_time_ms
+                << " (ms)";
       return ret;
     } catch (InvalidParseRequest& e) {
       throw std::invalid_argument(e.whyUp);
@@ -348,8 +364,8 @@ std::string Calcite::getExtensionFunctionWhitelist() {
     TPlanResult ret;
     std::string whitelist;
 
-    std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> clientP =
-        get_client(remote_calcite_port_);
+    std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
+        clientP = get_client(remote_calcite_port_);
     clientP.first->getExtensionFunctionWhitelist(whitelist);
     clientP.second->close();
     LOG(INFO) << whitelist;
@@ -366,8 +382,8 @@ void Calcite::close_calcite_server() {
   if (server_available_) {
     LOG(INFO) << "Shutting down Calcite server";
     try {
-      std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> clientP =
-        get_client(remote_calcite_port_);
+      std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
+          clientP = get_client(remote_calcite_port_);
       clientP.first->shutdown();
       clientP.second->close();
     } catch (const std::exception& e) {

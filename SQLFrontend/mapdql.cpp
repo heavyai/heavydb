@@ -24,7 +24,6 @@
 
 #include <glog/logging.h>
 #include <rapidjson/document.h>
-#include <signal.h>
 #include <termios.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
@@ -36,6 +35,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 #include <cmath>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -86,13 +86,15 @@ void completion(const char* buf, linenoiseCompletions* lc) {
   }
 }
 
-// code from https://stackoverflow.com/questions/7053538/how-do-i-encode-a-string-to-base64-using-only-boost
+// code from
+// https://stackoverflow.com/questions/7053538/how-do-i-encode-a-string-to-base64-using-only-boost
 
 static inline std::string decode64(const std::string& val) {
   using namespace boost::archive::iterators;
   using It = transform_width<binary_from_base64<std::string::const_iterator>, 8, 6>;
-  return boost::algorithm::trim_right_copy_if(std::string(It(std::begin(val)), It(std::end(val))),
-                                              [](char c) { return c == '\0'; });
+  return boost::algorithm::trim_right_copy_if(
+      std::string(It(std::begin(val)), It(std::end(val))),
+      [](char c) { return c == '\0'; });
 }
 
 #define LOAD_PATCH_SIZE 10000
@@ -138,8 +140,8 @@ void copy_table(char const* filepath, char const* table, ClientContext& context)
       std::cout << std::endl;
        */
       if (row.cols.size() != row_desc.size()) {
-        std::cerr << "Incorrect number of columns: (" << row.cols.size() << " vs " << row_desc.size() << ") " << line
-                  << std::endl;
+        std::cerr << "Incorrect number of columns: (" << row.cols.size() << " vs "
+                  << row_desc.size() << ") " << line << std::endl;
         continue;
       }
       input_rows.push_back(row);
@@ -152,8 +154,9 @@ void copy_table(char const* filepath, char const* table, ClientContext& context)
         input_rows.clear();
       }
     }
-    if (input_rows.size() > 0)
+    if (input_rows.size() > 0) {
       context.client.load_table(context.session, table, input_rows);
+    }
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
@@ -173,15 +176,18 @@ void detect_table(char* file_name, TCopyParams& copy_params, ClientContext& cont
     context.client.detect_column_types(_return, context.session, file_name, copy_params);
     // print result only for verifying detect_column_types api
     // as this cmd seems never planned for public use
-    for (const auto tct : _return.row_set.row_desc)
+    for (const auto tct : _return.row_set.row_desc) {
       printf("%20.20s ", tct.col_name.c_str());
+    }
     printf("\n");
-    for (const auto tct : _return.row_set.row_desc)
+    for (const auto tct : _return.row_set.row_desc) {
       printf("%20.20s ", type_info_from_thrift(tct.col_type).get_type_name().c_str());
+    }
     printf("\n");
     for (const auto row : _return.row_set.rows) {
-      for (const auto col : row.cols)
+      for (const auto col : row.cols) {
         printf("%20.20s ", col.val.str_val.c_str());
+      }
       printf("\n");
     }
     // output CREATE TABLE command
@@ -189,11 +195,14 @@ void detect_table(char* file_name, TCopyParams& copy_params, ClientContext& cont
     oss << "CREATE TABLE your_table_name(";
     for (size_t i = 0; i < _return.row_set.row_desc.size(); ++i) {
       const auto tct = _return.row_set.row_desc[i];
-      oss << (i ? ", " : "") << tct.col_name << " " << type_info_from_thrift(tct.col_type).get_type_name();
-      if (type_info_from_thrift(tct.col_type).is_string())
+      oss << (i ? ", " : "") << tct.col_name << " "
+          << type_info_from_thrift(tct.col_type).get_type_name();
+      if (type_info_from_thrift(tct.col_type).is_string()) {
         oss << " ENCODING DICT";
-      if (type_info_from_thrift(tct.col_type).is_array())
+      }
+      if (type_info_from_thrift(tct.col_type).is_array()) {
         oss << "[]";
+      }
     }
     oss << ");";
     printf("\n%s\n", oss.str().c_str());
@@ -215,20 +224,24 @@ size_t get_row_count(const TQueryResult& query_result) {
 
 void get_table_epoch(ClientContext& context, const std::string& table_specifier) {
   if (table_specifier.size() == 0) {
-    std::cerr << "get table epoch requires table to be specified by name or by db_id:table_id" << std::endl;
+    std::cerr
+        << "get table epoch requires table to be specified by name or by db_id:table_id"
+        << std::endl;
     return;
   }
 
   if (isdigit(table_specifier.at(0))) {
     std::vector<std::string> split_result;
 
-    boost::split(split_result,
-                 table_specifier,
-                 boost::is_any_of(":"),
-                 boost::token_compress_on);  // SplitVec == { "hello abc","ABC","aBc goodbye" }
+    boost::split(
+        split_result,
+        table_specifier,
+        boost::is_any_of(":"),
+        boost::token_compress_on);  // SplitVec == { "hello abc","ABC","aBc goodbye" }
 
     if (split_result.size() != 2) {
-      std::cerr << "get table epoch does not contain db_id:table_id " << table_specifier << std::endl;
+      std::cerr << "get table epoch does not contain db_id:table_id " << table_specifier
+                << std::endl;
       return;
     }
 
@@ -254,8 +267,9 @@ void get_table_epoch(ClientContext& context, const std::string& table_specifier)
     // presume we have a table name
     // get the db_id and table_id from the table metadata
     if (thrift_with_retry(kGET_PHYSICAL_TABLES, context, nullptr)) {
-      if (std::find(context.names_return.begin(), context.names_return.end(), table_specifier) ==
-          context.names_return.end()) {
+      if (std::find(context.names_return.begin(),
+                    context.names_return.end(),
+                    table_specifier) == context.names_return.end()) {
         std::cerr << "table " << table_specifier << " not found" << std::endl;
         return;
       }
@@ -272,20 +286,23 @@ void get_table_epoch(ClientContext& context, const std::string& table_specifier)
 
 void set_table_epoch(ClientContext& context, const std::string& table_details) {
   if (table_details.size() == 0) {
-    std::cerr << "set table epoch requires table and epoch to be specified by name epoch or by db_id:table_id:epoch"
+    std::cerr << "set table epoch requires table and epoch to be specified by name epoch "
+                 "or by db_id:table_id:epoch"
               << std::endl;
     return;
   }
   if (isdigit(table_details.at(0))) {
     std::vector<std::string> split_result;
 
-    boost::split(split_result,
-                 table_details,
-                 boost::is_any_of(":"),
-                 boost::token_compress_on);  // SplitVec == { "hello abc","ABC","aBc goodbye" }
+    boost::split(
+        split_result,
+        table_details,
+        boost::is_any_of(":"),
+        boost::token_compress_on);  // SplitVec == { "hello abc","ABC","aBc goodbye" }
 
     if (split_result.size() != 3) {
-      std::cerr << "Set table epoch does not contain db_id:table_id:epoch " << table_details << std::endl;
+      std::cerr << "Set table epoch does not contain db_id:table_id:epoch "
+                << table_details << std::endl;
       return;
     }
 
@@ -322,7 +339,8 @@ void set_table_epoch(ClientContext& context, const std::string& table_details) {
     }
   } else {
     std::vector<std::string> split_result;
-    boost::split(split_result, table_details, boost::is_any_of(" "), boost::token_compress_on);
+    boost::split(
+        split_result, table_details, boost::is_any_of(" "), boost::token_compress_on);
 
     if (split_result.size() < 2) {
       std::cerr << "Set table epoch does not contain table_name epoch " << std::endl;
@@ -330,8 +348,9 @@ void set_table_epoch(ClientContext& context, const std::string& table_details) {
     }
 
     if (thrift_with_retry(kGET_PHYSICAL_TABLES, context, nullptr)) {
-      if (std::find(context.names_return.begin(), context.names_return.end(), split_result[0]) ==
-          context.names_return.end()) {
+      if (std::find(context.names_return.begin(),
+                    context.names_return.end(),
+                    split_result[0]) == context.names_return.end()) {
         std::cerr << "table " << split_result[0] << " not found" << std::endl;
         return;
       }
@@ -391,12 +410,14 @@ std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_in
     }
     case TDatumType::DOUBLE: {
       std::ostringstream dout;
-      dout << std::setprecision(std::numeric_limits<double>::digits10 + 1) << datum.val.real_val;
+      dout << std::setprecision(std::numeric_limits<double>::digits10 + 1)
+           << datum.val.real_val;
       return dout.str();
     }
     case TDatumType::FLOAT: {
       std::ostringstream out;
-      out << std::setprecision(std::numeric_limits<float>::digits10 + 1) << datum.val.real_val;
+      out << std::setprecision(std::numeric_limits<float>::digits10 + 1)
+          << datum.val.real_val;
       return out.str();
     }
     case TDatumType::STR:
@@ -420,7 +441,8 @@ std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_in
         char buf[21];
         strftime(buf, 21, "%F %T.", &tm_struct);
         auto subsecond = std::to_string(modulus);
-        return std::string(buf) + std::string(type_info.precision - subsecond.length(), '0') + subsecond;
+        return std::string(buf) +
+               std::string(type_info.precision - subsecond.length(), '0') + subsecond;
       } else {
         time_t sec = datum.val.int_val;
         gmtime_r(&sec, &tm_struct);
@@ -463,13 +485,16 @@ std::string datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
     return "{" + boost::algorithm::join(elem_strs, ", ") + "}";
   }
   if (type_info.type == TDatumType::POINT || type_info.type == TDatumType::LINESTRING ||
-      type_info.type == TDatumType::POLYGON || type_info.type == TDatumType::MULTIPOLYGON) {
+      type_info.type == TDatumType::POLYGON ||
+      type_info.type == TDatumType::MULTIPOLYGON) {
     return datum.val.str_val;
   }
   return scalar_datum_to_string(datum, type_info);
 }
 
-TDatum columnar_val_to_datum(const TColumn& col, const size_t row_idx, const TTypeInfo& col_type) {
+TDatum columnar_val_to_datum(const TColumn& col,
+                             const size_t row_idx,
+                             const TTypeInfo& col_type) {
   TDatum datum;
   if (col_type.is_array) {
     auto elem_type = col_type;
@@ -566,10 +591,12 @@ bool backchannel(int action, ClientContext* cc) {
     mapd::shared_ptr<TProtocol> protocol2;
     mapd::shared_ptr<TTransport> socket2;
     if (context->http) {
-      transport2 = mapd::shared_ptr<TTransport>(new THttpClient(context->server_host, context->port, "/"));
+      transport2 = mapd::shared_ptr<TTransport>(
+          new THttpClient(context->server_host, context->port, "/"));
       protocol2 = mapd::shared_ptr<TProtocol>(new TJSONProtocol(transport2));
     } else {
-      socket2 = mapd::shared_ptr<TTransport>(new TSocket(context->server_host, context->port));
+      socket2 =
+          mapd::shared_ptr<TTransport>(new TSocket(context->server_host, context->port));
       transport2 = mapd::shared_ptr<TTransport>(new TBufferedTransport(socket2));
       protocol2 = mapd::shared_ptr<TProtocol>(new TBinaryProtocol(transport2));
     }
@@ -640,13 +667,17 @@ void print_memory_summary(ClientContext& context, std::string memory_level) {
 
   if (multiNode) {
     if (hasGPU) {
-      tss << "        NODE[GPU]            MAX            USE      ALLOCATED           FREE" << std::endl;
+      tss << "        NODE[GPU]            MAX            USE      ALLOCATED           "
+             "FREE"
+          << std::endl;
     } else {
-      tss << "        NODE            MAX            USE      ALLOCATED           FREE" << std::endl;
+      tss << "        NODE            MAX            USE      ALLOCATED           FREE"
+          << std::endl;
     }
   } else {
     if (hasGPU) {
-      tss << "[GPU]            MAX            USE      ALLOCATED           FREE" << std::endl;
+      tss << "[GPU]            MAX            USE      ALLOCATED           FREE"
+          << std::endl;
     } else {
       tss << "            MAX            USE      ALLOCATED           FREE" << std::endl;
     }
@@ -688,10 +719,14 @@ void print_memory_summary(ClientContext& context, std::string memory_level) {
     }
     tss << std::fixed;
     tss << std::setprecision(2);
-    tss << std::setfill(' ') << std::setw(12) << ((float)nodeIt.page_size * nodeIt.max_num_pages) / MB << " MB";
-    tss << std::setfill(' ') << std::setw(12) << ((float)nodeIt.page_size * used_page_count) / MB << " MB";
-    tss << std::setfill(' ') << std::setw(12) << ((float)nodeIt.page_size * page_count) / MB << " MB";
-    tss << std::setfill(' ') << std::setw(12) << ((float)nodeIt.page_size * free_page_count) / MB << " MB";
+    tss << std::setfill(' ') << std::setw(12)
+        << ((float)nodeIt.page_size * nodeIt.max_num_pages) / MB << " MB";
+    tss << std::setfill(' ') << std::setw(12)
+        << ((float)nodeIt.page_size * used_page_count) / MB << " MB";
+    tss << std::setfill(' ') << std::setw(12)
+        << ((float)nodeIt.page_size * page_count) / MB << " MB";
+    tss << std::setfill(' ') << std::setw(12)
+        << ((float)nodeIt.page_size * free_page_count) / MB << " MB";
     if (nodeIt.is_allocation_capped) {
       tss << " The allocation is capped!";
     }
@@ -727,8 +762,10 @@ void print_memory_info(ClientContext& context, std::string memory_level) {
         tss << "Node: " << nodeIt.host_name << std::endl;
       }
       tss << "Maximum Bytes for one page: " << nodeIt.page_size << " Bytes" << std::endl;
-      tss << "Maximum Bytes for node: " << (nodeIt.max_num_pages * nodeIt.page_size) / MB << " MB" << std::endl;
-      tss << "Memory allocated: " << (nodeIt.num_pages_allocated * nodeIt.page_size) / MB << " MB" << std::endl;
+      tss << "Maximum Bytes for node: " << (nodeIt.max_num_pages * nodeIt.page_size) / MB
+          << " MB" << std::endl;
+      tss << "Memory allocated: " << (nodeIt.num_pages_allocated * nodeIt.page_size) / MB
+          << " MB" << std::endl;
     } else {
       ++mgr_num;
     }
@@ -740,7 +777,9 @@ void print_memory_info(ClientContext& context, std::string memory_level) {
       tss << "The allocation is capped!";
     }
     tss << "SLAB     ST_PAGE NUM_PAGE  TOUCH         CHUNK_KEY" << std::endl;
-    for (auto segIt = nodeIt.node_memory_data.begin(); segIt != nodeIt.node_memory_data.end(); ++segIt) {
+    for (auto segIt = nodeIt.node_memory_data.begin();
+         segIt != nodeIt.node_memory_data.end();
+         ++segIt) {
       tss << std::setfill(' ') << std::setw(4) << segIt->slab;
       tss << std::setfill(' ') << std::setw(12) << segIt->start_page;
       tss << std::setfill(' ') << std::setw(9) << segIt->num_pages;
@@ -769,10 +808,11 @@ std::string print_gpu_specification(TGpuSpecification gpu_spec) {
   int Kilo = 1024;
   std::ostringstream tss;
   tss << "Number of SM             :" << gpu_spec.num_sm << std::endl;
-  tss << "Clock frequency          :" << gpu_spec.clock_frequency_kHz / Kilo << " MHz" << std::endl;
-  tss << "Physical GPU Memory      :" << gpu_spec.memory / Giga << " GB" << std::endl;
-  tss << "Compute capability       :" << gpu_spec.compute_capability_major << "." << gpu_spec.compute_capability_minor
+  tss << "Clock frequency          :" << gpu_spec.clock_frequency_kHz / Kilo << " MHz"
       << std::endl;
+  tss << "Physical GPU Memory      :" << gpu_spec.memory / Giga << " GB" << std::endl;
+  tss << "Compute capability       :" << gpu_spec.compute_capability_major << "."
+      << gpu_spec.compute_capability_minor << std::endl;
   return tss.str();
 }
 
@@ -805,49 +845,68 @@ void print_all_hardware_info(ClientContext& context) {
 
 static void print_privs(const std::vector<bool>& privs, TDBObjectType::type type) {
   if (type == TDBObjectType::DatabaseDBObjectType) {
-    if (privs[0])
+    if (privs[0]) {
       std::cout << " create";
-    if (privs[1])
+    }
+    if (privs[1]) {
       std::cout << " drop";
+    }
   } else if (type == TDBObjectType::TableDBObjectType) {
-    if (privs[0])
+    if (privs[0]) {
       std::cout << " create";
-    if (privs[1])
+    }
+    if (privs[1]) {
       std::cout << " drop";
-    if (privs[2])
+    }
+    if (privs[2]) {
       std::cout << " select";
-    if (privs[3])
+    }
+    if (privs[3]) {
       std::cout << " insert";
-    if (privs[4])
+    }
+    if (privs[4]) {
       std::cout << " update";
-    if (privs[5])
+    }
+    if (privs[5]) {
       std::cout << " delete";
-    if (privs[6])
+    }
+    if (privs[6]) {
       std::cout << " truncate";
+    }
 
   } else if (type == TDBObjectType::DashboardDBObjectType) {
-    if (privs[0])
+    if (privs[0]) {
       std::cout << " create";
-    if (privs[1])
+    }
+    if (privs[1]) {
       std::cout << " delete";
-    if (privs[2])
+    }
+    if (privs[2]) {
       std::cout << " view";
-    if (privs[3])
+    }
+    if (privs[3]) {
       std::cout << " edit";
+    }
 
   } else if (type == TDBObjectType::ViewDBObjectType) {
-    if (privs[0])
+    if (privs[0]) {
       std::cout << " create";
-    if (privs[1])
+    }
+    if (privs[1]) {
       std::cout << " drop";
-    if (privs[2])
+    }
+    if (privs[2]) {
       std::cout << " select";
-    if (privs[3])
+    }
+    if (privs[3]) {
       std::cout << " insert";
-    if (privs[4])
+    }
+    if (privs[4]) {
       std::cout << " update";
-    if (privs[5])
+    }
+    if (privs[5]) {
       std::cout << " delete";
+    }
   }
 }
 
@@ -947,17 +1006,20 @@ std::string hide_sensitive_data_from_query(const std::string& query_str) {
                       boost::regex_constants::perl | boost::regex::icase};
   boost::smatch matches;
   if (boost::regex_search(query_str, matches, passwd)) {
-    result.replace(matches["pwd"].first - query_str.begin(), matches["pwd"].length(), "XXXXXXXX");
+    result.replace(
+        matches["pwd"].first - query_str.begin(), matches["pwd"].length(), "XXXXXXXX");
   }
   return result;
 }
 
 std::string hide_sensitive_data_from_connect(const std::string& connect_str) {
   auto result = connect_str;
-  boost::regex passwd{R"(^\\c\s+?.+?\s+?.+?\s+?(?<pwd>.+))", boost::regex_constants::perl | boost::regex::icase};
+  boost::regex passwd{R"(^\\c\s+?.+?\s+?.+?\s+?(?<pwd>.+))",
+                      boost::regex_constants::perl | boost::regex::icase};
   boost::smatch matches;
   if (boost::regex_search(connect_str, matches, passwd)) {
-    result.replace(matches["pwd"].first - connect_str.begin(), matches["pwd"].length(), "XXXXXXXX");
+    result.replace(
+        matches["pwd"].first - connect_str.begin(), matches["pwd"].length(), "XXXXXXXX");
   }
   return result;
 }
@@ -983,17 +1045,26 @@ int main(int argc, char** argv) {
   desc.add_options()("help,h", "Print help messages ");
   desc.add_options()("version,v", "Print mapdql version number");
   desc.add_options()("no-header,n", "Do not print query result header");
-  desc.add_options()("timing,t",
-                     po::bool_switch(&print_timing)->default_value(print_timing)->implicit_value(true),
-                     "Print timing information");
   desc.add_options()(
-      "delimiter,d", po::value<std::string>(&delimiter)->default_value(delimiter), "Field delimiter in row output");
-  desc.add_options()("db", po::value<std::string>(&db_name)->default_value(db_name), "Database name");
-  desc.add_options()("user,u", po::value<std::string>(&user_name)->default_value(user_name), "User name");
+      "timing,t",
+      po::bool_switch(&print_timing)->default_value(print_timing)->implicit_value(true),
+      "Print timing information");
+  desc.add_options()("delimiter,d",
+                     po::value<std::string>(&delimiter)->default_value(delimiter),
+                     "Field delimiter in row output");
+  desc.add_options()(
+      "db", po::value<std::string>(&db_name)->default_value(db_name), "Database name");
+  desc.add_options()("user,u",
+                     po::value<std::string>(&user_name)->default_value(user_name),
+                     "User name");
   desc.add_options()("passwd,p", po::value<std::string>(&passwd), "Password");
-  desc.add_options()("server,s", po::value<std::string>(&server_host)->default_value(server_host), "Server hostname");
+  desc.add_options()("server,s",
+                     po::value<std::string>(&server_host)->default_value(server_host),
+                     "Server hostname");
   desc.add_options()("port", po::value<int>(&port)->default_value(port), "Port number");
-  desc.add_options()("http", po::bool_switch(&http)->default_value(http)->implicit_value(true), "Use HTTP transport");
+  desc.add_options()("http",
+                     po::bool_switch(&http)->default_value(http)->implicit_value(true),
+                     "Use HTTP transport");
   desc.add_options()("quiet,q", "Do not print result headers or connection strings ");
 
   po::variables_map vm;
@@ -1001,10 +1072,16 @@ int main(int argc, char** argv) {
   positionalOptions.add("db", 1);
 
   try {
-    po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
+    po::store(po::command_line_parser(argc, argv)
+                  .options(desc)
+                  .positional(positionalOptions)
+                  .run(),
+              vm);
     if (vm.count("help")) {
-      std::cout << "Usage: mapdql [<database>] [{--user|-u} <user>] [{--passwd|-p} <password>] [--port <port number>] "
-                   "[{-s|--server} <server host>] [--http] [{--no-header|-n}] [{--quiet|-q}] [{--delimiter|-d}]\n\n";
+      std::cout << "Usage: mapdql [<database>] [{--user|-u} <user>] [{--passwd|-p} "
+                   "<password>] [--port <port number>] "
+                   "[{-s|--server} <server host>] [--http] [{--no-header|-n}] "
+                   "[{--quiet|-q}] [{--delimiter|-d}]\n\n";
       std::cout << desc << std::endl;
       return 0;
     }
@@ -1016,8 +1093,9 @@ int main(int argc, char** argv) {
       print_header = false;
       print_connection = false;
     }
-    if (vm.count("no-header"))
+    if (vm.count("no-header")) {
       print_header = false;
+    }
     if (vm.count("db") && !vm.count("user")) {
       std::cerr << "Must specify a user name to access database " << db_name << std::endl;
       return 1;
@@ -1065,14 +1143,16 @@ int main(int argc, char** argv) {
   }
 
   if (context.db_name.empty()) {
-    std::cout
-        << "Not connected to any database.  Only \\u and \\l commands are allowed in this state.  See \\h for help."
-        << std::endl;
+    std::cout << "Not connected to any database.  Only \\u and \\l commands are allowed "
+                 "in this state.  See \\h for help."
+              << std::endl;
   } else {
-    if (thrift_with_retry(kCONNECT, context, nullptr))
+    if (thrift_with_retry(kCONNECT, context, nullptr)) {
       if (print_connection) {
-        std::cout << "User " << context.user_name << " connected to database " << context.db_name << std::endl;
+        std::cout << "User " << context.user_name << " connected to database "
+                  << context.db_name << std::endl;
       }
+    }
   }
 
   register_signal_handler();
@@ -1095,17 +1175,18 @@ int main(int argc, char** argv) {
    * The call to linenoise() will block as long as the user types something
    * and presses enter.
    *
-   * The typed string that is malloc() allocated by linenoise() is managed by a smart pointer
-   * with a custom free() deleter; no need to free this memory explicitly. */
+   * The typed string that is malloc() allocated by linenoise() is managed by a smart
+   * pointer with a custom free() deleter; no need to free this memory explicitly. */
 
   while (true) {
     using LineType = std::remove_pointer<__decltype(linenoise(prompt.c_str()))>::type;
     using LineTypePtr = LineType*;
 
-    std::unique_ptr<LineType, std::function<void(LineTypePtr)>> smart_line(linenoise(prompt.c_str()),
-                                                                           [](LineTypePtr l) { free((l)); });
-    if (smart_line == nullptr)
+    std::unique_ptr<LineType, std::function<void(LineTypePtr)>> smart_line(
+        linenoise(prompt.c_str()), [](LineTypePtr l) { free((l)); });
+    if (smart_line == nullptr) {
       break;
+    }
     LineType* line = smart_line.get();  // Alias to make the C stuff work
 
     {
@@ -1126,8 +1207,9 @@ int main(int argc, char** argv) {
       boost::algorithm::trim(current_line);
       if (current_line.back() == ';') {
         std::string query(current_line);
-        linenoiseHistoryAdd(hide_sensitive_data_from_query(current_line).c_str()); /* Add to the history. */
-        linenoiseHistorySave("mapdql_history.txt");                                /* Save the history on disk. */
+        linenoiseHistoryAdd(hide_sensitive_data_from_query(current_line)
+                                .c_str());          /* Add to the history. */
+        linenoiseHistorySave("mapdql_history.txt"); /* Save the history on disk. */
         current_line.clear();
         prompt.assign("mapdql> ");
         (void)backchannel(TURN_ON, nullptr);
@@ -1144,8 +1226,10 @@ int main(int argc, char** argv) {
               std::cout << "No rows returned." << std::endl;
             }
             if (print_timing) {
-              std::cout << "Execution time: " << context.query_return.execution_time_ms << " ms,"
-                        << " Total time: " << context.query_return.total_time_ms << " ms" << std::endl;
+              std::cout << "Execution time: " << context.query_return.execution_time_ms
+                        << " ms,"
+                        << " Total time: " << context.query_return.total_time_ms << " ms"
+                        << std::endl;
             }
             continue;
           }
@@ -1155,10 +1239,11 @@ int main(int argc, char** argv) {
               if (p.is_physical) {
                 // TODO(d): skip if we decide to suppress displaying physical columns
               }
-              if (not_first)
+              if (not_first) {
                 std::cout << delimiter;
-              else
+              } else {
                 not_first = true;
+              }
               std::cout << p.col_name;
             }
             std::cout << std::endl;
@@ -1171,14 +1256,18 @@ int main(int argc, char** argv) {
               }
               const auto& col_type = col_desc[col_idx].col_type;
               std::cout << datum_to_string(
-                  columnar_val_to_datum(context.query_return.row_set.columns[col_idx], row_idx, col_type), col_type);
+                  columnar_val_to_datum(
+                      context.query_return.row_set.columns[col_idx], row_idx, col_type),
+                  col_type);
             }
             std::cout << std::endl;
           }
           if (print_timing) {
             std::cout << row_count << " rows returned." << std::endl;
-            std::cout << "Execution time: " << context.query_return.execution_time_ms << " ms,"
-                      << " Total time: " << context.query_return.total_time_ms << " ms" << std::endl;
+            std::cout << "Execution time: " << context.query_return.execution_time_ms
+                      << " ms,"
+                      << " Total time: " << context.query_return.total_time_ms << " ms"
+                      << std::endl;
           }
         } else {
           (void)backchannel(TURN_OFF, nullptr);
@@ -1242,28 +1331,35 @@ int main(int argc, char** argv) {
         strftime(buf, 11, "%F", tm_ptr);
         std::string agg_version = context.cluster_status[0].version;
 
-        std::cout << "The Server Version Number  : " << context.cluster_status[0].version << std::endl;
-        std::cout << "The Server Start Time      : " << buf << " : " << tm_ptr->tm_hour << ":" << tm_ptr->tm_min << ":"
-                  << tm_ptr->tm_sec << std::endl;
+        std::cout << "The Server Version Number  : " << context.cluster_status[0].version
+                  << std::endl;
+        std::cout << "The Server Start Time      : " << buf << " : " << tm_ptr->tm_hour
+                  << ":" << tm_ptr->tm_min << ":" << tm_ptr->tm_sec << std::endl;
         std::cout << "The Server edition         : " << agg_version << std::endl;
 
         if (context.cluster_status.size() > 1) {
-          std::cout << "The Number of Leaves       : " << context.cluster_status.size() - 1 << std::endl;
-          for (auto leaf = context.cluster_status.begin() + 1; leaf != context.cluster_status.end(); ++leaf) {
+          std::cout << "The Number of Leaves       : "
+                    << context.cluster_status.size() - 1 << std::endl;
+          for (auto leaf = context.cluster_status.begin() + 1;
+               leaf != context.cluster_status.end();
+               ++leaf) {
             t = (time_t)leaf->start_time;
             buf[11] = 0;
             std::tm* tm_ptr = gmtime(&t);
             strftime(buf, 11, "%F", tm_ptr);
-            std::cout << "--------------------------------------------------" << std::endl;
+            std::cout << "--------------------------------------------------"
+                      << std::endl;
             std::cout << "Name of Leaf               : " << leaf->host_name << std::endl;
             if (agg_version != leaf->version) {
               std::cout << "The Leaf Version Number   : " << leaf->version << std::endl;
-              std::cerr << "\033[31m*** Version number mismatch! ***\033[0m Please make sure All leaves, Aggregator "
+              std::cerr << "\033[31m*** Version number mismatch! ***\033[0m Please make "
+                           "sure All leaves, Aggregator "
                            "and String Dictionary are running the same version of MapD."
                         << std::endl;
             }
-            std::cout << "The Leaf Start Time        : " << buf << " : " << tm_ptr->tm_hour << ":" << tm_ptr->tm_min
-                      << ":" << tm_ptr->tm_sec << std::endl;
+            std::cout << "The Leaf Start Time        : " << buf << " : "
+                      << tm_ptr->tm_hour << ":" << tm_ptr->tm_min << ":" << tm_ptr->tm_sec
+                      << std::endl;
           }
         }
       }
@@ -1272,12 +1368,15 @@ int main(int argc, char** argv) {
       TCopyParams copy_params;
       copy_params.delimiter = ",";
       char* env;
-      if (nullptr != (env = getenv("AWS_REGION")))
+      if (nullptr != (env = getenv("AWS_REGION"))) {
         copy_params.s3_region = env;
-      if (nullptr != (env = getenv("AWS_ACCESS_KEY_ID")))
+      }
+      if (nullptr != (env = getenv("AWS_ACCESS_KEY_ID"))) {
         copy_params.s3_access_key = env;
-      if (nullptr != (env = getenv("AWS_SECRET_ACCESS_KEY")))
+      }
+      if (nullptr != (env = getenv("AWS_SECRET_ACCESS_KEY"))) {
         copy_params.s3_secret_key = env;
+      }
       detect_table(filepath, copy_params, context);
     } else if (!strncmp(line, "\\historylen", 11)) {
       /* The "/historylen" command will change the history len. */
@@ -1306,7 +1405,9 @@ int main(int argc, char** argv) {
           get_db_objects_for_grantee(context);
         }
       } else {
-        std::cerr << "Command privileges failed because parameter role name or user name is missing." << std::endl;
+        std::cerr << "Command privileges failed because parameter role name or user name "
+                     "is missing."
+                  << std::endl;
       }
     } else if (!strncmp(line, "\\object_privileges", 18)) {
       std::string cmd(line);
@@ -1325,7 +1426,8 @@ int main(int argc, char** argv) {
           std::cerr << "Object type should be on in { database, table }" << std::endl;
         }
       } else {
-        std::cerr << "Command object_privileges failed. It requires two parameters: object type and object name."
+        std::cerr << "Command object_privileges failed. It requires two parameters: "
+                     "object type and object name."
                   << std::endl;
       }
     } else if (line[0] == '\\' && line[1] == 'q') {
@@ -1369,7 +1471,8 @@ int main(int argc, char** argv) {
   if (context.session != INVALID_SESSION_ID) {
     if (thrift_with_retry(kDISCONNECT, context, nullptr)) {
       if (print_connection) {
-        std::cout << "User " << context.user_name << " disconnected from database " << context.db_name << std::endl;
+        std::cout << "User " << context.user_name << " disconnected from database "
+                  << context.db_name << std::endl;
       }
     }
   }

@@ -71,7 +71,8 @@ DataMgr::DataMgr(const string& dataDir,
 
   if (dbConvertDir_.size() > 0) {  // i.e. "--db_convert" option was used
     dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->setDBConvert(true);
-    convertDB(dbConvertDir_);  // dbConvertDir_ is path to DB directory with old data structure
+    convertDB(
+        dbConvertDir_);  // dbConvertDir_ is path to DB directory with old data structure
     dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->setDBConvert(false);
   }
 }
@@ -107,13 +108,16 @@ size_t DataMgr::getTotalSystemMemory() {
 #endif
 }
 
-void DataMgr::populateMgrs(const MapDParameters& mapd_parameters, const size_t userSpecifiedNumReaderThreads) {
+void DataMgr::populateMgrs(const MapDParameters& mapd_parameters,
+                           const size_t userSpecifiedNumReaderThreads) {
   bufferMgrs_.resize(2);
   bufferMgrs_[0].push_back(new GlobalFileMgr(0, dataDir_, userSpecifiedNumReaderThreads));
   levelSizes_.push_back(1);
   size_t cpuBufferSize = mapd_parameters.cpu_buffer_mem_bytes;
-  if (cpuBufferSize == 0)                          // if size is not specified
-    cpuBufferSize = getTotalSystemMemory() * 0.8;  // should get free memory instead of this ugly heuristic
+  if (cpuBufferSize == 0) {  // if size is not specified
+    cpuBufferSize = getTotalSystemMemory() *
+                    0.8;  // should get free memory instead of this ugly heuristic
+  }
   size_t cpuSlabSize = std::min(static_cast<size_t>(1L << 32), cpuBufferSize);
   // cpuSlabSize -= cpuSlabSize % 512 == 0 ? 0 : 512 - (cpuSlabSize % 512);
   cpuSlabSize = (cpuSlabSize / 512) * 512;
@@ -122,22 +126,25 @@ void DataMgr::populateMgrs(const MapDParameters& mapd_parameters, const size_t u
     LOG(INFO) << "reserved GPU memory is " << (float)reservedGpuMem_ / (1024 * 1024)
               << "M includes render buffer allocation";
     bufferMgrs_.resize(3);
-    bufferMgrs_[1].push_back(new CpuBufferMgr(0, cpuBufferSize, cudaMgr_, cpuSlabSize, 512, bufferMgrs_[0][0]));
+    bufferMgrs_[1].push_back(new CpuBufferMgr(
+        0, cpuBufferSize, cudaMgr_, cpuSlabSize, 512, bufferMgrs_[0][0]));
     levelSizes_.push_back(1);
     int numGpus = cudaMgr_->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
-      size_t gpuMaxMemSize = mapd_parameters.gpu_buffer_mem_bytes != 0
-                                 ? mapd_parameters.gpu_buffer_mem_bytes
-                                 : (cudaMgr_->deviceProperties[gpuNum].globalMem) - (reservedGpuMem_);
+      size_t gpuMaxMemSize =
+          mapd_parameters.gpu_buffer_mem_bytes != 0
+              ? mapd_parameters.gpu_buffer_mem_bytes
+              : (cudaMgr_->deviceProperties[gpuNum].globalMem) - (reservedGpuMem_);
       size_t gpuSlabSize = std::min(static_cast<size_t>(1L << 31), gpuMaxMemSize);
       gpuSlabSize -= gpuSlabSize % 512 == 0 ? 0 : 512 - (gpuSlabSize % 512);
       LOG(INFO) << "gpuSlabSize is " << (float)gpuSlabSize / (1024 * 1024) << "M";
-      bufferMgrs_[2].push_back(
-          new GpuCudaBufferMgr(gpuNum, gpuMaxMemSize, cudaMgr_, gpuSlabSize, 512, bufferMgrs_[1][0]));
+      bufferMgrs_[2].push_back(new GpuCudaBufferMgr(
+          gpuNum, gpuMaxMemSize, cudaMgr_, gpuSlabSize, 512, bufferMgrs_[1][0]));
     }
     levelSizes_.push_back(numGpus);
   } else {
-    bufferMgrs_[1].push_back(new CpuBufferMgr(0, cpuBufferSize, cudaMgr_, cpuSlabSize, 512, bufferMgrs_[0][0]));
+    bufferMgrs_[1].push_back(new CpuBufferMgr(
+        0, cpuBufferSize, cudaMgr_, cpuSlabSize, 512, bufferMgrs_[0][0]));
     levelSizes_.push_back(1);
   }
 }
@@ -158,7 +165,9 @@ void DataMgr::convertDB(const std::string basePath) {
   size_t defaultPageSize = gfm->getDefaultPageSize();
   LOG(INFO) << "Database conversion started.";
   FileMgr* fm_base_db =
-      new FileMgr(gfm, defaultPageSize, basePath);  // this call also copies data into new DB structure
+      new FileMgr(gfm,
+                  defaultPageSize,
+                  basePath);  // this call also copies data into new DB structure
   delete fm_base_db;
 
   /* write content of DB into newly created/converted DB structure & location */
@@ -166,7 +175,8 @@ void DataMgr::convertDB(const std::string basePath) {
   LOG(INFO) << "Database conversion completed.";
 }
 
-void DataMgr::createTopLevelMetadata() const {  // create metadata shared by all tables of all DBs
+void DataMgr::createTopLevelMetadata()
+    const {  // create metadata shared by all tables of all DBs
   ChunkKey chunkKey(2);
   chunkKey[0] = 0;  // top level db_id
   chunkKey[1] = 0;  // top level tb_id
@@ -180,7 +190,8 @@ std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
   // TODO (vraj) : Reduce the duplicate code
   std::vector<MemoryInfo> memInfo;
   if (memLevel == MemoryLevel::CPU_LEVEL) {
-    CpuBufferMgr* cpuBuffer = dynamic_cast<CpuBufferMgr*>(bufferMgrs_[MemoryLevel::CPU_LEVEL][0]);
+    CpuBufferMgr* cpuBuffer =
+        dynamic_cast<CpuBufferMgr*>(bufferMgrs_[MemoryLevel::CPU_LEVEL][0]);
     MemoryInfo mi;
 
     mi.pageSize = cpuBuffer->getPageSize();
@@ -199,7 +210,8 @@ std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
         md.numPages = segIt.numPages;
         md.touch = segIt.lastTouched;
         md.isFree = segIt.memStatus;
-        md.chunk_key.insert(md.chunk_key.end(), segIt.chunkKey.begin(), segIt.chunkKey.end());
+        md.chunk_key.insert(
+            md.chunk_key.end(), segIt.chunkKey.begin(), segIt.chunkKey.end());
         mi.nodeMemoryData.push_back(md);
       }
     }
@@ -207,7 +219,8 @@ std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
   } else if (hasGpus_) {
     int numGpus = cudaMgr_->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
-      GpuCudaBufferMgr* gpuBuffer = dynamic_cast<GpuCudaBufferMgr*>(bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]);
+      GpuCudaBufferMgr* gpuBuffer =
+          dynamic_cast<GpuCudaBufferMgr*>(bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]);
       MemoryInfo mi;
 
       mi.pageSize = gpuBuffer->getPageSize();
@@ -224,7 +237,8 @@ std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
           md.startPage = segIt.startPage;
           md.numPages = segIt.numPages;
           md.touch = segIt.lastTouched;
-          md.chunk_key.insert(md.chunk_key.end(), segIt.chunkKey.begin(), segIt.chunkKey.end());
+          md.chunk_key.insert(
+              md.chunk_key.end(), segIt.chunkKey.begin(), segIt.chunkKey.end());
           md.isFree = segIt.memStatus;
           mi.nodeMemoryData.push_back(md);
         }
@@ -245,8 +259,8 @@ std::vector<MemoryData> DataMgr::getGpuMemory() {
       gms.max = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getMaxSize();
       gms.inUse = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getInUseSize();
       gms.allocated = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getAllocated();
-      gms.isAllocationCapped = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->isAllocationCapped();
-      memInfo.push_back(gms);
+      gms.isAllocationCapped =
+bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->isAllocationCapped(); memInfo.push_back(gms);
     }
   }
   return memInfo;
@@ -260,15 +274,22 @@ std::vector<MemoryData> DataMgr::getGpuMemory() {
 //  // ((float)bufferMgrs_[MemoryLevel::CPU_LEVEL][0]->getMaxSize() / mb)
 //  //    << std::endl;
 //  tss << "CPU RAM IN BUFFER USE     : " << std::fixed << setw(9) << setprecision(2)
-//      << ((float)bufferMgrs_[MemoryLevel::CPU_LEVEL][0]->getInUseSize() / mb) << " MB" << std::endl;
+//      << ((float)bufferMgrs_[MemoryLevel::CPU_LEVEL][0]->getInUseSize() / mb) << " MB"
+//      << std::endl;
 //  if (hasGpus_) {
 //    int numGpus = cudaMgr_->getDeviceCount();
 //    for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
-//      tss << "GPU" << setfill(' ') << setw(2) << gpuNum << " RAM TOTAL AVAILABLE : " << std::fixed << setw(9)
-//          << setprecision(2) << ((float)bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getMaxSize() / mb) << " MB"
+//      tss << "GPU" << setfill(' ') << setw(2) << gpuNum << " RAM TOTAL AVAILABLE : " <<
+//      std::fixed << setw(9)
+//          << setprecision(2) <<
+//          ((float)bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getMaxSize() / mb) << "
+//          MB"
 //          << std::endl;
-//      tss << "GPU" << setfill(' ') << setw(2) << gpuNum << " RAM IN BUFFER USE   : " << std::fixed << setw(9)
-//          << setprecision(2) << ((float)bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getInUseSize() / mb) << " MB"
+//      tss << "GPU" << setfill(' ') << setw(2) << gpuNum << " RAM IN BUFFER USE   : " <<
+//      std::fixed << setw(9)
+//          << setprecision(2) <<
+//          ((float)bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getInUseSize() / mb) << "
+//          MB"
 //          << std::endl;
 //    }
 //  }
@@ -302,18 +323,22 @@ void DataMgr::clearMemory(const MemoryLevel memLevel) {
   }
 }
 
-bool DataMgr::isBufferOnDevice(const ChunkKey& key, const MemoryLevel memLevel, const int deviceId) {
+bool DataMgr::isBufferOnDevice(const ChunkKey& key,
+                               const MemoryLevel memLevel,
+                               const int deviceId) {
   return bufferMgrs_[memLevel][deviceId]->isBufferOnDevice(key);
 }
 
-void DataMgr::getChunkMetadataVec(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec) {
+void DataMgr::getChunkMetadataVec(
+    std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec) {
   // Can we always assume this will just be at the disklevel bc we just
   // started?
   bufferMgrs_[0][0]->getChunkMetadataVec(chunkMetadataVec);
 }
 
-void DataMgr::getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
-                                              const ChunkKey& keyPrefix) {
+void DataMgr::getChunkMetadataVecForKeyPrefix(
+    std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
+    const ChunkKey& keyPrefix) {
   bufferMgrs_[0][0]->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, keyPrefix);
 }
 
@@ -345,15 +370,19 @@ void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix) {
 }
 
 // only deletes the chunks at the given memory level
-void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix, const MemoryLevel memLevel) {
-  if (bufferMgrs_.size() <= memLevel)
+void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix,
+                                     const MemoryLevel memLevel) {
+  if (bufferMgrs_.size() <= memLevel) {
     return;
+  }
   for (int device = 0; device < levelSizes_[memLevel]; ++device) {
     bufferMgrs_[memLevel][device]->deleteBuffersWithPrefix(keyPrefix);
   }
 }
 
-AbstractBuffer* DataMgr::alloc(const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes) {
+AbstractBuffer* DataMgr::alloc(const MemoryLevel memoryLevel,
+                               const int deviceId,
+                               const size_t numBytes) {
   int level = static_cast<int>(memoryLevel);
   assert(deviceId < levelSizes_[level]);
   return bufferMgrs_[level][deviceId]->alloc(numBytes);
@@ -370,13 +399,17 @@ void DataMgr::freeAllBuffers() {
 }
 
 void DataMgr::copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer) {
-  destBuffer->write(srcBuffer->getMemoryPtr(), srcBuffer->size(), 0, srcBuffer->getType(), srcBuffer->getDeviceId());
+  destBuffer->write(srcBuffer->getMemoryPtr(),
+                    srcBuffer->size(),
+                    0,
+                    srcBuffer->getType(),
+                    srcBuffer->getDeviceId());
 }
 
 // could add function below to do arbitrary copies between buffers
 
-// void DataMgr::copy(AbstractBuffer *destBuffer, const AbstractBuffer *srcBuffer, const size_t numBytes, const size_t
-// destOffset, const size_t srcOffset) {
+// void DataMgr::copy(AbstractBuffer *destBuffer, const AbstractBuffer *srcBuffer, const
+// size_t numBytes, const size_t destOffset, const size_t srcOffset) {
 //} /
 
 void DataMgr::checkpoint(const int db_id, const int tb_id) {
@@ -402,7 +435,8 @@ void DataMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
 }
 
 void DataMgr::setTableEpoch(const int db_id, const int tb_id, const int start_epoch) {
-  dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->setTableEpoch(db_id, tb_id, start_epoch);
+  dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])
+      ->setTableEpoch(db_id, tb_id, start_epoch);
 }
 
 size_t DataMgr::getTableEpoch(const int db_id, const int tb_id) {

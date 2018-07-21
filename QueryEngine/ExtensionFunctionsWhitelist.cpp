@@ -22,7 +22,8 @@
 #include <boost/algorithm/string/join.hpp>
 
 // Get the list of all type specializations for the given function name.
-std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get(const std::string& name) {
+std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get(
+    const std::string& name) {
   const auto it = functions_.find(to_upper(name));
   if (it == functions_.end()) {
     return nullptr;
@@ -77,12 +78,14 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations() {
     const auto& signatures = kv.second;
     CHECK(!signatures.empty());
     for (const auto& signature : kv.second) {
-      std::string decl_prefix{"declare " + serialize_type(signature.getRet()) + " @" + signature.getName()};
+      std::string decl_prefix{"declare " + serialize_type(signature.getRet()) + " @" +
+                              signature.getName()};
       std::vector<std::string> arg_strs;
       for (const auto arg : signature.getArgs()) {
         arg_strs.push_back(serialize_type(arg));
       }
-      declarations.push_back(decl_prefix + "(" + boost::algorithm::join(arg_strs, ", ") + ");");
+      declarations.push_back(decl_prefix + "(" + boost::algorithm::join(arg_strs, ", ") +
+                             ");");
     }
   }
   return declarations;
@@ -164,14 +167,16 @@ void ExtensionFunctionsWhitelist::add(const std::string& json_func_sigs) {
   rapidjson::Document func_sigs;
   func_sigs.Parse(json_func_sigs.c_str());
   CHECK(func_sigs.IsArray());
-  for (auto func_sigs_it = func_sigs.Begin(); func_sigs_it != func_sigs.End(); ++func_sigs_it) {
+  for (auto func_sigs_it = func_sigs.Begin(); func_sigs_it != func_sigs.End();
+       ++func_sigs_it) {
     CHECK(func_sigs_it->IsObject());
     const auto name = json_str(field(*func_sigs_it, "name"));
     const auto ret = deserialize_type(json_str(field(*func_sigs_it, "ret")));
     std::vector<ExtArgumentType> args;
     const auto& args_serialized = field(*func_sigs_it, "args");
     CHECK(args_serialized.IsArray());
-    for (auto args_serialized_it = args_serialized.Begin(); args_serialized_it != args_serialized.End();
+    for (auto args_serialized_it = args_serialized.Begin();
+         args_serialized_it != args_serialized.End();
          ++args_serialized_it) {
       args.push_back(deserialize_type(json_str(*args_serialized_it)));
     }
@@ -179,4 +184,5 @@ void ExtensionFunctionsWhitelist::add(const std::string& json_func_sigs) {
   }
 }
 
-std::unordered_map<std::string, std::vector<ExtensionFunction>> ExtensionFunctionsWhitelist::functions_;
+std::unordered_map<std::string, std::vector<ExtensionFunction>>
+    ExtensionFunctionsWhitelist::functions_;

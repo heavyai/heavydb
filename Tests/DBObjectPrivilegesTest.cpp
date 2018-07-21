@@ -68,7 +68,8 @@ class DBObjectPermissionsEnv : public ::testing::Environment {
     g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path.string(), 1024);
     {
       MapDParameters mapd_parms;
-      auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
+      auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
+          data_dir.string(), mapd_parms, false, 0);
       CHECK(boost::filesystem::exists(system_db_file));
       sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, false, true);
       CHECK(sys_cat.getMetadataForDB(db_name, db));
@@ -81,13 +82,14 @@ class DBObjectPermissionsEnv : public ::testing::Environment {
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
     }
     MapDParameters mapd_parms;
-    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
-    g_session.reset(
-        new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
-                                               base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-                                           user,
-                                           ExecutorDeviceType::GPU,
-                                           ""));
+    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
+        data_dir.string(), mapd_parms, false, 0);
+    g_session.reset(new Catalog_Namespace::SessionInfo(
+        std::make_shared<Catalog_Namespace::Catalog>(
+            base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
+        user,
+        ExecutorDeviceType::GPU,
+        ""));
   }
 };
 
@@ -181,9 +183,12 @@ struct DatabaseObject : testing::Test {
 };
 
 struct TableObject : testing::Test {
-  const std::string cquery1 = "CREATE TABLE IF NOT EXISTS epl(gp SMALLINT, won SMALLINT);";
-  const std::string cquery2 = "CREATE TABLE IF NOT EXISTS seriea(gp SMALLINT, won SMALLINT);";
-  const std::string cquery3 = "CREATE TABLE IF NOT EXISTS bundesliga(gp SMALLINT, won SMALLINT);";
+  const std::string cquery1 =
+      "CREATE TABLE IF NOT EXISTS epl(gp SMALLINT, won SMALLINT);";
+  const std::string cquery2 =
+      "CREATE TABLE IF NOT EXISTS seriea(gp SMALLINT, won SMALLINT);";
+  const std::string cquery3 =
+      "CREATE TABLE IF NOT EXISTS bundesliga(gp SMALLINT, won SMALLINT);";
   const std::string dquery1 = "DROP TABLE IF EXISTS epl;";
   const std::string dquery2 = "DROP TABLE IF EXISTS seriea;";
   const std::string dquery3 = "DROP TABLE IF EXISTS bundesliga;";
@@ -252,7 +257,11 @@ struct DashboardObject : testing::Test {
     vd1.userId = g_session->get_currentUser().userId;
     vd1.user = g_session->get_currentUser().userName;
     id = gcat.createFrontendView(vd1);
-    sys_cat.createDBObject(g_session->get_currentUser(), dname1, DBObjectType::DashboardDBObjectType, gcat, id);
+    sys_cat.createDBObject(g_session->get_currentUser(),
+                           dname1,
+                           DBObjectType::DashboardDBObjectType,
+                           gcat,
+                           id);
   }
 
   void drop_dashboards() {
@@ -287,15 +296,16 @@ TEST_F(DatabaseObject, TableAccessTest) {
   auto system_db_file = base_path / "mapd_catalogs" / "mapd";
   auto data_dir = base_path / "mapd_data";
   MapDParameters mapd_parms;
-  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
+  auto dataMgr =
+      std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   sys_cat.getMetadataForDB("mapd", db_meta);
   sys_cat.getMetadataForUser("Arsenal", user_meta);
-  session_ars.reset(
-      new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
-                                             base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-                                         user_meta,
-                                         ExecutorDeviceType::GPU,
-                                         ""));
+  session_ars.reset(new Catalog_Namespace::SessionInfo(
+      std::make_shared<Catalog_Namespace::Catalog>(
+          base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
+      user_meta,
+      ExecutorDeviceType::GPU,
+      ""));
   auto& cat_mapd = session_ars->get_catalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::CREATE_TABLE));
@@ -332,15 +342,16 @@ TEST_F(DatabaseObject, ViewAccessTest) {
   auto system_db_file = base_path / "mapd_catalogs" / "mapd";
   auto data_dir = base_path / "mapd_data";
   MapDParameters mapd_parms;
-  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
+  auto dataMgr =
+      std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   sys_cat.getMetadataForDB("mapd", db_meta);
   sys_cat.getMetadataForUser("Arsenal", user_meta);
-  session_ars.reset(
-      new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
-                                             base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-                                         user_meta,
-                                         ExecutorDeviceType::GPU,
-                                         ""));
+  session_ars.reset(new Catalog_Namespace::SessionInfo(
+      std::make_shared<Catalog_Namespace::Catalog>(
+          base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
+      user_meta,
+      ExecutorDeviceType::GPU,
+      ""));
   auto& cat_mapd = session_ars->get_catalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_VIEW));
@@ -387,15 +398,16 @@ TEST_F(DatabaseObject, DashboardAccessTest) {
   auto system_db_file = base_path / "mapd_catalogs" / "mapd";
   auto data_dir = base_path / "mapd_data";
   MapDParameters mapd_parms;
-  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
+  auto dataMgr =
+      std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   sys_cat.getMetadataForDB("mapd", db_meta);
   sys_cat.getMetadataForUser("Arsenal", user_meta);
-  session_ars.reset(
-      new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
-                                             base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-                                         user_meta,
-                                         ExecutorDeviceType::GPU,
-                                         ""));
+  session_ars.reset(new Catalog_Namespace::SessionInfo(
+      std::make_shared<Catalog_Namespace::Catalog>(
+          base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
+      user_meta,
+      ExecutorDeviceType::GPU,
+      ""));
   auto& cat_mapd = session_ars->get_catalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DASHBOARD));
@@ -441,15 +453,16 @@ TEST_F(DatabaseObject, DatabaseAllTest) {
   auto system_db_file = base_path / "mapd_catalogs" / "mapd";
   auto data_dir = base_path / "mapd_data";
   MapDParameters mapd_parms;
-  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
+  auto dataMgr =
+      std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   sys_cat.getMetadataForDB("mapd", db_meta);
   sys_cat.getMetadataForUser("Arsenal", user_meta);
-  session_ars.reset(
-      new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
-                                             base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-                                         user_meta,
-                                         ExecutorDeviceType::GPU,
-                                         ""));
+  session_ars.reset(new Catalog_Namespace::SessionInfo(
+      std::make_shared<Catalog_Namespace::Catalog>(
+          base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
+      user_meta,
+      ExecutorDeviceType::GPU,
+      ""));
   auto& cat_mapd = session_ars->get_catalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DATABASE));
@@ -758,7 +771,8 @@ TEST_F(ViewObject, GroupRoleFooGetsGrants) {
 }
 
 TEST_F(ViewObject, CalciteViewResolution) {
-  TPlanResult result = ::g_calcite->process(*g_session, "select * from bill_table", true, false);
+  TPlanResult result =
+      ::g_calcite->process(*g_session, "select * from bill_table", true, false);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
@@ -869,16 +883,20 @@ TEST_F(DashboardObject, AccessAfterRevokesTest) {
 
 TEST_F(DashboardObject, GranteesDefaultListTest) {
   auto& g_cat = g_session->get_catalog();
-  auto perms_list = sys_cat.getMetadataForObject(
-      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), id);
+  auto perms_list =
+      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+                                   static_cast<int>(DBObjectType::DashboardDBObjectType),
+                                   id);
   int size = static_cast<int>(perms_list.size());
   ASSERT_EQ(size, 0);
 }
 
 TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
   auto& g_cat = g_session->get_catalog();
-  auto perms_list = sys_cat.getMetadataForObject(
-      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), id);
+  auto perms_list =
+      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+                                   static_cast<int>(DBObjectType::DashboardDBObjectType),
+                                   id);
   int recs1 = static_cast<int>(perms_list.size());
   ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
   AccessPrivileges dash_priv;
@@ -890,8 +908,10 @@ TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
   privObjects.push_back(dash_object);
   ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("OldLady", dash_object, g_cat));
   ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", dash_object, g_cat));
-  perms_list = sys_cat.getMetadataForObject(
-      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), id);
+  perms_list =
+      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+                                   static_cast<int>(DBObjectType::DashboardDBObjectType),
+                                   id);
   int recs2 = static_cast<int>(perms_list.size());
   ASSERT_NE(recs1, recs2);
   ASSERT_EQ(recs2, 2);
@@ -902,8 +922,10 @@ TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::EDIT_DASHBOARD));
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", dash_object, g_cat));
-  perms_list = sys_cat.getMetadataForObject(
-      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), id);
+  perms_list =
+      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+                                   static_cast<int>(DBObjectType::DashboardDBObjectType),
+                                   id);
   int recs3 = static_cast<int>(perms_list.size());
   ASSERT_EQ(recs3, 2);
   ASSERT_TRUE(perms_list[0]->privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
@@ -913,8 +935,10 @@ TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
 
 TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   auto& g_cat = g_session->get_catalog();
-  auto perms_list = sys_cat.getMetadataForObject(
-      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), id);
+  auto perms_list =
+      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+                                   static_cast<int>(DBObjectType::DashboardDBObjectType),
+                                   id);
   int recs1 = static_cast<int>(perms_list.size());
   ASSERT_NO_THROW(sys_cat.grantRole("Gunners", "Arsenal"));
   AccessPrivileges dash_priv;
@@ -927,8 +951,10 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   privObjects.push_back(dash_object);
   ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Gunners", dash_object, g_cat));
   ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Chelsea", dash_object, g_cat));
-  perms_list = sys_cat.getMetadataForObject(
-      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), id);
+  perms_list =
+      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+                                   static_cast<int>(DBObjectType::DashboardDBObjectType),
+                                   id);
   int recs2 = static_cast<int>(perms_list.size());
   ASSERT_NE(recs1, recs2);
   ASSERT_EQ(recs2, 2);
@@ -940,8 +966,10 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   ASSERT_NO_THROW(dash_priv.remove(AccessPrivileges::VIEW_DASHBOARD));
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Gunners", dash_object, g_cat));
-  perms_list = sys_cat.getMetadataForObject(
-      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), id);
+  perms_list =
+      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+                                   static_cast<int>(DBObjectType::DashboardDBObjectType),
+                                   id);
   int recs3 = static_cast<int>(perms_list.size());
   ASSERT_EQ(recs3, 2);
   ASSERT_TRUE(perms_list[0]->privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
@@ -952,8 +980,10 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::VIEW_DASHBOARD));
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Gunners", dash_object, g_cat));
-  perms_list = sys_cat.getMetadataForObject(
-      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), id);
+  perms_list =
+      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+                                   static_cast<int>(DBObjectType::DashboardDBObjectType),
+                                   id);
   int recs4 = static_cast<int>(perms_list.size());
   ASSERT_EQ(recs4, 1);
   ASSERT_TRUE(perms_list[0]->privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
@@ -962,8 +992,10 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::EDIT_DASHBOARD));
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Chelsea", dash_object, g_cat));
-  perms_list = sys_cat.getMetadataForObject(
-      g_cat.get_currentDB().dbId, static_cast<int>(DBObjectType::DashboardDBObjectType), id);
+  perms_list =
+      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+                                   static_cast<int>(DBObjectType::DashboardDBObjectType),
+                                   id);
   int recs5 = static_cast<int>(perms_list.size());
   ASSERT_EQ(recs1, recs5);
   ASSERT_EQ(recs5, 0);
@@ -985,7 +1017,8 @@ void create_views(std::string prefix, int max) {
   auto& cat = g_session->get_catalog();
   for (int i = 0; i < max; i++) {
     std::string name = "view_" + prefix + std::to_string(i);
-    run_ddl_statement("CREATE VIEW " + name + " AS SELECT * FROM " + prefix + std::to_string(i) + ";");
+    run_ddl_statement("CREATE VIEW " + name + " AS SELECT * FROM " + prefix +
+                      std::to_string(i) + ";");
     auto td = cat.getMetadataForTable(name, false);
     ASSERT_TRUE(td);
     ASSERT_EQ(td->isView, true);
@@ -1007,7 +1040,8 @@ void create_dashboards(std::string prefix, int max) {
     vd.user = g_session->get_currentUser().userName;
     cat.createFrontendView(vd);
 
-    auto fvd = cat.getMetadataForFrontendView(std::to_string(g_session->get_currentUser().userId), name);
+    auto fvd = cat.getMetadataForFrontendView(
+        std::to_string(g_session->get_currentUser().userId), name);
     ASSERT_TRUE(fvd);
     ASSERT_EQ(fvd->viewName, name);
   }
@@ -1021,23 +1055,31 @@ void assert_grants(std::string prefix, int i, bool expected) {
     sys_cat.getDBObjectPrivileges("bob", tablePermission, cat);
   } catch (std::runtime_error& e) {
   }
-  ASSERT_EQ(expected, tablePermission.getPrivileges().hasPermission(TablePrivileges::SELECT_FROM_TABLE));
+  ASSERT_EQ(
+      expected,
+      tablePermission.getPrivileges().hasPermission(TablePrivileges::SELECT_FROM_TABLE));
 
-  DBObject viewPermission("view_" + prefix + std::to_string(i), DBObjectType::ViewDBObjectType);
+  DBObject viewPermission("view_" + prefix + std::to_string(i),
+                          DBObjectType::ViewDBObjectType);
   try {
     sys_cat.getDBObjectPrivileges("bob", viewPermission, cat);
   } catch (std::runtime_error& e) {
   }
-  ASSERT_EQ(expected, viewPermission.getPrivileges().hasPermission(ViewPrivileges::SELECT_FROM_VIEW));
+  ASSERT_EQ(
+      expected,
+      viewPermission.getPrivileges().hasPermission(ViewPrivileges::SELECT_FROM_VIEW));
 
-  auto fvd = cat.getMetadataForFrontendView(std::to_string(g_session->get_currentUser().userId),
-                                            "dash_" + prefix + std::to_string(i));
+  auto fvd =
+      cat.getMetadataForFrontendView(std::to_string(g_session->get_currentUser().userId),
+                                     "dash_" + prefix + std::to_string(i));
   DBObject dashPermission(fvd->viewId, DBObjectType::DashboardDBObjectType);
   try {
     sys_cat.getDBObjectPrivileges("bob", dashPermission, cat);
   } catch (std::runtime_error& e) {
   }
-  ASSERT_EQ(expected, dashPermission.getPrivileges().hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
+  ASSERT_EQ(
+      expected,
+      dashPermission.getPrivileges().hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
 }
 
 void check_grant_access(std::string prefix, int max) {
@@ -1046,16 +1088,22 @@ void check_grant_access(std::string prefix, int max) {
   for (int i = 0; i < max; i++) {
     assert_grants(prefix, i, false);
 
-    auto fvd = cat.getMetadataForFrontendView(std::to_string(g_session->get_currentUser().userId),
-                                              "dash_" + prefix + std::to_string(i));
+    auto fvd = cat.getMetadataForFrontendView(
+        std::to_string(g_session->get_currentUser().userId),
+        "dash_" + prefix + std::to_string(i));
     run_ddl_statement("GRANT SELECT ON TABLE " + prefix + std::to_string(i) + " TO bob;");
-    run_ddl_statement("GRANT SELECT ON VIEW view_" + prefix + std::to_string(i) + " TO bob;");
-    run_ddl_statement("GRANT VIEW ON DASHBOARD " + std::to_string(fvd->viewId) + " TO bob;");
+    run_ddl_statement("GRANT SELECT ON VIEW view_" + prefix + std::to_string(i) +
+                      " TO bob;");
+    run_ddl_statement("GRANT VIEW ON DASHBOARD " + std::to_string(fvd->viewId) +
+                      " TO bob;");
     assert_grants(prefix, i, true);
 
-    run_ddl_statement("REVOKE SELECT ON TABLE " + prefix + std::to_string(i) + " FROM bob;");
-    run_ddl_statement("REVOKE SELECT ON VIEW view_" + prefix + std::to_string(i) + " FROM bob;");
-    run_ddl_statement("REVOKE VIEW ON DASHBOARD " + std::to_string(fvd->viewId) + " FROM bob;");
+    run_ddl_statement("REVOKE SELECT ON TABLE " + prefix + std::to_string(i) +
+                      " FROM bob;");
+    run_ddl_statement("REVOKE SELECT ON VIEW view_" + prefix + std::to_string(i) +
+                      " FROM bob;");
+    run_ddl_statement("REVOKE VIEW ON DASHBOARD " + std::to_string(fvd->viewId) +
+                      " FROM bob;");
     assert_grants(prefix, i, false);
   }
 }
@@ -1066,8 +1114,10 @@ void drop_dashboards(std::string prefix, int max) {
   for (int i = 0; i < max; i++) {
     std::string name = "dash_" + prefix + std::to_string(i);
 
-    cat.deleteMetadataForFrontendView(std::to_string(g_session->get_currentUser().userId), name);
-    auto fvd = cat.getMetadataForFrontendView(std::to_string(g_session->get_currentUser().userId), name);
+    cat.deleteMetadataForFrontendView(std::to_string(g_session->get_currentUser().userId),
+                                      name);
+    auto fvd = cat.getMetadataForFrontendView(
+        std::to_string(g_session->get_currentUser().userId), name);
     ASSERT_FALSE(fvd);
   }
 }
@@ -1116,7 +1166,8 @@ TEST(Catalog, Concurrency) {
 
   for (int i = 0; i < num_threads; i++) {
     std::string prefix = "for_bob_" + std::to_string(i) + "_";
-    my_threads.push_back(std::make_shared<std::thread>(run_concurrency_test, prefix, 100));
+    my_threads.push_back(
+        std::make_shared<std::thread>(run_concurrency_test, prefix, 100));
   }
 
   for (auto& thread : my_threads) {

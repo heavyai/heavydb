@@ -65,7 +65,8 @@ inline bool operator==(const ColWidths& lhs, const ColWidths& rhs) {
 
 // Private: each thread has its own memory, no atomic operations required
 // Shared: threads in the same block share memory, atomic operations required
-// SharedForKeylessOneColumnKnownRange: special case of "Shared", but for keyless aggregates with single column group by
+// SharedForKeylessOneColumnKnownRange: special case of "Shared", but for keyless
+// aggregates with single column group by
 enum class GroupByMemSharing { Private, Shared, SharedForKeylessOneColumnKnownRange };
 
 struct RelAlgExecutionUnit;
@@ -152,7 +153,9 @@ struct QueryMemoryDescriptor {
   size_t getNextKeyOffInBytes(const size_t key_idx) const;
   size_t getColOffInBytes(const size_t bin, const size_t col_idx) const;
   size_t getColOffInBytesInNextBin(const size_t col_idx) const;
-  size_t getNextColOffInBytes(const int8_t* col_ptr, const size_t bin, const size_t col_idx) const;
+  size_t getNextColOffInBytes(const int8_t* col_ptr,
+                              const size_t bin,
+                              const size_t col_idx) const;
   size_t getColOnlyOffInBytes(const size_t col_idx) const;
   size_t getRowSize() const;
   size_t getColsSize() const;

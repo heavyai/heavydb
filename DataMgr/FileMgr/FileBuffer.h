@@ -58,7 +58,10 @@ class FileBuffer : public AbstractBuffer {
   /**
    * @brief Constructs a FileBuffer object.
    */
-  FileBuffer(FileMgr* fm, const size_t pageSize, const ChunkKey& chunkKey, const size_t initialSize = 0);
+  FileBuffer(FileMgr* fm,
+             const size_t pageSize,
+             const ChunkKey& chunkKey,
+             const size_t initialSize = 0);
 
   FileBuffer(FileMgr* fm,
              const size_t pageSize,
@@ -87,7 +90,8 @@ class FileBuffer : public AbstractBuffer {
                     const int deviceId = -1);
 
   /**
-   * @brief Writes the contents of source (src) into new versions of the affected logical pages.
+   * @brief Writes the contents of source (src) into new versions of the affected logical
+   * pages.
    *
    * This method will write the contents of source (src) into new version of the affected
    * logical pages. New pages are only appended if the value of epoch (in FileMgr)
@@ -103,7 +107,10 @@ class FileBuffer : public AbstractBuffer {
                       const size_t numBytes,
                       const MemoryLevel srcMemoryLevel = CPU_LEVEL,
                       const int deviceId = -1);
-  void copyPage(Page& srcPage, Page& destPage, const size_t numBytes, const size_t offset = 0);
+  void copyPage(Page& srcPage,
+                Page& destPage,
+                const size_t numBytes,
+                const size_t offset = 0);
   virtual inline Data_Namespace::MemoryLevel getType() const { return DISK_LEVEL; }
 
   /// Not implemented for FileMgr -- throws a runtime_error
@@ -118,7 +125,8 @@ class FileBuffer : public AbstractBuffer {
   /// Returns the size in bytes of the data portion of each page in the FileBuffer.
   inline virtual size_t pageDataSize() const { return pageDataSize_; }
 
-  /// Returns the size in bytes of the reserved header portion of each page in the FileBuffer.
+  /// Returns the size in bytes of the reserved header portion of each page in the
+  /// FileBuffer.
   inline virtual size_t reservedHeaderSize() const { return reservedHeaderSize_; }
 
   /// Returns vector of MultiPages in the FileBuffer.
@@ -132,7 +140,8 @@ class FileBuffer : public AbstractBuffer {
   /// Returns the total number of used bytes in the FileBuffer.
   // inline virtual size_t used() const {
 
-  /// Returns whether or not the FileBuffer has been modified since the last flush/checkpoint.
+  /// Returns whether or not the FileBuffer has been modified since the last
+  /// flush/checkpoint.
   virtual bool isDirty() const { return isDirty_; }
 
  private:
@@ -141,13 +150,18 @@ class FileBuffer : public AbstractBuffer {
 
   /// Write header writes header at top of page in format
   // headerSize(numBytes), ChunkKey, pageId, version epoch
-  // void writeHeader(Page &page, const int pageId, const int epoch, const bool writeSize = false);
-  void writeHeader(Page& page, const int pageId, const int epoch, const bool writeMetadata = false);
+  // void writeHeader(Page &page, const int pageId, const int epoch, const bool writeSize
+  // = false);
+  void writeHeader(Page& page,
+                   const int pageId,
+                   const int epoch,
+                   const bool writeMetadata = false);
   void writeMetadata(const int epoch);
   void readMetadata(const Page& page);
   void calcHeaderBuffer();
 
-  FileMgr* fm_;  // a reference to FileMgr is needed for writing to new pages in available files
+  FileMgr* fm_;  // a reference to FileMgr is needed for writing to new pages in available
+                 // files
   static size_t headerBufferOffset_;
   MultiPage metadataPages_;
   std::vector<MultiPage> multiPages_;
@@ -157,6 +171,6 @@ class FileBuffer : public AbstractBuffer {
   ChunkKey chunkKey_;
 };
 
-}  // File_Namespace
+}  // namespace File_Namespace
 
 #endif  // DATAMGR_MEMORY_FILE_FILEBUFFER_H

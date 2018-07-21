@@ -15,8 +15,8 @@
  */
 
 #include "../RenderAllocator.h"
-#include "../../GpuInitGroups.h"
 #include <glog/logging.h>
+#include "../../GpuInitGroups.h"
 
 RenderAllocator::RenderAllocator(int8_t* preallocated_ptr,
                                  const size_t preallocated_size,
@@ -61,9 +61,10 @@ RAExecutionPolicy RenderAllocator::getExecutionPolicy() const {
   return RAExecutionPolicy::Host;
 }
 
-RenderAllocatorMap::RenderAllocatorMap(::QueryRenderer::QueryRenderManager* render_manager,
-                                       const unsigned block_size_x,
-                                       const unsigned grid_size_x) {
+RenderAllocatorMap::RenderAllocatorMap(
+    ::QueryRenderer::QueryRenderManager* render_manager,
+    const unsigned block_size_x,
+    const unsigned grid_size_x) {
   CHECK(false);
 }
 
@@ -79,14 +80,18 @@ RenderAllocator* RenderAllocatorMap::operator[](size_t device_id) {
   return nullptr;
 }
 
-void RenderAllocatorMap::bufferData(int8_t* data, const size_t num_data_bytes, const size_t device_id) {
+void RenderAllocatorMap::bufferData(int8_t* data,
+                                    const size_t num_data_bytes,
+                                    const size_t device_id) {
   CHECK(false);
 }
 
-void RenderAllocatorMap::setDataLayout(const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout) {
+void RenderAllocatorMap::setDataLayout(
+    const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout) {
   CHECK(false);
 }
 
-void RenderAllocatorMap::prepForRendering(const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout) {
+void RenderAllocatorMap::prepForRendering(
+    const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout) {
   CHECK(false);
 }

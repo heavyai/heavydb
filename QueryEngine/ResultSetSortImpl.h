@@ -17,8 +17,8 @@
 #ifndef QUERYENGINE_RESULTSETSORTIMPL_H
 #define QUERYENGINE_RESULTSETSORTIMPL_H
 
-#include "CompilationOptions.h"
 #include "../Shared/TargetInfo.h"
+#include "CompilationOptions.h"
 
 struct PodOrderEntry {
   int tle_no;       /* targetlist entry number: 1-based */
@@ -39,7 +39,7 @@ namespace Data_Namespace {
 
 class DataMgr;
 
-}  // Data_Namespace
+}  // namespace Data_Namespace
 
 template <class K>
 std::vector<uint32_t> baseline_sort(const ExecutorDeviceType device_type,

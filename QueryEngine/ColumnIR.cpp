@@ -87,7 +87,8 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
                                             const CompilationOptions& co) {
   if (col_var->get_rte_idx() <= 0 ||
       (!cgen_state_->outer_join_cond_lv_ &&
-       (cgen_state_->outer_join_match_found_per_level_.empty() || !foundOuterJoinMatch(col_var->get_rte_idx())))) {
+       (cgen_state_->outer_join_match_found_per_level_.empty() ||
+        !foundOuterJoinMatch(col_var->get_rte_idx())))) {
     return codegenColVar(col_var, fetch_column, true, co);
   }
   return codegenOuterJoinNullPlaceholder(col_var, fetch_column, co);
@@ -120,20 +121,25 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
     if (col_ti.get_physical_coord_cols() > 0) {
       std::vector<llvm::Value*> cols;
       for (auto i = 0; i < col_ti.get_physical_coord_cols(); i++) {
-        auto cd0 = get_column_descriptor(col_id + i + 1, col_var->get_table_id(), *catalog_);
+        auto cd0 =
+            get_column_descriptor(col_id + i + 1, col_var->get_table_id(), *catalog_);
         auto col0_ti = cd0->columnType;
         CHECK(!cd0->isVirtualCol);
-        auto col0_var = makeExpr<Analyzer::ColumnVar>(col0_ti, col_var->get_table_id(), cd0->columnId, rte_idx);
+        auto col0_var = makeExpr<Analyzer::ColumnVar>(
+            col0_ti, col_var->get_table_id(), cd0->columnId, rte_idx);
         auto col = codegenColVar(col0_var.get(), fetch_column, false, co);
         cols.insert(cols.end(), col.begin(), col.end());
         if (!fetch_column && plan_state_->isLazyFetchColumn(col_var)) {
-          plan_state_->columns_to_not_fetch_.insert(std::make_pair(col_var->get_table_id(), col0_var->get_column_id()));
+          plan_state_->columns_to_not_fetch_.insert(
+              std::make_pair(col_var->get_table_id(), col0_var->get_column_id()));
         }
       }
       if (!fetch_column && plan_state_->isLazyFetchColumn(col_var)) {
-        plan_state_->columns_to_not_fetch_.insert(std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
+        plan_state_->columns_to_not_fetch_.insert(
+            std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
       } else {
-        plan_state_->columns_to_fetch_.insert(std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
+        plan_state_->columns_to_fetch_.insert(
+            std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
       }
       return cols;
     }
@@ -155,7 +161,8 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
   if (hash_join_lhs && hash_join_lhs->get_rte_idx() == 0 &&
       hash_join_lhs->get_type_info() == col_var->get_type_info()) {
     if (plan_state_->isLazyFetchColumn(col_var)) {
-      plan_state_->columns_to_fetch_.insert(std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
+      plan_state_->columns_to_fetch_.insert(
+          std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
     }
     return codegen(hash_join_lhs, fetch_column, co);
   }
@@ -163,7 +170,8 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
   auto col_byte_stream = colByteStream(col_var, fetch_column, hoist_literals);
   if (plan_state_->isLazyFetchColumn(col_var)) {
     if (update_query_plan) {
-      plan_state_->columns_to_not_fetch_.insert(std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
+      plan_state_->columns_to_not_fetch_.insert(
+          std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
     }
 #ifdef ENABLE_MULTIFRAG_JOIN
     if (rte_idx > 0) {
@@ -179,22 +187,26 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
   }
   const auto& col_ti = col_var->get_type_info();
   if (col_ti.is_string() && col_ti.get_compression() == kENCODING_NONE) {
-    const auto varlen_str_column_lvs = codegenVariableLengthStringColVar(col_byte_stream, pos_arg);
-    auto it_ok = cgen_state_->fetch_cache_.insert(std::make_pair(local_col_id, varlen_str_column_lvs));
+    const auto varlen_str_column_lvs =
+        codegenVariableLengthStringColVar(col_byte_stream, pos_arg);
+    auto it_ok = cgen_state_->fetch_cache_.insert(
+        std::make_pair(local_col_id, varlen_str_column_lvs));
     CHECK(it_ok.second);
     return varlen_str_column_lvs;
   }
   if (col_ti.is_array()) {
     return {col_byte_stream};
   }
-  const auto fixed_length_column_lv = codegenFixedLengthColVar(col_var, col_byte_stream, pos_arg);
-  auto it_ok =
-      cgen_state_->fetch_cache_.insert(std::make_pair(local_col_id, std::vector<llvm::Value*>{fixed_length_column_lv}));
+  const auto fixed_length_column_lv =
+      codegenFixedLengthColVar(col_var, col_byte_stream, pos_arg);
+  auto it_ok = cgen_state_->fetch_cache_.insert(
+      std::make_pair(local_col_id, std::vector<llvm::Value*>{fixed_length_column_lv}));
   CHECK(it_ok.second);
   return {it_ok.first->second};
 }
 
-// Generate code for fixed length column types (number, timestamp or date, dictionary-encoded string)
+// Generate code for fixed length column types (number, timestamp or date,
+// dictionary-encoded string)
 llvm::Value* Executor::codegenFixedLengthColVar(const Analyzer::ColumnVar* col_var,
                                                 llvm::Value* col_byte_stream,
                                                 llvm::Value* pos_arg) {
@@ -207,11 +219,11 @@ llvm::Value* Executor::codegenFixedLengthColVar(const Analyzer::ColumnVar* col_v
   if (dec_type->isIntegerTy()) {
     auto dec_width = static_cast<llvm::IntegerType*>(dec_type)->getBitWidth();
     auto col_width = get_col_bit_width(col_var);
-    dec_val_cast = cgen_state_->ir_builder_.CreateCast(static_cast<size_t>(col_width) > dec_width
-                                                           ? llvm::Instruction::CastOps::SExt
-                                                           : llvm::Instruction::CastOps::Trunc,
-                                                       dec_val,
-                                                       get_int_type(col_width, cgen_state_->context_));
+    dec_val_cast = cgen_state_->ir_builder_.CreateCast(
+        static_cast<size_t>(col_width) > dec_width ? llvm::Instruction::CastOps::SExt
+                                                   : llvm::Instruction::CastOps::Trunc,
+        dec_val,
+        get_int_type(col_width, cgen_state_->context_));
     if ((col_ti.get_compression() == kENCODING_FIXED ||
          (col_ti.get_compression() == kENCODING_DICT && col_ti.get_size() < 4)) &&
         !col_ti.get_notnull()) {
@@ -231,18 +243,22 @@ llvm::Value* Executor::codegenFixedLengthColVar(const Analyzer::ColumnVar* col_v
   return dec_val_cast;
 }
 
-std::vector<llvm::Value*> Executor::codegenVariableLengthStringColVar(llvm::Value* col_byte_stream,
-                                                                      llvm::Value* pos_arg) {
+std::vector<llvm::Value*> Executor::codegenVariableLengthStringColVar(
+    llvm::Value* col_byte_stream,
+    llvm::Value* pos_arg) {
   // real (not dictionary-encoded) strings; store the pointer to the payload
-  auto ptr_and_len = cgen_state_->emitExternalCall(
-      "string_decode", get_int_type(64, cgen_state_->context_), {col_byte_stream, pos_arg});
+  auto ptr_and_len =
+      cgen_state_->emitExternalCall("string_decode",
+                                    get_int_type(64, cgen_state_->context_),
+                                    {col_byte_stream, pos_arg});
   // Unpack the pointer + length, see string_decode function.
   auto str_lv = cgen_state_->emitCall("extract_str_ptr", {ptr_and_len});
   auto len_lv = cgen_state_->emitCall("extract_str_len", {ptr_and_len});
   return {ptr_and_len, str_lv, len_lv};
 }
 
-llvm::Value* Executor::codegenRowId(const Analyzer::ColumnVar* col_var, const CompilationOptions& co) {
+llvm::Value* Executor::codegenRowId(const Analyzer::ColumnVar* col_var,
+                                    const CompilationOptions& co) {
   const auto offset_lv = cgen_state_->frag_offsets_[adjusted_range_table_index(col_var)];
   llvm::Value* start_rowid_lv{nullptr};
   const auto& table_generation = getTableGeneration(col_var->get_table_id());
@@ -261,7 +277,8 @@ llvm::Value* Executor::codegenRowId(const Analyzer::ColumnVar* col_var, const Co
     rowid_lv = cgen_state_->ir_builder_.CreateAdd(rowid_lv, offset_lv);
   } else if (col_var->get_rte_idx() > 0) {
     auto frag_off_ptr = get_arg_by_name(cgen_state_->row_func_, "frag_row_off");
-    auto input_off_ptr = cgen_state_->ir_builder_.CreateGEP(frag_off_ptr, ll_int(int32_t(col_var->get_rte_idx())));
+    auto input_off_ptr = cgen_state_->ir_builder_.CreateGEP(
+        frag_off_ptr, ll_int(int32_t(col_var->get_rte_idx())));
     auto rowid_offset_lv = cgen_state_->ir_builder_.CreateLoad(input_off_ptr);
     rowid_lv = cgen_state_->ir_builder_.CreateAdd(rowid_lv, rowid_offset_lv);
   }
@@ -293,12 +310,15 @@ SQLTypes get_phys_int_type(const size_t byte_sz) {
 
 }  // namespace
 
-llvm::Value* Executor::codgenAdjustFixedEncNull(llvm::Value* val, const SQLTypeInfo& col_ti) {
+llvm::Value* Executor::codgenAdjustFixedEncNull(llvm::Value* val,
+                                                const SQLTypeInfo& col_ti) {
   CHECK_LT(col_ti.get_size(), col_ti.get_logical_size());
   const auto col_phys_width = col_ti.get_size() * 8;
   auto from_typename = "int" + std::to_string(col_phys_width) + "_t";
   auto adjusted = cgen_state_->ir_builder_.CreateCast(
-      llvm::Instruction::CastOps::Trunc, val, get_int_type(col_phys_width, cgen_state_->context_));
+      llvm::Instruction::CastOps::Trunc,
+      val,
+      get_int_type(col_phys_width, cgen_state_->context_));
   if (col_ti.get_compression() == kENCODING_DICT) {
     from_typename = "u" + from_typename;
     llvm::Value* from_null{nullptr};
@@ -312,8 +332,9 @@ llvm::Value* Executor::codgenAdjustFixedEncNull(llvm::Value* val, const SQLTypeI
       default:
         CHECK(false);
     }
-    return cgen_state_->emitCall("cast_" + from_typename + "_to_" + numeric_type_name(col_ti) + "_nullable",
-                                 {adjusted, from_null, inlineIntNull(col_ti)});
+    return cgen_state_->emitCall(
+        "cast_" + from_typename + "_to_" + numeric_type_name(col_ti) + "_nullable",
+        {adjusted, from_null, inlineIntNull(col_ti)});
   }
   SQLTypeInfo col_phys_ti(get_phys_int_type(col_ti.get_size()),
                           col_ti.get_dimension(),
@@ -322,39 +343,45 @@ llvm::Value* Executor::codgenAdjustFixedEncNull(llvm::Value* val, const SQLTypeI
                           kENCODING_NONE,
                           0,
                           col_ti.get_subtype());
-  return cgen_state_->emitCall("cast_" + from_typename + "_to_" + numeric_type_name(col_ti) + "_nullable",
-                               {adjusted, inlineIntNull(col_phys_ti), inlineIntNull(col_ti)});
+  return cgen_state_->emitCall(
+      "cast_" + from_typename + "_to_" + numeric_type_name(col_ti) + "_nullable",
+      {adjusted, inlineIntNull(col_phys_ti), inlineIntNull(col_ti)});
 }
 
 llvm::Value* Executor::foundOuterJoinMatch(const ssize_t nesting_level) const {
   CHECK_GE(nesting_level, size_t(0));
   CHECK_LE(nesting_level, cgen_state_->outer_join_match_found_per_level_.size());
-  // The JoinLoop-based outer joins supersede the legacy version which checks `outer_join_cond_lv_`.
-  // They cannot coexist within the same execution unit.
-  CHECK(!cgen_state_->outer_join_cond_lv_ || !cgen_state_->outer_join_match_found_per_level_[nesting_level - 1]);
-  return cgen_state_->outer_join_cond_lv_ ? cgen_state_->outer_join_cond_lv_
-                                          : cgen_state_->outer_join_match_found_per_level_[nesting_level - 1];
+  // The JoinLoop-based outer joins supersede the legacy version which checks
+  // `outer_join_cond_lv_`. They cannot coexist within the same execution unit.
+  CHECK(!cgen_state_->outer_join_cond_lv_ ||
+        !cgen_state_->outer_join_match_found_per_level_[nesting_level - 1]);
+  return cgen_state_->outer_join_cond_lv_
+             ? cgen_state_->outer_join_cond_lv_
+             : cgen_state_->outer_join_match_found_per_level_[nesting_level - 1];
 }
 
-std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const Analyzer::ColumnVar* col_var,
-                                                                    const bool fetch_column,
-                                                                    const CompilationOptions& co) {
+std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(
+    const Analyzer::ColumnVar* col_var,
+    const bool fetch_column,
+    const CompilationOptions& co) {
   const auto grouped_col_lv = resolveGroupedColumnReference(col_var);
   if (grouped_col_lv) {
     return {grouped_col_lv};
   }
   const auto bb = cgen_state_->ir_builder_.GetInsertBlock();
-  const auto outer_join_args_bb =
-      llvm::BasicBlock::Create(cgen_state_->context_, "outer_join_args", cgen_state_->row_func_);
-  const auto outer_join_nulls_bb =
-      llvm::BasicBlock::Create(cgen_state_->context_, "outer_join_nulls", cgen_state_->row_func_);
-  const auto phi_bb = llvm::BasicBlock::Create(cgen_state_->context_, "outer_join_phi", cgen_state_->row_func_);
+  const auto outer_join_args_bb = llvm::BasicBlock::Create(
+      cgen_state_->context_, "outer_join_args", cgen_state_->row_func_);
+  const auto outer_join_nulls_bb = llvm::BasicBlock::Create(
+      cgen_state_->context_, "outer_join_nulls", cgen_state_->row_func_);
+  const auto phi_bb = llvm::BasicBlock::Create(
+      cgen_state_->context_, "outer_join_phi", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(bb);
   const auto outer_join_match_lv = foundOuterJoinMatch(col_var->get_rte_idx());
   CHECK(outer_join_match_lv);
-  cgen_state_->ir_builder_.CreateCondBr(outer_join_match_lv, outer_join_args_bb, outer_join_nulls_bb);
-  const auto back_from_outer_join_bb =
-      llvm::BasicBlock::Create(cgen_state_->context_, "back_from_outer_join", cgen_state_->row_func_);
+  cgen_state_->ir_builder_.CreateCondBr(
+      outer_join_match_lv, outer_join_args_bb, outer_join_nulls_bb);
+  const auto back_from_outer_join_bb = llvm::BasicBlock::Create(
+      cgen_state_->context_, "back_from_outer_join", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_args_bb);
   FetchCacheAnchor anchor(cgen_state_.get());
   const auto orig_lvs = codegenColVar(col_var, fetch_column, true, co);
@@ -362,10 +389,15 @@ std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const Analyz
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_nulls_bb);
   const auto& null_ti = col_var->get_type_info();
   const auto null_constant = makeExpr<Analyzer::Constant>(null_ti, true, Datum{0});
-  const auto null_target_lvs = codegen(
-      null_constant.get(), false, CompilationOptions{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false});
-  if ((null_ti.is_string() && null_ti.get_compression() == kENCODING_NONE) || null_ti.is_array()) {
-    throw std::runtime_error("Projection type " + null_ti.get_type_name() + " not supported for outer joins yet");
+  const auto null_target_lvs =
+      codegen(null_constant.get(),
+              false,
+              CompilationOptions{
+                  ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false});
+  if ((null_ti.is_string() && null_ti.get_compression() == kENCODING_NONE) ||
+      null_ti.is_array()) {
+    throw std::runtime_error("Projection type " + null_ti.get_type_name() +
+                             " not supported for outer joins yet");
   }
   cgen_state_->ir_builder_.CreateBr(phi_bb);
   CHECK_EQ(orig_lvs.size(), null_target_lvs.size());
@@ -406,7 +438,8 @@ llvm::Value* Executor::colByteStream(const Analyzer::ColumnVar* col_var,
                                      const bool fetch_column,
                                      const bool hoist_literals) {
   CHECK_GE(cgen_state_->row_func_->arg_size(), size_t(3));
-  const auto stream_arg_name = "col_buf" + std::to_string(getLocalColumnId(col_var, fetch_column));
+  const auto stream_arg_name =
+      "col_buf" + std::to_string(getLocalColumnId(col_var, fetch_column));
   for (auto& arg : cgen_state_->row_func_->args()) {
     if (arg.getName() == stream_arg_name) {
       CHECK(arg.getType() == llvm::Type::getInt8PtrTy(cgen_state_->context_));
@@ -420,18 +453,20 @@ llvm::Value* Executor::colByteStream(const Analyzer::ColumnVar* col_var,
 llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
   if (dynamic_cast<const Analyzer::ColumnVar*>(expr)) {
     const auto col_var = static_cast<const Analyzer::ColumnVar*>(expr);
-    const auto hash_pos_it = cgen_state_->scan_idx_to_hash_pos_.find(col_var->get_rte_idx());
+    const auto hash_pos_it =
+        cgen_state_->scan_idx_to_hash_pos_.find(col_var->get_rte_idx());
     if (hash_pos_it != cgen_state_->scan_idx_to_hash_pos_.end()) {
       if (hash_pos_it->second->getType()->isPointerTy()) {
         CHECK(hash_pos_it->second->getType()->getPointerElementType()->isIntegerTy(32));
         llvm::Value* result = cgen_state_->ir_builder_.CreateLoad(hash_pos_it->second);
-        result = cgen_state_->ir_builder_.CreateSExt(result, get_int_type(64, cgen_state_->context_));
+        result = cgen_state_->ir_builder_.CreateSExt(
+            result, get_int_type(64, cgen_state_->context_));
         return result;
       }
       return hash_pos_it->second;
     }
-    const auto inner_it =
-        cgen_state_->scan_to_iterator_.find(InputDescriptor(col_var->get_table_id(), col_var->get_rte_idx()));
+    const auto inner_it = cgen_state_->scan_to_iterator_.find(
+        InputDescriptor(col_var->get_table_id(), col_var->get_rte_idx()));
     if (inner_it != cgen_state_->scan_to_iterator_.end()) {
       CHECK(inner_it->second.first);
       CHECK(inner_it->second.first->getType()->isIntegerTy(64));
@@ -445,8 +480,8 @@ llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
     if (hash_pos_it != cgen_state_->scan_idx_to_hash_pos_.end()) {
       return hash_pos_it->second;
     }
-    const auto inner_it =
-        cgen_state_->scan_to_iterator_.find(InputDescriptor(iter->get_table_id(), iter->get_rte_idx()));
+    const auto inner_it = cgen_state_->scan_to_iterator_.find(
+        InputDescriptor(iter->get_table_id(), iter->get_rte_idx()));
     if (inner_it != cgen_state_->scan_to_iterator_.end()) {
       CHECK(inner_it->second.first);
       CHECK(inner_it->second.first->getType()->isIntegerTy(64));
@@ -466,14 +501,16 @@ llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
 const Analyzer::ColumnVar* Executor::hashJoinLhs(const Analyzer::ColumnVar* rhs) const {
   for (const auto tautological_eq : plan_state_->join_info_.equi_join_tautologies_) {
     CHECK(IS_EQUIVALENCE(tautological_eq->get_optype()));
-    if (dynamic_cast<const Analyzer::ExpressionTuple*>(tautological_eq->get_left_operand())) {
+    if (dynamic_cast<const Analyzer::ExpressionTuple*>(
+            tautological_eq->get_left_operand())) {
       auto lhs_col = hashJoinLhsTuple(rhs, tautological_eq.get());
       if (lhs_col) {
         return lhs_col;
       }
     } else {
       if (*tautological_eq->get_right_operand() == *rhs) {
-        auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(tautological_eq->get_left_operand());
+        auto lhs_col =
+            dynamic_cast<const Analyzer::ColumnVar*>(tautological_eq->get_left_operand());
         CHECK(lhs_col);
         return lhs_col;
       }
@@ -482,10 +519,13 @@ const Analyzer::ColumnVar* Executor::hashJoinLhs(const Analyzer::ColumnVar* rhs)
   return nullptr;
 }
 
-const Analyzer::ColumnVar* Executor::hashJoinLhsTuple(const Analyzer::ColumnVar* rhs,
-                                                      const Analyzer::BinOper* tautological_eq) const {
-  const auto lhs_tuple_expr = dynamic_cast<const Analyzer::ExpressionTuple*>(tautological_eq->get_left_operand());
-  const auto rhs_tuple_expr = dynamic_cast<const Analyzer::ExpressionTuple*>(tautological_eq->get_right_operand());
+const Analyzer::ColumnVar* Executor::hashJoinLhsTuple(
+    const Analyzer::ColumnVar* rhs,
+    const Analyzer::BinOper* tautological_eq) const {
+  const auto lhs_tuple_expr =
+      dynamic_cast<const Analyzer::ExpressionTuple*>(tautological_eq->get_left_operand());
+  const auto rhs_tuple_expr = dynamic_cast<const Analyzer::ExpressionTuple*>(
+      tautological_eq->get_right_operand());
   CHECK(lhs_tuple_expr && rhs_tuple_expr);
   const auto& lhs_tuple = lhs_tuple_expr->getTuple();
   const auto& rhs_tuple = rhs_tuple_expr->getTuple();

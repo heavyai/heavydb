@@ -26,8 +26,8 @@
 #ifndef QUERYENGINE_RELALGEXECUTIONUNIT_H
 #define QUERYENGINE_RELALGEXECUTIONUNIT_H
 
-#include "InputDescriptors.h"
 #include "../Shared/sqldefs.h"
+#include "InputDescriptors.h"
 
 #include <list>
 #include <memory>
@@ -41,7 +41,7 @@ class Expr;
 class NDVEstimator;
 struct OrderEntry;
 
-}  // Analyzer
+}  // namespace Analyzer
 
 struct SortInfo {
   const std::list<Analyzer::OrderEntry> order_entries;

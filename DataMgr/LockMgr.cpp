@@ -15,8 +15,8 @@
  */
 
 #include "LockMgr.h"
-#include "QueryEngine/JsonAccessors.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
+#include "QueryEngine/JsonAccessors.h"
 
 namespace Lock_Namespace {
 
@@ -32,38 +32,46 @@ void getTableNames(std::map<std::string, bool>& tableNames, const std::string qu
 
 void getTableNames(std::map<std::string, bool>& tableNames, const Value& value) {
   if (value.IsArray()) {
-    for (SizeType i = 0; i < value.Size(); ++i)
+    for (SizeType i = 0; i < value.Size(); ++i) {
       getTableNames(tableNames, value[i]);
+    }
     return;
   } else if (value.IsObject()) {
-    for (auto mit = value.MemberBegin(); mit != value.MemberEnd(); ++mit)
+    for (auto mit = value.MemberBegin(); mit != value.MemberEnd(); ++mit) {
       getTableNames(tableNames, mit->value);
-  } else
+    }
+  } else {
     return;
+  }
 
-  if (value.FindMember("rels") == value.MemberEnd())
+  if (value.FindMember("rels") == value.MemberEnd()) {
     return;
+  }
   const auto& rels = value["rels"];
   CHECK(rels.IsArray());
   for (SizeType i = 0; i < rels.Size(); ++i) {
     const auto& rel = rels[i];
     const auto& relop = json_str(rel["relOp"]);
-    if (rel.FindMember("table") != rel.MemberEnd())
+    if (rel.FindMember("table") != rel.MemberEnd()) {
       if ("EnumerableTableScan" == relop || "LogicalTableModify" == relop) {
         const auto t = rel["table"].GetArray();
         CHECK(t[1].IsString());
         tableNames[t[1].GetString()] |= "LogicalTableModify" == relop;
       }
+    }
   }
 }
 
-ChunkKey getTableChunkKey(const Catalog_Namespace::Catalog& cat, const std::string& tableName) {
+ChunkKey getTableChunkKey(const Catalog_Namespace::Catalog& cat,
+                          const std::string& tableName) {
   if (const auto tdp = cat.getMetadataForTable(tableName)) {
-    const auto fragmenter = dynamic_cast<Fragmenter_Namespace::InsertOrderFragmenter*>(tdp->fragmenter);
+    const auto fragmenter =
+        dynamic_cast<Fragmenter_Namespace::InsertOrderFragmenter*>(tdp->fragmenter);
     CHECK(fragmenter);
     return fragmenter->getChunkKeyPrefix();
-  } else
+  } else {
     throw std::runtime_error("Table " + tableName + " does not exist.");
+  }
 }
 
 std::string parse_to_ra(const Catalog_Namespace::Catalog& cat,
@@ -71,4 +79,4 @@ std::string parse_to_ra(const Catalog_Namespace::Catalog& cat,
                         const Catalog_Namespace::SessionInfo& session_info) {
   return cat.get_calciteMgr().process(session_info, query_str, false, false).plan_result;
 }
-}
+}  // namespace Lock_Namespace

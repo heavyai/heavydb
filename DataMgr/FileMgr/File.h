@@ -33,7 +33,10 @@
 
 namespace File_Namespace {
 
-FILE* create(const std::string& basePath, const int fileId, const size_t pageSize, const size_t npages);
+FILE* create(const std::string& basePath,
+             const int fileId,
+             const size_t pageSize,
+             const size_t npages);
 
 FILE* create(const std::string& fullPath, const size_t requestedFileSize);
 

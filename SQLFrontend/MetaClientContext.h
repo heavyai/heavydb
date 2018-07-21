@@ -55,7 +55,10 @@ struct MetaClientContext {
   std::vector<TDashboard> dash_names;
 
   MetaClientContext(TTransport& t, CLIENT_TYPE& c)
-      : transport(t), client(c), session(INVALID_SESSION_ID), execution_mode(TExecuteMode::GPU) {}
+      : transport(t)
+      , client(c)
+      , session(INVALID_SESSION_ID)
+      , execution_mode(TExecuteMode::GPU) {}
   MetaClientContext() {}
 };
 

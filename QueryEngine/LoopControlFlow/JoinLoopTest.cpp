@@ -72,8 +72,10 @@ llvm::Function* create_loop_test_function(llvm::LLVMContext& context,
                                           llvm::Module* module,
                                           const std::vector<JoinLoop>& join_loops) {
   std::vector<llvm::Type*> argument_types;
-  const auto ft = llvm::FunctionType::get(llvm::Type::getVoidTy(context), argument_types, false);
-  const auto func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "loop_test_func", module);
+  const auto ft =
+      llvm::FunctionType::get(llvm::Type::getVoidTy(context), argument_types, false);
+  const auto func = llvm::Function::Create(
+      ft, llvm::Function::ExternalLinkage, "loop_test_func", module);
   const auto entry_bb = llvm::BasicBlock::Create(context, "entry", func);
   const auto exit_bb = llvm::BasicBlock::Create(context, "exit", func);
   llvm::IRBuilder<> builder(context);
@@ -82,11 +84,15 @@ llvm::Function* create_loop_test_function(llvm::LLVMContext& context,
   const auto loop_body_bb = JoinLoop::codegen(
       join_loops,
       [&builder, module](const std::vector<llvm::Value*>& iterators) {
-        const auto loop_body_bb =
-            llvm::BasicBlock::Create(builder.getContext(), "loop_body", builder.GetInsertBlock()->getParent());
+        const auto loop_body_bb = llvm::BasicBlock::Create(
+            builder.getContext(), "loop_body", builder.GetInsertBlock()->getParent());
         builder.SetInsertPoint(loop_body_bb);
         const std::vector<llvm::Value*> args(iterators.begin() + 1, iterators.end());
-        emit_external_call("print_iterators", llvm::Type::getVoidTy(builder.getContext()), args, module, builder);
+        emit_external_call("print_iterators",
+                           llvm::Type::getVoidTy(builder.getContext()),
+                           args,
+                           module,
+                           builder);
         return loop_body_bb;
       },
       nullptr,
@@ -102,8 +108,9 @@ std::unique_ptr<llvm::Module> create_loop_test_module() {
   return llvm::make_unique<llvm::Module>("Nested loops JIT", g_global_context);
 }
 
-std::pair<void*, std::unique_ptr<llvm::ExecutionEngine>> native_codegen(std::unique_ptr<llvm::Module>& module,
-                                                                        llvm::Function* func) {
+std::pair<void*, std::unique_ptr<llvm::ExecutionEngine>> native_codegen(
+    std::unique_ptr<llvm::Module>& module,
+    llvm::Function* func) {
   llvm::ExecutionEngine* execution_engine{nullptr};
 
   auto init_err = llvm::InitializeNativeTarget();
@@ -144,8 +151,9 @@ std::vector<JoinLoop> generate_descriptors(const unsigned mask,
                                 CHECK_EQ(i + 1, v.size());
                                 CHECK(!v.front());
                                 JoinLoopDomain domain{0};
-                                domain.slot_lookup_result = cond_is_true ? ll_int(int64_t(99), g_global_context)
-                                                                         : ll_int(int64_t(-1), g_global_context);
+                                domain.slot_lookup_result =
+                                    cond_is_true ? ll_int(int64_t(99), g_global_context)
+                                                 : ll_int(int64_t(-1), g_global_context);
                                 return domain;
                               },
                               nullptr,
@@ -161,7 +169,8 @@ std::vector<JoinLoop> generate_descriptors(const unsigned mask,
                                 CHECK_EQ(i + 1, v.size());
                                 CHECK(!v.front());
                                 JoinLoopDomain domain{0};
-                                domain.upper_bound = ll_int<int64_t>(upper_bound, g_global_context);
+                                domain.upper_bound =
+                                    ll_int<int64_t>(upper_bound, g_global_context);
                                 return domain;
                               },
                               nullptr,
@@ -177,12 +186,15 @@ std::vector<JoinLoop> generate_descriptors(const unsigned mask,
 
 int main() {
   std::vector<int64_t> upper_bounds{5, 3, 9};
-  for (unsigned mask = 0; mask < static_cast<unsigned>(1 << upper_bounds.size()); ++mask) {
+  for (unsigned mask = 0; mask < static_cast<unsigned>(1 << upper_bounds.size());
+       ++mask) {
     const unsigned mask_bitcount = __builtin_popcount(mask);
-    for (unsigned cond_mask = 0; cond_mask < static_cast<unsigned>(1 << mask_bitcount); ++cond_mask) {
+    for (unsigned cond_mask = 0; cond_mask < static_cast<unsigned>(1 << mask_bitcount);
+         ++cond_mask) {
       auto module = create_loop_test_module();
       const auto join_loops = generate_descriptors(mask, cond_mask, upper_bounds);
-      const auto function = create_loop_test_function(g_global_context, module.get(), join_loops);
+      const auto function =
+          create_loop_test_function(g_global_context, module.get(), join_loops);
       const auto& func_and_ee = native_codegen(module, function);
       reinterpret_cast<int64_t (*)()>(func_and_ee.first)();
     }

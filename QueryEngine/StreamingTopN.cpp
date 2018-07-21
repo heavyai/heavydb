@@ -13,10 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "RelAlgExecutor.h"
 #include "StreamingTopN.h"
-#include "TopKSort.h"
+#include "RelAlgExecutor.h"
 #include "Shared/checked_alloc.h"
+#include "TopKSort.h"
 
 namespace streaming_top_n {
 
@@ -43,7 +43,8 @@ std::vector<int8_t> get_rows_copy_from_heaps(const int64_t* heaps,
 
 }  // namespace streaming_top_n
 
-bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit, const QueryMemoryDescriptor& query_mem_desc) {
+bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
+                         const QueryMemoryDescriptor& query_mem_desc) {
   if (g_cluster) {
     return false;  // TODO(miyu)
   }
@@ -55,14 +56,16 @@ bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit, const QueryMemo
   }
 
   if (!query_mem_desc.canOutputColumnar() &&  // TODO(miyu): relax this limitation
-      ra_exe_unit.sort_info.order_entries.size() == 1 &&
-      ra_exe_unit.sort_info.limit && ra_exe_unit.sort_info.algorithm == SortAlgorithm::StreamingTopN) {
+      ra_exe_unit.sort_info.order_entries.size() == 1 && ra_exe_unit.sort_info.limit &&
+      ra_exe_unit.sort_info.algorithm == SortAlgorithm::StreamingTopN) {
     const auto only_order_entry = ra_exe_unit.sort_info.order_entries.front();
     CHECK_GT(only_order_entry.tle_no, int(0));
-    CHECK_LE(static_cast<size_t>(only_order_entry.tle_no), ra_exe_unit.target_exprs.size());
+    CHECK_LE(static_cast<size_t>(only_order_entry.tle_no),
+             ra_exe_unit.target_exprs.size());
     const auto order_entry_expr = ra_exe_unit.target_exprs[only_order_entry.tle_no - 1];
     const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
-    if ((order_entry_expr->get_type_info().is_number() || order_entry_expr->get_type_info().is_time()) &&
+    if ((order_entry_expr->get_type_info().is_number() ||
+         order_entry_expr->get_type_info().is_time()) &&
         n <= 100000) {  // TODO(miyu): relax?
       return true;
     }
@@ -72,33 +75,37 @@ bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit, const QueryMemo
 }
 
 #ifdef HAVE_CUDA
-std::vector<int8_t> pick_top_n_rows_from_dev_heaps(Data_Namespace::DataMgr* data_mgr,
-                                                   const int64_t* dev_heaps_buffer,
-                                                   const RelAlgExecutionUnit& ra_exe_unit,
-                                                   const QueryMemoryDescriptor& query_mem_desc,
-                                                   const size_t thread_count,
-                                                   const int device_id) {
+std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
+    Data_Namespace::DataMgr* data_mgr,
+    const int64_t* dev_heaps_buffer,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const size_t thread_count,
+    const int device_id) {
   CHECK(!query_mem_desc.canOutputColumnar());
   CHECK_EQ(ra_exe_unit.sort_info.order_entries.size(), size_t(1));
   const auto& only_oe = ra_exe_unit.sort_info.order_entries.back();
   const auto oe_col_idx = only_oe.tle_no - 1;
   const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
 #ifdef ENABLE_KEY_COMPACTION
-  const size_t group_key_bytes = query_mem_desc.group_col_compact_width ? query_mem_desc.group_col_compact_width : 8;
+  const size_t group_key_bytes =
+      query_mem_desc.group_col_compact_width ? query_mem_desc.group_col_compact_width : 8;
 #else
   const size_t group_key_bytes = 8;
 #endif  // ENABLE_KEY_COMPACTION
   const PodOrderEntry pod_oe{only_oe.tle_no, only_oe.is_desc, only_oe.nulls_first};
-  GroupByBufferLayoutInfo oe_layout{n * thread_count,
-                                    query_mem_desc.getColOffInBytes(0, oe_col_idx),
-                                    static_cast<size_t>(query_mem_desc.agg_col_widths[oe_col_idx].compact),
-                                    query_mem_desc.getRowSize(),
-                                    target_info(ra_exe_unit.target_exprs[oe_col_idx]),
-                                    -1};
+  GroupByBufferLayoutInfo oe_layout{
+      n * thread_count,
+      query_mem_desc.getColOffInBytes(0, oe_col_idx),
+      static_cast<size_t>(query_mem_desc.agg_col_widths[oe_col_idx].compact),
+      query_mem_desc.getRowSize(),
+      target_info(ra_exe_unit.target_exprs[oe_col_idx]),
+      -1};
   return pop_n_rows_from_merged_heaps_gpu(
       data_mgr,
       dev_heaps_buffer,
-      query_mem_desc.getBufferSizeBytes(ra_exe_unit, thread_count, ExecutorDeviceType::GPU),
+      query_mem_desc.getBufferSizeBytes(
+          ra_exe_unit, thread_count, ExecutorDeviceType::GPU),
       n,
       pod_oe,
       oe_layout,

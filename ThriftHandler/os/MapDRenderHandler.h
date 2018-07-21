@@ -31,8 +31,12 @@ class MapDRenderHandler {
   ~MapDRenderHandler() {}
 
  private:
-  MapDRenderHandler(MapDHandler* mapd_handler, const size_t render_mem_bytes, const int num_gpus, const int start_gpu) {
-    throw std::runtime_error("Rendering is only supported in the Enterprise and Community Editions");
+  MapDRenderHandler(MapDHandler* mapd_handler,
+                    const size_t render_mem_bytes,
+                    const int num_gpus,
+                    const int start_gpu) {
+    throw std::runtime_error(
+        "Rendering is only supported in the Enterprise and Community Editions");
   }
 
   void disconnect(const TSessionId& session) {}
@@ -60,14 +64,15 @@ class MapDRenderHandler {
     CHECK(false);
   }
 
-  void get_result_row_for_pixel(TPixelTableRowResult& _return,
-                                const Catalog_Namespace::SessionInfo& session_info,
-                                const int64_t widget_id,
-                                const TPixel& pixel,
-                                const std::map<std::string, std::vector<std::string>>& table_col_names,
-                                const bool column_format,
-                                const int32_t pixelRadius,
-                                const std::string& nonce) {
+  void get_result_row_for_pixel(
+      TPixelTableRowResult& _return,
+      const Catalog_Namespace::SessionInfo& session_info,
+      const int64_t widget_id,
+      const TPixel& pixel,
+      const std::map<std::string, std::vector<std::string>>& table_col_names,
+      const bool column_format,
+      const int32_t pixelRadius,
+      const std::string& nonce) {
     CHECK(false);
   }
 

@@ -23,8 +23,11 @@
 #include <boost/optional.hpp>
 
 typedef boost::multiprecision::number<
-    boost::multiprecision::
-        cpp_int_backend<64, 64, boost::multiprecision::signed_magnitude, boost::multiprecision::checked, void>>
+    boost::multiprecision::cpp_int_backend<64,
+                                           64,
+                                           boost::multiprecision::signed_magnitude,
+                                           boost::multiprecision::checked,
+                                           void>>
     checked_int64_t;
 
 enum class ExpressionRangeType { Invalid, Integer, Float, Double };
@@ -51,11 +54,15 @@ class ExpressionRange {
     return ExpressionRange(int_min, int_max, bucket, has_nulls);
   }
 
-  static ExpressionRange makeDoubleRange(const double fp_min, const double fp_max, const bool has_nulls) {
+  static ExpressionRange makeDoubleRange(const double fp_min,
+                                         const double fp_max,
+                                         const bool has_nulls) {
     return ExpressionRange(ExpressionRangeType::Double, fp_min, fp_max, has_nulls);
   }
 
-  static ExpressionRange makeFloatRange(const float fp_min, const float fp_max, const bool has_nulls) {
+  static ExpressionRange makeFloatRange(const float fp_min,
+                                        const float fp_max,
+                                        const bool has_nulls) {
     return ExpressionRange(ExpressionRangeType::Float, fp_min, fp_max, has_nulls);
   }
 
@@ -130,22 +137,30 @@ class ExpressionRange {
   bool operator==(const ExpressionRange& other) const;
 
  private:
-  ExpressionRange(const int64_t int_min_in, const int64_t int_max_in, const int64_t bucket, const bool has_nulls_in)
-      : type_(ExpressionRangeType::Integer),
-        has_nulls_(has_nulls_in),
-        int_min_(int_min_in),
-        int_max_(int_max_in),
-        bucket_(bucket) {}
+  ExpressionRange(const int64_t int_min_in,
+                  const int64_t int_max_in,
+                  const int64_t bucket,
+                  const bool has_nulls_in)
+      : type_(ExpressionRangeType::Integer)
+      , has_nulls_(has_nulls_in)
+      , int_min_(int_min_in)
+      , int_max_(int_max_in)
+      , bucket_(bucket) {}
 
   ExpressionRange(const ExpressionRangeType type,
                   const double fp_min_in,
                   const double fp_max_in,
                   const bool has_nulls_in)
-      : type_(type), has_nulls_(has_nulls_in), fp_min_(fp_min_in), fp_max_(fp_max_in), bucket_(0) {
+      : type_(type)
+      , has_nulls_(has_nulls_in)
+      , fp_min_(fp_min_in)
+      , fp_max_(fp_max_in)
+      , bucket_(0) {
     CHECK(type_ == ExpressionRangeType::Float || type_ == ExpressionRangeType::Double);
   }
 
-  ExpressionRange() : type_(ExpressionRangeType::Invalid), has_nulls_(false), bucket_(0) {}
+  ExpressionRange()
+      : type_(ExpressionRangeType::Invalid), has_nulls_(false), bucket_(0) {}
 
   template <class T, class BinOp>
   ExpressionRange binOp(const ExpressionRange& other, const BinOp& bin_op) const {
@@ -223,7 +238,8 @@ inline double getMax<double>(const ExpressionRange& e) {
 }
 
 template <>
-inline int64_t get_value_from_datum(const Datum datum, const SQLTypes type_info) noexcept {
+inline int64_t get_value_from_datum(const Datum datum,
+                                    const SQLTypes type_info) noexcept {
   switch (type_info) {
     case kBOOLEAN:
       return datum.boolval;
@@ -272,9 +288,10 @@ void apply_fp_qual(const Datum const_datum,
                    const SQLOps sql_op,
                    ExpressionRange& qual_range);
 
-ExpressionRange apply_simple_quals(const Analyzer::ColumnVar*,
-                                   const ExpressionRange&,
-                                   const boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> = boost::none);
+ExpressionRange apply_simple_quals(
+    const Analyzer::ColumnVar*,
+    const ExpressionRange&,
+    const boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> = boost::none);
 
 class Executor;
 struct InputTableInfo;
@@ -284,9 +301,10 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar*,
                                    const Executor*,
                                    const bool is_outer_join_proj);
 
-ExpressionRange getExpressionRange(const Analyzer::Expr*,
-                                   const std::vector<InputTableInfo>&,
-                                   const Executor*,
-                                   boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> = boost::none);
+ExpressionRange getExpressionRange(
+    const Analyzer::Expr*,
+    const std::vector<InputTableInfo>&,
+    const Executor*,
+    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> = boost::none);
 
 #endif  // QUERYENGINE_EXPRESSIONRANGE_H

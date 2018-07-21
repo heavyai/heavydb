@@ -48,6 +48,6 @@ class CpuBuffer : public Buffer {
                  const int srcDeviceId = -1);
   CudaMgr_Namespace::CudaMgr* cudaMgr_;
 };
-}  // Buffer_Namespace
+}  // namespace Buffer_Namespace
 
 #endif  // CPUBUFFER_H

@@ -26,54 +26,59 @@ int64_t Executor::getRowidForPixel(const int64_t x,
   return 0;
 }
 
-std::shared_ptr<ResultSet> Executor::renderLinesNonInSitu(const std::string& queryStr,
-                                                          const ExecutionResult& results,
-                                                          const Catalog_Namespace::SessionInfo& session,
-                                                          const int render_widget_id,
-                                                          const rapidjson::Value& data_desc,
-                                                          RenderInfo* render_query_data) {
+std::shared_ptr<ResultSet> Executor::renderLinesNonInSitu(
+    const std::string& queryStr,
+    const ExecutionResult& results,
+    const Catalog_Namespace::SessionInfo& session,
+    const int render_widget_id,
+    const rapidjson::Value& data_desc,
+    RenderInfo* render_query_data) {
   CHECK(false);
   return nullptr;
 }
 
-std::shared_ptr<ResultSet> renderPolygonsNonInSitu(const std::string& queryStr,
-                                                   const ExecutionResult& results,
-                                                   const Catalog_Namespace::SessionInfo& session,
-                                                   const int render_widget_id,
-                                                   const rapidjson::Value& data_desc,
-                                                   RenderInfo* render_query_data,
-                                                   const std::string& poly_table_name) {
+std::shared_ptr<ResultSet> renderPolygonsNonInSitu(
+    const std::string& queryStr,
+    const ExecutionResult& results,
+    const Catalog_Namespace::SessionInfo& session,
+    const int render_widget_id,
+    const rapidjson::Value& data_desc,
+    RenderInfo* render_query_data,
+    const std::string& poly_table_name) {
   CHECK(false);
   return nullptr;
 }
 
-std::shared_ptr<ResultSet> renderPolygonsInSitu(const std::string& queryStr,
-                                                const ExecutionResult& results,
-                                                const Catalog_Namespace::SessionInfo& session,
-                                                const int render_widget_id,
-                                                const rapidjson::Value& data_desc,
-                                                RenderInfo* render_query_data,
-                                                const std::string& poly_table_name) {
+std::shared_ptr<ResultSet> renderPolygonsInSitu(
+    const std::string& queryStr,
+    const ExecutionResult& results,
+    const Catalog_Namespace::SessionInfo& session,
+    const int render_widget_id,
+    const rapidjson::Value& data_desc,
+    RenderInfo* render_query_data,
+    const std::string& poly_table_name) {
   CHECK(false);
   return nullptr;
 }
 
-std::shared_ptr<ResultSet> renderLinesNonInSitu(const std::string& queryStr,
-                                                const ExecutionResult& results,
-                                                const Catalog_Namespace::SessionInfo& session,
-                                                const int render_widget_id,
-                                                const rapidjson::Value& data_desc,
-                                                RenderInfo* render_query_data) {
+std::shared_ptr<ResultSet> renderLinesNonInSitu(
+    const std::string& queryStr,
+    const ExecutionResult& results,
+    const Catalog_Namespace::SessionInfo& session,
+    const int render_widget_id,
+    const rapidjson::Value& data_desc,
+    RenderInfo* render_query_data) {
   CHECK(false);
   return nullptr;
 }
 
-std::vector<int32_t> Executor::getStringIds(const std::string& col_name,
-                                            const std::vector<std::string>& col_vals,
-                                            const ::QueryRenderer::QueryDataLayout* query_data_layout,
-                                            const ResultSet* results,
-                                            const std::shared_ptr<RowSetMemoryOwner>& row_set_mem_owner,
-                                            const bool warn) const {
+std::vector<int32_t> Executor::getStringIds(
+    const std::string& col_name,
+    const std::vector<std::string>& col_vals,
+    const ::QueryRenderer::QueryDataLayout* query_data_layout,
+    const ResultSet* results,
+    const std::shared_ptr<RowSetMemoryOwner>& row_set_mem_owner,
+    const bool warn) const {
   CHECK(false);
   return {};
 }

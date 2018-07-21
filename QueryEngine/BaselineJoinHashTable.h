@@ -40,22 +40,25 @@ class Executor;
 // now, such tuples must be unique within the inner table.
 class BaselineJoinHashTable : public JoinHashTableInterface {
  public:
-  static std::shared_ptr<BaselineJoinHashTable> getInstance(const std::shared_ptr<Analyzer::BinOper> condition,
-                                                            const std::vector<InputTableInfo>& query_infos,
-                                                            const RelAlgExecutionUnit& ra_exe_unit,
-                                                            const Data_Namespace::MemoryLevel memory_level,
-                                                            const int device_count,
-                                                            const std::unordered_set<int>& skip_tables,
-                                                            ColumnCacheMap& column_map,
-                                                            Executor* executor);
+  static std::shared_ptr<BaselineJoinHashTable> getInstance(
+      const std::shared_ptr<Analyzer::BinOper> condition,
+      const std::vector<InputTableInfo>& query_infos,
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const Data_Namespace::MemoryLevel memory_level,
+      const int device_count,
+      const std::unordered_set<int>& skip_tables,
+      ColumnCacheMap& column_map,
+      Executor* executor);
 
-  int64_t getJoinHashBuffer(const ExecutorDeviceType device_type, const int device_id) noexcept override;
+  int64_t getJoinHashBuffer(const ExecutorDeviceType device_type,
+                            const int device_id) noexcept override;
 
   llvm::Value* codegenSlotIsValid(const CompilationOptions&, const size_t) override;
 
   llvm::Value* codegenSlot(const CompilationOptions&, const size_t) override;
 
-  HashJoinMatchingSet codegenMatchingSet(const CompilationOptions&, const size_t) override;
+  HashJoinMatchingSet codegenMatchingSet(const CompilationOptions&,
+                                         const size_t) override;
 
   int getInnerTableId() const noexcept override;
 
@@ -79,7 +82,8 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
                         ColumnCacheMap& column_map,
                         Executor* executor);
 
-  static int getInnerTableId(const Analyzer::BinOper* condition, const Executor* executor);
+  static int getInnerTableId(const Analyzer::BinOper* condition,
+                             const Executor* executor);
 
   std::pair<const int8_t*, size_t> getAllColumnFragments(
       const Analyzer::ColumnVar& hash_col,
@@ -92,7 +96,8 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   int reify(const int device_count);
 
-  int reifyWithLayout(const int device_count, const JoinHashTableInterface::HashType layout);
+  int reifyWithLayout(const int device_count,
+                      const JoinHashTableInterface::HashType layout);
 
   struct ColumnsForDevice {
     const std::vector<JoinColumn> join_columns;
@@ -103,8 +108,9 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   size_t approximateTupleCount(const std::vector<ColumnsForDevice>&) const;
 
-  ColumnsForDevice fetchColumnsForDevice(const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-                                         const int device_id);
+  ColumnsForDevice fetchColumnsForDevice(
+      const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+      const int device_id);
 
   int reifyForDevice(const ColumnsForDevice& columns_for_device,
                      const JoinHashTableInterface::HashType layout,
@@ -145,7 +151,8 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
     const SQLOps optype;
 
     bool operator==(const struct HashTableCacheKey& that) const {
-      return num_elements == that.num_elements && chunk_keys == that.chunk_keys && optype == that.optype;
+      return num_elements == that.num_elements && chunk_keys == that.chunk_keys &&
+             optype == that.optype;
     }
   };
 
@@ -191,12 +198,15 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
 class HashTypeCache {
  public:
-  static void set(const std::vector<ChunkKey>& key, const JoinHashTableInterface::HashType hash_type);
+  static void set(const std::vector<ChunkKey>& key,
+                  const JoinHashTableInterface::HashType hash_type);
 
-  static std::pair<JoinHashTableInterface::HashType, bool> get(const std::vector<ChunkKey>& key);
+  static std::pair<JoinHashTableInterface::HashType, bool> get(
+      const std::vector<ChunkKey>& key);
 
  private:
-  static std::map<std::vector<ChunkKey>, JoinHashTableInterface::HashType> hash_type_cache_;
+  static std::map<std::vector<ChunkKey>, JoinHashTableInterface::HashType>
+      hash_type_cache_;
   static std::mutex hash_type_cache_mutex_;
 };
 

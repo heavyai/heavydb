@@ -31,9 +31,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <time.h>
-#include <math.h>
 #include "TimeGM.h"
+#include <cmath>
+#include <ctime>
 
 /* Number of days per month (except for February in leap years). */
 // static const int monoff[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
@@ -74,8 +74,9 @@ time_t TimeGM::my_timegm(const struct tm* tm) {
   days = 365 * (year - 1970) + leap_days(1970, year);
   days += monoff[tm->tm_mon];
 
-  if (tm->tm_mon > 1 && is_leap_year(year))
+  if (tm->tm_mon > 1 && is_leap_year(year)) {
     ++days;
+  }
   days += tm->tm_mday - 1;
 
   hours = days * 24 + tm->tm_hour;

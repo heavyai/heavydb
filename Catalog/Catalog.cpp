@@ -80,9 +80,11 @@ namespace Catalog_Namespace {
 const int MAPD_ROOT_USER_ID = 0;
 const std::string MAPD_ROOT_USER_ID_STR = "0";
 const std::string MAPD_ROOT_PASSWD_DEFAULT = "HyperInteractive";
-const int DEFAULT_INITIAL_VERSION = 1;            // start at version 1
-const int MAPD_TEMP_TABLE_START_ID = 1073741824;  // 2^30, give room for over a billion non-temp tables
-const int MAPD_TEMP_DICT_START_ID = 1073741824;   // 2^30, give room for over a billion non-temp dictionaries
+const int DEFAULT_INITIAL_VERSION = 1;  // start at version 1
+const int MAPD_TEMP_TABLE_START_ID =
+    1073741824;  // 2^30, give room for over a billion non-temp tables
+const int MAPD_TEMP_DICT_START_ID =
+    1073741824;  // 2^30, give room for over a billion non-temp dictionaries
 
 const std::string Catalog::physicalTableNameTag_("_shard_#");
 std::map<std::string, std::shared_ptr<Catalog>> Catalog::mapd_cat_map_;
@@ -109,18 +111,20 @@ class read_lock {
 
  public:
   read_lock(const T* cat) : catalog(cat), holds_lock(false) {
-    if (catalog->name() == MAPD_SYSTEM_DB)
+    if (catalog->name() == MAPD_SYSTEM_DB) {
       lock_catalog(&SysCatalog::instance());
-    else
+    } else {
       lock_catalog(cat);
+    }
   }
 
   ~read_lock() {
     if (holds_lock) {
-      if (catalog->name() == MAPD_SYSTEM_DB)
+      if (catalog->name() == MAPD_SYSTEM_DB) {
         SysCatalog::thread_holds_read_lock = false;
-      else
+      } else {
         T::thread_holds_read_lock = false;
+      }
     }
   }
 };
@@ -144,19 +148,21 @@ class sqlite_lock {
 
  public:
   sqlite_lock(const T* cat) : catalog(cat), holds_lock(false) {
-    if (catalog->name() == MAPD_SYSTEM_DB)
+    if (catalog->name() == MAPD_SYSTEM_DB) {
       lock_catalog(&SysCatalog::instance());
-    else
+    } else {
       lock_catalog(cat);
+    }
   }
 
   ~sqlite_lock() {
     if (holds_lock) {
       std::thread::id no_thread;
-      if (catalog->name() == MAPD_SYSTEM_DB)
+      if (catalog->name() == MAPD_SYSTEM_DB) {
         SysCatalog::instance().thread_holding_sqlite_lock = no_thread;
-      else
+      } else {
         catalog->thread_holding_sqlite_lock = no_thread;
+      }
     }
   }
 };
@@ -180,30 +186,32 @@ class write_lock {
 
  public:
   write_lock(const T* cat) : catalog(cat), holds_lock(false) {
-    if (catalog->name() == MAPD_SYSTEM_DB)
+    if (catalog->name() == MAPD_SYSTEM_DB) {
       lock_catalog(&SysCatalog::instance());
-    else
+    } else {
       lock_catalog(cat);
+    }
   }
 
   ~write_lock() {
     if (holds_lock) {
       std::thread::id no_thread;
-      if (catalog->name() == MAPD_SYSTEM_DB)
+      if (catalog->name() == MAPD_SYSTEM_DB) {
         SysCatalog::instance().thread_holding_write_lock = no_thread;
-      else
+      } else {
         catalog->thread_holding_write_lock = no_thread;
+      }
     }
   }
 };
 
-typedef read_lock<SysCatalog> sys_read_lock;
-typedef write_lock<SysCatalog> sys_write_lock;
-typedef sqlite_lock<SysCatalog> sys_sqlite_lock;
+using sys_read_lock = read_lock<SysCatalog>;
+using sys_write_lock = write_lock<SysCatalog>;
+using sys_sqlite_lock = sqlite_lock<SysCatalog>;
 
-typedef read_lock<Catalog> cat_read_lock;
-typedef write_lock<Catalog> cat_write_lock;
-typedef sqlite_lock<Catalog> cat_sqlite_lock;
+using cat_read_lock = read_lock<Catalog>;
+using cat_write_lock = write_lock<Catalog>;
+using cat_sqlite_lock = sqlite_lock<Catalog>;
 
 void SysCatalog::init(const std::string& basePath,
                       std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
@@ -222,7 +230,8 @@ void SysCatalog::init(const std::string& basePath,
   calciteMgr_ = calcite;
   check_privileges_ = check_privileges;
   string_dict_hosts_ = string_dict_hosts;
-  sqliteConnector_.reset(new SqliteConnector(MAPD_SYSTEM_DB, basePath + "/mapd_catalogs/"));
+  sqliteConnector_.reset(
+      new SqliteConnector(MAPD_SYSTEM_DB, basePath + "/mapd_catalogs/"));
   if (is_new_db) {
     initDB();
   } else {
@@ -245,7 +254,9 @@ SysCatalog::~SysCatalog() {
     delete roleIt->second;
   }
   roleMap_.clear();
-  for (UserRoleMap::iterator userRoleIt = userRoleMap_.begin(); userRoleIt != userRoleMap_.end(); ++userRoleIt) {
+  for (UserRoleMap::iterator userRoleIt = userRoleMap_.begin();
+       userRoleIt != userRoleMap_.end();
+       ++userRoleIt) {
     delete userRoleIt->second;
   }
   userRoleMap_.clear();
@@ -260,14 +271,20 @@ SysCatalog::~SysCatalog() {
 void SysCatalog::initDB() {
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query(
-      "CREATE TABLE mapd_users (userid integer primary key, name text unique, passwd_hash text, issuper boolean)");
+      "CREATE TABLE mapd_users (userid integer primary key, name text unique, "
+      "passwd_hash text, issuper boolean)");
   sqliteConnector_->query_with_text_params(
       "INSERT INTO mapd_users VALUES (?, ?, ?, 1)",
-      std::vector<std::string>{MAPD_ROOT_USER_ID_STR, MAPD_ROOT_USER, hash_with_bcrypt(MAPD_ROOT_PASSWD_DEFAULT)});
+      std::vector<std::string>{MAPD_ROOT_USER_ID_STR,
+                               MAPD_ROOT_USER,
+                               hash_with_bcrypt(MAPD_ROOT_PASSWD_DEFAULT)});
   sqliteConnector_->query(
-      "CREATE TABLE mapd_databases (dbid integer primary key, name text unique, owner integer references mapd_users)");
+      "CREATE TABLE mapd_databases (dbid integer primary key, name text unique, owner "
+      "integer references mapd_users)");
   if (check_privileges_) {
-    sqliteConnector_->query("CREATE TABLE mapd_roles(roleName text, userName text, UNIQUE(roleName, userName))");
+    sqliteConnector_->query(
+        "CREATE TABLE mapd_roles(roleName text, userName text, UNIQUE(roleName, "
+        "userName))");
     sqliteConnector_->query(
         "CREATE TABLE mapd_object_permissions ("
         "roleName text, "
@@ -276,10 +293,12 @@ void SysCatalog::initDB() {
         "objectId integer, "
         "objectPermissionsType integer, "
         "objectPermissions integer, "
-        "objectOwnerId integer, UNIQUE(roleName, objectPermissionsType, dbId, objectId))");
+        "objectOwnerId integer, UNIQUE(roleName, objectPermissionsType, dbId, "
+        "objectId))");
   } else {
     sqliteConnector_->query(
-        "CREATE TABLE mapd_privileges (userid integer references mapd_users, dbid integer references mapd_databases, "
+        "CREATE TABLE mapd_privileges (userid integer references mapd_users, dbid "
+        "integer references mapd_databases, "
         "select_priv boolean, insert_priv boolean, UNIQUE(userid, dbid))");
   }
   createDatabase("mapd", MAPD_ROOT_USER_ID);
@@ -298,14 +317,18 @@ void SysCatalog::createUserRoles() {
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_->query("SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_roles'");
+    sqliteConnector_->query(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_roles'");
     if (sqliteConnector_->getNumRows() != 0) {
       // already done
       sqliteConnector_->query("END TRANSACTION");
       return;
     }
-    sqliteConnector_->query("CREATE TABLE mapd_roles(roleName text, userName text, UNIQUE(roleName, userName))");
-    sqliteConnector_->query("SELECT name FROM mapd_users WHERE name <> \'" MAPD_ROOT_USER "\'");
+    sqliteConnector_->query(
+        "CREATE TABLE mapd_roles(roleName text, userName text, UNIQUE(roleName, "
+        "userName))");
+    sqliteConnector_->query("SELECT name FROM mapd_users WHERE name <> \'" MAPD_ROOT_USER
+                            "\'");
     size_t numRows = sqliteConnector_->getNumRows();
     vector<string> user_names;
     for (size_t i = 0; i < numRows; ++i) {
@@ -313,8 +336,9 @@ void SysCatalog::createUserRoles() {
     }
     for (const auto& user_name : user_names) {
       // for each user, create a fake role with the same name
-      sqliteConnector_->query_with_text_params("INSERT INTO mapd_roles(roleName, userName) VALUES (?, ?)",
-                                               vector<string>{user_name, user_name});
+      sqliteConnector_->query_with_text_params(
+          "INSERT INTO mapd_roles(roleName, userName) VALUES (?, ?)",
+          vector<string>{user_name, user_name});
     }
   } catch (const std::exception&) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
@@ -330,7 +354,8 @@ void deleteObjectPrivileges(std::unique_ptr<SqliteConnector>& sqliteConnector,
   DBObjectKey key = object.getObjectKey();
 
   sqliteConnector->query_with_text_params(
-      "DELETE FROM mapd_object_permissions WHERE roleName = ?1 and roleType = ?2 and objectPermissionsType = ?3 and "
+      "DELETE FROM mapd_object_permissions WHERE roleName = ?1 and roleType = ?2 and "
+      "objectPermissionsType = ?3 and "
       "dbId = "
       "?4 "
       "and objectId = ?5",
@@ -375,7 +400,9 @@ void SysCatalog::migratePrivileges() {
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_->query("SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_object_permissions'");
+    sqliteConnector_->query(
+        "SELECT name FROM sqlite_master WHERE type='table' AND "
+        "name='mapd_object_permissions'");
     if (sqliteConnector_->getNumRows() != 0) {
       // already done
       sqliteConnector_->query("END TRANSACTION");
@@ -391,10 +418,13 @@ void SysCatalog::migratePrivileges() {
         "objectId integer, "
         "objectPermissionsType integer, "
         "objectPermissions integer, "
-        "objectOwnerId integer, UNIQUE(roleName, objectPermissionsType, dbId, objectId))");
+        "objectOwnerId integer, UNIQUE(roleName, objectPermissionsType, dbId, "
+        "objectId))");
 
     // get the list of databases and their grantees
-    sqliteConnector_->query("SELECT userid, dbid FROM mapd_privileges WHERE select_priv = 1 and insert_priv = 1");
+    sqliteConnector_->query(
+        "SELECT userid, dbid FROM mapd_privileges WHERE select_priv = 1 and insert_priv "
+        "= 1");
     size_t numRows = sqliteConnector_->getNumRows();
     vector<pair<int, int>> db_grantees(numRows);
     for (size_t i = 0; i < numRows; ++i) {
@@ -407,7 +437,8 @@ void SysCatalog::migratePrivileges() {
     std::unordered_map<int, string> users_by_id;
     std::unordered_map<int, bool> user_has_privs;
     for (size_t i = 0; i < numRows; ++i) {
-      users_by_id[sqliteConnector_->getData<int>(i, 0)] = sqliteConnector_->getData<string>(i, 1);
+      users_by_id[sqliteConnector_->getData<int>(i, 0)] =
+          sqliteConnector_->getData<string>(i, 1);
       user_has_privs[sqliteConnector_->getData<int>(i, 0)] = false;
     }
     // map db names to db ids
@@ -415,9 +446,11 @@ void SysCatalog::migratePrivileges() {
     numRows = sqliteConnector_->getNumRows();
     std::unordered_map<int, string> dbs_by_id;
     for (size_t i = 0; i < numRows; ++i) {
-      dbs_by_id[sqliteConnector_->getData<int>(i, 0)] = sqliteConnector_->getData<string>(i, 1);
+      dbs_by_id[sqliteConnector_->getData<int>(i, 0)] =
+          sqliteConnector_->getData<string>(i, 1);
     }
-    // migrate old privileges to new privileges: if user had insert access to database, he was a grantee
+    // migrate old privileges to new privileges: if user had insert access to database, he
+    // was a grantee
     for (const auto& grantee : db_grantees) {
       user_has_privs[grantee.first] = true;
 
@@ -427,7 +460,8 @@ void SysCatalog::migratePrivileges() {
         key.permissionType = DBObjectType::TableDBObjectType;
         key.dbId = grantee.second;
         DBObject object(key, AccessPrivileges::ALL_TABLE_MIGRATE, MAPD_ROOT_USER_ID);
-        insertOrUpdateObjectPrivileges(sqliteConnector_, users_by_id[grantee.first], true, object);
+        insertOrUpdateObjectPrivileges(
+            sqliteConnector_, users_by_id[grantee.first], true, object);
       }
 
       {
@@ -436,7 +470,8 @@ void SysCatalog::migratePrivileges() {
         key.permissionType = DBObjectType::DashboardDBObjectType;
         key.dbId = grantee.second;
         DBObject object(key, AccessPrivileges::ALL_DASHBOARD_MIGRATE, MAPD_ROOT_USER_ID);
-        insertOrUpdateObjectPrivileges(sqliteConnector_, users_by_id[grantee.first], true, object);
+        insertOrUpdateObjectPrivileges(
+            sqliteConnector_, users_by_id[grantee.first], true, object);
       }
 
       {
@@ -445,7 +480,8 @@ void SysCatalog::migratePrivileges() {
         key.permissionType = DBObjectType::ViewDBObjectType;
         key.dbId = grantee.second;
         DBObject object(key, AccessPrivileges::ALL_VIEW_MIGRATE, MAPD_ROOT_USER_ID);
-        insertOrUpdateObjectPrivileges(sqliteConnector_, users_by_id[grantee.first], true, object);
+        insertOrUpdateObjectPrivileges(
+            sqliteConnector_, users_by_id[grantee.first], true, object);
       }
     }
     for (auto user : user_has_privs) {
@@ -455,7 +491,8 @@ void SysCatalog::migratePrivileges() {
           key.permissionType = DBObjectType::DatabaseDBObjectType;
           key.dbId = 0;
           DBObject object(key, AccessPrivileges::NONE, MAPD_ROOT_USER_ID);
-          insertOrUpdateObjectPrivileges(sqliteConnector_, users_by_id[user.first], true, object);
+          insertOrUpdateObjectPrivileges(
+              sqliteConnector_, users_by_id[user.first], true, object);
         }
       }
     }
@@ -469,7 +506,8 @@ void SysCatalog::migratePrivileges() {
 void SysCatalog::updatePasswordsToHashes() {
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_->query("SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_users'");
+    sqliteConnector_->query(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_users'");
     if (sqliteConnector_->getNumRows() == 0) {
       // Nothing to update
       sqliteConnector_->query("END TRANSACTION");
@@ -493,14 +531,17 @@ void SysCatalog::updatePasswordsToHashes() {
       passwords.push_back(sqliteConnector_->getData<std::string>(i, 1));
     }
     sqliteConnector_->query(
-        "CREATE TABLE mapd_users_tmp (userid integer primary key, name text unique, passwd_hash text, issuper "
+        "CREATE TABLE mapd_users_tmp (userid integer primary key, name text unique, "
+        "passwd_hash text, issuper "
         "boolean)");
     sqliteConnector_->query(
-        "INSERT INTO mapd_users_tmp(userid, name, passwd_hash, issuper) SELECT userid, name, null, issuper FROM "
+        "INSERT INTO mapd_users_tmp(userid, name, passwd_hash, issuper) SELECT userid, "
+        "name, null, issuper FROM "
         "mapd_users");
     for (size_t i = 0; i < users.size(); ++i) {
-      sqliteConnector_->query_with_text_params("UPDATE mapd_users_tmp SET passwd_hash = ? WHERE userid = ?",
-                                               std::vector<std::string>{hash_with_bcrypt(passwords[i]), users[i]});
+      sqliteConnector_->query_with_text_params(
+          "UPDATE mapd_users_tmp SET passwd_hash = ? WHERE userid = ?",
+          std::vector<std::string>{hash_with_bcrypt(passwords[i]), users[i]});
     }
     sqliteConnector_->query("DROP TABLE mapd_users");
     sqliteConnector_->query("ALTER TABLE mapd_users_tmp RENAME TO mapd_users");
@@ -522,7 +563,8 @@ void Catalog::updateFrontendViewsToDashboards() {
   cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_.query("SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_dashboards'");
+    sqliteConnector_.query(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_dashboards'");
     if (sqliteConnector_.getNumRows() != 0) {
       // already done
       sqliteConnector_.query("END TRANSACTION");
@@ -530,14 +572,16 @@ void Catalog::updateFrontendViewsToDashboards() {
     }
     sqliteConnector_.query(
         "CREATE TABLE mapd_dashboards (id integer primary key autoincrement, name text , "
-        "userid integer references mapd_users, state text, image_hash text, update_time timestamp, "
+        "userid integer references mapd_users, state text, image_hash text, update_time "
+        "timestamp, "
         "metadata text, UNIQUE(userid, name) )");
     // now copy content from old table to new table
     sqliteConnector_.query(
         "insert into mapd_dashboards (id, name , "
         "userid, state, image_hash, update_time , "
         "metadata) "
-        "SELECT viewid , name , userid, view_state, image_hash, update_time, view_metadata "
+        "SELECT viewid , name , userid, view_state, image_hash, update_time, "
+        "view_metadata "
         "from mapd_frontend_views");
 
   } catch (const std::exception& e) {
@@ -553,8 +597,10 @@ void SysCatalog::migratePrivileged_old() {
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     sqliteConnector_->query(
-        "CREATE TABLE IF NOT EXISTS mapd_privileges (userid integer references mapd_users, dbid integer references "
-        "mapd_databases, select_priv boolean, insert_priv boolean, UNIQUE(userid, dbid))");
+        "CREATE TABLE IF NOT EXISTS mapd_privileges (userid integer references "
+        "mapd_users, dbid integer references "
+        "mapd_databases, select_priv boolean, insert_priv boolean, UNIQUE(userid, "
+        "dbid))");
   } catch (const std::exception& e) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
@@ -575,7 +621,6 @@ std::shared_ptr<Catalog> SysCatalog::login(const std::string& dbname,
   sys_write_lock write_lock(this);
 
   {
-
     bool userPresent = getMetadataForUser(username, user_meta);
 
     if (!userPresent) {
@@ -593,7 +638,8 @@ std::shared_ptr<Catalog> SysCatalog::login(const std::string& dbname,
     Privileges privs;
     privs.insert_ = true;
     privs.select_ = false;
-    // use old style check for DB object level privs code only to check user access to the database
+    // use old style check for DB object level privs code only to check user access to the
+    // database
     if (!checkPrivileges(user_meta, db_meta, privs)) {
       throw std::runtime_error("Invalid credentials.");
     }
@@ -601,7 +647,8 @@ std::shared_ptr<Catalog> SysCatalog::login(const std::string& dbname,
 
   auto cat = Catalog::get(dbname);
   if (cat == nullptr) {
-    cat = std::make_shared<Catalog>(basePath_, db_meta, dataMgr_, *string_dict_hosts_, calciteMgr_);
+    cat = std::make_shared<Catalog>(
+        basePath_, db_meta, dataMgr_, *string_dict_hosts_, calciteMgr_);
     Catalog::set(dbname, cat);
   }
 
@@ -617,13 +664,16 @@ void SysCatalog::createUser(const string& name, const string& passwd, bool issup
     throw runtime_error("User " + name + " already exists.");
   }
   if (arePrivilegesOn() && getMetadataForRole(name)) {
-    throw runtime_error("User name " + name + " is same as one of role names. User and role names should be unique.");
+    throw runtime_error(
+        "User name " + name +
+        " is same as one of role names. User and role names should be unique.");
   }
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     sqliteConnector_->query_with_text_params(
         "INSERT INTO mapd_users (name, passwd_hash, issuper) VALUES (?, ?, ?)",
-        std::vector<std::string>{name, hash_with_bcrypt(passwd), std::to_string(issuper)});
+        std::vector<std::string>{
+            name, hash_with_bcrypt(passwd), std::to_string(issuper)});
     if (arePrivilegesOn()) {
       createRole_unsafe(name, true);
 
@@ -651,15 +701,20 @@ void SysCatalog::dropUser(const string& name) {
         dropUserRole(name);
         deleteObjectDescriptorMap(name);
         const std::string& roleName(name);
-        // TODO (max): this one looks redundant as we just deleted it in dropRole_unsafe. Verify it
-        sqliteConnector_->query_with_text_param("DELETE FROM mapd_roles WHERE userName = ?", roleName);
+        // TODO (max): this one looks redundant as we just deleted it in dropRole_unsafe.
+        // Verify it
+        sqliteConnector_->query_with_text_param(
+            "DELETE FROM mapd_roles WHERE userName = ?", roleName);
       }
     }
     UserMetadata user;
-    if (!getMetadataForUser(name, user))
+    if (!getMetadataForUser(name, user)) {
       throw runtime_error("User " + name + " does not exist.");
-    sqliteConnector_->query("DELETE FROM mapd_users WHERE userid = " + std::to_string(user.userId));
-    sqliteConnector_->query("DELETE FROM mapd_privileges WHERE userid = " + std::to_string(user.userId));
+    }
+    sqliteConnector_->query("DELETE FROM mapd_users WHERE userid = " +
+                            std::to_string(user.userId));
+    sqliteConnector_->query("DELETE FROM mapd_privileges WHERE userid = " +
+                            std::to_string(user.userId));
   } catch (const std::exception& e) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
@@ -672,7 +727,8 @@ void SysCatalog::alterUser(const int32_t userid, const string* passwd, bool* iss
   if (passwd != nullptr && issuper != nullptr) {
     sqliteConnector_->query_with_text_params(
         "UPDATE mapd_users SET passwd_hash = ?, issuper = ? WHERE userid = ?",
-        std::vector<std::string>{hash_with_bcrypt(*passwd), std::to_string(*issuper), std::to_string(userid)});
+        std::vector<std::string>{
+            hash_with_bcrypt(*passwd), std::to_string(*issuper), std::to_string(userid)});
   } else if (passwd != nullptr) {
     sqliteConnector_->query_with_text_params(
         "UPDATE mapd_users SET passwd_hash = ? WHERE userid = ?",
@@ -684,12 +740,15 @@ void SysCatalog::alterUser(const int32_t userid, const string* passwd, bool* iss
   }
 }
 
-void SysCatalog::grantPrivileges(const int32_t userid, const int32_t dbid, const Privileges& privs) {
+void SysCatalog::grantPrivileges(const int32_t userid,
+                                 const int32_t dbid,
+                                 const Privileges& privs) {
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     sqliteConnector_->query_with_text_params(
-        "INSERT OR REPLACE INTO mapd_privileges (userid, dbid, select_priv, insert_priv) VALUES (?1, ?2, ?3, ?4)",
+        "INSERT OR REPLACE INTO mapd_privileges (userid, dbid, select_priv, insert_priv) "
+        "VALUES (?1, ?2, ?3, ?4)",
         std::vector<std::string>{std::to_string(userid),
                                  std::to_string(dbid),
                                  std::to_string(privs.select_),
@@ -701,7 +760,9 @@ void SysCatalog::grantPrivileges(const int32_t userid, const int32_t dbid, const
   sqliteConnector_->query("END TRANSACTION");
 }
 
-bool SysCatalog::checkPrivileges(UserMetadata& user, DBMetadata& db, const Privileges& wants_privs) {
+bool SysCatalog::checkPrivileges(UserMetadata& user,
+                                 DBMetadata& db,
+                                 const Privileges& wants_privs) {
   if (user.isSuper || user.userId == db.dbOwner) {
     return true;
   }
@@ -719,51 +780,70 @@ bool SysCatalog::checkPrivileges(UserMetadata& user, DBMetadata& db, const Privi
   has_privs.select_ = sqliteConnector_->getData<bool>(0, 0);
   has_privs.insert_ = sqliteConnector_->getData<bool>(0, 1);
 
-  if (wants_privs.select_ && !has_privs.select_)
+  if (wants_privs.select_ && !has_privs.select_) {
     return false;
-  if (wants_privs.insert_ && !has_privs.insert_)
+  }
+  if (wants_privs.insert_ && !has_privs.insert_) {
     return false;
+  }
 
   return true;
 }
 
 void SysCatalog::createDatabase(const string& name, int owner) {
   DBMetadata db;
-  if (getMetadataForDB(name, db))
+  if (getMetadataForDB(name, db)) {
     throw runtime_error("Database " + name + " already exists.");
+  }
 
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
-      "INSERT INTO mapd_databases (name, owner) VALUES (?, " + std::to_string(owner) + ")", name);
+      "INSERT INTO mapd_databases (name, owner) VALUES (?, " + std::to_string(owner) +
+          ")",
+      name);
 
   SqliteConnector dbConn(name, basePath_ + "/mapd_catalogs/");
   dbConn.query(
-      "CREATE TABLE mapd_tables (tableid integer primary key, name text unique, userid integer, ncolumns integer, "
+      "CREATE TABLE mapd_tables (tableid integer primary key, name text unique, userid "
+      "integer, ncolumns integer, "
       "isview boolean, "
-      "fragments text, frag_type integer, max_frag_rows integer, max_chunk_size bigint, frag_page_size integer, "
-      "max_rows bigint, partitions text, shard_column_id integer, shard integer, num_shards integer, version_num "
+      "fragments text, frag_type integer, max_frag_rows integer, max_chunk_size bigint, "
+      "frag_page_size integer, "
+      "max_rows bigint, partitions text, shard_column_id integer, shard integer, "
+      "num_shards integer, version_num "
       "BIGINT DEFAULT 1) ");
   dbConn.query(
-      "CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype "
-      "integer, colsubtype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, "
-      "comp_param integer, size integer, chunks text, is_systemcol boolean, is_virtualcol boolean, virtual_expr "
+      "CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid "
+      "integer, name text, coltype "
+      "integer, colsubtype integer, coldim integer, colscale integer, is_notnull "
+      "boolean, compression integer, "
+      "comp_param integer, size integer, chunks text, is_systemcol boolean, "
+      "is_virtualcol boolean, virtual_expr "
       "text, "
       "primary key(tableid, columnid), unique(tableid, name))");
-  dbConn.query("CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text)");
+  dbConn.query(
+      "CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text)");
   dbConn.query(
       "CREATE TABLE mapd_dashboards (id integer primary key autoincrement, name text , "
-      "userid integer references mapd_users, state text, image_hash text, update_time timestamp, "
+      "userid integer references mapd_users, state text, image_hash text, update_time "
+      "timestamp, "
       "metadata text, UNIQUE(userid, name) )");
   dbConn.query(
-      "CREATE TABLE mapd_links (linkid integer primary key, userid integer references mapd_users, "
+      "CREATE TABLE mapd_links (linkid integer primary key, userid integer references "
+      "mapd_users, "
       "link text unique, view_state text, update_time timestamp, view_metadata text)");
   dbConn.query(
-      "CREATE TABLE mapd_dictionaries (dictid integer primary key, name text unique, nbits int, is_shared boolean, "
+      "CREATE TABLE mapd_dictionaries (dictid integer primary key, name text unique, "
+      "nbits int, is_shared boolean, "
       "refcount int, version_num BIGINT DEFAULT 1)");
-  dbConn.query("CREATE TABLE mapd_logical_to_physical(logical_table_id integer, physical_table_id integer)");
+  dbConn.query(
+      "CREATE TABLE mapd_logical_to_physical(logical_table_id integer, physical_table_id "
+      "integer)");
 }
 
-void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name, Catalog* db_cat) {
+void SysCatalog::dropDatabase(const int32_t dbid,
+                              const std::string& name,
+                              Catalog* db_cat) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
 
@@ -778,11 +858,13 @@ void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name, Catal
             // skip shards, they're not standalone tables
             continue;
           }
-          revokeDBObjectPrivilegesFromAllRoles_unsafe(DBObject(table->tableName, TableDBObjectType), db_cat);
+          revokeDBObjectPrivilegesFromAllRoles_unsafe(
+              DBObject(table->tableName, TableDBObjectType), db_cat);
         }
         const auto dashboards = db_cat->getAllFrontendViewMetadata();
         for (const auto dashboard : dashboards) {
-          revokeDBObjectPrivilegesFromAllRoles_unsafe(DBObject(dashboard->viewId, DashboardDBObjectType), db_cat);
+          revokeDBObjectPrivilegesFromAllRoles_unsafe(
+              DBObject(dashboard->viewId, DashboardDBObjectType), db_cat);
         }
       }
       Catalog::remove(name);
@@ -790,7 +872,8 @@ void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name, Catal
       revokeDBObjectPrivilegesFromAllRoles_unsafe(DBObject(name, DatabaseDBObjectType),
                                                   Catalog::get(MAPD_SYSTEM_DB).get());
     }
-    sqliteConnector_->query_with_text_param("DELETE FROM mapd_databases WHERE dbid = ?", std::to_string(dbid));
+    sqliteConnector_->query_with_text_param("DELETE FROM mapd_databases WHERE dbid = ?",
+                                            std::to_string(dbid));
     boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + name);
     ChunkKey chunkKeyPrefix = {dbid};
     calciteMgr_->updateMetadata(name, "");
@@ -818,11 +901,12 @@ bool SysCatalog::checkPasswordForUser(const std::string& passwd, UserMetadata& u
 
 bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
   sys_sqlite_lock sqlite_lock(this);
-  sqliteConnector_->query_with_text_param("SELECT userid, name, passwd_hash, issuper FROM mapd_users WHERE name = ?",
-                                          name);
+  sqliteConnector_->query_with_text_param(
+      "SELECT userid, name, passwd_hash, issuper FROM mapd_users WHERE name = ?", name);
   int numRows = sqliteConnector_->getNumRows();
-  if (numRows == 0)
+  if (numRows == 0) {
     return false;
+  }
   user.userId = sqliteConnector_->getData<int>(0, 0);
   user.userName = sqliteConnector_->getData<string>(0, 1);
   user.passwd_hash = sqliteConnector_->getData<string>(0, 2);
@@ -833,11 +917,13 @@ bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
 
 bool SysCatalog::getMetadataForUserById(const int32_t idIn, UserMetadata& user) {
   sys_sqlite_lock sqlite_lock(this);
-  sqliteConnector_->query_with_text_param("SELECT userid, name, passwd_hash, issuper FROM mapd_users WHERE userid = ?",
-                                          std::to_string(idIn));
+  sqliteConnector_->query_with_text_param(
+      "SELECT userid, name, passwd_hash, issuper FROM mapd_users WHERE userid = ?",
+      std::to_string(idIn));
   int numRows = sqliteConnector_->getNumRows();
-  if (numRows == 0)
+  if (numRows == 0) {
     return false;
+  }
   user.userId = sqliteConnector_->getData<int>(0, 0);
   user.userName = sqliteConnector_->getData<string>(0, 1);
   user.passwd_hash = sqliteConnector_->getData<string>(0, 2);
@@ -868,7 +954,8 @@ list<UserMetadata> SysCatalog::getAllUserMetadata(long dbId) {
   std::string sql = "SELECT userid, name, issuper FROM mapd_users";
   if (dbId >= 0) {
     sql =
-        "SELECT userid, name, issuper FROM mapd_users WHERE name IN (SELECT roleName FROM mapd_object_permissions "
+        "SELECT userid, name, issuper FROM mapd_users WHERE name IN (SELECT roleName "
+        "FROM mapd_object_permissions "
         "WHERE "
         "objectPermissions<>0 AND roleType=1 AND dbId=" +
         std::to_string(dbId) + ")";
@@ -892,10 +979,12 @@ list<UserMetadata> SysCatalog::getAllUserMetadata() {
 
 bool SysCatalog::getMetadataForDB(const string& name, DBMetadata& db) {
   sys_sqlite_lock sqlite_lock(this);
-  sqliteConnector_->query_with_text_param("SELECT dbid, name, owner FROM mapd_databases WHERE name = ?", name);
+  sqliteConnector_->query_with_text_param(
+      "SELECT dbid, name, owner FROM mapd_databases WHERE name = ?", name);
   int numRows = sqliteConnector_->getNumRows();
-  if (numRows == 0)
+  if (numRows == 0) {
     return false;
+  }
   db.dbId = sqliteConnector_->getData<int>(0, 0);
   db.dbName = sqliteConnector_->getData<string>(0, 1);
   db.dbOwner = sqliteConnector_->getData<int>(0, 2);
@@ -903,7 +992,8 @@ bool SysCatalog::getMetadataForDB(const string& name, DBMetadata& db) {
 }
 
 // Note (max): I wonder why this one is necessary
-void SysCatalog::grantDefaultPrivilegesToRole_unsafe(const std::string& name, bool issuper) {
+void SysCatalog::grantDefaultPrivilegesToRole_unsafe(const std::string& name,
+                                                     bool issuper) {
   DBObject dbObject(get_currentDB().dbName, DatabaseDBObjectType);
   auto* catalog = Catalog::get(get_currentDB().dbName).get();
   CHECK(catalog);
@@ -925,7 +1015,8 @@ void SysCatalog::createDBObject(const UserMetadata& user,
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
 
-  DBObject object = objectId == -1 ? DBObject(objectName, type) : DBObject(objectId, type);
+  DBObject object =
+      objectId == -1 ? DBObject(objectName, type) : DBObject(objectId, type);
   object.loadKey(catalog);
   switch (type) {
     case TableDBObjectType:
@@ -941,7 +1032,8 @@ void SysCatalog::createDBObject(const UserMetadata& user,
   object.setOwner(user.userId);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
-    if (user.userName.compare(MAPD_ROOT_USER)) {  // no need to grant to suser, has all privs by default
+    if (user.userName.compare(
+            MAPD_ROOT_USER)) {  // no need to grant to suser, has all privs by default
       grantDBObjectPrivileges_unsafe(user.userName, object, catalog);
       Role* user_rl = instance().getMetadataForUserRole(user.userId);
       CHECK(user_rl);
@@ -955,9 +1047,10 @@ void SysCatalog::createDBObject(const UserMetadata& user,
 }
 
 // GRANT INSERT ON TABLE payroll_table TO payroll_dept_role;
-void SysCatalog::grantDBObjectPrivileges_unsafe(const std::string& roleName,
-                                                DBObject& object,
-                                                const Catalog_Namespace::Catalog& catalog) {
+void SysCatalog::grantDBObjectPrivileges_unsafe(
+    const std::string& roleName,
+    DBObject& object,
+    const Catalog_Namespace::Catalog& catalog) {
   object.loadKey(catalog);
   if (object.getPrivileges().hasPermission(DatabasePrivileges::ALL) &&
       object.getObjectKey().permissionType == DatabaseDBObjectType) {
@@ -983,15 +1076,16 @@ void SysCatalog::grantDBObjectPrivileges_unsafe(const std::string& roleName,
   rl->getPrivileges(object);
 
   sys_sqlite_lock sqlite_lock(this);
-  insertOrUpdateObjectPrivileges(sqliteConnector_, roleName, rl->isUserPrivateRole(), object);
+  insertOrUpdateObjectPrivileges(
+      sqliteConnector_, roleName, rl->isUserPrivateRole(), object);
   updateObjectDescriptorMap(roleName, object, rl->isUserPrivateRole(), catalog);
 }
 
 void SysCatalog::grantAllOnDatabase_unsafe(const std::string& roleName,
                                            DBObject& object,
                                            const Catalog_Namespace::Catalog& catalog) {
-  // It's a separate use case because it's easier for implementation to convert ALL ON DATABASE
-  // into ALL ON DASHBOARDS, ALL ON VIEWS and ALL ON TABLES
+  // It's a separate use case because it's easier for implementation to convert ALL ON
+  // DATABASE into ALL ON DASHBOARDS, ALL ON VIEWS and ALL ON TABLES
   DBObject tmp_object = object;
   tmp_object.setPrivileges(AccessPrivileges::ALL_TABLE);
   tmp_object.setPermissionType(TableDBObjectType);
@@ -1006,14 +1100,16 @@ void SysCatalog::grantAllOnDatabase_unsafe(const std::string& roleName,
 }
 
 // REVOKE INSERT ON TABLE payroll_table FROM payroll_dept_role;
-void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
-                                                 DBObject object,
-                                                 const Catalog_Namespace::Catalog& catalog) {
+void SysCatalog::revokeDBObjectPrivileges_unsafe(
+    const std::string& roleName,
+    DBObject object,
+    const Catalog_Namespace::Catalog& catalog) {
   sys_write_lock write_lock(this);
 
   if (!roleName.compare(MAPD_ROOT_USER)) {
-    throw runtime_error("Request to revoke privileges from " + roleName +
-                        " failed because privileges can not be revoked from mapd root user.");
+    throw runtime_error(
+        "Request to revoke privileges from " + roleName +
+        " failed because privileges can not be revoked from mapd root user.");
   }
   Role* rl = getMetadataForRole(roleName);
   if (!rl) {
@@ -1030,7 +1126,8 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
   auto ret_object = rl->revokePrivileges(object);
   if (ret_object) {
     sys_sqlite_lock sqlite_lock(this);
-    insertOrUpdateObjectPrivileges(sqliteConnector_, roleName, rl->isUserPrivateRole(), *ret_object);
+    insertOrUpdateObjectPrivileges(
+        sqliteConnector_, roleName, rl->isUserPrivateRole(), *ret_object);
     updateObjectDescriptorMap(roleName, *ret_object, rl->isUserPrivateRole(), catalog);
   } else {
     sys_sqlite_lock sqlite_lock(this);
@@ -1039,10 +1136,13 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(const std::string& roleName,
   }
 }
 
-void SysCatalog::revokeAllOnDatabase_unsafe(const std::string& roleName, int32_t dbId, Role* rl) {
+void SysCatalog::revokeAllOnDatabase_unsafe(const std::string& roleName,
+                                            int32_t dbId,
+                                            Role* rl) {
   sys_sqlite_lock sqlite_lock(this);
-  sqliteConnector_->query_with_text_params("DELETE FROM mapd_object_permissions WHERE roleName = ?1 and dbId = ?2",
-                                           std::vector<std::string>{roleName, std::to_string(dbId)});
+  sqliteConnector_->query_with_text_params(
+      "DELETE FROM mapd_object_permissions WHERE roleName = ?1 and dbId = ?2",
+      std::vector<std::string>{roleName, std::to_string(dbId)});
   rl->revokeAllOnDatabase(dbId);
   for (auto d = objectDescriptorMap_.begin(); d != objectDescriptorMap_.end();) {
     if (d->second->roleName == roleName && d->second->dbId == dbId) {
@@ -1054,13 +1154,15 @@ void SysCatalog::revokeAllOnDatabase_unsafe(const std::string& roleName, int32_t
   }
 }
 
-void SysCatalog::revokeDBObjectPrivilegesFromAllRoles_unsafe(DBObject dbObject, Catalog* catalog) {
+void SysCatalog::revokeDBObjectPrivilegesFromAllRoles_unsafe(DBObject dbObject,
+                                                             Catalog* catalog) {
   sys_write_lock write_lock(this);
   dbObject.loadKey(*catalog);
   auto privs = (dbObject.getObjectKey().permissionType == TableDBObjectType)
                    ? AccessPrivileges::ALL_TABLE
-                   : (dbObject.getObjectKey().permissionType == DashboardDBObjectType) ? AccessPrivileges::ALL_DASHBOARD
-                                                                                       : AccessPrivileges::ALL_TABLE;
+                   : (dbObject.getObjectKey().permissionType == DashboardDBObjectType)
+                         ? AccessPrivileges::ALL_DASHBOARD
+                         : AccessPrivileges::ALL_TABLE;
   dbObject.setPrivileges(privs);
   std::vector<std::string> roles = getRoles(true, true, 0);
   for (size_t i = 0; i < roles.size(); i++) {
@@ -1105,21 +1207,25 @@ void SysCatalog::getDBObjectPrivileges(const std::string& roleName,
   rl->getPrivileges(object);
 }
 
-void SysCatalog::createRole_unsafe(const std::string& roleName, const bool& userPrivateRole) {
+void SysCatalog::createRole_unsafe(const std::string& roleName,
+                                   const bool& userPrivateRole) {
   sys_write_lock write_lock(this);
 
   if (!userPrivateRole) {
     UserMetadata user;
     if (getMetadataForUser(roleName, user)) {
-      throw runtime_error("Role name " + roleName +
-                          " is same as one of user names. Role and user names should be unique.");
+      throw runtime_error(
+          "Role name " + roleName +
+          " is same as one of user names. Role and user names should be unique.");
     }
   }
   if (getMetadataForRole(roleName) != nullptr) {
-    throw std::runtime_error("CREATE ROLE " + roleName + " failed because role with this name already exists.");
+    throw std::runtime_error("CREATE ROLE " + roleName +
+                             " failed because role with this name already exists.");
   }
   Role* rl = getMetadataForRole(roleName);
-  CHECK(!rl);  // it has been checked already in the calling proc that this role doesn't exist, fail otherwize
+  CHECK(!rl);  // it has been checked already in the calling proc that this role doesn't
+               // exist, fail otherwize
   rl = new GroupRole(roleName, userPrivateRole);
   roleMap_[to_upper(roleName)] = rl;
 
@@ -1143,21 +1249,26 @@ void SysCatalog::dropRole_unsafe(const std::string& roleName) {
   sys_write_lock write_lock(this);
 
   Role* rl = getMetadataForRole(roleName);
-  CHECK(rl);  // it has been checked already in the calling proc that this role exists, faiul otherwise
+  CHECK(rl);  // it has been checked already in the calling proc that this role exists,
+              // faiul otherwise
   delete rl;
   roleMap_.erase(to_upper(roleName));
 
   sys_sqlite_lock sqlite_lock(this);
-  sqliteConnector_->query_with_text_param("DELETE FROM mapd_roles WHERE roleName = ?", roleName);
-  sqliteConnector_->query_with_text_param("DELETE FROM mapd_object_permissions WHERE roleName = ?", roleName);
+  sqliteConnector_->query_with_text_param("DELETE FROM mapd_roles WHERE roleName = ?",
+                                          roleName);
+  sqliteConnector_->query_with_text_param(
+      "DELETE FROM mapd_object_permissions WHERE roleName = ?", roleName);
 }
 
 // GRANT ROLE payroll_dept_role TO joe;
-void SysCatalog::grantRole_unsafe(const std::string& roleName, const std::string& userName) {
+void SysCatalog::grantRole_unsafe(const std::string& roleName,
+                                  const std::string& userName) {
   Role* user_rl = nullptr;
   Role* rl = getMetadataForRole(roleName);
   if (!rl) {
-    throw runtime_error("Request to grant role " + roleName + " failed because role with this name does not exist.");
+    throw runtime_error("Request to grant role " + roleName +
+                        " failed because role with this name does not exist.");
   }
   UserMetadata user;
   if (!getMetadataForUser(userName, user)) {
@@ -1175,17 +1286,20 @@ void SysCatalog::grantRole_unsafe(const std::string& roleName, const std::string
   if (!user_rl->hasRole(rl)) {
     user_rl->grantRole(rl);
     sys_sqlite_lock sqlite_lock(this);
-    sqliteConnector_->query_with_text_params("INSERT INTO mapd_roles(roleName, userName) VALUES (?, ?)",
-                                             std::vector<std::string>{roleName, userName});
+    sqliteConnector_->query_with_text_params(
+        "INSERT INTO mapd_roles(roleName, userName) VALUES (?, ?)",
+        std::vector<std::string>{roleName, userName});
   }
 }
 
 // REVOKE ROLE payroll_dept_role FROM joe;
-void SysCatalog::revokeRole_unsafe(const std::string& roleName, const std::string& userName) {
+void SysCatalog::revokeRole_unsafe(const std::string& roleName,
+                                   const std::string& userName) {
   Role* user_rl = nullptr;
   Role* rl = getMetadataForRole(roleName);
   if (!rl) {
-    throw runtime_error("Request to revoke role " + roleName + " failed because role with this name does not exist.");
+    throw runtime_error("Request to revoke role " + roleName +
+                        " failed because role with this name does not exist.");
   }
   UserMetadata user;
   if (!getMetadataForUser(userName, user)) {
@@ -1205,8 +1319,9 @@ void SysCatalog::revokeRole_unsafe(const std::string& roleName, const std::strin
     userRoleMap_.erase(user.userId);
   }
   sys_sqlite_lock sqlite_lock(this);
-  sqliteConnector_->query_with_text_params("DELETE FROM mapd_roles WHERE roleName = ? AND userName = ?",
-                                           std::vector<std::string>{roleName, userName});
+  sqliteConnector_->query_with_text_params(
+      "DELETE FROM mapd_roles WHERE roleName = ? AND userName = ?",
+      std::vector<std::string>{roleName, userName});
 }
 
 // Update or add element in ObjectRoleDescriptorMap
@@ -1217,9 +1332,10 @@ void SysCatalog::updateObjectDescriptorMap(const std::string& roleName,
   bool present = false;
   auto privs = object.getPrivileges();
   sys_write_lock write_lock(this);
-  auto range = objectDescriptorMap_.equal_range(std::to_string(cat.get_currentDB().dbId) + ":" +
-                                                std::to_string(object.getObjectKey().permissionType) + ":" +
-                                                std::to_string(object.getObjectKey().objectId));
+  auto range = objectDescriptorMap_.equal_range(
+      std::to_string(cat.get_currentDB().dbId) + ":" +
+      std::to_string(object.getObjectKey().permissionType) + ":" +
+      std::to_string(object.getObjectKey().objectId));
   for (auto d = range.first; d != range.second; ++d) {
     if (d->second->roleName == roleName) {
       // overwrite permissions
@@ -1238,7 +1354,9 @@ void SysCatalog::updateObjectDescriptorMap(const std::string& roleName,
     od->objectOwnerId = object.getOwner();
     od->objectName = object.getName();
     objectDescriptorMap_.insert(ObjectRoleDescriptorMap::value_type(
-        std::to_string(od->dbId) + ":" + std::to_string(od->objectType) + ":" + std::to_string(od->objectId), od));
+        std::to_string(od->dbId) + ":" + std::to_string(od->objectType) + ":" +
+            std::to_string(od->objectId),
+        od));
   }
 }
 
@@ -1261,9 +1379,10 @@ void SysCatalog::deleteObjectDescriptorMap(const std::string& roleName,
                                            DBObject& object,
                                            const Catalog_Namespace::Catalog& cat) {
   sys_write_lock write_lock(this);
-  auto range = objectDescriptorMap_.equal_range(std::to_string(cat.get_currentDB().dbId) + ":" +
-                                                std::to_string(object.getObjectKey().permissionType) + ":" +
-                                                std::to_string(object.getObjectKey().objectId));
+  auto range = objectDescriptorMap_.equal_range(
+      std::to_string(cat.get_currentDB().dbId) + ":" +
+      std::to_string(object.getObjectKey().permissionType) + ":" +
+      std::to_string(object.getObjectKey().objectId));
   for (auto d = range.first; d != range.second;) {
     // remove the entry
     if (d->second->roleName == roleName) {
@@ -1281,8 +1400,9 @@ void SysCatalog::deleteObjectDescriptorMap(const std::string& roleName,
  * called as a result of executing "DROP USER" command
  */
 void SysCatalog::dropUserRole(const std::string& userName) {
-  /* this proc is not being directly called from parser, so it should have been checked already
-   * before calling this proc that the userName is valid (see call to proc "getMetadataForUser")
+  /* this proc is not being directly called from parser, so it should have been checked
+   * already before calling this proc that the userName is valid (see call to proc
+   * "getMetadataForUser")
    */
 
   sys_write_lock write_lock(this);
@@ -1299,14 +1419,17 @@ void SysCatalog::dropUserRole(const std::string& userName) {
   // do nothing if userName was not found in userRoleMap_
 }
 
-bool SysCatalog::hasAnyPrivileges(const UserMetadata& user, std::vector<DBObject>& privObjects) {
+bool SysCatalog::hasAnyPrivileges(const UserMetadata& user,
+                                  std::vector<DBObject>& privObjects) {
   sys_read_lock read_lock(this);
   if (user.isSuper) {
     return true;
   }
   Role* user_rl = instance().getMetadataForUserRole(user.userId);
   CHECK(user_rl);
-  for (std::vector<DBObject>::iterator objectIt = privObjects.begin(); objectIt != privObjects.end(); ++objectIt) {
+  for (std::vector<DBObject>::iterator objectIt = privObjects.begin();
+       objectIt != privObjects.end();
+       ++objectIt) {
     if (!user_rl->hasAnyPrivileges(*objectIt)) {
       return false;
     }
@@ -1314,7 +1437,8 @@ bool SysCatalog::hasAnyPrivileges(const UserMetadata& user, std::vector<DBObject
   return true;
 }
 
-bool SysCatalog::checkPrivileges(const UserMetadata& user, std::vector<DBObject>& privObjects) {
+bool SysCatalog::checkPrivileges(const UserMetadata& user,
+                                 std::vector<DBObject>& privObjects) {
   sys_read_lock read_lock(this);
   if (user.isSuper) {
     return true;
@@ -1322,7 +1446,9 @@ bool SysCatalog::checkPrivileges(const UserMetadata& user, std::vector<DBObject>
 
   Role* user_rl = instance().getMetadataForUserRole(user.userId);
   CHECK(user_rl);
-  for (std::vector<DBObject>::iterator objectIt = privObjects.begin(); objectIt != privObjects.end(); ++objectIt) {
+  for (std::vector<DBObject>::iterator objectIt = privObjects.begin();
+       objectIt != privObjects.end();
+       ++objectIt) {
     if (!user_rl->checkPrivileges(*objectIt)) {
       return false;
     }
@@ -1330,7 +1456,8 @@ bool SysCatalog::checkPrivileges(const UserMetadata& user, std::vector<DBObject>
   return true;
 }
 
-bool SysCatalog::checkPrivileges(const std::string& userName, std::vector<DBObject>& privObjects) {
+bool SysCatalog::checkPrivileges(const std::string& userName,
+                                 std::vector<DBObject>& privObjects) {
   UserMetadata user;
   if (!instance().getMetadataForUser(userName, user)) {
     throw runtime_error("Request to check privileges for user " + userName +
@@ -1357,13 +1484,13 @@ Role* SysCatalog::getMetadataForUserRole(int32_t userId) const {
   return userRoleIt->second;  // returns pointer to role
 }
 
-std::vector<ObjectRoleDescriptor*> SysCatalog::getMetadataForObject(int32_t dbId,
-                                                                    int32_t dbType,
-                                                                    int32_t objectId) const {
+std::vector<ObjectRoleDescriptor*>
+SysCatalog::getMetadataForObject(int32_t dbId, int32_t dbType, int32_t objectId) const {
   sys_read_lock read_lock(this);
   std::vector<ObjectRoleDescriptor*> objectsList;
 
-  auto range = objectDescriptorMap_.equal_range(std::to_string(dbId) + ":" + std::to_string(dbType) + ":" +
+  auto range = objectDescriptorMap_.equal_range(std::to_string(dbId) + ":" +
+                                                std::to_string(dbType) + ":" +
                                                 std::to_string(objectId));
   for (auto d = range.first; d != range.second; ++d) {
     objectsList.push_back(d->second);
@@ -1371,7 +1498,8 @@ std::vector<ObjectRoleDescriptor*> SysCatalog::getMetadataForObject(int32_t dbId
   return objectsList;  // return pointers to objects
 }
 
-bool SysCatalog::isRoleGrantedToUser(const int32_t userId, const std::string& roleName) const {
+bool SysCatalog::isRoleGrantedToUser(const int32_t userId,
+                                     const std::string& roleName) const {
   sys_read_lock read_lock(this);
 
   bool rc = false;
@@ -1396,7 +1524,8 @@ std::vector<std::string> SysCatalog::getRoles(const int32_t dbId) {
   // sadly mapd_object_permissions table is also misused to manage user roles.
   sys_sqlite_lock sqlite_lock(this);
   std::string sql =
-      "SELECT DISTINCT roleName FROM mapd_object_permissions WHERE objectPermissions<>0 AND roleType=0 AND dbId=" +
+      "SELECT DISTINCT roleName FROM mapd_object_permissions WHERE objectPermissions<>0 "
+      "AND roleType=0 AND dbId=" +
       std::to_string(dbId);
   sqliteConnector_->query(sql);
   int numRows = sqliteConnector_->getNumRows();
@@ -1408,14 +1537,18 @@ std::vector<std::string> SysCatalog::getRoles(const int32_t dbId) {
   return roles;
 }
 
-std::vector<std::string> SysCatalog::getRoles(bool userPrivateRole, bool isSuper, const int32_t userId) {
+std::vector<std::string> SysCatalog::getRoles(bool userPrivateRole,
+                                              bool isSuper,
+                                              const int32_t userId) {
   sys_read_lock read_lock(this);
   std::vector<std::string> roles(0);
   for (RoleMap::iterator roleIt = roleMap_.begin(); roleIt != roleMap_.end(); ++roleIt) {
-    if (!userPrivateRole && static_cast<GroupRole*>(roleIt->second)->isUserPrivateRole()) {
+    if (!userPrivateRole &&
+        static_cast<GroupRole*>(roleIt->second)->isUserPrivateRole()) {
       continue;
     }
-    if (!isSuper && !isRoleGrantedToUser(userId, static_cast<GroupRole*>(roleIt->second)->roleName())) {
+    if (!isSuper && !isRoleGrantedToUser(
+                        userId, static_cast<GroupRole*>(roleIt->second)->roleName())) {
       continue;
     }
     roles.push_back(roleIt->second->roleName());
@@ -1440,21 +1573,22 @@ Catalog::Catalog(const string& basePath,
                  AuthMetadata authMetadata,
                  bool is_initdb,
                  std::shared_ptr<Calcite> calcite)
-    : basePath_(basePath),
-      sqliteConnector_(dbname, basePath + "/mapd_catalogs/"),
-      dataMgr_(dataMgr),
-      string_dict_hosts_(string_dict_hosts),
-      calciteMgr_(calcite),
-      nextTempTableId_(MAPD_TEMP_TABLE_START_ID),
-      nextTempDictId_(MAPD_TEMP_DICT_START_ID),
-      sqliteMutex_(),
-      sharedMutex_(),
-      thread_holding_sqlite_lock(),
-      thread_holding_write_lock() {
+    : basePath_(basePath)
+    , sqliteConnector_(dbname, basePath + "/mapd_catalogs/")
+    , dataMgr_(dataMgr)
+    , string_dict_hosts_(string_dict_hosts)
+    , calciteMgr_(calcite)
+    , nextTempTableId_(MAPD_TEMP_TABLE_START_ID)
+    , nextTempDictId_(MAPD_TEMP_DICT_START_ID)
+    , sqliteMutex_()
+    , sharedMutex_()
+    , thread_holding_sqlite_lock()
+    , thread_holding_write_lock() {
   ldap_server_.reset(new LdapServer(authMetadata));
   rest_server_.reset(new RestServer(authMetadata));
-  if (!is_initdb)
+  if (!is_initdb) {
     buildMaps();
+  }
 }
 
 Catalog::Catalog(const string& basePath,
@@ -1462,17 +1596,17 @@ Catalog::Catalog(const string& basePath,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
                  AuthMetadata authMetadata,
                  std::shared_ptr<Calcite> calcite)
-    : basePath_(basePath),
-      sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/"),
-      currentDB_(curDB),
-      dataMgr_(dataMgr),
-      calciteMgr_(calcite),
-      nextTempTableId_(MAPD_TEMP_TABLE_START_ID),
-      nextTempDictId_(MAPD_TEMP_DICT_START_ID),
-      sqliteMutex_(),
-      sharedMutex_(),
-      thread_holding_sqlite_lock(),
-      thread_holding_write_lock() {
+    : basePath_(basePath)
+    , sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/")
+    , currentDB_(curDB)
+    , dataMgr_(dataMgr)
+    , calciteMgr_(calcite)
+    , nextTempTableId_(MAPD_TEMP_TABLE_START_ID)
+    , nextTempDictId_(MAPD_TEMP_DICT_START_ID)
+    , sqliteMutex_()
+    , sharedMutex_()
+    , thread_holding_sqlite_lock()
+    , thread_holding_write_lock() {
   ldap_server_.reset(new LdapServer(authMetadata));
   rest_server_.reset(new RestServer(authMetadata));
   buildMaps();
@@ -1483,18 +1617,18 @@ Catalog::Catalog(const string& basePath,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
                  const std::vector<LeafHostInfo>& string_dict_hosts,
                  std::shared_ptr<Calcite> calcite)
-    : basePath_(basePath),
-      sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/"),
-      currentDB_(curDB),
-      dataMgr_(dataMgr),
-      string_dict_hosts_(string_dict_hosts),
-      calciteMgr_(calcite),
-      nextTempTableId_(MAPD_TEMP_TABLE_START_ID),
-      nextTempDictId_(MAPD_TEMP_DICT_START_ID),
-      sqliteMutex_(),
-      sharedMutex_(),
-      thread_holding_sqlite_lock(),
-      thread_holding_write_lock() {
+    : basePath_(basePath)
+    , sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/")
+    , currentDB_(curDB)
+    , dataMgr_(dataMgr)
+    , string_dict_hosts_(string_dict_hosts)
+    , calciteMgr_(calcite)
+    , nextTempTableId_(MAPD_TEMP_TABLE_START_ID)
+    , nextTempDictId_(MAPD_TEMP_DICT_START_ID)
+    , sqliteMutex_()
+    , sharedMutex_()
+    , thread_holding_sqlite_lock()
+    , thread_holding_write_lock() {
   ldap_server_.reset(new LdapServer());
   buildMaps();
 }
@@ -1502,10 +1636,12 @@ Catalog::Catalog(const string& basePath,
 Catalog::~Catalog() {
   cat_write_lock write_lock(this);
   // must clean up heap-allocated TableDescriptor and ColumnDescriptor structs
-  for (TableDescriptorMap::iterator tableDescIt = tableDescriptorMap_.begin(); tableDescIt != tableDescriptorMap_.end();
+  for (TableDescriptorMap::iterator tableDescIt = tableDescriptorMap_.begin();
+       tableDescIt != tableDescriptorMap_.end();
        ++tableDescIt) {
-    if (tableDescIt->second->fragmenter != nullptr)
+    if (tableDescIt->second->fragmenter != nullptr) {
       delete tableDescIt->second->fragmenter;
+    }
     delete tableDescIt->second;
   }
 
@@ -1513,8 +1649,9 @@ Catalog::~Catalog() {
 
   for (ColumnDescriptorMap::iterator columnDescIt = columnDescriptorMap_.begin();
        columnDescIt != columnDescriptorMap_.end();
-       ++columnDescIt)
+       ++columnDescIt) {
     delete columnDescIt->second;
+  }
 
   // ColumnDescriptorMapById points to the same descriptors.  No need to delete
 }
@@ -1528,21 +1665,26 @@ void Catalog::updateTableDescriptorSchema() {
     for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
       cols.push_back(sqliteConnector_.getData<std::string>(i, 1));
     }
-    if (std::find(cols.begin(), cols.end(), std::string("max_chunk_size")) == cols.end()) {
+    if (std::find(cols.begin(), cols.end(), std::string("max_chunk_size")) ==
+        cols.end()) {
       string queryString("ALTER TABLE mapd_tables ADD max_chunk_size BIGINT DEFAULT " +
                          std::to_string(DEFAULT_MAX_CHUNK_SIZE));
       sqliteConnector_.query(queryString);
     }
-    if (std::find(cols.begin(), cols.end(), std::string("shard_column_id")) == cols.end()) {
-      string queryString("ALTER TABLE mapd_tables ADD shard_column_id BIGINT DEFAULT " + std::to_string(0));
+    if (std::find(cols.begin(), cols.end(), std::string("shard_column_id")) ==
+        cols.end()) {
+      string queryString("ALTER TABLE mapd_tables ADD shard_column_id BIGINT DEFAULT " +
+                         std::to_string(0));
       sqliteConnector_.query(queryString);
     }
     if (std::find(cols.begin(), cols.end(), std::string("shard")) == cols.end()) {
-      string queryString("ALTER TABLE mapd_tables ADD shard BIGINT DEFAULT " + std::to_string(-1));
+      string queryString("ALTER TABLE mapd_tables ADD shard BIGINT DEFAULT " +
+                         std::to_string(-1));
       sqliteConnector_.query(queryString);
     }
     if (std::find(cols.begin(), cols.end(), std::string("num_shards")) == cols.end()) {
-      string queryString("ALTER TABLE mapd_tables ADD num_shards BIGINT DEFAULT " + std::to_string(0));
+      string queryString("ALTER TABLE mapd_tables ADD num_shards BIGINT DEFAULT " +
+                         std::to_string(0));
       sqliteConnector_.query(queryString);
     }
     if (std::find(cols.begin(), cols.end(), std::string("key_metainfo")) == cols.end()) {
@@ -1550,7 +1692,8 @@ void Catalog::updateTableDescriptorSchema() {
       sqliteConnector_.query(queryString);
     }
     if (std::find(cols.begin(), cols.end(), std::string("userid")) == cols.end()) {
-      string queryString("ALTER TABLE mapd_tables ADD userid integer DEFAULT " + std::to_string(MAPD_ROOT_USER_ID));
+      string queryString("ALTER TABLE mapd_tables ADD userid integer DEFAULT " +
+                         std::to_string(MAPD_ROOT_USER_ID));
       sqliteConnector_.query(queryString);
     }
   } catch (std::exception& e) {
@@ -1565,7 +1708,9 @@ void Catalog::updateFrontendViewSchema() {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     // check table still exists
-    sqliteConnector_.query("SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_frontend_views'");
+    sqliteConnector_.query(
+        "SELECT name FROM sqlite_master WHERE type='table' AND "
+        "name='mapd_frontend_views'");
     if (sqliteConnector_.getNumRows() == 0) {
       // table does not exists
       // no need to migrate
@@ -1598,7 +1743,8 @@ void Catalog::updateLinkSchema() {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query(
-        "CREATE TABLE IF NOT EXISTS mapd_links (linkid integer primary key, userid integer references mapd_users, "
+        "CREATE TABLE IF NOT EXISTS mapd_links (linkid integer primary key, userid "
+        "integer references mapd_users, "
         "link text unique, view_state text, update_time timestamp, view_metadata text)");
     sqliteConnector_.query("PRAGMA TABLE_INFO(mapd_links)");
     std::vector<std::string> cols;
@@ -1621,14 +1767,17 @@ void Catalog::updateFrontendViewAndLinkUsers() {
   try {
     sqliteConnector_.query("UPDATE mapd_links SET userid = 0 WHERE userid IS NULL");
     // check table still exists
-    sqliteConnector_.query("SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_frontend_views'");
+    sqliteConnector_.query(
+        "SELECT name FROM sqlite_master WHERE type='table' AND "
+        "name='mapd_frontend_views'");
     if (sqliteConnector_.getNumRows() == 0) {
       // table does not exists
       // no need to migrate
       sqliteConnector_.query("END TRANSACTION");
       return;
     }
-    sqliteConnector_.query("UPDATE mapd_frontend_views SET userid = 0 WHERE userid IS NULL");
+    sqliteConnector_.query(
+        "UPDATE mapd_frontend_views SET userid = 0 WHERE userid IS NULL");
   } catch (const std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
@@ -1637,8 +1786,8 @@ void Catalog::updateFrontendViewAndLinkUsers() {
 }
 
 // introduce DB version into the tables table
-// if the DB does not have a version reset all pagesizes to 2097152 to be compatible with old
-// value
+// if the DB does not have a version reset all pagesizes to 2097152 to be compatible with
+// old value
 
 void Catalog::updatePageSize() {
   cat_sqlite_lock sqlite_lock(this);
@@ -1685,9 +1834,10 @@ void Catalog::updateDeletedColumnIndicator() {
       string queryString("ALTER TABLE mapd_columns ADD version_num BIGINT DEFAULT " +
                          std::to_string(DEFAULT_INITIAL_VERSION));
       sqliteConnector_.query(queryString);
-      // need to add new column to table defintion to indicate deleted column, column used as bitmap
-      // for deleted rows.
-      sqliteConnector_.query("ALTER TABLE mapd_columns  ADD is_deletedcol boolean default 0 ");
+      // need to add new column to table defintion to indicate deleted column, column used
+      // as bitmap for deleted rows.
+      sqliteConnector_.query(
+          "ALTER TABLE mapd_columns  ADD is_deletedcol boolean default 0 ");
     }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -1722,17 +1872,21 @@ void Catalog::updateDictionaryNames() {
         int dictId = sqliteConnector_.getData<int>(r, 0);
         std::string dictName = sqliteConnector_.getData<string>(r, 1);
 
-        std::string oldName = basePath_ + "/mapd_data/" + currentDB_.dbName + "_" + dictName;
-        std::string newName =
-            basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) + "_DICT_" + std::to_string(dictId);
+        std::string oldName =
+            basePath_ + "/mapd_data/" + currentDB_.dbName + "_" + dictName;
+        std::string newName = basePath_ + "/mapd_data/DB_" +
+                              std::to_string(currentDB_.dbId) + "_DICT_" +
+                              std::to_string(dictId);
 
         int result = rename(oldName.c_str(), newName.c_str());
 
-        if (result == 0)
-          LOG(INFO) << "Dictionary upgrade: successfully renamed " << oldName << " to " << newName;
-        else {
-          LOG(ERROR) << "Failed to rename old dictionary directory " << oldName << " to " << newName + " dbname '"
-                     << currentDB_.dbName << "' error code " << std::to_string(result);
+        if (result == 0) {
+          LOG(INFO) << "Dictionary upgrade: successfully renamed " << oldName << " to "
+                    << newName;
+        } else {
+          LOG(ERROR) << "Failed to rename old dictionary directory " << oldName << " to "
+                     << newName + " dbname '" << currentDB_.dbName << "' error code "
+                     << std::to_string(result);
         }
       }
       // need to add new version info
@@ -1776,8 +1930,10 @@ void Catalog::updateLogicalToPhysicalTableMap(const int32_t logical_tb_id) {
       for (size_t i = 0; i < physicalTables.size(); i++) {
         int32_t physical_tb_id = physicalTables[i];
         sqliteConnector_.query_with_text_params(
-            "INSERT OR REPLACE INTO mapd_logical_to_physical (logical_table_id, physical_table_id) VALUES (?1, ?2)",
-            std::vector<std::string>{std::to_string(logical_tb_id), std::to_string(physical_tb_id)});
+            "INSERT OR REPLACE INTO mapd_logical_to_physical (logical_table_id, "
+            "physical_table_id) VALUES (?1, ?2)",
+            std::vector<std::string>{std::to_string(logical_tb_id),
+                                     std::to_string(physical_tb_id)});
       }
     }
   } catch (std::exception& e) {
@@ -1815,7 +1971,9 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
   sqliteConnector_.query("BEGIN TRANSACTION");
   std::vector<DBObject> objects;
   try {
-    sqliteConnector_.query("SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_record_ownership_marker'");
+    sqliteConnector_.query(
+        "SELECT name FROM sqlite_master WHERE type='table' AND "
+        "name='mapd_record_ownership_marker'");
     // check if mapd catalog - marker exists
     if (sqliteConnector_.getNumRows() != 0 && currentDB_.dbId == 1) {
       // already done
@@ -1841,8 +1999,9 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
     DBMetadata db;
     CHECK(SysCatalog::instance().getMetadataForDB(currentDB_.dbName, db));
     // place dbId as a refernce for migration being performed
-    sqliteConnector_.query_with_text_params("INSERT INTO mapd_record_ownership_marker (dummy) VALUES (?1)",
-                                            std::vector<std::string>{std::to_string(db.dbOwner)});
+    sqliteConnector_.query_with_text_params(
+        "INSERT INTO mapd_record_ownership_marker (dummy) VALUES (?1)",
+        std::vector<std::string>{std::to_string(db.dbOwner)});
 
     // grant owner all permissions on DB
     {
@@ -1877,7 +2036,8 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
 
     {
       // other users tables and views
-      string tableQuery("SELECT tableid, name, userid, isview FROM mapd_tables WHERE userid > 0");
+      string tableQuery(
+          "SELECT tableid, name, userid, isview FROM mapd_tables WHERE userid > 0");
       sqliteConnector_.query(tableQuery);
       size_t numRows = sqliteConnector_.getNumRows();
       for (size_t r = 0; r < numRows; ++r) {
@@ -1886,7 +2046,8 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
         int32_t ownerid = sqliteConnector_.getData<int>(r, 2);
         bool isview = sqliteConnector_.getData<bool>(r, 3);
 
-        DBObjectType type = isview ? DBObjectType::ViewDBObjectType : DBObjectType::TableDBObjectType;
+        DBObjectType type =
+            isview ? DBObjectType::ViewDBObjectType : DBObjectType::TableDBObjectType;
         DBObjectKey key;
         key.dbId = currentDB_.dbId;
         key.objectId = tableid;
@@ -1895,7 +2056,8 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
         DBObject obj(tableName, type);
         obj.setObjectKey(key);
         obj.setOwner(ownerid);
-        obj.setPrivileges(isview ? AccessPrivileges::ALL_VIEW : AccessPrivileges::ALL_TABLE);
+        obj.setPrivileges(isview ? AccessPrivileges::ALL_VIEW
+                                 : AccessPrivileges::ALL_TABLE);
 
         objects.push_back(obj);
       }
@@ -1937,7 +2099,8 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
     SysCatalog::instance().populateRoleDbObjects(objects);
   } catch (const std::exception& e) {
     LOG(ERROR) << " Issue during migration of DB " << name() << " issue was " << e.what();
-    throw std::runtime_error(" Issue during migration of DB " + name() + " issue was " + e.what());
+    throw std::runtime_error(" Issue during migration of DB " + name() + " issue was " +
+                             e.what());
     // will need to remove the mapd_record_ownership_marker table and retry
   }
 }
@@ -1960,7 +2123,8 @@ void SysCatalog::buildRoleMap() {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   string roleQuery(
-      "SELECT roleName, roleType, objectPermissionsType, dbId, objectId, objectPermissions, objectOwnerId, objectName "
+      "SELECT roleName, roleType, objectPermissionsType, dbId, objectId, "
+      "objectPermissions, objectOwnerId, objectName "
       "from mapd_object_permissions");
   sqliteConnector_->query(roleQuery);
   size_t numRows = sqliteConnector_->getNumRows();
@@ -1971,7 +2135,8 @@ void SysCatalog::buildRoleMap() {
   for (size_t r = 0; r < numRows; ++r) {
     std::string roleName = sqliteConnector_->getData<string>(r, 0);
     userPrivateRole = sqliteConnector_->getData<bool>(r, 1);
-    DBObjectType permissionType = static_cast<DBObjectType>(sqliteConnector_->getData<int>(r, 2));
+    DBObjectType permissionType =
+        static_cast<DBObjectType>(sqliteConnector_->getData<int>(r, 2));
     objectKeyStr[0] = sqliteConnector_->getData<string>(r, 2);
     objectKeyStr[1] = sqliteConnector_->getData<string>(r, 3);
     objectKeyStr[2] = sqliteConnector_->getData<string>(r, 4);
@@ -2006,7 +2171,8 @@ void SysCatalog::populateRoleDbObjects(const std::vector<DBObject>& objects) {
       Role* role = getMetadataForUserRole(dbobject.getOwner());
       if (role) {
         Role* groupRole = getMetadataForRole(role->userName());
-        insertOrUpdateObjectPrivileges(sqliteConnector_, role->userName(), true, dbobject);
+        insertOrUpdateObjectPrivileges(
+            sqliteConnector_, role->userName(), true, dbobject);
         if (groupRole) {
           groupRole->grantPrivileges(dbobject);
         }
@@ -2031,15 +2197,18 @@ void SysCatalog::buildUserRoleMap() {
     std::string roleName = sqliteConnector_->getData<string>(r, 0);
     std::string userName = sqliteConnector_->getData<string>(r, 1);
     // required for declared nomenclature before v4.0.0
-    if ((boost::equals(roleName, "mapd_default_suser_role") && boost::equals(userName, "mapd")) ||
-        (boost::equals(roleName, "mapd_default_user_role") && !boost::equals(userName, "mapd_default_user_role"))) {
+    if ((boost::equals(roleName, "mapd_default_suser_role") &&
+         boost::equals(userName, "mapd")) ||
+        (boost::equals(roleName, "mapd_default_user_role") &&
+         !boost::equals(userName, "mapd_default_user_role"))) {
       // grouprole already exists with roleName==userName in mapd_roles table
       // ignore duplicate instances of userRole which exists before v4.0.0
       continue;
     }
     Role* rl = getMetadataForRole(roleName);
     if (!rl) {
-      throw runtime_error("Data inconsistency when building role map. Role " + roleName + " not found in the map.");
+      throw runtime_error("Data inconsistency when building role map. Role " + roleName +
+                          " not found in the map.");
     }
     std::pair<std::string, std::string> roleVecElem(roleName, userName);
     userRoleVec.push_back(roleVecElem);
@@ -2050,12 +2219,14 @@ void SysCatalog::buildUserRoleMap() {
     std::string userName = userRoleVec[i].second;
     UserMetadata user;
     if (!getMetadataForUser(userName, user)) {
-      throw runtime_error("Data inconsistency when building role map. User " + userName + " not found in the map.");
+      throw runtime_error("Data inconsistency when building role map. User " + userName +
+                          " not found in the map.");
     }
     Role* rl = getMetadataForRole(roleName);
     Role* user_rl = getMetadataForUserRole(user.userId);
     if (!user_rl) {
-      // roles for this user have not been recovered from sqlite DB before, so create new object
+      // roles for this user have not been recovered from sqlite DB before, so create new
+      // object
       user_rl = new UserRole(rl, user.userId, userName);
       userRoleMap_[user.userId] = user_rl;
     }
@@ -2067,7 +2238,8 @@ void SysCatalog::buildObjectDescriptorMap() {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   string objectQuery(
-      "SELECT roleName, roleType, objectPermissionsType, dbId, objectId, objectPermissions, objectOwnerId, objectName "
+      "SELECT roleName, roleType, objectPermissionsType, dbId, objectId, "
+      "objectPermissions, objectOwnerId, objectName "
       "from mapd_object_permissions");
   sqliteConnector_->query(objectQuery);
   size_t numRows = sqliteConnector_->getNumRows();
@@ -2082,7 +2254,9 @@ void SysCatalog::buildObjectDescriptorMap() {
     od->objectOwnerId = sqliteConnector_->getData<int>(r, 6);
     od->objectName = sqliteConnector_->getData<string>(r, 7);
     objectDescriptorMap_.insert(ObjectRoleDescriptorMap::value_type(
-        std::to_string(od->dbId) + ":" + std::to_string(od->objectType) + ":" + std::to_string(od->objectId), od));
+        std::to_string(od->dbId) + ":" + std::to_string(od->objectType) + ":" +
+            std::to_string(od->objectId),
+        od));
   }
 }
 
@@ -2095,7 +2269,7 @@ std::string getUserFromId(const int32_t id) {
   // a user could be deleted and a dashboard still exist?
   return "Unknown";
 }
-}
+}  // namespace
 
 void Catalog::buildMaps() {
   sys_write_lock write_lock_sys(&SysCatalog::instance());
@@ -2106,7 +2280,8 @@ void Catalog::buildMaps() {
 
   CheckAndExecuteMigrations();
 
-  string dictQuery("SELECT dictid, name, nbits, is_shared, refcount from mapd_dictionaries");
+  string dictQuery(
+      "SELECT dictid, name, nbits, is_shared, refcount from mapd_dictionaries");
   sqliteConnector_.query(dictQuery);
   size_t numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
@@ -2115,16 +2290,19 @@ void Catalog::buildMaps() {
     int dictNBits = sqliteConnector_.getData<int>(r, 2);
     bool is_shared = sqliteConnector_.getData<bool>(r, 3);
     int refcount = sqliteConnector_.getData<int>(r, 4);
-    std::string fname =
-        basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) + "_DICT_" + std::to_string(dictId);
+    std::string fname = basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) +
+                        "_DICT_" + std::to_string(dictId);
     DictRef dict_ref(currentDB_.dbId, dictId);
-    DictDescriptor* dd = new DictDescriptor(dict_ref, dictName, dictNBits, is_shared, refcount, fname, false);
+    DictDescriptor* dd = new DictDescriptor(
+        dict_ref, dictName, dictNBits, is_shared, refcount, fname, false);
     dictDescriptorMapByRef_[dict_ref].reset(dd);
   }
 
   string tableQuery(
-      "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, max_chunk_size, frag_page_size, "
-      "max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo, userid from mapd_tables");
+      "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, "
+      "max_chunk_size, frag_page_size, "
+      "max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo, userid "
+      "from mapd_tables");
   sqliteConnector_.query(tableQuery);
   numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
@@ -2134,7 +2312,8 @@ void Catalog::buildMaps() {
     td->nColumns = sqliteConnector_.getData<int>(r, 2);
     td->isView = sqliteConnector_.getData<bool>(r, 3);
     td->fragments = sqliteConnector_.getData<string>(r, 4);
-    td->fragType = (Fragmenter_Namespace::FragmenterType)sqliteConnector_.getData<int>(r, 5);
+    td->fragType =
+        (Fragmenter_Namespace::FragmenterType)sqliteConnector_.getData<int>(r, 5);
     td->maxFragRows = sqliteConnector_.getData<int>(r, 6);
     td->maxChunkSize = sqliteConnector_.getData<int>(r, 7);
     td->fragPageSize = sqliteConnector_.getData<int>(r, 8);
@@ -2153,8 +2332,10 @@ void Catalog::buildMaps() {
     tableDescriptorMapById_[td->tableId] = td;
   }
   string columnQuery(
-      "SELECT tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, compression, comp_param, "
-      "size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_deletedcol from mapd_columns ORDER BY tableid, "
+      "SELECT tableid, columnid, name, coltype, colsubtype, coldim, colscale, "
+      "is_notnull, compression, comp_param, "
+      "size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_deletedcol from "
+      "mapd_columns ORDER BY tableid, "
       "columnid");
   sqliteConnector_.query(columnQuery);
   numRows = sqliteConnector_.getNumRows();
@@ -2182,8 +2363,9 @@ void Catalog::buildMaps() {
     ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
     columnDescriptorMapById_[columnIdKey] = cd;
 
-    if (skip_physical_cols <= 0)
+    if (skip_physical_cols <= 0) {
       skip_physical_cols = cd->columnType.get_physical_cols();
+    }
 
     auto td_itr = tableDescriptorMapById_.find(cd->tableId);
     CHECK(td_itr != tableDescriptorMapById_.end());
@@ -2191,14 +2373,16 @@ void Catalog::buildMaps() {
     if (cd->isDeletedCol) {
       td_itr->second->hasDeletedCol = true;
       setDeletedColumnUnlocked(td_itr->second, cd);
-    } else if (cd->columnType.is_geometry() || skip_physical_cols-- <= 0)
+    } else if (cd->columnType.is_geometry() || skip_physical_cols-- <= 0) {
       tableDescriptorMapById_[cd->tableId]->columnIdBySpi_.push_back(cd->columnId);
+    }
   }
   // sort columnIdBySpi_ based on columnId
-  for (auto& tit : tableDescriptorMapById_)
+  for (auto& tit : tableDescriptorMapById_) {
     std::sort(tit.second->columnIdBySpi_.begin(),
               tit.second->columnIdBySpi_.end(),
               [](const size_t a, const size_t b) -> bool { return a < b; });
+  }
 
   string viewQuery("SELECT tableid, sql FROM mapd_views");
   sqliteConnector_.query(viewQuery);
@@ -2211,13 +2395,15 @@ void Catalog::buildMaps() {
   }
 
   string frontendViewQuery(
-      "SELECT id, state, name, image_hash, strftime('%Y-%m-%dT%H:%M:%SZ', update_time), userid, "
+      "SELECT id, state, name, image_hash, strftime('%Y-%m-%dT%H:%M:%SZ', update_time), "
+      "userid, "
       "metadata "
       "FROM mapd_dashboards");
   sqliteConnector_.query(frontendViewQuery);
   numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
-    std::shared_ptr<FrontendViewDescriptor> vd = std::make_shared<FrontendViewDescriptor>();
+    std::shared_ptr<FrontendViewDescriptor> vd =
+        std::make_shared<FrontendViewDescriptor>();
     vd->viewId = sqliteConnector_.getData<int>(r, 0);
     vd->viewState = sqliteConnector_.getData<string>(r, 1);
     vd->viewName = sqliteConnector_.getData<string>(r, 2);
@@ -2230,7 +2416,8 @@ void Catalog::buildMaps() {
   }
 
   string linkQuery(
-      "SELECT linkid, userid, link, view_state, strftime('%Y-%m-%dT%H:%M:%SZ', update_time), view_metadata "
+      "SELECT linkid, userid, link, view_state, strftime('%Y-%m-%dT%H:%M:%SZ', "
+      "update_time), view_metadata "
       "FROM mapd_links");
   sqliteConnector_.query(linkQuery);
   numRows = sqliteConnector_.getNumRows();
@@ -2260,7 +2447,8 @@ void Catalog::buildMaps() {
       /* add new entity to the map logicalToPhysicalTableMapById_ */
       std::vector<int32_t> physicalTables;
       physicalTables.push_back(physical_tb_id);
-      const auto it_ok = logicalToPhysicalTableMapById_.emplace(logical_tb_id, physicalTables);
+      const auto it_ok =
+          logicalToPhysicalTableMapById_.emplace(logical_tb_id, physicalTables);
       CHECK(it_ok.second);
     } else {
       /* update map logicalToPhysicalTableMapById_ */
@@ -2292,9 +2480,9 @@ void Catalog::addTableToMap(TableDescriptor& td,
     }
   }
 
-  std::sort(new_td->columnIdBySpi_.begin(), new_td->columnIdBySpi_.end(), [](const size_t a, const size_t b) -> bool {
-    return a < b;
-  });
+  std::sort(new_td->columnIdBySpi_.begin(),
+            new_td->columnIdBySpi_.end(),
+            [](const size_t a, const size_t b) -> bool { return a < b; });
 
   std::unique_ptr<StringDictionaryClient> client;
   DictRef dict_ref(currentDB_.dbId, -1);
@@ -2312,16 +2500,18 @@ void Catalog::addTableToMap(TableDescriptor& td,
     }
     DictDescriptor* new_dd = new DictDescriptor(dd);
     dictDescriptorMapByRef_[dict_ref].reset(new_dd);
-    if (!dd.dictIsTemp)
+    if (!dd.dictIsTemp) {
       boost::filesystem::create_directory(new_dd->dictFolderPath);
+    }
   }
 }
 
 void Catalog::removeTableFromMap(const string& tableName, int tableId) {
   cat_write_lock write_lock(this);
   TableDescriptorMapById::iterator tableDescIt = tableDescriptorMapById_.find(tableId);
-  if (tableDescIt == tableDescriptorMapById_.end())
+  if (tableDescIt == tableDescriptorMapById_.end()) {
     throw runtime_error("Table " + tableName + " does not exist.");
+  }
 
   TableDescriptor* td = tableDescIt->second;
 
@@ -2332,8 +2522,9 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
 
   tableDescriptorMapById_.erase(tableDescIt);
   tableDescriptorMap_.erase(to_upper(tableName));
-  if (td->fragmenter != nullptr)
+  if (td->fragmenter != nullptr) {
     delete td->fragmenter;
+  }
   bool isTemp = td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
   delete td;
 
@@ -2346,10 +2537,11 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
 
   // delete all column descriptors for the table
   // no more link columnIds to sequential indexes!
-  for (auto cit = columnDescriptorMapById_.begin(); cit != columnDescriptorMapById_.end();)
-    if (tableId != std::get<0>(cit->first))
+  for (auto cit = columnDescriptorMapById_.begin();
+       cit != columnDescriptorMapById_.end();) {
+    if (tableId != std::get<0>(cit->first)) {
       ++cit;
-    else {
+    } else {
       int i = std::get<1>(cit++->first);
       ColumnIdKey cidKey(tableId, i);
       ColumnDescriptorMapById::iterator colDescIt = columnDescriptorMapById_.find(cidKey);
@@ -2358,7 +2550,8 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
       ColumnKey cnameKey(tableId, to_upper(cd->columnName));
       columnDescriptorMap_.erase(cnameKey);
       const int dictId = cd->columnType.get_comp_param();
-      // Dummy dictionaries created for a shard of a logical table have the id set to zero.
+      // Dummy dictionaries created for a shard of a logical table have the id set to
+      // zero.
       if (cd->columnType.get_compression() == kENCODING_DICT && dictId) {
         DictRef dict_ref(currentDB_.dbId, dictId);
         const auto dictIt = dictDescriptorMapByRef_.find(dict_ref);
@@ -2379,6 +2572,7 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
       }
       delete cd;
     }
+  }
 }
 
 void Catalog::addFrontendViewToMap(FrontendViewDescriptor& vd) {
@@ -2388,7 +2582,8 @@ void Catalog::addFrontendViewToMap(FrontendViewDescriptor& vd) {
 
 void Catalog::addFrontendViewToMapNoLock(FrontendViewDescriptor& vd) {
   cat_write_lock write_lock(this);
-  dashboardDescriptorMap_[std::to_string(vd.userId) + ":" + vd.viewName] = std::make_shared<FrontendViewDescriptor>(vd);
+  dashboardDescriptorMap_[std::to_string(vd.userId) + ":" + vd.viewName] =
+      std::make_shared<FrontendViewDescriptor>(vd);
 }
 
 void Catalog::addLinkToMap(LinkDescriptor& ld) {
@@ -2422,11 +2617,14 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
                                                td->maxRows,
                                                td->persistenceLevel);
   });
-  LOG(INFO) << "Instantiating Fragmenter for table " << td->tableName << " took " << time_ms << "ms";
+  LOG(INFO) << "Instantiating Fragmenter for table " << td->tableName << " took "
+            << time_ms << "ms";
 }
 
-const TableDescriptor* Catalog::getMetadataForTable(const string& tableName, const bool populateFragmenter) const {
-  // we give option not to populate fragmenter (default true/yes) as it can be heavy for pure metadata calls
+const TableDescriptor* Catalog::getMetadataForTable(const string& tableName,
+                                                    const bool populateFragmenter) const {
+  // we give option not to populate fragmenter (default true/yes) as it can be heavy for
+  // pure metadata calls
   cat_read_lock read_lock(this);
   auto tableDescIt = tableDescriptorMap_.find(to_upper(tableName));
   if (tableDescIt == tableDescriptorMap_.end()) {  // check to make sure table exists
@@ -2448,16 +2646,19 @@ const TableDescriptor* Catalog::getMetadataForTable(int tableId) const {
   }
   TableDescriptor* td = tableDescIt->second;
   cat_sqlite_lock sqlite_lock(this);
-  if (td->fragmenter == nullptr && !td->isView)
+  if (td->fragmenter == nullptr && !td->isView) {
     instantiateFragmenter(td);
+  }
   return td;  // returns pointer to table descriptor
 }
 
-const DictDescriptor* Catalog::getMetadataForDict(const int dictId, const bool loadDict) const {
+const DictDescriptor* Catalog::getMetadataForDict(const int dictId,
+                                                  const bool loadDict) const {
   const DictRef dictRef(currentDB_.dbId, dictId);
   cat_read_lock read_lock(this);
   auto dictDescIt = dictDescriptorMapByRef_.find(dictRef);
-  if (dictDescIt == dictDescriptorMapByRef_.end()) {  // check to make sure dictionary exists
+  if (dictDescIt ==
+      dictDescriptorMapByRef_.end()) {  // check to make sure dictionary exists
     return nullptr;
   }
   auto& dd = dictDescIt->second;
@@ -2467,16 +2668,20 @@ const DictDescriptor* Catalog::getMetadataForDict(const int dictId, const bool l
     if (!dd->stringDict) {
       auto time_ms = measure<>::execution([&]() {
         if (string_dict_hosts_.empty()) {
-          if (dd->dictIsTemp)
-            dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath, true, true);
-          else
-            dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath, false, true);
+          if (dd->dictIsTemp) {
+            dd->stringDict =
+                std::make_shared<StringDictionary>(dd->dictFolderPath, true, true);
+          } else {
+            dd->stringDict =
+                std::make_shared<StringDictionary>(dd->dictFolderPath, false, true);
+          }
         } else {
-          dd->stringDict = std::make_shared<StringDictionary>(string_dict_hosts_.front(), dd->dictRef);
+          dd->stringDict =
+              std::make_shared<StringDictionary>(string_dict_hosts_.front(), dd->dictRef);
         }
       });
-      LOG(INFO) << "Time to load Dictionary " << dd->dictRef.dbId << "_" << dd->dictRef.dictId << " was " << time_ms
-                << "ms";
+      LOG(INFO) << "Time to load Dictionary " << dd->dictRef.dbId << "_"
+                << dd->dictRef.dictId << " was " << time_ms << "ms";
     }
   }
 
@@ -2487,12 +2692,14 @@ const std::vector<LeafHostInfo>& Catalog::getStringDictionaryHosts() const {
   return string_dict_hosts_;
 }
 
-const ColumnDescriptor* Catalog::getMetadataForColumn(int tableId, const string& columnName) const {
+const ColumnDescriptor* Catalog::getMetadataForColumn(int tableId,
+                                                      const string& columnName) const {
   cat_read_lock read_lock(this);
 
   ColumnKey columnKey(tableId, to_upper(columnName));
   auto colDescIt = columnDescriptorMap_.find(columnKey);
-  if (colDescIt == columnDescriptorMap_.end()) {  // need to check to make sure column exists for table
+  if (colDescIt ==
+      columnDescriptorMap_.end()) {  // need to check to make sure column exists for table
     return nullptr;
   }
   return colDescIt->second;
@@ -2503,7 +2710,8 @@ const ColumnDescriptor* Catalog::getMetadataForColumn(int tableId, int columnId)
 
   ColumnIdKey columnIdKey(tableId, columnId);
   auto colDescIt = columnDescriptorMapById_.find(columnIdKey);
-  if (colDescIt == columnDescriptorMapById_.end()) {  // need to check to make sure column exists for table
+  if (colDescIt == columnDescriptorMapById_
+                       .end()) {  // need to check to make sure column exists for table
     return nullptr;
   }
   return colDescIt->second;
@@ -2526,22 +2734,24 @@ const int Catalog::getColumnIdBySpi(const int tableId, const size_t spi) const {
   return columnIdBySpi[spx - 1] + phi;
 }
 
-const ColumnDescriptor* Catalog::getMetadataForColumnBySpi(const int tableId, const size_t spi) const {
+const ColumnDescriptor* Catalog::getMetadataForColumnBySpi(const int tableId,
+                                                           const size_t spi) const {
   const auto columnId = getColumnIdBySpi(tableId, spi);
   ColumnIdKey columnIdKey(tableId, columnId);
   const auto colDescIt = columnDescriptorMapById_.find(columnIdKey);
   return columnDescriptorMapById_.end() == colDescIt ? nullptr : colDescIt->second;
 }
 
-void Catalog::deleteMetadataForFrontendView(const std::string& userId, const std::string& viewName) {
+void Catalog::deleteMetadataForFrontendView(const std::string& userId,
+                                            const std::string& viewName) {
   cat_write_lock write_lock(this);
 
   auto viewDescIt = dashboardDescriptorMap_.find(userId + ":" + viewName);
   if (viewDescIt == dashboardDescriptorMap_.end()) {  // check to make sure view exists
-    LOG(ERROR) << "No metadata for dashboard for user " << userId << " dashboard " << viewName
-               << " does not exist in map";
-    throw runtime_error("No metadata for dashboard for user " + userId + " dashboard " + viewName +
-                        " does not exist in map");
+    LOG(ERROR) << "No metadata for dashboard for user " << userId << " dashboard "
+               << viewName << " does not exist in map";
+    throw runtime_error("No metadata for dashboard for user " + userId + " dashboard " +
+                        viewName + " does not exist in map");
   }
   // found view in Map now remove it
   dashboardDescriptorMap_.erase(viewDescIt);
@@ -2549,8 +2759,9 @@ void Catalog::deleteMetadataForFrontendView(const std::string& userId, const std
   cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_.query_with_text_params("DELETE FROM mapd_dashboards WHERE name = ? and userid = ?",
-                                            std::vector<std::string>{viewName, userId});
+    sqliteConnector_.query_with_text_params(
+        "DELETE FROM mapd_dashboards WHERE name = ? and userid = ?",
+        std::vector<std::string>{viewName, userId});
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
@@ -2558,7 +2769,9 @@ void Catalog::deleteMetadataForFrontendView(const std::string& userId, const std
   sqliteConnector_.query("END TRANSACTION");
 }
 
-const FrontendViewDescriptor* Catalog::getMetadataForFrontendView(const string& userId, const string& viewName) const {
+const FrontendViewDescriptor* Catalog::getMetadataForFrontendView(
+    const string& userId,
+    const string& viewName) const {
   cat_read_lock read_lock(this);
 
   auto viewDescIt = dashboardDescriptorMap_.find(userId + ":" + viewName);
@@ -2611,7 +2824,8 @@ void Catalog::deleteMetadataForDashboard(const int32_t id) {
     cat_write_lock write_lock(this);
     // TODO: transactionally unsafe
     if (SysCatalog::instance().arePrivilegesOn()) {
-      SysCatalog::instance().revokeDBObjectPrivilegesFromAllRoles_unsafe(DBObject(id, DashboardDBObjectType), this);
+      SysCatalog::instance().revokeDBObjectPrivilegesFromAllRoles_unsafe(
+          DBObject(id, DashboardDBObjectType), this);
     }
     deleteMetadataForFrontendView(userId, name);
   }
@@ -2635,11 +2849,12 @@ const LinkDescriptor* Catalog::getMetadataForLink(int linkId) const {
   return linkDescIt->second;
 }
 
-void Catalog::getAllColumnMetadataForTable(const TableDescriptor* td,
-                                           list<const ColumnDescriptor*>& columnDescriptors,
-                                           const bool fetchSystemColumns,
-                                           const bool fetchVirtualColumns,
-                                           const bool fetchPhysicalColumns) const {
+void Catalog::getAllColumnMetadataForTable(
+    const TableDescriptor* td,
+    list<const ColumnDescriptor*>& columnDescriptors,
+    const bool fetchSystemColumns,
+    const bool fetchVirtualColumns,
+    const bool fetchPhysicalColumns) const {
   cat_read_lock read_lock(this);
   int32_t skip_physical_cols = 0;
   for (const auto& columnDescriptor : columnDescriptorMapById_) {
@@ -2648,12 +2863,15 @@ void Catalog::getAllColumnMetadataForTable(const TableDescriptor* td,
       continue;
     }
     auto cd = columnDescriptor.second;
-    if (cd->tableId != td->tableId)
+    if (cd->tableId != td->tableId) {
       continue;
-    if (!fetchSystemColumns && cd->isSystemCol)
+    }
+    if (!fetchSystemColumns && cd->isSystemCol) {
       continue;
-    if (!fetchVirtualColumns && cd->isVirtualCol)
+    }
+    if (!fetchVirtualColumns && cd->isVirtualCol) {
       continue;
+    }
     if (!fetchPhysicalColumns) {
       const auto& col_ti = cd->columnType;
       skip_physical_cols = col_ti.get_physical_cols();
@@ -2662,29 +2880,36 @@ void Catalog::getAllColumnMetadataForTable(const TableDescriptor* td,
   }
 }
 
-list<const ColumnDescriptor*> Catalog::getAllColumnMetadataForTable(const int tableId,
-                                                                    const bool fetchSystemColumns,
-                                                                    const bool fetchVirtualColumns,
-                                                                    const bool fetchPhysicalColumns) const {
+list<const ColumnDescriptor*> Catalog::getAllColumnMetadataForTable(
+    const int tableId,
+    const bool fetchSystemColumns,
+    const bool fetchVirtualColumns,
+    const bool fetchPhysicalColumns) const {
   cat_read_lock read_lock(this);
   list<const ColumnDescriptor*> columnDescriptors;
   const TableDescriptor* td = getMetadataForTable(tableId);
-  getAllColumnMetadataForTable(td, columnDescriptors, fetchSystemColumns, fetchVirtualColumns, fetchPhysicalColumns);
+  getAllColumnMetadataForTable(td,
+                               columnDescriptors,
+                               fetchSystemColumns,
+                               fetchVirtualColumns,
+                               fetchPhysicalColumns);
   return columnDescriptors;
 }
 
 list<const TableDescriptor*> Catalog::getAllTableMetadata() const {
   cat_read_lock read_lock(this);
   list<const TableDescriptor*> table_list;
-  for (auto p : tableDescriptorMapById_)
+  for (auto p : tableDescriptorMapById_) {
     table_list.push_back(p.second);
+  }
   return table_list;
 }
 
 list<const FrontendViewDescriptor*> Catalog::getAllFrontendViewMetadata() const {
   list<const FrontendViewDescriptor*> view_list;
-  for (auto p : dashboardDescriptorMap_)
+  for (auto p : dashboardDescriptorMap_) {
     view_list.push_back(p.second.get());
+  }
   return view_list;
 }
 
@@ -2696,55 +2921,71 @@ DictRef Catalog::addDictionary(ColumnDescriptor& cd) {
   CHECK(dd.dictRef.dictId);
 
   std::unique_ptr<StringDictionaryClient> client;
-  if (!string_dict_hosts_.empty())
-    client.reset(new StringDictionaryClient(string_dict_hosts_.front(), DictRef(currentDB_.dbId, -1), true));
-  if (client)
+  if (!string_dict_hosts_.empty()) {
+    client.reset(new StringDictionaryClient(
+        string_dict_hosts_.front(), DictRef(currentDB_.dbId, -1), true));
+  }
+  if (client) {
     client->create(dd.dictRef, dd.dictIsTemp);
+  }
 
   DictDescriptor* new_dd = new DictDescriptor(dd);
   dictDescriptorMapByRef_[dd.dictRef].reset(new_dd);
-  if (!dd.dictIsTemp)
+  if (!dd.dictIsTemp) {
     boost::filesystem::create_directory(new_dd->dictFolderPath);
+  }
   return dd.dictRef;
 }
 
 void Catalog::delDictionary(const ColumnDescriptor& cd) {
-  if (!(cd.columnType.is_string() || cd.columnType.is_string_array()))
+  if (!(cd.columnType.is_string() || cd.columnType.is_string_array())) {
     return;
-  if (!(cd.columnType.get_compression() == kENCODING_DICT))
+  }
+  if (!(cd.columnType.get_compression() == kENCODING_DICT)) {
     return;
-  if (!(cd.columnType.get_comp_param() > 0))
+  }
+  if (!(cd.columnType.get_comp_param() > 0)) {
     return;
+  }
 
   const auto& td = *tableDescriptorMapById_[cd.tableId];
   const auto dictId = cd.columnType.get_comp_param();
   const DictRef dictRef(currentDB_.dbId, dictId);
-  const auto dictName = td.tableName + "_" + cd.columnName + "_dict" + std::to_string(dictId);
-  sqliteConnector_.query_with_text_param("DELETE FROM mapd_dictionaries WHERE name = ?", dictName);
-  boost::filesystem::remove_all(basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) + "_DICT_" +
+  const auto dictName =
+      td.tableName + "_" + cd.columnName + "_dict" + std::to_string(dictId);
+  sqliteConnector_.query_with_text_param("DELETE FROM mapd_dictionaries WHERE name = ?",
+                                         dictName);
+  boost::filesystem::remove_all(basePath_ + "/mapd_data/DB_" +
+                                std::to_string(currentDB_.dbId) + "_DICT_" +
                                 std::to_string(dictId));
 
   std::unique_ptr<StringDictionaryClient> client;
-  if (!string_dict_hosts_.empty())
+  if (!string_dict_hosts_.empty()) {
     client.reset(new StringDictionaryClient(string_dict_hosts_.front(), dictRef, true));
-  if (client)
+  }
+  if (client) {
     client->drop(dictRef);
+  }
 
   dictDescriptorMapByRef_.erase(dictRef);
 }
 
-void Catalog::getDictionary(const ColumnDescriptor& cd, std::map<int, StringDictionary*>& stringDicts) {
+void Catalog::getDictionary(const ColumnDescriptor& cd,
+                            std::map<int, StringDictionary*>& stringDicts) {
   // learn 'committed' ColumnDescriptor of this column
   auto cit = columnDescriptorMap_.find(ColumnKey(cd.tableId, to_upper(cd.columnName)));
   CHECK(cit != columnDescriptorMap_.end());
   auto& ccd = *cit->second;
 
-  if (!(ccd.columnType.is_string() || ccd.columnType.is_string_array()))
+  if (!(ccd.columnType.is_string() || ccd.columnType.is_string_array())) {
     return;
-  if (!(ccd.columnType.get_compression() == kENCODING_DICT))
+  }
+  if (!(ccd.columnType.get_compression() == kENCODING_DICT)) {
     return;
-  if (!(ccd.columnType.get_comp_param() > 0))
+  }
+  if (!(ccd.columnType.get_comp_param() > 0)) {
     return;
+  }
 
   auto dictId = ccd.columnType.get_comp_param();
   getMetadataForDict(dictId);
@@ -2760,12 +3001,15 @@ void Catalog::getDictionary(const ColumnDescriptor& cd, std::map<int, StringDict
 void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
   // caller must handle sqlite/chunk transaction TOGETHER
   cd.tableId = td.tableId;
-  if (cd.columnType.get_compression() == kENCODING_DICT)
+  if (cd.columnType.get_compression() == kENCODING_DICT) {
     addDictionary(cd);
+  }
 
   sqliteConnector_.query_with_text_params(
-      "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, "
-      "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr) VALUES (?, "
+      "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, "
+      "colscale, is_notnull, "
+      "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr) "
+      "VALUES (?, "
       "(SELECT max(columnid) + 1 FROM mapd_columns WHERE tableid = ?), "
       "?, ?, ?, "
       "?, "
@@ -2786,11 +3030,13 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
                                std::to_string(cd.isVirtualCol),
                                cd.virtualExpr});
 
-  sqliteConnector_.query_with_text_params("UPDATE mapd_tables SET ncolumns = ncolumns + 1 WHERE tableid = ?",
-                                          std::vector<std::string>{std::to_string(td.tableId)});
+  sqliteConnector_.query_with_text_params(
+      "UPDATE mapd_tables SET ncolumns = ncolumns + 1 WHERE tableid = ?",
+      std::vector<std::string>{std::to_string(td.tableId)});
 
-  sqliteConnector_.query_with_text_params("SELECT columnid FROM mapd_columns WHERE tableid = ? AND name = ?",
-                                          std::vector<std::string>{std::to_string(td.tableId), cd.columnName});
+  sqliteConnector_.query_with_text_params(
+      "SELECT columnid FROM mapd_columns WHERE tableid = ? AND name = ?",
+      std::vector<std::string>{std::to_string(td.tableId), cd.columnName});
   cd.columnId = sqliteConnector_.getData<int>(0, 0);
 
   ++tableDescriptorMapById_[td.tableId]->nColumns;
@@ -2813,8 +3059,10 @@ void Catalog::roll(const bool forward) {
     auto& vc = td->columnIdBySpi_;
     if (forward) {
       if (ocd) {
-        if (nullptr == ncd || ncd->columnType.get_comp_param() != ocd->columnType.get_comp_param())
+        if (nullptr == ncd ||
+            ncd->columnType.get_comp_param() != ocd->columnType.get_comp_param()) {
           delDictionary(*ocd);
+        }
 
         vc.erase(std::remove(vc.begin(), vc.end(), ocd->columnId), vc.end());
 
@@ -2822,8 +3070,9 @@ void Catalog::roll(const bool forward) {
       }
       if (ncd) {
         // append columnId if its new
-        if (vc.end() == std::find(vc.begin(), vc.end(), ncd->columnId))
+        if (vc.end() == std::find(vc.begin(), vc.end(), ncd->columnId)) {
           vc.push_back(ncd->columnId);
+        }
       }
       tds.insert(td);
     } else {
@@ -2833,23 +3082,28 @@ void Catalog::roll(const bool forward) {
       }
       // roll back the dict of new column
       if (ncd) {
-        if (nullptr == ocd || ocd->columnType.get_comp_param() != ncd->columnType.get_comp_param())
+        if (nullptr == ocd ||
+            ocd->columnType.get_comp_param() != ncd->columnType.get_comp_param()) {
           delDictionary(*ncd);
+        }
         delete ncd;
       }
     }
   }
   columnDescriptorsForRoll.clear();
 
-  if (forward)
-    for (const auto td : tds)
+  if (forward) {
+    for (const auto td : tds) {
       calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
+    }
+  }
 }
 
-void Catalog::createTable(TableDescriptor& td,
-                          const list<ColumnDescriptor>& cols,
-                          const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs,
-                          bool isLogicalTable) {
+void Catalog::createTable(
+    TableDescriptor& td,
+    const list<ColumnDescriptor>& cols,
+    const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs,
+    bool isLogicalTable) {
   cat_write_lock write_lock(this);
   list<ColumnDescriptor> cds;
   list<DictDescriptor> dds;
@@ -2857,7 +3111,8 @@ void Catalog::createTable(TableDescriptor& td,
   list<ColumnDescriptor> columns;
   for (auto cd : cols) {
     if (cd.columnName == "rowid") {
-      throw std::runtime_error("Cannot create column with name rowid. rowid is a system defined column.");
+      throw std::runtime_error(
+          "Cannot create column with name rowid. rowid is a system defined column.");
     }
     const auto& col_ti = cd.columnType;
     if (IS_GEO(col_ti.get_type())) {
@@ -2980,8 +3235,9 @@ void Catalog::createTable(TableDescriptor& td,
           throw runtime_error("Unrecognized geometry type.");
           break;
       }
-    } else
+    } else {
       columns.push_back(cd);
+    }
 
     toplevel_column_names.insert(cd.columnName);
   }
@@ -3017,9 +3273,11 @@ void Catalog::createTable(TableDescriptor& td,
   if (td.persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
     try {
       sqliteConnector_.query_with_text_params(
-          "INSERT INTO mapd_tables (name, userid, ncolumns, isview, fragments, frag_type, max_frag_rows, "
+          "INSERT INTO mapd_tables (name, userid, ncolumns, isview, fragments, "
+          "frag_type, max_frag_rows, "
           "max_chunk_size, "
-          "frag_page_size, max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo) VALUES (?, ?, ?, "
+          "frag_page_size, max_rows, partitions, shard_column_id, shard, num_shards, "
+          "key_metainfo) VALUES (?, ?, ?, "
           "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 
           std::vector<std::string>{td.tableName,
@@ -3039,12 +3297,14 @@ void Catalog::createTable(TableDescriptor& td,
                                    td.keyMetainfo});
 
       // now get the auto generated tableid
-      sqliteConnector_.query_with_text_param("SELECT tableid FROM mapd_tables WHERE name = ?", td.tableName);
+      sqliteConnector_.query_with_text_param(
+          "SELECT tableid FROM mapd_tables WHERE name = ?", td.tableName);
       td.tableId = sqliteConnector_.getData<int>(0, 0);
       int colId = 1;
       for (auto cd : columns) {
         if (cd.columnType.get_compression() == kENCODING_DICT) {
-          const bool is_foreign_col = setColumnSharedDictionary(cd, cds, dds, td, shared_dict_defs);
+          const bool is_foreign_col =
+              setColumnSharedDictionary(cd, cds, dds, td, shared_dict_defs);
           if (!is_foreign_col) {
             setColumnDictionary(cd, dds, td, isLogicalTable);
           }
@@ -3052,14 +3312,17 @@ void Catalog::createTable(TableDescriptor& td,
 
         if (toplevel_column_names.count(cd.columnName)) {
           // make up colId gap for sanity test (begin with 1 bc much code depends on it!)
-          if (colId > 1)
+          if (colId > 1) {
             colId += g_test_against_columnId_gap;
+          }
           td.columnIdBySpi_.push_back(colId);
         }
 
         sqliteConnector_.query_with_text_params(
-            "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, "
-            "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_deletedcol) "
+            "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, "
+            "coldim, colscale, is_notnull, "
+            "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, "
+            "virtual_expr, is_deletedcol) "
             "VALUES (?, ?, ?, ?, ?, "
             "?, "
             "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -3084,8 +3347,9 @@ void Catalog::createTable(TableDescriptor& td,
         cds.push_back(cd);
       }
       if (td.isView) {
-        sqliteConnector_.query_with_text_params("INSERT INTO mapd_views (tableid, sql) VALUES (?,?)",
-                                                std::vector<std::string>{std::to_string(td.tableId), td.viewSQL});
+        sqliteConnector_.query_with_text_params(
+            "INSERT INTO mapd_views (tableid, sql) VALUES (?,?)",
+            std::vector<std::string>{std::to_string(td.tableId), td.viewSQL});
       }
     } catch (std::exception& e) {
       sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -3155,8 +3419,9 @@ int32_t Catalog::getTableEpoch(const int32_t db_id, const int32_t table_id) cons
       } else {
         if (curr_epoch != dataMgr_->getTableEpoch(db_id, physical_tb_id)) {
           // oh dear the leaves do not agree on the epoch for this table
-          LOG(ERROR) << "Epochs on shards do not all agree on table id " << table_id << " db id  " << db_id << " epoch "
-                     << curr_epoch << " leaf_epoch " << dataMgr_->getTableEpoch(db_id, physical_tb_id);
+          LOG(ERROR) << "Epochs on shards do not all agree on table id " << table_id
+                     << " db id  " << db_id << " epoch " << curr_epoch << " leaf_epoch "
+                     << dataMgr_->getTableEpoch(db_id, physical_tb_id);
           return -1;
         }
       }
@@ -3169,7 +3434,8 @@ int32_t Catalog::getTableEpoch(const int32_t db_id, const int32_t table_id) cons
 
 void Catalog::setTableEpoch(const int db_id, const int table_id, int new_epoch) {
   cat_read_lock read_lock(this);
-  LOG(INFO) << "Set table epoch db:" << db_id << " Table ID  " << table_id << " back to new epoch " << new_epoch;
+  LOG(INFO) << "Set table epoch db:" << db_id << " Table ID  " << table_id
+            << " back to new epoch " << new_epoch;
   removeChunks(table_id);
   dataMgr_->setTableEpoch(db_id, table_id, new_epoch);
 
@@ -3182,8 +3448,8 @@ void Catalog::setTableEpoch(const int db_id, const int table_id, int new_epoch) 
       int32_t physical_tb_id = physicalTables[i];
       const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
       CHECK(phys_td);
-      LOG(INFO) << "Set sharded table epoch db:" << db_id << " Table ID  " << physical_tb_id << " back to new epoch "
-                << new_epoch;
+      LOG(INFO) << "Set sharded table epoch db:" << db_id << " Table ID  "
+                << physical_tb_id << " back to new epoch " << new_epoch;
       removeChunks(physical_tb_id);
       dataMgr_->setTableEpoch(db_id, physical_tb_id, new_epoch);
     }
@@ -3196,7 +3462,9 @@ const ColumnDescriptor* Catalog::getDeletedColumn(const TableDescriptor* td) con
   return it != deletedColumnPerTable_.end() ? it->second : nullptr;
 }
 
-const bool Catalog::checkMetadataForDeletedRecs(int dbId, int tableId, int columnId) const {
+const bool Catalog::checkMetadataForDeletedRecs(int dbId,
+                                                int tableId,
+                                                int columnId) const {
   // check if there are rows deleted by examining metadata for the deletedColumn metadata
   ChunkKey chunkKeyPrefix = {dbId, tableId, columnId};
   std::vector<std::pair<ChunkKey, ChunkMetadata>> chunkMetadataVec;
@@ -3213,7 +3481,8 @@ const bool Catalog::checkMetadataForDeletedRecs(int dbId, int tableId, int colum
   return false;
 }
 
-const ColumnDescriptor* Catalog::getDeletedColumnIfRowsDeleted(const TableDescriptor* td) const {
+const ColumnDescriptor* Catalog::getDeletedColumnIfRowsDeleted(
+    const TableDescriptor* td) const {
   cat_read_lock read_lock(this);
 
   const auto it = deletedColumnPerTable_.find(td);
@@ -3233,12 +3502,14 @@ const ColumnDescriptor* Catalog::getDeletedColumnIfRowsDeleted(const TableDescri
       int32_t physical_tb_id = physicalTables[i];
       const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
       CHECK(phys_td);
-      if (checkMetadataForDeletedRecs(currentDB_.dbId, phys_td->tableId, cd->columnId))
+      if (checkMetadataForDeletedRecs(currentDB_.dbId, phys_td->tableId, cd->columnId)) {
         return cd;
+      }
     }
   } else {
-    if (checkMetadataForDeletedRecs(currentDB_.dbId, td->tableId, cd->columnId))
+    if (checkMetadataForDeletedRecs(currentDB_.dbId, td->tableId, cd->columnId)) {
       return cd;
+    }
   }
   // no deletes so far recorded in metadata
   return nullptr;
@@ -3249,7 +3520,8 @@ void Catalog::setDeletedColumn(const TableDescriptor* td, const ColumnDescriptor
   setDeletedColumnUnlocked(td, cd);
 }
 
-void Catalog::setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd) {
+void Catalog::setDeletedColumnUnlocked(const TableDescriptor* td,
+                                       const ColumnDescriptor* cd) {
   cat_write_lock write_lock(this);
   const auto it_ok = deletedColumnPerTable_.emplace(td, cd);
   CHECK(it_ok.second);
@@ -3257,7 +3529,9 @@ void Catalog::setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDe
 
 namespace {
 
-const ColumnDescriptor* get_foreign_col(const Catalog& cat, const Parser::SharedDictionaryDef& shared_dict_def) {
+const ColumnDescriptor* get_foreign_col(
+    const Catalog& cat,
+    const Parser::SharedDictionaryDef& shared_dict_def) {
   const auto& table_name = shared_dict_def.get_foreign_table();
   const auto td = cat.getMetadataForTable(table_name);
   CHECK(td);
@@ -3281,15 +3555,17 @@ void Catalog::addReferenceToForeignDict(ColumnDescriptor& referencing_column,
   CHECK_GE(dd->refcount, 1);
   ++dd->refcount;
   cat_sqlite_lock sqlite_lock(this);
-  sqliteConnector_.query_with_text_params("UPDATE mapd_dictionaries SET refcount = refcount + 1 WHERE dictid = ?",
-                                          {std::to_string(dict_id)});
+  sqliteConnector_.query_with_text_params(
+      "UPDATE mapd_dictionaries SET refcount = refcount + 1 WHERE dictid = ?",
+      {std::to_string(dict_id)});
 }
 
-bool Catalog::setColumnSharedDictionary(ColumnDescriptor& cd,
-                                        std::list<ColumnDescriptor>& cdd,
-                                        std::list<DictDescriptor>& dds,
-                                        const TableDescriptor td,
-                                        const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs) {
+bool Catalog::setColumnSharedDictionary(
+    ColumnDescriptor& cd,
+    std::list<ColumnDescriptor>& cdd,
+    std::list<DictDescriptor>& dds,
+    const TableDescriptor td,
+    const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs) {
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(this);
 
@@ -3303,30 +3579,37 @@ bool Catalog::setColumnSharedDictionary(ColumnDescriptor& cd,
       if (!shared_dict_def.get_foreign_table().compare(td.tableName)) {
         // Dictionaries are being shared in table to be created
         const auto& ref_column = shared_dict_def.get_foreign_column();
-        auto colIt = std::find_if(cdd.begin(), cdd.end(), [ref_column](const ColumnDescriptor it) {
-          return !ref_column.compare(it.columnName);
-        });
+        auto colIt =
+            std::find_if(cdd.begin(), cdd.end(), [ref_column](const ColumnDescriptor it) {
+              return !ref_column.compare(it.columnName);
+            });
         CHECK(colIt != cdd.end());
         cd.columnType = colIt->columnType;
 
         sqliteConnector_.query_with_text_params(
-            "SELECT dictid FROM mapd_dictionaries WHERE dictid in (select comp_param from "
+            "SELECT dictid FROM mapd_dictionaries WHERE dictid in (select comp_param "
+            "from "
             "mapd_columns "
             "where compression = ? and tableid = ? and columnid = ?)",
-            std::vector<std::string>{
-                std::to_string(kENCODING_DICT), std::to_string(td.tableId), std::to_string(colIt->columnId)});
+            std::vector<std::string>{std::to_string(kENCODING_DICT),
+                                     std::to_string(td.tableId),
+                                     std::to_string(colIt->columnId)});
         const auto dict_id = sqliteConnector_.getData<int>(0, 0);
-        auto dictIt = std::find_if(dds.begin(), dds.end(), [this, dict_id](const DictDescriptor it) {
-          return it.dictRef.dbId == this->currentDB_.dbId && it.dictRef.dictId == dict_id;
-        });
+        auto dictIt = std::find_if(
+            dds.begin(), dds.end(), [this, dict_id](const DictDescriptor it) {
+              return it.dictRef.dbId == this->currentDB_.dbId &&
+                     it.dictRef.dictId == dict_id;
+            });
         if (dictIt != dds.end()) {
           // There exists dictionary definition of a dictionary column
           CHECK_GE(dictIt->refcount, 1);
           ++dictIt->refcount;
           sqliteConnector_.query_with_text_params(
-              "UPDATE mapd_dictionaries SET refcount = refcount + 1 WHERE dictid = ?", {std::to_string(dict_id)});
+              "UPDATE mapd_dictionaries SET refcount = refcount + 1 WHERE dictid = ?",
+              {std::to_string(dict_id)});
         } else {
-          // The dictionary is referencing a column which is referencing a column in diffrent table
+          // The dictionary is referencing a column which is referencing a column in
+          // diffrent table
           auto root_dict_def = compress_reference_path(shared_dict_def, shared_dict_defs);
           addReferenceToForeignDict(cd, root_dict_def);
         }
@@ -3352,16 +3635,27 @@ void Catalog::setColumnDictionary(ColumnDescriptor& cd,
     cat_sqlite_lock sqlite_lock(this);
 
     sqliteConnector_.query_with_text_params(
-        "INSERT INTO mapd_dictionaries (name, nbits, is_shared, refcount) VALUES (?, ?, ?, 1)",
-        std::vector<std::string>{dictName, std::to_string(cd.columnType.get_comp_param()), "0"});
-    sqliteConnector_.query_with_text_param("SELECT dictid FROM mapd_dictionaries WHERE name = ?", dictName);
+        "INSERT INTO mapd_dictionaries (name, nbits, is_shared, refcount) VALUES (?, ?, "
+        "?, 1)",
+        std::vector<std::string>{
+            dictName, std::to_string(cd.columnType.get_comp_param()), "0"});
+    sqliteConnector_.query_with_text_param(
+        "SELECT dictid FROM mapd_dictionaries WHERE name = ?", dictName);
     dictId = sqliteConnector_.getData<int>(0, 0);
     dictName = td.tableName + "_" + cd.columnName + "_dict" + std::to_string(dictId);
-    sqliteConnector_.query_with_text_param("UPDATE mapd_dictionaries SET name = ? WHERE name = 'Initial_key'",
-                                           dictName);
-    folderPath = basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) + "_DICT_" + std::to_string(dictId);
+    sqliteConnector_.query_with_text_param(
+        "UPDATE mapd_dictionaries SET name = ? WHERE name = 'Initial_key'", dictName);
+    folderPath = basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) +
+                 "_DICT_" + std::to_string(dictId);
   }
-  DictDescriptor dd(currentDB_.dbId, dictId, dictName, cd.columnType.get_comp_param(), false, 1, folderPath, false);
+  DictDescriptor dd(currentDB_.dbId,
+                    dictId,
+                    dictName,
+                    cd.columnType.get_comp_param(),
+                    false,
+                    1,
+                    folderPath,
+                    false);
   dds.push_back(dd);
   if (!cd.columnType.is_array()) {
     cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
@@ -3369,12 +3663,14 @@ void Catalog::setColumnDictionary(ColumnDescriptor& cd,
   cd.columnType.set_comp_param(dictId);
 }
 
-void Catalog::createShardedTable(TableDescriptor& td,
-                                 const list<ColumnDescriptor>& cols,
-                                 const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs) {
-  if (td.nShards > 0 && (td.shardedColumnId <= 0 || static_cast<size_t>(td.shardedColumnId) > cols.size())) {
-    std::string error_message{"Invalid sharding column for table " + td.tableName + " of database " +
-                              currentDB_.dbName};
+void Catalog::createShardedTable(
+    TableDescriptor& td,
+    const list<ColumnDescriptor>& cols,
+    const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs) {
+  if (td.nShards > 0 && (td.shardedColumnId <= 0 ||
+                         static_cast<size_t>(td.shardedColumnId) > cols.size())) {
+    std::string error_message{"Invalid sharding column for table " + td.tableName +
+                              " of database " + currentDB_.dbName};
     throw runtime_error(error_message);
   }
 
@@ -3400,7 +3696,8 @@ void Catalog::createShardedTable(TableDescriptor& td,
 
   if (!physicalTables.empty()) {
     /* add logical to physical tables correspondence to the map */
-    const auto it_ok = logicalToPhysicalTableMapById_.emplace(logical_tb_id, physicalTables);
+    const auto it_ok =
+        logicalToPhysicalTableMapById_.emplace(logical_tb_id, physicalTables);
     CHECK(it_ok.second);
     /* update sqlite mapd_logical_to_physical in sqlite database */
     updateLogicalToPhysicalTableMap(logical_tb_id);
@@ -3453,8 +3750,9 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
   // delete all column descriptors for the table
   for (const auto& columnDescriptor : columnDescriptorMapById_) {
     auto cd = columnDescriptor.second;
-    if (cd->tableId != td->tableId)
+    if (cd->tableId != td->tableId) {
       continue;
+    }
     const int dict_id = cd->columnType.get_comp_param();
     // Dummy dictionaries created for a shard of a logical table have the id set to zero.
     if (cd->columnType.get_compression() == kENCODING_DICT && dict_id) {
@@ -3471,12 +3769,18 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
         if (client) {
           client->drop(dd->dictRef);
         }
-        if (!dd->dictIsTemp)
+        if (!dd->dictIsTemp) {
           boost::filesystem::create_directory(dd->dictFolderPath);
+        }
       }
 
-      DictDescriptor* new_dd = new DictDescriptor(
-          dd->dictRef, dd->dictName, dd->dictNBits, dd->dictIsShared, dd->refcount, dd->dictFolderPath, dd->dictIsTemp);
+      DictDescriptor* new_dd = new DictDescriptor(dd->dictRef,
+                                                  dd->dictName,
+                                                  dd->dictNBits,
+                                                  dd->dictIsShared,
+                                                  dd->refcount,
+                                                  dd->dictFolderPath,
+                                                  dd->dictIsTemp);
       dictDescriptorMapByRef_.erase(dictIt);
       // now create new Dict -- need to figure out what to do here for temp tables
       if (client) {
@@ -3518,7 +3822,8 @@ void Catalog::dropTable(const TableDescriptor* td) {
   SqliteConnector* sys_conn = SysCatalog::instance().getSqliteConnector();
   SqliteConnector* drop_conn = sys_conn;
   sys_conn->query("BEGIN TRANSACTION");
-  bool is_system_db = currentDB_.dbName == MAPD_SYSTEM_DB;  // whether we need two connectors or not
+  bool is_system_db =
+      currentDB_.dbName == MAPD_SYSTEM_DB;  // whether we need two connectors or not
   if (!is_system_db) {
     drop_conn = &sqliteConnector_;
     drop_conn->query("BEGIN TRANSACTION");
@@ -3538,8 +3843,9 @@ void Catalog::dropTable(const TableDescriptor* td) {
 
       // remove corresponding record from the logicalToPhysicalTableMap in sqlite database
 
-      drop_conn->query_with_text_param("DELETE FROM mapd_logical_to_physical WHERE logical_table_id = ?",
-                                       std::to_string(td->tableId));
+      drop_conn->query_with_text_param(
+          "DELETE FROM mapd_logical_to_physical WHERE logical_table_id = ?",
+          std::to_string(td->tableId));
       logicalToPhysicalTableMapById_.erase(td->tableId);
     }
     doDropTable(td, drop_conn);
@@ -3561,25 +3867,32 @@ void Catalog::doDropTable(const TableDescriptor* td, SqliteConnector* conn) {
   bool view = td->isView;
 
   const int tableId = td->tableId;
-  conn->query_with_text_param("DELETE FROM mapd_tables WHERE tableid = ?", std::to_string(tableId));
-  conn->query_with_text_params("select comp_param from mapd_columns where compression = ? and tableid = ?",
-                               std::vector<std::string>{std::to_string(kENCODING_DICT), std::to_string(tableId)});
+  conn->query_with_text_param("DELETE FROM mapd_tables WHERE tableid = ?",
+                              std::to_string(tableId));
+  conn->query_with_text_params(
+      "select comp_param from mapd_columns where compression = ? and tableid = ?",
+      std::vector<std::string>{std::to_string(kENCODING_DICT), std::to_string(tableId)});
   int numRows = conn->getNumRows();
   std::vector<int> dict_id_list;
   for (int r = 0; r < numRows; ++r) {
     dict_id_list.push_back(conn->getData<int>(r, 0));
   }
   for (auto dict_id : dict_id_list) {
-    conn->query_with_text_params("UPDATE mapd_dictionaries SET refcount = refcount - 1 WHERE dictid = ?",
-                                 std::vector<std::string>{std::to_string(dict_id)});
+    conn->query_with_text_params(
+        "UPDATE mapd_dictionaries SET refcount = refcount - 1 WHERE dictid = ?",
+        std::vector<std::string>{std::to_string(dict_id)});
   }
   conn->query_with_text_params(
-      "DELETE FROM mapd_dictionaries WHERE dictid in (select comp_param from mapd_columns where compression = ? "
+      "DELETE FROM mapd_dictionaries WHERE dictid in (select comp_param from "
+      "mapd_columns where compression = ? "
       "and tableid = ?) and refcount = 0",
       std::vector<std::string>{std::to_string(kENCODING_DICT), std::to_string(tableId)});
-  conn->query_with_text_param("DELETE FROM mapd_columns WHERE tableid = ?", std::to_string(tableId));
-  if (td->isView)
-    conn->query_with_text_param("DELETE FROM mapd_views WHERE tableid = ?", std::to_string(tableId));
+  conn->query_with_text_param("DELETE FROM mapd_columns WHERE tableid = ?",
+                              std::to_string(tableId));
+  if (td->isView) {
+    conn->query_with_text_param("DELETE FROM mapd_views WHERE tableid = ?",
+                                std::to_string(tableId));
+  }
   // must destroy fragmenter before deleteChunks is called.
   if (td->fragmenter != nullptr) {
     auto tableDescIt = tableDescriptorMapById_.find(tableId);
@@ -3606,14 +3919,16 @@ void Catalog::renamePhysicalTable(const TableDescriptor* td, const string& newTa
 
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_.query_with_text_params("UPDATE mapd_tables SET name = ? WHERE tableid = ?",
-                                            std::vector<std::string>{newTableName, std::to_string(td->tableId)});
+    sqliteConnector_.query_with_text_params(
+        "UPDATE mapd_tables SET name = ? WHERE tableid = ?",
+        std::vector<std::string>{newTableName, std::to_string(td->tableId)});
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
-  TableDescriptorMap::iterator tableDescIt = tableDescriptorMap_.find(to_upper(td->tableName));
+  TableDescriptorMap::iterator tableDescIt =
+      tableDescriptorMap_.find(to_upper(td->tableName));
   CHECK(tableDescIt != tableDescriptorMap_.end());
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
   // Get table descriptor to change it
@@ -3636,21 +3951,25 @@ void Catalog::renameTable(const TableDescriptor* td, const string& newTableName)
       int32_t physical_tb_id = physicalTables[i];
       const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
       CHECK(phys_td);
-      std::string newPhysTableName = generatePhysicalTableName(newTableName, static_cast<int32_t>(i + 1));
+      std::string newPhysTableName =
+          generatePhysicalTableName(newTableName, static_cast<int32_t>(i + 1));
       renamePhysicalTable(phys_td, newPhysTableName);
     }
   }
   renamePhysicalTable(td, newTableName);
 }
 
-void Catalog::renameColumn(const TableDescriptor* td, const ColumnDescriptor* cd, const string& newColumnName) {
+void Catalog::renameColumn(const TableDescriptor* td,
+                           const ColumnDescriptor* cd,
+                           const string& newColumnName) {
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query_with_text_params(
         "UPDATE mapd_columns SET name = ? WHERE tableid = ? AND columnid = ?",
-        std::vector<std::string>{newColumnName, std::to_string(td->tableId), std::to_string(cd->columnId)});
+        std::vector<std::string>{
+            newColumnName, std::to_string(td->tableId), std::to_string(cd->columnId)});
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
@@ -3673,23 +3992,32 @@ int32_t Catalog::createFrontendView(FrontendViewDescriptor& vd) {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     // TODO(andrew): this should be an upsert
-    sqliteConnector_.query_with_text_params("SELECT id FROM mapd_dashboards WHERE name = ? and userid = ?",
-                                            std::vector<std::string>{vd.viewName, std::to_string(vd.userId)});
+    sqliteConnector_.query_with_text_params(
+        "SELECT id FROM mapd_dashboards WHERE name = ? and userid = ?",
+        std::vector<std::string>{vd.viewName, std::to_string(vd.userId)});
     if (sqliteConnector_.getNumRows() > 0) {
       sqliteConnector_.query_with_text_params(
-          "UPDATE mapd_dashboards SET state = ?, image_hash = ?, metadata = ?, update_time = "
+          "UPDATE mapd_dashboards SET state = ?, image_hash = ?, metadata = ?, "
+          "update_time = "
           "datetime('now') where name = ? "
           "and userid = ?",
-          std::vector<std::string>{
-              vd.viewState, vd.imageHash, vd.viewMetadata, vd.viewName, std::to_string(vd.userId)});
+          std::vector<std::string>{vd.viewState,
+                                   vd.imageHash,
+                                   vd.viewMetadata,
+                                   vd.viewName,
+                                   std::to_string(vd.userId)});
     } else {
       sqliteConnector_.query_with_text_params(
-          "INSERT INTO mapd_dashboards (name, state, image_hash, metadata, update_time, userid) "
+          "INSERT INTO mapd_dashboards (name, state, image_hash, metadata, update_time, "
+          "userid) "
           "VALUES "
           "(?,?,?,?, "
           "datetime('now'), ?)",
-          std::vector<std::string>{
-              vd.viewName, vd.viewState, vd.imageHash, vd.viewMetadata, std::to_string(vd.userId)});
+          std::vector<std::string>{vd.viewName,
+                                   vd.viewState,
+                                   vd.imageHash,
+                                   vd.viewMetadata,
+                                   std::to_string(vd.userId)});
     }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -3718,17 +4046,24 @@ void Catalog::replaceDashboard(FrontendViewDescriptor& vd) {
 
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_.query_with_text_params("SELECT id FROM mapd_dashboards WHERE id = ?",
-                                            std::vector<std::string>{std::to_string(vd.viewId)});
+    sqliteConnector_.query_with_text_params(
+        "SELECT id FROM mapd_dashboards WHERE id = ?",
+        std::vector<std::string>{std::to_string(vd.viewId)});
     if (sqliteConnector_.getNumRows() > 0) {
       sqliteConnector_.query_with_text_params(
-          "UPDATE mapd_dashboards SET name = ?, state = ?, image_hash = ?, metadata = ?, update_time = "
+          "UPDATE mapd_dashboards SET name = ?, state = ?, image_hash = ?, metadata = ?, "
+          "update_time = "
           "datetime('now') where id = ? ",
-          std::vector<std::string>{
-              vd.viewName, vd.viewState, vd.imageHash, vd.viewMetadata, std::to_string(vd.viewId)});
+          std::vector<std::string>{vd.viewName,
+                                   vd.viewState,
+                                   vd.imageHash,
+                                   vd.viewMetadata,
+                                   std::to_string(vd.viewId)});
     } else {
-      LOG(ERROR) << "Error replacing dashboard id " << vd.viewId << " does not exist in db";
-      throw runtime_error("Error replacing dashboard id " + std::to_string(vd.viewId) + " does not exist in db");
+      LOG(ERROR) << "Error replacing dashboard id " << vd.viewId
+                 << " does not exist in db";
+      throw runtime_error("Error replacing dashboard id " + std::to_string(vd.viewId) +
+                          " does not exist in db");
     }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -3741,11 +4076,14 @@ void Catalog::replaceDashboard(FrontendViewDescriptor& vd) {
     auto dash = descp.second.get();
     if (dash->viewId == vd.viewId) {
       found = true;
-      auto viewDescIt = dashboardDescriptorMap_.find(std::to_string(dash->userId) + ":" + dash->viewName);
-      if (viewDescIt == dashboardDescriptorMap_.end()) {  // check to make sure view exists
-        LOG(ERROR) << "No metadata for dashboard for user " << dash->userId << " dashboard " << dash->viewName
-                   << " does not exist in map";
-        throw runtime_error("No metadata for dashboard for user " + std::to_string(dash->userId) + " dashboard " +
+      auto viewDescIt = dashboardDescriptorMap_.find(std::to_string(dash->userId) + ":" +
+                                                     dash->viewName);
+      if (viewDescIt ==
+          dashboardDescriptorMap_.end()) {  // check to make sure view exists
+        LOG(ERROR) << "No metadata for dashboard for user " << dash->userId
+                   << " dashboard " << dash->viewName << " does not exist in map";
+        throw runtime_error("No metadata for dashboard for user " +
+                            std::to_string(dash->userId) + " dashboard " +
                             dash->viewName + " does not exist in map");
       }
       dashboardDescriptorMap_.erase(viewDescIt);
@@ -3753,13 +4091,16 @@ void Catalog::replaceDashboard(FrontendViewDescriptor& vd) {
     }
   }
   if (!found) {
-    LOG(ERROR) << "Error replacing dashboard id " << vd.viewId << " does not exist in map";
-    throw runtime_error("Error replacing dashboard id " + std::to_string(vd.viewId) + " does not exist in map");
+    LOG(ERROR) << "Error replacing dashboard id " << vd.viewId
+               << " does not exist in map";
+    throw runtime_error("Error replacing dashboard id " + std::to_string(vd.viewId) +
+                        " does not exist in map");
   }
 
   // now reload the object
   sqliteConnector_.query_with_text_params(
-      "SELECT id, strftime('%Y-%m-%dT%H:%M:%SZ', update_time)  FROM mapd_dashboards WHERE id = ?",
+      "SELECT id, strftime('%Y-%m-%dT%H:%M:%SZ', update_time)  FROM mapd_dashboards "
+      "WHERE id = ?",
       std::vector<std::string>{std::to_string(vd.viewId)});
   vd.updateTime = sqliteConnector_.getData<string>(0, 1);
   addFrontendViewToMapNoLock(vd);
@@ -3782,22 +4123,29 @@ std::string Catalog::createLink(LinkDescriptor& ld, size_t min_length) {
   cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    ld.link = calculateSHA1(ld.viewState + ld.viewMetadata + std::to_string(ld.userId)).substr(0, 8);
-    sqliteConnector_.query_with_text_params("SELECT linkid FROM mapd_links WHERE link = ? and userid = ?",
-                                            std::vector<std::string>{ld.link, std::to_string(ld.userId)});
+    ld.link = calculateSHA1(ld.viewState + ld.viewMetadata + std::to_string(ld.userId))
+                  .substr(0, 8);
+    sqliteConnector_.query_with_text_params(
+        "SELECT linkid FROM mapd_links WHERE link = ? and userid = ?",
+        std::vector<std::string>{ld.link, std::to_string(ld.userId)});
     if (sqliteConnector_.getNumRows() > 0) {
       sqliteConnector_.query_with_text_params(
-          "UPDATE mapd_links SET update_time = datetime('now') WHERE userid = ? AND link = ?",
+          "UPDATE mapd_links SET update_time = datetime('now') WHERE userid = ? AND link "
+          "= ?",
           std::vector<std::string>{std::to_string(ld.userId), ld.link});
     } else {
       sqliteConnector_.query_with_text_params(
-          "INSERT INTO mapd_links (userid, link, view_state, view_metadata, update_time) VALUES (?,?,?,?, "
+          "INSERT INTO mapd_links (userid, link, view_state, view_metadata, update_time) "
+          "VALUES (?,?,?,?, "
           "datetime('now'))",
-          std::vector<std::string>{std::to_string(ld.userId), ld.link, ld.viewState, ld.viewMetadata});
+          std::vector<std::string>{
+              std::to_string(ld.userId), ld.link, ld.viewState, ld.viewMetadata});
     }
     // now get the auto generated viewid
     sqliteConnector_.query_with_text_param(
-        "SELECT linkid, strftime('%Y-%m-%dT%H:%M:%SZ', update_time) FROM mapd_links WHERE link = ?", ld.link);
+        "SELECT linkid, strftime('%Y-%m-%dT%H:%M:%SZ', update_time) FROM mapd_links "
+        "WHERE link = ?",
+        ld.link);
     ld.linkId = sqliteConnector_.getData<int>(0, 0);
     ld.updateTime = sqliteConnector_.getData<std::string>(0, 1);
   } catch (std::exception& e) {
@@ -3812,7 +4160,8 @@ std::string Catalog::createLink(LinkDescriptor& ld, size_t min_length) {
 std::vector<const TableDescriptor*> Catalog::getPhysicalTablesDescriptors(
     const TableDescriptor* logicalTableDesc) const {
   cat_read_lock read_lock(this);
-  const auto physicalTableIt = logicalToPhysicalTableMapById_.find(logicalTableDesc->tableId);
+  const auto physicalTableIt =
+      logicalToPhysicalTableMapById_.find(logicalTableDesc->tableId);
   if (physicalTableIt == logicalToPhysicalTableMapById_.end()) {
     return {logicalTableDesc};
   }
@@ -3828,23 +4177,30 @@ std::vector<const TableDescriptor*> Catalog::getPhysicalTablesDescriptors(
 }
 
 int Catalog::getLogicalTableId(const int physicalTableId) const {
-  for (const auto& l : logicalToPhysicalTableMapById_)
-    if (l.second.end() != std::find_if(l.second.begin(), l.second.end(), [&](decltype(*l.second.begin()) tid) -> bool {
-          return physicalTableId == tid;
-        }))
+  for (const auto& l : logicalToPhysicalTableMapById_) {
+    if (l.second.end() != std::find_if(l.second.begin(),
+                                       l.second.end(),
+                                       [&](decltype(*l.second.begin()) tid) -> bool {
+                                         return physicalTableId == tid;
+                                       })) {
       return l.first;
+    }
+  }
   return physicalTableId;
 }
 
 void Catalog::checkpoint(const int logicalTableId) const {
   const auto td = getMetadataForTable(logicalTableId);
   const auto shards = getPhysicalTablesDescriptors(td);
-  for (const auto shard : shards)
+  for (const auto shard : shards) {
     get_dataMgr().checkpoint(get_currentDB().dbId, shard->tableId);
+  }
 }
 
-std::string Catalog::generatePhysicalTableName(const std::string& logicalTableName, const int32_t& shardNumber) {
-  std::string physicalTableName = logicalTableName + physicalTableNameTag_ + std::to_string(shardNumber);
+std::string Catalog::generatePhysicalTableName(const std::string& logicalTableName,
+                                               const int32_t& shardNumber) {
+  std::string physicalTableName =
+      logicalTableName + physicalTableNameTag_ + std::to_string(shardNumber);
   return (physicalTableName);
 }
 
@@ -3925,7 +4281,8 @@ void SysCatalog::grantDBObjectPrivileges(const std::string& roleName,
                                          const Catalog_Namespace::Catalog& catalog) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
-  execInTransaction(&SysCatalog::grantDBObjectPrivileges_unsafe, roleName, object, catalog);
+  execInTransaction(
+      &SysCatalog::grantDBObjectPrivileges_unsafe, roleName, object, catalog);
 }
 
 void SysCatalog::revokeDBObjectPrivileges(const std::string& roleName,
@@ -3933,7 +4290,8 @@ void SysCatalog::revokeDBObjectPrivileges(const std::string& roleName,
                                           const Catalog_Namespace::Catalog& catalog) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
-  execInTransaction(&SysCatalog::revokeDBObjectPrivileges_unsafe, roleName, object, catalog);
+  execInTransaction(
+      &SysCatalog::revokeDBObjectPrivileges_unsafe, roleName, object, catalog);
 }
 
-}  // Catalog_Namespace
+}  // namespace Catalog_Namespace

@@ -49,6 +49,6 @@ class GpuCudaBuffer : public Buffer {
   // int gpuNum_;
   CudaMgr_Namespace::CudaMgr* cudaMgr_;
 };
-}  // Buffer_Namespace
+}  // namespace Buffer_Namespace
 
 #endif  // GPUCUDABUFFER_H

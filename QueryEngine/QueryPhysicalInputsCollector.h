@@ -33,17 +33,21 @@ struct PhysicalInput {
   int col_id;
   int table_id;
 
-  bool operator==(const PhysicalInput& that) const { return col_id == that.col_id && table_id == that.table_id; }
+  bool operator==(const PhysicalInput& that) const {
+    return col_id == that.col_id && table_id == that.table_id;
+  }
 };
 
 namespace std {
 
 template <>
 struct hash<PhysicalInput> {
-  size_t operator()(const PhysicalInput& phys_input) const { return phys_input.col_id ^ phys_input.table_id; }
+  size_t operator()(const PhysicalInput& phys_input) const {
+    return phys_input.col_id ^ phys_input.table_id;
+  }
 };
 
-}  // std
+}  // namespace std
 
 std::unordered_set<PhysicalInput> get_physical_inputs(const RelAlgNode*);
 std::unordered_set<int> get_physical_table_inputs(const RelAlgNode*);

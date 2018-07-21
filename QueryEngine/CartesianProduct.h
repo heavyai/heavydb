@@ -24,11 +24,13 @@
 
 #include <boost/iterator/iterator_facade.hpp>
 
-//! Class iterating over the Cartesian product of a forward iterable container of forward iterable containers
+//! Class iterating over the Cartesian product of a forward iterable container of forward
+//! iterable containers
 template <typename T>
-class CartesianProductIterator : public boost::iterator_facade<CartesianProductIterator<T>,
-                                                               std::vector<typename T::value_type::value_type> const,
-                                                               boost::forward_traversal_tag> {
+class CartesianProductIterator
+    : public boost::iterator_facade<CartesianProductIterator<T>,
+                                    std::vector<typename T::value_type::value_type> const,
+                                    boost::forward_traversal_tag> {
  public:
   //! Delete default constructor
   CartesianProductIterator() = delete;
@@ -36,8 +38,9 @@ class CartesianProductIterator : public boost::iterator_facade<CartesianProductI
   //! Constructor setting the underlying iterator and position
   /*!
    * \param[in] structure The underlying structure
-   * \param[in] pos The position the iterator should be initialized to.  std::numeric_limits<std::size_t>::max()stands
-   * for the end, the position after the last element.
+   * \param[in] pos The position the iterator should be initialized to.
+   * std::numeric_limits<std::size_t>::max()stands for the end, the position after the
+   * last element.
    */
   explicit CartesianProductIterator(T const& structure, std::size_t pos);
 
@@ -83,7 +86,8 @@ class CartesianProductIterator : public boost::iterator_facade<CartesianProductI
 
   //! Used for returning references
   /*!
-   * We initialize with one empty element, so that we only need to add more elements in increment().
+   * We initialize with one empty element, so that we only need to add more elements in
+   * increment().
    */
   mutable std::vector<std::vector<Content>> result_{std::vector<Content>()};
 
@@ -92,7 +96,8 @@ class CartesianProductIterator : public boost::iterator_facade<CartesianProductI
 };
 
 template <typename T>
-CartesianProductIterator<T>::CartesianProductIterator(OuterContainer const& structure, std::size_t pos)
+CartesianProductIterator<T>::CartesianProductIterator(OuterContainer const& structure,
+                                                      std::size_t pos)
     : structure_(structure) {
   for (auto& entry : structure_) {
     cbegins_.push_back(entry.cbegin());
@@ -148,7 +153,8 @@ void CartesianProductIterator<T>::increment() {
 }
 
 template <typename T>
-std::vector<typename T::value_type::value_type> const& CartesianProductIterator<T>::dereference() const {
+std::vector<typename T::value_type::value_type> const&
+CartesianProductIterator<T>::dereference() const {
   if (absolutePosition_ == std::numeric_limits<std::size_t>::max()) {
     throw new std::out_of_range("Out of bound dereference in CartesianProductIterator\n");
   }
@@ -168,7 +174,8 @@ bool CartesianProductIterator<T>::equal(CartesianProductIterator<T> const& other
   return absolutePosition_ == other.absolutePosition_ && structure_ == other.structure_;
 }
 
-//! Class that turns a forward iterable container of forward iterable containers into a forward iterable container which
+//! Class that turns a forward iterable container of forward iterable containers into a
+//! forward iterable container which
 // iterates over the Cartesian product of the forward iterable containers
 template <typename T>
 class CartesianProduct {

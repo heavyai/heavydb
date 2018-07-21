@@ -47,7 +47,9 @@ enum class ExtArgumentType {
 
 class ExtensionFunction {
  public:
-  ExtensionFunction(const std::string& name, const std::vector<ExtArgumentType>& args, const ExtArgumentType ret)
+  ExtensionFunction(const std::string& name,
+                    const std::vector<ExtArgumentType>& args,
+                    const ExtArgumentType ret)
       : name_(name), args_(args), ret_(ret) {}
 
   const std::string& getName() const { return name_; }

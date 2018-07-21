@@ -75,25 +75,26 @@ Executor::Executor(const int db_id,
                    const std::string& debug_dir,
                    const std::string& debug_file,
                    ::QueryRenderer::QueryRenderManager* render_manager)
-    : cgen_state_(new CgenState({}, false, false)),
-      is_nested_(false),
-      gpu_active_modules_device_mask_(0x0),
-      interrupted_(false),
-      render_manager_(render_manager),
-      block_size_x_(block_size_x),
-      grid_size_x_(grid_size_x),
-      debug_dir_(debug_dir),
-      debug_file_(debug_file),
-      db_id_(db_id),
-      catalog_(nullptr),
-      temporary_tables_(nullptr),
-      input_table_info_cache_(this) {}
+    : cgen_state_(new CgenState({}, false, false))
+    , is_nested_(false)
+    , gpu_active_modules_device_mask_(0x0)
+    , interrupted_(false)
+    , render_manager_(render_manager)
+    , block_size_x_(block_size_x)
+    , grid_size_x_(grid_size_x)
+    , debug_dir_(debug_dir)
+    , debug_file_(debug_file)
+    , db_id_(db_id)
+    , catalog_(nullptr)
+    , temporary_tables_(nullptr)
+    , input_table_info_cache_(this) {}
 
-std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
-                                                const std::string& debug_dir,
-                                                const std::string& debug_file,
-                                                const MapDParameters mapd_parameters,
-                                                ::QueryRenderer::QueryRenderManager* render_manager) {
+std::shared_ptr<Executor> Executor::getExecutor(
+    const int db_id,
+    const std::string& debug_dir,
+    const std::string& debug_file,
+    const MapDParameters mapd_parameters,
+    ::QueryRenderer::QueryRenderManager* render_manager) {
   INJECT_TIMER(getExecutor);
   const auto executor_key = std::make_pair(db_id, render_manager);
   {
@@ -109,17 +110,22 @@ std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
     if (it != executors_.end()) {
       return it->second;
     }
-    auto executor = std::make_shared<Executor>(
-        db_id, mapd_parameters.cuda_block_size, mapd_parameters.cuda_grid_size, debug_dir, debug_file, render_manager);
+    auto executor = std::make_shared<Executor>(db_id,
+                                               mapd_parameters.cuda_block_size,
+                                               mapd_parameters.cuda_grid_size,
+                                               debug_dir,
+                                               debug_file,
+                                               render_manager);
     auto it_ok = executors_.insert(std::make_pair(executor_key, executor));
     CHECK(it_ok.second);
     return executor;
   }
 }
 
-StringDictionaryProxy* Executor::getStringDictionaryProxy(const int dict_id_in,
-                                                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                                          const bool with_generation) const {
+StringDictionaryProxy* Executor::getStringDictionaryProxy(
+    const int dict_id_in,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const bool with_generation) const {
   const int dict_id{dict_id_in < 0 ? REGULAR_DICT(dict_id_in) : dict_id_in};
   CHECK(catalog_);
   const auto dd = catalog_->getMetadataForDict(dict_id);
@@ -128,12 +134,15 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(const int dict_id_in,
     CHECK(dd->stringDict);
     CHECK_LE(dd->dictNBits, 32);
     CHECK(row_set_mem_owner);
-    const auto generation = with_generation ? string_dictionary_generations_.getGeneration(dict_id) : ssize_t(-1);
+    const auto generation = with_generation
+                                ? string_dictionary_generations_.getGeneration(dict_id)
+                                : ssize_t(-1);
     return row_set_mem_owner->addStringDict(dd->stringDict, dict_id, generation);
   }
   CHECK_EQ(0, dict_id);
   if (!lit_str_dict_proxy_) {
-    std::shared_ptr<StringDictionary> tsd = std::make_shared<StringDictionary>("", false, true);
+    std::shared_ptr<StringDictionary> tsd =
+        std::make_shared<StringDictionary>("", false, true);
     lit_str_dict_proxy_.reset(new StringDictionaryProxy(tsd, 0));
   }
   return lit_str_dict_proxy_.get();
@@ -144,8 +153,10 @@ bool Executor::isCPUOnly() const {
   return !catalog_->get_dataMgr().cudaMgr_;
 }
 
-const ColumnDescriptor* Executor::getColumnDescriptor(const Analyzer::ColumnVar* col_var) const {
-  return get_column_descriptor_maybe(col_var->get_column_id(), col_var->get_table_id(), *catalog_);
+const ColumnDescriptor* Executor::getColumnDescriptor(
+    const Analyzer::ColumnVar* col_var) const {
+  return get_column_descriptor_maybe(
+      col_var->get_column_id(), col_var->get_table_id(), *catalog_);
 }
 
 const Catalog_Namespace::Catalog* Executor::getCatalog() const {
@@ -179,8 +190,9 @@ void Executor::clearMetaInfoCache() {
   table_generations_.clear();
 }
 
-std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Executor::LiteralValues>& literals,
-                                                const int device_id) {
+std::vector<int8_t> Executor::serializeLiterals(
+    const std::unordered_map<int, Executor::LiteralValues>& literals,
+    const int device_id) {
   if (literals.empty()) {
     return {};
   }
@@ -215,12 +227,13 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
     } else if (lit.which() == 11) {
       const auto p = boost::get<std::pair<std::vector<int8_t>, int>>(&lit);
       CHECK(p);
-      if (p->second == 64)
+      if (p->second == 64) {
         align64_int8_array_literals.push_back(p->first);
-      else if (p->second == 32)
+      } else if (p->second == 32) {
         align32_int8_array_literals.push_back(p->first);
-      else
+      } else {
         CHECK(false);
+      }
     }
   }
   if (lit_buf_size > static_cast<size_t>(std::numeric_limits<int16_t>::max())) {
@@ -231,37 +244,46 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
     CHECK_LE(real_str.size(), static_cast<size_t>(std::numeric_limits<int16_t>::max()));
     lit_buf_size += real_str.size();
   }
-  if (double_array_literals.size() > 0)
+  if (double_array_literals.size() > 0) {
     lit_buf_size = align(lit_buf_size, sizeof(double));
+  }
   int16_t crt_double_arr_lit_off = lit_buf_size;
   for (const auto& double_array_literal : double_array_literals) {
-    CHECK_LE(double_array_literal.size(), static_cast<size_t>(std::numeric_limits<int16_t>::max()));
+    CHECK_LE(double_array_literal.size(),
+             static_cast<size_t>(std::numeric_limits<int16_t>::max()));
     lit_buf_size += double_array_literal.size() * sizeof(double);
   }
-  if (align64_int8_array_literals.size() > 0)
+  if (align64_int8_array_literals.size() > 0) {
     lit_buf_size = align(lit_buf_size, sizeof(uint64_t));
+  }
   int16_t crt_align64_int8_arr_lit_off = lit_buf_size;
   for (const auto& align64_int8_array_literal : align64_int8_array_literals) {
-    CHECK_LE(align64_int8_array_literals.size(), static_cast<size_t>(std::numeric_limits<int16_t>::max()));
+    CHECK_LE(align64_int8_array_literals.size(),
+             static_cast<size_t>(std::numeric_limits<int16_t>::max()));
     lit_buf_size += align64_int8_array_literal.size();
   }
-  if (int32_array_literals.size() > 0)
+  if (int32_array_literals.size() > 0) {
     lit_buf_size = align(lit_buf_size, sizeof(int32_t));
+  }
   int16_t crt_int32_arr_lit_off = lit_buf_size;
   for (const auto& int32_array_literal : int32_array_literals) {
-    CHECK_LE(int32_array_literal.size(), static_cast<size_t>(std::numeric_limits<int16_t>::max()));
+    CHECK_LE(int32_array_literal.size(),
+             static_cast<size_t>(std::numeric_limits<int16_t>::max()));
     lit_buf_size += int32_array_literal.size() * sizeof(int32_t);
   }
-  if (align32_int8_array_literals.size() > 0)
+  if (align32_int8_array_literals.size() > 0) {
     lit_buf_size = align(lit_buf_size, sizeof(int32_t));
+  }
   int16_t crt_align32_int8_arr_lit_off = lit_buf_size;
   for (const auto& align32_int8_array_literal : align32_int8_array_literals) {
-    CHECK_LE(align32_int8_array_literals.size(), static_cast<size_t>(std::numeric_limits<int16_t>::max()));
+    CHECK_LE(align32_int8_array_literals.size(),
+             static_cast<size_t>(std::numeric_limits<int16_t>::max()));
     lit_buf_size += align32_int8_array_literal.size();
   }
   int16_t crt_int8_arr_lit_off = lit_buf_size;
   for (const auto& int8_array_literal : int8_array_literals) {
-    CHECK_LE(int8_array_literal.size(), static_cast<size_t>(std::numeric_limits<int16_t>::max()));
+    CHECK_LE(int8_array_literal.size(),
+             static_cast<size_t>(std::numeric_limits<int16_t>::max()));
     lit_buf_size += int8_array_literal.size();
   }
   unsigned crt_real_str_idx = 0;
@@ -315,7 +337,8 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
       case 6: {
         const auto p = boost::get<std::pair<std::string, int>>(&lit);
         CHECK(p);
-        const auto str_id = getStringDictionaryProxy(p->second, row_set_mem_owner_, true)->getIdOfString(p->first);
+        const auto str_id = getStringDictionaryProxy(p->second, row_set_mem_owner_, true)
+                                ->getIdOfString(p->first);
         memcpy(&serialized[off - lit_bytes], &str_id, lit_bytes);
         break;
       }
@@ -341,7 +364,9 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
         off_and_len |= static_cast<int16_t>(len);
         int32_t double_array_bytesize = len * sizeof(double);
         memcpy(&serialized[off - lit_bytes], &off_and_len, lit_bytes);
-        memcpy(&serialized[crt_double_arr_lit_off], crt_double_arr_lit.data(), double_array_bytesize);
+        memcpy(&serialized[crt_double_arr_lit_off],
+               crt_double_arr_lit.data(),
+               double_array_bytesize);
         ++crt_double_arr_lit_idx;
         crt_double_arr_lit_off += double_array_bytesize;
         break;
@@ -356,7 +381,9 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
         off_and_len |= static_cast<int16_t>(len);
         int32_t int32_array_bytesize = len * sizeof(int32_t);
         memcpy(&serialized[off - lit_bytes], &off_and_len, lit_bytes);
-        memcpy(&serialized[crt_int32_arr_lit_off], crt_int32_arr_lit.data(), int32_array_bytesize);
+        memcpy(&serialized[crt_int32_arr_lit_off],
+               crt_int32_arr_lit.data(),
+               int32_array_bytesize);
         ++crt_int32_arr_lit_idx;
         crt_int32_arr_lit_off += int32_array_bytesize;
         break;
@@ -371,7 +398,9 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
         off_and_len |= static_cast<int16_t>(len);
         int32_t int8_array_bytesize = len;
         memcpy(&serialized[off - lit_bytes], &off_and_len, lit_bytes);
-        memcpy(&serialized[crt_int8_arr_lit_off], crt_int8_arr_lit.data(), int8_array_bytesize);
+        memcpy(&serialized[crt_int8_arr_lit_off],
+               crt_int8_arr_lit.data(),
+               int8_array_bytesize);
         ++crt_int8_arr_lit_idx;
         crt_int8_arr_lit_off += int8_array_bytesize;
         break;
@@ -381,26 +410,30 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
         CHECK(p);
         if (p->second == 64) {
           int32_t off_and_len = crt_align64_int8_arr_lit_off << 16;
-          const auto& crt_align64_int8_arr_lit = align64_int8_array_literals[crt_align64_int8_arr_lit_idx];
+          const auto& crt_align64_int8_arr_lit =
+              align64_int8_array_literals[crt_align64_int8_arr_lit_idx];
           int32_t len = crt_align64_int8_arr_lit.size();
           CHECK_EQ((len >> 16), 0);
           off_and_len |= static_cast<int16_t>(len);
           int32_t align64_int8_array_bytesize = len;
           memcpy(&serialized[off - lit_bytes], &off_and_len, lit_bytes);
-          memcpy(
-              &serialized[crt_align64_int8_arr_lit_off], crt_align64_int8_arr_lit.data(), align64_int8_array_bytesize);
+          memcpy(&serialized[crt_align64_int8_arr_lit_off],
+                 crt_align64_int8_arr_lit.data(),
+                 align64_int8_array_bytesize);
           ++crt_align64_int8_arr_lit_idx;
           crt_align64_int8_arr_lit_off += align64_int8_array_bytesize;
         } else if (p->second == 32) {
           int32_t off_and_len = crt_align32_int8_arr_lit_off << 16;
-          const auto& crt_align32_int8_arr_lit = align32_int8_array_literals[crt_align32_int8_arr_lit_idx];
+          const auto& crt_align32_int8_arr_lit =
+              align32_int8_array_literals[crt_align32_int8_arr_lit_idx];
           int32_t len = crt_align32_int8_arr_lit.size();
           CHECK_EQ((len >> 16), 0);
           off_and_len |= static_cast<int16_t>(len);
           int32_t align32_int8_array_bytesize = len;
           memcpy(&serialized[off - lit_bytes], &off_and_len, lit_bytes);
-          memcpy(
-              &serialized[crt_align32_int8_arr_lit_off], crt_align32_int8_arr_lit.data(), align32_int8_array_bytesize);
+          memcpy(&serialized[crt_align32_int8_arr_lit_off],
+                 crt_align32_int8_arr_lit.data(),
+                 align32_int8_array_bytesize);
           ++crt_align32_int8_arr_lit_idx;
           crt_align32_int8_arr_lit_off += align32_int8_array_bytesize;
         } else {
@@ -416,11 +449,14 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
 }
 
 int Executor::deviceCount(const ExecutorDeviceType device_type) const {
-  return device_type == ExecutorDeviceType::GPU ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount() : 1;
+  return device_type == ExecutorDeviceType::GPU
+             ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount()
+             : 1;
 }
 
 llvm::ConstantInt* Executor::inlineIntNull(const SQLTypeInfo& type_info) {
-  auto type = type_info.is_decimal() ? decimal_to_int_type(type_info) : type_info.get_type();
+  auto type =
+      type_info.is_decimal() ? decimal_to_int_type(type_info) : type_info.get_type();
   if (type_info.is_string()) {
     switch (type_info.get_compression()) {
       case kENCODING_DICT:
@@ -466,8 +502,9 @@ llvm::ConstantFP* Executor::inlineFpNull(const SQLTypeInfo& type_info) {
   }
 }
 
-std::pair<llvm::ConstantInt*, llvm::ConstantInt*> Executor::inlineIntMaxMin(const size_t byte_width,
-                                                                            const bool is_signed) {
+std::pair<llvm::ConstantInt*, llvm::ConstantInt*> Executor::inlineIntMaxMin(
+    const size_t byte_width,
+    const bool is_signed) {
   int64_t max_int{0}, min_int{0};
   if (is_signed) {
     std::tie(max_int, min_int) = inline_int_max_min(byte_width);
@@ -479,11 +516,14 @@ std::pair<llvm::ConstantInt*, llvm::ConstantInt*> Executor::inlineIntMaxMin(cons
   }
   switch (byte_width) {
     case 1:
-      return std::make_pair(ll_int(static_cast<int8_t>(max_int)), ll_int(static_cast<int8_t>(min_int)));
+      return std::make_pair(ll_int(static_cast<int8_t>(max_int)),
+                            ll_int(static_cast<int8_t>(min_int)));
     case 2:
-      return std::make_pair(ll_int(static_cast<int16_t>(max_int)), ll_int(static_cast<int16_t>(min_int)));
+      return std::make_pair(ll_int(static_cast<int16_t>(max_int)),
+                            ll_int(static_cast<int16_t>(min_int)));
     case 4:
-      return std::make_pair(ll_int(static_cast<int32_t>(max_int)), ll_int(static_cast<int32_t>(min_int)));
+      return std::make_pair(ll_int(static_cast<int32_t>(max_int)),
+                            ll_int(static_cast<int32_t>(min_int)));
     case 8:
       return std::make_pair(ll_int(max_int), ll_int(min_int));
     default:
@@ -508,7 +548,8 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
         if (ti.is_integer() || ti.is_decimal() || ti.is_time() || ti.is_boolean()) {
           int64_t agg_result = agg_init_val;
           for (size_t i = 0; i < out_vec_sz; ++i) {
-            if (detect_overflow_and_underflow(agg_result, out_vec[i], true, agg_init_val, ti)) {
+            if (detect_overflow_and_underflow(
+                    agg_result, out_vec[i], true, agg_init_val, ti)) {
               return {0, error_no};
             }
             agg_sum_skip_val(&agg_result, out_vec[i], agg_init_val);
@@ -520,21 +561,24 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
             case 4: {
               int agg_result = static_cast<int32_t>(agg_init_val);
               for (size_t i = 0; i < out_vec_sz; ++i) {
-                agg_sum_float_skip_val(&agg_result,
-                                       *reinterpret_cast<const float*>(may_alias_ptr(&out_vec[i])),
-                                       *reinterpret_cast<const float*>(may_alias_ptr(&agg_init_val)));
+                agg_sum_float_skip_val(
+                    &agg_result,
+                    *reinterpret_cast<const float*>(may_alias_ptr(&out_vec[i])),
+                    *reinterpret_cast<const float*>(may_alias_ptr(&agg_init_val)));
               }
-              const int64_t converted_bin = float_argument_input
-                                                ? static_cast<int64_t>(agg_result)
-                                                : float_to_double_bin(static_cast<int32_t>(agg_result), true);
+              const int64_t converted_bin =
+                  float_argument_input
+                      ? static_cast<int64_t>(agg_result)
+                      : float_to_double_bin(static_cast<int32_t>(agg_result), true);
               return {converted_bin, 0};
             } break;
             case 8: {
               int64_t agg_result = agg_init_val;
               for (size_t i = 0; i < out_vec_sz; ++i) {
-                agg_sum_double_skip_val(&agg_result,
-                                        *reinterpret_cast<const double*>(may_alias_ptr(&out_vec[i])),
-                                        *reinterpret_cast<const double*>(may_alias_ptr(&agg_init_val)));
+                agg_sum_double_skip_val(
+                    &agg_result,
+                    *reinterpret_cast<const double*>(may_alias_ptr(&out_vec[i])),
+                    *reinterpret_cast<const double*>(may_alias_ptr(&agg_init_val)));
               }
               return {agg_result, 0};
             } break;
@@ -546,7 +590,8 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
       if (ti.is_integer() || ti.is_decimal() || ti.is_time()) {
         int64_t agg_result = 0;
         for (size_t i = 0; i < out_vec_sz; ++i) {
-          if (detect_overflow_and_underflow(agg_result, out_vec[i], false, int64_t(0), ti)) {
+          if (detect_overflow_and_underflow(
+                  agg_result, out_vec[i], false, int64_t(0), ti)) {
             return {0, error_no};
           }
           agg_result += out_vec[i];
@@ -561,7 +606,8 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
               r += *reinterpret_cast<const float*>(may_alias_ptr(&out_vec[i]));
             }
             const auto float_bin = *reinterpret_cast<const int32_t*>(may_alias_ptr(&r));
-            const int64_t converted_bin = float_argument_input ? float_bin : float_to_double_bin(float_bin, true);
+            const int64_t converted_bin =
+                float_argument_input ? float_bin : float_to_double_bin(float_bin, true);
             return {converted_bin, 0};
           }
           case 8: {
@@ -599,21 +645,24 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
           case 4: {
             int32_t agg_result = static_cast<int32_t>(agg_init_val);
             for (size_t i = 0; i < out_vec_sz; ++i) {
-              agg_min_float_skip_val(&agg_result,
-                                     *reinterpret_cast<const float*>(may_alias_ptr(&out_vec[i])),
-                                     *reinterpret_cast<const float*>(may_alias_ptr(&agg_init_val)));
+              agg_min_float_skip_val(
+                  &agg_result,
+                  *reinterpret_cast<const float*>(may_alias_ptr(&out_vec[i])),
+                  *reinterpret_cast<const float*>(may_alias_ptr(&agg_init_val)));
             }
-            const int64_t converted_bin = float_argument_input
-                                              ? static_cast<int64_t>(agg_result)
-                                              : float_to_double_bin(static_cast<int32_t>(agg_result), true);
+            const int64_t converted_bin =
+                float_argument_input
+                    ? static_cast<int64_t>(agg_result)
+                    : float_to_double_bin(static_cast<int32_t>(agg_result), true);
             return {converted_bin, 0};
           }
           case 8: {
             int64_t agg_result = agg_init_val;
             for (size_t i = 0; i < out_vec_sz; ++i) {
-              agg_min_double_skip_val(&agg_result,
-                                      *reinterpret_cast<const double*>(may_alias_ptr(&out_vec[i])),
-                                      *reinterpret_cast<const double*>(may_alias_ptr(&agg_init_val)));
+              agg_min_double_skip_val(
+                  &agg_result,
+                  *reinterpret_cast<const double*>(may_alias_ptr(&out_vec[i])),
+                  *reinterpret_cast<const double*>(may_alias_ptr(&agg_init_val)));
             }
             return {agg_result, 0};
           }
@@ -634,20 +683,23 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
           case 4: {
             int32_t agg_result = static_cast<int32_t>(agg_init_val);
             for (size_t i = 0; i < out_vec_sz; ++i) {
-              agg_max_float_skip_val(&agg_result,
-                                     *reinterpret_cast<const float*>(may_alias_ptr(&out_vec[i])),
-                                     *reinterpret_cast<const float*>(may_alias_ptr(&agg_init_val)));
+              agg_max_float_skip_val(
+                  &agg_result,
+                  *reinterpret_cast<const float*>(may_alias_ptr(&out_vec[i])),
+                  *reinterpret_cast<const float*>(may_alias_ptr(&agg_init_val)));
             }
-            const int64_t converted_bin = float_argument_input ? static_cast<int64_t>(agg_result)
-                                                               : float_to_double_bin(agg_result, !ti.get_notnull());
+            const int64_t converted_bin =
+                float_argument_input ? static_cast<int64_t>(agg_result)
+                                     : float_to_double_bin(agg_result, !ti.get_notnull());
             return {converted_bin, 0};
           }
           case 8: {
             int64_t agg_result = agg_init_val;
             for (size_t i = 0; i < out_vec_sz; ++i) {
-              agg_max_double_skip_val(&agg_result,
-                                      *reinterpret_cast<const double*>(may_alias_ptr(&out_vec[i])),
-                                      *reinterpret_cast<const double*>(may_alias_ptr(&agg_init_val)));
+              agg_max_double_skip_val(
+                  &agg_result,
+                  *reinterpret_cast<const double*>(may_alias_ptr(&out_vec[i])),
+                  *reinterpret_cast<const double*>(may_alias_ptr(&agg_init_val)));
             }
             return {agg_result, 0};
           }
@@ -674,7 +726,8 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
 namespace {
 
 template <typename PtrTy>
-PtrTy get_merged_result(std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device) {
+PtrTy get_merged_result(
+    std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device) {
   auto& first = boost::get<PtrTy>(results_per_device.front().first);
   CHECK(first);
   for (size_t dev_idx = 1; dev_idx < results_per_device.size(); ++dev_idx) {
@@ -695,7 +748,8 @@ ResultPtr Executor::resultsUnion(ExecutionDispatch& execution_dispatch) {
     for (const auto target_expr : ra_exe_unit.target_exprs) {
       targets.push_back(target_info(target_expr));
     }
-    return std::make_shared<ResultSet>(targets, ExecutorDeviceType::CPU, QueryMemoryDescriptor{}, nullptr, nullptr);
+    return std::make_shared<ResultSet>(
+        targets, ExecutorDeviceType::CPU, QueryMemoryDescriptor{}, nullptr, nullptr);
   }
   typedef std::pair<ResultPtr, std::vector<size_t>> IndexedResultRows;
   std::sort(results_per_device.begin(),
@@ -717,8 +771,9 @@ ResultPtr Executor::resultsUnion(ExecutionDispatch& execution_dispatch) {
 
 namespace {
 
-RowSetPtr reduce_estimator_results(const RelAlgExecutionUnit& ra_exe_unit,
-                                   std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device) {
+RowSetPtr reduce_estimator_results(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device) {
   if (results_per_device.empty()) {
     return nullptr;
   }
@@ -742,10 +797,11 @@ RowSetPtr reduce_estimator_results(const RelAlgExecutionUnit& ra_exe_unit,
 
 }  // namespace
 
-RowSetPtr Executor::reduceMultiDeviceResults(const RelAlgExecutionUnit& ra_exe_unit,
-                                             std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device,
-                                             std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                             const QueryMemoryDescriptor& query_mem_desc) const {
+RowSetPtr Executor::reduceMultiDeviceResults(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const QueryMemoryDescriptor& query_mem_desc) const {
   if (ra_exe_unit.estimator) {
     return reduce_estimator_results(ra_exe_unit, results_per_device);
   }
@@ -755,11 +811,14 @@ RowSetPtr Executor::reduceMultiDeviceResults(const RelAlgExecutionUnit& ra_exe_u
     for (const auto target_expr : ra_exe_unit.target_exprs) {
       targets.push_back(target_info(target_expr));
     }
-    return std::make_shared<ResultSet>(targets, ExecutorDeviceType::CPU, QueryMemoryDescriptor{}, nullptr, this);
+    return std::make_shared<ResultSet>(
+        targets, ExecutorDeviceType::CPU, QueryMemoryDescriptor{}, nullptr, this);
   }
 
   return reduceMultiDeviceResultSets(
-      results_per_device, row_set_mem_owner, ResultSet::fixupQueryMemoryDescriptor(query_mem_desc));
+      results_per_device,
+      row_set_mem_owner,
+      ResultSet::fixupQueryMemoryDescriptor(query_mem_desc));
 }
 
 RowSetPtr Executor::reduceMultiDeviceResultSets(
@@ -771,30 +830,34 @@ RowSetPtr Executor::reduceMultiDeviceResultSets(
   const auto& first = boost::get<RowSetPtr>(results_per_device.front().first);
   CHECK(first);
 
-  if (query_mem_desc.hash_type == GroupByColRangeType::MultiCol && results_per_device.size() > 1) {
-    const auto total_entry_count =
-        std::accumulate(results_per_device.begin(),
-                        results_per_device.end(),
-                        size_t(0),
-                        [](const size_t init, const std::pair<ResultPtr, std::vector<size_t>>& rs) {
-                          const auto& r = boost::get<RowSetPtr>(rs.first);
-                          return init + r->getQueryMemDesc().entry_count;
-                        });
+  if (query_mem_desc.hash_type == GroupByColRangeType::MultiCol &&
+      results_per_device.size() > 1) {
+    const auto total_entry_count = std::accumulate(
+        results_per_device.begin(),
+        results_per_device.end(),
+        size_t(0),
+        [](const size_t init, const std::pair<ResultPtr, std::vector<size_t>>& rs) {
+          const auto& r = boost::get<RowSetPtr>(rs.first);
+          return init + r->getQueryMemDesc().entry_count;
+        });
     CHECK(total_entry_count);
     auto query_mem_desc = first->getQueryMemDesc();
     query_mem_desc.entry_count = total_entry_count;
-    reduced_results = std::make_shared<ResultSet>(
-        first->getTargetInfos(), ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, this);
+    reduced_results = std::make_shared<ResultSet>(first->getTargetInfos(),
+                                                  ExecutorDeviceType::CPU,
+                                                  query_mem_desc,
+                                                  row_set_mem_owner,
+                                                  this);
     auto result_storage = reduced_results->allocateStorage(plan_state_->init_agg_vals_);
     reduced_results->initializeStorage();
     switch (query_mem_desc.getEffectiveKeyWidth()) {
       case 4:
-        first->getStorage()->moveEntriesToBuffer<int32_t>(result_storage->getUnderlyingBuffer(),
-                                                          query_mem_desc.entry_count);
+        first->getStorage()->moveEntriesToBuffer<int32_t>(
+            result_storage->getUnderlyingBuffer(), query_mem_desc.entry_count);
         break;
       case 8:
-        first->getStorage()->moveEntriesToBuffer<int64_t>(result_storage->getUnderlyingBuffer(),
-                                                          query_mem_desc.entry_count);
+        first->getStorage()->moveEntriesToBuffer<int64_t>(
+            result_storage->getUnderlyingBuffer(), query_mem_desc.entry_count);
         break;
       default:
         CHECK(false);
@@ -811,10 +874,11 @@ RowSetPtr Executor::reduceMultiDeviceResultSets(
   return reduced_results;
 }
 
-RowSetPtr Executor::reduceSpeculativeTopN(const RelAlgExecutionUnit& ra_exe_unit,
-                                          std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device,
-                                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                          const QueryMemoryDescriptor& query_mem_desc) const {
+RowSetPtr Executor::reduceSpeculativeTopN(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const QueryMemoryDescriptor& query_mem_desc) const {
   if (results_per_device.size() == 1) {
     auto rows = boost::get<RowSetPtr>(&results_per_device.front().first);
     CHECK(rows);
@@ -829,7 +893,9 @@ RowSetPtr Executor::reduceSpeculativeTopN(const RelAlgExecutionUnit& ra_exe_unit
       continue;
     }
     SpeculativeTopNMap that(
-        **rows, ra_exe_unit.target_exprs, std::max(size_t(10000 * std::max(1, static_cast<int>(log(top_n)))), top_n));
+        **rows,
+        ra_exe_unit.target_exprs,
+        std::max(size_t(10000 * std::max(1, static_cast<int>(log(top_n)))), top_n));
     m.reduce(that);
   }
   CHECK_EQ(size_t(1), ra_exe_unit.sort_info.order_entries.size());
@@ -849,11 +915,14 @@ std::unordered_set<int> get_available_gpus(const Catalog_Namespace::Catalog& cat
   return available_gpus;
 }
 
-size_t get_context_count(const ExecutorDeviceType device_type, const size_t cpu_count, const size_t gpu_count) {
+size_t get_context_count(const ExecutorDeviceType device_type,
+                         const size_t cpu_count,
+                         const size_t gpu_count) {
   return device_type == ExecutorDeviceType::GPU
              ? gpu_count
-             : device_type == ExecutorDeviceType::Hybrid ? std::max(static_cast<size_t>(cpu_count), gpu_count)
-                                                         : static_cast<size_t>(cpu_count);
+             : device_type == ExecutorDeviceType::Hybrid
+                   ? std::max(static_cast<size_t>(cpu_count), gpu_count)
+                   : static_cast<size_t>(cpu_count);
 }
 
 namespace {
@@ -863,16 +932,18 @@ size_t compute_buffer_entry_guess(const std::vector<InputTableInfo>& query_infos
   size_t max_groups_buffer_entry_guess = 1;
   for (const auto& query_info : query_infos) {
     CHECK(!query_info.info.fragments.empty());
-    auto it = std::max_element(
-        query_info.info.fragments.begin(),
-        query_info.info.fragments.end(),
-        [](const FragmentInfo& f1, const FragmentInfo& f2) { return f1.getNumTuples() < f2.getNumTuples(); });
+    auto it = std::max_element(query_info.info.fragments.begin(),
+                               query_info.info.fragments.end(),
+                               [](const FragmentInfo& f1, const FragmentInfo& f2) {
+                                 return f1.getNumTuples() < f2.getNumTuples();
+                               });
     max_groups_buffer_entry_guess *= it->getNumTuples();
   }
   return max_groups_buffer_entry_guess;
 }
 
-std::string get_table_name(const InputDescriptor& input_desc, const Catalog_Namespace::Catalog& cat) {
+std::string get_table_name(const InputDescriptor& input_desc,
+                           const Catalog_Namespace::Catalog& cat) {
   const auto source_type = input_desc.getSourceType();
   if (source_type == InputSourceType::TABLE) {
     const auto td = cat.getMetadataForTable(input_desc.getTableId());
@@ -883,14 +954,15 @@ std::string get_table_name(const InputDescriptor& input_desc, const Catalog_Name
   }
 }
 
-void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit, const Catalog_Namespace::Catalog& cat) {
+void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
+                           const Catalog_Namespace::Catalog& cat) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
       return;
     }
   }
-  if (ra_exe_unit.sort_info.algorithm != SortAlgorithm::StreamingTopN && ra_exe_unit.groupby_exprs.size() == 1 &&
-      !ra_exe_unit.groupby_exprs.front() &&
+  if (ra_exe_unit.sort_info.algorithm != SortAlgorithm::StreamingTopN &&
+      ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front() &&
       (!ra_exe_unit.scan_limit || ra_exe_unit.scan_limit > Executor::high_scan_limit)) {
     std::vector<std::string> table_names;
     const auto& input_descs = ra_exe_unit.input_descs;
@@ -903,8 +975,9 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit, const Catalog
 }
 
 bool is_sample_query(const RelAlgExecutionUnit& ra_exe_unit) {
-  const bool result = ra_exe_unit.input_descs.size() == 1 && ra_exe_unit.simple_quals.empty() &&
-                      ra_exe_unit.quals.empty() && ra_exe_unit.sort_info.order_entries.empty() &&
+  const bool result = ra_exe_unit.input_descs.size() == 1 &&
+                      ra_exe_unit.simple_quals.empty() && ra_exe_unit.quals.empty() &&
+                      ra_exe_unit.sort_info.order_entries.empty() &&
                       ra_exe_unit.scan_limit;
   if (result) {
     CHECK(ra_exe_unit.join_type == JoinType::INVALID);
@@ -918,7 +991,8 @@ bool is_sample_query(const RelAlgExecutionUnit& ra_exe_unit) {
 
 }  // namespace
 
-bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos, const RelAlgExecutionUnit& ra_exe_unit) {
+bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos,
+                          const RelAlgExecutionUnit& ra_exe_unit) {
   if (ra_exe_unit.input_descs.size() < 2) {
     return false;
   }
@@ -938,7 +1012,8 @@ bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos, const 
     }
   }
   CHECK_NE(ssize_t(-1), inner_table_idx);
-  return query_infos[inner_table_idx].info.getNumTuples() <= g_trivial_loop_join_threshold;
+  return query_infos[inner_table_idx].info.getNumTuples() <=
+         g_trivial_loop_join_threshold;
 }
 
 ResultPtr Executor::executeWorkUnit(int32_t* error_code,
@@ -965,27 +1040,40 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
   }
 
   ColumnCacheMap column_cache;
-  auto join_info = JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}, "");
+  auto join_info = JoinInfo(
+      JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}, "");
   if (ra_exe_unit.input_descs.size() > 1 && ra_exe_unit.inner_joins.empty()) {
     OOM_TRACE_PUSH();
-    join_info = chooseJoinType(ra_exe_unit.inner_join_quals, query_infos, ra_exe_unit, device_type, column_cache);
+    join_info = chooseJoinType(ra_exe_unit.inner_join_quals,
+                               query_infos,
+                               ra_exe_unit,
+                               device_type,
+                               column_cache);
   }
-  if (join_info.join_impl_type_ == JoinImplType::Loop && !ra_exe_unit.outer_join_quals.empty()) {
+  if (join_info.join_impl_type_ == JoinImplType::Loop &&
+      !ra_exe_unit.outer_join_quals.empty()) {
     OOM_TRACE_PUSH();
-    join_info = chooseJoinType(ra_exe_unit.outer_join_quals, query_infos, ra_exe_unit, device_type, column_cache);
+    join_info = chooseJoinType(ra_exe_unit.outer_join_quals,
+                               query_infos,
+                               ra_exe_unit,
+                               device_type,
+                               column_cache);
   }
 
 #ifdef ENABLE_EQUIJOIN_FOLD
-  if (join_info.join_impl_type_ == JoinImplType::Loop && ra_exe_unit.input_descs.size() > 2) {
+  if (join_info.join_impl_type_ == JoinImplType::Loop &&
+      ra_exe_unit.input_descs.size() > 2) {
     throw UnfoldedMultiJoinRequired();
   }
 
-  if ((join_info.join_impl_type_ == JoinImplType::Loop || join_info.join_impl_type_ == JoinImplType::HashPlusLoop) &&
+  if ((join_info.join_impl_type_ == JoinImplType::Loop ||
+       join_info.join_impl_type_ == JoinImplType::HashPlusLoop) &&
 #else
       join_info.join_impl_type_  == JoinImplType::Loop &&
 #endif
       !(options.allow_loop_joins || is_trivial_loop_join(query_infos, ra_exe_unit))) {
-    throw std::runtime_error("Hash join failed, reason: " + join_info.hash_join_fail_reason_);
+    throw std::runtime_error("Hash join failed, reason: " +
+                             join_info.hash_join_fail_reason_);
   }
 
   int8_t crt_min_byte_width{get_min_byte_width()};
@@ -997,22 +1085,27 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
     int available_cpus = cpu_threads();
     auto available_gpus = get_available_gpus(cat);
 
-    const auto context_count = get_context_count(device_type, available_cpus, available_gpus.size());
+    const auto context_count =
+        get_context_count(device_type, available_cpus, available_gpus.size());
 
-    ExecutionDispatch execution_dispatch(this,
-                                         ra_exe_unit,
-                                         query_infos,
-                                         cat,
-                                         {device_type, co.hoist_literals_, co.opt_level_, co.with_dynamic_watchdog_},
-                                         context_count,
-                                         row_set_mem_owner,
-                                         column_cache,
-                                         error_code,
-                                         render_info);
+    ExecutionDispatch execution_dispatch(
+        this,
+        ra_exe_unit,
+        query_infos,
+        cat,
+        {device_type, co.hoist_literals_, co.opt_level_, co.with_dynamic_watchdog_},
+        context_count,
+        row_set_mem_owner,
+        column_cache,
+        error_code,
+        render_info);
     try {
       INJECT_TIMER(execution_dispatch_comp);
-      crt_min_byte_width = execution_dispatch.compile(
-          join_info, max_groups_buffer_entry_guess, crt_min_byte_width, options, has_cardinality_estimation);
+      crt_min_byte_width = execution_dispatch.compile(join_info,
+                                                      max_groups_buffer_entry_guess,
+                                                      crt_min_byte_width,
+                                                      options,
+                                                      has_cardinality_estimation);
     } catch (CompilationRetryNoCompaction&) {
       crt_min_byte_width = MAX_BYTE_WIDTH_SUPPORTED;
       continue;
@@ -1027,14 +1120,23 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
 
     std::condition_variable scheduler_cv;
     std::mutex scheduler_mutex;
-    auto dispatch = [&execution_dispatch, &available_cpus, &available_gpus, &options, &scheduler_mutex, &scheduler_cv](
-                        const ExecutorDeviceType chosen_device_type,
-                        int chosen_device_id,
-                        const FragmentsList& frag_list,
-                        const size_t ctx_idx,
-                        const int64_t rowid_lookup_key) {
+    auto dispatch = [&execution_dispatch,
+                     &available_cpus,
+                     &available_gpus,
+                     &options,
+                     &scheduler_mutex,
+                     &scheduler_cv](const ExecutorDeviceType chosen_device_type,
+                                    int chosen_device_id,
+                                    const FragmentsList& frag_list,
+                                    const size_t ctx_idx,
+                                    const int64_t rowid_lookup_key) {
       INJECT_TIMER(execution_dispatch_run);
-      execution_dispatch.run(chosen_device_type, chosen_device_id, options, frag_list, ctx_idx, rowid_lookup_key);
+      execution_dispatch.run(chosen_device_type,
+                             chosen_device_id,
+                             options,
+                             frag_list,
+                             ctx_idx,
+                             rowid_lookup_key);
       if (execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid) {
         std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
         if (chosen_device_type == ExecutorDeviceType::CPU) {
@@ -1051,7 +1153,8 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
 
     QueryFragmentDescriptor fragment_descriptor(ra_exe_unit, query_infos, this);
 
-    const QueryMemoryDescriptor& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
+    const QueryMemoryDescriptor& query_mem_desc =
+        execution_dispatch.getQueryMemoryDescriptor();
     if (!options.just_validate) {
       dispatchFragments(dispatch,
                         execution_dispatch,
@@ -1073,20 +1176,27 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
       continue;
     }
     if (*error_code != 0) {
-      return std::make_shared<ResultSet>(
-          std::vector<TargetInfo>{}, ExecutorDeviceType::CPU, QueryMemoryDescriptor{}, nullptr, this);
+      return std::make_shared<ResultSet>(std::vector<TargetInfo>{},
+                                         ExecutorDeviceType::CPU,
+                                         QueryMemoryDescriptor{},
+                                         nullptr,
+                                         this);
     }
     if (is_agg) {
       try {
         OOM_TRACE_PUSH();
-        return collectAllDeviceResults(execution_dispatch, ra_exe_unit.target_exprs, query_mem_desc, row_set_mem_owner);
+        return collectAllDeviceResults(execution_dispatch,
+                                       ra_exe_unit.target_exprs,
+                                       query_mem_desc,
+                                       row_set_mem_owner);
       } catch (ReductionRanOutOfSlots&) {
         *error_code = ERR_OUT_OF_SLOTS;
         std::vector<TargetInfo> targets;
         for (const auto target_expr : ra_exe_unit.target_exprs) {
           targets.push_back(target_info(target_expr));
         }
-        return std::make_shared<ResultSet>(targets, ExecutorDeviceType::CPU, query_mem_desc, nullptr, this);
+        return std::make_shared<ResultSet>(
+            targets, ExecutorDeviceType::CPU, query_mem_desc, nullptr, this);
       } catch (OverflowOrUnderflow&) {
         crt_min_byte_width <<= 1;
         continue;
@@ -1097,8 +1207,11 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
 
   } while (static_cast<size_t>(crt_min_byte_width) <= sizeof(int64_t));
 
-  return std::make_shared<ResultSet>(
-      std::vector<TargetInfo>{}, ExecutorDeviceType::CPU, QueryMemoryDescriptor{}, nullptr, this);
+  return std::make_shared<ResultSet>(std::vector<TargetInfo>{},
+                                     ExecutorDeviceType::CPU,
+                                     QueryMemoryDescriptor{},
+                                     nullptr,
+                                     this);
 }
 
 RowSetPtr Executor::executeExplain(const ExecutionDispatch& execution_dispatch) {
@@ -1109,20 +1222,23 @@ RowSetPtr Executor::executeExplain(const ExecutionDispatch& execution_dispatch) 
   }
   const auto llvm_ir_gpu = execution_dispatch.getIR(ExecutorDeviceType::GPU);
   if (!llvm_ir_gpu.empty()) {
-    explained_plan +=
-        (std::string(llvm_ir_cpu.empty() ? "" : "\n") + "IR for the GPU:\n===============\n" + llvm_ir_gpu);
+    explained_plan += (std::string(llvm_ir_cpu.empty() ? "" : "\n") +
+                       "IR for the GPU:\n===============\n" + llvm_ir_gpu);
   }
   return std::make_shared<ResultSet>(explained_plan);
 }
 
 // Looks at the targets and returns a feasible device type. We only punt
 // to CPU for count distinct and we should probably fix it and remove this.
-ExecutorDeviceType Executor::getDeviceTypeForTargets(const RelAlgExecutionUnit& ra_exe_unit,
-                                                     const ExecutorDeviceType requested_device_type) {
+ExecutorDeviceType Executor::getDeviceTypeForTargets(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const ExecutorDeviceType requested_device_type) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     const auto agg_info = target_info(target_expr);
-    if (!ra_exe_unit.groupby_exprs.empty() && !isArchPascalOrLater(requested_device_type)) {
-      if ((agg_info.agg_kind == kAVG || agg_info.agg_kind == kSUM) && agg_info.agg_arg_type.get_type() == kDOUBLE) {
+    if (!ra_exe_unit.groupby_exprs.empty() &&
+        !isArchPascalOrLater(requested_device_type)) {
+      if ((agg_info.agg_kind == kAVG || agg_info.agg_kind == kSUM) &&
+          agg_info.agg_arg_type.get_type() == kDOUBLE) {
         return ExecutorDeviceType::CPU;
       }
     }
@@ -1140,7 +1256,8 @@ int64_t inline_null_val(const SQLTypeInfo& ti, const bool float_argument_input) 
   if (ti.is_fp()) {
     if (float_argument_input && ti.get_type() == kFLOAT) {
       int64_t float_null_val = 0;
-      *reinterpret_cast<float*>(may_alias_ptr(&float_null_val)) = static_cast<float>(inline_fp_null_val(ti));
+      *reinterpret_cast<float*>(may_alias_ptr(&float_null_val)) =
+          static_cast<float>(inline_fp_null_val(ti));
       return float_null_val;
     }
     const auto double_null_val = inline_fp_null_val(ti);
@@ -1163,10 +1280,11 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
       auto row_set_mem_owner = query_mem_desc.executor_->getRowSetMemoryOwner();
       CHECK(row_set_mem_owner);
       CHECK_LT(target_idx, query_mem_desc.count_distinct_descriptors_.size());
-      const auto& count_distinct_desc = query_mem_desc.count_distinct_descriptors_[target_idx];
+      const auto& count_distinct_desc =
+          query_mem_desc.count_distinct_descriptors_[target_idx];
       if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
-        auto count_distinct_buffer =
-            static_cast<int8_t*>(checked_calloc(count_distinct_desc.bitmapPaddedSizeBytes(), 1));
+        auto count_distinct_buffer = static_cast<int8_t*>(
+            checked_calloc(count_distinct_desc.bitmapPaddedSizeBytes(), 1));
         CHECK(row_set_mem_owner);
         row_set_mem_owner->addCountDistinctBuffer(
             count_distinct_buffer, count_distinct_desc.bitmapPaddedSizeBytes(), true);
@@ -1206,7 +1324,8 @@ RowSetPtr build_row_for_empty_input(const std::vector<Analyzer::Expr*>& target_e
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_copies;
   std::vector<Analyzer::Expr*> target_exprs;
   for (const auto target_expr : target_exprs_in) {
-    const auto target_expr_copy = std::dynamic_pointer_cast<Analyzer::AggExpr>(target_expr->deep_copy());
+    const auto target_expr_copy =
+        std::dynamic_pointer_cast<Analyzer::AggExpr>(target_expr->deep_copy());
     CHECK(target_expr_copy);
     auto ti = target_expr->get_type_info();
     ti.set_notnull(false);
@@ -1226,7 +1345,8 @@ RowSetPtr build_row_for_empty_input(const std::vector<Analyzer::Expr*>& target_e
   CHECK(executor);
   auto row_set_mem_owner = executor->getRowSetMemoryOwner();
   CHECK(row_set_mem_owner);
-  auto rs = std::make_shared<ResultSet>(target_infos, device_type, query_mem_desc, row_set_mem_owner, executor);
+  auto rs = std::make_shared<ResultSet>(
+      target_infos, device_type, query_mem_desc, row_set_mem_owner, executor);
   rs->allocateStorage();
   rs->fillOneEntry(entry);
   return rs;
@@ -1234,10 +1354,11 @@ RowSetPtr build_row_for_empty_input(const std::vector<Analyzer::Expr*>& target_e
 
 }  // namespace
 
-RowSetPtr Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispatch,
-                                            const std::vector<Analyzer::Expr*>& target_exprs,
-                                            const QueryMemoryDescriptor& query_mem_desc,
-                                            std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
+RowSetPtr Executor::collectAllDeviceResults(
+    ExecutionDispatch& execution_dispatch,
+    const std::vector<Analyzer::Expr*>& target_exprs,
+    const QueryMemoryDescriptor& query_mem_desc,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   for (const auto& query_exe_context : execution_dispatch.getQueryContexts()) {
     if (!query_exe_context || query_exe_context->hasNoFragments()) {
@@ -1245,15 +1366,20 @@ RowSetPtr Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispatc
     }
     execution_dispatch.getFragmentResults().emplace_back(
         query_exe_context->getRowSet(
-            ra_exe_unit, query_mem_desc, execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid),
+            ra_exe_unit,
+            query_mem_desc,
+            execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid),
         std::vector<size_t>{});
   }
   auto& result_per_device = execution_dispatch.getFragmentResults();
-  if (result_per_device.empty() && query_mem_desc.hash_type == GroupByColRangeType::Scan) {
-    return build_row_for_empty_input(target_exprs, query_mem_desc, execution_dispatch.getDeviceType());
+  if (result_per_device.empty() &&
+      query_mem_desc.hash_type == GroupByColRangeType::Scan) {
+    return build_row_for_empty_input(
+        target_exprs, query_mem_desc, execution_dispatch.getDeviceType());
   }
   if (use_speculative_top_n(ra_exe_unit, query_mem_desc)) {
-    return reduceSpeculativeTopN(ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
+    return reduceSpeculativeTopN(
+        ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
   }
   const auto shard_count = execution_dispatch.getDeviceType() == ExecutorDeviceType::GPU
                                ? shard_count_for_top_groups(ra_exe_unit, *catalog_)
@@ -1262,13 +1388,15 @@ RowSetPtr Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispatc
   if (shard_count && !result_per_device.empty()) {
     return collectAllDeviceShardedTopResults(execution_dispatch);
   }
-  return reduceMultiDeviceResults(ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
+  return reduceMultiDeviceResults(
+      ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
 }
 
 // Collect top results from each device, stitch them together and sort. Partial
 // results from each device are guaranteed to be disjunct because we only go on
 // this path when one of the columns involved is a shard key.
-RowSetPtr Executor::collectAllDeviceShardedTopResults(ExecutionDispatch& execution_dispatch) const {
+RowSetPtr Executor::collectAllDeviceShardedTopResults(
+    ExecutionDispatch& execution_dispatch) const {
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   auto& result_per_device = execution_dispatch.getFragmentResults();
   const auto first_result_set = boost::get<RowSetPtr>(result_per_device.front().first);
@@ -1299,7 +1427,8 @@ RowSetPtr Executor::collectAllDeviceShardedTopResults(ExecutionDispatch& executi
     CHECK_LE(top_permutation.size(), top_n);
     const auto result_set_buffer = result_set->getStorage()->getUnderlyingBuffer();
     for (const auto sorted_idx : top_permutation) {
-      const auto row_ptr = result_set_buffer + sorted_idx * top_query_mem_desc.getRowSize();
+      const auto row_ptr =
+          result_set_buffer + sorted_idx * top_query_mem_desc.getRowSize();
       memcpy(top_result_set_buffer + top_output_row_idx * top_query_mem_desc.getRowSize(),
              row_ptr,
              top_query_mem_desc.getRowSize());
@@ -1310,31 +1439,34 @@ RowSetPtr Executor::collectAllDeviceShardedTopResults(ExecutionDispatch& executi
   return top_result_set;
 }
 
-std::unordered_map<int, const Analyzer::BinOper*> Executor::getInnerTabIdToJoinCond() const {
+std::unordered_map<int, const Analyzer::BinOper*> Executor::getInnerTabIdToJoinCond()
+    const {
   std::unordered_map<int, const Analyzer::BinOper*> id_to_cond;
   const auto& join_info = plan_state_->join_info_;
   CHECK_EQ(join_info.equi_join_tautologies_.size(), join_info.join_hash_tables_.size());
   for (size_t i = 0; i < join_info.join_hash_tables_.size(); ++i) {
     int inner_table_id = join_info.join_hash_tables_[i]->getInnerTableId();
-    id_to_cond.insert(std::make_pair(inner_table_id, join_info.equi_join_tautologies_[i].get()));
+    id_to_cond.insert(
+        std::make_pair(inner_table_id, join_info.equi_join_tautologies_[i].get()));
   }
   return id_to_cond;
 }
 
-void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,
-                                                          int chosen_device_id,
-                                                          const FragmentsList& frag_list,
-                                                          const size_t ctx_idx,
-                                                          const int64_t rowid_lookup_key)> dispatch,
-                                 const ExecutionDispatch& execution_dispatch,
-                                 const ExecutionOptions& eo,
-                                 const bool is_agg,
-                                 const size_t context_count,
-                                 QueryFragmentDescriptor& fragment_descriptor,
-                                 std::condition_variable& scheduler_cv,
-                                 std::mutex& scheduler_mutex,
-                                 std::unordered_set<int>& available_gpus,
-                                 int& available_cpus) {
+void Executor::dispatchFragments(
+    const std::function<void(const ExecutorDeviceType chosen_device_type,
+                             int chosen_device_id,
+                             const FragmentsList& frag_list,
+                             const size_t ctx_idx,
+                             const int64_t rowid_lookup_key)> dispatch,
+    const ExecutionDispatch& execution_dispatch,
+    const ExecutionOptions& eo,
+    const bool is_agg,
+    const size_t context_count,
+    QueryFragmentDescriptor& fragment_descriptor,
+    std::condition_variable& scheduler_cv,
+    std::mutex& scheduler_mutex,
+    std::unordered_set<int>& available_gpus,
+    int& available_cpus) {
   std::vector<std::future<void>> query_threads;
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   CHECK(!ra_exe_unit.input_descs.empty());
@@ -1344,9 +1476,10 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
   const auto& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
 
   const bool allow_multifrag =
-      eo.allow_multifrag && (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext() ||
-                             query_mem_desc.hash_type == GroupByColRangeType::MultiCol ||
-                             query_mem_desc.hash_type == GroupByColRangeType::Projection);
+      eo.allow_multifrag &&
+      (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext() ||
+       query_mem_desc.hash_type == GroupByColRangeType::MultiCol ||
+       query_mem_desc.hash_type == GroupByColRangeType::Projection);
 
   if ((device_type == ExecutorDeviceType::GPU) && allow_multifrag && is_agg) {
     // NB: We should never be on this path when the query is retried because of
@@ -1365,9 +1498,10 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
     if (eo.with_watchdog && fragment_descriptor.shouldCheckWorkUnitWatchdog()) {
       checkWorkUnitWatchdog(ra_exe_unit, *catalog_);
     }
-    auto multifrag_kernel_dispatch = [&query_threads, &dispatch, &context_count](const int device_id,
-                                                                                 const FragmentsList& frag_list,
-                                                                                 const int64_t rowid_lookup_key) {
+    auto multifrag_kernel_dispatch = [&query_threads, &dispatch, &context_count](
+                                         const int device_id,
+                                         const FragmentsList& frag_list,
+                                         const int64_t rowid_lookup_key) {
       query_threads.push_back(std::async(std::launch::async,
                                          dispatch,
                                          ExecutorDeviceType::GPU,
@@ -1379,8 +1513,9 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
     fragment_descriptor.assignFragsToMultiDispatch(multifrag_kernel_dispatch);
 
   } else {
-    const auto device_count =
-        device_type == ExecutorDeviceType::CPU ? 1 : catalog_->get_dataMgr().cudaMgr_->getDeviceCount();
+    const auto device_count = device_type == ExecutorDeviceType::CPU
+                                  ? 1
+                                  : catalog_->get_dataMgr().cudaMgr_->getDeviceCount();
     CHECK_GT(device_count, 0);
 
     fragment_descriptor.buildFragmentDeviceMap(ra_exe_unit,
@@ -1407,8 +1542,9 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
 
       if (device_type == ExecutorDeviceType::Hybrid) {
         std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
-        scheduler_cv.wait(scheduler_lock,
-                          [&available_cpus, &available_gpus] { return available_cpus || !available_gpus.empty(); });
+        scheduler_cv.wait(scheduler_lock, [&available_cpus, &available_gpus] {
+          return available_cpus || !available_gpus.empty();
+        });
         if (!available_gpus.empty()) {
           chosen_device_type = ExecutorDeviceType::GPU;
           auto device_id_it = available_gpus.begin();
@@ -1430,7 +1566,8 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
                                          fragment_descriptor.getRowIdLookupKey()));
 
       ++frag_list_idx;
-      const auto sample_query_limit = ra_exe_unit.sort_info.limit + ra_exe_unit.sort_info.offset;
+      const auto sample_query_limit =
+          ra_exe_unit.sort_info.limit + ra_exe_unit.sort_info.offset;
 
       if (is_sample_query(ra_exe_unit) && sample_query_limit > 0 &&
           fragment_descriptor.getOuterFragmentTupleSize(i) >= sample_query_limit) {
@@ -1452,12 +1589,14 @@ std::vector<size_t> Executor::getTableFragmentIndices(
     const size_t table_idx,
     const size_t outer_frag_idx,
     std::map<int, const TableFragments*>& selected_tables_fragments,
-    const std::unordered_map<int, const Analyzer::BinOper*>& inner_table_id_to_join_condition) {
+    const std::unordered_map<int, const Analyzer::BinOper*>&
+        inner_table_id_to_join_condition) {
   const int table_id = ra_exe_unit.input_descs[table_idx].getTableId();
   auto table_frags_it = selected_tables_fragments.find(table_id);
   CHECK(table_frags_it != selected_tables_fragments.end());
   const auto& outer_input_desc = ra_exe_unit.input_descs[0];
-  const auto outer_table_fragments_it = selected_tables_fragments.find(outer_input_desc.getTableId());
+  const auto outer_table_fragments_it =
+      selected_tables_fragments.find(outer_input_desc.getTableId());
   const auto outer_table_fragments = outer_table_fragments_it->second;
   CHECK(outer_table_fragments_it != selected_tables_fragments.end());
   CHECK_LT(outer_frag_idx, outer_table_fragments->size());
@@ -1472,12 +1611,14 @@ std::vector<size_t> Executor::getTableFragmentIndices(
 #endif
 #ifndef ENABLE_MULTIFRAG_JOIN
   if (inner_frags->size() > 1) {
-    throw std::runtime_error("Multi-fragment inner table '" + get_table_name(ra_exe_unit.input_descs[1], *catalog_) +
+    throw std::runtime_error("Multi-fragment inner table '" +
+                             get_table_name(ra_exe_unit.input_descs[1], *catalog_) +
                              "' not supported yet");
   }
 #endif
   std::vector<size_t> all_frag_ids;
-  for (size_t inner_frag_idx = 0; inner_frag_idx < inner_frags->size(); ++inner_frag_idx) {
+  for (size_t inner_frag_idx = 0; inner_frag_idx < inner_frags->size();
+       ++inner_frag_idx) {
     const auto& inner_frag_info = (*inner_frags)[inner_frag_idx];
     if (skipFragmentPair(outer_fragment_info,
                          inner_frag_info,
@@ -1498,13 +1639,15 @@ bool Executor::skipFragmentPair(
     const Fragmenter_Namespace::FragmentInfo& outer_fragment_info,
     const Fragmenter_Namespace::FragmentInfo& inner_fragment_info,
     const int table_idx,
-    const std::unordered_map<int, const Analyzer::BinOper*>& inner_table_id_to_join_condition,
+    const std::unordered_map<int, const Analyzer::BinOper*>&
+        inner_table_id_to_join_condition,
     const RelAlgExecutionUnit& ra_exe_unit,
     const ExecutorDeviceType device_type) {
   if (device_type != ExecutorDeviceType::GPU) {
     return false;
   }
-  CHECK(table_idx >= 0 && static_cast<size_t>(table_idx) < ra_exe_unit.input_descs.size());
+  CHECK(table_idx >= 0 &&
+        static_cast<size_t>(table_idx) < ra_exe_unit.input_descs.size());
   const int inner_table_id = ra_exe_unit.input_descs[table_idx].getTableId();
   // Don't bother with sharding for non-hash joins.
   if (plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToOne &&
@@ -1525,9 +1668,11 @@ bool Executor::skipFragmentPair(
     join_condition = condition_it->second;
     CHECK(join_condition);
   } else {
-    CHECK_EQ(plan_state_->join_info_.equi_join_tautologies_.size(), plan_state_->join_info_.join_hash_tables_.size());
+    CHECK_EQ(plan_state_->join_info_.equi_join_tautologies_.size(),
+             plan_state_->join_info_.join_hash_tables_.size());
     for (size_t i = 0; i < plan_state_->join_info_.join_hash_tables_.size(); ++i) {
-      if (plan_state_->join_info_.join_hash_tables_[i]->getInnerTableRteIdx() == table_idx) {
+      if (plan_state_->join_info_.join_hash_tables_[i]->getInnerTableRteIdx() ==
+          table_idx) {
         CHECK(!join_condition);
         join_condition = plan_state_->join_info_.equi_join_tautologies_[i].get();
       }
@@ -1537,7 +1682,8 @@ bool Executor::skipFragmentPair(
     return false;
   }
   size_t shard_count{0};
-  if (dynamic_cast<const Analyzer::ExpressionTuple*>(join_condition->get_left_operand())) {
+  if (dynamic_cast<const Analyzer::ExpressionTuple*>(
+          join_condition->get_left_operand())) {
     shard_count = get_baseline_shard_count(join_condition, ra_exe_unit, this);
   } else {
     shard_count = get_shard_count(join_condition, ra_exe_unit, this);
@@ -1548,10 +1694,11 @@ bool Executor::skipFragmentPair(
   return shard_count;
 }
 
-std::vector<const int8_t*> Executor::fetchIterTabFrags(const size_t frag_id,
-                                                       const ExecutionDispatch& execution_dispatch,
-                                                       const InputDescriptor& table_desc,
-                                                       const int device_id) {
+std::vector<const int8_t*> Executor::fetchIterTabFrags(
+    const size_t frag_id,
+    const ExecutionDispatch& execution_dispatch,
+    const InputDescriptor& table_desc,
+    const int device_id) {
   CHECK(table_desc.getSourceType() == InputSourceType::RESULT);
   const auto& temp = get_temporary_table(temporary_tables_, table_desc.getTableId());
   const auto table = boost::get<IterTabPtr>(&temp);
@@ -1559,8 +1706,8 @@ std::vector<const int8_t*> Executor::fetchIterTabFrags(const size_t frag_id,
   std::vector<const int8_t*> frag_iter_buffers;
   for (size_t i = 0; i < (*table)->colCount(); ++i) {
     const InputColDescriptor desc(i, table_desc.getTableId(), 0);
-    frag_iter_buffers.push_back(
-        execution_dispatch.getColumn(&desc, frag_id, {}, {}, Data_Namespace::CPU_LEVEL, device_id, false));
+    frag_iter_buffers.push_back(execution_dispatch.getColumn(
+        &desc, frag_id, {}, {}, Data_Namespace::CPU_LEVEL, device_id, false));
   }
   return frag_iter_buffers;
 }
@@ -1570,7 +1717,8 @@ namespace {
 const ColumnDescriptor* try_get_column_descriptor(const InputColDescriptor* col_desc,
                                                   const Catalog_Namespace::Catalog& cat) {
   const auto ind_col = dynamic_cast<const IndirectInputColDescriptor*>(col_desc);
-  const int ref_table_id = ind_col ? ind_col->getIndirectDesc().getTableId() : col_desc->getScanDesc().getTableId();
+  const int ref_table_id = ind_col ? ind_col->getIndirectDesc().getTableId()
+                                   : col_desc->getScanDesc().getTableId();
   const int ref_col_id = ind_col ? ind_col->getRefColIndex() : col_desc->getColId();
   return get_column_descriptor_maybe(ref_col_id, ref_table_id, cat);
 }
@@ -1596,14 +1744,16 @@ std::map<size_t, std::vector<uint64_t>> get_table_id_to_frag_offsets(
 }
 
 std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>>
-Executor::getRowCountAndOffsetForAllFrags(const RelAlgExecutionUnit& ra_exe_unit,
-                                          const CartesianProduct<std::vector<std::vector<size_t>>>& frag_ids_crossjoin,
-                                          const std::vector<InputDescriptor>& input_descs,
-                                          const std::map<int, const TableFragments*>& all_tables_fragments,
-                                          const bool one_to_all_frags) {
+Executor::getRowCountAndOffsetForAllFrags(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const CartesianProduct<std::vector<std::vector<size_t>>>& frag_ids_crossjoin,
+    const std::vector<InputDescriptor>& input_descs,
+    const std::map<int, const TableFragments*>& all_tables_fragments,
+    const bool one_to_all_frags) {
   std::vector<std::vector<int64_t>> all_num_rows;
   std::vector<std::vector<uint64_t>> all_frag_offsets;
-  const auto tab_id_to_frag_offsets = get_table_id_to_frag_offsets(input_descs, all_tables_fragments);
+  const auto tab_id_to_frag_offsets =
+      get_table_id_to_frag_offsets(input_descs, all_tables_fragments);
   CHECK(!one_to_all_frags || input_descs.size() == 2);
   std::unordered_map<size_t, size_t> outer_id_to_num_row_idx;
   for (const auto& selected_frag_ids : frag_ids_crossjoin) {
@@ -1612,7 +1762,8 @@ Executor::getRowCountAndOffsetForAllFrags(const RelAlgExecutionUnit& ra_exe_unit
     CHECK_EQ(selected_frag_ids.size(), input_descs.size());
     for (size_t tab_idx = 0; tab_idx < input_descs.size(); ++tab_idx) {
       const auto frag_id = selected_frag_ids[tab_idx];
-      const auto fragments_it = all_tables_fragments.find(input_descs[tab_idx].getTableId());
+      const auto fragments_it =
+          all_tables_fragments.find(input_descs[tab_idx].getTableId());
       CHECK(fragments_it != all_tables_fragments.end());
       const auto& fragments = *fragments_it->second;
       if (ra_exe_unit.inner_joins.empty() || tab_idx == 0 ||
@@ -1626,7 +1777,8 @@ Executor::getRowCountAndOffsetForAllFrags(const RelAlgExecutionUnit& ra_exe_unit
         }
         num_rows.push_back(total_row_count);
       }
-      const auto frag_offsets_it = tab_id_to_frag_offsets.find(input_descs[tab_idx].getTableId());
+      const auto frag_offsets_it =
+          tab_id_to_frag_offsets.find(input_descs[tab_idx].getTableId());
       CHECK(frag_offsets_it != tab_id_to_frag_offsets.end());
       const auto& offsets = frag_offsets_it->second;
       CHECK_LT(frag_id, offsets.size());
@@ -1638,7 +1790,8 @@ Executor::getRowCountAndOffsetForAllFrags(const RelAlgExecutionUnit& ra_exe_unit
       if (outer_id_to_num_row_idx.count(outer_frag_id)) {
         all_num_rows[outer_id_to_num_row_idx[outer_frag_id]][1] += num_rows[1];
       } else {
-        outer_id_to_num_row_idx.insert(std::make_pair(outer_frag_id, all_num_rows.size() - 1));
+        outer_id_to_num_row_idx.insert(
+            std::make_pair(outer_frag_id, all_num_rows.size() - 1));
       }
     }
     // Fragment offsets of outer table should be ONLY used by rowid for now.
@@ -1648,16 +1801,22 @@ Executor::getRowCountAndOffsetForAllFrags(const RelAlgExecutionUnit& ra_exe_unit
 }
 
 #ifdef ENABLE_MULTIFRAG_JOIN
-// Only fetch columns of hash-joined inner fact table whose fetch are not deferred from all the table fragments.
+// Only fetch columns of hash-joined inner fact table whose fetch are not deferred from
+// all the table fragments.
 bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
                                      const RelAlgExecutionUnit& ra_exe_unit,
                                      const FragmentsList& selected_fragments) const {
   const auto& input_descs = ra_exe_unit.input_descs;
   const int nest_level = inner_col_desc.getScanDesc().getNestLevel();
-  if (nest_level < 1 || inner_col_desc.getScanDesc().getSourceType() != InputSourceType::TABLE ||
-      (ra_exe_unit.inner_joins.empty() && plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToOne &&
-       plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToMany && !isOuterLoopJoin()) ||
-      input_descs.size() < 2 || (ra_exe_unit.inner_joins.empty() && plan_state_->isLazyFetchColumn(inner_col_desc))) {
+  if (nest_level < 1 ||
+      inner_col_desc.getScanDesc().getSourceType() != InputSourceType::TABLE ||
+      (ra_exe_unit.inner_joins.empty() &&
+       plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToOne &&
+       plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToMany &&
+       !isOuterLoopJoin()) ||
+      input_descs.size() < 2 ||
+      (ra_exe_unit.inner_joins.empty() &&
+       plan_state_->isLazyFetchColumn(inner_col_desc))) {
     return false;
   }
   const int table_id = inner_col_desc.getScanDesc().getTableId();
@@ -1668,23 +1827,28 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
 }
 #endif
 
-Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_dispatch,
-                                            const RelAlgExecutionUnit& ra_exe_unit,
-                                            const int device_id,
-                                            const Data_Namespace::MemoryLevel memory_level,
-                                            const std::map<int, const TableFragments*>& all_tables_fragments,
-                                            const FragmentsList& selected_fragments,
-                                            const Catalog_Namespace::Catalog& cat,
-                                            std::list<ChunkIter>& chunk_iterators,
-                                            std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
+Executor::FetchResult Executor::fetchChunks(
+    const ExecutionDispatch& execution_dispatch,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const int device_id,
+    const Data_Namespace::MemoryLevel memory_level,
+    const std::map<int, const TableFragments*>& all_tables_fragments,
+    const FragmentsList& selected_fragments,
+    const Catalog_Namespace::Catalog& cat,
+    std::list<ChunkIter>& chunk_iterators,
+    std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
   INJECT_TIMER(fetchChunks);
   const auto& col_global_ids = ra_exe_unit.input_col_descs;
   std::vector<std::vector<size_t>> selected_fragments_crossjoin;
   std::vector<size_t> local_col_to_frag_pos;
-  buildSelectedFragsMapping(
-      selected_fragments_crossjoin, local_col_to_frag_pos, col_global_ids, selected_fragments, ra_exe_unit);
+  buildSelectedFragsMapping(selected_fragments_crossjoin,
+                            local_col_to_frag_pos,
+                            col_global_ids,
+                            selected_fragments,
+                            ra_exe_unit);
 
-  CartesianProduct<std::vector<std::vector<size_t>>> frag_ids_crossjoin(selected_fragments_crossjoin);
+  CartesianProduct<std::vector<std::vector<size_t>>> frag_ids_crossjoin(
+      selected_fragments_crossjoin);
 
   std::vector<std::vector<const int8_t*>> all_frag_col_buffers;
   std::vector<std::vector<const int8_t*>> all_frag_iter_buffers;
@@ -1693,10 +1857,12 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
   const auto extra_tab_id_to_frag_offsets =
       get_table_id_to_frag_offsets(ra_exe_unit.extra_input_descs, all_tables_fragments);
   const bool needs_fetch_iterators =
-      ra_exe_unit.join_dimensions.size() > 2 && dynamic_cast<Analyzer::IterExpr*>(ra_exe_unit.target_exprs.front());
+      ra_exe_unit.join_dimensions.size() > 2 &&
+      dynamic_cast<Analyzer::IterExpr*>(ra_exe_unit.target_exprs.front());
 
   for (const auto& selected_frag_ids : frag_ids_crossjoin) {
-    std::vector<const int8_t*> frag_col_buffers(plan_state_->global_to_local_col_ids_.size());
+    std::vector<const int8_t*> frag_col_buffers(
+        plan_state_->global_to_local_col_ids_.size());
     for (const auto& col_id : col_global_ids) {
       CHECK(col_id);
       const int table_id = col_id->getScanDesc().getTableId();
@@ -1714,41 +1880,49 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
       const auto fragments = fragments_it->second;
       auto it = plan_state_->global_to_local_col_ids_.find(*col_id);
       CHECK(it != plan_state_->global_to_local_col_ids_.end());
-      CHECK_LT(static_cast<size_t>(it->second), plan_state_->global_to_local_col_ids_.size());
+      CHECK_LT(static_cast<size_t>(it->second),
+               plan_state_->global_to_local_col_ids_.size());
       const size_t frag_id = selected_frag_ids[local_col_to_frag_pos[it->second]];
       if (!fragments->size()) {
         return {};
       }
       CHECK_LT(frag_id, fragments->size());
       auto memory_level_for_column = memory_level;
-      if (plan_state_->columns_to_fetch_.find(std::make_pair(col_id->getScanDesc().getTableId(), col_id->getColId())) ==
+      if (plan_state_->columns_to_fetch_.find(
+              std::make_pair(col_id->getScanDesc().getTableId(), col_id->getColId())) ==
           plan_state_->columns_to_fetch_.end()) {
         memory_level_for_column = Data_Namespace::CPU_LEVEL;
       }
       if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
-        frag_col_buffers[it->second] = execution_dispatch.getColumn(col_id.get(),
-                                                                    frag_id,
-                                                                    all_tables_fragments,
-                                                                    extra_tab_id_to_frag_offsets,
-                                                                    memory_level_for_column,
-                                                                    device_id,
-                                                                    is_rowid);
+        frag_col_buffers[it->second] =
+            execution_dispatch.getColumn(col_id.get(),
+                                         frag_id,
+                                         all_tables_fragments,
+                                         extra_tab_id_to_frag_offsets,
+                                         memory_level_for_column,
+                                         device_id,
+                                         is_rowid);
       } else {
 #ifdef ENABLE_MULTIFRAG_JOIN
         if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
-          frag_col_buffers[it->second] = execution_dispatch.getAllScanColumnFrags(
-              table_id, col_id->getColId(), all_tables_fragments, memory_level_for_column, device_id);
+          frag_col_buffers[it->second] =
+              execution_dispatch.getAllScanColumnFrags(table_id,
+                                                       col_id->getColId(),
+                                                       all_tables_fragments,
+                                                       memory_level_for_column,
+                                                       device_id);
         } else
 #endif
         {
-          frag_col_buffers[it->second] = execution_dispatch.getScanColumn(table_id,
-                                                                          frag_id,
-                                                                          col_id->getColId(),
-                                                                          all_tables_fragments,
-                                                                          chunks,
-                                                                          chunk_iterators,
-                                                                          memory_level_for_column,
-                                                                          device_id);
+          frag_col_buffers[it->second] =
+              execution_dispatch.getScanColumn(table_id,
+                                               frag_id,
+                                               col_id->getColId(),
+                                               all_tables_fragments,
+                                               chunks,
+                                               chunk_iterators,
+                                               memory_level_for_column,
+                                               device_id);
         }
       }
     }
@@ -1756,19 +1930,26 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
     // IteratorTable on the left could only have a single fragment for now.
     if (needs_fetch_iterators && all_frag_iter_buffers.empty()) {
       CHECK_EQ(size_t(2), selected_fragments_crossjoin.size());
-      all_frag_iter_buffers.push_back(
-          fetchIterTabFrags(selected_frag_ids[0], execution_dispatch, ra_exe_unit.input_descs[0], device_id));
+      all_frag_iter_buffers.push_back(fetchIterTabFrags(selected_frag_ids[0],
+                                                        execution_dispatch,
+                                                        ra_exe_unit.input_descs[0],
+                                                        device_id));
     }
   }
-  std::tie(all_num_rows, all_frag_offsets) = getRowCountAndOffsetForAllFrags(
-      ra_exe_unit, frag_ids_crossjoin, ra_exe_unit.input_descs, all_tables_fragments, isOuterLoopJoin());
+  std::tie(all_num_rows, all_frag_offsets) =
+      getRowCountAndOffsetForAllFrags(ra_exe_unit,
+                                      frag_ids_crossjoin,
+                                      ra_exe_unit.input_descs,
+                                      all_tables_fragments,
+                                      isOuterLoopJoin());
   return {all_frag_col_buffers, all_frag_iter_buffers, all_num_rows, all_frag_offsets};
 }
 
 std::vector<size_t> Executor::getFragmentCount(const FragmentsList& selected_fragments,
                                                const size_t scan_idx,
                                                const RelAlgExecutionUnit& ra_exe_unit) {
-  if ((ra_exe_unit.input_descs.size() > size_t(2) || !ra_exe_unit.inner_joins.empty()) && scan_idx > 0 &&
+  if ((ra_exe_unit.input_descs.size() > size_t(2) || !ra_exe_unit.inner_joins.empty()) &&
+      scan_idx > 0 &&
       !plan_state_->join_info_.sharded_range_table_indices_.count(scan_idx) &&
       !selected_fragments[scan_idx].fragment_ids.empty()) {
     // Fetch all fragments
@@ -1778,27 +1959,31 @@ std::vector<size_t> Executor::getFragmentCount(const FragmentsList& selected_fra
   return selected_fragments[scan_idx].fragment_ids;
 }
 
-void Executor::buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
-                                         std::vector<size_t>& local_col_to_frag_pos,
-                                         const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
-                                         const FragmentsList& selected_fragments,
-                                         const RelAlgExecutionUnit& ra_exe_unit) {
+void Executor::buildSelectedFragsMapping(
+    std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
+    std::vector<size_t>& local_col_to_frag_pos,
+    const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
+    const FragmentsList& selected_fragments,
+    const RelAlgExecutionUnit& ra_exe_unit) {
   local_col_to_frag_pos.resize(plan_state_->global_to_local_col_ids_.size());
   size_t frag_pos{0};
   const auto& input_descs = ra_exe_unit.input_descs;
   for (size_t scan_idx = 0; scan_idx < input_descs.size(); ++scan_idx) {
     const int table_id = input_descs[scan_idx].getTableId();
     CHECK_EQ(selected_fragments[scan_idx].table_id, table_id);
-    selected_fragments_crossjoin.push_back(getFragmentCount(selected_fragments, scan_idx, ra_exe_unit));
+    selected_fragments_crossjoin.push_back(
+        getFragmentCount(selected_fragments, scan_idx, ra_exe_unit));
     for (const auto& col_id : col_global_ids) {
       CHECK(col_id);
       const auto& input_desc = col_id->getScanDesc();
-      if (input_desc.getTableId() != table_id || input_desc.getNestLevel() != static_cast<int>(scan_idx)) {
+      if (input_desc.getTableId() != table_id ||
+          input_desc.getNestLevel() != static_cast<int>(scan_idx)) {
         continue;
       }
       auto it = plan_state_->global_to_local_col_ids_.find(*col_id);
       CHECK(it != plan_state_->global_to_local_col_ids_.end());
-      CHECK_LT(static_cast<size_t>(it->second), plan_state_->global_to_local_col_ids_.size());
+      CHECK_LT(static_cast<size_t>(it->second),
+               plan_state_->global_to_local_col_ids_.size());
       local_col_to_frag_pos[it->second] = frag_pos;
     }
     ++frag_pos;
@@ -1822,22 +2007,23 @@ class OutVecOwner {
 
 }  // namespace
 
-int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
-                                            const CompilationResult& compilation_result,
-                                            const bool hoist_literals,
-                                            ResultPtr& results,
-                                            const std::vector<Analyzer::Expr*>& target_exprs,
-                                            const ExecutorDeviceType device_type,
-                                            std::vector<std::vector<const int8_t*>>& col_buffers,
-                                            QueryExecutionContext* query_exe_context,
-                                            const std::vector<std::vector<int64_t>>& num_rows,
-                                            const std::vector<std::vector<uint64_t>>& frag_offsets,
-                                            const uint32_t frag_stride,
-                                            Data_Namespace::DataMgr* data_mgr,
-                                            const int device_id,
-                                            const uint32_t start_rowid,
-                                            const uint32_t num_tables,
-                                            RenderInfo* render_info) {
+int32_t Executor::executePlanWithoutGroupBy(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const CompilationResult& compilation_result,
+    const bool hoist_literals,
+    ResultPtr& results,
+    const std::vector<Analyzer::Expr*>& target_exprs,
+    const ExecutorDeviceType device_type,
+    std::vector<std::vector<const int8_t*>>& col_buffers,
+    QueryExecutionContext* query_exe_context,
+    const std::vector<std::vector<int64_t>>& num_rows,
+    const std::vector<std::vector<uint64_t>>& frag_offsets,
+    const uint32_t frag_stride,
+    Data_Namespace::DataMgr* data_mgr,
+    const int device_id,
+    const uint32_t start_rowid,
+    const uint32_t num_tables,
+    RenderInfo* render_info) {
   INJECT_TIMER(executePlanWithoutGroupBy);
   results = RowSetPtr(nullptr);
   if (col_buffers.empty()) {
@@ -1846,10 +2032,11 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
 
   RenderAllocatorMap* render_allocator_map_ptr = nullptr;
   if (render_info) {
-    // TODO(adb): make sure that we either never get here in the CPU case, or if we do get here, we are in non-insitu
-    // mode.
+    // TODO(adb): make sure that we either never get here in the CPU case, or if we do get
+    // here, we are in non-insitu mode.
     CHECK(render_info->useCudaBuffers() || !render_info->isPotentialInSituRender())
-        << "CUDA disabled rendering in the executePlanWithoutGroupBy query path is currently unsupported.";
+        << "CUDA disabled rendering in the executePlanWithoutGroupBy query path is "
+           "currently unsupported.";
     render_allocator_map_ptr = render_info->render_allocator_map_ptr.get();
   }
 
@@ -1905,20 +2092,24 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
       LOG(FATAL) << "Error launching the GPU kernel: " << e.what();
     }
   }
-  if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW || error_code == Executor::ERR_DIV_BY_ZERO ||
-      error_code == Executor::ERR_OUT_OF_TIME || error_code == Executor::ERR_INTERRUPTED) {
+  if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW ||
+      error_code == Executor::ERR_DIV_BY_ZERO ||
+      error_code == Executor::ERR_OUT_OF_TIME ||
+      error_code == Executor::ERR_INTERRUPTED) {
     return error_code;
   }
   if (ra_exe_unit.estimator) {
     CHECK(!error_code);
-    results = std::shared_ptr<ResultSet>(query_exe_context->estimator_result_set_.release());
+    results =
+        std::shared_ptr<ResultSet>(query_exe_context->estimator_result_set_.release());
     return 0;
   }
   std::vector<int64_t> reduced_outs;
   CHECK_EQ(col_buffers.size() % frag_stride, size_t(0));
   const auto num_out_frags = col_buffers.size() / frag_stride;
-  const size_t entry_count =
-      device_type == ExecutorDeviceType::GPU ? num_out_frags * blockSize() * gridSize() : num_out_frags;
+  const size_t entry_count = device_type == ExecutorDeviceType::GPU
+                                 ? num_out_frags * blockSize() * gridSize()
+                                 : num_out_frags;
   if (size_t(1) == entry_count) {
     for (auto out : out_vec) {
       CHECK(out);
@@ -1936,33 +2127,36 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
         val1 = out_vec[out_vec_idx][0];
         error_code = 0;
       } else {
-        const auto chosen_bytes =
-            static_cast<size_t>(query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx].compact);
-        std::tie(val1, error_code) = reduceResults(agg_info.agg_kind,
-                                                   agg_info.sql_type,
-                                                   query_exe_context->init_agg_vals_[out_vec_idx],
-                                                   float_argument_input ? sizeof(int32_t) : chosen_bytes,
-                                                   out_vec[out_vec_idx],
-                                                   entry_count,
-                                                   false,
-                                                   float_argument_input);
+        const auto chosen_bytes = static_cast<size_t>(
+            query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx].compact);
+        std::tie(val1, error_code) =
+            reduceResults(agg_info.agg_kind,
+                          agg_info.sql_type,
+                          query_exe_context->init_agg_vals_[out_vec_idx],
+                          float_argument_input ? sizeof(int32_t) : chosen_bytes,
+                          out_vec[out_vec_idx],
+                          entry_count,
+                          false,
+                          float_argument_input);
       }
       if (error_code) {
         break;
       }
       reduced_outs.push_back(val1);
-      if (agg_info.agg_kind == kAVG || (agg_info.agg_kind == kLAST_SAMPLE && agg_info.sql_type.is_varlen())) {
-        const auto chosen_bytes =
-            static_cast<size_t>(query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx + 1].compact);
+      if (agg_info.agg_kind == kAVG ||
+          (agg_info.agg_kind == kLAST_SAMPLE && agg_info.sql_type.is_varlen())) {
+        const auto chosen_bytes = static_cast<size_t>(
+            query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx + 1].compact);
         int64_t val2;
-        std::tie(val2, error_code) = reduceResults(agg_info.agg_kind == kAVG ? kCOUNT : agg_info.agg_kind,
-                                                   agg_info.sql_type,
-                                                   query_exe_context->init_agg_vals_[out_vec_idx + 1],
-                                                   float_argument_input ? sizeof(int32_t) : chosen_bytes,
-                                                   out_vec[out_vec_idx + 1],
-                                                   entry_count,
-                                                   false,
-                                                   false);
+        std::tie(val2, error_code) =
+            reduceResults(agg_info.agg_kind == kAVG ? kCOUNT : agg_info.agg_kind,
+                          agg_info.sql_type,
+                          query_exe_context->init_agg_vals_[out_vec_idx + 1],
+                          float_argument_input ? sizeof(int32_t) : chosen_bytes,
+                          out_vec[out_vec_idx + 1],
+                          entry_count,
+                          false,
+                          false);
         if (error_code) {
           break;
         }
@@ -1974,7 +2168,8 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
   }
 
   CHECK_EQ(size_t(1), query_exe_context->result_sets_.size());
-  auto rows_ptr = std::shared_ptr<ResultSet>(query_exe_context->result_sets_[0].release());
+  auto rows_ptr =
+      std::shared_ptr<ResultSet>(query_exe_context->result_sets_[0].release());
   rows_ptr->fillOneEntry(reduced_outs);
   results = std::move(rows_ptr);
   return error_code;
@@ -1994,24 +2189,25 @@ bool check_rows_less_than_needed(const ResultPtr& results, const size_t scan_lim
 
 }  // namespace
 
-int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
-                                         const CompilationResult& compilation_result,
-                                         const bool hoist_literals,
-                                         ResultPtr& results,
-                                         const ExecutorDeviceType device_type,
-                                         std::vector<std::vector<const int8_t*>>& col_buffers,
-                                         const std::vector<size_t> outer_tab_frag_ids,
-                                         QueryExecutionContext* query_exe_context,
-                                         const std::vector<std::vector<int64_t>>& num_rows,
-                                         const std::vector<std::vector<uint64_t>>& frag_offsets,
-                                         const uint32_t frag_stride,
-                                         Data_Namespace::DataMgr* data_mgr,
-                                         const int device_id,
-                                         const int64_t scan_limit,
-                                         const bool was_auto_device,
-                                         const uint32_t start_rowid,
-                                         const uint32_t num_tables,
-                                         RenderInfo* render_info) {
+int32_t Executor::executePlanWithGroupBy(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const CompilationResult& compilation_result,
+    const bool hoist_literals,
+    ResultPtr& results,
+    const ExecutorDeviceType device_type,
+    std::vector<std::vector<const int8_t*>>& col_buffers,
+    const std::vector<size_t> outer_tab_frag_ids,
+    QueryExecutionContext* query_exe_context,
+    const std::vector<std::vector<int64_t>>& num_rows,
+    const std::vector<std::vector<uint64_t>>& frag_offsets,
+    const uint32_t frag_stride,
+    Data_Namespace::DataMgr* data_mgr,
+    const int device_id,
+    const int64_t scan_limit,
+    const bool was_auto_device,
+    const uint32_t start_rowid,
+    const uint32_t num_tables,
+    RenderInfo* render_info) {
   INJECT_TIMER(executePlanWithGroupBy);
   if (contains_iter_expr(ra_exe_unit.target_exprs)) {
     results = IterTabPtr(nullptr);
@@ -2083,27 +2279,34 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
     }
   }
 
-  if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW || error_code == Executor::ERR_DIV_BY_ZERO ||
-      error_code == Executor::ERR_OUT_OF_TIME || error_code == Executor::ERR_INTERRUPTED) {
+  if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW ||
+      error_code == Executor::ERR_DIV_BY_ZERO ||
+      error_code == Executor::ERR_OUT_OF_TIME ||
+      error_code == Executor::ERR_INTERRUPTED) {
     return error_code;
   }
 
-  if (error_code != Executor::ERR_OVERFLOW_OR_UNDERFLOW && error_code != Executor::ERR_DIV_BY_ZERO &&
-      !query_exe_context->query_mem_desc_.usesCachedContext() && !render_allocator_map_ptr) {
+  if (error_code != Executor::ERR_OVERFLOW_OR_UNDERFLOW &&
+      error_code != Executor::ERR_DIV_BY_ZERO &&
+      !query_exe_context->query_mem_desc_.usesCachedContext() &&
+      !render_allocator_map_ptr) {
     CHECK(!query_exe_context->query_mem_desc_.sortOnGpu());
-    results = query_exe_context->getResult(ra_exe_unit, outer_tab_frag_ids, was_auto_device);
+    results =
+        query_exe_context->getResult(ra_exe_unit, outer_tab_frag_ids, was_auto_device);
     if (auto rows = boost::get<RowSetPtr>(&results)) {
       (*rows)->holdLiterals(hoist_buf);
     }
   }
-  if (error_code && (render_allocator_map_ptr || (!scan_limit || check_rows_less_than_needed(results, scan_limit)))) {
+  if (error_code && (render_allocator_map_ptr ||
+                     (!scan_limit || check_rows_less_than_needed(results, scan_limit)))) {
     return error_code;  // unlucky, not enough results and we ran out of slots
   }
 
   return 0;
 }
 
-std::vector<int64_t> Executor::getJoinHashTablePtrs(const ExecutorDeviceType device_type, const int device_id) {
+std::vector<int64_t> Executor::getJoinHashTablePtrs(const ExecutorDeviceType device_type,
+                                                    const int device_id) {
   std::vector<int64_t> table_ptrs;
   const auto& join_hash_tables = plan_state_->join_info_.join_hash_tables_;
   for (auto hash_table : join_hash_tables) {
@@ -2111,8 +2314,8 @@ std::vector<int64_t> Executor::getJoinHashTablePtrs(const ExecutorDeviceType dev
       CHECK(table_ptrs.empty());
       return {};
     }
-    table_ptrs.push_back(
-        hash_table->getJoinHashBuffer(device_type, device_type == ExecutorDeviceType::GPU ? device_id : 0));
+    table_ptrs.push_back(hash_table->getJoinHashBuffer(
+        device_type, device_type == ExecutorDeviceType::GPU ? device_id : 0));
   }
   return table_ptrs;
 }
@@ -2135,12 +2338,14 @@ int64_t insert_one_dict_str(T* col_data,
     int32_t str_id = dd->stringDict->getOrAdd(str);
     const bool checkpoint_ok = dd->stringDict->checkpoint();
     if (!checkpoint_ok) {
-      throw std::runtime_error("Failed to checkpoint dictionary for column " + cd->columnName);
+      throw std::runtime_error("Failed to checkpoint dictionary for column " +
+                               cd->columnName);
     }
     const bool invalid = str_id > max_valid_int_value<T>();
     if (invalid || str_id == inline_int_null_value<int32_t>()) {
       if (invalid) {
-        LOG(ERROR) << "Could not encode string: " << str << ", the encoded value doesn't fit in " << sizeof(T) * 8
+        LOG(ERROR) << "Could not encode string: " << str
+                   << ", the encoded value doesn't fit in " << sizeof(T) * 8
                    << " bits. Will store NULL instead.";
       }
       str_id = inline_fixed_encoding_null_val(cd->columnType);
@@ -2163,7 +2368,8 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   CHECK(plan);
   const auto values_plan = dynamic_cast<const Planner::ValuesScan*>(plan);
   if (!values_plan) {
-    throw std::runtime_error("Only simple INSERT of immediate tuples is currently supported");
+    throw std::runtime_error(
+        "Only simple INSERT of immediate tuples is currently supported");
   }
   row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   const auto& targets = values_plan->get_targetlist();
@@ -2184,15 +2390,16 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     if (cd->columnType.is_string()) {
       switch (col_enc) {
         case kENCODING_NONE: {
-          auto it_ok = str_col_buffers.insert(std::make_pair(col_id, std::vector<std::string>{}));
+          auto it_ok =
+              str_col_buffers.insert(std::make_pair(col_id, std::vector<std::string>{}));
           CHECK(it_ok.second);
           break;
         }
         case kENCODING_DICT: {
           const auto dd = cat.getMetadataForDict(cd->columnType.get_comp_param());
           CHECK(dd);
-          const auto it_ok =
-              col_buffers.emplace(col_id, std::unique_ptr<uint8_t[]>(new uint8_t[cd->columnType.get_size()]));
+          const auto it_ok = col_buffers.emplace(
+              col_id, std::unique_ptr<uint8_t[]>(new uint8_t[cd->columnType.get_size()]));
           CHECK(it_ok.second);
           break;
         }
@@ -2200,14 +2407,17 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
           CHECK(false);
       }
     } else if (cd->columnType.is_geometry()) {
-      auto it_ok = str_col_buffers.insert(std::make_pair(col_id, std::vector<std::string>{}));
+      auto it_ok =
+          str_col_buffers.insert(std::make_pair(col_id, std::vector<std::string>{}));
       CHECK(it_ok.second);
     } else if (cd->columnType.is_array()) {
-      auto it_ok = arr_col_buffers.insert(std::make_pair(col_id, std::vector<ArrayDatum>{}));
+      auto it_ok =
+          arr_col_buffers.insert(std::make_pair(col_id, std::vector<ArrayDatum>{}));
       CHECK(it_ok.second);
     } else {
-      const auto it_ok =
-          col_buffers.emplace(col_id, std::unique_ptr<uint8_t[]>(new uint8_t[cd->columnType.get_logical_size()]));
+      const auto it_ok = col_buffers.emplace(
+          col_id,
+          std::unique_ptr<uint8_t[]>(new uint8_t[cd->columnType.get_logical_size()]));
       CHECK(it_ok.second);
     }
     col_descriptors.push_back(cd);
@@ -2229,10 +2439,12 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     CHECK(col_cv);
     const auto cd = col_descriptors[col_idx];
     auto col_datum = col_cv->get_constval();
-    auto col_type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
+    auto col_type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType)
+                                                : cd->columnType.get_type();
     uint8_t* col_data_bytes{nullptr};
     if (!cd->columnType.is_array() && !cd->columnType.is_geometry() &&
-        (!cd->columnType.is_string() || cd->columnType.get_compression() == kENCODING_DICT)) {
+        (!cd->columnType.is_string() ||
+         cd->columnType.get_compression() == kENCODING_DICT)) {
       const auto col_data_bytes_it = col_buffers.find(col_ids[col_idx]);
       CHECK(col_data_bytes_it != col_buffers.end());
       col_data_bytes = col_data_bytes_it->second.get();
@@ -2240,31 +2452,35 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     switch (col_type) {
       case kBOOLEAN: {
         auto col_data = col_data_bytes;
-        *col_data =
-            col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : (col_datum.boolval ? 1 : 0);
+        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
+                                          : (col_datum.boolval ? 1 : 0);
         break;
       }
       case kTINYINT: {
         auto col_data = reinterpret_cast<int8_t*>(col_data_bytes);
-        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.tinyintval;
+        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
+                                          : col_datum.tinyintval;
         int_col_val = col_datum.tinyintval;
         break;
       }
       case kSMALLINT: {
         auto col_data = reinterpret_cast<int16_t*>(col_data_bytes);
-        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.smallintval;
+        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
+                                          : col_datum.smallintval;
         int_col_val = col_datum.smallintval;
         break;
       }
       case kINT: {
         auto col_data = reinterpret_cast<int32_t*>(col_data_bytes);
-        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.intval;
+        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
+                                          : col_datum.intval;
         int_col_val = col_datum.intval;
         break;
       }
       case kBIGINT: {
         auto col_data = reinterpret_cast<int64_t*>(col_data_bytes);
-        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.bigintval;
+        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
+                                          : col_datum.bigintval;
         int_col_val = col_datum.bigintval;
         break;
       }
@@ -2283,18 +2499,22 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
       case kCHAR: {
         switch (cd->columnType.get_compression()) {
           case kENCODING_NONE:
-            str_col_buffers[col_ids[col_idx]].push_back(col_datum.stringval ? *col_datum.stringval : "");
+            str_col_buffers[col_ids[col_idx]].push_back(
+                col_datum.stringval ? *col_datum.stringval : "");
             break;
           case kENCODING_DICT: {
             switch (cd->columnType.get_size()) {
               case 1:
-                int_col_val = insert_one_dict_str(reinterpret_cast<uint8_t*>(col_data_bytes), cd, col_cv, cat);
+                int_col_val = insert_one_dict_str(
+                    reinterpret_cast<uint8_t*>(col_data_bytes), cd, col_cv, cat);
                 break;
               case 2:
-                int_col_val = insert_one_dict_str(reinterpret_cast<uint16_t*>(col_data_bytes), cd, col_cv, cat);
+                int_col_val = insert_one_dict_str(
+                    reinterpret_cast<uint16_t*>(col_data_bytes), cd, col_cv, cat);
                 break;
               case 4:
-                int_col_val = insert_one_dict_str(reinterpret_cast<int32_t*>(col_data_bytes), cd, col_cv, cat);
+                int_col_val = insert_one_dict_str(
+                    reinterpret_cast<int32_t*>(col_data_bytes), cd, col_cv, cat);
                 break;
               default:
                 CHECK(false);
@@ -2310,7 +2530,8 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
       case kTIMESTAMP:
       case kDATE: {
         auto col_data = reinterpret_cast<time_t*>(col_data_bytes);
-        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.timeval;
+        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
+                                          : col_datum.timeval;
         break;
       }
       case kARRAY: {
@@ -2332,7 +2553,8 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
       case kLINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON:
-        str_col_buffers[col_ids[col_idx]].push_back(col_datum.stringval ? *col_datum.stringval : "");
+        str_col_buffers[col_ids[col_idx]].push_back(
+            col_datum.stringval ? *col_datum.stringval : "");
         break;
       default:
         CHECK(false);
@@ -2375,12 +2597,15 @@ void Executor::nukeOldState(const bool allow_lazy_fetch,
                             const std::vector<InputTableInfo>& query_infos,
                             const RelAlgExecutionUnit& ra_exe_unit) {
   const bool contains_left_deep_outer_join =
-      std::find_if(
-          ra_exe_unit.inner_joins.begin(), ra_exe_unit.inner_joins.end(), [](const JoinCondition& join_condition) {
-            return join_condition.type == JoinType::LEFT;
-          }) != ra_exe_unit.inner_joins.end();
-  const bool has_outer_joins = !ra_exe_unit.outer_join_quals.empty() || contains_left_deep_outer_join;
-  cgen_state_.reset(new CgenState(query_infos, !ra_exe_unit.outer_join_quals.empty(), contains_left_deep_outer_join));
+      std::find_if(ra_exe_unit.inner_joins.begin(),
+                   ra_exe_unit.inner_joins.end(),
+                   [](const JoinCondition& join_condition) {
+                     return join_condition.type == JoinType::LEFT;
+                   }) != ra_exe_unit.inner_joins.end();
+  const bool has_outer_joins =
+      !ra_exe_unit.outer_join_quals.empty() || contains_left_deep_outer_join;
+  cgen_state_.reset(new CgenState(
+      query_infos, !ra_exe_unit.outer_join_quals.empty(), contains_left_deep_outer_join));
   plan_state_.reset(new PlanState(allow_lazy_fetch && !has_outer_joins, join_info, this));
 }
 
@@ -2399,7 +2624,8 @@ void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_desc
       cgen_state_->frag_offsets_.push_back(nullptr);
     } else {
       if (frag_count > 1) {
-        cgen_state_->frag_offsets_.push_back(cgen_state_->ir_builder_.CreateLoad(frag_off_ptr));
+        cgen_state_->frag_offsets_.push_back(
+            cgen_state_->ir_builder_.CreateLoad(frag_off_ptr));
       } else {
         cgen_state_->frag_offsets_.push_back(nullptr);
       }
@@ -2409,19 +2635,28 @@ void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_desc
 
 void Executor::codegenNomatchInitialization(const int index) {
   CHECK(isOuterJoin());
-  cgen_state_->outer_join_match_found_ = cgen_state_->ir_builder_.CreateAlloca(
-      get_int_type(1, cgen_state_->context_), nullptr, "match_found_" + std::to_string(index));
+  cgen_state_->outer_join_match_found_ =
+      cgen_state_->ir_builder_.CreateAlloca(get_int_type(1, cgen_state_->context_),
+                                            nullptr,
+                                            "match_found_" + std::to_string(index));
   cgen_state_->outer_join_nomatch_ = cgen_state_->ir_builder_.CreateAlloca(
-      get_int_type(1, cgen_state_->context_), nullptr, "outer_join_nomatch_flag" + std::to_string(index));
-  cgen_state_->ir_builder_.CreateStore(ll_bool(false), cgen_state_->outer_join_match_found_);
+      get_int_type(1, cgen_state_->context_),
+      nullptr,
+      "outer_join_nomatch_flag" + std::to_string(index));
+  cgen_state_->ir_builder_.CreateStore(ll_bool(false),
+                                       cgen_state_->outer_join_match_found_);
   cgen_state_->ir_builder_.CreateStore(ll_bool(false), cgen_state_->outer_join_nomatch_);
 }
 
-void Executor::codegenNomatchLoopback(const std::function<void()> init_iters, llvm::BasicBlock* loop_head) {
+void Executor::codegenNomatchLoopback(const std::function<void()> init_iters,
+                                      llvm::BasicBlock* loop_head) {
   CHECK(isOuterJoin());
-  auto nomatch_bb = llvm::BasicBlock::Create(cgen_state_->context_, "outer_join_nomatch", cgen_state_->row_func_);
-  auto ret_bb = llvm::BasicBlock::Create(cgen_state_->context_, "inner_scan_ret", cgen_state_->row_func_);
-  auto match_found_lv = cgen_state_->ir_builder_.CreateLoad(cgen_state_->outer_join_match_found_);
+  auto nomatch_bb = llvm::BasicBlock::Create(
+      cgen_state_->context_, "outer_join_nomatch", cgen_state_->row_func_);
+  auto ret_bb = llvm::BasicBlock::Create(
+      cgen_state_->context_, "inner_scan_ret", cgen_state_->row_func_);
+  auto match_found_lv =
+      cgen_state_->ir_builder_.CreateLoad(cgen_state_->outer_join_match_found_);
   cgen_state_->ir_builder_.CreateCondBr(match_found_lv, ret_bb, nomatch_bb);
   cgen_state_->ir_builder_.SetInsertPoint(nomatch_bb);
   init_iters();
@@ -2430,7 +2665,8 @@ void Executor::codegenNomatchLoopback(const std::function<void()> init_iters, ll
   cgen_state_->ir_builder_.SetInsertPoint(ret_bb);
 }
 
-void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& input_descs) {
+void Executor::allocateInnerScansIterators(
+    const std::vector<InputDescriptor>& input_descs) {
   if (input_descs.size() <= 1) {
     return;
   }
@@ -2448,29 +2684,37 @@ void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& i
   for (auto it = input_descs.begin() + desc_start_pos; it != input_descs.end(); ++it) {
     const int inner_scan_idx = it - input_descs.begin();
     auto inner_scan_pos_ptr = cgen_state_->ir_builder_.CreateAlloca(
-        get_int_type(64, cgen_state_->context_), nullptr, "inner_scan_" + std::to_string(inner_scan_idx));
+        get_int_type(64, cgen_state_->context_),
+        nullptr,
+        "inner_scan_" + std::to_string(inner_scan_idx));
     cgen_state_->ir_builder_.CreateStore(ll_int(int64_t(0)), inner_scan_pos_ptr);
     llvm::Value* rows_per_scan_ptr = nullptr;
     llvm::Value* rows_per_scan = nullptr;
     if (isOuterJoin()) {
       CHECK_EQ(input_descs.size(), size_t(2));
       rows_per_scan_ptr = cgen_state_->ir_builder_.CreateGEP(
-          get_arg_by_name(cgen_state_->row_func_, "num_rows_per_scan"), ll_int(int32_t(inner_scan_idx)));
-      rows_per_scan = cgen_state_->ir_builder_.CreateLoad(rows_per_scan_ptr, "num_rows_per_scan");
+          get_arg_by_name(cgen_state_->row_func_, "num_rows_per_scan"),
+          ll_int(int32_t(inner_scan_idx)));
+      rows_per_scan =
+          cgen_state_->ir_builder_.CreateLoad(rows_per_scan_ptr, "num_rows_per_scan");
       rows_per_scan_ptr = cgen_state_->ir_builder_.CreateAlloca(
           get_int_type(64, cgen_state_->context_), nullptr, "num_rows_per_scan_copy");
       cgen_state_->ir_builder_.CreateStore(rows_per_scan, rows_per_scan_ptr);
       codegenNomatchInitialization(inner_scan_idx);
     }
-    auto scan_loop_head = llvm::BasicBlock::Create(
-        cgen_state_->context_, "scan_loop_head", cgen_state_->row_func_, preheader->getNextNode());
+    auto scan_loop_head = llvm::BasicBlock::Create(cgen_state_->context_,
+                                                   "scan_loop_head",
+                                                   cgen_state_->row_func_,
+                                                   preheader->getNextNode());
     cgen_state_->inner_scan_labels_.push_back(scan_loop_head);
     cgen_state_->ir_builder_.CreateBr(scan_loop_head);
     cgen_state_->ir_builder_.SetInsertPoint(scan_loop_head);
     if (isOuterJoin()) {
-      rows_per_scan = cgen_state_->ir_builder_.CreateLoad(rows_per_scan_ptr, "rows_per_scan");
+      rows_per_scan =
+          cgen_state_->ir_builder_.CreateLoad(rows_per_scan_ptr, "rows_per_scan");
     }
-    auto inner_scan_pos = cgen_state_->ir_builder_.CreateLoad(inner_scan_pos_ptr, "load_inner_it");
+    auto inner_scan_pos =
+        cgen_state_->ir_builder_.CreateLoad(inner_scan_pos_ptr, "load_inner_it");
     {
       const auto it_ok = cgen_state_->scan_to_iterator_.insert(
           std::make_pair(*it, std::make_pair(inner_scan_pos, inner_scan_pos_ptr)));
@@ -2479,16 +2723,22 @@ void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& i
     if (!isOuterJoin()) {
       CHECK(!rows_per_scan_ptr);
       rows_per_scan_ptr = cgen_state_->ir_builder_.CreateGEP(
-          get_arg_by_name(cgen_state_->row_func_, "num_rows_per_scan"), ll_int(int32_t(inner_scan_idx)));
+          get_arg_by_name(cgen_state_->row_func_, "num_rows_per_scan"),
+          ll_int(int32_t(inner_scan_idx)));
       CHECK(!rows_per_scan);
-      rows_per_scan = cgen_state_->ir_builder_.CreateLoad(rows_per_scan_ptr, "num_rows_per_scan");
+      rows_per_scan =
+          cgen_state_->ir_builder_.CreateLoad(rows_per_scan_ptr, "num_rows_per_scan");
     }
-    auto have_more_inner_rows =
-        cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_ULT, inner_scan_pos, rows_per_scan);
-    auto inner_scan_ret = llvm::BasicBlock::Create(
-        cgen_state_->context_, (isOuterJoin() ? "inner_scan_ret" : "check_match_found"), cgen_state_->row_func_);
-    auto inner_scan_cont = llvm::BasicBlock::Create(cgen_state_->context_, "inner_scan_cont", cgen_state_->row_func_);
-    cgen_state_->ir_builder_.CreateCondBr(have_more_inner_rows, inner_scan_cont, inner_scan_ret);
+    auto have_more_inner_rows = cgen_state_->ir_builder_.CreateICmp(
+        llvm::ICmpInst::ICMP_ULT, inner_scan_pos, rows_per_scan);
+    auto inner_scan_ret =
+        llvm::BasicBlock::Create(cgen_state_->context_,
+                                 (isOuterJoin() ? "inner_scan_ret" : "check_match_found"),
+                                 cgen_state_->row_func_);
+    auto inner_scan_cont = llvm::BasicBlock::Create(
+        cgen_state_->context_, "inner_scan_cont", cgen_state_->row_func_);
+    cgen_state_->ir_builder_.CreateCondBr(
+        have_more_inner_rows, inner_scan_cont, inner_scan_ret);
     cgen_state_->ir_builder_.SetInsertPoint(inner_scan_ret);
     if (isOuterJoin()) {
       auto init_iters = [this, &rows_per_scan_ptr, &inner_scan_pos_ptr]() {
@@ -2515,12 +2765,14 @@ void check_loop_join_replication_constraint(const Catalog_Namespace::Catalog* ca
     const auto inner_td = catalog->getMetadataForTable(inner_table_id);
     CHECK(inner_td);
     if (!table_is_replicated(inner_td)) {
-      throw std::runtime_error("Join table " + inner_td->tableName + " must be replicated");
+      throw std::runtime_error("Join table " + inner_td->tableName +
+                               " must be replicated");
     }
   }
 }
 
-bool has_one_to_many_hash_table(const std::vector<std::shared_ptr<JoinHashTableInterface>>& hash_tables) {
+bool has_one_to_many_hash_table(
+    const std::vector<std::shared_ptr<JoinHashTableInterface>>& hash_tables) {
   for (auto ht : hash_tables) {
     if (ht->getHashType() == JoinHashTableInterface::HashType::OneToMany) {
       return true;
@@ -2539,29 +2791,44 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const std::unordered_set<int>& visited_tables,
     ColumnCacheMap& column_cache) {
   std::shared_ptr<JoinHashTableInterface> join_hash_table;
-  const int device_count =
-      memory_level == MemoryLevel::GPU_LEVEL ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount() : 1;
+  const int device_count = memory_level == MemoryLevel::GPU_LEVEL
+                               ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount()
+                               : 1;
   CHECK_GT(device_count, 0);
   try {
-    if (dynamic_cast<const Analyzer::ExpressionTuple*>(qual_bin_oper->get_left_operand())) {
+    if (dynamic_cast<const Analyzer::ExpressionTuple*>(
+            qual_bin_oper->get_left_operand())) {
       OOM_TRACE_PUSH();
-      join_hash_table = BaselineJoinHashTable::getInstance(
-          qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, column_cache, this);
+      join_hash_table = BaselineJoinHashTable::getInstance(qual_bin_oper,
+                                                           query_infos,
+                                                           ra_exe_unit,
+                                                           memory_level,
+                                                           device_count,
+                                                           visited_tables,
+                                                           column_cache,
+                                                           this);
     } else {
       try {
         OOM_TRACE_PUSH();
-        join_hash_table = JoinHashTable::getInstance(
-            qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, column_cache, this);
+        join_hash_table = JoinHashTable::getInstance(qual_bin_oper,
+                                                     query_infos,
+                                                     ra_exe_unit,
+                                                     memory_level,
+                                                     device_count,
+                                                     visited_tables,
+                                                     column_cache,
+                                                     this);
       } catch (TooManyHashEntries&) {
         OOM_TRACE_PUSH();
-        join_hash_table = BaselineJoinHashTable::getInstance(coalesce_singleton_equi_join(qual_bin_oper),
-                                                             query_infos,
-                                                             ra_exe_unit,
-                                                             memory_level,
-                                                             device_count,
-                                                             visited_tables,
-                                                             column_cache,
-                                                             this);
+        join_hash_table = BaselineJoinHashTable::getInstance(
+            coalesce_singleton_equi_join(qual_bin_oper),
+            query_infos,
+            ra_exe_unit,
+            memory_level,
+            device_count,
+            visited_tables,
+            column_cache,
+            this);
       }
     }
     CHECK(join_hash_table);
@@ -2573,16 +2840,18 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
   return {nullptr, ""};
 }
 
-Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>& join_quals,
-                                            const std::vector<InputTableInfo>& query_infos,
-                                            const RelAlgExecutionUnit& ra_exe_unit,
-                                            const ExecutorDeviceType device_type,
-                                            ColumnCacheMap& column_cache) {
+Executor::JoinInfo Executor::chooseJoinType(
+    const std::list<std::shared_ptr<Analyzer::Expr>>& join_quals,
+    const std::vector<InputTableInfo>& query_infos,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const ExecutorDeviceType device_type,
+    ColumnCacheMap& column_cache) {
   CHECK(device_type != ExecutorDeviceType::Hybrid);
   std::string hash_join_fail_reason{"No equijoin expression found"};
 
-  const MemoryLevel memory_level{device_type == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
-                                                                        : MemoryLevel::CPU_LEVEL};
+  const MemoryLevel memory_level{device_type == ExecutorDeviceType::GPU
+                                     ? MemoryLevel::GPU_LEVEL
+                                     : MemoryLevel::CPU_LEVEL};
 
   std::set<int> rte_idx_set;
   std::unordered_set<int> visited_tables;
@@ -2598,8 +2867,12 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
       continue;
     }
     if (IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
-      const auto hash_table_and_error = buildHashTableForQualifier(
-          qual_bin_oper, query_infos, ra_exe_unit, memory_level, visited_tables, column_cache);
+      const auto hash_table_and_error = buildHashTableForQualifier(qual_bin_oper,
+                                                                   query_infos,
+                                                                   ra_exe_unit,
+                                                                   memory_level,
+                                                                   visited_tables,
+                                                                   column_cache);
       if (hash_table_and_error.hash_table) {
         std::set<int> curr_rte_idx_set;
         qual_bin_oper->collect_rte_idx(curr_rte_idx_set);
@@ -2629,9 +2902,11 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
   }
   if (found_missing_rte) {
     // TODO(miyu): support a loop join in the beginning or middle of hash joins.
-    if (missing_rte == static_cast<ssize_t>(nest_level_num - 1) && join_hash_tables.size() == nest_level_num - 2) {
+    if (missing_rte == static_cast<ssize_t>(nest_level_num - 1) &&
+        join_hash_tables.size() == nest_level_num - 2) {
       if (!has_one_to_many_hash_table(join_hash_tables)) {
-        return Executor::JoinInfo(JoinImplType::HashPlusLoop, bin_ops, join_hash_tables, hash_join_fail_reason);
+        return Executor::JoinInfo(
+            JoinImplType::HashPlusLoop, bin_ops, join_hash_tables, hash_join_fail_reason);
       }
     }
   } else {
@@ -2639,16 +2914,20 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
       // TODO(miyu): support one-to-many hash join in folded join sequence.
       if (has_one_to_many_hash_table(join_hash_tables)) {
         if (nest_level_num == 2) {
-          return Executor::JoinInfo(JoinImplType::HashOneToMany, bin_ops, join_hash_tables, "");
+          return Executor::JoinInfo(
+              JoinImplType::HashOneToMany, bin_ops, join_hash_tables, "");
         }
       } else {
-        return Executor::JoinInfo(JoinImplType::HashOneToOne, bin_ops, join_hash_tables, "");
+        return Executor::JoinInfo(
+            JoinImplType::HashOneToOne, bin_ops, join_hash_tables, "");
       }
     }
   }
 
-  return Executor::JoinInfo(
-      JoinImplType::Loop, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}, hash_join_fail_reason);
+  return Executor::JoinInfo(JoinImplType::Loop,
+                            std::vector<std::shared_ptr<Analyzer::BinOper>>{},
+                            {},
+                            hash_join_fail_reason);
 }
 
 int8_t Executor::warpSize() const {
@@ -2706,13 +2985,15 @@ llvm::Value* Executor::castToTypeIn(llvm::Value* val, const size_t dst_bits) {
     return val;
   }
   if (val->getType()->isIntegerTy()) {
-    return cgen_state_->ir_builder_.CreateIntCast(val, get_int_type(dst_bits, cgen_state_->context_), src_bits != 1);
+    return cgen_state_->ir_builder_.CreateIntCast(
+        val, get_int_type(dst_bits, cgen_state_->context_), src_bits != 1);
   }
   // real (not dictionary-encoded) strings; store the pointer to the payload
   if (val->getType()->isPointerTy()) {
     const auto val_ptr_type = static_cast<llvm::PointerType*>(val->getType());
     CHECK(val_ptr_type->getElementType()->isIntegerTy(8));
-    return cgen_state_->ir_builder_.CreatePointerCast(val, get_int_type(dst_bits, cgen_state_->context_));
+    return cgen_state_->ir_builder_.CreatePointerCast(
+        val, get_int_type(dst_bits, cgen_state_->context_));
   }
 
   CHECK(val->getType()->isFloatTy() || val->getType()->isDoubleTy());
@@ -2775,17 +3056,19 @@ RelAlgExecutionUnit Executor::addDeletedColumn(const RelAlgExecutionUnit& ra_exe
       continue;
     }
     CHECK(deleted_cd->columnType.is_boolean());
-    ra_exe_unit_with_deleted.input_col_descs.emplace_back(
-        new InputColDescriptor(deleted_cd->columnId, deleted_cd->tableId, input_table.getNestLevel()));
+    ra_exe_unit_with_deleted.input_col_descs.emplace_back(new InputColDescriptor(
+        deleted_cd->columnId, deleted_cd->tableId, input_table.getNestLevel()));
   }
   return ra_exe_unit_with_deleted;
 }
 
-void Executor::allocateLocalColumnIds(const std::list<std::shared_ptr<const InputColDescriptor>>& global_col_ids) {
+void Executor::allocateLocalColumnIds(
+    const std::list<std::shared_ptr<const InputColDescriptor>>& global_col_ids) {
   for (const auto& col_id : global_col_ids) {
     CHECK(col_id);
     const auto local_col_id = plan_state_->global_to_local_col_ids_.size();
-    const auto it_ok = plan_state_->global_to_local_col_ids_.insert(std::make_pair(*col_id, local_col_id));
+    const auto it_ok = plan_state_->global_to_local_col_ids_.insert(
+        std::make_pair(*col_id, local_col_id));
     plan_state_->local_to_global_col_ids_.push_back(col_id->getColId());
     plan_state_->global_to_local_col_ids_.find(*col_id);
     // enforce uniqueness of the column ids in the scan plan
@@ -2793,7 +3076,8 @@ void Executor::allocateLocalColumnIds(const std::list<std::shared_ptr<const Inpu
   }
 }
 
-int Executor::getLocalColumnId(const Analyzer::ColumnVar* col_var, const bool fetch_column) const {
+int Executor::getLocalColumnId(const Analyzer::ColumnVar* col_var,
+                               const bool fetch_column) const {
   CHECK(col_var);
   const int table_id = is_nested_ ? 0 : col_var->get_table_id();
   int global_col_id = col_var->get_column_id();
@@ -2812,18 +3096,20 @@ int Executor::getLocalColumnId(const Analyzer::ColumnVar* col_var, const bool fe
   return it->second;
 }
 
-std::pair<bool, int64_t> Executor::skipFragment(const InputDescriptor& table_desc,
-                                                const Fragmenter_Namespace::FragmentInfo& fragment,
-                                                const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
-                                                const std::vector<uint64_t>& frag_offsets,
-                                                const size_t frag_idx) {
+std::pair<bool, int64_t> Executor::skipFragment(
+    const InputDescriptor& table_desc,
+    const Fragmenter_Namespace::FragmentInfo& fragment,
+    const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
+    const std::vector<uint64_t>& frag_offsets,
+    const size_t frag_idx) {
   const int table_id = table_desc.getTableId();
   if (table_desc.getSourceType() == InputSourceType::RESULT &&
       boost::get<IterTabPtr>(&get_temporary_table(temporary_tables_, table_id))) {
     return {false, -1};
   }
   for (const auto simple_qual : simple_quals) {
-    const auto comp_expr = std::dynamic_pointer_cast<const Analyzer::BinOper>(simple_qual);
+    const auto comp_expr =
+        std::dynamic_pointer_cast<const Analyzer::BinOper>(simple_qual);
     if (!comp_expr) {
       // is this possible?
       return {false, -1};
@@ -2834,7 +3120,8 @@ std::pair<bool, int64_t> Executor::skipFragment(const InputDescriptor& table_des
       // See if lhs is a simple cast that was allowed through normalize_simple_predicate
       auto lhs_uexpr = dynamic_cast<const Analyzer::UOper*>(lhs);
       if (lhs_uexpr) {
-        CHECK(lhs_uexpr->get_optype() == kCAST);  // We should have only been passed a cast expression
+        CHECK(lhs_uexpr->get_optype() ==
+              kCAST);  // We should have only been passed a cast expression
         lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(lhs_uexpr->get_operand());
         if (!lhs_col || !lhs_col->get_table_id() || lhs_col->get_rte_idx()) {
           continue;
@@ -2910,43 +3197,52 @@ std::pair<bool, int64_t> Executor::skipFragment(const InputDescriptor& table_des
 }
 
 /*
- *   The skipFragmentInnerJoins process all quals stored in the execution unit's inner_joins
- *   and gather all the ones that meet the "simple_qual" characteristics (logical expressions
- *   with AND operations, etc.). It then uses the skipFragment function to decide whether the
- *   fragment should be skipped or not.
- *   The fragment will be skipped if at least one of these skipFragment calls
- *   return a true statment in its first value.
- *   - The code depends on skipFragment's output to have a meaningful (anything but -1) second value
- *     only if its first value is "false".
+ *   The skipFragmentInnerJoins process all quals stored in the execution unit's
+ * inner_joins and gather all the ones that meet the "simple_qual" characteristics
+ * (logical expressions with AND operations, etc.). It then uses the skipFragment function
+ * to decide whether the fragment should be skipped or not. The fragment will be skipped
+ * if at least one of these skipFragment calls return a true statment in its first value.
+ *   - The code depends on skipFragment's output to have a meaningful (anything but -1)
+ * second value only if its first value is "false".
  *   - It is assumed that {false, n  > -1} has higher priority than {true, -1},
- *     i.e., we only skip if none of the quals trigger the code to update the rowid_lookup_key
+ *     i.e., we only skip if none of the quals trigger the code to update the
+ * rowid_lookup_key
  *   - Only AND operations are valid and considered:
- *     - `select * from t1,t2 where A and B and C`: A, B, and C are considered for causing the skip
+ *     - `select * from t1,t2 where A and B and C`: A, B, and C are considered for causing
+ * the skip
  *     - `select * from t1,t2 where (A or B) and C`: only C is considered
  *     - `select * from t1,t2 where A or B`: none are considered (no skipping).
- *   - NOTE: (re: intermediate projections) the following two queries are fundamentally implemented differently,
- *     which cause the first one to skip correctly, but the second one will not skip.
- *     -  e.g. #1, select * from t1 join t2 on (t1.i=t2.i) where (A and B); -- skips if possible
- *     -  e.g. #2, select * from t1 join t2 on (t1.i=t2.i and A and B); -- intermediate projection, no skipping
+ *   - NOTE: (re: intermediate projections) the following two queries are fundamentally
+ * implemented differently, which cause the first one to skip correctly, but the second
+ * one will not skip.
+ *     -  e.g. #1, select * from t1 join t2 on (t1.i=t2.i) where (A and B); -- skips if
+ * possible
+ *     -  e.g. #2, select * from t1 join t2 on (t1.i=t2.i and A and B); -- intermediate
+ * projection, no skipping
  */
-std::pair<bool, int64_t> Executor::skipFragmentInnerJoins(const InputDescriptor& table_desc,
-                                                          const RelAlgExecutionUnit& ra_exe_unit,
-                                                          const Fragmenter_Namespace::FragmentInfo& fragment,
-                                                          const std::vector<uint64_t>& frag_offsets,
-                                                          const size_t frag_idx) {
+std::pair<bool, int64_t> Executor::skipFragmentInnerJoins(
+    const InputDescriptor& table_desc,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const Fragmenter_Namespace::FragmentInfo& fragment,
+    const std::vector<uint64_t>& frag_offsets,
+    const size_t frag_idx) {
   std::pair<bool, int64_t> skip_frag{false, -1};
   for (auto& inner_join : ra_exe_unit.inner_joins) {
-    if (inner_join.type != JoinType::INNER)
+    if (inner_join.type != JoinType::INNER) {
       continue;
+    }
 
-    // extracting all the conjunctive simple_quals from the quals stored for the inner join
+    // extracting all the conjunctive simple_quals from the quals stored for the inner
+    // join
     std::list<std::shared_ptr<Analyzer::Expr>> inner_join_simple_quals;
     for (auto& qual : inner_join.quals) {
       auto temp_qual = qual_to_conjunctive_form(qual);
-      inner_join_simple_quals.insert(
-          inner_join_simple_quals.begin(), temp_qual.simple_quals.begin(), temp_qual.simple_quals.end());
+      inner_join_simple_quals.insert(inner_join_simple_quals.begin(),
+                                     temp_qual.simple_quals.begin(),
+                                     temp_qual.simple_quals.end());
     }
-    auto temp_skip_frag = skipFragment(table_desc, fragment, inner_join_simple_quals, frag_offsets, frag_idx);
+    auto temp_skip_frag = skipFragment(
+        table_desc, fragment, inner_join_simple_quals, frag_offsets, frag_idx);
     if (temp_skip_frag.second != -1) {
       skip_frag.second = temp_skip_frag.second;
       return skip_frag;
@@ -2957,6 +3253,7 @@ std::pair<bool, int64_t> Executor::skipFragmentInnerJoins(const InputDescriptor&
   return skip_frag;
 }
 
-std::map<std::pair<int, ::QueryRenderer::QueryRenderManager*>, std::shared_ptr<Executor>> Executor::executors_;
+std::map<std::pair<int, ::QueryRenderer::QueryRenderManager*>, std::shared_ptr<Executor>>
+    Executor::executors_;
 std::mutex Executor::execute_mutex_;
 mapd_shared_mutex Executor::executors_cache_mutex_;

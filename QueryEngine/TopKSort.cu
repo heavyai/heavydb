@@ -20,12 +20,12 @@
  *
  * Copyright (c) 2017 MapD Technologies, Inc.  All rights reserved.
  */
-#include "TopKSort.h"
 #include "BufferEntryUtils.h"
 #include "GpuMemUtils.h"
 #include "ResultSetBufferAccessors.h"
-#include "StreamingTopN.h"
 #include "SortUtils.cuh"
+#include "StreamingTopN.h"
+#include "TopKSort.h"
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
@@ -37,7 +37,8 @@
 
 template <class K, class I = int32_t>
 struct is_taken_entry {
-  is_taken_entry(const int8_t* buff, const size_t stride) : buff_ptr(buff), key_stride(stride) {}
+  is_taken_entry(const int8_t* buff, const size_t stride)
+      : buff_ptr(buff), key_stride(stride) {}
   __host__ __device__ bool operator()(const I index) {
     return !is_empty_entry<K>(static_cast<size_t>(index), buff_ptr, key_stride);
   }
@@ -54,7 +55,8 @@ struct is_null_order_entry {
     const auto oe_val = *reinterpret_cast<const K*>(oe_base + index * oe_stride);
     switch (sizeof(K)) {
       case 4:
-        return *reinterpret_cast<const int32_t*>(&oe_val) == static_cast<int32_t>(null_val);
+        return *reinterpret_cast<const int32_t*>(&oe_val) ==
+               static_cast<int32_t>(null_val);
       case 8:
         return *reinterpret_cast<const int64_t*>(&oe_val) == null_val;
       default:
@@ -76,25 +78,36 @@ ForwardIterator partition_by_null(ForwardIterator first,
   if (nulls_first) {
     return (layout.col_bytes == 4)
                ? thrust::partition(
-                     first, last, is_null_order_entry<int32_t>(rows_ptr + layout.col_off, layout.row_bytes, null_val))
+                     first,
+                     last,
+                     is_null_order_entry<int32_t>(
+                         rows_ptr + layout.col_off, layout.row_bytes, null_val))
                : thrust::partition(
-                     first, last, is_null_order_entry<int64_t>(rows_ptr + layout.col_off, layout.row_bytes, null_val));
+                     first,
+                     last,
+                     is_null_order_entry<int64_t>(
+                         rows_ptr + layout.col_off, layout.row_bytes, null_val));
   } else {
     return (layout.col_bytes == 4)
                ? thrust::partition(
                      first,
                      last,
-                     thrust::not1(is_null_order_entry<int32_t>(rows_ptr + layout.col_off, layout.row_bytes, null_val)))
+                     thrust::not1(is_null_order_entry<int32_t>(
+                         rows_ptr + layout.col_off, layout.row_bytes, null_val)))
                : thrust::partition(
                      first,
                      last,
-                     thrust::not1(is_null_order_entry<int64_t>(rows_ptr + layout.col_off, layout.row_bytes, null_val)));
+                     thrust::not1(is_null_order_entry<int64_t>(
+                         rows_ptr + layout.col_off, layout.row_bytes, null_val)));
   }
 }
 
 template <class K, class I>
 struct KeyFetcher {
-  KeyFetcher(K* out_base, const int8_t* src_oe_base, const size_t stride, const I* indices)
+  KeyFetcher(K* out_base,
+             const int8_t* src_oe_base,
+             const size_t stride,
+             const I* indices)
       : key_base(out_base), oe_base(src_oe_base), oe_stride(stride), idx_base(indices) {}
   __host__ __device__ void operator()(const I index) {
     key_base[index] = *reinterpret_cast<const K*>(oe_base + idx_base[index] * oe_stride);
@@ -143,10 +156,14 @@ void sort_indices_by_key(thrust::device_ptr<I> d_idx_first,
                          const bool desc,
                          ThrustAllocator& allocator) {
   if (desc) {
-    thrust::sort_by_key(
-        thrust::device(allocator), d_key_buffer, d_key_buffer + idx_count, d_idx_first, thrust::greater<K>());
+    thrust::sort_by_key(thrust::device(allocator),
+                        d_key_buffer,
+                        d_key_buffer + idx_count,
+                        d_idx_first,
+                        thrust::greater<K>());
   } else {
-    thrust::sort_by_key(thrust::device(allocator), d_key_buffer, d_key_buffer + idx_count, d_idx_first);
+    thrust::sort_by_key(
+        thrust::device(allocator), d_key_buffer, d_key_buffer + idx_count, d_idx_first);
   }
 }
 
@@ -162,12 +179,22 @@ void do_radix_sort(thrust::device_ptr<I> d_idx_first,
     switch (layout.col_bytes) {
       case 4: {
         auto d_oe_buffer = get_device_ptr<float>(idx_count, allocator);
-        collect_order_entry_column(d_oe_buffer, d_src_buffer, d_idx_first, idx_count, layout.col_off, layout.row_bytes);
+        collect_order_entry_column(d_oe_buffer,
+                                   d_src_buffer,
+                                   d_idx_first,
+                                   idx_count,
+                                   layout.col_off,
+                                   layout.row_bytes);
         sort_indices_by_key(d_idx_first, idx_count, d_oe_buffer, oe.is_desc, allocator);
       } break;
       case 8: {
         auto d_oe_buffer = get_device_ptr<double>(idx_count, allocator);
-        collect_order_entry_column(d_oe_buffer, d_src_buffer, d_idx_first, idx_count, layout.col_off, layout.row_bytes);
+        collect_order_entry_column(d_oe_buffer,
+                                   d_src_buffer,
+                                   d_idx_first,
+                                   idx_count,
+                                   layout.col_off,
+                                   layout.row_bytes);
         sort_indices_by_key(d_idx_first, idx_count, d_oe_buffer, oe.is_desc, allocator);
       } break;
       default:
@@ -179,12 +206,22 @@ void do_radix_sort(thrust::device_ptr<I> d_idx_first,
   switch (layout.col_bytes) {
     case 4: {
       auto d_oe_buffer = get_device_ptr<int32_t>(idx_count, allocator);
-      collect_order_entry_column(d_oe_buffer, d_src_buffer, d_idx_first, idx_count, layout.col_off, layout.row_bytes);
+      collect_order_entry_column(d_oe_buffer,
+                                 d_src_buffer,
+                                 d_idx_first,
+                                 idx_count,
+                                 layout.col_off,
+                                 layout.row_bytes);
       sort_indices_by_key(d_idx_first, idx_count, d_oe_buffer, oe.is_desc, allocator);
     } break;
     case 8: {
       auto d_oe_buffer = get_device_ptr<int64_t>(idx_count, allocator);
-      collect_order_entry_column(d_oe_buffer, d_src_buffer, d_idx_first, idx_count, layout.col_off, layout.row_bytes);
+      collect_order_entry_column(d_oe_buffer,
+                                 d_src_buffer,
+                                 d_idx_first,
+                                 idx_count,
+                                 layout.col_off,
+                                 layout.row_bytes);
       sort_indices_by_key(d_idx_first, idx_count, d_oe_buffer, oe.is_desc, allocator);
     } break;
     default:
@@ -194,7 +231,10 @@ void do_radix_sort(thrust::device_ptr<I> d_idx_first,
 
 template <class I>
 struct RowFetcher {
-  RowFetcher(int8_t* out_base, const int8_t* in_base, const I* indices, const size_t row_sz)
+  RowFetcher(int8_t* out_base,
+             const int8_t* in_base,
+             const I* indices,
+             const size_t row_sz)
       : dst_base(out_base), src_base(in_base), idx_base(indices), row_size(row_sz) {}
   __host__ __device__ void operator()(const I index) {
     memcpy(dst_base + index * row_size, src_base + idx_base[index] * row_size, row_size);
@@ -207,55 +247,63 @@ struct RowFetcher {
 };
 
 template <typename DerivedPolicy>
-void reset_keys_in_row_buffer(const thrust::detail::execution_policy_base<DerivedPolicy>& exec,
-                              int8_t* row_buffer,
-                              const size_t key_width,
-                              const size_t row_size,
-                              const size_t first,
-                              const size_t last) {
+void reset_keys_in_row_buffer(
+    const thrust::detail::execution_policy_base<DerivedPolicy>& exec,
+    int8_t* row_buffer,
+    const size_t key_width,
+    const size_t row_size,
+    const size_t first,
+    const size_t last) {
   switch (key_width) {
     case 4:
-      thrust::for_each(exec,
-                       thrust::make_counting_iterator(first),
-                       thrust::make_counting_iterator(last),
-                       KeyReseter<int32_t>(row_buffer, row_size, static_cast<int32_t>(EMPTY_KEY_32)));
+      thrust::for_each(
+          exec,
+          thrust::make_counting_iterator(first),
+          thrust::make_counting_iterator(last),
+          KeyReseter<int32_t>(row_buffer, row_size, static_cast<int32_t>(EMPTY_KEY_32)));
       break;
     case 8:
-      thrust::for_each(exec,
-                       thrust::make_counting_iterator(first),
-                       thrust::make_counting_iterator(last),
-                       KeyReseter<int64_t>(row_buffer, row_size, static_cast<int64_t>(EMPTY_KEY_64)));
+      thrust::for_each(
+          exec,
+          thrust::make_counting_iterator(first),
+          thrust::make_counting_iterator(last),
+          KeyReseter<int64_t>(row_buffer, row_size, static_cast<int64_t>(EMPTY_KEY_64)));
       break;
     default:
       CHECK(false);
   }
 }
 
-std::vector<int8_t> pop_n_rows_from_merged_heaps_gpu(Data_Namespace::DataMgr* data_mgr,
-                                                     const int64_t* dev_heaps,
-                                                     const size_t heaps_size,
-                                                     const size_t n,
-                                                     const PodOrderEntry& oe,
-                                                     const GroupByBufferLayoutInfo& layout,
-                                                     const size_t group_key_bytes,
-                                                     const size_t thread_count,
-                                                     const int device_id) {
+std::vector<int8_t> pop_n_rows_from_merged_heaps_gpu(
+    Data_Namespace::DataMgr* data_mgr,
+    const int64_t* dev_heaps,
+    const size_t heaps_size,
+    const size_t n,
+    const PodOrderEntry& oe,
+    const GroupByBufferLayoutInfo& layout,
+    const size_t group_key_bytes,
+    const size_t thread_count,
+    const int device_id) {
   const auto row_size = layout.row_bytes;
   CHECK_EQ(heaps_size, streaming_top_n::get_heap_size(row_size, n, thread_count));
-  const int8_t* rows_ptr =
-      reinterpret_cast<const int8_t*>(dev_heaps) + streaming_top_n::get_rows_offset_of_heaps(n, thread_count);
+  const int8_t* rows_ptr = reinterpret_cast<const int8_t*>(dev_heaps) +
+                           streaming_top_n::get_rows_offset_of_heaps(n, thread_count);
   const auto total_entry_count = n * thread_count;
   ThrustAllocator thrust_allocator(data_mgr, device_id);
   auto d_indices = get_device_ptr<int32_t>(total_entry_count, thrust_allocator);
   thrust::sequence(d_indices, d_indices + total_entry_count);
-  auto separator =
-      (group_key_bytes == 4)
-          ? thrust::partition(d_indices, d_indices + total_entry_count, is_taken_entry<int32_t>(rows_ptr, row_size))
-          : thrust::partition(d_indices, d_indices + total_entry_count, is_taken_entry<int64_t>(rows_ptr, row_size));
+  auto separator = (group_key_bytes == 4)
+                       ? thrust::partition(d_indices,
+                                           d_indices + total_entry_count,
+                                           is_taken_entry<int32_t>(rows_ptr, row_size))
+                       : thrust::partition(d_indices,
+                                           d_indices + total_entry_count,
+                                           is_taken_entry<int64_t>(rows_ptr, row_size));
   const size_t actual_entry_count = separator - d_indices;
   if (!actual_entry_count) {
     std::vector<int8_t> top_rows(row_size * n);
-    reset_keys_in_row_buffer(thrust::host, &top_rows[0], layout.col_bytes, row_size, 0, n);
+    reset_keys_in_row_buffer(
+        thrust::host, &top_rows[0], layout.col_bytes, row_size, 0, n);
     return top_rows;
   }
 
@@ -272,7 +320,12 @@ std::vector<int8_t> pop_n_rows_from_merged_heaps_gpu(Data_Namespace::DataMgr* da
     if (oe.nulls_first) {
       const size_t null_count = separator - d_indices;
       if (null_count < actual_entry_count) {
-        do_radix_sort(separator, actual_entry_count - null_count, rows_ptr, oe, layout, thrust_allocator);
+        do_radix_sort(separator,
+                      actual_entry_count - null_count,
+                      rows_ptr,
+                      oe,
+                      layout,
+                      thrust_allocator);
       }
     } else {
       const size_t nonnull_count = separator - d_indices;
@@ -286,12 +339,18 @@ std::vector<int8_t> pop_n_rows_from_merged_heaps_gpu(Data_Namespace::DataMgr* da
   auto d_top_rows = get_device_ptr<int8_t>(row_size * n, thrust_allocator);
   thrust::for_each(thrust::make_counting_iterator(size_t(0)),
                    thrust::make_counting_iterator(final_entry_count),
-                   RowFetcher<int32_t>(
-                       thrust::raw_pointer_cast(d_top_rows), rows_ptr, thrust::raw_pointer_cast(d_indices), row_size));
+                   RowFetcher<int32_t>(thrust::raw_pointer_cast(d_top_rows),
+                                       rows_ptr,
+                                       thrust::raw_pointer_cast(d_indices),
+                                       row_size));
 
   if (final_entry_count < n) {
-    reset_keys_in_row_buffer(
-        thrust::device, thrust::raw_pointer_cast(d_top_rows), layout.col_bytes, row_size, final_entry_count, n);
+    reset_keys_in_row_buffer(thrust::device,
+                             thrust::raw_pointer_cast(d_top_rows),
+                             layout.col_bytes,
+                             row_size,
+                             final_entry_count,
+                             n);
   }
 
   std::vector<int8_t> top_rows(row_size * n);

@@ -62,15 +62,24 @@ class CudaMgr {
   int8_t* allocateDeviceMem(const size_t numBytes, const int deviceNum);
   void freePinnedHostMem(int8_t* hostPtr);
   void freeDeviceMem(int8_t* devicePtr);
-  void copyHostToDevice(int8_t* devicePtr, const int8_t* hostPtr, const size_t numBytes, const int deviceNum);
-  void copyDeviceToHost(int8_t* hostPtr, const int8_t* devicePtr, const size_t numBytes, const int deviceNum);
+  void copyHostToDevice(int8_t* devicePtr,
+                        const int8_t* hostPtr,
+                        const size_t numBytes,
+                        const int deviceNum);
+  void copyDeviceToHost(int8_t* hostPtr,
+                        const int8_t* devicePtr,
+                        const size_t numBytes,
+                        const int deviceNum);
   void copyDeviceToDevice(int8_t* destPtr,
                           int8_t* srcPtr,
                           const size_t numBytes,
                           const int destDeviceNum,
                           const int srcDeviceNum);
   void zeroDeviceMem(int8_t* devicePtr, const size_t numBytes, const int deviceNum);
-  void setDeviceMem(int8_t* devicePtr, const unsigned char uc, const size_t numBytes, const int deviceNum);
+  void setDeviceMem(int8_t* devicePtr,
+                    const unsigned char uc,
+                    const size_t numBytes,
+                    const int deviceNum);
   inline int getDeviceCount() const { return deviceCount_; }
   inline int getStartGpu() const {
 #ifdef HAVE_CUDA
@@ -79,10 +88,18 @@ class CudaMgr {
     return -1;
 #endif
   }
-  inline bool isArchMaxwell() const { return (getDeviceCount() > 0 && deviceProperties[0].computeMajor == 5); }
-  inline bool isArchMaxwellOrLater() const { return (getDeviceCount() > 0 && deviceProperties[0].computeMajor >= 5); }
-  inline bool isArchPascal() const { return (getDeviceCount() > 0 && deviceProperties[0].computeMajor == 6); }
-  inline bool isArchPascalOrLater() const { return (getDeviceCount() > 0 && deviceProperties[0].computeMajor >= 6); }
+  inline bool isArchMaxwell() const {
+    return (getDeviceCount() > 0 && deviceProperties[0].computeMajor == 5);
+  }
+  inline bool isArchMaxwellOrLater() const {
+    return (getDeviceCount() > 0 && deviceProperties[0].computeMajor >= 5);
+  }
+  inline bool isArchPascal() const {
+    return (getDeviceCount() > 0 && deviceProperties[0].computeMajor == 6);
+  }
+  inline bool isArchPascalOrLater() const {
+    return (getDeviceCount() > 0 && deviceProperties[0].computeMajor >= 6);
+  }
 
   bool isArchMaxwellOrLaterForAll() const;
   bool isArchVoltaForAll() const;

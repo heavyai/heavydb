@@ -35,10 +35,12 @@ namespace Catalog_Namespace {
 class SessionInfo;
 }
 
-
 class Calcite {
  public:
-  Calcite(const int mapd_port, const int port, const std::string& data_dir, const size_t calcite_max_mem)
+  Calcite(const int mapd_port,
+          const int port,
+          const std::string& data_dir,
+          const size_t calcite_max_mem)
       : Calcite(mapd_port, port, data_dir, calcite_max_mem, ""){};
   Calcite(const int mapd_port,
           const int port,
@@ -49,10 +51,11 @@ class Calcite {
                       const std::string sql_string,
                       const bool legacy_syntax,
                       const bool is_explain);
-  std::vector<TCompletionHint> getCompletionHints(const Catalog_Namespace::SessionInfo& session_info,
-                                                  const std::vector<std::string>& visible_tables,
-                                                  const std::string sql_string,
-                                                  const int cursor);
+  std::vector<TCompletionHint> getCompletionHints(
+      const Catalog_Namespace::SessionInfo& session_info,
+      const std::vector<std::string>& visible_tables,
+      const std::string sql_string,
+      const int cursor);
   std::string getExtensionFunctionWhitelist();
   void updateMetadata(std::string catalog, std::string table);
   void close_calcite_server();
@@ -61,7 +64,10 @@ class Calcite {
   std::string& get_session_prefix() { return session_prefix_; }
 
  private:
-  void runServer(const int mapd_port, const int port, const std::string& data_dir, const size_t calcite_max_mem);
+  void runServer(const int mapd_port,
+                 const int port,
+                 const std::string& data_dir,
+                 const size_t calcite_max_mem);
   TPlanResult processImpl(const Catalog_Namespace::SessionInfo& session_info,
                           const std::string sql_string,
                           const bool legacy_syntax,

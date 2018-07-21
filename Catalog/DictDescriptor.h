@@ -46,14 +46,14 @@ struct DictDescriptor {
                  const int rc,
                  std::string& fname,
                  bool temp)
-      : dictRef(dict_ref),
-        dictName(name),
-        dictNBits(nbits),
-        dictIsShared(shared),
-        dictFolderPath(fname),
-        refcount(rc),
-        dictIsTemp(temp),
-        stringDict(nullptr) {}
+      : dictRef(dict_ref)
+      , dictName(name)
+      , dictNBits(nbits)
+      , dictIsShared(shared)
+      , dictFolderPath(fname)
+      , refcount(rc)
+      , dictIsTemp(temp)
+      , stringDict(nullptr) {}
 
   DictDescriptor(int db_id,
                  int dict_id,
@@ -63,13 +63,13 @@ struct DictDescriptor {
                  const int rc,
                  std::string& fname,
                  bool temp)
-      : dictName(name),
-        dictNBits(nbits),
-        dictIsShared(shared),
-        dictFolderPath(fname),
-        refcount(rc),
-        dictIsTemp(temp),
-        stringDict(nullptr) {
+      : dictName(name)
+      , dictNBits(nbits)
+      , dictIsShared(shared)
+      , dictFolderPath(fname)
+      , refcount(rc)
+      , dictIsTemp(temp)
+      , stringDict(nullptr) {
     dictRef.dbId = db_id;
     dictRef.dictId = dict_id;
   }

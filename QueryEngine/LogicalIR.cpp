@@ -27,14 +27,18 @@ bool contains_unsafe_division(const Analyzer::Expr* expr) {
     if (bin_oper && bin_oper->get_optype() == kDIVIDE) {
       auto rhs = bin_oper->get_right_operand();
       auto rhs_constant = dynamic_cast<const Analyzer::Constant*>(rhs);
-      if (!rhs_constant || rhs_constant->get_is_null())
+      if (!rhs_constant || rhs_constant->get_is_null()) {
         return true;
+      }
       const auto& datum = rhs_constant->get_constval();
       const auto& ti = rhs_constant->get_type_info();
       const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
-      if ((type == kBOOLEAN && datum.boolval == 0) || (type == kTINYINT && datum.tinyintval == 0) ||
-          (type == kSMALLINT && datum.smallintval == 0) || (type == kINT && datum.intval == 0) ||
-          (type == kBIGINT && datum.bigintval == 0LL) || (type == kFLOAT && datum.floatval == 0.0) ||
+      if ((type == kBOOLEAN && datum.boolval == 0) ||
+          (type == kTINYINT && datum.tinyintval == 0) ||
+          (type == kSMALLINT && datum.smallintval == 0) ||
+          (type == kINT && datum.intval == 0) ||
+          (type == kBIGINT && datum.bigintval == 0LL) ||
+          (type == kFLOAT && datum.floatval == 0.0) ||
           (type == kDOUBLE && datum.doubleval == 0.0)) {
         return true;
       }
@@ -73,10 +77,12 @@ Likelihood get_likelihood(const Analyzer::Expr* expr) {
   auto u_oper = dynamic_cast<const Analyzer::UOper*>(expr);
   if (u_oper) {
     Likelihood oper_likelihood = get_likelihood(u_oper->get_operand());
-    if (oper_likelihood.isInvalid())
+    if (oper_likelihood.isInvalid()) {
       return Likelihood();
-    if (u_oper->get_optype() == kNOT)
+    }
+    if (u_oper->get_optype() == kNOT) {
       return truth - oper_likelihood;
+    }
     return oper_likelihood;
   }
   auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
@@ -85,8 +91,9 @@ Likelihood get_likelihood(const Analyzer::Expr* expr) {
     auto rhs = bin_oper->get_right_operand();
     Likelihood lhs_likelihood = get_likelihood(lhs);
     Likelihood rhs_likelihood = get_likelihood(rhs);
-    if (lhs_likelihood.isInvalid() && rhs_likelihood.isInvalid())
+    if (lhs_likelihood.isInvalid() && rhs_likelihood.isInvalid()) {
       return Likelihood();
+    }
     const auto optype = bin_oper->get_optype();
     if (optype == kOR) {
       auto both_false = (truth - lhs_likelihood) * (truth - rhs_likelihood);
@@ -131,8 +138,9 @@ Weight get_weight(const Analyzer::Expr* expr, int depth = 0) {
     return weight + 1;
   }
 
-  if (depth > 4)
+  if (depth > 4) {
     return Weight(1);
+  }
 
   return Weight();
 }
@@ -217,7 +225,8 @@ bool Executor::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
   return short_circuit;
 }
 
-llvm::Value* Executor::codegenLogicalShortCircuit(const Analyzer::BinOper* bin_oper, const CompilationOptions& co) {
+llvm::Value* Executor::codegenLogicalShortCircuit(const Analyzer::BinOper* bin_oper,
+                                                  const CompilationOptions& co) {
   const auto optype = bin_oper->get_optype();
   auto lhs = bin_oper->get_left_operand();
   auto rhs = bin_oper->get_right_operand();
@@ -227,12 +236,15 @@ llvm::Value* Executor::codegenLogicalShortCircuit(const Analyzer::BinOper* bin_o
   } else if (contains_unsafe_division(lhs)) {
     // lhs contains a possible div-by-0: swap and short-circuit
     std::swap(rhs, lhs);
-  } else if (((optype == kOR && get_likelihood(lhs) > 0.90) || (optype == kAND && get_likelihood(lhs) < 0.10)) &&
+  } else if (((optype == kOR && get_likelihood(lhs) > 0.90) ||
+              (optype == kAND && get_likelihood(lhs) < 0.10)) &&
              get_weight(rhs) > 10) {
     // short circuit if we're likely to see either (trueA || heavyB) or (falseA && heavyB)
-  } else if (((optype == kOR && get_likelihood(rhs) > 0.90) || (optype == kAND && get_likelihood(rhs) < 0.10)) &&
+  } else if (((optype == kOR && get_likelihood(rhs) > 0.90) ||
+              (optype == kAND && get_likelihood(rhs) < 0.10)) &&
              get_weight(lhs) > 10) {
-    // swap and short circuit if we're likely to see either (heavyA || trueB) or (heavyA && falseB)
+    // swap and short circuit if we're likely to see either (heavyA || trueB) or (heavyA
+    // && falseB)
     std::swap(rhs, lhs);
   } else {
     // no motivation to short circuit
@@ -249,30 +261,37 @@ llvm::Value* Executor::codegenLogicalShortCircuit(const Analyzer::BinOper* bin_o
   // the control flow converges.
   FetchCacheAnchor anchor(cgen_state_.get());
 
-  auto rhs_bb = llvm::BasicBlock::Create(cgen_state_->context_, "rhs_bb", cgen_state_->row_func_);
-  auto ret_bb = llvm::BasicBlock::Create(cgen_state_->context_, "ret_bb", cgen_state_->row_func_);
+  auto rhs_bb =
+      llvm::BasicBlock::Create(cgen_state_->context_, "rhs_bb", cgen_state_->row_func_);
+  auto ret_bb =
+      llvm::BasicBlock::Create(cgen_state_->context_, "ret_bb", cgen_state_->row_func_);
   llvm::BasicBlock* nullcheck_ok_bb{nullptr};
   llvm::BasicBlock* nullcheck_fail_bb{nullptr};
 
   if (!ti.get_notnull()) {
     // need lhs nullcheck before short circuiting
-    nullcheck_ok_bb = llvm::BasicBlock::Create(cgen_state_->context_, "nullcheck_ok_bb", cgen_state_->row_func_);
-    nullcheck_fail_bb = llvm::BasicBlock::Create(cgen_state_->context_, "nullcheck_fail_bb", cgen_state_->row_func_);
+    nullcheck_ok_bb = llvm::BasicBlock::Create(
+        cgen_state_->context_, "nullcheck_ok_bb", cgen_state_->row_func_);
+    nullcheck_fail_bb = llvm::BasicBlock::Create(
+        cgen_state_->context_, "nullcheck_fail_bb", cgen_state_->row_func_);
     if (lhs_lv->getType()->isIntegerTy(1)) {
       lhs_lv = castToTypeIn(lhs_lv, 8);
     }
     auto lhs_nullcheck = cgen_state_->ir_builder_.CreateICmpEQ(lhs_lv, inlineIntNull(ti));
-    cgen_state_->ir_builder_.CreateCondBr(lhs_nullcheck, nullcheck_fail_bb, nullcheck_ok_bb);
+    cgen_state_->ir_builder_.CreateCondBr(
+        lhs_nullcheck, nullcheck_fail_bb, nullcheck_ok_bb);
     cgen_state_->ir_builder_.SetInsertPoint(nullcheck_ok_bb);
   }
 
   auto sc_check_bb = cgen_state_->ir_builder_.GetInsertBlock();
   auto cnst_lv = llvm::ConstantInt::get(lhs_lv->getType(), (optype == kOR));
-  // Branch to codegen rhs if NOT getting (true || rhs) or (false && rhs), likelihood of the branch is < 0.10
-  cgen_state_->ir_builder_.CreateCondBr(cgen_state_->ir_builder_.CreateICmpNE(lhs_lv, cnst_lv),
-                                        rhs_bb,
-                                        ret_bb,
-                                        llvm::MDBuilder(cgen_state_->context_).createBranchWeights(10, 90));
+  // Branch to codegen rhs if NOT getting (true || rhs) or (false && rhs), likelihood of
+  // the branch is < 0.10
+  cgen_state_->ir_builder_.CreateCondBr(
+      cgen_state_->ir_builder_.CreateICmpNE(lhs_lv, cnst_lv),
+      rhs_bb,
+      ret_bb,
+      llvm::MDBuilder(cgen_state_->context_).createBranchWeights(10, 90));
 
   // Codegen rhs when unable to short circuit.
   cgen_state_->ir_builder_.SetInsertPoint(rhs_bb);
@@ -295,20 +314,24 @@ llvm::Value* Executor::codegenLogicalShortCircuit(const Analyzer::BinOper* bin_o
   }
 
   cgen_state_->ir_builder_.SetInsertPoint(ret_bb);
-  auto result_phi = cgen_state_->ir_builder_.CreatePHI(lhs_lv->getType(), (!ti.get_notnull()) ? 3 : 2);
-  if (!ti.get_notnull())
+  auto result_phi =
+      cgen_state_->ir_builder_.CreatePHI(lhs_lv->getType(), (!ti.get_notnull()) ? 3 : 2);
+  if (!ti.get_notnull()) {
     result_phi->addIncoming(inlineIntNull(ti), nullcheck_fail_bb);
+  }
   result_phi->addIncoming(cnst_lv, sc_check_bb);
   result_phi->addIncoming(rhs_lv, rhs_codegen_bb);
   return result_phi;
 }
 
-llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper, const CompilationOptions& co) {
+llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper,
+                                      const CompilationOptions& co) {
   const auto optype = bin_oper->get_optype();
   CHECK(IS_LOGIC(optype));
 
-  if (llvm::Value* short_circuit = codegenLogicalShortCircuit(bin_oper, co))
+  if (llvm::Value* short_circuit = codegenLogicalShortCircuit(bin_oper, co)) {
     return short_circuit;
+  }
 
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
@@ -346,7 +369,8 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper, const C
 llvm::Value* Executor::toBool(llvm::Value* lv) {
   CHECK(lv->getType()->isIntegerTy());
   if (static_cast<llvm::IntegerType*>(lv->getType())->getBitWidth() > 1) {
-    return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGT, lv, llvm::ConstantInt::get(lv->getType(), 0));
+    return cgen_state_->ir_builder_.CreateICmp(
+        llvm::ICmpInst::ICMP_SGT, lv, llvm::ConstantInt::get(lv->getType(), 0));
   }
   return lv;
 }
@@ -360,7 +384,8 @@ bool is_qualified_bin_oper(const Analyzer::Expr* expr) {
 
 }  // namespace
 
-llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper, const CompilationOptions& co) {
+llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper,
+                                      const CompilationOptions& co) {
   const auto optype = uoper->get_optype();
   CHECK_EQ(kNOT, optype);
   const auto operand = uoper->get_operand();
@@ -371,10 +396,12 @@ llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper, const Compil
   const bool not_null = (operand_ti.get_notnull() || is_qualified_bin_oper(operand));
   CHECK(not_null || operand_lv->getType()->isIntegerTy(8));
   return not_null ? cgen_state_->ir_builder_.CreateNot(toBool(operand_lv))
-                  : cgen_state_->emitCall("logical_not", {operand_lv, inlineIntNull(operand_ti)});
+                  : cgen_state_->emitCall("logical_not",
+                                          {operand_lv, inlineIntNull(operand_ti)});
 }
 
-llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const CompilationOptions& co) {
+llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper,
+                                     const CompilationOptions& co) {
   const auto operand = uoper->get_operand();
   if (dynamic_cast<const Analyzer::Constant*>(operand) &&
       dynamic_cast<const Analyzer::Constant*>(operand)->get_is_null()) {
@@ -382,24 +409,29 @@ llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const Compila
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 1);
   }
   const auto& ti = operand->get_type_info();
-  CHECK(ti.is_integer() || ti.is_boolean() || ti.is_decimal() || ti.is_time() || ti.is_string() || ti.is_fp() ||
-        ti.is_array());
+  CHECK(ti.is_integer() || ti.is_boolean() || ti.is_decimal() || ti.is_time() ||
+        ti.is_string() || ti.is_fp() || ti.is_array());
   // if the type is inferred as non null, short-circuit to false
   if (ti.get_notnull() && !ti.is_array()) {
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
   }
   const auto operand_lv = codegen(operand, true, co).front();
   if (ti.is_array()) {
-    return cgen_state_->emitExternalCall(
-        "array_is_null", get_int_type(1, cgen_state_->context_), {operand_lv, posArg(operand)});
+    return cgen_state_->emitExternalCall("array_is_null",
+                                         get_int_type(1, cgen_state_->context_),
+                                         {operand_lv, posArg(operand)});
   }
   return codegenIsNullNumber(operand_lv, ti);
 }
 
-llvm::Value* Executor::codegenIsNullNumber(llvm::Value* operand_lv, const SQLTypeInfo& ti) {
+llvm::Value* Executor::codegenIsNullNumber(llvm::Value* operand_lv,
+                                           const SQLTypeInfo& ti) {
   if (ti.is_fp()) {
     return cgen_state_->ir_builder_.CreateFCmp(
-        llvm::FCmpInst::FCMP_OEQ, operand_lv, ti.get_type() == kFLOAT ? ll_fp(NULL_FLOAT) : ll_fp(NULL_DOUBLE));
+        llvm::FCmpInst::FCMP_OEQ,
+        operand_lv,
+        ti.get_type() == kFLOAT ? ll_fp(NULL_FLOAT) : ll_fp(NULL_DOUBLE));
   }
-  return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_EQ, operand_lv, inlineIntNull(ti));
+  return cgen_state_->ir_builder_.CreateICmp(
+      llvm::ICmpInst::ICMP_EQ, operand_lv, inlineIntNull(ti));
 }

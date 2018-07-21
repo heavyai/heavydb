@@ -17,8 +17,8 @@
 #ifndef ARCHIVE_ARCHIVE_H_
 #define ARCHIVE_ARCHIVE_H_
 
-#include <string>
 #include <regex>
+#include <string>
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -28,13 +28,15 @@
 // etc are derived.
 class Archive {
  public:
-  Archive(const std::string url, const bool plain_text) : url(url), plain_text(plain_text) {
+  Archive(const std::string url, const bool plain_text)
+      : url(url), plain_text(plain_text) {
     parse_url(url, url_parts);
 
     if (0 == (ar = archive_read_new()))
       throw std::runtime_error(std::string("archive_read_new failed!"));
 
-//!! LIBARCHIVE_ENABLE_ALL may trigger exception "detect_column_types error: libarchive error: Missing type keyword in
+//!! LIBARCHIVE_ENABLE_ALL may trigger exception "detect_column_types error: libarchive
+//! error: Missing type keyword in
 //! mtree specification"
 //!! on ridiculously simple raw data
 //#define LIBARCHIVE_ENABLE_ALL
@@ -84,7 +86,8 @@ class Archive {
 
   virtual std::string archive_error(int err) {
     auto cstr = archive_error_string(ar);
-    return std::string("libarchive error: ") + (cstr ? std::string(cstr) : std::to_string(err));
+    return std::string("libarchive error: ") +
+           (cstr ? std::string(cstr) : std::to_string(err));
   }
 
   virtual bool read_next_header() {
@@ -135,9 +138,13 @@ class Archive {
     return ((Archive*)client_data)->read(buff);
   }
 
-  static int open(struct archive* a, void* client_data) { return ((Archive*)client_data)->open(); }
+  static int open(struct archive* a, void* client_data) {
+    return ((Archive*)client_data)->open();
+  }
 
-  static int close(struct archive* a, void* client_data) { return ((Archive*)client_data)->close(); }
+  static int close(struct archive* a, void* client_data) {
+    return ((Archive*)client_data)->close();
+  }
 
   static void parse_url(const std::string url, std::map<int, std::string>& url_parts) {
     /*
@@ -155,7 +162,8 @@ class Archive {
                     9: cool
      */
     std::smatch sm;
-    std::regex url_regex(R"(^(([^:\/?#]+):)?(//([^\/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?)", std::regex::extended);
+    std::regex url_regex(R"(^(([^:\/?#]+):)?(//([^\/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?)",
+                         std::regex::extended);
     if (!std::regex_match(url, sm, url_regex))
       throw std::runtime_error(std::string("malformed url: ") + url);
 

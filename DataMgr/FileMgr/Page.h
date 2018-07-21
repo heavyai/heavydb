@@ -23,11 +23,11 @@
 #ifndef DATAMGR_MEMORY_FILE_PAGE_H
 #define DATAMGR_MEMORY_FILE_PAGE_H
 
+#include <glog/logging.h>
 #include <cassert>
 #include <deque>
-#include <vector>
 #include <stdexcept>
-#include <glog/logging.h>
+#include <vector>
 #include "../../Shared/types.h"
 
 namespace File_Namespace {
@@ -119,10 +119,13 @@ struct HeaderInfo {
   int versionEpoch;
   Page page;
 
-  HeaderInfo(const ChunkKey& chunkKey, const int pageId, const int versionEpoch, const Page& page)
+  HeaderInfo(const ChunkKey& chunkKey,
+             const int pageId,
+             const int versionEpoch,
+             const Page& page)
       : chunkKey(chunkKey), pageId(pageId), versionEpoch(versionEpoch), page(page) {}
 };
 
-}  // File_Namespace
+}  // namespace File_Namespace
 
 #endif  // DATAMGR_MEMORY_FILE_PAGE_H

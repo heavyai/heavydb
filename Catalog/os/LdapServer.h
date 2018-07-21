@@ -32,7 +32,9 @@ class LdapServer {
  public:
   LdapServer() {}
   LdapServer(const AuthMetadata& authMetadata) {}
-  bool authenticate_user(const std::string& userName, const std::string& passwd) { return false; }
+  bool authenticate_user(const std::string& userName, const std::string& passwd) {
+    return false;
+  }
   bool inUse() { return false; }
 };
 

@@ -20,15 +20,15 @@
 #ifdef HAVE_THRIFT_STD_SHAREDPTR
 #include <memory>
 namespace mapd {
-using std::shared_ptr;
 using std::make_shared;
-}
+using std::shared_ptr;
+}  // namespace mapd
 #else
 #include <boost/make_shared.hpp>
 namespace mapd {
-using boost::shared_ptr;
 using boost::make_shared;
-}
+using boost::shared_ptr;
+}  // namespace mapd
 #endif  // HAVE_THRIFT_STD_SHAREDPTR
 
 #endif  // MAPD_SHARED_PTR

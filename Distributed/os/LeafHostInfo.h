@@ -17,7 +17,8 @@
 /*
  * @file    LeafHostInfo.h
  * @author  Alex Suhan <alex@mapd.com>
- * @brief   Information about leaf nodes and utilities to parse a cluster configuration file.
+ * @brief   Information about leaf nodes and utilities to parse a cluster configuration
+ * file.
  *
  * Copyright (c) 2016 MapD Technologies, Inc.  All rights reserved.
  */

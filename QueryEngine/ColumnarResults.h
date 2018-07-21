@@ -28,7 +28,8 @@
 class ColumnarConversionNotSupported : public std::runtime_error {
  public:
   ColumnarConversionNotSupported()
-      : std::runtime_error("Columnar conversion not supported for variable length types") {}
+      : std::runtime_error(
+            "Columnar conversion not supported for variable length types") {}
 };
 
 class ColumnarResults {
@@ -92,5 +93,7 @@ class ColumnarResults {
   const std::vector<SQLTypeInfo> target_types_;
 };
 
-typedef std::unordered_map<int, std::unordered_map<int, std::shared_ptr<const ColumnarResults>>> ColumnCacheMap;
+typedef std::
+    unordered_map<int, std::unordered_map<int, std::shared_ptr<const ColumnarResults>>>
+        ColumnCacheMap;
 #endif  // COLUMNAR_RESULTS_H

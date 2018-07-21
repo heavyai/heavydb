@@ -58,7 +58,8 @@ ArrowResultSet::ArrowResultSet(const std::shared_ptr<arrow::RecordBatch>& record
   }
 }
 
-std::vector<TargetValue> ArrowResultSet::getNextRow(const bool translate_strings, const bool decimal_to_double) const {
+std::vector<TargetValue> ArrowResultSet::getNextRow(const bool translate_strings,
+                                                    const bool decimal_to_double) const {
   if (crt_row_idx_ == rowCount()) {
     return {};
   }
@@ -71,36 +72,41 @@ std::vector<TargetValue> ArrowResultSet::getNextRow(const bool translate_strings
       case kSMALLINT: {
         CHECK_EQ(arrow::Type::INT16, column.type_id());
         const auto& i16_column = static_cast<const arrow::Int16Array&>(column);
-        row.emplace_back(i16_column.IsNull(crt_row_idx_) ? inline_int_null_val(column_typeinfo)
-                                                         : static_cast<int64_t>(i16_column.Value(crt_row_idx_)));
+        row.emplace_back(i16_column.IsNull(crt_row_idx_)
+                             ? inline_int_null_val(column_typeinfo)
+                             : static_cast<int64_t>(i16_column.Value(crt_row_idx_)));
         break;
       }
       case kINT: {
         CHECK_EQ(arrow::Type::INT32, column.type_id());
         const auto& i32_column = static_cast<const arrow::Int32Array&>(column);
-        row.emplace_back(i32_column.IsNull(crt_row_idx_) ? inline_int_null_val(column_typeinfo)
-                                                         : static_cast<int64_t>(i32_column.Value(crt_row_idx_)));
+        row.emplace_back(i32_column.IsNull(crt_row_idx_)
+                             ? inline_int_null_val(column_typeinfo)
+                             : static_cast<int64_t>(i32_column.Value(crt_row_idx_)));
         break;
       }
       case kBIGINT: {
         CHECK_EQ(arrow::Type::INT64, column.type_id());
         const auto& i64_column = static_cast<const arrow::Int64Array&>(column);
-        row.emplace_back(i64_column.IsNull(crt_row_idx_) ? inline_int_null_val(column_typeinfo)
-                                                         : static_cast<int64_t>(i64_column.Value(crt_row_idx_)));
+        row.emplace_back(i64_column.IsNull(crt_row_idx_)
+                             ? inline_int_null_val(column_typeinfo)
+                             : static_cast<int64_t>(i64_column.Value(crt_row_idx_)));
         break;
       }
       case kFLOAT: {
         CHECK_EQ(arrow::Type::FLOAT, column.type_id());
         const auto& float_column = static_cast<const arrow::FloatArray&>(column);
-        row.emplace_back(float_column.IsNull(crt_row_idx_) ? inline_fp_null_value<float>()
-                                                           : float_column.Value(crt_row_idx_));
+        row.emplace_back(float_column.IsNull(crt_row_idx_)
+                             ? inline_fp_null_value<float>()
+                             : float_column.Value(crt_row_idx_));
         break;
       }
       case kDOUBLE: {
         CHECK_EQ(arrow::Type::DOUBLE, column.type_id());
         const auto& double_column = static_cast<const arrow::DoubleArray&>(column);
-        row.emplace_back(double_column.IsNull(crt_row_idx_) ? inline_fp_null_value<double>()
-                                                            : double_column.Value(crt_row_idx_));
+        row.emplace_back(double_column.IsNull(crt_row_idx_)
+                             ? inline_fp_null_value<double>()
+                             : double_column.Value(crt_row_idx_));
         break;
       }
       case kTEXT: {
@@ -110,8 +116,10 @@ std::vector<TargetValue> ArrowResultSet::getNextRow(const bool translate_strings
         if (dict_column.IsNull(crt_row_idx_)) {
           row.emplace_back(NullableString(nullptr));
         } else {
-          const auto& indices = static_cast<const arrow::Int32Array&>(*dict_column.indices());
-          const auto& dictionary = static_cast<const arrow::StringArray&>(*dict_column.dictionary());
+          const auto& indices =
+              static_cast<const arrow::Int32Array&>(*dict_column.indices());
+          const auto& dictionary =
+              static_cast<const arrow::StringArray&>(*dict_column.dictionary());
           row.emplace_back(dictionary.GetString(indices.Value(crt_row_idx_)));
         }
         break;
@@ -141,8 +149,9 @@ size_t ArrowResultSet::rowCount() const {
   return record_batch_->num_rows();
 }
 
-std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(const ExecutionResult* results,
-                                                          const std::shared_ptr<ResultSet>& rows) {
+std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
+    const ExecutionResult* results,
+    const std::shared_ptr<ResultSet>& rows) {
   std::vector<std::string> col_names;
 
   if (results) {
@@ -179,6 +188,7 @@ std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(const ExecutionResult*
   return boost::make_unique<ArrowResultSet>(batch);
 }
 
-std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(const ExecutionResult& results) {
+std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
+    const ExecutionResult& results) {
   return result_set_arrow_loopback(&results, results.getRows());
 }

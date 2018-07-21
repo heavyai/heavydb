@@ -46,7 +46,8 @@ TEST(FindLastWord, EmptyString) {
 
 namespace {
 
-void assert_set_equals(const std::vector<std::string>& expected, const std::vector<std::string>& actual) {
+void assert_set_equals(const std::vector<std::string>& expected,
+                       const std::vector<std::string>& actual) {
   auto actual_sorted = actual;
   std::sort(actual_sorted.begin(), actual_sorted.end());
   auto expected_sorted = expected;
@@ -63,7 +64,8 @@ TEST(Completion, QualifiedColumnName) {
   {
     std::vector<TCompletionHint> completion_hints;
     std::string last_word{"test.x"};
-    ASSERT_TRUE(get_qualified_column_hints(completion_hints, last_word, column_names_by_table));
+    ASSERT_TRUE(
+        get_qualified_column_hints(completion_hints, last_word, column_names_by_table));
     ASSERT_EQ(size_t(1), completion_hints.size());
     ASSERT_TRUE(TCompletionHintType::COLUMN == completion_hints.front().type);
     ASSERT_EQ(last_word, completion_hints.front().replaced);
@@ -72,7 +74,8 @@ TEST(Completion, QualifiedColumnName) {
   {
     std::vector<TCompletionHint> completion_hints;
     std::string last_word{"test.s"};
-    ASSERT_TRUE(get_qualified_column_hints(completion_hints, last_word, column_names_by_table));
+    ASSERT_TRUE(
+        get_qualified_column_hints(completion_hints, last_word, column_names_by_table));
     ASSERT_EQ(size_t(1), completion_hints.size());
     ASSERT_TRUE(TCompletionHintType::COLUMN == completion_hints.front().type);
     ASSERT_EQ(last_word, completion_hints.front().replaced);
@@ -81,7 +84,8 @@ TEST(Completion, QualifiedColumnName) {
   {
     std::vector<TCompletionHint> completion_hints;
     std::string last_word{"test."};
-    ASSERT_TRUE(get_qualified_column_hints(completion_hints, last_word, column_names_by_table));
+    ASSERT_TRUE(
+        get_qualified_column_hints(completion_hints, last_word, column_names_by_table));
     ASSERT_EQ(size_t(1), completion_hints.size());
     ASSERT_TRUE(TCompletionHintType::COLUMN == completion_hints.front().type);
     ASSERT_EQ(last_word, completion_hints.front().replaced);
@@ -89,7 +93,8 @@ TEST(Completion, QualifiedColumnName) {
   }
   {
     std::vector<TCompletionHint> completion_hints;
-    ASSERT_TRUE(get_qualified_column_hints(completion_hints, "test.y", column_names_by_table));
+    ASSERT_TRUE(
+        get_qualified_column_hints(completion_hints, "test.y", column_names_by_table));
     ASSERT_TRUE(completion_hints.empty());
   }
 }

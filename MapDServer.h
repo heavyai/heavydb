@@ -30,7 +30,8 @@
 #include "QueryEngine/TargetMetaInfo.h"
 #include "Shared/ThriftTypesConvert.h"
 
-inline std::vector<TargetMetaInfo> target_meta_infos_from_thrift(const TRowDescriptor& row_desc) {
+inline std::vector<TargetMetaInfo> target_meta_infos_from_thrift(
+    const TRowDescriptor& row_desc) {
   std::vector<TargetMetaInfo> target_meta_infos;
   for (const auto& col : row_desc) {
     target_meta_infos.emplace_back(col.col_name, type_info_from_thrift(col.col_type));
@@ -38,11 +39,13 @@ inline std::vector<TargetMetaInfo> target_meta_infos_from_thrift(const TRowDescr
   return target_meta_infos;
 }
 
-AggregatedColRange column_ranges_from_thrift(const std::vector<TColumnRange>& thrift_column_ranges);
+AggregatedColRange column_ranges_from_thrift(
+    const std::vector<TColumnRange>& thrift_column_ranges);
 
 StringDictionaryGenerations string_dictionary_generations_from_thrift(
     const std::vector<TDictionaryGeneration>& thrift_string_dictionary_generations);
 
-TableGenerations table_generations_from_thrift(const std::vector<TTableGeneration>& table_generations);
+TableGenerations table_generations_from_thrift(
+    const std::vector<TTableGeneration>& table_generations);
 
 #endif  // MAPDSERVER_H

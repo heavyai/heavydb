@@ -9,7 +9,7 @@ struct DoNothing {
   template <typename... T>
   void operator()(T&&... t) {}
 };
-}
+}  // namespace
 
 template <ThriftService THRIFT_SERVICE,
           typename CONTEXT_TYPE,

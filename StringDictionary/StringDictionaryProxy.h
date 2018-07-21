@@ -39,7 +39,8 @@ class StringDictionaryProxy {
   ssize_t getGeneration() const noexcept;
   int32_t getOrAddTransient(const std::string& str);
   int32_t getIdOfString(const std::string& str) const;
-  int32_t getIdOfStringNoGeneration(const std::string& str) const;  // disregard generation, only used by QueryRenderer
+  int32_t getIdOfStringNoGeneration(
+      const std::string& str) const;  // disregard generation, only used by QueryRenderer
   std::string getString(int32_t string_id) const;
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
   size_t storageEntryCount() const;
@@ -50,7 +51,8 @@ class StringDictionaryProxy {
                                const bool is_simple,
                                const char escape) const;
 
-  std::vector<int32_t> getCompare(const std::string& pattern, const std::string& comp_operator) const;
+  std::vector<int32_t> getCompare(const std::string& pattern,
+                                  const std::string& comp_operator) const;
 
   std::vector<int32_t> getRegexpLike(const std::string& pattern, const char escape) const;
 

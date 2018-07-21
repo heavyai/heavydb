@@ -38,32 +38,35 @@ struct BufferSeg {
 
   BufferSeg() : memStatus(FREE), buffer(0), pinCount(0), slabNum(-1), lastTouched(0) {}
   BufferSeg(const int startPage, const size_t numPages)
-      : startPage(startPage),
-        numPages(numPages),
-        memStatus(FREE),
-        buffer(0),
-        pinCount(0),
-        slabNum(-1),
-        lastTouched(0) {}
+      : startPage(startPage)
+      , numPages(numPages)
+      , memStatus(FREE)
+      , buffer(0)
+      , pinCount(0)
+      , slabNum(-1)
+      , lastTouched(0) {}
   BufferSeg(const int startPage, const size_t numPages, const MemStatus memStatus)
-      : startPage(startPage),
-        numPages(numPages),
-        memStatus(memStatus),
-        buffer(0),
-        pinCount(0),
-        slabNum(-1),
-        lastTouched(0) {}
-  BufferSeg(const int startPage, const size_t numPages, const MemStatus memStatus, const int lastTouched)
-      : startPage(startPage),
-        numPages(numPages),
-        memStatus(memStatus),
-        buffer(0),
-        pinCount(0),
-        slabNum(-1),
-        lastTouched(lastTouched) {}
+      : startPage(startPage)
+      , numPages(numPages)
+      , memStatus(memStatus)
+      , buffer(0)
+      , pinCount(0)
+      , slabNum(-1)
+      , lastTouched(0) {}
+  BufferSeg(const int startPage,
+            const size_t numPages,
+            const MemStatus memStatus,
+            const int lastTouched)
+      : startPage(startPage)
+      , numPages(numPages)
+      , memStatus(memStatus)
+      , buffer(0)
+      , pinCount(0)
+      , slabNum(-1)
+      , lastTouched(lastTouched) {}
 };
 
 typedef std::list<BufferSeg> BufferList;
-}
+}  // namespace Buffer_Namespace
 
 #endif

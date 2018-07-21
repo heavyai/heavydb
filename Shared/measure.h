@@ -18,8 +18,8 @@
 #define _MEASURE_H_
 
 #include <chrono>
-#include <sstream>
 #include <iomanip>
+#include <sstream>
 
 #include <glog/logging.h>
 
@@ -31,7 +31,8 @@ struct measure {
   static typename TimeT::rep execution(F func, Args&&... args) {
     auto start = std::chrono::steady_clock::now();
     func(std::forward<Args>(args)...);
-    auto duration = std::chrono::duration_cast<TimeT>(std::chrono::steady_clock::now() - start);
+    auto duration =
+        std::chrono::duration_cast<TimeT>(std::chrono::steady_clock::now() - start);
     return duration.count();
   }
 };
@@ -41,13 +42,16 @@ Type timer_start() {
   return std::chrono::steady_clock::now();
 }
 
-template <typename Type = std::chrono::steady_clock::time_point, typename TypeR = std::chrono::milliseconds>
+template <typename Type = std::chrono::steady_clock::time_point,
+          typename TypeR = std::chrono::milliseconds>
 typename TypeR::rep timer_stop(Type clock_begin) {
-  auto duration = std::chrono::duration_cast<TypeR>(std::chrono::steady_clock::now() - clock_begin);
+  auto duration =
+      std::chrono::duration_cast<TypeR>(std::chrono::steady_clock::now() - clock_begin);
   return duration.count();
 }
 
-template <typename Type = std::chrono::steady_clock::time_point, typename TypeR = std::chrono::milliseconds>
+template <typename Type = std::chrono::steady_clock::time_point,
+          typename TypeR = std::chrono::milliseconds>
 std::string timer_lap(Type clock_begin, Type& clock_last) {
   auto now = std::chrono::steady_clock::now();
   auto overall_duration = (now - clock_begin);
@@ -66,15 +70,16 @@ struct InjectTimer {
       : description_(description), lineNum_(lineNum), func_(func) {
     if (g_enable_debug_timer) {
       start_ = timer_start();
-      LOG(INFO) << "Timer start " << std::setfill(' ') << std::setw(35) << description_ << " " << std::setw(35) << func_
-                << ":" << std::setw(5) << lineNum_;
+      LOG(INFO) << "Timer start " << std::setfill(' ') << std::setw(35) << description_
+                << " " << std::setw(35) << func_ << ":" << std::setw(5) << lineNum_;
     }
   }
 
   ~InjectTimer() {
     if (g_enable_debug_timer) {
-      LOG(INFO) << "Timer end   " << std::setfill(' ') << std::setw(35) << description_ << " " << std::setw(35) << func_
-                << ":" << std::setw(5) << lineNum_ << " elapsed " << timer_stop(start_) << " ms";
+      LOG(INFO) << "Timer end   " << std::setfill(' ') << std::setw(35) << description_
+                << " " << std::setw(35) << func_ << ":" << std::setw(5) << lineNum_
+                << " elapsed " << timer_stop(start_) << " ms";
     }
   }
 

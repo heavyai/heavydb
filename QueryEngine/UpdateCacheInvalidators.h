@@ -7,7 +7,8 @@
 #include "BaselineJoinHashTable.h"
 #include "JoinHashTable.h"
 
-using UpdateTriggeredCacheInvalidator = CacheInvalidator<BaselineJoinHashTable, JoinHashTable>;
+using UpdateTriggeredCacheInvalidator =
+    CacheInvalidator<BaselineJoinHashTable, JoinHashTable>;
 using DeleteTriggeredCacheInvalidator = UpdateTriggeredCacheInvalidator;
 
 #endif

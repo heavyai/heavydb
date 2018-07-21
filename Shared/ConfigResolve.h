@@ -30,7 +30,8 @@ using CudaBuildSelector = PreprocessorTrue;
 using CudaBuildSelector = PreprocessorFalse;
 #endif
 
-// There is probably a better place to put this.  Catalog.h, perhaps?  Reviewers, please comment.
+// There is probably a better place to put this.  Catalog.h, perhaps?  Reviewers, please
+// comment.
 inline constexpr char const* getDeletedColumnLabel() {
   return "$delete$";
 }

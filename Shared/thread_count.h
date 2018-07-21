@@ -17,8 +17,8 @@
 #ifndef THREAD_COUNT_H
 #define THREAD_COUNT_H
 
-#include <algorithm>
 #include <unistd.h>
+#include <algorithm>
 
 inline int cpu_threads() {
   // could use std::thread::hardware_concurrency(), but some

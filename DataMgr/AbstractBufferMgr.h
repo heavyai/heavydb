@@ -22,26 +22,28 @@
 #ifndef ABSTRACTDATAMGR_H
 #define ABSTRACTDATAMGR_H
 
+#include <boost/preprocessor.hpp>
 #include "../Shared/types.h"
 #include "AbstractBuffer.h"
-#include <boost/preprocessor.hpp>
 
 #define X_DEFINE_ENUM_WITH_STRING_CONVERSIONS_TOSTRING_CASE(r, data, elem) \
   case elem:                                                               \
     return BOOST_PP_STRINGIZE(elem);
 
-#define DEFINE_ENUM_WITH_STRING_CONVERSIONS(name, enumerators)                                      \
-  enum name { BOOST_PP_SEQ_ENUM(enumerators) };                                                     \
-                                                                                                    \
-  inline const char* ToString(name v) {                                                             \
-    switch (v) {                                                                                    \
-      BOOST_PP_SEQ_FOR_EACH(X_DEFINE_ENUM_WITH_STRING_CONVERSIONS_TOSTRING_CASE, name, enumerators) \
-      default:                                                                                      \
-        return "[Unknown " BOOST_PP_STRINGIZE(name) "]";                                            \
-    }                                                                                               \
+#define DEFINE_ENUM_WITH_STRING_CONVERSIONS(name, enumerators)                    \
+  enum name { BOOST_PP_SEQ_ENUM(enumerators) };                                   \
+                                                                                  \
+  inline const char* ToString(name v) {                                           \
+    switch (v) {                                                                  \
+      BOOST_PP_SEQ_FOR_EACH(                                                      \
+          X_DEFINE_ENUM_WITH_STRING_CONVERSIONS_TOSTRING_CASE, name, enumerators) \
+      default:                                                                    \
+        return "[Unknown " BOOST_PP_STRINGIZE(name) "]";                          \
+    }                                                                             \
   }
 
-DEFINE_ENUM_WITH_STRING_CONVERSIONS(MgrType, (FILE_MGR)(CPU_MGR)(GPU_MGR)(GLOBAL_FILE_MGR))
+DEFINE_ENUM_WITH_STRING_CONVERSIONS(MgrType,
+                                    (FILE_MGR)(CPU_MGR)(GPU_MGR)(GLOBAL_FILE_MGR))
 
 namespace Data_Namespace {
 
@@ -66,15 +68,25 @@ class AbstractBufferMgr {
   virtual AbstractBuffer* createBuffer(const ChunkKey& key,
                                        const size_t pageSize = 0,
                                        const size_t initialSize = 0) = 0;
-  virtual void deleteBuffer(const ChunkKey& key, const bool purge = true) = 0;  // purge param only used in FileMgr
-  virtual void deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool purge = true) = 0;
+  virtual void deleteBuffer(
+      const ChunkKey& key,
+      const bool purge = true) = 0;  // purge param only used in FileMgr
+  virtual void deleteBuffersWithPrefix(const ChunkKey& keyPrefix,
+                                       const bool purge = true) = 0;
   virtual AbstractBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0) = 0;
-  virtual void fetchBuffer(const ChunkKey& key, AbstractBuffer* destBuffer, const size_t numBytes = 0) = 0;
-  // virtual AbstractBuffer* putBuffer(const ChunkKey &key, AbstractBuffer *srcBuffer, const size_t numBytes = 0) = 0;
-  virtual AbstractBuffer* putBuffer(const ChunkKey& key, AbstractBuffer* srcBuffer, const size_t numBytes = 0) = 0;
-  virtual void getChunkMetadataVec(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadata) = 0;
-  virtual void getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
-                                               const ChunkKey& keyPrefix) = 0;
+  virtual void fetchBuffer(const ChunkKey& key,
+                           AbstractBuffer* destBuffer,
+                           const size_t numBytes = 0) = 0;
+  // virtual AbstractBuffer* putBuffer(const ChunkKey &key, AbstractBuffer *srcBuffer,
+  // const size_t numBytes = 0) = 0;
+  virtual AbstractBuffer* putBuffer(const ChunkKey& key,
+                                    AbstractBuffer* srcBuffer,
+                                    const size_t numBytes = 0) = 0;
+  virtual void getChunkMetadataVec(
+      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadata) = 0;
+  virtual void getChunkMetadataVecForKeyPrefix(
+      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
+      const ChunkKey& keyPrefix) = 0;
 
   virtual bool isBufferOnDevice(const ChunkKey& key) = 0;
   virtual std::string printSlabs() = 0;
@@ -101,6 +113,6 @@ class AbstractBufferMgr {
   int deviceId_;
 };
 
-}  // Data_Namespace
+}  // namespace Data_Namespace
 
 #endif  // ABSTRACTDATAMGR_H

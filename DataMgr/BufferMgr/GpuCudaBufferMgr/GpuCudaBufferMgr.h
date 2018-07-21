@@ -40,10 +40,12 @@ class GpuCudaBufferMgr : public BufferMgr {
  private:
   virtual void addSlab(const size_t slabSize);
   virtual void freeAllMem();
-  virtual void allocateBuffer(BufferList::iterator segIt, const size_t pageSize, const size_t initialSize);
+  virtual void allocateBuffer(BufferList::iterator segIt,
+                              const size_t pageSize,
+                              const size_t initialSize);
   CudaMgr_Namespace::CudaMgr* cudaMgr_;
 };
 
-}  // Buffer_Namespace
+}  // namespace Buffer_Namespace
 
 #endif  // CPUBUFFERMGR_H

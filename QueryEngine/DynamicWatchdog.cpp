@@ -18,8 +18,8 @@
 #include <chrono>
 #include <thread>
 
-#include "DynamicWatchdog.h"
 #include <glog/logging.h>
+#include "DynamicWatchdog.h"
 
 static __inline__ uint64_t read_cycle_counter(void) {
 #if (defined(__x86_64__) || defined(__x86_64))
@@ -38,8 +38,11 @@ extern "C" uint64_t dynamic_watchdog_init(unsigned ms_budget) {
   static std::atomic_bool dw_abort{false};
 
   if (ms_budget == static_cast<unsigned>(DW_DEADLINE)) {
-    if (dw_abort.load())
-      return 0LL;
+    if (dw_abort.load()) {
+      {
+        return 0LL;
+      }
+    }
     return dw_cycle_start + dw_cycle_budget;
   }
   if (ms_budget == static_cast<unsigned>(DW_ABORT)) {
@@ -56,9 +59,9 @@ extern "C" uint64_t dynamic_watchdog_init(unsigned ms_budget) {
   std::this_thread::sleep_for(std::chrono::milliseconds(1));
   auto freq_kHz = read_cycle_counter() - dw_cycle_start;
   dw_cycle_budget = freq_kHz * static_cast<uint64_t>(ms_budget);
-  VLOG(1) << "INIT: thread " << std::this_thread::get_id() << ": ms_budget " << ms_budget << ", cycle_start "
-          << dw_cycle_start << ", cycle_budget " << dw_cycle_budget << ", dw_deadline "
-          << dw_cycle_start + dw_cycle_budget;
+  VLOG(1) << "INIT: thread " << std::this_thread::get_id() << ": ms_budget " << ms_budget
+          << ", cycle_start " << dw_cycle_start << ", cycle_budget " << dw_cycle_budget
+          << ", dw_deadline " << dw_cycle_start + dw_cycle_budget;
   return dw_cycle_budget;
 }
 
@@ -67,8 +70,8 @@ extern "C" bool dynamic_watchdog() {
   auto clock = read_cycle_counter();
   auto dw_deadline = dynamic_watchdog_init(static_cast<unsigned>(DW_DEADLINE));
   if (clock > dw_deadline) {
-    LOG(INFO) << "TIMEOUT: thread " << std::this_thread::get_id() << ": clock " << clock << ", deadline "
-              << dw_deadline;
+    LOG(INFO) << "TIMEOUT: thread " << std::this_thread::get_id() << ": clock " << clock
+              << ", deadline " << dw_deadline;
     return true;
   }
   return false;

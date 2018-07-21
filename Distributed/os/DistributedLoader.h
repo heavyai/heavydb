@@ -29,8 +29,9 @@ class DistributedLoader : public Importer_NS::Loader {
     CHECK(false);
   }
 
-  bool load(const std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>& import_buffers,
-            size_t row_count) override {
+  bool load(
+      const std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>& import_buffers,
+      size_t row_count) override {
     CHECK(false);
     return false;
   }

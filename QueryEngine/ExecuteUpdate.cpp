@@ -26,11 +26,13 @@ std::vector<TargetValue> UpdateLogForFragment::getEntryAt(const size_t index) co
   return rs_->getRowAtNoTranslations(index);
 }
 
-std::vector<TargetValue> UpdateLogForFragment::getTranslatedEntryAt(const size_t index) const {
+std::vector<TargetValue> UpdateLogForFragment::getTranslatedEntryAt(
+    const size_t index) const {
   return rs_->getRowAt(index);
 }
 
-UpdateLogForFragment::FragmentInfoType const& UpdateLogForFragment::getFragmentInfo() const {
+UpdateLogForFragment::FragmentInfoType const& UpdateLogForFragment::getFragmentInfo()
+    const {
   return fragment_info_;
 }
 
@@ -62,13 +64,18 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
   int available_cpus = cpu_threads();
   auto available_gpus = get_available_gpus(cat);
 
-  const auto context_count = get_context_count(co.device_type_, available_cpus, available_gpus.size());
+  const auto context_count =
+      get_context_count(co.device_type_, available_cpus, available_gpus.size());
 
   int error_code = 0;
   ColumnCacheMap column_cache;
 
   const auto count =
-      makeExpr<Analyzer::AggExpr>(SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, false), kCOUNT, nullptr, false, nullptr);
+      makeExpr<Analyzer::AggExpr>(SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, false),
+                                  kCOUNT,
+                                  nullptr,
+                                  false,
+                                  nullptr);
   const auto count_all_exe_unit = create_count_all_execution_unit(ra_exe_unit, count);
 
   std::vector<InputTableInfo> table_infos{table_info};
@@ -82,19 +89,25 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
                                        column_cache,
                                        &error_code,
                                        nullptr);
-  execution_dispatch.compile(JoinInfo{JoinImplType::Invalid, {}, {}, ""}, 0, 8, eo, false);
+  execution_dispatch.compile(
+      JoinInfo{JoinImplType::Invalid, {}, {}, ""}, 0, 8, eo, false);
   CHECK_EQ(size_t(1), ra_exe_unit.input_descs.size());
   const auto table_id = ra_exe_unit.input_descs[0].getTableId();
   const auto& outer_fragments = table_info.info.fragments;
-  for (size_t fragment_index = 0; fragment_index < outer_fragments.size(); ++fragment_index) {
-    // We may want to consider in the future allowing this to execute on devices other than CPU
+  for (size_t fragment_index = 0; fragment_index < outer_fragments.size();
+       ++fragment_index) {
+    // We may want to consider in the future allowing this to execute on devices other
+    // than CPU
     execution_dispatch.run(co.device_type_, 0, eo, {{table_id, {fragment_index}}}, 0, -1);
   }
   // Further optimization possible here to skip fragments
   CHECK_EQ(outer_fragments.size(), execution_dispatch.getFragmentResults().size());
-  // There could be benefit to multithread this once we see where the bottle necks really are
-  for (size_t fragment_index = 0; fragment_index < outer_fragments.size(); ++fragment_index) {
-    const auto& fragment_results = execution_dispatch.getFragmentResults()[fragment_index];
+  // There could be benefit to multithread this once we see where the bottle necks really
+  // are
+  for (size_t fragment_index = 0; fragment_index < outer_fragments.size();
+       ++fragment_index) {
+    const auto& fragment_results =
+        execution_dispatch.getFragmentResults()[fragment_index];
     const auto count_result_set = boost::get<RowSetPtr>(fragment_results.first);
     CHECK(count_result_set);
     const auto count_row = count_result_set->getNextRow(false, false);
@@ -104,13 +117,24 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
     CHECK(count_scalar_tv);
     const auto count_ptr = boost::get<int64_t>(count_scalar_tv);
     CHECK(count_ptr);
-    ExecutionDispatch current_fragment_execution_dispatch(
-        this, ra_exe_unit, table_infos, cat, co, context_count, row_set_mem_owner, column_cache, &error_code, nullptr);
-    current_fragment_execution_dispatch.compile(JoinInfo{JoinImplType::Invalid, {}, {}, ""}, *count_ptr, 8, eo, false);
-    // We may want to consider in the future allowing this to execute on devices other than CPU
+    ExecutionDispatch current_fragment_execution_dispatch(this,
+                                                          ra_exe_unit,
+                                                          table_infos,
+                                                          cat,
+                                                          co,
+                                                          context_count,
+                                                          row_set_mem_owner,
+                                                          column_cache,
+                                                          &error_code,
+                                                          nullptr);
+    current_fragment_execution_dispatch.compile(
+        JoinInfo{JoinImplType::Invalid, {}, {}, ""}, *count_ptr, 8, eo, false);
+    // We may want to consider in the future allowing this to execute on devices other
+    // than CPU
     current_fragment_execution_dispatch.run(
         co.device_type_, 0, eo, {FragmentsPerTable{table_id, {fragment_index}}}, 0, -1);
-    const auto& proj_fragment_results = current_fragment_execution_dispatch.getFragmentResults()[0];
+    const auto& proj_fragment_results =
+        current_fragment_execution_dispatch.getFragmentResults()[0];
     const auto proj_result_set = boost::get<RowSetPtr>(proj_fragment_results.first);
     CHECK(proj_result_set);
     cb({outer_fragments[fragment_index], fragment_index, proj_result_set});

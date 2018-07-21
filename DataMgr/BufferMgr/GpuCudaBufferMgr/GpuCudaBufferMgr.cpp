@@ -28,7 +28,8 @@ GpuCudaBufferMgr::GpuCudaBufferMgr(const int deviceId,
                                    const size_t bufferAllocIncrement,
                                    const size_t pageSize,
                                    AbstractBufferMgr* parentMgr)
-    : BufferMgr(deviceId, maxBufferSize, bufferAllocIncrement, pageSize, parentMgr), cudaMgr_(cudaMgr) {}
+    : BufferMgr(deviceId, maxBufferSize, bufferAllocIncrement, pageSize, parentMgr)
+    , cudaMgr_(cudaMgr) {}
 
 GpuCudaBufferMgr::~GpuCudaBufferMgr() {
   try {
@@ -57,11 +58,18 @@ void GpuCudaBufferMgr::freeAllMem() {
   }
 }
 
-void GpuCudaBufferMgr::allocateBuffer(BufferList::iterator segIt, const size_t pageSize, const size_t initialSize) {
-  new GpuCudaBuffer(this, segIt, deviceId_, cudaMgr_, pageSize, initialSize);  // this line is admittedly a bit weird
-                                                                               // but the segment iterator passed into
-                                                                               // buffer takes the address of the new
-                                                                               // Buffer in its buffer member
+void GpuCudaBufferMgr::allocateBuffer(BufferList::iterator segIt,
+                                      const size_t pageSize,
+                                      const size_t initialSize) {
+  new GpuCudaBuffer(this,
+                    segIt,
+                    deviceId_,
+                    cudaMgr_,
+                    pageSize,
+                    initialSize);  // this line is admittedly a bit weird
+                                   // but the segment iterator passed into
+                                   // buffer takes the address of the new
+                                   // Buffer in its buffer member
 }
 
 }  // namespace Buffer_Namespace

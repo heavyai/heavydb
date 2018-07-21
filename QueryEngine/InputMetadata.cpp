@@ -25,7 +25,8 @@ InputTableInfoCache::InputTableInfoCache(Executor* executor) : executor_(executo
 
 namespace {
 
-Fragmenter_Namespace::TableInfo copy_table_info(const Fragmenter_Namespace::TableInfo& table_info) {
+Fragmenter_Namespace::TableInfo copy_table_info(
+    const Fragmenter_Namespace::TableInfo& table_info) {
   Fragmenter_Namespace::TableInfo table_info_copy;
   table_info_copy.chunkKeyPrefix = table_info.chunkKeyPrefix;
   table_info_copy.fragments = table_info.fragments;
@@ -33,15 +34,17 @@ Fragmenter_Namespace::TableInfo copy_table_info(const Fragmenter_Namespace::Tabl
   return table_info_copy;
 }
 
-Fragmenter_Namespace::TableInfo build_table_info(const std::vector<const TableDescriptor*>& shard_tables) {
+Fragmenter_Namespace::TableInfo build_table_info(
+    const std::vector<const TableDescriptor*>& shard_tables) {
   size_t total_number_of_tuples{0};
   Fragmenter_Namespace::TableInfo table_info_all_shards;
   for (const TableDescriptor* shard_table : shard_tables) {
     CHECK(shard_table->fragmenter);
     const auto& shard_metainfo = shard_table->fragmenter->getFragmentsForQuery();
     total_number_of_tuples += shard_metainfo.getPhysicalNumTuples();
-    table_info_all_shards.fragments.insert(
-        table_info_all_shards.fragments.end(), shard_metainfo.fragments.begin(), shard_metainfo.fragments.end());
+    table_info_all_shards.fragments.insert(table_info_all_shards.fragments.end(),
+                                           shard_metainfo.fragments.begin(),
+                                           shard_metainfo.fragments.end());
   }
   table_info_all_shards.setPhysicalNumTuples(total_number_of_tuples);
   return table_info_all_shards;
@@ -73,7 +76,8 @@ void InputTableInfoCache::clear() {
 namespace {
 
 bool uses_int_meta(const SQLTypeInfo& col_ti) {
-  return col_ti.is_integer() || col_ti.is_decimal() || col_ti.is_time() || col_ti.is_boolean() ||
+  return col_ti.is_integer() || col_ti.is_decimal() || col_ti.is_time() ||
+         col_ti.is_boolean() ||
          (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT);
 }
 
@@ -104,20 +108,23 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultSet* rows) {
           case kFLOAT: {
             const auto float_p = boost::get<float>(scalar_col_val);
             CHECK(float_p);
-            dummy_encoders[i]->updateStats(*float_p, *float_p == inline_fp_null_val(col_ti));
+            dummy_encoders[i]->updateStats(*float_p,
+                                           *float_p == inline_fp_null_val(col_ti));
             break;
           }
           case kDOUBLE: {
             const auto double_p = boost::get<double>(scalar_col_val);
             CHECK(double_p);
-            dummy_encoders[i]->updateStats(*double_p, *double_p == inline_fp_null_val(col_ti));
+            dummy_encoders[i]->updateStats(*double_p,
+                                           *double_p == inline_fp_null_val(col_ti));
             break;
           }
           default:
             CHECK(false);
         }
       } else {
-        throw std::runtime_error(col_ti.get_type_name() + " is not supported in temporary table.");
+        throw std::runtime_error(col_ti.get_type_name() +
+                                 " is not supported in temporary table.");
       }
     }
   };
@@ -125,13 +132,16 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultSet* rows) {
     const size_t worker_count = cpu_threads();
     std::vector<std::future<void>> compute_stats_threads;
     const auto entry_count = rows->entryCount();
-    for (size_t i = 0, start_entry = 0, stride = (entry_count + worker_count - 1) / worker_count;
+    for (size_t i = 0,
+                start_entry = 0,
+                stride = (entry_count + worker_count - 1) / worker_count;
          i < worker_count && start_entry < entry_count;
          ++i, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, entry_count);
       compute_stats_threads.push_back(
           std::async(std::launch::async,
-                     [rows, &do_work, &dummy_encoders](const size_t start, const size_t end, const size_t worker_idx) {
+                     [rows, &do_work, &dummy_encoders](
+                         const size_t start, const size_t end, const size_t worker_idx) {
                        for (size_t i = start; i < end; ++i) {
                          const auto crt_row = rows->getRowAtNoTranslations(i);
                          if (!crt_row.empty()) {
@@ -168,7 +178,8 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultSet* rows) {
     }
   }
   for (size_t i = 0; i < rows->colCount(); ++i) {
-    const auto it_ok = metadata_map.emplace(i, dummy_encoders[0][i]->getMetadata(rows->getColType(i)));
+    const auto it_ok =
+        metadata_map.emplace(i, dummy_encoders[0][i]->getMetadata(rows->getColType(i)));
     CHECK(it_ok.second);
   }
   return metadata_map;
@@ -219,7 +230,8 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
     const auto cached_index_it = info_cache.find(table_id);
     if (cached_index_it != info_cache.end()) {
       CHECK_LT(cached_index_it->second, table_infos.size());
-      table_infos.push_back({table_id, copy_table_info(table_infos[cached_index_it->second].info)});
+      table_infos.push_back(
+          {table_id, copy_table_info(table_infos[cached_index_it->second].info)});
       continue;
     }
     if (input_desc.getSourceType() == InputSourceType::RESULT) {
@@ -261,13 +273,16 @@ size_t get_frag_count_of_table(const int table_id, Executor* executor) {
   }
 }
 
-std::vector<InputTableInfo> get_table_infos(const std::vector<InputDescriptor>& input_descs, Executor* executor) {
+std::vector<InputTableInfo> get_table_infos(
+    const std::vector<InputDescriptor>& input_descs,
+    Executor* executor) {
   std::vector<InputTableInfo> table_infos;
   collect_table_infos(table_infos, input_descs, executor);
   return table_infos;
 }
 
-std::vector<InputTableInfo> get_table_infos(const RelAlgExecutionUnit& ra_exe_unit, Executor* executor) {
+std::vector<InputTableInfo> get_table_infos(const RelAlgExecutionUnit& ra_exe_unit,
+                                            Executor* executor) {
   INJECT_TIMER(get_table_infos);
   std::vector<InputTableInfo> table_infos;
   collect_table_infos(table_infos, ra_exe_unit.input_descs, executor);
@@ -275,7 +290,8 @@ std::vector<InputTableInfo> get_table_infos(const RelAlgExecutionUnit& ra_exe_un
   return table_infos;
 }
 
-const std::map<int, ChunkMetadata>& Fragmenter_Namespace::FragmentInfo::getChunkMetadataMap() const {
+const std::map<int, ChunkMetadata>&
+Fragmenter_Namespace::FragmentInfo::getChunkMetadataMap() const {
   if (resultSet && !synthesizedMetadataIsValid) {
     chunkMetadataMap = synthesize_metadata(resultSet);
     synthesizedMetadataIsValid = true;
@@ -316,7 +332,8 @@ size_t Fragmenter_Namespace::TableInfo::getFragmentNumTuplesUpperBound() const {
   }
   size_t fragment_num_tupples_upper_bound = 0;
   for (const auto& fragment : fragments) {
-    fragment_num_tupples_upper_bound = std::max(fragment.getNumTuples(), fragment_num_tupples_upper_bound);
+    fragment_num_tupples_upper_bound =
+        std::max(fragment.getNumTuples(), fragment_num_tupples_upper_bound);
   }
   return fragment_num_tupples_upper_bound;
 }

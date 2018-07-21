@@ -39,7 +39,9 @@
 namespace {
 
 template <class K>
-INLINE DEVICE bool is_empty_entry(const size_t entry_idx, const int8_t* groupby_buffer, const size_t key_stride);
+INLINE DEVICE bool is_empty_entry(const size_t entry_idx,
+                                  const int8_t* groupby_buffer,
+                                  const size_t key_stride);
 
 template <>
 INLINE DEVICE bool is_empty_entry<int32_t>(const size_t entry_idx,

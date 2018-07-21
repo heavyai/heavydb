@@ -54,13 +54,15 @@ struct RelAlgExecutionUnit;
 class RowSetMemoryOwner;
 namespace Analyzer {
 class Expr;
-}  // Analyzer
+}  // namespace Analyzer
 
 class SpeculativeTopNMap {
  public:
   SpeculativeTopNMap();
 
-  SpeculativeTopNMap(const ResultSet& rows, const std::vector<Analyzer::Expr*>& target_exprs, const size_t truncate_n);
+  SpeculativeTopNMap(const ResultSet& rows,
+                     const std::vector<Analyzer::Expr*>& target_exprs,
+                     const size_t truncate_n);
 
   void reduce(SpeculativeTopNMap& that);
 

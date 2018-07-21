@@ -1,33 +1,33 @@
 
 /*
-* Copyright 2017 MapD Technologies, Inc.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-* http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright 2017 MapD Technologies, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
+#include "../Import/Importer.h"
 #include "../Parser/parser.h"
 #include "../QueryEngine/ArrowResultSet.h"
 #include "../QueryEngine/Execute.h"
 #include "../QueryEngine/RelAlgExecutionDescriptor.h"
-#include "../SqliteConnector/SqliteConnector.h"
-#include "../Import/Importer.h"
 #include "../QueryRunner/QueryRunner.h"
+#include "../SqliteConnector/SqliteConnector.h"
 
-#include <sstream>
-#include <boost/algorithm/string.hpp>
-#include <boost/program_options.hpp>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
+#include <boost/algorithm/string.hpp>
+#include <boost/program_options.hpp>
+#include <sstream>
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -47,10 +47,12 @@ inline void run_ddl_statement(const std::string query_str) {
 std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
                                             const ExecutorDeviceType device_type,
                                             const bool allow_loop_joins) {
-  return QueryRunner::run_multiple_agg(query_str, g_session, device_type, g_hoist_literals, allow_loop_joins);
+  return QueryRunner::run_multiple_agg(
+      query_str, g_session, device_type, g_hoist_literals, allow_loop_joins);
 }
 
-std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str, const ExecutorDeviceType device_type) {
+std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
+                                            const ExecutorDeviceType device_type) {
   return run_multiple_agg(query_str, device_type, true);
 }
 
@@ -65,7 +67,8 @@ T v(const TargetValue& r) {
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
-  return device_type == ExecutorDeviceType::GPU && !g_session->get_catalog().get_dataMgr().gpusPresent();
+  return device_type == ExecutorDeviceType::GPU &&
+         !g_session->get_catalog().get_dataMgr().gpusPresent();
 #else
   return device_type == ExecutorDeviceType::GPU;
 #endif
@@ -91,7 +94,8 @@ class SQLiteComparator {
   void compare_arrow_output(const std::string& query_string,
                             const std::string& sqlite_query_string,
                             const ExecutorDeviceType device_type) {
-    const auto results = QueryRunner::run_select_query(query_string, g_session, device_type, g_hoist_literals, true);
+    const auto results = QueryRunner::run_select_query(
+        query_string, g_session, device_type, g_hoist_literals, true);
     const auto arrow_mapd_results = result_set_arrow_loopback(results);
     compare_impl(arrow_mapd_results.get(), sqlite_query_string, device_type, false);
   }
@@ -104,7 +108,8 @@ class SQLiteComparator {
   }
 
   // added to deal with time shift for now testing
-  void compare_timstamp_approx(const std::string& query_string, const ExecutorDeviceType device_type) {
+  void compare_timstamp_approx(const std::string& query_string,
+                               const ExecutorDeviceType device_type) {
     const auto mapd_results = run_multiple_agg(query_string, device_type);
     compare_impl(mapd_results.get(), query_string, device_type, true);
   }
@@ -214,7 +219,9 @@ class SQLiteComparator {
               };
               const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
               const auto end_str =
-                  strptime(ref_val.c_str(), mapd_type == kTIMESTAMP ? "%Y-%m-%d %H:%M:%S" : "%Y-%m-%d", &tm_struct);
+                  strptime(ref_val.c_str(),
+                           mapd_type == kTIMESTAMP ? "%Y-%m-%d %H:%M:%S" : "%Y-%m-%d",
+                           &tm_struct);
               if (end_str != nullptr) {
                 ASSERT_EQ(0, *end_str);
                 ASSERT_EQ(ref_val.size(), static_cast<size_t>(end_str - ref_val.c_str()));
@@ -291,7 +298,9 @@ class SQLiteComparator {
 
 SQLiteComparator g_sqlite_comparator;
 
-void c(const std::string& query_string, const std::string& sqlite_query_string, const ExecutorDeviceType device_type) {
+void c(const std::string& query_string,
+       const std::string& sqlite_query_string,
+       const ExecutorDeviceType device_type) {
   g_sqlite_comparator.compare(query_string, sqlite_query_string, device_type);
 }
 }  // namespace
@@ -314,7 +323,8 @@ int create_and_populate_tables() {
 
     // Create a table
     const std::string create_test_table{
-        "CREATE TABLE tdata (id SMALLINT, b BOOLEAN, i INT, bi BIGINT, n DECIMAL(10, 2), f FLOAT, t TEXT, tt TIME, d "
+        "CREATE TABLE tdata (id SMALLINT, b BOOLEAN, i INT, bi BIGINT, n DECIMAL(10, 2), "
+        "f FLOAT, t TEXT, tt TIME, d "
         "DATE, ts TIMESTAMP, vc VARCHAR(15));"};
     run_ddl_statement(create_test_table);
     g_sqlite_comparator.query(create_test_table);
@@ -322,23 +332,35 @@ int create_and_populate_tables() {
     // Insert data into the table
     std::vector<std::string> data_col_value_list;
     data_col_value_list.push_back(
-        "1, 't', 23, 2349923, 111.1, 1.1, 'SFO', '15:13:14', '1999-09-09', '2014-12-13 22:23:15', 'paris'");
+        "1, 't', 23, 2349923, 111.1, 1.1, 'SFO', '15:13:14', '1999-09-09', '2014-12-13 "
+        "22:23:15', 'paris'");
     data_col_value_list.push_back(
-        "2, 'f', null, -973273, 7263.11, 87.1, null, '20:05:00', '2017-12-12', '2017-12-12 20:05:00', 'toronto'");
+        "2, 'f', null, -973273, 7263.11, 87.1, null, '20:05:00', '2017-12-12', "
+        "'2017-12-12 20:05:00', 'toronto'");
     data_col_value_list.push_back(
-        "3, 'f', 702, 87395, 333.5, null, 'YVR', '11:11:11', '2010-01-01', '2010-01-02 04:11:45', 'vancouver'");
+        "3, 'f', 702, 87395, 333.5, null, 'YVR', '11:11:11', '2010-01-01', '2010-01-02 "
+        "04:11:45', 'vancouver'");
     data_col_value_list.push_back(
-        "4, null, 864, 100001, null, 9.9, 'SJC', null, '2015-05-05', '2010-05-05 05:15:55', 'london'");
+        "4, null, 864, 100001, null, 9.9, 'SJC', null, '2015-05-05', '2010-05-05 "
+        "05:15:55', 'london'");
     data_col_value_list.push_back(
-        "5, 'f', 333, 112233, 99.9, 9.9, 'ABQ', '22:22:22', '2015-05-05', '2010-05-05 05:15:55', 'new york'");
-    data_col_value_list.push_back("6, 't', -3, 18, 765.8, 2.2, 'YYZ', '00:00:01', null, '2009-01-08 12:13:14', null");
+        "5, 'f', 333, 112233, 99.9, 9.9, 'ABQ', '22:22:22', '2015-05-05', '2010-05-05 "
+        "05:15:55', 'new york'");
     data_col_value_list.push_back(
-        "7, 'f', -9873, 3789, 789.3, 4.7, 'DCA', '11:22:33', '2001-02-03', '2005-04-03 15:16:17', 'rio de janerio'");
+        "6, 't', -3, 18, 765.8, 2.2, 'YYZ', '00:00:01', null, '2009-01-08 12:13:14', "
+        "null");
     data_col_value_list.push_back(
-        "8, 't', 12, 4321, 83.9, 1.2, 'DXB', '21:20:10', null, '2007-12-01 23:22:21', 'dubai'");
-    data_col_value_list.push_back("9, 't', 48, null, 83.9, 1.2, 'BWI', '09:08:07', '2001-09-11', null, 'washington'");
+        "7, 'f', -9873, 3789, 789.3, 4.7, 'DCA', '11:22:33', '2001-02-03', '2005-04-03 "
+        "15:16:17', 'rio de janerio'");
     data_col_value_list.push_back(
-        "10, 'f', 99, 777, 77.7, 7.7, 'LLBG', '07:07:07', '2017-07-07', '2017-07-07 07:07:07', 'Tel Aviv'");
+        "8, 't', 12, 4321, 83.9, 1.2, 'DXB', '21:20:10', null, '2007-12-01 23:22:21', "
+        "'dubai'");
+    data_col_value_list.push_back(
+        "9, 't', 48, null, 83.9, 1.2, 'BWI', '09:08:07', '2001-09-11', null, "
+        "'washington'");
+    data_col_value_list.push_back(
+        "10, 'f', 99, 777, 77.7, 7.7, 'LLBG', '07:07:07', '2017-07-07', '2017-07-07 "
+        "07:07:07', 'Tel Aviv'");
 
     for (const auto& data_col_values : data_col_value_list) {
       std::string insert_query = "INSERT INTO tdata VALUES(" + data_col_values + ");";
@@ -363,67 +385,117 @@ void drop_tables() {
 TEST(Select, TopK_LIMIT_AscendSort) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT i FROM tdata ORDER BY i NULLS FIRST LIMIT 5;", "SELECT i FROM tdata ORDER BY i ASC LIMIT 5;", dt);
-    c("SELECT b FROM tdata ORDER BY b NULLS FIRST LIMIT 5;", "SELECT b FROM tdata ORDER BY b LIMIT 5;", dt);
-    c("SELECT bi FROM tdata ORDER BY bi NULLS FIRST LIMIT 5;", "SELECT bi FROM tdata ORDER BY bi LIMIT 5;", dt);
-    c("SELECT n FROM tdata ORDER BY n NULLS FIRST LIMIT 5;", "SELECT n FROM tdata ORDER BY n LIMIT 5;", dt);
-    c("SELECT f FROM tdata ORDER BY f NULLS FIRST LIMIT 5;", "SELECT f FROM tdata ORDER BY f LIMIT 5;", dt);
-    c("SELECT tt FROM tdata ORDER BY tt NULLS FIRST LIMIT 5;", "SELECT tt FROM tdata ORDER BY tt LIMIT 5;", dt);
-    c("SELECT ts FROM tdata ORDER BY ts NULLS FIRST LIMIT 5;", "SELECT ts FROM tdata ORDER BY ts LIMIT 5;", dt);
-    c("SELECT d FROM tdata ORDER BY d NULLS FIRST LIMIT 5;", "SELECT d FROM tdata ORDER BY d LIMIT 5;", dt);
+    c("SELECT i FROM tdata ORDER BY i NULLS FIRST LIMIT 5;",
+      "SELECT i FROM tdata ORDER BY i ASC LIMIT 5;",
+      dt);
+    c("SELECT b FROM tdata ORDER BY b NULLS FIRST LIMIT 5;",
+      "SELECT b FROM tdata ORDER BY b LIMIT 5;",
+      dt);
+    c("SELECT bi FROM tdata ORDER BY bi NULLS FIRST LIMIT 5;",
+      "SELECT bi FROM tdata ORDER BY bi LIMIT 5;",
+      dt);
+    c("SELECT n FROM tdata ORDER BY n NULLS FIRST LIMIT 5;",
+      "SELECT n FROM tdata ORDER BY n LIMIT 5;",
+      dt);
+    c("SELECT f FROM tdata ORDER BY f NULLS FIRST LIMIT 5;",
+      "SELECT f FROM tdata ORDER BY f LIMIT 5;",
+      dt);
+    c("SELECT tt FROM tdata ORDER BY tt NULLS FIRST LIMIT 5;",
+      "SELECT tt FROM tdata ORDER BY tt LIMIT 5;",
+      dt);
+    c("SELECT ts FROM tdata ORDER BY ts NULLS FIRST LIMIT 5;",
+      "SELECT ts FROM tdata ORDER BY ts LIMIT 5;",
+      dt);
+    c("SELECT d FROM tdata ORDER BY d NULLS FIRST LIMIT 5;",
+      "SELECT d FROM tdata ORDER BY d LIMIT 5;",
+      dt);
   }
 }
 
 TEST(Select, TopK_LIMIT_DescendSort) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT i FROM tdata ORDER BY i DESC NULLS LAST LIMIT 5;", "SELECT i FROM tdata ORDER BY i DESC LIMIT 5;", dt);
-    c("SELECT b FROM tdata ORDER BY b DESC NULLS LAST LIMIT 5;", "SELECT b FROM tdata ORDER BY b DESC LIMIT 5;", dt);
+    c("SELECT i FROM tdata ORDER BY i DESC NULLS LAST LIMIT 5;",
+      "SELECT i FROM tdata ORDER BY i DESC LIMIT 5;",
+      dt);
+    c("SELECT b FROM tdata ORDER BY b DESC NULLS LAST LIMIT 5;",
+      "SELECT b FROM tdata ORDER BY b DESC LIMIT 5;",
+      dt);
     c("SELECT bi FROM tdata ORDER BY bi DESC NULLS LAST LIMIT 5;",
       "SELECT bi FROM tdata ORDER BY bi DESC LIMIT 5;",
       dt);
-    c("SELECT n FROM tdata ORDER BY n DESC NULLS LAST LIMIT 5;", "SELECT n FROM tdata ORDER BY n DESC LIMIT 5;", dt);
-    c("SELECT f FROM tdata ORDER BY f DESC NULLS LAST LIMIT 5;", "SELECT f FROM tdata ORDER BY f DESC LIMIT 5;", dt);
+    c("SELECT n FROM tdata ORDER BY n DESC NULLS LAST LIMIT 5;",
+      "SELECT n FROM tdata ORDER BY n DESC LIMIT 5;",
+      dt);
+    c("SELECT f FROM tdata ORDER BY f DESC NULLS LAST LIMIT 5;",
+      "SELECT f FROM tdata ORDER BY f DESC LIMIT 5;",
+      dt);
     c("SELECT tt FROM tdata ORDER BY tt DESC NULLS LAST LIMIT 5;",
       "SELECT tt FROM tdata ORDER BY tt DESC LIMIT 5;",
       dt);
     c("SELECT ts FROM tdata ORDER BY ts DESC NULLS LAST LIMIT 5;",
       "SELECT ts FROM tdata ORDER BY ts DESC LIMIT 5;",
       dt);
-    c("SELECT d FROM tdata ORDER BY d DESC NULLS LAST LIMIT 5;", "SELECT d FROM tdata ORDER BY d DESC LIMIT 5;", dt);
+    c("SELECT d FROM tdata ORDER BY d DESC NULLS LAST LIMIT 5;",
+      "SELECT d FROM tdata ORDER BY d DESC LIMIT 5;",
+      dt);
   }
 }
 
 TEST(Select, TopK_LIMIT_GreaterThan_TotalOfDataRows_AscendSort) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT b FROM tdata ORDER BY b NULLS FIRST LIMIT 11;", "SELECT b FROM tdata ORDER BY b LIMIT 11;", dt);
-    c("SELECT bi FROM tdata ORDER BY bi NULLS FIRST LIMIT 11;", "SELECT bi FROM tdata ORDER BY bi LIMIT 11;", dt);
-    c("SELECT n FROM tdata ORDER BY n NULLS FIRST LIMIT 11;", "SELECT n FROM tdata ORDER BY n LIMIT 11;", dt);
-    c("SELECT f FROM tdata ORDER BY f NULLS FIRST LIMIT 11;", "SELECT f FROM tdata ORDER BY f LIMIT 11;", dt);
-    c("SELECT tt FROM tdata ORDER BY tt NULLS FIRST LIMIT 11;", "SELECT tt FROM tdata ORDER BY tt LIMIT 11;", dt);
-    c("SELECT ts FROM tdata ORDER BY ts NULLS FIRST LIMIT 11;", "SELECT ts FROM tdata ORDER BY ts LIMIT 11;", dt);
-    c("SELECT d FROM tdata ORDER BY d NULLS FIRST LIMIT 11;", "SELECT d FROM tdata ORDER BY d LIMIT 11;", dt);
+    c("SELECT b FROM tdata ORDER BY b NULLS FIRST LIMIT 11;",
+      "SELECT b FROM tdata ORDER BY b LIMIT 11;",
+      dt);
+    c("SELECT bi FROM tdata ORDER BY bi NULLS FIRST LIMIT 11;",
+      "SELECT bi FROM tdata ORDER BY bi LIMIT 11;",
+      dt);
+    c("SELECT n FROM tdata ORDER BY n NULLS FIRST LIMIT 11;",
+      "SELECT n FROM tdata ORDER BY n LIMIT 11;",
+      dt);
+    c("SELECT f FROM tdata ORDER BY f NULLS FIRST LIMIT 11;",
+      "SELECT f FROM tdata ORDER BY f LIMIT 11;",
+      dt);
+    c("SELECT tt FROM tdata ORDER BY tt NULLS FIRST LIMIT 11;",
+      "SELECT tt FROM tdata ORDER BY tt LIMIT 11;",
+      dt);
+    c("SELECT ts FROM tdata ORDER BY ts NULLS FIRST LIMIT 11;",
+      "SELECT ts FROM tdata ORDER BY ts LIMIT 11;",
+      dt);
+    c("SELECT d FROM tdata ORDER BY d NULLS FIRST LIMIT 11;",
+      "SELECT d FROM tdata ORDER BY d LIMIT 11;",
+      dt);
   }
 }
 
 TEST(Select, TopK_LIMIT_GreaterThan_TotalOfDataRows_DescendSort) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT i FROM tdata ORDER BY i DESC NULLS LAST LIMIT 11;", "SELECT i FROM tdata ORDER BY i DESC LIMIT 11;", dt);
-    c("SELECT b FROM tdata ORDER BY b DESC NULLS LAST LIMIT 11;", "SELECT b FROM tdata ORDER BY b DESC LIMIT 11;", dt);
+    c("SELECT i FROM tdata ORDER BY i DESC NULLS LAST LIMIT 11;",
+      "SELECT i FROM tdata ORDER BY i DESC LIMIT 11;",
+      dt);
+    c("SELECT b FROM tdata ORDER BY b DESC NULLS LAST LIMIT 11;",
+      "SELECT b FROM tdata ORDER BY b DESC LIMIT 11;",
+      dt);
     c("SELECT bi FROM tdata ORDER BY bi DESC NULLS LAST LIMIT 11;",
       "SELECT bi FROM tdata ORDER BY bi DESC LIMIT 11;",
       dt);
-    c("SELECT n FROM tdata ORDER BY n DESC NULLS LAST LIMIT 11;", "SELECT n FROM tdata ORDER BY n DESC LIMIT 11;", dt);
-    c("SELECT f FROM tdata ORDER BY f DESC NULLS LAST LIMIT 11;", "SELECT f FROM tdata ORDER BY f DESC LIMIT 11;", dt);
+    c("SELECT n FROM tdata ORDER BY n DESC NULLS LAST LIMIT 11;",
+      "SELECT n FROM tdata ORDER BY n DESC LIMIT 11;",
+      dt);
+    c("SELECT f FROM tdata ORDER BY f DESC NULLS LAST LIMIT 11;",
+      "SELECT f FROM tdata ORDER BY f DESC LIMIT 11;",
+      dt);
     c("SELECT tt FROM tdata ORDER BY tt DESC NULLS LAST LIMIT 11;",
       "SELECT tt FROM tdata ORDER BY tt DESC LIMIT 11;",
       dt);
     c("SELECT ts FROM tdata ORDER BY ts DESC NULLS LAST LIMIT 11;",
       "SELECT ts FROM tdata ORDER BY ts DESC LIMIT 11;",
       dt);
-    c("SELECT d FROM tdata ORDER BY d DESC NULLS LAST LIMIT 11;", "SELECT d FROM tdata ORDER BY d DESC LIMIT 11;", dt);
+    c("SELECT d FROM tdata ORDER BY d DESC NULLS LAST LIMIT 11;",
+      "SELECT d FROM tdata ORDER BY d DESC LIMIT 11;",
+      dt);
   }
 }
 

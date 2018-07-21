@@ -1,30 +1,41 @@
 #ifdef HAVE_CUDA
-#include <thrust/sort.h>
+#include <thrust/copy.h>
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
-#include <thrust/copy.h>
 #include <thrust/gather.h>
+#include <thrust/sort.h>
 #endif
 
-#include "ThrustAllocator.h"
 #include "InPlaceSortImpl.h"
+#include "ThrustAllocator.h"
 
 #ifdef HAVE_CUDA
 
 template <typename T>
-void sort_on_gpu(T* val_buff, int32_t* idx_buff, const uint64_t entry_count, const bool desc, ThrustAllocator& alloc) {
+void sort_on_gpu(T* val_buff,
+                 int32_t* idx_buff,
+                 const uint64_t entry_count,
+                 const bool desc,
+                 ThrustAllocator& alloc) {
   thrust::device_ptr<T> key_ptr(val_buff);
   thrust::device_ptr<int32_t> idx_ptr(idx_buff);
   thrust::sequence(idx_ptr, idx_ptr + entry_count);
   if (desc) {
-    thrust::sort_by_key(thrust::device(alloc), key_ptr, key_ptr + entry_count, idx_ptr, thrust::greater<T>());
+    thrust::sort_by_key(thrust::device(alloc),
+                        key_ptr,
+                        key_ptr + entry_count,
+                        idx_ptr,
+                        thrust::greater<T>());
   } else {
     thrust::sort_by_key(thrust::device(alloc), key_ptr, key_ptr + entry_count, idx_ptr);
   }
 }
 
 template <typename T>
-void apply_permutation_on_gpu(T* val_buff, int32_t* idx_buff, const uint64_t entry_count, ThrustAllocator& alloc) {
+void apply_permutation_on_gpu(T* val_buff,
+                              int32_t* idx_buff,
+                              const uint64_t entry_count,
+                              ThrustAllocator& alloc) {
   thrust::device_ptr<T> key_ptr(val_buff);
   thrust::device_ptr<int32_t> idx_ptr(idx_buff);
   const size_t buf_size = entry_count * sizeof(T);
@@ -36,7 +47,10 @@ void apply_permutation_on_gpu(T* val_buff, int32_t* idx_buff, const uint64_t ent
 }
 
 template <typename T>
-void sort_on_cpu(T* val_buff, int32_t* idx_buff, const uint64_t entry_count, const bool desc) {
+void sort_on_cpu(T* val_buff,
+                 int32_t* idx_buff,
+                 const uint64_t entry_count,
+                 const bool desc) {
   thrust::sequence(idx_buff, idx_buff + entry_count);
   if (desc) {
     thrust::sort_by_key(val_buff, val_buff + entry_count, idx_buff, thrust::greater<T>());
@@ -46,7 +60,10 @@ void sort_on_cpu(T* val_buff, int32_t* idx_buff, const uint64_t entry_count, con
 }
 
 template <typename T>
-void apply_permutation_on_cpu(T* val_buff, int32_t* idx_buff, const uint64_t entry_count, T* tmp_buff) {
+void apply_permutation_on_cpu(T* val_buff,
+                              int32_t* idx_buff,
+                              const uint64_t entry_count,
+                              T* tmp_buff) {
   thrust::copy(val_buff, val_buff + entry_count, tmp_buff);
   thrust::gather(idx_buff, idx_buff + entry_count, tmp_buff, val_buff);
 }
@@ -61,7 +78,8 @@ void sort_on_gpu(int64_t* val_buff,
 #ifdef HAVE_CUDA
   switch (chosen_bytes) {
     case 4:
-      sort_on_gpu(reinterpret_cast<int32_t*>(val_buff), idx_buff, entry_count, desc, alloc);
+      sort_on_gpu(
+          reinterpret_cast<int32_t*>(val_buff), idx_buff, entry_count, desc, alloc);
       break;
     case 8:
       sort_on_gpu(val_buff, idx_buff, entry_count, desc, alloc);
@@ -101,7 +119,8 @@ void apply_permutation_on_gpu(int64_t* val_buff,
 #ifdef HAVE_CUDA
   switch (chosen_bytes) {
     case 4:
-      apply_permutation_on_gpu(reinterpret_cast<int32_t*>(val_buff), idx_buff, entry_count, alloc);
+      apply_permutation_on_gpu(
+          reinterpret_cast<int32_t*>(val_buff), idx_buff, entry_count, alloc);
       break;
     case 8:
       apply_permutation_on_gpu(val_buff, idx_buff, entry_count, alloc);
@@ -121,8 +140,10 @@ void apply_permutation_on_cpu(int64_t* val_buff,
 #ifdef HAVE_CUDA
   switch (chosen_bytes) {
     case 4:
-      apply_permutation_on_cpu(
-          reinterpret_cast<int32_t*>(val_buff), idx_buff, entry_count, reinterpret_cast<int32_t*>(tmp_buff));
+      apply_permutation_on_cpu(reinterpret_cast<int32_t*>(val_buff),
+                               idx_buff,
+                               entry_count,
+                               reinterpret_cast<int32_t*>(tmp_buff));
       break;
     case 8:
       apply_permutation_on_cpu(val_buff, idx_buff, entry_count, tmp_buff);

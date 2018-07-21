@@ -79,12 +79,14 @@ class QueryFragmentDescriptor {
     return getRowIdLookupKey() < 0 && fragments_per_device_.size() > 0;
   }
 
-  const std::pair<bool, std::shared_ptr<const FragmentsList>> getFragListForIndex(const size_t i) const {
+  const std::pair<bool, std::shared_ptr<const FragmentsList>> getFragListForIndex(
+      const size_t i) const {
     const auto frag_itr = fragments_per_device_.find(i);
     if (frag_itr == fragments_per_device_.end()) {
       return std::make_pair(false, nullptr);
     } else {
-      return std::make_pair(true, std::make_shared<const FragmentsList>(frag_itr->second));
+      return std::make_pair(true,
+                            std::make_shared<const FragmentsList>(frag_itr->second));
     }
   }
 

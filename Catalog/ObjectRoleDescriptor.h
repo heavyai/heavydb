@@ -17,13 +17,14 @@
 #ifndef OBJECT_ROLE_DESCRIPTOR_H
 #define OBJECT_ROLE_DESCRIPTOR_H
 
-#include <string>
 #include <cstdint>
+#include <string>
 #include "DBObject.h"
 
 /**
  * @type ObjectRoleDescriptor
- * @brief specifies the object_roles content in-memory of a row in mapd_object_permissions table
+ * @brief specifies the object_roles content in-memory of a row in mapd_object_permissions
+ * table
  *
  */
 

@@ -17,8 +17,8 @@
 #ifndef FRONTEND_VIEW_DESCRIPTOR_H
 #define FRONTEND_VIEW_DESCRIPTOR_H
 
-#include <string>
 #include <cstdint>
+#include <string>
 #include "../Shared/sqldefs.h"
 
 /**

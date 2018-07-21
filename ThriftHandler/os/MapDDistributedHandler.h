@@ -59,7 +59,9 @@ class MapDLeafHandler {
     CHECK(false);
   }
 
-  void execute_first_step(TStepResult& _return, const TPendingQuery& pending_query) { CHECK(false); }
+  void execute_first_step(TStepResult& _return, const TPendingQuery& pending_query) {
+    CHECK(false);
+  }
 
   void broadcast_serialized_rows(const std::string& serialized_rows,
                                  const TRowDescriptor& row_desc,

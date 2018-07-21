@@ -16,31 +16,34 @@
 
 #ifndef FIXED_LENGTH_ENCODER_H
 #define FIXED_LENGTH_ENCODER_H
-#include "Encoder.h"
-#include "AbstractBuffer.h"
-#include <stdexcept>
+#include <glog/logging.h>
 #include <iostream>
 #include <memory>
-#include <glog/logging.h>
+#include <stdexcept>
+#include "AbstractBuffer.h"
+#include "Encoder.h"
 
 template <typename T, typename V>
 class FixedLengthEncoder : public Encoder {
  public:
   FixedLengthEncoder(Data_Namespace::AbstractBuffer* buffer)
-      : Encoder(buffer),
-        dataMin(std::numeric_limits<T>::max()),
-        dataMax(std::numeric_limits<T>::min()),
-        has_nulls(false) {}
+      : Encoder(buffer)
+      , dataMin(std::numeric_limits<T>::max())
+      , dataMax(std::numeric_limits<T>::min())
+      , has_nulls(false) {}
 
-  ChunkMetadata appendData(int8_t*& srcData, const size_t numAppendElems, const bool replicating = false) {
+  ChunkMetadata appendData(int8_t*& srcData,
+                           const size_t numAppendElems,
+                           const bool replicating = false) {
     T* unencodedData = reinterpret_cast<T*>(srcData);
     auto encodedData = std::unique_ptr<V[]>(new V[numAppendElems]);
     for (size_t i = 0; i < numAppendElems; ++i) {
       size_t ri = replicating ? 0 : i;
       encodedData.get()[ri] = static_cast<V>(unencodedData[ri]);
       if (unencodedData[ri] != encodedData.get()[ri]) {
-        LOG(ERROR) << "Fixed encoding failed, Unencoded: " + std::to_string(unencodedData[ri]) + " encoded: " +
-                          std::to_string(encodedData.get()[ri]);
+        LOG(ERROR) << "Fixed encoding failed, Unencoded: " +
+                          std::to_string(unencodedData[ri]) +
+                          " encoded: " + std::to_string(encodedData.get()[ri]);
       } else {
         T data = unencodedData[ri];
         if (data == std::numeric_limits<V>::min())
@@ -108,7 +111,8 @@ class FixedLengthEncoder : public Encoder {
 
   void copyMetadata(const Encoder* copyFromEncoder) {
     numElems = copyFromEncoder->numElems;
-    auto castedEncoder = reinterpret_cast<const FixedLengthEncoder<T, V>*>(copyFromEncoder);
+    auto castedEncoder =
+        reinterpret_cast<const FixedLengthEncoder<T, V>*>(copyFromEncoder);
     dataMin = castedEncoder->dataMin;
     dataMax = castedEncoder->dataMax;
     has_nulls = castedEncoder->has_nulls;

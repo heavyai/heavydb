@@ -24,9 +24,9 @@
 #ifndef QUERYENGINE_GROUPBYFASTIMPL_H
 #define QUERYENGINE_GROUPBYFASTIMPL_H
 
+#include <stdint.h>
 #include "../Shared/funcannotations.h"
 #include "../Shared/shard_key.h"
-#include <stdint.h>
 
 extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_hash_slot)(int32_t* buff,
                                                                const int64_t key,
@@ -34,14 +34,16 @@ extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_hash_slot)(int32_t* buff,
   return buff + (key - min_key);
 }
 
-extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_hash_slot_sharded)(int32_t* buff,
-                                                                       const int64_t key,
-                                                                       const int64_t min_key,
-                                                                       const uint32_t entry_count_per_shard,
-                                                                       const uint32_t num_shards,
-                                                                       const uint32_t device_count) {
+extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_hash_slot_sharded)(
+    int32_t* buff,
+    const int64_t key,
+    const int64_t min_key,
+    const uint32_t entry_count_per_shard,
+    const uint32_t num_shards,
+    const uint32_t device_count) {
   const uint32_t shard = SHARD_FOR_KEY(key, num_shards);
-  const uint32_t shard_buffer_index = shard / device_count;  // shard sub-buffer index within `buff`
+  const uint32_t shard_buffer_index =
+      shard / device_count;  // shard sub-buffer index within `buff`
   int32_t* shard_buffer = buff + shard_buffer_index * entry_count_per_shard;
   return shard_buffer + (key - min_key) / num_shards;
 }

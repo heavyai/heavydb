@@ -31,12 +31,13 @@
 namespace Data_Namespace {
 class DataMgr;
 class AbstractBuffer;
-};  // Data_Namespace
+};  // namespace Data_Namespace
 
 class ThrustAllocator {
  public:
   typedef int8_t value_type;
-  ThrustAllocator(Data_Namespace::DataMgr* mgr, const int id) : data_mgr_(mgr), device_id_(id) {}
+  ThrustAllocator(Data_Namespace::DataMgr* mgr, const int id)
+      : data_mgr_(mgr), device_id_(id) {}
   ~ThrustAllocator();
 
   int8_t* allocate(std::ptrdiff_t num_bytes);

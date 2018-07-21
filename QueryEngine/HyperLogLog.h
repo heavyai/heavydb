@@ -47,8 +47,9 @@ inline double get_alpha(const size_t m) {
 inline double get_beta(const uint32_t zeros) {
   // Using polynomial regression terms found in LogLog-Beta paper and Redis
   double zl = log(zeros + 1);
-  double beta = -0.370393911 * zeros + 0.070471823 * zl + 0.17393686 * pow(zl, 2) + 0.16339839 * pow(zl, 3) +
-                -0.09237745 * pow(zl, 4) + 0.03738027 * pow(zl, 5) + -0.005384159 * pow(zl, 6) +
+  double beta = -0.370393911 * zeros + 0.070471823 * zl + 0.17393686 * pow(zl, 2) +
+                0.16339839 * pow(zl, 3) + -0.09237745 * pow(zl, 4) +
+                0.03738027 * pow(zl, 5) + -0.005384159 * pow(zl, 6) +
                 0.00042419 * pow(zl, 7);
   return beta;
 }
@@ -65,7 +66,8 @@ inline double get_harmonic_mean_denominator(T* M, uint32_t m) {
 
 template <typename T>
 inline double get_beta_adjusted_estimate(const size_t m, const uint32_t z, T* M) {
-  return (get_alpha(m) * m * (m - z) * (1 / (get_beta(z) + get_harmonic_mean_denominator(M, m))));
+  return (get_alpha(m) * m * (m - z) *
+          (1 / (get_beta(z) + get_harmonic_mean_denominator(M, m))));
 }
 
 template <typename T>
@@ -113,7 +115,8 @@ inline void hll_unify(T1* lhs, T2* rhs, const size_t m) {
 inline int hll_size_for_rate(const int err_percent) {
   double err_rate{static_cast<double>(err_percent) / 100.0};
   double k = ceil(2 * log2(1.04 / err_rate));
-  // On the next line, 4 is the minimum for which we have an alpha adjustment factor in get_alpha()
+  // On the next line, 4 is the minimum for which we have an alpha adjustment factor in
+  // get_alpha()
   return std::min(16, std::max(static_cast<int>(k), 4));
 }
 

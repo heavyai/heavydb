@@ -52,7 +52,11 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
   using RowSetPtrSharedPtr = std::shared_ptr<RowSetPtr>;
 
   RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat)
-      : StorageIOFacility(executor, cat), executor_(executor), cat_(cat), now_(0), queue_time_ms_(0) {}
+      : StorageIOFacility(executor, cat)
+      , executor_(executor)
+      , cat_(cat)
+      , now_(0)
+      , queue_time_ms_(0) {}
 
   ExecutionResult executeRelAlgQuery(const std::string& query_ra,
                                      const CompilationOptions& co,
@@ -64,9 +68,10 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                                        const ExecutionOptions& eo,
                                                        RenderInfo* render_info);
 
-  void prepareLeafExecution(const AggregatedColRange& agg_col_range,
-                            const StringDictionaryGenerations& string_dictionary_generations,
-                            const TableGenerations& table_generations);
+  void prepareLeafExecution(
+      const AggregatedColRange& agg_col_range,
+      const StringDictionaryGenerations& string_dictionary_generations,
+      const TableGenerations& table_generations);
 
   ExecutionResult executeRelAlgSubQuery(const RexSubQuery* subquery,
                                         const CompilationOptions& co,
@@ -83,7 +88,9 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
     CHECK(it_ok.second);
   }
 
-  void registerSubquery(RexSubQuery* subquery) noexcept { subqueries_.push_back(subquery); }
+  void registerSubquery(RexSubQuery* subquery) noexcept {
+    subqueries_.push_back(subquery);
+  }
 
   const std::vector<RexSubQuery*>& getSubqueries() const noexcept { return subqueries_; };
 
@@ -225,15 +232,25 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
   WorkUnit createModifyCompoundWorkUnit(const RelCompound* compound,
                                         const SortInfo& sort_info,
                                         const bool just_explain);
-  WorkUnit createCompoundWorkUnit(const RelCompound*, const SortInfo&, const bool just_explain);
+  WorkUnit createCompoundWorkUnit(const RelCompound*,
+                                  const SortInfo&,
+                                  const bool just_explain);
 
-  WorkUnit createAggregateWorkUnit(const RelAggregate*, const SortInfo&, const bool just_explain);
+  WorkUnit createAggregateWorkUnit(const RelAggregate*,
+                                   const SortInfo&,
+                                   const bool just_explain);
 
-  WorkUnit createModifyProjectWorkUnit(const RelProject* project, const SortInfo& sort_info, const bool just_explain);
+  WorkUnit createModifyProjectWorkUnit(const RelProject* project,
+                                       const SortInfo& sort_info,
+                                       const bool just_explain);
 
-  WorkUnit createProjectWorkUnit(const RelProject*, const SortInfo&, const bool just_explain);
+  WorkUnit createProjectWorkUnit(const RelProject*,
+                                 const SortInfo&,
+                                 const bool just_explain);
 
-  WorkUnit createFilterWorkUnit(const RelFilter*, const SortInfo&, const bool just_explain);
+  WorkUnit createFilterWorkUnit(const RelFilter*,
+                                const SortInfo&,
+                                const bool just_explain);
 
   WorkUnit createJoinWorkUnit(const RelJoin*, const SortInfo&, const bool just_explain);
 

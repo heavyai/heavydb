@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 #include "EquiJoinCondition.h"
+#include "Analyzer/Analyzer.h"
 #include "HashJoinRuntime.h"
 #include "RangeTableIndexVisitor.h"
-#include "Analyzer/Analyzer.h"
 
 namespace {
 
@@ -41,17 +41,20 @@ bool can_combine_with(const Analyzer::Expr* crt, const Analyzer::Expr* prev) {
       crt_bin->get_optype() != prev_bin->get_optype()) {
     return false;
   }
-  const auto crt_inner = std::dynamic_pointer_cast<Analyzer::ColumnVar>(remove_cast(crt_bin->get_own_right_operand()));
-  const auto prev_inner =
-      std::dynamic_pointer_cast<Analyzer::ColumnVar>(remove_cast(prev_bin->get_own_right_operand()));
+  const auto crt_inner = std::dynamic_pointer_cast<Analyzer::ColumnVar>(
+      remove_cast(crt_bin->get_own_right_operand()));
+  const auto prev_inner = std::dynamic_pointer_cast<Analyzer::ColumnVar>(
+      remove_cast(prev_bin->get_own_right_operand()));
   AllRangeTableIndexVisitor visitor;
   const auto crt_outer_rte_set = visitor.visit(crt_bin->get_left_operand());
   const auto prev_outer_rte_set = visitor.visit(prev_bin->get_left_operand());
   // We shouldn't treat mixed nesting levels columns as a composite key tuple.
-  if (crt_outer_rte_set.size() != 1 || prev_outer_rte_set.size() != 1 || crt_outer_rte_set != prev_outer_rte_set) {
+  if (crt_outer_rte_set.size() != 1 || prev_outer_rte_set.size() != 1 ||
+      crt_outer_rte_set != prev_outer_rte_set) {
     return false;
   }
-  if (!crt_inner || !prev_inner || crt_inner->get_table_id() != prev_inner->get_table_id() ||
+  if (!crt_inner || !prev_inner ||
+      crt_inner->get_table_id() != prev_inner->get_table_id() ||
       crt_inner->get_rte_idx() != prev_inner->get_rte_idx()) {
     return false;
   }
@@ -73,17 +76,20 @@ std::shared_ptr<Analyzer::BinOper> make_composite_equals_impl(
     rhs_tuple.push_back(rhs_col);
   }
   CHECK(!crt_coalesced_quals.empty());
-  const auto first_qual = std::dynamic_pointer_cast<Analyzer::BinOper>(crt_coalesced_quals.front());
+  const auto first_qual =
+      std::dynamic_pointer_cast<Analyzer::BinOper>(crt_coalesced_quals.front());
   CHECK(first_qual);
-  return std::make_shared<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, not_null),
-                                             false,
-                                             first_qual->get_optype(),
-                                             kONE,
-                                             std::make_shared<Analyzer::ExpressionTuple>(lhs_tuple),
-                                             std::make_shared<Analyzer::ExpressionTuple>(rhs_tuple));
+  return std::make_shared<Analyzer::BinOper>(
+      SQLTypeInfo(kBOOLEAN, not_null),
+      false,
+      first_qual->get_optype(),
+      kONE,
+      std::make_shared<Analyzer::ExpressionTuple>(lhs_tuple),
+      std::make_shared<Analyzer::ExpressionTuple>(rhs_tuple));
 }
 
-// Create an equals expression with column tuple operands out of regular equals expressions.
+// Create an equals expression with column tuple operands out of regular equals
+// expressions.
 std::shared_ptr<Analyzer::Expr> make_composite_equals(
     const std::vector<std::shared_ptr<Analyzer::Expr>>& crt_coalesced_quals) {
   if (crt_coalesced_quals.size() == 1) {
@@ -119,7 +125,8 @@ std::list<std::shared_ptr<Analyzer::Expr>> combine_equi_join_conditions(
   return coalesced_quals;
 }
 
-std::shared_ptr<Analyzer::BinOper> coalesce_singleton_equi_join(const std::shared_ptr<Analyzer::BinOper>& join_qual) {
+std::shared_ptr<Analyzer::BinOper> coalesce_singleton_equi_join(
+    const std::shared_ptr<Analyzer::BinOper>& join_qual) {
   std::vector<std::shared_ptr<Analyzer::Expr>> singleton_qual_list;
   singleton_qual_list.push_back(join_qual);
   return make_composite_equals_impl(singleton_qual_list);

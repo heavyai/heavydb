@@ -17,8 +17,8 @@
 #ifndef LINK_DESCRIPTOR_H
 #define LINK_DESCRIPTOR_H
 
-#include <string>
 #include <cstdint>
+#include <string>
 #include "../Shared/sqldefs.h"
 
 /**

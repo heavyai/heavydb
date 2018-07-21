@@ -25,7 +25,9 @@
 namespace TestHelpers {
 
 template <class T>
-void compare_array(const TargetValue& r, const std::vector<T>& arr, const double tol = -1.) {
+void compare_array(const TargetValue& r,
+                   const std::vector<T>& arr,
+                   const double tol = -1.) {
   auto scalar_tv_vector = boost::get<std::vector<ScalarTargetValue>>(&r);
   CHECK(scalar_tv_vector);
   ASSERT_EQ(scalar_tv_vector->size(), arr.size());
@@ -48,6 +50,6 @@ T v(const TargetValue& r) {
   CHECK(p);
   return *p;
 }
-}
+}  // namespace TestHelpers
 
 #endif  // TEST_HELPERS_H_

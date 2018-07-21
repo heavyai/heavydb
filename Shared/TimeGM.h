@@ -18,9 +18,9 @@
 #ifndef TIMEGM_H
 #define TIMEGM_H
 #include <string.h>
+#include <cmath>
 #include <ctime>
 #include <sstream>
-#include <cmath>
 #include "sqltypes.h"
 
 class TimeGM {

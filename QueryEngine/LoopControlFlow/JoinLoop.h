@@ -21,8 +21,8 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Value.h>
 
-#include "../IRCodegenUtils.h"
 #include "../../Shared/sqldefs.h"
+#include "../IRCodegenUtils.h"
 
 #include <functional>
 #include <vector>
@@ -35,7 +35,8 @@ enum class JoinLoopKind {
 
 // The domain of iteration for a join:
 // 1. For loop join, from 0 to `upper_bound`.
-// 2. For one-to-one joins, at most one value: `slot_lookup_result` if valid (greater than or equal to zero).
+// 2. For one-to-one joins, at most one value: `slot_lookup_result` if valid (greater than
+// or equal to zero).
 // 3. For one-to-many joins, the `element_count` values in `values_buffer`.
 struct JoinLoopDomain {
   union {
@@ -56,12 +57,14 @@ class JoinLoop {
            const std::function<JoinLoopDomain(const std::vector<llvm::Value*>&)>&,
            const std::function<llvm::Value*(const std::vector<llvm::Value*>&)>&,
            const std::function<void(llvm::Value*)>&,
-           const std::function<llvm::Value*(const std::vector<llvm::Value*>& prev_iters, llvm::Value*)>&,
+           const std::function<llvm::Value*(const std::vector<llvm::Value*>& prev_iters,
+                                            llvm::Value*)>&,
            const std::string& name = "");
 
   static llvm::BasicBlock* codegen(
       const std::vector<JoinLoop>& join_loops,
-      const std::function<llvm::BasicBlock*(const std::vector<llvm::Value*>&)>& body_codegen,
+      const std::function<llvm::BasicBlock*(const std::vector<llvm::Value*>&)>&
+          body_codegen,
       llvm::Value* outer_iter,
       llvm::BasicBlock* exit_bb,
       llvm::IRBuilder<>& builder);
@@ -79,16 +82,23 @@ class JoinLoop {
   const JoinLoopKind kind_;
   // SQL type of the join.
   const JoinType type_;
-  // Callback provided from the executor which generates the code for the given join domain of iteration.
-  const std::function<JoinLoopDomain(const std::vector<llvm::Value*>&)> iteration_domain_codegen_;
-  // Callback provided from the executor which generates true iff the outer condition evaluates to true.
-  const std::function<llvm::Value*(const std::vector<llvm::Value*>&)> outer_condition_match_;
+  // Callback provided from the executor which generates the code for the given join
+  // domain of iteration.
+  const std::function<JoinLoopDomain(const std::vector<llvm::Value*>&)>
+      iteration_domain_codegen_;
+  // Callback provided from the executor which generates true iff the outer condition
+  // evaluates to true.
+  const std::function<llvm::Value*(const std::vector<llvm::Value*>&)>
+      outer_condition_match_;
   // Callback provided from the executor which receives the IR boolean value which tracks
   // whether there are matches for the current iteration.
   const std::function<void(llvm::Value*)> found_outer_matches_;
-  // Callback provided from the executor which returns if the current row (given by position) is deleted.
-  // The second argument is true iff the iteration isn't done yet. Useful for UpperBound and Set, which
-  // need to avoid fetching the deleted column from a past-the-end position. It's null for Singleton.
-  const std::function<llvm::Value*(const std::vector<llvm::Value*>& prev_iters, llvm::Value*)> is_deleted_;
+  // Callback provided from the executor which returns if the current row (given by
+  // position) is deleted. The second argument is true iff the iteration isn't done yet.
+  // Useful for UpperBound and Set, which need to avoid fetching the deleted column from a
+  // past-the-end position. It's null for Singleton.
+  const std::function<llvm::Value*(const std::vector<llvm::Value*>& prev_iters,
+                                   llvm::Value*)>
+      is_deleted_;
   const std::string name_;
 };

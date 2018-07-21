@@ -27,12 +27,14 @@ class PosixFileArchive : public Archive {
   const size_t buf_size = (1 << 20);
 
  public:
-  PosixFileArchive(const std::string url, const bool plain_text) : Archive(url, plain_text) {
+  PosixFileArchive(const std::string url, const bool plain_text)
+      : Archive(url, plain_text) {
     // some well-known file.exts imply plain text
     if (!this->plain_text)
-      this->plain_text =
-          boost::filesystem::extension(url_part(5)) == ".csv" || boost::filesystem::extension(url_part(5)) == ".tsv" ||
-          boost::filesystem::extension(url_part(5)) == ".txt" || boost::filesystem::extension(url_part(5)) == "";
+      this->plain_text = boost::filesystem::extension(url_part(5)) == ".csv" ||
+                         boost::filesystem::extension(url_part(5)) == ".tsv" ||
+                         boost::filesystem::extension(url_part(5)) == ".txt" ||
+                         boost::filesystem::extension(url_part(5)) == "";
 
     if (this->plain_text)
       buf = new char[buf_size];
@@ -51,10 +53,12 @@ class PosixFileArchive : public Archive {
     auto file_path = url_part(5);
     if (plain_text) {
       if (nullptr == (fp = fopen(file_path.c_str(), "r")))
-        throw std::runtime_error(std::string("fopen(") + file_path + "): " + strerror(errno));
+        throw std::runtime_error(std::string("fopen(") + file_path +
+                                 "): " + strerror(errno));
     } else {
       if (ARCHIVE_OK != archive_read_open_filename(ar, file_path.c_str(), 1 << 16))
-        throw std::runtime_error(std::string("fopen(") + file_path + "): " + strerror(errno));
+        throw std::runtime_error(std::string("fopen(") + file_path +
+                                 "): " + strerror(errno));
     }
   }
 

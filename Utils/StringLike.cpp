@@ -28,13 +28,15 @@
 enum LikeStatus {
   kLIKE_TRUE,
   kLIKE_FALSE,
-  kLIKE_ABORT,  // means we run out of string characters to match against pattern, can abort early
+  kLIKE_ABORT,  // means we run out of string characters to match against pattern, can
+                // abort early
   kLIKE_ERROR   // error condition
 };
 
 DEVICE static int inline lowercase(char c) {
-  if ('A' <= c && c <= 'Z')
+  if ('A' <= c && c <= 'Z') {
     return 'a' + (c - 'A');
+  }
   return c;
 }
 
@@ -70,13 +72,16 @@ extern "C" DEVICE bool string_ilike_simple(const char* str,
   return false;
 }
 
-#define STR_LIKE_SIMPLE_NULLABLE(base_func)                                                                     \
-  extern "C" DEVICE int8_t base_func##_nullable(                                                                \
-      const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len, const int8_t bool_null) { \
-    if (!lhs || !rhs) {                                                                                         \
-      return bool_null;                                                                                         \
-    }                                                                                                           \
-    return base_func(lhs, lhs_len, rhs, rhs_len) ? 1 : 0;                                                       \
+#define STR_LIKE_SIMPLE_NULLABLE(base_func)                               \
+  extern "C" DEVICE int8_t base_func##_nullable(const char* lhs,          \
+                                                const int32_t lhs_len,    \
+                                                const char* rhs,          \
+                                                const int32_t rhs_len,    \
+                                                const int8_t bool_null) { \
+    if (!lhs || !rhs) {                                                   \
+      return bool_null;                                                   \
+    }                                                                     \
+    return base_func(lhs, lhs_len, rhs, rhs_len) ? 1 : 0;                 \
   }
 
 STR_LIKE_SIMPLE_NULLABLE(string_like_simple)
@@ -102,10 +107,12 @@ DEVICE static LikeStatus string_like_match(const char* str,
       // next pattern char must match literally, whatever it is
       p++;
       plen--;
-      if (plen <= 0)
+      if (plen <= 0) {
         return kLIKE_ERROR;
-      if ((!is_ilike && *s != *p) || (is_ilike && lowercase(*s) != *p))
+      }
+      if ((!is_ilike && *s != *p) || (is_ilike && lowercase(*s) != *p)) {
         return kLIKE_FALSE;
+      }
     } else if (*p == '%') {
       char firstpat;
       p++;
@@ -115,23 +122,28 @@ DEVICE static LikeStatus string_like_match(const char* str,
           p++;
           plen--;
         } else if (*p == '_') {
-          if (slen <= 0)
+          if (slen <= 0) {
             return kLIKE_ABORT;
+          }
           s++;
           slen--;
           p++;
           plen--;
-        } else
+        } else {
           break;
+        }
       }
-      if (plen <= 0)
+      if (plen <= 0) {
         return kLIKE_TRUE;
+      }
       if (*p == escape_char) {
-        if (plen < 2)
+        if (plen < 2) {
           return kLIKE_ERROR;
+        }
         firstpat = p[1];
-      } else
+      } else {
         firstpat = *p;
+      }
 
       while (slen > 0) {
         bool match = false;
@@ -146,15 +158,18 @@ DEVICE static LikeStatus string_like_match(const char* str,
             pp++;
             pplen--;
           }
-          if (pplen <= 0)
+          if (pplen <= 0) {
             return kLIKE_ERROR;  // malformed
-        } else if ((!is_ilike && *s == firstpat) || (is_ilike && lowercase(*s) == firstpat)) {
+          }
+        } else if ((!is_ilike && *s == firstpat) ||
+                   (is_ilike && lowercase(*s) == firstpat)) {
           match = true;
         }
         if (match) {
           LikeStatus status = string_like_match(s, slen, p, plen, escape_char, is_ilike);
-          if (status != kLIKE_FALSE)
+          if (status != kLIKE_FALSE) {
             return status;
+          }
         }
         s++;
         slen--;
@@ -183,30 +198,36 @@ DEVICE static LikeStatus string_like_match(const char* str,
         slen--;
         pplen--;
         const char* x;
-        for (x = pp + 1; *x != ']' && pplen > 0; x++, pplen--)
+        for (x = pp + 1; *x != ']' && pplen > 0; x++, pplen--) {
           ;
-        if (pplen <= 0)
+        }
+        if (pplen <= 0) {
           return kLIKE_ERROR;  // malformed
+        }
         plen -= (x - p + 1);
         p = x + 1;
         continue;
-      } else
+      } else {
         return kLIKE_FALSE;
-    } else if ((!is_ilike && *s != *p) || (is_ilike && lowercase(*s) != *p))
+      }
+    } else if ((!is_ilike && *s != *p) || (is_ilike && lowercase(*s) != *p)) {
       return kLIKE_FALSE;
+    }
     s++;
     slen--;
     p++;
     plen--;
   }
-  if (slen > 0)
+  if (slen > 0) {
     return kLIKE_FALSE;
+  }
   while (plen > 0 && *p == '%') {
     p++;
     plen--;
   }
-  if (plen <= 0)
+  if (plen <= 0) {
     return kLIKE_TRUE;
+  }
   return kLIKE_ABORT;
 }
 
@@ -228,7 +249,8 @@ extern "C" DEVICE bool string_like(const char* str,
                                    const int32_t pat_len,
                                    const char escape_char) {
   // @TODO(wei/alex) add runtime error handling
-  LikeStatus status = string_like_match(str, str_len, pattern, pat_len, escape_char, false);
+  LikeStatus status =
+      string_like_match(str, str_len, pattern, pat_len, escape_char, false);
   return status == kLIKE_TRUE;
 }
 
@@ -238,11 +260,15 @@ extern "C" DEVICE bool string_ilike(const char* str,
                                     const int32_t pat_len,
                                     const char escape_char) {
   // @TODO(wei/alex) add runtime error handling
-  LikeStatus status = string_like_match(str, str_len, pattern, pat_len, escape_char, true);
+  LikeStatus status =
+      string_like_match(str, str_len, pattern, pat_len, escape_char, true);
   return status == kLIKE_TRUE;
 }
 
-extern "C" DEVICE int32_t StringCompare(const char* s1, const int32_t s1_len, const char* s2, const int32_t s2_len) {
+extern "C" DEVICE int32_t StringCompare(const char* s1,
+                                        const int32_t s1_len,
+                                        const char* s2,
+                                        const int32_t s2_len) {
   const char* s1_ = s1;
   const char* s2_ = s2;
 
@@ -275,37 +301,58 @@ STR_LIKE_NULLABLE(string_ilike)
 
 #undef STR_LIKE_NULLABLE
 
-extern "C" DEVICE bool string_lt(const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len) {
+extern "C" DEVICE bool string_lt(const char* lhs,
+                                 const int32_t lhs_len,
+                                 const char* rhs,
+                                 const int32_t rhs_len) {
   return StringCompare(lhs, lhs_len, rhs, rhs_len) < 0;
 }
 
-extern "C" DEVICE bool string_le(const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len) {
+extern "C" DEVICE bool string_le(const char* lhs,
+                                 const int32_t lhs_len,
+                                 const char* rhs,
+                                 const int32_t rhs_len) {
   return StringCompare(lhs, lhs_len, rhs, rhs_len) <= 0;
 }
 
-extern "C" DEVICE bool string_gt(const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len) {
+extern "C" DEVICE bool string_gt(const char* lhs,
+                                 const int32_t lhs_len,
+                                 const char* rhs,
+                                 const int32_t rhs_len) {
   return StringCompare(lhs, lhs_len, rhs, rhs_len) > 0;
 }
 
-extern "C" DEVICE bool string_ge(const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len) {
+extern "C" DEVICE bool string_ge(const char* lhs,
+                                 const int32_t lhs_len,
+                                 const char* rhs,
+                                 const int32_t rhs_len) {
   return StringCompare(lhs, lhs_len, rhs, rhs_len) >= 0;
 }
 
-extern "C" DEVICE bool string_eq(const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len) {
+extern "C" DEVICE bool string_eq(const char* lhs,
+                                 const int32_t lhs_len,
+                                 const char* rhs,
+                                 const int32_t rhs_len) {
   return StringCompare(lhs, lhs_len, rhs, rhs_len) == 0;
 }
 
-extern "C" DEVICE bool string_ne(const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len) {
+extern "C" DEVICE bool string_ne(const char* lhs,
+                                 const int32_t lhs_len,
+                                 const char* rhs,
+                                 const int32_t rhs_len) {
   return StringCompare(lhs, lhs_len, rhs, rhs_len) != 0;
 }
 
-#define STR_CMP_NULLABLE(base_func)                                                                             \
-  extern "C" DEVICE int8_t base_func##_nullable(                                                                \
-      const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len, const int8_t bool_null) { \
-    if (!lhs || !rhs) {                                                                                         \
-      return bool_null;                                                                                         \
-    }                                                                                                           \
-    return base_func(lhs, lhs_len, rhs, rhs_len) ? 1 : 0;                                                       \
+#define STR_CMP_NULLABLE(base_func)                                       \
+  extern "C" DEVICE int8_t base_func##_nullable(const char* lhs,          \
+                                                const int32_t lhs_len,    \
+                                                const char* rhs,          \
+                                                const int32_t rhs_len,    \
+                                                const int8_t bool_null) { \
+    if (!lhs || !rhs) {                                                   \
+      return bool_null;                                                   \
+    }                                                                     \
+    return base_func(lhs, lhs_len, rhs, rhs_len) ? 1 : 0;                 \
   }
 
 STR_CMP_NULLABLE(string_lt)

@@ -25,10 +25,10 @@
 #define PLANNER_H
 
 #include <cstdint>
-#include <string>
-#include <vector>
 #include <list>
 #include <map>
+#include <string>
+#include <vector>
 #include "../Analyzer/Analyzer.h"
 
 namespace Planner {
@@ -46,21 +46,29 @@ class Plan {
   Plan(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t, double c, Plan* p)
       : targetlist(t), cost(c), child_plan(p) {}
   Plan() : cost(0.0), child_plan(nullptr) {}
-  Plan(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t) : targetlist(t), cost(0.0), child_plan(nullptr) {}
+  Plan(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t)
+      : targetlist(t), cost(0.0), child_plan(nullptr) {}
   virtual ~Plan() {}
-  const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& get_targetlist() const { return targetlist; }
+  const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& get_targetlist() const {
+    return targetlist;
+  }
   const std::list<std::shared_ptr<Analyzer::Expr>>& get_quals() const { return quals; }
   double get_cost() const { return cost; }
   const Plan* get_child_plan() const { return child_plan.get(); }
   void add_tle(std::shared_ptr<Analyzer::TargetEntry> tle) { targetlist.push_back(tle); }
-  void set_targetlist(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t) { targetlist = t; }
+  void set_targetlist(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t) {
+    targetlist = t;
+  }
   virtual void print() const;
 
  protected:
-  std::vector<std::shared_ptr<Analyzer::TargetEntry>> targetlist;  // projection of this plan node
-  std::list<std::shared_ptr<Analyzer::Expr>> quals;  // list of boolean expressions, implicitly conjunctive
-  double cost;                                       // Planner assigned cost for optimization purpose
-  std::unique_ptr<Plan> child_plan;  // most plan nodes have at least one child, therefore keep it in super class
+  std::vector<std::shared_ptr<Analyzer::TargetEntry>>
+      targetlist;  // projection of this plan node
+  std::list<std::shared_ptr<Analyzer::Expr>>
+      quals;    // list of boolean expressions, implicitly conjunctive
+  double cost;  // Planner assigned cost for optimization purpose
+  std::unique_ptr<Plan> child_plan;  // most plan nodes have at least one child, therefore
+                                     // keep it in super class
 };
 
 /*
@@ -82,11 +90,14 @@ class Result : public Plan {
          Plan* p,
          const std::list<std::shared_ptr<Analyzer::Expr>>& cq)
       : Plan(t, q, c, p), const_quals(cq) {}
-  const std::list<std::shared_ptr<Analyzer::Expr>>& get_constquals() const { return const_quals; }
+  const std::list<std::shared_ptr<Analyzer::Expr>>& get_constquals() const {
+    return const_quals;
+  }
   virtual void print() const;
 
  private:
-  std::list<std::shared_ptr<Analyzer::Expr>> const_quals;  // constant quals to evaluate only once
+  std::list<std::shared_ptr<Analyzer::Expr>>
+      const_quals;  // constant quals to evaluate only once
 };
 
 /*
@@ -104,11 +115,15 @@ class Scan : public Plan {
        const std::list<int>& cl)
       : Plan(t, q, c, p), simple_quals(sq), table_id(r), col_list(cl) {}
   Scan(const Analyzer::RangeTblEntry& rte);
-  const std::list<std::shared_ptr<Analyzer::Expr>>& get_simple_quals() const { return simple_quals; };
+  const std::list<std::shared_ptr<Analyzer::Expr>>& get_simple_quals() const {
+    return simple_quals;
+  };
   int get_table_id() const { return table_id; }
   const std::list<int>& get_col_list() const { return col_list; }
   void add_predicate(std::shared_ptr<Analyzer::Expr> pred) { quals.push_back(pred); }
-  void add_simple_predicate(std::shared_ptr<Analyzer::Expr> pred) { simple_quals.push_back(pred); }
+  void add_simple_predicate(std::shared_ptr<Analyzer::Expr> pred) {
+    simple_quals.push_back(pred);
+  }
   virtual void print() const;
 
  private:
@@ -161,8 +176,11 @@ class AggPlan : public Plan {
           Plan* p,
           const std::list<std::shared_ptr<Analyzer::Expr>>& gl)
       : Plan(t, c, p), groupby_list(gl) {}
-  const std::list<std::shared_ptr<Analyzer::Expr>>& get_groupby_list() const { return groupby_list; }
-  void set_groupby_list(const std::list<std::shared_ptr<Analyzer::Expr>>& new_groupby_list) {
+  const std::list<std::shared_ptr<Analyzer::Expr>>& get_groupby_list() const {
+    return groupby_list;
+  }
+  void set_groupby_list(
+      const std::list<std::shared_ptr<Analyzer::Expr>>& new_groupby_list) {
     groupby_list = new_groupby_list;
   }
   virtual void print() const;
@@ -206,13 +224,17 @@ class MergeAppend : public Plan {
               std::list<std::unique_ptr<Plan>>& pl,
               const std::list<Analyzer::OrderEntry>& oe)
       : Plan(t, q, c, p), mergeplan_list(std::move(pl)), order_entries(oe) {}
-  const std::list<std::unique_ptr<Plan>>& get_mergeplan_list() const { return mergeplan_list; }
-  const std::list<Analyzer::OrderEntry>& get_order_entries() const { return order_entries; }
+  const std::list<std::unique_ptr<Plan>>& get_mergeplan_list() const {
+    return mergeplan_list;
+  }
+  const std::list<Analyzer::OrderEntry>& get_order_entries() const {
+    return order_entries;
+  }
   virtual void print() const;
 
  private:
   std::list<std::unique_ptr<Plan>> mergeplan_list;  // list of plans to merge
-  std::list<Analyzer::OrderEntry> order_entries;    // defines how the mergeplans are sorted
+  std::list<Analyzer::OrderEntry> order_entries;  // defines how the mergeplans are sorted
 };
 
 /*
@@ -228,12 +250,15 @@ class Sort : public Plan {
        const std::list<Analyzer::OrderEntry>& oe,
        bool d)
       : Plan(t, c, p), order_entries(oe), remove_duplicates(d) {}
-  const std::list<Analyzer::OrderEntry>& get_order_entries() const { return order_entries; }
+  const std::list<Analyzer::OrderEntry>& get_order_entries() const {
+    return order_entries;
+  }
   bool get_remove_duplicates() const { return remove_duplicates; }
   virtual void print() const;
 
  private:
-  std::list<Analyzer::OrderEntry> order_entries;  // defines columns to sort on and in what order
+  std::list<Analyzer::OrderEntry>
+      order_entries;  // defines columns to sort on and in what order
   bool remove_duplicates;
 };
 
@@ -252,15 +277,15 @@ class RootPlan {
            const Catalog_Namespace::Catalog& cat,
            int64_t l,
            int64_t o)
-      : plan(p),
-        stmt_type(t),
-        result_table_id(r),
-        result_col_list(c),
-        catalog(cat),
-        limit(l),
-        offset(o),
-        render_type("NONE"),
-        plan_dest(kCLIENT) {}
+      : plan(p)
+      , stmt_type(t)
+      , result_table_id(r)
+      , result_col_list(c)
+      , catalog(cat)
+      , limit(l)
+      , offset(o)
+      , render_type("NONE")
+      , plan_dest(kCLIENT) {}
   const Plan* get_plan() const { return plan.get(); }
   SQLStmtType get_stmt_type() const { return stmt_type; }
   int get_result_table_id() const { return result_table_id; }
@@ -275,13 +300,16 @@ class RootPlan {
   void set_plan_dest(Dest d) { plan_dest = d; }
 
  private:
-  std::unique_ptr<Plan> plan;                 // query plan
-  SQLStmtType stmt_type;                      // SELECT, UPDATE, DELETE or INSERT
-  int result_table_id;                        // For UPDATE, DELETE or INSERT only: table id for the result table
-  std::list<int> result_col_list;             // For UPDATE and INSERT only: list of result column ids.
-  const Catalog_Namespace::Catalog& catalog;  // include the current catalog here for the executor
-  int64_t limit;                              // limit from LIMIT clause.  0 means ALL
-  int64_t offset;                             // offset from OFFSET clause.  0 means no offset.
+  std::unique_ptr<Plan> plan;  // query plan
+  SQLStmtType stmt_type;       // SELECT, UPDATE, DELETE or INSERT
+  int result_table_id;  // For UPDATE, DELETE or INSERT only: table id for the result
+                        // table
+  std::list<int>
+      result_col_list;  // For UPDATE and INSERT only: list of result column ids.
+  const Catalog_Namespace::Catalog&
+      catalog;     // include the current catalog here for the executor
+  int64_t limit;   // limit from LIMIT clause.  0 means ALL
+  int64_t offset;  // offset from OFFSET clause.  0 means no offset.
   std::string render_type;
   Dest plan_dest;
 };
@@ -322,6 +350,6 @@ class Optimizer {
   const Analyzer::Query& query;
   const Catalog_Namespace::Catalog& catalog;
 };
-}
+}  // namespace Planner
 
 #endif  // PLANNER_H

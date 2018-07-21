@@ -5,11 +5,11 @@
 #include "TargetMetaInfo.h"
 #include "UpdateCacheInvalidators.h"
 
+#include <boost/variant.hpp>
 #include "Shared/ConfigResolve.h"
 #include "Shared/UpdelRoll.h"
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"
-#include <boost/variant.hpp>
 
 #include <future>
 
@@ -88,10 +88,12 @@ class DefaultIOFacet {
   }
 
   template <typename CATALOG_TYPE, typename TABLE_DESCRIPTOR_TYPE>
-  static std::function<bool(std::string const&)> yieldColumnValidator(CATALOG_TYPE const& cat,
-                                                                      TABLE_DESCRIPTOR_TYPE const* table_descriptor) {
+  static std::function<bool(std::string const&)> yieldColumnValidator(
+      CATALOG_TYPE const& cat,
+      TABLE_DESCRIPTOR_TYPE const* table_descriptor) {
     return [&cat, table_descriptor](std::string const& column_name) -> bool {
-      auto const* target_column = cat.getMetadataForColumn(table_descriptor->tableId, column_name);
+      auto const* target_column =
+          cat.getMetadataForColumn(table_descriptor->tableId, column_name);
 
       // The default IO facet currently only rejects none-encoded string columns
       auto column_type(target_column->columnType);
@@ -122,7 +124,9 @@ class StorageIOFacility {
 
   class TransactionParameters {
    public:
-    typename IOFacility::TransactionLog& getTransactionTracker() { return transaction_tracker_; }
+    typename IOFacility::TransactionLog& getTransactionTracker() {
+      return transaction_tracker_;
+    }
     void finalizeTransaction() { transaction_tracker_.commitUpdate(); }
 
    private:
@@ -135,7 +139,8 @@ class StorageIOFacility {
 
    private:
     DeleteTransactionParameters(DeleteTransactionParameters const& other) = delete;
-    DeleteTransactionParameters& operator=(DeleteTransactionParameters const& other) = delete;
+    DeleteTransactionParameters& operator=(DeleteTransactionParameters const& other) =
+        delete;
   };
 
   class UpdateTransactionParameters : public TransactionParameters {
@@ -143,26 +148,37 @@ class StorageIOFacility {
     UpdateTransactionParameters(TableDescriptorType const* table_desc,
                                 UpdateTargetColumnNamesList const& update_column_names,
                                 UpdateTargetTypeList const& target_types)
-        : table_descriptor_(table_desc), update_column_names_(update_column_names), targets_meta_(target_types){};
+        : table_descriptor_(table_desc)
+        , update_column_names_(update_column_names)
+        , targets_meta_(target_types){};
 
-    typename UpdateTargetColumnNamesList::size_type getUpdateColumnCount() const { return update_column_names_.size(); }
+    typename UpdateTargetColumnNamesList::size_type getUpdateColumnCount() const {
+      return update_column_names_.size();
+    }
     TableDescriptorType const* getTableDescriptor() const { return table_descriptor_; }
     UpdateTargetTypeList const& getTargetsMetaInfo() const { return targets_meta_; }
-    typename UpdateTargetTypeList::size_type getTargetsMetaInfoSize() const { return targets_meta_.size(); }
-    UpdateTargetColumnNamesList const& getUpdateColumnNames() const { return update_column_names_; }
+    typename UpdateTargetTypeList::size_type getTargetsMetaInfoSize() const {
+      return targets_meta_.size();
+    }
+    UpdateTargetColumnNamesList const& getUpdateColumnNames() const {
+      return update_column_names_;
+    }
 
    private:
     UpdateTransactionParameters(UpdateTransactionParameters const& other) = delete;
-    UpdateTransactionParameters& operator=(UpdateTransactionParameters const& other) = delete;
+    UpdateTransactionParameters& operator=(UpdateTransactionParameters const& other) =
+        delete;
 
     TableDescriptorType const* table_descriptor_;
     UpdateTargetColumnNamesList update_column_names_;
     UpdateTargetTypeList const& targets_meta_;
   };
 
-  StorageIOFacility(ExecutorType* executor, CatalogType const& catalog) : executor_(executor), catalog_(catalog) {}
+  StorageIOFacility(ExecutorType* executor, CatalogType const& catalog)
+      : executor_(executor), catalog_(catalog) {}
 
-  ColumnValidationFunction yieldColumnValidator(TableDescriptorType const* table_descriptor) {
+  ColumnValidationFunction yieldColumnValidator(
+      TableDescriptorType const* table_descriptor) {
     return IOFacility::yieldColumnValidator(catalog_, table_descriptor);
   }
 
@@ -184,7 +200,8 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
   using ScalarTargetValueVector = std::vector<ScalarTargetValue>;
   using RowProcessingFuturesVector = std::vector<std::future<uint64_t>>;
 
-  auto callback = [this, &update_parameters](FragmentUpdaterType const& update_log) -> void {
+  auto callback = [this,
+                   &update_parameters](FragmentUpdaterType const& update_log) -> void {
     auto rows_per_column = update_log.getEntryCount();
     if (rows_per_column == 0)
       return;
@@ -201,40 +218,50 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
       usable_threads = 1;
     }
 
-    auto string_process_rows = [&update_log, &update_parameters, &column_offsets, &scalar_target_values](
-        uint64_t column_index, uint64_t row_start, uint64_t row_count) -> uint64_t {
+    auto string_process_rows =
+        [&update_log, &update_parameters, &column_offsets, &scalar_target_values](
+            uint64_t column_index, uint64_t row_start, uint64_t row_count) -> uint64_t {
       uint64_t rows_processed = 0;
-      for (uint64_t row_index = row_start; row_index < (row_start + row_count); row_index++, rows_processed++) {
+      for (uint64_t row_index = row_start; row_index < (row_start + row_count);
+           row_index++, rows_processed++) {
         auto const row(update_log.getTranslatedEntryAt(row_index));
 
         CHECK(!row.empty());
         CHECK(row.size() == update_parameters.getUpdateColumnCount() + 1);
 
         auto terminal_column_iter = std::prev(row.end());
-        const auto frag_offset_scalar_tv = boost::get<ScalarTargetValue>(&*terminal_column_iter);
+        const auto frag_offset_scalar_tv =
+            boost::get<ScalarTargetValue>(&*terminal_column_iter);
         CHECK(frag_offset_scalar_tv);
 
-        column_offsets[row_index] = static_cast<uint64_t>(*(boost::get<int64_t>(frag_offset_scalar_tv)));
-        scalar_target_values[row_index] = boost::get<ScalarTargetValue>(row[column_index]);
+        column_offsets[row_index] =
+            static_cast<uint64_t>(*(boost::get<int64_t>(frag_offset_scalar_tv)));
+        scalar_target_values[row_index] =
+            boost::get<ScalarTargetValue>(row[column_index]);
       }
       return rows_processed;
     };
 
-    auto process_rows = [&update_log, &update_parameters, &column_offsets, &scalar_target_values](
-        uint64_t column_index, uint64_t row_start, uint64_t row_count) -> uint64_t {
+    auto process_rows =
+        [&update_log, &update_parameters, &column_offsets, &scalar_target_values](
+            uint64_t column_index, uint64_t row_start, uint64_t row_count) -> uint64_t {
       uint64_t rows_processed = 0;
-      for (uint64_t row_index = row_start; row_index < (row_start + row_count); row_index++, rows_processed++) {
+      for (uint64_t row_index = row_start; row_index < (row_start + row_count);
+           row_index++, rows_processed++) {
         auto const row(update_log.getEntryAt(row_index));
 
         CHECK(!row.empty());
         CHECK(row.size() == update_parameters.getUpdateColumnCount() + 1);
 
         auto terminal_column_iter = std::prev(row.end());
-        const auto frag_offset_scalar_tv = boost::get<ScalarTargetValue>(&*terminal_column_iter);
+        const auto frag_offset_scalar_tv =
+            boost::get<ScalarTargetValue>(&*terminal_column_iter);
         CHECK(frag_offset_scalar_tv);
 
-        column_offsets[row_index] = static_cast<uint64_t>(*(boost::get<int64_t>(frag_offset_scalar_tv)));
-        scalar_target_values[row_index] = boost::get<ScalarTargetValue>(row[column_index]);
+        column_offsets[row_index] =
+            static_cast<uint64_t>(*(boost::get<int64_t>(frag_offset_scalar_tv)));
+        scalar_target_values[row_index] =
+            boost::get<ScalarTargetValue>(row[column_index]);
       }
       return rows_processed;
     };
@@ -249,19 +276,22 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
       RowProcessingFuturesVector row_processing_futures;
       row_processing_futures.reserve(usable_threads);
 
-      if (!update_log.getColumnType(column_index).is_string()) {  // Process non-string columns
+      if (!update_log.getColumnType(column_index)
+               .is_string()) {  // Process non-string columns
         for (unsigned i = 0; i < static_cast<unsigned>(usable_threads); i++)
-          row_processing_futures.emplace_back(std::async(std::launch::async,
-                                                         std::forward<decltype(process_rows)>(process_rows),
-                                                         column_index,
-                                                         get_row_index(i),
-                                                         complete_row_block_size));
+          row_processing_futures.emplace_back(
+              std::async(std::launch::async,
+                         std::forward<decltype(process_rows)>(process_rows),
+                         column_index,
+                         get_row_index(i),
+                         complete_row_block_size));
         if (partial_row_block_size) {
-          row_processing_futures.emplace_back(std::async(std::launch::async,
-                                                         std::forward<decltype(process_rows)>(process_rows),
-                                                         column_index,
-                                                         get_row_index(usable_threads),
-                                                         partial_row_block_size));
+          row_processing_futures.emplace_back(
+              std::async(std::launch::async,
+                         std::forward<decltype(process_rows)>(process_rows),
+                         column_index,
+                         get_row_index(usable_threads),
+                         partial_row_block_size));
         }
       } else {  // Process string columns
         for (unsigned i = 0; i < (unsigned)usable_threads; i++)
@@ -307,7 +337,8 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldDeleteCallb
     DeleteTransactionParameters& delete_parameters) {
   using RowProcessingFuturesVector = std::vector<std::future<uint64_t>>;
 
-  auto callback = [this, &delete_parameters](FragmentUpdaterType const& update_log) -> void {
+  auto callback = [this,
+                   &delete_parameters](FragmentUpdaterType const& update_log) -> void {
     auto rows_per_column = update_log.getEntryCount();
     if (rows_per_column == 0)
       return;
@@ -323,11 +354,12 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldDeleteCallb
       usable_threads = 1;
     }
 
-    auto process_rows = [&update_log, &delete_parameters, &victim_offsets](uint64_t row_start,
-                                                                           uint64_t row_count) -> uint64_t {
+    auto process_rows = [&update_log, &delete_parameters, &victim_offsets](
+                            uint64_t row_start, uint64_t row_count) -> uint64_t {
       uint64_t rows_processed = 0;
 
-      for (uint64_t row_index = row_start; row_index < (row_start + row_count); row_index++, rows_processed++) {
+      for (uint64_t row_index = row_start; row_index < (row_start + row_count);
+           row_index++, rows_processed++) {
         auto const row(update_log.getEntryAt(row_index));
         __builtin_prefetch(row.data(), 0, 0);
 
@@ -336,7 +368,8 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldDeleteCallb
         const auto scalar_tv = boost::get<ScalarTargetValue>(&*terminal_column_iter);
         CHECK(scalar_tv);
 
-        uint64_t fragment_offset = static_cast<uint64_t>(*(boost::get<int64_t>(scalar_tv)));
+        uint64_t fragment_offset =
+            static_cast<uint64_t>(*(boost::get<int64_t>(scalar_tv)));
         victim_offsets[row_index] = fragment_offset;
       }
       return rows_processed;
@@ -350,15 +383,17 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldDeleteCallb
     row_processing_futures.reserve(usable_threads);
 
     for (unsigned i = 0; i < (unsigned)usable_threads; i++)
-      row_processing_futures.emplace_back(std::async(std::launch::async,
-                                                     std::forward<decltype(process_rows)>(process_rows),
-                                                     get_row_index(i),
-                                                     complete_row_block_size));
+      row_processing_futures.emplace_back(
+          std::async(std::launch::async,
+                     std::forward<decltype(process_rows)>(process_rows),
+                     get_row_index(i),
+                     complete_row_block_size));
     if (partial_row_block_size)
-      row_processing_futures.emplace_back(std::async(std::launch::async,
-                                                     std::forward<decltype(process_rows)>(process_rows),
-                                                     get_row_index(usable_threads),
-                                                     partial_row_block_size));
+      row_processing_futures.emplace_back(
+          std::async(std::launch::async,
+                     std::forward<decltype(process_rows)>(process_rows),
+                     get_row_index(usable_threads),
+                     partial_row_block_size));
 
     uint64_t rows_processed(0);
     for (auto& t : row_processing_futures) {

@@ -17,37 +17,37 @@
 /**
  * @file    RowToColumnLoader.cpp
  * @author  Michael <michael@mapd.com>
- * @brief   Based on StreamInsert code but using binary columnar format for inserting a stream of rows
- * with optional transformations from stdin to a MapD table.
+ * @brief   Based on StreamInsert code but using binary columnar format for inserting a
+ *stream of rows with optional transformations from stdin to a MapD table.
  *
  * Copyright (c) 2017 MapD Technologies, Inc.  All rights reserved.
  **/
 
+#include <glog/logging.h>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/trim.hpp>
+#include <boost/regex.hpp>
 #include <cstring>
-#include <string>
 #include <iostream>
 #include <iterator>
-#include <boost/regex.hpp>
-#include <boost/algorithm/string/trim.hpp>
-#include <boost/algorithm/string.hpp>
-#include <glog/logging.h>
+#include <string>
 
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/sqltypes.h"
 
-#include <thread>
 #include <chrono>
+#include <thread>
 
 #include <boost/program_options.hpp>
 
 // include files for Thrift and MapD Thrift Services
-#include "gen-cpp/MapD.h"
-#include "gen-cpp/mapd_types.h"
-#include "Importer.h"
-#include "RowToColumnLoader.h"
-#include <thrift/transport/TSocket.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
+#include <thrift/transport/TSocket.h>
+#include "Importer.h"
+#include "RowToColumnLoader.h"
+#include "gen-cpp/MapD.h"
+#include "gen-cpp/mapd_types.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -120,8 +120,9 @@ SQLTypeInfo create_array_sql_type_info_from_col_type(const TColumnType& ct) {
                      SQLTypes::kNULLT);
 }
 
-std::string RowToColumnLoader::print_row_with_delim(std::vector<TStringValue> row,
-                                                    const Importer_NS::CopyParams& copy_params) {
+std::string RowToColumnLoader::print_row_with_delim(
+    std::vector<TStringValue> row,
+    const Importer_NS::CopyParams& copy_params) {
   std::ostringstream out;
   bool first = true;
   for (TStringValue ts : row) {
@@ -197,14 +198,16 @@ void populate_TColumn(TStringValue ts,
         switch (column_type_info.get_type()) {
           case SQLTypes::kCHAR:
           case SQLTypes::kVARCHAR:
-            input_col.data.str_col.push_back(ts.str_val.substr(0, column_type_info.get_precision()));
+            input_col.data.str_col.push_back(
+                ts.str_val.substr(0, column_type_info.get_precision()));
             break;
           case SQLTypes::kTEXT:
 
             input_col.data.str_col.push_back(ts.str_val);
             break;
           default:
-            LOG(FATAL) << " trying to process a STRING transport type not handled " << column_type_info.get_type();
+            LOG(FATAL) << " trying to process a STRING transport type not handled "
+                       << column_type_info.get_type();
         }
       }
       break;
@@ -242,7 +245,8 @@ void populate_TColumn(TStringValue ts,
             input_col.data.int_col.push_back(d.timeval);
             break;
           default:
-            LOG(FATAL) << " trying to process an INT transport type not handled " << column_type_info.get_type();
+            LOG(FATAL) << " trying to process an INT transport type not handled "
+                       << column_type_info.get_type();
         }
       }
       break;
@@ -263,7 +267,8 @@ void populate_TColumn(TStringValue ts,
             input_col.data.real_col.push_back(d.doubleval);
             break;
           default:
-            LOG(FATAL) << " trying to process a REAL transport type not handled " << column_type_info.get_type();
+            LOG(FATAL) << " trying to process a REAL transport type not handled "
+                       << column_type_info.get_type();
         }
       }
       break;
@@ -276,8 +281,9 @@ TRowDescriptor RowToColumnLoader::get_row_descriptor() {
   return row_desc_;
 };
 
-bool RowToColumnLoader::convert_string_to_column(std::vector<TStringValue> row,
-                                                 const Importer_NS::CopyParams& copy_params) {
+bool RowToColumnLoader::convert_string_to_column(
+    std::vector<TStringValue> row,
+    const Importer_NS::CopyParams& copy_params) {
   // create datum and push data to column structure from row data
   uint curr_col = 0;
   for (TStringValue ts : row) {
@@ -293,19 +299,22 @@ bool RowToColumnLoader::convert_string_to_column(std::vector<TStringValue> row,
             tsa.str_val = item;
             tsa.is_null = (tsa.str_val.empty() || tsa.str_val == copy_params.null_str);
             // now put into TColumn
-            populate_TColumn(tsa, array_column_type_info_[curr_col], array_tcol, copy_params);
+            populate_TColumn(
+                tsa, array_column_type_info_[curr_col], array_tcol, copy_params);
           }
           input_columns_[curr_col].nulls.push_back(false);
           input_columns_[curr_col].data.arr_col.push_back(array_tcol);
 
         } break;
         default:
-          populate_TColumn(ts, column_type_info_[curr_col], input_columns_[curr_col], copy_params);
+          populate_TColumn(
+              ts, column_type_info_[curr_col], input_columns_[curr_col], copy_params);
       }
     } catch (const std::exception& e) {
       remove_partial_row(curr_col, column_type_info_, input_columns_);
       // import_status.rows_rejected++;
-      LOG(ERROR) << "Input exception thrown: " << e.what() << ". Row discarded, issue at column : " << (curr_col + 1)
+      LOG(ERROR) << "Input exception thrown: " << e.what()
+                 << ". Row discarded, issue at column : " << (curr_col + 1)
                  << " data :" << print_row_with_delim(row, copy_params);
       return false;
     }
@@ -335,7 +344,8 @@ RowToColumnLoader::RowToColumnLoader(const std::string server_host,
     column_type_info_.push_back(create_sql_type_info_from_col_type(ct));
   }
 
-  // create vector with array column details presented as real column for easier resue of othe code
+  // create vector with array column details presented as real column for easier resue of
+  // othe code
   for (TColumnType ct : row_desc_) {
     array_column_type_info_.push_back(create_array_sql_type_info_from_col_type(ct));
   }
@@ -356,8 +366,9 @@ void RowToColumnLoader::createConnection(ConnectionDetails con) {
   mapd::shared_ptr<TProtocol> protocol(new TBinaryProtocol(mytransport_));
   client_.reset(new MapDClient(protocol));
   try {
-    mytransport_->open();                                                // open transport
-    client_->connect(session_, con.user_name, con.passwd, con.db_name);  // connect to mapd_server
+    mytransport_->open();  // open transport
+    client_->connect(
+        session_, con.user_name, con.passwd, con.db_name);  // connect to mapd_server
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
@@ -376,24 +387,30 @@ void RowToColumnLoader::closeConnection() {
   }
 }
 
-void RowToColumnLoader::wait_disconnet_reconnnect_retry(size_t tries,
-                                                        Importer_NS::CopyParams copy_params,
-                                                        ConnectionDetails conn_details) {
-  std::cout << "  Waiting  " << copy_params.retry_wait << " secs to retry Inserts , will try "
-            << (copy_params.retry_count - tries) << " times more " << std::endl;
+void RowToColumnLoader::wait_disconnet_reconnnect_retry(
+    size_t tries,
+    Importer_NS::CopyParams copy_params,
+    ConnectionDetails conn_details) {
+  std::cout << "  Waiting  " << copy_params.retry_wait
+            << " secs to retry Inserts , will try " << (copy_params.retry_count - tries)
+            << " times more " << std::endl;
   sleep(copy_params.retry_wait);
 
   closeConnection();
   createConnection(conn_details);
 }
 
-void RowToColumnLoader::do_load(int& nrows, int& nskipped, Importer_NS::CopyParams copy_params) {
-  for (size_t tries = 0; tries < copy_params.retry_count; tries++) {  // allow for retries in case of insert failure
+void RowToColumnLoader::do_load(int& nrows,
+                                int& nskipped,
+                                Importer_NS::CopyParams copy_params) {
+  for (size_t tries = 0; tries < copy_params.retry_count;
+       tries++) {  // allow for retries in case of insert failure
     try {
       client_->load_table_binary_columnar(session_, table_name_, input_columns_);
       //      client->load_table(session, table_name, input_rows);
       nrows += input_columns_[0].nulls.size();
-      std::cout << nrows << " Rows Inserted, " << nskipped << " rows skipped." << std::endl;
+      std::cout << nrows << " Rows Inserted, " << nskipped << " rows skipped."
+                << std::endl;
       // we successfully loaded the data, lets move on
       input_columns_.clear();
       // create vector for storage of the actual column data

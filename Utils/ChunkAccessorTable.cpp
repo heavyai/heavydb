@@ -48,18 +48,20 @@ ChunkAccessorTable getChunkAccessorTable(const Catalog_Namespace::Catalog& cat,
       }
 
       // find the chunk
-      ChunkKey chunkKey{cat.get_currentDB().dbId, td->tableId, cd->columnId, fragment.fragmentId};
+      ChunkKey chunkKey{
+          cat.get_currentDB().dbId, td->tableId, cd->columnId, fragment.fragmentId};
       auto chunkMetaIt = fragment.getChunkMetadataMap().find(cd->columnId);
       CHECK(chunkMetaIt != fragment.getChunkMetadataMap().end());
 
       // get the chunk
-      std::shared_ptr<Chunk_NS::Chunk> chunk = Chunk_NS::Chunk::getChunk(cd,
-                                                                         &cat.get_dataMgr(),
-                                                                         chunkKey,
-                                                                         Data_Namespace::CPU_LEVEL,
-                                                                         0,
-                                                                         chunkMetaIt->second.numBytes,
-                                                                         chunkMetaIt->second.numElements);
+      std::shared_ptr<Chunk_NS::Chunk> chunk =
+          Chunk_NS::Chunk::getChunk(cd,
+                                    &cat.get_dataMgr(),
+                                    chunkKey,
+                                    Data_Namespace::CPU_LEVEL,
+                                    0,
+                                    chunkMetaIt->second.numBytes,
+                                    chunkMetaIt->second.numElements);
       CHECK(chunk);
 
       // the size
@@ -94,7 +96,9 @@ ChunkAccessorTable getChunkAccessorTable(const Catalog_Namespace::Catalog& cat,
   return table;
 }
 
-ChunkIterVector& getChunkItersAndRowOffset(ChunkAccessorTable& table, size_t rowid, size_t& rowOffset) {
+ChunkIterVector& getChunkItersAndRowOffset(ChunkAccessorTable& table,
+                                           size_t rowid,
+                                           size_t& rowOffset) {
   rowOffset = 0;
   for (auto& entry : table) {
     if (rowid < std::get<0>(entry)) {

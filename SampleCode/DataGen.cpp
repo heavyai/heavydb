@@ -30,20 +30,20 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
-#include <cstring>
-#include <cstdlib>
-#include <string>
-#include <iostream>
-#include <cstdint>
 #include <cfloat>
-#include <random>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <ctime>
+#include <iostream>
+#include <random>
+#include <string>
 
 // include files for Thrift and MapD Thrift Services
-#include "gen-cpp/MapD.h"
-#include <thrift/transport/TSocket.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
+#include <thrift/transport/TSocket.h>
+#include "gen-cpp/MapD.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -52,15 +52,15 @@ using namespace ::apache::thrift::transport;
 #ifdef HAVE_THRIFT_STD_SHAREDPTR
 #include <memory>
 namespace mapd {
-using std::shared_ptr;
 using std::make_shared;
-}
+using std::shared_ptr;
+}  // namespace mapd
 #else
 #include <boost/make_shared.hpp>
 namespace mapd {
-using boost::shared_ptr;
 using boost::make_shared;
-}
+using boost::shared_ptr;
+}  // namespace mapd
 #endif  // HAVE_THRIFT_STD_SHAREDPTR
 
 namespace {
@@ -88,16 +88,18 @@ std::string gen_string() {
   std::uniform_int_distribution<> len_dist(0, max_str_len);
   int len = len_dist(random_gen);
   std::string s(len, ' ');
-  for (int i = 0; i < len; i++)
+  for (int i = 0; i < len; i++) {
     s[i] = chars[char_dist(random_gen)];
+  }
   return s;
 }
 
 // returns a random boolean as string
 std::string gen_bool() {
   std::uniform_int_distribution<int> dist(0, 1);
-  if (dist(random_gen) == 1)
+  if (dist(random_gen) == 1) {
     return "t";
+  }
   return "f";
 }
 
@@ -137,10 +139,11 @@ void data_gen(const TRowDescriptor& row_desc, const char* delimiter, int num_row
   for (int i = 0; i < num_rows; i++) {
     bool not_first = false;
     for (auto p = row_desc.begin(); p != row_desc.end(); ++p) {
-      if (not_first)
+      if (not_first) {
         std::cout << delimiter;
-      else
+      } else {
         not_first = true;
+      }
       switch (p->col_type.type) {
         case TDatumType::SMALLINT:
         case TDatumType::INT:
@@ -177,7 +180,7 @@ void data_gen(const TRowDescriptor& row_desc, const char* delimiter, int num_row
     std::cout << std::endl;
   }
 }
-}
+}  // namespace
 
 int main(int argc, char** argv) {
   std::string server_host("localhost");  // default to localhost
@@ -186,7 +189,9 @@ int main(int argc, char** argv) {
   const char* delimiter = "\t";          // only support tab delimiter for now
 
   if (argc < 5) {
-    std::cout << "Usage: <table> <database> <user> <password> [<num rows>] [hostname[:port]]" << std::endl;
+    std::cout
+        << "Usage: <table> <database> <user> <password> [<num rows>] [hostname[:port]]"
+        << std::endl;
     return 1;
   }
   std::string table_name(argv[1]);
@@ -200,8 +205,9 @@ int main(int argc, char** argv) {
       char* host = strtok(argv[6], ":");
       char* portno = strtok(NULL, ":");
       server_host = host;
-      if (portno != NULL)
+      if (portno != NULL) {
         port = atoi(portno);
+      }
     }
   }
 

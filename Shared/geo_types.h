@@ -30,7 +30,8 @@ namespace Geo_namespace {
 class GeoTypesError : public std::runtime_error {
  public:
   explicit GeoTypesError(const std::string& type, const int ogr_err)
-      : std::runtime_error("Geo" + type + " Error: " + GeoTypesError::OGRErrorToStr(ogr_err)) {}
+      : std::runtime_error("Geo" + type +
+                           " Error: " + GeoTypesError::OGRErrorToStr(ogr_err)) {}
   explicit GeoTypesError(const std::string& type, const std::string& err)
       : std::runtime_error("Geo" + type + " Error: " + err) {}
 
@@ -52,7 +53,8 @@ class GeoBase {
   virtual bool operator==(const GeoBase& other) const;
 
  protected:
-  GeoBase(OGRGeometry* geom, const bool owns_geom_obj) : geom_(geom), owns_geom_obj_(owns_geom_obj) {}
+  GeoBase(OGRGeometry* geom, const bool owns_geom_obj)
+      : geom_(geom), owns_geom_obj_(owns_geom_obj) {}
   OGRGeometry* geom_ = nullptr;
   bool owns_geom_obj_;
 
@@ -84,7 +86,8 @@ class GeoLineString : public GeoBase {
   GeoType getType() const final { return GeoType::kLINESTRING; }
 
  protected:
-  GeoLineString(OGRGeometry* geom, const bool owns_geom_obj) : GeoBase(geom, owns_geom_obj) {}
+  GeoLineString(OGRGeometry* geom, const bool owns_geom_obj)
+      : GeoBase(geom, owns_geom_obj) {}
 
   friend class GeoTypesFactory;
 };
@@ -94,13 +97,16 @@ class GeoPolygon : public GeoBase {
   GeoPolygon(const std::vector<double>& coords, const std::vector<int32_t>& ring_sizes);
   GeoPolygon(const std::string& wkt);
 
-  void getColumns(std::vector<double>& coords, std::vector<int32_t>& ring_sizes, std::vector<double>& bounds) const;
+  void getColumns(std::vector<double>& coords,
+                  std::vector<int32_t>& ring_sizes,
+                  std::vector<double>& bounds) const;
   GeoType getType() const final { return GeoType::kPOLYGON; }
 
   int32_t getNumInteriorRings() const;
 
  protected:
-  GeoPolygon(OGRGeometry* geom, const bool owns_geom_obj) : GeoBase(geom, owns_geom_obj) {}
+  GeoPolygon(OGRGeometry* geom, const bool owns_geom_obj)
+      : GeoBase(geom, owns_geom_obj) {}
 
   friend class GeoTypesFactory;
 };
@@ -119,7 +125,8 @@ class GeoMultiPolygon : public GeoBase {
   GeoType getType() const final { return GeoType::kMULTIPOLYGON; }
 
  protected:
-  GeoMultiPolygon(OGRGeometry* geom, const bool owns_geom_obj) : GeoBase(geom, owns_geom_obj) {}
+  GeoMultiPolygon(OGRGeometry* geom, const bool owns_geom_obj)
+      : GeoBase(geom, owns_geom_obj) {}
 
   friend class GeoTypesFactory;
 };
@@ -146,7 +153,9 @@ class GeoTypesFactory {
                             const bool promote_poly_to_mpoly = false);
 
  private:
-  static std::unique_ptr<Geo_namespace::GeoBase> createGeoTypeImpl(OGRGeometry* geom, const bool owns_geom_obj = true);
+  static std::unique_ptr<Geo_namespace::GeoBase> createGeoTypeImpl(
+      OGRGeometry* geom,
+      const bool owns_geom_obj = true);
   static void getGeoColumnsImpl(const std::unique_ptr<GeoBase>& geospatial_base,
                                 SQLTypeInfo& ti,
                                 std::vector<double>& coords,

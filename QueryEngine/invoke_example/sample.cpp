@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-#include <iostream>
-#include <fstream>
+#include <glog/logging.h>
 #include <cassert>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <fstream>
+#include <iostream>
 #include "cuda.h"
-#include <glog/logging.h>
 
 template <typename TimeT = std::chrono::milliseconds>
 struct measure {
@@ -29,7 +29,8 @@ struct measure {
   static typename TimeT::rep execution(F func, Args&&... args) {
     auto start = std::chrono::steady_clock::now();
     func(std::forward<Args>(args)...);
-    auto duration = std::chrono::duration_cast<TimeT>(std::chrono::steady_clock::now() - start);
+    auto duration =
+        std::chrono::duration_cast<TimeT>(std::chrono::steady_clock::now() - start);
     return duration.count();
   }
 };
@@ -100,9 +101,19 @@ int main(int argc, char** argv) {
   void* KernelParams[] = {&devBufferAA, &devBufferN, &devBufferI, &devBufferB};
 
   LOG(INFO) << measure<std::chrono::microseconds>::execution([&]() {
-    checkCudaErrors(cuLaunchKernel(
-        function, gridSizeX, gridSizeY, gridSizeZ, blockSizeX, blockSizeY, blockSizeZ, 0, NULL, KernelParams, NULL));
-    checkCudaErrors(cuMemcpyDtoH(result_vec, devBufferB, blockSizeX * gridSizeX * sizeof(int64_t)));
+    checkCudaErrors(cuLaunchKernel(function,
+                                   gridSizeX,
+                                   gridSizeY,
+                                   gridSizeZ,
+                                   blockSizeX,
+                                   blockSizeY,
+                                   blockSizeZ,
+                                   0,
+                                   NULL,
+                                   KernelParams,
+                                   NULL));
+    checkCudaErrors(
+        cuMemcpyDtoH(result_vec, devBufferB, blockSizeX * gridSizeX * sizeof(int64_t)));
   });
 
   int64_t result = 0;

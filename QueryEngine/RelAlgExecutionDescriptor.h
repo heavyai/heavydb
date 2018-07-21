@@ -24,13 +24,16 @@ class ResultSet;
 
 class ExecutionResult {
  public:
-  ExecutionResult(const std::shared_ptr<ResultSet>& rows, const std::vector<TargetMetaInfo>& targets_meta)
+  ExecutionResult(const std::shared_ptr<ResultSet>& rows,
+                  const std::vector<TargetMetaInfo>& targets_meta)
       : result_(rows), targets_meta_(targets_meta) {}
 
-  ExecutionResult(const IteratorTable& table, const std::vector<TargetMetaInfo>& targets_meta)
+  ExecutionResult(const IteratorTable& table,
+                  const std::vector<TargetMetaInfo>& targets_meta)
       : result_(boost::make_unique<IteratorTable>(table)), targets_meta_(targets_meta) {}
 
-  ExecutionResult(ResultPtr&& result, const std::vector<TargetMetaInfo>& targets_meta) : targets_meta_(targets_meta) {
+  ExecutionResult(ResultPtr&& result, const std::vector<TargetMetaInfo>& targets_meta)
+      : targets_meta_(targets_meta) {
     if (auto rows = boost::get<RowSetPtr>(&result)) {
       result_ = std::move(*rows);
       CHECK(boost::get<RowSetPtr>(result_));
@@ -120,8 +123,8 @@ class ExecutionResult {
 class RaExecutionDesc {
  public:
   RaExecutionDesc(const RelAlgNode* body)
-      : body_(body),
-        result_(std::make_shared<ResultSet>(std::vector<TargetInfo>{},
+      : body_(body)
+      , result_(std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                             ExecutorDeviceType::CPU,
                                             QueryMemoryDescriptor{},
                                             nullptr,
@@ -143,6 +146,7 @@ class RaExecutionDesc {
 };
 
 std::vector<RaExecutionDesc> get_execution_descriptors(const RelAlgNode*);
-std::vector<RaExecutionDesc> get_execution_descriptors(const std::vector<const RelAlgNode*>&);
+std::vector<RaExecutionDesc> get_execution_descriptors(
+    const std::vector<const RelAlgNode*>&);
 
 #endif  // QUERYENGINE_RELALGEXECUTIONDESCRIPTOR_H

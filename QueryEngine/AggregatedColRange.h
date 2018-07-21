@@ -25,8 +25,8 @@
 #ifndef QUERYENGINE_AGGREGATEDCOLRANGECACHE_H
 #define QUERYENGINE_AGGREGATEDCOLRANGECACHE_H
 
-#include "QueryPhysicalInputsCollector.h"
 #include "ExpressionRange.h"
+#include "QueryPhysicalInputsCollector.h"
 
 #include <unordered_map>
 

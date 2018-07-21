@@ -22,10 +22,10 @@
 #ifndef DATAMGR_MEMORY_ABSTRACTBUFFER_H
 #define DATAMGR_MEMORY_ABSTRACTBUFFER_H
 
-#include "../Shared/types.h"
 #include "../Shared/sqltypes.h"
-#include "MemoryLevel.h"
+#include "../Shared/types.h"
 #include "Encoder.h"
+#include "MemoryLevel.h"
 
 #ifdef BUFFER_MUTEX
 #include <boost/thread/locks.hpp>
@@ -46,9 +46,18 @@ namespace Data_Namespace {
 class AbstractBuffer {
  public:
   AbstractBuffer(const int deviceId)
-      : hasEncoder(false), size_(0), isDirty_(false), isAppended_(false), isUpdated_(false), deviceId_(deviceId) {}
+      : hasEncoder(false)
+      , size_(0)
+      , isDirty_(false)
+      , isAppended_(false)
+      , isUpdated_(false)
+      , deviceId_(deviceId) {}
   AbstractBuffer(const int deviceId, const SQLTypeInfo sqlType)
-      : size_(0), isDirty_(false), isAppended_(false), isUpdated_(false), deviceId_(deviceId) {
+      : size_(0)
+      , isDirty_(false)
+      , isAppended_(false)
+      , isUpdated_(false)
+      , deviceId_(deviceId) {
     initEncoder(sqlType);
   }
   virtual ~AbstractBuffer() {}
@@ -138,6 +147,6 @@ class AbstractBuffer {
 #endif
 };
 
-}  // Data_Namespace
+}  // namespace Data_Namespace
 
 #endif  // DATAMGR_MEMORY_ABSTRACTBUFFER_H

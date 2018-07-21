@@ -28,7 +28,9 @@ class ScopeGuard {
   ScopeGuard(const ScopeGuard&) = delete;
   void operator=(const ScopeGuard&) = delete;
 
-  ScopeGuard(ScopeGuard&& other) : at_exit_(std::move(other.at_exit_)) { other.at_exit_ = nullptr; }
+  ScopeGuard(ScopeGuard&& other) : at_exit_(std::move(other.at_exit_)) {
+    other.at_exit_ = nullptr;
+  }
 
   ~ScopeGuard() {
     if (at_exit_) {

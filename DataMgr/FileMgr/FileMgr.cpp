@@ -21,21 +21,21 @@
  */
 
 #include "FileMgr.h"
-#include "GlobalFileMgr.h"
-#include "File.h"
-#include "../Shared/measure.h"
 #include <boost/filesystem.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/system/error_code.hpp>
 #include <string>
+#include "../Shared/measure.h"
+#include "File.h"
+#include "GlobalFileMgr.h"
 
-#include <algorithm>
 #include <fcntl.h>
-#include <thread>
 #include <unistd.h>
+#include <algorithm>
+#include <future>
+#include <thread>
 #include <utility>
 #include <vector>
-#include <future>
 
 #define EPOCH_FILENAME "epoch"
 #define DB_META_FILENAME "dbmeta"
@@ -47,10 +47,12 @@ namespace File_Namespace {
 bool headerCompare(const HeaderInfo& firstElem, const HeaderInfo& secondElem) {
   // HeaderInfo.first is a pair of Chunk key with a vector containing
   // pageId and version
-  if (firstElem.chunkKey != secondElem.chunkKey)
+  if (firstElem.chunkKey != secondElem.chunkKey) {
     return firstElem.chunkKey < secondElem.chunkKey;
-  if (firstElem.pageId != secondElem.pageId)
+  }
+  if (firstElem.pageId != secondElem.pageId) {
     return firstElem.pageId < secondElem.pageId;
+  }
   return firstElem.versionEpoch < secondElem.versionEpoch;
 
   /*
@@ -66,23 +68,23 @@ FileMgr::FileMgr(const int deviceId,
                  const size_t num_reader_threads,
                  const int epoch,
                  const size_t defaultPageSize)
-    : AbstractBufferMgr(deviceId),
-      gfm_(gfm),
-      fileMgrKey_(fileMgrKey),
-      defaultPageSize_(defaultPageSize),
-      nextFileId_(0),
-      epoch_(epoch) {
+    : AbstractBufferMgr(deviceId)
+    , gfm_(gfm)
+    , fileMgrKey_(fileMgrKey)
+    , defaultPageSize_(defaultPageSize)
+    , nextFileId_(0)
+    , epoch_(epoch) {
   init(num_reader_threads);
 }
 
 FileMgr::FileMgr(GlobalFileMgr* gfm, const size_t defaultPageSize, std::string basePath)
-    : AbstractBufferMgr(0),
-      gfm_(gfm),
-      fileMgrKey_(0, 0),
-      fileMgrBasePath_(basePath),
-      defaultPageSize_(defaultPageSize),
-      nextFileId_(0),
-      epoch_(-1) {
+    : AbstractBufferMgr(0)
+    , gfm_(gfm)
+    , fileMgrKey_(0, 0)
+    , fileMgrBasePath_(basePath)
+    , defaultPageSize_(defaultPageSize)
+    , nextFileId_(0)
+    , epoch_(-1) {
   init(basePath);
 }
 
@@ -102,13 +104,15 @@ void FileMgr::init(const size_t num_reader_threads) {
   const std::string fileMgrDirPrefix("table");
   const std::string FileMgrDirDelim("_");
   fileMgrBasePath_ =
-      (gfm_->getBasePath() + fileMgrDirPrefix + FileMgrDirDelim + std::to_string(fileMgrKey_.first) +  // db_id
-       FileMgrDirDelim +
-       std::to_string(fileMgrKey_.second) + "/");  // tb_id
+      (gfm_->getBasePath() + fileMgrDirPrefix + FileMgrDirDelim +
+       std::to_string(fileMgrKey_.first) +                           // db_id
+       FileMgrDirDelim + std::to_string(fileMgrKey_.second) + "/");  // tb_id
   boost::filesystem::path path(fileMgrBasePath_);
   if (boost::filesystem::exists(path)) {
-    if (!boost::filesystem::is_directory(path))
-      LOG(FATAL) << "Specified path '" << fileMgrBasePath_ << "' for table data is not a directory.";
+    if (!boost::filesystem::is_directory(path)) {
+      LOG(FATAL) << "Specified path '" << fileMgrBasePath_
+                 << "' for table data is not a directory.";
+    }
     if (epoch_ != -1) {  // if opening at previous epoch
       int epochCopy = epoch_;
       openEpochFile(EPOCH_FILENAME);
@@ -119,7 +123,8 @@ void FileMgr::init(const size_t num_reader_threads) {
 
     auto clock_begin = timer_start();
 
-    boost::filesystem::directory_iterator endItr;  // default construction yields past-the-end
+    boost::filesystem::directory_iterator
+        endItr;  // default construction yields past-the-end
     int maxFileId = -1;
     int fileCount = 0;
     int threadCount = std::thread::hardware_concurrency();
@@ -145,19 +150,22 @@ void FileMgr::init(const size_t num_reader_threads) {
           if (fileId > maxFileId) {
             maxFileId = fileId;
           }
-          size_t pageSize = boost::lexical_cast<size_t>(fileStem.substr(dotPos + 1, fileStem.size()));
+          size_t pageSize =
+              boost::lexical_cast<size_t>(fileStem.substr(dotPos + 1, fileStem.size()));
           std::string filePath(fileIt->path().string());
           size_t fileSize = boost::filesystem::file_size(filePath);
           assert(fileSize % pageSize == 0);  // should be no partial pages
           size_t numPages = fileSize / pageSize;
 
-          VLOG(1) << "File id: " << fileId << " Page size: " << pageSize << " Num pages: " << numPages;
+          VLOG(1) << "File id: " << fileId << " Page size: " << pageSize
+                  << " Num pages: " << numPages;
 
-          file_futures.emplace_back(std::async(std::launch::async, [filePath, fileId, pageSize, numPages, this] {
-            std::vector<HeaderInfo> tempHeaderVec;
-            openExistingFile(filePath, fileId, pageSize, numPages, tempHeaderVec);
-            return tempHeaderVec;
-          }));
+          file_futures.emplace_back(std::async(
+              std::launch::async, [filePath, fileId, pageSize, numPages, this] {
+                std::vector<HeaderInfo> tempHeaderVec;
+                openExistingFile(filePath, fileId, pageSize, numPages, tempHeaderVec);
+                return tempHeaderVec;
+              }));
           fileCount++;
           if (fileCount % threadCount == 0) {
             processFileFutures(file_futures, headerVec);
@@ -171,8 +179,9 @@ void FileMgr::init(const size_t num_reader_threads) {
     }
     int64_t queue_time_ms = timer_stop(clock_begin);
 
-    LOG(INFO) << "Completed Reading table's file metadata, Elapsed time : " << queue_time_ms << "ms Epoch: " << epoch_
-              << " files read: " << fileCount << " table location: '" << fileMgrBasePath_ << "'";
+    LOG(INFO) << "Completed Reading table's file metadata, Elapsed time : "
+              << queue_time_ms << "ms Epoch: " << epoch_ << " files read: " << fileCount
+              << " table location: '" << fileMgrBasePath_ << "'";
 
     /* Sort headerVec so that all HeaderInfos
      * from a chunk will be grouped together
@@ -190,19 +199,23 @@ void FileMgr::init(const size_t num_reader_threads) {
       ChunkKey lastChunkKey = headerVec.begin()->chunkKey;
       auto startIt = headerVec.begin();
 
-      for (auto headerIt = headerVec.begin() + 1; headerIt != headerVec.end(); ++headerIt) {
-        // for (auto chunkIt = headerIt->chunkKey.begin(); chunkIt != headerIt->chunkKey.end(); ++chunkIt) {
+      for (auto headerIt = headerVec.begin() + 1; headerIt != headerVec.end();
+           ++headerIt) {
+        // for (auto chunkIt = headerIt->chunkKey.begin(); chunkIt !=
+        // headerIt->chunkKey.end(); ++chunkIt) {
         //    std::cout << *chunkIt << " ";
         //}
 
         if (headerIt->chunkKey != lastChunkKey) {
-          chunkIndex_[lastChunkKey] = new FileBuffer(this, /*pageSize,*/ lastChunkKey, startIt, headerIt);
+          chunkIndex_[lastChunkKey] =
+              new FileBuffer(this, /*pageSize,*/ lastChunkKey, startIt, headerIt);
           /*
           if (startIt->versionEpoch != -1) {
               cout << "not skipping bc version != -1" << endl;
               // -1 means that chunk was deleted
               // lets not read it in
-              chunkIndex_[lastChunkKey] = new FileBuffer (this,/lastChunkKey,startIt,headerIt);
+              chunkIndex_[lastChunkKey] = new FileBuffer
+          (this,/lastChunkKey,startIt,headerIt);
 
           }
           else {
@@ -217,7 +230,8 @@ void FileMgr::init(const size_t num_reader_threads) {
       // size_t pageSize = files_[startIt->page.fileId]->pageSize;
       // cout << "Inserting last chunk" << endl;
       // if (startIt->versionEpoch != -1) {
-      chunkIndex_[lastChunkKey] = new FileBuffer(this, /*pageSize,*/ lastChunkKey, startIt, headerVec.end());
+      chunkIndex_[lastChunkKey] =
+          new FileBuffer(this, /*pageSize,*/ lastChunkKey, startIt, headerVec.end());
       //}
     }
     nextFileId_ = maxFileId + 1;
@@ -234,19 +248,22 @@ void FileMgr::init(const size_t num_reader_threads) {
 
   /* define number of reader threads to be used */
   size_t num_hardware_based_threads =
-      std::thread::hardware_concurrency();  // # of threads is based on # of cores on the host
+      std::thread::hardware_concurrency();  // # of threads is based on # of cores on the
+                                            // host
   if (num_reader_threads == 0) {            // # of threads has not been defined by user
     num_reader_threads_ = num_hardware_based_threads;
   } else {
-    if (num_reader_threads > num_hardware_based_threads)
+    if (num_reader_threads > num_hardware_based_threads) {
       num_reader_threads_ = num_hardware_based_threads;
-    else
+    } else {
       num_reader_threads_ = num_reader_threads;
+    }
   }
 }
 
-void FileMgr::processFileFutures(std::vector<std::future<std::vector<HeaderInfo>>>& file_futures,
-                                 std::vector<HeaderInfo>& headerVec) {
+void FileMgr::processFileFutures(
+    std::vector<std::future<std::vector<HeaderInfo>>>& file_futures,
+    std::vector<HeaderInfo>& headerVec) {
   for (auto& file_future : file_futures) {
     file_future.wait();
   }
@@ -262,8 +279,9 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
   int converted_data_epoch = 0;
   boost::filesystem::path path(dataPathToConvertFrom);
   if (boost::filesystem::exists(path)) {
-    if (!boost::filesystem::is_directory(path))
+    if (!boost::filesystem::is_directory(path)) {
       LOG(FATAL) << "Specified path is not a directory.";
+    }
 
     if (epoch_ != -1) {  // if opening at previous epoch
       int epochCopy = epoch_;
@@ -273,7 +291,8 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
       openEpochFile(EPOCH_FILENAME);
     }
 
-    boost::filesystem::directory_iterator endItr;  // default construction yields past-the-end
+    boost::filesystem::directory_iterator
+        endItr;  // default construction yields past-the-end
     int maxFileId = -1;
     int fileCount = 0;
     int threadCount = std::thread::hardware_concurrency();
@@ -299,17 +318,19 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
           if (fileId > maxFileId) {
             maxFileId = fileId;
           }
-          size_t pageSize = boost::lexical_cast<size_t>(fileStem.substr(dotPos + 1, fileStem.size()));
+          size_t pageSize =
+              boost::lexical_cast<size_t>(fileStem.substr(dotPos + 1, fileStem.size()));
           std::string filePath(fileIt->path().string());
           size_t fileSize = boost::filesystem::file_size(filePath);
           assert(fileSize % pageSize == 0);  // should be no partial pages
           size_t numPages = fileSize / pageSize;
 
-          file_futures.emplace_back(std::async(std::launch::async, [filePath, fileId, pageSize, numPages, this] {
-            std::vector<HeaderInfo> tempHeaderVec;
-            openExistingFile(filePath, fileId, pageSize, numPages, tempHeaderVec);
-            return tempHeaderVec;
-          }));
+          file_futures.emplace_back(std::async(
+              std::launch::async, [filePath, fileId, pageSize, numPages, this] {
+                std::vector<HeaderInfo> tempHeaderVec;
+                openExistingFile(filePath, fileId, pageSize, numPages, tempHeaderVec);
+                return tempHeaderVec;
+              }));
           fileCount++;
           if (fileCount % threadCount) {
             processFileFutures(file_futures, headerVec);
@@ -337,7 +358,8 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
       ChunkKey lastChunkKey = headerVec.begin()->chunkKey;
       auto startIt = headerVec.begin();
 
-      for (auto headerIt = headerVec.begin() + 1; headerIt != headerVec.end(); ++headerIt) {
+      for (auto headerIt = headerVec.begin() + 1; headerIt != headerVec.end();
+           ++headerIt) {
         if (headerIt->chunkKey != lastChunkKey) {
           FileMgr* c_fm_ = gfm_->getFileMgr(lastChunkKey);
           FileBuffer* srcBuf = new FileBuffer(this, lastChunkKey, startIt, headerIt);
@@ -346,19 +368,22 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
           c_fm_->chunkIndex_[lastChunkKey] = destBuf;
           destBuf->syncEncoder(srcBuf);
           destBuf->setSize(srcBuf->size());
-          destBuf->setDirty();  // this needs to be set to force writing out metadata files from "checkpoint()" call
+          destBuf->setDirty();  // this needs to be set to force writing out metadata
+                                // files from "checkpoint()" call
 
           size_t totalNumPages = srcBuf->getMultiPage().size();
           for (size_t pageNum = 0; pageNum < totalNumPages; pageNum++) {
             Page srcPage = srcBuf->getMultiPage()[pageNum].current();
             Page destPage = c_fm_->requestFreePage(
-                srcBuf->pageSize(), false);  // may modify and use api "FileBuffer::addNewMultiPage" instead
+                srcBuf->pageSize(),
+                false);  // may modify and use api "FileBuffer::addNewMultiPage" instead
             MultiPage multiPage(srcBuf->pageSize());
             multiPage.epochs.push_back(converted_data_epoch);
             multiPage.pageVersions.push_back(destPage);
             destBuf->multiPages_.push_back(multiPage);
             size_t reservedHeaderSize = srcBuf->reservedHeaderSize();
-            copyPage(srcPage, c_fm_, destPage, reservedHeaderSize, srcBuf->pageDataSize(), 0);
+            copyPage(
+                srcPage, c_fm_, destPage, reservedHeaderSize, srcBuf->pageDataSize(), 0);
             destBuf->writeHeader(destPage, pageNum, converted_data_epoch, false);
           }
           lastChunkKey = headerIt->chunkKey;
@@ -374,13 +399,15 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
       c_fm_->chunkIndex_[lastChunkKey] = destBuf;
       destBuf->syncEncoder(srcBuf);
       destBuf->setSize(srcBuf->size());
-      destBuf->setDirty();  // this needs to be set to write out metadata file from the "checkpoint()" call
+      destBuf->setDirty();  // this needs to be set to write out metadata file from the
+                            // "checkpoint()" call
 
       size_t totalNumPages = srcBuf->getMultiPage().size();
       for (size_t pageNum = 0; pageNum < totalNumPages; pageNum++) {
         Page srcPage = srcBuf->getMultiPage()[pageNum].current();
-        Page destPage = c_fm_->requestFreePage(srcBuf->pageSize(),
-                                               false);  // may modify and use api "FileBuffer::addNewMultiPage" instead
+        Page destPage = c_fm_->requestFreePage(
+            srcBuf->pageSize(),
+            false);  // may modify and use api "FileBuffer::addNewMultiPage" instead
         MultiPage multiPage(srcBuf->pageSize());
         multiPage.epochs.push_back(converted_data_epoch);
         multiPage.pageVersions.push_back(destPage);
@@ -432,11 +459,13 @@ void FileMgr::copyPage(Page& srcPage,
   FileInfo* destFileInfo = destFileMgr->getFileInfoForFileId(destPage.fileId);
   int8_t* buffer = new int8_t[numBytes];
 
-  size_t bytesRead =
-      srcFileInfo->read(srcPage.pageNum * defaultPageSize_ + offset + reservedHeaderSize, numBytes, buffer);
+  size_t bytesRead = srcFileInfo->read(
+      srcPage.pageNum * defaultPageSize_ + offset + reservedHeaderSize, numBytes, buffer);
   CHECK(bytesRead == numBytes);
-  size_t bytesWritten =
-      destFileInfo->write(destPage.pageNum * defaultPageSize_ + offset + reservedHeaderSize, numBytes, buffer);
+  size_t bytesWritten = destFileInfo->write(
+      destPage.pageNum * defaultPageSize_ + offset + reservedHeaderSize,
+      numBytes,
+      buffer);
   CHECK(bytesWritten == numBytes);
   delete[] buffer;
 }
@@ -549,19 +578,23 @@ void FileMgr::checkpoint() {
   mapd_shared_lock<mapd_shared_mutex> read_lock(files_rw_mutex_);
   for (auto fileIt = files_.begin(); fileIt != files_.end(); ++fileIt) {
     int status = (*fileIt)->syncToDisk();
-    if (status != 0)
+    if (status != 0) {
       LOG(FATAL) << "Could not sync file to disk";
+    }
   }
 
   writeAndSyncEpochToDisk();
 
   mapd_unique_lock<mapd_shared_mutex> freePagesWriteLock(mutex_free_page);
-  for (auto& free_page : free_pages)
+  for (auto& free_page : free_pages) {
     free_page.first->freePageDeferred(free_page.second);
+  }
   free_pages.clear();
 }
 
-AbstractBuffer* FileMgr::createBuffer(const ChunkKey& key, const size_t pageSize, const size_t numBytes) {
+AbstractBuffer* FileMgr::createBuffer(const ChunkKey& key,
+                                      const size_t pageSize,
+                                      const size_t numBytes) {
   size_t actualPageSize = pageSize;
   if (actualPageSize == 0) {
     actualPageSize = defaultPageSize_;
@@ -608,9 +641,10 @@ void FileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool purg
     return;  // should we throw?
   }
   while (chunkIt != chunkIndex_.end() &&
-         std::search(
-             chunkIt->first.begin(), chunkIt->first.begin() + keyPrefix.size(), keyPrefix.begin(), keyPrefix.end()) !=
-             chunkIt->first.begin() + keyPrefix.size()) {
+         std::search(chunkIt->first.begin(),
+                     chunkIt->first.begin() + keyPrefix.size(),
+                     keyPrefix.begin(),
+                     keyPrefix.end()) != chunkIt->first.begin() + keyPrefix.size()) {
     /*
     cout << "Freeing pages for chunk ";
     for (auto vecIt = chunkIt->first.begin(); vecIt != chunkIt->first.end(); ++vecIt) {
@@ -636,7 +670,9 @@ AbstractBuffer* FileMgr::getBuffer(const ChunkKey& key, const size_t numBytes) {
   return chunkIt->second;
 }
 
-void FileMgr::fetchBuffer(const ChunkKey& key, AbstractBuffer* destBuffer, const size_t numBytes) {
+void FileMgr::fetchBuffer(const ChunkKey& key,
+                          AbstractBuffer* destBuffer,
+                          const size_t numBytes) {
   // reads chunk specified by ChunkKey into AbstractBuffer provided by
   // destBuffer
   if (destBuffer->isDirty()) {
@@ -659,7 +695,11 @@ void FileMgr::fetchBuffer(const ChunkKey& key, AbstractBuffer* destBuffer, const
   destBuffer->reserve(chunkSize);
   // std::cout << "After reserve chunksize: " << chunkSize << std::endl;
   if (chunk->isUpdated()) {
-    chunk->read(destBuffer->getMemoryPtr(), chunkSize, 0, destBuffer->getType(), destBuffer->getDeviceId());
+    chunk->read(destBuffer->getMemoryPtr(),
+                chunkSize,
+                0,
+                destBuffer->getType(),
+                destBuffer->getDeviceId());
   } else {
     chunk->read(destBuffer->getMemoryPtr() + destBuffer->size(),
                 chunkSize - destBuffer->size(),
@@ -671,7 +711,9 @@ void FileMgr::fetchBuffer(const ChunkKey& key, AbstractBuffer* destBuffer, const
   destBuffer->syncEncoder(chunk);
 }
 
-AbstractBuffer* FileMgr::putBuffer(const ChunkKey& key, AbstractBuffer* srcBuffer, const size_t numBytes) {
+AbstractBuffer* FileMgr::putBuffer(const ChunkKey& key,
+                                   AbstractBuffer* srcBuffer,
+                                   const size_t numBytes) {
   // obtain a pointer to the Chunk
   mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.find(key);
@@ -692,7 +734,11 @@ AbstractBuffer* FileMgr::putBuffer(const ChunkKey& key, AbstractBuffer* srcBuffe
   if (srcBuffer->isUpdated()) {
     //@todo use dirty flags to only flush pages of chunk that need to
     // be flushed
-    chunk->write((int8_t*)srcBuffer->getMemoryPtr(), newChunkSize, 0, srcBuffer->getType(), srcBuffer->getDeviceId());
+    chunk->write((int8_t*)srcBuffer->getMemoryPtr(),
+                 newChunkSize,
+                 0,
+                 srcBuffer->getType(),
+                 srcBuffer->getDeviceId());
   } else if (srcBuffer->isAppended()) {
     assert(oldChunkSize < newChunkSize);
     chunk->append((int8_t*)srcBuffer->getMemoryPtr() + oldChunkSize,
@@ -795,7 +841,8 @@ FileInfo* FileMgr::openExistingFile(const std::string& path,
                                     const size_t numPages,
                                     std::vector<HeaderInfo>& headerVec) {
   FILE* f = open(path);
-  FileInfo* fInfo = new FileInfo(this, fileId, f, pageSize, numPages, false);  // false means don't init file
+  FileInfo* fInfo = new FileInfo(
+      this, fileId, f, pageSize, numPages, false);  // false means don't init file
 
   fInfo->openExistingFile(headerVec, epoch_);
   mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
@@ -809,20 +856,24 @@ FileInfo* FileMgr::openExistingFile(const std::string& path,
 
 FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
   // check arguments
-  if (pageSize == 0 || numPages == 0)
+  if (pageSize == 0 || numPages == 0) {
     LOG(FATAL) << "File creation failed: pageSize and numPages must be greater than 0.";
+  }
 
   // create the new file
   FILE* f = create(fileMgrBasePath_,
                    nextFileId_,
                    pageSize,
-                   numPages);  // TM: not sure if I like naming scheme here - should be in separate namespace?
-  if (f == nullptr)
+                   numPages);  // TM: not sure if I like naming scheme here - should be in
+                               // separate namespace?
+  if (f == nullptr) {
     LOG(FATAL) << "Unable to create the new file.";
+  }
 
   // instantiate a new FileInfo for the newly created file
   int fileId = nextFileId_++;
-  FileInfo* fInfo = new FileInfo(this, fileId, f, pageSize, numPages, true);  // true means init file
+  FileInfo* fInfo =
+      new FileInfo(this, fileId, f, pageSize, numPages, true);  // true means init file
   assert(fInfo);
 
   mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
@@ -842,11 +893,13 @@ FILE* FileMgr::getFileForFileId(const int fileId) {
 void FileMgr::getAllChunkMetaInfo(std::vector<std::pair<ChunkKey, int64_t> > &metadata) {
     metadata.reserve(chunkIndex_.size());
     for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-        metadata.push_back(std::make_pair(chunkIt->first, chunkIt->second->encoder->numElems));
+        metadata.push_back(std::make_pair(chunkIt->first,
+chunkIt->second->encoder->numElems));
     }
 }
 */
-void FileMgr::getChunkMetadataVec(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec) {
+void FileMgr::getChunkMetadataVec(
+    std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec) {
   mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   chunkMetadataVec.reserve(chunkIndex_.size());
   for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
@@ -858,18 +911,21 @@ void FileMgr::getChunkMetadataVec(std::vector<std::pair<ChunkKey, ChunkMetadata>
   }
 }
 
-void FileMgr::getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
-                                              const ChunkKey& keyPrefix) {
+void FileMgr::getChunkMetadataVecForKeyPrefix(
+    std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
+    const ChunkKey& keyPrefix) {
   mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(
-      chunkIndexMutex_);  // is this guarding the right structure?  it look slike we oly read here for chunk
+      chunkIndexMutex_);  // is this guarding the right structure?  it look slike we oly
+                          // read here for chunk
   auto chunkIt = chunkIndex_.lower_bound(keyPrefix);
   if (chunkIt == chunkIndex_.end()) {
     return;  // throw?
   }
   while (chunkIt != chunkIndex_.end() &&
-         std::search(
-             chunkIt->first.begin(), chunkIt->first.begin() + keyPrefix.size(), keyPrefix.begin(), keyPrefix.end()) !=
-             chunkIt->first.begin() + keyPrefix.size()) {
+         std::search(chunkIt->first.begin(),
+                     chunkIt->first.begin() + keyPrefix.size(),
+                     keyPrefix.begin(),
+                     keyPrefix.end()) != chunkIt->first.begin() + keyPrefix.size()) {
     /*
     for (auto vecIt = chunkIt->first.begin(); vecIt != chunkIt->first.end(); ++vecIt) {
         std::cout << *vecIt << ",";
@@ -896,7 +952,8 @@ bool FileMgr::getDBConvert() const {
 void FileMgr::createTopLevelMetadata() {
   if (openDBMetaFile(DB_META_FILENAME)) {
     if (db_version_ > getDBVersion()) {
-      LOG(FATAL) << "DB forward compatibility is not supported. Version of mapd software used is older than the "
+      LOG(FATAL) << "DB forward compatibility is not supported. Version of mapd software "
+                    "used is older than the "
                     "version of DB being read: "
                  << db_version_;
     }
@@ -915,4 +972,4 @@ void FileMgr::free_page(std::pair<FileInfo*, int>&& page) {
   free_pages.push_back(page);
 }
 
-}  // File_Namespace
+}  // namespace File_Namespace

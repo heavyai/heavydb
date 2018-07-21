@@ -15,10 +15,10 @@
  */
 
 #include "CpuBuffer.h"
-#include "../../../CudaMgr/CudaMgr.h"
 #include <glog/logging.h>
+#include <cassert>
 #include <cstring>
-#include <assert.h>
+#include "../../../CudaMgr/CudaMgr.h"
 
 namespace Buffer_Namespace {
 
@@ -40,7 +40,8 @@ void CpuBuffer::readData(int8_t* const dst,
   } else if (dstMemoryLevel == GPU_LEVEL) {
     //@todo: use actual device id in next call
     assert(dstDeviceId >= 0);
-    cudaMgr_->copyHostToDevice(dst, mem_ + offset, numBytes, dstDeviceId);  // need to replace 0 with gpu num
+    cudaMgr_->copyHostToDevice(
+        dst, mem_ + offset, numBytes, dstDeviceId);  // need to replace 0 with gpu num
   } else {
     LOG(FATAL) << "Unsupported buffer type";
   }
@@ -58,10 +59,11 @@ void CpuBuffer::writeData(int8_t* const src,
     // std::cout << "Writing to CPU from source GPU" << std::endl;
     //@todo: use actual device id in next call
     assert(srcDeviceId >= 0);
-    cudaMgr_->copyDeviceToHost(mem_ + offset, src, numBytes, srcDeviceId);  // need to replace 0 with gpu num
+    cudaMgr_->copyDeviceToHost(
+        mem_ + offset, src, numBytes, srcDeviceId);  // need to replace 0 with gpu num
   } else {
     LOG(FATAL) << "Unsupported buffer type";
   }
 }
 
-}  // Buffer_Namespace
+}  // namespace Buffer_Namespace

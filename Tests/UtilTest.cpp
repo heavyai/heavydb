@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "../Utils/StringLike.h"
 #include "../Utils/Regexp.h"
+#include "../Utils/StringLike.h"
 #include "gtest/gtest.h"
 
 TEST(Utils, StringLike) {

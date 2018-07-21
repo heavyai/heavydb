@@ -20,23 +20,26 @@
  * @brief   Implementation of helper methods for File I/O.
  *
  */
-#include <iostream>
-#include <cstdio>
-#include <string>
-#include <stdexcept>
-#include <unistd.h>
 #include "File.h"
 #include <glog/logging.h>
+#include <unistd.h>
+#include <cstdio>
+#include <iostream>
+#include <stdexcept>
+#include <string>
 
 namespace File_Namespace {
 
-FILE* create(const std::string& basePath, const int fileId, const size_t pageSize, const size_t numPages) {
+FILE* create(const std::string& basePath,
+             const int fileId,
+             const size_t pageSize,
+             const size_t numPages) {
   std::string path(basePath + std::to_string(fileId) + "." + std::to_string(pageSize) +
                    std::string(MAPD_FILE_EXT));  // MAPD_FILE_EXT has preceding "."
   if (numPages < 1 || pageSize < 1) {
     LOG(FATAL) << "Error trying to create file '" << path
-               << "', Number of pages and page size must be positive integers. numPages " << numPages << " pageSize "
-               << pageSize;
+               << "', Number of pages and page size must be positive integers. numPages "
+               << numPages << " pageSize " << pageSize;
   }
   FILE* f = fopen(path.c_str(), "w+b");
   if (f == nullptr) {
@@ -46,8 +49,9 @@ FILE* create(const std::string& basePath, const int fileId, const size_t pageSiz
   fputc(EOF, f);
   fseek(f, 0, SEEK_SET);  // rewind
   if (fileSize(f) != pageSize * numPages) {
-    LOG(FATAL) << "Error trying to create file '" << path << "', file size " << fileSize(f)
-               << " does not equal pageSize * numPages " << pageSize * numPages;
+    LOG(FATAL) << "Error trying to create file '" << path << "', file size "
+               << fileSize(f) << " does not equal pageSize * numPages "
+               << pageSize * numPages;
   }
 
   return f;
@@ -56,14 +60,16 @@ FILE* create(const std::string& basePath, const int fileId, const size_t pageSiz
 FILE* create(const std::string& fullPath, const size_t requestedFileSize) {
   FILE* f = fopen(fullPath.c_str(), "w+b");
   if (f == nullptr) {
-    LOG(FATAL) << "Error trying to create file '" << fullPath << "', the errno is " << errno;
+    LOG(FATAL) << "Error trying to create file '" << fullPath << "', the errno is "
+               << errno;
   }
   fseek(f, requestedFileSize - 1, SEEK_SET);
   fputc(EOF, f);
   fseek(f, 0, SEEK_SET);  // rewind
   if (fileSize(f) != requestedFileSize) {
-    LOG(FATAL) << "Error trying to create file '" << fullPath << "', file size " << fileSize(f)
-               << " does not equal requestedFileSize " << requestedFileSize;
+    LOG(FATAL) << "Error trying to create file '" << fullPath << "', file size "
+               << fileSize(f) << " does not equal requestedFileSize "
+               << requestedFileSize;
   }
   return f;
 }
@@ -155,4 +161,4 @@ size_t fileSize(FILE* f) {
   return size;
 }
 
-}  // File_Namespace
+}  // namespace File_Namespace

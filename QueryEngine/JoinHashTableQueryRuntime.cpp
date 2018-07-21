@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
-#include "MurmurHash.h"
 #include "CompareKeysInl.h"
+#include "MurmurHash.h"
 
-DEVICE bool compare_to_key(const int8_t* entry, const int8_t* key, const size_t key_bytes) {
+DEVICE bool compare_to_key(const int8_t* entry,
+                           const int8_t* key,
+                           const size_t key_bytes) {
   for (size_t i = 0; i < key_bytes; ++i) {
     if (entry[i] != key[i]) {
       return false;
@@ -34,12 +36,16 @@ const int kNotPresent = -2;
 }  // namespace
 
 template <class T>
-DEVICE int64_t get_matching_slot(const int8_t* hash_buff, const uint32_t h, const int8_t* key, const size_t key_bytes) {
+DEVICE int64_t get_matching_slot(const int8_t* hash_buff,
+                                 const uint32_t h,
+                                 const int8_t* key,
+                                 const size_t key_bytes) {
   const auto lookup_result_ptr = hash_buff + h * (key_bytes + sizeof(T));
   if (compare_to_key(lookup_result_ptr, key, key_bytes)) {
     return *reinterpret_cast<const T*>(lookup_result_ptr + key_bytes);
   }
-  if (*reinterpret_cast<const T*>(lookup_result_ptr) == SUFFIX(get_invalid_key)<T>()) {
+  if (*reinterpret_cast<const T*>(lookup_result_ptr) ==
+      SUFFIX(get_invalid_key) < T > ()) {
     return kNotPresent;
   }
   return kNoMatch;
@@ -66,17 +72,19 @@ FORCE_INLINE DEVICE int64_t baseline_hash_join_idx_impl(const int8_t* hash_buff,
   return kNoMatch;
 }
 
-extern "C" NEVER_INLINE DEVICE int64_t baseline_hash_join_idx_32(const int8_t* hash_buff,
-                                                                 const int8_t* key,
-                                                                 const size_t key_bytes,
-                                                                 const size_t entry_count) {
+extern "C" NEVER_INLINE DEVICE int64_t
+baseline_hash_join_idx_32(const int8_t* hash_buff,
+                          const int8_t* key,
+                          const size_t key_bytes,
+                          const size_t entry_count) {
   return baseline_hash_join_idx_impl<int32_t>(hash_buff, key, key_bytes, entry_count);
 }
 
-extern "C" NEVER_INLINE DEVICE int64_t baseline_hash_join_idx_64(const int8_t* hash_buff,
-                                                                 const int8_t* key,
-                                                                 const size_t key_bytes,
-                                                                 const size_t entry_count) {
+extern "C" NEVER_INLINE DEVICE int64_t
+baseline_hash_join_idx_64(const int8_t* hash_buff,
+                          const int8_t* key,
+                          const size_t key_bytes,
+                          const size_t entry_count) {
   return baseline_hash_join_idx_impl<int64_t>(hash_buff, key, key_bytes, entry_count);
 }
 
@@ -96,7 +104,7 @@ FORCE_INLINE DEVICE int64_t get_composite_key_index_impl(const T* key,
     if (keys_are_equal(&composite_key_dict[off], key, key_component_count)) {
       return h_probe;
     }
-    if (composite_key_dict[off] == SUFFIX(get_invalid_key)<T>()) {
+    if (composite_key_dict[off] == SUFFIX(get_invalid_key) < T > ()) {
       return -1;
     }
     h_probe = (h_probe + 1) % entry_count;
@@ -104,16 +112,20 @@ FORCE_INLINE DEVICE int64_t get_composite_key_index_impl(const T* key,
   return -1;
 }
 
-extern "C" NEVER_INLINE DEVICE int64_t get_composite_key_index_32(const int32_t* key,
-                                                                  const size_t key_component_count,
-                                                                  const int32_t* composite_key_dict,
-                                                                  const size_t entry_count) {
-  return get_composite_key_index_impl(key, key_component_count, composite_key_dict, entry_count);
+extern "C" NEVER_INLINE DEVICE int64_t
+get_composite_key_index_32(const int32_t* key,
+                           const size_t key_component_count,
+                           const int32_t* composite_key_dict,
+                           const size_t entry_count) {
+  return get_composite_key_index_impl(
+      key, key_component_count, composite_key_dict, entry_count);
 }
 
-extern "C" NEVER_INLINE DEVICE int64_t get_composite_key_index_64(const int64_t* key,
-                                                                  const size_t key_component_count,
-                                                                  const int64_t* composite_key_dict,
-                                                                  const size_t entry_count) {
-  return get_composite_key_index_impl(key, key_component_count, composite_key_dict, entry_count);
+extern "C" NEVER_INLINE DEVICE int64_t
+get_composite_key_index_64(const int64_t* key,
+                           const size_t key_component_count,
+                           const int64_t* composite_key_dict,
+                           const size_t entry_count) {
+  return get_composite_key_index_impl(
+      key, key_component_count, composite_key_dict, entry_count);
 }

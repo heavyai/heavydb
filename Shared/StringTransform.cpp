@@ -29,14 +29,16 @@ std::vector<std::pair<size_t, size_t>> find_string_literals(const std::string& q
     CHECK_GT(what[1].length(), 0);
     prev_it = it;
     it += what.length();
-    positions.emplace_back(prev_it + what[1].length() - query.begin(), it - query.begin());
+    positions.emplace_back(prev_it + what[1].length() - query.begin(),
+                           it - query.begin());
   }
   return positions;
 }
 
-ssize_t inside_string_literal(const size_t start,
-                              const size_t length,
-                              const std::vector<std::pair<size_t, size_t>>& literal_positions) {
+ssize_t inside_string_literal(
+    const size_t start,
+    const size_t length,
+    const std::vector<std::pair<size_t, size_t>>& literal_positions) {
   const auto end = start + length;
   for (const auto& literal_position : literal_positions) {
     if (literal_position.first <= start && end <= literal_position.second) {
@@ -57,7 +59,8 @@ void apply_shim(std::string& result,
     if (!boost::regex_search(start_it, end_it, what, reg_expr)) {
       break;
     }
-    const auto next_start = inside_string_literal(what.position(), what.length(), lit_pos);
+    const auto next_start =
+        inside_string_literal(what.position(), what.length(), lit_pos);
     if (next_start >= 0) {
       start_it = result.cbegin() + next_start;
     } else {

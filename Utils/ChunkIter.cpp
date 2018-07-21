@@ -21,7 +21,10 @@
 
 #include "ChunkIter.h"
 
-DEVICE static void decompress(const SQLTypeInfo& ti, int8_t* compressed, VarlenDatum* result, Datum* datum) {
+DEVICE static void decompress(const SQLTypeInfo& ti,
+                              int8_t* compressed,
+                              VarlenDatum* result,
+                              Datum* datum) {
   switch (ti.get_type()) {
     case kSMALLINT:
       result->length = sizeof(int16_t);
@@ -125,7 +128,10 @@ void ChunkIter_reset(ChunkIter* it) {
   it->current_pos = it->start_pos;
 }
 
-DEVICE void ChunkIter_get_next(ChunkIter* it, bool uncompress, VarlenDatum* result, bool* is_end) {
+DEVICE void ChunkIter_get_next(ChunkIter* it,
+                               bool uncompress,
+                               VarlenDatum* result,
+                               bool* is_end) {
   if (it->current_pos >= it->end_pos) {
     *is_end = true;
     result->length = 0;
@@ -156,7 +162,11 @@ DEVICE void ChunkIter_get_next(ChunkIter* it, bool uncompress, VarlenDatum* resu
 }
 
 // @brief get nth element in Chunk.  Does not change ChunkIter state
-DEVICE void ChunkIter_get_nth(ChunkIter* it, int n, bool uncompress, VarlenDatum* result, bool* is_end) {
+DEVICE void ChunkIter_get_nth(ChunkIter* it,
+                              int n,
+                              bool uncompress,
+                              VarlenDatum* result,
+                              bool* is_end) {
   if (static_cast<size_t>(n) >= it->num_elems || n < 0) {
     *is_end = true;
     result->length = 0;

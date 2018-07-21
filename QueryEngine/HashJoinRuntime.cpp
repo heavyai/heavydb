@@ -15,20 +15,20 @@
  */
 
 #include "HashJoinRuntime.h"
+#include "../Shared/shard_key.h"
 #include "CompareKeysInl.h"
 #include "HyperLogLogRank.h"
 #include "MurmurHash1Inl.h"
-#include "../Shared/shard_key.h"
 #ifdef __CUDACC__
 #include "DecodersImpl.h"
 #include "GpuRtConstants.h"
 #include "JoinHashImpl.h"
 #else
-#include "RuntimeFunctions.h"
+#include <glog/logging.h>
 #include "../Shared/likely.h"
 #include "../StringDictionary/StringDictionary.h"
 #include "../StringDictionary/StringDictionaryProxy.h"
-#include <glog/logging.h>
+#include "RuntimeFunctions.h"
 
 #include <future>
 #endif
@@ -80,8 +80,10 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
     int64_t elem = type_info.is_unsigned
-                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
-                       : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(
+                             join_column.col_buff, type_info.elem_sz, i)
+                       : SUFFIX(fixed_width_int_decode_noinline)(
+                             join_column.col_buff, type_info.elem_sz, i);
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -90,10 +92,13 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
       }
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy && (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
+    if (sd_inner_proxy &&
+        (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       CHECK(sd_outer_proxy);
-      const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-      const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
+      const auto sd_inner_dict_proxy =
+          static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
+      const auto sd_outer_dict_proxy =
+          static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
       const auto elem_str = sd_inner_dict_proxy->getString(elem);
       const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
@@ -128,8 +133,10 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
     int64_t elem = type_info.is_unsigned
-                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
-                       : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(
+                             join_column.col_buff, type_info.elem_sz, i)
+                       : SUFFIX(fixed_width_int_decode_noinline)(
+                             join_column.col_buff, type_info.elem_sz, i);
     size_t shard = SHARD_FOR_KEY(elem, shard_info.num_shards);
     if (shard != shard_info.shard) {
       continue;
@@ -142,10 +149,13 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
       }
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy && (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
+    if (sd_inner_proxy &&
+        (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       CHECK(sd_outer_proxy);
-      const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-      const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
+      const auto sd_inner_dict_proxy =
+          static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
+      const auto sd_outer_dict_proxy =
+          static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
       const auto elem_str = sd_inner_dict_proxy->getString(elem);
       const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
@@ -215,7 +225,8 @@ __device__ T* get_matching_baseline_hash_slot_at(int8_t* hash_buff,
   }
   if (key_component_count > 1) {
     while (atomicAdd(row_ptr + key_component_count - 1, 0) == empty_key) {
-      // spin until the winning thread has finished writing the entire key and the init value
+      // spin until the winning thread has finished writing the entire key and the init
+      // value
     }
   }
   bool match = true;
@@ -234,7 +245,8 @@ __device__ T* get_matching_baseline_hash_slot_at(int8_t* hash_buff,
 #else
 
 #define cas_cst(ptr, expected, desired) \
-  __atomic_compare_exchange_n(ptr, expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
+  __atomic_compare_exchange_n(          \
+      ptr, expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
 #define store_cst(ptr, val) __atomic_store_n(ptr, val, __ATOMIC_SEQ_CST)
 #define load_cst(ptr) __atomic_load_n(ptr, __ATOMIC_SEQ_CST)
 
@@ -286,12 +298,15 @@ DEVICE int write_baseline_hash_slot(const int32_t val,
                                     const size_t key_component_count,
                                     const bool with_val_slot,
                                     const int32_t invalid_slot_val) {
-  const uint32_t h = MurmurHash1Impl(key, key_component_count * sizeof(T), 0) % entry_count;
-  T* matching_group = get_matching_baseline_hash_slot_at(hash_buff, h, key, key_component_count, with_val_slot);
+  const uint32_t h =
+      MurmurHash1Impl(key, key_component_count * sizeof(T), 0) % entry_count;
+  T* matching_group = get_matching_baseline_hash_slot_at(
+      hash_buff, h, key, key_component_count, with_val_slot);
   if (!matching_group) {
     uint32_t h_probe = (h + 1) % entry_count;
     while (h_probe != h) {
-      matching_group = get_matching_baseline_hash_slot_at(hash_buff, h_probe, key, key_component_count, with_val_slot);
+      matching_group = get_matching_baseline_hash_slot_at(
+          hash_buff, h_probe, key, key_component_count, with_val_slot);
       if (matching_group) {
         break;
       }
@@ -311,17 +326,18 @@ DEVICE int write_baseline_hash_slot(const int32_t val,
 }
 
 template <typename T>
-DEVICE int SUFFIX(fill_baseline_hash_join_buff)(int8_t* hash_buff,
-                                                const size_t entry_count,
-                                                const int32_t invalid_slot_val,
-                                                const size_t key_component_count,
-                                                const bool with_val_slot,
-                                                const JoinColumn* join_column_per_key,
-                                                const JoinColumnTypeInfo* type_info_per_key,
-                                                const void* const* sd_inner_proxy_per_key,
-                                                const void* const* sd_outer_proxy_per_key,
-                                                const int32_t cpu_thread_idx,
-                                                const int32_t cpu_thread_count) {
+DEVICE int SUFFIX(fill_baseline_hash_join_buff)(
+    int8_t* hash_buff,
+    const size_t entry_count,
+    const int32_t invalid_slot_val,
+    const size_t key_component_count,
+    const bool with_val_slot,
+    const JoinColumn* join_column_per_key,
+    const JoinColumnTypeInfo* type_info_per_key,
+    const void* const* sd_inner_proxy_per_key,
+    const void* const* sd_outer_proxy_per_key,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count) {
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   int32_t step = blockDim.x * gridDim.x;
@@ -333,7 +349,8 @@ DEVICE int SUFFIX(fill_baseline_hash_join_buff)(int8_t* hash_buff,
   T key_scratch_buff[g_maximum_conditions_to_coalesce];
   for (size_t i = start; i < num_elems; i += step) {
     bool skip_entry = false;
-    for (size_t key_component_index = 0; key_component_index < key_component_count; ++key_component_index) {
+    for (size_t key_component_index = 0; key_component_index < key_component_count;
+         ++key_component_index) {
       const auto& join_column = join_column_per_key[key_component_index];
       const auto& type_info = type_info_per_key[key_component_index];
 #ifndef __CUDACC__
@@ -341,8 +358,10 @@ DEVICE int SUFFIX(fill_baseline_hash_join_buff)(int8_t* hash_buff,
       const auto sd_outer_proxy = sd_outer_proxy_per_key[key_component_index];
 #endif
       int64_t elem = type_info.is_unsigned
-                         ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
-                         : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+                         ? SUFFIX(fixed_width_unsigned_decode_noinline)(
+                               join_column.col_buff, type_info.elem_sz, i)
+                         : SUFFIX(fixed_width_int_decode_noinline)(
+                               join_column.col_buff, type_info.elem_sz, i);
       if (elem == type_info.null_val && !type_info.uses_bw_eq) {
         skip_entry = true;
         break;
@@ -350,8 +369,10 @@ DEVICE int SUFFIX(fill_baseline_hash_join_buff)(int8_t* hash_buff,
 #ifndef __CUDACC__
       if (sd_inner_proxy && elem != type_info.null_val) {
         CHECK(sd_outer_proxy);
-        const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-        const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
+        const auto sd_inner_dict_proxy =
+            static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
+        const auto sd_outer_dict_proxy =
+            static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
         const auto elem_str = sd_inner_dict_proxy->getString(elem);
         const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
         if (outer_id == StringDictionary::INVALID_STR_ID) {
@@ -364,8 +385,13 @@ DEVICE int SUFFIX(fill_baseline_hash_join_buff)(int8_t* hash_buff,
       key_scratch_buff[key_component_index] = elem;
     }
     if (!skip_entry) {
-      int err = write_baseline_hash_slot<T>(
-          i, hash_buff, entry_count, key_scratch_buff, key_component_count, with_val_slot, invalid_slot_val);
+      int err = write_baseline_hash_slot<T>(i,
+                                            hash_buff,
+                                            entry_count,
+                                            key_scratch_buff,
+                                            key_component_count,
+                                            with_val_slot,
+                                            invalid_slot_val);
       if (err) {
         return err;
       }
@@ -393,7 +419,7 @@ GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
                                   const int32_t cpu_thread_idx,
                                   const int32_t cpu_thread_count
 #endif
-                                  ) {
+) {
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   int32_t step = blockDim.x * gridDim.x;
@@ -403,8 +429,10 @@ GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
     int64_t elem = type_info.is_unsigned
-                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
-                       : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(
+                             join_column.col_buff, type_info.elem_sz, i)
+                       : SUFFIX(fixed_width_int_decode_noinline)(
+                             join_column.col_buff, type_info.elem_sz, i);
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -413,10 +441,13 @@ GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
       }
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy && (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
+    if (sd_inner_proxy &&
+        (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       CHECK(sd_outer_proxy);
-      const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-      const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
+      const auto sd_inner_dict_proxy =
+          static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
+      const auto sd_outer_dict_proxy =
+          static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
       const auto elem_str = sd_inner_dict_proxy->getString(elem);
       const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
@@ -442,7 +473,7 @@ GLOBAL void SUFFIX(count_matches_sharded)(int32_t* count_buff,
                                           const int32_t cpu_thread_idx,
                                           const int32_t cpu_thread_count
 #endif
-                                          ) {
+) {
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   int32_t step = blockDim.x * gridDim.x;
@@ -452,8 +483,10 @@ GLOBAL void SUFFIX(count_matches_sharded)(int32_t* count_buff,
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
     int64_t elem = type_info.is_unsigned
-                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
-                       : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(
+                             join_column.col_buff, type_info.elem_sz, i)
+                       : SUFFIX(fixed_width_int_decode_noinline)(
+                             join_column.col_buff, type_info.elem_sz, i);
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -462,10 +495,13 @@ GLOBAL void SUFFIX(count_matches_sharded)(int32_t* count_buff,
       }
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy && (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
+    if (sd_inner_proxy &&
+        (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       CHECK(sd_outer_proxy);
-      const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-      const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
+      const auto sd_inner_dict_proxy =
+          static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
+      const auto sd_outer_dict_proxy =
+          static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
       const auto elem_str = sd_inner_dict_proxy->getString(elem);
       const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
@@ -485,11 +521,13 @@ GLOBAL void SUFFIX(count_matches_sharded)(int32_t* count_buff,
 }
 
 template <typename T>
-DEVICE NEVER_INLINE const T* SUFFIX(get_matching_baseline_hash_slot_readonly)(const T* key,
-                                                                              const size_t key_component_count,
-                                                                              const T* composite_key_dict,
-                                                                              const size_t entry_count) {
-  const uint32_t h = MurmurHash1Impl(key, key_component_count * sizeof(T), 0) % entry_count;
+DEVICE NEVER_INLINE const T* SUFFIX(get_matching_baseline_hash_slot_readonly)(
+    const T* key,
+    const size_t key_component_count,
+    const T* composite_key_dict,
+    const size_t entry_count) {
+  const uint32_t h =
+      MurmurHash1Impl(key, key_component_count * sizeof(T), 0) % entry_count;
   uint32_t off = h * key_component_count;
   if (keys_are_equal(&composite_key_dict[off], key, key_component_count)) {
     return &composite_key_dict[off];
@@ -525,7 +563,7 @@ GLOBAL void SUFFIX(count_matches_baseline)(int32_t* count_buff,
                                            const int32_t cpu_thread_idx,
                                            const int32_t cpu_thread_count
 #endif
-                                           ) {
+) {
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   int32_t step = blockDim.x * gridDim.x;
@@ -537,7 +575,8 @@ GLOBAL void SUFFIX(count_matches_baseline)(int32_t* count_buff,
   T key_scratch_buff[g_maximum_conditions_to_coalesce];
   for (size_t i = start; i < num_elems; i += step) {
     bool skip_entry = false;
-    for (size_t key_component_index = 0; key_component_index < key_component_count; ++key_component_index) {
+    for (size_t key_component_index = 0; key_component_index < key_component_count;
+         ++key_component_index) {
       const auto& join_column = join_column_per_key[key_component_index];
       const auto& type_info = type_info_per_key[key_component_index];
 #ifndef __CUDACC__
@@ -545,8 +584,10 @@ GLOBAL void SUFFIX(count_matches_baseline)(int32_t* count_buff,
       const auto sd_outer_proxy = sd_outer_proxy_per_key[key_component_index];
 #endif
       int64_t elem = type_info.is_unsigned
-                         ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
-                         : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+                         ? SUFFIX(fixed_width_unsigned_decode_noinline)(
+                               join_column.col_buff, type_info.elem_sz, i)
+                         : SUFFIX(fixed_width_int_decode_noinline)(
+                               join_column.col_buff, type_info.elem_sz, i);
       if (elem == type_info.null_val && !type_info.uses_bw_eq) {
         skip_entry = true;
         break;
@@ -554,8 +595,10 @@ GLOBAL void SUFFIX(count_matches_baseline)(int32_t* count_buff,
 #ifndef __CUDACC__
       if (sd_inner_proxy && elem != type_info.null_val) {
         CHECK(sd_outer_proxy);
-        const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-        const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
+        const auto sd_inner_dict_proxy =
+            static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
+        const auto sd_outer_dict_proxy =
+            static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
         const auto elem_str = sd_inner_dict_proxy->getString(elem);
         const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
         if (outer_id == StringDictionary::INVALID_STR_ID) {
@@ -591,7 +634,7 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
                                  const int32_t cpu_thread_idx,
                                  const int32_t cpu_thread_count
 #endif
-                                 ) {
+) {
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
   int32_t* id_buff = count_buff + hash_entry_count;
@@ -605,8 +648,10 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
     int64_t elem = type_info.is_unsigned
-                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
-                       : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(
+                             join_column.col_buff, type_info.elem_sz, i)
+                       : SUFFIX(fixed_width_int_decode_noinline)(
+                             join_column.col_buff, type_info.elem_sz, i);
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -615,10 +660,13 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
       }
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy && (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
+    if (sd_inner_proxy &&
+        (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       CHECK(sd_outer_proxy);
-      const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-      const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
+      const auto sd_inner_dict_proxy =
+          static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
+      const auto sd_outer_dict_proxy =
+          static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
       const auto elem_str = sd_inner_dict_proxy->getString(elem);
       const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
@@ -650,7 +698,7 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
                                          const int32_t cpu_thread_idx,
                                          const int32_t cpu_thread_count
 #endif
-                                         ) {
+) {
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
   int32_t* id_buff = count_buff + hash_entry_count;
@@ -664,8 +712,10 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
     int64_t elem = type_info.is_unsigned
-                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
-                       : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(
+                             join_column.col_buff, type_info.elem_sz, i)
+                       : SUFFIX(fixed_width_int_decode_noinline)(
+                             join_column.col_buff, type_info.elem_sz, i);
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -674,10 +724,13 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
       }
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy && (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
+    if (sd_inner_proxy &&
+        (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       CHECK(sd_outer_proxy);
-      const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-      const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
+      const auto sd_inner_dict_proxy =
+          static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
+      const auto sd_outer_dict_proxy =
+          static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
       const auto elem_str = sd_inner_dict_proxy->getString(elem);
       const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
@@ -716,7 +769,7 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
                                           const int32_t cpu_thread_idx,
                                           const int32_t cpu_thread_count
 #endif
-                                          ) {
+) {
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
   int32_t* id_buff = count_buff + hash_entry_count;
@@ -731,7 +784,8 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
   T key_scratch_buff[g_maximum_conditions_to_coalesce];
   for (size_t i = start; i < num_elems; i += step) {
     bool skip_entry = false;
-    for (size_t key_component_index = 0; key_component_index < key_component_count; ++key_component_index) {
+    for (size_t key_component_index = 0; key_component_index < key_component_count;
+         ++key_component_index) {
       const auto& join_column = join_column_per_key[key_component_index];
       const auto& type_info = type_info_per_key[key_component_index];
 #ifndef __CUDACC__
@@ -739,8 +793,10 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
       const auto sd_outer_proxy = sd_outer_proxy_per_key[key_component_index];
 #endif
       int64_t elem = type_info.is_unsigned
-                         ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
-                         : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+                         ? SUFFIX(fixed_width_unsigned_decode_noinline)(
+                               join_column.col_buff, type_info.elem_sz, i)
+                         : SUFFIX(fixed_width_int_decode_noinline)(
+                               join_column.col_buff, type_info.elem_sz, i);
       if (elem == type_info.null_val && !type_info.uses_bw_eq) {
         skip_entry = true;
         break;
@@ -748,8 +804,10 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
 #ifndef __CUDACC__
       if (sd_inner_proxy && elem != type_info.null_val) {
         CHECK(sd_outer_proxy);
-        const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-        const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
+        const auto sd_inner_dict_proxy =
+            static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
+        const auto sd_outer_dict_proxy =
+            static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
         const auto elem_str = sd_inner_dict_proxy->getString(elem);
         const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
         if (outer_id == StringDictionary::INVALID_STR_ID) {
@@ -784,17 +842,18 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
 
 namespace {
 
-GLOBAL void SUFFIX(approximate_distinct_tuples_impl)(uint8_t* hll_buffer,
-                                                     const uint32_t b,
-                                                     const size_t key_component_count,
-                                                     const JoinColumn* join_column_per_key,
-                                                     const JoinColumnTypeInfo* type_info_per_key
+GLOBAL void SUFFIX(approximate_distinct_tuples_impl)(
+    uint8_t* hll_buffer,
+    const uint32_t b,
+    const size_t key_component_count,
+    const JoinColumn* join_column_per_key,
+    const JoinColumnTypeInfo* type_info_per_key
 #ifndef __CUDACC__
-                                                     ,
-                                                     const int32_t cpu_thread_idx,
-                                                     const int32_t cpu_thread_count
+    ,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count
 #endif
-                                                     ) {
+) {
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   int32_t step = blockDim.x * gridDim.x;
@@ -805,15 +864,18 @@ GLOBAL void SUFFIX(approximate_distinct_tuples_impl)(uint8_t* hll_buffer,
   const auto num_elems = join_column_per_key[0].num_elems;
   int64_t key_scratch_buff[g_maximum_conditions_to_coalesce];
   for (size_t i = start; i < num_elems; i += step) {
-    for (size_t key_component_index = 0; key_component_index < key_component_count; ++key_component_index) {
+    for (size_t key_component_index = 0; key_component_index < key_component_count;
+         ++key_component_index) {
       const auto& join_column = join_column_per_key[key_component_index];
       const auto& type_info = type_info_per_key[key_component_index];
       key_scratch_buff[key_component_index] =
-          type_info.is_unsigned
-              ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
-              : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+          type_info.is_unsigned ? SUFFIX(fixed_width_unsigned_decode_noinline)(
+                                      join_column.col_buff, type_info.elem_sz, i)
+                                : SUFFIX(fixed_width_int_decode_noinline)(
+                                      join_column.col_buff, type_info.elem_sz, i);
     }
-    const uint64_t hash = MurmurHash64AImpl(key_scratch_buff, key_component_count * sizeof(int64_t), 0);
+    const uint64_t hash =
+        MurmurHash64AImpl(key_scratch_buff, key_component_count * sizeof(int64_t), 0);
     const uint32_t index = hash >> (64 - b);
     const auto rank = get_rank(hash << b, 64 - b);
 #ifdef __CUDACC__
@@ -829,9 +891,12 @@ GLOBAL void SUFFIX(approximate_distinct_tuples_impl)(uint8_t* hll_buffer,
 #ifndef __CUDACC__
 
 template <typename InputIterator, typename OutputIterator>
-void inclusive_scan(InputIterator first, InputIterator last, OutputIterator out, const size_t thread_count) {
-  typedef typename InputIterator::value_type ElementType;
-  typedef typename InputIterator::difference_type OffsetType;
+void inclusive_scan(InputIterator first,
+                    InputIterator last,
+                    OutputIterator out,
+                    const size_t thread_count) {
+  using ElementType = typename InputIterator::value_type;
+  using OffsetType = typename InputIterator::difference_type;
   const OffsetType elem_count = last - first;
   if (elem_count < 10000 || thread_count <= 1) {
     ElementType sum = 0;
@@ -851,9 +916,12 @@ void inclusive_scan(InputIterator first, InputIterator last, OutputIterator out,
               end_off = std::min(start_off + step, elem_count)) {
     counter_threads.push_back(std::async(
         std::launch::async,
-        [first, out](ElementType& partial_sum, const OffsetType start, const OffsetType end) {
+        [first, out](
+            ElementType& partial_sum, const OffsetType start, const OffsetType end) {
           ElementType sum = 0;
-          for (auto in_iter = first + start, out_iter = out + start; in_iter != (first + end); ++in_iter, ++out_iter) {
+          for (auto in_iter = first + start, out_iter = out + start;
+               in_iter != (first + end);
+               ++in_iter, ++out_iter) {
             *out_iter = sum += *in_iter;
           }
           partial_sum = sum;
@@ -878,16 +946,16 @@ void inclusive_scan(InputIterator first, InputIterator last, OutputIterator out,
   for (size_t thread_idx = 0; thread_idx < thread_count - 1; ++thread_idx,
               start_off = std::min(start_off + step, elem_count),
               end_off = std::min(start_off + step, elem_count)) {
-    counter_threads.push_back(
-        std::async(std::launch::async,
-                   [out](const ElementType prev_sum, const OffsetType start, const OffsetType end) {
-                     for (auto iter = out + start; iter != (out + end); ++iter) {
-                       *iter += prev_sum;
-                     }
-                   },
-                   partial_sums[thread_idx],
-                   start_off,
-                   end_off));
+    counter_threads.push_back(std::async(
+        std::launch::async,
+        [out](const ElementType prev_sum, const OffsetType start, const OffsetType end) {
+          for (auto iter = out + start; iter != (out + end); ++iter) {
+            *iter += prev_sum;
+          }
+        },
+        partial_sums[thread_idx],
+        start_off,
+        end_off));
   }
   for (auto& child : counter_threads) {
     child.get();
@@ -929,13 +997,15 @@ void fill_one_to_many_hash_table(int32_t* buff,
 #if HAVE_CUDA
   thrust::inclusive_scan(count_copy.begin(), count_copy.end(), count_copy.begin());
 #else
-  inclusive_scan(count_copy.begin(), count_copy.end(), count_copy.begin(), cpu_thread_count);
+  inclusive_scan(
+      count_copy.begin(), count_copy.end(), count_copy.begin(), cpu_thread_count);
 #endif
   std::vector<std::future<void>> pos_threads;
   for (int cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
     pos_threads.push_back(std::async(std::launch::async,
                                      [&](const int thread_idx) {
-                                       for (int i = thread_idx; i < hash_entry_count; i += cpu_thread_count) {
+                                       for (int i = thread_idx; i < hash_entry_count;
+                                            i += cpu_thread_count) {
                                          if (count_buff[i]) {
                                            pos_buff[i] = count_copy[i];
                                          }
@@ -1002,12 +1072,14 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
   std::vector<int32_t> count_copy(hash_entry_count, 0);
   CHECK_GT(hash_entry_count, int32_t(0));
   memcpy(&count_copy[1], count_buff, (hash_entry_count - 1) * sizeof(int32_t));
-  inclusive_scan(count_copy.begin(), count_copy.end(), count_copy.begin(), cpu_thread_count);
+  inclusive_scan(
+      count_copy.begin(), count_copy.end(), count_copy.begin(), cpu_thread_count);
   std::vector<std::future<void>> pos_threads;
   for (int cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
     pos_threads.push_back(std::async(std::launch::async,
                                      [&](const int thread_idx) {
-                                       for (int i = thread_idx; i < hash_entry_count; i += cpu_thread_count) {
+                                       for (int i = thread_idx; i < hash_entry_count;
+                                            i += cpu_thread_count) {
                                          if (count_buff[i]) {
                                            pos_buff[i] = count_copy[i];
                                          }
@@ -1073,17 +1145,18 @@ void init_baseline_hash_join_buff_64(int8_t* hash_join_buff,
                                         cpu_thread_count);
 }
 
-int fill_baseline_hash_join_buff_32(int8_t* hash_buff,
-                                    const size_t entry_count,
-                                    const int32_t invalid_slot_val,
-                                    const size_t key_component_count,
-                                    const bool with_val_slot,
-                                    const std::vector<JoinColumn>& join_column_per_key,
-                                    const std::vector<JoinColumnTypeInfo>& type_info_per_key,
-                                    const std::vector<const void*>& sd_inner_proxy_per_key,
-                                    const std::vector<const void*>& sd_outer_proxy_per_key,
-                                    const int32_t cpu_thread_idx,
-                                    const int32_t cpu_thread_count) {
+int fill_baseline_hash_join_buff_32(
+    int8_t* hash_buff,
+    const size_t entry_count,
+    const int32_t invalid_slot_val,
+    const size_t key_component_count,
+    const bool with_val_slot,
+    const std::vector<JoinColumn>& join_column_per_key,
+    const std::vector<JoinColumnTypeInfo>& type_info_per_key,
+    const std::vector<const void*>& sd_inner_proxy_per_key,
+    const std::vector<const void*>& sd_outer_proxy_per_key,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count) {
   return fill_baseline_hash_join_buff<int32_t>(hash_buff,
                                                entry_count,
                                                invalid_slot_val,
@@ -1097,17 +1170,18 @@ int fill_baseline_hash_join_buff_32(int8_t* hash_buff,
                                                cpu_thread_count);
 }
 
-int fill_baseline_hash_join_buff_64(int8_t* hash_buff,
-                                    const size_t entry_count,
-                                    const int32_t invalid_slot_val,
-                                    const size_t key_component_count,
-                                    const bool with_val_slot,
-                                    const std::vector<JoinColumn>& join_column_per_key,
-                                    const std::vector<JoinColumnTypeInfo>& type_info_per_key,
-                                    const std::vector<const void*>& sd_inner_proxy_per_key,
-                                    const std::vector<const void*>& sd_outer_proxy_per_key,
-                                    const int32_t cpu_thread_idx,
-                                    const int32_t cpu_thread_count) {
+int fill_baseline_hash_join_buff_64(
+    int8_t* hash_buff,
+    const size_t entry_count,
+    const int32_t invalid_slot_val,
+    const size_t key_component_count,
+    const bool with_val_slot,
+    const std::vector<JoinColumn>& join_column_per_key,
+    const std::vector<JoinColumnTypeInfo>& type_info_per_key,
+    const std::vector<const void*>& sd_inner_proxy_per_key,
+    const std::vector<const void*>& sd_outer_proxy_per_key,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count) {
   return fill_baseline_hash_join_buff<int64_t>(hash_buff,
                                                entry_count,
                                                invalid_slot_val,
@@ -1122,16 +1196,17 @@ int fill_baseline_hash_join_buff_64(int8_t* hash_buff,
 }
 
 template <typename T>
-void fill_one_to_many_baseline_hash_table(int32_t* buff,
-                                          const T* composite_key_dict,
-                                          const size_t hash_entry_count,
-                                          const int32_t invalid_slot_val,
-                                          const size_t key_component_count,
-                                          const std::vector<JoinColumn>& join_column_per_key,
-                                          const std::vector<JoinColumnTypeInfo>& type_info_per_key,
-                                          const std::vector<const void*>& sd_inner_proxy_per_key,
-                                          const std::vector<const void*>& sd_outer_proxy_per_key,
-                                          const int32_t cpu_thread_count) {
+void fill_one_to_many_baseline_hash_table(
+    int32_t* buff,
+    const T* composite_key_dict,
+    const size_t hash_entry_count,
+    const int32_t invalid_slot_val,
+    const size_t key_component_count,
+    const std::vector<JoinColumn>& join_column_per_key,
+    const std::vector<JoinColumnTypeInfo>& type_info_per_key,
+    const std::vector<const void*>& sd_inner_proxy_per_key,
+    const std::vector<const void*>& sd_outer_proxy_per_key,
+    const int32_t cpu_thread_count) {
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
   memset(count_buff, 0, hash_entry_count * sizeof(int32_t));
@@ -1159,12 +1234,14 @@ void fill_one_to_many_baseline_hash_table(int32_t* buff,
   std::vector<int32_t> count_copy(hash_entry_count, 0);
   CHECK_GT(hash_entry_count, int32_t(0));
   memcpy(&count_copy[1], count_buff, (hash_entry_count - 1) * sizeof(int32_t));
-  inclusive_scan(count_copy.begin(), count_copy.end(), count_copy.begin(), cpu_thread_count);
+  inclusive_scan(
+      count_copy.begin(), count_copy.end(), count_copy.begin(), cpu_thread_count);
   std::vector<std::future<void>> pos_threads;
   for (int cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
     pos_threads.push_back(std::async(std::launch::async,
                                      [&](const int thread_idx) {
-                                       for (size_t i = thread_idx; i < hash_entry_count; i += cpu_thread_count) {
+                                       for (size_t i = thread_idx; i < hash_entry_count;
+                                            i += cpu_thread_count) {
                                          if (count_buff[i]) {
                                            pos_buff[i] = count_copy[i];
                                          }
@@ -1198,16 +1275,17 @@ void fill_one_to_many_baseline_hash_table(int32_t* buff,
   }
 }
 
-void fill_one_to_many_baseline_hash_table_32(int32_t* buff,
-                                             const int32_t* composite_key_dict,
-                                             const size_t hash_entry_count,
-                                             const int32_t invalid_slot_val,
-                                             const size_t key_component_count,
-                                             const std::vector<JoinColumn>& join_column_per_key,
-                                             const std::vector<JoinColumnTypeInfo>& type_info_per_key,
-                                             const std::vector<const void*>& sd_inner_proxy_per_key,
-                                             const std::vector<const void*>& sd_outer_proxy_per_key,
-                                             const int32_t cpu_thread_count) {
+void fill_one_to_many_baseline_hash_table_32(
+    int32_t* buff,
+    const int32_t* composite_key_dict,
+    const size_t hash_entry_count,
+    const int32_t invalid_slot_val,
+    const size_t key_component_count,
+    const std::vector<JoinColumn>& join_column_per_key,
+    const std::vector<JoinColumnTypeInfo>& type_info_per_key,
+    const std::vector<const void*>& sd_inner_proxy_per_key,
+    const std::vector<const void*>& sd_outer_proxy_per_key,
+    const int32_t cpu_thread_count) {
   fill_one_to_many_baseline_hash_table<int32_t>(buff,
                                                 composite_key_dict,
                                                 hash_entry_count,
@@ -1220,16 +1298,17 @@ void fill_one_to_many_baseline_hash_table_32(int32_t* buff,
                                                 cpu_thread_count);
 }
 
-void fill_one_to_many_baseline_hash_table_64(int32_t* buff,
-                                             const int64_t* composite_key_dict,
-                                             const size_t hash_entry_count,
-                                             const int32_t invalid_slot_val,
-                                             const size_t key_component_count,
-                                             const std::vector<JoinColumn>& join_column_per_key,
-                                             const std::vector<JoinColumnTypeInfo>& type_info_per_key,
-                                             const std::vector<const void*>& sd_inner_proxy_per_key,
-                                             const std::vector<const void*>& sd_outer_proxy_per_key,
-                                             const int32_t cpu_thread_count) {
+void fill_one_to_many_baseline_hash_table_64(
+    int32_t* buff,
+    const int64_t* composite_key_dict,
+    const size_t hash_entry_count,
+    const int32_t invalid_slot_val,
+    const size_t key_component_count,
+    const std::vector<JoinColumn>& join_column_per_key,
+    const std::vector<JoinColumnTypeInfo>& type_info_per_key,
+    const std::vector<const void*>& sd_inner_proxy_per_key,
+    const std::vector<const void*>& sd_outer_proxy_per_key,
+    const int32_t cpu_thread_count) {
   fill_one_to_many_baseline_hash_table<int64_t>(buff,
                                                 composite_key_dict,
                                                 hash_entry_count,
@@ -1252,24 +1331,24 @@ void approximate_distinct_tuples(uint8_t* hll_buffer_all_cpus,
   CHECK(!join_column_per_key.empty());
   std::vector<std::future<void>> approx_distinct_threads;
   for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-    approx_distinct_threads.push_back(std::async(std::launch::async,
-                                                 [&join_column_per_key,
-                                                  &type_info_per_key,
-                                                  b,
-                                                  hll_buffer_all_cpus,
-                                                  padded_size_bytes,
-                                                  thread_idx,
-                                                  thread_count] {
-                                                   auto hll_buffer =
-                                                       hll_buffer_all_cpus + thread_idx * padded_size_bytes;
-                                                   approximate_distinct_tuples_impl(hll_buffer,
-                                                                                    b,
-                                                                                    join_column_per_key.size(),
-                                                                                    &join_column_per_key[0],
-                                                                                    &type_info_per_key[0],
-                                                                                    thread_idx,
-                                                                                    thread_count);
-                                                 }));
+    approx_distinct_threads.push_back(std::async(
+        std::launch::async,
+        [&join_column_per_key,
+         &type_info_per_key,
+         b,
+         hll_buffer_all_cpus,
+         padded_size_bytes,
+         thread_idx,
+         thread_count] {
+          auto hll_buffer = hll_buffer_all_cpus + thread_idx * padded_size_bytes;
+          approximate_distinct_tuples_impl(hll_buffer,
+                                           b,
+                                           join_column_per_key.size(),
+                                           &join_column_per_key[0],
+                                           &type_info_per_key[0],
+                                           thread_idx,
+                                           thread_count);
+        }));
   }
   for (auto& child : approx_distinct_threads) {
     child.get();

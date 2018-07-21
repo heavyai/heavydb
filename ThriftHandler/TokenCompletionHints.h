@@ -27,19 +27,25 @@
 std::string find_last_word_from_cursor(const std::string& sql, const ssize_t cursor);
 
 // Only allows a few whitelisted keywords, filters out everything else.
-std::vector<TCompletionHint> just_whitelisted_keyword_hints(const std::vector<TCompletionHint>& hints);
+std::vector<TCompletionHint> just_whitelisted_keyword_hints(
+    const std::vector<TCompletionHint>& hints);
 
-// Given last_word = "table.prefix", returns column hints for all columns in "table" which start with "prefix" from
-// `column_names_by_table["table"]`. Returns true iff `last_word` looks like a qualified name (contains a dot).
+// Given last_word = "table.prefix", returns column hints for all columns in "table" which
+// start with "prefix" from `column_names_by_table["table"]`. Returns true iff `last_word`
+// looks like a qualified name (contains a dot).
 bool get_qualified_column_hints(
     std::vector<TCompletionHint>& hints,
     const std::string& last_word,
-    const std::unordered_map<std::string, std::unordered_set<std::string>>& column_names_by_table);
+    const std::unordered_map<std::string, std::unordered_set<std::string>>&
+        column_names_by_table);
 
-// Returns column hints for the flattened list of all values in `column_names_by_table` which start with `last_word`.
-void get_column_hints(std::vector<TCompletionHint>& hints,
-                      const std::string& last_word,
-                      const std::unordered_map<std::string, std::unordered_set<std::string>>& column_names_by_table);
+// Returns column hints for the flattened list of all values in `column_names_by_table`
+// which start with `last_word`.
+void get_column_hints(
+    std::vector<TCompletionHint>& hints,
+    const std::string& last_word,
+    const std::unordered_map<std::string, std::unordered_set<std::string>>&
+        column_names_by_table);
 
 // Returns true iff it should suggest columns or just the FROM keyword,
 // should be called for partial queries after SELECT but before FROM.

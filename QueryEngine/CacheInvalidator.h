@@ -20,7 +20,8 @@ class CacheInvalidator {
             typename... REMAINING_CACHE_HOLDING_TYPES>
   static void internalInvalidateCache() {
     FIRST_CACHE_HOLDING_TYPE::yieldCacheInvalidator()();
-    internalInvalidateCache<SECOND_CACHE_HOLDING_TYPE, REMAINING_CACHE_HOLDING_TYPES...>();
+    internalInvalidateCache<SECOND_CACHE_HOLDING_TYPE,
+                            REMAINING_CACHE_HOLDING_TYPES...>();
   }
 };
 

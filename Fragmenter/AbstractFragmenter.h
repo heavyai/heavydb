@@ -22,13 +22,13 @@
 #ifndef _ABSTRACT_FRAGMENTER_H
 #define _ABSTRACT_FRAGMENTER_H
 
+#include <boost/variant.hpp>
+#include <string>
+#include <vector>
+#include "../Shared/UpdelRoll.h"
 #include "../Shared/sqltypes.h"
 #include "../StringDictionary/StringDictionary.h"
-#include "../Shared/UpdelRoll.h"
 #include "Fragmenter.h"
-#include <vector>
-#include <string>
-#include <boost/variant.hpp>
 
 // Should the ColumnInfo and FragmentInfo structs be in
 // AbstractFragmenter?
@@ -36,7 +36,7 @@
 namespace Data_Namespace {
 class AbstractBuffer;
 class AbstractDataMgr;
-};
+};  // namespace Data_Namespace
 
 namespace Importer_NS {
 class TypedImportBuffer;
@@ -74,7 +74,8 @@ class AbstractFragmenter {
    * keeps. May also prune the predicate.
    */
 
-  // virtual void getFragmentsForQuery(QueryInfo &queryInfo, const void *predicate = 0) = 0;
+  // virtual void getFragmentsForQuery(QueryInfo &queryInfo, const void *predicate = 0) =
+  // 0;
   virtual TableInfo getFragmentsForQuery() = 0;
 
   /**
@@ -150,6 +151,6 @@ class AbstractFragmenter {
                               UpdelRoll& updelRoll) = 0;
 };
 
-}  // Fragmenter_Namespace
+}  // namespace Fragmenter_Namespace
 
 #endif  // _ABSTRACT_FRAGMENTER_H

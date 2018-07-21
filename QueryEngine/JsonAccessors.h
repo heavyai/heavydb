@@ -28,7 +28,8 @@
 #include <glog/logging.h>
 #include <rapidjson/document.h>
 
-inline const rapidjson::Value& field(const rapidjson::Value& obj, const char field[]) noexcept {
+inline const rapidjson::Value& field(const rapidjson::Value& obj,
+                                     const char field[]) noexcept {
   CHECK(obj.IsObject());
   const auto field_it = obj.FindMember(field);
   CHECK(field_it != obj.MemberEnd());

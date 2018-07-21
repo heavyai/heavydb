@@ -18,16 +18,16 @@
 #include <gtest/gtest.h>
 
 #include <boost/algorithm/string.hpp>
-#include "boost/filesystem.hpp"
 #include <boost/iterator/counting_iterator.hpp>
+#include "boost/filesystem.hpp"
 
 #include "Catalog/Catalog.h"
+#include "Fragmenter/InsertOrderFragmenter.h"
+#include "Import/Importer.h"
 #include "Parser/parser.h"
 #include "QueryEngine/ResultSet.h"
-#include "Import/Importer.h"
-#include "Shared/UpdelRoll.h"
-#include "Fragmenter/InsertOrderFragmenter.h"
 #include "QueryRunner/QueryRunner.h"
+#include "Shared/UpdelRoll.h"
 #include "Tests/TestHelpers.h"
 
 #include <tuple>
@@ -51,7 +51,8 @@ inline void run_ddl_statement(const string& input_str) {
 }
 
 std::shared_ptr<ResultSet> run_query(const string& query_str) {
-  return QueryRunner::run_multiple_agg(query_str, gsession, ExecutorDeviceType::CPU, g_hoist_literals, true);
+  return QueryRunner::run_multiple_agg(
+      query_str, gsession, ExecutorDeviceType::CPU, g_hoist_literals, true);
 }
 
 bool alter_common(const string& table,
@@ -60,14 +61,17 @@ bool alter_common(const string& table,
                   const string& comp,
                   const string& val) {
   std::string alter_query = "alter table " + table + " add column " + column + " " + type;
-  if (val != "")
+  if (val != "") {
     alter_query += " default " + val;
-  if (comp != "")
+  }
+  if (comp != "") {
     alter_query += " encoding " + comp;
+  }
   EXPECT_NO_THROW(run_ddl_statement(alter_query + ";"););
 
-  std::string query_str = "SELECT count() FROM " + table + " WHERE " + column +
-                          ("" == val || boost::iequals("NULL", val) ? " IS NULL" : (" = " + val));
+  std::string query_str =
+      "SELECT count() FROM " + table + " WHERE " + column +
+      ("" == val || boost::iequals("NULL", val) ? " IS NULL" : (" = " + val));
   auto rows = run_query(query_str + ";");
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(1), crt_row.size());
@@ -76,20 +80,22 @@ bool alter_common(const string& table,
 }
 
 void import_table_file(const string& table, const string& file) {
-  std::string query_str =
-      string("COPY trips FROM '") + "../../Tests/Import/datafiles/" + file + "' WITH (header='true');";
+  std::string query_str = string("COPY trips FROM '") + "../../Tests/Import/datafiles/" +
+                          file + "' WITH (header='true');";
 
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;
-  if (parser.parse(query_str, parse_trees, last_parsed))
+  if (parser.parse(query_str, parse_trees, last_parsed)) {
     throw std::runtime_error("Failed to parse: " + query_str);
+  }
   CHECK_EQ(parse_trees.size(), size_t(1));
 
   const auto& stmt = parse_trees.front();
   Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
-  if (!ddl)
+  if (!ddl) {
     throw std::runtime_error("Not a DDLStmt: " + query_str);
+  }
   ddl->execute(*gsession);
 }
 
@@ -134,8 +140,9 @@ void init_table_data(const string& table = "trips",
                      const string& file = "trip_data_b.txt") {
   run_ddl_statement("drop table if exists " + table + ";");
   run_ddl_statement(create_table_cmd);
-  if (file.size())
+  if (file.size()) {
     import_table_file(table, file);
+  }
 }
 
 class AlterColumnTest : public ::testing::Test {
@@ -162,10 +169,17 @@ TEST_F(AlterColumnTest, Add_column) {
       MT("timestamp", "", "'2011-10-23 10:23:45'"),
   };
   int cid = 0;
-  for (const auto& tv : type_vals)
-    EXPECT_TRUE(alter_common("trips", "x" + std::to_string(++cid), std::get<0>(tv), std::get<1>(tv), std::get<2>(tv)));
-  for (const auto& tv : type_vals)
-    EXPECT_TRUE(alter_common("trips", "x" + std::to_string(++cid), std::get<0>(tv), std::get<1>(tv), ""));
+  for (const auto& tv : type_vals) {
+    EXPECT_TRUE(alter_common("trips",
+                             "x" + std::to_string(++cid),
+                             std::get<0>(tv),
+                             std::get<1>(tv),
+                             std::get<2>(tv)));
+  }
+  for (const auto& tv : type_vals) {
+    EXPECT_TRUE(alter_common(
+        "trips", "x" + std::to_string(++cid), std::get<0>(tv), std::get<1>(tv), ""));
+  }
 }
 }  // namespace
 

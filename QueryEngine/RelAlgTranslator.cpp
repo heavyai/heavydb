@@ -35,15 +35,18 @@ extern bool g_enable_watchdog;
 
 namespace {
 
-SQLTypeInfo build_type_info(const SQLTypes sql_type, const int scale, const int precision) {
+SQLTypeInfo build_type_info(const SQLTypes sql_type,
+                            const int scale,
+                            const int precision) {
   SQLTypeInfo ti(sql_type, 0, 0, false);
   ti.set_scale(scale);
   ti.set_precision(precision);
   return ti;
 }
 
-std::pair<std::shared_ptr<Analyzer::Expr>, SQLQualifier> get_quantified_rhs(const RexScalar* rex_scalar,
-                                                                            const RelAlgTranslator& translator) {
+std::pair<std::shared_ptr<Analyzer::Expr>, SQLQualifier> get_quantified_rhs(
+    const RexScalar* rex_scalar,
+    const RelAlgTranslator& translator) {
   std::shared_ptr<Analyzer::Expr> rhs;
   SQLQualifier sql_qual{kONE};
   const auto rex_operator = dynamic_cast<const RexOperator*>(rex_scalar);
@@ -64,7 +67,8 @@ std::pair<std::shared_ptr<Analyzer::Expr>, SQLQualifier> get_quantified_rhs(cons
   return std::make_pair(rhs, sql_qual);
 }
 
-std::pair<Datum, bool> datum_from_scalar_tv(const ScalarTargetValue* scalar_tv, const SQLTypeInfo& ti) noexcept {
+std::pair<Datum, bool> datum_from_scalar_tv(const ScalarTargetValue* scalar_tv,
+                                            const SQLTypeInfo& ti) noexcept {
   Datum d{0};
   bool is_null_const{false};
   switch (ti.get_type()) {
@@ -154,7 +158,8 @@ std::pair<Datum, bool> datum_from_scalar_tv(const ScalarTargetValue* scalar_tv, 
 
 }  // namespace
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarRex(const RexScalar* rex) const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarRex(
+    const RexScalar* rex) const {
   const auto rex_input = dynamic_cast<const RexInput*>(rex);
   if (rex_input) {
     return translateInput(rex_input);
@@ -197,11 +202,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
     CHECK_LE(rex->size(), 2);
     arg_expr = scalar_sources[operand];
     if (agg_kind == kAPPROX_COUNT_DISTINCT && rex->size() == 2) {
-      err_rate = std::dynamic_pointer_cast<Analyzer::Constant>(scalar_sources[rex->getOperand(1)]);
-      if (!err_rate || err_rate->get_type_info().get_type() != kSMALLINT || err_rate->get_constval().smallintval < 1 ||
+      err_rate = std::dynamic_pointer_cast<Analyzer::Constant>(
+          scalar_sources[rex->getOperand(1)]);
+      if (!err_rate || err_rate->get_type_info().get_type() != kSMALLINT ||
+          err_rate->get_constval().smallintval < 1 ||
           err_rate->get_constval().smallintval > 100) {
         throw std::runtime_error(
-            "APPROX_COUNT_DISTINCT's second parameter should be SMALLINT literal between 1 and 100");
+            "APPROX_COUNT_DISTINCT's second parameter should be SMALLINT literal between "
+            "1 and 100");
       }
     }
   }
@@ -209,10 +217,13 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
   return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct, err_rate);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(const RexLiteral* rex_literal) {
-  const auto lit_ti = build_type_info(rex_literal->getType(), rex_literal->getScale(), rex_literal->getPrecision());
-  const auto target_ti =
-      build_type_info(rex_literal->getTargetType(), rex_literal->getTypeScale(), rex_literal->getTypePrecision());
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
+    const RexLiteral* rex_literal) {
+  const auto lit_ti = build_type_info(
+      rex_literal->getType(), rex_literal->getScale(), rex_literal->getPrecision());
+  const auto target_ti = build_type_info(rex_literal->getTargetType(),
+                                         rex_literal->getTypeScale(),
+                                         rex_literal->getTypePrecision());
   switch (rex_literal->getType()) {
     case kDECIMAL: {
       const auto val = rex_literal->getVal<int64_t>();
@@ -221,8 +232,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(const RexLite
       if (target_ti.is_fp() && !scale) {
         return make_fp_constant(val, target_ti);
       }
-      auto lit_expr =
-          scale ? Parser::FixedPtLiteral::analyzeValue(val, scale, precision) : Parser::IntLiteral::analyzeValue(val);
+      auto lit_expr = scale ? Parser::FixedPtLiteral::analyzeValue(val, scale, precision)
+                            : Parser::IntLiteral::analyzeValue(val);
       return scale && lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
     }
     case kTEXT: {
@@ -264,7 +275,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(const RexLite
   return nullptr;
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarSubquery(const RexSubQuery* rex_subquery) const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarSubquery(
+    const RexSubQuery* rex_subquery) const {
   if (just_explain_) {
     throw std::runtime_error("EXPLAIN is not supported with sub-queries");
   }
@@ -286,7 +298,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarSubquery(const 
   return makeExpr<Analyzer::Constant>(ti, is_null_const, d);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(const RexInput* rex_input) const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
+    const RexInput* rex_input) const {
   const auto source = rex_input->getSourceNode();
   const auto it_rte_idx = input_to_nest_level_.find(source);
   CHECK(it_rte_idx != input_to_nest_level_.end());
@@ -298,14 +311,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(const RexInput*
     // the name and type information come directly from the catalog.
     CHECK(in_metainfo.empty());
     const auto table_desc = scan_source->getTableDescriptor();
-    const auto cd = cat_.getMetadataForColumnBySpi(table_desc->tableId, rex_input->getIndex() + 1);
+    const auto cd =
+        cat_.getMetadataForColumnBySpi(table_desc->tableId, rex_input->getIndex() + 1);
     CHECK(cd);
     auto col_ti = cd->columnType;
     if (col_ti.is_string()) {
       col_ti.set_type(kTEXT);
     }
     if (cd->isVirtualCol) {
-      // TODO(alex): remove at some point, we only need this fixup for backwards compatibility with old imported data
+      // TODO(alex): remove at some point, we only need this fixup for backwards
+      // compatibility with old imported data
       CHECK_EQ("rowid", cd->columnName);
       col_ti.set_size(8);
     }
@@ -313,7 +328,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(const RexInput*
     if (rte_idx > 0 && join_types_[rte_idx - 1] == JoinType::LEFT) {
       col_ti.set_notnull(false);
     }
-    return std::make_shared<Analyzer::ColumnVar>(col_ti, table_desc->tableId, cd->columnId, rte_idx);
+    return std::make_shared<Analyzer::ColumnVar>(
+        col_ti, table_desc->tableId, cd->columnId, rte_idx);
   }
   CHECK(!in_metainfo.empty());
   CHECK_GE(rte_idx, 0);
@@ -327,7 +343,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(const RexInput*
   return std::make_shared<Analyzer::ColumnVar>(col_ti, -source->getId(), col_id, rte_idx);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(const RexOperator* rex_operator) const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(
+    const RexOperator* rex_operator) const {
   CHECK_EQ(size_t(1), rex_operator->size());
   const auto operand_expr = translateScalarRex(rex_operator->getOperand(0));
   const auto sql_op = rex_operator->getOperator();
@@ -339,10 +356,13 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(const RexOperat
       if (operand_ti.is_string() && target_ti.is_string()) {
         return operand_expr;
       }
-      if (operand_ti.is_decimal() && target_ti.is_decimal() && operand_ti.get_scale() != target_ti.get_scale()) {
+      if (operand_ti.is_decimal() && target_ti.is_decimal() &&
+          operand_ti.get_scale() != target_ti.get_scale()) {
         throw std::runtime_error("Cast between different DECIMAL scales not supported");
       }
-      if (target_ti.is_time() || operand_ti.is_string()) {  // TODO(alex): check and unify with the rest of the cases
+      if (target_ti.is_time() ||
+          operand_ti
+              .is_string()) {  // TODO(alex): check and unify with the rest of the cases
         return operand_expr->add_cast(target_ti);
       }
       if (!operand_ti.is_string() && target_ti.is_string()) {
@@ -376,27 +396,33 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(const RexOperat
 
 namespace {
 
-std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Expr> arg, const ResultSet& val_set) {
+std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Expr> arg,
+                                                   const ResultSet& val_set) {
   if (!can_use_parallel_algorithms(val_set)) {
     return nullptr;
   }
   if (val_set.rowCount() > 5000000 && g_enable_watchdog) {
-    throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 5M+ rows.");
+    throw std::runtime_error(
+        "Unable to handle 'expr IN (subquery)', subquery returned 5M+ rows.");
   }
   std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
   const size_t fetcher_count = cpu_threads();
-  std::vector<std::list<std::shared_ptr<Analyzer::Expr>>> expr_set(fetcher_count,
-                                                                   std::list<std::shared_ptr<Analyzer::Expr>>());
+  std::vector<std::list<std::shared_ptr<Analyzer::Expr>>> expr_set(
+      fetcher_count, std::list<std::shared_ptr<Analyzer::Expr>>());
   std::vector<std::future<void>> fetcher_threads;
   const auto& ti = arg->get_type_info();
   const auto entry_count = val_set.entryCount();
-  for (size_t i = 0, start_entry = 0, stride = (entry_count + fetcher_count - 1) / fetcher_count;
+  for (size_t i = 0,
+              start_entry = 0,
+              stride = (entry_count + fetcher_count - 1) / fetcher_count;
        i < fetcher_count && start_entry < entry_count;
        ++i, start_entry += stride) {
     const auto end_entry = std::min(start_entry + stride, entry_count);
     fetcher_threads.push_back(std::async(
         std::launch::async,
-        [&](std::list<std::shared_ptr<Analyzer::Expr>>& in_vals, const size_t start, const size_t end) {
+        [&](std::list<std::shared_ptr<Analyzer::Expr>>& in_vals,
+            const size_t start,
+            const size_t end) {
           for (auto index = start; index < end; ++index) {
             auto row = val_set.getRowAt(index);
             if (row.empty()) {
@@ -409,8 +435,10 @@ std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Exp
             if (ti.is_string() && ti.get_compression() != kENCODING_NONE) {
               auto ti_none_encoded = ti;
               ti_none_encoded.set_compression(kENCODING_NONE);
-              auto none_encoded_string = makeExpr<Analyzer::Constant>(ti, is_null_const, d);
-              auto dict_encoded_string = std::make_shared<Analyzer::UOper>(ti, false, kCAST, none_encoded_string);
+              auto none_encoded_string =
+                  makeExpr<Analyzer::Constant>(ti, is_null_const, d);
+              auto dict_encoded_string = std::make_shared<Analyzer::UOper>(
+                  ti, false, kCAST, none_encoded_string);
               in_vals.push_back(dict_encoded_string);
             } else {
               in_vals.push_back(makeExpr<Analyzer::Constant>(ti, is_null_const, d));
@@ -437,8 +465,10 @@ std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Exp
 // Creates an Analyzer expression for an IN subquery which subsequently goes through the
 // regular Executor::codegen() mechanism. The creation of the expression out of subquery's
 // result set is parallelized whenever possible. In addition, take advantage of additional
-// information that elements in the right hand side are constants; see getInIntegerSetExpr().
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOperator* rex_operator) const {
+// information that elements in the right hand side are constants; see
+// getInIntegerSetExpr().
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(
+    const RexOperator* rex_operator) const {
   if (just_explain_) {
     throw std::runtime_error("EXPLAIN is not supported with sub-queries");
   }
@@ -453,8 +483,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
   CHECK_EQ(size_t(1), row_set->colCount());
   const auto& rhs_ti = row_set->getColType(0);
   if (rhs_ti.get_type() != ti.get_type()) {
-    throw std::runtime_error("The two sides of the IN operator must have the same type; found " + ti.get_type_name() +
-                             " and " + rhs_ti.get_type_name());
+    throw std::runtime_error(
+        "The two sides of the IN operator must have the same type; found " +
+        ti.get_type_name() + " and " + rhs_ti.get_type_name());
   }
   row_set->moveToBegin();
   if (row_set->entryCount() > 10000) {
@@ -465,7 +496,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
       // Handle the highly unlikely case when the InIntegerSet ended up being tiny.
       // Just let it fall through the usual InValues path at the end of this method,
       // its codegen knows to use inline comparisons for few values.
-      if (expr && std::static_pointer_cast<Analyzer::InIntegerSet>(expr)->get_value_list().size() <= 100) {
+      if (expr && std::static_pointer_cast<Analyzer::InIntegerSet>(expr)
+                          ->get_value_list()
+                          .size() <= 100) {
         expr = nullptr;
       }
     } else {
@@ -478,10 +511,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
   std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
   while (true) {
     auto row = row_set->getNextRow(true, false);
-    if (row.empty())
+    if (row.empty()) {
       break;
+    }
     if (g_enable_watchdog && value_exprs.size() >= 10000) {
-      throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 10000+ rows.");
+      throw std::runtime_error(
+          "Unable to handle 'expr IN (subquery)', subquery returned 10000+ rows.");
     }
     auto scalar_tv = boost::get<ScalarTargetValue>(&row[0]);
     Datum d{0};
@@ -491,7 +526,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
       auto ti_none_encoded = ti;
       ti_none_encoded.set_compression(kENCODING_NONE);
       auto none_encoded_string = makeExpr<Analyzer::Constant>(ti, is_null_const, d);
-      auto dict_encoded_string = std::make_shared<Analyzer::UOper>(ti, false, kCAST, none_encoded_string);
+      auto dict_encoded_string =
+          std::make_shared<Analyzer::UOper>(ti, false, kCAST, none_encoded_string);
       value_exprs.push_back(dict_encoded_string);
     } else {
       value_exprs.push_back(makeExpr<Analyzer::Constant>(ti, is_null_const, d));
@@ -504,16 +540,18 @@ namespace {
 
 const size_t g_max_integer_set_size{1 << 25};
 
-void fill_dictionary_encoded_in_vals(std::vector<int64_t>& in_vals,
-                                     std::atomic<size_t>& total_in_vals_count,
-                                     const ResultSet* values_rowset,
-                                     const std::pair<int64_t, int64_t> values_rowset_slice,
-                                     const StringDictionaryProxy* source_dict,
-                                     const StringDictionaryProxy* dest_dict,
-                                     const int64_t needle_null_val) {
+void fill_dictionary_encoded_in_vals(
+    std::vector<int64_t>& in_vals,
+    std::atomic<size_t>& total_in_vals_count,
+    const ResultSet* values_rowset,
+    const std::pair<int64_t, int64_t> values_rowset_slice,
+    const StringDictionaryProxy* source_dict,
+    const StringDictionaryProxy* dest_dict,
+    const int64_t needle_null_val) {
   CHECK(in_vals.empty());
   bool dicts_are_equal = source_dict == dest_dict;
-  for (auto index = values_rowset_slice.first; index < values_rowset_slice.second; ++index) {
+  for (auto index = values_rowset_slice.first; index < values_rowset_slice.second;
+       ++index) {
     const auto row = values_rowset->getOneColRow(index);
     if (UNLIKELY(!row.valid)) {
       continue;
@@ -522,14 +560,17 @@ void fill_dictionary_encoded_in_vals(std::vector<int64_t>& in_vals,
       in_vals.push_back(row.value);
     } else {
       const int string_id =
-          row.value == needle_null_val ? needle_null_val : dest_dict->getIdOfString(source_dict->getString(row.value));
+          row.value == needle_null_val
+              ? needle_null_val
+              : dest_dict->getIdOfString(source_dict->getString(row.value));
       if (string_id != StringDictionary::INVALID_STR_ID) {
         in_vals.push_back(string_id);
       }
     }
     if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
                  total_in_vals_count.fetch_add(1024) >= g_max_integer_set_size)) {
-      throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
+      throw std::runtime_error(
+          "Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
     }
   }
 }
@@ -539,13 +580,15 @@ void fill_integer_in_vals(std::vector<int64_t>& in_vals,
                           const ResultSet* values_rowset,
                           const std::pair<int64_t, int64_t> values_rowset_slice) {
   CHECK(in_vals.empty());
-  for (auto index = values_rowset_slice.first; index < values_rowset_slice.second; ++index) {
+  for (auto index = values_rowset_slice.first; index < values_rowset_slice.second;
+       ++index) {
     const auto row = values_rowset->getOneColRow(index);
     if (row.valid) {
       in_vals.push_back(row.value);
       if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
                    total_in_vals_count.fetch_add(1024) >= g_max_integer_set_size)) {
-        throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
+        throw std::runtime_error(
+            "Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
       }
     }
   }
@@ -555,24 +598,28 @@ void fill_integer_in_vals(std::vector<int64_t>& in_vals,
 // for a big right-hand side result. It only handles physical string dictionary ids,
 // therefore it won't be able to handle a right-hand side sub-query with a CASE
 // returning literals on some branches. That case isn't hard too handle either, but
-// it's not clear it's actually important in practice. RelAlgTranslator::getInIntegerSetExpr
-// makes sure, by checking the encodings, that this function isn't called in such cases.
-void fill_dictionary_encoded_in_vals(std::vector<int64_t>& in_vals,
-                                     std::atomic<size_t>& total_in_vals_count,
-                                     const ResultSet* values_rowset,
-                                     const std::pair<int64_t, int64_t> values_rowset_slice,
-                                     const std::vector<LeafHostInfo>& leaf_hosts,
-                                     const DictRef source_dict_ref,
-                                     const DictRef dest_dict_ref,
-                                     const int32_t dest_generation,
-                                     const int64_t needle_null_val) {
+// it's not clear it's actually important in practice.
+// RelAlgTranslator::getInIntegerSetExpr makes sure, by checking the encodings, that this
+// function isn't called in such cases.
+void fill_dictionary_encoded_in_vals(
+    std::vector<int64_t>& in_vals,
+    std::atomic<size_t>& total_in_vals_count,
+    const ResultSet* values_rowset,
+    const std::pair<int64_t, int64_t> values_rowset_slice,
+    const std::vector<LeafHostInfo>& leaf_hosts,
+    const DictRef source_dict_ref,
+    const DictRef dest_dict_ref,
+    const int32_t dest_generation,
+    const int64_t needle_null_val) {
   CHECK(in_vals.empty());
   std::vector<int32_t> source_ids;
   source_ids.reserve(values_rowset->entryCount());
   bool has_nulls = false;
   if (source_dict_ref == dest_dict_ref) {
-    in_vals.reserve(values_rowset_slice.second - values_rowset_slice.first + 1);  // Add 1 to cover interval
-    for (auto index = values_rowset_slice.first; index < values_rowset_slice.second; ++index) {
+    in_vals.reserve(values_rowset_slice.second - values_rowset_slice.first +
+                    1);  // Add 1 to cover interval
+    for (auto index = values_rowset_slice.first; index < values_rowset_slice.second;
+         ++index) {
       const auto row = values_rowset->getOneColRow(index);
       if (!row.valid) {
         continue;
@@ -581,7 +628,8 @@ void fill_dictionary_encoded_in_vals(std::vector<int64_t>& in_vals,
         in_vals.push_back(row.value);
         if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
                      total_in_vals_count.fetch_add(1024) >= g_max_integer_set_size)) {
-          throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
+          throw std::runtime_error(
+              "Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
         }
       } else {
         has_nulls = true;
@@ -589,12 +637,14 @@ void fill_dictionary_encoded_in_vals(std::vector<int64_t>& in_vals,
     }
     if (has_nulls) {
       in_vals.push_back(
-          needle_null_val);  // we've deduped null values as an optimization, although this is not required by consumer
+          needle_null_val);  // we've deduped null values as an optimization, although
+                             // this is not required by consumer
     }
     return;
   }
   // Code path below is for when dictionaries are not shared
-  for (auto index = values_rowset_slice.first; index < values_rowset_slice.second; ++index) {
+  for (auto index = values_rowset_slice.first; index < values_rowset_slice.second;
+       ++index) {
     const auto row = values_rowset->getOneColRow(index);
     if (row.valid) {
       if (row.value != needle_null_val) {
@@ -605,7 +655,12 @@ void fill_dictionary_encoded_in_vals(std::vector<int64_t>& in_vals,
     }
   }
   std::vector<int32_t> dest_ids;
-  translate_string_ids(dest_ids, leaf_hosts.front(), dest_dict_ref, source_ids, source_dict_ref, dest_generation);
+  translate_string_ids(dest_ids,
+                       leaf_hosts.front(),
+                       dest_dict_ref,
+                       source_ids,
+                       source_dict_ref,
+                       dest_generation);
   CHECK_EQ(dest_ids.size(), source_ids.size());
   in_vals.reserve(dest_ids.size() + (has_nulls ? 1 : 0));
   if (has_nulls) {
@@ -616,7 +671,8 @@ void fill_dictionary_encoded_in_vals(std::vector<int64_t>& in_vals,
       in_vals.push_back(dest_id);
       if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
                    total_in_vals_count.fetch_add(1024) >= g_max_integer_set_size)) {
-        throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
+        throw std::runtime_error(
+            "Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
       }
     }
   }
@@ -630,8 +686,9 @@ void fill_dictionary_encoded_in_vals(std::vector<int64_t>& in_vals,
 // shared pointers. We can avoid the big overhead of each Analyzer::Constant and the
 // refcounting associated with shared pointers by creating an abbreviated InIntegerSet
 // representation of the IN expression which takes advantage of the this information.
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(std::shared_ptr<Analyzer::Expr> arg,
-                                                                      const ResultSet& val_set) const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
+    std::shared_ptr<Analyzer::Expr> arg,
+    const ResultSet& val_set) const {
   if (!can_use_parallel_algorithms(val_set)) {
     return nullptr;
   }
@@ -643,12 +700,15 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(std::share
   const auto entry_count = val_set.entryCount();
   CHECK_EQ(size_t(1), val_set.colCount());
   const auto& col_type = val_set.getColType(0);
-  if (g_cluster && arg_type.is_string() && (col_type.get_comp_param() <= 0 || arg_type.get_comp_param() <= 0)) {
+  if (g_cluster && arg_type.is_string() &&
+      (col_type.get_comp_param() <= 0 || arg_type.get_comp_param() <= 0)) {
     // Skip this case for now, see comment for fill_dictionary_encoded_in_vals.
     return nullptr;
   }
   std::atomic<size_t> total_in_vals_count{0};
-  for (size_t i = 0, start_entry = 0, stride = (entry_count + fetcher_count - 1) / fetcher_count;
+  for (size_t i = 0,
+              start_entry = 0,
+              stride = (entry_count + fetcher_count - 1) / fetcher_count;
        i < fetcher_count && start_entry < entry_count;
        ++i, start_entry += stride) {
     expr_set[i].reserve(entry_count / fetcher_count);
@@ -659,38 +719,53 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(std::share
       // const int32_t source_dict_id = col_type.get_comp_param();
       const DictRef dest_dict_ref(arg_type.get_comp_param(), cat_.getDatabaseId());
       const DictRef source_dict_ref(col_type.get_comp_param(), cat_.getDatabaseId());
-      const auto dd = executor_->getStringDictionaryProxy(arg_type.get_comp_param(), val_set.getRowSetMemOwner(), true);
-      const auto sd = executor_->getStringDictionaryProxy(col_type.get_comp_param(), val_set.getRowSetMemOwner(), true);
+      const auto dd = executor_->getStringDictionaryProxy(
+          arg_type.get_comp_param(), val_set.getRowSetMemOwner(), true);
+      const auto sd = executor_->getStringDictionaryProxy(
+          col_type.get_comp_param(), val_set.getRowSetMemOwner(), true);
       CHECK(sd);
       const auto needle_null_val = inline_int_null_val(arg_type);
-      fetcher_threads.push_back(
-          std::async(std::launch::async,
-                     [this, &val_set, &total_in_vals_count, sd, dd, source_dict_ref, dest_dict_ref, needle_null_val](
-                         std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
-                       if (g_cluster) {
-                         CHECK_GE(dd->getGeneration(), 0);
-                         fill_dictionary_encoded_in_vals(in_vals,
-                                                         total_in_vals_count,
-                                                         &val_set,
-                                                         {start, end},
-                                                         cat_.getStringDictionaryHosts(),
-                                                         source_dict_ref,
-                                                         dest_dict_ref,
-                                                         dd->getGeneration(),
-                                                         needle_null_val);
-                       } else {
-                         fill_dictionary_encoded_in_vals(
-                             in_vals, total_in_vals_count, &val_set, {start, end}, sd, dd, needle_null_val);
-                       }
-                     },
-                     std::ref(expr_set[i]),
-                     start_entry,
-                     end_entry));
+      fetcher_threads.push_back(std::async(
+          std::launch::async,
+          [this,
+           &val_set,
+           &total_in_vals_count,
+           sd,
+           dd,
+           source_dict_ref,
+           dest_dict_ref,
+           needle_null_val](
+              std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
+            if (g_cluster) {
+              CHECK_GE(dd->getGeneration(), 0);
+              fill_dictionary_encoded_in_vals(in_vals,
+                                              total_in_vals_count,
+                                              &val_set,
+                                              {start, end},
+                                              cat_.getStringDictionaryHosts(),
+                                              source_dict_ref,
+                                              dest_dict_ref,
+                                              dd->getGeneration(),
+                                              needle_null_val);
+            } else {
+              fill_dictionary_encoded_in_vals(in_vals,
+                                              total_in_vals_count,
+                                              &val_set,
+                                              {start, end},
+                                              sd,
+                                              dd,
+                                              needle_null_val);
+            }
+          },
+          std::ref(expr_set[i]),
+          start_entry,
+          end_entry));
     } else {
       CHECK(arg_type.is_integer());
       fetcher_threads.push_back(std::async(
           std::launch::async,
-          [&val_set, &total_in_vals_count](std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
+          [&val_set, &total_in_vals_count](
+              std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
             fill_integer_in_vals(in_vals, total_in_vals_count, &val_set, {start, end});
           },
           std::ref(expr_set[i]),
@@ -707,10 +782,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(std::share
   for (auto& exprs : expr_set) {
     value_exprs.insert(value_exprs.end(), exprs.begin(), exprs.end());
   }
-  return makeExpr<Analyzer::InIntegerSet>(arg, value_exprs, arg_type.get_notnull() && col_type.get_notnull());
+  return makeExpr<Analyzer::InIntegerSet>(
+      arg, value_exprs, arg_type.get_notnull() && col_type.get_notnull());
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(const RexOperator* rex_operator) const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
+    const RexOperator* rex_operator) const {
   CHECK_GT(rex_operator->size(), size_t(0));
   if (rex_operator->size() == 1) {
     return translateUoper(rex_operator);
@@ -740,9 +817,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(const RexOperato
   return lhs;
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCase(const RexCase* rex_case) const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCase(
+    const RexCase* rex_case) const {
   std::shared_ptr<Analyzer::Expr> else_expr;
-  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> expr_list;
+  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
+      expr_list;
   for (size_t i = 0; i < rex_case->branchCount(); ++i) {
     const auto when_expr = translateScalarRex(rex_case->getWhen(i));
     const auto then_expr = translateScalarRex(rex_case->getThen(i));
@@ -754,42 +833,51 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCase(const RexCase* r
   return Parser::CaseExpr::normalize(expr_list, else_expr);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLike(const RexFunctionOperator* rex_function) const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLike(
+    const RexFunctionOperator* rex_function) const {
   CHECK(rex_function->size() == 2 || rex_function->size() == 3);
   const auto arg = translateScalarRex(rex_function->getOperand(0));
   const auto like = translateScalarRex(rex_function->getOperand(1));
   if (!std::dynamic_pointer_cast<const Analyzer::Constant>(like)) {
     throw std::runtime_error("The matching pattern must be a literal.");
   }
-  const auto escape = (rex_function->size() == 3) ? translateScalarRex(rex_function->getOperand(2)) : nullptr;
+  const auto escape = (rex_function->size() == 3)
+                          ? translateScalarRex(rex_function->getOperand(2))
+                          : nullptr;
   const bool is_ilike = rex_function->getName() == std::string("PG_ILIKE");
   return Parser::LikeExpr::get(arg, like, escape, is_ilike, false);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRegexp(const RexFunctionOperator* rex_function) const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRegexp(
+    const RexFunctionOperator* rex_function) const {
   CHECK(rex_function->size() == 2 || rex_function->size() == 3);
   const auto arg = translateScalarRex(rex_function->getOperand(0));
   const auto pattern = translateScalarRex(rex_function->getOperand(1));
   if (!std::dynamic_pointer_cast<const Analyzer::Constant>(pattern)) {
     throw std::runtime_error("The matching pattern must be a literal.");
   }
-  const auto escape = (rex_function->size() == 3) ? translateScalarRex(rex_function->getOperand(2)) : nullptr;
+  const auto escape = (rex_function->size() == 3)
+                          ? translateScalarRex(rex_function->getOperand(2))
+                          : nullptr;
   return Parser::RegexpExpr::get(arg, pattern, escape, false);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLikely(const RexFunctionOperator* rex_function) const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLikely(
+    const RexFunctionOperator* rex_function) const {
   CHECK(rex_function->size() == 1);
   const auto arg = translateScalarRex(rex_function->getOperand(0));
   return makeExpr<Analyzer::LikelihoodExpr>(arg, 0.9375);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnlikely(const RexFunctionOperator* rex_function) const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnlikely(
+    const RexFunctionOperator* rex_function) const {
   CHECK(rex_function->size() == 1);
   const auto arg = translateScalarRex(rex_function->getOperand(0));
   return makeExpr<Analyzer::LikelihoodExpr>(arg, 0.0625);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(const RexFunctionOperator* rex_function) const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(
+    const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(2), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
   const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
@@ -798,13 +886,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(const RexFunc
   }
   const auto from_expr = translateScalarRex(rex_function->getOperand(1));
   const bool is_date_trunc = rex_function->getName() == std::string("PG_DATE_TRUNC");
-  return is_date_trunc ? Parser::DatetruncExpr::get(from_expr, *timeunit_lit->get_constval().stringval)
-                       : Parser::ExtractExpr::get(from_expr, *timeunit_lit->get_constval().stringval);
+  return is_date_trunc ? Parser::DatetruncExpr::get(
+                             from_expr, *timeunit_lit->get_constval().stringval)
+                       : Parser::ExtractExpr::get(
+                             from_expr, *timeunit_lit->get_constval().stringval);
 }
 
 namespace {
 
-std::shared_ptr<Analyzer::Constant> makeNumericConstant(const SQLTypeInfo& ti, const long val) {
+std::shared_ptr<Analyzer::Constant> makeNumericConstant(const SQLTypeInfo& ti,
+                                                        const long val) {
   CHECK(ti.is_number());
   Datum datum{0};
   switch (ti.get_type()) {
@@ -845,7 +936,8 @@ std::shared_ptr<Analyzer::Constant> makeNumericConstant(const SQLTypeInfo& ti, c
 
 }  // namespace
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(const RexFunctionOperator* rex_function) const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
+    const RexFunctionOperator* rex_function) const {
   if (rex_function->getName() == std::string("DATETIME_PLUS")) {
     const auto datetime = translateScalarRex(rex_function->getOperand(0));
     const auto unfolded_number = translateScalarRex(rex_function->getOperand(1));
@@ -855,15 +947,22 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(const RexFunc
     if (number_ti.get_type() == kINTERVAL_DAY_TIME) {
       std::shared_ptr<Analyzer::Expr> number_sec;
       if (number_lit) {
-        number_sec = makeNumericConstant(SQLTypeInfo(kBIGINT, false), number_lit->get_constval().timeval / 1000);
+        number_sec = makeNumericConstant(SQLTypeInfo(kBIGINT, false),
+                                         number_lit->get_constval().timeval / 1000);
       } else {
         number_sec = makeExpr<Analyzer::BinOper>(
-            number_ti.get_type(), kDIVIDE, kONE, number, makeNumericConstant(SQLTypeInfo(kBIGINT, false), 1000));
+            number_ti.get_type(),
+            kDIVIDE,
+            kONE,
+            number,
+            makeNumericConstant(SQLTypeInfo(kBIGINT, false), 1000));
       }
-      return makeExpr<Analyzer::DateaddExpr>(datetime->get_type_info(), daSECOND, number_sec, datetime);
+      return makeExpr<Analyzer::DateaddExpr>(
+          datetime->get_type_info(), daSECOND, number_sec, datetime);
     }
     CHECK(number_ti.get_type() == kINTERVAL_YEAR_MONTH);
-    return makeExpr<Analyzer::DateaddExpr>(datetime->get_type_info(), daMONTH, number, datetime);
+    return makeExpr<Analyzer::DateaddExpr>(
+        datetime->get_type_info(), daMONTH, number, datetime);
   }
   CHECK_EQ(size_t(3), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
@@ -876,36 +975,48 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(const RexFunc
   const auto cast_number_units = number_units->add_cast(SQLTypeInfo(kBIGINT, false));
   const auto datetime = translateScalarRex(rex_function->getOperand(2));
   const auto& datetime_ti = datetime->get_type_info();
-  return makeExpr<Analyzer::DateaddExpr>(SQLTypeInfo(kTIMESTAMP, datetime_ti.get_dimension(), 0, false),
-                                         to_dateadd_field(*timeunit_lit->get_constval().stringval),
-                                         cast_number_units,
-                                         datetime);
+  return makeExpr<Analyzer::DateaddExpr>(
+      SQLTypeInfo(kTIMESTAMP, datetime_ti.get_dimension(), 0, false),
+      to_dateadd_field(*timeunit_lit->get_constval().stringval),
+      cast_number_units,
+      datetime);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateminus(const RexOperator* rex_operator) const {
-  if (rex_operator->size() != 2)
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateminus(
+    const RexOperator* rex_operator) const {
+  if (rex_operator->size() != 2) {
     return nullptr;
+  }
   const auto datetime = translateScalarRex(rex_operator->getOperand(0));
   const auto datetime_ti = datetime->get_type_info();
-  if (datetime_ti.get_type() != kTIMESTAMP && datetime_ti.get_type() != kDATE)
+  if (datetime_ti.get_type() != kTIMESTAMP && datetime_ti.get_type() != kDATE) {
     return nullptr;
+  }
   const auto rhs = translateScalarRex(rex_operator->getOperand(1));
   const auto rhs_ti = rhs->get_type_info();
   if (rhs_ti.get_type() == kTIMESTAMP || rhs_ti.get_type() == kDATE) {
     if (datetime_ti.get_dimension() > 0 || rhs_ti.get_dimension() > 0) {
-      throw std::runtime_error("Only timestamp(0) is supported for TIMESTAMPDIFF operation.");
+      throw std::runtime_error(
+          "Only timestamp(0) is supported for TIMESTAMPDIFF operation.");
     }
     const auto& rex_operator_ti = rex_operator->getType();
-    const auto datediff_field = (rex_operator_ti.get_type() == kINTERVAL_DAY_TIME) ? dtNANOSECOND : dtMONTH;
+    const auto datediff_field =
+        (rex_operator_ti.get_type() == kINTERVAL_DAY_TIME) ? dtNANOSECOND : dtMONTH;
     if (datediff_field == dtNANOSECOND) {
       auto bigint_time = SQLTypeInfo(kBIGINT, false);
-      const auto datetime_lit = std::dynamic_pointer_cast<Analyzer::Constant>(fold_expr(datetime.get()));
-      const auto rhs_lit = std::dynamic_pointer_cast<Analyzer::Constant>(fold_expr(rhs.get()));
-      const auto datetime_sec = makeNumericConstant(bigint_time, datetime_lit->get_constval().timeval * 1000);
-      const auto rhs_sec = makeNumericConstant(bigint_time, rhs_lit->get_constval().timeval * 1000);
-      return makeExpr<Analyzer::DatediffExpr>(SQLTypeInfo(kBIGINT, false), datediff_field, rhs_sec, datetime_sec);
+      const auto datetime_lit =
+          std::dynamic_pointer_cast<Analyzer::Constant>(fold_expr(datetime.get()));
+      const auto rhs_lit =
+          std::dynamic_pointer_cast<Analyzer::Constant>(fold_expr(rhs.get()));
+      const auto datetime_sec =
+          makeNumericConstant(bigint_time, datetime_lit->get_constval().timeval * 1000);
+      const auto rhs_sec =
+          makeNumericConstant(bigint_time, rhs_lit->get_constval().timeval * 1000);
+      return makeExpr<Analyzer::DatediffExpr>(
+          SQLTypeInfo(kBIGINT, false), datediff_field, rhs_sec, datetime_sec);
     } else if ((datediff_field == dtMONTH)) {
-      return makeExpr<Analyzer::DatediffExpr>(SQLTypeInfo(kBIGINT, false), datediff_field, rhs, datetime);
+      return makeExpr<Analyzer::DatediffExpr>(
+          SQLTypeInfo(kBIGINT, false), datediff_field, rhs, datetime);
     }
   }
   const auto interval = fold_expr(rhs.get());
@@ -915,21 +1026,31 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateminus(const RexOp
   if (interval_ti.get_type() == kINTERVAL_DAY_TIME) {
     std::shared_ptr<Analyzer::Expr> neg_interval_sec;
     if (interval_lit) {
-      neg_interval_sec = makeNumericConstant(bigint_ti, -interval_lit->get_constval().timeval / 1000);
+      neg_interval_sec =
+          makeNumericConstant(bigint_ti, -interval_lit->get_constval().timeval / 1000);
     } else {
-      auto interval_sec = makeExpr<Analyzer::BinOper>(
-          bigint_ti.get_type(), kDIVIDE, kONE, interval, makeNumericConstant(bigint_ti, 1000));
-      neg_interval_sec = std::make_shared<Analyzer::UOper>(bigint_ti, false, kUMINUS, interval_sec);
+      auto interval_sec =
+          makeExpr<Analyzer::BinOper>(bigint_ti.get_type(),
+                                      kDIVIDE,
+                                      kONE,
+                                      interval,
+                                      makeNumericConstant(bigint_ti, 1000));
+      neg_interval_sec =
+          std::make_shared<Analyzer::UOper>(bigint_ti, false, kUMINUS, interval_sec);
     }
-    return makeExpr<Analyzer::DateaddExpr>(datetime_ti, daSECOND, neg_interval_sec, datetime);
+    return makeExpr<Analyzer::DateaddExpr>(
+        datetime_ti, daSECOND, neg_interval_sec, datetime);
   }
   CHECK(interval_ti.get_type() == kINTERVAL_YEAR_MONTH);
   std::shared_ptr<Analyzer::Expr> neg_interval_months;
-  neg_interval_months = std::make_shared<Analyzer::UOper>(bigint_ti, false, kUMINUS, interval);
-  return makeExpr<Analyzer::DateaddExpr>(datetime_ti, daMONTH, neg_interval_months, datetime);
+  neg_interval_months =
+      std::make_shared<Analyzer::UOper>(bigint_ti, false, kUMINUS, interval);
+  return makeExpr<Analyzer::DateaddExpr>(
+      datetime_ti, daMONTH, neg_interval_months, datetime);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatediff(const RexFunctionOperator* rex_function) const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatediff(
+    const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(3), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
   const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
@@ -939,10 +1060,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatediff(const RexFun
   const auto start = translateScalarRex(rex_function->getOperand(1));
   const auto end = translateScalarRex(rex_function->getOperand(2));
   return makeExpr<Analyzer::DatediffExpr>(
-      SQLTypeInfo(kBIGINT, false), to_datediff_field(*timeunit_lit->get_constval().stringval), start, end);
+      SQLTypeInfo(kBIGINT, false),
+      to_datediff_field(*timeunit_lit->get_constval().stringval),
+      start,
+      end);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatepart(const RexFunctionOperator* rex_function) const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatepart(
+    const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(2), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
   const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
@@ -950,28 +1075,33 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatepart(const RexFun
     throw std::runtime_error("The time unit parameter must be a literal.");
   }
   const auto from_expr = translateScalarRex(rex_function->getOperand(1));
-  return Parser::ExtractExpr::get(from_expr, to_datepart_field(*timeunit_lit->get_constval().stringval));
+  return Parser::ExtractExpr::get(
+      from_expr, to_datepart_field(*timeunit_lit->get_constval().stringval));
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLength(const RexFunctionOperator* rex_function) const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLength(
+    const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(1), rex_function->size());
   const auto str_arg = translateScalarRex(rex_function->getOperand(0));
-  return makeExpr<Analyzer::CharLengthExpr>(str_arg->decompress(),
-                                            rex_function->getName() == std::string("CHAR_LENGTH"));
+  return makeExpr<Analyzer::CharLengthExpr>(
+      str_arg->decompress(), rex_function->getName() == std::string("CHAR_LENGTH"));
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateItem(const RexFunctionOperator* rex_function) const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateItem(
+    const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(2), rex_function->size());
   const auto base = translateScalarRex(rex_function->getOperand(0));
   const auto index = translateScalarRex(rex_function->getOperand(1));
-  return makeExpr<Analyzer::BinOper>(base->get_type_info().get_elem_type(), false, kARRAY_AT, kONE, base, index);
+  return makeExpr<Analyzer::BinOper>(
+      base->get_type_info().get_elem_type(), false, kARRAY_AT, kONE, base, index);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateNow() const {
   return Parser::TimestampLiteral::get(now_);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatetime(const RexFunctionOperator* rex_function) const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatetime(
+    const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(1), rex_function->size());
   const auto arg = translateScalarRex(rex_function->getOperand(0));
   const auto arg_lit = std::dynamic_pointer_cast<Analyzer::Constant>(arg);
@@ -986,21 +1116,26 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatetime(const RexFun
   return translateNow();
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAbs(const RexFunctionOperator* rex_function) const {
-  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> expr_list;
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAbs(
+    const RexFunctionOperator* rex_function) const {
+  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
+      expr_list;
   CHECK_EQ(size_t(1), rex_function->size());
   const auto operand = translateScalarRex(rex_function->getOperand(0));
   const auto& operand_ti = operand->get_type_info();
   CHECK(operand_ti.is_number());
   const auto zero = makeNumericConstant(operand_ti, 0);
   const auto lt_zero = makeExpr<Analyzer::BinOper>(kBOOLEAN, kLT, kONE, operand, zero);
-  const auto uminus_operand = makeExpr<Analyzer::UOper>(operand_ti.get_type(), kUMINUS, operand);
+  const auto uminus_operand =
+      makeExpr<Analyzer::UOper>(operand_ti.get_type(), kUMINUS, operand);
   expr_list.emplace_back(lt_zero, uminus_operand);
   return makeExpr<Analyzer::CaseExpr>(operand_ti, false, expr_list, operand);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSign(const RexFunctionOperator* rex_function) const {
-  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> expr_list;
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSign(
+    const RexFunctionOperator* rex_function) const {
+  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
+      expr_list;
   CHECK_EQ(size_t(1), rex_function->size());
   const auto operand = translateScalarRex(rex_function->getOperand(0));
   const auto& operand_ti = operand->get_type_info();
@@ -1013,15 +1148,20 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSign(const RexFunctio
   const auto gt_zero = makeExpr<Analyzer::BinOper>(kBOOLEAN, kGT, kONE, operand, zero);
   expr_list.emplace_back(gt_zero, makeNumericConstant(operand_ti, 1));
   return makeExpr<Analyzer::CaseExpr>(
-      operand_ti, false, expr_list, makeExpr<Analyzer::Constant>(operand_ti, true, Datum{0}));
+      operand_ti,
+      false,
+      expr_list,
+      makeExpr<Analyzer::Constant>(operand_ti, true, Datum{0}));
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOffsetInFragment() const {
   return makeExpr<Analyzer::OffsetInFragment>();
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFunctionOperator* rex_function) const {
-  if (rex_function->getName() == std::string("LIKE") || rex_function->getName() == std::string("PG_ILIKE")) {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
+    const RexFunctionOperator* rex_function) const {
+  if (rex_function->getName() == std::string("LIKE") ||
+      rex_function->getName() == std::string("PG_ILIKE")) {
     return translateLike(rex_function);
   }
   if (rex_function->getName() == std::string("REGEXP_LIKE")) {
@@ -1033,7 +1173,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
   if (rex_function->getName() == std::string("UNLIKELY")) {
     return translateUnlikely(rex_function);
   }
-  if (rex_function->getName() == std::string("PG_EXTRACT") || rex_function->getName() == std::string("PG_DATE_TRUNC")) {
+  if (rex_function->getName() == std::string("PG_EXTRACT") ||
+      rex_function->getName() == std::string("PG_DATE_TRUNC")) {
     return translateExtract(rex_function);
   }
   if (rex_function->getName() == std::string("DATEADD")) {
@@ -1045,7 +1186,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
   if (rex_function->getName() == std::string("DATEPART")) {
     return translateDatepart(rex_function);
   }
-  if (rex_function->getName() == std::string("LENGTH") || rex_function->getName() == std::string("CHAR_LENGTH")) {
+  if (rex_function->getName() == std::string("LENGTH") ||
+      rex_function->getName() == std::string("CHAR_LENGTH")) {
     return translateLength(rex_function);
   }
   if (rex_function->getName() == std::string("ITEM")) {
@@ -1063,12 +1205,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
   if (rex_function->getName() == std::string("SIGN")) {
     return translateSign(rex_function);
   }
-  if (rex_function->getName() == std::string("CEIL") || rex_function->getName() == std::string("FLOOR") ||
+  if (rex_function->getName() == std::string("CEIL") ||
+      rex_function->getName() == std::string("FLOOR") ||
       rex_function->getName() == std::string("TRUNCATE")) {
     return makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(
-        rex_function->getType(), rex_function->getName(), translateFunctionArgs(rex_function));
+        rex_function->getType(),
+        rex_function->getName(),
+        translateFunctionArgs(rex_function));
   } else if (rex_function->getName() == std::string("ROUND")) {
-    std::vector<std::shared_ptr<Analyzer::Expr>> args = translateFunctionArgs(rex_function);
+    std::vector<std::shared_ptr<Analyzer::Expr>> args =
+        translateFunctionArgs(rex_function);
 
     if (rex_function->size() == 1) {
       // push a 0 constant if 2nd operand is missing.
@@ -1098,8 +1244,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
         rex_function->getType(), rex_function->getName(), args);
   }
   if (rex_function->getName() == std::string("DATETIME_PLUS")) {
-    auto dt_plus = makeExpr<Analyzer::FunctionOper>(
-        rex_function->getType(), rex_function->getName(), translateFunctionArgs(rex_function));
+    auto dt_plus = makeExpr<Analyzer::FunctionOper>(rex_function->getType(),
+                                                    rex_function->getName(),
+                                                    translateFunctionArgs(rex_function));
     const auto date_trunc = rewrite_to_date_trunc(dt_plus.get());
     if (date_trunc) {
       return date_trunc;
@@ -1117,15 +1264,20 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
     CHECK_EQ(size_t(1), rex_function->size());
     return translateScalarRex(rex_function->getOperand(0));
   }
-  if (rex_function->getName() == std::string("ST_X") || rex_function->getName() == std::string("ST_Y") ||
-      rex_function->getName() == std::string("ST_XMin") || rex_function->getName() == std::string("ST_YMin") ||
-      rex_function->getName() == std::string("ST_XMax") || rex_function->getName() == std::string("ST_YMax") ||
-      rex_function->getName() == std::string("ST_NRings") || rex_function->getName() == std::string("ST_NPoints") ||
+  if (rex_function->getName() == std::string("ST_X") ||
+      rex_function->getName() == std::string("ST_Y") ||
+      rex_function->getName() == std::string("ST_XMin") ||
+      rex_function->getName() == std::string("ST_YMin") ||
+      rex_function->getName() == std::string("ST_XMax") ||
+      rex_function->getName() == std::string("ST_YMax") ||
+      rex_function->getName() == std::string("ST_NRings") ||
+      rex_function->getName() == std::string("ST_NPoints") ||
       rex_function->getName() == std::string("ST_SRID")) {
     CHECK_EQ(rex_function->size(), size_t(1));
     return translateUnaryGeoFunction(rex_function);
   }
-  if (rex_function->getName() == std::string("ST_Distance") || rex_function->getName() == std::string("ST_Contains")) {
+  if (rex_function->getName() == std::string("ST_Distance") ||
+      rex_function->getName() == std::string("ST_Contains")) {
     CHECK_EQ(rex_function->size(), size_t(2));
     return translateBinaryGeoFunction(rex_function);
   }
@@ -1136,8 +1288,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
   if (!ExtensionFunctionsWhitelist::get(rex_function->getName())) {
     throw QueryNotSupported("Function " + rex_function->getName() + " not supported");
   }
-  return makeExpr<Analyzer::FunctionOper>(
-      rex_function->getType(), rex_function->getName(), translateFunctionArgs(rex_function));
+  return makeExpr<Analyzer::FunctionOper>(rex_function->getType(),
+                                          rex_function->getName(),
+                                          translateFunctionArgs(rex_function));
 }
 
 std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateFunctionArgs(
@@ -1149,7 +1302,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateFunction
   return args;
 }
 
-QualsConjunctiveForm qual_to_conjunctive_form(const std::shared_ptr<Analyzer::Expr> qual_expr) {
+QualsConjunctiveForm qual_to_conjunctive_form(
+    const std::shared_ptr<Analyzer::Expr> qual_expr) {
   CHECK(qual_expr);
   const auto bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(qual_expr);
   if (!bin_oper) {
@@ -1160,14 +1314,16 @@ QualsConjunctiveForm qual_to_conjunctive_form(const std::shared_ptr<Analyzer::Ex
     const auto lhs_cf = qual_to_conjunctive_form(bin_oper->get_own_left_operand());
     const auto rhs_cf = qual_to_conjunctive_form(bin_oper->get_own_right_operand());
     auto simple_quals = lhs_cf.simple_quals;
-    simple_quals.insert(simple_quals.end(), rhs_cf.simple_quals.begin(), rhs_cf.simple_quals.end());
+    simple_quals.insert(
+        simple_quals.end(), rhs_cf.simple_quals.begin(), rhs_cf.simple_quals.end());
     auto quals = lhs_cf.quals;
     quals.insert(quals.end(), rhs_cf.quals.begin(), rhs_cf.quals.end());
     return {simple_quals, quals};
   }
   int rte_idx{0};
   const auto simple_qual = bin_oper->normalize_simple_predicate(rte_idx);
-  return simple_qual ? QualsConjunctiveForm{{simple_qual}, {}} : QualsConjunctiveForm{{}, {qual_expr}};
+  return simple_qual ? QualsConjunctiveForm{{simple_qual}, {}}
+                     : QualsConjunctiveForm{{}, {qual_expr}};
 }
 
 std::vector<std::shared_ptr<Analyzer::Expr>> qual_to_disjunctive_form(

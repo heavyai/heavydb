@@ -22,12 +22,14 @@ ExpressionRange AggregatedColRange::getColRange(const PhysicalInput& phys_input)
   return it->second;
 }
 
-void AggregatedColRange::setColRange(const PhysicalInput& phys_input, const ExpressionRange& expr_range) {
+void AggregatedColRange::setColRange(const PhysicalInput& phys_input,
+                                     const ExpressionRange& expr_range) {
   const auto it_ok = cache_.emplace(phys_input, expr_range);
   CHECK(it_ok.second);
 }
 
-const std::unordered_map<PhysicalInput, ExpressionRange>& AggregatedColRange::asMap() const {
+const std::unordered_map<PhysicalInput, ExpressionRange>& AggregatedColRange::asMap()
+    const {
   return cache_;
 }
 

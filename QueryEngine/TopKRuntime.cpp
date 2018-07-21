@@ -29,7 +29,9 @@ enum class NullsOrdering { FIRST, LAST };
 
 template <typename KeyT = int64_t, typename IndexT = int32_t>
 struct KeyAccessor {
-  DEVICE KeyAccessor(const int8_t* key_buff, const size_t key_stride, const size_t key_idx)
+  DEVICE KeyAccessor(const int8_t* key_buff,
+                     const size_t key_stride,
+                     const size_t key_idx)
       : buffer(key_buff), stride(key_stride), index(key_idx) {}
   ALWAYS_INLINE DEVICE KeyT get(const IndexT rowid) const {
     auto keys_ptr = reinterpret_cast<const KeyT*>(buffer + stride * rowid);
@@ -47,7 +49,10 @@ struct KeyComparator {
                        const bool nullable,
                        const KeyT null_val,
                        const NullsOrdering null_order)
-      : heap_ordering(hp_order), has_nulls(nullable), null_key(null_val), nulls_ordering(null_order) {}
+      : heap_ordering(hp_order)
+      , has_nulls(nullable)
+      , null_key(null_val)
+      , nulls_ordering(null_order) {}
   ALWAYS_INLINE DEVICE bool operator()(const KeyT lhs, const KeyT rhs) const {
     if (has_nulls) {
       if (nulls_ordering == NullsOrdering::FIRST) {
@@ -189,23 +194,38 @@ ALWAYS_INLINE DEVICE int64_t* get_bin_from_k_heap_impl(int64_t* heaps,
   const int32_t thread_count = pos_step_impl();
   int64_t& node_count = heaps[thread_global_index];
   int64_t* heap_ptr = heaps + thread_count + thread_global_index * k;
-  int64_t* rows_ptr = heaps + thread_count + thread_count * k + thread_global_index * row_size_quad * k;
+  int64_t* rows_ptr =
+      heaps + thread_count + thread_count * k + thread_global_index * row_size_quad * k;
   KeyComparator<KeyT> compare((min_heap ? HeapOrdering::MIN : HeapOrdering::MAX),
                               has_null,
                               null_key,
                               nulls_first ? NullsOrdering::FIRST : NullsOrdering::LAST);
-  KeyAccessor<KeyT, int64_t> accessor(
-      reinterpret_cast<int8_t*>(rows_ptr), row_size_quad * sizeof(int64_t), key_offset / sizeof(KeyT));
+  KeyAccessor<KeyT, int64_t> accessor(reinterpret_cast<int8_t*>(rows_ptr),
+                                      row_size_quad * sizeof(int64_t),
+                                      key_offset / sizeof(KeyT));
   if (node_count < static_cast<int64_t>(k)) {
-    push_heap(heap_ptr, rows_ptr, node_count, row_size_quad, key_offset, compare, accessor, curr_key);
+    push_heap(heap_ptr,
+              rows_ptr,
+              node_count,
+              row_size_quad,
+              key_offset,
+              compare,
+              accessor,
+              curr_key);
     const auto last_bin_index = node_count - 1;
     auto row_ptr = rows_ptr + last_bin_index * row_size_quad;
     row_ptr[0] = last_bin_index;
     return row_ptr + 1;
   } else {
     const int64_t top_bin_idx = heap_ptr[0];
-    const bool rejected =
-        !pop_and_push_heap(heap_ptr, rows_ptr, node_count, row_size_quad, key_offset, compare, accessor, curr_key);
+    const bool rejected = !pop_and_push_heap(heap_ptr,
+                                             rows_ptr,
+                                             node_count,
+                                             row_size_quad,
+                                             key_offset,
+                                             compare,
+                                             accessor,
+                                             curr_key);
     if (rejected) {
       return nullptr;
     }
@@ -215,18 +235,26 @@ ALWAYS_INLINE DEVICE int64_t* get_bin_from_k_heap_impl(int64_t* heaps,
   }
 }
 
-#define DEF_GET_BIN_FROM_K_HEAP(key_type)                                                              \
-  extern "C" NEVER_INLINE DEVICE int64_t* get_bin_from_k_heap_##key_type(int64_t* heaps,               \
-                                                                         const uint32_t k,             \
-                                                                         const uint32_t row_size_quad, \
-                                                                         const uint32_t key_offset,    \
-                                                                         const bool min_heap,          \
-                                                                         const bool has_null,          \
-                                                                         const bool nulls_first,       \
-                                                                         const key_type null_key,      \
-                                                                         const key_type curr_key) {    \
-    return get_bin_from_k_heap_impl(                                                                   \
-        heaps, k, row_size_quad, key_offset, min_heap, has_null, nulls_first, null_key, curr_key);     \
+#define DEF_GET_BIN_FROM_K_HEAP(key_type)                                 \
+  extern "C" NEVER_INLINE DEVICE int64_t* get_bin_from_k_heap_##key_type( \
+      int64_t* heaps,                                                     \
+      const uint32_t k,                                                   \
+      const uint32_t row_size_quad,                                       \
+      const uint32_t key_offset,                                          \
+      const bool min_heap,                                                \
+      const bool has_null,                                                \
+      const bool nulls_first,                                             \
+      const key_type null_key,                                            \
+      const key_type curr_key) {                                          \
+    return get_bin_from_k_heap_impl(heaps,                                \
+                                    k,                                    \
+                                    row_size_quad,                        \
+                                    key_offset,                           \
+                                    min_heap,                             \
+                                    has_null,                             \
+                                    nulls_first,                          \
+                                    null_key,                             \
+                                    curr_key);                            \
   }
 
 DEF_GET_BIN_FROM_K_HEAP(int32_t)

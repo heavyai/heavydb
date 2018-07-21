@@ -37,9 +37,11 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn() const {
   if (ra_exe_unit_.quals.size() != 1) {
     return ra_exe_unit_;
   }
-  auto in_vals = std::dynamic_pointer_cast<Analyzer::InValues>(ra_exe_unit_.quals.front());
+  auto in_vals =
+      std::dynamic_pointer_cast<Analyzer::InValues>(ra_exe_unit_.quals.front());
   if (!in_vals) {
-    in_vals = std::dynamic_pointer_cast<Analyzer::InValues>(rewrite_expr(ra_exe_unit_.quals.front().get()));
+    in_vals = std::dynamic_pointer_cast<Analyzer::InValues>(
+        rewrite_expr(ra_exe_unit_.quals.front().get()));
   }
   if (!in_vals || in_vals->get_value_list().empty()) {
     return ra_exe_unit_;
@@ -56,11 +58,14 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn() const {
   return rewriteConstrainedByIn(case_expr, in_vals.get());
 }
 
-std::shared_ptr<Analyzer::CaseExpr> QueryRewriter::generateCaseForDomainValues(const Analyzer::InValues* in_vals) {
-  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> case_expr_list;
+std::shared_ptr<Analyzer::CaseExpr> QueryRewriter::generateCaseForDomainValues(
+    const Analyzer::InValues* in_vals) {
+  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
+      case_expr_list;
   auto in_val_arg = in_vals->get_arg()->deep_copy();
   for (const auto in_val : in_vals->get_value_list()) {
-    auto case_cond = makeExpr<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, true), false, kEQ, kONE, in_val_arg, in_val);
+    auto case_cond = makeExpr<Analyzer::BinOper>(
+        SQLTypeInfo(kBOOLEAN, true), false, kEQ, kONE, in_val_arg, in_val);
     auto in_val_copy = in_val->deep_copy();
     auto ti = in_val_copy->get_type_info();
     if (ti.is_string() && ti.get_compression() == kENCODING_DICT) {
@@ -72,16 +77,19 @@ std::shared_ptr<Analyzer::CaseExpr> QueryRewriter::generateCaseForDomainValues(c
   // TODO(alex): refine the expression range for case with empty else expression;
   //             for now, add a dummy else which should never be taken
   auto else_expr = case_expr_list.front().second;
-  return makeExpr<Analyzer::CaseExpr>(case_expr_list.front().second->get_type_info(), false, case_expr_list, else_expr);
+  return makeExpr<Analyzer::CaseExpr>(
+      case_expr_list.front().second->get_type_info(), false, case_expr_list, else_expr);
 }
 
-RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(const std::shared_ptr<Analyzer::CaseExpr> case_expr,
-                                                          const Analyzer::InValues* in_vals) const {
+RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(
+    const std::shared_ptr<Analyzer::CaseExpr> case_expr,
+    const Analyzer::InValues* in_vals) const {
   std::list<std::shared_ptr<Analyzer::Expr>> new_groupby_list;
   std::vector<Analyzer::Expr*> new_target_exprs;
   bool rewrite{false};
   size_t groupby_idx{0};
-  const auto redirected_exprs = redirect_exprs(ra_exe_unit_.groupby_exprs, ra_exe_unit_.input_col_descs);
+  const auto redirected_exprs =
+      redirect_exprs(ra_exe_unit_.groupby_exprs, ra_exe_unit_.input_col_descs);
   auto it = redirected_exprs.begin();
   for (const auto group_expr : ra_exe_unit_.groupby_exprs) {
     CHECK(group_expr);
@@ -102,8 +110,8 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(const std::shared_ptr<
       for (size_t i = 0; i < ra_exe_unit_.target_exprs.size(); ++i) {
         const auto target = ra_exe_unit_.target_exprs[i];
         if (*target == *in_vals->get_arg()) {
-          auto var_case_expr =
-              makeExpr<Analyzer::Var>(case_expr->get_type_info(), Analyzer::Var::kGROUPBY, groupby_idx);
+          auto var_case_expr = makeExpr<Analyzer::Var>(
+              case_expr->get_type_info(), Analyzer::Var::kGROUPBY, groupby_idx);
           target_exprs_owned_.push_back(var_case_expr);
           // TODO(alex): fixup for legacy plan-based path, remove
           if (plan_) {

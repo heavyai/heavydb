@@ -3,7 +3,9 @@
 
 #include "../Shared/funcannotations.h"
 
-FORCE_INLINE DEVICE uint32_t MurmurHash1Impl(const void* key, int len, const uint32_t seed) {
+FORCE_INLINE DEVICE uint32_t MurmurHash1Impl(const void* key,
+                                             int len,
+                                             const uint32_t seed) {
   const unsigned int m = 0xc6a4a793;
 
   const int r = 16;

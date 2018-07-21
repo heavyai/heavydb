@@ -25,11 +25,12 @@
 #include <limits>
 
 /**
- * Note: We use dynamic_cast to convert the OGRGeometry pointer from the base class into appropriate OGR<<type>> objects
- * in derived clases to ensure GDAL is creating the proper geometry type for all possibly inputs. Since we check the
- * output type after creating a new OGRGeometry object via the OGRGeometryFactor, we could theoretically move some
- * dynamic_cast to static_cast. The performance impact and safety of going from RTTI to compile time casting needs to be
- * investigated.
+ * Note: We use dynamic_cast to convert the OGRGeometry pointer from the base class into
+ * appropriate OGR<<type>> objects in derived clases to ensure GDAL is creating the proper
+ * geometry type for all possibly inputs. Since we check the output type after creating a
+ * new OGRGeometry object via the OGRGeometryFactor, we could theoretically move some
+ * dynamic_cast to static_cast. The performance impact and safety of going from RTTI to
+ * compile time casting needs to be investigated.
  */
 
 namespace {
@@ -63,15 +64,18 @@ struct BoundingBox {
   }
 };
 
-int process_poly_ring(OGRLinearRing* ring, std::vector<double>& coords, BoundingBox* bbox) {
+int process_poly_ring(OGRLinearRing* ring,
+                      std::vector<double>& coords,
+                      BoundingBox* bbox) {
   double last_x = DOUBLE_MAX, last_y = DOUBLE_MAX;
   size_t first_index = coords.size();
   int num_points_added = 0;
   int num_points_in_ring = ring->getNumPoints();
   if (num_points_in_ring < 3) {
-    throw Geo_namespace::GeoTypesError("PolyRing",
-                                       "All poly rings must have more than 3 points. Found ring with " +
-                                           std::to_string(num_points_in_ring) + " points.");
+    throw Geo_namespace::GeoTypesError(
+        "PolyRing",
+        "All poly rings must have more than 3 points. Found ring with " +
+            std::to_string(num_points_in_ring) + " points.");
   }
   for (auto i = 0; i < num_points_in_ring; i++) {
     OGRPoint point;
@@ -91,9 +95,10 @@ int process_poly_ring(OGRLinearRing* ring, std::vector<double>& coords, Bounding
     coords.pop_back();
     num_points_added--;
     if (num_points_added < 3) {
-      throw Geo_namespace::GeoTypesError("PolyRing",
-                                         "All exterior rings must have more than 3 points. Found ring with " +
-                                             std::to_string(num_points_added) + " points.");
+      throw Geo_namespace::GeoTypesError(
+          "PolyRing",
+          "All exterior rings must have more than 3 points. Found ring with " +
+              std::to_string(num_points_added) + " points.");
     }
   }
   return num_points_added;
@@ -131,8 +136,9 @@ std::string GeoTypesError::OGRErrorToStr(const int ogr_err) {
 }
 
 GeoBase::~GeoBase() {
-  // Note: Removing the geometry object that was pulled from an OGRFeature results in a segfault. If we are wrapping
-  // around a pre-existing OGRGeometry object, we let the caller manage the memory.
+  // Note: Removing the geometry object that was pulled from an OGRFeature results in a
+  // segfault. If we are wrapping around a pre-existing OGRGeometry object, we let the
+  // caller manage the memory.
   if (geom_ && owns_geom_obj_) {
     OGRGeometryFactory::destroyGeometry(geom_);
   }
@@ -162,12 +168,15 @@ bool GeoBase::operator==(const GeoBase& other) const {
     return false;
   }
   return this->geom_->Equals(other.geom_);
-  // return const_cast<const OGRGeometry*>(this->geom_) == const_cast<const OGRGeometry*>(other.geom_);
+  // return const_cast<const OGRGeometry*>(this->geom_) == const_cast<const
+  // OGRGeometry*>(other.geom_);
 }
 
 GeoPoint::GeoPoint(const std::vector<double>& coords) {
   if (coords.size() != 2) {
-    throw GeoTypesError("Point", "Incorrect coord size of " + std::to_string(coords.size()) + " supplied. Expected 2.");
+    throw GeoTypesError("Point",
+                        "Incorrect coord size of " + std::to_string(coords.size()) +
+                            " supplied. Expected 2.");
   }
   geom_ = OGRGeometryFactory::createGeometry(OGRwkbGeometryType::wkbPoint);
   OGRPoint* point = dynamic_cast<OGRPoint*>(geom_);
@@ -183,9 +192,9 @@ GeoPoint::GeoPoint(const std::string& wkt) {
   }
   CHECK(geom_);
   if (wkbFlatten(geom_->getGeometryType()) != OGRwkbGeometryType::wkbPoint) {
-    throw GeoTypesError(
-        "Point",
-        "Unexpected geometry type from WKT string: " + std::string(OGRGeometryTypeToName(geom_->getGeometryType())));
+    throw GeoTypesError("Point",
+                        "Unexpected geometry type from WKT string: " +
+                            std::string(OGRGeometryTypeToName(geom_->getGeometryType())));
   }
 }
 
@@ -212,13 +221,14 @@ GeoLineString::GeoLineString(const std::string& wkt) {
   }
   CHECK(geom_);
   if (wkbFlatten(geom_->getGeometryType()) != OGRwkbGeometryType::wkbLineString) {
-    throw GeoTypesError(
-        "LineString",
-        "Unexpected geometry type from WKT string: " + std::string(OGRGeometryTypeToName(geom_->getGeometryType())));
+    throw GeoTypesError("LineString",
+                        "Unexpected geometry type from WKT string: " +
+                            std::string(OGRGeometryTypeToName(geom_->getGeometryType())));
   }
 }
 
-void GeoLineString::getColumns(std::vector<double>& coords, std::vector<double>& bounds) const {
+void GeoLineString::getColumns(std::vector<double>& coords,
+                               std::vector<double>& bounds) const {
   auto linestring_geom = dynamic_cast<OGRLineString*>(geom_);
   CHECK(linestring_geom);
   BoundingBox bbox;
@@ -237,7 +247,8 @@ void GeoLineString::getColumns(std::vector<double>& coords, std::vector<double>&
   bounds.push_back(bbox.max.y);
 }
 
-GeoPolygon::GeoPolygon(const std::vector<double>& coords, const std::vector<int32_t>& ring_sizes) {
+GeoPolygon::GeoPolygon(const std::vector<double>& coords,
+                       const std::vector<int32_t>& ring_sizes) {
   geom_ = OGRGeometryFactory::createGeometry(OGRwkbGeometryType::wkbPolygon);
   OGRPolygon* poly = dynamic_cast<OGRPolygon*>(geom_);
   CHECK(poly);
@@ -262,9 +273,9 @@ GeoPolygon::GeoPolygon(const std::string& wkt) {
   }
   CHECK(geom_);
   if (wkbFlatten(geom_->getGeometryType()) != OGRwkbGeometryType::wkbPolygon) {
-    throw GeoTypesError(
-        "Polygon",
-        "Unexpected geometry type from WKT string: " + std::string(OGRGeometryTypeToName(geom_->getGeometryType())));
+    throw GeoTypesError("Polygon",
+                        "Unexpected geometry type from WKT string: " +
+                            std::string(OGRGeometryTypeToName(geom_->getGeometryType())));
   }
 }
 
@@ -338,9 +349,9 @@ GeoMultiPolygon::GeoMultiPolygon(const std::string& wkt) {
   }
   CHECK(geom_);
   if (wkbFlatten(geom_->getGeometryType()) != OGRwkbGeometryType::wkbMultiPolygon) {
-    throw GeoTypesError(
-        "MultiPolygon",
-        "Unexpected geometry type from WKT string: " + std::string(OGRGeometryTypeToName(geom_->getGeometryType())));
+    throw GeoTypesError("MultiPolygon",
+                        "Unexpected geometry type from WKT string: " +
+                            std::string(OGRGeometryTypeToName(geom_->getGeometryType())));
   }
 }
 
@@ -356,7 +367,8 @@ void GeoMultiPolygon::getColumns(std::vector<double>& coords,
     CHECK(mpoly_geom);
     const auto poly_geom = dynamic_cast<OGRPolygon*>(mpoly_geom);
     if (!poly_geom) {
-      throw GeoTypesError("MultiPolygon", "Failed to read polygon geometry from multipolygon");
+      throw GeoTypesError("MultiPolygon",
+                          "Failed to read polygon geometry from multipolygon");
     }
     const auto exterior_ring = poly_geom->getExteriorRing();
     CHECK(exterior_ring);
@@ -412,7 +424,13 @@ bool GeoTypesFactory::getGeoColumns(const std::string& wkt,
     ti.set_input_srid(srid);
     ti.set_output_srid(srid);
 
-    getGeoColumnsImpl(geospatial_base, ti, coords, bounds, ring_sizes, poly_rings, promote_poly_to_mpoly);
+    getGeoColumnsImpl(geospatial_base,
+                      ti,
+                      coords,
+                      bounds,
+                      ring_sizes,
+                      poly_rings,
+                      promote_poly_to_mpoly);
 
   } catch (const std::exception& e) {
     LOG(ERROR) << "Geospatial Import Error: " << e.what();
@@ -436,7 +454,13 @@ bool GeoTypesFactory::getGeoColumns(OGRGeometry* geom,
     ti.set_input_srid(srid);
     ti.set_output_srid(srid);
 
-    getGeoColumnsImpl(geospatial_base, ti, coords, bounds, ring_sizes, poly_rings, promote_poly_to_mpoly);
+    getGeoColumnsImpl(geospatial_base,
+                      ti,
+                      coords,
+                      bounds,
+                      ring_sizes,
+                      poly_rings,
+                      promote_poly_to_mpoly);
 
   } catch (const std::exception& e) {
     LOG(ERROR) << "Geospatial Import Error: " << e.what();
@@ -446,7 +470,8 @@ bool GeoTypesFactory::getGeoColumns(OGRGeometry* geom,
   return true;
 }
 
-std::unique_ptr<GeoBase> GeoTypesFactory::createGeoTypeImpl(OGRGeometry* geom, const bool owns_geom_obj) {
+std::unique_ptr<GeoBase> GeoTypesFactory::createGeoTypeImpl(OGRGeometry* geom,
+                                                            const bool owns_geom_obj) {
   switch (wkbFlatten(geom->getGeometryType())) {
     case wkbPoint:
       return std::unique_ptr<GeoPoint>(new GeoPoint(geom, owns_geom_obj));
@@ -457,7 +482,9 @@ std::unique_ptr<GeoBase> GeoTypesFactory::createGeoTypeImpl(OGRGeometry* geom, c
     case wkbMultiPolygon:
       return std::unique_ptr<GeoMultiPolygon>(new GeoMultiPolygon(geom, owns_geom_obj));
     default:
-      throw GeoTypesError("GeoTypesFactory", "Unrecognized geometry type: " + std::string(geom->getGeometryName()));
+      throw GeoTypesError(
+          "GeoTypesFactory",
+          "Unrecognized geometry type: " + std::string(geom->getGeometryName()));
   }
 }
 
@@ -476,7 +503,8 @@ void GeoTypesFactory::getGeoColumnsImpl(const std::unique_ptr<GeoBase>& geospati
       ti.set_type(kPOINT);
     } break;
     case GeoBase::GeoType::kLINESTRING: {
-      const auto geospatial_linestring = dynamic_cast<GeoLineString*>(geospatial_base.get());
+      const auto geospatial_linestring =
+          dynamic_cast<GeoLineString*>(geospatial_base.get());
       CHECK(geospatial_linestring);
       geospatial_linestring->getColumns(coords, bounds);
       ti.set_type(kLINESTRING);

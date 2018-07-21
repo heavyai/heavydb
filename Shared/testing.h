@@ -30,12 +30,30 @@ static unsigned pass = 0;
 static unsigned fail = 0;
 static unsigned skip = 0;
 
-#define PPASS(msg) \
-  (printf("[%s:%d] %s PASS(%d):\t%s%s\n", __FILE__, __LINE__, ANSI_COLOR_GREEN, ++pass, msg, ANSI_COLOR_RESET))
-#define PFAIL(msg) \
-  (printf("[%s:%d] %s FAIL(%d):\t%s%s\n", __FILE__, __LINE__, ANSI_COLOR_RED, ++fail, msg, ANSI_COLOR_RESET))
-#define PSKIP(msg) \
-  (printf("[%s:%d] %s SKIP(%d):\t%s%s\n", __FILE__, __LINE__, ANSI_COLOR_BLUE, ++skip, msg, ANSI_COLOR_RESET))
+#define PPASS(msg)                        \
+  (printf("[%s:%d] %s PASS(%d):\t%s%s\n", \
+          __FILE__,                       \
+          __LINE__,                       \
+          ANSI_COLOR_GREEN,               \
+          ++pass,                         \
+          msg,                            \
+          ANSI_COLOR_RESET))
+#define PFAIL(msg)                        \
+  (printf("[%s:%d] %s FAIL(%d):\t%s%s\n", \
+          __FILE__,                       \
+          __LINE__,                       \
+          ANSI_COLOR_RED,                 \
+          ++fail,                         \
+          msg,                            \
+          ANSI_COLOR_RESET))
+#define PSKIP(msg)                        \
+  (printf("[%s:%d] %s SKIP(%d):\t%s%s\n", \
+          __FILE__,                       \
+          __LINE__,                       \
+          ANSI_COLOR_BLUE,                \
+          ++skip,                         \
+          msg,                            \
+          ANSI_COLOR_RESET))
 #define PCLEAR \
   pass = 0;    \
   fail = 0;    \
@@ -51,5 +69,5 @@ void printTestSummary() {
          ((double)fail / (pass + fail)) * 100,
          ((double)skip / (pass + fail)) * 100);
 }
-}
+}  // namespace Testing
 #endif /* TESTING_H */

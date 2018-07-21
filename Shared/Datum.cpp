@@ -23,14 +23,14 @@
  **/
 
 #include <glog/logging.h>
-#include <string>
-#include <stdexcept>
 #include <cassert>
-#include <cstdio>
 #include <cmath>
-#include "sqltypes.h"
+#include <cstdio>
+#include <stdexcept>
+#include <string>
 #include "StringTransform.h"
 #include "TimeGM.h"
+#include "sqltypes.h"
 
 std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
                                                      "BOOLEAN",
@@ -57,7 +57,8 @@ std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
                                                      "TINYINT",
                                                      "GEOMETRY",
                                                      "GEOGRAPHY"};
-std::string SQLTypeInfo::comp_name[kENCODING_LAST] = {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED"};
+std::string SQLTypeInfo::comp_name[kENCODING_LAST] =
+    {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED"};
 
 int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
   assert(s.length() <= 20);
@@ -77,27 +78,34 @@ int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
   int64_t result;
   result = std::abs(std::stoll(before_dot));
   int64_t fraction = 0;
-  if (!after_dot.empty())
+  if (!after_dot.empty()) {
     fraction = std::stoll(after_dot);
+  }
   if (ti.get_dimension() == 0) {
     // set the type info based on the literal string
     ti.set_scale(after_dot.length());
     ti.set_dimension(before_dot.length() + ti.get_scale());
     ti.set_notnull(false);
   } else {
-    if (before_dot.length() + ti.get_scale() > static_cast<size_t>(ti.get_dimension()))
-      throw std::runtime_error("numeric value " + s + " exceeds the maximum precision of " +
+    if (before_dot.length() + ti.get_scale() > static_cast<size_t>(ti.get_dimension())) {
+      throw std::runtime_error("numeric value " + s +
+                               " exceeds the maximum precision of " +
                                std::to_string(ti.get_dimension()));
-    for (ssize_t i = 0; i < static_cast<ssize_t>(after_dot.length()) - ti.get_scale(); i++)
+    }
+    for (ssize_t i = 0; i < static_cast<ssize_t>(after_dot.length()) - ti.get_scale();
+         i++) {
       fraction /= 10;  // truncate the digits after decimal point.
+    }
   }
   // the following loop can be made more efficient if needed
-  for (int i = 0; i < ti.get_scale(); i++)
+  for (int i = 0; i < ti.get_scale(); i++) {
     result *= 10;
-  if (result < 0)
+  }
+  if (result < 0) {
     result -= fraction;
-  else
+  } else {
     result += fraction;
+  }
   return result * sign;
 }
 
@@ -108,12 +116,13 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
   Datum d;
   switch (ti.get_type()) {
     case kBOOLEAN:
-      if (s == "t" || s == "T" || s == "1" || to_upper(s) == "TRUE")
+      if (s == "t" || s == "T" || s == "1" || to_upper(s) == "TRUE") {
         d.boolval = true;
-      else if (s == "f" || s == "F" || s == "0" || to_upper(s) == "FALSE")
+      } else if (s == "f" || s == "F" || s == "0" || to_upper(s) == "FALSE") {
         d.boolval = false;
-      else
+      } else {
         throw std::runtime_error("Invalid string for boolean " + s);
+      }
       break;
     case kNUMERIC:
     case kDECIMAL:
@@ -140,14 +149,17 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
     case kTIME: {
       // @TODO handle fractional seconds
       std::tm tm_struct = {0};
-      if (!strptime(s.c_str(), "%T %z", &tm_struct) && !strptime(s.c_str(), "%T", &tm_struct) &&
-          !strptime(s.c_str(), "%H%M%S", &tm_struct) && !strptime(s.c_str(), "%R", &tm_struct)) {
+      if (!strptime(s.c_str(), "%T %z", &tm_struct) &&
+          !strptime(s.c_str(), "%T", &tm_struct) &&
+          !strptime(s.c_str(), "%H%M%S", &tm_struct) &&
+          !strptime(s.c_str(), "%R", &tm_struct)) {
         throw std::runtime_error("Invalid time string " + s);
       }
       tm_struct.tm_mday = 1;
       tm_struct.tm_mon = 0;
       tm_struct.tm_year = 70;
-      tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = tm_struct.tm_gmtoff = 0;
+      tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = tm_struct.tm_gmtoff =
+          0;
       d.timeval = TimeGM::instance().my_timegm(&tm_struct);
       break;
     }
@@ -158,12 +170,15 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       char* tp;
       // try ISO8601 date first
       tp = strptime(s.c_str(), "%Y-%m-%d", &tm_struct);
-      if (!tp)
+      if (!tp) {
         tp = strptime(s.c_str(), "%m/%d/%Y", &tm_struct);  // accept American date
-      if (!tp)
+      }
+      if (!tp) {
         tp = strptime(s.c_str(), "%d-%b-%y", &tm_struct);  // accept 03-Sep-15
-      if (!tp)
+      }
+      if (!tp) {
         tp = strptime(s.c_str(), "%d/%b/%Y", &tm_struct);  // accept 03/Sep/2015
+      }
       if (!tp) {
         try {
           d.timeval = std::stoll(s);
@@ -172,18 +187,22 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
           throw std::runtime_error("Invalid timestamp string " + s);
         }
       }
-      if (*tp == 'T' || *tp == ' ' || *tp == ':')
+      if (*tp == 'T' || *tp == ' ' || *tp == ':') {
         tp++;
-      else
+      } else {
         throw std::runtime_error("Invalid timestamp break string " + s);
+      }
       // now parse the time
       char* p = strptime(tp, "%T %z", &tm_struct);
-      if (!p)
+      if (!p) {
         p = strptime(tp, "%T", &tm_struct);
-      if (!p)
+      }
+      if (!p) {
         p = strptime(tp, "%H%M%S", &tm_struct);
-      if (!p)
+      }
+      if (!p) {
         p = strptime(tp, "%R", &tm_struct);
+      }
       if (!p) {
         // check for weird customer format
         // remove decimal seconds from string if there is a period followed by a number
@@ -209,10 +228,12 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
             memmove(startptr, endptr, strlen(endptr) + 1);
           }
         }
-        p = strptime(tp, "%I . %M . %S %p", &tm_struct);  // customers weird '.' separated date
+        p = strptime(
+            tp, "%I . %M . %S %p", &tm_struct);  // customers weird '.' separated date
       }
-      if (!p)
+      if (!p) {
         throw std::runtime_error("Invalid timestamp time string " + s);
+      }
       tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = 0;
       // handle fractional seconds
       if (ti.get_dimension() > 0) {  // check for precision
@@ -220,15 +241,17 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
         if (*p == '.') {
           p++;
           std::string fstr(p);
-          fsc = fstr.length() == (unsigned)ti.get_dimension() ? std::stol(fstr)
-                                                              : TimeGM::instance().parse_fractional_seconds(fstr, ti);
+          fsc = fstr.length() == (unsigned)ti.get_dimension()
+                    ? std::stol(fstr)
+                    : TimeGM::instance().parse_fractional_seconds(fstr, ti);
           d.timeval = TimeGM::instance().my_timegm(&tm_struct, fsc, ti);
           break;
         } else if (*p == '\0') {
           d.timeval = TimeGM::instance().my_timegm(&tm_struct, fsc, ti);
           break;
         } else {  // check for misleading/unclear syntax
-          throw std::runtime_error("Unclear syntax for leading fractional seconds: " + std::string(p));
+          throw std::runtime_error("Unclear syntax for leading fractional seconds: " +
+                                   std::string(p));
         }
       } else {  // default timestamp(0) precision
         d.timeval = TimeGM::instance().my_timegm(&tm_struct);
@@ -242,12 +265,15 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       char* tp;
       // try ISO8601 date first
       tp = strptime(s.c_str(), "%Y-%m-%d", &tm_struct);
-      if (!tp)
+      if (!tp) {
         tp = strptime(s.c_str(), "%m/%d/%Y", &tm_struct);  // accept American date
-      if (!tp)
+      }
+      if (!tp) {
         tp = strptime(s.c_str(), "%d-%b-%y", &tm_struct);  // accept 03-Sep-15
-      if (!tp)
+      }
+      if (!tp) {
         tp = strptime(s.c_str(), "%d/%b/%Y", &tm_struct);  // accept 03/Sep/2015
+      }
       if (!tp) {
         try {
           d.timeval = std::stoll(s);
@@ -257,7 +283,8 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
         }
       }
       tm_struct.tm_sec = tm_struct.tm_min = tm_struct.tm_hour = 0;
-      tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = tm_struct.tm_gmtoff = 0;
+      tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = tm_struct.tm_gmtoff =
+          0;
       d.timeval = TimeGM::instance().my_timegm(&tm_struct);
       break;
     }
@@ -278,8 +305,9 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
 std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
   switch (ti.get_type()) {
     case kBOOLEAN:
-      if (d.boolval)
+      if (d.boolval) {
         return "t";
+      }
       return "f";
     case kNUMERIC:
     case kDECIMAL: {
@@ -368,14 +396,17 @@ int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
                                        const SQLTypeInfo& new_type_info) {
   auto converted_decimal_value = decimal_value;
   if (new_type_info.get_scale() > type_info.get_scale()) {
-    for (int i = 0; i < new_type_info.get_scale() - type_info.get_scale(); i++)
+    for (int i = 0; i < new_type_info.get_scale() - type_info.get_scale(); i++) {
       converted_decimal_value *= 10;
+    }
   } else if (new_type_info.get_scale() < type_info.get_scale()) {
-    for (int i = 0; i < type_info.get_scale() - new_type_info.get_scale(); i++)
-      if (converted_decimal_value > 0)
+    for (int i = 0; i < type_info.get_scale() - new_type_info.get_scale(); i++) {
+      if (converted_decimal_value > 0) {
         converted_decimal_value = (converted_decimal_value + 5) / 10;
-      else
+      } else {
         converted_decimal_value = (converted_decimal_value - 5) / 10;
+      }
+    }
   }
   return converted_decimal_value;
 }

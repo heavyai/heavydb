@@ -16,9 +16,9 @@
 #define QUERYENGINE_TOPKSORT_H
 
 #ifdef HAVE_CUDA
-#include "ResultSetSortImpl.h"
-#include "../Shared/sqltypes.h"
 #include <cuda.h>
+#include "../Shared/sqltypes.h"
+#include "ResultSetSortImpl.h"
 
 #include <vector>
 
@@ -26,19 +26,20 @@ namespace Data_Namespace {
 
 class DataMgr;
 
-}  // Data_Namespace
+}  // namespace Data_Namespace
 
 class ThrustAllocator;
 
-std::vector<int8_t> pop_n_rows_from_merged_heaps_gpu(Data_Namespace::DataMgr* data_mgr,
-                                                     const int64_t* dev_heaps,
-                                                     const size_t heaps_size,
-                                                     const size_t n,
-                                                     const PodOrderEntry& oe,
-                                                     const GroupByBufferLayoutInfo& layout,
-                                                     const size_t group_key_bytes,
-                                                     const size_t thread_count,
-                                                     const int device_id);
+std::vector<int8_t> pop_n_rows_from_merged_heaps_gpu(
+    Data_Namespace::DataMgr* data_mgr,
+    const int64_t* dev_heaps,
+    const size_t heaps_size,
+    const size_t n,
+    const PodOrderEntry& oe,
+    const GroupByBufferLayoutInfo& layout,
+    const size_t group_key_bytes,
+    const size_t thread_count,
+    const int device_id);
 
 #endif  // HAVE_CUDA
 

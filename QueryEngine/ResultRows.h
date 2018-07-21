@@ -34,13 +34,13 @@
 #include "../Shared/TargetInfo.h"
 #include "../StringDictionary/StringDictionaryProxy.h"
 
-#include <boost/noncopyable.hpp>
 #include <glog/logging.h>
+#include <boost/noncopyable.hpp>
 
+#include <limits>
 #include <list>
 #include <mutex>
 #include <set>
-#include <limits>
 #include <unordered_set>
 
 extern bool g_bigint_count;
@@ -51,7 +51,9 @@ class RowSetMemoryOwner;
 
 // The legacy way of representing result sets. Don't change it, it's going away.
 
-inline int64_t get_component(const int8_t* group_by_buffer, const size_t comp_sz, const size_t index = 0) {
+inline int64_t get_component(const int8_t* group_by_buffer,
+                             const size_t comp_sz,
+                             const size_t index = 0) {
   int64_t ret = std::numeric_limits<int64_t>::min();
   switch (comp_sz) {
     case 1: {
@@ -90,11 +92,13 @@ inline int64_t get_consistent_frag_size(const std::vector<uint64_t>& frag_offset
       return int64_t(-1);
     }
   }
-  return !frag_size ? std::numeric_limits<int64_t>::max() : static_cast<int64_t>(frag_size);
+  return !frag_size ? std::numeric_limits<int64_t>::max()
+                    : static_cast<int64_t>(frag_size);
 }
 
-inline std::pair<int64_t, int64_t> get_frag_id_and_local_idx(const std::vector<uint64_t>& frag_offsets,
-                                                             const int64_t global_idx) {
+inline std::pair<int64_t, int64_t> get_frag_id_and_local_idx(
+    const std::vector<uint64_t>& frag_offsets,
+    const int64_t global_idx) {
   CHECK_GE(global_idx, int64_t(0));
   for (int64_t frag_id = frag_offsets.size() - 1; frag_id >= 0; --frag_id) {
     const auto frag_off = static_cast<int64_t>(frag_offsets[frag_id]);
@@ -105,7 +109,8 @@ inline std::pair<int64_t, int64_t> get_frag_id_and_local_idx(const std::vector<u
   return {-1, -1};
 }
 
-inline std::vector<int64_t> get_consistent_frags_sizes(const std::vector<std::vector<uint64_t>>& frag_offsets) {
+inline std::vector<int64_t> get_consistent_frags_sizes(
+    const std::vector<std::vector<uint64_t>>& frag_offsets) {
   if (frag_offsets.empty()) {
     return {};
   }
@@ -121,9 +126,10 @@ inline std::vector<int64_t> get_consistent_frags_sizes(const std::vector<std::ve
 }
 
 template <typename T>
-inline std::pair<int64_t, int64_t> get_frag_id_and_local_idx(const std::vector<std::vector<T>>& frag_offsets,
-                                                             const size_t tab_or_col_idx,
-                                                             const int64_t global_idx) {
+inline std::pair<int64_t, int64_t> get_frag_id_and_local_idx(
+    const std::vector<std::vector<T>>& frag_offsets,
+    const size_t tab_or_col_idx,
+    const int64_t global_idx) {
   CHECK_GE(global_idx, int64_t(0));
   for (int64_t frag_id = frag_offsets.size() - 1; frag_id > 0; --frag_id) {
     CHECK_LT(tab_or_col_idx, frag_offsets[frag_id].size());
@@ -136,8 +142,9 @@ inline std::pair<int64_t, int64_t> get_frag_id_and_local_idx(const std::vector<s
 }
 
 #ifdef ENABLE_MULTIFRAG_JOIN
-inline std::vector<int64_t> get_consistent_frags_sizes(const std::vector<Analyzer::Expr*>& target_exprs,
-                                                       const std::vector<int64_t>& table_frag_sizes) {
+inline std::vector<int64_t> get_consistent_frags_sizes(
+    const std::vector<Analyzer::Expr*>& target_exprs,
+    const std::vector<int64_t>& table_frag_sizes) {
   std::vector<int64_t> col_frag_sizes;
   for (auto expr : target_exprs) {
     if (const auto col_var = dynamic_cast<Analyzer::ColumnVar*>(expr)) {
@@ -167,7 +174,8 @@ inline std::vector<std::vector<int64_t>> get_col_frag_offsets(
           col_offsets.push_back(int64_t(-1));
         } else {
           CHECK_LT(static_cast<size_t>(col_var->get_rte_idx()), table_offsets.size());
-          col_offsets.push_back(static_cast<int64_t>(table_offsets[col_var->get_rte_idx()]));
+          col_offsets.push_back(
+              static_cast<int64_t>(table_offsets[col_var->get_rte_idx()]));
         }
       } else {
         col_offsets.push_back(int64_t(-1));
@@ -185,9 +193,12 @@ class ChunkIter;
 
 class RowSetMemoryOwner : boost::noncopyable {
  public:
-  void addCountDistinctBuffer(int8_t* count_distinct_buffer, const size_t bytes, const bool system_allocated) {
+  void addCountDistinctBuffer(int8_t* count_distinct_buffer,
+                              const size_t bytes,
+                              const bool system_allocated) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    count_distinct_bitmaps_.emplace_back(CountDistinctBitmapBuffer{count_distinct_buffer, bytes, system_allocated});
+    count_distinct_bitmaps_.emplace_back(
+        CountDistinctBitmapBuffer{count_distinct_buffer, bytes, system_allocated});
   }
 
   void addCountDistinctSet(std::set<int64_t>* count_distinct_set) {
@@ -222,7 +233,8 @@ class RowSetMemoryOwner : boost::noncopyable {
       it->second->updateGeneration(generation);
       return it->second;
     }
-    StringDictionaryProxy* str_dict_proxy = new StringDictionaryProxy(str_dict, generation);
+    StringDictionaryProxy* str_dict_proxy =
+        new StringDictionaryProxy(str_dict, generation);
     str_dict_proxy_owned_.emplace(dict_id, str_dict_proxy);
     return str_dict_proxy;
   }
@@ -234,7 +246,8 @@ class RowSetMemoryOwner : boost::noncopyable {
     return it->second;
   }
 
-  void addLiteralStringDictProxy(std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy) {
+  void addLiteralStringDictProxy(
+      std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     lit_str_dict_proxy_ = lit_str_dict_proxy;
   }
@@ -295,7 +308,8 @@ inline const Analyzer::AggExpr* cast_to_agg_expr(const Analyzer::Expr* target_ex
   return dynamic_cast<const Analyzer::AggExpr*>(target_expr);
 }
 
-inline const Analyzer::AggExpr* cast_to_agg_expr(const std::shared_ptr<Analyzer::Expr> target_expr) {
+inline const Analyzer::AggExpr* cast_to_agg_expr(
+    const std::shared_ptr<Analyzer::Expr> target_expr) {
   return dynamic_cast<const Analyzer::AggExpr*>(target_expr.get());
 }
 
@@ -304,7 +318,8 @@ inline TargetInfo target_info(const PointerType target_expr) {
   const auto agg_expr = cast_to_agg_expr(target_expr);
   bool notnull = target_expr->get_type_info().get_notnull();
   if (!agg_expr) {
-    auto target_ti = target_expr ? get_logical_type_info(target_expr->get_type_info()) : SQLTypeInfo(kBIGINT, notnull);
+    auto target_ti = target_expr ? get_logical_type_info(target_expr->get_type_info())
+                                 : SQLTypeInfo(kBIGINT, notnull);
     return {false, kMIN, target_ti, SQLTypeInfo(kNULLT, false), false, false};
   }
   const auto agg_type = agg_expr->get_aggtype();
@@ -312,8 +327,12 @@ inline TargetInfo target_info(const PointerType target_expr) {
   if (!agg_arg) {
     CHECK_EQ(kCOUNT, agg_type);
     CHECK(!agg_expr->get_is_distinct());
-    return {
-        true, kCOUNT, SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, notnull), SQLTypeInfo(kNULLT, false), false, false};
+    return {true,
+            kCOUNT,
+            SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, notnull),
+            SQLTypeInfo(kNULLT, false),
+            false,
+            false};
   }
 
   const auto& agg_arg_ti = agg_arg->get_type_info();
@@ -324,15 +343,17 @@ inline TargetInfo target_info(const PointerType target_expr) {
 
   return {true,
           agg_expr->get_aggtype(),
-          agg_type == kCOUNT ? SQLTypeInfo((is_distinct || g_bigint_count) ? kBIGINT : kINT, notnull)
-                             : (agg_type == kAVG ? agg_arg_ti : agg_expr->get_type_info()),
+          agg_type == kCOUNT
+              ? SQLTypeInfo((is_distinct || g_bigint_count) ? kBIGINT : kINT, notnull)
+              : (agg_type == kAVG ? agg_arg_ti : agg_expr->get_type_info()),
           agg_arg_ti,
           !agg_arg_ti.get_notnull(),
           is_distinct};
 }
 
-inline std::vector<TargetInfo> target_exprs_to_infos(const std::vector<Analyzer::Expr*>& targets,
-                                                     const QueryMemoryDescriptor& query_mem_desc) {
+inline std::vector<TargetInfo> target_exprs_to_infos(
+    const std::vector<Analyzer::Expr*>& targets,
+    const QueryMemoryDescriptor& query_mem_desc) {
   std::vector<TargetInfo> target_infos;
   for (const auto target_expr : targets) {
     auto target = target_info(target_expr);

@@ -33,11 +33,12 @@
 
 namespace Analyzer {
 class FunctionOper;
-}  // Analyzer
+}  // namespace Analyzer
 
 SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type);
 
-const ExtensionFunction& bind_function(const Analyzer::FunctionOper* function_oper,
-                                       const std::vector<ExtensionFunction>& ext_func_sigs);
+const ExtensionFunction& bind_function(
+    const Analyzer::FunctionOper* function_oper,
+    const std::vector<ExtensionFunction>& ext_func_sigs);
 
 #endif  // QUERYENGINE_EXTENSIONFUNCTIONSBINDING_H

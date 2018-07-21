@@ -20,47 +20,47 @@
  * @brief Functions for Importer class
  */
 
-#include <csignal>
-#include <iostream>
-#include <fstream>
-#include <iomanip>
-#include <cstdio>
-#include <cstdlib>
-#include <unistd.h>
-#include <stdexcept>
-#include <list>
-#include <vector>
-#include <stack>
-#include <unordered_map>
-#include <unordered_set>
-#include <thread>
-#include <future>
-#include <mutex>
-#include <boost/algorithm/string.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/dynamic_bitset.hpp>
+#include <gdal.h>
 #include <glog/logging.h>
 #include <ogrsf_frmts.h>
-#include <gdal.h>
+#include <unistd.h>
+#include <boost/algorithm/string.hpp>
+#include <boost/dynamic_bitset.hpp>
+#include <boost/filesystem.hpp>
+#include <csignal>
+#include <cstdio>
+#include <cstdlib>
+#include <fstream>
+#include <future>
+#include <iomanip>
+#include <iostream>
+#include <list>
+#include <mutex>
+#include <stack>
+#include <stdexcept>
+#include <thread>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 #include "../QueryEngine/SqlTypesLayout.h"
 #include "../QueryEngine/TypePunning.h"
+#include "../Shared/geo_types.h"
+#include "../Shared/geosupport.h"
+#include "../Shared/import_helpers.h"
+#include "../Shared/mapd_glob.h"
 #include "../Shared/mapdpath.h"
 #include "../Shared/measure.h"
-#include "../Shared/unreachable.h"
-#include "../Shared/geosupport.h"
-#include "../Shared/mapd_glob.h"
 #include "../Shared/scope.h"
-#include "../Shared/import_helpers.h"
 #include "../Shared/shard_key.h"
-#include "../Shared/geo_types.h"
+#include "../Shared/unreachable.h"
 
-#include "Importer.h"
+#include <iostream>
+#include <vector>
 #include "DataMgr/LockMgr.h"
+#include "Importer.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Utils/ChunkAccessorTable.h"
 #include "gen-cpp/MapD.h"
-#include <vector>
-#include <iostream>
 
 #include <arrow/api.h>
 
@@ -97,7 +97,8 @@ struct OGRSpatialReferenceDeleter {
     }
   }
 };
-using OGRSpatialReferenceUqPtr = std::unique_ptr<OGRSpatialReference, OGRSpatialReferenceDeleter>;
+using OGRSpatialReferenceUqPtr =
+    std::unique_ptr<OGRSpatialReference, OGRSpatialReferenceDeleter>;
 
 }  // namespace
 
@@ -105,7 +106,8 @@ namespace Importer_NS {
 
 using FieldNameToIndexMapType = std::map<std::string, size_t>;
 using ColumnNameToSourceNameMapType = std::map<std::string, std::string>;
-using ColumnIdToRenderGroupAnalyzerMapType = std::map<int, std::shared_ptr<RenderGroupAnalyzer>>;
+using ColumnIdToRenderGroupAnalyzerMapType =
+    std::map<int, std::shared_ptr<RenderGroupAnalyzer>>;
 using FeaturePtrVector = std::vector<OGRFeatureUqPtr>;
 
 #define DEBUG_TIMING false
@@ -119,7 +121,10 @@ static constexpr bool PROMOTE_POLYGON_TO_MULTIPOLYGON = true;
 static mapd_shared_mutex status_mutex;
 static std::map<std::string, ImportStatus> import_status_map;
 
-Importer::Importer(Catalog_Namespace::Catalog& c, const TableDescriptor* t, const std::string& f, const CopyParams& p)
+Importer::Importer(Catalog_Namespace::Catalog& c,
+                   const TableDescriptor* t,
+                   const std::string& f,
+                   const CopyParams& p)
     : Importer(new Loader(c, t), f, p) {}
 
 Importer::Importer(Loader* providedLoader, const std::string& f, const CopyParams& p)
@@ -137,23 +142,28 @@ Importer::Importer(Loader* providedLoader, const std::string& f, const CopyParam
     if (p->columnType.get_type() == kARRAY) {
       is_array.get()[i] = true;
       has_array = true;
-    } else
+    } else {
       is_array.get()[i] = false;
+    }
     ++i;
   }
-  if (has_array)
+  if (has_array) {
     is_array_a = std::unique_ptr<bool[]>(is_array.release());
-  else
+  } else {
     is_array_a = std::unique_ptr<bool[]>(nullptr);
+  }
 }
 
 Importer::~Importer() {
-  if (p_file != nullptr)
+  if (p_file != nullptr) {
     fclose(p_file);
-  if (buffer[0] != nullptr)
+  }
+  if (buffer[0] != nullptr) {
     free(buffer[0]);
-  if (buffer[1] != nullptr)
+  }
+  if (buffer[1] != nullptr) {
     free(buffer[1]);
+  }
 }
 
 ImportStatus Importer::get_import_status(const std::string& import_id) {
@@ -206,16 +216,20 @@ static const char* get_row(const char* buf,
   try_single_thread = false;
   std::string line_endings({copy_params.line_delim, '\r', '\n'});
   for (p = buf; p < entire_buf_end; p++) {
-    if (*p == copy_params.escape && p < entire_buf_end - 1 && *(p + 1) == copy_params.quote) {
+    if (*p == copy_params.escape && p < entire_buf_end - 1 &&
+        *(p + 1) == copy_params.quote) {
       p++;
       has_escape = true;
     } else if (copy_params.quoted && *p == copy_params.quote) {
       in_quote = !in_quote;
-      if (in_quote)
+      if (in_quote) {
         strip_quotes = true;
-    } else if (!in_quote && is_array != nullptr && *p == copy_params.array_begin && is_array[row.size()]) {
+      }
+    } else if (!in_quote && is_array != nullptr && *p == copy_params.array_begin &&
+               is_array[row.size()]) {
       in_array = true;
-    } else if (!in_quote && is_array != nullptr && *p == copy_params.array_end && is_array[row.size()]) {
+    } else if (!in_quote && is_array != nullptr && *p == copy_params.array_end &&
+               is_array[row.size()]) {
       in_array = false;
     } else if (*p == copy_params.delimiter || is_eol(*p, line_endings)) {
       if (!in_quote && !in_array) {
@@ -226,7 +240,8 @@ static const char* get_row(const char* buf,
           auto field_buf = std::unique_ptr<char[]>(new char[p - field + 1]);
           int j = 0, i = 0;
           for (; i < p - field; i++, j++) {
-            if (has_escape && field[i] == copy_params.escape && field[i + 1] == copy_params.quote) {
+            if (has_escape && field[i] == copy_params.escape &&
+                field[i + 1] == copy_params.quote) {
               field_buf[j] = copy_params.quote;
               i++;
             } else {
@@ -246,7 +261,8 @@ static const char* get_row(const char* buf,
         has_escape = false;
         strip_quotes = false;
       }
-      if (is_eol(*p, line_endings) && ((!in_quote && !in_array) || copy_params.threads != 1)) {
+      if (is_eol(*p, line_endings) &&
+          ((!in_quote && !in_array) || copy_params.threads != 1)) {
         while (p + 1 < buf_end && is_eol(*(p + 1), line_endings)) {
           p++;
         }
@@ -304,7 +320,9 @@ int8_t* appendDatum(int8_t* buf, Datum d, const SQLTypeInfo& ti) {
   return NULL;
 }
 
-ArrayDatum StringToArray(const std::string& s, const SQLTypeInfo& ti, const CopyParams& copy_params) {
+ArrayDatum StringToArray(const std::string& s,
+                         const SQLTypeInfo& ti,
+                         const CopyParams& copy_params) {
   SQLTypeInfo elem_ti = ti.get_elem_type();
   if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
     LOG(WARNING) << "Malformed array: " << s;
@@ -350,16 +368,19 @@ Datum TDatumToDatum(const TDatum& datum, SQLTypeInfo& ti) {
       d.boolval = datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
       break;
     case kBIGINT:
-      d.bigintval = datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
+      d.bigintval =
+          datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
       break;
     case kINT:
       d.intval = datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
       break;
     case kSMALLINT:
-      d.smallintval = datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
+      d.smallintval =
+          datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
       break;
     case kTINYINT:
-      d.tinyintval = datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
+      d.tinyintval =
+          datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
       break;
     case kFLOAT:
       d.floatval = datum.is_null ? NULL_FLOAT : datum.val.real_val;
@@ -395,15 +416,21 @@ ArrayDatum TDatumToArrayDatum(const TDatum& datum, const SQLTypeInfo& ti) {
   return ArrayDatum(len, buf, len == 0);
 }
 
-static size_t find_beginning(const char* buffer, size_t begin, size_t end, const CopyParams& copy_params) {
+static size_t find_beginning(const char* buffer,
+                             size_t begin,
+                             size_t end,
+                             const CopyParams& copy_params) {
   // @TODO(wei) line_delim is in quotes note supported
-  if (begin == 0 || (begin > 0 && buffer[begin - 1] == copy_params.line_delim))
+  if (begin == 0 || (begin > 0 && buffer[begin - 1] == copy_params.line_delim)) {
     return 0;
+  }
   size_t i;
   const char* buf = buffer + begin;
-  for (i = 0; i < end - begin; i++)
-    if (buf[i] == copy_params.line_delim)
+  for (i = 0; i < end - begin; i++) {
+    if (buf[i] == copy_params.line_delim) {
       return i + 1;
+    }
+  }
   return i;
 }
 
@@ -417,8 +444,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
   switch (type) {
     case kBOOLEAN: {
       if (is_null) {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addBoolean(inline_fixed_encoding_null_val(cd->columnType));
       } else {
         SQLTypeInfo ti = cd->columnType;
@@ -433,8 +461,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         Datum d = StringToDatum(val, ti);
         addTinyint(d.tinyintval);
       } else {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addTinyint(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
@@ -445,8 +474,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         Datum d = StringToDatum(val, ti);
         addSmallint(d.smallintval);
       } else {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addSmallint(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
@@ -457,8 +487,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         Datum d = StringToDatum(val, ti);
         addInt(d.intval);
       } else {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addInt(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
@@ -469,8 +500,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         Datum d = StringToDatum(val, ti);
         addBigint(d.bigintval);
       } else {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addBigint(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
@@ -480,11 +512,13 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       if (!is_null) {
         SQLTypeInfo ti(kNUMERIC, 0, 0, false);
         Datum d = StringToDatum(val, ti);
-        const auto converted_decimal_value = convert_decimal_value_to_scale(d.bigintval, ti, cd->columnType);
+        const auto converted_decimal_value =
+            convert_decimal_value_to_scale(d.bigintval, ti, cd->columnType);
         addBigint(converted_decimal_value);
       } else {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addBigint(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
@@ -493,8 +527,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       if (!is_null && (val[0] == '.' || isdigit(val[0]) || val[0] == '-')) {
         addFloat((float)std::atof(val.c_str()));
       } else {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addFloat(NULL_FLOAT);
       }
       break;
@@ -502,8 +537,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       if (!is_null && (val[0] == '.' || isdigit(val[0]) || val[0] == '-')) {
         addDouble(std::atof(val.c_str()));
       } else {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addDouble(NULL_DOUBLE);
       }
       break;
@@ -512,14 +548,16 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     case kCHAR: {
       // @TODO(wei) for now, use empty string for nulls
       if (is_null) {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addString(std::string());
       } else {
-        if (val.length() > StringDictionary::MAX_STRLEN)
-          throw std::runtime_error("String too long for column " + cd->columnName + " was " +
-                                   std::to_string(val.length()) + " max is " +
+        if (val.length() > StringDictionary::MAX_STRLEN) {
+          throw std::runtime_error("String too long for column " + cd->columnName +
+                                   " was " + std::to_string(val.length()) + " max is " +
                                    std::to_string(StringDictionary::MAX_STRLEN));
+        }
         addString(val);
       }
       break;
@@ -532,8 +570,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         Datum d = StringToDatum(val, ti);
         addTime(d.timeval);
       } else {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addTime(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
@@ -565,8 +604,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
 }
 
 void TypedImportBuffer::pop_value() {
-  const auto type = column_desc_->columnType.is_decimal() ? decimal_to_int_type(column_desc_->columnType)
-                                                          : column_desc_->columnType.get_type();
+  const auto type = column_desc_->columnType.is_decimal()
+                        ? decimal_to_int_type(column_desc_->columnType)
+                        : column_desc_->columnType.get_type();
   switch (type) {
     case kBOOLEAN:
       bool_buffer_->pop_back();
@@ -625,7 +665,9 @@ using namespace arrow;
   }
 
 template <typename ArrayType, typename T>
-inline void append_arrow_primitive(const Array& values, const T null_sentinel, std::vector<T>* buffer) {
+inline void append_arrow_primitive(const Array& values,
+                                   const T null_sentinel,
+                                   std::vector<T>* buffer) {
   const auto& typed_values = static_cast<const ArrayType&>(values);
   buffer->reserve(typed_values.length());
   const T* raw_values = typed_values.raw_values();
@@ -644,7 +686,9 @@ inline void append_arrow_primitive(const Array& values, const T null_sentinel, s
   }
 }
 
-void append_arrow_boolean(const ColumnDescriptor* cd, const Array& values, std::vector<int8_t>* buffer) {
+void append_arrow_boolean(const ColumnDescriptor* cd,
+                          const Array& values,
+                          std::vector<int8_t>* buffer) {
   ARROW_THROW_IF(values.type_id() != Type::BOOL, "Expected boolean col");
   const int8_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
   const auto& typed_values = static_cast<const BooleanArray&>(values);
@@ -659,18 +703,24 @@ void append_arrow_boolean(const ColumnDescriptor* cd, const Array& values, std::
 }
 
 template <typename ArrowType, typename T>
-void append_arrow_integer(const ColumnDescriptor* cd, const Array& values, std::vector<T>* buffer) {
+void append_arrow_integer(const ColumnDescriptor* cd,
+                          const Array& values,
+                          std::vector<T>* buffer) {
   using ArrayType = typename TypeTraits<ArrowType>::ArrayType;
   const T null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
   append_arrow_primitive<ArrayType, T>(values, null_sentinel, buffer);
 }
 
-void append_arrow_float(const ColumnDescriptor* cd, const Array& values, std::vector<float>* buffer) {
+void append_arrow_float(const ColumnDescriptor* cd,
+                        const Array& values,
+                        std::vector<float>* buffer) {
   ARROW_THROW_IF(values.type_id() != Type::FLOAT, "Expected float col");
   append_arrow_primitive<FloatArray, float>(values, NULL_FLOAT, buffer);
 }
 
-void append_arrow_double(const ColumnDescriptor* cd, const Array& values, std::vector<double>* buffer) {
+void append_arrow_double(const ColumnDescriptor* cd,
+                         const Array& values,
+                         std::vector<double>* buffer) {
   ARROW_THROW_IF(values.type_id() != Type::DOUBLE, "Expected double col");
   append_arrow_primitive<DoubleArray, double>(values, NULL_DOUBLE, buffer);
 }
@@ -680,7 +730,9 @@ constexpr int64_t kMicrosecondsInSecond = 1000L * 1000L;
 constexpr int64_t kNanosecondsinSecond = 1000L * 1000L * 1000L;
 constexpr int32_t kSecondsInDay = 86400;
 
-void append_arrow_time(const ColumnDescriptor* cd, const Array& values, std::vector<time_t>* buffer) {
+void append_arrow_time(const ColumnDescriptor* cd,
+                       const Array& values,
+                       std::vector<time_t>* buffer) {
   const time_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
   if (values.type_id() == Type::TIME32) {
     const auto& typed_values = static_cast<const Time32Array&>(values);
@@ -739,7 +791,9 @@ void append_arrow_time(const ColumnDescriptor* cd, const Array& values, std::vec
   }
 }
 
-void append_arrow_timestamp(const ColumnDescriptor* cd, const Array& values, std::vector<time_t>* buffer) {
+void append_arrow_timestamp(const ColumnDescriptor* cd,
+                            const Array& values,
+                            std::vector<time_t>* buffer) {
   ARROW_THROW_IF(values.type_id() != Type::TIMESTAMP, "Expected timestamp col");
 
   const time_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
@@ -774,7 +828,9 @@ void append_arrow_timestamp(const ColumnDescriptor* cd, const Array& values, std
   }
 }
 
-void append_arrow_date(const ColumnDescriptor* cd, const Array& values, std::vector<time_t>* buffer) {
+void append_arrow_date(const ColumnDescriptor* cd,
+                       const Array& values,
+                       std::vector<time_t>* buffer) {
   const time_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
   if (values.type_id() == Type::DATE32) {
     const auto& typed_values = static_cast<const Date32Array&>(values);
@@ -808,8 +864,11 @@ void append_arrow_date(const ColumnDescriptor* cd, const Array& values, std::vec
   }
 }
 
-void append_arrow_binary(const ColumnDescriptor* cd, const Array& values, std::vector<std::string>* buffer) {
-  ARROW_THROW_IF(values.type_id() != Type::BINARY && values.type_id() != Type::STRING, "Expected binary col");
+void append_arrow_binary(const ColumnDescriptor* cd,
+                         const Array& values,
+                         std::vector<std::string>* buffer) {
+  ARROW_THROW_IF(values.type_id() != Type::BINARY && values.type_id() != Type::STRING,
+                 "Expected binary col");
 
   const auto& typed_values = static_cast<const BinaryArray&>(values);
   buffer->reserve(typed_values.length());
@@ -829,8 +888,10 @@ void append_arrow_binary(const ColumnDescriptor* cd, const Array& values, std::v
 
 }  // namespace
 
-size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd, const arrow::Array& col) {
-  const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
+size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
+                                           const arrow::Array& col) {
+  const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType)
+                                                : cd->columnType.get_type();
   if (cd->columnType.get_notnull()) {
     // We can't have any null values for this column; to have them is an error
     if (col.null_count() > 0) {
@@ -884,11 +945,13 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd, const arr
 
 size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& col) {
   size_t dataSize = 0;
-  const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
+  const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType)
+                                                : cd->columnType.get_type();
   if (cd->columnType.get_notnull()) {
     // We can't have any null values for this column; to have them is an error
-    if (std::any_of(col.nulls.begin(), col.nulls.end(), [](int i) { return i != 0; }))
+    if (std::any_of(col.nulls.begin(), col.nulls.end(), [](int i) { return i != 0; })) {
       throw std::runtime_error("NULL for column " + cd->columnName);
+    }
   }
 
   switch (type) {
@@ -896,10 +959,11 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
       dataSize = col.data.int_col.size();
       bool_buffer_->reserve(dataSize);
       for (size_t i = 0; i < dataSize; i++) {
-        if (col.nulls[i])
+        if (col.nulls[i]) {
           bool_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
-        else
+        } else {
           bool_buffer_->push_back((int8_t)col.data.int_col[i]);
+        }
       }
       break;
     }
@@ -907,10 +971,11 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
       dataSize = col.data.int_col.size();
       smallint_buffer_->reserve(dataSize);
       for (size_t i = 0; i < dataSize; i++) {
-        if (col.nulls[i])
+        if (col.nulls[i]) {
           smallint_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
-        else
+        } else {
           smallint_buffer_->push_back((int16_t)col.data.int_col[i]);
+        }
       }
       break;
     }
@@ -918,10 +983,11 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
       dataSize = col.data.int_col.size();
       int_buffer_->reserve(dataSize);
       for (size_t i = 0; i < dataSize; i++) {
-        if (col.nulls[i])
+        if (col.nulls[i]) {
           int_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
-        else
+        } else {
           int_buffer_->push_back((int32_t)col.data.int_col[i]);
+        }
       }
       break;
     }
@@ -929,10 +995,11 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
       dataSize = col.data.int_col.size();
       bigint_buffer_->reserve(dataSize);
       for (size_t i = 0; i < dataSize; i++) {
-        if (col.nulls[i])
+        if (col.nulls[i]) {
           bigint_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
-        else
+        } else {
           bigint_buffer_->push_back((int64_t)col.data.int_col[i]);
+        }
       }
       break;
     }
@@ -940,10 +1007,11 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
       dataSize = col.data.real_col.size();
       float_buffer_->reserve(dataSize);
       for (size_t i = 0; i < dataSize; i++) {
-        if (col.nulls[i])
+        if (col.nulls[i]) {
           float_buffer_->push_back(NULL_FLOAT);
-        else
+        } else {
           float_buffer_->push_back((float)col.data.real_col[i]);
+        }
       }
       break;
     }
@@ -951,10 +1019,11 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
       dataSize = col.data.real_col.size();
       double_buffer_->reserve(dataSize);
       for (size_t i = 0; i < dataSize; i++) {
-        if (col.nulls[i])
+        if (col.nulls[i]) {
           double_buffer_->push_back(NULL_DOUBLE);
-        else
+        } else {
           double_buffer_->push_back((double)col.data.real_col[i]);
+        }
       }
       break;
     }
@@ -965,10 +1034,11 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
       dataSize = col.data.str_col.size();
       string_buffer_->reserve(dataSize);
       for (size_t i = 0; i < dataSize; i++) {
-        if (col.nulls[i])
+        if (col.nulls[i]) {
           string_buffer_->push_back(std::string());
-        else
+        } else {
           string_buffer_->push_back(col.data.str_col[i]);
+        }
       }
       break;
     }
@@ -978,10 +1048,11 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
       dataSize = col.data.int_col.size();
       time_buffer_->reserve(dataSize);
       for (size_t i = 0; i < dataSize; i++) {
-        if (col.nulls[i])
+        if (col.nulls[i]) {
           time_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
-        else
+        } else {
           time_buffer_->push_back((time_t)col.data.int_col[i]);
+        }
       }
       break;
     }
@@ -993,8 +1064,9 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
           std::vector<std::string>& string_vec = addStringArray();
           if (!col.nulls[i]) {
             size_t stringArrSize = col.data.arr_col[i].data.str_col.size();
-            for (size_t str_idx = 0; str_idx != stringArrSize; ++str_idx)
+            for (size_t str_idx = 0; str_idx != stringArrSize; ++str_idx) {
               string_vec.push_back(col.data.arr_col[i].data.str_col[str_idx]);
+            }
           }
         }
       } else {
@@ -1002,9 +1074,9 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
         switch (elem_ti) {
           case kBOOLEAN: {
             for (size_t i = 0; i < dataSize; i++) {
-              if (col.nulls[i])
+              if (col.nulls[i]) {
                 addArray(ArrayDatum(0, NULL, true));
-              else {
+              } else {
                 size_t len = col.data.arr_col[i].data.int_col.size();
                 size_t byteSize = len * sizeof(int8_t);
                 int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
@@ -1020,15 +1092,16 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
           }
           case kSMALLINT: {
             for (size_t i = 0; i < dataSize; i++) {
-              if (col.nulls[i])
+              if (col.nulls[i]) {
                 addArray(ArrayDatum(0, NULL, true));
-              else {
+              } else {
                 size_t len = col.data.arr_col[i].data.int_col.size();
                 size_t byteSize = len * sizeof(int16_t);
                 int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
                 int8_t* p = buf;
                 for (size_t j = 0; j < len; ++j) {
-                  *(int16_t*)p = static_cast<int16_t>(col.data.arr_col[i].data.int_col[j]);
+                  *(int16_t*)p =
+                      static_cast<int16_t>(col.data.arr_col[i].data.int_col[j]);
                   p += sizeof(int16_t);
                 }
                 addArray(ArrayDatum(byteSize, buf, len == 0));
@@ -1038,15 +1111,16 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
           }
           case kINT: {
             for (size_t i = 0; i < dataSize; i++) {
-              if (col.nulls[i])
+              if (col.nulls[i]) {
                 addArray(ArrayDatum(0, NULL, true));
-              else {
+              } else {
                 size_t len = col.data.arr_col[i].data.int_col.size();
                 size_t byteSize = len * sizeof(int32_t);
                 int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
                 int8_t* p = buf;
                 for (size_t j = 0; j < len; ++j) {
-                  *(int32_t*)p = static_cast<int32_t>(col.data.arr_col[i].data.int_col[j]);
+                  *(int32_t*)p =
+                      static_cast<int32_t>(col.data.arr_col[i].data.int_col[j]);
                   p += sizeof(int32_t);
                 }
                 addArray(ArrayDatum(byteSize, buf, len == 0));
@@ -1058,15 +1132,16 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
           case kNUMERIC:
           case kDECIMAL: {
             for (size_t i = 0; i < dataSize; i++) {
-              if (col.nulls[i])
+              if (col.nulls[i]) {
                 addArray(ArrayDatum(0, NULL, true));
-              else {
+              } else {
                 size_t len = col.data.arr_col[i].data.int_col.size();
                 size_t byteSize = len * sizeof(int64_t);
                 int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
                 int8_t* p = buf;
                 for (size_t j = 0; j < len; ++j) {
-                  *(int64_t*)p = static_cast<int64_t>(col.data.arr_col[j].data.int_col[j]);
+                  *(int64_t*)p =
+                      static_cast<int64_t>(col.data.arr_col[j].data.int_col[j]);
                   p += sizeof(int64_t);
                 }
                 addArray(ArrayDatum(byteSize, buf, len == 0));
@@ -1076,9 +1151,9 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
           }
           case kFLOAT: {
             for (size_t i = 0; i < dataSize; i++) {
-              if (col.nulls[i])
+              if (col.nulls[i]) {
                 addArray(ArrayDatum(0, NULL, true));
-              else {
+              } else {
                 size_t len = col.data.arr_col[i].data.real_col.size();
                 size_t byteSize = len * sizeof(float);
                 int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
@@ -1094,9 +1169,9 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
           }
           case kDOUBLE: {
             for (size_t i = 0; i < dataSize; i++) {
-              if (col.nulls[i])
+              if (col.nulls[i]) {
                 addArray(ArrayDatum(0, NULL, true));
-              else {
+              } else {
                 size_t len = col.data.arr_col[i].data.real_col.size();
                 size_t byteSize = len * sizeof(double);
                 int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
@@ -1114,9 +1189,9 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
           case kTIMESTAMP:
           case kDATE: {
             for (size_t i = 0; i < dataSize; i++) {
-              if (col.nulls[i])
+              if (col.nulls[i]) {
                 addArray(ArrayDatum(0, NULL, true));
-              else {
+              } else {
                 size_t len = col.data.arr_col[i].data.int_col.size();
                 size_t byteSize = len * sizeof(time_t);
                 int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
@@ -1142,13 +1217,17 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
   return dataSize;
 }
 
-void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datum, const bool is_null) {
-  const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
+void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
+                                  const TDatum& datum,
+                                  const bool is_null) {
+  const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType)
+                                                : cd->columnType.get_type();
   switch (type) {
     case kBOOLEAN: {
       if (is_null) {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addBoolean(inline_fixed_encoding_null_val(cd->columnType));
       } else {
         addBoolean((int8_t)datum.val.int_val);
@@ -1159,8 +1238,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
       if (!is_null) {
         addTinyint((int8_t)datum.val.int_val);
       } else {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addTinyint(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
@@ -1168,8 +1248,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
       if (!is_null) {
         addSmallint((int16_t)datum.val.int_val);
       } else {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addSmallint(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
@@ -1177,8 +1258,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
       if (!is_null) {
         addInt((int32_t)datum.val.int_val);
       } else {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addInt(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
@@ -1186,8 +1268,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
       if (!is_null) {
         addBigint(datum.val.int_val);
       } else {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addBigint(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
@@ -1195,8 +1278,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
       if (!is_null) {
         addFloat((float)datum.val.real_val);
       } else {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addFloat(NULL_FLOAT);
       }
       break;
@@ -1204,8 +1288,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
       if (!is_null) {
         addDouble(datum.val.real_val);
       } else {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addDouble(NULL_DOUBLE);
       }
       break;
@@ -1214,11 +1299,13 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
     case kCHAR: {
       // @TODO(wei) for now, use empty string for nulls
       if (is_null) {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addString(std::string());
-      } else
+      } else {
         addString(datum.val.str_val);
+      }
       break;
     }
     case kTIME:
@@ -1227,8 +1314,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
       if (!is_null) {
         addTime((time_t)datum.val.int_val);
       } else {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addTime(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
@@ -1252,11 +1340,13 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
     case kPOLYGON:
     case kMULTIPOLYGON:
       if (is_null) {
-        if (cd->columnType.get_notnull())
+        if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
+        }
         addGeoString(std::string());
-      } else
+      } else {
         addGeoString(datum.val.str_val);
+      }
       break;
     default:
       CHECK(false);
@@ -1269,16 +1359,18 @@ ostream& operator<<(ostream& out, const std::vector<T>& v) {
   size_t last = v.size() - 1;
   for (size_t i = 0; i < v.size(); ++i) {
     out << v[i];
-    if (i != last)
+    if (i != last) {
       out << ", ";
+    }
   }
   out << "]";
   return out;
 }
 
 bool importGeoFromLonLat(double lon, double lat, std::vector<double>& coords) {
-  if (std::isinf(lat) || std::isnan(lat) || std::isinf(lon) || std::isnan(lon))
+  if (std::isinf(lat) || std::isnan(lat) || std::isinf(lon) || std::isnan(lon)) {
     return false;
+  }
   auto point = new OGRPoint(lon, lat);
   // NOTE(adb): Use OGRSpatialReferenceUqPtr to ensure proper deletion
   // auto poSR0 = new OGRSpatialReference();
@@ -1298,7 +1390,8 @@ uint64_t compress_coord(double coord, const SQLTypeInfo& ti, bool x) {
   if (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32) {
     // compress longitude: -180..180  --->  -2,147,483,647..2,147,483,647
     // compress latitude: -90..90  --->  -2,147,483,647..2,147,483,647
-    int32_t compressed_coord = static_cast<int32_t>(coord * (2147483647.0 / (x ? 180.0 : 90.0)));
+    int32_t compressed_coord =
+        static_cast<int32_t>(coord * (2147483647.0 / (x ? 180.0 : 90.0)));
     return static_cast<uint64_t>(*reinterpret_cast<uint32_t*>(&compressed_coord));
   }
   return *reinterpret_cast<uint64_t*>(may_alias_ptr(&coord));
@@ -1314,11 +1407,15 @@ std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeI
 
     if (ti.get_output_srid() == 4326) {
       if (x) {
-        if (coord < -180.0 || coord > 180.0)
-          throw std::runtime_error("WGS84 longitude " + std::to_string(coord) + " is out of bounds");
+        if (coord < -180.0 || coord > 180.0) {
+          throw std::runtime_error("WGS84 longitude " + std::to_string(coord) +
+                                   " is out of bounds");
+        }
       } else {
-        if (coord < -90.0 || coord > 90.0)
-          throw std::runtime_error("WGS84 latitude " + std::to_string(coord) + " is out of bounds");
+        if (coord < -90.0 || coord > 90.0) {
+          throw std::runtime_error("WGS84 latitude " + std::to_string(coord) +
+                                   " is out of bounds");
+        }
       }
       if (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32) {
         coord_data = compress_coord(coord, ti, x);
@@ -1356,10 +1453,12 @@ static ImportStatus import_thread_delimited(
     const char* thread_buf_end = buffer + end_pos;
     const char* buf_end = buffer + total_size;
     bool try_single_thread = false;
-    std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers = importer->get_import_buffers(thread_id);
+    std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers =
+        importer->get_import_buffers(thread_id);
     auto us = measure<std::chrono::microseconds>::execution([&]() {});
-    for (const auto& p : import_buffers)
+    for (const auto& p : import_buffers) {
       p->clear();
+    }
     std::vector<std::string> row;
     for (const char* p = thread_buf; p < thread_buf_end; p++) {
       row.clear();
@@ -1375,24 +1474,34 @@ static ImportStatus import_thread_delimited(
                       try_single_thread);
         });
         total_get_row_time_us += us;
-      } else
-        p = get_row(
-            p, thread_buf_end, buf_end, copy_params, p == thread_buf, importer->get_is_array(), row, try_single_thread);
+      } else {
+        p = get_row(p,
+                    thread_buf_end,
+                    buf_end,
+                    copy_params,
+                    p == thread_buf,
+                    importer->get_is_array(),
+                    row,
+                    try_single_thread);
+      }
       int phys_cols = 0;
       int point_cols = 0;
       for (const auto cd : col_descs) {
         const auto& col_ti = cd->columnType;
         phys_cols += col_ti.get_physical_cols();
-        if (cd->columnType.get_type() == kPOINT)
+        if (cd->columnType.get_type() == kPOINT) {
           point_cols++;
+        }
       }
       auto num_cols = col_descs.size() - phys_cols;
       // Each POINT could consume two separate coords instead of a single WKT
       if (row.size() < num_cols || (num_cols + point_cols) < row.size()) {
         import_status.rows_rejected++;
-        LOG(ERROR) << "Incorrect Row (expected " << num_cols << " columns, has " << row.size() << "): " << row;
-        if (import_status.rows_rejected > copy_params.max_reject)
+        LOG(ERROR) << "Incorrect Row (expected " << num_cols << " columns, has "
+                   << row.size() << "): " << row;
+        if (import_status.rows_rejected > copy_params.max_reject) {
           break;
+        }
         continue;
       }
       us = measure<std::chrono::microseconds>::execution([&]() {
@@ -1407,9 +1516,11 @@ static ImportStatus import_thread_delimited(
 
               // store the string (possibly null)
               bool is_null = (row[import_idx] == copy_params.null_str);
-              if (!cd->columnType.is_string() && row[import_idx].empty())
+              if (!cd->columnType.is_string() && row[import_idx].empty()) {
                 is_null = true;
-              import_buffers[col_idx]->add_value(cd, row[import_idx], is_null, copy_params);
+              }
+              import_buffers[col_idx]->add_value(
+                  cd, row[import_idx], is_null, copy_params);
 
               // next
               ++import_idx;
@@ -1418,7 +1529,8 @@ static ImportStatus import_thread_delimited(
               // geo
 
               // store null string in the base column
-              import_buffers[col_idx]->add_value(cd, copy_params.null_str, true, copy_params);
+              import_buffers[col_idx]->add_value(
+                  cd, copy_params.null_str, true, copy_params);
 
               // WKT from string we're not storing
               std::string wkt{row[import_idx]};
@@ -1436,39 +1548,56 @@ static ImportStatus import_thread_delimited(
               std::vector<int> poly_rings;
               int render_group = 0;
 
-              if (col_type == kPOINT && wkt.size() > 0 && (wkt[0] == '.' || isdigit(wkt[0]) || wkt[0] == '-')) {
+              if (col_type == kPOINT && wkt.size() > 0 &&
+                  (wkt[0] == '.' || isdigit(wkt[0]) || wkt[0] == '-')) {
                 // Invalid WKT, looks more like a scalar.
-                // Try custom POINT import: from two separate scalars rather than WKT string
+                // Try custom POINT import: from two separate scalars rather than WKT
+                // string
                 double lon = std::atof(wkt.c_str());
                 double lat = NAN;
                 std::string lat_str{row[import_idx]};
                 ++import_idx;
-                if (lat_str.size() > 0 && (lat_str[0] == '.' || isdigit(lat_str[0]) || lat_str[0] == '-')) {
+                if (lat_str.size() > 0 &&
+                    (lat_str[0] == '.' || isdigit(lat_str[0]) || lat_str[0] == '-')) {
                   lat = std::atof(lat_str.c_str());
                 }
                 // Swap coordinates if this table uses a reverse order: lat/lon
-                if (!copy_params.lonlat)
+                if (!copy_params.lonlat) {
                   std::swap(lat, lon);
-                // TODO: should check if POINT column should have been declared with SRID WGS 84, EPSG 4326 ?
-                // if (col_ti.get_dimension() != 4326) {
-                //  throw std::runtime_error("POINT column " + cd->columnName + " is not WGS84, cannot insert lon/lat");
+                }
+                // TODO: should check if POINT column should have been declared with SRID
+                // WGS 84, EPSG 4326 ? if (col_ti.get_dimension() != 4326) {
+                //  throw std::runtime_error("POINT column " + cd->columnName + " is not
+                //  WGS84, cannot insert lon/lat");
                 // }
                 if (!importGeoFromLonLat(lon, lat, coords)) {
-                  throw std::runtime_error("Cannot read lon/lat to insert into POINT column " + cd->columnName);
+                  throw std::runtime_error(
+                      "Cannot read lon/lat to insert into POINT column " +
+                      cd->columnName);
                 }
               } else {
                 // import it
                 SQLTypeInfo import_ti;
                 if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
-                        wkt, import_ti, coords, bounds, ring_sizes, poly_rings, PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
-                  throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
+                        wkt,
+                        import_ti,
+                        coords,
+                        bounds,
+                        ring_sizes,
+                        poly_rings,
+                        PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
+                  throw std::runtime_error("Cannot read geometry to insert into column " +
+                                           cd->columnName);
                 }
 
                 // validate types
                 if (col_type != import_ti.get_type()) {
                   if (!PROMOTE_POLYGON_TO_MULTIPOLYGON ||
-                      !(import_ti.get_type() == SQLTypes::kPOLYGON && col_type == SQLTypes::kMULTIPOLYGON)) {
-                    throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
+                      !(import_ti.get_type() == SQLTypes::kPOLYGON &&
+                        col_type == SQLTypes::kMULTIPOLYGON)) {
+                    throw std::runtime_error(
+                        "Imported geometry doesn't match the type of column " +
+                        cd->columnName);
                   }
                 }
 
@@ -1476,7 +1605,8 @@ static ImportStatus import_thread_delimited(
                   // get a suitable render group for these poly coords
                   auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
                   CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
-                  render_group = (*rga_it).second->insertBoundsAndReturnRenderGroup(bounds);
+                  render_group =
+                      (*rga_it).second->insertBoundsAndReturnRenderGroup(bounds);
                 }
               }
 
@@ -1529,7 +1659,8 @@ static ImportStatus import_thread_delimited(
                 ++col_idx;
               }
 
-              if (col_type == kLINESTRING || col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+              if (col_type == kLINESTRING || col_type == kPOLYGON ||
+                  col_type == kMULTIPOLYGON) {
                 ++cd_it;
                 auto cd_bounds = *cd_it;
                 std::vector<TDatum> td_bounds_data;
@@ -1552,7 +1683,8 @@ static ImportStatus import_thread_delimited(
                 TDatum td_render_group;
                 td_render_group.val.int_val = render_group;
                 td_render_group.is_null = false;
-                import_buffers[col_idx]->add_value(cd_render_group, td_render_group, false);
+                import_buffers[col_idx]->add_value(
+                    cd_render_group, td_render_group, false);
                 ++col_idx;
               }
             }
@@ -1563,21 +1695,25 @@ static ImportStatus import_thread_delimited(
             import_buffers[col_idx_to_pop]->pop_value();
           }
           import_status.rows_rejected++;
-          LOG(ERROR) << "Input exception thrown: " << e.what() << ". Row discarded, issue at column : " << (col_idx + 1)
+          LOG(ERROR) << "Input exception thrown: " << e.what()
+                     << ". Row discarded, issue at column : " << (col_idx + 1)
                      << " data :" << row;
         }
       });
       total_str_to_val_time_us += us;
     }
     if (import_status.rows_completed > 0) {
-      load_ms = measure<>::execution([&]() { importer->load(import_buffers, import_status.rows_completed); });
+      load_ms = measure<>::execution(
+          [&]() { importer->load(import_buffers, import_status.rows_completed); });
     }
   });
   if (DEBUG_TIMING && import_status.rows_completed > 0) {
-    LOG(INFO) << "Thread" << std::this_thread::get_id() << ":" << import_status.rows_completed << " rows inserted in "
+    LOG(INFO) << "Thread" << std::this_thread::get_id() << ":"
+              << import_status.rows_completed << " rows inserted in "
               << (double)ms / 1000.0 << "sec, Insert Time: " << (double)load_ms / 1000.0
               << "sec, get_row: " << (double)total_get_row_time_us / 1000000.0
-              << "sec, str_to_val: " << (double)total_str_to_val_time_us / 1000000.0 << "sec" << std::endl;
+              << "sec, str_to_val: " << (double)total_str_to_val_time_us / 1000000.0
+              << "sec" << std::endl;
   }
 
   import_status.thread_id = thread_id;
@@ -1598,16 +1734,19 @@ static ImportStatus import_thread_shapefile(
   ImportStatus import_status;
   const CopyParams& copy_params = importer->get_copy_params();
   const std::list<const ColumnDescriptor*>& col_descs = importer->get_column_descs();
-  std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers = importer->get_import_buffers(thread_id);
+  std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers =
+      importer->get_import_buffers(thread_id);
 
-  for (const auto& p : import_buffers)
+  for (const auto& p : import_buffers) {
     p->clear();
+  }
 
   auto convert_timer = timer_start();
 
   for (size_t iFeature = 0; iFeature < numFeatures; iFeature++) {
-    if (!features[iFeature])
+    if (!features[iFeature]) {
       continue;
+    }
 
     // get this feature's geometry
     OGRGeometry* pGeometry = features[iFeature]->GetGeometryRef();
@@ -1624,8 +1763,9 @@ static ImportStatus import_thread_shapefile(
 
     // transform it
     // avoid GDAL error if not transformable
-    if (pGeometry->getSpatialReference())
+    if (pGeometry->getSpatialReference()) {
       pGeometry->transformTo(poGeographicSR);
+    }
 
     size_t col_idx = 0;
     try {
@@ -1653,15 +1793,24 @@ static ImportStatus import_thread_shapefile(
           SQLTypeInfo import_ti;
 
           if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
-                  pGeometry, import_ti, coords, bounds, ring_sizes, poly_rings, PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
-            throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
+                  pGeometry,
+                  import_ti,
+                  coords,
+                  bounds,
+                  ring_sizes,
+                  poly_rings,
+                  PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
+            throw std::runtime_error("Cannot read geometry to insert into column " +
+                                     cd->columnName);
           }
 
           // validate types
           if (col_type != import_ti.get_type()) {
             if (!PROMOTE_POLYGON_TO_MULTIPOLYGON ||
-                !(import_ti.get_type() == SQLTypes::kPOLYGON && col_type == SQLTypes::kMULTIPOLYGON)) {
-              throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
+                !(import_ti.get_type() == SQLTypes::kPOLYGON &&
+                  col_type == SQLTypes::kMULTIPOLYGON)) {
+              throw std::runtime_error(
+                  "Imported geometry doesn't match the type of column " + cd->columnName);
             }
           }
 
@@ -1722,7 +1871,8 @@ static ImportStatus import_thread_shapefile(
             ++col_idx;
           }
 
-          if (col_type == kLINESTRING || col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+          if (col_type == kLINESTRING || col_type == kPOLYGON ||
+              col_type == kMULTIPOLYGON) {
             // Create bounds array value and add it to the physical column
             ++cd_it;
             auto cd_bounds = *cd_it;
@@ -1770,17 +1920,24 @@ static ImportStatus import_thread_shapefile(
         import_buffers[col_idx_to_pop]->pop_value();
       }
       import_status.rows_rejected++;
-      LOG(ERROR) << "Input exception thrown: " << e.what() << ". Row discarded, issue at column : " << (col_idx + 1);
+      LOG(ERROR) << "Input exception thrown: " << e.what()
+                 << ". Row discarded, issue at column : " << (col_idx + 1);
     }
   }
   float convert_ms =
-      float(timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(convert_timer)) / 1000.0f;
+      float(timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(
+          convert_timer)) /
+      1000.0f;
 
   float load_ms = 0.0f;
   if (import_status.rows_completed > 0) {
     auto load_timer = timer_start();
     importer->load(import_buffers, import_status.rows_completed);
-    load_ms = float(timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(load_timer)) / 1000.0f;
+    load_ms =
+        float(
+            timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(
+                load_timer)) /
+        1000.0f;
   }
 
   if (DEBUG_TIMING && import_status.rows_completed > 0) {
@@ -1790,11 +1947,13 @@ static ImportStatus import_thread_shapefile(
 
   import_status.thread_id = thread_id;
 
-  if (DEBUG_TIMING)
+  if (DEBUG_TIMING) {
     LOG(INFO) << "DEBUG:      Total "
-              << float(timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(convert_timer)) /
+              << float(timer_stop<std::chrono::steady_clock::time_point,
+                                  std::chrono::microseconds>(convert_timer)) /
                      1000.0f
               << "ms";
+  }
 
   return import_status;
 }
@@ -1802,24 +1961,28 @@ static ImportStatus import_thread_shapefile(
 static size_t find_end(const char* buffer, size_t size, const CopyParams& copy_params) {
   int i;
   // @TODO(wei) line_delim is in quotes note supported
-  for (i = size - 1; i >= 0 && buffer[i] != copy_params.line_delim; i--)
+  for (i = size - 1; i >= 0 && buffer[i] != copy_params.line_delim; i--) {
     ;
+  }
 
   if (i < 0) {
     int slen = size < 50 ? size : 50;
     std::string showMsgStr(buffer, buffer + slen);
-    LOG(ERROR) << "No line delimiter in block. Block was of size " << size << " bytes, first few characters "
-               << showMsgStr;
+    LOG(ERROR) << "No line delimiter in block. Block was of size " << size
+               << " bytes, first few characters " << showMsgStr;
     return size;
   }
   return i + 1;
 }
 
-bool Loader::loadNoCheckpoint(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers, size_t row_count) {
+bool Loader::loadNoCheckpoint(
+    const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+    size_t row_count) {
   return loadImpl(import_buffers, row_count, false);
 }
 
-bool Loader::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers, size_t row_count) {
+bool Loader::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+                  size_t row_count) {
   return loadImpl(import_buffers, row_count, true);
 }
 
@@ -1881,7 +2044,8 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
     all_shard_import_buffers.emplace_back();
     for (const auto& typed_import_buffer : import_buffers) {
       all_shard_import_buffers.back().emplace_back(
-          new TypedImportBuffer(typed_import_buffer->getColumnDesc(), typed_import_buffer->getStringDictionary()));
+          new TypedImportBuffer(typed_import_buffer->getColumnDesc(),
+                                typed_import_buffer->getStringDictionary()));
     }
   }
   CHECK_GT(table_desc->shardedColumnId, 0);
@@ -1898,7 +2062,8 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
   CHECK_LE(static_cast<size_t>(table_desc->shardedColumnId), import_buffers.size());
   auto& shard_column_input_buffer = import_buffers[table_desc->shardedColumnId - 1];
   const auto& shard_col_ti = shard_col_desc->columnType;
-  CHECK(shard_col_ti.is_integer() || (shard_col_ti.is_string() && shard_col_ti.get_compression() == kENCODING_DICT));
+  CHECK(shard_col_ti.is_integer() ||
+        (shard_col_ti.is_string() && shard_col_ti.get_compression() == kENCODING_DICT));
   if (shard_col_ti.is_string()) {
     const auto payloads_ptr = shard_column_input_buffer->getStringBuffer();
     CHECK(payloads_ptr);
@@ -1914,22 +2079,27 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
     auto& shard_output_buffers = all_shard_import_buffers[shard];
 
     // when replicate a column, populate 'rows' to all shards only once
-    if (get_replicating())
-      if (i >= shard_count)
+    if (get_replicating()) {
+      if (i >= shard_count) {
         break;
+      }
+    }
 
     for (size_t col_idx = 0; col_idx < import_buffers.size(); ++col_idx) {
       const auto& input_buffer = import_buffers[col_idx];
       const auto& col_ti = input_buffer->getTypeInfo();
-      const auto type = col_ti.is_decimal() ? decimal_to_int_type(col_ti) : col_ti.get_type();
+      const auto type =
+          col_ti.is_decimal() ? decimal_to_int_type(col_ti) : col_ti.get_type();
 
-      // for a replicated (added) column, populate rows_per_shard as per-shard replicate count.
-      // and, bypass non-replicated column.
+      // for a replicated (added) column, populate rows_per_shard as per-shard replicate
+      // count. and, bypass non-replicated column.
       if (get_replicating()) {
-        if (input_buffer->get_replicate_count() > 0)
-          shard_output_buffers[col_idx]->set_replicate_count(std::min<int64_t>(rows_left, rows_per_shard));
-        else
+        if (input_buffer->get_replicate_count() > 0) {
+          shard_output_buffers[col_idx]->set_replicate_count(
+              std::min<int64_t>(rows_left, rows_per_shard));
+        } else {
           continue;
+        }
       }
 
       switch (type) {
@@ -1981,7 +2151,8 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
         case kPOLYGON:
         case kMULTIPOLYGON: {
           CHECK_LT(i, input_buffer->getGeoStringBuffer()->size());
-          shard_output_buffers[col_idx]->addGeoString((*input_buffer->getGeoStringBuffer())[i]);
+          shard_output_buffers[col_idx]->addGeoString(
+              (*input_buffer->getGeoStringBuffer())[i]);
           break;
         }
         default:
@@ -1989,20 +2160,27 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
       }
     }
     ++all_shard_row_counts[shard];
-    // when replicating a column, row count of a shard == replicate count of the column on the shard
-    if (get_replicating())
+    // when replicating a column, row count of a shard == replicate count of the column on
+    // the shard
+    if (get_replicating()) {
       all_shard_row_counts[shard] = std::min<int64_t>(rows_left, rows_per_shard);
+    }
   }
 }
 
-bool Loader::loadImpl(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
-                      size_t row_count,
-                      bool checkpoint) {
+bool Loader::loadImpl(
+    const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+    size_t row_count,
+    bool checkpoint) {
   if (table_desc->nShards) {
     std::vector<OneShardBuffers> all_shard_import_buffers;
     std::vector<size_t> all_shard_row_counts;
     const auto shard_tables = catalog.getPhysicalTablesDescriptors(table_desc);
-    distributeToShards(all_shard_import_buffers, all_shard_row_counts, import_buffers, row_count, shard_tables.size());
+    distributeToShards(all_shard_import_buffers,
+                       all_shard_row_counts,
+                       import_buffers,
+                       row_count,
+                       shard_tables.size());
     bool success = true;
     for (size_t shard_idx = 0; shard_idx < shard_tables.size(); ++shard_idx) {
       if (!all_shard_row_counts[shard_idx]) {
@@ -2018,17 +2196,20 @@ bool Loader::loadImpl(const std::vector<std::unique_ptr<TypedImportBuffer>>& imp
   return loadToShard(import_buffers, row_count, table_desc, checkpoint);
 }
 
-bool Loader::loadToShard(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
-                         size_t row_count,
-                         const TableDescriptor* shard_table,
-                         bool checkpoint) {
+bool Loader::loadToShard(
+    const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+    size_t row_count,
+    const TableDescriptor* shard_table,
+    bool checkpoint) {
   std::lock_guard<std::mutex> loader_lock(loader_mutex_);
   // patch insert_data with new column
-  if (this->get_replicating())
+  if (this->get_replicating()) {
     for (const auto& import_buff : import_buffers) {
       insert_data.replicate_count = import_buff->get_replicate_count();
-      insert_data.columnDescriptors[import_buff->getColumnDesc()->columnId] = import_buff->getColumnDesc();
+      insert_data.columnDescriptors[import_buff->getColumnDesc()->columnId] =
+          import_buff->getColumnDesc();
     }
+  }
 
   Fragmenter_Namespace::InsertData ins_data(insert_data);
   ins_data.numRows = row_count;
@@ -2056,18 +2237,20 @@ bool Loader::loadToShard(const std::vector<std::unique_ptr<TypedImportBuffer>>& 
         CHECK(import_buff->getTypeInfo().get_compression() == kENCODING_DICT);
         import_buff->addDictEncodedStringArray(*import_buff->getStringArrayBuffer());
         p.arraysPtr = import_buff->getStringArrayDictBuffer();
-      } else
+      } else {
         p.arraysPtr = import_buff->getArrayBuffer();
+      }
     }
     ins_data.data.push_back(p);
     ins_data.bypass.push_back(0 == import_buff->get_replicate_count());
   }
   {
     try {
-      if (checkpoint)
+      if (checkpoint) {
         shard_table->fragmenter->insertData(ins_data);
-      else
+      } else {
         shard_table->fragmenter->insertDataNoCheckpoint(ins_data);
+      }
     } catch (std::exception& e) {
       LOG(ERROR) << "Fragmenter Insert Exception: " << e.what();
       success = false;
@@ -2097,43 +2280,52 @@ void Detector::init() {
   find_best_sqltypes_and_headers();
 }
 
-ImportStatus Detector::importDelimited(const std::string& file_path, const bool decompressed) {
-  if (!p_file)
+ImportStatus Detector::importDelimited(const std::string& file_path,
+                                       const bool decompressed) {
+  if (!p_file) {
     p_file = fopen(file_path.c_str(), "rb");
-  if (!p_file)
-    throw std::runtime_error("failed to open file '" + file_path + "': " + strerror(errno));
+  }
+  if (!p_file) {
+    throw std::runtime_error("failed to open file '" + file_path +
+                             "': " + strerror(errno));
+  }
 
   // somehow clang does not support ext/stdio_filebuf.h, so
   // need to diy readline with customized copy_params.line_delim...
   char line[1 << 20];
-  auto end_time = std::chrono::steady_clock::now() + timeout * (boost::istarts_with(file_path, "s3://") ? 3 : 1);
+  auto end_time = std::chrono::steady_clock::now() +
+                  timeout * (boost::istarts_with(file_path, "s3://") ? 3 : 1);
   try {
     while (!feof(p_file)) {
       int c;
       size_t n = 0;
       while (EOF != (c = fgetc(p_file)) && copy_params.line_delim != c) {
         line[n++] = c;
-        if (n >= sizeof(line) - 1)
+        if (n >= sizeof(line) - 1) {
           break;
+        }
       }
-      if (0 == n)
+      if (0 == n) {
         break;
+      }
       line[n] = 0;
       // remember the first line, which is possibly a header line, to
       // ignore identical header line(s) in 2nd+ files of a archive;
       // otherwise, 2nd+ header may be mistaken as an all-string row
       // and so be final column types.
-      if (line1.empty())
+      if (line1.empty()) {
         line1 = line;
-      else if (line == line1)
+      } else if (line == line1) {
         continue;
+      }
 
       raw_data += std::string(line, n);
       raw_data += copy_params.line_delim;
       ++import_status.rows_completed;
       if (std::chrono::steady_clock::now() > end_time) {
-        if (import_status.rows_completed > 10000)
+        if (import_status.rows_completed > 10000) {
           break;
+        }
       }
     }
   } catch (std::exception& e) {
@@ -2179,7 +2371,8 @@ void Detector::split_raw_data() {
     raw_rows.clear();
     for (const char* p = buf; p < buf_end; p++) {
       std::vector<std::string> row;
-      p = get_row(p, buf_end, buf_end, copy_params, true, nullptr, row, try_single_thread);
+      p = get_row(
+          p, buf_end, buf_end, copy_params, true, nullptr, row, try_single_thread);
       raw_rows.push_back(row);
     }
   }
@@ -2213,7 +2406,8 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
     type = kDOUBLE;
     /*if (try_cast<bool>(str)) {
       type = kBOOLEAN;
-    }*/ if (try_cast<int16_t>(str)) {
+    }*/
+    if (try_cast<int16_t>(str)) {
       type = kSMALLINT;
     } else if (try_cast<int32_t>(str)) {
       type = kINT;
@@ -2228,7 +2422,8 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
   if (type == kTEXT) {
     // convert to upper case
     std::string str_upper_case = str;
-    std::transform(str_upper_case.begin(), str_upper_case.end(), str_upper_case.begin(), ::toupper);
+    std::transform(
+        str_upper_case.begin(), str_upper_case.end(), str_upper_case.begin(), ::toupper);
 
     // then test for leading words
     if (str_upper_case.find("POINT") == 0) {
@@ -2243,7 +2438,8 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
       }
     } else if (str_upper_case.find("MULTIPOLYGON") == 0) {
       type = kMULTIPOLYGON;
-    } else if (str_upper_case.find_first_not_of("0123456789ABCDEF") == std::string::npos &&
+    } else if (str_upper_case.find_first_not_of("0123456789ABCDEF") ==
+                   std::string::npos &&
                (str_upper_case.size() % 2) == 0) {
       // could be a WKB hex blob
       // we can't handle these yet
@@ -2267,7 +2463,8 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
         buf++;
       }
     }
-    buf = try_strptimes(buf == nullptr ? str.c_str() : buf, {"%T %z", "%T", "%H%M%S", "%R"});
+    buf = try_strptimes(buf == nullptr ? str.c_str() : buf,
+                        {"%T %z", "%T", "%H%M%S", "%R"});
     if (buf) {
       if (type == kDATE) {
         type = kTIMESTAMP;
@@ -2312,7 +2509,8 @@ bool Detector::more_restrictive_sqltype(const SQLTypes a, const SQLTypes b) {
 
 void Detector::find_best_sqltypes_and_headers() {
   best_sqltypes = find_best_sqltypes(raw_rows.begin() + 1, raw_rows.end(), copy_params);
-  best_encodings = find_best_encodings(raw_rows.begin() + 1, raw_rows.end(), best_sqltypes);
+  best_encodings =
+      find_best_encodings(raw_rows.begin() + 1, raw_rows.end(), best_sqltypes);
   std::vector<SQLTypes> head_types = detect_column_types(raw_rows.at(0));
   has_headers = detect_headers(head_types, best_sqltypes);
   copy_params.has_header = has_headers;
@@ -2322,8 +2520,9 @@ void Detector::find_best_sqltypes() {
   best_sqltypes = find_best_sqltypes(raw_rows.begin(), raw_rows.end(), copy_params);
 }
 
-std::vector<SQLTypes> Detector::find_best_sqltypes(const std::vector<std::vector<std::string>>& raw_rows,
-                                                   const CopyParams& copy_params) {
+std::vector<SQLTypes> Detector::find_best_sqltypes(
+    const std::vector<std::vector<std::string>>& raw_rows,
+    const CopyParams& copy_params) {
   return find_best_sqltypes(raw_rows.begin(), raw_rows.end(), copy_params);
 }
 
@@ -2332,7 +2531,8 @@ std::vector<SQLTypes> Detector::find_best_sqltypes(
     const std::vector<std::vector<std::string>>::const_iterator& row_end,
     const CopyParams& copy_params) {
   if (raw_rows.size() < 1) {
-    throw std::runtime_error("No rows found in: " + boost::filesystem::basename(file_path));
+    throw std::runtime_error("No rows found in: " +
+                             boost::filesystem::basename(file_path));
   }
   auto end_time = std::chrono::steady_clock::now() + timeout;
   size_t num_cols = raw_rows.front().size();
@@ -2345,8 +2545,9 @@ std::vector<SQLTypes> Detector::find_best_sqltypes(
     }
     for (size_t col_idx = 0; col_idx < row->size(); col_idx++) {
       // do not count nulls
-      if (row->at(col_idx) == "" || !row->at(col_idx).compare(copy_params.null_str))
+      if (row->at(col_idx) == "" || !row->at(col_idx).compare(copy_params.null_str)) {
         continue;
+      }
       SQLTypes t = detect_sqltype(row->at(col_idx));
       non_null_col_counts[col_idx]++;
       if (!more_restrictive_sqltype(best_types[col_idx], t)) {
@@ -2360,8 +2561,9 @@ std::vector<SQLTypes> Detector::find_best_sqltypes(
   for (size_t col_idx = 0; col_idx < num_cols; col_idx++) {
     // if we don't have any non-null values for this column make it text to be
     // safe b/c that is least restrictive type
-    if (non_null_col_counts[col_idx] == 0)
+    if (non_null_col_counts[col_idx] == 0) {
       best_types[col_idx] = kTEXT;
+    }
   }
 
   return best_types;
@@ -2372,7 +2574,8 @@ std::vector<EncodingType> Detector::find_best_encodings(
     const std::vector<std::vector<std::string>>::const_iterator& row_end,
     const std::vector<SQLTypes>& best_types) {
   if (raw_rows.size() < 1) {
-    throw std::runtime_error("No rows found in: " + boost::filesystem::basename(file_path));
+    throw std::runtime_error("No rows found in: " +
+                             boost::filesystem::basename(file_path));
   }
   size_t num_cols = best_types.size();
   std::vector<EncodingType> best_encodes(num_cols, kENCODING_NONE);
@@ -2388,7 +2591,8 @@ std::vector<EncodingType> Detector::find_best_encodings(
   }
   for (size_t col_idx = 0; col_idx < num_cols; col_idx++) {
     if (IS_STRING(best_types[col_idx])) {
-      float uniqueRatio = static_cast<float>(count_set[col_idx].size()) / num_rows_per_col[col_idx];
+      float uniqueRatio =
+          static_cast<float>(count_set[col_idx].size()) / num_rows_per_col[col_idx];
       if (uniqueRatio < 0.75) {
         best_encodes[col_idx] = kENCODING_DICT;
       }
@@ -2406,14 +2610,17 @@ bool Detector::detect_headers(const std::vector<std::vector<std::string>>& raw_r
     return false;
   }
   std::vector<SQLTypes> head_types = detect_column_types(raw_rows.at(0));
-  std::vector<SQLTypes> tail_types = find_best_sqltypes(raw_rows.begin() + 1, raw_rows.end(), copy_params);
+  std::vector<SQLTypes> tail_types =
+      find_best_sqltypes(raw_rows.begin() + 1, raw_rows.end(), copy_params);
   return detect_headers(head_types, tail_types);
 }
 
 // detect_headers returns true if:
 // - all elements of the first argument are kTEXT
-// - there is at least one instance where tail_types is more restrictive than head_types (ie, not kTEXT)
-bool Detector::detect_headers(const std::vector<SQLTypes>& head_types, const std::vector<SQLTypes>& tail_types) {
+// - there is at least one instance where tail_types is more restrictive than head_types
+// (ie, not kTEXT)
+bool Detector::detect_headers(const std::vector<SQLTypes>& head_types,
+                              const std::vector<SQLTypes>& tail_types) {
   if (head_types.size() != tail_types.size()) {
     return false;
   }
@@ -2430,7 +2637,8 @@ bool Detector::detect_headers(const std::vector<SQLTypes>& head_types, const std
 std::vector<std::vector<std::string>> Detector::get_sample_rows(size_t n) {
   n = std::min(n, raw_rows.size());
   size_t offset = (has_headers && raw_rows.size() > 1) ? 1 : 0;
-  std::vector<std::vector<std::string>> sample_rows(raw_rows.begin() + offset, raw_rows.begin() + n);
+  std::vector<std::vector<std::string>> sample_rows(raw_rows.begin() + offset,
+                                                    raw_rows.begin() + n);
   return sample_rows;
 }
 
@@ -2442,9 +2650,11 @@ std::vector<std::string> Detector::get_headers() {
   return headers;
 }
 
-void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers, size_t row_count) {
-  if (!loader->loadNoCheckpoint(import_buffers, row_count))
+void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+                    size_t row_count) {
+  if (!loader->loadNoCheckpoint(import_buffers, row_count)) {
     load_failed = true;
+  }
 }
 
 ImportStatus DataStreamSink::archivePlumber() {
@@ -2452,8 +2662,9 @@ ImportStatus DataStreamSink::archivePlumber() {
   // contain a file path, a url or a wildcard of file paths.
   // see CopyTableStmt::execute.
   auto file_paths = mapd_glob(file_path);
-  if (file_paths.size() == 0)
+  if (file_paths.size() == 0) {
     file_paths.push_back(file_path);
+  }
 
   // s3 parquet goes different route because the files do not use libarchive
   // but parquet api, and they need to landed like .7z files.
@@ -2461,10 +2672,11 @@ ImportStatus DataStreamSink::archivePlumber() {
   // note: parquet must be explicitly specified by a WITH parameter "parquet='true'".
   //       without the parameter, it means plain or compressed csv files.
   // note: .ORC and AVRO files should follow a similar path to Parquet?
-  if (copy_params.is_parquet)
+  if (copy_params.is_parquet) {
     import_parquet(file_paths);
-  else
+  } else {
     import_compressed(file_paths);
+  }
   return import_status;
 }
 
@@ -2496,27 +2708,36 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {
 #else
       throw std::runtime_error("AWS S3 support not available");
 #endif  // HAVE_AWS_S3
-    } else
+    } else {
       objkeys.emplace_back(file_path);
+    }
 
     // for each obj key of a s3 url we need to land it before
     // importing it like doing with a 'local file'.
-    for (auto const& objkey : objkeys)
+    for (auto const& objkey : objkeys) {
       try {
-        auto file_path = us3arch ? us3arch->land(objkey, teptr, nullptr != dynamic_cast<Detector*>(this)) : objkey;
-        if (boost::filesystem::exists(file_path))
+        auto file_path =
+            us3arch
+                ? us3arch->land(objkey, teptr, nullptr != dynamic_cast<Detector*>(this))
+                : objkey;
+        if (boost::filesystem::exists(file_path)) {
           import_local_parquet(file_path);
-        if (us3arch)
+        }
+        if (us3arch) {
           us3arch->vacuum(objkey);
+        }
       } catch (...) {
-        if (us3arch)
+        if (us3arch) {
           us3arch->vacuum(objkey);
+        }
         throw;
       }
+    }
   }
   // rethrow any exception happened herebefore
-  if (teptr)
+  if (teptr) {
     std::rethrow_exception(teptr);
+  }
 }
 
 void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
@@ -2524,8 +2745,9 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
   // Importer::importDelimited, so need to move pipe related
   // stuff to the outmost block.
   int fd[2];
-  if (pipe(fd) < 0)
+  if (pipe(fd) < 0) {
     throw std::runtime_error(std::string("failed to create a pipe: ") + strerror(errno));
+  }
   signal(SIGPIPE, SIG_IGN);
 
   std::exception_ptr teptr;
@@ -2535,19 +2757,23 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
   auto th_pipe_reader = std::thread([&]() {
     try {
       // importDelimited will read from FILE* p_file
-      if (0 == (p_file = fdopen(fd[0], "r")))
-        throw std::runtime_error(std::string("failed to open a pipe: ") + strerror(errno));
+      if (0 == (p_file = fdopen(fd[0], "r"))) {
+        throw std::runtime_error(std::string("failed to open a pipe: ") +
+                                 strerror(errno));
+      }
 
       // in future, depending on data types of this uncompressed stream
       // it can be feed into other function such like importParquet, etc
       ret = importDelimited(file_path, true);
     } catch (...) {
-      if (!teptr)  // no replace
+      if (!teptr) {  // no replace
         teptr = std::current_exception();
+      }
     }
 
-    if (p_file)
+    if (p_file) {
       fclose(p_file);
+    }
     p_file = 0;
   });
 
@@ -2563,9 +2789,9 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
         std::map<int, std::string> url_parts;
         Archive::parse_url(file_path, url_parts);
         const std::string S3_objkey_url_scheme = "s3ok";
-        if ("file" == url_parts[2] || "" == url_parts[2])
+        if ("file" == url_parts[2] || "" == url_parts[2]) {
           uarch.reset(new PosixFileArchive(file_path, copy_params.plain_text));
-        else if ("s3" == url_parts[2]) {
+        } else if ("s3" == url_parts[2]) {
 #ifdef HAVE_AWS_S3
           // new a S3Archive with a shared s3client.
           // should be safe b/c no wildcard with s3 url
@@ -2576,8 +2802,9 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
                                       copy_params.plain_text));
           us3arch->init_for_read();
           // not land all files here but one by one in following iterations
-          for (const auto& objkey : us3arch->get_objkeys())
+          for (const auto& objkey : us3arch->get_objkeys()) {
             file_paths.emplace_back(std::string(S3_objkey_url_scheme) + "://" + objkey);
+          }
           continue;
 #else
           throw std::runtime_error("AWS S3 support not available");
@@ -2585,9 +2812,11 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
         } else if (S3_objkey_url_scheme == url_parts[2]) {
 #ifdef HAVE_AWS_S3
           auto objkey = file_path.substr(3 + S3_objkey_url_scheme.size());
-          auto file_path = us3arch->land(objkey, teptr, nullptr != dynamic_cast<Detector*>(this));
-          if (0 == file_path.size())
+          auto file_path =
+              us3arch->land(objkey, teptr, nullptr != dynamic_cast<Detector*>(this));
+          if (0 == file_path.size()) {
             throw std::runtime_error(std::string("failed to land s3 object: ") + objkey);
+          }
           uarch.reset(new PosixFileArchive(file_path, copy_params.plain_text));
           // file not removed until file closed
           us3arch->vacuum(objkey);
@@ -2600,8 +2829,9 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
         if ("hdfs" == url_parts[2])
           uarch.reset(new HdfsArchive(file_path));
 #endif
-        else
+        else {
           throw std::runtime_error(std::string("unsupported archive url: ") + file_path);
+        }
 
         // init the archive for read
         auto& arch = *uarch;
@@ -2615,7 +2845,7 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
         bool stop = false;
         // start reading uncompressed bytes of this archive from libarchive
         // note! this archive may contain more than one files!
-        while (!stop && !!(just_saw_header = arch.read_next_header()))
+        while (!stop && !!(just_saw_header = arch.read_next_header())) {
           while (!stop && arch.read_data_block(&buf, &size, &offset)) {
             // one subtle point here is now we concatenate all files
             // to a single FILE stream with which we call importDelimited
@@ -2626,42 +2856,59 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
             const char* buf2 = (const char*)buf;
             int size2 = size;
             if (copy_params.has_header && just_saw_header) {
-              while (size2-- > 0)
-                if (*buf2++ == copy_params.line_delim)
+              while (size2-- > 0) {
+                if (*buf2++ == copy_params.line_delim) {
                   break;
-              if (size2 <= 0)
+                }
+              }
+              if (size2 <= 0) {
                 LOG(WARNING) << "No line delimiter in block." << std::endl;
+              }
               just_saw_header = false;
             }
-            // In very rare occasions the write pipe somehow operates in a mode similar to non-blocking
-            // while pipe(fds) should behave like pipe2(fds, 0) which means blocking mode. On such a
-            // unreliable blocking mode, a possible fix is to loop reading till no bytes left, otherwise
-            // the annoying `failed to write pipe: Success`...
-            if (size2 > 0)
-              for (int nread = 0, nleft = size2; nleft > 0; nleft -= (nread > 0 ? nread : 0)) {
+            // In very rare occasions the write pipe somehow operates in a mode similar to
+            // non-blocking while pipe(fds) should behave like pipe2(fds, 0) which means
+            // blocking mode. On such a unreliable blocking mode, a possible fix is to
+            // loop reading till no bytes left, otherwise the annoying `failed to write
+            // pipe: Success`...
+            if (size2 > 0) {
+              for (int nread = 0, nleft = size2; nleft > 0;
+                   nleft -= (nread > 0 ? nread : 0)) {
                 nread = write(fd[1], buf2, nleft);
-                if (nread == nleft)
+                if (nread == nleft) {
                   break;  // done
+                }
                 // no exception when too many rejected
                 if (import_status.load_truncated) {
                   stop = true;
                   break;
                 }
                 // not to overwrite original error
-                if (nread < 0 && !(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK))
-                  throw std::runtime_error(std::string("failed or interrupted write to pipe: ") + strerror(errno));
+                if (nread < 0 &&
+                    !(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) {
+                  throw std::runtime_error(
+                      std::string("failed or interrupted write to pipe: ") +
+                      strerror(errno));
+                }
               }
+            }
           }
+        }
       } catch (...) {
-        // when import is aborted because too many data errors or because end of a detection,
-        // any exception thrown by s3 sdk or libarchive is okay and should be suppressed.
-        if (import_status.load_truncated)
+        // when import is aborted because too many data errors or because end of a
+        // detection, any exception thrown by s3 sdk or libarchive is okay and should be
+        // suppressed.
+        if (import_status.load_truncated) {
           break;
-        if (import_status.rows_completed > 0)
-          if (nullptr != dynamic_cast<Detector*>(this))
+        }
+        if (import_status.rows_completed > 0) {
+          if (nullptr != dynamic_cast<Detector*>(this)) {
             break;
-        if (!teptr)  // no replace
+          }
+        }
+        if (!teptr) {  // no replace
           teptr = std::current_exception();
+        }
         break;
       }
     }
@@ -2673,25 +2920,30 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
   th_pipe_writer.join();
 
   // rethrow any exception happened herebefore
-  if (teptr)
+  if (teptr) {
     std::rethrow_exception(teptr);
+  }
 }
 
 ImportStatus Importer::import() {
   return DataStreamSink::archivePlumber();
 }
 
-#define IMPORT_FILE_BUFFER_SIZE (1 << 23)  // not too big (need much memory) but not too small (many thread forks)
-#define MIN_FILE_BUFFER_SIZE 50000         // 50K min buffer
+#define IMPORT_FILE_BUFFER_SIZE \
+  (1 << 23)  // not too big (need much memory) but not too small (many thread forks)
+#define MIN_FILE_BUFFER_SIZE 50000  // 50K min buffer
 
-ImportStatus Importer::importDelimited(const std::string& file_path, const bool decompressed) {
+ImportStatus Importer::importDelimited(const std::string& file_path,
+                                       const bool decompressed) {
   bool load_truncated = false;
   set_import_status(import_id, import_status);
 
-  if (!p_file)
-    p_file = fopen(file_path.c_str(), "rb");
   if (!p_file) {
-    throw std::runtime_error("failed to open file '" + file_path + "': " + strerror(errno));
+    p_file = fopen(file_path.c_str(), "rb");
+  }
+  if (!p_file) {
+    throw std::runtime_error("failed to open file '" + file_path +
+                             "': " + strerror(errno));
   }
 
   if (!decompressed) {
@@ -2699,21 +2951,24 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
     file_size = ftell(p_file);
   }
 
-  if (copy_params.threads == 0)
+  if (copy_params.threads == 0) {
     max_threads = static_cast<size_t>(sysconf(_SC_NPROCESSORS_CONF));
-  else
+  } else {
     max_threads = static_cast<size_t>(copy_params.threads);
+  }
 
   // deal with small files
   size_t alloc_size = IMPORT_FILE_BUFFER_SIZE;
-  if (!decompressed && file_size < alloc_size)
+  if (!decompressed && file_size < alloc_size) {
     alloc_size = file_size;
+  }
 
   for (size_t i = 0; i < max_threads; i++) {
     import_buffers_vec.push_back(std::vector<std::unique_ptr<TypedImportBuffer>>());
-    for (const auto cd : loader->get_column_descs())
-      import_buffers_vec[i].push_back(
-          std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, loader->get_string_dict(cd))));
+    for (const auto cd : loader->get_column_descs()) {
+      import_buffers_vec[i].push_back(std::unique_ptr<TypedImportBuffer>(
+          new TypedImportBuffer(cd, loader->get_string_dict(cd))));
+    }
   }
 
   std::shared_ptr<char> sbuffer(new char[alloc_size]);
@@ -2727,8 +2982,8 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
 
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-  auto columnDescriptors =
-      loader->get_catalog().getAllColumnMetadataForTable(loader->get_table_desc()->tableId, false, false, false);
+  auto columnDescriptors = loader->get_catalog().getAllColumnMetadataForTable(
+      loader->get_table_desc()->tableId, false, false, false);
   for (auto cd : columnDescriptors) {
     SQLTypes ct = cd->columnType.get_type();
     if (ct == kPOLYGON || ct == kMULTIPOLYGON) {
@@ -2738,27 +2993,31 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
     }
   }
 
-  ChunkKey chunkKey = {loader->get_catalog().get_currentDB().dbId, loader->get_table_desc()->tableId};
+  ChunkKey chunkKey = {loader->get_catalog().get_currentDB().dbId,
+                       loader->get_table_desc()->tableId};
   {
     std::list<std::future<ImportStatus>> threads;
 
     // use a stack to track thread_ids which must not overlap among threads
     // because thread_id is used to index import_buffers_vec[]
     std::stack<size_t> stack_thread_ids;
-    for (size_t i = 0; i < max_threads; i++)
+    for (size_t i = 0; i < max_threads; i++) {
       stack_thread_ids.push(i);
+    }
 
     auto start_epoch = loader->getTableEpoch();
     while (size > 0) {
-      if (eof_reached)
+      if (eof_reached) {
         end_pos = size;
-      else
+      } else {
         end_pos = find_end(sbuffer.get(), size, copy_params);
+      }
       // unput residual
       int nresidual = size - end_pos;
       std::unique_ptr<char> unbuf(nresidual > 0 ? new char[nresidual] : nullptr);
-      if (unbuf)
+      if (unbuf) {
         memcpy(unbuf.get(), sbuffer.get() + end_pos, nresidual);
+      }
 
       // get a thread_id not in use
       auto thread_id = stack_thread_ids.top();
@@ -2778,44 +3037,57 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
       current_pos += end_pos;
       sbuffer.reset(new char[alloc_size]);
       memcpy(sbuffer.get(), unbuf.get(), nresidual);
-      size = nresidual + fread(sbuffer.get() + nresidual, 1, IMPORT_FILE_BUFFER_SIZE - nresidual, p_file);
-      if (size < IMPORT_FILE_BUFFER_SIZE && feof(p_file))
+      size = nresidual + fread(sbuffer.get() + nresidual,
+                               1,
+                               IMPORT_FILE_BUFFER_SIZE - nresidual,
+                               p_file);
+      if (size < IMPORT_FILE_BUFFER_SIZE && feof(p_file)) {
         eof_reached = true;
+      }
 
       begin_pos = 0;
 
       while (threads.size() > 0) {
         int nready = 0;
-        for (std::list<std::future<ImportStatus>>::iterator it = threads.begin(); it != threads.end(); it = it) {
+        for (std::list<std::future<ImportStatus>>::iterator it = threads.begin();
+             it != threads.end();
+             it = it) {
           auto& p = *it;
-          std::chrono::milliseconds span(0);  //(std::distance(it, threads.end()) == 1? 1: 0);
+          std::chrono::milliseconds span(
+              0);  //(std::distance(it, threads.end()) == 1? 1: 0);
           if (p.wait_for(span) == std::future_status::ready) {
             auto ret_import_status = p.get();
             import_status += ret_import_status;
-            import_status.rows_estimated = ((float)file_size / current_pos) * import_status.rows_completed;
+            import_status.rows_estimated =
+                ((float)file_size / current_pos) * import_status.rows_completed;
             set_import_status(import_id, import_status);
 
             // recall thread_id for reuse
             stack_thread_ids.push(ret_import_status.thread_id);
-            // LOG(INFO) << " stack_thread_ids.push " << ret_import_status.thread_id << std::endl;
+            // LOG(INFO) << " stack_thread_ids.push " << ret_import_status.thread_id <<
+            // std::endl;
 
             threads.erase(it++);
             ++nready;
-          } else
+          } else {
             ++it;
+          }
         }
 
-        if (nready == 0)
+        if (nready == 0) {
           std::this_thread::yield();
+        }
 
         // on eof, wait all threads to finish
-        if (0 == size)
+        if (0 == size) {
           continue;
+        }
 
         // keep reading if any free thread slot
         // this is one of the major difference from old threading model !!
-        if (threads.size() < max_threads)
+        if (threads.size() < max_threads) {
           break;
+        }
       }
 
       if (import_status.rows_rejected > copy_params.max_reject) {
@@ -2826,14 +3098,16 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
       }
       if (load_failed) {
         load_truncated = true;
-        LOG(ERROR) << "A call to the Loader::load failed, Please review the logs for more details";
+        LOG(ERROR) << "A call to the Loader::load failed, Please review the logs for "
+                      "more details";
         break;
       }
     }
 
     // join dangling threads in case of LOG(ERROR) above
-    for (auto& p : threads)
+    for (auto& p : threads) {
       p.wait();
+    }
 
     if (load_failed) {
       // rollback to starting epoch - undo all the added records
@@ -2849,15 +3123,18 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
       if (!load_failed) {
         for (auto& p : import_buffers_vec[0]) {
           if (!p->stringDictCheckpoint()) {
-            LOG(ERROR) << "Checkpointing Dictionary for Column " << p->getColumnDesc()->columnName << " failed.";
+            LOG(ERROR) << "Checkpointing Dictionary for Column "
+                       << p->getColumnDesc()->columnName << " failed.";
             load_failed = true;
             break;
           }
         }
       }
     });
-    if (DEBUG_TIMING)
-      LOG(INFO) << "Dictionary Checkpointing took " << (double)ms / 1000.0 << " Seconds." << std::endl;
+    if (DEBUG_TIMING) {
+      LOG(INFO) << "Dictionary Checkpointing took " << (double)ms / 1000.0 << " Seconds."
+                << std::endl;
+    }
   }
   // must set import_status.load_truncated before closing this end of pipe
   // otherwise, the thread on the other end would throw an unwanted 'write()'
@@ -2877,20 +3154,27 @@ void Loader::checkpoint() {
 }
 
 int32_t Loader::getTableEpoch() {
-  return get_catalog().getTableEpoch(get_catalog().get_currentDB().dbId, get_table_desc()->tableId);
+  return get_catalog().getTableEpoch(get_catalog().get_currentDB().dbId,
+                                     get_table_desc()->tableId);
 }
 
 void Loader::setTableEpoch(int32_t start_epoch) {
-  get_catalog().setTableEpoch(get_catalog().get_currentDB().dbId, get_table_desc()->tableId, start_epoch);
+  get_catalog().setTableEpoch(
+      get_catalog().get_currentDB().dbId, get_table_desc()->tableId, start_epoch);
 }
 
 void GDALErrorHandler(CPLErr eErrClass, int err_no, const char* msg) {
   CHECK(eErrClass >= CE_None && eErrClass <= CE_Fatal);
   static const char* errClassStrings[5] = {
-      "Info", "Debug", "Warning", "Failure", "Fatal",
+      "Info",
+      "Debug",
+      "Warning",
+      "Failure",
+      "Fatal",
   };
-  std::string log_msg = std::string("GDAL ") + errClassStrings[eErrClass] + std::string(": ") + msg +
-                        std::string(" (") + std::to_string(err_no) + std::string(")");
+  std::string log_msg = std::string("GDAL ") + errClassStrings[eErrClass] +
+                        std::string(": ") + msg + std::string(" (") +
+                        std::to_string(err_no) + std::string(")");
   if (eErrClass >= CE_Failure) {
     throw std::runtime_error(log_msg);
   } else {
@@ -2909,7 +3193,9 @@ void Importer::initGDAL() {
   static bool gdal_initialized = false;
   if (!gdal_initialized) {
     // FIXME(andrewseidl): investigate if CPLPushFinderLocation can be public
-    setenv("GDAL_DATA", std::string(mapd_root_abs_path() + "/ThirdParty/gdal-data").c_str(), true);
+    setenv("GDAL_DATA",
+           std::string(mapd_root_abs_path() + "/ThirdParty/gdal-data").c_str(),
+           true);
 
     // configure SSL certificate path (per S3Archive::init_for_read)
     // in a production build, GDAL and Curl will have been built on
@@ -2947,7 +3233,8 @@ void Importer::setGDALAuthorizationTokens(const CopyParams& copy_params) {
   // for now we only support S3
   // @TODO generalize CopyParams to have a dictionary of GDAL tokens
   // only set if non-empty to allow GDAL defaults to persist
-  // explicitly clear if empty to revert to default and not reuse a previous session's keys
+  // explicitly clear if empty to revert to default and not reuse a previous session's
+  // keys
   if (copy_params.s3_region.size()) {
 #if DEBUG_AWS_AUTHENTICATION
     LOG(INFO) << "GDAL: Setting AWS_REGION to '" << copy_params.s3_region << "'";
@@ -2961,7 +3248,8 @@ void Importer::setGDALAuthorizationTokens(const CopyParams& copy_params) {
   }
   if (copy_params.s3_access_key.size()) {
 #if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Setting AWS_ACCESS_KEY_ID to '" << copy_params.s3_access_key << "'";
+    LOG(INFO) << "GDAL: Setting AWS_ACCESS_KEY_ID to '" << copy_params.s3_access_key
+              << "'";
 #endif
     CPLSetConfigOption("AWS_ACCESS_KEY_ID", copy_params.s3_access_key.c_str());
   } else {
@@ -2972,7 +3260,8 @@ void Importer::setGDALAuthorizationTokens(const CopyParams& copy_params) {
   }
   if (copy_params.s3_secret_key.size()) {
 #if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Setting AWS_SECRET_ACCESS_KEY to '" << copy_params.s3_secret_key << "'";
+    LOG(INFO) << "GDAL: Setting AWS_SECRET_ACCESS_KEY to '" << copy_params.s3_secret_key
+              << "'";
 #endif
     CPLSetConfigOption("AWS_SECRET_ACCESS_KEY", copy_params.s3_secret_key.c_str());
   } else {
@@ -2999,7 +3288,8 @@ void Importer::setGDALAuthorizationTokens(const CopyParams& copy_params) {
 }
 
 /* static */
-OGRDataSource* Importer::openGDALDataset(const std::string& file_name, const CopyParams& copy_params) {
+OGRDataSource* Importer::openGDALDataset(const std::string& file_name,
+                                         const CopyParams& copy_params) {
   // lazy init GDAL
   initGDAL();
 
@@ -3011,9 +3301,11 @@ OGRDataSource* Importer::openGDALDataset(const std::string& file_name, const Cop
 #if GDAL_VERSION_MAJOR == 1
   poDS = (OGRDataSource*)OGRSFDriverRegistrar::Open(file_name.c_str(), false);
 #else
-  poDS = (OGRDataSource*)GDALOpenEx(file_name.c_str(), GDAL_OF_VECTOR, nullptr, nullptr, nullptr);
+  poDS = (OGRDataSource*)GDALOpenEx(
+      file_name.c_str(), GDAL_OF_VECTOR, nullptr, nullptr, nullptr);
   if (poDS == nullptr) {
-    poDS = (OGRDataSource*)GDALOpenEx(file_name.c_str(), GDAL_OF_READONLY | GDAL_OF_VECTOR, nullptr, nullptr, nullptr);
+    poDS = (OGRDataSource*)GDALOpenEx(
+        file_name.c_str(), GDAL_OF_READONLY | GDAL_OF_VECTOR, nullptr, nullptr, nullptr);
     if (poDS) {
       LOG(INFO) << "openGDALDataset had to open as read-only";
     }
@@ -3022,20 +3314,22 @@ OGRDataSource* Importer::openGDALDataset(const std::string& file_name, const Cop
   if (poDS == nullptr) {
     LOG(ERROR) << "openGDALDataset Error: " << CPLGetLastErrorMsg();
   }
-  // NOTE(adb): If extending this function, refactor to ensure any errors will not result in a memory leak if GDAL
-  // successfully opened the input dataset.
+  // NOTE(adb): If extending this function, refactor to ensure any errors will not result
+  // in a memory leak if GDAL successfully opened the input dataset.
   return poDS;
 }
 
 /* static */
-void Importer::readMetadataSampleGDAL(const std::string& file_name,
-                                      const std::string& geo_column_name,
-                                      std::map<std::string, std::vector<std::string>>& metadata,
-                                      int rowLimit,
-                                      const CopyParams& copy_params) {
+void Importer::readMetadataSampleGDAL(
+    const std::string& file_name,
+    const std::string& geo_column_name,
+    std::map<std::string, std::vector<std::string>>& metadata,
+    int rowLimit,
+    const CopyParams& copy_params) {
   OGRDataSourceUqPtr poDS(openGDALDataset(file_name, copy_params));
   if (poDS == nullptr) {
-    throw std::runtime_error("openGDALDataset Error: Unable to open geo file " + file_name);
+    throw std::runtime_error("openGDALDataset Error: Unable to open geo file " +
+                             file_name);
   }
   OGRLayer* poLayer = poDS->GetLayer(0);
   if (poLayer == nullptr) {
@@ -3046,7 +3340,8 @@ void Importer::readMetadataSampleGDAL(const std::string& file_name,
   // typeof GetFeatureCount() is different between GDAL 1.x (int32_t) and 2.x (int64_t)
   auto nFeats = poLayer->GetFeatureCount();
   size_t numFeatures =
-      std::max(static_cast<decltype(nFeats)>(0), std::min(static_cast<decltype(nFeats)>(rowLimit), nFeats));
+      std::max(static_cast<decltype(nFeats)>(0),
+               std::min(static_cast<decltype(nFeats)>(rowLimit), nFeats));
   for (auto iField = 0; iField < poFDefn->GetFieldCount(); iField++) {
     OGRFieldDefn* poFieldDefn = poFDefn->GetFieldDefn(iField);
     // FIXME(andrewseidl): change this to the faster one used by readVerticesFromGDAL
@@ -3072,14 +3367,17 @@ void Importer::readMetadataSampleGDAL(const std::string& file_name,
         case wkbMultiPolygon:
           break;
         default:
-          throw std::runtime_error("Unsupported geometry type: " + std::string(poGeometry->getGeometryName()));
+          throw std::runtime_error("Unsupported geometry type: " +
+                                   std::string(poGeometry->getGeometryName()));
       }
 
       // populate metadata for regular fields
       for (auto i : metadata) {
         auto iField = poFeature->GetFieldIndex(i.first.c_str());
-        if (iField >= 0)  // geom is -1
-          metadata[i.first].at(iFeature) = std::string(poFeature->GetFieldAsString(iField));
+        if (iField >= 0) {  // geom is -1
+          metadata[i.first].at(iFeature) =
+              std::string(poFeature->GetFieldAsString(iField));
+        }
       }
 
       // populate metadata for geo column with WKT string
@@ -3143,14 +3441,16 @@ SQLTypes ogr_to_type(const OGRwkbGeometryType& ogr_type) {
 }
 
 /* static */
-const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::string& file_name,
-                                                                    const std::string& geo_column_name,
-                                                                    const CopyParams& copy_params) {
+const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(
+    const std::string& file_name,
+    const std::string& geo_column_name,
+    const CopyParams& copy_params) {
   std::list<ColumnDescriptor> cds;
 
   OGRDataSourceUqPtr poDS(openGDALDataset(file_name, copy_params));
   if (poDS == nullptr) {
-    throw std::runtime_error("openGDALDataset Error: Unable to open geo file " + file_name);
+    throw std::runtime_error("openGDALDataset Error: Unable to open geo file " +
+                             file_name);
   }
   OGRLayer* poLayer = poDS->GetLayer(0);
   if (poLayer == nullptr) {
@@ -3209,7 +3509,9 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::s
   return cds;
 }
 
-bool Importer::gdalStatInternal(const std::string& path, const CopyParams& copy_params, bool also_dir) {
+bool Importer::gdalStatInternal(const std::string& path,
+                                const CopyParams& copy_params,
+                                bool also_dir) {
   // lazy init GDAL
   initGDAL();
 
@@ -3226,8 +3528,9 @@ bool Importer::gdalStatInternal(const std::string& path, const CopyParams& copy_
   // stat path
   VSIStatBufL sb;
   int result = VSIStatExL(path.c_str(), &sb, VSI_STAT_EXISTS_FLAG);
-  if (result < 0)
+  if (result < 0) {
     return false;
+  }
 
   // exists?
   if (also_dir && (VSI_ISREG(sb.st_mode) || VSI_ISDIR(sb.st_mode))) {
@@ -3244,11 +3547,13 @@ bool Importer::gdalFileExists(const std::string& path, const CopyParams& copy_pa
 }
 
 /* static */
-bool Importer::gdalFileOrDirectoryExists(const std::string& path, const CopyParams& copy_params) {
+bool Importer::gdalFileOrDirectoryExists(const std::string& path,
+                                         const CopyParams& copy_params) {
   return gdalStatInternal(path, copy_params, true);
 }
 
-void gdalGatherFilesInArchiveRecursive(const std::string& archive_path, std::vector<std::string>& files) {
+void gdalGatherFilesInArchiveRecursive(const std::string& archive_path,
+                                       std::vector<std::string>& files) {
   // prepare to gather subdirectories
   std::vector<std::string> subdirectories;
 
@@ -3269,13 +3574,15 @@ void gdalGatherFilesInArchiveRecursive(const std::string& archive_path, std::vec
     while (true) {
       // get next entry, or drop out if there isn't one
       char* entry_c = entries[index++];
-      if (!entry_c)
+      if (!entry_c) {
         break;
+      }
       std::string entry(entry_c);
 
       // ignore '.' and '..'
-      if (entry == "." || entry == "..")
+      if (entry == "." || entry == "..") {
         continue;
+      }
 
       // build the full path
       std::string entry_path = archive_path + std::string("/") + entry;
@@ -3283,8 +3590,9 @@ void gdalGatherFilesInArchiveRecursive(const std::string& archive_path, std::vec
       // is it a file or a sub-folder
       VSIStatBufL sb;
       int result = VSIStatExL(entry_path.c_str(), &sb, VSI_STAT_NATURE_FLAG);
-      if (result < 0)
+      if (result < 0) {
         break;
+      }
 
       if (VSI_ISDIR(sb.st_mode)) {
         // add subdirectory to be recursed into
@@ -3303,8 +3611,9 @@ void gdalGatherFilesInArchiveRecursive(const std::string& archive_path, std::vec
 }
 
 /* static */
-std::vector<std::string> Importer::gdalGetAllFilesInArchive(const std::string& archive_path,
-                                                            const CopyParams& copy_params) {
+std::vector<std::string> Importer::gdalGetAllFilesInArchive(
+    const std::string& archive_path,
+    const CopyParams& copy_params) {
   // lazy init GDAL
   initGDAL();
 
@@ -3335,14 +3644,16 @@ bool Importer::gdalSupportsNetworkFileAccess() {
 #endif
 }
 
-ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSourceNameMap) {
+ImportStatus Importer::importGDAL(
+    ColumnNameToSourceNameMapType columnNameToSourceNameMap) {
   // initial status
   bool load_truncated = false;
   set_import_status(import_id, import_status);
 
   OGRDataSourceUqPtr poDS(openGDALDataset(file_path, copy_params));
   if (poDS == nullptr) {
-    throw std::runtime_error("openGDALDataset Error: Unable to open geo file " + file_path);
+    throw std::runtime_error("openGDALDataset Error: Unable to open geo file " +
+                             file_path);
   }
 
   // get the first layer
@@ -3374,24 +3685,27 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 #else
   // how many threads to use
   size_t max_threads = 0;
-  if (copy_params.threads == 0)
+  if (copy_params.threads == 0) {
     max_threads = sysconf(_SC_NPROCESSORS_CONF);
-  else
+  } else {
     max_threads = copy_params.threads;
+  }
 #endif
 
   // make an import buffer for each thread
   CHECK_EQ(import_buffers_vec.size(), 0);
   import_buffers_vec.resize(max_threads);
   for (size_t i = 0; i < max_threads; i++) {
-    for (const auto cd : loader->get_column_descs())
-      import_buffers_vec[i].emplace_back(new TypedImportBuffer(cd, loader->get_string_dict(cd)));
+    for (const auto cd : loader->get_column_descs()) {
+      import_buffers_vec[i].emplace_back(
+          new TypedImportBuffer(cd, loader->get_string_dict(cd)));
+    }
   }
 
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-  auto columnDescriptors =
-      loader->get_catalog().getAllColumnMetadataForTable(loader->get_table_desc()->tableId, false, false, false);
+  auto columnDescriptors = loader->get_catalog().getAllColumnMetadataForTable(
+      loader->get_table_desc()->tableId, false, false, false);
   for (auto cd : columnDescriptors) {
     SQLTypes ct = cd->columnType.get_type();
     if (ct == kPOLYGON || ct == kMULTIPOLYGON) {
@@ -3408,8 +3722,9 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
   // use a stack to track thread_ids which must not overlap among threads
   // because thread_id is used to index import_buffers_vec[]
   std::stack<size_t> stack_thread_ids;
-  for (size_t i = 0; i < max_threads; i++)
+  for (size_t i = 0; i < max_threads; i++) {
     stack_thread_ids.push(i);
+  }
 #endif
 
   // checkpoint the table
@@ -3427,7 +3742,8 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
   size_t firstFeatureThisChunk = 0;
   while (firstFeatureThisChunk < numFeatures) {
     // how many features this chunk
-    size_t numFeaturesThisChunk = std::min(MAX_FEATURES_PER_CHUNK, numFeatures - firstFeatureThisChunk);
+    size_t numFeaturesThisChunk =
+        std::min(MAX_FEATURES_PER_CHUNK, numFeatures - firstFeatureThisChunk);
 
 // get a thread_id not in use
 #if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
@@ -3454,7 +3770,8 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
                                                      columnNameToSourceNameMap,
                                                      columnIdToRenderGroupAnalyzerMap);
     import_status += ret_import_status;
-    import_status.rows_estimated = ((float)firstFeatureThisChunk / (float)numFeatures) * import_status.rows_completed;
+    import_status.rows_estimated = ((float)firstFeatureThisChunk / (float)numFeatures) *
+                                   import_status.rows_completed;
     set_import_status(import_id, import_status);
 #else
     // fire up that thread to import this geometry
@@ -3472,14 +3789,18 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
     // let the threads run
     while (threads.size() > 0) {
       int nready = 0;
-      for (std::list<std::future<ImportStatus>>::iterator it = threads.begin(); it != threads.end(); it = it) {
+      for (std::list<std::future<ImportStatus>>::iterator it = threads.begin();
+           it != threads.end();
+           it = it) {
         auto& p = *it;
-        std::chrono::milliseconds span(0);  //(std::distance(it, threads.end()) == 1? 1: 0);
+        std::chrono::milliseconds span(
+            0);  //(std::distance(it, threads.end()) == 1? 1: 0);
         if (p.wait_for(span) == std::future_status::ready) {
           auto ret_import_status = p.get();
           import_status += ret_import_status;
           import_status.rows_estimated =
-              ((float)firstFeatureThisChunk / (float)numFeatures) * import_status.rows_completed;
+              ((float)firstFeatureThisChunk / (float)numFeatures) *
+              import_status.rows_completed;
           set_import_status(import_id, import_status);
 
           // recall thread_id for reuse
@@ -3487,8 +3808,9 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 
           threads.erase(it++);
           ++nready;
-        } else
+        } else {
           ++it;
+        }
       }
 
       if (nready == 0) {
@@ -3497,8 +3819,9 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 
       // keep reading if any free thread slot
       // this is one of the major difference from old threading model !!
-      if (threads.size() < max_threads)
+      if (threads.size() < max_threads) {
         break;
+      }
     }
 #endif
 
@@ -3513,7 +3836,8 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
     // failed?
     if (load_failed) {
       load_truncated = true;
-      LOG(ERROR) << "A call to the Loader::load failed, Please review the logs for more details";
+      LOG(ERROR)
+          << "A call to the Loader::load failed, Please review the logs for more details";
       break;
     }
 
@@ -3544,10 +3868,12 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 
   if (!load_failed &&
       loader->get_table_desc()->persistenceLevel ==
-          Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
+          Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident
+                                                      // tables
     for (auto& p : import_buffers_vec[0]) {
       if (!p->stringDictCheckpoint()) {
-        LOG(ERROR) << "Checkpointing Dictionary for Column " << p->getColumnDesc()->columnName << " failed.";
+        LOG(ERROR) << "Checkpointing Dictionary for Column "
+                   << p->getColumnDesc()->columnName << " failed.";
         load_failed = true;
         break;
       }
@@ -3565,8 +3891,9 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 // class RenderGroupAnalyzer
 //
 
-void RenderGroupAnalyzer::seedFromExistingTableContents(const std::unique_ptr<Loader>& loader,
-                                                        const std::string& geoColumnBaseName) {
+void RenderGroupAnalyzer::seedFromExistingTableContents(
+    const std::unique_ptr<Loader>& loader,
+    const std::string& geoColumnBaseName) {
   // start timer
   auto seedTimer = timer_start();
 
@@ -3583,39 +3910,48 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(const std::unique_ptr<Lo
 
   // if the table is empty, we're done
   if (td->fragmenter->getFragmentsForQuery().getPhysicalNumTuples() == 0) {
-    if (DEBUG_RENDER_GROUP_ANALYZER)
+    if (DEBUG_RENDER_GROUP_ANALYZER) {
       LOG(INFO) << "DEBUG: Table is empty!";
+    }
     return;
   }
 
   // no seeding possible without these two columns
-  const auto cd_bounds = cat.getMetadataForColumn(td->tableId, geoColumnBaseName + "_bounds");
-  const auto cd_render_group = cat.getMetadataForColumn(td->tableId, geoColumnBaseName + "_render_group");
+  const auto cd_bounds =
+      cat.getMetadataForColumn(td->tableId, geoColumnBaseName + "_bounds");
+  const auto cd_render_group =
+      cat.getMetadataForColumn(td->tableId, geoColumnBaseName + "_render_group");
   if (!cd_bounds || !cd_render_group) {
-    if (DEBUG_RENDER_GROUP_ANALYZER)
+    if (DEBUG_RENDER_GROUP_ANALYZER) {
       LOG(INFO) << "DEBUG: Table doesn't have bounds or render_group columns!";
+    }
     return;
   }
 
   // and validate their types
-  if (cd_bounds->columnType.get_type() != kARRAY || cd_bounds->columnType.get_subtype() != kDOUBLE) {
-    if (DEBUG_RENDER_GROUP_ANALYZER)
+  if (cd_bounds->columnType.get_type() != kARRAY ||
+      cd_bounds->columnType.get_subtype() != kDOUBLE) {
+    if (DEBUG_RENDER_GROUP_ANALYZER) {
       LOG(INFO) << "DEBUG: Table bounds columns is wrong type!";
+    }
     return;
   }
   if (cd_render_group->columnType.get_type() != kINT) {
-    if (DEBUG_RENDER_GROUP_ANALYZER)
+    if (DEBUG_RENDER_GROUP_ANALYZER) {
       LOG(INFO) << "DEBUG: Table render_group columns is wrong type!";
+    }
     return;
   }
 
   // get chunk accessor table
-  auto chunkAccessorTable =
-      getChunkAccessorTable(cat, td, {geoColumnBaseName + "_bounds", geoColumnBaseName + "_render_group"});
+  auto chunkAccessorTable = getChunkAccessorTable(
+      cat, td, {geoColumnBaseName + "_bounds", geoColumnBaseName + "_render_group"});
   const auto table_count = std::get<0>(chunkAccessorTable.back());
 
-  if (DEBUG_RENDER_GROUP_ANALYZER)
-    LOG(INFO) << "DEBUG: Scanning existing table geo column set '" << geoColumnBaseName << "'";
+  if (DEBUG_RENDER_GROUP_ANALYZER) {
+    LOG(INFO) << "DEBUG: Scanning existing table geo column set '" << geoColumnBaseName
+              << "'";
+  }
 
   for (size_t row = 0; row < table_count; row++) {
     ArrayDatum ad;
@@ -3653,21 +3989,25 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(const std::unique_ptr<Lo
     _rtree.insert(std::make_pair(bounding_box, renderGroup));
 
     // how many render groups do we have now?
-    if (renderGroup >= _numRenderGroups)
+    if (renderGroup >= _numRenderGroups) {
       _numRenderGroups = renderGroup + 1;
+    }
 
-    if (DEBUG_RENDER_GROUP_ANALYZER)
+    if (DEBUG_RENDER_GROUP_ANALYZER) {
       LOG(INFO) << "DEBUG:   Existing row " << row << " has Render Group " << renderGroup;
+    }
   }
 
-  if (DEBUG_RENDER_GROUP_ANALYZER)
+  if (DEBUG_RENDER_GROUP_ANALYZER) {
     LOG(INFO) << "DEBUG: Done! Now have " << _numRenderGroups << " Render Groups";
+  }
 
-  LOG(INFO) << "Scanning existing poly render groups of table '" << tableName << "' took " << timer_stop(seedTimer)
-            << "ms";
+  LOG(INFO) << "Scanning existing poly render groups of table '" << tableName << "' took "
+            << timer_stop(seedTimer) << "ms";
 }
 
-int RenderGroupAnalyzer::insertBoundsAndReturnRenderGroup(const std::vector<double>& bounds) {
+int RenderGroupAnalyzer::insertBoundsAndReturnRenderGroup(
+    const std::vector<double>& bounds) {
   // validate
   CHECK(bounds.size() == 4);
 
@@ -3682,7 +4022,8 @@ int RenderGroupAnalyzer::insertBoundsAndReturnRenderGroup(const std::vector<doub
 
   // get the intersecting nodes
   std::vector<Node> intersects;
-  _rtree.query(boost::geometry::index::intersects(bounding_box), std::back_inserter(intersects));
+  _rtree.query(boost::geometry::index::intersects(bounding_box),
+               std::back_inserter(intersects));
 
   // build bitset of render groups of the intersecting rectangles
   // clear bit means available, allows use of find_first()
@@ -3725,11 +4066,13 @@ void ImportDriver::import_geo_table(const std::string& file_path,
     copy_params.geo_coords_comp_param = 0;
   }
 
-  const auto cds = Importer::gdalToColumnDescriptors(file_path, geo_column_name, copy_params);
+  const auto cds =
+      Importer::gdalToColumnDescriptors(file_path, geo_column_name, copy_params);
   std::map<std::string, std::string> colname_to_src;
   for (auto cd : cds) {
     const auto col_name_sanitized = ImportHelpers::sanitize_name(cd.columnName);
-    const auto ret = colname_to_src.insert(std::make_pair(cd.columnName, col_name_sanitized));
+    const auto ret =
+        colname_to_src.insert(std::make_pair(cd.columnName, col_name_sanitized));
     CHECK(ret.second);
     cd.columnName = col_name_sanitized;
   }
@@ -3737,8 +4080,9 @@ void ImportDriver::import_geo_table(const std::string& file_path,
   auto& cat = session_->get_catalog();
   const auto td = cat.getMetadataForTable(table_name);
   if (td != nullptr) {
-    throw std::runtime_error("Error: Table " + table_name +
-                             " already exists. Possible failure to correctly re-create mapd_data directory.");
+    throw std::runtime_error(
+        "Error: Table " + table_name +
+        " already exists. Possible failure to correctly re-create mapd_data directory.");
   }
   if (table_name != ImportHelpers::sanitize_name(table_name)) {
     throw std::runtime_error("Invalid characters in table name: " + table_name);
@@ -3750,8 +4094,9 @@ void ImportDriver::import_geo_table(const std::string& file_path,
   for (auto col : cds) {
     if (col.columnType.get_type() == SQLTypes::kINTERVAL_DAY_TIME ||
         col.columnType.get_type() == SQLTypes::kINTERVAL_YEAR_MONTH) {
-      throw std::runtime_error("Unsupported type: INTERVAL_DAY_TIME or INTERVAL_YEAR_MONTH for col " + col.columnName +
-                               " (table: " + table_name + ")");
+      throw std::runtime_error(
+          "Unsupported type: INTERVAL_DAY_TIME or INTERVAL_YEAR_MONTH for col " +
+          col.columnName + " (table: " + table_name + ")");
     }
 
     if (col.columnType.get_type() == SQLTypes::kDECIMAL) {
@@ -3788,4 +4133,4 @@ void ImportDriver::import_geo_table(const std::string& file_path,
   LOG(INFO) << "Import Time for " << table_name << ": " << (double)ms / 1000.0 << " s";
 }
 
-}  // Namespace Importer
+}  // namespace Importer_NS

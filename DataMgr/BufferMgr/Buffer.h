@@ -49,17 +49,20 @@ class Buffer : public AbstractBuffer {
  public:
   /**
    * @brief Constructs a Buffer object.
-   * The constructor requires a memory address (provided by BufferMgr), number of pages, and
-   * the size in bytes of each page. Additionally, the Buffer can be initialized with an epoch.
+   * The constructor requires a memory address (provided by BufferMgr), number of pages,
+   * and the size in bytes of each page. Additionally, the Buffer can be initialized with
+   * an epoch.
    *
    * @param mem       The beginning memory address of the buffer.
    * @param numPages  The number of pages into which the buffer's memory space is divided.
    * @param pageSize  The size in bytes of each page that composes the buffer.
-   * @param epoch     A temporal reference implying the buffer is up-to-date up to the epoch.
+   * @param epoch     A temporal reference implying the buffer is up-to-date up to the
+   * epoch.
    */
 
   /*
-  Buffer(const int8_t * mem, const size_t numPages, const size_t pageSize, const int epoch);
+  Buffer(const int8_t * mem, const size_t numPages, const size_t pageSize, const int
+  epoch);
   */
 
   Buffer(BufferMgr* bm,
@@ -73,8 +76,8 @@ class Buffer : public AbstractBuffer {
 
   /**
    * @brief Reads (copies) data from the buffer to the destination (dst) memory location.
-   * Reads (copies) nbytes of data from the buffer, beginning at the specified byte offset,
-   * into the destination (dst) memory location.
+   * Reads (copies) nbytes of data from the buffer, beginning at the specified byte
+   * offset, into the destination (dst) memory location.
    *
    * @param dst       The destination address to where the buffer's data is being copied.
    * @param offset    The byte offset into the buffer from where reading (copying) begins.
@@ -165,12 +168,13 @@ class Buffer : public AbstractBuffer {
   size_t pageSize_;  /// the size of each page in the buffer
   size_t numPages_;
   int epoch_;  /// indicates when the buffer was last flushed
-  // std::vector<Page> pages_;   /// a vector of pages (page metadata) that compose the buffer
+  // std::vector<Page> pages_;   /// a vector of pages (page metadata) that compose the
+  // buffer
   std::vector<bool> pageDirtyFlags_;
   int pinCount_;
   std::mutex pinMutex_;
 };
 
-}  // Buffer_Namespace
+}  // namespace Buffer_Namespace
 
 #endif  // DATAMGR_MEMORY_BUFFER_BUFFER_H

@@ -23,22 +23,22 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
+#include <boost/regex.hpp>
 #include <cstring>
-#include <string>
 #include <iostream>
 #include <iterator>
-#include <boost/regex.hpp>
+#include <string>
 
-#include <thread>
 #include <chrono>
+#include <thread>
 
 #include <boost/program_options.hpp>
 
 // include files for Thrift and MapD Thrift Services
-#include "gen-cpp/MapD.h"
-#include <thrift/transport/TSocket.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
+#include <thrift/transport/TSocket.h>
+#include "gen-cpp/MapD.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -47,15 +47,15 @@ using namespace ::apache::thrift::transport;
 #ifdef HAVE_THRIFT_STD_SHAREDPTR
 #include <memory>
 namespace mapd {
-using std::shared_ptr;
 using std::make_shared;
-}
+using std::shared_ptr;
+}  // namespace mapd
 #else
 #include <boost/make_shared.hpp>
 namespace mapd {
-using boost::shared_ptr;
 using boost::make_shared;
-}
+using boost::shared_ptr;
+}  // namespace mapd
 #endif  // HAVE_THRIFT_STD_SHAREDPTR
 
 struct CopyParams {
@@ -66,7 +66,12 @@ struct CopyParams {
   size_t retry_count;
   size_t retry_wait;
   CopyParams(char d, const std::string& n, char l, size_t b, size_t retries, size_t wait)
-      : delimiter(d), null_str(n), line_delim(l), batch_size(b), retry_count(retries), retry_wait(wait) {}
+      : delimiter(d)
+      , null_str(n)
+      , line_delim(l)
+      , batch_size(b)
+      , retry_count(retries)
+      , retry_wait(wait) {}
 };
 
 struct ConnectionDetails {
@@ -80,7 +85,11 @@ struct ConnectionDetails {
                     std::string in_db_name,
                     std::string in_user_name,
                     std::string in_passwd)
-      : server_host(in_server_host), port(in_port), db_name(in_db_name), user_name(in_user_name), passwd(in_passwd) {}
+      : server_host(in_server_host)
+      , port(in_port)
+      , db_name(in_db_name)
+      , user_name(in_user_name)
+      , passwd(in_passwd) {}
 };
 
 bool print_error_data = false;
@@ -101,8 +110,9 @@ void createConnection(ConnectionDetails con) {
   mapd::shared_ptr<TProtocol> protocol(new TBinaryProtocol(mytransport));
   client.reset(new MapDClient(protocol));
   try {
-    mytransport->open();                                               // open transport
-    client->connect(session, con.user_name, con.passwd, con.db_name);  // connect to mapd_server
+    mytransport->open();  // open transport
+    client->connect(
+        session, con.user_name, con.passwd, con.db_name);  // connect to mapd_server
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
@@ -121,9 +131,12 @@ void closeConnection() {
   }
 }
 
-void wait_disconnet_reconnnect_retry(size_t tries, CopyParams copy_params, ConnectionDetails conn_details) {
-  std::cout << "  Waiting  " << copy_params.retry_wait << " secs to retry Inserts , will try "
-            << (copy_params.retry_count - tries) << " times more " << std::endl;
+void wait_disconnet_reconnnect_retry(size_t tries,
+                                     CopyParams copy_params,
+                                     ConnectionDetails conn_details) {
+  std::cout << "  Waiting  " << copy_params.retry_wait
+            << " secs to retry Inserts , will try " << (copy_params.retry_count - tries)
+            << " times more " << std::endl;
   sleep(copy_params.retry_wait);
 
   closeConnection();
@@ -136,11 +149,13 @@ void do_load(int& nrows,
              const std::string& table_name,
              CopyParams copy_params,
              ConnectionDetails conn_details) {
-  for (size_t tries = 0; tries < copy_params.retry_count; tries++) {  // allow for retries in case of insert failure
+  for (size_t tries = 0; tries < copy_params.retry_count;
+       tries++) {  // allow for retries in case of insert failure
     try {
       client->load_table(session, table_name, input_rows);
       nrows += input_rows.size();
-      std::cout << nrows << " Rows Inserted, " << nskipped << " rows skipped." << std::endl;
+      std::cout << nrows << " Rows Inserted, " << nskipped << " rows skipped."
+                << std::endl;
       // we successfully loaded the data, lets move on
       return;
     } catch (TMapDException& e) {
@@ -157,13 +172,15 @@ void do_load(int& nrows,
 
 // reads copy_params.delimiter delimited rows from std::cin and load them to
 // table_name in batches of size copy_params.batch_size until EOF
-void stream_insert(const std::string& table_name,
-                   const TRowDescriptor& row_desc,
-                   const std::map<std::string, std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>>&
-                       transformations,
-                   const CopyParams& copy_params,
-                   const ConnectionDetails conn_details,
-                   const bool remove_quotes) {
+void stream_insert(
+    const std::string& table_name,
+    const TRowDescriptor& row_desc,
+    const std::map<std::string,
+                   std::pair<std::unique_ptr<boost::regex>,
+                             std::unique_ptr<std::string>>>& transformations,
+    const CopyParams& copy_params,
+    const ConnectionDetails conn_details,
+    const bool remove_quotes) {
   std::vector<TStringRow> input_rows;
   TStringRow row;
 
@@ -179,13 +196,15 @@ void stream_insert(const std::string& table_name,
   int nskipped = 0;
   bool backEscape = false;
 
-  const std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>* xforms[row_desc.size()];
+  const std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>*
+      xforms[row_desc.size()];
   for (size_t i = 0; i < row_desc.size(); i++) {
     auto it = transformations.find(row_desc[i].col_name);
-    if (it != transformations.end())
+    if (it != transformations.end()) {
       xforms[i] = &(it->second);
-    else
+    } else {
       xforms[i] = nullptr;
+    }
   }
 
   while (iit != eos) {
@@ -195,14 +214,15 @@ void stream_insert(const std::string& table_name,
       if (*iit == copy_params.delimiter || *iit == copy_params.line_delim) {
         bool end_of_field = (*iit == copy_params.delimiter);
         bool end_of_row;
-        if (end_of_field)
+        if (end_of_field) {
           end_of_row = false;
-        else {
-          end_of_row =
-              (row_desc[row.cols.size()].col_type.type != TDatumType::STR) || (row.cols.size() == row_desc.size() - 1);
+        } else {
+          end_of_row = (row_desc[row.cols.size()].col_type.type != TDatumType::STR) ||
+                       (row.cols.size() == row_desc.size() - 1);
           if (!end_of_row) {
             size_t l = copy_params.null_str.size();
-            if (field_i >= l && strncmp(field + field_i - l, copy_params.null_str.c_str(), l) == 0) {
+            if (field_i >= l &&
+                strncmp(field + field_i - l, copy_params.null_str.c_str(), l) == 0) {
               end_of_row = true;
               // std::cout << "new line after null.\n";
             }
@@ -218,19 +238,24 @@ void stream_insert(const std::string& table_name,
           TStringValue ts;
           ts.str_val = std::string(field);
           ts.is_null = (ts.str_val.empty() || ts.str_val == copy_params.null_str);
-          auto xform = row.cols.size() < row_desc.size() ? xforms[row.cols.size()] : nullptr;
+          auto xform =
+              row.cols.size() < row_desc.size() ? xforms[row.cols.size()] : nullptr;
           if (!ts.is_null && xform != nullptr) {
-            if (print_transformation)
+            if (print_transformation) {
               std::cout << "\ntransforming\n" << ts.str_val << "\nto\n";
+            }
             ts.str_val = boost::regex_replace(ts.str_val, *xform->first, *xform->second);
-            if (ts.str_val.empty())
+            if (ts.str_val.empty()) {
               ts.is_null = true;
-            if (print_transformation)
+            }
+            if (print_transformation) {
               std::cout << ts.str_val << std::endl;
+            }
           }
           row.cols.push_back(ts);  // add column value to row
-          if (end_of_row || (row.cols.size() > row_desc.size()))
+          if (end_of_row || (row.cols.size() > row_desc.size())) {
             break;  // found row
+          }
         }
       } else {
         if (*iit == '\\') {
@@ -245,8 +270,9 @@ void stream_insert(const std::string& table_name,
       if (field_i >= MAX_FIELD_LEN) {
         field[MAX_FIELD_LEN - 1] = '\0';
         std::cerr << "String too long for buffer." << std::endl;
-        if (print_error_data)
+        if (print_error_data) {
           std::cerr << field << std::endl;
+        }
         field_i = 0;
         break;
       }
@@ -264,18 +290,20 @@ void stream_insert(const std::string& table_name,
         std::cerr << "Incorrect number of columns for row at: ";
         bool not_first = false;
         for (const auto& p : row.cols) {
-          if (not_first)
+          if (not_first) {
             std::cerr << copy_params.delimiter;
-          else
+          } else {
             not_first = true;
+          }
           std::cerr << &p;
         }
         std::cerr << std::endl;
       }
       if (row.cols.size() > row_desc.size()) {
         // skip to the next line delimiter
-        while (*iit != copy_params.line_delim)
+        while (*iit != copy_params.line_delim) {
           ++iit;
+        }
       }
     }
     ++iit;
@@ -285,7 +313,7 @@ void stream_insert(const std::string& table_name,
     do_load(nrows, nskipped, input_rows, table_name, copy_params, conn_details);
   }
 }
-}
+}  // namespace
 
 int main(int argc, char** argv) {
   std::string server_host("localhost");  // default to localhost
@@ -300,31 +328,48 @@ int main(int argc, char** argv) {
   size_t retry_wait = 5;
   bool remove_quotes = false;
   std::vector<std::string> xforms;
-  std::map<std::string, std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>> transformations;
+  std::map<std::string,
+           std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>>
+      transformations;
 
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
   desc.add_options()("help,h", "Print help messages ");
-  desc.add_options()("table", po::value<std::string>(&table_name)->required(), "Table Name");
-  desc.add_options()("database", po::value<std::string>(&db_name)->required(), "Database Name");
-  desc.add_options()("user,u", po::value<std::string>(&user_name)->required(), "User Name");
-  desc.add_options()("passwd,p", po::value<std::string>(&passwd)->required(), "User Password");
-  desc.add_options()("host", po::value<std::string>(&server_host)->default_value(server_host), "MapD Server Hostname");
-  desc.add_options()("port", po::value<int>(&port)->default_value(port), "MapD Server Port Number");
-  desc.add_options()("delim", po::value<std::string>(&delim_str)->default_value(delim_str), "Field delimiter");
+  desc.add_options()(
+      "table", po::value<std::string>(&table_name)->required(), "Table Name");
+  desc.add_options()(
+      "database", po::value<std::string>(&db_name)->required(), "Database Name");
+  desc.add_options()(
+      "user,u", po::value<std::string>(&user_name)->required(), "User Name");
+  desc.add_options()(
+      "passwd,p", po::value<std::string>(&passwd)->required(), "User Password");
+  desc.add_options()("host",
+                     po::value<std::string>(&server_host)->default_value(server_host),
+                     "MapD Server Hostname");
+  desc.add_options()(
+      "port", po::value<int>(&port)->default_value(port), "MapD Server Port Number");
+  desc.add_options()("delim",
+                     po::value<std::string>(&delim_str)->default_value(delim_str),
+                     "Field delimiter");
   desc.add_options()("null", po::value<std::string>(&nulls), "NULL string");
   desc.add_options()("line", po::value<std::string>(&line_delim_str), "Line delimiter");
-  desc.add_options()("quoted",
-                     po::value<std::string>(&quoted),
-                     "Whether the source contains quoted fields (true/false, default false)");
-  desc.add_options()("batch", po::value<size_t>(&batch_size)->default_value(batch_size), "Insert batch size");
   desc.add_options()(
-      "retry_count", po::value<size_t>(&retry_count)->default_value(retry_count), "Number of time to retry an insert");
-  desc.add_options()(
-      "retry_wait", po::value<size_t>(&retry_wait)->default_value(retry_wait), "wait in secs between retries");
-  desc.add_options()(
-      "transform,t", po::value<std::vector<std::string>>(&xforms)->multitoken(), "Column Transformations");
+      "quoted",
+      po::value<std::string>(&quoted),
+      "Whether the source contains quoted fields (true/false, default false)");
+  desc.add_options()("batch",
+                     po::value<size_t>(&batch_size)->default_value(batch_size),
+                     "Insert batch size");
+  desc.add_options()("retry_count",
+                     po::value<size_t>(&retry_count)->default_value(retry_count),
+                     "Number of time to retry an insert");
+  desc.add_options()("retry_wait",
+                     po::value<size_t>(&retry_wait)->default_value(retry_wait),
+                     "wait in secs between retries");
+  desc.add_options()("transform,t",
+                     po::value<std::vector<std::string>>(&xforms)->multitoken(),
+                     "Column Transformations");
   desc.add_options()("print_error", "Print Error Rows");
   desc.add_options()("print_transform", "Print Transformations");
 
@@ -335,20 +380,29 @@ int main(int argc, char** argv) {
   po::variables_map vm;
 
   try {
-    po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
+    po::store(po::command_line_parser(argc, argv)
+                  .options(desc)
+                  .positional(positionalOptions)
+                  .run(),
+              vm);
     if (vm.count("help")) {
-      std::cout
-          << "Usage: <table name> <database name> {-u|--user} <user> {-p|--passwd} <password> [{--host} "
-             "<hostname>][--port <port number>][--delim <delimiter>][--null <null string>][--line <line "
-             "delimiter>][--batch <batch size>][{-t|--transform} transformation [--quoted <true|false>] "
-             "...][--retry_count <num_of_retries>] [--retry_wait <wait in secs>][--print_error][--print_transform]\n\n";
+      std::cout << "Usage: <table name> <database name> {-u|--user} <user> {-p|--passwd} "
+                   "<password> [{--host} "
+                   "<hostname>][--port <port number>][--delim <delimiter>][--null <null "
+                   "string>][--line <line "
+                   "delimiter>][--batch <batch size>][{-t|--transform} transformation "
+                   "[--quoted <true|false>] "
+                   "...][--retry_count <num_of_retries>] [--retry_wait <wait in "
+                   "secs>][--print_error][--print_transform]\n\n";
       std::cout << desc << std::endl;
       return 0;
     }
-    if (vm.count("print_error"))
+    if (vm.count("print_error")) {
       print_error_data = true;
-    if (vm.count("print_transform"))
+    }
+    if (vm.count("print_transform")) {
       print_transformation = true;
+    }
 
     po::notify(vm);
   } catch (boost::program_options::error& e) {
@@ -358,94 +412,105 @@ int main(int argc, char** argv) {
 
   char delim = delim_str[0];
   if (delim == '\\') {
-    if (delim_str.size() < 2 || (delim_str[1] != 'x' && delim_str[1] != 't' && delim_str[1] != 'n')) {
+    if (delim_str.size() < 2 ||
+        (delim_str[1] != 'x' && delim_str[1] != 't' && delim_str[1] != 'n')) {
       std::cerr << "Incorrect delimiter string: " << delim_str << std::endl;
       return 1;
     }
-    if (delim_str[1] == 't')
+    if (delim_str[1] == 't') {
       delim = '\t';
-    else if (delim_str[1] == 'n')
+    } else if (delim_str[1] == 'n') {
       delim = '\n';
-    else {
+    } else {
       std::string d(delim_str);
       d[0] = '0';
       delim = (char)std::stoi(d, nullptr, 16);
     }
   }
-  if (isprint(delim))
+  if (isprint(delim)) {
     std::cout << "Field Delimiter: " << delim << std::endl;
-  else if (delim == '\t')
+  } else if (delim == '\t') {
     std::cout << "Field Delimiter: "
               << "\\t" << std::endl;
-  else if (delim == '\n')
+  } else if (delim == '\n') {
     std::cout << "Field Delimiter: "
               << "\\n"
               << std::endl;
-  else
+  } else {
     std::cout << "Field Delimiter: \\x" << std::hex << (int)delim << std::endl;
+  }
   char line_delim = line_delim_str[0];
   if (line_delim == '\\') {
     if (line_delim_str.size() < 2 ||
-        (line_delim_str[1] != 'x' && line_delim_str[1] != 't' && line_delim_str[1] != 'n')) {
+        (line_delim_str[1] != 'x' && line_delim_str[1] != 't' &&
+         line_delim_str[1] != 'n')) {
       std::cerr << "Incorrect delimiter string: " << line_delim_str << std::endl;
       return 1;
     }
-    if (line_delim_str[1] == 't')
+    if (line_delim_str[1] == 't') {
       line_delim = '\t';
-    else if (line_delim_str[1] == 'n')
+    } else if (line_delim_str[1] == 'n') {
       line_delim = '\n';
-    else {
+    } else {
       std::string d(line_delim_str);
       d[0] = '0';
       line_delim = (char)std::stoi(d, nullptr, 16);
     }
   }
-  if (isprint(line_delim))
+  if (isprint(line_delim)) {
     std::cout << "Line Delimiter: " << line_delim << std::endl;
-  else if (line_delim == '\t')
+  } else if (line_delim == '\t') {
     std::cout << "Line Delimiter: "
               << "\\t" << std::endl;
-  else if (line_delim == '\n')
+  } else if (line_delim == '\n') {
     std::cout << "Line Delimiter: "
               << "\\n"
               << std::endl;
-  else
+  } else {
     std::cout << "Line Delimiter: \\x" << std::hex << (int)line_delim << std::endl;
+  }
   std::cout << "Null String: " << nulls << std::endl;
   std::cout << "Insert Batch Size: " << std::dec << batch_size << std::endl;
 
-  if (quoted == "true")
+  if (quoted == "true") {
     remove_quotes = true;
+  }
 
   for (auto& t : xforms) {
     auto n = t.find_first_of(':');
     if (n == std::string::npos) {
-      std::cerr << "Transformation format: <column name>:s/<regex pattern>/<fmt string>/" << std::endl;
+      std::cerr << "Transformation format: <column name>:s/<regex pattern>/<fmt string>/"
+                << std::endl;
       return 1;
     }
     std::string col_name = t.substr(0, n);
     if (t.size() < n + 3 || t[n + 1] != 's' || t[n + 2] != '/') {
-      std::cerr << "Transformation format: <column name>:s/<regex pattern>/<fmt string>/" << std::endl;
+      std::cerr << "Transformation format: <column name>:s/<regex pattern>/<fmt string>/"
+                << std::endl;
       return 1;
     }
     auto n1 = n + 3;
     auto n2 = t.find_first_of('/', n1);
     if (n2 == std::string::npos) {
-      std::cerr << "Transformation format: <column name>:s/<regex pattern>/<fmt string>/" << std::endl;
+      std::cerr << "Transformation format: <column name>:s/<regex pattern>/<fmt string>/"
+                << std::endl;
       return 1;
     }
     std::string regex_str = t.substr(n1, n2 - n1);
     n1 = n2 + 1;
     n2 = t.find_first_of('/', n1);
     if (n2 == std::string::npos) {
-      std::cerr << "Transformation format: <column name>:s/<regex pattern>/<fmt string>/" << std::endl;
+      std::cerr << "Transformation format: <column name>:s/<regex pattern>/<fmt string>/"
+                << std::endl;
       return 1;
     }
     std::string fmt_str = t.substr(n1, n2 - n1);
-    std::cout << "transform " << col_name << ": s/" << regex_str << "/" << fmt_str << "/" << std::endl;
-    transformations[col_name] = std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>(
-        std::unique_ptr<boost::regex>(new boost::regex(regex_str)),
-        std::unique_ptr<std::string>(new std::string(fmt_str)));
+    std::cout << "transform " << col_name << ": s/" << regex_str << "/" << fmt_str << "/"
+              << std::endl;
+    transformations[col_name] =
+        std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>(
+            std::unique_ptr<boost::regex>(new boost::regex(regex_str)),
+            std::unique_ptr<std::string>(new std::string(fmt_str)));
   }
 
   CopyParams copy_params(delim, nulls, line_delim, batch_size, retry_count, retry_wait);
@@ -456,7 +521,12 @@ int main(int argc, char** argv) {
 
   TTableDetails table_details;
   client->get_table_details(table_details, session, table_name);
-  stream_insert(table_name, table_details.row_desc, transformations, copy_params, conn_details, remove_quotes);
+  stream_insert(table_name,
+                table_details.row_desc,
+                transformations,
+                copy_params,
+                conn_details,
+                remove_quotes);
 
   closeConnection();
 

@@ -17,8 +17,8 @@
 #ifndef _MAPDPATH_H
 #define _MAPDPATH_H
 
-#include <boost/filesystem/path.hpp>
 #include <glog/logging.h>
+#include <boost/filesystem/path.hpp>
 
 #ifdef __APPLE__
 #include <libproc.h>

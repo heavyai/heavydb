@@ -17,8 +17,8 @@
 #define UPDELROLL_H
 
 #include <map>
-#include <set>
 #include <mutex>
+#include <set>
 #include <utility>
 
 #include "../Chunk/Chunk.h"
@@ -28,7 +28,7 @@
 namespace Fragmenter_Namespace {
 class InsertOrderFragmenter;
 class FragmentInfo;
-}
+}  // namespace Fragmenter_Namespace
 
 namespace Catalog_Namespace {
 class Catalog;
@@ -36,7 +36,8 @@ class Catalog;
 
 struct TableDescriptor;
 
-using MetaDataKey = std::pair<const TableDescriptor*, Fragmenter_Namespace::FragmentInfo*>;
+using MetaDataKey =
+    std::pair<const TableDescriptor*, Fragmenter_Namespace::FragmentInfo*>;
 
 // this roll records stuff that need to be roll back/forw after upd/del fails or finishes
 struct UpdelRoll {

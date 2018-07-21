@@ -83,7 +83,8 @@ TEST(GeoPoint, BadWktType) {
   try {
     auto pt = GeoPoint("LINESTRING (1 1)");
   } catch (const GeoTypesError& e) {
-    ASSERT_STREQ("GeoPoint Error: Unexpected geometry type from WKT string: Line String", e.what());
+    ASSERT_STREQ("GeoPoint Error: Unexpected geometry type from WKT string: Line String",
+                 e.what());
   } catch (...) {
     FAIL();
   }
@@ -144,17 +145,20 @@ TEST(GeoLineString, BadWktType) {
   try {
     auto pt = GeoLineString("POINT (1 1)");
   } catch (const GeoTypesError& e) {
-    ASSERT_STREQ("GeoLineString Error: Unexpected geometry type from WKT string: Point", e.what());
+    ASSERT_STREQ("GeoLineString Error: Unexpected geometry type from WKT string: Point",
+                 e.what());
   } catch (...) {
     FAIL();
   }
 }
 
 struct SamplePolygonData {
-  const std::vector<double> coords{35, 10, 45, 45, 15, 40, 10, 20, 20, 30, 35, 35, 30, 20};
+  const std::vector<double>
+      coords{35, 10, 45, 45, 15, 40, 10, 20, 20, 30, 35, 35, 30, 20};
   const std::vector<int32_t> ring_sizes{4, 3};
   const std::vector<double> bounds{10, 10, 45, 45};
-  const std::string wkt{"POLYGON ((35 10,45 45,15 40,10 20,35 10),(20 30,35 35,30 20,20 30))"};
+  const std::string wkt{
+      "POLYGON ((35 10,45 45,15 40,10 20,35 10),(20 30,35 35,30 20,20 30))"};
 };
 
 TEST(GeoPolygon, EmptyWKT) {
@@ -197,7 +201,8 @@ TEST(GeoPolygon, ExportColumns) {
 
 TEST(GeoPolygon, EqualsOperator) {
   const auto sample_poly = SamplePolygonData();
-  ASSERT_TRUE(GeoPolygon(sample_poly.coords, sample_poly.ring_sizes) == GeoPolygon(sample_poly.wkt));
+  ASSERT_TRUE(GeoPolygon(sample_poly.coords, sample_poly.ring_sizes) ==
+              GeoPolygon(sample_poly.wkt));
 }
 
 TEST(GeoPolygon, OGRError) {
@@ -208,7 +213,8 @@ TEST(GeoPolygon, BadWktType) {
   try {
     auto pt = GeoPolygon("POINT (1 1)");
   } catch (const GeoTypesError& e) {
-    ASSERT_STREQ("GeoPolygon Error: Unexpected geometry type from WKT string: Point", e.what());
+    ASSERT_STREQ("GeoPolygon Error: Unexpected geometry type from WKT string: Point",
+                 e.what());
   } catch (...) {
     FAIL();
   }
@@ -221,7 +227,8 @@ struct SampleMultiPolygonData {
   const std::vector<int32_t> poly_rings{1, 2};
   const std::vector<double> bounds{10, 5, 45, 45};
   const std::string wkt{
-      "MULTIPOLYGON (((40 40,20 45,45 30,40 40)),((20 35,10 30,10 10,30 5,45 20,20 35),(30 20,20 15,20 25,30 20)))"};
+      "MULTIPOLYGON (((40 40,20 45,45 30,40 40)),((20 35,10 30,10 10,30 5,45 20,20 "
+      "35),(30 20,20 15,20 25,30 20)))"};
 };
 
 TEST(GeoMultiPolygon, EmptyWKT) {
@@ -231,7 +238,8 @@ TEST(GeoMultiPolygon, EmptyWKT) {
 }
 
 TEST(GeoMultiPolygon, EmptyCoords) {
-  const auto gdal_mpoly = GeoMultiPolygon(std::vector<double>(), std::vector<int32_t>(), std::vector<int32_t>());
+  const auto gdal_mpoly = GeoMultiPolygon(
+      std::vector<double>(), std::vector<int32_t>(), std::vector<int32_t>());
   const auto wkt_str = gdal_mpoly.getWktString();
   ASSERT_EQ(wkt_str, "MULTIPOLYGON EMPTY");
 }
@@ -245,7 +253,8 @@ TEST(GeoMultiPolygon, ImportWKT) {
 
 TEST(GeoMultiPolygon, ExportWKT) {
   const auto sample_mpoly = SampleMultiPolygonData();
-  const auto gdal_mpoly = GeoMultiPolygon(sample_mpoly.coords, sample_mpoly.ring_sizes, sample_mpoly.poly_rings);
+  const auto gdal_mpoly = GeoMultiPolygon(
+      sample_mpoly.coords, sample_mpoly.ring_sizes, sample_mpoly.poly_rings);
   const auto wkt_str = gdal_mpoly.getWktString();
   ASSERT_EQ(wkt_str, sample_mpoly.wkt);
 }
@@ -266,7 +275,9 @@ TEST(GeoMultiPolygon, ExportColumns) {
 
 TEST(GeoMultiPolygon, EqualsOperator) {
   const auto sample_mpoly = SampleMultiPolygonData();
-  ASSERT_TRUE(GeoMultiPolygon(sample_mpoly.coords, sample_mpoly.ring_sizes, sample_mpoly.poly_rings) ==
+  ASSERT_TRUE(GeoMultiPolygon(sample_mpoly.coords,
+                              sample_mpoly.ring_sizes,
+                              sample_mpoly.poly_rings) ==
               GeoMultiPolygon(sample_mpoly.wkt));
 }
 
@@ -278,7 +289,8 @@ TEST(GeoMultiPolygon, BadWktType) {
   try {
     auto pt = GeoMultiPolygon("POINT (1 1)");
   } catch (const GeoTypesError& e) {
-    ASSERT_STREQ("GeoMultiPolygon Error: Unexpected geometry type from WKT string: Point", e.what());
+    ASSERT_STREQ("GeoMultiPolygon Error: Unexpected geometry type from WKT string: Point",
+                 e.what());
   } catch (...) {
     FAIL();
   }
@@ -290,7 +302,8 @@ TEST(GeoMisc, Inequality) {
   ASSERT_FALSE(GeoPoint(sample_pt.wkt) == GeoLineString(sample_linestring.wkt));
 
   const auto sample_mpoly = SampleMultiPolygonData();
-  ASSERT_FALSE(GeoLineString(sample_linestring.coords) == GeoMultiPolygon(sample_mpoly.wkt));
+  ASSERT_FALSE(GeoLineString(sample_linestring.coords) ==
+               GeoMultiPolygon(sample_mpoly.wkt));
 }
 
 int main(int argc, char** argv) {

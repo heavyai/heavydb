@@ -25,9 +25,9 @@
 #ifndef POPULATE_TABLE_RANDOM_H
 #define POPULATE_TABLE_RANDOM_H
 
+#include <cstdlib>
 #include <string>
 #include <vector>
-#include <cstdlib>
 #include "../Catalog/Catalog.h"
 
 std::vector<size_t> populate_table_random(const std::string& table_name,

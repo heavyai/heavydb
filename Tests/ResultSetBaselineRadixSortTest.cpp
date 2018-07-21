@@ -21,10 +21,10 @@
  *
  * Copyright (c) 2016 MapD Technologies, Inc.  All rights reserved.
  */
-#include "ResultSetTestUtils.h"
 #include "../QueryEngine/ResultRows.h"
 #include "../QueryEngine/ResultSet.h"
 #include "../QueryEngine/RuntimeFunctions.h"
+#include "ResultSetTestUtils.h"
 
 #ifdef HAVE_CUDA
 #include "../CudaMgr/CudaMgr.h"
@@ -87,7 +87,8 @@ void fill_storage_buffer_baseline_sort_int(int8_t* buff,
       CHECK(target_it != slot_to_target.end());
       const auto& target_info = target_infos[target_it->second];
 
-      const auto cols_ptr = reinterpret_cast<int64_t*>(row_ptr + get_slot_off_quad(query_mem_desc) * sizeof(int64_t));
+      const auto cols_ptr = reinterpret_cast<int64_t*>(
+          row_ptr + get_slot_off_quad(query_mem_desc) * sizeof(int64_t));
       cols_ptr[target_slot] = (target_info.agg_kind == kCOUNT ? 0 : 0xdeadbeef);
     }
   }
@@ -121,7 +122,8 @@ void fill_storage_buffer_baseline_sort_fp(int8_t* buff,
   const auto target_slot_count = get_slot_count(target_infos);
   const auto slot_to_target = get_slot_to_target_mapping(target_infos);
   for (size_t i = 0; i < query_mem_desc.entry_count; ++i) {
-    const auto first_key_comp_offset = key_offset_rowwise(i, key_component_count, target_slot_count);
+    const auto first_key_comp_offset =
+        key_offset_rowwise(i, key_component_count, target_slot_count);
     for (size_t key_comp_idx = 0; key_comp_idx < key_component_count; ++key_comp_idx) {
       i64_buff[first_key_comp_offset + key_comp_idx] = EMPTY_KEY_64;
     }
@@ -129,7 +131,8 @@ void fill_storage_buffer_baseline_sort_fp(int8_t* buff,
       auto target_it = slot_to_target.find(target_slot);
       CHECK(target_it != slot_to_target.end());
       const auto& target_info = target_infos[target_it->second];
-      i64_buff[slot_offset_rowwise(i, target_slot, key_component_count, target_slot_count)] =
+      i64_buff[slot_offset_rowwise(
+          i, target_slot, key_component_count, target_slot_count)] =
           (target_info.agg_kind == kCOUNT ? 0 : 0xdeadbeef);
     }
   }
@@ -153,7 +156,10 @@ void fill_storage_buffer_baseline_sort_fp(int8_t* buff,
 }
 
 template <class T>
-void check_sorted(const ResultSet& result_set, const int64_t bound, const size_t top_n, const size_t desc) {
+void check_sorted(const ResultSet& result_set,
+                  const int64_t bound,
+                  const size_t top_n,
+                  const size_t desc) {
   ASSERT_EQ(top_n, result_set.rowCount());
   T ref_val = bound;
   while (true) {
@@ -204,11 +210,14 @@ void SortBaselineIntegersTestImpl(const bool desc) {
   const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
   const int64_t upper_bound = 200;
   const int64_t lower_bound = 1;
-  std::unique_ptr<ResultSet> rs(
-      new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
+  std::unique_ptr<ResultSet> rs(new ResultSet(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
   auto storage = rs->allocateStorage();
-  fill_storage_buffer_baseline_sort_int<K>(
-      storage->getUnderlyingBuffer(), target_infos, query_mem_desc, upper_bound, empty_key_val<K>());
+  fill_storage_buffer_baseline_sort_int<K>(storage->getUnderlyingBuffer(),
+                                           target_infos,
+                                           query_mem_desc,
+                                           upper_bound,
+                                           empty_key_val<K>());
   std::list<Analyzer::OrderEntry> order_entries;
   order_entries.emplace_back(3, desc, false);
   const size_t top_n = 5;
@@ -239,10 +248,14 @@ TEST(SortBaseline, Floats) {
       const auto query_mem_desc = baseline_sort_desc(target_infos, 400, 8);
       const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
       const int64_t upper_bound = 200;
-      std::unique_ptr<ResultSet> rs(
-          new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
+      std::unique_ptr<ResultSet> rs(new ResultSet(target_infos,
+                                                  ExecutorDeviceType::CPU,
+                                                  query_mem_desc,
+                                                  row_set_mem_owner,
+                                                  nullptr));
       auto storage = rs->allocateStorage();
-      fill_storage_buffer_baseline_sort_fp(storage->getUnderlyingBuffer(), target_infos, query_mem_desc, upper_bound);
+      fill_storage_buffer_baseline_sort_fp(
+          storage->getUnderlyingBuffer(), target_infos, query_mem_desc, upper_bound);
       std::list<Analyzer::OrderEntry> order_entries;
       order_entries.emplace_back(tle_no, desc, false);
       const size_t top_n = 5;

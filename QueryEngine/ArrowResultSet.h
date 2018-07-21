@@ -17,11 +17,11 @@
 #ifndef QUERYENGINE_ARROWRESULTSET_H
 #define QUERYENGINE_ARROWRESULTSET_H
 
+#include "../Shared/sqltypes.h"
+#include "ResultSet.h"
 #include "SqlTypesLayout.h"
 #include "TargetMetaInfo.h"
 #include "TargetValue.h"
-#include "ResultSet.h"
-#include "../Shared/sqltypes.h"
 
 #include <arrow/api.h>
 
@@ -31,7 +31,8 @@ class ArrowResultSet {
  public:
   ArrowResultSet(const std::shared_ptr<arrow::RecordBatch>& record_batch);
 
-  std::vector<TargetValue> getNextRow(const bool translate_strings, const bool decimal_to_double) const;
+  std::vector<TargetValue> getNextRow(const bool translate_strings,
+                                      const bool decimal_to_double) const;
 
   size_t colCount() const;
 
@@ -57,9 +58,11 @@ class ExecutionResult;
 // them to ArrowResultSet, which can then be used by the existing test framework.
 std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(const ExecutionResult& results);
 
-// QUERYENGINE_// Take results from the executor, serializes them to Arrow and then deserialize
-// them to ArrowResultSet, which can then be used by the existing test framework.
-std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(const ExecutionResult* results,
-                                                          const std::shared_ptr<ResultSet>& rows);
+// QUERYENGINE_// Take results from the executor, serializes them to Arrow and then
+// deserialize them to ArrowResultSet, which can then be used by the existing test
+// framework.
+std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
+    const ExecutionResult* results,
+    const std::shared_ptr<ResultSet>& rows);
 
 #endif  // QUERYENGINE_ARROWRESULTSET_H

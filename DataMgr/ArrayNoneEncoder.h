@@ -24,22 +24,26 @@
 #ifndef ARRAY_NONE_ENCODER_H
 #define ARRAY_NONE_ENCODER_H
 
+#include <cassert>
 #include <cstring>
 #include <memory>
-#include <vector>
+#include <mutex>
 #include <string>
-#include <cassert>
+#include <vector>
 #include "AbstractBuffer.h"
 #include "ChunkMetadata.h"
 #include "Encoder.h"
-#include <mutex>
 
 using Data_Namespace::AbstractBuffer;
 
 class ArrayNoneEncoder : public Encoder {
  public:
   ArrayNoneEncoder(AbstractBuffer* buffer)
-      : Encoder(buffer), has_nulls(false), initialized(false), index_buf(nullptr), last_offset(-1) {}
+      : Encoder(buffer)
+      , has_nulls(false)
+      , initialized(false)
+      , index_buf(nullptr)
+      , last_offset(-1) {}
 
   size_t getNumElemsForBytesInsertData(const std::vector<ArrayDatum>* srcData,
                                        const int start_idx,
@@ -58,7 +62,9 @@ class ArrayNoneEncoder : public Encoder {
     return n - start_idx;
   }
 
-  ChunkMetadata appendData(int8_t*& srcData, const size_t numAppendElems, const bool replicating = false) {
+  ChunkMetadata appendData(int8_t*& srcData,
+                           const size_t numAppendElems,
+                           const bool replicating = false) {
     assert(false);  // should never be called for arrays
     ChunkMetadata chunkMetadata;
     getMetadata(chunkMetadata);
@@ -76,7 +82,8 @@ class ArrayNoneEncoder : public Encoder {
     index_buf->reserve(index_size);
     StringOffsetT offset = 0;
     if (numElems == 0) {
-      index_buf->append((int8_t*)&offset, sizeof(StringOffsetT));  // write the inital 0 offset
+      index_buf->append((int8_t*)&offset,
+                        sizeof(StringOffsetT));  // write the inital 0 offset
       last_offset = 0;
     } else {
       if (last_offset < 0) {
@@ -95,14 +102,17 @@ class ArrayNoneEncoder : public Encoder {
     }
     buffer_->reserve(data_size);
 
-    size_t inbuf_size = std::min(std::max(index_size, data_size), (size_t)MAX_INPUT_BUF_SIZE);
+    size_t inbuf_size =
+        std::min(std::max(index_size, data_size), (size_t)MAX_INPUT_BUF_SIZE);
     auto inbuf = new int8_t[inbuf_size];
     std::unique_ptr<int8_t[]> gc_inbuf(inbuf);
     for (size_t num_appended = 0; num_appended < numAppendElems;) {
       StringOffsetT* p = (StringOffsetT*)inbuf;
       size_t i;
-      for (i = 0; num_appended < numAppendElems && i < inbuf_size / sizeof(StringOffsetT); i++, num_appended++) {
-        p[i] = last_offset + (*srcData)[replicating ? 0 : num_appended + start_idx].length;
+      for (i = 0; num_appended < numAppendElems && i < inbuf_size / sizeof(StringOffsetT);
+           i++, num_appended++) {
+        p[i] =
+            last_offset + (*srcData)[replicating ? 0 : num_appended + start_idx].length;
         last_offset = p[i];
       }
       index_buf->append(inbuf, i * sizeof(StringOffsetT));
@@ -110,7 +120,9 @@ class ArrayNoneEncoder : public Encoder {
 
     for (size_t num_appended = 0; num_appended < numAppendElems;) {
       size_t size = 0;
-      for (int i = start_idx + num_appended; num_appended < numAppendElems && size < inbuf_size; i++, num_appended++) {
+      for (int i = start_idx + num_appended;
+           num_appended < numAppendElems && size < inbuf_size;
+           i++, num_appended++) {
         size_t len = (*srcData)[replicating ? 0 : i].length;
         if (len > inbuf_size) {
           // for large strings, append on its own

@@ -17,19 +17,21 @@
 #ifndef IMPORT_HELPERS_H_
 #define IMPORT_HELPERS_H_
 
+#include <Parser/ReservedKeywords.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/regex.hpp>
-#include <Parser/ReservedKeywords.h>
 
 namespace ImportHelpers {
 
 inline bool is_reserved_name(const std::string& name) {
-  return reserved_keywords.find(boost::to_upper_copy<std::string>(name)) != reserved_keywords.end();
+  return reserved_keywords.find(boost::to_upper_copy<std::string>(name)) !=
+         reserved_keywords.end();
 }
 
 inline std::string sanitize_name(const std::string& name) {
-  boost::regex invalid_chars{R"([^0-9a-z_])", boost::regex::extended | boost::regex::icase};
+  boost::regex invalid_chars{R"([^0-9a-z_])",
+                             boost::regex::extended | boost::regex::icase};
   std::string sanitized_name = boost::regex_replace(name, invalid_chars, "");
   if (is_reserved_name(sanitized_name)) {
     sanitized_name += "_";

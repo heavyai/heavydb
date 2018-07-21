@@ -20,13 +20,17 @@
 #include "DictRef.h"
 #include "LeafHostInfo.h"
 
+#include <glog/logging.h>
 #include <memory>
 #include <mutex>
-#include <glog/logging.h>
 
 class StringDictionaryClient {
  public:
-  StringDictionaryClient(const LeafHostInfo& server_host, const DictRef dict_id, const bool with_timeout) { CHECK(false); };
+  StringDictionaryClient(const LeafHostInfo& server_host,
+                         const DictRef dict_id,
+                         const bool with_timeout) {
+    CHECK(false);
+  };
 
   void create(const DictRef dict_ref, const bool is_temp) { CHECK(false); };
 
@@ -60,12 +64,17 @@ class StringDictionaryClient {
     return std::vector<int32_t>{};
   };
 
-  std::vector<int32_t> get_regexp_like(const std::string& pattern, const char escape, const int64_t generation) {
+  std::vector<int32_t> get_regexp_like(const std::string& pattern,
+                                       const char escape,
+                                       const int64_t generation) {
     CHECK(false);
     return std::vector<int32_t>{};
   };
 
-  void get_or_add_bulk(std::vector<int32_t>& string_ids, const std::vector<std::string>& strings) { CHECK(false); };
+  void get_or_add_bulk(std::vector<int32_t>& string_ids,
+                       const std::vector<std::string>& strings) {
+    CHECK(false);
+  };
 
   void translate_string_ids(std::vector<int32_t>& dest_ids,
                             const DictRef dest_dict_ref,

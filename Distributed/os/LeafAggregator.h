@@ -18,17 +18,17 @@
 #define LEAFAGGREGATOR_H
 
 #include "../AggregatedResult.h"
-#include "LeafHostInfo.h"
-#include "gen-cpp/MapD.h"
 #include "DataMgr/MemoryLevel.h"
+#include "LeafHostInfo.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/TargetMetaInfo.h"
+#include "gen-cpp/MapD.h"
 
 #include <glog/logging.h>
 
 namespace Catalog_Namespace {
 class SessionInfo;
-}  // Catalog_Namespace
+}  // namespace Catalog_Namespace
 
 class ResultSet;
 
@@ -43,15 +43,17 @@ class LeafAggregator {
     return {nullptr, {}};
   }
 
-  std::vector<TQueryResult> forwardQueryToLeaves(const Catalog_Namespace::SessionInfo& parent_session_info,
-                                                 const std::string& query_str) {
+  std::vector<TQueryResult> forwardQueryToLeaves(
+      const Catalog_Namespace::SessionInfo& parent_session_info,
+      const std::string& query_str) {
     CHECK(false);
     return {};
   }
 
-  TQueryResult forwardQueryToLeaf(const Catalog_Namespace::SessionInfo& parent_session_info,
-                                  const std::string& query_str,
-                                  const size_t leaf_idx) {
+  TQueryResult forwardQueryToLeaf(
+      const Catalog_Namespace::SessionInfo& parent_session_info,
+      const std::string& query_str,
+      const size_t leaf_idx) {
     CHECK(false);
     return {};
   }
@@ -93,7 +95,9 @@ class LeafAggregator {
 
   void interrupt(const TSessionId session) { CHECK(false); }
 
-  void set_execution_mode(const TSessionId session, const TExecuteMode::type mode) { CHECK(false); }
+  void set_execution_mode(const TSessionId session, const TExecuteMode::type mode) {
+    CHECK(false);
+  }
 
   size_t leafCount() const { return 0; }
 
@@ -102,7 +106,9 @@ class LeafAggregator {
     return {};
   }
 
-  std::vector<TNodeMemoryInfo> getLeafMemoryInfo(TSessionId session, Data_Namespace::MemoryLevel memory_level) {
+  std::vector<TNodeMemoryInfo> getLeafMemoryInfo(
+      TSessionId session,
+      Data_Namespace::MemoryLevel memory_level) {
     CHECK(false);
     return {};
   }

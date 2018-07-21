@@ -40,15 +40,20 @@
 inline bool is_real_str_or_array(const TargetInfo& target_info) {
   return (!target_info.is_agg || target_info.agg_kind == kLAST_SAMPLE) &&
          (target_info.sql_type.is_array() ||
-          (target_info.sql_type.is_string() && target_info.sql_type.get_compression() == kENCODING_NONE));
+          (target_info.sql_type.is_string() &&
+           target_info.sql_type.get_compression() == kENCODING_NONE));
 }
 
-inline size_t advance_slot(const size_t j, const TargetInfo& target_info, const bool separate_varlen_storage) {
+inline size_t advance_slot(const size_t j,
+                           const TargetInfo& target_info,
+                           const bool separate_varlen_storage) {
   if (target_info.sql_type.is_geometry()) {
     return j + 2 * target_info.sql_type.get_physical_coord_cols();
   }
-  return j +
-         ((target_info.agg_kind == kAVG || (!separate_varlen_storage && is_real_str_or_array(target_info))) ? 2 : 1);
+  return j + ((target_info.agg_kind == kAVG ||
+               (!separate_varlen_storage && is_real_str_or_array(target_info)))
+                  ? 2
+                  : 1);
 }
 
 inline size_t slot_offset_rowwise(const size_t entry_idx,
@@ -65,11 +70,15 @@ inline size_t slot_offset_colwise(const size_t entry_idx,
   return (key_count + slot_idx) * entry_count + entry_idx;
 }
 
-inline size_t key_offset_rowwise(const size_t entry_idx, const size_t key_count, const size_t slot_count) {
+inline size_t key_offset_rowwise(const size_t entry_idx,
+                                 const size_t key_count,
+                                 const size_t slot_count) {
   return (key_count + slot_count) * entry_idx;
 }
 
-inline size_t key_offset_colwise(const size_t entry_idx, const size_t key_idx, const size_t entry_count) {
+inline size_t key_offset_colwise(const size_t entry_idx,
+                                 const size_t key_idx,
+                                 const size_t entry_count) {
   return key_idx * entry_count + entry_idx;
 }
 
@@ -79,7 +88,8 @@ inline T advance_to_next_columnar_target_buff(T target_ptr,
                                               const size_t target_slot_idx) {
   CHECK_LT(target_slot_idx, query_mem_desc.agg_col_widths.size());
   auto new_target_ptr =
-      target_ptr + query_mem_desc.entry_count * query_mem_desc.agg_col_widths[target_slot_idx].compact;
+      target_ptr +
+      query_mem_desc.entry_count * query_mem_desc.agg_col_widths[target_slot_idx].compact;
   if (!query_mem_desc.target_column_pad_bytes.empty()) {
     CHECK_LT(target_slot_idx, query_mem_desc.target_column_pad_bytes.size());
     new_target_ptr += query_mem_desc.target_column_pad_bytes[target_slot_idx];
@@ -100,9 +110,10 @@ inline size_t get_buffer_col_slot_count(const QueryMemoryDescriptor& query_mem_d
     return query_mem_desc.agg_col_widths.size();
   }
   const auto& target_groupby_indices = query_mem_desc.target_groupby_indices;
-  return query_mem_desc.agg_col_widths.size() - std::count_if(target_groupby_indices.begin(),
-                                                              target_groupby_indices.end(),
-                                                              [](const ssize_t i) { return i >= 0; });
+  return query_mem_desc.agg_col_widths.size() -
+         std::count_if(target_groupby_indices.begin(),
+                       target_groupby_indices.end(),
+                       [](const ssize_t i) { return i >= 0; });
 }
 
 template <class T>
@@ -112,7 +123,8 @@ inline T get_cols_ptr(T buff, const QueryMemoryDescriptor& query_mem_desc) {
   if (query_mem_desc.keyless_hash) {
     CHECK(query_mem_desc.key_column_pad_bytes.empty());
   } else {
-    CHECK_EQ(query_mem_desc.key_column_pad_bytes.empty(), query_mem_desc.target_column_pad_bytes.empty());
+    CHECK_EQ(query_mem_desc.key_column_pad_bytes.empty(),
+             query_mem_desc.target_column_pad_bytes.empty());
   }
   const bool has_key_col_padding = !query_mem_desc.key_column_pad_bytes.empty();
   const auto key_count = get_key_count_for_descriptor(query_mem_desc);
@@ -152,7 +164,9 @@ inline size_t get_row_bytes(const QueryMemoryDescriptor& query_mem_desc) {
 }
 
 template <class T>
-inline T row_ptr_rowwise(T buff, const QueryMemoryDescriptor& query_mem_desc, const size_t entry_idx) {
+inline T row_ptr_rowwise(T buff,
+                         const QueryMemoryDescriptor& query_mem_desc,
+                         const size_t entry_idx) {
   const auto row_bytes = get_row_bytes(query_mem_desc);
   return buff + entry_idx * row_bytes;
 }
@@ -169,7 +183,7 @@ inline T advance_target_ptr(T target_ptr,
     return result + query_mem_desc.agg_col_widths[slot_idx + 1].compact;
   }
   if (target_info.sql_type.is_geometry()) {
-    for(auto i = 1; i < 2 * target_info.sql_type.get_physical_coord_cols(); ++i) {
+    for (auto i = 1; i < 2 * target_info.sql_type.get_physical_coord_cols(); ++i) {
       result += query_mem_desc.agg_col_widths[slot_idx + i].compact;
     }
   }
@@ -190,7 +204,8 @@ inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair,
   switch (ti.get_type()) {
     case kFLOAT: {
       if (float_argument_input) {
-        dividend = static_cast<double>(*reinterpret_cast<const float*>(may_alias_ptr(&fp_pair.first)));
+        dividend = static_cast<double>(
+            *reinterpret_cast<const float*>(may_alias_ptr(&fp_pair.first)));
       } else {
         dividend = *reinterpret_cast<const double*>(may_alias_ptr(&fp_pair.first));
       }
@@ -216,21 +231,25 @@ inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair,
   }
 
   return ti.is_integer() || ti.is_decimal()
-             ? (dividend / exp_to_scale(ti.is_decimal() ? ti.get_scale() : 0)) / static_cast<double>(fp_pair.second)
+             ? (dividend / exp_to_scale(ti.is_decimal() ? ti.get_scale() : 0)) /
+                   static_cast<double>(fp_pair.second)
              : dividend / static_cast<double>(fp_pair.second);
 }
 
-inline int64_t null_val_bit_pattern(const SQLTypeInfo& ti, const bool float_argument_input) {
+inline int64_t null_val_bit_pattern(const SQLTypeInfo& ti,
+                                    const bool float_argument_input) {
   if (ti.is_fp()) {
     if (float_argument_input && ti.get_type() == kFLOAT) {
       int64_t float_null_val = 0;
-      *reinterpret_cast<float*>(may_alias_ptr(&float_null_val)) = static_cast<float>(inline_fp_null_val(ti));
+      *reinterpret_cast<float*>(may_alias_ptr(&float_null_val)) =
+          static_cast<float>(inline_fp_null_val(ti));
       return float_null_val;
     }
     const auto double_null_val = inline_fp_null_val(ti);
     return *reinterpret_cast<const int64_t*>(may_alias_ptr(&double_null_val));
   }
-  if ((ti.is_string() && ti.get_compression() == kENCODING_NONE) || ti.is_array() || ti.is_geometry()) {
+  if ((ti.is_string() && ti.get_compression() == kENCODING_NONE) || ti.is_array() ||
+      ti.is_geometry()) {
     return 0;
   }
   return inline_int_null_val(ti);

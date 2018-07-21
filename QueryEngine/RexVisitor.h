@@ -106,7 +106,9 @@ class RexVisitor : public RexVisitorBase<T> {
   }
 
  protected:
-  virtual T aggregateResult(const T& aggregate, const T& next_result) const { return next_result; }
+  virtual T aggregateResult(const T& aggregate, const T& next_result) const {
+    return next_result;
+  }
 
   T defaultResult() const override { return T{}; }
 };
@@ -117,9 +119,13 @@ class RexDeepCopyVisitor : public RexVisitorBase<std::unique_ptr<const RexScalar
 
   RetType visitInput(const RexInput* input) const override { return input->deepCopy(); }
 
-  RetType visitLiteral(const RexLiteral* literal) const override { return literal->deepCopy(); }
+  RetType visitLiteral(const RexLiteral* literal) const override {
+    return literal->deepCopy();
+  }
 
-  RetType visitSubQuery(const RexSubQuery* subquery) const override { return subquery->deepCopy(); }
+  RetType visitSubQuery(const RexSubQuery* subquery) const override {
+    return subquery->deepCopy();
+  }
 
   RetType visitRef(const RexRef* ref) const override { return ref->deepCopy(); }
 
@@ -135,7 +141,8 @@ class RexDeepCopyVisitor : public RexVisitorBase<std::unique_ptr<const RexScalar
   RetType visitCase(const RexCase* rex_case) const override {
     std::vector<std::pair<RetType, RetType>> new_pair_list;
     for (size_t i = 0; i < rex_case->branchCount(); ++i) {
-      new_pair_list.emplace_back(visit(rex_case->getWhen(i)), visit(rex_case->getThen(i)));
+      new_pair_list.emplace_back(visit(rex_case->getWhen(i)),
+                                 visit(rex_case->getThen(i)));
     }
     auto new_else = visit(rex_case->getElse());
     return boost::make_unique<RexCase>(new_pair_list, new_else);
@@ -148,7 +155,8 @@ class RexDeepCopyVisitor : public RexVisitorBase<std::unique_ptr<const RexScalar
 template <bool bAllowMissing>
 class RexInputRenumber : public RexDeepCopyVisitor {
  public:
-  RexInputRenumber(const std::unordered_map<size_t, size_t>& new_numbering) : old_to_new_idx_(new_numbering) {}
+  RexInputRenumber(const std::unordered_map<size_t, size_t>& new_numbering)
+      : old_to_new_idx_(new_numbering) {}
   RetType visitInput(const RexInput* input) const override {
     auto renum_it = old_to_new_idx_.find(input->getIndex());
     if (bAllowMissing) {

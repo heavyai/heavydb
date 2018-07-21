@@ -62,7 +62,8 @@ std::shared_ptr<QueryRenderer::QueryDataLayout> RenderInfo::getQueryVboLayout() 
   return nullptr;
 }
 
-void RenderInfo::setQueryVboLayout(const std::shared_ptr<QueryRenderer::QueryDataLayout>& vbo_layout) {
+void RenderInfo::setQueryVboLayout(
+    const std::shared_ptr<QueryRenderer::QueryDataLayout>& vbo_layout) {
   CHECK(false);
 }
 
@@ -71,7 +72,8 @@ std::shared_ptr<QueryRenderer::QueryDataLayout> RenderInfo::getQuerySsboLayout()
   return nullptr;
 }
 
-void RenderInfo::setQuerySsboLayout(const std::shared_ptr<QueryRenderer::QueryDataLayout>& ssbo_layout) {
+void RenderInfo::setQuerySsboLayout(
+    const std::shared_ptr<QueryRenderer::QueryDataLayout>& ssbo_layout) {
   CHECK(false);
 }
 

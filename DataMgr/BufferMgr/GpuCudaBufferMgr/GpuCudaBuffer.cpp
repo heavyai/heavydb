@@ -18,7 +18,7 @@
 #include "../../../CudaMgr/CudaMgr.h"
 
 #include <glog/logging.h>
-#include <assert.h>
+#include <cassert>
 
 namespace Buffer_Namespace {
 
@@ -36,7 +36,8 @@ void GpuCudaBuffer::readData(int8_t* const dst,
                              const MemoryLevel dstBufferType,
                              const int dstDeviceId) {
   if (dstBufferType == CPU_LEVEL) {
-    cudaMgr_->copyDeviceToHost(dst, mem_ + offset, numBytes, deviceId_);  // need to replace 0 with gpu num
+    cudaMgr_->copyDeviceToHost(
+        dst, mem_ + offset, numBytes, deviceId_);  // need to replace 0 with gpu num
   } else if (dstBufferType == GPU_LEVEL) {
     //@todo fill this in
     // CudaUtils::copyGpuToGpu(dst, mem_ + offset, numBytes, 1, dst->getDeviceId());
@@ -57,7 +58,8 @@ void GpuCudaBuffer::writeData(int8_t* const src,
   if (srcBufferType == CPU_LEVEL) {
     // std::cout << "Writing to GPU from source CPU" << std::endl;
 
-    cudaMgr_->copyHostToDevice(mem_ + offset, src, numBytes, deviceId_);  // need to replace 0 with gpu num
+    cudaMgr_->copyHostToDevice(
+        mem_ + offset, src, numBytes, deviceId_);  // need to replace 0 with gpu num
 
   } else if (srcBufferType == GPU_LEVEL) {
     // std::cout << "Writing to GPU from source GPU" << std::endl;
@@ -70,4 +72,4 @@ void GpuCudaBuffer::writeData(int8_t* const src,
   }
 }
 
-}  // Buffer_Namespace
+}  // namespace Buffer_Namespace

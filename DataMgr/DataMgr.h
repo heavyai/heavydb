@@ -73,7 +73,8 @@ class DataMgr {
           const std::string& dbConvertDir = "",
           const int startGpu = 0,
           const size_t reservedGpuMem = (1 << 27),
-          const size_t numReaderThreads = 0); /* 0 means use default for # of reader threads */
+          const size_t numReaderThreads =
+              0); /* 0 means use default for # of reader threads */
   ~DataMgr();
   AbstractBuffer* createChunkBuffer(const ChunkKey& key,
                                     const MemoryLevel memoryLevel,
@@ -85,22 +86,29 @@ class DataMgr {
                                  const size_t numBytes = 0);
   void deleteChunksWithPrefix(const ChunkKey& keyPrefix);
   void deleteChunksWithPrefix(const ChunkKey& keyPrefix, const MemoryLevel memLevel);
-  AbstractBuffer* alloc(const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes);
+  AbstractBuffer* alloc(const MemoryLevel memoryLevel,
+                        const int deviceId,
+                        const size_t numBytes);
   void free(AbstractBuffer* buffer);
   void freeAllBuffers();
   // copies one buffer to another
   void copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer);
-  bool isBufferOnDevice(const ChunkKey& key, const MemoryLevel memLevel, const int deviceId);
+  bool isBufferOnDevice(const ChunkKey& key,
+                        const MemoryLevel memLevel,
+                        const int deviceId);
   std::vector<MemoryInfo> getMemoryInfo(const MemoryLevel memLevel);
   std::string dumpLevel(const MemoryLevel memLevel);
   void clearMemory(const MemoryLevel memLevel);
 
   // const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();
   const std::map<ChunkKey, File_Namespace::FileBuffer*>& getChunkMap();
-  void checkpoint(const int db_id, const int tb_id);  // checkpoint for individual table of DB
-  void getChunkMetadataVec(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec);
-  void getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
-                                       const ChunkKey& keyPrefix);
+  void checkpoint(const int db_id,
+                  const int tb_id);  // checkpoint for individual table of DB
+  void getChunkMetadataVec(
+      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec);
+  void getChunkMetadataVecForKeyPrefix(
+      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
+      const ChunkKey& keyPrefix);
   inline bool gpusPresent() { return hasGpus_; }
   void removeTableRelatedDS(const int db_id, const int tb_id);
   void setTableEpoch(const int db_id, const int tb_id, const int start_epoch);
@@ -113,7 +121,8 @@ class DataMgr {
 
  private:
   size_t getTotalSystemMemory();
-  void populateMgrs(const MapDParameters& mapd_parameters, const size_t userSpecifiedNumReaderThreads);
+  void populateMgrs(const MapDParameters& mapd_parameters,
+                    const size_t userSpecifiedNumReaderThreads);
   void convertDB(const std::string basePath);
   void checkpoint();  // checkpoint for whole DB, called from convertDB proc only
   void createTopLevelMetadata() const;

@@ -57,7 +57,9 @@ inline std::string nullable_str_to_string(const NullableString& str) {
   return *sptr;
 }
 
-inline std::string datum_to_string(const TargetValue& tv, const SQLTypeInfo& ti, const std::string& delim) {
+inline std::string datum_to_string(const TargetValue& tv,
+                                   const SQLTypeInfo& ti,
+                                   const std::string& delim) {
   if (ti.is_array()) {
     const auto list_tv = boost::get<std::vector<ScalarTargetValue>>(&tv);
     CHECK(list_tv);
@@ -92,8 +94,9 @@ inline std::string datum_to_string(const TargetValue& tv, const SQLTypeInfo& ti,
   }
   auto dptr = boost::get<double>(scalar_tv);
   if (dptr) {
-    return *dptr == inline_fp_null_val(ti.is_decimal() ? SQLTypeInfo(kDOUBLE, false) : ti) ? "NULL"
-                                                                                           : std::to_string(*dptr);
+    return *dptr == inline_fp_null_val(ti.is_decimal() ? SQLTypeInfo(kDOUBLE, false) : ti)
+               ? "NULL"
+               : std::to_string(*dptr);
   }
   auto sptr = boost::get<NullableString>(scalar_tv);
   CHECK(sptr);
@@ -129,46 +132,52 @@ class QueryExecutionContext : boost::noncopyable {
                                  const std::vector<Analyzer::Expr*>& targets,
                                  const bool was_auto_device) const;
 
-  IterTabPtr getIterTab(const std::vector<Analyzer::Expr*>& targets, const ssize_t frag_idx) const;
+  IterTabPtr getIterTab(const std::vector<Analyzer::Expr*>& targets,
+                        const ssize_t frag_idx) const;
 
-  std::vector<int64_t*> launchGpuCode(const RelAlgExecutionUnit& ra_exe_unit,
-                                      const std::vector<std::pair<void*, void*>>& cu_functions,
-                                      const bool hoist_literals,
-                                      const std::vector<int8_t>& literal_buff,
-                                      std::vector<std::vector<const int8_t*>> col_buffers,
-                                      const std::vector<std::vector<int64_t>>& num_rows,
-                                      const std::vector<std::vector<uint64_t>>& frag_row_offsets,
-                                      const uint32_t frag_stride,
-                                      const int32_t scan_limit,
-                                      const std::vector<int64_t>& init_agg_vals,
-                                      Data_Namespace::DataMgr* data_mgr,
-                                      const unsigned block_size_x,
-                                      const unsigned grid_size_x,
-                                      const int device_id,
-                                      int32_t* error_code,
-                                      const uint32_t num_tables,
-                                      const std::vector<int64_t>& join_hash_tables,
-                                      RenderAllocatorMap* render_allocator_map);
+  std::vector<int64_t*> launchGpuCode(
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const std::vector<std::pair<void*, void*>>& cu_functions,
+      const bool hoist_literals,
+      const std::vector<int8_t>& literal_buff,
+      std::vector<std::vector<const int8_t*>> col_buffers,
+      const std::vector<std::vector<int64_t>>& num_rows,
+      const std::vector<std::vector<uint64_t>>& frag_row_offsets,
+      const uint32_t frag_stride,
+      const int32_t scan_limit,
+      const std::vector<int64_t>& init_agg_vals,
+      Data_Namespace::DataMgr* data_mgr,
+      const unsigned block_size_x,
+      const unsigned grid_size_x,
+      const int device_id,
+      int32_t* error_code,
+      const uint32_t num_tables,
+      const std::vector<int64_t>& join_hash_tables,
+      RenderAllocatorMap* render_allocator_map);
 
-  std::vector<int64_t*> launchCpuCode(const RelAlgExecutionUnit& ra_exe_unit,
-                                      const std::vector<std::pair<void*, void*>>& fn_ptrs,
-                                      const bool hoist_literals,
-                                      const std::vector<int8_t>& literal_buff,
-                                      std::vector<std::vector<const int8_t*>> col_buffers,
-                                      const std::vector<std::vector<int64_t>>& num_rows,
-                                      const std::vector<std::vector<uint64_t>>& frag_row_offsets,
-                                      const uint32_t frag_stride,
-                                      const int32_t scan_limit,
-                                      const std::vector<int64_t>& init_agg_vals,
-                                      int32_t* error_code,
-                                      const uint32_t num_tables,
-                                      const std::vector<int64_t>& join_hash_tables);
+  std::vector<int64_t*> launchCpuCode(
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const std::vector<std::pair<void*, void*>>& fn_ptrs,
+      const bool hoist_literals,
+      const std::vector<int8_t>& literal_buff,
+      std::vector<std::vector<const int8_t*>> col_buffers,
+      const std::vector<std::vector<int64_t>>& num_rows,
+      const std::vector<std::vector<uint64_t>>& frag_row_offsets,
+      const uint32_t frag_stride,
+      const int32_t scan_limit,
+      const std::vector<int64_t>& init_agg_vals,
+      int32_t* error_code,
+      const uint32_t num_tables,
+      const std::vector<int64_t>& join_hash_tables);
 
   bool hasNoFragments() const { return consistent_frag_sizes_.empty(); }
 
  private:
-  const std::vector<const int8_t*>& getColumnFrag(const size_t table_idx, int64_t& global_idx) const;
-  bool isEmptyBin(const int64_t* group_by_buffer, const size_t bin, const size_t key_idx) const;
+  const std::vector<const int8_t*>& getColumnFrag(const size_t table_idx,
+                                                  int64_t& global_idx) const;
+  bool isEmptyBin(const int64_t* group_by_buffer,
+                  const size_t bin,
+                  const size_t key_idx) const;
 
   void initColumnPerRow(const QueryMemoryDescriptor& query_mem_desc,
                         int8_t* row_ptr,
@@ -194,8 +203,9 @@ class QueryExecutionContext : boost::noncopyable {
                               const ssize_t frag_idx,
                               const std::vector<Analyzer::Expr*>& targets) const;
 
-  uint32_t getFragmentStride(const RelAlgExecutionUnit& ra_exe_unit,
-                             const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids) const;
+  uint32_t getFragmentStride(
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids) const;
 
 #ifdef HAVE_CUDA
   enum {
@@ -218,27 +228,29 @@ class QueryExecutionContext : boost::noncopyable {
 
   void initializeDynamicWatchdog(void* native_module, const int device_id) const;
 
-  std::vector<CUdeviceptr> prepareKernelParams(const std::vector<std::vector<const int8_t*>>& col_buffers,
-                                               const std::vector<int8_t>& literal_buff,
-                                               const std::vector<std::vector<int64_t>>& num_rows,
-                                               const std::vector<std::vector<uint64_t>>& frag_offsets,
-                                               const uint32_t frag_stride,
-                                               const int32_t scan_limit,
-                                               const std::vector<int64_t>& init_agg_vals,
-                                               const std::vector<int32_t>& error_codes,
-                                               const uint32_t num_tables,
-                                               const std::vector<int64_t>& join_hash_tables,
-                                               Data_Namespace::DataMgr* data_mgr,
-                                               const int device_id,
-                                               const bool hoist_literals,
-                                               const bool is_group_by) const;
+  std::vector<CUdeviceptr> prepareKernelParams(
+      const std::vector<std::vector<const int8_t*>>& col_buffers,
+      const std::vector<int8_t>& literal_buff,
+      const std::vector<std::vector<int64_t>>& num_rows,
+      const std::vector<std::vector<uint64_t>>& frag_offsets,
+      const uint32_t frag_stride,
+      const int32_t scan_limit,
+      const std::vector<int64_t>& init_agg_vals,
+      const std::vector<int32_t>& error_codes,
+      const uint32_t num_tables,
+      const std::vector<int64_t>& join_hash_tables,
+      Data_Namespace::DataMgr* data_mgr,
+      const int device_id,
+      const bool hoist_literals,
+      const bool is_group_by) const;
 
-  std::pair<CUdeviceptr, CUdeviceptr> prepareTopNHeapsDevBuffer(Data_Namespace::DataMgr* data_mgr,
-                                                                const CUdeviceptr init_agg_vals_dev_ptr,
-                                                                const size_t n,
-                                                                const int device_id,
-                                                                const unsigned block_size_x,
-                                                                const unsigned grid_size_x) const;
+  std::pair<CUdeviceptr, CUdeviceptr> prepareTopNHeapsDevBuffer(
+      Data_Namespace::DataMgr* data_mgr,
+      const CUdeviceptr init_agg_vals_dev_ptr,
+      const size_t n,
+      const int device_id,
+      const unsigned block_size_x,
+      const unsigned grid_size_x) const;
 
   GpuQueryMemory prepareGroupByDevBuffer(Data_Namespace::DataMgr* data_mgr,
                                          RenderAllocator* render_allocator,
@@ -254,7 +266,8 @@ class QueryExecutionContext : boost::noncopyable {
   int64_t allocateCountDistinctBitmap(const size_t bitmap_byte_sz);
   int64_t allocateCountDistinctSet();
 
-  std::vector<ColumnLazyFetchInfo> getColLazyFetchInfo(const std::vector<Analyzer::Expr*>& target_exprs) const;
+  std::vector<ColumnLazyFetchInfo> getColLazyFetchInfo(
+      const std::vector<Analyzer::Expr*>& target_exprs) const;
 
   void allocateCountDistinctGpuMem();
 
@@ -285,14 +298,15 @@ class QueryExecutionContext : boost::noncopyable {
   size_t count_distinct_bitmap_mem_bytes_;
 
   friend class Executor;
-  friend void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
-                                             const QueryExecutionContext* query_exe_context,
-                                             const GpuQueryMemory& gpu_query_mem,
-                                             const RelAlgExecutionUnit& ra_exe_unit,
-                                             const unsigned block_size_x,
-                                             const unsigned grid_size_x,
-                                             const int device_id,
-                                             const bool prepend_index_buffer);
+  friend void copy_group_by_buffers_from_gpu(
+      Data_Namespace::DataMgr* data_mgr,
+      const QueryExecutionContext* query_exe_context,
+      const GpuQueryMemory& gpu_query_mem,
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const unsigned block_size_x,
+      const unsigned grid_size_x,
+      const int device_id,
+      const bool prepend_index_buffer);
 };
 
 class GroupByAndAggregate {
@@ -322,9 +336,10 @@ class GroupByAndAggregate {
                llvm::BasicBlock* sc_false,
                const CompilationOptions& co);
 
-  static void addTransientStringLiterals(const RelAlgExecutionUnit& ra_exe_unit,
-                                         Executor* executor,
-                                         std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
+  static void addTransientStringLiterals(
+      const RelAlgExecutionUnit& ra_exe_unit,
+      Executor* executor,
+      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
  private:
   struct ColRangeInfo {
@@ -369,7 +384,8 @@ class GroupByAndAggregate {
                                  RenderInfo* render_info,
                                  const bool must_use_baseline_sort);
 
-  int64_t getShardedTopBucket(const ColRangeInfo& col_range_info, const size_t shard_count) const;
+  int64_t getShardedTopBucket(const ColRangeInfo& col_range_info,
+                              const size_t shard_count) const;
 
   void addTransientStringLiterals();
 
@@ -379,7 +395,8 @@ class GroupByAndAggregate {
                                  const CompilationOptions& co,
                                  DiamondCodegen& diamond_codegen);
 
-  std::tuple<llvm::Value*, llvm::Value*> codegenGroupBy(const CompilationOptions& co, DiamondCodegen& codegen);
+  std::tuple<llvm::Value*, llvm::Value*> codegenGroupBy(const CompilationOptions& co,
+                                                        DiamondCodegen& codegen);
 
   llvm::Function* codegenPerfectHashFunction();
 
@@ -387,18 +404,22 @@ class GroupByAndAggregate {
 
   GroupByAndAggregate::ColRangeInfo getExprRangeInfo(const Analyzer::Expr* expr) const;
 
-  static int64_t getBucketedCardinality(const GroupByAndAggregate::ColRangeInfo& col_range_info);
+  static int64_t getBucketedCardinality(
+      const GroupByAndAggregate::ColRangeInfo& col_range_info);
 
   struct KeylessInfo {
     const bool keyless;
     const int32_t target_index;
     const int64_t init_val;
-    const bool shared_mem_support;  // TODO(Saman) remove, all aggregate operations should eventually be potentially
-                                    // done with shared memory. The decision will be made when the query memory
-                                    // descriptor is created, not here. This member just indicates the possibility.
+    const bool shared_mem_support;  // TODO(Saman) remove, all aggregate operations should
+                                    // eventually be potentially done with shared memory.
+                                    // The decision will be made when the query memory
+                                    // descriptor is created, not here. This member just
+                                    // indicates the possibility.
   };
 
-  KeylessInfo getKeylessInfo(const std::vector<Analyzer::Expr*>& target_expr_list, const bool is_group_by) const;
+  KeylessInfo getKeylessInfo(const std::vector<Analyzer::Expr*>& target_expr_list,
+                             const bool is_group_by) const;
 
   llvm::Value* convertNullIfAny(const SQLTypeInfo& arg_type,
                                 const SQLTypeInfo& agg_type,
@@ -428,7 +449,8 @@ class GroupByAndAggregate {
 
   llvm::Value* getAdditionalLiteral(const int32_t off);
 
-  std::vector<llvm::Value*> codegenAggArg(const Analyzer::Expr* target_expr, const CompilationOptions& co);
+  std::vector<llvm::Value*> codegenAggArg(const Analyzer::Expr* target_expr,
+                                          const CompilationOptions& co);
 
   llvm::Value* emitCall(const std::string& fname, const std::vector<llvm::Value*>& args);
 
@@ -513,8 +535,9 @@ inline size_t get_count_distinct_sub_bitmap_count(const size_t bitmap_sz_bits,
 }
 
 template <class T>
-inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list,
-                                               const std::vector<ssize_t>& target_group_by_indices) {
+inline std::vector<int8_t> get_col_byte_widths(
+    const T& col_expr_list,
+    const std::vector<ssize_t>& target_group_by_indices) {
   if (!target_group_by_indices.empty()) {
     CHECK_EQ(col_expr_list.size(), target_group_by_indices.size());
   }
@@ -532,7 +555,8 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list,
     } else {
       const auto agg_info = target_info(col_expr);
       const auto chosen_type = get_compact_type(agg_info);
-      if ((chosen_type.is_string() && chosen_type.get_compression() == kENCODING_NONE) || chosen_type.is_array()) {
+      if ((chosen_type.is_string() && chosen_type.get_compression() == kENCODING_NONE) ||
+          chosen_type.is_array()) {
         col_widths.push_back(sizeof(int64_t));
         col_widths.push_back(sizeof(int64_t));
         ++col_expr_idx;
@@ -574,6 +598,7 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
                                  const std::vector<InputTableInfo>& query_infos,
                                  const int8_t crt_min_byte_width);
 
-size_t shard_count_for_top_groups(const RelAlgExecutionUnit& ra_exe_unit, const Catalog_Namespace::Catalog& catalog);
+size_t shard_count_for_top_groups(const RelAlgExecutionUnit& ra_exe_unit,
+                                  const Catalog_Namespace::Catalog& catalog);
 
 #endif  // QUERYENGINE_GROUPBYANDAGGREGATE_H

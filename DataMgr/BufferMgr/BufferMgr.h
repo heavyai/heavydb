@@ -19,8 +19,8 @@
  * @author	Steven Stewart <steve@map-d.com>
  * @author	Todd Mostak <todd@map-d.com>
  *
- * This file includes the class specification for the buffer manager (BufferMgr), and related
- * data structures and types.
+ * This file includes the class specification for the buffer manager (BufferMgr), and
+ * related data structures and types.
  */
 #ifndef DATAMGR_MEMORY_BUFFER_BUFFERMGR_H
 #define DATAMGR_MEMORY_BUFFER_BUFFERMGR_H
@@ -102,11 +102,14 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   const std::vector<BufferList>& getSlabSegments();
 
   /// Creates a chunk with the specified key and page size.
-  virtual AbstractBuffer* createBuffer(const ChunkKey& key, const size_t pageSize = 0, const size_t initialSize = 0);
+  virtual AbstractBuffer* createBuffer(const ChunkKey& key,
+                                       const size_t pageSize = 0,
+                                       const size_t initialSize = 0);
 
   /// Deletes the chunk with the specified key
   virtual void deleteBuffer(const ChunkKey& key, const bool purge = true);
-  virtual void deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool purge = true);
+  virtual void deleteBuffersWithPrefix(const ChunkKey& keyPrefix,
+                                       const bool purge = true);
 
   /// Returns the a pointer to the chunk with the specified key.
   virtual AbstractBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0);
@@ -118,8 +121,12 @@ class BufferMgr : public AbstractBufferMgr {  // implements
    * @return AbstractBuffer*
    */
   virtual bool isBufferOnDevice(const ChunkKey& key);
-  virtual void fetchBuffer(const ChunkKey& key, AbstractBuffer* destBuffer, const size_t numBytes = 0);
-  virtual AbstractBuffer* putBuffer(const ChunkKey& key, AbstractBuffer* d, const size_t numBytes = 0);
+  virtual void fetchBuffer(const ChunkKey& key,
+                           AbstractBuffer* destBuffer,
+                           const size_t numBytes = 0);
+  virtual AbstractBuffer* putBuffer(const ChunkKey& key,
+                                    AbstractBuffer* d,
+                                    const size_t numBytes = 0);
   void checkpoint();
   void checkpoint(const int db_id, const int tb_id);
 
@@ -133,12 +140,15 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   size_t getNumChunks();
 
   BufferList::iterator reserveBuffer(BufferList::iterator& segIt, const size_t numBytes);
-  virtual void getChunkMetadataVec(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec);
-  virtual void getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
-                                               const ChunkKey& keyPrefix);
+  virtual void getChunkMetadataVec(
+      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec);
+  virtual void getChunkMetadataVecForKeyPrefix(
+      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
+      const ChunkKey& keyPrefix);
 
  protected:
-  std::vector<int8_t*> slabs_;  /// vector of beginning memory addresses for each allocation of the buffer pool
+  std::vector<int8_t*> slabs_;  /// vector of beginning memory addresses for each
+                                /// allocation of the buffer pool
   std::vector<BufferList> slabSegments_;
   size_t pageSize_;
 
@@ -146,11 +156,14 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   BufferMgr(const BufferMgr&);             // private copy constructor
   BufferMgr& operator=(const BufferMgr&);  // private assignment
   void removeSegment(BufferList::iterator& segIt);
-  BufferList::iterator findFreeBufferInSlab(const size_t slabNum, const size_t numPagesRequested);
+  BufferList::iterator findFreeBufferInSlab(const size_t slabNum,
+                                            const size_t numPagesRequested);
   int getBufferId();
   virtual void addSlab(const size_t slabSize) = 0;
   virtual void freeAllMem() = 0;
-  virtual void allocateBuffer(BufferList::iterator segIt, const size_t pageSize, const size_t numBytes) = 0;
+  virtual void allocateBuffer(BufferList::iterator segIt,
+                              const size_t pageSize,
+                              const size_t numBytes) = 0;
   std::mutex chunkIndexMutex_;
   std::mutex sizedSegsMutex_;
   std::mutex unsizedSegsMutex_;
@@ -163,8 +176,8 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   size_t numPagesAllocated_;
   size_t maxNumPagesPerSlab_;
   size_t currentMaxSlabPageSize_;
-  size_t
-      maxSlabSize_;  /// size of the individual memory allocations that compose the buffer pool (up to maxBufferSize_)
+  size_t maxSlabSize_;  /// size of the individual memory allocations that compose the
+                        /// buffer pool (up to maxBufferSize_)
   bool allocationsCapped_;
   AbstractBufferMgr* parentMgr_;
   int maxBufferId_;
@@ -177,7 +190,9 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   BufferList unsizedSegs_;
   // std::map<size_t, int8_t *> freeMem_;
 
-  BufferList::iterator evict(BufferList::iterator& evictStart, const size_t numPagesRequested, const int slabNum);
+  BufferList::iterator evict(BufferList::iterator& evictStart,
+                             const size_t numPagesRequested,
+                             const int slabNum);
   BufferList::iterator findFreeBuffer(size_t numBytes);
 
   /**

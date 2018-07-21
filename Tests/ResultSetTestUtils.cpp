@@ -56,7 +56,8 @@ void fill_one_entry_baseline(int64_t* value_slots,
         }
       case kDOUBLE: {
         double di = vv;
-        value_slots[target_slot] = null_val ? vv : *reinterpret_cast<const int64_t*>(may_alias_ptr(&di));
+        value_slots[target_slot] =
+            null_val ? vv : *reinterpret_cast<const int64_t*>(may_alias_ptr(&di));
         break;
       }
       case kTEXT:
@@ -80,7 +81,8 @@ size_t get_slot_count(const std::vector<TargetInfo>& target_infos) {
   return count;
 }
 
-std::unordered_map<size_t, size_t> get_slot_to_target_mapping(const std::vector<TargetInfo>& target_infos) {
+std::unordered_map<size_t, size_t> get_slot_to_target_mapping(
+    const std::vector<TargetInfo>& target_infos) {
   std::unordered_map<size_t, size_t> mapping;
   size_t target_index = 0;
   size_t slot_index = 0;

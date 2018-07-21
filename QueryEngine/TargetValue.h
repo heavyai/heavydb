@@ -25,8 +25,8 @@
 #ifndef QUERYENGINE_TARGETVALUE_H
 #define QUERYENGINE_TARGETVALUE_H
 
-#include <boost/variant.hpp>
 #include <glog/logging.h>
+#include <boost/variant.hpp>
 
 #include <cstdint>
 #include <string>
@@ -42,17 +42,22 @@ struct InternalTargetValue {
 
   explicit InternalTargetValue(const int64_t i1_) : i1(i1_), ty(ITVType::Int) {}
 
-  explicit InternalTargetValue(const int64_t i1_, const int64_t i2_) : i1(i1_), i2(i2_), ty(ITVType::Pair) {}
+  explicit InternalTargetValue(const int64_t i1_, const int64_t i2_)
+      : i1(i1_), i2(i2_), ty(ITVType::Pair) {}
 
-  explicit InternalTargetValue(const std::string* s) : i1(reinterpret_cast<int64_t>(s)), ty(ITVType::Str) {}
+  explicit InternalTargetValue(const std::string* s)
+      : i1(reinterpret_cast<int64_t>(s)), ty(ITVType::Str) {}
 
-  explicit InternalTargetValue(const std::vector<int64_t>* v) : i1(reinterpret_cast<int64_t>(v)), ty(ITVType::Arr) {}
+  explicit InternalTargetValue(const std::vector<int64_t>* v)
+      : i1(reinterpret_cast<int64_t>(v)), ty(ITVType::Arr) {}
 
   explicit InternalTargetValue() : ty(ITVType::Null) {}
 
   std::string strVal() const { return *reinterpret_cast<std::string*>(i1); }
 
-  std::vector<int64_t> arrVal() const { return *reinterpret_cast<std::vector<int64_t>*>(i1); }
+  std::vector<int64_t> arrVal() const {
+    return *reinterpret_cast<std::vector<int64_t>*>(i1);
+  }
 
   bool isInt() const { return ty == ITVType::Int; }
 
@@ -83,7 +88,9 @@ struct InternalTargetValue {
     }
   }
 
-  bool operator==(const InternalTargetValue& other) const { return !(*this < other || other < *this); }
+  bool operator==(const InternalTargetValue& other) const {
+    return !(*this < other || other < *this);
+  }
 };
 
 typedef boost::variant<std::string, void*> NullableString;

@@ -49,11 +49,15 @@ inline const SQLTypeInfo& get_compact_type(const TargetInfo& target) {
     return target.sql_type;
   }
 
-  return (agg_type != kCOUNT && agg_type != kAPPROX_COUNT_DISTINCT) ? agg_arg : target.sql_type;
+  return (agg_type != kCOUNT && agg_type != kAPPROX_COUNT_DISTINCT) ? agg_arg
+                                                                    : target.sql_type;
 }
 
 template <typename T>
-inline bool detect_overflow_and_underflow(const T a, const T b, const bool nullable, const T null_val) {
+inline bool detect_overflow_and_underflow(const T a,
+                                          const T b,
+                                          const bool nullable,
+                                          const T null_val) {
 #ifdef ENABLE_COMPACTION
   if (nullable) {
     if (a == null_val || b == null_val) {

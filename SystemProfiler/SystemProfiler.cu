@@ -2,10 +2,10 @@
 
 #include "SystemProfiler.h"
 
-#include <vector>
-#include <iostream>
-#include <boost/filesystem.hpp>
 #include <hwloc.h>
+#include <boost/filesystem.hpp>
+#include <iostream>
+#include <vector>
 
 using namespace std;
 

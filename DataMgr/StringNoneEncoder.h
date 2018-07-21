@@ -24,10 +24,10 @@
 #ifndef STRING_NONE_ENCODER_H
 #define STRING_NONE_ENCODER_H
 
-#include <vector>
-#include <string>
-#include <cassert>
 #include <glog/logging.h>
+#include <cassert>
+#include <string>
+#include <vector>
 #include "AbstractBuffer.h"
 #include "ChunkMetadata.h"
 #include "Encoder.h"
@@ -36,7 +36,8 @@ using Data_Namespace::AbstractBuffer;
 
 class StringNoneEncoder : public Encoder {
  public:
-  StringNoneEncoder(AbstractBuffer* buffer) : Encoder(buffer), index_buf(nullptr), last_offset(-1), has_nulls(false) {}
+  StringNoneEncoder(AbstractBuffer* buffer)
+      : Encoder(buffer), index_buf(nullptr), last_offset(-1), has_nulls(false) {}
 
   size_t getNumElemsForBytesInsertData(const std::vector<std::string>* srcData,
                                        const int start_idx,
@@ -44,7 +45,9 @@ class StringNoneEncoder : public Encoder {
                                        const size_t byteLimit,
                                        const bool replicating = false);
 
-  ChunkMetadata appendData(int8_t*& srcData, const size_t numAppendElems, const bool replicating = false) {
+  ChunkMetadata appendData(int8_t*& srcData,
+                           const size_t numAppendElems,
+                           const bool replicating = false) {
     assert(false);  // should never be called for strings
     ChunkMetadata chunkMetadata;
     getMetadata(chunkMetadata);

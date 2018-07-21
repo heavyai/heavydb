@@ -42,19 +42,25 @@ ResultSetStorage::ResultSetStorage(const std::vector<TargetInfo>& targets,
                                    const QueryMemoryDescriptor& query_mem_desc,
                                    int8_t* buff,
                                    const bool buff_is_provided)
-    : targets_(targets), query_mem_desc_(query_mem_desc), buff_(buff), buff_is_provided_(buff_is_provided) {
+    : targets_(targets)
+    , query_mem_desc_(query_mem_desc)
+    , buff_(buff)
+    , buff_is_provided_(buff_is_provided) {
   for (const auto& target_info : targets_) {
-    if (target_info.agg_kind == kCOUNT || target_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
+    if (target_info.agg_kind == kCOUNT ||
+        target_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
       target_init_vals_.push_back(0);
       continue;
     }
     if (!target_info.sql_type.get_notnull()) {
-      int64_t init_val = null_val_bit_pattern(target_info.sql_type, takes_float_argument(target_info));
+      int64_t init_val =
+          null_val_bit_pattern(target_info.sql_type, takes_float_argument(target_info));
       target_init_vals_.push_back(target_info.is_agg ? init_val : 0);
     } else {
       target_init_vals_.push_back(target_info.is_agg ? 0xdeadbeef : 0);
     }
-    if (target_info.agg_kind == kAVG || (target_info.agg_kind == kLAST_SAMPLE && target_info.sql_type.is_varlen())) {
+    if (target_info.agg_kind == kAVG ||
+        (target_info.agg_kind == kLAST_SAMPLE && target_info.sql_type.is_varlen())) {
       target_init_vals_.push_back(0);
     }
   }
@@ -79,25 +85,25 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const QueryMemoryDescriptor& query_mem_desc,
                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                      const Executor* executor)
-    : targets_(targets),
-      device_type_(device_type),
-      device_id_(-1),
-      query_mem_desc_(query_mem_desc),
-      crt_row_buff_idx_(0),
-      fetched_so_far_(0),
-      drop_first_(0),
-      keep_first_(0),
-      row_set_mem_owner_(row_set_mem_owner),
-      queue_time_ms_(0),
-      render_time_ms_(0),
-      executor_(executor),
-      estimator_buffer_(nullptr),
-      host_estimator_buffer_(nullptr),
-      data_mgr_(nullptr),
-      none_encoded_strings_valid_(false),
-      just_explain_(false),
-      cached_row_count_(-1),
-      geo_return_type_(GeoReturnType::WktString) {}
+    : targets_(targets)
+    , device_type_(device_type)
+    , device_id_(-1)
+    , query_mem_desc_(query_mem_desc)
+    , crt_row_buff_idx_(0)
+    , fetched_so_far_(0)
+    , drop_first_(0)
+    , keep_first_(0)
+    , row_set_mem_owner_(row_set_mem_owner)
+    , queue_time_ms_(0)
+    , render_time_ms_(0)
+    , executor_(executor)
+    , estimator_buffer_(nullptr)
+    , host_estimator_buffer_(nullptr)
+    , data_mgr_(nullptr)
+    , none_encoded_strings_valid_(false)
+    , just_explain_(false)
+    , cached_row_count_(-1)
+    , geo_return_type_(GeoReturnType::WktString) {}
 
 ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
@@ -111,87 +117,92 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const QueryMemoryDescriptor& query_mem_desc,
                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                      const Executor* executor)
-    : targets_(targets),
-      device_type_(device_type),
-      device_id_(device_id),
-      query_mem_desc_(query_mem_desc),
-      crt_row_buff_idx_(0),
-      fetched_so_far_(0),
-      drop_first_(0),
-      keep_first_(0),
-      row_set_mem_owner_(row_set_mem_owner),
-      queue_time_ms_(0),
-      render_time_ms_(0),
-      executor_(executor),
-      lazy_fetch_info_(lazy_fetch_info),
-      col_buffers_{col_buffers},
+    : targets_(targets)
+    , device_type_(device_type)
+    , device_id_(device_id)
+    , query_mem_desc_(query_mem_desc)
+    , crt_row_buff_idx_(0)
+    , fetched_so_far_(0)
+    , drop_first_(0)
+    , keep_first_(0)
+    , row_set_mem_owner_(row_set_mem_owner)
+    , queue_time_ms_(0)
+    , render_time_ms_(0)
+    , executor_(executor)
+    , lazy_fetch_info_(lazy_fetch_info)
+    , col_buffers_{col_buffers}
+    ,
 #ifdef ENABLE_MULTIFRAG_JOIN
-      frag_offsets_{frag_offsets},
-      consistent_frag_sizes_{consistent_frag_sizes},
+    frag_offsets_{frag_offsets}
+    , consistent_frag_sizes_{consistent_frag_sizes}
+    ,
 #endif
-      estimator_buffer_(nullptr),
-      host_estimator_buffer_(nullptr),
-      data_mgr_(nullptr),
-      none_encoded_strings_valid_(false),
-      just_explain_(false),
-      cached_row_count_(-1),
-      geo_return_type_(GeoReturnType::WktString) {
+    estimator_buffer_(nullptr)
+    , host_estimator_buffer_(nullptr)
+    , data_mgr_(nullptr)
+    , none_encoded_strings_valid_(false)
+    , just_explain_(false)
+    , cached_row_count_(-1)
+    , geo_return_type_(GeoReturnType::WktString) {
 }
 
 ResultSet::ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator> estimator,
                      const ExecutorDeviceType device_type,
                      const int device_id,
                      Data_Namespace::DataMgr* data_mgr)
-    : device_type_(device_type),
-      device_id_(device_id),
-      query_mem_desc_{},
-      crt_row_buff_idx_(0),
-      estimator_(estimator),
-      estimator_buffer_(nullptr),
-      host_estimator_buffer_(nullptr),
-      data_mgr_(data_mgr),
-      none_encoded_strings_valid_(false),
-      just_explain_(false),
-      cached_row_count_(-1),
-      geo_return_type_(GeoReturnType::WktString) {
+    : device_type_(device_type)
+    , device_id_(device_id)
+    , query_mem_desc_{}
+    , crt_row_buff_idx_(0)
+    , estimator_(estimator)
+    , estimator_buffer_(nullptr)
+    , host_estimator_buffer_(nullptr)
+    , data_mgr_(data_mgr)
+    , none_encoded_strings_valid_(false)
+    , just_explain_(false)
+    , cached_row_count_(-1)
+    , geo_return_type_(GeoReturnType::WktString) {
   if (device_type == ExecutorDeviceType::GPU) {
-    estimator_buffer_ =
-        reinterpret_cast<int8_t*>(alloc_gpu_mem(data_mgr_, estimator_->getEstimatorBufferSize(), device_id_, nullptr));
-    data_mgr->cudaMgr_->zeroDeviceMem(estimator_buffer_, estimator_->getEstimatorBufferSize(), device_id_);
+    estimator_buffer_ = reinterpret_cast<int8_t*>(alloc_gpu_mem(
+        data_mgr_, estimator_->getEstimatorBufferSize(), device_id_, nullptr));
+    data_mgr->cudaMgr_->zeroDeviceMem(
+        estimator_buffer_, estimator_->getEstimatorBufferSize(), device_id_);
   } else {
-    OOM_TRACE_PUSH(+": host_estimator_buffer_ " + std::to_string(estimator_->getEstimatorBufferSize()));
-    host_estimator_buffer_ = static_cast<int8_t*>(checked_calloc(estimator_->getEstimatorBufferSize(), 1));
+    OOM_TRACE_PUSH(+": host_estimator_buffer_ " +
+                   std::to_string(estimator_->getEstimatorBufferSize()));
+    host_estimator_buffer_ =
+        static_cast<int8_t*>(checked_calloc(estimator_->getEstimatorBufferSize(), 1));
   }
 }
 
 ResultSet::ResultSet(const std::string& explanation)
-    : device_type_(ExecutorDeviceType::CPU),
-      device_id_(-1),
-      fetched_so_far_(0),
-      queue_time_ms_(0),
-      render_time_ms_(0),
-      estimator_buffer_(nullptr),
-      host_estimator_buffer_(nullptr),
-      none_encoded_strings_valid_(false),
-      explanation_(explanation),
-      just_explain_(true),
-      cached_row_count_(-1),
-      geo_return_type_(GeoReturnType::WktString) {}
+    : device_type_(ExecutorDeviceType::CPU)
+    , device_id_(-1)
+    , fetched_so_far_(0)
+    , queue_time_ms_(0)
+    , render_time_ms_(0)
+    , estimator_buffer_(nullptr)
+    , host_estimator_buffer_(nullptr)
+    , none_encoded_strings_valid_(false)
+    , explanation_(explanation)
+    , just_explain_(true)
+    , cached_row_count_(-1)
+    , geo_return_type_(GeoReturnType::WktString) {}
 
 ResultSet::ResultSet(int64_t queue_time_ms,
                      int64_t render_time_ms,
                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
-    : device_type_(ExecutorDeviceType::CPU),
-      device_id_(-1),
-      fetched_so_far_(0),
-      queue_time_ms_(queue_time_ms),
-      render_time_ms_(render_time_ms),
-      estimator_buffer_(nullptr),
-      host_estimator_buffer_(nullptr),
-      none_encoded_strings_valid_(false),
-      just_explain_(true),
-      cached_row_count_(-1),
-      geo_return_type_(GeoReturnType::WktString){};
+    : device_type_(ExecutorDeviceType::CPU)
+    , device_id_(-1)
+    , fetched_so_far_(0)
+    , queue_time_ms_(queue_time_ms)
+    , render_time_ms_(render_time_ms)
+    , estimator_buffer_(nullptr)
+    , host_estimator_buffer_(nullptr)
+    , none_encoded_strings_valid_(false)
+    , just_explain_(true)
+    , cached_row_count_(-1)
+    , geo_return_type_(GeoReturnType::WktString){};
 
 ResultSet::~ResultSet() {
   if (storage_) {
@@ -212,23 +223,30 @@ ExecutorDeviceType ResultSet::getDeviceType() const {
 
 const ResultSetStorage* ResultSet::allocateStorage() const {
   CHECK(!storage_);
-  OOM_TRACE_PUSH(+": size " + std::to_string(query_mem_desc_.getBufferSizeBytes(device_type_)));
-  auto buff = static_cast<int8_t*>(checked_malloc(query_mem_desc_.getBufferSizeBytes(device_type_)));
+  OOM_TRACE_PUSH(+": size " +
+                 std::to_string(query_mem_desc_.getBufferSizeBytes(device_type_)));
+  auto buff = static_cast<int8_t*>(
+      checked_malloc(query_mem_desc_.getBufferSizeBytes(device_type_)));
   storage_.reset(new ResultSetStorage(targets_, query_mem_desc_, buff, false));
   return storage_.get();
 }
 
-const ResultSetStorage* ResultSet::allocateStorage(int8_t* buff, const std::vector<int64_t>& target_init_vals) const {
+const ResultSetStorage* ResultSet::allocateStorage(
+    int8_t* buff,
+    const std::vector<int64_t>& target_init_vals) const {
   CHECK(buff);
   storage_.reset(new ResultSetStorage(targets_, query_mem_desc_, buff, true));
   storage_->target_init_vals_ = target_init_vals;
   return storage_.get();
 }
 
-const ResultSetStorage* ResultSet::allocateStorage(const std::vector<int64_t>& target_init_vals) const {
+const ResultSetStorage* ResultSet::allocateStorage(
+    const std::vector<int64_t>& target_init_vals) const {
   CHECK(!storage_);
-  OOM_TRACE_PUSH(+": size " + std::to_string(query_mem_desc_.getBufferSizeBytes(device_type_)));
-  auto buff = static_cast<int8_t*>(checked_malloc(query_mem_desc_.getBufferSizeBytes(device_type_)));
+  OOM_TRACE_PUSH(+": size " +
+                 std::to_string(query_mem_desc_.getBufferSizeBytes(device_type_)));
+  auto buff = static_cast<int8_t*>(
+      checked_malloc(query_mem_desc_.getBufferSizeBytes(device_type_)));
   storage_.reset(new ResultSetStorage(targets_, query_mem_desc_, buff, false));
   storage_->target_init_vals_ = target_init_vals;
   return storage_.get();
@@ -249,19 +267,25 @@ void ResultSet::append(ResultSet& that) {
   }
   appended_storage_.push_back(std::move(that.storage_));
   query_mem_desc_.entry_count += appended_storage_.back()->query_mem_desc_.entry_count;
-  query_mem_desc_.entry_count_small += appended_storage_.back()->query_mem_desc_.entry_count_small;
+  query_mem_desc_.entry_count_small +=
+      appended_storage_.back()->query_mem_desc_.entry_count_small;
   chunks_.insert(chunks_.end(), that.chunks_.begin(), that.chunks_.end());
-  col_buffers_.insert(col_buffers_.end(), that.col_buffers_.begin(), that.col_buffers_.end());
+  col_buffers_.insert(
+      col_buffers_.end(), that.col_buffers_.begin(), that.col_buffers_.end());
 #ifdef ENABLE_MULTIFRAG_JOIN
-  frag_offsets_.insert(frag_offsets_.end(), that.frag_offsets_.begin(), that.frag_offsets_.end());
-  consistent_frag_sizes_.insert(
-      consistent_frag_sizes_.end(), that.consistent_frag_sizes_.begin(), that.consistent_frag_sizes_.end());
+  frag_offsets_.insert(
+      frag_offsets_.end(), that.frag_offsets_.begin(), that.frag_offsets_.end());
+  consistent_frag_sizes_.insert(consistent_frag_sizes_.end(),
+                                that.consistent_frag_sizes_.begin(),
+                                that.consistent_frag_sizes_.end());
 #endif
-  chunk_iters_.insert(chunk_iters_.end(), that.chunk_iters_.begin(), that.chunk_iters_.end());
+  chunk_iters_.insert(
+      chunk_iters_.end(), that.chunk_iters_.begin(), that.chunk_iters_.end());
   if (none_encoded_strings_valid_) {
     CHECK(that.none_encoded_strings_valid_);
-    none_encoded_strings_.insert(
-        none_encoded_strings_.end(), that.none_encoded_strings_.begin(), that.none_encoded_strings_.end());
+    none_encoded_strings_.insert(none_encoded_strings_.end(),
+                                 that.none_encoded_strings_.begin(),
+                                 that.none_encoded_strings_.end());
   }
   for (auto& buff : that.literal_buffers_) {
     literal_buffers_.push_back(std::move(buff));
@@ -281,7 +305,8 @@ SQLTypeInfo ResultSet::getColType(const size_t col_idx) const {
     return SQLTypeInfo(kTEXT, false);
   }
   CHECK_LT(col_idx, targets_.size());
-  return targets_[col_idx].agg_kind == kAVG ? SQLTypeInfo(kDOUBLE, false) : targets_[col_idx].sql_type;
+  return targets_[col_idx].agg_kind == kAVG ? SQLTypeInfo(kDOUBLE, false)
+                                            : targets_[col_idx].sql_type;
 }
 
 size_t ResultSet::rowCount(const bool force_parallel) const {
@@ -324,7 +349,9 @@ size_t ResultSet::parallelRowCount() const {
   size_t row_count{0};
   const size_t worker_count = cpu_threads();
   std::vector<std::future<size_t>> counter_threads;
-  for (size_t i = 0, start_entry = 0, stride = (entryCount() + worker_count - 1) / worker_count;
+  for (size_t i = 0,
+              start_entry = 0,
+              stride = (entryCount() + worker_count - 1) / worker_count;
        i < worker_count && start_entry < entryCount();
        ++i, start_entry += stride) {
     const auto end_entry = std::min(start_entry + stride, entryCount());
@@ -380,8 +407,10 @@ void ResultSet::syncEstimatorBuffer() const {
   CHECK(device_type_ == ExecutorDeviceType::GPU);
   CHECK(!host_estimator_buffer_);
   CHECK_EQ(size_t(0), estimator_->getEstimatorBufferSize() % sizeof(int64_t));
-  OOM_TRACE_PUSH(+": host_estimator_buffer_ " + std::to_string(estimator_->getEstimatorBufferSize()));
-  host_estimator_buffer_ = static_cast<int8_t*>(checked_calloc(estimator_->getEstimatorBufferSize(), 1));
+  OOM_TRACE_PUSH(+": host_estimator_buffer_ " +
+                 std::to_string(estimator_->getEstimatorBufferSize()));
+  host_estimator_buffer_ =
+      static_cast<int8_t*>(checked_calloc(estimator_->getEstimatorBufferSize(), 1));
   copy_from_gpu(data_mgr_,
                 host_estimator_buffer_,
                 reinterpret_cast<CUdeviceptr>(estimator_buffer_),
@@ -391,7 +420,8 @@ void ResultSet::syncEstimatorBuffer() const {
 
 size_t ResultSet::getNDVEstimator() const {
   CHECK(host_estimator_buffer_);
-  auto bits_set = bitmap_set_size(host_estimator_buffer_, estimator_->getEstimatorBufferSize());
+  auto bits_set =
+      bitmap_set_size(host_estimator_buffer_, estimator_->getEstimatorBufferSize());
   const auto total_bits = estimator_->getEstimatorBufferSize() * 8;
   CHECK_LE(bits_set, total_bits);
   const auto unset_bits = total_bits - bits_set;
@@ -423,7 +453,8 @@ bool ResultSet::isTruncated() const {
   return keep_first_ + drop_first_;
 }
 
-QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(const QueryMemoryDescriptor& query_mem_desc) {
+QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
+    const QueryMemoryDescriptor& query_mem_desc) {
   auto query_mem_desc_copy = query_mem_desc;
   for (auto& group_width : query_mem_desc_copy.group_col_widths) {
     group_width = 8;
@@ -457,7 +488,8 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(const QueryMemoryDes
   return query_mem_desc_copy;
 }
 
-void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n) {
+void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
+                     const size_t top_n) {
   CHECK_EQ(-1, cached_row_count_);
   CHECK(!targets_.empty());
 #ifdef HAVE_CUDA
@@ -484,7 +516,8 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const
     throw RowSortException("Sorting more than 4B elements not supported");
   }
 
-  CHECK(size_t(0) == query_mem_desc_.entry_count_small || !query_mem_desc_.output_columnar);  // TODO(alex)
+  CHECK(size_t(0) == query_mem_desc_.entry_count_small ||
+        !query_mem_desc_.output_columnar);  // TODO(alex)
   CHECK(permutation_.empty());
 
   const bool use_heap{order_entries.size() == 1 && top_n};
@@ -512,7 +545,8 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const
 }
 
 #ifdef HAVE_CUDA
-void ResultSet::baselineSort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n) {
+void ResultSet::baselineSort(const std::list<Analyzer::OrderEntry>& order_entries,
+                             const size_t top_n) {
   // If we only have on GPU, it's usually faster to do multi-threaded radix sort on CPU
   if (getGpuCount() > 1) {
     try {
@@ -526,12 +560,16 @@ void ResultSet::baselineSort(const std::list<Analyzer::OrderEntry>& order_entrie
 }
 #endif  // HAVE_CUDA
 
-std::vector<uint32_t> ResultSet::initPermutationBuffer(const size_t start, const size_t step) {
+std::vector<uint32_t> ResultSet::initPermutationBuffer(const size_t start,
+                                                       const size_t step) {
   CHECK_NE(size_t(0), step);
   std::vector<uint32_t> permutation;
-  const auto total_entries = query_mem_desc_.entry_count + query_mem_desc_.entry_count_small;
+  const auto total_entries =
+      query_mem_desc_.entry_count + query_mem_desc_.entry_count_small;
   permutation.reserve(total_entries / step);
-  for (size_t i = start; i < query_mem_desc_.entry_count + query_mem_desc_.entry_count_small; i += step) {
+  for (size_t i = start;
+       i < query_mem_desc_.entry_count + query_mem_desc_.entry_count_small;
+       i += step) {
     const auto storage_lookup_result = findStorage(i);
     const auto lhs_storage = storage_lookup_result.storage_ptr;
     const auto off = storage_lookup_result.fixedup_entry_idx;
@@ -547,14 +585,16 @@ const std::vector<uint32_t>& ResultSet::getPermutationBuffer() const {
   return permutation_;
 }
 
-void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n) {
+void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries,
+                            const size_t top_n) {
   const size_t step = cpu_threads();
   std::vector<std::vector<uint32_t>> strided_permutations(step);
   std::vector<std::future<void>> init_futures;
   for (size_t start = 0; start < step; ++start) {
-    init_futures.emplace_back(std::async(std::launch::async, [this, start, step, &strided_permutations] {
-      strided_permutations[start] = initPermutationBuffer(start, step);
-    }));
+    init_futures.emplace_back(
+        std::async(std::launch::async, [this, start, step, &strided_permutations] {
+          strided_permutations[start] = initPermutationBuffer(start, step);
+        }));
   }
   for (auto& init_future : init_futures) {
     init_future.wait();
@@ -565,9 +605,10 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
   auto compare = createComparator(order_entries, true);
   std::vector<std::future<void>> top_futures;
   for (auto& strided_permutation : strided_permutations) {
-    top_futures.emplace_back(std::async(std::launch::async, [&strided_permutation, &compare, top_n] {
-      topPermutation(strided_permutation, top_n, compare);
-    }));
+    top_futures.emplace_back(
+        std::async(std::launch::async, [&strided_permutation, &compare, top_n] {
+          topPermutation(strided_permutation, top_n, compare);
+        }));
   }
   for (auto& top_future : top_futures) {
     top_future.wait();
@@ -577,7 +618,8 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
   }
   permutation_.reserve(strided_permutations.size() * top_n);
   for (const auto& strided_permutation : strided_permutations) {
-    permutation_.insert(permutation_.end(), strided_permutation.begin(), strided_permutation.end());
+    permutation_.insert(
+        permutation_.end(), strided_permutation.begin(), strided_permutation.end());
   }
   topPermutation(permutation_, top_n, compare);
 }
@@ -614,8 +656,9 @@ ResultSet::StorageLookupResult ResultSet::findStorage(const size_t entry_idx) co
   size_t fixedup_entry_idx{entry_idx};
   std::tie(stg_idx, fixedup_entry_idx) = getStorageIndex(entry_idx);
   CHECK_LE(ssize_t(0), stg_idx);
-  return {
-      stg_idx ? appended_storage_[stg_idx - 1].get() : storage_.get(), fixedup_entry_idx, static_cast<size_t>(stg_idx)};
+  return {stg_idx ? appended_storage_[stg_idx - 1].get() : storage_.get(),
+          fixedup_entry_idx,
+          static_cast<size_t>(stg_idx)};
 }
 
 std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
@@ -638,32 +681,42 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
       // Need to determine if the float value has been stored as float
       // or if it has been compacted to a different (often larger 8 bytes)
       // in distributed case the floats are actually 4 bytes
-      // TODO the above takes_float_argument() is widely used  wonder if this problem exists elsewhere
+      // TODO the above takes_float_argument() is widely used  wonder if this problem
+      // exists elsewhere
       if (entry_ti.get_type() == kFLOAT) {
-        if (query_mem_desc_.agg_col_widths[order_entry.tle_no - 1].compact == sizeof(float)) {
+        if (query_mem_desc_.agg_col_widths[order_entry.tle_no - 1].compact ==
+            sizeof(float)) {
           float_argument_input = true;
         }
       }
-      const auto lhs_v =
-          getColumnInternal(lhs_storage->buff_, fixedup_lhs, order_entry.tle_no - 1, lhs_storage_lookup_result);
-      const auto rhs_v =
-          getColumnInternal(rhs_storage->buff_, fixedup_rhs, order_entry.tle_no - 1, rhs_storage_lookup_result);
-      if (UNLIKELY(isNull(entry_ti, lhs_v, float_argument_input) && isNull(entry_ti, rhs_v, float_argument_input))) {
+      const auto lhs_v = getColumnInternal(lhs_storage->buff_,
+                                           fixedup_lhs,
+                                           order_entry.tle_no - 1,
+                                           lhs_storage_lookup_result);
+      const auto rhs_v = getColumnInternal(rhs_storage->buff_,
+                                           fixedup_rhs,
+                                           order_entry.tle_no - 1,
+                                           rhs_storage_lookup_result);
+      if (UNLIKELY(isNull(entry_ti, lhs_v, float_argument_input) &&
+                   isNull(entry_ti, rhs_v, float_argument_input))) {
         return false;
       }
-      if (UNLIKELY(isNull(entry_ti, lhs_v, float_argument_input) && !isNull(entry_ti, rhs_v, float_argument_input))) {
+      if (UNLIKELY(isNull(entry_ti, lhs_v, float_argument_input) &&
+                   !isNull(entry_ti, rhs_v, float_argument_input))) {
         return use_heap ? !order_entry.nulls_first : order_entry.nulls_first;
       }
-      if (UNLIKELY(isNull(entry_ti, rhs_v, float_argument_input) && !isNull(entry_ti, lhs_v, float_argument_input))) {
+      if (UNLIKELY(isNull(entry_ti, rhs_v, float_argument_input) &&
+                   !isNull(entry_ti, lhs_v, float_argument_input))) {
         return use_heap ? order_entry.nulls_first : !order_entry.nulls_first;
       }
       const bool use_desc_cmp = use_heap ? !order_entry.is_desc : order_entry.is_desc;
       if (LIKELY(lhs_v.isInt())) {
         CHECK(rhs_v.isInt());
-        if (UNLIKELY(entry_ti.is_string() && entry_ti.get_compression() == kENCODING_DICT)) {
+        if (UNLIKELY(entry_ti.is_string() &&
+                     entry_ti.get_compression() == kENCODING_DICT)) {
           CHECK_EQ(4, entry_ti.get_logical_size());
-          const auto string_dict_proxy =
-              executor_->getStringDictionaryProxy(entry_ti.get_comp_param(), row_set_mem_owner_, false);
+          const auto string_dict_proxy = executor_->getStringDictionaryProxy(
+              entry_ti.get_comp_param(), row_set_mem_owner_, false);
           auto lhs_str = string_dict_proxy->getString(lhs_v.i1);
           auto rhs_str = string_dict_proxy->getString(rhs_v.i1);
           if (lhs_str == rhs_str) {
@@ -673,9 +726,13 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
         }
         if (UNLIKELY(is_distinct_target(targets_[order_entry.tle_no - 1]))) {
           const auto lhs_sz =
-              count_distinct_set_size(lhs_v.i1, order_entry.tle_no - 1, query_mem_desc_.count_distinct_descriptors_);
+              count_distinct_set_size(lhs_v.i1,
+                                      order_entry.tle_no - 1,
+                                      query_mem_desc_.count_distinct_descriptors_);
           const auto rhs_sz =
-              count_distinct_set_size(rhs_v.i1, order_entry.tle_no - 1, query_mem_desc_.count_distinct_descriptors_);
+              count_distinct_set_size(rhs_v.i1,
+                                      order_entry.tle_no - 1,
+                                      query_mem_desc_.count_distinct_descriptors_);
           if (lhs_sz == rhs_sz) {
             continue;
           }
@@ -686,12 +743,16 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
         }
         if (entry_ti.is_fp()) {
           if (float_argument_input) {
-            const auto lhs_dval = *reinterpret_cast<const float*>(may_alias_ptr(&lhs_v.i1));
-            const auto rhs_dval = *reinterpret_cast<const float*>(may_alias_ptr(&rhs_v.i1));
+            const auto lhs_dval =
+                *reinterpret_cast<const float*>(may_alias_ptr(&lhs_v.i1));
+            const auto rhs_dval =
+                *reinterpret_cast<const float*>(may_alias_ptr(&rhs_v.i1));
             return use_desc_cmp ? lhs_dval > rhs_dval : lhs_dval < rhs_dval;
           } else {
-            const auto lhs_dval = *reinterpret_cast<const double*>(may_alias_ptr(&lhs_v.i1));
-            const auto rhs_dval = *reinterpret_cast<const double*>(may_alias_ptr(&rhs_v.i1));
+            const auto lhs_dval =
+                *reinterpret_cast<const double*>(may_alias_ptr(&lhs_v.i1));
+            const auto rhs_dval =
+                *reinterpret_cast<const double*>(may_alias_ptr(&rhs_v.i1));
             return use_desc_cmp ? lhs_dval > rhs_dval : lhs_dval < rhs_dval;
           }
         }
@@ -699,8 +760,10 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
       } else {
         if (lhs_v.isPair()) {
           CHECK(rhs_v.isPair());
-          const auto lhs = pair_to_double({lhs_v.i1, lhs_v.i2}, entry_ti, float_argument_input);
-          const auto rhs = pair_to_double({rhs_v.i1, rhs_v.i2}, entry_ti, float_argument_input);
+          const auto lhs =
+              pair_to_double({lhs_v.i1, lhs_v.i2}, entry_ti, float_argument_input);
+          const auto rhs =
+              pair_to_double({rhs_v.i1, rhs_v.i2}, entry_ti, float_argument_input);
           if (lhs == rhs) {
             continue;
           }
@@ -720,9 +783,10 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
   };
 }
 
-void ResultSet::topPermutation(std::vector<uint32_t>& to_sort,
-                               const size_t n,
-                               const std::function<bool(const uint32_t, const uint32_t)> compare) {
+void ResultSet::topPermutation(
+    std::vector<uint32_t>& to_sort,
+    const size_t n,
+    const std::function<bool(const uint32_t, const uint32_t)> compare) {
   std::make_heap(to_sort.begin(), to_sort.end(), compare);
   std::vector<uint32_t> permutation_top;
   permutation_top.reserve(n);
@@ -734,11 +798,13 @@ void ResultSet::topPermutation(std::vector<uint32_t>& to_sort,
   to_sort.swap(permutation_top);
 }
 
-void ResultSet::sortPermutation(const std::function<bool(const uint32_t, const uint32_t)> compare) {
+void ResultSet::sortPermutation(
+    const std::function<bool(const uint32_t, const uint32_t)> compare) {
   std::sort(permutation_.begin(), permutation_.end(), compare);
 }
 
-void ResultSet::radixSortOnGpu(const std::list<Analyzer::OrderEntry>& order_entries) const {
+void ResultSet::radixSortOnGpu(
+    const std::list<Analyzer::OrderEntry>& order_entries) const {
   auto data_mgr = &executor_->catalog_->get_dataMgr();
   const int device_id{0};
   std::vector<int64_t*> group_by_buffers(executor_->blockSize());
@@ -753,19 +819,22 @@ void ResultSet::radixSortOnGpu(const std::list<Analyzer::OrderEntry>& order_entr
                                                    true,
                                                    true,
                                                    nullptr);
-  ResultRows::inplaceSortGpuImpl(order_entries, query_mem_desc_, gpu_query_mem, data_mgr, device_id);
-  copy_group_by_buffers_from_gpu(data_mgr,
-                                 group_by_buffers,
-                                 query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU),
-                                 gpu_query_mem.group_by_buffers.second,
-                                 query_mem_desc_,
-                                 executor_->blockSize(),
-                                 executor_->gridSize(),
-                                 device_id,
-                                 false);
+  ResultRows::inplaceSortGpuImpl(
+      order_entries, query_mem_desc_, gpu_query_mem, data_mgr, device_id);
+  copy_group_by_buffers_from_gpu(
+      data_mgr,
+      group_by_buffers,
+      query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU),
+      gpu_query_mem.group_by_buffers.second,
+      query_mem_desc_,
+      executor_->blockSize(),
+      executor_->gridSize(),
+      device_id,
+      false);
 }
 
-void ResultSet::radixSortOnCpu(const std::list<Analyzer::OrderEntry>& order_entries) const {
+void ResultSet::radixSortOnCpu(
+    const std::list<Analyzer::OrderEntry>& order_entries) const {
   CHECK(!query_mem_desc_.keyless_hash);
   std::vector<int64_t> tmp_buff(query_mem_desc_.entry_count);
   std::vector<int32_t> idx_buff(query_mem_desc_.entry_count);
@@ -773,28 +842,38 @@ void ResultSet::radixSortOnCpu(const std::list<Analyzer::OrderEntry>& order_entr
   auto buffer_ptr = storage_->getUnderlyingBuffer();
   for (const auto& order_entry : order_entries) {
     const auto target_idx = order_entry.tle_no - 1;
-    const auto sortkey_val_buff =
-        reinterpret_cast<int64_t*>(buffer_ptr + query_mem_desc_.getColOffInBytes(0, target_idx));
+    const auto sortkey_val_buff = reinterpret_cast<int64_t*>(
+        buffer_ptr + query_mem_desc_.getColOffInBytes(0, target_idx));
     const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_idx].compact;
-    sort_groups_cpu(sortkey_val_buff, &idx_buff[0], query_mem_desc_.entry_count, order_entry.is_desc, chosen_bytes);
+    sort_groups_cpu(sortkey_val_buff,
+                    &idx_buff[0],
+                    query_mem_desc_.entry_count,
+                    order_entry.is_desc,
+                    chosen_bytes);
     apply_permutation_cpu(reinterpret_cast<int64_t*>(buffer_ptr),
                           &idx_buff[0],
                           query_mem_desc_.entry_count,
                           &tmp_buff[0],
                           sizeof(int64_t));
-    for (size_t target_idx = 0; target_idx < query_mem_desc_.agg_col_widths.size(); ++target_idx) {
+    for (size_t target_idx = 0; target_idx < query_mem_desc_.agg_col_widths.size();
+         ++target_idx) {
       if (static_cast<int>(target_idx) == order_entry.tle_no - 1) {
         continue;
       }
       const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_idx].compact;
-      const auto satellite_val_buff =
-          reinterpret_cast<int64_t*>(buffer_ptr + query_mem_desc_.getColOffInBytes(0, target_idx));
-      apply_permutation_cpu(satellite_val_buff, &idx_buff[0], query_mem_desc_.entry_count, &tmp_buff[0], chosen_bytes);
+      const auto satellite_val_buff = reinterpret_cast<int64_t*>(
+          buffer_ptr + query_mem_desc_.getColOffInBytes(0, target_idx));
+      apply_permutation_cpu(satellite_val_buff,
+                            &idx_buff[0],
+                            query_mem_desc_.entry_count,
+                            &tmp_buff[0],
+                            chosen_bytes);
     }
   }
 }
 
-void ResultSetStorage::addCountDistinctSetPointerMapping(const int64_t remote_ptr, const int64_t ptr) {
+void ResultSetStorage::addCountDistinctSetPointerMapping(const int64_t remote_ptr,
+                                                         const int64_t ptr) {
   const auto it_ok = count_distinct_sets_mapping_.emplace(remote_ptr, ptr);
   CHECK(it_ok.second);
 }

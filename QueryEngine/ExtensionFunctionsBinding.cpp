@@ -30,7 +30,8 @@
 
 namespace {
 
-unsigned narrowing_conversion_score(const SQLTypeInfo& arg_ti, const SQLTypeInfo& arg_target_ti) {
+unsigned narrowing_conversion_score(const SQLTypeInfo& arg_ti,
+                                    const SQLTypeInfo& arg_target_ti) {
   CHECK(arg_ti.is_number());
   CHECK(arg_target_ti.is_integer() || arg_target_ti.is_fp());
   if (arg_ti.get_type() == arg_target_ti.get_type()) {
@@ -40,7 +41,8 @@ unsigned narrowing_conversion_score(const SQLTypeInfo& arg_ti, const SQLTypeInfo
     return 1;
   }
   if (arg_ti.is_integer()) {
-    if (!arg_target_ti.is_integer() || arg_target_ti.get_logical_size() >= arg_ti.get_logical_size()) {
+    if (!arg_target_ti.is_integer() ||
+        arg_target_ti.get_logical_size() >= arg_ti.get_logical_size()) {
       return 0;
     }
     CHECK_EQ(0, arg_ti.get_logical_size() % arg_target_ti.get_logical_size());
@@ -71,7 +73,8 @@ unsigned narrowing_conversion_score(const SQLTypeInfo& arg_ti, const SQLTypeInfo
   return 0;
 }
 
-unsigned widening_conversion_score(const SQLTypeInfo& arg_ti, const SQLTypeInfo& arg_target_ti) {
+unsigned widening_conversion_score(const SQLTypeInfo& arg_ti,
+                                   const SQLTypeInfo& arg_target_ti) {
   CHECK(arg_ti.is_number());
   CHECK(arg_target_ti.is_integer() || arg_target_ti.is_fp());
   if (arg_ti.get_type() == arg_target_ti.get_type()) {
@@ -116,7 +119,8 @@ bool element_type_is_compatible(const SQLTypeInfo& elem_ti, const ExtArgumentTyp
   if (elem_ti.get_type() == kDOUBLE) {
     return ty == ExtArgumentType::PDouble;
   }
-  CHECK(elem_ti.is_integer() || (elem_ti.is_string() && elem_ti.get_compression() == kENCODING_DICT));
+  CHECK(elem_ti.is_integer() ||
+        (elem_ti.is_string() && elem_ti.get_compression() == kENCODING_DICT));
   switch (elem_ti.get_size()) {
     case 1:
       return ty == ExtArgumentType::PInt8;
@@ -132,18 +136,21 @@ bool element_type_is_compatible(const SQLTypeInfo& elem_ti, const ExtArgumentTyp
   return false;
 }
 
-std::vector<unsigned> compute_narrowing_conv_scores(const Analyzer::FunctionOper* function_oper,
-                                                    const std::vector<ExtensionFunction>& ext_func_sigs) {
+std::vector<unsigned> compute_narrowing_conv_scores(
+    const Analyzer::FunctionOper* function_oper,
+    const std::vector<ExtensionFunction>& ext_func_sigs) {
   std::vector<unsigned> narrowing_conv_scores;
   for (const auto& ext_func_sig : ext_func_sigs) {
     const auto& ext_func_args = ext_func_sig.getArgs();
     unsigned score = 0;
-    for (size_t logical_arg_idx = 0, phys_arg_idx = 0; logical_arg_idx < function_oper->getArity();
+    for (size_t logical_arg_idx = 0, phys_arg_idx = 0;
+         logical_arg_idx < function_oper->getArity();
          ++logical_arg_idx, ++phys_arg_idx) {
       const auto arg = function_oper->getArg(logical_arg_idx);
       const auto& arg_ti = arg->get_type_info();
       if (arg_ti.is_array()) {
-        if (!element_type_is_compatible(arg_ti.get_elem_type(), ext_func_args[phys_arg_idx])) {
+        if (!element_type_is_compatible(arg_ti.get_elem_type(),
+                                        ext_func_args[phys_arg_idx])) {
           score = std::numeric_limits<unsigned>::max();
           break;
         }
@@ -207,18 +214,21 @@ std::vector<unsigned> compute_narrowing_conv_scores(const Analyzer::FunctionOper
   return narrowing_conv_scores;
 }
 
-std::vector<unsigned> compute_widening_conv_scores(const Analyzer::FunctionOper* function_oper,
-                                                   const std::vector<const ExtensionFunction*>& ext_func_sigs) {
+std::vector<unsigned> compute_widening_conv_scores(
+    const Analyzer::FunctionOper* function_oper,
+    const std::vector<const ExtensionFunction*>& ext_func_sigs) {
   std::vector<unsigned> widening_conv_scores;
   for (const auto& ext_func_sig_ptr : ext_func_sigs) {
     const auto& ext_func_args = ext_func_sig_ptr->getArgs();
     unsigned score = 0;
-    for (size_t logical_arg_idx = 0, phys_arg_idx = 0; logical_arg_idx < function_oper->getArity();
+    for (size_t logical_arg_idx = 0, phys_arg_idx = 0;
+         logical_arg_idx < function_oper->getArity();
          ++logical_arg_idx, ++phys_arg_idx) {
       const auto arg = function_oper->getArg(logical_arg_idx);
       const auto& arg_ti = arg->get_type_info();
       if (arg_ti.is_array()) {
-        if (!element_type_is_compatible(arg_ti.get_elem_type(), ext_func_args[phys_arg_idx])) {
+        if (!element_type_is_compatible(arg_ti.get_elem_type(),
+                                        ext_func_args[phys_arg_idx])) {
           score = std::numeric_limits<unsigned>::max();
           break;
         }
@@ -307,14 +317,19 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
   return SQLTypeInfo(kNULLT, false);
 }
 
-// Binds a SQL function operator to the best candidate (in terms of signature) in `ext_func_sigs`.
-const ExtensionFunction& bind_function(const Analyzer::FunctionOper* function_oper,
-                                       const std::vector<ExtensionFunction>& ext_func_sigs) {
+// Binds a SQL function operator to the best candidate (in terms of signature) in
+// `ext_func_sigs`.
+const ExtensionFunction& bind_function(
+    const Analyzer::FunctionOper* function_oper,
+    const std::vector<ExtensionFunction>& ext_func_sigs) {
   CHECK(!ext_func_sigs.empty());
-  const auto narrowing_conv_scores = compute_narrowing_conv_scores(function_oper, ext_func_sigs);
-  const auto min_narrowing_it = std::min_element(narrowing_conv_scores.begin(), narrowing_conv_scores.end());
+  const auto narrowing_conv_scores =
+      compute_narrowing_conv_scores(function_oper, ext_func_sigs);
+  const auto min_narrowing_it =
+      std::min_element(narrowing_conv_scores.begin(), narrowing_conv_scores.end());
   if (*min_narrowing_it == std::numeric_limits<unsigned>::max()) {
-    throw std::runtime_error("Could not find an adequate specialization for " + function_oper->getName());
+    throw std::runtime_error("Could not find an adequate specialization for " +
+                             function_oper->getName());
   }
   std::vector<const ExtensionFunction*> widening_candidates;
   for (size_t cand_idx = 0; cand_idx < narrowing_conv_scores.size(); ++cand_idx) {
@@ -323,7 +338,9 @@ const ExtensionFunction& bind_function(const Analyzer::FunctionOper* function_op
     }
   }
   CHECK(!widening_candidates.empty());
-  const auto widening_conv_scores = compute_widening_conv_scores(function_oper, widening_candidates);
-  const auto min_widening_it = std::min_element(widening_conv_scores.begin(), widening_conv_scores.end());
+  const auto widening_conv_scores =
+      compute_widening_conv_scores(function_oper, widening_candidates);
+  const auto min_widening_it =
+      std::min_element(widening_conv_scores.begin(), widening_conv_scores.end());
   return *widening_candidates[min_widening_it - widening_conv_scores.begin()];
 }

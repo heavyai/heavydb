@@ -17,7 +17,8 @@
 /**
  * @file    CountDistinctDescriptor.h
  * @author  Alex Suhan <alex@mapd.com>
- * @brief   Descriptor for the storage layout use for (approximate) count distinct operations.
+ * @brief   Descriptor for the storage layout use for (approximate) count distinct
+ *operations.
  *
  * Copyright (c) 2017 MapD Technologies, Inc.  All rights reserved.
  **/
@@ -50,22 +51,27 @@ struct CountDistinctDescriptor {
 
   size_t bitmapSizeBytes() const {
     CHECK(impl_type_ == CountDistinctImplType::Bitmap);
-    const auto approx_reg_bytes = (device_type == ExecutorDeviceType::GPU ? sizeof(int32_t) : 1);
-    return approximate ? (1 << bitmap_sz_bits) * approx_reg_bytes : bitmap_bits_to_bytes(bitmap_sz_bits);
+    const auto approx_reg_bytes =
+        (device_type == ExecutorDeviceType::GPU ? sizeof(int32_t) : 1);
+    return approximate ? (1 << bitmap_sz_bits) * approx_reg_bytes
+                       : bitmap_bits_to_bytes(bitmap_sz_bits);
   }
 
   size_t bitmapPaddedSizeBytes() const {
     const auto effective_size = bitmapSizeBytes();
-    const auto padded_size = (device_type == ExecutorDeviceType::GPU || sub_bitmap_count > 1)
-                                 ? align_to_int64(effective_size)
-                                 : effective_size;
+    const auto padded_size =
+        (device_type == ExecutorDeviceType::GPU || sub_bitmap_count > 1)
+            ? align_to_int64(effective_size)
+            : effective_size;
     return padded_size * sub_bitmap_count;
   }
 };
 
-inline bool operator==(const CountDistinctDescriptor& lhs, const CountDistinctDescriptor& rhs) {
-  return lhs.impl_type_ == rhs.impl_type_ && lhs.min_val == rhs.min_val && lhs.bitmap_sz_bits == rhs.bitmap_sz_bits &&
-         lhs.approximate == rhs.approximate && lhs.device_type == rhs.device_type;
+inline bool operator==(const CountDistinctDescriptor& lhs,
+                       const CountDistinctDescriptor& rhs) {
+  return lhs.impl_type_ == rhs.impl_type_ && lhs.min_val == rhs.min_val &&
+         lhs.bitmap_sz_bits == rhs.bitmap_sz_bits && lhs.approximate == rhs.approximate &&
+         lhs.device_type == rhs.device_type;
 }
 
 #endif  // QUERYENGINE_COUNTDISTINCTDESCRIPTOR_H

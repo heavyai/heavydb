@@ -24,9 +24,9 @@
 #ifndef PARSER_WRAPPER_H_
 #define PARSER_WRAPPER_H_
 
+#include <boost/regex.hpp>
 #include <string>
 #include <vector>
-#include <boost/regex.hpp>
 
 #include "Shared/ConfigResolve.h"
 
@@ -79,7 +79,8 @@ inline CalciteDMLPathSelection yield_dml_path_selector() {
 }
 
 inline bool is_calcite_permissable_dml(ParserWrapper const& pw, bool read_only_mode) {
-  if( read_only_mode ) return !pw.is_update_dml; // If we're read-only rejected, no DML is permissable
+  if (read_only_mode)
+    return !pw.is_update_dml;  // If we're read-only rejected, no DML is permissable
 
   switch (yield_dml_path_selector()) {
     case CalciteDMLPathSelection::OnlyUpdates:
@@ -95,8 +96,10 @@ inline bool is_calcite_permissable_dml(ParserWrapper const& pw, bool read_only_m
   }
 }
 
-inline bool is_calcite_path_permissable(ParserWrapper const& pw, bool read_only_mode = false) {
-  return (!pw.is_ddl && is_calcite_permissable_dml(pw, read_only_mode) && !pw.is_other_explain);
+inline bool is_calcite_path_permissable(ParserWrapper const& pw,
+                                        bool read_only_mode = false) {
+  return (!pw.is_ddl && is_calcite_permissable_dml(pw, read_only_mode) &&
+          !pw.is_other_explain);
 }
 
 #endif  // PARSERWRAPPER_H_

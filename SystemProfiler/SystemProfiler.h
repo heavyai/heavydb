@@ -19,9 +19,9 @@
 #ifndef SYSTEM_PROFILER_H
 #define SYSTEM_PROFILER_H
 
-#include <vector>
 #include <map>
 #include <string>
+#include <vector>
 
 enum NodeType { STORAGE_NODE, CPU_NODE, GPU_NODE };
 

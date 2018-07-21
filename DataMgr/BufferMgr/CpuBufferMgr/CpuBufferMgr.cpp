@@ -15,9 +15,9 @@
  */
 
 #include "CpuBufferMgr.h"
-#include "CpuBuffer.h"
 #include <glog/logging.h>
 #include "../../../CudaMgr/CudaMgr.h"
+#include "CpuBuffer.h"
 
 namespace Buffer_Namespace {
 
@@ -27,7 +27,8 @@ CpuBufferMgr::CpuBufferMgr(const int deviceId,
                            const size_t bufferAllocIncrement,
                            const size_t pageSize,
                            AbstractBufferMgr* parentMgr)
-    : BufferMgr(deviceId, maxBufferSize, bufferAllocIncrement, pageSize, parentMgr), cudaMgr_(cudaMgr) {}
+    : BufferMgr(deviceId, maxBufferSize, bufferAllocIncrement, pageSize, parentMgr)
+    , cudaMgr_(cudaMgr) {}
 
 CpuBufferMgr::~CpuBufferMgr() {
   freeAllMem();
@@ -51,11 +52,18 @@ void CpuBufferMgr::freeAllMem() {
   }
 }
 
-void CpuBufferMgr::allocateBuffer(BufferList::iterator segIt, const size_t pageSize, const size_t initialSize) {
-  new CpuBuffer(this, segIt, deviceId_, cudaMgr_, pageSize, initialSize);  // this line is admittedly a bit weird but
-                                                                           // the segment iterator passed into buffer
-                                                                           // takes the address of the new Buffer in its
-                                                                           // buffer member
+void CpuBufferMgr::allocateBuffer(BufferList::iterator segIt,
+                                  const size_t pageSize,
+                                  const size_t initialSize) {
+  new CpuBuffer(this,
+                segIt,
+                deviceId_,
+                cudaMgr_,
+                pageSize,
+                initialSize);  // this line is admittedly a bit weird but
+                               // the segment iterator passed into buffer
+                               // takes the address of the new Buffer in its
+                               // buffer member
 }
 
-}  // Buffer_Namespace
+}  // namespace Buffer_Namespace

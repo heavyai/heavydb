@@ -30,7 +30,9 @@ template <typename LHT, typename RHT>
 inline void value_truncated(const LHT& lhs, const RHT& rhs) {
   std::ostringstream os;
   os << "Value " << rhs << " would be truncated to "
-     << (std::is_same<LHT, uint8_t>::value || std::is_same<LHT, int8_t>::value ? (int64_t)lhs : lhs);
+     << (std::is_same<LHT, uint8_t>::value || std::is_same<LHT, int8_t>::value
+             ? (int64_t)lhs
+             : lhs);
   throw std::runtime_error(os.str());
 };
 
@@ -65,8 +67,13 @@ inline int get_element_size(const SQLTypeInfo& t) {
     return sizeof(int32_t);
   if (!t.is_array())
     return t.get_size();
-  return SQLTypeInfo(
-             t.get_subtype(), t.get_dimension(), t.get_scale(), false, t.get_compression(), t.get_comp_param(), kNULLT)
+  return SQLTypeInfo(t.get_subtype(),
+                     t.get_dimension(),
+                     t.get_scale(),
+                     false,
+                     t.get_compression(),
+                     t.get_comp_param(),
+                     kNULLT)
       .get_size();
 }
 
@@ -113,11 +120,15 @@ inline bool set_string_index(void* ptr, const SQLTypeInfo& etype, int32_t sidx) 
 }
 
 template <typename T>
-static void put_scalar(void* ndptr, const SQLTypeInfo& etype, const int esize, const T oval) {
+static void put_scalar(void* ndptr,
+                       const SQLTypeInfo& etype,
+                       const int esize,
+                       const T oval) {
   // round floating oval to nearest integer
   auto rval = oval;
   if (std::is_floating_point<T>::value)
-    if (etype.is_integer() || etype.is_time() || etype.is_timeinterval() || etype.is_decimal())
+    if (etype.is_integer() || etype.is_time() || etype.is_timeinterval() ||
+        etype.is_decimal())
       rval = round(rval);
   switch (etype.get_type()) {
     case kBOOLEAN:
@@ -191,14 +202,17 @@ inline void put_scalar(void* ndptr,
     case kNUMERIC:
     case kDECIMAL:
       if (otype && otype->is_decimal())
-        put_scalar<int64_t>(
-            ndptr,
-            etype,
-            esize,
-            isnull ? inline_int_null_value<int64_t>() : convert_decimal_value_to_scale(oval, *otype, etype));
+        put_scalar<int64_t>(ndptr,
+                            etype,
+                            esize,
+                            isnull ? inline_int_null_value<int64_t>()
+                                   : convert_decimal_value_to_scale(oval, *otype, etype));
       else
-        put_scalar<T>(
-            ndptr, etype, esize, isnull ? inline_int_null_value<int64_t>() : oval * pow(10, etype.get_scale()));
+        put_scalar<T>(ndptr,
+                      etype,
+                      esize,
+                      isnull ? inline_int_null_value<int64_t>()
+                             : oval * pow(10, etype.get_scale()));
       break;
     default:
       if (otype && otype->is_decimal())

@@ -31,7 +31,7 @@
 
 namespace Analyzer {
 class Expr;
-}  // Analyzer
+}  // namespace Analyzer
 
 struct QueryMemoryDescriptor;
 
@@ -39,20 +39,23 @@ std::pair<int64_t, int64_t> inline_int_max_min(const size_t byte_width);
 
 std::pair<uint64_t, uint64_t> inline_uint_max_min(const size_t byte_width);
 
-int64_t get_initial_val(const TargetInfo& target_info, const size_t min_byte_width_to_compact);
+int64_t get_initial_val(const TargetInfo& target_info,
+                        const size_t min_byte_width_to_compact);
 
 int64_t get_agg_initial_val(const SQLAgg agg,
                             const SQLTypeInfo& ti,
                             const bool enable_compaction,
                             const unsigned min_byte_width_to_compact);
 
-std::vector<int64_t> init_agg_val_vec(const std::vector<Analyzer::Expr*>& targets,
-                                      const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
-                                      const QueryMemoryDescriptor& query_mem_desc);
+std::vector<int64_t> init_agg_val_vec(
+    const std::vector<Analyzer::Expr*>& targets,
+    const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
+    const QueryMemoryDescriptor& query_mem_desc);
 
 const Analyzer::Expr* agg_arg(const Analyzer::Expr* expr);
 
-bool constrained_not_null(const Analyzer::Expr* expr, const std::list<std::shared_ptr<Analyzer::Expr>>& quals);
+bool constrained_not_null(const Analyzer::Expr* expr,
+                          const std::list<std::shared_ptr<Analyzer::Expr>>& quals);
 
 void set_notnull(TargetInfo& target, const bool not_null);
 

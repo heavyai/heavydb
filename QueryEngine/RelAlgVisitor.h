@@ -68,7 +68,7 @@ class RelAlgVisitor {
       return aggregateResult(result, visitLogicalValues(logical_values));
     }
     const auto modify = dynamic_cast<const RelModify*>(rel_alg);
-    if( modify ) {
+    if (modify) {
       return aggregateResult(result, visitModify(modify));
     }
     CHECK(false);
@@ -85,7 +85,9 @@ class RelAlgVisitor {
 
   virtual T visitMultiJoin(const RelMultiJoin*) const { return defaultResult(); }
 
-  virtual T visitLeftDeepInnerJoin(const RelLeftDeepInnerJoin*) const { return defaultResult(); }
+  virtual T visitLeftDeepInnerJoin(const RelLeftDeepInnerJoin*) const {
+    return defaultResult();
+  }
 
   virtual T visitProject(const RelProject*) const { return defaultResult(); }
 
@@ -98,7 +100,9 @@ class RelAlgVisitor {
   virtual T visitModify(const RelModify*) const { return defaultResult(); }
 
  protected:
-  virtual T aggregateResult(const T& aggregate, const T& next_result) const { return next_result; }
+  virtual T aggregateResult(const T& aggregate, const T& next_result) const {
+    return next_result;
+  }
 
   virtual T defaultResult() const { return T{}; }
 };

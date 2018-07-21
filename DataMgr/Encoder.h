@@ -17,14 +17,14 @@
 #ifndef ENCODER_H
 #define ENCODER_H
 
-#include "ChunkMetadata.h"
-#include "../Shared/types.h"
 #include "../Shared/sqltypes.h"
+#include "../Shared/types.h"
+#include "ChunkMetadata.h"
 
-#include <vector>
 #include <iostream>
-#include <stdexcept>
 #include <limits>
+#include <stdexcept>
+#include <vector>
 
 namespace Data_Namespace {
 class AbstractBuffer;
@@ -35,9 +35,12 @@ class AbstractBuffer;
 
 class Encoder {
  public:
-  static Encoder* Create(Data_Namespace::AbstractBuffer* buffer, const SQLTypeInfo sqlType);
+  static Encoder* Create(Data_Namespace::AbstractBuffer* buffer,
+                         const SQLTypeInfo sqlType);
   Encoder(Data_Namespace::AbstractBuffer* buffer) : numElems(0), buffer_(buffer) {}
-  virtual ChunkMetadata appendData(int8_t*& srcData, const size_t numAppendElems, const bool replicating = false) = 0;
+  virtual ChunkMetadata appendData(int8_t*& srcData,
+                                   const size_t numAppendElems,
+                                   const bool replicating = false) = 0;
   virtual void getMetadata(ChunkMetadata& chunkMetadata);
   // Only called from the executor for synthesized meta-information.
   virtual ChunkMetadata getMetadata(const SQLTypeInfo& ti);

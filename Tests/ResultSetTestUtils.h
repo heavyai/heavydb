@@ -33,7 +33,8 @@ void fill_one_entry_baseline(int64_t* value_slots,
 
 size_t get_slot_count(const std::vector<TargetInfo>& target_infos);
 
-std::unordered_map<size_t, size_t> get_slot_to_target_mapping(const std::vector<TargetInfo>& target_infos);
+std::unordered_map<size_t, size_t> get_slot_to_target_mapping(
+    const std::vector<TargetInfo>& target_infos);
 
 template <class T>
 inline T v(const TargetValue& r) {

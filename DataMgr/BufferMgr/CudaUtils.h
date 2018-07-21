@@ -20,16 +20,29 @@
 namespace CudaUtils {
 
 template <typename T>
-void allocGpuMem(T*& devMem, const std::size_t numElems, const std::size_t elemSize, const int gpuNum);
+void allocGpuMem(T*& devMem,
+                 const std::size_t numElems,
+                 const std::size_t elemSize,
+                 const int gpuNum);
 
 template <typename T>
-void allocPinnedHostMem(T*& hostMem, const std::size_t numElems, const std::size_t elemSize);
+void allocPinnedHostMem(T*& hostMem,
+                        const std::size_t numElems,
+                        const std::size_t elemSize);
 
 template <typename T>
-void copyToGpu(T* devMem, const T* hostMem, const std::size_t numElems, const std::size_t elemSize, const int gpuNum);
+void copyToGpu(T* devMem,
+               const T* hostMem,
+               const std::size_t numElems,
+               const std::size_t elemSize,
+               const int gpuNum);
 
 template <typename T>
-void copyToHost(T* hostMem, const T* devMem, const std::size_t numElems, const std::size_t elemSize, const int gpuNum);
+void copyToHost(T* hostMem,
+                const T* devMem,
+                const std::size_t numElems,
+                const std::size_t elemSize,
+                const int gpuNum);
 
 template <typename T>
 void copyGpuToGpu(T* dstMem,
@@ -43,6 +56,6 @@ void gpuFree(T*& devMem);
 
 template <typename T>
 void hostFree(T*& hostMem);
-}
+}  // namespace CudaUtils
 
 #endif

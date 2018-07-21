@@ -34,7 +34,9 @@ struct CubinResult {
   CUlinkState link_state;
 };
 
-CubinResult ptx_to_cubin(const std::string& ptx, const unsigned block_size, const CudaMgr_Namespace::CudaMgr* cuda_mgr);
+CubinResult ptx_to_cubin(const std::string& ptx,
+                         const unsigned block_size,
+                         const CudaMgr_Namespace::CudaMgr* cuda_mgr);
 
 class GpuCompilationContext {
  public:

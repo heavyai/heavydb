@@ -25,10 +25,11 @@
 
 using std::cout;
 using std::endl;
-using std::string;
 using std::runtime_error;
+using std::string;
 
-SqliteConnector::SqliteConnector(const string& dbName, const string& dir) : dbName_(dbName) {
+SqliteConnector::SqliteConnector(const string& dbName, const string& dir)
+    : dbName_(dbName) {
   string connectString(dir);
   if (connectString.size() > 0 && connectString[connectString.size() - 1] != '/') {
     connectString.push_back('/');
@@ -49,8 +50,9 @@ void SqliteConnector::throwError() {
   throw runtime_error("Sqlite3 Error: " + errorMsg);
 }
 
-void SqliteConnector::query_with_text_params(const std::string& queryString,
-                                             const std::vector<std::string>& text_params) {
+void SqliteConnector::query_with_text_params(
+    const std::string& queryString,
+    const std::vector<std::string>& text_params) {
   atFirstResult_ = true;
   numRows_ = 0;
   numCols_ = 0;
@@ -65,7 +67,8 @@ void SqliteConnector::query_with_text_params(const std::string& queryString,
 
   int numParams_ = 1;
   for (auto text_param : text_params) {
-    returnCode = sqlite3_bind_text(stmt, numParams_++, text_param.c_str(), text_param.size(), SQLITE_TRANSIENT);
+    returnCode = sqlite3_bind_text(
+        stmt, numParams_++, text_param.c_str(), text_param.size(), SQLITE_TRANSIENT);
     if (returnCode != SQLITE_OK) {
       throwError();
     }
@@ -100,7 +103,8 @@ void SqliteConnector::query_with_text_params(const std::string& queryString,
   sqlite3_finalize(stmt);
 }
 
-void SqliteConnector::query_with_text_param(const std::string& queryString, const std::string& text_param) {
+void SqliteConnector::query_with_text_param(const std::string& queryString,
+                                            const std::string& text_param) {
   query_with_text_params(queryString, std::vector<std::string>{text_param});
 }
 

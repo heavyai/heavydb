@@ -1,10 +1,13 @@
-#include "CudaUtils.h"
 #include <cuda.h>
+#include "CudaUtils.h"
 
 namespace CudaUtils {
 
 template <typename T>
-void allocGpuMem(T*& devMem, const size_t numElems, const size_t elemSize, const int gpuNum) {
+void allocGpuMem(T*& devMem,
+                 const size_t numElems,
+                 const size_t elemSize,
+                 const int gpuNum) {
   cudaSetDevice(gpuNum);
   cudaMalloc((void**)&devMem, numElems * elemSize);
 }
@@ -15,7 +18,11 @@ void allocPinnedHostMem(T*& hostMem, const size_t numElems, const size_t elemSiz
 }
 
 template <typename T>
-void copyToGpu(T* devMem, const T* hostMem, const size_t numElems, const size_t elemSize, const int gpuNum) {
+void copyToGpu(T* devMem,
+               const T* hostMem,
+               const size_t numElems,
+               const size_t elemSize,
+               const int gpuNum) {
   cudaSetDevice(gpuNum);
   cudaMemcpy(devMem, hostMem, numElems * elemSize, cudaMemcpyHostToDevice);
 }
@@ -31,7 +38,11 @@ void copyGpuToGpu(T* dstMem,
 }
 
 template <typename T>
-void copyToHost(T* hostMem, const T* devMem, const size_t numElems, const size_t elemSize, const int gpuNum) {
+void copyToHost(T* hostMem,
+                const T* devMem,
+                const size_t numElems,
+                const size_t elemSize,
+                const int gpuNum) {
   cudaSetDevice(gpuNum);
   cudaMemcpy(hostMem, devMem, numElems * elemSize, cudaMemcpyDeviceToHost);
 }
@@ -48,14 +59,26 @@ void hostFree(T*& hostMem) {
   hostMem = 0;
 }
 
-template void allocGpuMem<bool>(bool*& devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-template void allocGpuMem<char>(char*& devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+template void allocGpuMem<bool>(bool*& devMem,
+                                const size_t numElems,
+                                const size_t elemSize,
+                                const int gpuNum);
+template void allocGpuMem<char>(char*& devMem,
+                                const size_t numElems,
+                                const size_t elemSize,
+                                const int gpuNum);
 template void allocGpuMem<unsigned char>(unsigned char*& devMem,
                                          const size_t numElems,
                                          const size_t elemSize,
                                          const int gpuNum);
-template void allocGpuMem<int>(int*& devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-template void allocGpuMem<int8_t>(int8_t*& devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+template void allocGpuMem<int>(int*& devMem,
+                               const size_t numElems,
+                               const size_t elemSize,
+                               const int gpuNum);
+template void allocGpuMem<int8_t>(int8_t*& devMem,
+                                  const size_t numElems,
+                                  const size_t elemSize,
+                                  const int gpuNum);
 template void allocGpuMem<unsigned int>(unsigned int*& devMem,
                                         const size_t numElems,
                                         const size_t elemSize,
@@ -68,17 +91,38 @@ template void allocGpuMem<unsigned long long int>(unsigned long long int*& devMe
                                                   const size_t numElems,
                                                   const size_t elemSize,
                                                   const int gpuNum);
-template void allocGpuMem<float>(float*& devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-template void allocGpuMem<double>(double*& devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-// template void allocGpuMem <void>(void * &devMem, const size_t numElems, const size_t elemSize);
+template void allocGpuMem<float>(float*& devMem,
+                                 const size_t numElems,
+                                 const size_t elemSize,
+                                 const int gpuNum);
+template void allocGpuMem<double>(double*& devMem,
+                                  const size_t numElems,
+                                  const size_t elemSize,
+                                  const int gpuNum);
+// template void allocGpuMem <void>(void * &devMem, const size_t numElems, const size_t
+// elemSize);
 
-template void allocPinnedHostMem<int>(int*& hostMem, const size_t numElems, const size_t elemSize);
-template void allocPinnedHostMem<int8_t>(int8_t*& hostMem, const size_t numElems, const size_t elemSize);
-template void allocPinnedHostMem<char>(char*& hostMem, const size_t numElems, const size_t elemSize);
-template void allocPinnedHostMem<unsigned char>(unsigned char*& hostMem, const size_t numElems, const size_t elemSize);
-template void allocPinnedHostMem<float>(float*& hostMem, const size_t numElems, const size_t elemSize);
-template void allocPinnedHostMem<unsigned int>(unsigned int*& hostMem, const size_t numElems, const size_t elemSize);
-template void allocPinnedHostMem<void>(void*& hostMem, const size_t numElems, const size_t elemSize);
+template void allocPinnedHostMem<int>(int*& hostMem,
+                                      const size_t numElems,
+                                      const size_t elemSize);
+template void allocPinnedHostMem<int8_t>(int8_t*& hostMem,
+                                         const size_t numElems,
+                                         const size_t elemSize);
+template void allocPinnedHostMem<char>(char*& hostMem,
+                                       const size_t numElems,
+                                       const size_t elemSize);
+template void allocPinnedHostMem<unsigned char>(unsigned char*& hostMem,
+                                                const size_t numElems,
+                                                const size_t elemSize);
+template void allocPinnedHostMem<float>(float*& hostMem,
+                                        const size_t numElems,
+                                        const size_t elemSize);
+template void allocPinnedHostMem<unsigned int>(unsigned int*& hostMem,
+                                               const size_t numElems,
+                                               const size_t elemSize);
+template void allocPinnedHostMem<void>(void*& hostMem,
+                                       const size_t numElems,
+                                       const size_t elemSize);
 
 template void copyToGpu<bool>(bool* devMem,
                               const bool* hostMem,
@@ -177,8 +221,8 @@ template void copyGpuToGpu<double>(double* dstMem,
                                    const std::size_t elemSize,
                                    const int dstGpuNum);
 
-// template void copyToHost <__nv_bool> (__nv_bool * hostMem, __nv_bool * devMem, const size_t numElems, const size_t
-// elemSize, const int gpuNum);
+// template void copyToHost <__nv_bool> (__nv_bool * hostMem, __nv_bool * devMem, const
+// size_t numElems, const size_t elemSize, const int gpuNum);
 
 template void copyToHost<bool>(bool* hostMem,
                                const bool* devMem,
@@ -259,4 +303,4 @@ template void hostFree<double>(double*& hostMem);
 template void hostFree<unsigned char>(unsigned char*& hostMem);
 // template void hostFree <geops_size_t> (geops_size_t * &hostMem);
 template void hostFree<void>(void*& hostMem);
-}
+}  // namespace CudaUtils

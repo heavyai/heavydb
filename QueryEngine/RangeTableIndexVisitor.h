@@ -22,29 +22,36 @@
 
 class MaxRangeTableIndexVisitor : public ScalarExprVisitor<int> {
  protected:
-  virtual int visitColumnVar(const Analyzer::ColumnVar* column) const override { return column->get_rte_idx(); }
+  virtual int visitColumnVar(const Analyzer::ColumnVar* column) const override {
+    return column->get_rte_idx();
+  }
 
-  virtual int visitColumnVarTuple(const Analyzer::ExpressionTuple* expr_tuple) const override {
+  virtual int visitColumnVarTuple(
+      const Analyzer::ExpressionTuple* expr_tuple) const override {
     MaxRangeTableIndexVisitor visitor;
     int max_range_table_idx = 0;
     for (const auto& expr_component : expr_tuple->getTuple()) {
-      max_range_table_idx = std::max(max_range_table_idx, visitor.visit(expr_component.get()));
+      max_range_table_idx =
+          std::max(max_range_table_idx, visitor.visit(expr_component.get()));
     }
     return max_range_table_idx;
   }
 
-  virtual int aggregateResult(const int& aggregate, const int& next_result) const override {
+  virtual int aggregateResult(const int& aggregate,
+                              const int& next_result) const override {
     return std::max(aggregate, next_result);
   }
 };
 
 class AllRangeTableIndexVisitor : public ScalarExprVisitor<std::unordered_set<int>> {
  protected:
-  virtual std::unordered_set<int> visitColumnVar(const Analyzer::ColumnVar* column) const override {
+  virtual std::unordered_set<int> visitColumnVar(
+      const Analyzer::ColumnVar* column) const override {
     return {column->get_rte_idx()};
   }
 
-  virtual std::unordered_set<int> visitColumnVarTuple(const Analyzer::ExpressionTuple* expr_tuple) const override {
+  virtual std::unordered_set<int> visitColumnVarTuple(
+      const Analyzer::ExpressionTuple* expr_tuple) const override {
     AllRangeTableIndexVisitor visitor;
     std::unordered_set<int> result;
     for (const auto& expr_component : expr_tuple->getTuple()) {
@@ -54,8 +61,9 @@ class AllRangeTableIndexVisitor : public ScalarExprVisitor<std::unordered_set<in
     return result;
   }
 
-  virtual std::unordered_set<int> aggregateResult(const std::unordered_set<int>& aggregate,
-                                                  const std::unordered_set<int>& next_result) const override {
+  virtual std::unordered_set<int> aggregateResult(
+      const std::unordered_set<int>& aggregate,
+      const std::unordered_set<int>& next_result) const override {
     auto result = aggregate;
     result.insert(next_result.begin(), next_result.end());
     return result;

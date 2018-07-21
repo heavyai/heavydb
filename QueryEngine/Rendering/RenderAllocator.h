@@ -24,9 +24,9 @@
 #endif  // HAVE_CUDA
 
 #include <cstdlib>
-#include <stdexcept>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <vector>
 
 namespace QueryRenderer {
@@ -83,15 +83,18 @@ class RenderAllocatorMap {
   RenderAllocator* operator[](size_t device_id);
 
   void bufferData(int8_t* data, const size_t num_data_bytes, const size_t device_id);
-  void setDataLayout(const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout);
-  void prepForRendering(const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout);
+  void setDataLayout(
+      const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout);
+  void prepForRendering(
+      const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout);
 
  private:
   ::QueryRenderer::QueryRenderManager* render_manager_;
   std::vector<RenderAllocator> render_allocator_map_;
 
-  // NOTE(adb): Duplicating the CheckedAllocDeleter here since this header is included in multiple Cuda files. Including
-  // the checked_alloc header is currently problematic for nvcc.
+  // NOTE(adb): Duplicating the CheckedAllocDeleter here since this header is included in
+  // multiple Cuda files. Including the checked_alloc header is currently problematic for
+  // nvcc.
   struct HostBufferDeleter {
     void operator()(void* p) { free(p); }
   };

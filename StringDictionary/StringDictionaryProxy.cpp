@@ -26,7 +26,8 @@
 
 #include <thread>
 
-StringDictionaryProxy::StringDictionaryProxy(std::shared_ptr<StringDictionary> sd, const ssize_t generation)
+StringDictionaryProxy::StringDictionaryProxy(std::shared_ptr<StringDictionary> sd,
+                                             const ssize_t generation)
     : string_dict_(sd), generation_(generation) {}
 
 int32_t truncate_to_generation(const int32_t id, const size_t generation) {
@@ -40,7 +41,8 @@ int32_t truncate_to_generation(const int32_t id, const size_t generation) {
 int32_t StringDictionaryProxy::getOrAddTransient(const std::string& str) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   CHECK_GE(generation_, 0);
-  auto transient_id = truncate_to_generation(string_dict_->getIdOfString(str), generation_);
+  auto transient_id =
+      truncate_to_generation(string_dict_->getIdOfString(str), generation_);
   if (transient_id != StringDictionary::INVALID_STR_ID) {
     return transient_id;
   }
@@ -48,7 +50,8 @@ int32_t StringDictionaryProxy::getOrAddTransient(const std::string& str) {
   if (it != transient_str_to_int_.end()) {
     return it->second;
   }
-  transient_id = -(transient_str_to_int_.size() + 2);  // make sure it's not INVALID_STR_ID
+  transient_id =
+      -(transient_str_to_int_.size() + 2);  // make sure it's not INVALID_STR_ID
   {
     auto it_ok = transient_str_to_int_.insert(std::make_pair(str, transient_id));
     CHECK(it_ok.second);
@@ -68,7 +71,8 @@ int32_t StringDictionaryProxy::getIdOfString(const std::string& str) const {
     return str_id;
   }
   auto it = transient_str_to_int_.find(str);
-  return it != transient_str_to_int_.end() ? it->second : StringDictionary::INVALID_STR_ID;
+  return it != transient_str_to_int_.end() ? it->second
+                                           : StringDictionary::INVALID_STR_ID;
 }
 
 int32_t StringDictionaryProxy::getIdOfStringNoGeneration(const std::string& str) const {
@@ -78,7 +82,8 @@ int32_t StringDictionaryProxy::getIdOfStringNoGeneration(const std::string& str)
     return str_id;
   }
   auto it = transient_str_to_int_.find(str);
-  return it != transient_str_to_int_.end() ? it->second : StringDictionary::INVALID_STR_ID;
+  return it != transient_str_to_int_.end() ? it->second
+                                           : StringDictionary::INVALID_STR_ID;
 }
 
 std::string StringDictionaryProxy::getString(int32_t string_id) const {
@@ -99,10 +104,21 @@ bool is_like(const std::string& str,
              const bool icase,
              const bool is_simple,
              const char escape) {
-  return icase ? (is_simple ? string_ilike_simple(str.c_str(), str.size(), pattern.c_str(), pattern.size())
-                            : string_ilike(str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape))
-               : (is_simple ? string_like_simple(str.c_str(), str.size(), pattern.c_str(), pattern.size())
-                            : string_like(str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape));
+  return icase
+             ? (is_simple ? string_ilike_simple(
+                                str.c_str(), str.size(), pattern.c_str(), pattern.size())
+                          : string_ilike(str.c_str(),
+                                         str.size(),
+                                         pattern.c_str(),
+                                         pattern.size(),
+                                         escape))
+             : (is_simple ? string_like_simple(
+                                str.c_str(), str.size(), pattern.c_str(), pattern.size())
+                          : string_like(str.c_str(),
+                                        str.size(),
+                                        pattern.c_str(),
+                                        pattern.size(),
+                                        escape));
 }
 
 }  // namespace
@@ -124,7 +140,9 @@ std::vector<int32_t> StringDictionaryProxy::getLike(const std::string& pattern,
 
 namespace {
 
-bool do_compare(const std::string& str, const std::string& pattern, const std::string& comp_operator) {
+bool do_compare(const std::string& str,
+                const std::string& pattern,
+                const std::string& comp_operator) {
   int res = str.compare(pattern);
   if (comp_operator == "<") {
     return res < 0;
@@ -144,8 +162,9 @@ bool do_compare(const std::string& str, const std::string& pattern, const std::s
 
 }  // namespace
 
-std::vector<int32_t> StringDictionaryProxy::getCompare(const std::string& pattern,
-                                                       const std::string& comp_operator) const {
+std::vector<int32_t> StringDictionaryProxy::getCompare(
+    const std::string& pattern,
+    const std::string& comp_operator) const {
   CHECK_GE(generation_, 0);
   auto result = string_dict_->getCompare(pattern, comp_operator, generation_);
   for (const auto& kv : transient_int_to_str_) {
@@ -159,13 +178,16 @@ std::vector<int32_t> StringDictionaryProxy::getCompare(const std::string& patter
 
 namespace {
 
-bool is_regexp_like(const std::string& str, const std::string& pattern, const char escape) {
+bool is_regexp_like(const std::string& str,
+                    const std::string& pattern,
+                    const char escape) {
   return regexp_like(str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape);
 }
 
 }  // namespace
 
-std::vector<int32_t> StringDictionaryProxy::getRegexpLike(const std::string& pattern, const char escape) const {
+std::vector<int32_t> StringDictionaryProxy::getRegexpLike(const std::string& pattern,
+                                                          const char escape) const {
   CHECK_GE(generation_, 0);
   auto result = string_dict_->getRegexpLike(pattern, escape, generation_);
   for (const auto& kv : transient_int_to_str_) {
@@ -181,7 +203,8 @@ int32_t StringDictionaryProxy::getOrAdd(const std::string& str) noexcept {
   return string_dict_->getOrAdd(str);
 }
 
-std::pair<char*, size_t> StringDictionaryProxy::getStringBytes(int32_t string_id) const noexcept {
+std::pair<char*, size_t> StringDictionaryProxy::getStringBytes(int32_t string_id) const
+    noexcept {
   return string_dict_.get()->getStringBytes(string_id);
 }
 

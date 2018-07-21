@@ -26,8 +26,8 @@
 
 #include <sstream>
 #include <string>
-#include <vector>
 #include <thread>
+#include <vector>
 
 // The ChunkKey is a unique identifier for chunks in the database file.
 // The first element of the underlying vector for ChunkKey indicates the type of

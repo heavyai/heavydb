@@ -27,7 +27,8 @@
  */
 class TargetMetaInfo {
  public:
-  TargetMetaInfo(const std::string& resname, const SQLTypeInfo& ti) : resname_(resname), ti_(ti) {}
+  TargetMetaInfo(const std::string& resname, const SQLTypeInfo& ti)
+      : resname_(resname), ti_(ti) {}
   const std::string& get_resname() const { return resname_; }
   const SQLTypeInfo& get_type_info() const { return ti_; }
 

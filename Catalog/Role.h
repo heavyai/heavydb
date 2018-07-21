@@ -31,18 +31,19 @@
 #include "DBObject.h"
 // #include "Catalog.h"
 
-#include <map>
-#include <unordered_set>
+#include <glog/logging.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/make_unique.hpp>
+#include <map>
 #include <string>
-#include <glog/logging.h>
+#include <unordered_set>
 
 // Abstract base class, includes access privileges to DB objects
 class Role {
   /**
    * @type DBObjectMap
-   * @brief Maps DBObject's object keys to pointers to DBObject class objects allocated on the heap
+   * @brief Maps DBObject's object keys to pointers to DBObject class objects allocated on
+   * the heap
    */
   typedef std::map<DBObjectKey, std::unique_ptr<DBObject>> DBObjectMap;
 
@@ -118,7 +119,8 @@ class UserRole : public Role {
   std::unordered_set<Role*> groupRole_;
 };
 
-// DB user roles and privileges, including DB users and their access privileges to DB objects
+// DB user roles and privileges, including DB users and their access privileges to DB
+// objects
 class GroupRole : public Role {
  public:
   GroupRole(const std::string& name, const bool& userPrivateRole = false);

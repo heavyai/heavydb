@@ -17,12 +17,15 @@
 /**
  * @file    Catalog.h
  * @author  Todd Mostak <todd@map-d.com>, Wei Hong <wei@map-d.com>
- * @brief   This file contains the class specification and related data structures for Catalog.
+ * @brief   This file contains the class specification and related data structures for
+ * Catalog.
  *
- * This file contains the Catalog class specification. The Catalog class is responsible for storing metadata
- * about stored objects in the system (currently just relations).  At this point it does not take advantage of the
- * database storage infrastructure; this likely will change in the future as the buildout continues. Although it
- * persists the metainfo on disk, at database startup it reads everything into in-memory dictionaries for fast access.
+ * This file contains the Catalog class specification. The Catalog class is responsible
+ * for storing metadata about stored objects in the system (currently just relations).  At
+ * this point it does not take advantage of the database storage infrastructure; this
+ * likely will change in the future as the buildout continues. Although it persists the
+ * metainfo on disk, at database startup it reads everything into in-memory dictionaries
+ * for fast access.
  *
  */
 
@@ -34,21 +37,21 @@
 #include <ctime>
 #include <limits>
 #include <list>
-#include <vector>
 #include <map>
 #include <mutex>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "ColumnDescriptor.h"
 #include "DictDescriptor.h"
 #include "FrontendViewDescriptor.h"
 #include "LdapServer.h"
-#include "RestServer.h"
 #include "LinkDescriptor.h"
+#include "ObjectRoleDescriptor.h"
+#include "RestServer.h"
 #include "Role.h"
 #include "TableDescriptor.h"
-#include "ObjectRoleDescriptor.h"
 
 #include "../DataMgr/DataMgr.h"
 #include "../QueryEngine/CompilationOptions.h"
@@ -73,12 +76,14 @@ class SharedDictionaryDef;
 namespace Importer_NS {
 class Loader;
 class TypedImportBuffer;
-}
+}  // namespace Importer_NS
 
-// SPI means Sequential Positional Index which is equivalent to the input index in a RexInput node
+// SPI means Sequential Positional Index which is equivalent to the input index in a
+// RexInput node
 #define SPIMAP_MAGIC1 (std::numeric_limits<unsigned>::max() / 4)
 #define SPIMAP_MAGIC2 8
-#define SPIMAP_GEO_PHYSICAL_INPUT(c, i) (SPIMAP_MAGIC1 + (unsigned)(SPIMAP_MAGIC2 * ((c) + 1) + (i)))
+#define SPIMAP_GEO_PHYSICAL_INPUT(c, i) \
+  (SPIMAP_MAGIC1 + (unsigned)(SPIMAP_MAGIC2 * ((c) + 1) + (i)))
 
 namespace Catalog_Namespace {
 
@@ -165,16 +170,19 @@ class Catalog {
                    const std::list<ColumnDescriptor>& columns,
                    const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs,
                    bool isLogicalTable);
-  void createShardedTable(TableDescriptor& td,
-                          const std::list<ColumnDescriptor>& columns,
-                          const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs);
+  void createShardedTable(
+      TableDescriptor& td,
+      const std::list<ColumnDescriptor>& columns,
+      const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs);
   int32_t createFrontendView(FrontendViewDescriptor& vd);
   void replaceDashboard(FrontendViewDescriptor& vd);
   std::string createLink(LinkDescriptor& ld, size_t min_length);
   void dropTable(const TableDescriptor* td);
   void truncateTable(const TableDescriptor* td);
   void renameTable(const TableDescriptor* td, const std::string& newTableName);
-  void renameColumn(const TableDescriptor* td, const ColumnDescriptor* cd, const std::string& newColumnName);
+  void renameColumn(const TableDescriptor* td,
+                    const ColumnDescriptor* cd,
+                    const std::string& newColumnName);
   void addColumn(const TableDescriptor& td, ColumnDescriptor& cd);
   void removeChunks(const int table_id);
 
@@ -182,21 +190,27 @@ class Catalog {
    * @brief Returns a pointer to a const TableDescriptor struct matching
    * the provided tableName
    * @param tableName table specified column belongs to
-   * @return pointer to const TableDescriptor object queried for or nullptr if it does not exist.
+   * @return pointer to const TableDescriptor object queried for or nullptr if it does not
+   * exist.
    */
 
-  const TableDescriptor* getMetadataForTable(const std::string& tableName, const bool populateFragmenter = true) const;
+  const TableDescriptor* getMetadataForTable(const std::string& tableName,
+                                             const bool populateFragmenter = true) const;
   const TableDescriptor* getMetadataForTable(int tableId) const;
 
-  const ColumnDescriptor* getMetadataForColumn(int tableId, const std::string& colName) const;
+  const ColumnDescriptor* getMetadataForColumn(int tableId,
+                                               const std::string& colName) const;
   const ColumnDescriptor* getMetadataForColumn(int tableId, int columnId) const;
 
   const int getColumnIdBySpi(const int tableId, const size_t spi) const;
-  const ColumnDescriptor* getMetadataForColumnBySpi(const int tableId, const size_t spi) const;
+  const ColumnDescriptor* getMetadataForColumnBySpi(const int tableId,
+                                                    const size_t spi) const;
 
-  const FrontendViewDescriptor* getMetadataForFrontendView(const std::string& userId,
-                                                           const std::string& viewName) const;
-  void deleteMetadataForFrontendView(const std::string& userId, const std::string& viewName);
+  const FrontendViewDescriptor* getMetadataForFrontendView(
+      const std::string& userId,
+      const std::string& viewName) const;
+  void deleteMetadataForFrontendView(const std::string& userId,
+                                     const std::string& viewName);
 
   const FrontendViewDescriptor* getMetadataForDashboard(const int32_t dashboard_id) const;
   void deleteMetadataForDashboard(const int32_t dashboard_id);
@@ -205,18 +219,19 @@ class Catalog {
   const LinkDescriptor* getMetadataForLink(int linkId) const;
 
   /**
-   * @brief Returns a list of pointers to constant ColumnDescriptor structs for all the columns from a particular table
-   * specified by table id
+   * @brief Returns a list of pointers to constant ColumnDescriptor structs for all the
+   * columns from a particular table specified by table id
    * @param tableId table id we want the column metadata for
    * @return list of pointers to const ColumnDescriptor structs - one
    * for each and every column in the table
    *
    */
 
-  std::list<const ColumnDescriptor*> getAllColumnMetadataForTable(const int tableId,
-                                                                  const bool fetchSystemColumns,
-                                                                  const bool fetchVirtualColumns,
-                                                                  const bool fetchPhysicalColumns) const;
+  std::list<const ColumnDescriptor*> getAllColumnMetadataForTable(
+      const int tableId,
+      const bool fetchSystemColumns,
+      const bool fetchVirtualColumns,
+      const bool fetchPhysicalColumns) const;
 
   std::list<const TableDescriptor*> getAllTableMetadata() const;
   std::list<const FrontendViewDescriptor*> getAllFrontendViewMetadata() const;
@@ -230,7 +245,8 @@ class Catalog {
 
   const std::vector<LeafHostInfo>& getStringDictionaryHosts() const;
 
-  std::vector<const TableDescriptor*> getPhysicalTablesDescriptors(const TableDescriptor* logicalTableDesc) const;
+  std::vector<const TableDescriptor*> getPhysicalTablesDescriptors(
+      const TableDescriptor* logicalTableDesc) const;
 
   int32_t getTableEpoch(const int32_t db_id, const int32_t table_id) const;
   void setTableEpoch(const int db_id, const int table_id, const int new_epoch);
@@ -240,7 +256,8 @@ class Catalog {
   void roll(const bool forward);
   DictRef addDictionary(ColumnDescriptor& cd);
   void delDictionary(const ColumnDescriptor& cd);
-  void getDictionary(const ColumnDescriptor& cd, std::map<int, StringDictionary*>& stringDicts);
+  void getDictionary(const ColumnDescriptor& cd,
+                     std::map<int, StringDictionary*>& stringDicts);
 
   static void set(const std::string& dbName, std::shared_ptr<Catalog> cat);
   static std::shared_ptr<Catalog> get(const std::string& dbName);
@@ -265,10 +282,12 @@ class Catalog {
   typedef std::tuple<int, int> ColumnIdKey;
   typedef std::map<ColumnIdKey, ColumnDescriptor*> ColumnDescriptorMapById;
   typedef std::map<DictRef, std::unique_ptr<DictDescriptor>> DictDescriptorMapById;
-  typedef std::map<std::string, std::shared_ptr<FrontendViewDescriptor>> FrontendViewDescriptorMap;
+  typedef std::map<std::string, std::shared_ptr<FrontendViewDescriptor>>
+      FrontendViewDescriptorMap;
   typedef std::map<std::string, LinkDescriptor*> LinkDescriptorMap;
   typedef std::map<int, LinkDescriptor*> LinkDescriptorMapById;
-  typedef std::unordered_map<const TableDescriptor*, const ColumnDescriptor*> DeletedColumnPerTableMap;
+  typedef std::unordered_map<const TableDescriptor*, const ColumnDescriptor*>
+      DeletedColumnPerTableMap;
 
   void CheckAndExecuteMigrations();
   void updateDictionaryNames();
@@ -287,12 +306,14 @@ class Catalog {
   void addTableToMap(TableDescriptor& td,
                      const std::list<ColumnDescriptor>& columns,
                      const std::list<DictDescriptor>& dicts);
-  void addReferenceToForeignDict(ColumnDescriptor& referencing_column, Parser::SharedDictionaryDef shared_dict_def);
-  bool setColumnSharedDictionary(ColumnDescriptor& cd,
-                                 std::list<ColumnDescriptor>& cdd,
-                                 std::list<DictDescriptor>& dds,
-                                 const TableDescriptor td,
-                                 const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs);
+  void addReferenceToForeignDict(ColumnDescriptor& referencing_column,
+                                 Parser::SharedDictionaryDef shared_dict_def);
+  bool setColumnSharedDictionary(
+      ColumnDescriptor& cd,
+      std::list<ColumnDescriptor>& cdd,
+      std::list<DictDescriptor>& dds,
+      const TableDescriptor td,
+      const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs);
   void setColumnDictionary(ColumnDescriptor& cd,
                            std::list<DictDescriptor>& dds,
                            const TableDescriptor& td,
@@ -311,7 +332,8 @@ class Catalog {
                                     const bool fetchVirtualColumns,
                                     const bool fetchPhysicalColumns) const;
   std::string calculateSHA1(const std::string& data);
-  std::string generatePhysicalTableName(const std::string& logicalTableName, const int32_t& shardNumber);
+  std::string generatePhysicalTableName(const std::string& logicalTableName,
+                                        const int32_t& shardNumber);
 
   std::string basePath_;
   TableDescriptorMap tableDescriptorMap_;
@@ -332,14 +354,17 @@ class Catalog {
   std::shared_ptr<Calcite> calciteMgr_;
 
   LogicalToPhysicalTableMapById logicalToPhysicalTableMapById_;
-  static const std::string physicalTableNameTag_;  // extra component added to the name of each physical table
+  static const std::string
+      physicalTableNameTag_;  // extra component added to the name of each physical table
   int nextTempTableId_;
   int nextTempDictId_;
 
-  // this tuple is for rolling forw/back once after ALTER ADD/DEL/MODIFY columns succeeds/fails
+  // this tuple is for rolling forw/back once after ALTER ADD/DEL/MODIFY columns
+  // succeeds/fails
   //	get(0) = old ColumnDescriptor*
   //	get(1) = new ColumnDescriptor*
-  using ColumnDescriptorsForRoll = std::vector<std::pair<ColumnDescriptor*, ColumnDescriptor*>>;
+  using ColumnDescriptorsForRoll =
+      std::vector<std::pair<ColumnDescriptor*, ColumnDescriptor*>>;
   ColumnDescriptorsForRoll columnDescriptorsForRoll;
 
  private:
@@ -357,7 +382,8 @@ class Catalog {
 
 /*
  * @type SysCatalog
- * @brief class for the system-wide catalog, currently containing user and database metadata
+ * @brief class for the system-wide catalog, currently containing user and database
+ * metadata
  */
 class SysCatalog {
  public:
@@ -416,7 +442,9 @@ class SysCatalog {
   void getDBObjectPrivileges(const std::string& roleName,
                              DBObject& object,
                              const Catalog_Namespace::Catalog& catalog) const;
-  bool verifyDBObjectOwnership(const UserMetadata& user, DBObject object, const Catalog_Namespace::Catalog& catalog);
+  bool verifyDBObjectOwnership(const UserMetadata& user,
+                               DBObject object,
+                               const Catalog_Namespace::Catalog& catalog);
   void createRole(const std::string& roleName, const bool& userPrivateRole = false);
   void dropRole(const std::string& roleName);
   void grantRole(const std::string& roleName, const std::string& userName);
@@ -428,10 +456,15 @@ class SysCatalog {
   bool checkPrivileges(const std::string& userName, std::vector<DBObject>& privObjects);
   Role* getMetadataForRole(const std::string& roleName) const;
   Role* getMetadataForUserRole(int32_t userId) const;
-  std::vector<ObjectRoleDescriptor*> getMetadataForObject(int32_t dbId, int32_t dbType, int32_t objectId) const;
+  std::vector<ObjectRoleDescriptor*> getMetadataForObject(int32_t dbId,
+                                                          int32_t dbType,
+                                                          int32_t objectId) const;
   bool isRoleGrantedToUser(const int32_t userId, const std::string& roleName) const;
-  bool hasRole(const std::string& roleName, bool userPrivateRole) const;  // true - role exists, false - otherwise
-  std::vector<std::string> getRoles(bool userPrivateRole, bool isSuper, const int32_t userId);
+  bool hasRole(const std::string& roleName,
+               bool userPrivateRole) const;  // true - role exists, false - otherwise
+  std::vector<std::string> getRoles(bool userPrivateRole,
+                                    bool isSuper,
+                                    const int32_t userId);
   std::vector<std::string> getRoles(const int32_t dbId);
   std::vector<std::string> getUserRoles(const int32_t userId);
   bool arePrivilegesOn() const { return check_privileges_; }
@@ -450,10 +483,10 @@ class SysCatalog {
   typedef std::multimap<std::string, ObjectRoleDescriptor*> ObjectRoleDescriptorMap;
 
   SysCatalog()
-      : sqliteMutex_(),
-        sharedMutex_(),
-        thread_holding_sqlite_lock(std::thread::id()),
-        thread_holding_write_lock(std::thread::id()) {}
+      : sqliteMutex_()
+      , sharedMutex_()
+      , thread_holding_sqlite_lock(std::thread::id())
+      , thread_holding_write_lock(std::thread::id()) {}
   virtual ~SysCatalog();
 
   void initDB();
@@ -469,7 +502,8 @@ class SysCatalog {
 
   // Here go functions not wrapped into transactions (necessary for nested calls)
   void grantDefaultPrivilegesToRole_unsafe(const std::string& name, bool issuper);
-  void createRole_unsafe(const std::string& roleName, const bool& userPrivateRole = false);
+  void createRole_unsafe(const std::string& roleName,
+                         const bool& userPrivateRole = false);
   void dropRole_unsafe(const std::string& roleName);
   void grantRole_unsafe(const std::string& roleName, const std::string& userName);
   void revokeRole_unsafe(const std::string& roleName, const std::string& userName);
@@ -478,7 +512,9 @@ class SysCatalog {
                                  bool roleType,
                                  const Catalog_Namespace::Catalog& cat);
   void deleteObjectDescriptorMap(const std::string& roleName);
-  void deleteObjectDescriptorMap(const std::string& roleName, DBObject& object, const Catalog_Namespace::Catalog& cat);
+  void deleteObjectDescriptorMap(const std::string& roleName,
+                                 DBObject& object,
+                                 const Catalog_Namespace::Catalog& cat);
   void grantDBObjectPrivileges_unsafe(const std::string& roleName,
                                       DBObject& object,
                                       const Catalog_Namespace::Catalog& catalog);
@@ -529,11 +565,12 @@ class SysCatalog {
 // this class is defined to accommodate both Thrift and non-Thrift builds.
 class MapDHandler {
  public:
-  virtual void prepare_columnar_loader(const std::string& session,
-                                       const std::string& table_name,
-                                       size_t num_cols,
-                                       std::unique_ptr<Importer_NS::Loader>* loader,
-                                       std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>* import_buffers);
+  virtual void prepare_columnar_loader(
+      const std::string& session,
+      const std::string& table_name,
+      size_t num_cols,
+      std::unique_ptr<Importer_NS::Loader>* loader,
+      std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>* import_buffers);
 };
 
 /*
@@ -547,28 +584,30 @@ class SessionInfo {
               const UserMetadata& user,
               const ExecutorDeviceType t,
               const std::string& sid)
-      : mapdHandler_(mapdHandler),
-        catalog_(cat),
-        currentUser_(user),
-        executor_device_type_(t),
-        session_id(sid),
-        last_used_time(time(0)) {}
+      : mapdHandler_(mapdHandler)
+      , catalog_(cat)
+      , currentUser_(user)
+      , executor_device_type_(t)
+      , session_id(sid)
+      , last_used_time(time(0)) {}
   SessionInfo(std::shared_ptr<Catalog> cat,
               const UserMetadata& user,
               const ExecutorDeviceType t,
               const std::string& sid)
       : SessionInfo(std::make_shared<MapDHandler>(), cat, user, t, sid) {}
   SessionInfo(const SessionInfo& s)
-      : mapdHandler_(s.mapdHandler_),
-        catalog_(s.catalog_),
-        currentUser_(s.currentUser_),
-        executor_device_type_(static_cast<ExecutorDeviceType>(s.executor_device_type_)),
-        session_id(s.session_id) {}
+      : mapdHandler_(s.mapdHandler_)
+      , catalog_(s.catalog_)
+      , currentUser_(s.currentUser_)
+      , executor_device_type_(static_cast<ExecutorDeviceType>(s.executor_device_type_))
+      , session_id(s.session_id) {}
   MapDHandler* get_mapdHandler() const { return mapdHandler_.get(); };
   Catalog& get_catalog() const { return *catalog_; }
   std::shared_ptr<Catalog> get_catalog_ptr() const { return catalog_; }
   const UserMetadata& get_currentUser() const { return currentUser_; }
-  const ExecutorDeviceType get_executor_device_type() const { return executor_device_type_; }
+  const ExecutorDeviceType get_executor_device_type() const {
+    return executor_device_type_;
+  }
   void set_executor_device_type(ExecutorDeviceType t) { executor_device_type_ = t; }
   std::string get_session_id() const { return session_id; }
   time_t get_last_used_time() const { return last_used_time; }

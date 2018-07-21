@@ -26,7 +26,8 @@ template <typename TOKEN_LIST_TYPE>
 class QuotedInputSupportParser {
  public:
   template <typename INPUT_TYPE>
-  TOKEN_LIST_TYPE extract_tokens(INPUT_TYPE& input_stream, std::ostream& error_stream = std::cout) {
+  TOKEN_LIST_TYPE extract_tokens(INPUT_TYPE& input_stream,
+                                 std::ostream& error_stream = std::cout) {
     using Tokenizer = boost::tokenizer<boost::escaped_list_separator<char>>;
     using TokenIterator = Tokenizer::iterator;
     TOKEN_LIST_TYPE token_list;
@@ -58,8 +59,8 @@ class QuotedInputSupportParser {
         }
       }
     } catch (boost::exception& e) {
-      // Silently fail; odds are this input stream will be processed by a parallel input tokenizer (like for Regex
-      // commands)
+      // Silently fail; odds are this input stream will be processed by a parallel input
+      // tokenizer (like for Regex commands)
     }  // Best efforts
 
     return token_list;

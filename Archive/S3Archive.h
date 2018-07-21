@@ -18,9 +18,9 @@
 #define ARCHIVE_S3ARCHIVE_H_
 
 #include <stdio.h>
+#include <exception>
 #include <map>
 #include <thread>
-#include <exception>
 #include "Archive.h"
 
 #ifdef HAVE_AWS_S3
@@ -88,13 +88,19 @@ class S3Archive : public Archive {
   virtual void init_for_read();
   const std::vector<std::string>& get_objkeys() { return objkeys; }
 #ifdef HAVE_AWS_S3
-  const std::string land(const std::string& objkey, std::exception_ptr& teptr, const bool for_detection);
+  const std::string land(const std::string& objkey,
+                         std::exception_ptr& teptr,
+                         const bool for_detection);
   void vacuum(const std::string& objkey);
 #else
-  const std::string land(const std::string& objkey, std::exception_ptr& teptr, const bool for_detection) {
+  const std::string land(const std::string& objkey,
+                         std::exception_ptr& teptr,
+                         const bool for_detection) {
     throw std::runtime_error("AWS S3 support not available");
   }
-  void vacuum(const std::string& objkey) { throw std::runtime_error("AWS S3 support not available"); }
+  void vacuum(const std::string& objkey) {
+    throw std::runtime_error("AWS S3 support not available");
+  }
 #endif  // HAVE_AWS_S3
 
  private:

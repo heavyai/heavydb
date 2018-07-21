@@ -17,10 +17,12 @@
 #ifndef QUERYENGINE_MAXWELLCODEGENPATCH_H
 #define QUERYENGINE_MAXWELLCODEGENPATCH_H
 
-#include "Execute.h"
 #include "../CudaMgr/CudaMgr.h"
+#include "Execute.h"
 
-inline bool need_patch_unnest_double(const SQLTypeInfo& ti, const bool is_maxwell, const bool mem_shared) {
+inline bool need_patch_unnest_double(const SQLTypeInfo& ti,
+                                     const bool is_maxwell,
+                                     const bool mem_shared) {
   return is_maxwell && mem_shared && ti.is_fp() && ti.get_type() == kDOUBLE;
 }
 

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <math.h>
 #include "DateAdd.h"
+#include <math.h>
 #include "ExtractFromTime.h"
 
 #ifdef EXECUTE_INCLUDE
@@ -31,8 +31,9 @@ int is_leap(int64_t year) {
 
 DEVICE
 time_t skip_months(time_t timeval, int64_t months_to_go) {
-  const int month_lengths[2][MONSPERYEAR] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
-                                             {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
+  const int month_lengths[2][MONSPERYEAR] = {
+      {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
+      {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
   tm tm_struct;
   gmtime_r_newlib(&timeval, &tm_struct);
   long dimen = 1;  // placeholder
@@ -91,7 +92,10 @@ time_t skip_months(time_t timeval, int64_t months_to_go) {
   return new_timeval;
 }
 
-extern "C" NEVER_INLINE DEVICE time_t DateAdd(DateaddField field, int64_t number, time_t timeval, const int32_t dimen) {
+extern "C" NEVER_INLINE DEVICE time_t DateAdd(DateaddField field,
+                                              int64_t number,
+                                              time_t timeval,
+                                              const int32_t dimen) {
   long scale_ret = 1;
   if (dimen == 3) {
     scale_ret = MILLISECSPERSEC;
@@ -175,8 +179,11 @@ extern "C" NEVER_INLINE DEVICE time_t DateAdd(DateaddField field, int64_t number
   return (skip_months(stimeval, months_to_go) * scale_ret) + nfrac;
 }
 
-extern "C" DEVICE time_t
-DateAddNullable(const DateaddField field, int64_t number, time_t timeval, const int32_t dimen, const time_t null_val) {
+extern "C" DEVICE time_t DateAddNullable(const DateaddField field,
+                                         int64_t number,
+                                         time_t timeval,
+                                         const int32_t dimen,
+                                         const time_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }

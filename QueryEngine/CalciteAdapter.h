@@ -22,7 +22,8 @@
 
 #include <string>
 
-Planner::RootPlan* translate_query(const std::string& query, const Catalog_Namespace::Catalog& catalog);
+Planner::RootPlan* translate_query(const std::string& query,
+                                   const Catalog_Namespace::Catalog& catalog);
 
 std::string pg_shim(const std::string&);
 

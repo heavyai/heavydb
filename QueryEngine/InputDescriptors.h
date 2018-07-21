@@ -19,14 +19,15 @@
 
 #include "../Catalog/TableDescriptor.h"
 
-#include <memory>
 #include <glog/logging.h>
+#include <memory>
 
 enum class InputSourceType { TABLE, RESULT };
 
 class InputDescriptor {
  public:
-  InputDescriptor(const int table_id, const int nest_level) : table_id_(table_id), nest_level_(nest_level) {}
+  InputDescriptor(const int table_id, const int nest_level)
+      : table_id_(table_id), nest_level_(nest_level) {}
 
   bool operator==(const InputDescriptor& that) const {
     return table_id_ == that.table_id_ && nest_level_ == that.nest_level_;
@@ -36,7 +37,9 @@ class InputDescriptor {
 
   int getNestLevel() const { return nest_level_; }
 
-  InputSourceType getSourceType() const { return table_id_ > 0 ? InputSourceType::TABLE : InputSourceType::RESULT; }
+  InputSourceType getSourceType() const {
+    return table_id_ > 0 ? InputSourceType::TABLE : InputSourceType::RESULT;
+  }
 
  private:
   int table_id_;
@@ -50,7 +53,7 @@ struct hash<InputDescriptor> {
     return input_desc.getTableId() ^ input_desc.getNestLevel();
   }
 };
-}  // std
+}  // namespace std
 
 class InputColDescriptor {
  public:
@@ -83,11 +86,11 @@ class IndirectInputColDescriptor : public InputColDescriptor {
                              const int ref_col_id,
                              const int ref_table_id,
                              const int ref_input_desc)
-      : InputColDescriptor(col_id, table_id, input_desc),
-        iter_col_id_(iter_col_id),
-        iter_input_desc_(iter_table_id, iter_input_desc),
-        ref_col_id_(ref_col_id),
-        ref_input_desc_(ref_table_id, ref_input_desc) {}
+      : InputColDescriptor(col_id, table_id, input_desc)
+      , iter_col_id_(iter_col_id)
+      , iter_input_desc_(iter_table_id, iter_input_desc)
+      , ref_col_id_(ref_col_id)
+      , ref_input_desc_(ref_table_id, ref_input_desc) {}
 
   int getIterIndex() const { return iter_col_id_; }
 
@@ -110,7 +113,8 @@ template <>
 struct hash<InputColDescriptor> {
   size_t operator()(const InputColDescriptor& input_col_desc) const {
     hash<InputDescriptor> input_col_desc_hasher;
-    return input_col_desc_hasher(input_col_desc.getScanDesc()) ^ static_cast<size_t>(input_col_desc.getColId());
+    return input_col_desc_hasher(input_col_desc.getScanDesc()) ^
+           static_cast<size_t>(input_col_desc.getColId());
   }
 };
 
@@ -131,6 +135,6 @@ struct equal_to<shared_ptr<const InputColDescriptor>> {
     return *lhs == *rhs;
   }
 };
-}  // std
+}  // namespace std
 
 #endif  // QUERYENGINE_INPUTDESCRIPTORS_H

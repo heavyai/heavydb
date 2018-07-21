@@ -22,9 +22,9 @@
  * Copyright (c) 2016 MapD Technologies, Inc.  All rights reserved.
  */
 #include "ProfileTest.h"
-#include "Shared/measure.h"
 #include "../QueryEngine/ResultRows.h"
 #include "../QueryEngine/ResultSet.h"
+#include "Shared/measure.h"
 
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
 #include <cuda_runtime.h>
@@ -34,11 +34,11 @@
 #include <gtest/gtest.h>
 #include <boost/make_unique.hpp>
 
-#include <future>
 #include <algorithm>
+#include <future>
 #include <random>
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
 
 bool g_gpus_present = false;
 
@@ -125,7 +125,8 @@ bool generate_numbers(int8_t* random_numbers,
     case POI: {
       std::poisson_distribution<T> d(4);
       for (unsigned i = 0; i < num_random_numbers; ++i) {
-        *reinterpret_cast<T*>(random_numbers + i * stride) = std::max<T>(min_number, std::min(max_number, d(gen)));
+        *reinterpret_cast<T*>(random_numbers + i * stride) =
+            std::max<T>(min_number, std::min(max_number, d(gen)));
       }
     } break;
     default:
@@ -152,7 +153,8 @@ bool generate_columns_on_host(int8_t* buffers,
     row_size += wid;
   }
   std::vector<std::future<bool>> child_threads;
-  for (size_t i = 0; i < col_count; buffers += (is_columnar ? row_count : 1) * col_widths[i++]) {
+  for (size_t i = 0; i < col_count;
+       buffers += (is_columnar ? row_count : 1) * col_widths[i++]) {
     if (dists[i] == DIST_KIND::INVALID) {
       continue;
     }
@@ -207,43 +209,48 @@ inline void init_groups_on_host(int8_t* groups,
   for (size_t start_group = 0; start_group < group_count; start_group += stride) {
     const auto end_group = std::min(group_count, start_group + stride);
     if (is_columnar) {
-      child_threads.push_back(std::async(std::launch::async, [&, start_group, end_group]() {
-        auto col_base = groups;
-        for (size_t j = 0; j < col_count; col_base += col_widths[j++] * group_count) {
-          for (size_t i = start_group; i < end_group; ++i) {
-            switch (col_widths[j]) {
-              case 4: {
-                auto col_ptr = reinterpret_cast<uint32_t*>(col_base);
-                std::fill(col_ptr, col_ptr + group_count, static_cast<uint32_t>(init_vals[j]));
-              } break;
-              case 8: {
-                auto col_ptr = reinterpret_cast<size_t*>(col_base);
-                std::fill(col_ptr, col_ptr + group_count, init_vals[j]);
-              } break;
-              default:
-                CHECK(false);
+      child_threads.push_back(
+          std::async(std::launch::async, [&, start_group, end_group]() {
+            auto col_base = groups;
+            for (size_t j = 0; j < col_count; col_base += col_widths[j++] * group_count) {
+              for (size_t i = start_group; i < end_group; ++i) {
+                switch (col_widths[j]) {
+                  case 4: {
+                    auto col_ptr = reinterpret_cast<uint32_t*>(col_base);
+                    std::fill(col_ptr,
+                              col_ptr + group_count,
+                              static_cast<uint32_t>(init_vals[j]));
+                  } break;
+                  case 8: {
+                    auto col_ptr = reinterpret_cast<size_t*>(col_base);
+                    std::fill(col_ptr, col_ptr + group_count, init_vals[j]);
+                  } break;
+                  default:
+                    CHECK(false);
+                }
+              }
             }
-          }
-        }
-      }));
+          }));
     } else {
-      child_threads.push_back(std::async(std::launch::async, [&, start_group, end_group]() {
-        for (size_t i = start_group; i < end_group; ++i) {
-          auto row_base = groups + i * row_size;
-          for (size_t j = 0; j < col_count; row_base += col_widths[j++]) {
-            switch (col_widths[j]) {
-              case 4:
-                *reinterpret_cast<uint32_t*>(row_base) = static_cast<uint32_t>(init_vals[j]);
-                break;
-              case 8:
-                *reinterpret_cast<size_t*>(row_base) = init_vals[j];
-                break;
-              default:
-                CHECK(false);
+      child_threads.push_back(
+          std::async(std::launch::async, [&, start_group, end_group]() {
+            for (size_t i = start_group; i < end_group; ++i) {
+              auto row_base = groups + i * row_size;
+              for (size_t j = 0; j < col_count; row_base += col_widths[j++]) {
+                switch (col_widths[j]) {
+                  case 4:
+                    *reinterpret_cast<uint32_t*>(row_base) =
+                        static_cast<uint32_t>(init_vals[j]);
+                    break;
+                  case 8:
+                    *reinterpret_cast<size_t*>(row_base) = init_vals[j];
+                    break;
+                  default:
+                    CHECK(false);
+                }
+              }
             }
-          }
-        }
-      }));
+          }));
     }
   }
   for (auto& child : child_threads) {
@@ -274,10 +281,12 @@ void columnarize_groups_on_host(int8_t* columnar_buffer,
           auto write_ptr = write_base + i * col_widths[j];
           switch (col_widths[j]) {
             case 4:
-              *reinterpret_cast<uint32_t*>(write_ptr) = *reinterpret_cast<const uint32_t*>(read_ptr);
+              *reinterpret_cast<uint32_t*>(write_ptr) =
+                  *reinterpret_cast<const uint32_t*>(read_ptr);
               break;
             case 8:
-              *reinterpret_cast<size_t*>(write_ptr) = *reinterpret_cast<const size_t*>(read_ptr);
+              *reinterpret_cast<size_t*>(write_ptr) =
+                  *reinterpret_cast<const size_t*>(read_ptr);
               break;
             default:
               CHECK(false);
@@ -367,7 +376,8 @@ struct hash<vector<T>> {
 namespace {
 template <typename KeyT = int64_t>
 inline bool is_empty_slot(const KeyT k) {
-  static_assert(std::is_same<KeyT, int64_t>::value, "Unsupported template parameter other than int64_t for now");
+  static_assert(std::is_same<KeyT, int64_t>::value,
+                "Unsupported template parameter other than int64_t for now");
   return k == EMPTY_KEY_64;
 }
 
@@ -519,10 +529,12 @@ class AggregateEmulator {
       for (size_t v = 0; v < val_count; ++v) {
         ValT value;
         if (is_columnar) {
-          auto val_buffer = reinterpret_cast<const ValT*>(key_buffers + key_count * row_count);
+          auto val_buffer =
+              reinterpret_cast<const ValT*>(key_buffers + key_count * row_count);
           value = val_buffer[i + v * row_count];
         } else {
-          auto val_buffer = reinterpret_cast<const ValT*>(buffers + row_size * i + sizeof(KeyT) * key_count);
+          auto val_buffer = reinterpret_cast<const ValT*>(buffers + row_size * i +
+                                                          sizeof(KeyT) * key_count);
           value = val_buffer[v];
         }
 
@@ -597,10 +609,12 @@ class AggregateEmulator {
       std::vector<ValT> actual_vals(val_count);
       for (size_t v = 0; v < val_count; ++v) {
         if (is_columnar) {
-          auto val_buffers = reinterpret_cast<const ValT*>(key_buffers + key_count * group_count);
+          auto val_buffers =
+              reinterpret_cast<const ValT*>(key_buffers + key_count * group_count);
           actual_vals[v] = val_buffers[i + v * group_count];
         } else {
-          auto val_buffers = reinterpret_cast<const ValT*>(buffers + row_size * i + sizeof(KeyT) * key_count);
+          auto val_buffers = reinterpret_cast<const ValT*>(buffers + row_size * i +
+                                                           sizeof(KeyT) * key_count);
           actual_vals[v] = val_buffers[v];
         }
       }
@@ -635,7 +649,8 @@ void mash_restore_dispatch(int8_t* output_buffer,
   const auto read_step = isColumnar ? row_count : 1;
   const auto write_step = isColumnar ? group_count : 1;
   for (size_t i = start_group; i < end_group; ++i) {
-    const auto group_ptr = groups_buffer + i * (isColumnar ? sizeof(int64_t) : entry_size);
+    const auto group_ptr =
+        groups_buffer + i * (isColumnar ? sizeof(int64_t) : entry_size);
     const auto key_idx = *reinterpret_cast<const int64_t*>(group_ptr);
     auto read_ptr = input_buffer + key_idx * (isColumnar ? sizeof(KeyT) : row_size);
     auto write_ptr = output_buffer + i * (isColumnar ? sizeof(KeyT) : row_size);
@@ -643,15 +658,18 @@ void mash_restore_dispatch(int8_t* output_buffer,
       *reinterpret_cast<KeyT*>(write_ptr) = static_cast<KeyT>(empty_key);
       continue;
     }
-    for (size_t k = 0; k < key_count;
-         ++k, write_ptr += write_step * sizeof(KeyT), read_ptr += read_step * sizeof(KeyT)) {
+    for (size_t k = 0; k < key_count; ++k,
+                write_ptr += write_step * sizeof(KeyT),
+                read_ptr += read_step * sizeof(KeyT)) {
       *reinterpret_cast<KeyT*>(write_ptr) = *reinterpret_cast<const KeyT*>(read_ptr);
     }
     if (isColumnar) {
-      write_ptr = output_buffer + key_count * sizeof(KeyT) * group_count + sizeof(ValT) * i;
+      write_ptr =
+          output_buffer + key_count * sizeof(KeyT) * group_count + sizeof(ValT) * i;
       read_ptr = groups_buffer + sizeof(int64_t) * group_count + sizeof(ValT) * i;
-      for (size_t v = 0; v < val_count;
-           ++v, write_ptr += write_step * sizeof(ValT), read_ptr += write_step * sizeof(ValT)) {
+      for (size_t v = 0; v < val_count; ++v,
+                  write_ptr += write_step * sizeof(ValT),
+                  read_ptr += write_step * sizeof(ValT)) {
         *reinterpret_cast<ValT*>(write_ptr) = *reinterpret_cast<const ValT*>(read_ptr);
       }
     } else {
@@ -726,8 +744,8 @@ class CudaTimer {
     if (used_size == size_t(-1)) {
       std::cout << "Current query took " << elapsedTime << " ms on device.\n";
     } else {
-      std::cout << "Current query took " << elapsedTime << " ms on device using " << used_size / (1024 * 1024.f)
-                << " MB VRAM.\n";
+      std::cout << "Current query took " << elapsedTime << " ms on device using "
+                << used_size / (1024 * 1024.f) << " MB VRAM.\n";
     }
     cudaEventDestroy(start_);
     cudaEventDestroy(stop_);
@@ -757,10 +775,18 @@ TEST(Hash, Baseline) {
     init_vals.push_back(get_default_value(agg_ops[i]));
   }
 
-  std::vector<DIST_KIND> dist_tries{
-      DIST_KIND::UNI, DIST_KIND::UNI, DIST_KIND::NRM, DIST_KIND::EXP1, DIST_KIND::EXP2, DIST_KIND::POI};
-  std::vector<std::string> dist_names{
-      "uniform(-100, 100)", "uniform(-100000, 100000)", "normal(0, 1)", "exp(1)", "exp(2)", "poisson(4)"};
+  std::vector<DIST_KIND> dist_tries{DIST_KIND::UNI,
+                                    DIST_KIND::UNI,
+                                    DIST_KIND::NRM,
+                                    DIST_KIND::EXP1,
+                                    DIST_KIND::EXP2,
+                                    DIST_KIND::POI};
+  std::vector<std::string> dist_names{"uniform(-100, 100)",
+                                      "uniform(-100000, 100000)",
+                                      "normal(0, 1)",
+                                      "exp(1)",
+                                      "exp(2)",
+                                      "poisson(4)"};
   std::vector<std::pair<int64_t, int64_t>> range_tries{
       {-100, 100},
       {-100000, 100000},
@@ -802,9 +828,17 @@ TEST(Hash, Baseline) {
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
     int8_t* dev_input_buffer = nullptr;
     cudaMalloc(&dev_input_buffer, input_buffer.size() * sizeof(int64_t));
-    if (generate_columns_on_device(
-            dev_input_buffer, row_count, col_count, col_widths, ranges, is_columnar, distributions)) {
-      cudaMemcpy(&input_buffer[0], dev_input_buffer, input_buffer.size() * sizeof(int64_t), cudaMemcpyDeviceToHost);
+    if (generate_columns_on_device(dev_input_buffer,
+                                   row_count,
+                                   col_count,
+                                   col_widths,
+                                   ranges,
+                                   is_columnar,
+                                   distributions)) {
+      cudaMemcpy(&input_buffer[0],
+                 dev_input_buffer,
+                 input_buffer.size() * sizeof(int64_t),
+                 cudaMemcpyDeviceToHost);
     } else
 #endif
     {
@@ -816,15 +850,22 @@ TEST(Hash, Baseline) {
                                is_columnar,
                                distributions);
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
-      cudaMemcpy(dev_input_buffer, &input_buffer[0], input_buffer.size() * sizeof(int64_t), cudaMemcpyHostToDevice);
+      cudaMemcpy(dev_input_buffer,
+                 &input_buffer[0],
+                 input_buffer.size() * sizeof(int64_t),
+                 cudaMemcpyHostToDevice);
 #endif
     }
     AggregateEmulator<int64_t, int64_t> emulator(agg_ops);
-    auto ref_result =
-        emulator.run(reinterpret_cast<int8_t*>(&input_buffer[0]), key_count, val_count, row_count, is_columnar);
-    std::cout << "  Generated " << row_count / 1000000.f << "M rows aggregated into " << ref_result.size()
-              << " groups.\n";
-    const auto actual_group_count = static_cast<size_t>(ref_result.size() * c_space_usage);
+    auto ref_result = emulator.run(reinterpret_cast<int8_t*>(&input_buffer[0]),
+                                   key_count,
+                                   val_count,
+                                   row_count,
+                                   is_columnar);
+    std::cout << "  Generated " << row_count / 1000000.f << "M rows aggregated into "
+              << ref_result.size() << " groups.\n";
+    const auto actual_group_count =
+        static_cast<size_t>(ref_result.size() * c_space_usage);
     std::vector<int64_t> groups_buffer(actual_group_count * col_count, 0);
 #ifdef TRY_COLUMNAR
     std::vector<int64_t> columnar_groups_buffer(actual_group_count * col_count, 0);
@@ -840,7 +881,8 @@ TEST(Hash, Baseline) {
     std::vector<int64_t> mash_groups_buffer(actual_group_count * actual_col_count, 0);
 #endif
 #ifdef TRY_MASH_COLUMNAR
-    std::vector<int64_t> mash_columnar_groups_buffer(actual_group_count * actual_col_count, 0);
+    std::vector<int64_t> mash_columnar_groups_buffer(
+        actual_group_count * actual_col_count, 0);
 #endif
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
     const auto device_type = DEV_KIND::GPU;
@@ -849,7 +891,12 @@ TEST(Hash, Baseline) {
       try {
         int8_t* dev_groups_buffer = nullptr;
         cudaMalloc(&dev_groups_buffer, groups_buffer.size() * sizeof(int64_t));
-        init_groups_on_device(dev_groups_buffer, actual_group_count, col_count, col_widths, init_vals, is_columnar);
+        init_groups_on_device(dev_groups_buffer,
+                              actual_group_count,
+                              col_count,
+                              col_widths,
+                              init_vals,
+                              is_columnar);
         {
           CudaTimer timer(groups_buffer.size() * sizeof(int64_t));
           run_query_on_device(dev_groups_buffer,
@@ -862,8 +909,10 @@ TEST(Hash, Baseline) {
                               agg_ops,
                               is_columnar);
         }
-        cudaMemcpy(
-            &groups_buffer[0], dev_groups_buffer, groups_buffer.size() * sizeof(int64_t), cudaMemcpyDeviceToHost);
+        cudaMemcpy(&groups_buffer[0],
+                   dev_groups_buffer,
+                   groups_buffer.size() * sizeof(int64_t),
+                   cudaMemcpyDeviceToHost);
         cudaFree(dev_groups_buffer);
       } catch (const thrust::system_error& e) {
         std::cout << e.what() << std::endl;
@@ -922,7 +971,8 @@ TEST(Hash, Baseline) {
                               init_vals);
           });
           std::cout << "  \tAnd optional " << elapsedTime << " ms on host if using "
-                    << mash_groups_buffer.size() * sizeof(int64_t) / (1024 * 1024.f) << " MB VRAM instead.\n";
+                    << mash_groups_buffer.size() * sizeof(int64_t) / (1024 * 1024.f)
+                    << " MB VRAM instead.\n";
           mash_groups_buffer.swap(temp_groups_buffer);
         }
 #endif
@@ -952,7 +1002,12 @@ TEST(Hash, Baseline) {
                    columnar_input_buffer.size() * sizeof(int64_t),
                    cudaMemcpyHostToDevice);
 #endif
-        init_groups_on_device(dev_groups_buffer, actual_group_count, col_count, col_widths, init_vals, is_columnar);
+        init_groups_on_device(dev_groups_buffer,
+                              actual_group_count,
+                              col_count,
+                              col_widths,
+                              init_vals,
+                              is_columnar);
         {
           CudaTimer timer(columnar_groups_buffer.size() * sizeof(int64_t));
           run_query_on_device(dev_groups_buffer,
@@ -979,7 +1034,8 @@ TEST(Hash, Baseline) {
       try {
         const bool is_columnar = true;
         int8_t* dev_mash_groups_buffer = nullptr;
-        cudaMalloc(&dev_mash_groups_buffer, mash_columnar_groups_buffer.size() * sizeof(int64_t));
+        cudaMalloc(&dev_mash_groups_buffer,
+                   mash_columnar_groups_buffer.size() * sizeof(int64_t));
         std::vector<int64_t> columnar_input_buffer(input_buffer.size());
         columnarize_groups_on_host(reinterpret_cast<int8_t*>(&columnar_input_buffer[0]),
                                    reinterpret_cast<const int8_t*>(&input_buffer[0]),
@@ -1015,17 +1071,20 @@ TEST(Hash, Baseline) {
         if (key_count > 1) {
           std::vector<int64_t> temp_groups_buffer(actual_group_count * col_count, 0);
           auto elapsedTime = measure<>::execution([&]() {
-            mash_restore_keys<true>(reinterpret_cast<int8_t*>(&temp_groups_buffer[0]),
-                                    reinterpret_cast<int8_t*>(&mash_columnar_groups_buffer[0]),
-                                    actual_group_count,
-                                    reinterpret_cast<int8_t*>(&columnar_input_buffer[0]),
-                                    row_count,
-                                    key_count,
-                                    col_widths,
-                                    init_vals);
+            mash_restore_keys<true>(
+                reinterpret_cast<int8_t*>(&temp_groups_buffer[0]),
+                reinterpret_cast<int8_t*>(&mash_columnar_groups_buffer[0]),
+                actual_group_count,
+                reinterpret_cast<int8_t*>(&columnar_input_buffer[0]),
+                row_count,
+                key_count,
+                col_widths,
+                init_vals);
           });
           std::cout << "  \t\t And optional " << elapsedTime << " ms on host if using "
-                    << mash_columnar_groups_buffer.size() * sizeof(int64_t) / (1024 * 1024.f) << " MB VRAM instead.\n";
+                    << mash_columnar_groups_buffer.size() * sizeof(int64_t) /
+                           (1024 * 1024.f)
+                    << " MB VRAM instead.\n";
           mash_columnar_groups_buffer.swap(temp_groups_buffer);
         }
 #endif
@@ -1076,12 +1135,13 @@ TEST(Hash, Baseline) {
                                  ref_result));
 #endif
 #ifdef TRY_MASH_COLUMNAR
-    ASSERT_TRUE(emulator.compare(reinterpret_cast<int8_t*>(&mash_columnar_groups_buffer[0]),
-                                 key_count,
-                                 val_count,
-                                 actual_group_count,
-                                 true,
-                                 ref_result));
+    ASSERT_TRUE(
+        emulator.compare(reinterpret_cast<int8_t*>(&mash_columnar_groups_buffer[0]),
+                         key_count,
+                         val_count,
+                         actual_group_count,
+                         true,
+                         ref_result));
 #endif
   }
 }
@@ -1090,23 +1150,32 @@ namespace {
 
 template <typename KeyT = int64_t>
 void reset_entry(KeyT* entry_ptr) {
-  static_assert(std::is_same<KeyT, int64_t>::value, "Unsupported template parameter other than int64_t for now");
+  static_assert(std::is_same<KeyT, int64_t>::value,
+                "Unsupported template parameter other than int64_t for now");
   *entry_ptr = static_cast<KeyT>(EMPTY_KEY_64);
 }
 
 template <bool isColumnar, typename KeyT = int64_t>
 class Deduplicater {
  public:
-  Deduplicater(int8_t* row_buff, const size_t row_size, const size_t row_count, const size_t key_count)
-      : buff_(row_buff), entry_sz_(row_size), entry_cnt_(row_count), key_cnt_(key_count) {}
+  Deduplicater(int8_t* row_buff,
+               const size_t row_size,
+               const size_t row_count,
+               const size_t key_count)
+      : buff_(row_buff)
+      , entry_sz_(row_size)
+      , entry_cnt_(row_count)
+      , key_cnt_(key_count) {}
   size_t run() {
     std::vector<std::future<void>> child_threads;
     const size_t cpu_count = cpu_threads();
     const size_t stride = (entry_cnt_ + cpu_count - 1) / cpu_count;
 
-    std::vector<std::unordered_set<std::vector<KeyT>>> mask_set(cpu_count, std::unordered_set<std::vector<KeyT>>());
+    std::vector<std::unordered_set<std::vector<KeyT>>> mask_set(
+        cpu_count, std::unordered_set<std::vector<KeyT>>());
     std::vector<std::mutex> mutex_set(cpu_count);
-    for (size_t start_entry = 0, i = 0; start_entry < entry_cnt_; start_entry += stride, ++i) {
+    for (size_t start_entry = 0, i = 0; start_entry < entry_cnt_;
+         start_entry += stride, ++i) {
       const auto end_entry = std::min(entry_cnt_, start_entry + stride);
       child_threads.push_back(std::async(std::launch::async,
                                          &Deduplicater::runDispatch,
@@ -1224,7 +1293,8 @@ TEST(Reduction, Baseline) {
     row_size += sizeof(int64_t);
   }
   for (const auto& target_info : target_infos) {
-    const auto slot_bytes = std::max(int8_t(8), static_cast<int8_t>(target_info.sql_type.get_size()));
+    const auto slot_bytes =
+        std::max(int8_t(8), static_cast<int8_t>(target_info.sql_type.get_size()));
     query_mem_desc.agg_col_widths.emplace_back(ColWidths{slot_bytes, slot_bytes});
     row_size += slot_bytes;
   }
@@ -1238,7 +1308,8 @@ TEST(Reduction, Baseline) {
   const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
   std::vector<std::unique_ptr<ResultSet>> results;
   for (size_t i = 0; i < result_count; ++i) {
-    auto rs = boost::make_unique<ResultSet>(target_infos, device_type, query_mem_desc, row_set_mem_owner, nullptr);
+    auto rs = boost::make_unique<ResultSet>(
+        target_infos, device_type, query_mem_desc, row_set_mem_owner, nullptr);
     rs->allocateStorage();
     results.push_back(std::move(rs));
   }
@@ -1264,19 +1335,42 @@ TEST(Reduction, Baseline) {
     }
     int8_t* dev_input_buffer = nullptr;
     cudaMalloc(&dev_input_buffer, input_size);
-    if (generate_columns_on_device(
-            dev_input_buffer, entry_count, col_count, col_widths, ranges, is_columnar, distributions)) {
-      actual_row_count = deduplicate_rows_on_device(dev_input_buffer, entry_count, key_count, col_widths, is_columnar);
-      auto dev_input_copy =
-          get_hashed_copy(dev_input_buffer, entry_count, entry_count, col_widths, agg_ops, init_vals, is_columnar);
+    if (generate_columns_on_device(dev_input_buffer,
+                                   entry_count,
+                                   col_count,
+                                   col_widths,
+                                   ranges,
+                                   is_columnar,
+                                   distributions)) {
+      actual_row_count = deduplicate_rows_on_device(
+          dev_input_buffer, entry_count, key_count, col_widths, is_columnar);
+      auto dev_input_copy = get_hashed_copy(dev_input_buffer,
+                                            entry_count,
+                                            entry_count,
+                                            col_widths,
+                                            agg_ops,
+                                            init_vals,
+                                            is_columnar);
       cudaFree(dev_input_buffer);
-      actual_row_count = drop_rows(dev_input_copy, entry_count, row_size, actual_row_count, fill_rate, is_columnar);
+      actual_row_count = drop_rows(dev_input_copy,
+                                   entry_count,
+                                   row_size,
+                                   actual_row_count,
+                                   fill_rate,
+                                   is_columnar);
       cudaMemcpy(input_buffer, dev_input_copy, input_size, cudaMemcpyDeviceToHost);
     } else
 #endif
     {
-      generate_columns_on_host(input_buffer, entry_count, col_count, col_widths, ranges, is_columnar, distributions);
-      actual_row_count = Deduplicater<false>(input_buffer, row_size, entry_count, key_count).run();
+      generate_columns_on_host(input_buffer,
+                               entry_count,
+                               col_count,
+                               col_widths,
+                               ranges,
+                               is_columnar,
+                               distributions);
+      actual_row_count =
+          Deduplicater<false>(input_buffer, row_size, entry_count, key_count).run();
     }
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
     if (dev_input_buffer) {
@@ -1288,8 +1382,10 @@ TEST(Reduction, Baseline) {
   if (has_multi_gpus) {
     std::vector<std::future<size_t>> gener_threads;
     for (size_t i = 0; i < results.size(); ++i) {
-      gener_threads.push_back(
-          std::async(std::launch::async, gen_func, results[i]->getStorage()->getUnderlyingBuffer(), i));
+      gener_threads.push_back(std::async(std::launch::async,
+                                         gen_func,
+                                         results[i]->getStorage()->getUnderlyingBuffer(),
+                                         i));
     }
 
     for (size_t i = 0; i < gener_threads.size(); ++i) {
@@ -1302,13 +1398,17 @@ TEST(Reduction, Baseline) {
   }
 
   for (size_t i = 0; i < rs_row_counts.size(); ++i) {
-    std::cout << "ResultSet " << i << " has " << rs_row_counts[i] << " rows and " << entry_count - rs_row_counts[i]
-              << " empty buckets\n";
+    std::cout << "ResultSet " << i << " has " << rs_row_counts[i] << " rows and "
+              << entry_count - rs_row_counts[i] << " empty buckets\n";
   }
   AggregateEmulator<int64_t, int64_t> emulator(agg_ops);
   std::vector<decltype(emulator)::ResultType> ref_results;
   for (auto& rs : results) {
-    auto ref_rs = emulator.run(rs->getStorage()->getUnderlyingBuffer(), key_count, val_count, entry_count, is_columnar);
+    auto ref_rs = emulator.run(rs->getStorage()->getUnderlyingBuffer(),
+                               key_count,
+                               val_count,
+                               entry_count,
+                               is_columnar);
     ref_results.push_back(std::move(ref_rs));
   }
   auto ref_reduced_result = emulator.reduce(ref_results);
@@ -1320,7 +1420,9 @@ TEST(Reduction, Baseline) {
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
   CHECK_GT(results.size(), 0);
   std::vector<int64_t> gpu_reduced_result(input_size / sizeof(int64_t), 0);
-  memcpy(&gpu_reduced_result[0], results[0]->getStorage()->getUnderlyingBuffer(), input_size);
+  memcpy(&gpu_reduced_result[0],
+         results[0]->getStorage()->getUnderlyingBuffer(),
+         input_size);
 #endif
   ResultSet* reduced_result = nullptr;
   std::cout << "CPU reduction: ";
@@ -1329,8 +1431,8 @@ TEST(Reduction, Baseline) {
     reduced_result = rs_manager.reduce(storage_set);
   });
   CHECK(reduced_result != nullptr);
-  std::cout << "Current reduction took " << elapsedTime << " ms and got reduced " << reduced_result->rowCount()
-            << " rows\n";
+  std::cout << "Current reduction took " << elapsedTime << " ms and got reduced "
+            << reduced_result->rowCount() << " rows\n";
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
   std::vector<int8_t*> host_reduced_buffers(result_count, nullptr);
   host_reduced_buffers[0] = reinterpret_cast<int8_t*>(&gpu_reduced_result[0]);
@@ -1347,30 +1449,35 @@ TEST(Reduction, Baseline) {
       }
       int8_t* dev_reduced_buffer = nullptr;
       cudaMalloc(&dev_reduced_buffer, input_size);
-      cudaMemcpy(dev_reduced_buffer, host_reduced_buffers[device_id], input_size, cudaMemcpyHostToDevice);
+      cudaMemcpy(dev_reduced_buffer,
+                 host_reduced_buffers[device_id],
+                 input_size,
+                 cudaMemcpyHostToDevice);
       dev_reduced_buffers[device_id] = dev_reduced_buffer;
     }
     for (size_t stride = 1, end = (result_count + 1) / 2; stride <= end; stride <<= 1) {
       std::vector<std::future<void>> reducer_threads;
-      for (size_t device_id = 0; device_id + stride < result_count; device_id += stride * 2) {
-        reducer_threads.push_back(std::async(std::launch::async,
-                                             [&](const size_t dev_id) {
-                                               if (has_multi_gpus) {
-                                                 cudaSetDevice(dev_id);
-                                               }
-                                               reduce_on_device(dev_reduced_buffers[dev_id],
-                                                                dev_id,
-                                                                rs_entry_count[dev_id],
-                                                                dev_reduced_buffers[dev_id + stride],
-                                                                has_multi_gpus ? dev_id + stride : dev_id,
-                                                                rs_entry_count[dev_id + stride],
-                                                                rs_row_counts[dev_id + stride],
-                                                                col_widths,
-                                                                agg_ops,
-                                                                init_vals,
-                                                                is_columnar);
-                                             },
-                                             device_id));
+      for (size_t device_id = 0; device_id + stride < result_count;
+           device_id += stride * 2) {
+        reducer_threads.push_back(
+            std::async(std::launch::async,
+                       [&](const size_t dev_id) {
+                         if (has_multi_gpus) {
+                           cudaSetDevice(dev_id);
+                         }
+                         reduce_on_device(dev_reduced_buffers[dev_id],
+                                          dev_id,
+                                          rs_entry_count[dev_id],
+                                          dev_reduced_buffers[dev_id + stride],
+                                          has_multi_gpus ? dev_id + stride : dev_id,
+                                          rs_entry_count[dev_id + stride],
+                                          rs_row_counts[dev_id + stride],
+                                          col_widths,
+                                          agg_ops,
+                                          init_vals,
+                                          is_columnar);
+                       },
+                       device_id));
       }
       for (auto& child : reducer_threads) {
         child.get();
@@ -1380,7 +1487,10 @@ TEST(Reduction, Baseline) {
   std::cout << "Current reduction took " << elapsedTime << " ms\n";
   {
     std::vector<int64_t> temp_buffer(rs_entry_count[0] * col_count, 0);
-    cudaMemcpy(&temp_buffer[0], dev_reduced_buffers[0], temp_buffer.size() * sizeof(int64_t), cudaMemcpyDeviceToHost);
+    cudaMemcpy(&temp_buffer[0],
+               dev_reduced_buffers[0],
+               temp_buffer.size() * sizeof(int64_t),
+               cudaMemcpyDeviceToHost);
     for (size_t i = 0; i < dev_reduced_buffers.size(); ++i) {
       if (has_multi_gpus) {
         cudaSetDevice(i);
@@ -1442,8 +1552,8 @@ TEST(Reduction, PerfectHash) {
   QueryMemoryDescriptor query_mem_desc{};
   query_mem_desc.keyless_hash = false;
   query_mem_desc.has_nulls = false;
-  query_mem_desc.hash_type =
-      key_count == 1 ? GroupByColRangeType::OneColKnownRange : GroupByColRangeType::MultiColPerfectHash;
+  query_mem_desc.hash_type = key_count == 1 ? GroupByColRangeType::OneColKnownRange
+                                            : GroupByColRangeType::MultiColPerfectHash;
   query_mem_desc.output_columnar = is_columnar;
   query_mem_desc.entry_count = entry_count;
   size_t row_size = 0;
@@ -1452,7 +1562,8 @@ TEST(Reduction, PerfectHash) {
     row_size += sizeof(int64_t);
   }
   for (const auto& target_info : target_infos) {
-    const auto slot_bytes = std::max(int8_t(8), static_cast<int8_t>(target_info.sql_type.get_size()));
+    const auto slot_bytes =
+        std::max(int8_t(8), static_cast<int8_t>(target_info.sql_type.get_size()));
     query_mem_desc.agg_col_widths.emplace_back(ColWidths{slot_bytes, slot_bytes});
     row_size += slot_bytes;
   }
@@ -1466,13 +1577,15 @@ TEST(Reduction, PerfectHash) {
   const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
   std::vector<std::unique_ptr<ResultSet>> results;
   for (size_t i = 0; i < result_count; ++i) {
-    auto rs = boost::make_unique<ResultSet>(target_infos, device_type, query_mem_desc, row_set_mem_owner, nullptr);
+    auto rs = boost::make_unique<ResultSet>(
+        target_infos, device_type, query_mem_desc, row_set_mem_owner, nullptr);
     rs->allocateStorage();
     results.push_back(std::move(rs));
   }
 
   std::vector<std::pair<int64_t, int64_t>> ranges(
-      key_count, {0, (static_cast<int64_t>(std::exp((std::log(entry_count) / key_count))) - 1)});
+      key_count,
+      {0, (static_cast<int64_t>(std::exp((std::log(entry_count) / key_count))) - 1)});
 
   for (size_t v = 0; v < val_count; ++v) {
     ranges.push_back(get_default_range(agg_ops[v]));
@@ -1490,18 +1603,36 @@ TEST(Reduction, PerfectHash) {
     }
     int8_t* dev_input_buffer = nullptr;
     cudaMalloc(&dev_input_buffer, input_size);
-    if (generate_columns_on_device(
-            dev_input_buffer, entry_count, col_count, col_widths, ranges, is_columnar, distributions)) {
+    if (generate_columns_on_device(dev_input_buffer,
+                                   entry_count,
+                                   col_count,
+                                   col_widths,
+                                   ranges,
+                                   is_columnar,
+                                   distributions)) {
       int8_t* dev_input_copy = nullptr;
       std::tie(dev_input_copy, actual_row_count) =
-          get_perfect_hashed_copy(dev_input_buffer, entry_count, col_widths, ranges, agg_ops, init_vals, is_columnar);
+          get_perfect_hashed_copy(dev_input_buffer,
+                                  entry_count,
+                                  col_widths,
+                                  ranges,
+                                  agg_ops,
+                                  init_vals,
+                                  is_columnar);
       cudaFree(dev_input_buffer);
       cudaMemcpy(input_buffer, dev_input_copy, input_size, cudaMemcpyDeviceToHost);
     } else
 #endif
     {
-      generate_columns_on_host(input_buffer, entry_count, col_count, col_widths, ranges, is_columnar, distributions);
-      actual_row_count = Deduplicater<false>(input_buffer, row_size, entry_count, key_count).run();
+      generate_columns_on_host(input_buffer,
+                               entry_count,
+                               col_count,
+                               col_widths,
+                               ranges,
+                               is_columnar,
+                               distributions);
+      actual_row_count =
+          Deduplicater<false>(input_buffer, row_size, entry_count, key_count).run();
     }
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
     if (dev_input_buffer) {
@@ -1514,8 +1645,10 @@ TEST(Reduction, PerfectHash) {
   if (has_multi_gpus) {
     std::vector<std::future<size_t>> gener_threads;
     for (size_t i = 0; i < results.size(); ++i) {
-      gener_threads.push_back(
-          std::async(std::launch::async, gen_func, results[i]->getStorage()->getUnderlyingBuffer(), i));
+      gener_threads.push_back(std::async(std::launch::async,
+                                         gen_func,
+                                         results[i]->getStorage()->getUnderlyingBuffer(),
+                                         i));
     }
 
     for (size_t i = 0; i < gener_threads.size(); ++i) {
@@ -1528,13 +1661,17 @@ TEST(Reduction, PerfectHash) {
   }
 
   for (size_t i = 0; i < rs_row_counts.size(); ++i) {
-    std::cout << "ResultSet " << i << " has " << rs_row_counts[i] << " rows and " << entry_count - rs_row_counts[i]
-              << " empty buckets\n";
+    std::cout << "ResultSet " << i << " has " << rs_row_counts[i] << " rows and "
+              << entry_count - rs_row_counts[i] << " empty buckets\n";
   }
   AggregateEmulator<int64_t, int64_t> emulator(agg_ops);
   std::vector<decltype(emulator)::ResultType> ref_results;
   for (auto& rs : results) {
-    auto ref_rs = emulator.run(rs->getStorage()->getUnderlyingBuffer(), key_count, val_count, entry_count, is_columnar);
+    auto ref_rs = emulator.run(rs->getStorage()->getUnderlyingBuffer(),
+                               key_count,
+                               val_count,
+                               entry_count,
+                               is_columnar);
     ref_results.push_back(std::move(ref_rs));
   }
   auto ref_reduced_result = emulator.reduce(ref_results);
@@ -1546,7 +1683,9 @@ TEST(Reduction, PerfectHash) {
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
   CHECK_GT(results.size(), 0);
   std::vector<int64_t> gpu_reduced_result(input_size / sizeof(int64_t), 0);
-  memcpy(&gpu_reduced_result[0], results[0]->getStorage()->getUnderlyingBuffer(), input_size);
+  memcpy(&gpu_reduced_result[0],
+         results[0]->getStorage()->getUnderlyingBuffer(),
+         input_size);
 #endif
   ResultSet* reduced_result = nullptr;
   std::cout << "CPU reduction: ";
@@ -1555,8 +1694,8 @@ TEST(Reduction, PerfectHash) {
     reduced_result = rs_manager.reduce(storage_set);
   });
   CHECK(reduced_result != nullptr);
-  std::cout << "Current reduction took " << elapsedTime << " ms and got reduced " << reduced_result->rowCount()
-            << " rows\n";
+  std::cout << "Current reduction took " << elapsedTime << " ms and got reduced "
+            << reduced_result->rowCount() << " rows\n";
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
   std::vector<int8_t*> host_reduced_buffers(result_count, nullptr);
   host_reduced_buffers[0] = reinterpret_cast<int8_t*>(&gpu_reduced_result[0]);
@@ -1572,18 +1711,21 @@ TEST(Reduction, PerfectHash) {
   elapsedTime = measure<>::execution([&]() {
     std::vector<std::future<void>> uploader_threads;
     for (size_t device_id = 0; device_id < result_count; ++device_id) {
-      uploader_threads.push_back(
-          std::async(std::launch::async,
-                     [&](const size_t dev_id) {
-                       if (has_multi_gpus) {
-                         cudaSetDevice(dev_id);
-                       }
-                       int8_t* dev_reduced_buffer = nullptr;
-                       cudaMalloc(&dev_reduced_buffer, input_size);
-                       cudaMemcpy(dev_reduced_buffer, host_reduced_buffers[dev_id], input_size, cudaMemcpyHostToDevice);
-                       dev_reduced_buffers[dev_id] = dev_reduced_buffer;
-                     },
-                     device_id));
+      uploader_threads.push_back(std::async(std::launch::async,
+                                            [&](const size_t dev_id) {
+                                              if (has_multi_gpus) {
+                                                cudaSetDevice(dev_id);
+                                              }
+                                              int8_t* dev_reduced_buffer = nullptr;
+                                              cudaMalloc(&dev_reduced_buffer, input_size);
+                                              cudaMemcpy(dev_reduced_buffer,
+                                                         host_reduced_buffers[dev_id],
+                                                         input_size,
+                                                         cudaMemcpyHostToDevice);
+                                              dev_reduced_buffers[dev_id] =
+                                                  dev_reduced_buffer;
+                                            },
+                                            device_id));
     }
     for (auto& child : uploader_threads) {
       child.get();
@@ -1595,14 +1737,21 @@ TEST(Reduction, PerfectHash) {
     // Redistribute across devices
     if (has_multi_gpus) {
       std::vector<std::future<void>> redis_threads;
-      for (size_t device_id = 0, start_entry = 0; device_id < result_count; ++device_id, start_entry += stride) {
+      for (size_t device_id = 0, start_entry = 0; device_id < result_count;
+           ++device_id, start_entry += stride) {
         const auto end_entry = std::min(start_entry + stride, entry_count);
         redis_threads.push_back(std::async(
             std::launch::async,
             [&](const size_t dev_id, const size_t start, const size_t end) {
               cudaSetDevice(dev_id);
-              dev_seg_copies[dev_id] = fetch_segs_from_others(
-                  dev_reduced_buffers, entry_count, dev_id, result_count, col_widths, is_columnar, start, end);
+              dev_seg_copies[dev_id] = fetch_segs_from_others(dev_reduced_buffers,
+                                                              entry_count,
+                                                              dev_id,
+                                                              result_count,
+                                                              col_widths,
+                                                              is_columnar,
+                                                              start,
+                                                              end);
             },
             device_id,
             start_entry,
@@ -1617,26 +1766,28 @@ TEST(Reduction, PerfectHash) {
     }
     // Reduce
     std::vector<std::future<void>> reducer_threads;
-    for (size_t device_id = 0, start_entry = 0; device_id < seg_count; ++device_id, start_entry += stride) {
+    for (size_t device_id = 0, start_entry = 0; device_id < seg_count;
+         ++device_id, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, entry_count);
-      reducer_threads.push_back(std::async(std::launch::async,
-                                           [&](const size_t dev_id, const size_t start, const size_t end) {
-                                             if (has_multi_gpus) {
-                                               cudaSetDevice(dev_id);
-                                             }
-                                             reduce_segment_on_device(dev_reduced_buffers[dev_id],
-                                                                      dev_seg_copies[dev_id],
-                                                                      entry_count,
-                                                                      seg_count,
-                                                                      col_widths,
-                                                                      agg_ops,
-                                                                      is_columnar,
-                                                                      start,
-                                                                      end);
-                                           },
-                                           device_id,
-                                           start_entry,
-                                           end_entry));
+      reducer_threads.push_back(
+          std::async(std::launch::async,
+                     [&](const size_t dev_id, const size_t start, const size_t end) {
+                       if (has_multi_gpus) {
+                         cudaSetDevice(dev_id);
+                       }
+                       reduce_segment_on_device(dev_reduced_buffers[dev_id],
+                                                dev_seg_copies[dev_id],
+                                                entry_count,
+                                                seg_count,
+                                                col_widths,
+                                                agg_ops,
+                                                is_columnar,
+                                                start,
+                                                end);
+                     },
+                     device_id,
+                     start_entry,
+                     end_entry));
     }
     for (auto& child : reducer_threads) {
       child.get();
@@ -1644,7 +1795,8 @@ TEST(Reduction, PerfectHash) {
   });
   std::cout << elapsedTime << " ms to reduce.\n";
   {
-    for (size_t device_id = 0, start = 0; device_id < seg_count; ++device_id, start += stride) {
+    for (size_t device_id = 0, start = 0; device_id < seg_count;
+         ++device_id, start += stride) {
       const auto end = std::min(start + stride, entry_count);
       if (has_multi_gpus) {
         cudaSetDevice(device_id);
@@ -1652,7 +1804,8 @@ TEST(Reduction, PerfectHash) {
         dev_seg_copies[device_id] = nullptr;
       }
       if (is_columnar) {
-        for (size_t c = 0, col_base = start; c < col_count; ++c, col_base += entry_count) {
+        for (size_t c = 0, col_base = start; c < col_count;
+             ++c, col_base += entry_count) {
           cudaMemcpy(&gpu_reduced_result[col_base],
                      dev_reduced_buffers[device_id] + col_base * sizeof(int64_t),
                      (end - start) * sizeof(int64_t),
