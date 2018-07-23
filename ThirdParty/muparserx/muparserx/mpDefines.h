@@ -69,7 +69,7 @@
 /** \brief Floating point type used by the parser. */
 #define MUP_FLOAT_TYPE double
 
-#define MUP_INT_TYPE int
+#define MUP_INT_TYPE int64_t
 
 /** \brief Verifies whether a given condition is met.
 	
