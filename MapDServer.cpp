@@ -347,7 +347,7 @@ int main(int argc, char** argv) {
                          po::value<bool>(&g_enable_debug_timer)
                              ->default_value(g_enable_debug_timer)
                              ->implicit_value(true),
-                         "Enable dynamic watchdog");
+                         "Enable debug timer logging");
   desc_adv.add_options()("trivial-loop-join-threshold",
                          po::value<unsigned>(&g_trivial_loop_join_threshold)
                              ->default_value(g_trivial_loop_join_threshold)
