@@ -991,6 +991,24 @@ TEST(Select, FilterAndGroupBy) {
   }
 }
 
+TEST(Select, FilterCastToDecimal) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    ASSERT_EQ(static_cast<int64_t>(5),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x > 7.1;", dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(10),
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE y > 42.5;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(10),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE ufd > -2147483648.0;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(15),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE ofd > -2147483648;", dt)));
+  }
+}
+
 TEST(Select, FilterAndGroupByMultipleAgg) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

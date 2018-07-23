@@ -307,7 +307,7 @@ llvm::Value* Executor::codegenCmpDecimalConst(const SQLOps optype,
   Datum d;
   d.bigintval = truncated_decimal;
   const auto new_rhs_lit =
-      makeExpr<Analyzer::Constant>(new_ti, operand_ti.get_notnull(), d);
+      makeExpr<Analyzer::Constant>(new_ti, rhs_constant->get_is_null(), d);
   const auto operand_lv = codegen(operand, true, co).front();
   const auto lhs_lv = codegenCast(operand_lv, operand_ti, new_ti, false, co);
   return codegenCmp(optype, qualifier, {lhs_lv}, new_ti, new_rhs_lit.get(), co);
