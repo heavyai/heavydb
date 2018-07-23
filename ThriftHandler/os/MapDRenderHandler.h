@@ -76,6 +76,9 @@ class MapDRenderHandler {
     CHECK(false);
   }
 
+  void clear_gpu_memory() { CHECK(false); }
+  void clear_cpu_memory() { CHECK(false); }
+
   ::QueryRenderer::QueryRenderManager* get_render_manager() {
     CHECK(false);
     return nullptr;

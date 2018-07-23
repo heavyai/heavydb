@@ -1623,12 +1623,18 @@ void MapDHandler::get_version(std::string& version) {
 void MapDHandler::clear_gpu_memory(const TSessionId& session) {
   const auto session_info = get_session(session);
   SysCatalog::instance().get_dataMgr().clearMemory(MemoryLevel::GPU_LEVEL);
+  if (render_handler_) {
+    render_handler_->clear_gpu_memory();
+  }
 }
 
 // TODO This need to be corrected for distributed they are only hitting aggr
 void MapDHandler::clear_cpu_memory(const TSessionId& session) {
   const auto session_info = get_session(session);
   SysCatalog::instance().get_dataMgr().clearMemory(MemoryLevel::CPU_LEVEL);
+  if (render_handler_) {
+    render_handler_->clear_cpu_memory();
+  }
 }
 
 TSessionId MapDHandler::getInvalidSessionId() const {
