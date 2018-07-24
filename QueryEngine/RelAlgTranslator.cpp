@@ -491,7 +491,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(
   if (row_set->entryCount() > 10000) {
     std::shared_ptr<Analyzer::Expr> expr;
     if ((ti.is_integer() || (ti.is_string() && ti.get_compression() == kENCODING_DICT)) &&
-        !row_set->getQueryMemDesc().output_columnar) {
+        !row_set->getQueryMemDesc().didOutputColumnar()) {
       expr = getInIntegerSetExpr(lhs, *row_set);
       // Handle the highly unlikely case when the InIntegerSet ended up being tiny.
       // Just let it fall through the usual InValues path at the end of this method,

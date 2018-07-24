@@ -113,10 +113,12 @@ RowSetPtr SpeculativeTopNMap::asRows(const RelAlgExecutionUnit& ra_exe_unit,
   }
   CHECK_EQ(size_t(2), ra_exe_unit.target_exprs.size());
   auto query_mem_desc_rs = query_mem_desc;
-  query_mem_desc_rs.hash_type = GroupByColRangeType::MultiCol;
-  query_mem_desc_rs.output_columnar = false;
-  query_mem_desc_rs.entry_count = num_rows;
-  query_mem_desc_rs.agg_col_widths = {{8, 8}, {8, 8}};
+  query_mem_desc_rs.setGroupByColRangeType(GroupByColRangeType::MultiCol);
+  query_mem_desc_rs.setOutputColumnar(false);
+  query_mem_desc_rs.setEntryCount(num_rows);
+  query_mem_desc_rs.clearAggColWidths();
+  query_mem_desc_rs.addAggColWidth({8, 8});
+  query_mem_desc_rs.addAggColWidth({8, 8});
   auto rs = std::make_shared<ResultSet>(
       target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc_rs),
       ExecutorDeviceType::CPU,

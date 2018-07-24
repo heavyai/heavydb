@@ -27,11 +27,11 @@ inline std::vector<int64_t> init_agg_val_vec(
     const std::vector<TargetInfo>& targets,
     const QueryMemoryDescriptor& query_mem_desc) {
   std::vector<int64_t> agg_init_vals;
-  agg_init_vals.reserve(query_mem_desc.agg_col_widths.size());
-  const bool is_group_by{!query_mem_desc.group_col_widths.empty()};
+  agg_init_vals.reserve(query_mem_desc.getColCount());
+  const bool is_group_by{query_mem_desc.isGroupBy()};
   for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size();
        ++target_idx, ++agg_col_idx) {
-    CHECK_LT(agg_col_idx, query_mem_desc.agg_col_widths.size());
+    CHECK_LT(agg_col_idx, query_mem_desc.getColCount());
     const auto agg_info = targets[target_idx];
     if (!agg_info.is_agg || agg_info.agg_kind == kLAST_SAMPLE) {
       if (agg_info.agg_kind == kLAST_SAMPLE && agg_info.sql_type.is_string() &&
@@ -43,7 +43,7 @@ inline std::vector<int64_t> init_agg_val_vec(
                                 query_mem_desc.getCompactByteWidth()));
         continue;
       }
-      if (query_mem_desc.agg_col_widths[agg_col_idx].compact > 0) {
+      if (query_mem_desc.getColumnWidth(agg_col_idx).compact > 0) {
         agg_init_vals.push_back(0);
       }
       if (agg_info.sql_type.is_array() ||
@@ -60,7 +60,7 @@ inline std::vector<int64_t> init_agg_val_vec(
       }
       continue;
     }
-    CHECK_GT(query_mem_desc.agg_col_widths[agg_col_idx].compact, 0);
+    CHECK_GT(query_mem_desc.getColumnWidth(agg_col_idx).compact, 0);
     const bool float_argument_input = takes_float_argument(agg_info);
     const auto chosen_bytes = query_mem_desc.getCompactByteWidth();
     auto init_ti = get_compact_type(agg_info);
@@ -264,7 +264,7 @@ std::vector<int64_t> init_agg_val_vec(
     const QueryMemoryDescriptor& query_mem_desc) {
   std::vector<TargetInfo> target_infos;
   target_infos.reserve(targets.size());
-  const auto agg_col_count = query_mem_desc.agg_col_widths.size();
+  const auto agg_col_count = query_mem_desc.getColCount();
   for (size_t target_idx = 0, agg_col_idx = 0;
        target_idx < targets.size() && agg_col_idx < agg_col_count;
        ++target_idx, ++agg_col_idx) {
@@ -272,7 +272,8 @@ std::vector<int64_t> init_agg_val_vec(
     auto target = target_info(target_expr);
     auto arg_expr = agg_arg(target_expr);
     if (arg_expr) {
-      if (query_mem_desc.hash_type == GroupByColRangeType::Scan && target.is_agg &&
+      if (query_mem_desc.getGroupByColRangeType() == GroupByColRangeType::Scan &&
+          target.is_agg &&
           (target.agg_kind == kMIN ||
            target.agg_kind == kMAX)) {  // TODO(alex): fix SUM and AVG as well
         set_notnull(target, false);

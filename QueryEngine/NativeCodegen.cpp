@@ -1104,7 +1104,7 @@ Executor::CompilationResult Executor::compileWorkUnit(
       eo.output_columnar_hint && co.device_type_ == ExecutorDeviceType::GPU);
   const auto& query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
 
-  if (query_mem_desc.hash_type == GroupByColRangeType::MultiCol &&
+  if (query_mem_desc.getGroupByColRangeType() == GroupByColRangeType::MultiCol &&
       !query_mem_desc.getSmallBufferSizeBytes() && !has_cardinality_estimation &&
       (!render_info || !render_info->isPotentialInSituRender()) && !eo.just_explain) {
     throw CardinalityEstimationRequired();
@@ -1113,8 +1113,11 @@ Executor::CompilationResult Executor::compileWorkUnit(
   const bool output_columnar = group_by_and_aggregate.outputColumnar();
 
   if (co.device_type_ == ExecutorDeviceType::GPU) {
-    for (const auto& count_distinct_descriptor :
-         query_mem_desc.count_distinct_descriptors_) {
+    const size_t num_count_distinct_descs =
+        query_mem_desc.getCountDistinctDescriptorsSize();
+    for (size_t i = 0; i < num_count_distinct_descs; i++) {
+      const auto& count_distinct_descriptor =
+          query_mem_desc.getCountDistinctDescriptor(i);
       if (count_distinct_descriptor.impl_type_ == CountDistinctImplType::StdSet ||
           (count_distinct_descriptor.impl_type_ != CountDistinctImplType::Invalid &&
            !co.hoist_literals_)) {
@@ -1124,7 +1127,8 @@ Executor::CompilationResult Executor::compileWorkUnit(
   }
 
   if (co.device_type_ == ExecutorDeviceType::GPU &&
-      query_mem_desc.hash_type == GroupByColRangeType::MultiColPerfectHash) {
+      query_mem_desc.getGroupByColRangeType() ==
+          GroupByColRangeType::MultiColPerfectHash) {
     const auto grid_size = query_mem_desc.blocksShareMemory() ? 1 : gridSize();
     const size_t required_memory{
         (grid_size * query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU))};
@@ -1145,7 +1149,7 @@ Executor::CompilationResult Executor::compileWorkUnit(
       get_agg_fnames(ra_exe_unit.target_exprs, !ra_exe_unit.groupby_exprs.empty());
   const auto agg_slot_count = ra_exe_unit.estimator ? size_t(1) : agg_fnames.size();
 
-  const bool is_group_by{!query_mem_desc.group_col_widths.empty()};
+  const bool is_group_by{query_mem_desc.isGroupBy()};
   auto query_func = is_group_by ? query_group_by_template(cgen_state_->module_,
                                                           is_nested_,
                                                           co.hoist_literals_,

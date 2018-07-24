@@ -480,9 +480,9 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      columnarized_table_cache_,
                                      render_info_);
     }
-    for (auto wids : compilation_result_cpu_.query_mem_desc.agg_col_widths) {
-      actual_min_byte_width = std::min(actual_min_byte_width, wids.compact);
-    }
+    actual_min_byte_width =
+        compilation_result_cpu_.query_mem_desc.updateActualMinByteWidth(
+            actual_min_byte_width);
   };
 
   if (co_.device_type_ == ExecutorDeviceType::CPU ||
@@ -535,10 +535,9 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      columnarized_table_cache_,
                                      render_info_);
     }
-
-    for (auto wids : compilation_result_gpu_.query_mem_desc.agg_col_widths) {
-      actual_min_byte_width = std::min(actual_min_byte_width, wids.compact);
-    }
+    actual_min_byte_width =
+        compilation_result_gpu_.query_mem_desc.updateActualMinByteWidth(
+            actual_min_byte_width);
   }
 
   return std::max(actual_min_byte_width, crt_min_byte_width);

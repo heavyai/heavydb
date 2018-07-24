@@ -74,4 +74,9 @@ inline bool operator==(const CountDistinctDescriptor& lhs,
          lhs.device_type == rhs.device_type;
 }
 
+inline bool operator!=(const CountDistinctDescriptor& lhs,
+                       const CountDistinctDescriptor& rhs) {
+  return !(lhs == rhs);
+}
+
 #endif  // QUERYENGINE_COUNTDISTINCTDESCRIPTOR_H

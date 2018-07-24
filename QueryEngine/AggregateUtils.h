@@ -65,15 +65,17 @@ inline int64_t float_to_double_bin(int32_t val, bool nullable = false) {
   return *reinterpret_cast<const int64_t*>(may_alias_ptr(&res));
 }
 
-inline std::vector<int64_t> compact_init_vals(const size_t cmpt_size,
-                                              const std::vector<int64_t>& init_vec,
-                                              const std::vector<ColWidths>& col_widths) {
+inline std::vector<int64_t> compact_init_vals(
+    const size_t cmpt_size,
+    const std::vector<int64_t>& init_vec,
+    const QueryMemoryDescriptor& query_mem_desc) {
   std::vector<int64_t> cmpt_res(cmpt_size, 0);
   int8_t* buffer_ptr = reinterpret_cast<int8_t*>(&cmpt_res[0]);
-  for (size_t col_idx = 0, init_vec_idx = 0, col_count = col_widths.size();
+  for (size_t col_idx = 0, init_vec_idx = 0, col_count = query_mem_desc.getColCount();
        col_idx < col_count;
        ++col_idx) {
-    const auto chosen_bytes = static_cast<unsigned>(col_widths[col_idx].compact);
+    const auto chosen_bytes =
+        static_cast<unsigned>(query_mem_desc.getColumnWidth(col_idx).compact);
     if (chosen_bytes == 0) {
       continue;
     }

@@ -67,9 +67,9 @@ void fill_slots(int64_t* dst_entry,
                 const size_t src_entry_idx,
                 const size_t src_entry_count,
                 const QueryMemoryDescriptor& query_mem_desc) {
-  const auto slot_count = get_buffer_col_slot_count(query_mem_desc);
-  const auto key_count = get_groupby_col_count(query_mem_desc);
-  if (query_mem_desc.output_columnar) {
+  const auto slot_count = query_mem_desc.getBufferColSlotCount();
+  const auto key_count = query_mem_desc.getGroupbyColCount();
+  if (query_mem_desc.didOutputColumnar()) {
     for (size_t i = 0, dst_slot_off = 0; i < slot_count;
          ++i, dst_slot_off += dst_entry_count) {
       dst_entry[dst_slot_off] =
@@ -118,40 +118,43 @@ void fill_empty_key(void* key_ptr, const size_t key_count, const size_t key_widt
 // Driver method for various buffer layouts, actual work is done by reduceOne* methods.
 // Reduces the entries of `that` into the buffer of this ResultSetStorage object.
 void ResultSetStorage::reduce(const ResultSetStorage& that) const {
-  auto entry_count = query_mem_desc_.entry_count;
+  auto entry_count = query_mem_desc_.getEntryCount();
   CHECK_GT(entry_count, size_t(0));
-  if (query_mem_desc_.output_columnar) {
-    CHECK(query_mem_desc_.hash_type == GroupByColRangeType::OneColKnownRange ||
-          query_mem_desc_.hash_type == GroupByColRangeType::MultiColPerfectHash ||
-          query_mem_desc_.hash_type == GroupByColRangeType::MultiCol);
+  if (query_mem_desc_.didOutputColumnar()) {
+    CHECK(query_mem_desc_.getGroupByColRangeType() ==
+              GroupByColRangeType::OneColKnownRange ||
+          query_mem_desc_.getGroupByColRangeType() ==
+              GroupByColRangeType::MultiColPerfectHash ||
+          query_mem_desc_.getGroupByColRangeType() == GroupByColRangeType::MultiCol);
   }
-  switch (query_mem_desc_.hash_type) {
+  switch (query_mem_desc_.getGroupByColRangeType()) {
     case GroupByColRangeType::MultiCol:
-      CHECK_EQ(size_t(0), query_mem_desc_.entry_count_small);
-      CHECK_GE(entry_count, that.query_mem_desc_.entry_count);
+      CHECK_EQ(size_t(0), query_mem_desc_.getEntryCountSmall());
+      CHECK_GE(entry_count, that.query_mem_desc_.getEntryCount());
       break;
     case GroupByColRangeType::OneColGuessedRange:
-      CHECK_NE(size_t(0), query_mem_desc_.entry_count_small);
-      CHECK_EQ(query_mem_desc_.entry_count_small, that.query_mem_desc_.entry_count_small);
-      CHECK_GE(entry_count, that.query_mem_desc_.entry_count);
+      CHECK_NE(size_t(0), query_mem_desc_.getEntryCountSmall());
+      CHECK_EQ(query_mem_desc_.getEntryCountSmall(),
+               that.query_mem_desc_.getEntryCountSmall());
+      CHECK_GE(entry_count, that.query_mem_desc_.getEntryCount());
       break;
     default:
-      CHECK_EQ(entry_count, that.query_mem_desc_.entry_count);
+      CHECK_EQ(entry_count, that.query_mem_desc_.getEntryCount());
   }
   auto this_buff = buff_;
   CHECK(this_buff);
   auto that_buff = that.buff_;
   CHECK(that_buff);
-  if (query_mem_desc_.hash_type == GroupByColRangeType::MultiCol) {
-    if (use_multithreaded_reduction(that.query_mem_desc_.entry_count)) {
+  if (query_mem_desc_.getGroupByColRangeType() == GroupByColRangeType::MultiCol) {
+    if (use_multithreaded_reduction(that.query_mem_desc_.getEntryCount())) {
       const size_t thread_count = cpu_threads();
       std::vector<std::future<void>> reduction_threads;
       for (size_t thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
         const auto thread_entry_count =
-            (that.query_mem_desc_.entry_count + thread_count - 1) / thread_count;
+            (that.query_mem_desc_.getEntryCount() + thread_count - 1) / thread_count;
         const auto start_index = thread_idx * thread_entry_count;
-        const auto end_index =
-            std::min(start_index + thread_entry_count, that.query_mem_desc_.entry_count);
+        const auto end_index = std::min(start_index + thread_entry_count,
+                                        that.query_mem_desc_.getEntryCount());
         reduction_threads.emplace_back(std::async(
             std::launch::async,
             [this, this_buff, that_buff, start_index, end_index, &that] {
@@ -159,7 +162,7 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
                 reduceOneEntryBaseline(this_buff,
                                        that_buff,
                                        entry_idx,
-                                       that.query_mem_desc_.entry_count,
+                                       that.query_mem_desc_.getEntryCount(),
                                        that);
               }
             }));
@@ -171,24 +174,25 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
         reduction_thread.get();
       }
     } else {
-      for (size_t i = 0; i < that.query_mem_desc_.entry_count; ++i) {
+      for (size_t i = 0; i < that.query_mem_desc_.getEntryCount(); ++i) {
         reduceOneEntryBaseline(
-            this_buff, that_buff, i, that.query_mem_desc_.entry_count, that);
+            this_buff, that_buff, i, that.query_mem_desc_.getEntryCount(), that);
       }
     }
     return;
   }
-  if (query_mem_desc_.hash_type == GroupByColRangeType::OneColGuessedRange) {
-    CHECK(!query_mem_desc_.output_columnar);
-    for (size_t i = 0; i < that.query_mem_desc_.entry_count; ++i) {
+  if (query_mem_desc_.getGroupByColRangeType() ==
+      GroupByColRangeType::OneColGuessedRange) {
+    CHECK(!query_mem_desc_.didOutputColumnar());
+    for (size_t i = 0; i < that.query_mem_desc_.getEntryCount(); ++i) {
       reduceOneEntryBaseline(
-          this_buff, that_buff, i, that.query_mem_desc_.entry_count, that);
+          this_buff, that_buff, i, that.query_mem_desc_.getEntryCount(), that);
     }
-    entry_count = query_mem_desc_.entry_count_small;
+    entry_count = query_mem_desc_.getEntryCountSmall();
     const auto row_bytes = get_row_bytes(query_mem_desc_);
     CHECK_EQ(get_row_bytes(that.query_mem_desc_), row_bytes);
-    this_buff += query_mem_desc_.entry_count * row_bytes;
-    that_buff += that.query_mem_desc_.entry_count * row_bytes;
+    this_buff += query_mem_desc_.getEntryCount() * row_bytes;
+    that_buff += that.query_mem_desc_.getEntryCount() * row_bytes;
   }
   if (use_multithreaded_reduction(entry_count)) {
     const size_t thread_count = cpu_threads();
@@ -197,7 +201,7 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
       const auto thread_entry_count = (entry_count + thread_count - 1) / thread_count;
       const auto start_index = thread_idx * thread_entry_count;
       const auto end_index = std::min(start_index + thread_entry_count, entry_count);
-      if (query_mem_desc_.output_columnar) {
+      if (query_mem_desc_.didOutputColumnar()) {
         reduction_threads.emplace_back(
             std::async(std::launch::async,
                        [this, this_buff, that_buff, start_index, end_index, &that] {
@@ -221,9 +225,9 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
       reduction_thread.get();
     }
   } else {
-    if (query_mem_desc_.output_columnar) {
+    if (query_mem_desc_.didOutputColumnar()) {
       reduceEntriesNoCollisionsColWise(
-          this_buff, that_buff, that, 0, query_mem_desc_.entry_count);
+          this_buff, that_buff, that, 0, query_mem_desc_.getEntryCount());
     } else {
       for (size_t i = 0; i < entry_count; ++i) {
         reduceOneEntryNoCollisionsRowWise(i, this_buff, that_buff, that);
@@ -254,7 +258,7 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(int8_t* this_buff,
   auto this_crt_col_ptr = get_cols_ptr(this_buff, query_mem_desc_);
   auto that_crt_col_ptr = get_cols_ptr(that_buff, query_mem_desc_);
   size_t agg_col_idx = 0;
-  const auto buffer_col_count = get_buffer_col_slot_count(query_mem_desc_);
+  const auto buffer_col_count = query_mem_desc_.getBufferColSlotCount();
   for (size_t target_idx = 0; target_idx < targets_.size(); ++target_idx) {
     CHECK_LT(agg_col_idx, buffer_col_count);
     const auto& agg_info = targets_[target_idx];
@@ -264,7 +268,7 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(int8_t* this_buff,
         that_crt_col_ptr, query_mem_desc_, agg_col_idx);
     for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
       check_watchdog(entry_idx);
-      if (__builtin_expect(query_mem_desc_.keyless_hash, 0)) {
+      if (__builtin_expect(query_mem_desc_.hasKeylessHash(), 0)) {
         if (isEmptyEntry(entry_idx, that_buff)) {
           continue;
         }
@@ -278,18 +282,18 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(int8_t* this_buff,
         copyKeyColWise(entry_idx, this_buff, that_buff);
       }
       auto this_ptr1 = this_crt_col_ptr +
-                       entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx].compact;
+                       entry_idx * query_mem_desc_.getColumnWidth(agg_col_idx).compact;
       auto that_ptr1 = that_crt_col_ptr +
-                       entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx].compact;
+                       entry_idx * query_mem_desc_.getColumnWidth(agg_col_idx).compact;
       int8_t* this_ptr2{nullptr};
       const int8_t* that_ptr2{nullptr};
       if (agg_info.is_agg &&
           (agg_info.agg_kind == kAVG ||
            (agg_info.agg_kind == kLAST_SAMPLE && agg_info.sql_type.is_varlen()))) {
         this_ptr2 = this_next_col_ptr +
-                    entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
+                    entry_idx * query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact;
         that_ptr2 = that_next_col_ptr +
-                    entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
+                    entry_idx * query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact;
       }
       reduceOneSlot(this_ptr1,
                     this_ptr2,
@@ -316,14 +320,14 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(int8_t* this_buff,
 void ResultSetStorage::copyKeyColWise(const size_t entry_idx,
                                       int8_t* this_buff,
                                       const int8_t* that_buff) const {
-  const auto key_count = get_groupby_col_count(query_mem_desc_);
+  const auto key_count = query_mem_desc_.getGroupbyColCount();
   // TODO(alex): we might want to support keys smaller than 64 bits at some point
   auto lhs_key_buff = reinterpret_cast<int64_t*>(this_buff) + entry_idx;
   auto rhs_key_buff = reinterpret_cast<const int64_t*>(that_buff) + entry_idx;
   for (size_t key_comp_idx = 0; key_comp_idx < key_count; ++key_comp_idx) {
     *lhs_key_buff = *rhs_key_buff;
-    lhs_key_buff += query_mem_desc_.entry_count;
-    rhs_key_buff += query_mem_desc_.entry_count;
+    lhs_key_buff += query_mem_desc_.getEntryCount();
+    rhs_key_buff += query_mem_desc_.getEntryCount();
   }
 }
 
@@ -335,7 +339,7 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
     const int8_t* that_buff,
     const ResultSetStorage& that) const {
   check_watchdog(entry_idx);
-  CHECK(!query_mem_desc_.output_columnar);
+  CHECK(!query_mem_desc_.didOutputColumnar());
   if (isEmptyEntry(entry_idx, that_buff)) {
     return;
   }
@@ -361,9 +365,9 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
         (target_info.agg_kind == kAVG ||
          (target_info.agg_kind == kLAST_SAMPLE && target_info.sql_type.is_varlen()))) {
       this_ptr2 =
-          this_targets_ptr + query_mem_desc_.agg_col_widths[target_slot_idx].compact;
+          this_targets_ptr + query_mem_desc_.getColumnWidth(target_slot_idx).compact;
       that_ptr2 =
-          that_targets_ptr + query_mem_desc_.agg_col_widths[target_slot_idx].compact;
+          that_targets_ptr + query_mem_desc_.getColumnWidth(target_slot_idx).compact;
     }
     reduceOneSlot(this_targets_ptr,
                   this_ptr2,
@@ -379,11 +383,10 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
     that_targets_ptr = advance_target_ptr(
         that_targets_ptr, target_info, target_slot_idx, query_mem_desc_, false);
     target_slot_idx = advance_slot(target_slot_idx, target_info, false);
-    if (query_mem_desc_.target_groupby_indices.empty()) {
+    if (query_mem_desc_.targetGroupbyIndicesSize() == 0) {
       init_agg_val_idx = advance_slot(init_agg_val_idx, target_info, false);
     } else {
-      CHECK_LT(target_logical_idx, query_mem_desc_.target_groupby_indices.size());
-      if (query_mem_desc_.target_groupby_indices[target_logical_idx] < 0) {
+      if (query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) < 0) {
         init_agg_val_idx = advance_slot(init_agg_val_idx, target_info, false);
       }
     }
@@ -468,7 +471,7 @@ GroupValueInfo get_matching_group_value_reduction(
   const bool success = cas_cst(row_ptr, &empty_key, write_pending);
   if (success) {
     fill_slots(groups_buffer + off + slot_off_quad,
-               query_mem_desc.entry_count,
+               query_mem_desc.getEntryCount(),
                that_buff_i64,
                that_entry_idx,
                that_entry_count,
@@ -587,13 +590,14 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
                                               const size_t that_entry_count,
                                               const ResultSetStorage& that) const {
   check_watchdog(that_entry_idx);
-  const auto key_count = get_groupby_col_count(query_mem_desc_);
-  CHECK(GroupByColRangeType::MultiCol == query_mem_desc_.hash_type ||
-        GroupByColRangeType::OneColGuessedRange == query_mem_desc_.hash_type);
-  CHECK(!query_mem_desc_.keyless_hash);
+  const auto key_count = query_mem_desc_.getGroupbyColCount();
+  CHECK(GroupByColRangeType::MultiCol == query_mem_desc_.getGroupByColRangeType() ||
+        GroupByColRangeType::OneColGuessedRange ==
+            query_mem_desc_.getGroupByColRangeType());
+  CHECK(!query_mem_desc_.hasKeylessHash());
   const auto key_off =
-      query_mem_desc_.output_columnar
-          ? key_offset_colwise(that_entry_idx, 0, query_mem_desc_.output_columnar)
+      query_mem_desc_.didOutputColumnar()
+          ? key_offset_colwise(that_entry_idx, 0, query_mem_desc_.didOutputColumnar())
           : get_row_qw_count(query_mem_desc_) * that_entry_idx;
   if (isEmptyEntry(that_entry_idx, that_buff)) {
     return;
@@ -602,15 +606,15 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
   auto this_buff_i64 = reinterpret_cast<int64_t*>(this_buff);
   auto that_buff_i64 = reinterpret_cast<const int64_t*>(that_buff);
   bool empty_entry = false;
-  if (query_mem_desc_.output_columnar) {
+  if (query_mem_desc_.didOutputColumnar()) {
     const auto key = make_key(&that_buff_i64[key_off], that_entry_count, key_count);
     std::tie(this_entry_slots, empty_entry) = get_group_value_columnar_reduction(
-        this_buff_i64, query_mem_desc_.entry_count, &key[0], key_count);
+        this_buff_i64, query_mem_desc_.getEntryCount(), &key[0], key_count);
   } else {
     const uint32_t row_size_quad = get_row_qw_count(query_mem_desc_);
     std::tie(this_entry_slots, empty_entry) =
         get_group_value_reduction(this_buff_i64,
-                                  query_mem_desc_.entry_count,
+                                  query_mem_desc_.getEntryCount(),
                                   &that_buff_i64[key_off],
                                   key_count,
                                   query_mem_desc_.getEffectiveKeyWidth(),
@@ -622,9 +626,9 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
   }
   CHECK(this_entry_slots);
   if (empty_entry) {
-    if (query_mem_desc_.output_columnar) {
+    if (query_mem_desc_.didOutputColumnar()) {
       fill_slots(this_entry_slots,
-                 query_mem_desc_.entry_count,
+                 query_mem_desc_.getEntryCount(),
                  that_buff_i64,
                  that_entry_idx,
                  that_entry_count,
@@ -641,19 +645,19 @@ void ResultSetStorage::reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
                                                    const size_t that_entry_idx,
                                                    const size_t that_entry_count,
                                                    const ResultSetStorage& that) const {
-  const auto key_count = get_groupby_col_count(query_mem_desc_);
+  const auto key_count = query_mem_desc_.getGroupbyColCount();
   size_t j = 0;
   size_t init_agg_val_idx = 0;
   for (size_t target_logical_idx = 0; target_logical_idx < targets_.size();
        ++target_logical_idx) {
     const auto& target_info = targets_[target_logical_idx];
     const auto that_slot_off =
-        query_mem_desc_.output_columnar
+        query_mem_desc_.didOutputColumnar()
             ? slot_offset_colwise(that_entry_idx, j, key_count, that_entry_count)
             : get_row_qw_count(query_mem_desc_) * that_entry_idx +
                   get_slot_off_quad(query_mem_desc_) + init_agg_val_idx;
-    const auto this_slot_off = query_mem_desc_.output_columnar
-                                   ? j * query_mem_desc_.entry_count
+    const auto this_slot_off = query_mem_desc_.didOutputColumnar()
+                                   ? j * query_mem_desc_.getEntryCount()
                                    : init_agg_val_idx;
     reduceOneSlotBaseline(this_entry_slots,
                           this_slot_off,
@@ -665,11 +669,10 @@ void ResultSetStorage::reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
                           j,
                           init_agg_val_idx,
                           that);
-    if (query_mem_desc_.target_groupby_indices.empty()) {
+    if (query_mem_desc_.targetGroupbyIndicesSize() == 0) {
       init_agg_val_idx = advance_slot(init_agg_val_idx, target_info, false);
     } else {
-      CHECK_LT(target_logical_idx, query_mem_desc_.target_groupby_indices.size());
-      if (query_mem_desc_.target_groupby_indices[target_logical_idx] < 0) {
+      if (query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) < 0) {
         init_agg_val_idx = advance_slot(init_agg_val_idx, target_info, false);
       }
     }
@@ -693,8 +696,9 @@ void ResultSetStorage::reduceOneSlotBaseline(int64_t* this_buff,
       (target_info.agg_kind == kAVG ||
        (target_info.agg_kind == kLAST_SAMPLE && target_info.sql_type.is_varlen()))) {
     const auto this_count_off =
-        query_mem_desc_.output_columnar ? query_mem_desc_.entry_count : 1;
-    const auto that_count_off = query_mem_desc_.output_columnar ? that_entry_count : 1;
+        query_mem_desc_.didOutputColumnar() ? query_mem_desc_.getEntryCount() : 1;
+    const auto that_count_off =
+        query_mem_desc_.didOutputColumnar() ? that_entry_count : 1;
     this_ptr2 = reinterpret_cast<int8_t*>(&this_buff[this_slot + this_count_off]);
     that_ptr2 = reinterpret_cast<const int8_t*>(&that_buff[that_slot + that_count_off]);
   }
@@ -715,26 +719,26 @@ void ResultSetStorage::reduceOneSlotBaseline(int64_t* this_buff,
 template <class KeyType>
 void ResultSetStorage::moveEntriesToBuffer(int8_t* new_buff,
                                            const size_t new_entry_count) const {
-  CHECK(!query_mem_desc_.keyless_hash);
-  CHECK_GT(new_entry_count, query_mem_desc_.entry_count);
+  CHECK(!query_mem_desc_.hasKeylessHash());
+  CHECK_GT(new_entry_count, query_mem_desc_.getEntryCount());
   auto new_buff_i64 = reinterpret_cast<int64_t*>(new_buff);
-  const auto key_count = get_groupby_col_count(query_mem_desc_);
-  CHECK(GroupByColRangeType::MultiCol == query_mem_desc_.hash_type);
+  const auto key_count = query_mem_desc_.getGroupbyColCount();
+  CHECK(GroupByColRangeType::MultiCol == query_mem_desc_.getGroupByColRangeType());
   const auto this_buff = reinterpret_cast<const int64_t*>(buff_);
   const auto row_qw_count = get_row_qw_count(query_mem_desc_);
   const auto key_byte_width = query_mem_desc_.getEffectiveKeyWidth();
-  for (size_t i = 0; i < query_mem_desc_.entry_count; ++i) {
-    const auto key_off = query_mem_desc_.output_columnar
-                             ? key_offset_colwise(i, 0, query_mem_desc_.entry_count)
+  for (size_t i = 0; i < query_mem_desc_.getEntryCount(); ++i) {
+    const auto key_off = query_mem_desc_.didOutputColumnar()
+                             ? key_offset_colwise(i, 0, query_mem_desc_.getEntryCount())
                              : row_qw_count * i;
     const auto key_ptr = reinterpret_cast<const KeyType*>(&this_buff[key_off]);
     if (*key_ptr == get_empty_key<KeyType>()) {
       continue;
     }
     int64_t* new_entries_ptr{nullptr};
-    if (query_mem_desc_.output_columnar) {
+    if (query_mem_desc_.didOutputColumnar()) {
       const auto key =
-          make_key(&this_buff[key_off], query_mem_desc_.entry_count, key_count);
+          make_key(&this_buff[key_off], query_mem_desc_.getEntryCount(), key_count);
       new_entries_ptr =
           get_group_value_columnar(new_buff_i64, new_entry_count, &key[0], key_count);
     } else {
@@ -751,13 +755,13 @@ void ResultSetStorage::moveEntriesToBuffer(int8_t* new_buff,
                new_entry_count,
                this_buff,
                i,
-               query_mem_desc_.entry_count,
+               query_mem_desc_.getEntryCount(),
                query_mem_desc_);
   }
 }
 
 void ResultSet::initializeStorage() const {
-  if (query_mem_desc_.output_columnar) {
+  if (query_mem_desc_.didOutputColumnar()) {
     storage_->initializeColWise();
   } else {
     storage_->initializeRowWise();
@@ -781,17 +785,18 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
   for (const auto result_set : result_sets) {
     CHECK_EQ(executor, result_set->executor_);
   }
-  if (first_result.query_mem_desc_.hash_type == GroupByColRangeType::MultiCol) {
+  if (first_result.query_mem_desc_.getGroupByColRangeType() ==
+      GroupByColRangeType::MultiCol) {
     const auto total_entry_count =
         std::accumulate(result_sets.begin(),
                         result_sets.end(),
                         size_t(0),
                         [](const size_t init, const ResultSet* rs) {
-                          return init + rs->query_mem_desc_.entry_count;
+                          return init + rs->query_mem_desc_.getEntryCount();
                         });
     CHECK(total_entry_count);
     auto query_mem_desc = first_result.query_mem_desc_;
-    query_mem_desc.entry_count = total_entry_count;
+    query_mem_desc.setEntryCount(total_entry_count);
     rs_.reset(new ResultSet(first_result.targets_,
                             ExecutorDeviceType::CPU,
                             query_mem_desc,
@@ -802,11 +807,11 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
     switch (query_mem_desc.getEffectiveKeyWidth()) {
       case 4:
         first_result.moveEntriesToBuffer<int32_t>(result_storage->getUnderlyingBuffer(),
-                                                  query_mem_desc.entry_count);
+                                                  query_mem_desc.getEntryCount());
         break;
       case 8:
         first_result.moveEntriesToBuffer<int64_t>(result_storage->getUnderlyingBuffer(),
-                                                  query_mem_desc.entry_count);
+                                                  query_mem_desc.getEntryCount());
         break;
       default:
         CHECK(false);
@@ -826,12 +831,12 @@ std::shared_ptr<ResultSet> ResultSetManager::getOwnResultSet() {
 }
 
 void ResultSetStorage::fillOneEntryRowWise(const std::vector<int64_t>& entry) {
-  const auto slot_count = get_buffer_col_slot_count(query_mem_desc_);
-  const auto key_count = get_groupby_col_count(query_mem_desc_);
+  const auto slot_count = query_mem_desc_.getBufferColSlotCount();
+  const auto key_count = query_mem_desc_.getGroupbyColCount();
   CHECK_EQ(slot_count + key_count, entry.size());
   auto this_buff = reinterpret_cast<int64_t*>(buff_);
-  CHECK(!query_mem_desc_.output_columnar);
-  CHECK_EQ(size_t(1), query_mem_desc_.entry_count);
+  CHECK(!query_mem_desc_.didOutputColumnar());
+  CHECK_EQ(size_t(1), query_mem_desc_.getEntryCount());
   const auto key_off = key_offset_rowwise(0, key_count, slot_count);
   CHECK_EQ(query_mem_desc_.getEffectiveKeyWidth(), sizeof(int64_t));
   for (size_t i = 0; i < key_count; ++i) {
@@ -844,15 +849,15 @@ void ResultSetStorage::fillOneEntryRowWise(const std::vector<int64_t>& entry) {
 }
 
 void ResultSetStorage::initializeRowWise() const {
-  const auto key_count = get_groupby_col_count(query_mem_desc_);
+  const auto key_count = query_mem_desc_.getGroupbyColCount();
   const auto row_size = get_row_bytes(query_mem_desc_);
   CHECK_EQ(row_size % 8, 0);
   const auto key_bytes_with_padding =
       align_to_int64(get_key_bytes_rowwise(query_mem_desc_));
-  CHECK(!query_mem_desc_.keyless_hash);
+  CHECK(!query_mem_desc_.hasKeylessHash());
   switch (query_mem_desc_.getEffectiveKeyWidth()) {
     case 4: {
-      for (size_t i = 0; i < query_mem_desc_.entry_count; ++i) {
+      for (size_t i = 0; i < query_mem_desc_.getEntryCount(); ++i) {
         auto row_ptr = buff_ + i * row_size;
         fill_empty_key_32(reinterpret_cast<int32_t*>(row_ptr), key_count);
         auto slot_ptr = reinterpret_cast<int64_t*>(row_ptr + key_bytes_with_padding);
@@ -863,7 +868,7 @@ void ResultSetStorage::initializeRowWise() const {
       break;
     }
     case 8: {
-      for (size_t i = 0; i < query_mem_desc_.entry_count; ++i) {
+      for (size_t i = 0; i < query_mem_desc_.getEntryCount(); ++i) {
         auto row_ptr = buff_ + i * row_size;
         fill_empty_key_64(reinterpret_cast<int64_t*>(row_ptr), key_count);
         auto slot_ptr = reinterpret_cast<int64_t*>(row_ptr + key_bytes_with_padding);
@@ -879,20 +884,20 @@ void ResultSetStorage::initializeRowWise() const {
 }
 
 void ResultSetStorage::initializeColWise() const {
-  const auto key_count = get_groupby_col_count(query_mem_desc_);
+  const auto key_count = query_mem_desc_.getGroupbyColCount();
   auto this_buff = reinterpret_cast<int64_t*>(buff_);
-  CHECK(!query_mem_desc_.keyless_hash);
+  CHECK(!query_mem_desc_.hasKeylessHash());
   for (size_t key_idx = 0; key_idx < key_count; ++key_idx) {
     const auto first_key_off =
-        key_offset_colwise(0, key_idx, query_mem_desc_.entry_count);
-    for (size_t i = 0; i < query_mem_desc_.entry_count; ++i) {
+        key_offset_colwise(0, key_idx, query_mem_desc_.getEntryCount());
+    for (size_t i = 0; i < query_mem_desc_.getEntryCount(); ++i) {
       this_buff[first_key_off + i] = EMPTY_KEY_64;
     }
   }
   for (size_t target_idx = 0; target_idx < target_init_vals_.size(); ++target_idx) {
     const auto first_val_off =
-        slot_offset_colwise(0, target_idx, key_count, query_mem_desc_.entry_count);
-    for (size_t i = 0; i < query_mem_desc_.entry_count; ++i) {
+        slot_offset_colwise(0, target_idx, key_count, query_mem_desc_.getEntryCount());
+    for (size_t i = 0; i < query_mem_desc_.getEntryCount(); ++i) {
       this_buff[first_val_off + i] = target_init_vals_[target_idx];
     }
   }
@@ -900,11 +905,11 @@ void ResultSetStorage::initializeColWise() const {
 
 void ResultSetStorage::initializeBaselineValueSlots(int64_t* entry_slots) const {
   CHECK(entry_slots);
-  if (query_mem_desc_.output_columnar) {
+  if (query_mem_desc_.didOutputColumnar()) {
     size_t slot_off = 0;
     for (size_t j = 0; j < target_init_vals_.size(); ++j) {
       entry_slots[slot_off] = target_init_vals_[j];
-      slot_off += query_mem_desc_.entry_count;
+      slot_off += query_mem_desc_.getEntryCount();
     }
   } else {
     for (size_t j = 0; j < target_init_vals_.size(); ++j) {
@@ -1085,18 +1090,16 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
                                      const size_t target_slot_idx,
                                      const size_t init_agg_val_idx,
                                      const ResultSetStorage& that) const {
-  if (!query_mem_desc_.target_groupby_indices.empty()) {
-    CHECK_LT(target_logical_idx, query_mem_desc_.target_groupby_indices.size());
-    if (query_mem_desc_.target_groupby_indices[target_logical_idx] >= 0) {
+  if (query_mem_desc_.targetGroupbyIndicesSize() > 0) {
+    if (query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) >= 0) {
       return;
     }
   }
   CHECK_LT(init_agg_val_idx, target_init_vals_.size());
-  CHECK_LT(target_slot_idx, query_mem_desc_.agg_col_widths.size());
   const bool float_argument_input = takes_float_argument(target_info);
   const auto chosen_bytes = float_argument_input
                                 ? static_cast<int8_t>(sizeof(float))
-                                : query_mem_desc_.agg_col_widths[target_slot_idx].compact;
+                                : query_mem_desc_.getColumnWidth(target_slot_idx).compact;
   auto init_val = target_init_vals_[init_agg_val_idx];
   if (target_info.is_agg && target_info.agg_kind != kLAST_SAMPLE) {
     switch (target_info.agg_kind) {
@@ -1115,7 +1118,7 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
         // Ignore float argument compaction for count component for fear of its overflow
         AGGREGATE_ONE_COUNT(this_ptr2,
                             that_ptr2,
-                            query_mem_desc_.agg_col_widths[target_slot_idx].compact);
+                            query_mem_desc_.getColumnWidth(target_slot_idx).compact);
       }
       // fall thru
       case kSUM: {
@@ -1171,12 +1174,12 @@ void ResultSetStorage::reduceOneCountDistinctSlot(int8_t* this_ptr1,
                                                   const int8_t* that_ptr1,
                                                   const size_t target_logical_idx,
                                                   const ResultSetStorage& that) const {
-  CHECK_LT(target_logical_idx, query_mem_desc_.count_distinct_descriptors_.size());
+  CHECK_LT(target_logical_idx, query_mem_desc_.getCountDistinctDescriptorsSize());
   const auto& old_count_distinct_desc =
-      query_mem_desc_.count_distinct_descriptors_[target_logical_idx];
+      query_mem_desc_.getCountDistinctDescriptor(target_logical_idx);
   CHECK(old_count_distinct_desc.impl_type_ != CountDistinctImplType::Invalid);
   const auto& new_count_distinct_desc =
-      that.query_mem_desc_.count_distinct_descriptors_[target_logical_idx];
+      that.query_mem_desc_.getCountDistinctDescriptor(target_logical_idx);
   CHECK(old_count_distinct_desc.impl_type_ == new_count_distinct_desc.impl_type_);
   CHECK(this_ptr1 && that_ptr1);
   auto old_set_ptr = reinterpret_cast<const int64_t*>(this_ptr1);
@@ -1195,10 +1198,10 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
                                  const std::vector<int64_t>& agg_init_vals) {
   const size_t agg_col_count{agg_vals.size()};
   const auto row_size = query_mem_desc.getRowSize();
-  CHECK_EQ(agg_col_count, query_mem_desc.agg_col_widths.size());
+  CHECK_EQ(agg_col_count, query_mem_desc.getColCount());
   CHECK_GE(agg_col_count, targets.size());
-  CHECK_EQ(is_columnar, query_mem_desc.output_columnar);
-  CHECK(query_mem_desc.keyless_hash);
+  CHECK_EQ(is_columnar, query_mem_desc.didOutputColumnar());
+  CHECK(query_mem_desc.hasKeylessHash());
   std::vector<int64_t> partial_agg_vals(agg_col_count, 0);
   bool discard_row = true;
   for (int8_t warp_idx = 0; warp_idx < warp_count; ++warp_idx) {
@@ -1210,7 +1213,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
       const bool float_argument_input = takes_float_argument(agg_info);
       const auto chosen_bytes = float_argument_input
                                     ? sizeof(float)
-                                    : query_mem_desc.agg_col_widths[agg_col_idx].compact;
+                                    : query_mem_desc.getColumnWidth(agg_col_idx).compact;
       auto partial_bin_val = get_component(
           row_ptr + query_mem_desc.getColOnlyOffInBytes(agg_col_idx), chosen_bytes);
       partial_agg_vals[agg_col_idx] = partial_bin_val;
@@ -1219,7 +1222,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
         CHECK(agg_info.is_agg && (agg_info.agg_kind == kCOUNT ||
                                   agg_info.agg_kind == kAPPROX_COUNT_DISTINCT));
         partial_bin_val = count_distinct_set_size(
-            partial_bin_val, target_idx, query_mem_desc.count_distinct_descriptors_);
+            partial_bin_val, query_mem_desc.getCountDistinctDescriptor(target_idx));
         if (replace_bitmap_ptr_with_bitmap_sz) {
           partial_agg_vals[agg_col_idx] = partial_bin_val;
         }
@@ -1229,10 +1232,10 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
         ++agg_col_idx;
         partial_bin_val = partial_agg_vals[agg_col_idx] =
             get_component(row_ptr + query_mem_desc.getColOnlyOffInBytes(agg_col_idx),
-                          query_mem_desc.agg_col_widths[agg_col_idx].compact);
+                          query_mem_desc.getColumnWidth(agg_col_idx).compact);
       }
-      if (agg_col_idx == static_cast<size_t>(query_mem_desc.idx_target_as_key) &&
-          partial_bin_val != agg_init_vals[query_mem_desc.idx_target_as_key]) {
+      if (agg_col_idx == static_cast<size_t>(query_mem_desc.getTargetIdxForKey()) &&
+          partial_bin_val != agg_init_vals[query_mem_desc.getTargetIdxForKey()]) {
         CHECK(agg_info.is_agg);
         discard_partial_result = false;
       }
@@ -1250,7 +1253,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
       const bool float_argument_input = takes_float_argument(agg_info);
       const auto chosen_bytes = float_argument_input
                                     ? sizeof(float)
-                                    : query_mem_desc.agg_col_widths[agg_col_idx].compact;
+                                    : query_mem_desc.getColumnWidth(agg_col_idx).compact;
       const auto& chosen_type = get_compact_type(agg_info);
       if (agg_info.is_agg && agg_info.agg_kind != kLAST_SAMPLE) {
         try {
@@ -1270,7 +1273,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
               AGGREGATE_ONE_COUNT(
                   reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx + 1]),
                   reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx + 1]),
-                  query_mem_desc.agg_col_widths[agg_col_idx].compact);
+                  query_mem_desc.getColumnWidth(agg_col_idx).compact);
             // fall thru
             case kSUM:
               AGGREGATE_ONE_NULLABLE_VALUE(

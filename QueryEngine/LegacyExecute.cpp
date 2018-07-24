@@ -510,7 +510,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
       column_cache);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), static_cast<size_t>(in_col_count));
-  std::vector<int64_t> init_agg_vals(query_mem_desc.agg_col_widths.size());
+  std::vector<int64_t> init_agg_vals(query_mem_desc.getColCount());
   auto query_exe_context =
       query_mem_desc.getQueryExecutionContext(res_ra_unit,
                                               init_agg_vals,

@@ -830,7 +830,7 @@ RowSetPtr Executor::reduceMultiDeviceResultSets(
   const auto& first = boost::get<RowSetPtr>(results_per_device.front().first);
   CHECK(first);
 
-  if (query_mem_desc.hash_type == GroupByColRangeType::MultiCol &&
+  if (query_mem_desc.getGroupByColRangeType() == GroupByColRangeType::MultiCol &&
       results_per_device.size() > 1) {
     const auto total_entry_count = std::accumulate(
         results_per_device.begin(),
@@ -838,11 +838,11 @@ RowSetPtr Executor::reduceMultiDeviceResultSets(
         size_t(0),
         [](const size_t init, const std::pair<ResultPtr, std::vector<size_t>>& rs) {
           const auto& r = boost::get<RowSetPtr>(rs.first);
-          return init + r->getQueryMemDesc().entry_count;
+          return init + r->getQueryMemDesc().getEntryCount();
         });
     CHECK(total_entry_count);
     auto query_mem_desc = first->getQueryMemDesc();
-    query_mem_desc.entry_count = total_entry_count;
+    query_mem_desc.setEntryCount(total_entry_count);
     reduced_results = std::make_shared<ResultSet>(first->getTargetInfos(),
                                                   ExecutorDeviceType::CPU,
                                                   query_mem_desc,
@@ -853,11 +853,11 @@ RowSetPtr Executor::reduceMultiDeviceResultSets(
     switch (query_mem_desc.getEffectiveKeyWidth()) {
       case 4:
         first->getStorage()->moveEntriesToBuffer<int32_t>(
-            result_storage->getUnderlyingBuffer(), query_mem_desc.entry_count);
+            result_storage->getUnderlyingBuffer(), query_mem_desc.getEntryCount());
         break;
       case 8:
         first->getStorage()->moveEntriesToBuffer<int64_t>(
-            result_storage->getUnderlyingBuffer(), query_mem_desc.entry_count);
+            result_storage->getUnderlyingBuffer(), query_mem_desc.getEntryCount());
         break;
       default:
         CHECK(false);
@@ -1280,9 +1280,8 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
       CHECK(executor);
       auto row_set_mem_owner = executor->getRowSetMemoryOwner();
       CHECK(row_set_mem_owner);
-      CHECK_LT(target_idx, query_mem_desc.count_distinct_descriptors_.size());
       const auto& count_distinct_desc =
-          query_mem_desc.count_distinct_descriptors_[target_idx];
+          query_mem_desc.getCountDistinctDescriptor(target_idx);
       if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
         auto count_distinct_buffer = static_cast<int8_t*>(
             checked_calloc(count_distinct_desc.bitmapPaddedSizeBytes(), 1));
@@ -1374,7 +1373,7 @@ RowSetPtr Executor::collectAllDeviceResults(
   }
   auto& result_per_device = execution_dispatch.getFragmentResults();
   if (result_per_device.empty() &&
-      query_mem_desc.hash_type == GroupByColRangeType::Scan) {
+      query_mem_desc.getGroupByColRangeType() == GroupByColRangeType::Scan) {
     return build_row_for_empty_input(
         target_exprs, query_mem_desc, execution_dispatch.getDeviceType());
   }
@@ -1403,15 +1402,16 @@ RowSetPtr Executor::collectAllDeviceShardedTopResults(
   const auto first_result_set = boost::get<RowSetPtr>(result_per_device.front().first);
   CHECK(first_result_set);
   auto top_query_mem_desc = first_result_set->getQueryMemDesc();
-  CHECK(!top_query_mem_desc.output_columnar);
-  CHECK(!top_query_mem_desc.interleaved_bins_on_gpu);
+  CHECK(!top_query_mem_desc.didOutputColumnar());
+  CHECK(!top_query_mem_desc.hasInterleavedBinsOnGpu());
   const auto top_n = ra_exe_unit.sort_info.limit + ra_exe_unit.sort_info.offset;
-  top_query_mem_desc.entry_count = 0;
+  top_query_mem_desc.setEntryCount(0);
   for (auto& result : result_per_device) {
     const auto result_set = boost::get<RowSetPtr>(result.first);
     CHECK(result_set);
     result_set->sort(ra_exe_unit.sort_info.order_entries, top_n);
-    top_query_mem_desc.entry_count += result_set->rowCount();
+    size_t new_entry_cnt = top_query_mem_desc.getEntryCount() + result_set->rowCount();
+    top_query_mem_desc.setEntryCount(new_entry_cnt);
   }
   auto top_result_set = std::make_shared<ResultSet>(first_result_set->getTargetInfos(),
                                                     first_result_set->getDeviceType(),
@@ -1436,7 +1436,7 @@ RowSetPtr Executor::collectAllDeviceShardedTopResults(
       ++top_output_row_idx;
     }
   }
-  CHECK_EQ(top_output_row_idx, top_query_mem_desc.entry_count);
+  CHECK_EQ(top_output_row_idx, top_query_mem_desc.getEntryCount());
   return top_result_set;
 }
 
@@ -1479,8 +1479,8 @@ void Executor::dispatchFragments(
   const bool allow_multifrag =
       eo.allow_multifrag &&
       (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext() ||
-       query_mem_desc.hash_type == GroupByColRangeType::MultiCol ||
-       query_mem_desc.hash_type == GroupByColRangeType::Projection);
+       query_mem_desc.getGroupByColRangeType() == GroupByColRangeType::MultiCol ||
+       query_mem_desc.getGroupByColRangeType() == GroupByColRangeType::Projection);
 
   if ((device_type == ExecutorDeviceType::GPU) && allow_multifrag && is_agg) {
     // NB: We should never be on this path when the query is retried because of
@@ -2129,7 +2129,7 @@ int32_t Executor::executePlanWithoutGroupBy(
         error_code = 0;
       } else {
         const auto chosen_bytes = static_cast<size_t>(
-            query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx].compact);
+            query_exe_context->query_mem_desc_.getColumnWidth(out_vec_idx).compact);
         std::tie(val1, error_code) =
             reduceResults(agg_info.agg_kind,
                           agg_info.sql_type,
@@ -2147,7 +2147,7 @@ int32_t Executor::executePlanWithoutGroupBy(
       if (agg_info.agg_kind == kAVG ||
           (agg_info.agg_kind == kLAST_SAMPLE && agg_info.sql_type.is_varlen())) {
         const auto chosen_bytes = static_cast<size_t>(
-            query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx + 1].compact);
+            query_exe_context->query_mem_desc_.getColumnWidth(out_vec_idx + 1).compact);
         int64_t val2;
         std::tie(val2, error_code) =
             reduceResults(agg_info.agg_kind == kAVG ? kCOUNT : agg_info.agg_kind,

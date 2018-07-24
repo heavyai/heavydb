@@ -108,10 +108,11 @@ std::pair<CUdeviceptr, CUdeviceptr> create_dev_group_by_buffers(
                      block_size_x,
                      query_mem_desc.blocksShareMemory() ? 1 : grid_size_x)};
 
-  CHECK_LE(query_mem_desc.entry_count, std::numeric_limits<uint32_t>::max());
+  CHECK_LE(query_mem_desc.getEntryCount(), std::numeric_limits<uint32_t>::max());
   const size_t prepended_buff_size{
-      prepend_index_buffer ? align_to_int64(query_mem_desc.entry_count * sizeof(int32_t))
-                           : 0};
+      prepend_index_buffer
+          ? align_to_int64(query_mem_desc.getEntryCount() * sizeof(int32_t))
+          : 0};
 
   CUdeviceptr group_by_dev_buffers_mem =
       alloc_gpu_mem(
@@ -247,7 +248,7 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
   }
   const size_t num_buffers{block_size_x * block_buffer_count};
   const size_t index_buffer_sz{
-      prepend_index_buffer ? query_mem_desc.entry_count * sizeof(int64_t) : 0};
+      prepend_index_buffer ? query_mem_desc.getEntryCount() * sizeof(int64_t) : 0};
   std::vector<int8_t> buff_from_gpu(
       coalesced_size(
           query_mem_desc, groups_buffer_size, block_size_x, block_buffer_count) +

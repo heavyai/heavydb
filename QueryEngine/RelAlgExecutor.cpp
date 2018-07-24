@@ -1523,7 +1523,7 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
 
   const auto& tuple_type = logical_values->getTupleType();
   for (size_t i = 0; i < tuple_type.size(); ++i) {
-    query_mem_desc.agg_col_widths.emplace_back(ColWidths{8, 8});
+    query_mem_desc.addAggColWidth(ColWidths{8, 8});
   }
   logical_values->setOutputMetainfo(tuple_type);
   std::vector<std::unique_ptr<Analyzer::ColumnVar>> owned_column_expressions;

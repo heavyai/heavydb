@@ -74,13 +74,10 @@ inline void partial_bitmap_union(int8_t* set_vals,
 
 inline int64_t count_distinct_set_size(
     const int64_t set_handle,
-    const int target_idx,
-    const CountDistinctDescriptors& count_distinct_descriptors) {
+    const CountDistinctDescriptor& count_distinct_desc) {
   if (!set_handle) {
     return 0;
   }
-  CHECK_LT(target_idx, count_distinct_descriptors.size());
-  const auto& count_distinct_desc = count_distinct_descriptors[target_idx];
   if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
     auto set_vals = reinterpret_cast<int8_t*>(set_handle);
     if (count_distinct_desc.approximate) {

@@ -1698,8 +1698,8 @@ class Executor {
   static const int32_t ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY{14};
   friend class BaselineJoinHashTable;
   friend class GroupByAndAggregate;
-  friend struct QueryMemoryDescriptor;
-  friend struct QueryFragmentDescriptor;
+  friend class QueryMemoryDescriptor;
+  friend class QueryFragmentDescriptor;
   friend class QueryExecutionContext;
   friend class ResultSet;
   friend class IteratorTable;

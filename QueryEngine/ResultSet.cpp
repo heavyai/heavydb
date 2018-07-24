@@ -261,14 +261,17 @@ size_t ResultSet::getCurrentRowBufferIndex() const {
 
 void ResultSet::append(ResultSet& that) {
   CHECK_EQ(-1, cached_row_count_);
-  CHECK(!query_mem_desc_.output_columnar);  // TODO(miyu)
+  CHECK(!query_mem_desc_.didOutputColumnar());  // TODO(miyu)
   if (!that.storage_) {
     return;
   }
   appended_storage_.push_back(std::move(that.storage_));
-  query_mem_desc_.entry_count += appended_storage_.back()->query_mem_desc_.entry_count;
-  query_mem_desc_.entry_count_small +=
-      appended_storage_.back()->query_mem_desc_.entry_count_small;
+  query_mem_desc_.setEntryCount(
+      query_mem_desc_.getEntryCount() +
+      appended_storage_.back()->query_mem_desc_.getEntryCount());
+  query_mem_desc_.setEntryCountSmall(
+      query_mem_desc_.getEntryCountSmall() +
+      appended_storage_.back()->query_mem_desc_.getEntryCountSmall());
   chunks_.insert(chunks_.end(), that.chunks_.begin(), that.chunks_.end());
   col_buffers_.insert(
       col_buffers_.end(), that.col_buffers_.begin(), that.col_buffers_.end());
@@ -456,20 +459,19 @@ bool ResultSet::isTruncated() const {
 QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
     const QueryMemoryDescriptor& query_mem_desc) {
   auto query_mem_desc_copy = query_mem_desc;
-  for (auto& group_width : query_mem_desc_copy.group_col_widths) {
-    group_width = 8;
-  }
+  query_mem_desc_copy.resetGroupColWidths(
+      std::vector<int8_t>(query_mem_desc_copy.groupColWidthsSize(), 8));
   size_t total_bytes{0};
   size_t col_idx = 0;
-  for (; col_idx < query_mem_desc_copy.agg_col_widths.size(); ++col_idx) {
-    auto chosen_bytes = query_mem_desc_copy.agg_col_widths[col_idx].compact;
+  for (; col_idx < query_mem_desc_copy.getColCount(); ++col_idx) {
+    auto chosen_bytes = query_mem_desc_copy.getColumnWidth(col_idx).compact;
     if (chosen_bytes == sizeof(int64_t)) {
       const auto aligned_total_bytes = align_to_int64(total_bytes);
       CHECK_GE(aligned_total_bytes, total_bytes);
       if (col_idx >= 1) {
         const auto padding = aligned_total_bytes - total_bytes;
         CHECK(padding == 0 || padding == 4);
-        query_mem_desc_copy.agg_col_widths[col_idx - 1].compact += padding;
+        query_mem_desc_copy.agg_col_widths_[col_idx - 1].compact += padding;
       }
       total_bytes = aligned_total_bytes;
     }
@@ -480,10 +482,10 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
     CHECK_GE(aligned_total_bytes, total_bytes);
     const auto padding = aligned_total_bytes - total_bytes;
     CHECK(padding == 0 || padding == 4);
-    query_mem_desc_copy.agg_col_widths[col_idx - 1].compact += padding;
+    query_mem_desc_copy.agg_col_widths_[col_idx - 1].compact += padding;
   }
-  if (query_mem_desc_copy.entry_count_small > 0) {
-    query_mem_desc_copy.hash_type = GroupByColRangeType::OneColGuessedRange;
+  if (query_mem_desc_copy.getEntryCountSmall() > 0) {
+    query_mem_desc_copy.setGroupByColRangeType(GroupByColRangeType::OneColGuessedRange);
   }
   return query_mem_desc_copy;
 }
@@ -512,12 +514,12 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
     return;
   }
   // This check isn't strictly required, but allows the index buffer to be 32-bit.
-  if (query_mem_desc_.entry_count > std::numeric_limits<uint32_t>::max()) {
+  if (query_mem_desc_.getEntryCount() > std::numeric_limits<uint32_t>::max()) {
     throw RowSortException("Sorting more than 4B elements not supported");
   }
 
-  CHECK(size_t(0) == query_mem_desc_.entry_count_small ||
-        !query_mem_desc_.output_columnar);  // TODO(alex)
+  CHECK(size_t(0) == query_mem_desc_.getEntryCountSmall() ||
+        !query_mem_desc_.didOutputColumnar());  // TODO(alex)
   CHECK(permutation_.empty());
 
   const bool use_heap{order_entries.size() == 1 && top_n};
@@ -565,11 +567,9 @@ std::vector<uint32_t> ResultSet::initPermutationBuffer(const size_t start,
   CHECK_NE(size_t(0), step);
   std::vector<uint32_t> permutation;
   const auto total_entries =
-      query_mem_desc_.entry_count + query_mem_desc_.entry_count_small;
+      query_mem_desc_.getEntryCount() + query_mem_desc_.getEntryCountSmall();
   permutation.reserve(total_entries / step);
-  for (size_t i = start;
-       i < query_mem_desc_.entry_count + query_mem_desc_.entry_count_small;
-       i += step) {
+  for (size_t i = start; i < total_entries; i += step) {
     const auto storage_lookup_result = findStorage(i);
     const auto lhs_storage = storage_lookup_result.storage_ptr;
     const auto off = storage_lookup_result.fixedup_entry_idx;
@@ -626,10 +626,10 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
 
 std::pair<ssize_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) const {
   size_t fixedup_entry_idx = entry_idx;
-  auto entry_count = storage_->query_mem_desc_.entry_count;
-  const bool is_rowwise_layout = !storage_->query_mem_desc_.output_columnar;
+  auto entry_count = storage_->query_mem_desc_.getEntryCount();
+  const bool is_rowwise_layout = !storage_->query_mem_desc_.didOutputColumnar();
   if (is_rowwise_layout) {
-    entry_count += storage_->query_mem_desc_.entry_count_small;
+    entry_count += storage_->query_mem_desc_.getEntryCountSmall();
   }
   if (fixedup_entry_idx < entry_count) {
     return {0, fixedup_entry_idx};
@@ -637,10 +637,10 @@ std::pair<ssize_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) co
   fixedup_entry_idx -= entry_count;
   for (size_t i = 0; i < appended_storage_.size(); ++i) {
     const auto& desc = appended_storage_[i]->query_mem_desc_;
-    CHECK_NE(is_rowwise_layout, desc.output_columnar);
-    entry_count = desc.entry_count;
+    CHECK_NE(is_rowwise_layout, desc.didOutputColumnar());
+    entry_count = desc.getEntryCount();
     if (is_rowwise_layout) {
-      entry_count += desc.entry_count_small;
+      entry_count += desc.getEntryCountSmall();
     }
     if (fixedup_entry_idx < entry_count) {
       return {i + 1, fixedup_entry_idx};
@@ -684,7 +684,7 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
       // TODO the above takes_float_argument() is widely used  wonder if this problem
       // exists elsewhere
       if (entry_ti.get_type() == kFLOAT) {
-        if (query_mem_desc_.agg_col_widths[order_entry.tle_no - 1].compact ==
+        if (query_mem_desc_.getColumnWidth(order_entry.tle_no - 1).compact ==
             sizeof(float)) {
           float_argument_input = true;
         }
@@ -725,14 +725,12 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
           return use_desc_cmp ? lhs_str > rhs_str : lhs_str < rhs_str;
         }
         if (UNLIKELY(is_distinct_target(targets_[order_entry.tle_no - 1]))) {
-          const auto lhs_sz =
-              count_distinct_set_size(lhs_v.i1,
-                                      order_entry.tle_no - 1,
-                                      query_mem_desc_.count_distinct_descriptors_);
-          const auto rhs_sz =
-              count_distinct_set_size(rhs_v.i1,
-                                      order_entry.tle_no - 1,
-                                      query_mem_desc_.count_distinct_descriptors_);
+          const auto lhs_sz = count_distinct_set_size(
+              lhs_v.i1,
+              query_mem_desc_.getCountDistinctDescriptor(order_entry.tle_no - 1));
+          const auto rhs_sz = count_distinct_set_size(
+              rhs_v.i1,
+              query_mem_desc_.getCountDistinctDescriptor(order_entry.tle_no - 1));
           if (lhs_sz == rhs_sz) {
             continue;
           }
@@ -835,37 +833,37 @@ void ResultSet::radixSortOnGpu(
 
 void ResultSet::radixSortOnCpu(
     const std::list<Analyzer::OrderEntry>& order_entries) const {
-  CHECK(!query_mem_desc_.keyless_hash);
-  std::vector<int64_t> tmp_buff(query_mem_desc_.entry_count);
-  std::vector<int32_t> idx_buff(query_mem_desc_.entry_count);
+  CHECK(!query_mem_desc_.hasKeylessHash());
+  std::vector<int64_t> tmp_buff(query_mem_desc_.getEntryCount());
+  std::vector<int32_t> idx_buff(query_mem_desc_.getEntryCount());
   CHECK_EQ(size_t(1), order_entries.size());
   auto buffer_ptr = storage_->getUnderlyingBuffer();
   for (const auto& order_entry : order_entries) {
     const auto target_idx = order_entry.tle_no - 1;
     const auto sortkey_val_buff = reinterpret_cast<int64_t*>(
         buffer_ptr + query_mem_desc_.getColOffInBytes(0, target_idx));
-    const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_idx].compact;
+    const auto chosen_bytes = query_mem_desc_.getColumnWidth(target_idx).compact;
     sort_groups_cpu(sortkey_val_buff,
                     &idx_buff[0],
-                    query_mem_desc_.entry_count,
+                    query_mem_desc_.getEntryCount(),
                     order_entry.is_desc,
                     chosen_bytes);
     apply_permutation_cpu(reinterpret_cast<int64_t*>(buffer_ptr),
                           &idx_buff[0],
-                          query_mem_desc_.entry_count,
+                          query_mem_desc_.getEntryCount(),
                           &tmp_buff[0],
                           sizeof(int64_t));
-    for (size_t target_idx = 0; target_idx < query_mem_desc_.agg_col_widths.size();
+    for (size_t target_idx = 0; target_idx < query_mem_desc_.getColCount();
          ++target_idx) {
       if (static_cast<int>(target_idx) == order_entry.tle_no - 1) {
         continue;
       }
-      const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_idx].compact;
+      const auto chosen_bytes = query_mem_desc_.getColumnWidth(target_idx).compact;
       const auto satellite_val_buff = reinterpret_cast<int64_t*>(
           buffer_ptr + query_mem_desc_.getColOffInBytes(0, target_idx));
       apply_permutation_cpu(satellite_val_buff,
                             &idx_buff[0],
-                            query_mem_desc_.entry_count,
+                            query_mem_desc_.getEntryCount(),
                             &tmp_buff[0],
                             chosen_bytes);
     }

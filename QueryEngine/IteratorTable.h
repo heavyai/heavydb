@@ -63,9 +63,7 @@ class IteratorTable {
   void fetchLazy(const std::vector<std::vector<const int8_t*>>& iter_buffers,
                  const ssize_t frag_id);
 
-  size_t colCount() const {
-    return just_explain_ ? 1 : query_mem_desc_.agg_col_widths.size();
-  }
+  size_t colCount() const { return just_explain_ ? 1 : query_mem_desc_.getColCount(); }
 
   size_t fragCount() const { return buffer_frags_.size(); }
 

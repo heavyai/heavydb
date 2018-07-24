@@ -86,70 +86,51 @@ template <class T>
 inline T advance_to_next_columnar_target_buff(T target_ptr,
                                               const QueryMemoryDescriptor& query_mem_desc,
                                               const size_t target_slot_idx) {
-  CHECK_LT(target_slot_idx, query_mem_desc.agg_col_widths.size());
   auto new_target_ptr =
-      target_ptr +
-      query_mem_desc.entry_count * query_mem_desc.agg_col_widths[target_slot_idx].compact;
-  if (!query_mem_desc.target_column_pad_bytes.empty()) {
-    CHECK_LT(target_slot_idx, query_mem_desc.target_column_pad_bytes.size());
-    new_target_ptr += query_mem_desc.target_column_pad_bytes[target_slot_idx];
+      target_ptr + query_mem_desc.getEntryCount() *
+                       query_mem_desc.getColumnWidth(target_slot_idx).compact;
+  if (query_mem_desc.getTargetColumnPadBytesSize() > 0) {
+    new_target_ptr += query_mem_desc.getTargetColumnPadBytes(target_slot_idx);
   }
   return new_target_ptr;
 }
 
-inline size_t get_groupby_col_count(const QueryMemoryDescriptor& query_mem_desc) {
-  return query_mem_desc.group_col_widths.size();
-}
-
-inline size_t get_key_count_for_descriptor(const QueryMemoryDescriptor& query_mem_desc) {
-  return query_mem_desc.keyless_hash ? 0 : get_groupby_col_count(query_mem_desc);
-}
-
-inline size_t get_buffer_col_slot_count(const QueryMemoryDescriptor& query_mem_desc) {
-  if (query_mem_desc.target_groupby_indices.empty()) {
-    return query_mem_desc.agg_col_widths.size();
-  }
-  const auto& target_groupby_indices = query_mem_desc.target_groupby_indices;
-  return query_mem_desc.agg_col_widths.size() -
-         std::count_if(target_groupby_indices.begin(),
-                       target_groupby_indices.end(),
-                       [](const ssize_t i) { return i >= 0; });
-}
-
 template <class T>
 inline T get_cols_ptr(T buff, const QueryMemoryDescriptor& query_mem_desc) {
-  CHECK(query_mem_desc.output_columnar);
+  CHECK(query_mem_desc.didOutputColumnar());
   auto cols_ptr = buff;
-  if (query_mem_desc.keyless_hash) {
-    CHECK(query_mem_desc.key_column_pad_bytes.empty());
+  if (query_mem_desc.hasKeylessHash()) {
+    CHECK_EQ(size_t(0), query_mem_desc.getKeyColumnPadBytesSize());
   } else {
-    CHECK_EQ(query_mem_desc.key_column_pad_bytes.empty(),
-             query_mem_desc.target_column_pad_bytes.empty());
+    CHECK_EQ(query_mem_desc.getKeyColumnPadBytesSize() > 0,
+             query_mem_desc.getTargetColumnPadBytesSize() > 0);
   }
-  const bool has_key_col_padding = !query_mem_desc.key_column_pad_bytes.empty();
-  const auto key_count = get_key_count_for_descriptor(query_mem_desc);
+  const bool has_key_col_padding = query_mem_desc.getKeyColumnPadBytesSize() > 0;
+  const auto key_count = query_mem_desc.getKeyCount();
   if (has_key_col_padding) {
-    CHECK_EQ(key_count, query_mem_desc.key_column_pad_bytes.size());
+    CHECK_EQ(key_count, query_mem_desc.getKeyColumnPadBytesSize());
   }
   for (size_t key_idx = 0; key_idx < key_count; ++key_idx) {
-    cols_ptr += query_mem_desc.group_col_widths[key_idx] * query_mem_desc.entry_count;
+    cols_ptr += query_mem_desc.groupColWidth(key_idx) * query_mem_desc.getEntryCount();
     if (has_key_col_padding) {
-      cols_ptr += query_mem_desc.key_column_pad_bytes[key_idx];
+      cols_ptr += query_mem_desc.getKeyColumnPadBytes(key_idx);
     }
   }
   return cols_ptr;
 }
 
 inline size_t get_key_bytes_rowwise(const QueryMemoryDescriptor& query_mem_desc) {
-  if (query_mem_desc.keyless_hash) {
+  if (query_mem_desc.hasKeylessHash()) {
     return 0;
   }
   size_t result = 0;
   if (auto consist_key_width = query_mem_desc.getEffectiveKeyWidth()) {
-    result += consist_key_width * query_mem_desc.group_col_widths.size();
+    result += consist_key_width * query_mem_desc.groupColWidthsSize();
   } else {
-    for (const auto& group_width : query_mem_desc.group_col_widths) {
-      result += group_width;
+    for (auto group_itr = query_mem_desc.groupColWidthsBegin();
+         group_itr != query_mem_desc.groupColWidthsEnd();
+         ++group_itr) {
+      result += *group_itr;
     }
   }
   return result;
@@ -157,10 +138,7 @@ inline size_t get_key_bytes_rowwise(const QueryMemoryDescriptor& query_mem_desc)
 
 inline size_t get_row_bytes(const QueryMemoryDescriptor& query_mem_desc) {
   size_t result = align_to_int64(get_key_bytes_rowwise(query_mem_desc));  // plus padding
-  for (const auto& target_width : query_mem_desc.agg_col_widths) {
-    result += target_width.compact;
-  }
-  return result;
+  return result + query_mem_desc.getRowWidth();
 }
 
 template <class T>
@@ -177,14 +155,14 @@ inline T advance_target_ptr(T target_ptr,
                             const size_t slot_idx,
                             const QueryMemoryDescriptor& query_mem_desc,
                             const bool separate_varlen_storage) {
-  auto result = target_ptr + query_mem_desc.agg_col_widths[slot_idx].compact;
+  auto result = target_ptr + query_mem_desc.getColumnWidth(slot_idx).compact;
   if ((target_info.is_agg && target_info.agg_kind == kAVG) ||
       (is_real_str_or_array(target_info) && !separate_varlen_storage)) {
-    return result + query_mem_desc.agg_col_widths[slot_idx + 1].compact;
+    return result + query_mem_desc.getColumnWidth(slot_idx + 1).compact;
   }
   if (target_info.sql_type.is_geometry()) {
     for (auto i = 1; i < 2 * target_info.sql_type.get_physical_coord_cols(); ++i) {
-      result += query_mem_desc.agg_col_widths[slot_idx + i].compact;
+      result += query_mem_desc.getColumnWidth(slot_idx + i).compact;
     }
   }
   return result;

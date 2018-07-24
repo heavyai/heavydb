@@ -87,17 +87,12 @@ std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
   const auto& only_oe = ra_exe_unit.sort_info.order_entries.back();
   const auto oe_col_idx = only_oe.tle_no - 1;
   const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
-#ifdef ENABLE_KEY_COMPACTION
-  const size_t group_key_bytes =
-      query_mem_desc.group_col_compact_width ? query_mem_desc.group_col_compact_width : 8;
-#else
-  const size_t group_key_bytes = 8;
-#endif  // ENABLE_KEY_COMPACTION
+  const auto group_key_bytes = query_mem_desc.getEffectiveKeyWidth();
   const PodOrderEntry pod_oe{only_oe.tle_no, only_oe.is_desc, only_oe.nulls_first};
   GroupByBufferLayoutInfo oe_layout{
       n * thread_count,
       query_mem_desc.getColOffInBytes(0, oe_col_idx),
-      static_cast<size_t>(query_mem_desc.agg_col_widths[oe_col_idx].compact),
+      static_cast<size_t>(query_mem_desc.getColumnWidth(oe_col_idx).compact),
       query_mem_desc.getRowSize(),
       target_info(ra_exe_unit.target_exprs[oe_col_idx]),
       -1};

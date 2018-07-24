@@ -52,18 +52,16 @@ std::vector<TargetInfo> get_sort_int_target_infos() {
 QueryMemoryDescriptor baseline_sort_desc(const std::vector<TargetInfo>& target_infos,
                                          const size_t hash_entry_count,
                                          const size_t key_bytewidth) {
-  QueryMemoryDescriptor query_mem_desc;
-  query_mem_desc.hash_type = GroupByColRangeType::MultiCol;
-  query_mem_desc.group_col_widths.emplace_back(8);
-  query_mem_desc.group_col_widths.emplace_back(8);
+  QueryMemoryDescriptor query_mem_desc(
+      GroupByColRangeType::MultiCol, 0, 0, false, {8, 8});
 #ifdef ENABLE_KEY_COMPACTION
-  query_mem_desc.group_col_compact_width = key_bytewidth;
+  query_mem_desc.setGroupColCompactWidth(key_bytewidth);
 #endif  // ENABLE_KEY_COMPACTION
   static const size_t slot_bytes = 8;
   for (size_t i = 0; i < target_infos.size(); ++i) {
-    query_mem_desc.agg_col_widths.emplace_back(ColWidths{slot_bytes, slot_bytes});
+    query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
   }
-  query_mem_desc.entry_count = hash_entry_count;
+  query_mem_desc.setEntryCount(hash_entry_count);
   return query_mem_desc;
 }
 
@@ -73,11 +71,11 @@ void fill_storage_buffer_baseline_sort_int(int8_t* buff,
                                            const QueryMemoryDescriptor& query_mem_desc,
                                            const int64_t upper_bound,
                                            const int64_t empty_key) {
-  const auto key_component_count = get_key_count_for_descriptor(query_mem_desc);
+  const auto key_component_count = query_mem_desc.getKeyCount();
   const auto target_slot_count = get_slot_count(target_infos);
   const auto slot_to_target = get_slot_to_target_mapping(target_infos);
   const auto row_bytes = get_row_bytes(query_mem_desc);
-  for (size_t i = 0; i < query_mem_desc.entry_count; ++i) {
+  for (size_t i = 0; i < query_mem_desc.getEntryCount(); ++i) {
     const auto row_ptr = buff + i * row_bytes;
     for (size_t key_comp_idx = 0; key_comp_idx < key_component_count; ++key_comp_idx) {
       reinterpret_cast<K*>(row_ptr)[key_comp_idx] = empty_key;
@@ -102,7 +100,7 @@ void fill_storage_buffer_baseline_sort_int(int8_t* buff,
   for (const auto val : values) {
     std::vector<K> key(key_component_count, val);
     auto value_slots = get_group_value(reinterpret_cast<int64_t*>(buff),
-                                       query_mem_desc.entry_count,
+                                       query_mem_desc.getEntryCount(),
                                        reinterpret_cast<const int64_t*>(&key[0]),
                                        key.size(),
                                        sizeof(K),
@@ -117,11 +115,11 @@ void fill_storage_buffer_baseline_sort_fp(int8_t* buff,
                                           const std::vector<TargetInfo>& target_infos,
                                           const QueryMemoryDescriptor& query_mem_desc,
                                           const int64_t upper_bound) {
-  const auto key_component_count = get_key_count_for_descriptor(query_mem_desc);
+  const auto key_component_count = query_mem_desc.getKeyCount();
   const auto i64_buff = reinterpret_cast<int64_t*>(buff);
   const auto target_slot_count = get_slot_count(target_infos);
   const auto slot_to_target = get_slot_to_target_mapping(target_infos);
-  for (size_t i = 0; i < query_mem_desc.entry_count; ++i) {
+  for (size_t i = 0; i < query_mem_desc.getEntryCount(); ++i) {
     const auto first_key_comp_offset =
         key_offset_rowwise(i, key_component_count, target_slot_count);
     for (size_t key_comp_idx = 0; key_comp_idx < key_component_count; ++key_comp_idx) {
@@ -144,7 +142,7 @@ void fill_storage_buffer_baseline_sort_fp(int8_t* buff,
   for (const auto val : values) {
     std::vector<int64_t> key(key_component_count, val);
     auto value_slots = get_group_value(i64_buff,
-                                       query_mem_desc.entry_count,
+                                       query_mem_desc.getEntryCount(),
                                        &key[0],
                                        key.size(),
                                        sizeof(int64_t),

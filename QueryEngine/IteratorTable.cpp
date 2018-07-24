@@ -45,14 +45,14 @@ IteratorTable::IteratorTable(const QueryMemoryDescriptor& query_mem_desc,
       return info;
     }())
     , query_mem_desc_([&query_mem_desc, &targets]() {
-      CHECK_EQ(size_t(2), query_mem_desc.agg_col_widths.size());
+      CHECK_EQ(size_t(2), query_mem_desc.getColCount());
       auto desc = query_mem_desc;
-      desc.output_columnar = true;
-      desc.group_col_widths.clear();
-      desc.agg_col_widths.clear();
-      auto width = query_mem_desc.agg_col_widths[0];
+      desc.setOutputColumnar(true);
+      desc.clearGroupColWidths();
+      desc.clearAggColWidths();
+      auto width = query_mem_desc.getColumnWidth(0);
       for (size_t i = 0; i < targets.size(); ++i) {
-        desc.agg_col_widths.push_back(width);
+        desc.addAggColWidth(width);
       }
       return desc;
     }())
@@ -101,7 +101,7 @@ BufferFragment IteratorTable::transformGroupByBuffer(
     const QueryMemoryDescriptor& query_mem_desc) {
   CHECK(group_by_buffer);
   CHECK_LT(size_t(0), groups_buffer_entry_count);
-  CHECK_EQ(size_t(2), query_mem_desc.agg_col_widths.size());
+  CHECK_EQ(size_t(2), query_mem_desc.getColCount());
   const auto col_count = colCount();
   std::vector<int64_t> scratch_buffer;
   scratch_buffer.reserve(groups_buffer_entry_count * col_count);
@@ -118,7 +118,7 @@ BufferFragment IteratorTable::transformGroupByBuffer(
         continue;
       }
       auto col_ptr = reinterpret_cast<const int8_t*>(group_by_buffer) + bin_base_off;
-      auto chosen_bytes = query_mem_desc.agg_col_widths[src_col_idx].compact;
+      auto chosen_bytes = query_mem_desc.getColumnWidth(src_col_idx).compact;
       CHECK_EQ(sizeof(int64_t), static_cast<size_t>(chosen_bytes));
       scratch_buffer.push_back(get_component(col_ptr, chosen_bytes));
     }
@@ -172,7 +172,7 @@ void IteratorTable::fetchLazy(const std::vector<std::vector<const int8_t*>>& ite
   CHECK_LT(size_t(0), buffer_frag.row_count);
   for (size_t col_idx = 0, col_cnt = colCount() - 1, col_base_off = 0; col_idx < col_cnt;
        ++col_idx, col_base_off += buffer_frag.row_count) {
-    auto chosen_bytes = query_mem_desc_.agg_col_widths[col_idx].compact;
+    auto chosen_bytes = query_mem_desc_.getColumnWidth(col_idx).compact;
     CHECK_EQ(sizeof(int64_t), static_cast<size_t>(chosen_bytes));
     for (size_t row_idx = 0; row_idx < buffer_frag.row_count; ++row_idx) {
       auto col_ptr = reinterpret_cast<int8_t*>(&buffer_frag.data[col_base_off + row_idx]);
@@ -188,12 +188,11 @@ void IteratorTable::fetchLazy(const std::vector<std::vector<const int8_t*>>& ite
 }
 
 void IteratorTable::fuse(const IteratorTable& that) {
-  CHECK(!query_mem_desc_.keyless_hash && !that.query_mem_desc_.keyless_hash);
-  CHECK_EQ(size_t(0), query_mem_desc_.group_col_widths.size());
-  CHECK_EQ(size_t(0), that.query_mem_desc_.group_col_widths.size());
-  CHECK_EQ(query_mem_desc_.agg_col_widths.size(),
-           that.query_mem_desc_.agg_col_widths.size());
-  CHECK_EQ(query_mem_desc_.output_columnar, that.query_mem_desc_.output_columnar);
+  CHECK(!query_mem_desc_.hasKeylessHash() && !that.query_mem_desc_.hasKeylessHash());
+  CHECK_EQ(size_t(0), query_mem_desc_.groupColWidthsSize());
+  CHECK_EQ(size_t(0), that.query_mem_desc_.groupColWidthsSize());
+  CHECK_EQ(query_mem_desc_.getColCount(), that.query_mem_desc_.getColCount());
+  CHECK_EQ(query_mem_desc_.didOutputColumnar(), that.query_mem_desc_.didOutputColumnar());
   CHECK_EQ(size_t(1), buffer_frags_.size());
   CHECK_EQ(size_t(1), that.buffer_frags_.size());
   auto& this_buffer = buffer_frags_[0].data;
@@ -208,7 +207,7 @@ void IteratorTable::fuse(const IteratorTable& that) {
     return;
   }
 
-  const auto col_count = query_mem_desc_.agg_col_widths.size();
+  const auto col_count = query_mem_desc_.getColCount();
   OOM_TRACE_PUSH(+": fused_buffer " +
                  std::to_string(((this_entry_count + that_entry_count) * col_count) *
                                 sizeof(int64_t)));
@@ -235,8 +234,8 @@ IterTabPtr QueryExecutionContext::groupBufferToTab(
     const size_t buf_idx,
     const ssize_t frag_idx,
     const std::vector<Analyzer::Expr*>& targets) const {
-  CHECK_EQ(size_t(2), query_mem_desc_.agg_col_widths.size());
-  const size_t group_by_col_count{query_mem_desc_.group_col_widths.size()};
+  CHECK_EQ(size_t(2), query_mem_desc_.getColCount());
+  const size_t group_by_col_count{query_mem_desc_.groupColWidthsSize()};
   CHECK(!output_columnar_ || group_by_col_count == 1);
   auto impl = [this, &targets](const size_t groups_buffer_entry_count,
                                int64_t* group_by_buffer,
@@ -256,12 +255,12 @@ IterTabPtr QueryExecutionContext::groupBufferToTab(
   if (query_mem_desc_.getSmallBufferSizeBytes()) {
     CHECK(!sort_on_gpu_);
     table = impl(
-        query_mem_desc_.entry_count_small, small_group_by_buffers_[buf_idx], frag_idx);
+        query_mem_desc_.getEntryCountSmall(), small_group_by_buffers_[buf_idx], frag_idx);
     CHECK(table);
   }
   CHECK_LT(buf_idx, group_by_buffers_.size());
   auto other_table =
-      impl(query_mem_desc_.entry_count, group_by_buffers_[buf_idx], frag_idx);
+      impl(query_mem_desc_.getEntryCount(), group_by_buffers_[buf_idx], frag_idx);
   CHECK(other_table);
   if (table) {
     table->fuse(*other_table);

@@ -55,28 +55,30 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
                                const std::list<Analyzer::OrderEntry>& order_entries,
                                const size_t top_n) {
   CHECK_EQ(size_t(1), order_entries.size());
-  CHECK_EQ(size_t(0), query_mem_desc_.entry_count_small);
-  CHECK(!query_mem_desc_.output_columnar);
+  CHECK_EQ(size_t(0), query_mem_desc_.getEntryCountSmall());
+  CHECK(!query_mem_desc_.didOutputColumnar());
   const auto& oe = order_entries.front();
   CHECK_GT(oe.tle_no, 0);
   CHECK_LE(static_cast<size_t>(oe.tle_no), targets_.size());
   size_t logical_slot_idx = 0;
   size_t physical_slot_off = 0;
   for (size_t i = 0; i < static_cast<size_t>(oe.tle_no - 1); ++i) {
-    physical_slot_off += query_mem_desc_.agg_col_widths[logical_slot_idx].compact;
+    physical_slot_off += query_mem_desc_.getColumnWidth(logical_slot_idx).compact;
     logical_slot_idx =
         advance_slot(logical_slot_idx, targets_[i], none_encoded_strings_valid_);
   }
   const auto col_off =
       get_slot_off_quad(query_mem_desc_) * sizeof(int64_t) + physical_slot_off;
-  const size_t col_bytes = query_mem_desc_.agg_col_widths[logical_slot_idx].compact;
+  const size_t col_bytes = query_mem_desc_.getColumnWidth(logical_slot_idx).compact;
   const auto row_bytes = get_row_bytes(query_mem_desc_);
-  const auto& target_groupby_indices = query_mem_desc_.target_groupby_indices;
-  CHECK(target_groupby_indices.empty() ||
-        static_cast<size_t>(oe.tle_no) <= target_groupby_indices.size());
+  const auto target_groupby_indices_sz = query_mem_desc_.targetGroupbyIndicesSize();
+  CHECK(target_groupby_indices_sz == 0 ||
+        static_cast<size_t>(oe.tle_no) <= target_groupby_indices_sz);
   const ssize_t target_groupby_index{
-      target_groupby_indices.empty() ? -1 : target_groupby_indices[oe.tle_no - 1]};
-  GroupByBufferLayoutInfo layout{query_mem_desc_.entry_count,
+      target_groupby_indices_sz == 0
+          ? -1
+          : query_mem_desc_.getTargetGroupbyIndex(oe.tle_no - 1)};
+  GroupByBufferLayoutInfo layout{query_mem_desc_.getEntryCount(),
                                  col_off,
                                  col_bytes,
                                  row_bytes,
@@ -88,13 +90,7 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
   const auto step = static_cast<size_t>(
       device_type == ExecutorDeviceType::GPU ? getGpuCount() : cpu_threads());
   CHECK_GE(step, size_t(1));
-#ifdef ENABLE_KEY_COMPACTION
-  const size_t key_bytewidth = query_mem_desc_.group_col_compact_width
-                                   ? query_mem_desc_.group_col_compact_width
-                                   : 8;
-#else
-  const size_t key_bytewidth = 8;
-#endif  // ENABLE_KEY_COMPACTION
+  const auto key_bytewidth = query_mem_desc_.getEffectiveKeyWidth();
   if (step > 1) {
     std::vector<std::future<void>> top_futures;
     std::vector<std::vector<uint32_t>> strided_permutations(step);
@@ -162,7 +158,7 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
 bool ResultSet::canUseFastBaselineSort(
     const std::list<Analyzer::OrderEntry>& order_entries,
     const size_t top_n) {
-  if (order_entries.size() != 1 || query_mem_desc_.keyless_hash ||
+  if (order_entries.size() != 1 || query_mem_desc_.hasKeylessHash() ||
       query_mem_desc_.sortOnGpu()) {
     return false;
   }
@@ -173,8 +169,9 @@ bool ResultSet::canUseFastBaselineSort(
   if (!target_info.sql_type.is_number() || is_distinct_target(target_info)) {
     return false;
   }
-  return (query_mem_desc_.hash_type == GroupByColRangeType::MultiCol ||
-          query_mem_desc_.hash_type == GroupByColRangeType::OneColKnownRange) &&
+  return (query_mem_desc_.getGroupByColRangeType() == GroupByColRangeType::MultiCol ||
+          query_mem_desc_.getGroupByColRangeType() ==
+              GroupByColRangeType::OneColKnownRange) &&
          !query_mem_desc_.getSmallBufferSizeQuad() && top_n;
 }
 

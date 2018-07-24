@@ -480,7 +480,8 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   auto func_init_shared_mem = query_mem_desc.sharedMemBytes(device_type)
                                   ? mod->getFunction("init_shared_mem")
                                   : mod->getFunction("init_shared_mem_nop");
-  if (query_mem_desc.sharing == GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
+  if (query_mem_desc.getGpuMemSharing() ==
+      GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
     func_init_shared_mem = mod->getFunction("init_shared_mem_dynamic");
   }
   CHECK(func_init_shared_mem);
@@ -488,7 +489,8 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   auto func_write_back = query_mem_desc.sharedMemBytes(device_type)
                              ? mod->getFunction("write_back")
                              : mod->getFunction("write_back_nop");
-  if (query_mem_desc.sharing == GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
+  if (query_mem_desc.getGpuMemSharing() ==
+      GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
     func_write_back = mod->getFunction("write_back_smem_nop");
   }
   CHECK(func_write_back);
@@ -676,8 +678,9 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   llvm::ConstantInt* shared_mem_num_elements_lv = nullptr;
   llvm::ConstantInt* shared_mem_bytes_lv = nullptr;
   llvm::CallInst* result_buffer = nullptr;
-  if (query_mem_desc.sharing == GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
-    int32_t num_shared_mem_buckets = query_mem_desc.entry_count + 1;
+  if (query_mem_desc.getGpuMemSharing() ==
+      GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
+    int32_t num_shared_mem_buckets = query_mem_desc.getEntryCount() + 1;
     shared_mem_bytes_lv =
         ConstantInt::get(i32_type, query_mem_desc.sharedMemBytes(device_type));
     shared_mem_num_elements_lv = ConstantInt::get(i32_type, num_shared_mem_buckets);
@@ -740,7 +743,7 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
 
   // Forcing all threads within a warp to be synchronized (Volta only)
   if (query_mem_desc.isWarpSyncRequired(device_type)) {
-    if (query_mem_desc.sharing ==
+    if (query_mem_desc.getGpuMemSharing() ==
         GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
       // The shared memory path requires __syncthreads to sync all threads within a block,
       // so __syncwarp can make trouble if not propoerly handled; making sure either all
@@ -798,13 +801,14 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   BranchInst::Create(bb_exit, bb_crit_edge);
 
   // Block .exit
-  if (query_mem_desc.sharing == GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
-    CHECK_LT(query_mem_desc.idx_target_as_key,
+  if (query_mem_desc.getGpuMemSharing() ==
+      GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
+    CHECK_LT(query_mem_desc.getTargetIdxForKey(),
              2);  // Saman: not expected for the shared memory design if more than 1
     // Depending on the aggregate's target expression index, we choose different memory
     // layout for the shared memory
     auto func_agg_from_smem_to_gmem =
-        (query_mem_desc.idx_target_as_key == 0)
+        (query_mem_desc.getTargetIdxForKey() == 0)
             ? mod->getFunction("agg_from_smem_to_gmem_count_binId")
             : mod->getFunction("agg_from_smem_to_gmem_binId_count");
     CHECK(func_agg_from_smem_to_gmem);

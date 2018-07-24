@@ -1280,22 +1280,18 @@ TEST(Reduction, Baseline) {
   std::reverse(target_infos.begin(), target_infos.end());
 
   const auto device_type = ExecutorDeviceType::CPU;
-  QueryMemoryDescriptor query_mem_desc;
-  query_mem_desc.keyless_hash = false;
-  query_mem_desc.has_nulls = false;
   CHECK_GT(key_count, 1);
-  query_mem_desc.hash_type = GroupByColRangeType::MultiCol;
-  query_mem_desc.output_columnar = is_columnar;
-  query_mem_desc.entry_count = entry_count;
-  size_t row_size = 0;
-  for (size_t k = 0; k < key_count; ++k) {
-    query_mem_desc.group_col_widths.emplace_back(sizeof(int64_t));
-    row_size += sizeof(int64_t);
-  }
+  size_t row_size = key_count * sizeof(int64_t);
+  std::vector<int8_t> group_col_widths(key_count, sizeof(int64_t));
+  QueryMemoryDescriptor query_mem_desc(
+      GroupByColRangeType::MultiCol, 0, 0, false, group_col_widths);
+  query_mem_desc.setHasKeylessHash(false);
+  query_mem_desc.setOutputColumnar(is_columnar);
+  query_mem_desc.setEntryCount(entry_count);
   for (const auto& target_info : target_infos) {
     const auto slot_bytes =
         std::max(int8_t(8), static_cast<int8_t>(target_info.sql_type.get_size()));
-    query_mem_desc.agg_col_widths.emplace_back(ColWidths{slot_bytes, slot_bytes});
+    query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
     row_size += slot_bytes;
   }
 
@@ -1504,7 +1500,7 @@ TEST(Reduction, Baseline) {
   ASSERT_TRUE(emulator.compare(reduced_result->getStorage()->getUnderlyingBuffer(),
                                key_count,
                                val_count,
-                               reduced_result->getQueryMemDesc().entry_count,
+                               reduced_result->getQueryMemDesc().getEntryCount(),
                                is_columnar,
                                ref_reduced_result));
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
@@ -1549,22 +1545,19 @@ TEST(Reduction, PerfectHash) {
   std::reverse(target_infos.begin(), target_infos.end());
 
   const auto device_type = ExecutorDeviceType::CPU;
-  QueryMemoryDescriptor query_mem_desc;
-  query_mem_desc.keyless_hash = false;
-  query_mem_desc.has_nulls = false;
-  query_mem_desc.hash_type = key_count == 1 ? GroupByColRangeType::OneColKnownRange
-                                            : GroupByColRangeType::MultiColPerfectHash;
-  query_mem_desc.output_columnar = is_columnar;
-  query_mem_desc.entry_count = entry_count;
-  size_t row_size = 0;
-  for (size_t k = 0; k < key_count; ++k) {
-    query_mem_desc.group_col_widths.emplace_back(sizeof(int64_t));
-    row_size += sizeof(int64_t);
-  }
+  size_t row_size = key_count * sizeof(int64_t);
+  std::vector<int8_t> group_col_widths(key_count, sizeof(int64_t));
+  const auto hash_type = key_count == 1 ? GroupByColRangeType::OneColKnownRange
+                                        : GroupByColRangeType::MultiColPerfectHash;
+  QueryMemoryDescriptor query_mem_desc(hash_type, 0, 0, false, group_col_widths);
+  query_mem_desc.setHasKeylessHash(false);
+  query_mem_desc.setOutputColumnar(is_columnar);
+  query_mem_desc.setEntryCount(entry_count);
+
   for (const auto& target_info : target_infos) {
     const auto slot_bytes =
         std::max(int8_t(8), static_cast<int8_t>(target_info.sql_type.get_size()));
-    query_mem_desc.agg_col_widths.emplace_back(ColWidths{slot_bytes, slot_bytes});
+    query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
     row_size += slot_bytes;
   }
 
@@ -1825,7 +1818,7 @@ TEST(Reduction, PerfectHash) {
   ASSERT_TRUE(emulator.compare(reduced_result->getStorage()->getUnderlyingBuffer(),
                                key_count,
                                val_count,
-                               reduced_result->getQueryMemDesc().entry_count,
+                               reduced_result->getQueryMemDesc().getEntryCount(),
                                is_columnar,
                                ref_reduced_result));
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
