@@ -1695,6 +1695,7 @@ class Executor {
   static const int32_t ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED{11};
   static const int32_t ERR_TOO_MANY_LITERALS{12};
   static const int32_t ERR_STRING_CONST_IN_RESULTSET{13};
+  static const int32_t ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY{14};
   friend class BaselineJoinHashTable;
   friend class GroupByAndAggregate;
   friend struct QueryMemoryDescriptor;

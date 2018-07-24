@@ -2234,6 +2234,8 @@ std::string RelAlgExecutor::getErrorMessageFromCode(const int32_t error_code) {
       return "NONE ENCODED String types are not supported as input result set.";
     case Executor::ERR_OUT_OF_RENDER_MEM:
       return "Not enough OpenGL memory to render the query results";
+    case Executor::ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY:
+      return "Streaming-Top-N not supported in Render Query";
   }
   return "Other error: code " + std::to_string(error_code);
 }

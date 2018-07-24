@@ -900,7 +900,9 @@ GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(
     const unsigned grid_size_x,
     const bool can_sort_on_gpu) const {
   if (use_streaming_top_n(ra_exe_unit, query_mem_desc_)) {
-    CHECK(!render_allocator);
+    if (render_allocator) {
+      throw StreamingTopNNotSupportedInRenderQuery();
+    }
     const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
     auto heap_buffers = prepareTopNHeapsDevBuffer(
         data_mgr, init_agg_vals_dev_ptr, n, device_id, block_size_x, grid_size_x);

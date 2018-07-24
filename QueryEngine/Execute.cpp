@@ -2272,6 +2272,8 @@ int32_t Executor::executePlanWithGroupBy(
       return ERR_OUT_OF_GPU_MEM;
     } catch (const OutOfRenderMemory&) {
       return ERR_OUT_OF_RENDER_MEM;
+    } catch (const StreamingTopNNotSupportedInRenderQuery&) {
+      return ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY;
     } catch (const std::bad_alloc&) {
       return ERR_SPECULATIVE_TOP_OOM;
     } catch (const std::exception& e) {

@@ -39,6 +39,12 @@ class OutOfRenderMemory : public std::runtime_error {
   OutOfRenderMemory() : std::runtime_error("OutOfMemory") {}
 };
 
+class StreamingTopNNotSupportedInRenderQuery : public std::runtime_error {
+ public:
+  StreamingTopNNotSupportedInRenderQuery()
+      : std::runtime_error("Streaming-Top-N not supported in Render Query") {}
+};
+
 enum class RAExecutionPolicy { Host, Device };
 
 class RenderAllocator {
