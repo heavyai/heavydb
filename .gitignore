@@ -28,6 +28,8 @@ cmake_install.cmake
 install_manifest.txt
 _build/
 build/
+build_debug/
+build_release/
 build3.6/
 !docker/build/
 
