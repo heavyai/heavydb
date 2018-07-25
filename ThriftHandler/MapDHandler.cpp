@@ -1153,7 +1153,8 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
       } else {
         object_to_find = DBObject(std::stoi(objectName), object_type);
       }
-    } else if ((object_type == TableDBObjectType || object_type == ViewDBObjectType) && !objectName.empty()) {
+    } else if ((object_type == TableDBObjectType || object_type == ViewDBObjectType) &&
+               !objectName.empty()) {
       // special handling for view / table
       auto& cat = session_info_ptr->get_catalog();
       auto td = cat.getMetadataForTable(objectName, false);
@@ -1353,7 +1354,6 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
     try {
       if (!SysCatalog::instance().arePrivilegesOn() ||
           hasTableAccessPrivileges(td, session)) {
-
         session_info.make_superuser();
         const auto query_ra = parse_to_ra(td->viewSQL, session_info);
         TQueryResult result;
