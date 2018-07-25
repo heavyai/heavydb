@@ -999,24 +999,21 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateminus(
       throw std::runtime_error(
           "Only timestamp(0) is supported for TIMESTAMPDIFF operation.");
     }
+    auto bigint_ti = SQLTypeInfo(kBIGINT, false);
     const auto& rex_operator_ti = rex_operator->getType();
     const auto datediff_field =
         (rex_operator_ti.get_type() == kINTERVAL_DAY_TIME) ? dtNANOSECOND : dtMONTH;
-    if (datediff_field == dtNANOSECOND) {
-      auto bigint_time = SQLTypeInfo(kBIGINT, false);
-      const auto datetime_lit =
-          std::dynamic_pointer_cast<Analyzer::Constant>(fold_expr(datetime.get()));
-      const auto rhs_lit =
-          std::dynamic_pointer_cast<Analyzer::Constant>(fold_expr(rhs.get()));
-      const auto datetime_sec =
-          makeNumericConstant(bigint_time, datetime_lit->get_constval().timeval * 1000);
-      const auto rhs_sec =
-          makeNumericConstant(bigint_time, rhs_lit->get_constval().timeval * 1000);
-      return makeExpr<Analyzer::DatediffExpr>(
-          SQLTypeInfo(kBIGINT, false), datediff_field, rhs_sec, datetime_sec);
-    } else if ((datediff_field == dtMONTH)) {
-      return makeExpr<Analyzer::DatediffExpr>(
-          SQLTypeInfo(kBIGINT, false), datediff_field, rhs, datetime);
+    auto result =
+        makeExpr<Analyzer::DatediffExpr>(bigint_ti, datediff_field, rhs, datetime);
+    // multiply 1000 to result since expected result should be in millisecond precision.
+    if (rex_operator_ti.get_type() == kINTERVAL_DAY_TIME) {
+      return makeExpr<Analyzer::BinOper>(bigint_ti.get_type(),
+                                         kMULTIPLY,
+                                         kONE,
+                                         result,
+                                         makeNumericConstant(bigint_ti, 1000));
+    } else {
+      return result;
     }
   }
   const auto interval = fold_expr(rhs.get());

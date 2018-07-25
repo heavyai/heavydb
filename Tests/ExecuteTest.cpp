@@ -2930,6 +2930,34 @@ TEST(Select, Time) {
         v<int64_t>(run_simple_agg("select count(*) from test where TIMESTAMPDIFF(YEAR, "
                                   "m, CAST(o AS TIMESTAMP)) < 0;",
                                   dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(year, DATE '2018-01-02', "
+                                        "DATE '2019-03-04') FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(14,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(month, DATE '2018-01-02', "
+                                        "DATE '2019-03-04') FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(426,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(day, DATE '2018-01-02', "
+                                        "DATE '2019-03-04') FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(60,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(week, DATE '2018-01-02', "
+                                        "DATE '2019-03-04') FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(613440,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(minute, DATE '2018-01-02', "
+                                        "DATE '2019-03-04') FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(10224,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(hour, DATE '2018-01-02', "
+                                        "DATE '2019-03-04') FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(36806400,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(second, DATE '2018-01-02', "
+                                        "DATE '2019-03-04') FROM TEST LIMIT 1;",
+                                        dt)));
 
     ASSERT_EQ(
         1418428800L,
