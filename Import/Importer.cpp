@@ -587,9 +587,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         if (!is_null) {
           SQLTypeInfo ti = cd->columnType;
           ArrayDatum d = StringToArray(val, ti, copy_params);
-          if (ti.get_size() > 0 && ti.get_size() != d.length) {
-            throw std::runtime_error("Fixed length array for column " + cd->columnName + " has incorrect length: " +
-                                     val);
+          if (ti.get_size() > 0 && static_cast<size_t>(ti.get_size()) != d.length) {
+            throw std::runtime_error("Fixed length array for column " + cd->columnName +
+                                     " has incorrect length: " + val);
           }
           addArray(d);
         } else {

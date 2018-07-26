@@ -175,13 +175,6 @@ inline std::string thrift_to_name(const TTypeInfo& ti) {
                                  kENCODING_NONE,
                                  0,
                                  ti.is_array ? type : kNULLT);
-  if (ti.is_array) {
-    // Array size is currently stored in scale which means no support for decimal/numeric
-    // arrays
-    // TODO: pass the size in a dedicated field and remove this limiation
-    internal_ti.set_size(ti.scale);
-    CHECK(type != kDECIMAL && type != kNUMERIC && !IS_GEO(type));
-  }
   if (type == kDECIMAL || type == kNUMERIC) {
     internal_ti.set_precision(ti.precision);
     internal_ti.set_scale(ti.scale);
@@ -193,6 +186,7 @@ inline std::string thrift_to_name(const TTypeInfo& ti) {
     internal_ti.set_input_srid(ti.scale);
     internal_ti.set_output_srid(ti.scale);
   }
+  internal_ti.set_size(ti.size);
   return internal_ti.get_type_name();
 }
 

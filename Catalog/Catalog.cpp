@@ -3126,7 +3126,8 @@ void Catalog::createTable(
           // Raw data: compressed/uncompressed coords
           coords_ti.set_subtype(kTINYINT);
           size_t unit_size;
-          if (col_ti.get_compression() == kENCODING_GEOINT && col_ti.get_comp_param() == 32) {
+          if (col_ti.get_compression() == kENCODING_GEOINT &&
+              col_ti.get_comp_param() == 32) {
             unit_size = 4 * sizeof(int8_t);
           } else {
             CHECK(col_ti.get_compression() == kENCODING_NONE);

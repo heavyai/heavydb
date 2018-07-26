@@ -2541,10 +2541,10 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
         SQLTypeInfo elem_ti = cd->columnType.get_elem_type();
         size_t len = l.size() * elem_ti.get_size();
         auto size = cd->columnType.get_size();
-        if (size > 0 && size != len) {
+        if (size > 0 && static_cast<size_t>(size) != len) {
           throw std::runtime_error("Array column " + cd->columnName + " expects " +
-                                   std::to_string(size / elem_ti.get_size()) + " values, " + "received " +
-                                   std::to_string(l.size()));
+                                   std::to_string(size / elem_ti.get_size()) +
+                                   " values, " + "received " + std::to_string(l.size()));
         }
         CHECK(!elem_ti.is_string());
         int8_t* buf = (int8_t*)checked_malloc(len);

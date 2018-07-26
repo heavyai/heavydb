@@ -24,15 +24,16 @@
 #ifndef FIXED_LENGTH_ARRAY_NONE_ENCODER_H
 #define FIXED_LENGTH_ARRAY_NONE_ENCODER_H
 
+#include <glog/logging.h>
+#include <cassert>
 #include <cstring>
 #include <memory>
-#include <vector>
+#include <mutex>
 #include <string>
-#include <cassert>
+#include <vector>
 #include "AbstractBuffer.h"
 #include "ChunkMetadata.h"
 #include "Encoder.h"
-#include <mutex>
 
 using Data_Namespace::AbstractBuffer;
 
@@ -44,31 +45,37 @@ class FixedLengthArrayNoneEncoder : public Encoder {
   size_t getNumElemsForBytesInsertData(const std::vector<ArrayDatum>* srcData,
                                        const int start_idx,
                                        const size_t numAppendElems,
-                                       const size_t byteLimit) {
+                                       const size_t byteLimit,
+                                       const bool replicating = false) {
     size_t dataSize = numAppendElems * array_size;
     if (dataSize > byteLimit)
       dataSize = byteLimit;
     return dataSize / array_size;
   }
 
-  ChunkMetadata appendData(int8_t*& srcData, const size_t numAppendElems) {
+  ChunkMetadata appendData(int8_t*& srcData,
+                           const size_t numAppendElems,
+                           const bool replicating = false) {
     assert(false);  // should never be called for arrays
     ChunkMetadata chunkMetadata;
     getMetadata(chunkMetadata);
     return chunkMetadata;
   }
 
-  ChunkMetadata appendData(const std::vector<ArrayDatum>* srcData, const int start_idx, const size_t numAppendElems) {
+  ChunkMetadata appendData(const std::vector<ArrayDatum>* srcData,
+                           const int start_idx,
+                           const size_t numAppendElems,
+                           const bool replicating = false) {
     size_t data_size = array_size * numAppendElems;
     buffer_->reserve(data_size);
 
-    for (int i = start_idx; i < start_idx + numAppendElems; i++) {
+    for (size_t i = start_idx; i < start_idx + numAppendElems; i++) {
       size_t len = (*srcData)[i].length;
       CHECK(len == array_size);
-      buffer_->append((*srcData)[i].data_ptr.get(), len);
+      buffer_->append((*srcData)[replicating ? 0 : i].data_ptr.get(), len);
 
       // keep Chunk statistics with array elements
-      update_elem_stats((*srcData)[i]);
+      update_elem_stats((*srcData)[replicating ? 0 : i]);
     }
     // make sure buffer_ is flushed even if no new data is appended to it
     // (e.g. empty strings) because the metadata needs to be flushed.
@@ -106,7 +113,8 @@ class FixedLengthArrayNoneEncoder : public Encoder {
 
   void copyMetadata(const Encoder* copyFromEncoder) {
     numElems = copyFromEncoder->numElems;
-    auto array_encoder = dynamic_cast<const FixedLengthArrayNoneEncoder*>(copyFromEncoder);
+    auto array_encoder =
+        dynamic_cast<const FixedLengthArrayNoneEncoder*>(copyFromEncoder);
     elem_min = array_encoder->elem_min;
     elem_max = array_encoder->elem_max;
     has_nulls = array_encoder->has_nulls;

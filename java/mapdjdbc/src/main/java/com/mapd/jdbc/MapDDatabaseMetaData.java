@@ -1280,7 +1280,7 @@ SQLException - if a database access error occurs
     MAPDLOGGER.debug("TablePattern " + tableNamePattern + " modifiedTableNamePattern " + modifiedTablePattern);
 
     // declare the columns in the result set
-    final TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
+    final TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0, -1);
     final TDatumType datumType = strTTI.type;
 
     Map<String, MapDData> dataMap = new HashMap() {{
