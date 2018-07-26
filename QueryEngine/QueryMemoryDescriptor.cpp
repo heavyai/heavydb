@@ -50,7 +50,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor()
     , has_nulls_(false)
     , sharing_(GroupByMemSharing::Private)
     , sort_on_gpu_(false)
-    , is_sort_plan_(false)
     , output_columnar_(false)
     , render_output_(false)
     , must_use_baseline_sort_(false)
@@ -78,7 +77,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
     , has_nulls_(false)
     , sharing_(GroupByMemSharing::Private)
     , sort_on_gpu_(false)
-    , is_sort_plan_(false)
     , output_columnar_(false)
     , render_output_(false)
     , must_use_baseline_sort_(false)
@@ -109,7 +107,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const GroupByColRangeType hash_type
     , has_nulls_(false)
     , sharing_(GroupByMemSharing::Private)
     , sort_on_gpu_(false)
-    , is_sort_plan_(false)
     , output_columnar_(false)
     , render_output_(false)
     , must_use_baseline_sort_(false)
@@ -139,7 +136,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     const GroupByMemSharing sharing,
     const CountDistinctDescriptors count_distinct_descriptors,
     const bool sort_on_gpu,
-    const bool is_sort_plan,
     const bool output_columnar,
     const bool render_output,
     const std::vector<int8_t>& key_column_pad_bytes,
@@ -167,7 +163,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , sharing_(sharing)
     , count_distinct_descriptors_(count_distinct_descriptors)
     , sort_on_gpu_(sort_on_gpu)
-    , is_sort_plan_(is_sort_plan)
     , output_columnar_(output_columnar)
     , render_output_(render_output)
     , key_column_pad_bytes_(key_column_pad_bytes)

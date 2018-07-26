@@ -109,7 +109,6 @@ class QueryMemoryDescriptor {
                         const GroupByMemSharing sharing,
                         const CountDistinctDescriptors count_distinct_descriptors,
                         const bool sort_on_gpu,
-                        const bool is_sort_plan,
                         const bool output_columnar,
                         const bool reder_output,
                         const std::vector<int8_t>& key_column_pad_bytes,
@@ -367,7 +366,6 @@ class QueryMemoryDescriptor {
   GroupByMemSharing sharing_;  // meaningful for GPU only
   CountDistinctDescriptors count_distinct_descriptors_;
   bool sort_on_gpu_;
-  bool is_sort_plan_;  // TODO(alex): remove
   bool output_columnar_;
   bool render_output_;
   std::vector<int8_t> key_column_pad_bytes_;
