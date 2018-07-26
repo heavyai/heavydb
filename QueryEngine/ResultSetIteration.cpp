@@ -409,10 +409,16 @@ InternalTargetValue ResultSet::getColumnInternal(
                                    : key_width;
       const int8_t* ptr2{nullptr};
       int8_t compact_sz2{0};
-      if ((agg_info.is_agg && agg_info.agg_kind == kAVG) ||
-          is_real_str_or_array(agg_info)) {
+      if ((agg_info.is_agg && agg_info.agg_kind == kAVG)) {
         ptr2 = rowwise_target_ptr + query_mem_desc_.agg_col_widths[agg_col_idx].compact;
         compact_sz2 = query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
+      } else if (is_real_str_or_array(agg_info)) {
+        ptr2 = rowwise_target_ptr + query_mem_desc_.agg_col_widths[agg_col_idx].compact;
+        if (!none_encoded_strings_valid_) {
+          // None encoded strings explicitly attached to ResultSetStorage do not have a
+          // second slot in the QueryMemoryDescriptor col width vector
+          compact_sz2 = query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
+        }
       }
       if (target_idx == target_logical_idx) {
         const auto i1 = lazyReadInt(read_int_from_buff(ptr1, compact_sz1),
@@ -1301,7 +1307,13 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
     const auto ptr2 =
         rowwise_target_ptr + query_mem_desc_.agg_col_widths[slot_idx].compact;
     compact_sz1 = query_mem_desc_.agg_col_widths[slot_idx].compact;
-    const auto compact_sz2 = query_mem_desc_.agg_col_widths[slot_idx + 1].compact;
+    int8_t compact_sz2 = 0;
+    // Skip reading the second slot if we have a none encoded string and are using the
+    // none encoded strings buffer attached to ResultSetStorage
+    if (!(none_encoded_strings_valid_ && target_info.sql_type.is_string() &&
+          target_info.sql_type.get_compression() == kENCODING_NONE)) {
+      compact_sz2 = query_mem_desc_.agg_col_widths[slot_idx + 1].compact;
+    }
     CHECK(ptr2);
     return target_info.agg_kind == kAVG
                ? make_avg_target_value(ptr1, compact_sz1, ptr2, compact_sz2, target_info)
