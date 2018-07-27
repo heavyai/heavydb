@@ -28,6 +28,7 @@
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/RelAlgExecutor.h"
 
+#include <glog/logging.h>
 #include <boost/filesystem/operations.hpp>
 #include <csignal>
 #include <random>
@@ -213,7 +214,8 @@ ExecutionResult run_select_query(
     const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
     const ExecutorDeviceType device_type,
     const bool hoist_literals,
-    const bool allow_loop_joins) {
+    const bool allow_loop_joins,
+    const bool just_explain) {
   CHECK(!g_aggregator);
 
   const auto& cat = session->get_catalog();
@@ -221,7 +223,7 @@ ExecutionResult run_select_query(
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
   ExecutionOptions eo = {
-      false, true, false, allow_loop_joins, false, false, false, false, 10000};
+      false, true, just_explain, allow_loop_joins, false, false, false, false, 10000};
   auto& calcite_mgr = cat.get_calciteMgr();
   const auto query_ra =
       calcite_mgr.process(*session, pg_shim(query_str), true, false).plan_result;
@@ -256,26 +258,45 @@ std::shared_ptr<ResultSet> run_multiple_agg(
     const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
     const ExecutorDeviceType device_type,
     const bool hoist_literals,
-    const bool allow_loop_joins) {
+    const bool allow_loop_joins,
+    const std::unique_ptr<IROutputFile>& ir_output_file) {
   if (g_aggregator) {
     return run_sql_distributed(query_str, session, device_type, allow_loop_joins);
   }
 
   ParserWrapper pw{query_str};
   if (is_calcite_path_permissable(pw)) {
+    if (ir_output_file && (pw.getDMLType() == ParserWrapper::DMLType::NotDML)) {
+      try {
+        const auto result = run_select_query(
+            query_str, session, device_type, hoist_literals, allow_loop_joins, true);
+        const auto crt_row = result.getRows()->getNextRow(true, true);
+        CHECK_EQ(size_t(1), crt_row.size());
+        const auto scalar_ir = boost::get<ScalarTargetValue>(&crt_row[0]);
+        CHECK(scalar_ir);
+        const auto ir_ns = boost::get<NullableString>(scalar_ir);
+        CHECK(ir_ns);
+        const auto ir_str = boost::get<std::string>(ir_ns);
+        CHECK(ir_str);
+        (*ir_output_file)(query_str, *ir_str);
+      } catch (const std::exception& e) {
+        LOG(INFO) << "Failed to run EXPLAIN on SELECT query: " << query_str << " ("
+                  << e.what() << ")";
+      }
+    }
     const auto execution_result = run_select_query(
         query_str, session, device_type, hoist_literals, allow_loop_joins);
+
     return execution_result.getRows();
   }
-
-  Planner::RootPlan* plan = parse_plan(query_str, session);
-  std::unique_ptr<Planner::RootPlan> plan_ptr(plan);  // make sure it's deleted
 
   const auto& cat = session->get_catalog();
   auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
 
+  auto plan = std::unique_ptr<Planner::RootPlan>(parse_plan(query_str, session));
+
 #ifdef HAVE_CUDA
-  return executor->execute(plan,
+  return executor->execute(plan.get(),
                            *session,
                            hoist_literals,
                            device_type,
@@ -283,7 +304,7 @@ std::shared_ptr<ResultSet> run_multiple_agg(
                            true,
                            allow_loop_joins);
 #else
-  return executor->execute(plan,
+  return executor->execute(plan.get(),
                            *session,
                            hoist_literals,
                            device_type,

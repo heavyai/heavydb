@@ -49,6 +49,7 @@ extern bool g_enable_smem_group_by;
 namespace {
 
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
+std::unique_ptr<QueryRunner::IROutputFile> g_ir_output_file;
 bool g_hoist_literals{true};
 size_t g_shard_count{0};
 
@@ -116,8 +117,12 @@ std::string build_create_table_statement(
 std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
                                             const ExecutorDeviceType device_type,
                                             const bool allow_loop_joins) {
-  return QueryRunner::run_multiple_agg(
-      query_str, g_session, device_type, g_hoist_literals, allow_loop_joins);
+  return QueryRunner::run_multiple_agg(query_str,
+                                       g_session,
+                                       device_type,
+                                       g_hoist_literals,
+                                       allow_loop_joins,
+                                       g_ir_output_file);
 }
 
 std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
@@ -10536,15 +10541,29 @@ int main(int argc, char** argv) {
   desc.add_options()(
       "use-existing-data",
       "Don't create and drop tables and only run select tests (it implies --keep-data).");
+  desc.add_options()("dump-ir",
+                     po::value<std::string>(),
+                     "Dump IR for all executed queries to file. Currently only supports "
+                     "single node tests.");
   desc.add_options()("disable-fast-strcmp",
                      po::value<bool>(&g_fast_strcmp)
                          ->default_value(g_fast_strcmp)
                          ->implicit_value(false),
                      "Disable fast string comparison");
 
+  desc.add_options()(
+      "test-help",
+      "Print all ExecuteTest specific options (for gtest options use `--help`).");
+
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
   po::notify(vm);
+
+  if (vm.count("test-help")) {
+    std::cout << "Usage: ExecuteTest" << std::endl << std::endl;
+    std::cout << desc << std::endl;
+    return 0;
+  }
 
   if (vm.count("disable-literal-hoisting")) {
     g_hoist_literals = false;
@@ -10554,6 +10573,11 @@ int main(int argc, char** argv) {
 
   if (vm.count("with-sharding")) {
     g_shard_count = choose_shard_count();
+  }
+
+  if (vm.count("dump-ir")) {
+    const auto filename = vm["dump-ir"].as<std::string>();
+    g_ir_output_file = std::make_unique<QueryRunner::IROutputFile>(filename);
   }
 
   // insert artificial gap of columnId so as to test against the gap w/o

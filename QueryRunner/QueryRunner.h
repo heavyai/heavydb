@@ -20,6 +20,7 @@
 #include "../QueryEngine/CompilationOptions.h"
 #include "LeafAggregator.h"
 
+#include <fstream>
 #include <memory>
 #include <string>
 
@@ -33,6 +34,19 @@ class ResultSet;
 class ExecutionResult;
 
 namespace QueryRunner {
+
+struct IROutputFile {
+  IROutputFile(const std::string& filename) : filename(filename) {
+    ofs.open(filename, std::ios::trunc);
+  }
+  ~IROutputFile() { ofs.close(); }
+  std::string filename;
+  std::ofstream ofs;
+
+  void operator()(const std::string& query_str, const std::string& ir_str) {
+    ofs << query_str << "\n\n" << ir_str << "\n\n";
+  }
+};
 
 LeafAggregator* get_leaf_aggregator();
 
@@ -67,14 +81,16 @@ ExecutionResult run_select_query(
     const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
     const ExecutorDeviceType device_type,
     const bool hoist_literals,
-    const bool allow_loop_joins);
+    const bool allow_loop_joins,
+    const bool just_explain = false);
 
 std::shared_ptr<ResultSet> run_multiple_agg(
     const std::string& query_str,
     const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
     const ExecutorDeviceType device_type,
     const bool hoist_literals,
-    const bool allow_loop_joins);
+    const bool allow_loop_joins,
+    const std::unique_ptr<IROutputFile>& ir_output_file = nullptr);
 
 void run_ddl_statement(const std::string& create_table_stmt,
                        const std::unique_ptr<Catalog_Namespace::SessionInfo>& session);
