@@ -83,7 +83,7 @@ struct TTypeInfo {
   5: i32 precision,
   6: i32 scale,
   7: i32 comp_param,
-  8: i32 size
+  8: optional i32 size=-1
 }
 
 struct TColumnType {
