@@ -48,7 +48,8 @@
       parseTrees.emplace_back(new DropRoleStmt(role_name));                                                             \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    boost::regex grant_privileges_expr{R"(GRANT\s+([A-Za-z_][A-Za-z0-9\$_\s]*)\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z0-9\$_\.]*)\s+TO\s+([A-Za-z_][A-Za-z0-9\$_]*)\s*;)", \
+    std::string username_regex = R"((([A-Za-z_][A-Za-z0-9\$_]*)|([^\s"]+|".+")@[A-Za-z0-9][A-Za-z0-9\-\.]*\.[A-Za-z]+))"; \
+    boost::regex grant_privileges_expr{R"(GRANT\s+([A-Za-z_][A-Za-z0-9\$_\s]*)\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z0-9\$_\.]*)\s+TO\s+)" + username_regex + R"(\s*;)", \
                                        boost::regex::extended | boost::regex::icase};                                   \
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, grant_privileges_expr)) {                \
       const auto priv = what[1].str();                                                                                  \
@@ -58,7 +59,7 @@
       parseTrees.emplace_back(new GrantPrivilegesStmt(priv, object_type, object_name, role_name));                      \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    boost::regex revoke_privileges_expr{R"(REVOKE\s+([A-Za-z_][A-Za-z0-9\$_\s]*)\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z0-9\$_\.]*)\s+FROM\s+([A-Za-z_][A-Za-z0-9\$_]*)\s*;)", \
+    boost::regex revoke_privileges_expr{R"(REVOKE\s+([A-Za-z_][A-Za-z0-9\$_\s]*)\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z0-9\$_\.]*)\s+FROM\s+)" + username_regex + R"(\s*;)", \
                                        boost::regex::extended | boost::regex::icase};                                   \
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, revoke_privileges_expr)) {               \
       const auto priv = what[1].str();                                                                                  \
@@ -68,7 +69,7 @@
       parseTrees.emplace_back(new RevokePrivilegesStmt(priv, object_type, object_name, role_name));                     \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    boost::regex show_privileges_expr{R"(SHOW\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z0-9\$_\.]*)\s+FOR\s+([A-Za-z_][A-Za-z0-9\$_]*)\s*;)", \
+    boost::regex show_privileges_expr{R"(SHOW\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z0-9\$_\.]*)\s+FOR\s+)" + username_regex + R"(\s*;)", \
                                        boost::regex::extended | boost::regex::icase};                                   \
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, show_privileges_expr)) {                 \
       const auto object_type = what[1].str();                                                                           \
@@ -77,7 +78,7 @@
       parseTrees.emplace_back(new ShowPrivilegesStmt(object_type, object_name, role_name));                             \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    boost::regex grant_role_expr{R"(GRANT\s+([A-Za-z_][A-Za-z0-9\$_]*)\s+TO\s+([A-Za-z_][A-Za-z0-9\$_]*)\s*;)",		\
+    boost::regex grant_role_expr{R"(GRANT\s+([A-Za-z_][A-Za-z0-9\$_]*)\s+TO\s+)" + username_regex + R"(\s*;)",	     	\
                                  boost::regex::extended | boost::regex::icase};                                         \
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, grant_role_expr)) {                      \
       const auto role_name = what[1].str();                                                                             \
@@ -85,7 +86,7 @@
       parseTrees.emplace_back(new GrantRoleStmt(role_name, user_name));                                                 \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    boost::regex revoke_role_expr{R"(REVOKE\s+([A-Za-z_][A-Za-z0-9\$_]*)\s+FROM\s+([A-Za-z_][A-Za-z0-9\$_]*)\s*;)",	\
+    boost::regex revoke_role_expr{R"(REVOKE\s+([A-Za-z_][A-Za-z0-9\$_]*)\s+FROM\s+)" + username_regex + R"(\s*;)",   	\
                                   boost::regex::extended | boost::regex::icase};                                        \
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, revoke_role_expr)) {                     \
       const auto role_name = what[1].str();                                                                             \
@@ -149,6 +150,7 @@ using namespace Parser;
 	/* symbolic tokens */
 
 %token NAME
+%token EMAIL
 %token STRING FWDSTR
 %token INTNUM FIXEDNUM
 
@@ -237,6 +239,10 @@ schema_element:
 	;
 NOT SUPPORTED */
 
+username:
+        NAME | EMAIL
+    ;
+
 create_database_statement:
 		CREATE DATABASE NAME
 		{
@@ -254,19 +260,19 @@ drop_database_statement:
 		}
 		;
 create_user_statement:
-		CREATE USER NAME '(' name_eq_value_list ')'
+		CREATE USER username '(' name_eq_value_list ')'
 		{
 			$<nodeval>$ = new CreateUserStmt($<stringval>3, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>5));
 		}
 		;
 drop_user_statement:
-		DROP USER NAME
+		DROP USER username
 		{
 			$<nodeval>$ = new DropUserStmt($<stringval>3);
 		}
 		;
 alter_user_statement:
-		ALTER USER NAME '(' name_eq_value_list ')'
+		ALTER USER username '(' name_eq_value_list ')'
 		{
 			$<nodeval>$ = new AlterUserStmt($<stringval>3, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>5));
 		}
