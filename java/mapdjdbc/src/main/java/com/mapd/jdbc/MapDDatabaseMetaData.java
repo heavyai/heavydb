@@ -48,8 +48,6 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDDatabaseMetaData.class);
 
     MapDConnection con = null;
-    int driverMajorVersion = 1;
-    int driverMinorVersion = 3;
     int databaseMajorVersion = 0;
     int databaseMinorVersion = 0;
     String databaseVersion = null;
@@ -147,18 +145,14 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
   @Override
   public String getDriverVersion() throws SQLException { //logger.debug("Entered");
     MAPDLOGGER.debug("Entered");
-    return Integer.toString(this.driverMajorVersion) + "." + Integer.toString(this.driverMinorVersion);
+    return Integer.toString(MapDDriver.DriverMajorVersion) + "." + Integer.toString(MapDDriver.DriverMinorVersion);
   }
 
   @Override
-  public int getDriverMajorVersion() {
-    return this.driverMajorVersion;
-  }
+  public int getDriverMajorVersion() { return MapDDriver.DriverMajorVersion; }
 
   @Override
-  public int getDriverMinorVersion() {
-    return this.driverMinorVersion;
-  }
+  public int getDriverMinorVersion() { return MapDDriver.DriverMinorVersion; }
 
   @Override
   public boolean usesLocalFiles() throws SQLException {

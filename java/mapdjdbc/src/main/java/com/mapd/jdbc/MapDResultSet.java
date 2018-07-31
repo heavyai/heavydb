@@ -356,8 +356,36 @@ class MapDResultSet implements java.sql.ResultSet {
       // assume column is str already for now
       wasNull = false;
       long val = rowSet.columns.get(columnIndex - 1).data.int_col.get(offset);
-      return new Timestamp(val * 1000);
+      Timestamp tm = null;
+      int precision = rowSet.row_desc.get(columnIndex - 1).col_type.getPrecision();
+      boolean negative = (val < 0);
+      long scale;
+      switch (precision){
+        case 0:
+          return new Timestamp(val * 1000);
+        case 3:
+          return new Timestamp(val);
+        case 6:
+          return extract_complex_time(val,  precision);
+        case 9:
+          return extract_complex_time(val,  precision);
+        default:
+          throw new RuntimeException("Invalid precision [" + Integer.toString(precision) +
+                  "] returned. Valid values 0,3,6,9");
+      }
     }
+  }
+  private Timestamp extract_complex_time(long val, int precision) {
+    long scale = (long)Math.pow(10, precision);
+    double nano_part = Math.abs(val) % scale;
+    if(val < 0) nano_part = -nano_part;
+    nano_part = (int)((nano_part + scale) % scale) * (long)Math.pow(10, 9 - precision);
+    long micro_sec_value  = (long)(val / scale);
+    // Round value
+    micro_sec_value  = micro_sec_value - ((micro_sec_value < 0 && nano_part > 0) ? 1 : 0);
+    Timestamp tm = new Timestamp(micro_sec_value * 1000); //convert to milli seconds and make a time
+    tm.setNanos((int)(nano_part));
+    return tm;
   }
 
   @Override
@@ -562,6 +590,11 @@ class MapDResultSet implements java.sql.ResultSet {
         case DOUBLE:
           return this.rowSet.columns.get(columnIndex - 1).data.real_col.get(offset);
         case STR:
+          return this.rowSet.columns.get(columnIndex - 1).data.str_col.get(offset);
+        case POINT:
+        case LINESTRING:
+        case POLYGON:
+        case MULTIPOLYGON:
           return this.rowSet.columns.get(columnIndex - 1).data.str_col.get(offset);
         default:
           throw new AssertionError(rowDesc.get(columnIndex - 1).col_type.type.name());
