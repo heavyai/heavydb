@@ -600,6 +600,11 @@ int main(int argc, char** argv) {
     LOG(INFO) << " From clause table reordering is disabled";
   }
 
+  boost::algorithm::trim_if(mapd_parameters.ha_brokers, boost::is_any_of("\"'"));
+  boost::algorithm::trim_if(mapd_parameters.ha_group_id, boost::is_any_of("\"'"));
+  boost::algorithm::trim_if(mapd_parameters.ha_shared_data, boost::is_any_of("\"'"));
+  boost::algorithm::trim_if(mapd_parameters.ha_unique_server_id, boost::is_any_of("\"'"));
+
   if (!mapd_parameters.ha_group_id.empty()) {
     LOG(INFO) << " HA group id " << mapd_parameters.ha_group_id;
     if (mapd_parameters.ha_unique_server_id.empty()) {
