@@ -82,10 +82,9 @@ void scanForTablesAndAggsInRelAlgSeqForRender(std::vector<RaExecutionDesc>& exec
         continue;
       }
       if (node_is_aggregate(walker)) {
-        // don't do this if we're doing in-situ polys (see new logic in
-        // executeRelAlgQueryNoRetry) simon.eves 8/1/18
-        if (render_info->render_query_specialty_type !=
-            QueryRenderer::RenderQuerySpecialtyType::POLYS) {
+        // see new logic in executeRelAlgQueryNoRetry
+        // if not using more relaxed logic, disallow if we find an aggregate *anywhere*
+        if (!render_info->disallow_in_situ_only_if_final_ED_is_aggregate) {
           // set the render to be non in-situ if we have an
           // aggregate node
           render_info->setInSituDataIfUnset(false);
@@ -166,21 +165,18 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const std::string& que
     // set whether the query results will be transferred to the host and then
     // back to the device for rendering (in_situ_data = false)
 
-    // if this is a potential in-situ poly render, we use a different
-    // logic to check for conditions that disallow in-situ
-    if (render_info->render_query_specialty_type ==
-        QueryRenderer::RenderQuerySpecialtyType::POLYS) {
+    // if this is a potential in-situ poly render, we use more relaxed logic
+    // only disallow in-situ if the *final* ED is an aggregate
+    // this *should* be usable for point renders too, but not safe yet
+    if (render_info->disallow_in_situ_only_if_final_ED_is_aggregate) {
       // new logic
-      // only disallow in-situ rendering if the *last* ED is an aggregate
-      // this *should* be usable for point renders too, but not safe yet
-      // simon.eves 8/1/18
       CHECK(ed_list.size() > 0);
       if (node_is_aggregate(ed_list.back().getBody())) {
         render_info->setInSituDataIfUnset(false);
       }
     } else {
       // old logic
-      // not clear to me what the old logic *is*, but...
+      // disallow if more than one ED, and there's an aggregate *anywhere*
       if (ed_list.size() != 1) {
         render_info->setInSituDataIfUnset(false);
       }

@@ -82,7 +82,6 @@ bool RenderInfo::setInSituDataIfUnset(const bool is_in_situ_data) {
   return false;
 }
 
-void RenderInfo::reset(
-    const QueryRenderer::RenderQuerySpecialtyType render_query_specialty_type_in) {
+void RenderInfo::reset(const bool disallow_in_situ_only_if_final_ED_is_aggregate_in) {
   CHECK(false);
 }
