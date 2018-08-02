@@ -82,9 +82,14 @@ void scanForTablesAndAggsInRelAlgSeqForRender(std::vector<RaExecutionDesc>& exec
         continue;
       }
       if (node_is_aggregate(walker)) {
-        // set the render to be non in-situ if we have an
-        // aggregate node
-        render_info->setInSituDataIfUnset(false);
+        // don't do this if we're doing in-situ polys (see new logic in
+        // executeRelAlgQueryNoRetry) simon.eves 8/1/18
+        if (render_info->render_query_specialty_type !=
+            QueryRenderer::RenderQuerySpecialtyType::POLYS) {
+          // set the render to be non in-situ if we have an
+          // aggregate node
+          render_info->setInSituDataIfUnset(false);
+        }
       }
       const auto compound = dynamic_cast<const RelCompound*>(walker);
       const auto join = dynamic_cast<const RelJoin*>(walker);
@@ -160,8 +165,25 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const std::string& que
     // set whether the render will be done in-situ (in_situ_data = true) or
     // set whether the query results will be transferred to the host and then
     // back to the device for rendering (in_situ_data = false)
-    if (ed_list.size() != 1) {
-      render_info->setInSituDataIfUnset(false);
+
+    // if this is a potential in-situ poly render, we use a different
+    // logic to check for conditions that disallow in-situ
+    if (render_info->render_query_specialty_type ==
+        QueryRenderer::RenderQuerySpecialtyType::POLYS) {
+      // new logic
+      // only disallow in-situ rendering if the *last* ED is an aggregate
+      // this *should* be usable for point renders too, but not safe yet
+      // simon.eves 8/1/18
+      CHECK(ed_list.size() > 0);
+      if (node_is_aggregate(ed_list.back().getBody())) {
+        render_info->setInSituDataIfUnset(false);
+      }
+    } else {
+      // old logic
+      // not clear to me what the old logic *is*, but...
+      if (ed_list.size() != 1) {
+        render_info->setInSituDataIfUnset(false);
+      }
     }
     scanForTablesAndAggsInRelAlgSeqForRender(ed_list, render_info);
   }

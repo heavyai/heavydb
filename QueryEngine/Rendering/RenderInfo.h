@@ -20,6 +20,8 @@
 #include "../ResultRows.h"
 #include "RenderAllocator.h"
 
+#include <QueryRenderer/RenderQueryExecuteTypes.h>
+
 class RenderInfo {
  public:
   std::unique_ptr<RenderAllocatorMap> render_allocator_map_ptr;
@@ -35,6 +37,7 @@ class RenderInfo {
       table_names;  // the names of all the tables used in a query in hierarchical order.
                     // For example, for join queries, the outer join table will be the
                     // first item in this list
+  QueryRenderer::RenderQuerySpecialtyType render_query_specialty_type;
 
   RenderInfo(const std::string& session_id,
              const int render_widget_id,
@@ -58,7 +61,8 @@ class RenderInfo {
 
   bool setInSituDataIfUnset(const bool is_in_situ_data);
 
-  void reset();
+  void reset(
+      const QueryRenderer::RenderQuerySpecialtyType render_query_specialty_type_in);
 
  private:
   enum class InSituState { UNSET, IS_IN_SITU, IS_NOT_IN_SITU };
