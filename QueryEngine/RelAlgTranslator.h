@@ -124,13 +124,15 @@ class RelAlgTranslator {
       SQLTypeInfo& arg_ti,
       int32_t& lindex,
       const bool with_bounds,
-      const bool expand_geo_col = false) const;
+      const bool with_render_group,
+      const bool expand_geo_col) const;
 
   std::vector<std::shared_ptr<Analyzer::Expr>> translateGeoColumn(
       const RexInput*,
       SQLTypeInfo&,
       const bool with_bounds,
-      const bool expand_geo_col = false) const;
+      const bool with_render_group,
+      const bool expand_geo_col) const;
 
   std::vector<std::shared_ptr<Analyzer::Expr>> translateGeoLiteral(const RexLiteral*,
                                                                    SQLTypeInfo&,

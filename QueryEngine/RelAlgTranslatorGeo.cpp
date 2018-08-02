@@ -21,6 +21,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
     const RexInput* rex_input,
     SQLTypeInfo& ti,
     const bool with_bounds,
+    const bool with_render_group,
     const bool expand_geo_col) const {
   std::vector<std::shared_ptr<Analyzer::Expr>> args;
   const auto source = rex_input->getSourceNode();
@@ -62,6 +63,15 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
     auto bounds_ti = bounds_cd->columnType;
     args.push_back(std::make_shared<Analyzer::ColumnVar>(
         bounds_ti, table_desc->tableId, bounds_cd->columnId, rte_idx));
+  }
+  if (with_render_group && ti.has_render_group()) {
+    const auto render_group_cd = cat_.getMetadataForColumnBySpi(
+        table_desc->tableId,
+        SPIMAP_GEO_PHYSICAL_INPUT(rex_input->getIndex(),
+                                  ti.get_physical_coord_cols() + 2));
+    auto render_group_ti = render_group_cd->columnType;
+    args.push_back(std::make_shared<Analyzer::ColumnVar>(
+        render_group_ti, table_desc->tableId, render_group_cd->columnId, rte_idx));
   }
   return args;
 }
@@ -169,6 +179,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
     SQLTypeInfo& arg_ti,
     int32_t& lindex,
     const bool with_bounds,
+    const bool with_render_group,
     const bool expand_geo_col) const {
   std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
 
@@ -179,7 +190,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
     if (!column || !column->get_type_info().is_geometry()) {
       throw QueryNotSupported("Geo function is expecting a geo column argument");
     }
-    return translateGeoColumn(rex_input, arg_ti, with_bounds, expand_geo_col);
+    return translateGeoColumn(
+        rex_input, arg_ti, with_bounds, with_render_group, expand_geo_col);
   }
   const auto rex_function = dynamic_cast<const RexFunctionOperator*>(rex_scalar);
   if (rex_function) {
@@ -190,7 +202,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       if (!rex_scalar0) {
         throw QueryNotSupported(rex_function->getName() + ": unexpected first argument");
       }
-      auto arg0 = translateGeoFunctionArg(rex_scalar0, arg_ti, lindex, with_bounds);
+      auto arg0 = translateGeoFunctionArg(
+          rex_scalar0, arg_ti, lindex, with_bounds, with_render_group, expand_geo_col);
 
       const auto rex_literal =
           dynamic_cast<const RexLiteral*>(rex_function->getOperand(1));
@@ -282,7 +295,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         throw QueryNotSupported(rex_function->getName() +
                                 ": expects scalar as first argument");
       }
-      auto arg0 = translateGeoFunctionArg(rex_scalar0, arg_ti, lindex, with_bounds);
+      auto arg0 = translateGeoFunctionArg(
+          rex_scalar0, arg_ti, lindex, with_bounds, with_render_group, expand_geo_col);
       if (arg_ti.get_type() != kLINESTRING) {
         throw QueryNotSupported(rex_function->getName() +
                                 " expects LINESTRING as first argument");
@@ -326,7 +340,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         throw QueryNotSupported(rex_function->getName() +
                                 ": expects scalar as first argument");
       }
-      auto arg0 = translateGeoFunctionArg(rex_scalar0, arg_ti, lindex, with_bounds);
+      auto arg0 = translateGeoFunctionArg(
+          rex_scalar0, arg_ti, lindex, with_bounds, with_render_group, expand_geo_col);
       if (arg_ti.get_type() != kLINESTRING) {
         throw QueryNotSupported(rex_function->getName() +
                                 " expects LINESTRING as first argument");
@@ -345,7 +360,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         throw QueryNotSupported(rex_function->getName() +
                                 ": expects scalar as first argument");
       }
-      auto arg0 = translateGeoFunctionArg(rex_scalar0, arg_ti, lindex, with_bounds);
+      auto arg0 = translateGeoFunctionArg(
+          rex_scalar0, arg_ti, lindex, with_bounds, with_render_group, expand_geo_col);
       if (arg_ti.get_type() != kLINESTRING) {
         throw QueryNotSupported(rex_function->getName() +
                                 " expects LINESTRING as first argument");
@@ -364,7 +380,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         throw QueryNotSupported(rex_function->getName() +
                                 ": expects scalar as first argument");
       }
-      auto arg0 = translateGeoFunctionArg(rex_scalar0, arg_ti, lindex, with_bounds);
+      auto arg0 = translateGeoFunctionArg(
+          rex_scalar0, arg_ti, lindex, with_bounds, with_render_group, expand_geo_col);
       if (!IS_GEO(arg_ti.get_type())) {
         throw QueryNotSupported(rex_function->getName() + " expects geometry argument");
       }
@@ -377,7 +394,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         throw QueryNotSupported(rex_function->getName() +
                                 ": expects scalar as first argument");
       }
-      auto arg0 = translateGeoFunctionArg(rex_scalar0, arg_ti, lindex, with_bounds);
+      auto arg0 = translateGeoFunctionArg(
+          rex_scalar0, arg_ti, lindex, with_bounds, with_render_group, expand_geo_col);
       if (!IS_GEO(arg_ti.get_type())) {
         throw QueryNotSupported(rex_function->getName() + " expects geometry argument");
       }
@@ -413,7 +431,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         throw QueryNotSupported(rex_function->getName() +
                                 ": expects scalar as first argument");
       }
-      auto arg0 = translateGeoFunctionArg(rex_scalar0, arg_ti, lindex, with_bounds);
+      auto arg0 = translateGeoFunctionArg(
+          rex_scalar0, arg_ti, lindex, with_bounds, with_render_group, expand_geo_col);
       if (!IS_GEO(arg_ti.get_type())) {
         throw QueryNotSupported(rex_function->getName() + " expects geometry argument");
       }
@@ -467,8 +486,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
   // physical coords (e.g. ring_sizes / poly_rings)
   if (rex_function->getName() == std::string("ST_NRings")) {
     SQLTypeInfo arg_ti;
-    auto geoargs =
-        translateGeoFunctionArg(rex_function->getOperand(0), arg_ti, lindex, false, true);
+    auto geoargs = translateGeoFunctionArg(
+        rex_function->getOperand(0), arg_ti, lindex, false, false, true);
     if (arg_ti.get_type() == kPOLYGON) {
       CHECK_EQ(geoargs.size(), 2);
       geoargs.erase(geoargs.begin(), geoargs.begin() + 1);  // remove the coords
@@ -486,8 +505,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     }
   } else if (rex_function->getName() == std::string("ST_NPoints")) {
     SQLTypeInfo arg_ti;
-    auto geoargs =
-        translateGeoFunctionArg(rex_function->getOperand(0), arg_ti, lindex, false, true);
+    auto geoargs = translateGeoFunctionArg(
+        rex_function->getOperand(0), arg_ti, lindex, false, false, true);
     geoargs.erase(geoargs.begin() + 1, geoargs.end());  // remove all but coords
     // Add compression information
     Datum input_compression;
@@ -500,11 +519,44 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
         rex_function->getType(), specialized_geofunc, geoargs);
   }
 
+  // Accessors for poly bounds and render group for in-situ poly render queries
+  if (rex_function->getName() == std::string("MapD_GeoPolyBoundsPtr")) {
+    SQLTypeInfo arg_ti;
+    // get geo column plus bounds only (not expanded)
+    auto geoargs = translateGeoFunctionArg(
+        rex_function->getOperand(0), arg_ti, lindex, true, false, false);
+    // this function only works on polys
+    if (!IS_GEO_POLY(arg_ti.get_type())) {
+      throw QueryNotSupported(rex_function->getName() +
+                              " expects a POLYGON or MULTIPOLYGON");
+    }
+    // only need the bounds argument (last), discard the rest
+    geoargs.erase(geoargs.begin(), geoargs.end() - 1);
+    // done
+    return makeExpr<Analyzer::FunctionOper>(
+        rex_function->getType(), specialized_geofunc, geoargs);
+  } else if (rex_function->getName() == std::string("MapD_GeoPolyRenderGroup")) {
+    SQLTypeInfo arg_ti;
+    // get geo column plus render_group only (not expanded)
+    auto geoargs = translateGeoFunctionArg(
+        rex_function->getOperand(0), arg_ti, lindex, false, true, false);
+    // this function only works on polys
+    if (!IS_GEO_POLY(arg_ti.get_type())) {
+      throw QueryNotSupported(rex_function->getName() +
+                              " expects a POLYGON or MULTIPOLYGON");
+    }
+    // only need the render_group argument (last), discard the rest
+    geoargs.erase(geoargs.begin(), geoargs.end() - 1);
+    // done
+    return makeExpr<Analyzer::FunctionOper>(
+        rex_function->getType(), specialized_geofunc, geoargs);
+  }
+
   // All functions below use geo col as reference and expand it as necessary
   SQLTypeInfo arg_ti;
   bool with_bounds = true;
-  auto geoargs =
-      translateGeoFunctionArg(rex_function->getOperand(0), arg_ti, lindex, with_bounds);
+  auto geoargs = translateGeoFunctionArg(
+      rex_function->getOperand(0), arg_ti, lindex, with_bounds, false, false);
 
   if (rex_function->getName() == std::string("ST_SRID")) {
     Datum output_srid;
@@ -591,16 +643,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   int32_t lindex1 = 0;
   bool with_bounds = (rex_function->getName() == std::string("ST_Contains"));
 
-  auto geoargs0 =
-      translateGeoFunctionArg(rex_function->getOperand(0), arg0_ti, lindex0, with_bounds);
+  auto geoargs0 = translateGeoFunctionArg(
+      rex_function->getOperand(0), arg0_ti, lindex0, with_bounds, false, false);
   if (arg0_ti.get_type() == kLINESTRING) {
     Datum index;
     index.intval = lindex0;
     geoargs0.push_back(makeExpr<Analyzer::Constant>(kINT, false, index));
   }
   geoargs.insert(geoargs.end(), geoargs0.begin(), geoargs0.end());
-  auto geoargs1 =
-      translateGeoFunctionArg(rex_function->getOperand(1), arg1_ti, lindex1, with_bounds);
+  auto geoargs1 = translateGeoFunctionArg(
+      rex_function->getOperand(1), arg1_ti, lindex1, with_bounds, false, false);
   if (arg1_ti.get_type() == kLINESTRING) {
     Datum index;
     index.intval = lindex1;

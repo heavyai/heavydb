@@ -140,6 +140,7 @@ enum EncodingType {
   (((T) == kPOINT) || ((T) == kLINESTRING) || ((T) == kPOLYGON) || ((T) == kMULTIPOLYGON))
 #define IS_INTERVAL(T) ((T) == kINTERVAL_DAY_TIME || (T) == kINTERVAL_YEAR_MONTH)
 #define IS_DECIMAL(T) ((T) == kNUMERIC || (T) == kDECIMAL)
+#define IS_GEO_POLY(T) (((T) == kPOLYGON) || ((T) == kMULTIPOLYGON))
 
 #define NULL_BOOLEAN INT8_MIN
 #define NULL_TINYINT INT8_MIN
@@ -276,6 +277,16 @@ class SQLTypeInfo {
   inline bool has_bounds() const {
     switch (type) {
       case kLINESTRING:
+      case kPOLYGON:
+      case kMULTIPOLYGON:
+        return true;
+      default:
+        break;
+    }
+    return false;
+  }
+  inline bool has_render_group() const {
+    switch (type) {
       case kPOLYGON:
       case kMULTIPOLYGON:
         return true;

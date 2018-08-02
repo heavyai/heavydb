@@ -170,6 +170,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new OffsetInFragment());
     opTab.addOperator(new ApproxCountDistinct());
     opTab.addOperator(new LastSample());
+    opTab.addOperator(new MapD_GeoPolyBoundsPtr());
+    opTab.addOperator(new MapD_GeoPolyRenderGroup());
     if (extSigs == null) {
       return;
     }
@@ -1162,6 +1164,50 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     }
 
     private final SqlTypeName ret;
+  }
+
+  //
+  // Internal accessors for in-situ poly render queries
+  //
+
+  static class MapD_GeoPolyBoundsPtr extends SqlFunction {
+    
+    MapD_GeoPolyBoundsPtr() {
+      super("MapD_GeoPolyBoundsPtr",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.ANY),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory
+             = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.BIGINT);
+    }
+  }
+
+  static class MapD_GeoPolyRenderGroup extends SqlFunction {
+    
+    MapD_GeoPolyRenderGroup() {
+      super("MapD_GeoPolyRenderGroup",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.ANY),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory
+             = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+    }
   }
 }
 

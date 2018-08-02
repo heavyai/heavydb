@@ -1417,3 +1417,17 @@ bool ST_Contains_MultiPolygon_Point(int8_t* mpoly_coords,
 
   return false;
 }
+
+//
+// Accessors for poly bounds and render group for in-situ poly render queries
+//
+
+EXTENSION_INLINE
+int64_t MapD_GeoPolyBoundsPtr(double* bounds, int64_t size) {
+  return reinterpret_cast<int64_t>(bounds);
+}
+
+EXTENSION_INLINE
+int32_t MapD_GeoPolyRenderGroup(int32_t render_group) {
+  return render_group;
+}
