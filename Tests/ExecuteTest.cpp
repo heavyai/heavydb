@@ -1491,6 +1491,9 @@ TEST(Select, Case) {
     c("SELECT CASE WHEN test.str = 'foo' THEN 'foo' ELSE test.str END AS g FROM test "
       "GROUP BY g ORDER BY g ASC;",
       dt);
+    c("SELECT COUNT(*) FROM test WHERE CASE WHEN x > 8 THEN 'oops' END = 'oops' OR CASE "
+      "WHEN x > 8 THEN 'oops' END = 'oops';",
+      dt);
     ASSERT_EQ(
         int64_t(1418428800),
         v<int64_t>(run_simple_agg(

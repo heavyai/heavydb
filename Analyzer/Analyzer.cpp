@@ -1940,6 +1940,9 @@ bool Constant::operator==(const Expr& rhs) const {
   if (type_info != rhs_c.get_type_info() || is_null != rhs_c.get_is_null()) {
     return false;
   }
+  if (is_null && rhs_c.get_is_null()) {
+    return true;
+  }
   return Datum_equal(type_info, constval, rhs_c.get_constval());
 }
 
