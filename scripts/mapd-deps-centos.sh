@@ -149,6 +149,7 @@ download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/lldb-$VERS
 download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/lld-$VERS.src.tar.xz
 download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/libcxx-$VERS.src.tar.xz
 download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/libcxxabi-$VERS.src.tar.xz
+download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/clang-tools-extra-$VERS.src.tar.xz
 rm -rf llvm-$VERS.src
 extract llvm-$VERS.src.tar.xz
 extract cfe-$VERS.src.tar.xz
@@ -157,12 +158,15 @@ extract lld-$VERS.src.tar.xz
 extract lldb-$VERS.src.tar.xz
 extract libcxx-$VERS.src.tar.xz
 extract libcxxabi-$VERS.src.tar.xz
+extract clang-tools-extra-$VERS.src.tar.xz
 mv cfe-$VERS.src llvm-$VERS.src/tools/clang
 mv compiler-rt-$VERS.src llvm-$VERS.src/projects/compiler-rt
 mv lld-$VERS.src llvm-$VERS.src/tools/lld
 mv lldb-$VERS.src llvm-$VERS.src/tools/lldb
 mv libcxx-$VERS.src llvm-$VERS.src/projects/libcxx
 mv libcxxabi-$VERS.src llvm-$VERS.src/projects/libcxxabi
+mkdir -p llvm-$VERS.src/tools/clang/tools
+mv clang-tools-extra-$VERS.src llvm-$VERS.src/tools/clang/tools/extra
 rm -rf build.llvm-$VERS
 mkdir build.llvm-$VERS
 pushd build.llvm-$VERS
