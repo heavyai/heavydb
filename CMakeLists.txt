@@ -376,9 +376,13 @@ endif()
 
 add_subdirectory(SqliteConnector)
 
+add_subdirectory(StringDictionary)
+add_subdirectory(Calcite)
+get_target_property(CalciteThrift_BINARY_DIR calciteserver_thrift BINARY_DIR)
+include_directories(${CalciteThrift_BINARY_DIR})
+
 add_subdirectory(Distributed)
 
-add_subdirectory(StringDictionary)
 add_subdirectory(Catalog)
 add_subdirectory(Parser)
 add_subdirectory(Analyzer)
@@ -399,8 +403,6 @@ option(ENABLE_ODBC "Build ODBC driver" OFF)
 if(ENABLE_ODBC)
   add_subdirectory(ODBC)
 endif()
-
-add_subdirectory(Calcite)
 
 set(MAPD_LIBRARIES Shared Catalog SqliteConnector Parser Analyzer Planner CsvImport QueryRunner QueryEngine DataMgr Fragmenter Chunk)
 
