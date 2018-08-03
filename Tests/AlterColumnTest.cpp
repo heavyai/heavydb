@@ -181,6 +181,17 @@ TEST_F(AlterColumnTest, Add_column) {
         "trips", "x" + std::to_string(++cid), std::get<0>(tv), std::get<1>(tv), ""));
   }
 }
+
+TEST(AlterColumnTest2, Drop_after_fail_to_add) {
+  EXPECT_NO_THROW(run_ddl_statement("drop table if exists t;"););
+  EXPECT_NO_THROW(run_ddl_statement("create table t(c1 int);"););
+  EXPECT_NO_THROW(run_query("insert into t values (10);"););
+  EXPECT_THROW(
+      run_ddl_statement("alter table t add column c2 TEXT NOT NULL ENCODING DICT;"),
+      std::runtime_error);
+  EXPECT_NO_THROW(run_ddl_statement("drop table t;"););
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {

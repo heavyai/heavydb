@@ -3082,6 +3082,8 @@ void Catalog::roll(const bool forward) {
       }
       // roll back the dict of new column
       if (ncd) {
+        columnDescriptorMap_.erase(ColumnKey(ncd->tableId, to_upper(ncd->columnName)));
+        columnDescriptorMapById_.erase(ColumnIdKey(ncd->tableId, ncd->columnId));
         if (nullptr == ocd ||
             ocd->columnType.get_comp_param() != ncd->columnType.get_comp_param()) {
           delDictionary(*ncd);
