@@ -4213,7 +4213,11 @@ void MapDHandler::insert_data(const TSessionId& session,
         } else {
           ArrayDatum arr_datum;
           arr_datum.length = t_arr_datum.payload.size();
-          arr_datum.pointer = (int8_t*)t_arr_datum.payload.data();
+          int8_t* ptr = (int8_t*)(t_arr_datum.payload.data());
+          arr_datum.pointer = ptr;
+          // In this special case, ArrayDatum does not handle freeing the underlying
+          // memory
+          arr_datum.data_ptr = std::shared_ptr<int8_t>(ptr, [](auto p) {});
           arr_datum.is_null = false;
           array_column->push_back(arr_datum);
         }
