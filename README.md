@@ -177,7 +177,7 @@ MapD has the following dependencies:
 | [LLVM](http://llvm.org/) | 3.8-4.0, 6.0 | yes |
 | [GCC](http://gcc.gnu.org/) | 5.1 | no, if building with clang |
 | [Go](https://golang.org/) | 1.6 | yes |
-| [Boost](http://www.boost.org/) | 1.57.0 | yes |
+| [Boost](http://www.boost.org/) | 1.65.0 | yes |
 | [OpenJDK](http://openjdk.java.net/) | 1.7 | yes |
 | [CUDA](http://nvidia.com/cuda) | 8.0 | yes, if compiling with GPU support |
 | [gperftools](https://github.com/gperftools/gperftools) | | yes |
@@ -256,11 +256,17 @@ Be sure to reboot after installing in order to activate the NVIDIA drivers.
 
 `mapd-deps-osx.sh` will automatically install Java and Maven via Homebrew and add the correct environment variables to `~/.bash_profile`.
 
-## Ubuntu 16.04 - 18.04
+## Ubuntu
 
-Most build dependencies required by MapD Core are available via APT. Certain dependencies such as Thrift, Blosc, and Folly must be built as they either do not exist in the default repositories or have outdated versions. The provided [scripts/mapd-deps-ubuntu.sh](scripts/mapd-deps-ubuntu.sh) script will install all required dependencies (except CUDA) and build the dependencies which require it. The built dependencies will be installed to `/usr/local/mapd-deps/` by default; see the Environment Variables section below for how to add these dependencies to your environment.
+Most build dependencies required by MapD Core are available via APT. Certain dependencies such as Thrift, Blosc, and Folly must be built as they either do not exist in the default repositories or have outdated versions. The provided build script will install all required dependencies (except CUDA) and build the dependencies which require it. The built dependencies will be installed to `/usr/local/mapd-deps/` by default; see the Environment Variables section below for how to add these dependencies to your environment.
+
+### Ubuntu 16.04
+
+MapD Core requires a newer version of Boost than the version which is provided by Ubuntu 16.04. The [scripts/mapd-deps-ubuntu1604.sh](scripts/mapd-deps-ubuntu1604.sh) build script will compile and install a newer version of Boost into the `/usr/local/mapd-deps/` directory. 
 
 ### Ubuntu 18.04
+
+Use the [scripts/mapd-deps-ubuntu.sh](scripts/mapd-deps-ubuntu.sh) build script to install dependencies. 
 
 Some installs of Ubuntu 18.04 may fail while building with a message similar to:
 
