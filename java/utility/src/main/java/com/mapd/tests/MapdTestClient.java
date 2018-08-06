@@ -19,21 +19,37 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 
+import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TSocket;
 
 import com.mapd.thrift.server.MapD;
+import com.mapd.thrift.server.TClusterHardwareInfo;
 import com.mapd.thrift.server.TDBObject;
 import com.mapd.thrift.server.TDBObjectType;
 import com.mapd.thrift.server.TDashboard;
+import com.mapd.thrift.server.TMapDException;
 import com.mapd.thrift.server.TQueryResult;
+import com.mapd.thrift.server.TServerStatus;
 import com.mapd.thrift.server.TTableDetails;
 
 public class MapdTestClient {
   MapD.Client client;
   String sessionId;
 
+  public TServerStatus get_server_status() throws TMapDException, TException {
+    return client.get_server_status(sessionId);
+  }
+
+  public List<TServerStatus> get_status() throws TMapDException, TException {
+    return client.get_status(sessionId);
+  }
+
+  public TClusterHardwareInfo get_hardware_info() throws TMapDException, TException {
+    return client.get_hardware_info(sessionId);
+  }
+  
   public TTableDetails get_table_details(String table_name) throws Exception {
     return client.get_table_details(sessionId, table_name);
   }
