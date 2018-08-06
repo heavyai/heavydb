@@ -1092,18 +1092,17 @@ static TDBObject serialize_db_object(const std::string& roleName,
 }
 
 void MapDHandler::get_db_objects_for_grantee(std::vector<TDBObject>& TDBObjectsForRole,
-                                             const TSessionId& session,
+                                             const TSessionId& sessionId,
                                              const std::string& roleName) {
-  auto session_it = get_session_it(session);
-  auto session_info_ptr = session_it->second.get();
-  auto user = session_info_ptr->get_currentUser();
+  auto session = get_session(sessionId);
+  auto user = session.get_currentUser();
   if (!user.isSuper &&
       !SysCatalog::instance().isRoleGrantedToUser(user.userId, roleName)) {
     return;
   }
   Role* rl = SysCatalog::instance().getMetadataForRole(roleName);
   if (rl) {
-    auto dbId = session_info_ptr->get_catalog().get_currentDB().dbId;
+    auto dbId = session.get_catalog().get_currentDB().dbId;
     for (auto dbObjectIt = rl->getDbObject()->begin();
          dbObjectIt != rl->getDbObject()->end();
          ++dbObjectIt) {
@@ -1121,11 +1120,10 @@ void MapDHandler::get_db_objects_for_grantee(std::vector<TDBObject>& TDBObjectsF
 }
 
 void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
-                                      const TSessionId& session,
+                                      const TSessionId& sessionId,
                                       const std::string& objectName,
                                       const TDBObjectType::type type) {
-  auto session_it = get_session_it(session);
-  auto session_info_ptr = session_it->second.get();
+  auto session = get_session(sessionId);
   DBObjectType object_type;
   switch (type) {
     case TDBObjectType::DatabaseDBObjectType:
@@ -1156,36 +1154,33 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
     } else if ((object_type == TableDBObjectType || object_type == ViewDBObjectType) &&
                !objectName.empty()) {
       // special handling for view / table
-      auto& cat = session_info_ptr->get_catalog();
+      auto& cat = session.get_catalog();
       auto td = cat.getMetadataForTable(objectName, false);
       if (td) {
         object_type = td->isView ? ViewDBObjectType : TableDBObjectType;
         object_to_find = DBObject(objectName, object_type);
       }
     }
-    object_to_find.loadKey(session_info_ptr->get_catalog());
+    object_to_find.loadKey(session.get_catalog());
   } catch (const std::exception&) {
     THROW_MAPD_EXCEPTION("Object with name " + objectName + " does not exist.");
   }
 
   // object type on database level
   DBObject object_to_find_dblevel("", object_type);
-  object_to_find_dblevel.loadKey(session_info_ptr->get_catalog());
+  object_to_find_dblevel.loadKey(session.get_catalog());
   // if user is superuser respond with a full priv
-  if (session_info_ptr->get_currentUser().isSuper) {
+  if (session.get_currentUser().isSuper) {
     // using ALL_TABLE here to set max permissions
     DBObject dbObj{object_to_find.getObjectKey(),
                    AccessPrivileges::ALL_TABLE,
-                   session_info_ptr->get_currentUser().userId};
+                   session.get_currentUser().userId};
     dbObj.setName("super");
-    TDBObjects.push_back(
-        serialize_db_object(session_info_ptr->get_currentUser().userName, dbObj));
+    TDBObjects.push_back(serialize_db_object(session.get_currentUser().userName, dbObj));
   };
 
-  std::vector<std::string> roles =
-      SysCatalog::instance().getRoles(true,
-                                      session_info_ptr->get_currentUser().isSuper,
-                                      session_info_ptr->get_currentUser().userId);
+  std::vector<std::string> roles = SysCatalog::instance().getRoles(
+      true, session.get_currentUser().isSuper, session.get_currentUser().userId);
   for (const auto& role : roles) {
     DBObject* object_found;
     Role* rl = SysCatalog::instance().getMetadataForRole(role);
@@ -1200,14 +1195,13 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
 }
 
 void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
-                                         const TSessionId& session,
+                                         const TSessionId& sessionId,
                                          const std::string& userName) {
-  auto session_it = get_session_it(session);
-  auto session_info_ptr = session_it->second.get();
+  auto session = get_session(sessionId);
   Catalog_Namespace::UserMetadata user_meta;
   if (SysCatalog::instance().getMetadataForUser(userName, user_meta)) {
-    if (session_info_ptr->get_currentUser().isSuper ||
-        session_info_ptr->get_currentUser().userId == user_meta.userId) {
+    if (session.get_currentUser().isSuper ||
+        session.get_currentUser().userId == user_meta.userId) {
       roles = SysCatalog::instance().getUserRoles(user_meta.userId);
     } else {
       THROW_MAPD_EXCEPTION(
