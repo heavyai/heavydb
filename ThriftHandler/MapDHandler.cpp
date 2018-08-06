@@ -1620,21 +1620,27 @@ void MapDHandler::get_version(std::string& version) {
   version = MAPD_RELEASE;
 }
 
-// TODO This need to be corrected for distributed they are only hitting aggr
 void MapDHandler::clear_gpu_memory(const TSessionId& session) {
   const auto session_info = get_session(session);
   SysCatalog::instance().get_dataMgr().clearMemory(MemoryLevel::GPU_LEVEL);
   if (render_handler_) {
     render_handler_->clear_gpu_memory();
   }
+
+  if (leaf_aggregator_.leafCount() > 0) {
+    leaf_aggregator_.clear_leaf_gpu_memory(session);
+  }
 }
 
-// TODO This need to be corrected for distributed they are only hitting aggr
 void MapDHandler::clear_cpu_memory(const TSessionId& session) {
   const auto session_info = get_session(session);
   SysCatalog::instance().get_dataMgr().clearMemory(MemoryLevel::CPU_LEVEL);
   if (render_handler_) {
     render_handler_->clear_cpu_memory();
+  }
+
+  if (leaf_aggregator_.leafCount() > 0) {
+    leaf_aggregator_.clear_leaf_cpu_memory(session);
   }
 }
 

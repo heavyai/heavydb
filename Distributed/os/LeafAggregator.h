@@ -117,6 +117,10 @@ class LeafAggregator {
     CHECK(false);
     return {};
   }
+
+  void clear_leaf_cpu_memory(const TSessionId session) { CHECK(false); }
+
+  void clear_leaf_gpu_memory(const TSessionId session) { CHECK(false); }
 };
 
 #endif  // LEAFAGGREGATOR_H
