@@ -1109,10 +1109,11 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
       continue;
     }
     const auto scalar_expr = translator.translateScalarRex(scalar_rex);
+    const auto rewritten_expr = rewrite_expr(scalar_expr.get());
     try {
-      scalar_sources.push_back(set_transient_dict(fold_expr(scalar_expr.get())));
+      scalar_sources.push_back(set_transient_dict(fold_expr(rewritten_expr.get())));
     } catch (...) {
-      scalar_sources.push_back(fold_expr(scalar_expr.get()));
+      scalar_sources.push_back(fold_expr(rewritten_expr.get()));
     }
   }
   return scalar_sources;
@@ -1175,7 +1176,8 @@ std::vector<Analyzer::Expr*> translate_targets(
         target_expr = var_ref(groupby_expr.get(), Analyzer::Var::kGROUPBY, ref_idx);
       } else {
         target_expr = translator.translateScalarRex(target_rex_scalar);
-        target_expr = fold_expr(target_expr.get());
+        auto rewritten_expr = rewrite_expr(target_expr.get());
+        target_expr = fold_expr(rewritten_expr.get());
       }
     }
     CHECK(target_expr);

@@ -15,6 +15,7 @@
  */
 
 #include "ExpressionRewrite.h"
+#include "../Analyzer/Analyzer.h"
 #include "../Shared/sqldefs.h"
 #include "Execute.h"
 #include "ScalarExprVisitor.h"
@@ -283,6 +284,30 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
                                        arg,
                                        agg->get_is_distinct(),
                                        agg->get_error_rate());
+  }
+};
+
+class RecursiveOrToInVisitor : public DeepCopyVisitor {
+ protected:
+  std::shared_ptr<Analyzer::Expr> visitBinOper(
+      const Analyzer::BinOper* bin_oper) const override {
+    OrToInVisitor simple_visitor;
+    if (bin_oper->get_optype() == kOR) {
+      auto rewritten = simple_visitor.visit(bin_oper);
+      if (rewritten) {
+        return rewritten;
+      }
+    }
+    auto lhs = bin_oper->get_own_left_operand();
+    auto rhs = bin_oper->get_own_right_operand();
+    auto rewritten_lhs = visit(lhs.get());
+    auto rewritten_rhs = visit(rhs.get());
+    return makeExpr<Analyzer::BinOper>(bin_oper->get_type_info(),
+                                       bin_oper->get_contains_agg(),
+                                       bin_oper->get_optype(),
+                                       bin_oper->get_qualifier(),
+                                       rewritten_lhs ? rewritten_lhs : lhs,
+                                       rewritten_rhs ? rewritten_rhs : rhs);
   }
 };
 
@@ -691,13 +716,11 @@ std::shared_ptr<Analyzer::Expr> rewrite_expr(const Analyzer::Expr* expr) {
   const auto expr_no_likelihood = strip_likelihood(expr);
   // The following check is not strictly needed, but seems silly to transform a
   // simple string comparison to an IN just to codegen the same thing anyway.
-  const auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr_no_likelihood);
-  if (!bin_oper || bin_oper->get_optype() != kOR) {
-    return nullptr;
-  }
-  OrToInVisitor visitor;
+
+  RecursiveOrToInVisitor visitor;
   auto rewritten_expr = visitor.visit(expr_no_likelihood);
-  const auto expr_with_likelihood = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
+  const auto expr_with_likelihood =
+      std::dynamic_pointer_cast<const Analyzer::LikelihoodExpr>(rewritten_expr);
   if (expr_with_likelihood) {
     // Add back likelihood
     return std::make_shared<Analyzer::LikelihoodExpr>(
