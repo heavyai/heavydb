@@ -1,21 +1,49 @@
 #define COMPRESSION_NONE 0
 #define COMPRESSION_GEOINT32 1
-#define TOLERANCE 0.0000001
+#define COMPRESSION_GEOBBINT32 2
+#define COMPRESSION_GEOBBINT16 3
+#define COMPRESSION_GEOBBINT8 4
 
-DEVICE ALWAYS_INLINE bool tol_zero(double x) {
-  return (-TOLERANCE <= x) && (x <= TOLERANCE);
+#define TOLERANCE_DEFAULT 0.000000001
+#define TOLERANCE_GEOINT32 0.0000001
+
+// Adjustable tolerance, determined by compression mode.
+// The criteria is to still recognize a compressed+decompressed number.
+// For example 1.0 longitude compressed with GEOINT32 and then decompressed
+// comes back as 0.99999994086101651, which is still within GEOINT32
+// tolerance val 0.0000001
+DEVICE ALWAYS_INLINE double tol(int32_t ic) {
+  if (ic == COMPRESSION_GEOINT32)
+    return TOLERANCE_GEOINT32;
+  return TOLERANCE_DEFAULT;
 }
 
-DEVICE ALWAYS_INLINE bool tol_eq(double x, double y) {
-  return tol_zero(x - y);
+// Combine tolerances for two-component calculations
+DEVICE ALWAYS_INLINE double tol(int32_t ic1, int32_t ic2) {
+  return fmax(tol(ic1), tol(ic2));
 }
 
-DEVICE ALWAYS_INLINE bool tol_le(double x, double y) {
-  return x <= (y + TOLERANCE);
+DEVICE ALWAYS_INLINE bool tol_zero(double x, double tolerance = TOLERANCE_DEFAULT) {
+  return (-tolerance <= x) && (x <= tolerance);
 }
 
-DEVICE ALWAYS_INLINE bool tol_ge(double x, double y) {
-  return (x + TOLERANCE) >= y;
+DEVICE ALWAYS_INLINE bool tol_eq(double x,
+                                 double y,
+                                 double tolerance = TOLERANCE_DEFAULT) {
+  auto diff = x - y;
+  return (-tolerance <= diff) && (diff <= tolerance);
+}
+
+DEVICE ALWAYS_INLINE bool tol_le(double x,
+                                 double y,
+                                 double tolerance = TOLERANCE_DEFAULT) {
+  return x <= (y + tolerance);
+}
+
+DEVICE ALWAYS_INLINE bool tol_ge(double x,
+                                 double y,
+                                 double tolerance = TOLERANCE_DEFAULT) {
+  return (x + tolerance) >= y;
 }
 
 DEVICE ALWAYS_INLINE double decompress_coord(int8_t* data,
@@ -224,34 +252,54 @@ bool polygon_contains_point(int8_t* poly,
   // of polygon's edges. Each intersection means we're entered/exited the polygon. Odd
   // number of intersections means the polygon does contain P.
   bool result = false;
-  int64_t i, j;
-  for (i = 0, j = poly_num_coords - 2; i < poly_num_coords; j = i, i += 2) {
-    double e1x = coord_x(poly, j, ic1, isr1, osr);
-    double e1y = coord_y(poly, j + 1, ic1, isr1, osr);
+  int8_t xray_touch = 0;
+  double e1x = coord_x(poly, poly_num_coords - 2, ic1, isr1, osr);
+  double e1y = coord_y(poly, poly_num_coords - 1, ic1, isr1, osr);
+  for (int64_t i = 0; i < poly_num_coords; i += 2) {
     double e2x = coord_x(poly, i, ic1, isr1, osr);
     double e2y = coord_y(poly, i + 1, ic1, isr1, osr);
-    double xray = fmax(e2x, e1x);
-    if (xray < px)
-      continue;  // No intersection - edge is to the left of point, we're casting the ray
-                 // to the right
-    if (intersects_line_line(px,  // ray shooting from point p to the right
+    // Overshoot the xray to detect an intersection if there is one.
+    double xray = fmax(e2x, e1x) + 1.0;
+    if (px <= xray &&  // Only check for intersection if the edge is on the right
+        intersects_line_line(px,  // xray shooting from point p to the right
                              py,
-                             xray + 1.0,  // overshoot the ray a little bit to detect
-                                          // intersection if there is one
+                             xray,
                              py,
                              e1x,  // polygon edge
                              e1y,
                              e2x,
                              e2y)) {
       result = !result;
+
       if (tol_zero(distance_point_line(e2x, e2y, px, py, xray + 1.0, py))) {
-        // If ray goes through the edge's second vertex, flip the result again -
+        // Xray goes through the edge's second vertex, flip the result again -
         // that vertex will be crossed again when we look at the next edge
-        // TODO: sensitivity: how close should the ray be to the vertex be to register a
-        // crossing
         result = !result;
+        // Register if the xray was touched from above (1) or from below (-1)
+        xray_touch = (e1y > py) ? 1 : -1;
+      }
+      if (xray_touch != 0) {
+        // Previous edge touched the xray, intersection hasn't been registered,
+        // it has to be registered now if this edge continues across the xray.
+        // TODO: what if after touch, edge(s) follow the xray horizontally?
+        if (xray_touch > 0) {
+          // Previous edge touched the xray from above
+          // Register intersection if current edge crosses under
+          if (e2y <= py)
+            result = !result;
+        } else {
+          // Previous edge touched the xray from below
+          // Register intersection if current edge crosses over
+          if (e2y > py)
+            result = !result;
+        }
+        // Unregister the xray touch
+        xray_touch = 0;
       }
     }
+    // Advance to the next vertex
+    e1x = e2x;
+    e1y = e2y;
   }
   return result;
 }
@@ -1080,7 +1128,8 @@ bool ST_Contains_Point_Point(int8_t* p1,
   double p1y = coord_y(p1, 1, ic1, isr1, osr);
   double p2x = coord_x(p2, 0, ic2, isr2, osr);
   double p2y = coord_y(p2, 1, ic2, isr2, osr);
-  return tol_eq(p1x, p2x) && tol_eq(p1y, p2y);
+  double tolerance = tol(ic1, ic2);
+  return tol_eq(p1x, p2x, tolerance) && tol_eq(p1y, p2y, tolerance);
 }
 
 EXTENSION_NOINLINE
@@ -1267,7 +1316,7 @@ bool ST_Contains_Polygon_LineString(int8_t* poly_coords,
                                     int32_t ic2,
                                     int32_t isr2,
                                     int32_t osr) {
-  if (poly_num_rings > 0)
+  if (poly_num_rings > 1)
     return false;  // TODO: support polygons with interior rings
 
   auto poly_num_coords = poly_coords_size / compression_unit_size(ic1);
@@ -1322,8 +1371,8 @@ bool ST_Contains_Polygon_Polygon(int8_t* poly1_coords,
                                  int32_t osr) {
   // TODO: needs to be extended, cover more cases
   // Right now only checking if simple poly1 (no holes) contains poly2's exterior shape
-  if (poly1_num_rings > 0)
-    return false;
+  if (poly1_num_rings > 1)
+    return false;  // TODO: support polygons with interior rings
 
   if (poly1_bounds && poly2_bounds) {
     if (!box_contains_box(

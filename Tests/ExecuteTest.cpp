@@ -9394,7 +9394,7 @@ TEST(Select, GeoSpatial_Projection) {
             "'POINT(0.1 0.1)') FROM geospatial_test limit 1;",
             dt)));
     ASSERT_EQ(
-        static_cast<int64_t>(1),  // last query but for geography objects
+        static_cast<int64_t>(1),  // last query but for 4326 objects
         v<int64_t>(run_simple_agg(
             "SELECT ST_Contains("
             "ST_GeomFromText('MULTIPOLYGON(((2 0, 0 2, -2 0, 0 -2, 2 0),(1 0, 0 1, -1 0, "
@@ -9402,27 +9402,54 @@ TEST(Select, GeoSpatial_Projection) {
             "((2 0, 0 2, -2 0, 0 -2, 1 -2, 2 -1)))', 4326), "
             "ST_GeomFromText('POINT(0.1 0.1)', 4326)) FROM geospatial_test limit 1;",
             dt)));
-    // Tolerance
-    ASSERT_EQ(
-        static_cast<int64_t>(1),  // point containing an extremely close point
-        v<int64_t>(run_simple_agg(
-            "SELECT ST_Contains("
-            "ST_GeomFromText('POINT(2.11000001 -1.72299999    )'), "
-            "ST_GeomFromText('POINT(2.11       -1.723)')) FROM geospatial_test limit 1;",
-            dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(0),  // point not containing a very close point
-        v<int64_t>(run_simple_agg(
-            "SELECT ST_Contains("
-            "ST_GeomFromText('POINT(2.11    -1.723    )'), "
-            "ST_GeomFromText('POINT(2.11001 -1.72299)')) FROM geospatial_test limit 1;",
-            dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),  // linestring containing an extremely close point
+    ASSERT_EQ(static_cast<int64_t>(1),  // point in polygon, xray touches another vertex
               v<int64_t>(run_simple_agg(
                   "SELECT ST_Contains("
-                  "ST_GeomFromText('LINESTRING(1 -1.00000001, 3 -1.00000001)'), "
-                  "ST_GeomFromText('POINT(0.9999999 -1)')) FROM geospatial_test limit 1;",
+                  "ST_GeomFromText('POLYGON((0 -1, 2 1, 3 0, 5 2, 0 2, -1 0))'), "
+                  "ST_GeomFromText('POINT(0 0)')) FROM geospatial_test limit 1;",
                   dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),  // polygon containing linestring
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_Contains("
+                  "ST_GeomFromText('POLYGON((2 0, 0 2, -2 0, 0 -2, 2 0))'), "
+                  "ST_GeomFromText('LINESTRING(1 0, 0 1, -1 0, 0 -1, 1 0)')) "
+                  "FROM geospatial_test limit 1;",
+                  dt)));
+    ASSERT_EQ(static_cast<int64_t>(0),  // polygon containing only a part of linestring
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_Contains("
+                  "ST_GeomFromText('POLYGON((2 0, 0 2, -2 0, 0 -2, 2 0))'), "
+                  "ST_GeomFromText('LINESTRING(1 0, 0 1, -1 0, 0 -1, 3 0)')) "
+                  "FROM geospatial_test limit 1;",
+                  dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),  // polygon containing another polygon
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_Contains("
+                  "ST_GeomFromText('POLYGON((2 0, 0 2, -2 0, 0 -2, 2 0))'), "
+                  "ST_GeomFromText('POLYGON((1 0, 0 1, -1 0, 0 -1, 1 0))')) "
+                  "FROM geospatial_test limit 1;",
+                  dt)));
+    // Tolerance
+    ASSERT_EQ(static_cast<int64_t>(1),  // point containing an extremely close point
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_Contains("
+                  "ST_GeomFromText('POINT(2.1100000001 -1.7229999999    )'), "
+                  "ST_GeomFromText('POINT(2.11         -1.723)')) FROM geospatial_test "
+                  "limit 1;",
+                  dt)));
+    ASSERT_EQ(static_cast<int64_t>(0),  // point not containing a very close point
+              v<int64_t>(run_simple_agg("SELECT ST_Contains("
+                                        "ST_GeomFromText('POINT(2.11      -1.723    )'), "
+                                        "ST_GeomFromText('POINT(2.1100001 -1.7229999)')) "
+                                        "FROM geospatial_test limit 1;",
+                                        dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(1),  // linestring containing an extremely close point
+        v<int64_t>(run_simple_agg(
+            "SELECT ST_Contains("
+            "ST_GeomFromText('LINESTRING(1 -1.0000000001, 3 -1.0000000001)'), "
+            "ST_GeomFromText('POINT(0.999999999 -1)')) FROM geospatial_test limit 1;",
+            dt)));
 
     // Coord accessors
     ASSERT_NEAR(static_cast<double>(-118.4079),
