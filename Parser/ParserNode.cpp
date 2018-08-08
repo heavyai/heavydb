@@ -1021,9 +1021,116 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::get(
   if (c != nullptr) {
     c->set_type_info(ti);
     Datum d;
-    d.bigintval = (dimen > 0) ? ExtractFromTimeHighPrecision(
-                                    fieldno, c->get_constval().timeval, dimen)
-                              : ExtractFromTime(fieldno, c->get_constval().timeval);
+
+    if (dimen > 0)
+      {
+	switch (fieldno)
+	  {
+	  case kEPOCH:
+	    d.bigintval = extract_epoch_highprecision (c->get_constval().timeval, dimen);
+	    break;
+	  case kQUARTERDAY:
+	    d.bigintval = extract_quarterday_highprecision (c->get_constval().timeval, dimen);
+	    break;
+	  case kHOUR:
+	    d.bigintval = extract_hour_highprecision (c->get_constval().timeval, dimen);
+	    break;
+	  case kMINUTE:
+	    d.bigintval = extract_minute_highprecision (c->get_constval().timeval, dimen);
+	    break;
+	  case kSECOND:
+	    d.bigintval = extract_second_highprecision (c->get_constval().timeval, dimen);
+	    break;
+	  case kMILLISECOND:
+	    d.bigintval = extract_millisecond_highprecision (c->get_constval().timeval, dimen);
+	    break;
+	  case kMICROSECOND:
+	    d.bigintval = extract_microsecond_highprecision (c->get_constval().timeval, dimen);
+	    break;
+	  case kNANOSECOND:
+	    d.bigintval = extract_nanosecond_highprecision (c->get_constval().timeval, dimen);
+	    break;
+	  case kDOW:
+	    d.bigintval = extract_dow_highprecision (c->get_constval().timeval, dimen);
+	    break;
+	  case kISODOW:
+	    d.bigintval = extract_isodow_highprecision (c->get_constval().timeval, dimen);
+	    break;
+	  case kMONTH:
+	    d.bigintval = extract_month_highprecision (c->get_constval().timeval, dimen);
+	    break;
+	  case kQUARTER:
+	    d.bigintval = extract_quarter_highprecision (c->get_constval().timeval, dimen);
+	    break;
+	  case kYEAR:
+	    d.bigintval = extract_year_highprecision (c->get_constval().timeval, dimen);
+	    break;
+	  case kDAY:
+	    d.bigintval = extract_day_highprecision (c->get_constval().timeval, dimen);
+	    break;
+	  case kDOY:
+	    d.bigintval = extract_dayofyear_highprecision (c->get_constval().timeval, dimen);
+	    break;
+	  case kWEEK:
+	    d.bigintval = extract_week_highprecision (c->get_constval().timeval, dimen);	
+	    break;
+	  }
+      }
+    else
+      {
+	switch (fieldno)
+	  {
+	  case kEPOCH:
+	    d.bigintval = extract_epoch (c->get_constval().timeval);
+	    break;
+	  case kQUARTERDAY:
+	    d.bigintval = extract_quarterday (c->get_constval().timeval);
+	    break;
+	  case kHOUR:
+	    d.bigintval = extract_hour (c->get_constval().timeval);
+	    break;
+	  case kMINUTE:
+	    d.bigintval = extract_minute (c->get_constval().timeval);
+	    break;
+	  case kSECOND:
+	    d.bigintval = extract_second (c->get_constval().timeval);
+	    break;
+	  case kMILLISECOND:
+	    d.bigintval = extract_millisecond (c->get_constval().timeval);
+	    break;
+	  case kMICROSECOND:
+	    d.bigintval = extract_microsecond (c->get_constval().timeval);
+	    break;
+	  case kNANOSECOND:
+	    d.bigintval = extract_nanosecond (c->get_constval().timeval);
+	    break;
+	  case kDOW:
+	    d.bigintval = extract_dow (c->get_constval().timeval);
+	    break;
+	  case kISODOW:
+	    d.bigintval = extract_isodow (c->get_constval().timeval);
+	    break;
+	  case kMONTH:
+	    d.bigintval = extract_month (c->get_constval().timeval);
+	    break;
+	  case kQUARTER:
+	    d.bigintval = extract_quarter (c->get_constval().timeval);
+	    break;
+	  case kYEAR:
+	    d.bigintval = extract_year (c->get_constval().timeval);
+	    break;
+	  case kDAY:
+	    d.bigintval = extract_day (c->get_constval().timeval);
+	    break;
+	  case kDOY:
+	    d.bigintval = extract_dayofyear (c->get_constval().timeval);
+	    break;
+	  case kWEEK:
+	    d.bigintval = extract_week (c->get_constval().timeval);	
+	    break;
+	  }
+      }
+    
     c->set_constval(d);
     return c;
   }

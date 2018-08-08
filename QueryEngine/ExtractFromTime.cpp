@@ -35,7 +35,7 @@ DEVICE int32_t extract_hour(const time_t* tim_p) {
   return static_cast<int32_t>(rem / SECSPERHOUR);
 }
 
-extern "C" DEVICE int32_t extract_hour(const time_t timeval) {
+extern "C" DEVICE int64_t extract_hour(const time_t timeval) {
   return extract_hour (&timeval);
 }
 
@@ -47,13 +47,13 @@ extern "C" DEVICE int64_t extract_hour_nullable(time_t timeval,
   return extract_hour(&timeval);
 }
 
-extern "C" DEVICE int32_t extract_hour_highprecision(const time_t timeval,
+extern "C" DEVICE int64_t extract_hour_highprecision(const time_t timeval,
 						     int32_t dimen) {
   const time_t stimeval = static_cast<int64_t>(timeval) / get_scale(dimen);
   return extract_hour (stimeval);
 }
 
-extern "C" DEVICE int32_t extract_hour_highprecision_nullable(const time_t timeval,
+extern "C" DEVICE int64_t extract_hour_highprecision_nullable(const time_t timeval,
 							      int32_t dimen,
 							      const int64_t null_val) {
   if (timeval == null_val) {
@@ -75,7 +75,7 @@ DEVICE int32_t extract_minute(const time_t* tim_p) {
   return static_cast<int32_t>(rem / SECSPERMIN);
 }
 
-extern "C" DEVICE int32_t extract_minute(const time_t timeval) {
+extern "C" DEVICE int64_t extract_minute(const time_t timeval) {
   return extract_minute (&timeval);
 }
 
@@ -87,13 +87,13 @@ extern "C" DEVICE int64_t extract_minute_nullable(time_t timeval,
   return extract_minute(&timeval);
 }
 
-extern "C" DEVICE int32_t extract_minute_highprecision(const time_t timeval,
+extern "C" DEVICE int64_t extract_minute_highprecision(const time_t timeval,
 						       int32_t dimen) {
   const time_t stimeval = static_cast<int64_t>(timeval) / get_scale(dimen);
   return extract_minute (stimeval);
 }
 
-extern "C" DEVICE int32_t extract_minute_highprecision_nullable(const time_t timeval,
+extern "C" DEVICE int64_t extract_minute_highprecision_nullable(const time_t timeval,
 							      int32_t dimen,
 							      const int64_t null_val) {
   if (timeval == null_val) {
@@ -107,7 +107,7 @@ DEVICE int32_t extract_second(const time_t* tim_p) {
   return static_cast<int32_t>(static_cast<int64_t>(lcltime) % SECSPERMIN);
 }
 
-extern "C" DEVICE int32_t extract_second(const time_t timeval) {
+extern "C" DEVICE int64_t extract_second(const time_t timeval) {
   return extract_second (&timeval);
 }
 
@@ -119,13 +119,13 @@ extern "C" DEVICE int64_t extract_second_nullable(time_t timeval,
   return extract_second(&timeval);
 }
 
-extern "C" DEVICE int32_t extract_second_highprecision(const time_t timeval,
+extern "C" DEVICE int64_t extract_second_highprecision(const time_t timeval,
 						       int32_t dimen) {
   const time_t stimeval = static_cast<int64_t>(timeval) / get_scale(dimen);
   return extract_second (stimeval);
 }
 
-extern "C" DEVICE int32_t extract_second_highprecision_nullable(const time_t timeval,
+extern "C" DEVICE int64_t extract_second_highprecision_nullable(const time_t timeval,
 								int32_t dimen,
 								const int64_t null_val) {
   if (timeval == null_val) {
@@ -139,11 +139,11 @@ DEVICE int32_t extract_millisecond(const time_t* tim_p) {
   return static_cast<int32_t>(static_cast<int64_t>(lcltime) % MILLISECSPERSEC);
 }
 
-extern "C" DEVICE int32_t extract_millisecond(time_t timeval) {
+extern "C" DEVICE int64_t extract_millisecond(time_t timeval) {
   return 0;
 }
 
-extern "C" DEVICE int32_t extract_millisecond_nullable(time_t timeval,
+extern "C" DEVICE int64_t extract_millisecond_nullable(time_t timeval,
 						       const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
@@ -152,7 +152,7 @@ extern "C" DEVICE int32_t extract_millisecond_nullable(time_t timeval,
   return extract_millisecond (timeval);
 }
 
-extern "C" DEVICE int32_t extract_millisecond_highprecision(const time_t timeval,
+extern "C" DEVICE int64_t extract_millisecond_highprecision(const time_t timeval,
 							    int32_t dimen) {
   time_t mtime = timeval;
   if (dimen == 6) {
@@ -163,7 +163,7 @@ extern "C" DEVICE int32_t extract_millisecond_highprecision(const time_t timeval
   return extract_millisecond(&mtime);
 }
 
-extern "C" DEVICE int32_t extract_millisecond_highprecision_nullable(const time_t timeval,
+extern "C" DEVICE int64_t extract_millisecond_highprecision_nullable(const time_t timeval,
 								     int32_t dimen,
 								     const int64_t null_val) {
   if (timeval == null_val) {
@@ -178,11 +178,11 @@ DEVICE int32_t extract_microsecond(const time_t* tim_p) {
   return static_cast<int32_t>(static_cast<int64_t>(lcltime) % MICROSECSPERSEC);
 }
 
-extern "C" DEVICE int32_t extract_microsecond(time_t timeval) {
+extern "C" DEVICE int64_t extract_microsecond(time_t timeval) {
   return 0;
 }
 
-extern "C" DEVICE int32_t extract_microsecond_nullable(time_t timeval,
+extern "C" DEVICE int64_t extract_microsecond_nullable(time_t timeval,
 						       const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
@@ -191,7 +191,7 @@ extern "C" DEVICE int32_t extract_microsecond_nullable(time_t timeval,
   return extract_microsecond (timeval);
 }
 
-extern "C" DEVICE int32_t extract_microsecond_highprecision(const time_t timeval,
+extern "C" DEVICE int64_t extract_microsecond_highprecision(const time_t timeval,
 							    int32_t dimen) {
   time_t mtime = timeval;
   if (dimen == 9) {
@@ -202,7 +202,7 @@ extern "C" DEVICE int32_t extract_microsecond_highprecision(const time_t timeval
   return extract_microsecond(&mtime);
 }
 
-extern "C" DEVICE int32_t extract_microsecond_highprecision_nullable(const time_t timeval,
+extern "C" DEVICE int64_t extract_microsecond_highprecision_nullable(const time_t timeval,
 								    int32_t dimen,
 								    const int64_t null_val) {
   if (timeval == null_val) {
@@ -217,11 +217,11 @@ DEVICE int32_t extract_nanosecond(const time_t* tim_p) {
   return static_cast<int32_t>(static_cast<int64_t>(lcltime) % NANOSECSPERSEC);
 }
 
-extern "C" DEVICE int32_t extract_nanosecond(time_t timeval) {
+extern "C" DEVICE int64_t extract_nanosecond(time_t timeval) {
   return 0;
 }
 
-extern "C" DEVICE int32_t extract_nanosecond_nullable(time_t timeval,
+extern "C" DEVICE int64_t extract_nanosecond_nullable(time_t timeval,
 						      const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
@@ -230,7 +230,7 @@ extern "C" DEVICE int32_t extract_nanosecond_nullable(time_t timeval,
   return extract_nanosecond (timeval);
 }
 
-extern "C" DEVICE int32_t extract_nanosecond_highprecision(const time_t timeval,
+extern "C" DEVICE int64_t extract_nanosecond_highprecision(const time_t timeval,
 							   int32_t dimen) {
   if (dimen == 3 || dimen == 6) {
     return 0;
@@ -239,7 +239,7 @@ extern "C" DEVICE int32_t extract_nanosecond_highprecision(const time_t timeval,
   }
 }
 
-extern "C" DEVICE int32_t extract_nanosecond_highprecision_nullable(const time_t timeval,
+extern "C" DEVICE int64_t extract_nanosecond_highprecision_nullable(const time_t timeval,
 								    int32_t dimen,
 								    const int64_t null_val) {
   if (timeval == null_val) {
@@ -266,7 +266,7 @@ DEVICE int32_t extract_dow(const time_t* tim_p) {
   return weekday;
 }
 
-extern "C" DEVICE int32_t extract_dow(time_t timeval) {
+extern "C" DEVICE int64_t extract_dow(time_t timeval) {
   return extract_dow (&timeval);
 }
 
@@ -278,13 +278,13 @@ extern "C" DEVICE int64_t extract_dow_nullable(time_t timeval,
   return extract_dow(&timeval);
 }
 
-extern "C" DEVICE int32_t extract_dow_highprecision(const time_t timeval,
+extern "C" DEVICE int64_t extract_dow_highprecision(const time_t timeval,
 						    int32_t dimen) {
   const time_t stimeval = static_cast<int64_t>(timeval) / get_scale(dimen);
   return extract_dow (stimeval);
 }
 
-extern "C" DEVICE int32_t extract_dow_highprecision_nullable(const time_t timeval,
+extern "C" DEVICE int64_t extract_dow_highprecision_nullable(const time_t timeval,
 							     int32_t dimen,
 							     const int64_t null_val) {
   if (timeval == null_val) {
@@ -293,7 +293,7 @@ extern "C" DEVICE int32_t extract_dow_highprecision_nullable(const time_t timeva
   return extract_dow_highprecision (timeval, dimen);
 }
 
-extern "C" DEVICE int32_t extract_isodow(time_t timeval) {
+extern "C" DEVICE int64_t extract_isodow(time_t timeval) {
   int64_t dow = extract_dow(&timeval);
   return (dow == 0 ? 7 : dow);
 }
@@ -306,13 +306,13 @@ extern "C" DEVICE int64_t extract_isodow_nullable(time_t timeval,
   return extract_isodow(timeval);
 }
 
-extern "C" DEVICE int32_t extract_isodow_highprecision(const time_t timeval,
+extern "C" DEVICE int64_t extract_isodow_highprecision(const time_t timeval,
 						       int32_t dimen) {
   const time_t stimeval = static_cast<int64_t>(timeval) / get_scale(dimen);
   return extract_isodow (stimeval);
 }
 
-extern "C" DEVICE int32_t extract_isodow_highprecision_nullable(const time_t timeval,
+extern "C" DEVICE int64_t extract_isodow_highprecision_nullable(const time_t timeval,
 								int32_t dimen,
 								const int64_t null_val) {
   if (timeval == null_val) {
@@ -340,13 +340,13 @@ extern "C" DEVICE int64_t extract_quarterday_nullable(time_t timeval,
   return extract_quarterday(&timeval);
 }
 
-extern "C" DEVICE int32_t extract_quarterday_highprecision(const time_t timeval,
+extern "C" DEVICE int64_t extract_quarterday_highprecision(const time_t timeval,
 							   int32_t dimen) {
   const time_t stimeval = static_cast<int64_t>(timeval) / get_scale(dimen);
   return extract_quarterday (stimeval);
 }
 
-extern "C" DEVICE int32_t extract_quarterday_highprecision_nullable(const time_t timeval,
+extern "C" DEVICE int64_t extract_quarterday_highprecision_nullable(const time_t timeval,
 								    int32_t dimen,
 								    const int64_t null_val) {
   if (timeval == null_val) {
@@ -390,7 +390,7 @@ DEVICE int32_t extract_month_fast(const time_t* tim_p) {
   return (month + 2) % 12 + 1;
 }
 
-extern "C" DEVICE int32_t extract_month(const time_t timeval) {
+extern "C" DEVICE int64_t extract_month(const time_t timeval) {
   if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900)
     return extract_month_fast(&timeval);
 
@@ -408,13 +408,13 @@ extern "C" DEVICE int64_t extract_month_nullable(time_t timeval,
   return extract_month(timeval);
 }
 
-extern "C" DEVICE int32_t extract_month_highprecision(const time_t timeval,
+extern "C" DEVICE int64_t extract_month_highprecision(const time_t timeval,
 						      int32_t dimen) {
   const time_t stimeval = static_cast<int64_t>(timeval) / get_scale(dimen);
   return extract_month (stimeval);
 }
 
-extern "C" DEVICE int32_t extract_month_highprecision_nullable(const time_t timeval,
+extern "C" DEVICE int64_t extract_month_highprecision_nullable(const time_t timeval,
 							       int32_t dimen,
 							       const int64_t null_val) {
   if (timeval == null_val) {
@@ -450,7 +450,7 @@ DEVICE int32_t extract_quarter_fast(const time_t* tim_p) {
   return quarter + 1;
 }
 
-extern "C" DEVICE int32_t extract_quarter(const time_t timeval) {
+extern "C" DEVICE int64_t extract_quarter(const time_t timeval) {
   if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900)
     return extract_quarter_fast(&timeval);
 
@@ -468,13 +468,13 @@ extern "C" DEVICE int64_t extract_quarter_nullable(time_t timeval,
   return extract_quarter(timeval);
 }
 
-extern "C" DEVICE int32_t extract_quarter_highprecision(const time_t timeval,
+extern "C" DEVICE int64_t extract_quarter_highprecision(const time_t timeval,
 						    int32_t dimen) {
   const time_t stimeval = static_cast<int64_t>(timeval) / get_scale(dimen);
   return extract_quarter (stimeval);
 }
 
-extern "C" DEVICE int32_t extract_quarter_highprecision_nullable(const time_t timeval,
+extern "C" DEVICE int64_t extract_quarter_highprecision_nullable(const time_t timeval,
 							     int32_t dimen,
 							     const int64_t null_val) {
   if (timeval == null_val) {
@@ -493,7 +493,7 @@ DEVICE int32_t extract_year_fast(const time_t* tim_p) {
   return year;
 }
 
-extern "C" DEVICE int32_t extract_year(const time_t timeval) {
+extern "C" DEVICE int64_t extract_year(const time_t timeval) {
   if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900)
     return extract_year_fast(&timeval);
 
@@ -511,13 +511,13 @@ extern "C" DEVICE int64_t extract_year_nullable(time_t timeval,
   return extract_year(timeval);
 }
 
-extern "C" DEVICE int32_t extract_year_highprecision(const time_t timeval,
+extern "C" DEVICE int64_t extract_year_highprecision(const time_t timeval,
 						    int32_t dimen) {
   const time_t stimeval = static_cast<int64_t>(timeval) / get_scale(dimen);
   return extract_year (stimeval);
 }
 
-extern "C" DEVICE int32_t extract_year_highprecision_nullable(const time_t timeval,
+extern "C" DEVICE int64_t extract_year_highprecision_nullable(const time_t timeval,
 							     int32_t dimen,
 							     const int64_t null_val) {
   if (timeval == null_val) {
@@ -526,7 +526,7 @@ extern "C" DEVICE int32_t extract_year_highprecision_nullable(const time_t timev
   return extract_year_highprecision (timeval, dimen);
 }
 
-extern "C" DEVICE int32_t extract_day(const time_t timeval) {
+extern "C" DEVICE int64_t extract_day(const time_t timeval) {
   tm tm_struct;
   gmtime_r_newlib(&timeval, &tm_struct);
 
@@ -541,13 +541,13 @@ extern "C" DEVICE int64_t extract_day_nullable(time_t timeval,
   return extract_day(timeval);
 }
 
-extern "C" DEVICE int32_t extract_day_highprecision(const time_t timeval,
+extern "C" DEVICE int64_t extract_day_highprecision(const time_t timeval,
 						    int32_t dimen) {
   const time_t stimeval = static_cast<int64_t>(timeval) / get_scale(dimen);
   return extract_day (stimeval);
 }
 
-extern "C" DEVICE int32_t extract_day_highprecision_nullable(const time_t timeval,
+extern "C" DEVICE int64_t extract_day_highprecision_nullable(const time_t timeval,
 							     int32_t dimen,
 							     const int64_t null_val) {
   if (timeval == null_val) {
@@ -557,7 +557,7 @@ extern "C" DEVICE int32_t extract_day_highprecision_nullable(const time_t timeva
 }
 
 
-extern "C" DEVICE int32_t extract_dayofyear(const time_t timeval) {
+extern "C" DEVICE int64_t extract_dayofyear(const time_t timeval) {
   tm tm_struct;
   gmtime_r_newlib(&timeval, &tm_struct);
 
@@ -572,13 +572,13 @@ extern "C" DEVICE int64_t extract_dayofyear_nullable(time_t timeval,
   return extract_dayofyear(timeval);
 }
 
-extern "C" DEVICE int32_t extract_dayofyear_highprecision(const time_t timeval,
+extern "C" DEVICE int64_t extract_dayofyear_highprecision(const time_t timeval,
 							  int32_t dimen) {
   const time_t stimeval = static_cast<int64_t>(timeval) / get_scale(dimen);
   return extract_dayofyear (stimeval);
 }
 
-extern "C" DEVICE int32_t extract_dayofyear_highprecision_nullable(const time_t timeval,
+extern "C" DEVICE int64_t extract_dayofyear_highprecision_nullable(const time_t timeval,
 								   int32_t dimen,
 								   const int64_t null_val) {
   if (timeval == null_val) {
@@ -587,7 +587,7 @@ extern "C" DEVICE int32_t extract_dayofyear_highprecision_nullable(const time_t 
   return extract_dayofyear_highprecision (timeval, dimen);
 }
 
-extern "C" DEVICE int32_t extract_week(const time_t timeval) {
+extern "C" DEVICE int64_t extract_week(const time_t timeval) {
   tm tm_struct;
   gmtime_r_newlib(&timeval, &tm_struct);
 
@@ -618,19 +618,46 @@ extern "C" DEVICE int64_t extract_week_nullable(time_t timeval,
   return extract_week(timeval);
 }
 
-extern "C" DEVICE int32_t extract_week_highprecision(const time_t timeval,
+extern "C" DEVICE int64_t extract_week_highprecision(const time_t timeval,
 						     int32_t dimen) {
   const time_t stimeval = static_cast<int64_t>(timeval) / get_scale(dimen);
   return extract_week (stimeval);
 }
 
-extern "C" DEVICE int32_t extract_week_highprecision_nullable(const time_t timeval,
+extern "C" DEVICE int64_t extract_week_highprecision_nullable(const time_t timeval,
 							      int32_t dimen,
 							      const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }
   return extract_week_highprecision (timeval, dimen);
+}
+
+extern "C" DEVICE int64_t extract_epoch(const time_t timeval) {
+  return timeval;
+}
+
+extern "C" DEVICE int64_t extract_epoch_nullable(time_t timeval,
+						 const int64_t null_val) {
+  if (timeval == null_val) {
+    return null_val;
+  }
+  return extract_epoch(timeval);
+}
+
+extern "C" DEVICE int64_t extract_epoch_highprecision(const time_t timeval,
+						      int32_t dimen) {
+  const time_t stimeval = static_cast<int64_t>(timeval) / get_scale(dimen);
+  return extract_epoch (stimeval);
+}
+
+extern "C" DEVICE int64_t extract_epoch_highprecision_nullable(const time_t timeval,
+							      int32_t dimen,
+							      const int64_t null_val) {
+  if (timeval == null_val) {
+    return null_val;
+  }
+  return extract_epoch_highprecision (timeval, dimen);
 }
 
 DEVICE tm* gmtime_r_newlib(const time_t* tim_p, tm* res) {

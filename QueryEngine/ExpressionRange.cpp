@@ -774,11 +774,11 @@ ExpressionRange getExpressionRange(
       CHECK(arg_range.getType() == ExpressionRangeType::Integer);
       const int32_t dimen = extract_expr_ti.get_dimension();
       const int64_t year_range_min =
-          (dimen > 0) ? ExtractFromTimeHighPrecision(kYEAR, arg_range.getIntMin(), dimen)
-                      : ExtractFromTime(kYEAR, arg_range.getIntMin());
+          (dimen > 0) ? extract_year_highprecision(arg_range.getIntMin(), dimen)
+                      : extract_year(arg_range.getIntMin());
       const int64_t year_range_max =
-          (dimen > 0) ? ExtractFromTimeHighPrecision(kYEAR, arg_range.getIntMax(), dimen)
-                      : ExtractFromTime(kYEAR, arg_range.getIntMax());
+          (dimen > 0) ? extract_year_highprecision(arg_range.getIntMax(), dimen)
+                      : extract_year(arg_range.getIntMax());
       return ExpressionRange::makeIntRange(
           year_range_min, year_range_max, 0, arg_range.hasNulls());
     }
