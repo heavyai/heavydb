@@ -277,6 +277,20 @@ struct DashboardObject : testing::Test {
   virtual ~DashboardObject() { drop_dashboards(); }
 };
 
+TEST(UserRoles, InvalidGrantsRevokesTest) {
+  run_ddl_statement("CREATE USER Antazin(password = 'password', is_super = 'false');");
+  run_ddl_statement("CREATE USER Max(password = 'password', is_super = 'false');");
+
+  EXPECT_THROW(run_ddl_statement("GRANT Antazin to Antazin;"), std::runtime_error);
+  EXPECT_THROW(run_ddl_statement("REVOKE Antazin from Antazin;"), std::runtime_error);
+  EXPECT_THROW(run_ddl_statement("GRANT Antazin to Max;"), std::runtime_error);
+  EXPECT_THROW(run_ddl_statement("REVOKE Antazin from Max;"), std::runtime_error);
+  EXPECT_THROW(run_ddl_statement("GRANT Max to Antazin;"), std::runtime_error);
+  EXPECT_THROW(run_ddl_statement("REVOKE Max from Antazin;"), std::runtime_error);
+
+  run_ddl_statement("DROP USER Antazin;");
+}
+
 TEST_F(DatabaseObject, AccessDefaultsTest) {
   auto cat_mapd = Catalog_Namespace::Catalog::get("mapd");
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);

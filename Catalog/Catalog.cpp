@@ -1297,11 +1297,12 @@ void SysCatalog::revokeRole_unsafe(const std::string& roleName,
                                    const std::string& userName) {
   Role* user_rl = nullptr;
   Role* rl = getMetadataForRole(roleName);
-  if (!rl) {
+  UserMetadata user;
+  if (!rl || getMetadataForUser(roleName, user)) {
+    // check role is userRole
     throw runtime_error("Request to revoke role " + roleName +
                         " failed because role with this name does not exist.");
   }
-  UserMetadata user;
   if (!getMetadataForUser(userName, user)) {
     throw runtime_error("Request to revoke role from user " + userName +
                         " failed because user with this name does not exist.");

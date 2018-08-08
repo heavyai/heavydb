@@ -3704,6 +3704,15 @@ void GrantRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         "Request to grant role " + get_role() +
         " failed because mapd root user has all privileges by default.");
   }
+  Catalog_Namespace::UserMetadata user;
+  Role* rl = SysCatalog::instance().getMetadataForRole(get_role());
+  if (!rl || SysCatalog::instance().getMetadataForUser(get_role(), user)) {
+    // check role is userRole
+    // reason for placing the check here instead of Catalog.cpp is to
+    // bypass grantRole_unsafe when createUser statement is kicked off.
+    throw std::runtime_error("Request to grant role " + get_role() +
+                             " failed because role does not exist.");
+  }
   SysCatalog::instance().grantRole(get_role(), get_user());
 }
 
