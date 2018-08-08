@@ -538,7 +538,10 @@ class TypedImportBuffer : boost::noncopyable {
                  const bool is_null,
                  const CopyParams& copy_params,
                  const int64_t replicate_count = 0);
-  void add_value(const ColumnDescriptor* cd, const TDatum& val, const bool is_null);
+  void add_value(const ColumnDescriptor* cd,
+                 const TDatum& val,
+                 const bool is_null,
+                 const int64_t replicate_count = 0);
   void pop_value();
 
   inline int64_t get_replicate_count() const { return replicate_count_; }
@@ -825,6 +828,18 @@ class Importer : public DataStreamSink {
       const std::string& archive_path,
       const CopyParams& copy_params);
   static bool gdalSupportsNetworkFileAccess();
+  Catalog_Namespace::Catalog& get_catalog() { return loader->get_catalog(); }
+  static void set_geo_physical_import_buffer(
+      const Catalog_Namespace::Catalog& catalog,
+      const ColumnDescriptor* cd,
+      std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+      size_t& col_idx,
+      std::vector<double>& coords,
+      std::vector<double>& bounds,
+      std::vector<int>& ring_sizes,
+      std::vector<int>& poly_rings,
+      int render_group,
+      const int64_t replicate_count = 0);
 
  private:
   static void initGDAL();

@@ -166,6 +166,8 @@ class Catalog {
    */
   virtual ~Catalog();
 
+  static void expandGeoColumn(const ColumnDescriptor& cd,
+                              std::list<ColumnDescriptor>& columns);
   void createTable(TableDescriptor& td,
                    const std::list<ColumnDescriptor>& columns,
                    const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs,

@@ -1224,7 +1224,9 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
 
 void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
                                   const TDatum& datum,
-                                  const bool is_null) {
+                                  const bool is_null,
+                                  const int64_t replicate_count) {
+  set_replicate_count(replicate_count);
   const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType)
                                                 : cd->columnType.get_type();
   switch (type) {
@@ -1437,6 +1439,90 @@ std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeI
   return compressed_coords;
 }
 
+void Importer::set_geo_physical_import_buffer(
+    const Catalog_Namespace::Catalog& catalog,
+    const ColumnDescriptor* cd,
+    std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+    size_t& col_idx,
+    std::vector<double>& coords,
+    std::vector<double>& bounds,
+    std::vector<int>& ring_sizes,
+    std::vector<int>& poly_rings,
+    int render_group,
+    const int64_t replicate_count) {
+  const auto col_ti = cd->columnType;
+  const auto col_type = col_ti.get_type();
+  auto columnId = cd->columnId;
+  auto cd_coords = catalog.getMetadataForColumn(cd->tableId, ++columnId);
+  std::vector<TDatum> td_coords_data;
+  std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
+  for (auto cc : compressed_coords) {
+    TDatum td_byte;
+    td_byte.val.int_val = cc;
+    td_coords_data.push_back(td_byte);
+  }
+  TDatum tdd_coords;
+  tdd_coords.val.arr_val = td_coords_data;
+  tdd_coords.is_null = false;
+  import_buffers[col_idx++]->add_value(cd_coords, tdd_coords, false, replicate_count);
+
+  if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+    // Create ring_sizes array value and add it to the physical column
+    auto cd_ring_sizes = catalog.getMetadataForColumn(cd->tableId, ++columnId);
+    std::vector<TDatum> td_ring_sizes;
+    for (auto ring_size : ring_sizes) {
+      TDatum td_ring_size;
+      td_ring_size.val.int_val = ring_size;
+      td_ring_sizes.push_back(td_ring_size);
+    }
+    TDatum tdd_ring_sizes;
+    tdd_ring_sizes.val.arr_val = td_ring_sizes;
+    tdd_ring_sizes.is_null = false;
+    import_buffers[col_idx++]->add_value(
+        cd_ring_sizes, tdd_ring_sizes, false, replicate_count);
+  }
+
+  if (col_type == kMULTIPOLYGON) {
+    // Create poly_rings array value and add it to the physical column
+    auto cd_poly_rings = catalog.getMetadataForColumn(cd->tableId, ++columnId);
+    std::vector<TDatum> td_poly_rings;
+    for (auto num_rings : poly_rings) {
+      TDatum td_num_rings;
+      td_num_rings.val.int_val = num_rings;
+      td_poly_rings.push_back(td_num_rings);
+    }
+    TDatum tdd_poly_rings;
+    tdd_poly_rings.val.arr_val = td_poly_rings;
+    tdd_poly_rings.is_null = false;
+    import_buffers[col_idx++]->add_value(
+        cd_poly_rings, tdd_poly_rings, false, replicate_count);
+  }
+
+  if (col_type == kLINESTRING || col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+    auto cd_bounds = catalog.getMetadataForColumn(cd->tableId, ++columnId);
+    std::vector<TDatum> td_bounds_data;
+    for (auto b : bounds) {
+      TDatum td_double;
+      td_double.val.real_val = b;
+      td_bounds_data.push_back(td_double);
+    }
+    TDatum tdd_bounds;
+    tdd_bounds.val.arr_val = td_bounds_data;
+    tdd_bounds.is_null = false;
+    import_buffers[col_idx++]->add_value(cd_bounds, tdd_bounds, false, replicate_count);
+  }
+
+  if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+    // Create render_group value and add it to the physical column
+    auto cd_render_group = catalog.getMetadataForColumn(cd->tableId, ++columnId);
+    TDatum td_render_group;
+    td_render_group.val.int_val = render_group;
+    td_render_group.is_null = false;
+    import_buffers[col_idx++]->add_value(
+        cd_render_group, td_render_group, false, replicate_count);
+  }
+}
+
 static ImportStatus import_thread_delimited(
     int thread_id,
     Importer* importer,
@@ -1606,92 +1692,27 @@ static ImportStatus import_thread_delimited(
                   }
                 }
 
-                if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-                  // get a suitable render group for these poly coords
-                  auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
-                  CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
-                  render_group =
-                      (*rga_it).second->insertBoundsAndReturnRenderGroup(bounds);
-                }
+                if (columnIdToRenderGroupAnalyzerMap.size())
+                  if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+                    // get a suitable render group for these poly coords
+                    auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
+                    CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
+                    render_group =
+                        (*rga_it).second->insertBoundsAndReturnRenderGroup(bounds);
+                  }
               }
 
-              ++cd_it;
-              auto cd_coords = *cd_it;
-              std::vector<TDatum> td_coords_data;
-              std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
-              for (auto cc : compressed_coords) {
-                TDatum td_byte;
-                td_byte.val.int_val = cc;
-                td_coords_data.push_back(td_byte);
-              }
-              TDatum tdd_coords;
-              tdd_coords.val.arr_val = td_coords_data;
-              tdd_coords.is_null = false;
-              import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false);
-              ++col_idx;
-
-              if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-                // Create ring_sizes array value and add it to the physical column
+              Importer::set_geo_physical_import_buffer(importer->get_catalog(),
+                                                       cd,
+                                                       import_buffers,
+                                                       col_idx,
+                                                       coords,
+                                                       bounds,
+                                                       ring_sizes,
+                                                       poly_rings,
+                                                       render_group);
+              for (int i = 0; i < cd->columnType.get_physical_cols(); ++i)
                 ++cd_it;
-                auto cd_ring_sizes = *cd_it;
-                std::vector<TDatum> td_ring_sizes;
-                for (auto ring_size : ring_sizes) {
-                  TDatum td_ring_size;
-                  td_ring_size.val.int_val = ring_size;
-                  td_ring_sizes.push_back(td_ring_size);
-                }
-                TDatum tdd_ring_sizes;
-                tdd_ring_sizes.val.arr_val = td_ring_sizes;
-                tdd_ring_sizes.is_null = false;
-                import_buffers[col_idx]->add_value(cd_ring_sizes, tdd_ring_sizes, false);
-                ++col_idx;
-              }
-
-              if (col_type == kMULTIPOLYGON) {
-                // Create poly_rings array value and add it to the physical column
-                ++cd_it;
-                auto cd_poly_rings = *cd_it;
-                std::vector<TDatum> td_poly_rings;
-                for (auto num_rings : poly_rings) {
-                  TDatum td_num_rings;
-                  td_num_rings.val.int_val = num_rings;
-                  td_poly_rings.push_back(td_num_rings);
-                }
-                TDatum tdd_poly_rings;
-                tdd_poly_rings.val.arr_val = td_poly_rings;
-                tdd_poly_rings.is_null = false;
-                import_buffers[col_idx]->add_value(cd_poly_rings, tdd_poly_rings, false);
-                ++col_idx;
-              }
-
-              if (col_type == kLINESTRING || col_type == kPOLYGON ||
-                  col_type == kMULTIPOLYGON) {
-                ++cd_it;
-                auto cd_bounds = *cd_it;
-                std::vector<TDatum> td_bounds_data;
-                for (auto b : bounds) {
-                  TDatum td_double;
-                  td_double.val.real_val = b;
-                  td_bounds_data.push_back(td_double);
-                }
-                TDatum tdd_bounds;
-                tdd_bounds.val.arr_val = td_bounds_data;
-                tdd_bounds.is_null = false;
-                import_buffers[col_idx]->add_value(cd_bounds, tdd_bounds, false);
-                ++col_idx;
-              }
-
-              if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-                // Create render_group value and add it to the physical column
-                ++cd_it;
-                auto cd_render_group = *cd_it;
-                TDatum td_render_group;
-                td_render_group.val.int_val = render_group;
-                td_render_group.is_null = false;
-                import_buffers[col_idx]->add_value(
-                    cd_render_group, td_render_group, false);
-                ++col_idx;
-              }
             }
           }
           import_status.rows_completed++;

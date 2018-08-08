@@ -38,6 +38,7 @@ struct ColumnDescriptor {
   bool isVirtualCol;
   std::string virtualExpr;
   bool isDeletedCol;
+  bool isGeoPhyCol{false};
 
   ColumnDescriptor() : isSystemCol(false), isVirtualCol(false), isDeletedCol(false) {}
   ColumnDescriptor(const int tableId,
@@ -52,6 +53,9 @@ struct ColumnDescriptor {
       , isSystemCol(false)
       , isVirtualCol(false)
       , isDeletedCol(false) {}
+  ColumnDescriptor(const bool isGeoPhyCol) : ColumnDescriptor() {
+    this->isGeoPhyCol = isGeoPhyCol;
+  }
 };
 
 #endif  // COLUMN_DESCRIPTOR

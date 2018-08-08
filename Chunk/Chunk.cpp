@@ -161,7 +161,7 @@ size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
       StringNoneEncoder* str_encoder =
           dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
       return str_encoder->getNumElemsForBytesInsertData(
-          src_data.stringsPtr, start_idx, num_elems, byte_limit);
+          src_data.stringsPtr, start_idx, num_elems, byte_limit, replicating);
     }
     default:
       CHECK(false);
@@ -202,7 +202,8 @@ ChunkMetadata Chunk::appendData(DataBlockPtr& src_data,
       case kMULTIPOLYGON: {
         StringNoneEncoder* str_encoder =
             dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
-        return str_encoder->appendData(src_data.stringsPtr, start_idx, num_elems);
+        return str_encoder->appendData(
+            src_data.stringsPtr, start_idx, num_elems, replicating);
       }
       default:
         CHECK(false);

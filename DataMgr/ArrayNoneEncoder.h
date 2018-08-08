@@ -129,7 +129,7 @@ class ArrayNoneEncoder : public Encoder {
           if (size > 0)
             buffer_->append(inbuf, size);
           size = 0;
-          buffer_->append((*srcData)[replicating ? 0 : i].data_ptr.get(), len);
+          buffer_->append((*srcData)[replicating ? 0 : i].pointer, len);
           num_appended++;
           break;
         } else if (size + len > inbuf_size)

@@ -2358,6 +2358,7 @@ void Catalog::buildMaps() {
     cd->isVirtualCol = sqliteConnector_.getData<bool>(r, 13);
     cd->virtualExpr = sqliteConnector_.getData<string>(r, 14);
     cd->isDeletedCol = sqliteConnector_.getData<bool>(r, 15);
+    cd->isGeoPhyCol = skip_physical_cols > 0;
     ColumnKey columnKey(cd->tableId, to_upper(cd->columnName));
     columnDescriptorMap_[columnKey] = cd;
     ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
@@ -3069,10 +3070,10 @@ void Catalog::roll(const bool forward) {
         delete ocd;
       }
       if (ncd) {
-        // append columnId if its new
-        if (vc.end() == std::find(vc.begin(), vc.end(), ncd->columnId)) {
-          vc.push_back(ncd->columnId);
-        }
+        // append columnId if its new and not phy geo
+        if (vc.end() == std::find(vc.begin(), vc.end(), ncd->columnId))
+          if (!ncd->isGeoPhyCol)
+            vc.push_back(ncd->columnId);
       }
       tds.insert(td);
     } else {
@@ -3101,6 +3102,136 @@ void Catalog::roll(const bool forward) {
   }
 }
 
+void Catalog::expandGeoColumn(const ColumnDescriptor& cd,
+                              list<ColumnDescriptor>& columns) {
+  const auto& col_ti = cd.columnType;
+  if (IS_GEO(col_ti.get_type())) {
+    switch (col_ti.get_type()) {
+      case kPOINT: {
+        ColumnDescriptor physical_cd_coords(true);
+        physical_cd_coords.columnName = cd.columnName + "_coords";
+        SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, true);
+        // Raw data: compressed/uncompressed coords
+        coords_ti.set_subtype(kTINYINT);
+        size_t unit_size;
+        if (col_ti.get_compression() == kENCODING_GEOINT &&
+            col_ti.get_comp_param() == 32) {
+          unit_size = 4 * sizeof(int8_t);
+        } else {
+          CHECK(col_ti.get_compression() == kENCODING_NONE);
+          unit_size = 8 * sizeof(int8_t);
+        }
+        coords_ti.set_size(2 * unit_size);
+        physical_cd_coords.columnType = coords_ti;
+        columns.push_back(physical_cd_coords);
+
+        // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
+
+        break;
+      }
+      case kLINESTRING: {
+        ColumnDescriptor physical_cd_coords(true);
+        physical_cd_coords.columnName = cd.columnName + "_coords";
+        SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, true);
+        // Raw data: compressed/uncompressed coords
+        coords_ti.set_subtype(kTINYINT);
+        physical_cd_coords.columnType = coords_ti;
+        columns.push_back(physical_cd_coords);
+
+        ColumnDescriptor physical_cd_bounds(true);
+        physical_cd_bounds.columnName = cd.columnName + "_bounds";
+        SQLTypeInfo bounds_ti = SQLTypeInfo(kARRAY, true);
+        bounds_ti.set_subtype(kDOUBLE);
+        bounds_ti.set_size(4 * sizeof(double));
+        physical_cd_bounds.columnType = bounds_ti;
+        columns.push_back(physical_cd_bounds);
+
+        // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
+
+        break;
+      }
+      case kPOLYGON: {
+        ColumnDescriptor physical_cd_coords(true);
+        physical_cd_coords.columnName = cd.columnName + "_coords";
+        SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, true);
+        // Raw data: compressed/uncompressed coords
+        coords_ti.set_subtype(kTINYINT);
+        physical_cd_coords.columnType = coords_ti;
+        columns.push_back(physical_cd_coords);
+
+        ColumnDescriptor physical_cd_ring_sizes(true);
+        physical_cd_ring_sizes.columnName = cd.columnName + "_ring_sizes";
+        SQLTypeInfo ring_sizes_ti = SQLTypeInfo(kARRAY, true);
+        ring_sizes_ti.set_subtype(kINT);
+        physical_cd_ring_sizes.columnType = ring_sizes_ti;
+        columns.push_back(physical_cd_ring_sizes);
+
+        ColumnDescriptor physical_cd_bounds(true);
+        physical_cd_bounds.columnName = cd.columnName + "_bounds";
+        SQLTypeInfo bounds_ti = SQLTypeInfo(kARRAY, true);
+        bounds_ti.set_subtype(kDOUBLE);
+        bounds_ti.set_size(4 * sizeof(double));
+        physical_cd_bounds.columnType = bounds_ti;
+        columns.push_back(physical_cd_bounds);
+
+        ColumnDescriptor physical_cd_render_group(true);
+        physical_cd_render_group.columnName = cd.columnName + "_render_group";
+        SQLTypeInfo render_group_ti = SQLTypeInfo(kINT, true);
+        physical_cd_render_group.columnType = render_group_ti;
+        columns.push_back(physical_cd_render_group);
+
+        // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
+
+        break;
+      }
+      case kMULTIPOLYGON: {
+        ColumnDescriptor physical_cd_coords(true);
+        physical_cd_coords.columnName = cd.columnName + "_coords";
+        SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, true);
+        // Raw data: compressed/uncompressed coords
+        coords_ti.set_subtype(kTINYINT);
+        physical_cd_coords.columnType = coords_ti;
+        columns.push_back(physical_cd_coords);
+
+        ColumnDescriptor physical_cd_ring_sizes(true);
+        physical_cd_ring_sizes.columnName = cd.columnName + "_ring_sizes";
+        SQLTypeInfo ring_sizes_ti = SQLTypeInfo(kARRAY, true);
+        ring_sizes_ti.set_subtype(kINT);
+        physical_cd_ring_sizes.columnType = ring_sizes_ti;
+        columns.push_back(physical_cd_ring_sizes);
+
+        ColumnDescriptor physical_cd_poly_rings(true);
+        physical_cd_poly_rings.columnName = cd.columnName + "_poly_rings";
+        SQLTypeInfo poly_rings_ti = SQLTypeInfo(kARRAY, true);
+        poly_rings_ti.set_subtype(kINT);
+        physical_cd_poly_rings.columnType = poly_rings_ti;
+        columns.push_back(physical_cd_poly_rings);
+
+        ColumnDescriptor physical_cd_bounds(true);
+        physical_cd_bounds.columnName = cd.columnName + "_bounds";
+        SQLTypeInfo bounds_ti = SQLTypeInfo(kARRAY, true);
+        bounds_ti.set_subtype(kDOUBLE);
+        bounds_ti.set_size(4 * sizeof(double));
+        physical_cd_bounds.columnType = bounds_ti;
+        columns.push_back(physical_cd_bounds);
+
+        ColumnDescriptor physical_cd_render_group(true);
+        physical_cd_render_group.columnName = cd.columnName + "_render_group";
+        SQLTypeInfo render_group_ti = SQLTypeInfo(kINT, true);
+        physical_cd_render_group.columnType = render_group_ti;
+        columns.push_back(physical_cd_render_group);
+
+        // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
+
+        break;
+      }
+      default:
+        throw runtime_error("Unrecognized geometry type.");
+        break;
+    }
+  }
+}
+
 void Catalog::createTable(
     TableDescriptor& td,
     const list<ColumnDescriptor>& cols,
@@ -3116,144 +3247,10 @@ void Catalog::createTable(
       throw std::runtime_error(
           "Cannot create column with name rowid. rowid is a system defined column.");
     }
-    const auto& col_ti = cd.columnType;
-    if (IS_GEO(col_ti.get_type())) {
-      switch (col_ti.get_type()) {
-        case kPOINT: {
-          columns.push_back(cd);
-
-          ColumnDescriptor physical_cd_coords;
-          physical_cd_coords.columnName = cd.columnName + "_coords";
-          SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, true);
-          // Raw data: compressed/uncompressed coords
-          coords_ti.set_subtype(kTINYINT);
-          size_t unit_size;
-          if (col_ti.get_compression() == kENCODING_GEOINT &&
-              col_ti.get_comp_param() == 32) {
-            unit_size = 4 * sizeof(int8_t);
-          } else {
-            CHECK(col_ti.get_compression() == kENCODING_NONE);
-            unit_size = 8 * sizeof(int8_t);
-          }
-          coords_ti.set_size(2 * unit_size);
-          physical_cd_coords.columnType = coords_ti;
-          columns.push_back(physical_cd_coords);
-
-          // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
-
-          break;
-        }
-        case kLINESTRING: {
-          columns.push_back(cd);
-
-          ColumnDescriptor physical_cd_coords;
-          physical_cd_coords.columnName = cd.columnName + "_coords";
-          SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, true);
-          // Raw data: compressed/uncompressed coords
-          coords_ti.set_subtype(kTINYINT);
-          physical_cd_coords.columnType = coords_ti;
-          columns.push_back(physical_cd_coords);
-
-          ColumnDescriptor physical_cd_bounds;
-          physical_cd_bounds.columnName = cd.columnName + "_bounds";
-          SQLTypeInfo bounds_ti = SQLTypeInfo(kARRAY, true);
-          bounds_ti.set_subtype(kDOUBLE);
-          bounds_ti.set_size(4 * sizeof(double));
-          physical_cd_bounds.columnType = bounds_ti;
-          columns.push_back(physical_cd_bounds);
-
-          // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
-
-          break;
-        }
-        case kPOLYGON: {
-          columns.push_back(cd);
-
-          ColumnDescriptor physical_cd_coords;
-          physical_cd_coords.columnName = cd.columnName + "_coords";
-          SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, true);
-          // Raw data: compressed/uncompressed coords
-          coords_ti.set_subtype(kTINYINT);
-          physical_cd_coords.columnType = coords_ti;
-          columns.push_back(physical_cd_coords);
-
-          ColumnDescriptor physical_cd_ring_sizes;
-          physical_cd_ring_sizes.columnName = cd.columnName + "_ring_sizes";
-          SQLTypeInfo ring_sizes_ti = SQLTypeInfo(kARRAY, true);
-          ring_sizes_ti.set_subtype(kINT);
-          physical_cd_ring_sizes.columnType = ring_sizes_ti;
-          columns.push_back(physical_cd_ring_sizes);
-
-          ColumnDescriptor physical_cd_bounds;
-          physical_cd_bounds.columnName = cd.columnName + "_bounds";
-          SQLTypeInfo bounds_ti = SQLTypeInfo(kARRAY, true);
-          bounds_ti.set_subtype(kDOUBLE);
-          bounds_ti.set_size(4 * sizeof(double));
-          physical_cd_bounds.columnType = bounds_ti;
-          columns.push_back(physical_cd_bounds);
-
-          ColumnDescriptor physical_cd_render_group;
-          physical_cd_render_group.columnName = cd.columnName + "_render_group";
-          SQLTypeInfo render_group_ti = SQLTypeInfo(kINT, true);
-          physical_cd_render_group.columnType = render_group_ti;
-          columns.push_back(physical_cd_render_group);
-
-          // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
-
-          break;
-        }
-        case kMULTIPOLYGON: {
-          columns.push_back(cd);
-
-          ColumnDescriptor physical_cd_coords;
-          physical_cd_coords.columnName = cd.columnName + "_coords";
-          SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, true);
-          // Raw data: compressed/uncompressed coords
-          coords_ti.set_subtype(kTINYINT);
-          physical_cd_coords.columnType = coords_ti;
-          columns.push_back(physical_cd_coords);
-
-          ColumnDescriptor physical_cd_ring_sizes;
-          physical_cd_ring_sizes.columnName = cd.columnName + "_ring_sizes";
-          SQLTypeInfo ring_sizes_ti = SQLTypeInfo(kARRAY, true);
-          ring_sizes_ti.set_subtype(kINT);
-          physical_cd_ring_sizes.columnType = ring_sizes_ti;
-          columns.push_back(physical_cd_ring_sizes);
-
-          ColumnDescriptor physical_cd_poly_rings;
-          physical_cd_poly_rings.columnName = cd.columnName + "_poly_rings";
-          SQLTypeInfo poly_rings_ti = SQLTypeInfo(kARRAY, true);
-          poly_rings_ti.set_subtype(kINT);
-          physical_cd_poly_rings.columnType = poly_rings_ti;
-          columns.push_back(physical_cd_poly_rings);
-
-          ColumnDescriptor physical_cd_bounds;
-          physical_cd_bounds.columnName = cd.columnName + "_bounds";
-          SQLTypeInfo bounds_ti = SQLTypeInfo(kARRAY, true);
-          bounds_ti.set_subtype(kDOUBLE);
-          bounds_ti.set_size(4 * sizeof(double));
-          physical_cd_bounds.columnType = bounds_ti;
-          columns.push_back(physical_cd_bounds);
-
-          ColumnDescriptor physical_cd_render_group;
-          physical_cd_render_group.columnName = cd.columnName + "_render_group";
-          SQLTypeInfo render_group_ti = SQLTypeInfo(kINT, true);
-          physical_cd_render_group.columnType = render_group_ti;
-          columns.push_back(physical_cd_render_group);
-
-          // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
-
-          break;
-        }
-        default:
-          throw runtime_error("Unrecognized geometry type.");
-          break;
-      }
-    } else {
-      columns.push_back(cd);
-    }
-
+    columns.push_back(cd);
     toplevel_column_names.insert(cd.columnName);
+    if (cd.columnType.is_geometry())
+      expandGeoColumn(cd, columns);
   }
 
   ColumnDescriptor cd;
@@ -3329,7 +3326,8 @@ void Catalog::createTable(
           if (colId > 1) {
             colId += g_test_against_columnId_gap;
           }
-          td.columnIdBySpi_.push_back(colId);
+          if (!cd.isGeoPhyCol)
+            td.columnIdBySpi_.push_back(colId);
         }
 
         sqliteConnector_.query_with_text_params(

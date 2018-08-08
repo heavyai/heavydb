@@ -2868,11 +2868,24 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   catalog.getSqliteConnector().query("BEGIN TRANSACTION");
   try {
     std::map<const std::string, const ColumnDescriptor> cds;
+    std::map<const int, const ColumnDef*> cid_coldefs;
     for (const auto& coldef : coldefs) {
       ColumnDescriptor cd;
       setColumnDescriptor(cd, coldef.get());
       catalog.addColumn(*td, cd);
       cds.emplace(*coldef->get_column_name(), cd);
+      cid_coldefs.emplace(cd.columnId, coldef.get());
+
+      // expand geo column to phy columns
+      if (cd.columnType.is_geometry()) {
+        std::list<ColumnDescriptor> phy_geo_columns;
+        catalog.expandGeoColumn(cd, phy_geo_columns);
+        for (auto& cd : phy_geo_columns) {
+          catalog.addColumn(*td, cd);
+          cds.emplace(cd.columnName, cd);
+          cid_coldefs.emplace(cd.columnId, nullptr);
+        }
+      }
     }
 
     std::unique_ptr<Importer_NS::Loader> loader(new Importer_NS::Loader(catalog, td));
@@ -2886,11 +2899,20 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                                                        &import_buffers);
     loader->set_replicating(true);
 
-    auto nrows = td->fragmenter->getNumRows();
+    // set_geo_physical_import_buffer below needs a sorted import_buffers
+    std::sort(import_buffers.begin(),
+              import_buffers.end(),
+              [](decltype(import_buffers[0])& a, decltype(import_buffers[0])& b) {
+                return a->getColumnDesc()->columnId < b->getColumnDesc()->columnId;
+              });
+
+    const auto nrows = td->fragmenter->getNumRows();
     if (nrows > 0) {
-      for (const auto& coldef : coldefs) {
-        auto& cd = cds[*coldef->get_column_name()];
-        auto column_constraint = coldef->get_column_constraint();
+      int skip_physical_cols = 0;
+      for (const auto cit : cid_coldefs) {
+        const auto cd = catalog.getMetadataForColumn(td->tableId, cit.first);
+        const auto coldef = cit.second;
+        const auto column_constraint = coldef ? coldef->get_column_constraint() : nullptr;
         std::string defaultval = "";
         if (column_constraint) {
           auto defaultlp = column_constraint->get_defaultval();
@@ -2903,10 +2925,45 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           isnull = true;
         }
 
-        for (auto& import_buffer : import_buffers) {
-          if (cd.columnId == import_buffer->getColumnDesc()->columnId) {
-            import_buffer->add_value(
-                &cd, defaultval, isnull, Importer_NS::CopyParams(), nrows);
+        // TODO: remove is_geometry below once if null is allowed for geo
+        if (isnull)
+          if (cd->columnType.is_geometry() ||
+              (column_constraint && column_constraint->get_notnull()))
+            throw std::runtime_error("Default value required for column" +
+                                     cd->columnName + "(NULL not supported)");
+
+        for (auto it = import_buffers.begin(); it < import_buffers.end(); ++it) {
+          auto& import_buffer = *it;
+          if (cd->columnId == import_buffer->getColumnDesc()->columnId) {
+            if (coldef != nullptr ||
+                skip_physical_cols-- <= 0) {  // skip non-null phy col
+              import_buffer->add_value(
+                  cd, defaultval, isnull, Importer_NS::CopyParams(), nrows);
+              // tedious non-null geo default value ...
+              if (cd->columnType.is_geometry() && !isnull) {
+                std::vector<double> coords, bounds;
+                std::vector<int> ring_sizes, poly_rings;
+                int render_group = 0;
+                SQLTypeInfo tinfo;
+                if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
+                        defaultval, tinfo, coords, bounds, ring_sizes, poly_rings, false))
+                  throw std::runtime_error("Bad geometry data: '" + defaultval + "'");
+                size_t col_idx = 1 + std::distance(import_buffers.begin(), it);
+                Importer_NS::Importer::set_geo_physical_import_buffer(catalog,
+                                                                      cd,
+                                                                      import_buffers,
+                                                                      col_idx,
+                                                                      coords,
+                                                                      bounds,
+                                                                      ring_sizes,
+                                                                      poly_rings,
+                                                                      render_group,
+                                                                      nrows);
+                // skip following phy cols
+                skip_physical_cols = cd->columnType.get_physical_cols();
+              }
+            }
+            break;
           }
         }
       }

@@ -28,6 +28,7 @@
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/UpdelRoll.h"
+#include "Shared/geo_types.h"
 #include "Tests/TestHelpers.h"
 
 #include <tuple>
@@ -55,11 +56,14 @@ std::shared_ptr<ResultSet> run_query(const string& query_str) {
       query_str, gsession, ExecutorDeviceType::CPU, g_hoist_literals, true);
 }
 
+template <typename E = std::runtime_error>
 bool alter_common(const string& table,
                   const string& column,
                   const string& type,
                   const string& comp,
-                  const string& val) {
+                  const string& val,
+                  const string& val2,
+                  const bool expect_throw = false) {
   std::string alter_query = "alter table " + table + " add column " + column + " " + type;
   if (val != "") {
     alter_query += " default " + val;
@@ -67,16 +71,51 @@ bool alter_common(const string& table,
   if (comp != "") {
     alter_query += " encoding " + comp;
   }
-  EXPECT_NO_THROW(run_ddl_statement(alter_query + ";"););
 
-  std::string query_str =
-      "SELECT count() FROM " + table + " WHERE " + column +
-      ("" == val || boost::iequals("NULL", val) ? " IS NULL" : (" = " + val));
-  auto rows = run_query(query_str + ";");
-  auto crt_row = rows->getNextRow(true, true);
-  CHECK_EQ(size_t(1), crt_row.size());
-  auto r_cnt = v<int64_t>(crt_row[0]);
-  return r_cnt == 100;
+  if (expect_throw) {
+    EXPECT_THROW(run_ddl_statement(alter_query + ";"), E);
+    return true;
+  } else
+    EXPECT_NO_THROW(run_ddl_statement(alter_query + ";"););
+
+  if (val2 != "") {
+    std::string query_str = "SELECT " + column + " FROM " + table;
+    auto rows = run_query(query_str + ";");
+    int r_cnt = 0;
+    while (true) {
+      auto crt_row = rows->getNextRow(true, true);
+      if (0 == crt_row.size())
+        break;
+      auto geo = boost::get<std::string>(v<NullableString>(crt_row[0]));
+#if 1
+      if (geo == val2)
+        ++r_cnt;
+#else
+      // somehow these do not work as advertised ...
+      using namespace Geo_namespace;
+      if (boost::iequals(type, "POINT") && GeoPoint(geo) == GeoPoint(val2))
+        ++r_cnt;
+      else if (boost::iequals(type, "LINESTRING") &&
+               GeoLineString(geo) == GeoLineString(val2))
+        ++r_cnt;
+      else if (boost::iequals(type, "POLYGON") && GeoPolygon(geo) == GeoPolygon(val2))
+        ++r_cnt;
+      else if (boost::iequals(type, "MULTIPOLYGON") &&
+               GeoMultiPolygon(geo) == GeoMultiPolygon(val2))
+        ++r_cnt;
+#endif
+    }
+    return r_cnt == 100;
+  } else {
+    std::string query_str =
+        "SELECT count() FROM " + table + " WHERE " + column +
+        ("" == val || boost::iequals("NULL", val) ? " IS NULL" : (" = " + val));
+    auto rows = run_query(query_str + ";");
+    auto crt_row = rows->getNextRow(true, true);
+    CHECK_EQ(size_t(1), crt_row.size());
+    auto r_cnt = v<int64_t>(crt_row[0]);
+    return r_cnt == 100;
+  }
 }
 
 void import_table_file(const string& table, const string& file) {
@@ -151,34 +190,65 @@ class AlterColumnTest : public ::testing::Test {
   virtual void TearDown() { ASSERT_NO_THROW(run_ddl_statement("drop table trips;");); }
 };
 
-TEST_F(AlterColumnTest, Add_column) {
 #define MT std::make_tuple
-  std::vector<std::tuple<std::string, std::string, std::string>> type_vals = {
-      MT("text", "none", "'abc'"),
-      MT("text", "dict(8)", "'ijk'"),
-      MT("text", "dict(32)", "'xyz'"),
-      MT("float", "", "1.25"),
-      MT("double", "", "1.25"),
-      MT("smallint", "", "123"),
-      MT("integer", "", "123"),
-      MT("bigint", "", "123"),
-      MT("decimal(8)", "", "123"),
-      MT("decimal(8,2)", "", "1.23"),
-      MT("date", "", "'2011-10-23'"),
-      MT("time", "", "'10:23:45'"),
-      MT("timestamp", "", "'2011-10-23 10:23:45'"),
-  };
+std::vector<std::tuple<std::string, std::string, std::string, std::string>> type_vals = {
+    MT("text", "none", "'abc'", ""),
+    MT("text", "dict(8)", "'ijk'", ""),
+    MT("text", "dict(32)", "'xyz'", ""),
+    MT("float", "", "1.25", ""),
+    MT("double", "", "1.25", ""),
+    MT("smallint", "", "123", ""),
+    MT("integer", "", "123", ""),
+    MT("bigint", "", "123", ""),
+    MT("decimal(8)", "", "123", ""),
+    MT("decimal(8,2)", "", "1.23", ""),
+    MT("date", "", "'2011-10-23'", ""),
+    MT("time", "", "'10:23:45'", ""),
+    MT("timestamp", "", "'2011-10-23 10:23:45'", ""),
+    MT("POINT", "", "'POINT (1 2)'", "POINT (1 2)"),
+    MT("LINESTRING", "", "'LINESTRING (1 1,2 2,3 3)'", "LINESTRING (1 1,2 2,3 3)"),
+    MT("POLYGON",
+       "",
+       "'POLYGON((0 0,0 9,9 9,9 0),(1 1,2 2,3 3))'",
+       "POLYGON ((9 0,9 9,0 9,0 0,9 0),(3 3,2 2,1 1,3 3))"),
+    MT("MULTIPOLYGON",
+       "",
+       "'MULTIPOLYGON(((0 0,0 9,9 9,9 0),(1 1,2 2,3 3)))'",
+       "MULTIPOLYGON (((9 0,9 9,0 9,0 0,9 0),(3 3,2 2,1 1,3 3)))"),
+};
+
+TEST_F(AlterColumnTest, Add_column_with_default) {
   int cid = 0;
   for (const auto& tv : type_vals) {
     EXPECT_TRUE(alter_common("trips",
                              "x" + std::to_string(++cid),
                              std::get<0>(tv),
                              std::get<1>(tv),
-                             std::get<2>(tv)));
+                             std::get<2>(tv),
+                             std::get<3>(tv),
+                             false));
   }
+}
+
+TEST_F(AlterColumnTest, Add_column_with_null) {
+  int cid = 0;
   for (const auto& tv : type_vals) {
-    EXPECT_TRUE(alter_common(
-        "trips", "x" + std::to_string(++cid), std::get<0>(tv), std::get<1>(tv), ""));
+    if (std::get<3>(tv) == "")
+      EXPECT_TRUE(alter_common("trips",
+                               "x" + std::to_string(++cid),
+                               std::get<0>(tv),
+                               std::get<1>(tv),
+                               "",
+                               "",
+                               false));
+    else
+      EXPECT_TRUE(alter_common("trips",
+                               "x" + std::to_string(++cid),
+                               std::get<0>(tv),
+                               std::get<1>(tv),
+                               "",
+                               std::get<3>(tv),
+                               true));
   }
 }
 
