@@ -40,16 +40,84 @@ llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr,
                                             from_expr,
                                             get_int_type(32, cgen_state_->context_));
   }
-  std::vector<llvm::Value*> extract_args{
-      ll_int(static_cast<int32_t>(extract_expr->get_field())), from_expr};
+  
+  std::vector<llvm::Value*> extract_args{from_expr};
   if (extract_expr_ti.get_dimension() > 0) {
     extract_args.push_back(ll_int(static_cast<int32_t>(extract_expr_ti.get_dimension())));
   }
-  std::string extract_fname{"ExtractFromTime"};
-  extract_fname += (extract_expr_ti.get_dimension() > 0) ? "HighPrecision" : "";
+
+  std::string extract_fname{"extract_"};
+
+  switch (extract_field)
+    {
+    case kQUARTERDAY:
+      extract_fname += "quarterday";
+      break;
+
+    case kHOUR:
+      extract_fname += "hour";
+      break;
+
+    case kMINUTE:
+      extract_fname += "minute";
+      break;
+
+    case kSECOND:
+      extract_fname += "second";
+      break;
+
+    case kMILLISECOND:
+      extract_fname += "millisecond";
+      break;
+
+    case kMICROSECOND:
+      extract_fname += "microsecond";
+      break;
+
+    case kNANOSECOND:
+      extract_fname += "nanosecond";
+      break;
+
+    case kDOW:
+      extract_fname += "dow";
+      break;
+
+    case kISODOW:
+      extract_fname += "isodow";
+      break;
+
+    case kMONTH:
+      extract_fname += "month";
+      break;
+
+    case kQUARTER:
+      extract_fname += "quarter";
+      break;
+
+    case kYEAR:
+      extract_fname += "year";
+      break;
+
+    case kDAY:
+      extract_fname += "day";
+      break;
+
+    case kDOY:
+      extract_fname += "dayofyear";
+      break;
+
+    case kWEEK:
+      extract_fname += "week";
+      break;
+
+    default:
+      break;
+    }
+
+  extract_fname += (extract_expr_ti.get_dimension() > 0) ? "_highprecision" : "";
   if (!extract_expr_ti.get_notnull()) {
     extract_args.push_back(inlineIntNull(extract_expr_ti));
-    extract_fname += "Nullable";
+    extract_fname += "_nullable";
   }
   return cgen_state_->emitExternalCall(
       extract_fname, get_int_type(64, cgen_state_->context_), extract_args);

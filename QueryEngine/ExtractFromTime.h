@@ -110,4 +110,229 @@ __device__
     int64_t
     ExtractFromTimeHighPrecision(ExtractField field, time_t timeval, const int32_t dimen);
 
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_year(time_t timeval);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_year_highprecision(time_t timeval, const int32_t dimen);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_epoch(time_t timeval);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_epoch_highprecision(time_t timeval, const int32_t dimen);
+
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_quarterday(time_t timeval);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_quarterday_highprecision(time_t timeval, const int32_t dimen);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_hour(time_t timeval);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_hour_highprecision(time_t timeval, const int32_t dimen);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_minute(time_t timeval);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_minute_highprecision(time_t timeval, const int32_t dimen);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_second(time_t timeval);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_second_highprecision(time_t timeval, const int32_t dimen);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_millisecond(time_t timeval);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_millisecond_highprecision(time_t timeval, const int32_t dimen);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_microsecond(time_t timeval);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_microsecond_highprecision(time_t timeval, const int32_t dimen);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_nanosecond(time_t timeval);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_nanosecond_highprecision(time_t timeval, const int32_t dimen);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_dow(time_t timeval);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_dow_highprecision(time_t timeval, const int32_t dimen);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_isodow(time_t timeval);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_isodow_highprecision(time_t timeval, const int32_t dimen);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_month(time_t timeval);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_month_highprecision(time_t timeval, const int32_t dimen);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_quarter(time_t timeval);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_quarter_highprecision(time_t timeval, const int32_t dimen);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_day(time_t timeval);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_day_highprecision(time_t timeval, const int32_t dimen);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_dayofyear(time_t timeval);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_dayofyear_highprecision(time_t timeval, const int32_t dimen);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_week(time_t timeval);
+
+extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    extract_week_highprecision(time_t timeval, const int32_t dimen);
+
 #endif  // QUERYENGINE_EXTRACTFROMTIME_H
