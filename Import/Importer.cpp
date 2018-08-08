@@ -135,10 +135,22 @@ Importer::Importer(Loader* providedLoader, const std::string& f, const CopyParam
   p_file = nullptr;
   buffer[0] = nullptr;
   buffer[1] = nullptr;
+  // we may be overallocating a little more memory here due to dropping phy cols.
+  // it shouldn't be an issue because iteration of it is not supposed to go OOB.
   auto is_array = std::unique_ptr<bool[]>(new bool[loader->get_column_descs().size()]);
   int i = 0;
   bool has_array = false;
+  // TODO: replace this ugly way of skipping phy cols once if isPhyGeo is defined
+  int skip_physical_cols = 0;
   for (auto& p : loader->get_column_descs()) {
+    // phy geo columns can't be in input file
+    if (skip_physical_cols-- > 0)
+      continue;
+    // neither are rowid or $deleted$
+    // note: columns can be added after rowid/$deleted$
+    if (p->isVirtualCol || p->isDeletedCol)
+      continue;
+    skip_physical_cols = p->columnType.get_physical_cols();
     if (p->columnType.get_type() == kARRAY) {
       is_array.get()[i] = true;
       has_array = true;

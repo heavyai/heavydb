@@ -247,6 +247,36 @@ TEST(Detect, Numeric) {
   d(kTEXT, "1.22.22");
 }
 
+const char* create_table_fix1 =
+    "CREATE TABLE fix1("
+    " pt GEOMETRY(POINT),"
+    " ls GEOMETRY(LINESTRING),"
+    " faii INTEGER[2],"
+    " fadc DECIMAL(5,2)[2],"
+    " fatx TEXT[] ENCODING DICT(32)"
+    ");";
+
+class ImportTestFix1 : public ::testing::Test {
+ protected:
+  virtual void SetUp() {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists fix1;"););
+    ASSERT_NO_THROW(run_ddl_statement(create_table_fix1););
+  }
+
+  virtual void TearDown() { ASSERT_NO_THROW(run_ddl_statement("drop table fix1;");); }
+};
+
+TEST_F(ImportTestFix1, Fix_failed_import_arrays_after_geos) {
+  EXPECT_NO_THROW(
+      run_ddl_statement("copy fix1 from '../../Tests/Import/datafiles/fix1.txt' with "
+                        "(header='false');"););
+  std::string query_str = "SELECT COUNT(*) FROM fix1;";
+  auto rows = run_query(query_str);
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(1), crt_row.size());
+  CHECK_EQ(int64_t(1), v<int64_t>(crt_row[0]));
+}
+
 // don't use R"()" format; somehow it causes many blank lines
 // to be output on console. how come?
 const char* create_table_trips =
