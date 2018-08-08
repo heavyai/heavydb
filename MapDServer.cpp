@@ -226,6 +226,9 @@ int main(int argc, char** argv) {
                                    // no conversion is requested
   std::string db_query_file("");   // path to file containing warmup queries list
   bool enable_access_priv_check = true;  // enable DB objects access privileges checking
+  int max_session_duration =
+      900;  // session tolerance in secs (15 mins)
+            // (https://pages.nist.gov/800-63-3/sp800-63b.html#aal3reauth)
 
   namespace po = boost::program_options;
 
@@ -410,6 +413,10 @@ int main(int argc, char** argv) {
                              ->default_value(g_enable_smem_group_by)
                              ->implicit_value(false),
                          "Enable/disable using GPU shared memory for GROUP BY.");
+  desc_adv.add_options()(
+      "max-session-duration",
+      po::value<int>(&max_session_duration)->default_value(max_session_duration),
+      "Maximum duration of active session.");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
@@ -596,6 +603,8 @@ int main(int argc, char** argv) {
 
   LOG(INFO) << " Debug Timer is set to " << g_enable_debug_timer;
 
+  LOG(INFO) << " Maximum active session duration " << max_session_duration;
+
   if (!g_from_table_reordering) {
     LOG(INFO) << " From clause table reordering is disabled";
   }
@@ -663,7 +672,8 @@ int main(int argc, char** argv) {
                                                   mapd_parameters,
                                                   db_convert_dir,
                                                   enable_legacy_syntax,
-                                                  enable_access_priv_check);
+                                                  enable_access_priv_check,
+                                                  max_session_duration);
 
   if (mapd_parameters.ha_group_id.empty()) {
     mapd::shared_ptr<TProcessor> processor(new MapDProcessor(g_mapd_handler));

@@ -129,7 +129,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const MapDParameters& mapd_parameters,
                          const std::string& db_convert_dir,
                          const bool legacy_syntax,
-                         const bool access_priv_check)
+                         const bool access_priv_check,
+                         const int max_session_duration)
     : leaf_aggregator_(db_leaves)
     , string_leaves_(string_leaves)
     , base_data_path_(base_data_path)
@@ -143,7 +144,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     , legacy_syntax_(legacy_syntax)
     , super_user_rights_(false)
     , access_priv_check_(access_priv_check)
-    , _was_geo_copy_from(false) {
+    , _was_geo_copy_from(false)
+    , max_session_duration_(max_session_duration) {
   LOG(INFO) << "MapD Server " << MAPD_RELEASE;
   if (executor_device == "gpu") {
 #ifdef HAVE_CUDA
@@ -3399,6 +3401,14 @@ void MapDHandler::get_heap_profile(std::string& profile, const TSessionId& sessi
 #endif  // HAVE_PROFILER
 }
 
+void MapDHandler::check_session_exp(const SessionMap::iterator& session_it) {
+  time_t last_used_time = session_it->second->get_last_used_time();
+  if ((time(0) - last_used_time) > max_session_duration_) {
+    THROW_MAPD_EXCEPTION("Session Expired. User should Re-authenticate.")
+    sessions_.erase(session_it);  // Already checked session existance in get_session_it
+  }
+}
+
 SessionMap::iterator MapDHandler::get_session_it(const TSessionId& session) {
   auto calcite_session_prefix = calcite_->get_session_prefix();
   auto prefix_length = calcite_session_prefix.size();
@@ -3409,6 +3419,7 @@ SessionMap::iterator MapDHandler::get_session_it(const TSessionId& session) {
       if (session_it == sessions_.end()) {
         THROW_MAPD_EXCEPTION("Session not valid.");
       }
+      check_session_exp(session_it);
       session_it->second->make_superuser();
       session_it->second->update_time();
       return session_it;
@@ -3419,6 +3430,7 @@ SessionMap::iterator MapDHandler::get_session_it(const TSessionId& session) {
   if (session_it == sessions_.end()) {
     THROW_MAPD_EXCEPTION("Session not valid.");
   }
+  check_session_exp(session_it);
   session_it->second->reset_superuser();
   session_it->second->update_time();
   return session_it;

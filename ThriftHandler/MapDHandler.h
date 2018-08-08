@@ -119,7 +119,8 @@ class MapDHandler : public MapDIf {
               const MapDParameters& mapd_parameters,
               const std::string& db_convert_dir,
               const bool legacy_syntax,
-              const bool access_priv_check);
+              const bool access_priv_check,
+              const int max_session_duration);
 
   ~MapDHandler();
 
@@ -430,6 +431,7 @@ class MapDHandler : public MapDIf {
                               const bool get_system,
                               const bool get_physical);
   void check_read_only(const std::string& str);
+  void check_session_exp(const SessionMap::iterator& session_it);
   SessionMap::iterator get_session_it(const TSessionId& session);
   static void value_to_thrift_column(const TargetValue& tv,
                                      const SQLTypeInfo& ti,
@@ -565,6 +567,7 @@ class MapDHandler : public MapDIf {
   bool super_user_rights_;  // default is "false"; setting to "true" ignores passwd checks
                             // in "connect(..)" method
   const bool access_priv_check_;
+  const int max_session_duration_;  // duration tolerance for active session
 
   bool _was_geo_copy_from;
   std::string _geo_copy_from_table;
