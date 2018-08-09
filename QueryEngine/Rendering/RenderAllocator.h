@@ -87,7 +87,7 @@ class RenderAllocatorMap {
 
   RenderAllocator* getRenderAllocator(size_t device_id);
   RenderAllocator* operator[](size_t device_id);
-  const size_t size() const { return render_allocator_map_.size(); }
+  const size_t size() { return render_allocator_map_.size(); }
 
   void bufferData(int8_t* data, const size_t num_data_bytes, const size_t device_id);
   void setDataLayout(
