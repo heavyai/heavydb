@@ -160,7 +160,7 @@ WORK          TOK(WORK)
 	/* names */
 [A-Za-z_][A-Za-z0-9\$_]*	{ yylval.stringval = new std::string(yytext); TOK(NAME) }
 
-  /* emails */
+	/* emails */
 ([^[:space:]\"]+|\".+\")@[A-Za-z0-9][A-Za-z0-9\-\.]*\.[A-Za-z]+	{ yylval.stringval = new std::string(yytext); TOK(EMAIL) }
 
 	/* parameters */

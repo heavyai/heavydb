@@ -34,22 +34,23 @@
       parseTrees.emplace_back(new CreateTableAsSelectStmt(table_name, select_query, true));                             \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    boost::regex create_role_expr{R"(CREATE\s+ROLE\s+([A-Za-z_][A-Za-z0-9\$_]*)\s*;)",                                  \
+    std::string rolename_regex = R"(([A-Za-z_][A-Za-z0-9\$_\-]*))";                                                     \
+    boost::regex create_role_expr{R"(CREATE\s+ROLE\s+)" + rolename_regex + R"(\s*;)",                                   \
                                   boost::regex::extended | boost::regex::icase};                                        \
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, create_role_expr)) {                     \
       const auto role_name = what[1].str();                                                                             \
       parseTrees.emplace_back(new CreateRoleStmt(role_name));                                                           \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    boost::regex drop_role_expr{R"(DROP\s+ROLE\s+([A-Za-z_][A-Za-z0-9\$_]*)\s*;)",                                      \
+    boost::regex drop_role_expr{R"(DROP\s+ROLE\s+)" + rolename_regex + R"(\s*;)",                                       \
                                 boost::regex::extended | boost::regex::icase};                                          \
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, drop_role_expr)) {                       \
       const auto role_name = what[1].str();                                                                             \
       parseTrees.emplace_back(new DropRoleStmt(role_name));                                                             \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    std::string username_regex = R"((([A-Za-z_][A-Za-z0-9\$_]*)|([^\s"]+|".+")@[A-Za-z0-9][A-Za-z0-9\-\.]*\.[A-Za-z]+))"; \
-    boost::regex grant_privileges_expr{R"(GRANT\s+([A-Za-z_][A-Za-z0-9\$_\s]*)\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z0-9\$_\.]*)\s+TO\s+)" + username_regex + R"(\s*;)", \
+    std::string grantee_regex = R"((([A-Za-z_][A-Za-z0-9\$_\-]*)|([^\s"]+|".+")@[A-Za-z0-9][A-Za-z0-9\-\.]*\.[A-Za-z]+))"; \
+    boost::regex grant_privileges_expr{R"(GRANT\s+([A-Za-z_][A-Za-z0-9\$_\s]*)\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z0-9\$_\.]*)\s+TO\s+)" + grantee_regex + R"(\s*;)", \
                                        boost::regex::extended | boost::regex::icase};                                   \
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, grant_privileges_expr)) {                \
       const auto priv = what[1].str();                                                                                  \
@@ -59,7 +60,7 @@
       parseTrees.emplace_back(new GrantPrivilegesStmt(priv, object_type, object_name, role_name));                      \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    boost::regex revoke_privileges_expr{R"(REVOKE\s+([A-Za-z_][A-Za-z0-9\$_\s]*)\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z0-9\$_\.]*)\s+FROM\s+)" + username_regex + R"(\s*;)", \
+    boost::regex revoke_privileges_expr{R"(REVOKE\s+([A-Za-z_][A-Za-z0-9\$_\s]*)\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z0-9\$_\.]*)\s+FROM\s+)" + grantee_regex + R"(\s*;)", \
                                        boost::regex::extended | boost::regex::icase};                                   \
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, revoke_privileges_expr)) {               \
       const auto priv = what[1].str();                                                                                  \
@@ -69,7 +70,7 @@
       parseTrees.emplace_back(new RevokePrivilegesStmt(priv, object_type, object_name, role_name));                     \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    boost::regex show_privileges_expr{R"(SHOW\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z0-9\$_\.]*)\s+FOR\s+)" + username_regex + R"(\s*;)", \
+    boost::regex show_privileges_expr{R"(SHOW\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z0-9\$_\.]*)\s+FOR\s+)" + grantee_regex + R"(\s*;)", \
                                        boost::regex::extended | boost::regex::icase};                                   \
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, show_privileges_expr)) {                 \
       const auto object_type = what[1].str();                                                                           \
@@ -78,7 +79,7 @@
       parseTrees.emplace_back(new ShowPrivilegesStmt(object_type, object_name, role_name));                             \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    boost::regex grant_role_expr{R"(GRANT\s+([A-Za-z_][A-Za-z0-9\$_]*)\s+TO\s+)" + username_regex + R"(\s*;)",	     	\
+    boost::regex grant_role_expr{R"(GRANT\s+)" + rolename_regex + R"(\s+TO\s+)" + grantee_regex + R"(\s*;)",            \
                                  boost::regex::extended | boost::regex::icase};                                         \
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, grant_role_expr)) {                      \
       const auto role_name = what[1].str();                                                                             \
@@ -86,14 +87,14 @@
       parseTrees.emplace_back(new GrantRoleStmt(role_name, user_name));                                                 \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    boost::regex revoke_role_expr{R"(REVOKE\s+([A-Za-z_][A-Za-z0-9\$_]*)\s+FROM\s+)" + username_regex + R"(\s*;)",   	\
+    boost::regex revoke_role_expr{R"(REVOKE\s+)" + rolename_regex + R"(\s+FROM\s+)" + grantee_regex + R"(\s*;)",        \
                                   boost::regex::extended | boost::regex::icase};                                        \
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, revoke_role_expr)) {                     \
       const auto role_name = what[1].str();                                                                             \
       const auto user_name = what[2].str();                                                                             \
       parseTrees.emplace_back(new RevokeRoleStmt(role_name, user_name));                                                \
       return 0;                                                                                                         \
-    }															\
+    }                                                                                                                   \
     std::istringstream ss(inputStr);                                                                                    \
     lexer.switch_streams(&ss,0);                                                                                        \
     yyparse(parseTrees);                                                                                                \
