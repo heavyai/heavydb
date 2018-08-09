@@ -450,6 +450,19 @@ void check_geo_gdal_mpoly_import() {
   ASSERT_NEAR(1.0, trip_distance, 1e-7);
 }
 
+void check_geo_gdal_mpoly_append() {
+  auto rows = run_query(
+      "SELECT mapd_geo, trip FROM geospatial WHERE "
+      "trip = 1.0");
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(4), crt_row.size());
+  const auto mpoly = boost::get<std::string>(v<NullableString>(crt_row[0]));
+  ASSERT_TRUE(Geo_namespace::GeoMultiPolygon("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))") ==
+              Geo_namespace::GeoMultiPolygon(mpoly));
+  const auto trip_distance = v<double>(crt_row[1]);
+  ASSERT_NEAR(1.0, trip_distance, 1e-7);
+}
+
 void check_geo_gdal_point_tv_import() {
   auto rows = run_query(
       "SELECT mapd_geo, trip FROM geospatial WHERE "
@@ -609,6 +622,14 @@ TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import_3857) {
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_3857.shp");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
   check_geo_gdal_mpoly_tv_import();
+}
+
+TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Append) {
+  const auto file_path =
+      boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
+  import_test_geofile_importer(file_path.string(), "geospatial", false);
+  ASSERT_NO_THROW(import_test_geofile_importer(file_path.string(), "geospatial", false));
+  check_geo_gdal_mpoly_append();
 }
 
 #ifdef HAVE_AWS_S3
