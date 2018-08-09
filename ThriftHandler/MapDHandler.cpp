@@ -1063,6 +1063,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
       outObject.objectType = TDBObjectType::DatabaseDBObjectType;
       outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::CREATE_DATABASE));
       outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::DROP_DATABASE));
+      outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::VIEW_SQL_EDITOR));
 
       break;
     case TableDBObjectType:

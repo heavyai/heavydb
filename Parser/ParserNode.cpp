@@ -3501,6 +3501,10 @@ static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(
     return {AccessPrivileges::EDIT_DASHBOARD, DashboardDBObjectType};
   } else if (privs.compare("DELETE") == 0 && (objectType == DashboardDBObjectType)) {
     return {AccessPrivileges::DELETE_DASHBOARD, DashboardDBObjectType};
+
+  } else if (privs.compare("VIEW SQL EDITOR") == 0 &&
+             (objectType == DatabaseDBObjectType)) {
+    return {AccessPrivileges::VIEW_SQL_EDITOR, DatabaseDBObjectType};
   }
 
   throw std::runtime_error("Privileges " + privs + " on DB object " + object_name +
