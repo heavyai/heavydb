@@ -389,7 +389,8 @@ class MapDHandler : public MapDIf {
                    const std::string& user,
                    const std::string& passwd,
                    const std::string& dbname,
-                   Catalog_Namespace::UserMetadata& user_meta);
+                   Catalog_Namespace::UserMetadata& user_meta,
+                   std::shared_ptr<Catalog_Namespace::Catalog> cat);
 
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
   std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> sessions_;

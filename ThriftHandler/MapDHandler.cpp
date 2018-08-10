@@ -275,7 +275,13 @@ void MapDHandler::internal_connect(TSessionId& session,
   if (!SysCatalog::instance().getMetadataForUser(user, user_meta)) {
     THROW_MAPD_EXCEPTION(std::string("User ") + user + " does not exist.");
   }
-  connectImpl(session, user, std::string(""), dbname, user_meta);
+  std::shared_ptr<Catalog> cat = nullptr;
+  try {
+    cat = SysCatalog::instance().login(dbname, user, std::string(""), user_meta, false);
+  } catch (std::exception& e) {
+    THROW_MAPD_EXCEPTION(e.what());
+  }
+  connectImpl(session, user, std::string(""), dbname, user_meta, cat);
 }
 
 void MapDHandler::connect(TSessionId& session,
@@ -284,14 +290,7 @@ void MapDHandler::connect(TSessionId& session,
                           const std::string& dbname) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   Catalog_Namespace::UserMetadata user_meta;
-  connectImpl(session, user, passwd, dbname, user_meta);
-}
 
-void MapDHandler::connectImpl(TSessionId& session,
-                              const std::string& user,
-                              const std::string& passwd,
-                              const std::string& dbname,
-                              Catalog_Namespace::UserMetadata& user_meta) {
   std::shared_ptr<Catalog> cat = nullptr;
   try {
     cat = SysCatalog::instance().login(
@@ -300,6 +299,15 @@ void MapDHandler::connectImpl(TSessionId& session,
     THROW_MAPD_EXCEPTION(e.what());
   }
 
+  connectImpl(session, user, passwd, dbname, user_meta, cat);
+}
+
+void MapDHandler::connectImpl(TSessionId& session,
+                              const std::string& user,
+                              const std::string& passwd,
+                              const std::string& dbname,
+                              Catalog_Namespace::UserMetadata& user_meta,
+                              std::shared_ptr<Catalog> cat) {
   session = INVALID_SESSION_ID;
   while (true) {
     session = generate_random_string(32);
