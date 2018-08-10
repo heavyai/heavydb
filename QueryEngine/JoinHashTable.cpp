@@ -634,7 +634,6 @@ int JoinHashTable::reifyOneToOneForDevice(
 int JoinHashTable::reifyOneToManyForDevice(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id) {
-  static std::mutex fragment_fetch_mutex;
 #ifndef ENABLE_MULTIFRAG_JOIN
   if (fragments.size() != 1) {  // we don't support multiple fragment inner tables (yet)
     return ERR_MULTI_FRAG;

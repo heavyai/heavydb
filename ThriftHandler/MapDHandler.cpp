@@ -4181,7 +4181,6 @@ void MapDHandler::broadcast_serialized_rows(const std::string& serialized_rows,
 
 void MapDHandler::insert_data(const TSessionId& session,
                               const TInsertData& thrift_insert_data) {
-  static std::mutex insert_mutex;  // TODO: split lock, make it per table
   CHECK_EQ(thrift_insert_data.column_ids.size(), thrift_insert_data.data.size());
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
