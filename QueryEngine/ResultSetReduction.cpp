@@ -289,7 +289,7 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(int8_t* this_buff,
       const int8_t* that_ptr2{nullptr};
       if (agg_info.is_agg &&
           (agg_info.agg_kind == kAVG ||
-           (agg_info.agg_kind == kLAST_SAMPLE && agg_info.sql_type.is_varlen()))) {
+           (agg_info.agg_kind == kSAMPLE && agg_info.sql_type.is_varlen()))) {
         this_ptr2 = this_next_col_ptr +
                     entry_idx * query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact;
         that_ptr2 = that_next_col_ptr +
@@ -363,7 +363,7 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
     const int8_t* that_ptr2{nullptr};
     if (target_info.is_agg &&
         (target_info.agg_kind == kAVG ||
-         (target_info.agg_kind == kLAST_SAMPLE && target_info.sql_type.is_varlen()))) {
+         (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()))) {
       this_ptr2 =
           this_targets_ptr + query_mem_desc_.getColumnWidth(target_slot_idx).compact;
       that_ptr2 =
@@ -694,7 +694,7 @@ void ResultSetStorage::reduceOneSlotBaseline(int64_t* this_buff,
   const int8_t* that_ptr2{nullptr};
   if (target_info.is_agg &&
       (target_info.agg_kind == kAVG ||
-       (target_info.agg_kind == kLAST_SAMPLE && target_info.sql_type.is_varlen()))) {
+       (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()))) {
     const auto this_count_off =
         query_mem_desc_.didOutputColumnar() ? query_mem_desc_.getEntryCount() : 1;
     const auto that_count_off =
@@ -1101,7 +1101,7 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
                                 ? static_cast<int8_t>(sizeof(float))
                                 : query_mem_desc_.getColumnWidth(target_slot_idx).compact;
   auto init_val = target_init_vals_[init_agg_val_idx];
-  if (target_info.is_agg && target_info.agg_kind != kLAST_SAMPLE) {
+  if (target_info.is_agg && target_info.agg_kind != kSAMPLE) {
     switch (target_info.agg_kind) {
       case kCOUNT:
       case kAPPROX_COUNT_DISTINCT: {
@@ -1142,7 +1142,7 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
   } else {
     switch (chosen_bytes) {
       case 4: {
-        CHECK(target_info.agg_kind != kLAST_SAMPLE);
+        CHECK(target_info.agg_kind != kSAMPLE);
         const auto rhs_proj_col = *reinterpret_cast<const int32_t*>(that_ptr1);
         if (rhs_proj_col != init_val) {
           *reinterpret_cast<int32_t*>(this_ptr1) = rhs_proj_col;
@@ -1154,7 +1154,7 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
         if (rhs_proj_col != init_val) {
           *reinterpret_cast<int64_t*>(this_ptr1) = rhs_proj_col;
         }
-        if (target_info.agg_kind == kLAST_SAMPLE && target_info.sql_type.is_varlen()) {
+        if (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()) {
           CHECK(this_ptr2 && that_ptr2);
           *reinterpret_cast<int64_t*>(this_ptr2) =
               *reinterpret_cast<const int64_t*>(that_ptr2);
@@ -1255,7 +1255,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
                                     ? sizeof(float)
                                     : query_mem_desc.getColumnWidth(agg_col_idx).compact;
       const auto& chosen_type = get_compact_type(agg_info);
-      if (agg_info.is_agg && agg_info.agg_kind != kLAST_SAMPLE) {
+      if (agg_info.is_agg && agg_info.agg_kind != kSAMPLE) {
         try {
           switch (agg_info.agg_kind) {
             case kCOUNT:
@@ -1330,7 +1330,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
         }
       } else {
         if (agg_vals[agg_col_idx]) {
-          if (agg_info.agg_kind == kLAST_SAMPLE) {
+          if (agg_info.agg_kind == kSAMPLE) {
             continue;
           }
           CHECK_EQ(agg_vals[agg_col_idx], partial_bin_val);

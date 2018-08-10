@@ -33,8 +33,8 @@ inline std::vector<int64_t> init_agg_val_vec(
        ++target_idx, ++agg_col_idx) {
     CHECK_LT(agg_col_idx, query_mem_desc.getColCount());
     const auto agg_info = targets[target_idx];
-    if (!agg_info.is_agg || agg_info.agg_kind == kLAST_SAMPLE) {
-      if (agg_info.agg_kind == kLAST_SAMPLE && agg_info.sql_type.is_string() &&
+    if (!agg_info.is_agg || agg_info.agg_kind == kSAMPLE) {
+      if (agg_info.agg_kind == kSAMPLE && agg_info.sql_type.is_string() &&
           agg_info.sql_type.get_compression() != kENCODING_NONE) {
         agg_init_vals.push_back(
             get_agg_initial_val(agg_info.agg_kind,
@@ -137,7 +137,7 @@ int64_t get_agg_initial_val(const SQLAgg agg,
                             const SQLTypeInfo& ti,
                             const bool enable_compaction,
                             const unsigned min_byte_width_to_compact) {
-  CHECK(!ti.is_string() || agg == kLAST_SAMPLE);
+  CHECK(!ti.is_string() || agg == kSAMPLE);
   const auto byte_width =
       enable_compaction
           ? compact_byte_width(static_cast<unsigned>(get_bit_width(ti) >> 3),
@@ -214,7 +214,7 @@ int64_t get_agg_initial_val(const SQLAgg agg,
           CHECK(false);
       }
     }
-    case kLAST_SAMPLE:
+    case kSAMPLE:
     case kMAX: {
       switch (byte_width) {
         case 4: {

@@ -1516,7 +1516,7 @@ int32_t get_agg_count(const std::vector<Analyzer::Expr*>& target_exprs) {
   for (auto target_expr : target_exprs) {
     CHECK(target_expr);
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
-    if (!agg_expr || agg_expr->get_aggtype() == kLAST_SAMPLE) {
+    if (!agg_expr || agg_expr->get_aggtype() == kSAMPLE) {
       const auto& ti = target_expr->get_type_info();
       if (ti.is_string() && ti.get_compression() != kENCODING_DICT) {
         agg_count += 2;
@@ -2338,7 +2338,7 @@ void GroupByAndAggregate::addTransientStringLiterals(
     }
     const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
     if (agg_expr) {
-      if (agg_expr->get_aggtype() == kLAST_SAMPLE) {
+      if (agg_expr->get_aggtype() == kSAMPLE) {
         add_transient_string_literals_for_expression(
             agg_expr->get_arg(), executor, row_set_mem_owner);
       }
@@ -3228,7 +3228,7 @@ namespace {
 
 std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
   const auto& chosen_type = get_compact_type(target_info);
-  if (!target_info.is_agg || target_info.agg_kind == kLAST_SAMPLE) {
+  if (!target_info.is_agg || target_info.agg_kind == kSAMPLE) {
     if (chosen_type.is_geometry()) {
       return std::vector<std::string>(2 * chosen_type.get_physical_coord_cols(),
                                       "agg_id");
@@ -3251,7 +3251,7 @@ std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
       return {"agg_sum"};
     case kAPPROX_COUNT_DISTINCT:
       return {"agg_approximate_count_distinct"};
-    case kLAST_SAMPLE:
+    case kSAMPLE:
       return {"agg_id"};
     default:
       abort();
@@ -3400,7 +3400,7 @@ bool GroupByAndAggregate::codegenAggCalls(
     auto agg_info = target_info(target_expr);
     auto arg_expr = agg_arg(target_expr);
     if (arg_expr) {
-      if (agg_info.agg_kind == kLAST_SAMPLE) {
+      if (agg_info.agg_kind == kSAMPLE) {
         agg_info.skip_null_val = false;
       } else if (query_mem_desc_.getGroupByColRangeType() == GroupByColRangeType::Scan) {
         agg_info.skip_null_val = true;

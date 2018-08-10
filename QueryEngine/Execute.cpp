@@ -707,7 +707,7 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
             CHECK(false);
         }
       }
-    case kLAST_SAMPLE: {
+    case kSAMPLE: {
       int64_t agg_result = agg_init_val;
       for (size_t i = 0; i < out_vec_sz; ++i) {
         if (out_vec[i] != agg_init_val) {
@@ -1305,7 +1305,7 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
     } else if (agg_info.agg_kind == kAVG) {
       entry.push_back(inline_null_val(agg_info.agg_arg_type, float_argument_input));
       entry.push_back(0);
-    } else if (agg_info.agg_kind == kLAST_SAMPLE) {
+    } else if (agg_info.agg_kind == kSAMPLE) {
       if (agg_info.sql_type.is_varlen()) {
         entry.push_back(0);
         entry.push_back(0);
@@ -2145,7 +2145,7 @@ int32_t Executor::executePlanWithoutGroupBy(
       }
       reduced_outs.push_back(val1);
       if (agg_info.agg_kind == kAVG ||
-          (agg_info.agg_kind == kLAST_SAMPLE && agg_info.sql_type.is_varlen())) {
+          (agg_info.agg_kind == kSAMPLE && agg_info.sql_type.is_varlen())) {
         const auto chosen_bytes = static_cast<size_t>(
             query_exe_context->query_mem_desc_.getColumnWidth(out_vec_idx + 1).compact);
         int64_t val2;

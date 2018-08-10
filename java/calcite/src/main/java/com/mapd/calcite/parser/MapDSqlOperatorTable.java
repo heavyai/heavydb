@@ -169,6 +169,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new CastToGeography());
     opTab.addOperator(new OffsetInFragment());
     opTab.addOperator(new ApproxCountDistinct());
+    opTab.addOperator(new Sample());
     opTab.addOperator(new LastSample());
     opTab.addOperator(new MapD_GeoPolyBoundsPtr());
     opTab.addOperator(new MapD_GeoPolyRenderGroup());
@@ -1079,8 +1080,26 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     }
   }
 
-  public static class LastSample extends SqlAggFunction {
+  public static class Sample extends SqlAggFunction {
 
+    public Sample() {
+      super("SAMPLE",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.ANY,
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+  }
+
+  // for backwards compatibility
+  public static class LastSample extends SqlAggFunction {
+    
     public LastSample() {
       super("LAST_SAMPLE",
               SqlKind.OTHER_FUNCTION,
@@ -1094,6 +1113,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       return opBinding.getOperandType(0);
     }
+  
   }
 
   static class ExtFunction extends SqlFunction {

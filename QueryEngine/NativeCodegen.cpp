@@ -877,7 +877,7 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
         (target_type_info.is_string() &&
          target_type_info.get_compression() == kENCODING_NONE) ||
         target_type_info.is_array();  // TODO: should it use is_varlen_array() ?
-    if (!agg_expr || agg_expr->get_aggtype() == kLAST_SAMPLE) {
+    if (!agg_expr || agg_expr->get_aggtype() == kSAMPLE) {
       result.push_back(target_type_info.is_fp() ? "agg_id_double" : "agg_id");
       if (is_varlen) {
         result.push_back("agg_id");
@@ -939,12 +939,12 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
         result.push_back(agg_expr->get_is_distinct() ? "agg_count_distinct"
                                                      : "agg_count");
         break;
-      case kLAST_SAMPLE: {
+      case kSAMPLE: {
         if ((agg_type_info.is_string() &&
              agg_type_info.get_compression() == kENCODING_NONE) ||
             agg_type_info.is_array()) {
           throw std::runtime_error(
-              "LAST_SAMPLE on none encoded strings or arrays not supported yet");
+              "SAMPLE on none encoded strings or arrays not supported yet");
         }
         result.push_back(agg_type_info.is_fp() ? "agg_id_double" : "agg_id");
         break;

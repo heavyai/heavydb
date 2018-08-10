@@ -36,7 +36,7 @@ SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const Analyzer::Expr* arg_expr) 
       return SQLTypeInfo(kDOUBLE, false);
     case kAPPROX_COUNT_DISTINCT:
       return SQLTypeInfo(kBIGINT, false);
-    case kLAST_SAMPLE:
+    case kSAMPLE:
       return arg_expr->get_type_info();
     default:
       CHECK(false);
