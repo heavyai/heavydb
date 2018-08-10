@@ -156,8 +156,8 @@ StringDictionary::StringDictionary(const std::string& folder,
       std::vector<std::future<std::vector<std::pair<unsigned int, unsigned int>>>>
           dictionary_futures;
       for (string_id = 0; string_id < str_count; string_id += items_per_thread) {
-        dictionary_futures.emplace_back(std::async(
-            std::launch::async, [items_per_thread, string_id, str_count, this] {
+        dictionary_futures.emplace_back(
+            std::async(std::launch::async, [string_id, str_count, this] {
               std::vector<std::pair<unsigned int, unsigned int>> hashVec;
               for (uint32_t curr_id = string_id;
                    curr_id < string_id + items_per_thread && curr_id < str_count;

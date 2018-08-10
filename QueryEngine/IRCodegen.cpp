@@ -350,12 +350,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
         join_loops.emplace_back(
             JoinLoopKind::Singleton,
             current_level_join_conditions.type,
-            [this,
-             current_hash_table_idx,
-             level_idx,
-             current_level_hash_table,
-             &current_level_join_conditions,
-             &co](const std::vector<llvm::Value*>& prev_iters) {
+            [this, current_hash_table_idx, level_idx, current_level_hash_table, &co](
+                const std::vector<llvm::Value*>& prev_iters) {
               addJoinLoopIterator(prev_iters, level_idx);
               JoinLoopDomain domain{0};
               domain.slot_lookup_result =

@@ -354,8 +354,8 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldDeleteCallb
       usable_threads = 1;
     }
 
-    auto process_rows = [&update_log, &delete_parameters, &victim_offsets](
-                            uint64_t row_start, uint64_t row_count) -> uint64_t {
+    auto process_rows = [&update_log, &victim_offsets](uint64_t row_start,
+                                                       uint64_t row_count) -> uint64_t {
       uint64_t rows_processed = 0;
 
       for (uint64_t row_index = row_start; row_index < (row_start + row_count);
