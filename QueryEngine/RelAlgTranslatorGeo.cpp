@@ -28,50 +28,71 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
   const auto it_rte_idx = input_to_nest_level_.find(source);
   CHECK(it_rte_idx != input_to_nest_level_.end());
   const int rte_idx = it_rte_idx->second;
-  const auto scan_source = dynamic_cast<const RelScan*>(source);
   const auto& in_metainfo = source->getOutputMetainfo();
-  CHECK(scan_source);
-  // We're at leaf (scan) level and not supposed to have input metadata,
-  // the name and type information come directly from the catalog.
-  CHECK(in_metainfo.empty());
-  const auto table_desc = scan_source->getTableDescriptor();
-  const auto gcd =
-      cat_.getMetadataForColumnBySpi(table_desc->tableId, rex_input->getIndex() + 1);
-  CHECK(gcd);
-  ti = gcd->columnType;
+
+  int32_t table_id{0};
+  int column_id{-1};
+  const auto scan_source = dynamic_cast<const RelScan*>(source);
+  if (scan_source) {
+    // We're at leaf (scan) level and not supposed to have input metadata,
+    // the name and type information come directly from the catalog.
+    CHECK(in_metainfo.empty());
+
+    const auto td = scan_source->getTableDescriptor();
+    table_id = td->tableId;
+
+    const auto gcd = cat_.getMetadataForColumnBySpi(table_id, rex_input->getIndex() + 1);
+    CHECK(gcd);
+    ti = gcd->columnType;
+    column_id = gcd->columnId;
+
+  } else {
+    // Likely backed by a temp table. Read the table ID from the source node and negate it
+    // (see RelAlgTranslator::translateInput)
+    table_id = -source->getId();
+
+    CHECK(!expand_geo_col);
+
+    CHECK(!in_metainfo.empty());
+    CHECK_GE(rte_idx, 0);
+    column_id = rex_input->getIndex();
+    CHECK_LT(column_id, in_metainfo.size());
+    ti = in_metainfo[column_id].get_type_info();
+  }
   CHECK(IS_GEO(ti.get_type()));
+
   // Return geo column reference. The geo column may be expanded if required for extension
   // function arguments. Otherwise, the geo column reference will be translated into
   // physical columns as required. Bounds column will be added if present and requested.
   if (expand_geo_col) {
     for (auto i = 0; i < ti.get_physical_coord_cols(); i++) {
       const auto pcd = cat_.getMetadataForColumnBySpi(
-          table_desc->tableId, SPIMAP_GEO_PHYSICAL_INPUT(rex_input->getIndex(), i + 1));
+          table_id, SPIMAP_GEO_PHYSICAL_INPUT(rex_input->getIndex(), i + 1));
       auto pcol_ti = pcd->columnType;
       args.push_back(std::make_shared<Analyzer::ColumnVar>(
-          pcol_ti, table_desc->tableId, pcd->columnId, rte_idx));
+          pcol_ti, table_id, pcd->columnId, rte_idx));
     }
   } else {
-    args.push_back(std::make_shared<Analyzer::ColumnVar>(
-        ti, table_desc->tableId, gcd->columnId, rte_idx));
+    args.push_back(
+        std::make_shared<Analyzer::ColumnVar>(ti, table_id, column_id, rte_idx));
   }
   if (with_bounds && ti.has_bounds()) {
     const auto bounds_cd = cat_.getMetadataForColumnBySpi(
-        table_desc->tableId,
+        table_id,
         SPIMAP_GEO_PHYSICAL_INPUT(rex_input->getIndex(),
                                   ti.get_physical_coord_cols() + 1));
     auto bounds_ti = bounds_cd->columnType;
     args.push_back(std::make_shared<Analyzer::ColumnVar>(
-        bounds_ti, table_desc->tableId, bounds_cd->columnId, rte_idx));
+        bounds_ti, table_id, bounds_cd->columnId, rte_idx));
   }
   if (with_render_group && ti.has_render_group()) {
     const auto render_group_cd = cat_.getMetadataForColumnBySpi(
-        table_desc->tableId,
+        table_id,
         SPIMAP_GEO_PHYSICAL_INPUT(rex_input->getIndex(),
                                   ti.get_physical_coord_cols() + 2));
     auto render_group_ti = render_group_cd->columnType;
     args.push_back(std::make_shared<Analyzer::ColumnVar>(
-        render_group_ti, table_desc->tableId, render_group_cd->columnId, rte_idx));
+        render_group_ti, table_id, render_group_cd->columnId, rte_idx));
   }
   return args;
 }
