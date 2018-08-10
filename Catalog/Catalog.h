@@ -573,6 +573,7 @@ class MapDHandler {
       size_t num_cols,
       std::unique_ptr<Importer_NS::Loader>* loader,
       std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>* import_buffers);
+  virtual ~MapDHandler() {}
 };
 
 /*

@@ -73,6 +73,8 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
     };
   }
 
+  virtual ~BaselineJoinHashTable() {}
+
  private:
   BaselineJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,
                         const std::vector<InputTableInfo>& query_infos,

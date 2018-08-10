@@ -298,6 +298,7 @@ class RootPlan {
   void set_render_type(std::string t) { render_type = t; }
   Dest get_plan_dest() const { return plan_dest; }
   void set_plan_dest(Dest d) { plan_dest = d; }
+  virtual ~RootPlan() {}
 
  private:
   std::unique_ptr<Plan> plan;  // query plan

@@ -128,6 +128,8 @@ class JoinHashTable : public JoinHashTableInterface {
     };
   }
 
+  virtual ~JoinHashTable() {}
+
  private:
   JoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
                 const Analyzer::ColumnVar* col_var,

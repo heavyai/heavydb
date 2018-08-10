@@ -26,6 +26,7 @@ class Decoder {
   virtual llvm::Instruction* codegenDecode(llvm::Value* byte_stream,
                                            llvm::Value* pos,
                                            llvm::Module* module) const = 0;
+  virtual ~Decoder() {}
 };
 
 class FixedWidthInt : public Decoder {

@@ -611,6 +611,7 @@ class Loader {
   virtual void setTableEpoch(const int32_t new_epoch);
   inline void set_replicating(const bool replicating) { replicating_ = replicating; }
   inline bool get_replicating() const { return replicating_; }
+  virtual ~Loader() {}
 
  protected:
   Catalog_Namespace::Catalog& catalog;
