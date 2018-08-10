@@ -291,6 +291,27 @@ TEST(UserRoles, InvalidGrantsRevokesTest) {
   run_ddl_statement("DROP USER Antazin;");
 }
 
+TEST(UserRoles, ValidNames) {
+  EXPECT_NO_THROW(run_ddl_statement("CREATE USER vasya (password = 'password');"));
+  EXPECT_NO_THROW(
+      run_ddl_statement("CREATE USER vasya.vasya@vasya.com (password = 'password');"));
+  EXPECT_NO_THROW(run_ddl_statement(
+      "CREATE USER \"vasya ivanov\"@vasya.ivanov.com (password = 'password');"));
+  EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE developer;"));
+  EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE developer-backend;"));
+  EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE developer-backend-rendering;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT developer-backend-rendering TO vasya;"));
+  EXPECT_NO_THROW(
+      run_ddl_statement("GRANT developer-backend TO \"vasya ivanov\"@vasya.ivanov.com;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT developer TO vasya.vasya@vasya.com;"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP USER vasya;"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP USER vasya.vasya@vasya.com;"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP USER \"vasya ivanov\"@vasya.ivanov.com;"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP ROLE developer;"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP ROLE developer-backend;"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP ROLE developer-backend-rendering;"));
+}
+
 TEST_F(DatabaseObject, AccessDefaultsTest) {
   auto cat_mapd = Catalog_Namespace::Catalog::get("mapd");
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
