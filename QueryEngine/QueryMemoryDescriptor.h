@@ -71,7 +71,7 @@ inline bool operator==(const ColWidths& lhs, const ColWidths& rhs) {
 enum class GroupByMemSharing { Private, Shared, SharedForKeylessOneColumnKnownRange };
 
 struct RelAlgExecutionUnit;
-struct TResultSetBufferDescriptor;
+class TResultSetBufferDescriptor;
 
 class QueryMemoryDescriptor {
  public:

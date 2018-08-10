@@ -36,7 +36,7 @@ class FragmentInfo;
 }
 
 class Executor;
-class InputTableInfo;
+struct InputTableInfo;
 struct RelAlgExecutionUnit;
 
 struct FragmentsPerTable {
