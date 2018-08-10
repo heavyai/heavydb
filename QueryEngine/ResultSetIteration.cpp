@@ -397,7 +397,7 @@ InternalTargetValue ResultSet::getColumnInternal(
       }
     } else {
       auto ptr1 = rowwise_target_ptr;
-      if (!query_mem_desc_.targetGroupbyIndicesSize() == 0) {
+      if (query_mem_desc_.targetGroupbyIndicesSize() > 0) {
         if (query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) >= 0) {
           ptr1 = keys_ptr +
                  query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) * key_width;
