@@ -2283,7 +2283,7 @@ class UsedColumnsVisitor : public ScalarExprVisitor<SET_TYPE> {
   using ColumnIdSet = SET_TYPE;
 
  protected:
-  virtual ColumnIdSet visitColumnVar(const Analyzer::ColumnVar* col_var) const {
+  virtual ColumnIdSet visitColumnVar(const Analyzer::ColumnVar* col_var) const override {
     return {col_var->get_column_id()};
   }
 
