@@ -353,7 +353,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             [this, current_hash_table_idx, level_idx, current_level_hash_table, &co](
                 const std::vector<llvm::Value*>& prev_iters) {
               addJoinLoopIterator(prev_iters, level_idx);
-              JoinLoopDomain domain{0};
+              JoinLoopDomain domain{{0}};
               domain.slot_lookup_result =
                   current_level_hash_table->codegenSlot(co, current_hash_table_idx);
               return domain;
@@ -370,7 +370,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             [this, current_hash_table_idx, level_idx, current_level_hash_table, &co](
                 const std::vector<llvm::Value*>& prev_iters) {
               addJoinLoopIterator(prev_iters, level_idx);
-              JoinLoopDomain domain{0};
+              JoinLoopDomain domain{{0}};
               const auto matching_set = current_level_hash_table->codegenMatchingSet(
                   co, current_hash_table_idx);
               domain.values_buffer = matching_set.elements;
@@ -412,7 +412,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
           current_level_join_conditions.type,
           [this, level_idx](const std::vector<llvm::Value*>& prev_iters) {
             addJoinLoopIterator(prev_iters, level_idx);
-            JoinLoopDomain domain{0};
+            JoinLoopDomain domain{{0}};
             const auto rows_per_scan_ptr = cgen_state_->ir_builder_.CreateGEP(
                 get_arg_by_name(cgen_state_->row_func_, "num_rows_per_scan"),
                 ll_int(int32_t(level_idx + 1)));
