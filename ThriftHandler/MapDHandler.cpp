@@ -144,8 +144,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     , legacy_syntax_(legacy_syntax)
     , super_user_rights_(false)
     , access_priv_check_(access_priv_check)
-    , _was_geo_copy_from(false)
-    , max_session_duration_(max_session_duration) {
+    , max_session_duration_(max_session_duration)
+    , _was_geo_copy_from(false) {
   LOG(INFO) << "MapD Server " << MAPD_RELEASE;
   if (executor_device == "gpu") {
 #ifdef HAVE_CUDA
