@@ -500,9 +500,19 @@ class Executor {
                                     const int dict_id,
                                     const CompilationOptions&);
   std::vector<llvm::Value*> codegenHoistedConstants(
-      const std::vector<const Analyzer::Constant*>&,
+      const std::vector<const Analyzer::Constant*>& constants,
       const EncodingType enc_type,
       const int dict_id);
+  std::vector<llvm::Value*> codegenHoistedConstantsLoads(const SQLTypeInfo& type_info,
+                                                         const EncodingType enc_type,
+                                                         const int dict_id,
+                                                         const int16_t lit_off);
+  std::vector<llvm::Value*> codegenHoistedConstantsPlaceholders(
+      const SQLTypeInfo& type_info,
+      const EncodingType enc_type,
+      const int16_t lit_off,
+      const std::vector<llvm::Value*>& literal_loads);
+
   int deviceCount(const ExecutorDeviceType) const;
   std::vector<llvm::Value*> codegen(const Analyzer::CaseExpr*, const CompilationOptions&);
   llvm::Value* codegenCase(const Analyzer::CaseExpr*,
@@ -1085,6 +1095,8 @@ class Executor {
   bool prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
                        std::vector<Analyzer::Expr*>& primary_quals,
                        std::vector<Analyzer::Expr*>& deferred_quals);
+
+  std::vector<llvm::Value*> inlineHoistedLiterals();
   CompilationResult compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                     const RelAlgExecutionUnit& ra_exe_unit,
                                     const CompilationOptions& co,
@@ -1325,7 +1337,9 @@ class Executor {
         , outer_join_nomatch_(nullptr)
         , outer_join_match_found_per_level_(std::max(query_infos.size(), size_t(1)) - 1)
         , query_infos_(query_infos)
-        , needs_error_check_(false) {}
+        , needs_error_check_(false)
+        , query_func_(nullptr)
+        , query_func_entry_ir_builder_(context_){};
 
     size_t getOrAddLiteral(const Analyzer::Constant* constant,
                            const EncodingType enc_type,
@@ -1497,6 +1511,10 @@ class Executor {
       return ir_builder_.CreateCall(f, args);
     }
 
+    size_t getLiteralBufferUsage(const int device_id) {
+      return literal_bytes_[device_id];
+    }
+
     llvm::Module* module_;
     llvm::Function* row_func_;
     std::vector<llvm::Function*> helper_functions_;
@@ -1521,6 +1539,17 @@ class Executor {
     std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
     const std::vector<InputTableInfo>& query_infos_;
     bool needs_error_check_;
+
+    llvm::Function* query_func_;
+    llvm::IRBuilder<> query_func_entry_ir_builder_;
+    std::unordered_map<int, std::vector<llvm::Value*>> query_func_literal_loads_;
+
+    struct HoistedLiteralLoadLocator {
+      int offset_in_literal_buffer;
+      int index_of_literal_load;
+    };
+    std::unordered_map<llvm::Value*, HoistedLiteralLoadLocator>
+        row_func_hoisted_literals_;
 
    private:
     template <class T>

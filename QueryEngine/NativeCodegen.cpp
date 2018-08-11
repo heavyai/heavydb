@@ -47,6 +47,7 @@
 #if LLVM_VERSION_MAJOR >= 4
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #endif
+#include <llvm/Support/Casting.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
@@ -108,9 +109,6 @@ void optimizeIR(llvm::Function* query_func,
     pass_manager.add(llvm::createDebugIRPass(false, false, debug_dir, debug_file));
   }
 #endif
-  if (co.hoist_literals_) {
-    pass_manager.add(llvm::createLICMPass());
-  }
   if (co.opt_level_ == ExecutorOptLevel::LoopStrengthReduction) {
     pass_manager.add(llvm::createLoopStrengthReducePass());
   }
@@ -1072,6 +1070,108 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
   CHECK(done_splitting);
 }
 
+std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
+  std::vector<llvm::Value*> hoisted_literals;
+
+  // row_func_ is using literals whose defs have been hoisted up to the query_func_,
+  // extend row_func_ signature to include extra args to pass these literal values.
+  std::vector<llvm::Type*> row_process_arg_types;
+
+  for (llvm::Function::arg_iterator I = cgen_state_->row_func_->arg_begin(),
+                                    E = cgen_state_->row_func_->arg_end();
+       I != E;
+       ++I) {
+    row_process_arg_types.push_back(I->getType());
+  }
+
+  for (auto& element : cgen_state_->query_func_literal_loads_) {
+    for (auto value : element.second) {
+      row_process_arg_types.push_back(value->getType());
+    }
+  }
+
+  auto ft = llvm::FunctionType::get(
+      get_int_type(32, cgen_state_->context_), row_process_arg_types, false);
+  auto row_func_with_hoisted_literals =
+      llvm::Function::Create(ft,
+                             llvm::Function::ExternalLinkage,
+                             "row_func_hoisted_literals",
+                             cgen_state_->row_func_->getParent());
+
+  // make sure it's in-lined, we don't want register spills in the inner loop
+  mark_function_always_inline(row_func_with_hoisted_literals);
+
+  auto arg_it = row_func_with_hoisted_literals->arg_begin();
+  for (llvm::Function::arg_iterator I = cgen_state_->row_func_->arg_begin(),
+                                    E = cgen_state_->row_func_->arg_end();
+       I != E;
+       ++I) {
+    if (I->hasName()) {
+      arg_it->setName(I->getName());
+    }
+    ++arg_it;
+  }
+
+  std::unordered_map<int, std::vector<llvm::Value*>>
+      query_func_literal_loads_function_arguments;
+
+  for (auto& element : cgen_state_->query_func_literal_loads_) {
+    std::vector<llvm::Value*> argument_values;
+
+    for (auto value : element.second) {
+      hoisted_literals.push_back(value);
+      argument_values.push_back(&*arg_it);
+      if (value->hasName()) {
+        arg_it->setName("arg_" + value->getName());
+      }
+      ++arg_it;
+    }
+
+    query_func_literal_loads_function_arguments[element.first] = argument_values;
+  }
+
+  // copy the row_func function body over
+  // see
+  // https://stackoverflow.com/questions/12864106/move-function-body-avoiding-full-cloning/18751365
+  row_func_with_hoisted_literals->getBasicBlockList().splice(
+      row_func_with_hoisted_literals->begin(),
+      cgen_state_->row_func_->getBasicBlockList());
+
+  // also replace row_func arguments with the arguments from row_func_hoisted_literals
+  for (llvm::Function::arg_iterator I = cgen_state_->row_func_->arg_begin(),
+                                    E = cgen_state_->row_func_->arg_end(),
+                                    I2 = row_func_with_hoisted_literals->arg_begin();
+       I != E;
+       ++I) {
+    I->replaceAllUsesWith(&*I2);
+    I2->takeName(&*I);
+    ++I2;
+  }
+
+  cgen_state_->row_func_ = row_func_with_hoisted_literals;
+
+  // and finally replace  literal placeholders
+  std::string prefix("__placeholder__literal_");
+  for (auto it = llvm::inst_begin(row_func_with_hoisted_literals),
+            e = llvm::inst_end(row_func_with_hoisted_literals);
+       it != e;
+       ++it) {
+    if (it->hasName() && it->getName().startswith(prefix)) {
+      auto offset_and_index_entry =
+          cgen_state_->row_func_hoisted_literals_.find(llvm::dyn_cast<llvm::Value>(&*it));
+      CHECK(offset_and_index_entry != cgen_state_->row_func_hoisted_literals_.end());
+
+      int lit_off = offset_and_index_entry->second.offset_in_literal_buffer;
+      int lit_idx = offset_and_index_entry->second.index_of_literal_load;
+
+      it->replaceAllUsesWith(
+          query_func_literal_loads_function_arguments[lit_off][lit_idx]);
+    }
+  }
+
+  return hoisted_literals;
+}
+
 Executor::CompilationResult Executor::compileWorkUnit(
     const std::vector<InputTableInfo>& query_infos,
     const RelAlgExecutionUnit& ra_exe_unit,
@@ -1165,6 +1265,10 @@ Executor::CompilationResult Executor::compileWorkUnit(
   bind_pos_placeholders("group_buff_idx", false, query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", false, query_func, cgen_state_->module_);
 
+  cgen_state_->query_func_ = query_func;
+  cgen_state_->query_func_entry_ir_builder_.SetInsertPoint(
+      &query_func->getEntryBlock().front());
+
   std::vector<llvm::Value*> col_heads;
   std::tie(cgen_state_->row_func_, col_heads) =
       create_row_function(ra_exe_unit.input_col_descs.size(),
@@ -1203,6 +1307,20 @@ Executor::CompilationResult Executor::compileWorkUnit(
     }
   }
 
+  std::vector<llvm::Value*> hoisted_literals;
+
+  if (co.hoist_literals_) {
+    VLOG(1) << "number of hoisted literals: "
+            << cgen_state_->query_func_literal_loads_.size()
+            << " / literal buffer usage: " << cgen_state_->getLiteralBufferUsage(0)
+            << " bytes";
+  }
+
+  if (co.hoist_literals_ && !cgen_state_->query_func_literal_loads_.empty()) {
+    // we have some hoisted literals...
+    hoisted_literals = inlineHoistedLiterals();
+  }
+
   // iterate through all the instruction in the query template function and
   // replace the call to the filter placeholder with the call to the actual filter
   for (auto it = llvm::inst_begin(query_func), e = llvm::inst_end(query_func); it != e;
@@ -1219,6 +1337,9 @@ Executor::CompilationResult Executor::compileWorkUnit(
       }
       args.insert(args.end(), col_heads.begin(), col_heads.end());
       args.push_back(get_arg_by_name(query_func, "join_hash_tables"));
+      // push hoisted literals arguments, if any
+      args.insert(args.end(), hoisted_literals.begin(), hoisted_literals.end());
+
       llvm::ReplaceInstWithInst(&filter_call,
                                 llvm::CallInst::Create(cgen_state_->row_func_, args, ""));
       break;
