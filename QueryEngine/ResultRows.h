@@ -211,6 +211,11 @@ class RowSetMemoryOwner : boost::noncopyable {
     group_by_buffers_.push_back(group_by_buffer);
   }
 
+  void addVarlenBuffer(void* varlen_buffer) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    varlen_buffers_.push_back(varlen_buffer);
+  }
+
   std::string* addString(const std::string& str) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     strings_.emplace_back(str);
@@ -274,6 +279,9 @@ class RowSetMemoryOwner : boost::noncopyable {
     for (auto group_by_buffer : group_by_buffers_) {
       free(group_by_buffer);
     }
+    for (auto varlen_buffer : varlen_buffers_) {
+      free(varlen_buffer);
+    }
     for (auto col_buffer : col_buffers_) {
       free(col_buffer);
     }
@@ -293,6 +301,7 @@ class RowSetMemoryOwner : boost::noncopyable {
   std::vector<CountDistinctBitmapBuffer> count_distinct_bitmaps_;
   std::vector<std::set<int64_t>*> count_distinct_sets_;
   std::vector<int64_t*> group_by_buffers_;
+  std::vector<void*> varlen_buffers_;
   std::list<std::string> strings_;
   std::list<std::vector<int64_t>> arrays_;
   std::unordered_map<int, StringDictionaryProxy*> str_dict_proxy_owned_;
