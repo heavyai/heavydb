@@ -32,6 +32,30 @@ QueryFragmentDescriptor::QueryFragmentDescriptor(
   }
 }
 
+void QueryFragmentDescriptor::computeAllTablesFragments(
+    std::map<int, const TableFragments*>& all_tables_fragments,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& query_infos) {
+  for (size_t tab_idx = 0, tab_cnt = ra_exe_unit.input_descs.size(); tab_idx < tab_cnt;
+       ++tab_idx) {
+    int table_id = ra_exe_unit.input_descs[tab_idx].getTableId();
+    CHECK_EQ(query_infos[tab_idx].table_id, table_id);
+    const auto& fragments = query_infos[tab_idx].info.fragments;
+    if (!all_tables_fragments.count(table_id)) {
+      all_tables_fragments.insert(std::make_pair(table_id, &fragments));
+    }
+  }
+  for (size_t tab_idx = 0,
+              extra_tab_base = ra_exe_unit.input_descs.size(),
+              tab_cnt = ra_exe_unit.extra_input_descs.size();
+       tab_idx < tab_cnt;
+       ++tab_idx) {
+    int table_id = ra_exe_unit.extra_input_descs[tab_idx].getTableId();
+    const auto& fragments = query_infos[extra_tab_base + tab_idx].info.fragments;
+    all_tables_fragments.insert(std::make_pair(table_id, &fragments));
+  }
+}
+
 void QueryFragmentDescriptor::buildFragmentKernelMap(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<uint64_t>& frag_offsets,

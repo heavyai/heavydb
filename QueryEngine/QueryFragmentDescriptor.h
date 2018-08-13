@@ -53,6 +53,11 @@ class QueryFragmentDescriptor {
   QueryFragmentDescriptor(const RelAlgExecutionUnit& ra_exe_unit,
                           const std::vector<InputTableInfo>& query_infos);
 
+  static void computeAllTablesFragments(
+      std::map<int, const TableFragments*>& all_tables_fragments,
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const std::vector<InputTableInfo>& query_infos);
+
   void buildFragmentKernelMap(const RelAlgExecutionUnit& ra_exe_unit,
                               const std::vector<uint64_t>& frag_offsets,
                               const int device_count,

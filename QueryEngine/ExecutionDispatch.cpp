@@ -220,24 +220,9 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
   FetchResult fetch_result;
   try {
     std::map<int, const TableFragments*> all_tables_fragments;
-    for (size_t tab_idx = 0, tab_cnt = ra_exe_unit_.input_descs.size(); tab_idx < tab_cnt;
-         ++tab_idx) {
-      int table_id = ra_exe_unit_.input_descs[tab_idx].getTableId();
-      CHECK_EQ(query_infos_[tab_idx].table_id, table_id);
-      const auto& fragments = query_infos_[tab_idx].info.fragments;
-      if (!all_tables_fragments.count(table_id)) {
-        all_tables_fragments.insert(std::make_pair(table_id, &fragments));
-      }
-    }
-    for (size_t tab_idx = 0,
-                extra_tab_base = ra_exe_unit_.input_descs.size(),
-                tab_cnt = ra_exe_unit_.extra_input_descs.size();
-         tab_idx < tab_cnt;
-         ++tab_idx) {
-      int table_id = ra_exe_unit_.extra_input_descs[tab_idx].getTableId();
-      const auto& fragments = query_infos_[extra_tab_base + tab_idx].info.fragments;
-      all_tables_fragments.insert(std::make_pair(table_id, &fragments));
-    }
+    QueryFragmentDescriptor::computeAllTablesFragments(
+        all_tables_fragments, ra_exe_unit_, query_infos_);
+
     OOM_TRACE_PUSH();
     fetch_result = executor_->fetchChunks(*this,
                                           ra_exe_unit_,
