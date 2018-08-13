@@ -344,7 +344,8 @@ void MapDHandler::disconnect(const TSessionId& session) {
 
 void MapDHandler::interrupt(const TSessionId& session) {
   if (g_enable_dynamic_watchdog) {
-    mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
+    // Shared lock to allow simultaneous interrupts of multiple sessions
+    mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
     if (leaf_aggregator_.leafCount() > 0) {
       leaf_aggregator_.interrupt(session);
     }
