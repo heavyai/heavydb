@@ -172,6 +172,10 @@ class Expr : public std::enable_shared_from_this<Expr> {
   bool contains_agg;
 };
 
+using ExpressionPtr = std::shared_ptr<Analyzer::Expr>;
+using ExpressionPtrList = std::list<ExpressionPtr>;
+using ExpressionPtrVector = std::vector<ExpressionPtr>;
+
 /*
  * @type ColumnVar
  * @brief expression that evaluates to the value of a column in a given row from a base
@@ -1210,6 +1214,43 @@ class OffsetInFragment : public Expr {
   void print() const override;
 
   bool operator==(const Expr& rhs) const override;
+};
+
+/*
+ * @type ArrayExpr
+ * @brief Corresponds to ARRAY[] statements in SQL
+ */
+
+class ArrayExpr : public Expr {
+ public:
+  ArrayExpr(SQLTypeInfo const& array_ti,
+            ExpressionPtrVector const& array_exprs,
+            int expr_index)
+      : Expr(preInitTweakedTypeInfo(array_ti))
+      , contained_expressions_(array_exprs)
+      , expr_index_(expr_index) {}
+
+  virtual Analyzer::ExpressionPtr deep_copy() const;
+  virtual void print() const;
+  virtual bool operator==(Expr const& rhs) const;
+  size_t getElementCount() const { return contained_expressions_.size(); }
+  int32_t getExprIndex() const { return expr_index_; }
+
+  const Analyzer::Expr* getElement(const size_t i) const {
+    CHECK_LT(i, contained_expressions_.size());
+    return contained_expressions_[i].get();
+  }
+
+ private:
+  SQLTypeInfo& preInitTweakedTypeInfo(SQLTypeInfo const& array_ti) {
+    tweaked_type_info_ = array_ti;
+    tweaked_type_info_.setSyntheticTransport();
+    return tweaked_type_info_;
+  }
+
+  SQLTypeInfo tweaked_type_info_;
+  ExpressionPtrVector contained_expressions_;
+  int expr_index_;
 };
 
 /*

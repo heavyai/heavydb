@@ -187,6 +187,10 @@ std::shared_ptr<Analyzer::Expr> OffsetInFragment::deep_copy() const {
   return makeExpr<OffsetInFragment>();
 }
 
+ExpressionPtr ArrayExpr::deep_copy() const {
+  return makeExpr<Analyzer::ArrayExpr>(type_info, contained_expressions_, expr_index_);
+}
+
 SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
                                        const SQLTypeInfo& left_type,
                                        const SQLTypeInfo& right_type,
@@ -2133,6 +2137,19 @@ bool OffsetInFragment::operator==(const Expr& rhs) const {
   return typeid(rhs) == typeid(OffsetInFragment);
 }
 
+bool ArrayExpr::operator==(Expr const& rhs) const {
+  if (typeid(rhs) != typeid(ArrayExpr))
+    return false;
+  ArrayExpr const& casted_rhs = static_cast<ArrayExpr const&>(rhs);
+  for (unsigned i = 0; i < contained_expressions_.size(); i++) {
+    auto& lhs_expr = contained_expressions_[i];
+    auto& rhs_expr = casted_rhs.contained_expressions_[i];
+    if (!(lhs_expr == rhs_expr))
+      return false;
+  }
+  return true;
+}
+
 void ColumnVar::print() const {
   std::cout << "(ColumnVar table: " << table_id << " column: " << column_id
             << " rte: " << rte_idx << ") ";
@@ -2419,6 +2436,19 @@ void IterExpr::print() const {
 
 void OffsetInFragment::print() const {
   std::cout << "(OffsetInFragment) ";
+}
+
+void ArrayExpr::print() const {
+  std::cout << "ARRAY[";
+
+  auto iter(contained_expressions_.begin());
+  while (iter != contained_expressions_.end()) {
+    (*iter)->print();
+    if (iter + 1 != contained_expressions_.end())
+      std::cout << ", ";
+    iter++;
+  }
+  std::cout << "]";
 }
 
 void TargetEntry::print() const {
