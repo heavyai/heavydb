@@ -22,8 +22,9 @@
 #include <string>
 #include <vector>
 
+#include "sqltypes.h"
+
 class OGRGeometry;
-class SQLTypeInfo;
 
 namespace Geo_namespace {
 

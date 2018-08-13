@@ -29,36 +29,9 @@
 #include <stdexcept>
 #include <string>
 #include "StringTransform.h"
+
 #include "TimeGM.h"
 #include "sqltypes.h"
-
-std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
-                                                     "BOOLEAN",
-                                                     "CHAR",
-                                                     "VARCHAR",
-                                                     "NUMERIC",
-                                                     "DECIMAL",
-                                                     "INTEGER",
-                                                     "SMALLINT",
-                                                     "FLOAT",
-                                                     "DOUBLE",
-                                                     "TIME",
-                                                     "TIMESTAMP",
-                                                     "BIGINT",
-                                                     "TEXT",
-                                                     "DATE",
-                                                     "ARRAY",
-                                                     "INTERVAL_DAY_TIME",
-                                                     "INTERVAL_YEAR_MONTH",
-                                                     "POINT",
-                                                     "LINESTRING",
-                                                     "POLYGON",
-                                                     "MULTIPOLYGON",
-                                                     "TINYINT",
-                                                     "GEOMETRY",
-                                                     "GEOGRAPHY"};
-std::string SQLTypeInfo::comp_name[kENCODING_LAST] =
-    {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED"};
 
 int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
   assert(s.length() <= 20);
@@ -115,6 +88,8 @@ int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
 Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
   Datum d;
   switch (ti.get_type()) {
+    case kARRAY:
+      break;
     case kBOOLEAN:
       if (s == "t" || s == "T" || s == "1" || to_upper(s) == "TRUE") {
         d.boolval = true;
