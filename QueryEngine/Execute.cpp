@@ -979,9 +979,6 @@ bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos,
     return false;
   }
 
-#ifndef ENABLE_EQUIJOIN_FOLD
-  CHECK_EQ(size_t(2), ra_exe_unit.input_descs.size());
-#endif
   // We only support loop join at the end of folded joins
   // where ra_exe_unit.input_descs.size() > 2 for now.
   const auto inner_table_id = ra_exe_unit.input_descs.back().getTableId();
@@ -1042,7 +1039,6 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                                column_cache);
   }
 
-#ifdef ENABLE_EQUIJOIN_FOLD
   if (join_info.join_impl_type_ == JoinImplType::Loop &&
       ra_exe_unit.input_descs.size() > 2) {
     throw UnfoldedMultiJoinRequired();
@@ -1050,9 +1046,6 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
 
   if ((join_info.join_impl_type_ == JoinImplType::Loop ||
        join_info.join_impl_type_ == JoinImplType::HashPlusLoop) &&
-#else
-      join_info.join_impl_type_  == JoinImplType::Loop &&
-#endif
       !(options.allow_loop_joins || is_trivial_loop_join(query_infos, ra_exe_unit))) {
     throw std::runtime_error("Hash join failed, reason: " +
                              join_info.hash_join_fail_reason_);
@@ -1533,9 +1526,6 @@ std::vector<size_t> Executor::getTableFragmentIndices(
   const auto& outer_fragment_info = (*outer_table_fragments)[outer_frag_idx];
   auto& inner_frags = table_frags_it->second;
   CHECK_LT(size_t(1), ra_exe_unit.input_descs.size());
-#ifndef ENABLE_EQUIJOIN_FOLD
-  CHECK_EQ(table_id, ra_exe_unit.input_descs[1].getTableId());
-#endif
 #ifndef ENABLE_MULTIFRAG_JOIN
   if (inner_frags->size() > 1) {
     throw std::runtime_error("Multi-fragment inner table '" +

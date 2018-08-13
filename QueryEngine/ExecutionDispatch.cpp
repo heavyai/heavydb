@@ -205,9 +205,6 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                 : Data_Namespace::CPU_LEVEL;
   const int outer_table_id = ra_exe_unit_.input_descs[0].getTableId();
   CHECK_GE(frag_list.size(), size_t(1));
-#ifndef ENABLE_EQUIJOIN_FOLD
-  CHECK_LE(frag_list.size(), size_t(2));
-#endif
   CHECK_EQ(frag_list[0].table_id, outer_table_id);
   const auto& outer_tab_frag_ids = frag_list[0].fragment_ids;
   CHECK_GE(chosen_device_id, 0);

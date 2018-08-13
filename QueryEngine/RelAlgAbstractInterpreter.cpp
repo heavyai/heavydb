@@ -988,7 +988,6 @@ class RANodeIterator : public std::vector<std::shared_ptr<RelAlgNode>>::const_it
   std::unordered_set<size_t> visited_;
 };
 
-#ifdef ENABLE_EQUIJOIN_FOLD
 template <typename T>
 const RexOperator* get_equals_operator(const T* node) {
   auto top_operator = dynamic_cast<const RexOperator*>(node->getCondition());
@@ -1414,15 +1413,12 @@ void coalesce_joins(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   }
   nodes.swap(new_nodes);
 }
-#endif
 
 void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
                     const std::vector<const RelAlgNode*>& left_deep_joins) {
-#ifdef ENABLE_EQUIJOIN_FOLD
   if (left_deep_joins.empty()) {
     coalesce_joins(nodes);
   }
-#endif
   enum class CoalesceState { Initial, Filter, FirstProject, Aggregate };
   std::vector<size_t> crt_pattern;
   CoalesceState crt_state{CoalesceState::Initial};
