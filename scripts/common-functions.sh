@@ -32,7 +32,7 @@ function download_make_install() {
     popd
 }
 
-ARROW_VERSION=apache-arrow-0.7.1
+ARROW_VERSION=apache-arrow-0.10.0
 
 function install_arrow() {
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz

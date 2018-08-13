@@ -76,13 +76,13 @@ set(Arrow_INCLUDE_DIRS ${Arrow_LIBRARY_DIR}/../include)
 try_compile(HAVE_ARROW_STATIC_RECORDBATCH_CTOR
   ${CMAKE_CURRENT_BINARY_DIR}
   ${CMAKE_SOURCE_DIR}/cmake/Modules/arrow_static_recordbatch.cpp
-  COMPILE_DEFINITIONS -I${Arrow_INCLUDE_DIRS}
+  COMPILE_DEFINITIONS -I${Arrow_INCLUDE_DIRS} -std=c++14
   LINK_LIBRARIES ${Arrow_LIBRARY})
 
 try_compile(HAVE_ARROW_APPENDVALUES
   ${CMAKE_CURRENT_BINARY_DIR}
   ${CMAKE_SOURCE_DIR}/cmake/Modules/arrow_appendvalues.cpp
-  COMPILE_DEFINITIONS -I${Arrow_INCLUDE_DIRS}
+  COMPILE_DEFINITIONS -I${Arrow_INCLUDE_DIRS} -std=c++14
   LINK_LIBRARIES ${Arrow_LIBRARY})
 
 include(FindPackageHandleStandardArgs)
