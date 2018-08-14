@@ -3010,12 +3010,13 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
   sqliteConnector_.query_with_text_params(
       "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, "
       "colscale, is_notnull, "
-      "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr) "
+      "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr, "
+      "is_deletedcol) "
       "VALUES (?, "
       "(SELECT max(columnid) + 1 FROM mapd_columns WHERE tableid = ?), "
       "?, ?, ?, "
       "?, "
-      "?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       std::vector<std::string>{std::to_string(td.tableId),
                                std::to_string(td.tableId),
                                cd.columnName,
@@ -3030,7 +3031,8 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
                                "",
                                std::to_string(cd.isSystemCol),
                                std::to_string(cd.isVirtualCol),
-                               cd.virtualExpr});
+                               cd.virtualExpr,
+                               std::to_string(cd.isDeletedCol)});
 
   sqliteConnector_.query_with_text_params(
       "UPDATE mapd_tables SET ncolumns = ncolumns + 1 WHERE tableid = ?",
