@@ -365,7 +365,8 @@ void MapDHandler::interrupt(const TSessionId& session) {
     CHECK(executor);
 
     VLOG(1) << "Received interrupt: "
-            << "Session " << session << ", Executor " << executor << ", leafCount "
+            << "Session " << session_it->second->get_currentUser().userName << "_"
+            << session.substr(0, 3) << ", Executor " << executor << ", leafCount "
             << leaf_aggregator_.leafCount() << ", User "
             << session_it->second->get_currentUser().userName << ", Database " << dbname
             << std::endl;
@@ -654,8 +655,9 @@ void MapDHandler::sql_execute(TQueryResult& _return,
     THROW_MAPD_EXCEPTION(std::string("At most one of first_n and at_most_n can be set"));
   }
   const auto session_info = MapDHandler::get_session(session);
-  LOG(INFO) << "sql_execute :" << session
-            << ":query_str:" << hide_sensitive_data(query_str);
+  const auto session_it = get_session_it(session);
+  LOG(INFO) << "sql_execute :" << session_it->second->get_currentUser().userName << "_"
+            << session.substr(0, 3) << " :query_str:" << hide_sensitive_data(query_str);
   if (leaf_aggregator_.leafCount() > 0) {
     if (!agg_handler_) {
       THROW_MAPD_EXCEPTION("Distributed support is disabled.");
@@ -1252,7 +1254,10 @@ void MapDHandler::get_result_row_for_pixel(
   }
 
   const auto session_info = MapDHandler::get_session(session);
-  LOG(INFO) << "get_result_row_for_pixel :" << session << ":widget_id:" << widget_id
+  const auto session_it = get_session_it(session);
+  LOG(INFO) << "get_result_row_for_pixel :"
+            << session_it->second->get_currentUser().userName << "_"
+            << session.substr(0, 3) << " :widget_id:" << widget_id
             << ":pixel.x:" << pixel.x << ":pixel.y:" << pixel.y
             << ":column_format:" << column_format << ":pixel_radius:" << pixel_radius
             << ":table_col_names" << dump_table_col_names(table_col_names)
@@ -2524,7 +2529,9 @@ void MapDHandler::render_vega(TRenderResult& _return,
   }
 
   const auto session_info = MapDHandler::get_session(session);
-  LOG(INFO) << "render_vega :" << session << ":widget_id:" << widget_id
+  const auto session_it = get_session_it(session);
+  LOG(INFO) << "render_vega :" << session_it->second->get_currentUser().userName << "_"
+            << session.substr(0, 3) << " :widget_id:" << widget_id
             << ":compression_level:" << compression_level << ":vega_json:" << vega_json
             << ":nonce:" << nonce;
 
@@ -3416,11 +3423,11 @@ void MapDHandler::check_session_exp(const SessionMap::iterator& session_it) {
   time_t last_used_time = session_it->second->get_last_used_time();
   time_t creation_time = session_it->second->get_creation_time();
   if ((time(0) - last_used_time) > idle_session_duration_) {
+    sessions_.erase(session_it);  // Already checked session existance in get_session_it
     THROW_MAPD_EXCEPTION("Idle Session Timeout. User should Re-authenticate.")
-    sessions_.erase(session_it);  // Already checked session existance in get_session_it
   } else if ((time(0) - creation_time) > max_session_duration_) {
-    THROW_MAPD_EXCEPTION("Maximum active Session Timeout. User should Re-authenticate.")
     sessions_.erase(session_it);  // Already checked session existance in get_session_it
+    THROW_MAPD_EXCEPTION("Maximum active Session Timeout. User should Re-authenticate.")
   }
 }
 
@@ -4156,7 +4163,9 @@ void MapDHandler::start_query(TPendingQuery& _return,
   if (!leaf_handler_) {
     THROW_MAPD_EXCEPTION("Distributed support is disabled.");
   }
-  LOG(INFO) << "start_query :" << session << ":" << just_explain;
+  const auto session_it = get_session_it(session);
+  LOG(INFO) << "start_query :" << session_it->second->get_currentUser().userName << "_"
+            << session.substr(0, 3) << " :" << just_explain;
   auto time_ms = measure<>::execution([&]() {
     try {
       leaf_handler_->start_query(_return, session, query_ra, just_explain);
@@ -4276,8 +4285,9 @@ void MapDHandler::start_render_query(TPendingRenderQuery& _return,
   if (!render_handler_) {
     THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
   }
-
-  LOG(INFO) << "start_render_query :" << session << ":widget_id:" << widget_id
+  const auto session_it = get_session_it(session);
+  LOG(INFO) << "start_render_query :" << session_it->second->get_currentUser().userName
+            << "_" << session.substr(0, 3) << " :widget_id:" << widget_id
             << ":vega_json:" << vega_json;
   auto time_ms = measure<>::execution([&]() {
     try {

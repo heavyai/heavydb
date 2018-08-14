@@ -312,8 +312,8 @@ TEST_F(DatabaseObject, SqlEditorAccessTest) {
   MapDParameters mapd_parms;
   auto dataMgr =
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
-  sys_cat.getMetadataForDB("mapd", db_meta);
-  sys_cat.getMetadataForUser("Juventus", user_meta);
+  CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
+  CHECK(sys_cat.getMetadataForUser("Juventus", user_meta));
   session_juve.reset(new Catalog_Namespace::SessionInfo(
       std::make_shared<Catalog_Namespace::Catalog>(
           base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
@@ -368,8 +368,8 @@ TEST_F(DatabaseObject, TableAccessTest) {
   MapDParameters mapd_parms;
   auto dataMgr =
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
-  sys_cat.getMetadataForDB("mapd", db_meta);
-  sys_cat.getMetadataForUser("Arsenal", user_meta);
+  CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
+  CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
   session_ars.reset(new Catalog_Namespace::SessionInfo(
       std::make_shared<Catalog_Namespace::Catalog>(
           base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
@@ -414,8 +414,8 @@ TEST_F(DatabaseObject, ViewAccessTest) {
   MapDParameters mapd_parms;
   auto dataMgr =
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
-  sys_cat.getMetadataForDB("mapd", db_meta);
-  sys_cat.getMetadataForUser("Arsenal", user_meta);
+  CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
+  CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
   session_ars.reset(new Catalog_Namespace::SessionInfo(
       std::make_shared<Catalog_Namespace::Catalog>(
           base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
@@ -470,8 +470,8 @@ TEST_F(DatabaseObject, DashboardAccessTest) {
   MapDParameters mapd_parms;
   auto dataMgr =
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
-  sys_cat.getMetadataForDB("mapd", db_meta);
-  sys_cat.getMetadataForUser("Arsenal", user_meta);
+  CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
+  CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
   session_ars.reset(new Catalog_Namespace::SessionInfo(
       std::make_shared<Catalog_Namespace::Catalog>(
           base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
@@ -525,8 +525,8 @@ TEST_F(DatabaseObject, DatabaseAllTest) {
   MapDParameters mapd_parms;
   auto dataMgr =
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
-  sys_cat.getMetadataForDB("mapd", db_meta);
-  sys_cat.getMetadataForUser("Arsenal", user_meta);
+  CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
+  CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
   session_ars.reset(new Catalog_Namespace::SessionInfo(
       std::make_shared<Catalog_Namespace::Catalog>(
           base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
