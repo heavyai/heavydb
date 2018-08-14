@@ -592,7 +592,8 @@ class SessionInfo {
       , currentUser_(user)
       , executor_device_type_(t)
       , session_id(sid)
-      , last_used_time(time(0)) {}
+      , last_used_time(time(0))
+      , creation_time(time(0)) {}
   SessionInfo(std::shared_ptr<Catalog> cat,
               const UserMetadata& user,
               const ExecutorDeviceType t,
@@ -614,12 +615,13 @@ class SessionInfo {
   void set_executor_device_type(ExecutorDeviceType t) { executor_device_type_ = t; }
   std::string get_session_id() const { return session_id; }
   time_t get_last_used_time() const { return last_used_time; }
-  void update_time() { last_used_time = time(0); }
+  void update_last_used_time() { last_used_time = time(0); }
   void reset_superuser() { currentUser_.isSuper = currentUser_.isReallySuper; }
   void make_superuser() { currentUser_.isSuper = true; }
   bool checkDBAccessPrivileges(const DBObjectType& permissionType,
                                const AccessPrivileges& privs,
                                const std::string& objectName = "") const;
+  time_t get_creation_time() const { return creation_time; }
 
  private:
   std::shared_ptr<MapDHandler> mapdHandler_;
@@ -628,6 +630,7 @@ class SessionInfo {
   std::atomic<ExecutorDeviceType> executor_device_type_;
   const std::string session_id;
   std::atomic<time_t> last_used_time;  // for cleaning up SessionInfo after client dies
+  std::atomic<time_t> creation_time;   // for invalidating session after tolerance period
 };
 
 }  // namespace Catalog_Namespace

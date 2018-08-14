@@ -226,9 +226,10 @@ int main(int argc, char** argv) {
                                    // no conversion is requested
   std::string db_query_file("");   // path to file containing warmup queries list
   bool enable_access_priv_check = true;  // enable DB objects access privileges checking
+  int idle_session_duration = 60;        // Inactive session tolerance in secs (60 mins)
   int max_session_duration =
-      900;  // session tolerance in secs (15 mins)
-            // (https://pages.nist.gov/800-63-3/sp800-63b.html#aal3reauth)
+      43200;  // maximum session life in secs (30 Days)(in minutes)
+              // (https://pages.nist.gov/800-63-3/sp800-63b.html#aal3reauth)
 
   namespace po = boost::program_options;
 
@@ -413,6 +414,10 @@ int main(int argc, char** argv) {
                              ->default_value(g_enable_smem_group_by)
                              ->implicit_value(false),
                          "Enable/disable using GPU shared memory for GROUP BY.");
+  desc_adv.add_options()(
+      "idle-session-duration",
+      po::value<int>(&idle_session_duration)->default_value(idle_session_duration),
+      "Maximum duration of idle session.");
   desc_adv.add_options()(
       "max-session-duration",
       po::value<int>(&max_session_duration)->default_value(max_session_duration),
@@ -603,6 +608,8 @@ int main(int argc, char** argv) {
 
   LOG(INFO) << " Debug Timer is set to " << g_enable_debug_timer;
 
+  LOG(INFO) << " Maximum Idle session duration " << idle_session_duration;
+
   LOG(INFO) << " Maximum active session duration " << max_session_duration;
 
   if (!g_from_table_reordering) {
@@ -673,6 +680,7 @@ int main(int argc, char** argv) {
                                                   db_convert_dir,
                                                   enable_legacy_syntax,
                                                   enable_access_priv_check,
+                                                  idle_session_duration,
                                                   max_session_duration);
 
   if (mapd_parameters.ha_group_id.empty()) {

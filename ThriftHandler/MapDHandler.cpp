@@ -130,6 +130,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const std::string& db_convert_dir,
                          const bool legacy_syntax,
                          const bool access_priv_check,
+                         const int idle_session_duration,
                          const int max_session_duration)
     : leaf_aggregator_(db_leaves)
     , string_leaves_(string_leaves)
@@ -144,7 +145,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     , legacy_syntax_(legacy_syntax)
     , super_user_rights_(false)
     , access_priv_check_(access_priv_check)
-    , max_session_duration_(max_session_duration)
+    , idle_session_duration_(idle_session_duration * 60)
+    , max_session_duration_(max_session_duration * 60)
     , _was_geo_copy_from(false) {
   LOG(INFO) << "MapD Server " << MAPD_RELEASE;
   if (executor_device == "gpu") {
@@ -3412,8 +3414,12 @@ void MapDHandler::get_heap_profile(std::string& profile, const TSessionId& sessi
 
 void MapDHandler::check_session_exp(const SessionMap::iterator& session_it) {
   time_t last_used_time = session_it->second->get_last_used_time();
-  if ((time(0) - last_used_time) > max_session_duration_) {
-    THROW_MAPD_EXCEPTION("Session Expired. User should Re-authenticate.")
+  time_t creation_time = session_it->second->get_creation_time();
+  if ((time(0) - last_used_time) > idle_session_duration_) {
+    THROW_MAPD_EXCEPTION("Idle Session Timeout. User should Re-authenticate.")
+    sessions_.erase(session_it);  // Already checked session existance in get_session_it
+  } else if ((time(0) - creation_time) > max_session_duration_) {
+    THROW_MAPD_EXCEPTION("Maximum active Session Timeout. User should Re-authenticate.")
     sessions_.erase(session_it);  // Already checked session existance in get_session_it
   }
 }
@@ -3430,7 +3436,7 @@ SessionMap::iterator MapDHandler::get_session_it(const TSessionId& session) {
       }
       check_session_exp(session_it);
       session_it->second->make_superuser();
-      session_it->second->update_time();
+      session_it->second->update_last_used_time();
       return session_it;
     }
   }
@@ -3441,7 +3447,7 @@ SessionMap::iterator MapDHandler::get_session_it(const TSessionId& session) {
   }
   check_session_exp(session_it);
   session_it->second->reset_superuser();
-  session_it->second->update_time();
+  session_it->second->update_last_used_time();
   return session_it;
 }
 

@@ -120,6 +120,7 @@ class MapDHandler : public MapDIf {
               const std::string& db_convert_dir,
               const bool legacy_syntax,
               const bool access_priv_check,
+              const int idle_session_duration,
               const int max_session_duration);
 
   ~MapDHandler();
@@ -568,7 +569,8 @@ class MapDHandler : public MapDIf {
   bool super_user_rights_;  // default is "false"; setting to "true" ignores passwd checks
                             // in "connect(..)" method
   const bool access_priv_check_;
-  const int max_session_duration_;  // duration tolerance for active session
+  const int idle_session_duration_;  // max duration of idle session
+  const int max_session_duration_;   // max duration of session
 
   bool _was_geo_copy_from;
   std::string _geo_copy_from_table;
