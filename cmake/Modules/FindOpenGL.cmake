@@ -346,7 +346,13 @@ else()
      (NOT OPENGL_USE_EGL AND
           OPENGL_opengl_LIBRARY AND
           OPENGL_glx_LIBRARY) OR
-     (    OPENGL_USE_EGL))
+     # NOTE: MapD-customization(croot) - adding the
+     # OPENGL_USE_EGL && OPENGL_opengl_LIBRARY
+     # logic. We can have EGL without GLVND, so this logic
+     # only adds the OPENGL_opengl_LIBRARY requirement if
+     # both are found.
+     (    OPENGL_USE_EGL AND
+          OPENGL_opengl_LIBRARY))
     list(APPEND _OpenGL_REQUIRED_VARS OPENGL_opengl_LIBRARY)
   endif()
 
@@ -379,6 +385,14 @@ else()
           OPENGL_gl_LIBRARY) OR
      (NOT OPENGL_USE_EGL AND
       NOT OPENGL_glx_LIBRARY AND
+          OPENGL_gl_LIBRARY) OR
+     # NOTE: MapD-customization(croot) - adding the
+     # OPENGL_USE_EGL && !OPENGL_opengl_LIBRARY && OPENGL_gl_LIBRARY
+     # logic. We can have EGL without GLVND now, so this logic
+     # adds the OPENGL_gl_LIBRARY requirement if
+     # both egl & gl are found.
+     (    OPENGL_USE_EGL AND
+      NOT OPENGL_opengl_LIBRARY AND
           OPENGL_gl_LIBRARY))
     list(APPEND _OpenGL_REQUIRED_VARS OPENGL_gl_LIBRARY)
   endif()
@@ -459,24 +473,9 @@ if(OPENGL_FOUND)
                           "${OPENGL_INCLUDE_DIR}")
   endif()
 
-  # ::GLX is a GLVND library, and thus Linux-only: we don't bother checking
-  # for a framework version of this library.
-  if(OpenGL_GLX_FOUND AND NOT TARGET OpenGL::GLX)
-    if(IS_ABSOLUTE "${OPENGL_glx_LIBRARY}")
-      add_library(OpenGL::GLX UNKNOWN IMPORTED)
-      set_target_properties(OpenGL::GLX PROPERTIES IMPORTED_LOCATION
-                            "${OPENGL_glx_LIBRARY}")
-    else()
-      add_library(OpenGL::GLX INTERFACE IMPORTED)
-      set_target_properties(OpenGL::GLX PROPERTIES IMPORTED_LIBNAME
-                            "${OPENGL_glx_LIBRARY}")
-    endif()
-    set_target_properties(OpenGL::GLX PROPERTIES INTERFACE_LINK_LIBRARIES
-                          OpenGL::OpenGL)
-    set_target_properties(OpenGL::GLX PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
-                          "${OPENGL_GLX_INCLUDE_DIR}")
-  endif()
-
+  # NOTE: MapD-customization(croot) - changing the logic around here
+  # quite a bit to handle the fact that glx & egl do not have to be
+  # glvnd only. So glx & gl or glx & opengl or egl & gl or egl & opengl
   if(OPENGL_gl_LIBRARY AND NOT TARGET OpenGL::GL)
     # A legacy GL library is available, so use it for the legacy GL target.
     if(IS_ABSOLUTE "${OPENGL_gl_LIBRARY}")
@@ -499,16 +498,29 @@ if(OPENGL_FOUND)
     endif()
     set_target_properties(OpenGL::GL PROPERTIES
       INTERFACE_INCLUDE_DIRECTORIES "${OPENGL_INCLUDE_DIR}")
-  elseif(NOT TARGET OpenGL::GL AND TARGET OpenGL::OpenGL AND TARGET OpenGL::GLX)
-    # A legacy GL library is not available, but we can provide the legacy GL
-    # target using GLVND OpenGL+GLX.
-    add_library(OpenGL::GL INTERFACE IMPORTED)
-    set_target_properties(OpenGL::GL PROPERTIES INTERFACE_LINK_LIBRARIES
-                          OpenGL::OpenGL)
-    set_property(TARGET OpenGL::GL APPEND PROPERTY INTERFACE_LINK_LIBRARIES
-                 OpenGL::GLX)
-    set_target_properties(OpenGL::GL PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
-                          "${OPENGL_INCLUDE_DIR}")
+  endif()
+
+  # ::GLX is a GLVND library, and thus Linux-only: we don't bother checking
+  # for a framework version of this library.
+  if(OpenGL_GLX_FOUND AND NOT TARGET OpenGL::GLX)
+    if(IS_ABSOLUTE "${OPENGL_glx_LIBRARY}")
+      add_library(OpenGL::GLX UNKNOWN IMPORTED)
+      set_target_properties(OpenGL::GLX PROPERTIES IMPORTED_LOCATION
+                            "${OPENGL_glx_LIBRARY}")
+    else()
+      add_library(OpenGL::GLX INTERFACE IMPORTED)
+      set_target_properties(OpenGL::GLX PROPERTIES IMPORTED_LIBNAME
+                            "${OPENGL_glx_LIBRARY}")
+    endif()
+    if (TARGET OpenGL::OpenGL)
+        set_target_properties(OpenGL::GLX PROPERTIES INTERFACE_LINK_LIBRARIES
+                              OpenGL::OpenGL)
+    else()
+        set_target_properties(OpenGL::GLX PROPERTIES INTERFACE_LINK_LIBRARIES
+                              OpenGL::GL)
+    endif()
+    set_target_properties(OpenGL::GLX PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
+                          "${OPENGL_GLX_INCLUDE_DIR}")
   endif()
 
   # ::EGL is a GLVND library, and thus Linux-only: we don't bother checking
@@ -516,7 +528,7 @@ if(OPENGL_FOUND)
   # Note we test for OpenGL::OpenGL as a target.  When this module is updated to
   # support GLES, we would additionally want to check for the hypothetical GLES
   # target and enable EGL if either ::GLES or ::OpenGL is created.
-  if(TARGET OpenGL::OpenGL AND OpenGL_EGL_FOUND AND NOT TARGET OpenGL::EGL)
+  if(OpenGL_EGL_FOUND AND NOT TARGET OpenGL::EGL)
     if(IS_ABSOLUTE "${OPENGL_egl_LIBRARY}")
       add_library(OpenGL::EGL UNKNOWN IMPORTED)
       set_target_properties(OpenGL::EGL PROPERTIES IMPORTED_LOCATION
@@ -526,11 +538,33 @@ if(OPENGL_FOUND)
       set_target_properties(OpenGL::EGL PROPERTIES IMPORTED_LIBNAME
                             "${OPENGL_egl_LIBRARY}")
     endif()
-    set_target_properties(OpenGL::EGL PROPERTIES INTERFACE_LINK_LIBRARIES
-                          OpenGL::OpenGL)
+    if (TARGET OpenGL::OpenGL)
+        set_target_properties(OpenGL::EGL PROPERTIES INTERFACE_LINK_LIBRARIES
+                              OpenGL::OpenGL)
+    else()
+        set_target_properties(OpenGL::EGL PROPERTIES INTERFACE_LINK_LIBRARIES
+                              OpenGL::GL)
+    endif()
     # Note that EGL's include directory is different from OpenGL/GLX's!
     set_target_properties(OpenGL::EGL PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
                           "${OPENGL_EGL_INCLUDE_DIR}")
+  endif()
+
+  if(NOT TARGET OpenGL::GL AND TARGET OpenGL::OpenGL)
+    # A legacy GL library is not available, but we can provide the legacy GL
+    # target using GLVND OpenGL+GLX or OpenGL+EGL.
+    add_library(OpenGL::GL INTERFACE IMPORTED)
+    set_target_properties(OpenGL::GL PROPERTIES INTERFACE_LINK_LIBRARIES
+                          OpenGL::OpenGL)
+    if (TARGET OpenGL::GLX)
+        set_property(TARGET OpenGL::GL APPEND PROPERTY INTERFACE_LINK_LIBRARIES
+                     OpenGL::GLX)
+    elseif (TARGET OpenG::EGL)
+        set_property(TARGET OpenGL::GL APPEND PROPERTY INTERFACE_LINK_LIBRARIES
+                     OpenGL::EGL)
+    endif()
+    set_target_properties(OpenGL::GL PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
+                          "${OPENGL_INCLUDE_DIR}")
   endif()
 
   if(OPENGL_GLU_FOUND AND NOT TARGET OpenGL::GLU)
