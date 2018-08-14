@@ -73,6 +73,7 @@ function install_awscpp() {
     download https://github.com/aws/aws-sdk-cpp/archive/${AWSCPP_VERSION}.tar.gz
     tar xvfz ${AWSCPP_VERSION}.tar.gz
     pushd aws-sdk-cpp-${AWSCPP_VERSION}
+    patch -p1 < ${SCRIPTS_DIR}/aws-sdk-cpp-remove-git-version.patch
     mkdir build
     cd build
     cmake \
@@ -89,7 +90,7 @@ function install_awscpp() {
     os=`uname`
     if [ "$os" = "Darwin" ]; then
         sudo make install
-    else 
+    else
         make install
     fi
 

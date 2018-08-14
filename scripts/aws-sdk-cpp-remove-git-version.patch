@@ -1,0 +1,16 @@
+diff -r -p aws-sdk-cpp-1.4.76.orig/cmake/initialize_project_version.cmake aws-sdk-cpp-1.4.76/cmake/initialize_project_version.cmake
+*** aws-sdk-cpp-1.4.76.orig/cmake/initialize_project_version.cmake	2018-08-14 16:28:12.739517019 -0700
+--- aws-sdk-cpp-1.4.76/cmake/initialize_project_version.cmake	2018-08-14 16:28:34.799477972 -0700
+***************
+*** 1,10 ****
+- if(GIT_FOUND)
+-     execute_process(COMMAND ${GIT_EXECUTABLE} describe --abbrev=0 --tags
+-     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+-     OUTPUT_VARIABLE VERSION_STRING
+-     OUTPUT_STRIP_TRAILING_WHITESPACE)
+- endif()
+- 
+  if(NOT VERSION_STRING)
+      if(PACKAGE_VERSION) # set by AWSSDKConfigVersion when using find_package(AWSSDK)
+          set(VERSION_STRING "${PACKAGE_VERSION}")
+--- 1,3 ----
