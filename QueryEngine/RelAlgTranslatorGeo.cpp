@@ -662,18 +662,36 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   SQLTypeInfo arg1_ti;
   int32_t lindex0 = 0;
   int32_t lindex1 = 0;
-  bool with_bounds = (rex_function->getName() == std::string("ST_Contains"));
+  auto function_name = rex_function->getName();
+  bool swap_args = false;
+  bool with_bounds = false;
 
-  auto geoargs0 = translateGeoFunctionArg(
-      rex_function->getOperand(0), arg0_ti, lindex0, with_bounds, false, false);
+  if (function_name == std::string("ST_Within")) {
+    function_name = "ST_Contains";
+    swap_args = true;
+  }
+  if (function_name == std::string("ST_Contains")) {
+    with_bounds = true;
+  }
+
+  auto geoargs0 = translateGeoFunctionArg(rex_function->getOperand(swap_args ? 1 : 0),
+                                          arg0_ti,
+                                          lindex0,
+                                          with_bounds,
+                                          false,
+                                          false);
   if (arg0_ti.get_type() == kLINESTRING) {
     Datum index;
     index.intval = lindex0;
     geoargs0.push_back(makeExpr<Analyzer::Constant>(kINT, false, index));
   }
   geoargs.insert(geoargs.end(), geoargs0.begin(), geoargs0.end());
-  auto geoargs1 = translateGeoFunctionArg(
-      rex_function->getOperand(1), arg1_ti, lindex1, with_bounds, false, false);
+  auto geoargs1 = translateGeoFunctionArg(rex_function->getOperand(swap_args ? 0 : 1),
+                                          arg1_ti,
+                                          lindex1,
+                                          with_bounds,
+                                          false,
+                                          false);
   if (arg1_ti.get_type() == kLINESTRING) {
     Datum index;
     index.intval = lindex1;
@@ -690,12 +708,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
     throw QueryNotSupported(rex_function->getName() + " cannot accept different SRIDs");
   }
 
-  std::string specialized_geofunc{rex_function->getName() + suffix(arg0_ti.get_type()) +
+  std::string specialized_geofunc{function_name + suffix(arg0_ti.get_type()) +
                                   suffix(arg1_ti.get_type())};
 
   if (arg0_ti.get_subtype() == kGEOGRAPHY && arg0_ti.get_output_srid() == 4326) {
     // Need to call geodesic runtime functions
-    if (rex_function->getName() == std::string("ST_Distance")) {
+    if (function_name == std::string("ST_Distance")) {
       if ((arg0_ti.get_type() == kPOINT ||
            (arg0_ti.get_type() == kLINESTRING && lindex0 != 0)) &&
           (arg1_ti.get_type() == kPOINT ||
@@ -703,14 +721,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
         // Geodesic distance between points (or indexed linestrings)
         specialized_geofunc += std::string("_Geodesic");
       } else {
-        throw QueryNotSupported(rex_function->getName() +
+        throw QueryNotSupported(function_name +
                                 " currently doesn't accept non-POINT geographies");
       }
     } else if (rex_function->getName() == std::string("ST_Contains")) {
       // We currently don't have a geodesic implementation of ST_Contains,
       // allowing calls to a [less precise] cartesian implementation.
     } else {
-      throw QueryNotSupported(rex_function->getName() + " doesn't accept geographies");
+      throw QueryNotSupported(function_name + " doesn't accept geographies");
     }
   }
 

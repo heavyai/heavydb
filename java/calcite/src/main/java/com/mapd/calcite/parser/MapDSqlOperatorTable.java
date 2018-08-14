@@ -149,6 +149,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new Sign());
     opTab.addOperator(new Truncate());
     opTab.addOperator(new ST_Contains());
+    opTab.addOperator(new ST_Within());
     opTab.addOperator(new ST_Distance());
     opTab.addOperator(new ST_GeogFromText());
     opTab.addOperator(new ST_GeomFromText());
@@ -668,6 +669,28 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       st_contains_sig.add(SqlTypeFamily.ANY);
       st_contains_sig.add(SqlTypeFamily.ANY);
       return st_contains_sig;
+    }
+  }
+
+  static class ST_Within extends SqlFunction {
+
+    ST_Within() {
+      super("ST_Within", SqlKind.OTHER_FUNCTION, null, null, OperandTypes.family(signature()), SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 2;
+      final RelDataTypeFactory typeFactory
+              = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> st_within_sig = new java.util.ArrayList<SqlTypeFamily>();
+      st_within_sig.add(SqlTypeFamily.ANY);
+      st_within_sig.add(SqlTypeFamily.ANY);
+      return st_within_sig;
     }
   }
 

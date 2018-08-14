@@ -1276,7 +1276,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     return translateUnaryGeoFunction(rex_function);
   }
   if (rex_function->getName() == std::string("ST_Distance") ||
-      rex_function->getName() == std::string("ST_Contains")) {
+      rex_function->getName() == std::string("ST_Contains") ||
+      rex_function->getName() == std::string("ST_Within")) {
     CHECK_EQ(rex_function->size(), size_t(2));
     return translateBinaryGeoFunction(rex_function);
   }

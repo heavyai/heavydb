@@ -9525,6 +9525,10 @@ TEST(Select, GeoSpatial_Projection) {
             "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains('POINT(0 0)', l);",
             dt)));
     ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
+                                        "ST_Within('POINT(10.5 10.5)', l);",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(p,l);", dt)));
     ASSERT_EQ(static_cast<int64_t>(1),
@@ -9538,6 +9542,10 @@ TEST(Select, GeoSpatial_Projection) {
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
                                         "ST_Contains(poly, 'POINT(0.1 0.1)');",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
+                                        "ST_Within('POINT(0.1 0.1)', poly);",
                                         dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
