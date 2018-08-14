@@ -213,7 +213,7 @@ First install the basic build tools:
 
 Next download and install the prebuilt dependencies:
 
-    curl -OJ https://internal-dependencies.mapd.com/mapd-deps/deploy.sh
+    curl -OJ https://dependencies.mapd.com/mapd-deps/deploy.sh
     sudo bash deploy.sh
 
 These dependencies will be installed to a directory under `/usr/local/mapd-deps`. The `deploy.sh` script also installs [Environment Modules](http://modules.sf.net) in order to simplify managing the required environment variables. Log out and log back in after running the `deploy.sh` script in order to active Environment Modules command, `module`.

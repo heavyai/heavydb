@@ -23,9 +23,9 @@ source $SCRIPTS_DIR/common-functions.sh
 # wget https://gmplib.org/repo/gmp/raw-rev/4a6d258b467f
 # patch -p1 < 4a6d258b467f
 # https://gmplib.org/download/gmp/gmp-6.1.2.tar.xz
-download_make_install https://internal-dependencies.mapd.com/thirdparty/gmp-6.1.2.tar.xz "" "--enable-fat"
+download_make_install https://dependencies.mapd.com/thirdparty/gmp-6.1.2.tar.xz "" "--enable-fat"
 # http://www.mpfr.org/mpfr-current/mpfr-3.1.5.tar.xz
-download_make_install https://internal-dependencies.mapd.com/thirdparty/mpfr-4.0.1.tar.xz "" "--with-gmp=$PREFIX"
+download_make_install https://dependencies.mapd.com/thirdparty/mpfr-4.0.1.tar.xz "" "--with-gmp=$PREFIX"
 download_make_install ftp://ftp.gnu.org/gnu/mpc/mpc-1.1.0.tar.gz "" "--with-gmp=$PREFIX"
 download_make_install ftp://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.xz # "" "--build=powerpc64le-unknown-linux-gnu"
 download_make_install ftp://ftp.gnu.org/gnu/automake/automake-1.16.1.tar.xz
@@ -61,7 +61,7 @@ export CXX=$PREFIX/bin/g++
 
 download_make_install ftp://ftp.gnu.org/gnu/libtool/libtool-2.4.6.tar.gz
 # http://zlib.net/zlib-1.2.8.tar.xz
-download_make_install https://internal-dependencies.mapd.com/thirdparty/zlib-1.2.8.tar.xz
+download_make_install https://dependencies.mapd.com/thirdparty/zlib-1.2.8.tar.xz
 
 VERS=1.0.6
 download http://bzip.org/$VERS/bzip2-$VERS.tar.gz
@@ -74,7 +74,7 @@ popd
 download_make_install https://www.openssl.org/source/openssl-1.0.2o.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
 
 # libarchive
-download_make_install https://internal-dependencies.mapd.com/thirdparty/xz-5.2.4.tar.xz "" "--disable-shared"
+download_make_install https://dependencies.mapd.com/thirdparty/xz-5.2.4.tar.xz "" "--disable-shared"
 download_make_install http://libarchive.org/downloads/libarchive-3.3.2.tar.gz "" "--without-openssl --disable-shared"
 
 CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/pub/gnu/ncurses/ncurses-6.1.tar.gz # "" "--build=powerpc64le-unknown-linux-gnu"
@@ -82,13 +82,13 @@ CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/pub/gnu/ncurses/ncurses-6
 download_make_install ftp://ftp.gnu.org/gnu/bison/bison-3.0.4.tar.xz # "" "--build=powerpc64le-unknown-linux-gnu"
 
 # https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/flexpp-bisonpp/bisonpp-1.21-45.tar.gz
-download_make_install https://internal-dependencies.mapd.com/thirdparty/bisonpp-1.21-45.tar.gz bison++-1.21
+download_make_install https://dependencies.mapd.com/thirdparty/bisonpp-1.21-45.tar.gz bison++-1.21
 
 CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/gnu/readline/readline-7.0.tar.gz
 
 VERS=1_67_0
 # http://downloads.sourceforge.net/project/boost/boost/${VERS//_/.}/boost_$VERS.tar.bz2
-download https://internal-dependencies.mapd.com/thirdparty/boost_$VERS.tar.bz2
+download https://dependencies.mapd.com/thirdparty/boost_$VERS.tar.bz2
 extract boost_$VERS.tar.bz2
 pushd boost_$VERS
 ./bootstrap.sh --prefix=$PREFIX
@@ -96,7 +96,7 @@ pushd boost_$VERS
 popd
 
 # https://cmake.org/files/v3.9/cmake-3.9.6.tar.gz
-download_make_install https://internal-dependencies.mapd.com/thirdparty/cmake-3.9.6.tar.gz
+download_make_install https://dependencies.mapd.com/thirdparty/cmake-3.9.6.tar.gz
 
 # folly
 VERS=3.0.0
@@ -142,14 +142,14 @@ popd
 download_make_install http://thrysoee.dk/editline/libedit-20170329-3.1.tar.gz
 VERS=6.0.1
 # http://releases.llvm.org
-download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/llvm-$VERS.src.tar.xz
-download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/cfe-$VERS.src.tar.xz
-download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/compiler-rt-$VERS.src.tar.xz
-download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/lldb-$VERS.src.tar.xz
-download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/lld-$VERS.src.tar.xz
-download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/libcxx-$VERS.src.tar.xz
-download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/libcxxabi-$VERS.src.tar.xz
-download https://internal-dependencies.mapd.com/thirdparty/llvm/$VERS/clang-tools-extra-$VERS.src.tar.xz
+download https://dependencies.mapd.com/thirdparty/llvm/$VERS/llvm-$VERS.src.tar.xz
+download https://dependencies.mapd.com/thirdparty/llvm/$VERS/cfe-$VERS.src.tar.xz
+download https://dependencies.mapd.com/thirdparty/llvm/$VERS/compiler-rt-$VERS.src.tar.xz
+download https://dependencies.mapd.com/thirdparty/llvm/$VERS/lldb-$VERS.src.tar.xz
+download https://dependencies.mapd.com/thirdparty/llvm/$VERS/lld-$VERS.src.tar.xz
+download https://dependencies.mapd.com/thirdparty/llvm/$VERS/libcxx-$VERS.src.tar.xz
+download https://dependencies.mapd.com/thirdparty/llvm/$VERS/libcxxabi-$VERS.src.tar.xz
+download https://dependencies.mapd.com/thirdparty/llvm/$VERS/clang-tools-extra-$VERS.src.tar.xz
 rm -rf llvm-$VERS.src
 extract llvm-$VERS.src.tar.xz
 extract cfe-$VERS.src.tar.xz
@@ -180,7 +180,7 @@ popd
 
 VERS=7.60.0
 # https://curl.haxx.se/download/curl-$VERS.tar.xz
-download_make_install https://internal-dependencies.mapd.com/thirdparty/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps"
+download_make_install https://dependencies.mapd.com/thirdparty/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps"
 
 # thrift
 VERS=0.11.0
@@ -203,7 +203,7 @@ popd
 # backend rendering
 VERS=1.6.21
 # http://download.sourceforge.net/libpng/libpng-$VERS.tar.xz
-download_make_install https://internal-dependencies.mapd.com/thirdparty/libpng-$VERS.tar.xz
+download_make_install https://dependencies.mapd.com/thirdparty/libpng-$VERS.tar.xz
 
 VERS=2.1.4_egl
 download https://github.com/vastcharade/glbinding/archive/v$VERS.tar.gz
@@ -243,7 +243,7 @@ popd
 download_make_install https://github.com/libexpat/libexpat/releases/download/R_2_2_5/expat-2.2.5.tar.bz2
 
 # https://github.com/google/libkml/archive/master.zip
-download https://internal-dependencies.mapd.com/thirdparty/libkml-master.zip
+download https://dependencies.mapd.com/thirdparty/libkml-master.zip
 unzip -u libkml-master.zip
 pushd libkml-master
 ./autogen.sh || true
@@ -263,7 +263,7 @@ ARCH=$(uname -m)
 ARCH=${ARCH//x86_64/amd64}
 ARCH=${ARCH//aarch64/arm64}
 # https://dl.google.com/go/go$VERS.linux-$ARCH.tar.gz
-download https://internal-dependencies.mapd.com/thirdparty/go$VERS.linux-$ARCH.tar.gz
+download https://dependencies.mapd.com/thirdparty/go$VERS.linux-$ARCH.tar.gz
 extract go$VERS.linux-amd64.tar.gz
 mv go $PREFIX
 

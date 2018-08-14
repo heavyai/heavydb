@@ -7,8 +7,8 @@
   <version>1.0-SNAPSHOT</version>
   <repositories>
     <repository>
-      <id>MapD Internal Dependencies</id>
-      <url>https://internal-dependencies.mapd.com/mvn/</url>
+      <id>MapD Dependencies</id>
+      <url>https://dependencies.mapd.com/mvn/</url>
     </repository>
   </repositories>
   <name>MapD Java</name>
