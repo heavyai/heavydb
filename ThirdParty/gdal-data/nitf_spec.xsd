@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!--
 /******************************************************************************
- * $Id: nitf_spec.xsd 22867 2011-08-06 13:47:27Z rouault $
+ * $Id: nitf_spec.xsd 53d6df8552738b8e852ea38462051f9079587baa 2011-08-06 13:47:27Z Even Rouault $
  *
  * Project:  NITF Library
  * Purpose:  Schema of description of NITF TREs
