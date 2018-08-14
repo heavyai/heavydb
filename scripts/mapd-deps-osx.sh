@@ -17,6 +17,7 @@ fi
 
 # install deps
 brew install cmake
+brew install folly
 brew install gflags
 brew install glog
 brew install wget
@@ -27,8 +28,7 @@ brew install -s $SCRIPTS_DIR/../ThirdParty/Thrift/thrift.rb
 brew switch thrift 0.11.0
 
 brew install cryptopp
-brew install llvm@4
-brew install folly
+brew install llvm@6
 brew install apache-arrow
 brew install golang
 brew install libpng
@@ -59,7 +59,7 @@ export PATH=$CUDA_ROOT/bin/:$PATH
 # Not adding full llvm/bin to PATH since brew's `clang` breaks CUDA
 mkdir -p ~/bin/
 for i in llvm-config; do
-  ln -sf "$(brew --prefix llvm@4)/bin/$i" ~/bin/$i
+  ln -sf "$(brew --prefix llvm@6)/bin/$i" ~/bin/$i
 done
 export PATH=~/bin:$PATH
 
