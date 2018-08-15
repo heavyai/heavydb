@@ -134,14 +134,24 @@ std::vector<InnerOuter> normalize_column_pairs(const Analyzer::BinOper* conditio
       dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_left_operand());
   const auto rhs_tuple_expr =
       dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_right_operand());
-  CHECK(lhs_tuple_expr && rhs_tuple_expr);
-  const auto& lhs_tuple = lhs_tuple_expr->getTuple();
-  const auto& rhs_tuple = rhs_tuple_expr->getTuple();
-  CHECK_EQ(lhs_tuple.size(), rhs_tuple.size());
-  for (size_t i = 0; i < lhs_tuple.size(); ++i) {
-    result.push_back(normalize_column_pair(
-        lhs_tuple[i].get(), rhs_tuple[i].get(), cat, temporary_tables));
+
+  CHECK_EQ(static_cast<bool>(lhs_tuple_expr), static_cast<bool>(rhs_tuple_expr));
+  if (lhs_tuple_expr) {
+    const auto& lhs_tuple = lhs_tuple_expr->getTuple();
+    const auto& rhs_tuple = rhs_tuple_expr->getTuple();
+    CHECK_EQ(lhs_tuple.size(), rhs_tuple.size());
+    for (size_t i = 0; i < lhs_tuple.size(); ++i) {
+      result.push_back(normalize_column_pair(
+          lhs_tuple[i].get(), rhs_tuple[i].get(), cat, temporary_tables));
+    }
+  } else {
+    CHECK(!lhs_tuple_expr && !rhs_tuple_expr);
+    result.push_back(normalize_column_pair(condition->get_left_operand(),
+                                           condition->get_right_operand(),
+                                           cat,
+                                           temporary_tables));
   }
+
   return result;
 }
 
@@ -585,9 +595,6 @@ int BaselineJoinHashTable::initHashTableOnCpu(
     const std::vector<JoinColumn>& join_columns,
     const std::vector<JoinColumnTypeInfo>& join_column_types,
     const JoinHashTableInterface::HashType layout) {
-  const auto col_tuple_expr = std::dynamic_pointer_cast<Analyzer::ExpressionTuple>(
-      condition_->get_own_right_operand());
-  CHECK(col_tuple_expr);
   const auto inner_outer_pairs = normalize_column_pairs(
       condition_.get(), *executor_->getCatalog(), executor_->getTemporaryTables());
   const auto composite_key_info = get_composite_key_info(inner_outer_pairs, executor_);
@@ -895,9 +902,6 @@ int BaselineJoinHashTable::initHashTableForDevice(
     const Data_Namespace::MemoryLevel effective_memory_level,
     const int device_id) {
   const auto catalog = executor_->getCatalog();
-  const auto col_tuple_expr = std::dynamic_pointer_cast<Analyzer::ExpressionTuple>(
-      condition_->get_own_right_operand());
-  CHECK(col_tuple_expr);
   const auto inner_outer_pairs =
       normalize_column_pairs(condition_.get(), *catalog, executor_->getTemporaryTables());
   const auto key_component_width = get_key_component_width(condition_, executor_);

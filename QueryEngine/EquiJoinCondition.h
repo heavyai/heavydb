@@ -29,7 +29,7 @@ class Expr;
 std::list<std::shared_ptr<Analyzer::Expr>> combine_equi_join_conditions(
     const std::list<std::shared_ptr<Analyzer::Expr>>& join_quals);
 
-std::shared_ptr<Analyzer::BinOper> coalesce_singleton_equi_join(
+std::list<std::shared_ptr<Analyzer::Expr>> coalesce_singleton_equi_join(
     const std::shared_ptr<Analyzer::BinOper>& join_qual);
 
 #endif  // QUERYENGINE_EQUIJOINCONDITION_H

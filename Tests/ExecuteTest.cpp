@@ -3676,19 +3676,48 @@ void import_array_test(const std::string& table_name) {
   loader.load(import_buffers, g_array_test_row_count);
 }
 
+template <typename T>
+inline std::string convert(const T& t) {
+  return std::to_string(t);
+}
+
+template <std::size_t N>
+inline std::string convert(const char (&t)[N]) {
+  return std::string(t);
+}
+
+template <>
+inline std::string convert(const std::string& t) {
+  return t;
+}
+
+struct ValuesGenerator {
+  ValuesGenerator(const std::string& table_name) : table_name_(table_name) {}
+
+  template <typename... COL_ARGS>
+  std::string operator()(COL_ARGS&&... args) const {
+    std::vector<std::string> vals({convert(std::forward<COL_ARGS>(args))...});
+    return std::string("INSERT INTO " + table_name_ + " VALUES(" +
+                       boost::algorithm::join(vals, ",") + ");");
+  }
+
+  const std::string table_name_;
+};
+
 void import_gpu_sort_test() {
   const std::string drop_old_gpu_sort_test{"DROP TABLE IF EXISTS gpu_sort_test;"};
   run_ddl_statement(drop_old_gpu_sort_test);
   g_sqlite_comparator.query(drop_old_gpu_sort_test);
   run_ddl_statement("CREATE TABLE gpu_sort_test(x int) WITH (fragment_size=2);");
   g_sqlite_comparator.query("CREATE TABLE gpu_sort_test(x int);");
+  ValuesGenerator gen("gpu_sort_test");
   for (size_t i = 0; i < 4; ++i) {
-    const std::string insert_query{"INSERT INTO gpu_sort_test VALUES(2);"};
+    const auto insert_query = gen(2);
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   for (size_t i = 0; i < 6; ++i) {
-    const std::string insert_query{"INSERT INTO gpu_sort_test VALUES(16000);"};
+    const auto insert_query = gen(16000);
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -3851,6 +3880,87 @@ void import_hash_join_test() {
     const std::string insert_query{"INSERT INTO hash_join_test VALUES(9, 'the', 1002);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
+  }
+}
+
+void import_coalesce_cols_join_test(const int id, bool with_delete_support) {
+  const std::string table_name = "coalesce_cols_test_" + std::to_string(id);
+  const std::string drop_old_test{"DROP TABLE IF EXISTS " + table_name + ";"};
+  run_ddl_statement(drop_old_test);
+  g_sqlite_comparator.query(drop_old_test);
+
+  std::string columns_definition{
+      "x int not null, y int, str text encoding dict, dup_str text encoding dict, d "
+      "date, t time, tz timestamp, dn decimal(5)"};
+  const auto create_test = build_create_table_statement(columns_definition,
+                                                        table_name,
+                                                        {"", g_shard_count},
+                                                        {},
+#ifdef ENABLE_MULTIFRAG_JOIN
+                                                        2
+#else
+                                                        3
+#endif
+                                                        ,
+                                                        with_delete_support,
+                                                        g_aggregator);
+  run_ddl_statement(create_test);
+
+  g_sqlite_comparator.query("CREATE TABLE " + table_name +
+                            "(x int not null, y int, str text, dup_str text, d date, t "
+                            "time, tz timestamp, dn decimal(5));");
+  ValuesGenerator gen(table_name);
+  for (size_t i = 0; i < 5; i++) {
+    const auto insert_query = gen(i,
+                                  20 - i,
+                                  "'test'",
+                                  "'test'",
+                                  "'2018-01-01'",
+                                  "'12:34:56'",
+                                  "'2018-01-01 12:34:56'",
+                                  i * 1.1);
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  for (size_t i = 5; i < 10; i++) {
+    const auto insert_query = gen(i,
+                                  20 - i,
+                                  "'test1'",
+                                  "'test1'",
+                                  "'2017-01-01'",
+                                  "'12:34:00'",
+                                  "'2017-01-01 12:34:56'",
+                                  i * 1.1);
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  if (id > 0) {
+    for (size_t i = 10; i < 15; i++) {
+      const auto insert_query = gen(i,
+                                    20 - i,
+                                    "'test2'",
+                                    "'test2'",
+                                    "'2016-01-01'",
+                                    "'12:00:56'",
+                                    "'2016-01-01 12:34:56'",
+                                    i * 1.1);
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+  }
+  if (id > 1) {
+    for (size_t i = 15; i < 20; i++) {
+      const auto insert_query = gen(i,
+                                    20 - i,
+                                    "'test3'",
+                                    "'test3'",
+                                    "'2015-01-01'",
+                                    "'10:34:56'",
+                                    "'2015-01-01 12:34:56'",
+                                    i * 1.1);
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
   }
 }
 
@@ -5336,6 +5446,62 @@ TEST(Select, Joins_BuildHashTable) {
     c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
     // Intentionally duplicate previous string join to cover hash table building.
     c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
+  }
+}
+
+TEST(Select, Joins_CoalesceColumns) {
+  SKIP_ALL_ON_AGGREGATOR();
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    c("SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
+      "ON t0.x = t1.x AND t0.y = t1.y;",
+      dt);
+    c("SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
+      "ON t0.x = t1.x AND t0.str = t1.str;",
+      dt);
+    c("SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
+      "ON t0.str = t1.str AND t0.dup_str = t1.dup_str;",
+      dt);
+    c("SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
+      "ON t0.str = t1.str AND t0.dup_str = t1.dup_str AND t0.x = t1.x;",
+      dt);
+    c("SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
+      "ON t0.x = t1.x AND t0.y = t1.y INNER JOIN coalesce_cols_test_2 t2 on t0.x = t2.x "
+      "AND t1.y = t2.y;",
+      dt);
+    c("SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
+      "ON t0.x = t1.x AND t0.d = t1.d;",
+      dt);
+    c("SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
+      "ON t0.x = t1.x AND t0.d = t1.d AND t0.y = t1.y;",
+      dt);
+    c("SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
+      "ON t0.d = t1.d AND t0.x = t1.x;",
+      dt);
+    c("SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
+      "ON t0.d = t1.d AND t0.tz = t1.tz AND t0.x = t1.x;",
+      dt);
+    c("SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
+      "ON t0.dn = t1.dn AND t0.tz = t1.tz AND t0.y = t1.y AND t0.x = t1.x;",
+      dt);
+    c("SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
+      "ON t0.dn = t1.dn AND t0.y = t1.y AND t0.tz = t1.tz AND t0.x = t1.x;",
+      dt);
+
+    c("SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
+      "ON t0.dn = t1.dn AND t0.y = t1.y AND t0.tz = t1.tz AND t0.x = t1.x INNER JOIN "
+      "coalesce_cols_test_2 t2 ON t0.y = t2.y AND t0.tz = t1.tz AND t0.x = t1.x;",
+      dt);
+    c("SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
+      "ON t0.dn = t1.dn AND t0.y = t1.y AND t0.tz = t1.tz AND t0.x = t1.x INNER JOIN "
+      "coalesce_cols_test_2 t2 ON t0.d = t2.d AND t0.tz = t1.tz AND t0.x = t1.x;",
+      dt);
+    c("SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
+      "ON t0.dn = t1.dn AND t0.str = t1.str AND t0.tz = t1.tz AND t0.x = t1.x INNER JOIN "
+      "coalesce_cols_test_2 t2 ON t0.y = t2.y AND t0.tz = t1.tz AND t0.x = t1.x;",
+      dt);
   }
 }
 
@@ -10376,6 +10542,16 @@ int create_and_populate_tables(bool with_delete_support = true) {
     return -EEXIST;
   }
   try {
+    import_coalesce_cols_join_test(0, with_delete_support);
+    import_coalesce_cols_join_test(1, with_delete_support);
+    import_coalesce_cols_join_test(2, with_delete_support);
+  } catch (...) {
+    CHECK(false);
+    LOG(ERROR) << "Failed to (re-)create table for coalesce col join test "
+                  "('coalesce_cols_join_0', "
+                  "'coalesce_cols_join_1', 'coalesce_cols_join_2')";
+  }
+  try {
     import_emp_table();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'emp'";
@@ -10568,11 +10744,20 @@ void drop_tables() {
   g_sqlite_comparator.query(drop_empty_test);
   run_ddl_statement("DROP TABLE text_group_by_test;");
   const std::string drop_join_test{"DROP TABLE join_test;"};
+  run_ddl_statement(drop_join_test);
   g_sqlite_comparator.query(drop_join_test);
   const std::string drop_hash_join_test{"DROP TABLE hash_join_test;"};
   run_ddl_statement(drop_hash_join_test);
   g_sqlite_comparator.query(drop_hash_join_test);
-  run_ddl_statement(drop_join_test);
+  const std::string drop_coalesce_join_test_0{"DROP TABLE coalesce_cols_test_0"};
+  run_ddl_statement(drop_coalesce_join_test_0);
+  g_sqlite_comparator.query(drop_coalesce_join_test_0);
+  const std::string drop_coalesce_join_test_1{"DROP TABLE coalesce_cols_test_1"};
+  run_ddl_statement(drop_coalesce_join_test_1);
+  g_sqlite_comparator.query(drop_coalesce_join_test_1);
+  const std::string drop_coalesce_join_test_2{"DROP TABLE coalesce_cols_test_2"};
+  run_ddl_statement(drop_coalesce_join_test_2);
+  g_sqlite_comparator.query(drop_coalesce_join_test_2);
   const std::string drop_emp_table{"DROP TABLE emp;"};
   g_sqlite_comparator.query(drop_emp_table);
   run_ddl_statement(drop_emp_table);

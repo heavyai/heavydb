@@ -2829,15 +2829,18 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                      this);
       } catch (TooManyHashEntries&) {
         OOM_TRACE_PUSH();
-        join_hash_table = BaselineJoinHashTable::getInstance(
-            coalesce_singleton_equi_join(qual_bin_oper),
-            query_infos,
-            ra_exe_unit,
-            memory_level,
-            device_count,
-            visited_tables,
-            column_cache,
-            this);
+        const auto join_quals = coalesce_singleton_equi_join(qual_bin_oper);
+        CHECK_EQ(join_quals.size(), size_t(1));
+        const auto join_qual =
+            std::dynamic_pointer_cast<Analyzer::BinOper>(join_quals.front());
+        join_hash_table = BaselineJoinHashTable::getInstance(join_qual,
+                                                             query_infos,
+                                                             ra_exe_unit,
+                                                             memory_level,
+                                                             device_count,
+                                                             visited_tables,
+                                                             column_cache,
+                                                             this);
       }
     }
     CHECK(join_hash_table);
