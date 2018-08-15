@@ -4092,7 +4092,8 @@ int RenderGroupAnalyzer::insertBoundsAndReturnRenderGroup(
 
 void ImportDriver::import_geo_table(const std::string& file_path,
                                     const std::string& table_name,
-                                    const bool compression) {
+                                    const bool compression,
+                                    const bool create_table) {
   const std::string geo_column_name(MAPD_GEO_PREFIX);
 
   CopyParams copy_params;
@@ -4116,57 +4117,67 @@ void ImportDriver::import_geo_table(const std::string& file_path,
   }
 
   auto& cat = session_->get_catalog();
-  const auto td = cat.getMetadataForTable(table_name);
-  if (td != nullptr) {
-    throw std::runtime_error(
-        "Error: Table " + table_name +
-        " already exists. Possible failure to correctly re-create mapd_data directory.");
-  }
-  if (table_name != ImportHelpers::sanitize_name(table_name)) {
-    throw std::runtime_error("Invalid characters in table name: " + table_name);
-  }
 
-  std::string stmt{"CREATE TABLE " + table_name};
-  std::vector<std::string> col_stmts;
-
-  for (auto col : cds) {
-    if (col.columnType.get_type() == SQLTypes::kINTERVAL_DAY_TIME ||
-        col.columnType.get_type() == SQLTypes::kINTERVAL_YEAR_MONTH) {
-      throw std::runtime_error(
-          "Unsupported type: INTERVAL_DAY_TIME or INTERVAL_YEAR_MONTH for col " +
-          col.columnName + " (table: " + table_name + ")");
+  if (create_table) {
+    const auto td = cat.getMetadataForTable(table_name);
+    if (td != nullptr) {
+      throw std::runtime_error("Error: Table " + table_name +
+                               " already exists. Possible failure to correctly re-create "
+                               "mapd_data directory.");
+    }
+    if (table_name != ImportHelpers::sanitize_name(table_name)) {
+      throw std::runtime_error("Invalid characters in table name: " + table_name);
     }
 
-    if (col.columnType.get_type() == SQLTypes::kDECIMAL) {
-      if (col.columnType.get_precision() == 0 && col.columnType.get_scale() == 0) {
-        col.columnType.set_precision(14);
-        col.columnType.set_scale(7);
+    std::string stmt{"CREATE TABLE " + table_name};
+    std::vector<std::string> col_stmts;
+
+    for (auto col : cds) {
+      if (col.columnType.get_type() == SQLTypes::kINTERVAL_DAY_TIME ||
+          col.columnType.get_type() == SQLTypes::kINTERVAL_YEAR_MONTH) {
+        throw std::runtime_error(
+            "Unsupported type: INTERVAL_DAY_TIME or INTERVAL_YEAR_MONTH for col " +
+            col.columnName + " (table: " + table_name + ")");
       }
-    }
 
-    std::string col_stmt;
-    col_stmt.append(col.columnName + " " + col.columnType.get_type_name() + " ");
-
-    if (col.columnType.get_compression() != EncodingType::kENCODING_NONE) {
-      col_stmt.append("ENCODING " + col.columnType.get_compression_name() + " ");
-    } else {
-      if (col.columnType.is_string()) {
-        col_stmt.append("ENCODING NONE");
-      } else if (col.columnType.is_geometry()) {
-        if (col.columnType.get_output_srid() == 4326) {
-          col_stmt.append("ENCODING NONE");
+      if (col.columnType.get_type() == SQLTypes::kDECIMAL) {
+        if (col.columnType.get_precision() == 0 && col.columnType.get_scale() == 0) {
+          col.columnType.set_precision(14);
+          col.columnType.set_scale(7);
         }
       }
+
+      std::string col_stmt;
+      col_stmt.append(col.columnName + " " + col.columnType.get_type_name() + " ");
+
+      if (col.columnType.get_compression() != EncodingType::kENCODING_NONE) {
+        col_stmt.append("ENCODING " + col.columnType.get_compression_name() + " ");
+      } else {
+        if (col.columnType.is_string()) {
+          col_stmt.append("ENCODING NONE");
+        } else if (col.columnType.is_geometry()) {
+          if (col.columnType.get_output_srid() == 4326) {
+            col_stmt.append("ENCODING NONE");
+          }
+        }
+      }
+      col_stmts.push_back(col_stmt);
     }
-    col_stmts.push_back(col_stmt);
+
+    stmt.append(" (" + boost::algorithm::join(col_stmts, ",") + ");");
+    QueryRunner::run_ddl_statement(stmt, session_);
+
+    LOG(INFO) << "Created table: " << table_name;
+  } else {
+    LOG(INFO) << "Not creating table: " << table_name;
   }
 
-  stmt.append(" (" + boost::algorithm::join(col_stmts, ",") + ");");
-  QueryRunner::run_ddl_statement(stmt, session_);
+  const auto td = cat.getMetadataForTable(table_name);
+  if (td == nullptr) {
+    throw std::runtime_error("Error: Failed to create table " + table_name);
+  }
 
-  LOG(INFO) << "Created table: " << table_name;
-  const auto new_td = cat.getMetadataForTable(table_name);
-  Importer_NS::Importer importer(cat, new_td, file_path, copy_params);
+  Importer_NS::Importer importer(cat, td, file_path, copy_params);
   auto ms = measure<>::execution([&]() { importer.importGDAL(colname_to_src); });
   LOG(INFO) << "Import Time for " << table_name << ": " << (double)ms / 1000.0 << " s";
 }

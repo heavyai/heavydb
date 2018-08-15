@@ -869,7 +869,8 @@ class ImportDriver {
 
   void import_geo_table(const std::string& file_path,
                         const std::string& table_name,
-                        const bool compression = true);
+                        const bool compression = true,
+                        const bool create_table = true);
 
  private:
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_;

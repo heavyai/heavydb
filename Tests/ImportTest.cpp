@@ -117,7 +117,8 @@ bool import_test_common_geo(const string& query_str,
 
 void import_test_geofile_importer(const std::string& file_str,
                                   const std::string& table_name,
-                                  const bool compression = false) {
+                                  const bool compression,
+                                  const bool create_table = true) {
   Importer_NS::ImportDriver import_driver(QueryRunner::get_catalog(g_session.get()),
                                           QueryRunner::get_user_metadata(g_session.get()),
                                           ExecutorDeviceType::CPU);
@@ -126,8 +127,8 @@ void import_test_geofile_importer(const std::string& file_str,
 
   ASSERT_TRUE(boost::filesystem::exists(file_path));
 
-  ASSERT_NO_THROW(
-      import_driver.import_geo_table(file_path.string(), table_name, compression));
+  ASSERT_NO_THROW(import_driver.import_geo_table(
+      file_path.string(), table_name, compression, create_table));
 }
 
 bool import_test_local(const string& filename, const int64_t cnt, const double avg) {
@@ -450,17 +451,9 @@ void check_geo_gdal_mpoly_import() {
   ASSERT_NEAR(1.0, trip_distance, 1e-7);
 }
 
-void check_geo_gdal_mpoly_append() {
-  auto rows = run_query(
-      "SELECT mapd_geo, trip FROM geospatial WHERE "
-      "trip = 1.0");
-  auto crt_row = rows->getNextRow(true, true);
-  CHECK_EQ(size_t(4), crt_row.size());
-  const auto mpoly = boost::get<std::string>(v<NullableString>(crt_row[0]));
-  ASSERT_TRUE(Geo_namespace::GeoMultiPolygon("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))") ==
-              Geo_namespace::GeoMultiPolygon(mpoly));
-  const auto trip_distance = v<double>(crt_row[1]);
-  ASSERT_NEAR(1.0, trip_distance, 1e-7);
+void check_geo_gdal_mpoly_append(const size_t num_expected_rows) {
+  auto rows = run_query("SELECT mapd_geo, trip FROM geospatial");
+  ASSERT_TRUE(rows->entryCount() == num_expected_rows);
 }
 
 void check_geo_gdal_point_tv_import() {
@@ -628,8 +621,10 @@ TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Append) {
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
-  ASSERT_NO_THROW(import_test_geofile_importer(file_path.string(), "geospatial", false));
-  check_geo_gdal_mpoly_append();
+  check_geo_gdal_mpoly_append(10);
+  ASSERT_NO_THROW(
+      import_test_geofile_importer(file_path.string(), "geospatial", false, false));
+  check_geo_gdal_mpoly_append(20);
 }
 
 #ifdef HAVE_AWS_S3
