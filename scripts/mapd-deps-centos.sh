@@ -258,7 +258,7 @@ makej
 make install
 popd
 
-download_make_install https://github.com/OSGeo/proj.4/releases/download/5.0.1/proj-5.0.1.tar.gz
+download_make_install https://github.com/OSGeo/proj.4/releases/download/5.1.0/proj-5.1.0.tar.gz
 # http://download.osgeo.org/gdal/2.3.1/gdal-2.3.1.tar.xz
 download_make_install ${HTTP_DEPS}/gdal-2.3.1.tar.xz "" "--without-geos --with-libkml=$PREFIX --with-static-proj4=$PREFIX"
 
