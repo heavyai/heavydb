@@ -536,6 +536,32 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
     return makeExpr<Analyzer::FunctionOper>(
         rex_function->getType(), specialized_geofunc, geoargs);
+  } else if (rex_function->getName() == std::string("ST_Perimeter")) {
+    SQLTypeInfo arg_ti;
+    auto geoargs = translateGeoFunctionArg(
+        rex_function->getOperand(0), arg_ti, lindex, false, false, true);
+    if (arg_ti.get_type() != kPOLYGON) {
+      throw QueryNotSupported(rex_function->getName() + " expects a POLYGON");
+    }
+    specialized_geofunc += suffix(arg_ti.get_type());
+    if (arg_ti.get_subtype() == kGEOGRAPHY && arg_ti.get_output_srid() == 4326) {
+      specialized_geofunc += std::string("_Geodesic");
+    }
+    // Add compression information
+    Datum input_compression;
+    input_compression.intval =
+        (arg_ti.get_compression() == kENCODING_GEOINT && arg_ti.get_comp_param() == 32)
+            ? 1
+            : 0;
+    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
+    Datum input_srid;
+    input_srid.intval = arg_ti.get_input_srid();
+    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_srid));
+    Datum output_srid;
+    output_srid.intval = arg_ti.get_output_srid();
+    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, output_srid));
+    return makeExpr<Analyzer::FunctionOper>(
+        rex_function->getType(), specialized_geofunc, geoargs);
   }
 
   // Accessors for poly bounds and render group for in-situ poly render queries

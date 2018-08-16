@@ -513,6 +513,40 @@ double ST_Length_LineString_Geodesic(int8_t* coords,
   return length_linestring(coords, coords_sz, ic, isr, osr, true);
 }
 
+EXTENSION_NOINLINE
+double ST_Perimeter_Polygon(int8_t* poly,
+                            int64_t polysize,
+                            int32_t* poly_ring_sizes,
+                            int64_t poly_num_rings,
+                            int32_t ic,
+                            int32_t isr,
+                            int32_t osr) {
+  if (poly_num_rings <= 0)
+    return 0.0;
+
+  auto exterior_ring_num_coords = poly_ring_sizes[0] * 2;
+  auto exterior_ring_coords_size = exterior_ring_num_coords * compression_unit_size(ic);
+
+  return length_linestring(poly, exterior_ring_coords_size, ic, isr, osr, false);
+}
+
+EXTENSION_NOINLINE
+double ST_Perimeter_Polygon_Geodesic(int8_t* poly,
+                                     int64_t polysize,
+                                     int32_t* poly_ring_sizes,
+                                     int64_t poly_num_rings,
+                                     int32_t ic,
+                                     int32_t isr,
+                                     int32_t osr) {
+  if (poly_num_rings <= 0)
+    return 0.0;
+
+  auto exterior_ring_num_coords = poly_ring_sizes[0] * 2;
+  auto exterior_ring_coords_size = exterior_ring_num_coords * compression_unit_size(ic);
+
+  return length_linestring(poly, exterior_ring_coords_size, ic, isr, osr, true);
+}
+
 EXTENSION_INLINE
 int32_t ST_NPoints(int8_t* coords, int64_t coords_sz, int32_t ic) {
   auto num_pts = coords_sz / compression_unit_size(ic);
