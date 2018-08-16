@@ -1706,11 +1706,16 @@ static ImportStatus import_thread_delimited(
 
                 if (columnIdToRenderGroupAnalyzerMap.size())
                   if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-                    // get a suitable render group for these poly coords
-                    auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
-                    CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
-                    render_group =
-                        (*rga_it).second->insertBoundsAndReturnRenderGroup(bounds);
+                    if (ring_sizes.size()) {
+                      // get a suitable render group for these poly coords
+                      auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
+                      CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
+                      render_group =
+                          (*rga_it).second->insertBoundsAndReturnRenderGroup(bounds);
+                    } else {
+                      // empty poly
+                      render_group = -1;
+                    }
                   }
               }
 
@@ -1853,10 +1858,15 @@ static ImportStatus import_thread_shapefile(
           }
 
           if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-            // get a suitable render group for these poly coords
-            auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
-            CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
-            render_group = (*rga_it).second->insertBoundsAndReturnRenderGroup(bounds);
+            if (ring_sizes.size()) {
+              // get a suitable render group for these poly coords
+              auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
+              CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
+              render_group = (*rga_it).second->insertBoundsAndReturnRenderGroup(bounds);
+            } else {
+              // empty poly
+              render_group = -1;
+            }
           }
 
           // create coords array value and add it to the physical column
