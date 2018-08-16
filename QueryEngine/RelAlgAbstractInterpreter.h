@@ -255,7 +255,15 @@ class ExecutionResult;
 class RexSubQuery : public RexScalar {
  public:
   RexSubQuery(const std::shared_ptr<const RelAlgNode> ra)
-      : type_(SQLTypeInfo(kNULLT, false)), ra_(ra) {}
+      : type_(new SQLTypeInfo(kNULLT, false))
+      , result_(new std::shared_ptr<const ExecutionResult>(nullptr))
+      , ra_(ra) {}
+
+  // for deep copy
+  RexSubQuery(std::shared_ptr<SQLTypeInfo> type,
+              std::shared_ptr<std::shared_ptr<const ExecutionResult>> result,
+              const std::shared_ptr<const RelAlgNode> ra)
+      : type_(type), result_(result), ra_(ra) {}
 
   RexSubQuery(const RexSubQuery&) = delete;
 
@@ -266,13 +274,14 @@ class RexSubQuery : public RexScalar {
   RexSubQuery& operator=(RexSubQuery&&) = delete;
 
   const SQLTypeInfo& getType() const {
-    CHECK_NE(kNULLT, type_.get_type());
-    return type_;
+    CHECK_NE(kNULLT, type_->get_type());
+    return *(type_.get());
   }
 
   std::shared_ptr<const ExecutionResult> getExecutionResult() const {
     CHECK(result_);
-    return result_;
+    CHECK(result_.get());
+    return *(result_.get());
   }
 
   const RelAlgNode* getRelAlg() const { return ra_.get(); }
@@ -281,15 +290,13 @@ class RexSubQuery : public RexScalar {
     return "(RexSubQuery " + std::to_string(reinterpret_cast<const uint64_t>(this)) + ")";
   }
 
-  std::unique_ptr<RexSubQuery> deepCopy() const {
-    throw std::runtime_error("Sub-query not supported in this context");
-  }
+  std::unique_ptr<RexSubQuery> deepCopy() const;
 
   void setExecutionResult(const std::shared_ptr<const ExecutionResult> result);
 
  private:
-  SQLTypeInfo type_;
-  std::shared_ptr<const ExecutionResult> result_;
+  std::shared_ptr<SQLTypeInfo> type_;
+  std::shared_ptr<std::shared_ptr<const ExecutionResult>> result_;
   const std::shared_ptr<const RelAlgNode> ra_;
 };
 

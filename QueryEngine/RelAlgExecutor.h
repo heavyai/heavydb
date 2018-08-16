@@ -88,11 +88,13 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
     CHECK(it_ok.second);
   }
 
-  void registerSubquery(RexSubQuery* subquery) noexcept {
+  void registerSubquery(std::shared_ptr<RexSubQuery> subquery) noexcept {
     subqueries_.push_back(subquery);
   }
 
-  const std::vector<RexSubQuery*>& getSubqueries() const noexcept { return subqueries_; };
+  const std::vector<std::shared_ptr<RexSubQuery>>& getSubqueries() const noexcept {
+    return subqueries_;
+  };
 
   AggregatedColRange computeColRangesCache(const RelAlgNode* ra);
 
@@ -285,7 +287,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
   TemporaryTables temporary_tables_;
   time_t now_;
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;  // TODO(alex): remove
-  std::vector<RexSubQuery*> subqueries_;
+  std::vector<std::shared_ptr<RexSubQuery>> subqueries_;
   std::unordered_map<unsigned, AggregatedResult> leaf_results_;
   int64_t queue_time_ms_;
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;

@@ -46,8 +46,12 @@ void RexSubQuery::setExecutionResult(
   auto row_set = result->getRows();
   CHECK(row_set);
   CHECK_EQ(size_t(1), row_set->colCount());
-  type_ = row_set->getColType(0);
-  result_ = result;
+  *(type_.get()) = row_set->getColType(0);
+  (*(result_.get())) = result;
+}
+
+std::unique_ptr<RexSubQuery> RexSubQuery::deepCopy() const {
+  return std::make_unique<RexSubQuery>(type_, result_, ra_->deepCopy());
 }
 
 namespace {
@@ -1805,9 +1809,9 @@ std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
   const auto& subquery_ast = field(expr, "subquery");
 
   const auto ra = ra_interpret(subquery_ast, cat, ra_executor);
-  auto subquery = new RexSubQuery(ra);
+  auto subquery = std::make_shared<RexSubQuery>(ra);
   ra_executor->registerSubquery(subquery);
-  return std::unique_ptr<const RexSubQuery>(subquery);
+  return subquery->deepCopy();
 }
 
 }  // namespace

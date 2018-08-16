@@ -5680,6 +5680,14 @@ TEST(Select, Views) {
   }
 }
 
+TEST(Select, Views_With_Subquery) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT x, COUNT(*) FROM view_test WHERE y < (SELECT max(y) FROM test) GROUP BY x;",
+      dt);
+  }
+}
+
 TEST(Select, CreateTableAsSelect) {
   SKIP_ALL_ON_AGGREGATOR();
 

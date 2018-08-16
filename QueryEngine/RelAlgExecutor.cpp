@@ -187,7 +187,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const std::string& que
   for (auto subquery : subqueries_) {
     // Execute the subquery and cache the result.
     RelAlgExecutor ra_executor(executor_, cat_);
-    auto result = ra_executor.executeRelAlgSubQuery(subquery, co, eo);
+    auto result = ra_executor.executeRelAlgSubQuery(subquery.get(), co, eo);
     subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
   }
   return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
