@@ -457,11 +457,9 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       if (!IS_GEO(arg_ti.get_type())) {
         throw QueryNotSupported(rex_function->getName() + " expects geometry argument");
       }
-      if (!(arg_ti.get_type() == kPOINT ||
-            (arg_ti.get_type() == kLINESTRING && lindex != 0)) ||
-          arg_ti.get_output_srid() != 4326) {
+      if (arg_ti.get_output_srid() != 4326) {
         throw QueryNotSupported(rex_function->getName() +
-                                " expects point geometry with SRID=4326");
+                                " expects geometry with SRID=4326");
       }
       arg_ti.set_subtype(kGEOGRAPHY);
       return arg0;
@@ -631,6 +629,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
       throw QueryNotSupported(rex_function->getName() + " expects a POINT");
     }
     specialized_geofunc += suffix(arg_ti.get_type());
+  } else if (rex_function->getName() == std::string("ST_Length")) {
+    if (arg_ti.get_type() != kLINESTRING || lindex != 0) {
+      throw QueryNotSupported(rex_function->getName() + " expects unindexed LINESTRING");
+    }
+    specialized_geofunc += suffix(arg_ti.get_type());
+    if (arg_ti.get_subtype() == kGEOGRAPHY && arg_ti.get_output_srid() == 4326) {
+      specialized_geofunc += std::string("_Geodesic");
+    }
   }
 
   // Add input compression mode and SRID args to enable on-the-fly

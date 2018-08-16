@@ -9506,6 +9506,26 @@ TEST(Select, GeoSpatial_Projection) {
             dt)),
         static_cast<double>(10000.0));
 
+    // ST_Length
+    // Cartesian length of a planar path
+    ASSERT_NEAR(static_cast<double>(5.65685),
+                v<double>(run_simple_agg(
+                    "SELECT ST_Length('LINESTRING(1 0, 0 1, -1 0, 0 -1, 1 0)') "
+                    "from geospatial_test limit 1;",
+                    dt)),
+                static_cast<double>(0.0001));
+    // Geodesic length of a geographic path, in meters
+    ASSERT_NEAR(
+        static_cast<double>(617121.626),
+        v<double>(run_simple_agg(
+            "SELECT ST_Length(CAST (ST_GeomFromText('LINESTRING(-76.6168198439371 "
+            "39.9703199555959, -80.5189990254673 40.6493554919257, -82.5189990254673 "
+            "42.6493554919257)', 4326) as GEOGRAPHY)) "
+            "from geospatial_test limit 1;",
+            dt)),
+        static_cast<double>(0.01));
+
+    // ST_Contains
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(p,p);", dt)));

@@ -1269,6 +1269,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
       rex_function->getName() == std::string("ST_YMax") ||
       rex_function->getName() == std::string("ST_NRings") ||
       rex_function->getName() == std::string("ST_NPoints") ||
+      rex_function->getName() == std::string("ST_Length") ||
       rex_function->getName() == std::string("ST_SRID") ||
       rex_function->getName() == std::string("MapD_GeoPolyBoundsPtr") ||
       rex_function->getName() == std::string("MapD_GeoPolyRenderGroup")) {

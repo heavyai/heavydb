@@ -163,6 +163,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new ST_PointN());
     opTab.addOperator(new ST_StartPoint());
     opTab.addOperator(new ST_EndPoint());
+    opTab.addOperator(new ST_Length());
     opTab.addOperator(new ST_NPoints());
     opTab.addOperator(new ST_NRings());
     opTab.addOperator(new ST_SRID());
@@ -957,6 +958,26 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       final RelDataTypeFactory typeFactory
               = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
+    }
+  }
+
+  static class ST_Length extends SqlFunction {
+
+    ST_Length() {
+      super("ST_Length",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.ANY),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory
+              = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.DOUBLE);
     }
   }
 

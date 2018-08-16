@@ -470,6 +470,49 @@ double ST_YMax_Bounds(double* bounds, int64_t size, int32_t isr, int32_t osr) {
   return transform_coord(bounds[3], isr, osr, false);
 }
 
+DEVICE ALWAYS_INLINE double length_linestring(int8_t* l,
+                                              int64_t lsize,
+                                              int32_t ic,
+                                              int32_t isr,
+                                              int32_t osr,
+                                              bool geodesic) {
+  auto l_num_coords = lsize / compression_unit_size(ic);
+  auto l_num_points = l_num_coords / 2;
+
+  double length = 0.0;
+
+  double l2x = coord_x(l, 0, ic, isr, osr);
+  double l2y = coord_y(l, 1, ic, isr, osr);
+  for (int32_t i = 2; i < l_num_coords; i += 2) {
+    double l1x = l2x;
+    double l1y = l2y;
+    l2x = coord_x(l, i, ic, isr, osr);
+    l2y = coord_y(l, i + 1, ic, isr, osr);
+    double ldist = geodesic ? distance_in_meters(l1x, l1y, l2x, l2y)
+                            : distance_point_point(l1x, l1y, l2x, l2y);
+    length += ldist;
+  }
+  return length;
+}
+
+EXTENSION_NOINLINE
+double ST_Length_LineString(int8_t* coords,
+                            int64_t coords_sz,
+                            int32_t ic,
+                            int32_t isr,
+                            int32_t osr) {
+  return length_linestring(coords, coords_sz, ic, isr, osr, false);
+}
+
+EXTENSION_NOINLINE
+double ST_Length_LineString_Geodesic(int8_t* coords,
+                                     int64_t coords_sz,
+                                     int32_t ic,
+                                     int32_t isr,
+                                     int32_t osr) {
+  return length_linestring(coords, coords_sz, ic, isr, osr, true);
+}
+
 EXTENSION_INLINE
 int32_t ST_NPoints(int8_t* coords, int64_t coords_sz, int32_t ic) {
   auto num_pts = coords_sz / compression_unit_size(ic);
