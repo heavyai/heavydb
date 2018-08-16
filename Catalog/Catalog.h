@@ -501,6 +501,7 @@ class SysCatalog {
   void migratePrivileged_old();
   void updatePasswordsToHashes();
   void dropUserRole(const std::string& userName);
+  void migrateDBAccessPrivileges();
 
   // Here go functions not wrapped into transactions (necessary for nested calls)
   void grantDefaultPrivilegesToRole_unsafe(const std::string& name, bool issuper);

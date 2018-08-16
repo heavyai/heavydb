@@ -48,6 +48,7 @@
 #include "../Shared/StringTransform.h"
 #include "../Shared/measure.h"
 #include "../StringDictionary/StringDictionaryClient.h"
+#include "MapDRelease.h"
 #include "SharedDictionaryValidator.h"
 #include "bcrypt.h"
 
@@ -309,6 +310,7 @@ void SysCatalog::checkAndExecuteMigrations() {
   if (check_privileges_) {
     createUserRoles();
     migratePrivileges();
+    migrateDBAccessPrivileges();
   }
   updatePasswordsToHashes();
 }
@@ -545,14 +547,84 @@ void SysCatalog::updatePasswordsToHashes() {
     }
     sqliteConnector_->query("DROP TABLE mapd_users");
     sqliteConnector_->query("ALTER TABLE mapd_users_tmp RENAME TO mapd_users");
-  } catch (const std::exception&) {
-    LOG(ERROR) << "Failed to hash passwords";
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Failed to hash passwords: " << e.what();
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
   sqliteConnector_->query("VACUUM");  // physically delete plain text passwords
   LOG(INFO) << "Passwords were successfully hashed";
+}
+
+void SysCatalog::migrateDBAccessPrivileges() {
+  sys_sqlite_lock sqlite_lock(this);
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_->query(
+        "select name from sqlite_master WHERE type='table' AND "
+        "name='mapd_version_history'");
+    if (sqliteConnector_->getNumRows() == 0) {
+      sqliteConnector_->query(
+          "CREATE TABLE mapd_version(version integer, migration_history text unique)");
+    } else {
+      sqliteConnector_->query(
+          "select version, migration_history from mapd_version_history");
+      if (sqliteConnector_->getNumRows() != 0) {
+        for (size_t i = 0; i < sqliteConnector_->getNumRows(); i++) {
+          const auto ver = sqliteConnector_->getData<int>(i, 0);
+          const auto mig = sqliteConnector_->getData<std::string>(i, 1);
+          if (ver == 4002000 && mig == "sql_editor_privilege") {
+            // migration done
+            sqliteConnector_->query("END TRANSACTION");
+            return;
+          }
+        }
+      }
+    }
+    // Insert check for migration
+    sqliteConnector_->query_with_text_params(
+        "INSERT INTO mapd_version(version, migration_history) values(?,?)",
+        std::vector<std::string>{std::to_string(MAPD_VERSION), "sql_editor_privilege"});
+
+    sqliteConnector_->query("select dbid, name from mapd_databases");
+    std::unordered_map<int, string> databases;
+    for (size_t i = 0; i < sqliteConnector_->getNumRows(); ++i) {
+      databases[sqliteConnector_->getData<int>(i, 0)] =
+          sqliteConnector_->getData<string>(i, 1);
+    }
+
+    sqliteConnector_->query("select userid, name from mapd_users");
+    std::unordered_map<int, string> users;
+    for (size_t i = 0; i < sqliteConnector_->getNumRows(); ++i) {
+      users[sqliteConnector_->getData<int>(i, 0)] =
+          sqliteConnector_->getData<string>(i, 1);
+    }
+
+    // All existing users by default will be granted DB Access permissions
+    DBMetadata dbmeta;
+    for (auto db_ : databases) {
+      CHECK(SysCatalog::instance().getMetadataForDB(db_.second, dbmeta));
+      for (auto user : users) {
+        if (user.first != MAPD_ROOT_USER_ID) {
+          // database level permissions;
+          {
+            DBObjectKey key;
+            key.permissionType = DBObjectType::DatabaseDBObjectType;
+            key.dbId = dbmeta.dbId;
+            DBObject object(key, AccessPrivileges::VIEW_SQL_EDITOR, dbmeta.dbOwner);
+            insertOrUpdateObjectPrivileges(sqliteConnector_, user.second, true, object);
+          }
+        }
+      }
+    }
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Failed to migrate sql editor privileges: " << e.what();
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+  LOG(INFO) << "Successfully migrated sql editor privileges";
 }
 
 // migration will be done as two step process this release
@@ -880,7 +952,7 @@ void SysCatalog::dropDatabase(const int32_t dbid,
     dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
     /* don't need to checkpoint as database is being dropped */
     // dataMgr_->checkpoint();
-  } catch (std::exception&) {
+  } catch (std::exception& e) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
   }
@@ -1039,7 +1111,7 @@ void SysCatalog::createDBObject(const UserMetadata& user,
       CHECK(user_rl);
       user_rl->grantPrivileges(object);
     }
-  } catch (std::exception&) {
+  } catch (std::exception& e) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
   }
