@@ -9536,7 +9536,7 @@ TEST(Select, GeoSpatial_Projection) {
                 static_cast<double>(0.0001));
     // Geodesic perimeter of a polygon geography, in meters
     ASSERT_NEAR(
-        static_cast<double>(853621.0547924),
+        static_cast<double>(1193066.02892),
         v<double>(run_simple_agg(
             "SELECT ST_Perimeter(CAST (ST_GeomFromText('POLYGON((-76.6168198439371 "
             "39.9703199555959, -80.5189990254673 40.6493554919257, -82.5189990254673 "

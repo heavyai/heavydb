@@ -475,14 +475,16 @@ DEVICE ALWAYS_INLINE double length_linestring(int8_t* l,
                                               int32_t ic,
                                               int32_t isr,
                                               int32_t osr,
-                                              bool geodesic) {
+                                              bool geodesic,
+                                              bool check_closed) {
   auto l_num_coords = lsize / compression_unit_size(ic);
-  auto l_num_points = l_num_coords / 2;
 
   double length = 0.0;
 
-  double l2x = coord_x(l, 0, ic, isr, osr);
-  double l2y = coord_y(l, 1, ic, isr, osr);
+  double l0x = coord_x(l, 0, ic, isr, osr);
+  double l0y = coord_y(l, 1, ic, isr, osr);
+  double l2x = l0x;
+  double l2y = l0y;
   for (int32_t i = 2; i < l_num_coords; i += 2) {
     double l1x = l2x;
     double l1y = l2y;
@@ -490,6 +492,11 @@ DEVICE ALWAYS_INLINE double length_linestring(int8_t* l,
     l2y = coord_y(l, i + 1, ic, isr, osr);
     double ldist = geodesic ? distance_in_meters(l1x, l1y, l2x, l2y)
                             : distance_point_point(l1x, l1y, l2x, l2y);
+    length += ldist;
+  }
+  if (check_closed) {
+    double ldist = geodesic ? distance_in_meters(l2x, l2y, l0x, l0y)
+                            : distance_point_point(l2x, l2y, l0x, l0y);
     length += ldist;
   }
   return length;
@@ -501,7 +508,7 @@ double ST_Length_LineString(int8_t* coords,
                             int32_t ic,
                             int32_t isr,
                             int32_t osr) {
-  return length_linestring(coords, coords_sz, ic, isr, osr, false);
+  return length_linestring(coords, coords_sz, ic, isr, osr, false, false);
 }
 
 EXTENSION_NOINLINE
@@ -510,7 +517,7 @@ double ST_Length_LineString_Geodesic(int8_t* coords,
                                      int32_t ic,
                                      int32_t isr,
                                      int32_t osr) {
-  return length_linestring(coords, coords_sz, ic, isr, osr, true);
+  return length_linestring(coords, coords_sz, ic, isr, osr, true, false);
 }
 
 EXTENSION_NOINLINE
@@ -527,7 +534,7 @@ double ST_Perimeter_Polygon(int8_t* poly,
   auto exterior_ring_num_coords = poly_ring_sizes[0] * 2;
   auto exterior_ring_coords_size = exterior_ring_num_coords * compression_unit_size(ic);
 
-  return length_linestring(poly, exterior_ring_coords_size, ic, isr, osr, false);
+  return length_linestring(poly, exterior_ring_coords_size, ic, isr, osr, false, true);
 }
 
 EXTENSION_NOINLINE
@@ -544,7 +551,7 @@ double ST_Perimeter_Polygon_Geodesic(int8_t* poly,
   auto exterior_ring_num_coords = poly_ring_sizes[0] * 2;
   auto exterior_ring_coords_size = exterior_ring_num_coords * compression_unit_size(ic);
 
-  return length_linestring(poly, exterior_ring_coords_size, ic, isr, osr, true);
+  return length_linestring(poly, exterior_ring_coords_size, ic, isr, osr, true, true);
 }
 
 EXTENSION_INLINE
