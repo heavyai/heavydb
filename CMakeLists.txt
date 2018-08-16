@@ -239,6 +239,11 @@ add_definitions("-DARROW_NO_DEPRECATED_API")
 if(HAVE_ARROW_STATIC_RECORDBATCH_CTOR)
   add_definitions("-DHAVE_ARROW_STATIC_RECORDBATCH_CTOR")
 endif()
+if(HAVE_ARROW_APPENDVALUES)
+  add_definitions("-DHAVE_ARROW_APPENDVALUES")
+else()
+  message(WARNING "It appears that you have Arrow < 0.10.0. Please upgrade.")
+endif()
 include_directories(${Arrow_INCLUDE_DIRS})
 
 # RapidJSON

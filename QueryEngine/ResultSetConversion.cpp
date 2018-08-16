@@ -52,6 +52,12 @@ typedef boost::variant<std::vector<bool>,
 #define ARROW_RECORDBATCH_MAKE std::make_shared<arrow::RecordBatch>
 #endif
 
+#ifdef HAVE_ARROW_APPENDVALUES
+#define APPENDVALUES AppendValues
+#else
+#define APPENDVALUES Append
+#endif
+
 namespace {
 
 bool is_dict_enc_str(const SQLTypeInfo& ti) {
@@ -261,9 +267,9 @@ struct ColumnBuilder {
     auto typed_builder = static_cast<BuilderType*>(this->builder.get());
     if (this->field->nullable()) {
       CHECK(is_valid.get());
-      ARROW_THROW_NOT_OK(typed_builder->Append(vals_scaled, *is_valid));
+      ARROW_THROW_NOT_OK(typed_builder->APPENDVALUES(vals_scaled, *is_valid));
     } else {
-      ARROW_THROW_NOT_OK(typed_builder->Append(vals_scaled));
+      ARROW_THROW_NOT_OK(typed_builder->APPENDVALUES(vals_scaled));
     }
   }
 
@@ -275,9 +281,9 @@ struct ColumnBuilder {
     auto typed_builder = static_cast<BuilderType*>(this->builder.get());
     if (this->field->nullable()) {
       CHECK(is_valid.get());
-      ARROW_THROW_NOT_OK(typed_builder->Append(vals, *is_valid));
+      ARROW_THROW_NOT_OK(typed_builder->APPENDVALUES(vals, *is_valid));
     } else {
-      ARROW_THROW_NOT_OK(typed_builder->Append(vals));
+      ARROW_THROW_NOT_OK(typed_builder->APPENDVALUES(vals));
     }
   }
 
@@ -347,7 +353,8 @@ void print_serialized_schema(const uint8_t* data, const size_t length) {
   ARROW_THROW_NOT_OK(ipc::ReadSchema(&reader, &schema));
 
   std::cout << "Arrow Schema: " << std::endl;
-  ARROW_THROW_NOT_OK(PrettyPrint(*schema, {}, &std::cout));
+  const PrettyPrintOptions options{0};
+  ARROW_THROW_NOT_OK(PrettyPrint(*(schema.get()), options, &std::cout));
 }
 
 void print_serialized_records(const uint8_t* data,
@@ -590,6 +597,8 @@ std::shared_ptr<arrow::RecordBatch> ResultSet::convertToArrow(
         auto str_list = getDictionary(dict_id);
 
         arrow::StringBuilder builder;
+        // TODO(andrewseidl): replace with AppendValues() once Arrow 0.7.1 support is
+        // fully deprecated
         for (const std::string& val : *str_list) {
           ARROW_THROW_NOT_OK(builder.Append(val));
         }
