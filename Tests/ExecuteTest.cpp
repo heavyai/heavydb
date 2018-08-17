@@ -4825,6 +4825,63 @@ TEST(Select, Joins_ImplicitJoins) {
   }
 }
 
+TEST(Select, Joins_FilterPushDown) {
+  auto default_flag = g_enable_filter_push_down;
+  auto default_lower_frac = g_filter_push_down_low_frac;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (auto fpd : {std::make_pair(true, 1.0), std::make_pair(false, 0.0)}) {
+      g_enable_filter_push_down = fpd.first;
+      g_filter_push_down_low_frac = fpd.second;
+      c("SELECT COUNT(*) FROM coalesce_cols_test_2 AS R, coalesce_cols_test_0 AS S "
+        "WHERE R.y = S.y AND R.x > 2 AND (S.x > 1 OR S.y < 18);",
+        dt);
+      c("SELECT COUNT(*) FROM coalesce_cols_test_2 AS R, coalesce_cols_test_0 AS S "
+        "WHERE R.x = S.x AND S.str = 'test1' AND ABS(S.dn - 2.2) < 0.001;",
+        dt);
+      c("SELECT S.y, COUNT(*) FROM coalesce_cols_test_2 AS R, coalesce_cols_test_0 AS S "
+        "WHERE R.x = S.x AND S.t < time '12:40:23' AND S.d < date '2018-01-01' GROUP BY "
+        "S.y ORDER BY S.y;",
+        "SELECT R.y, COUNT(*) FROM coalesce_cols_test_2 AS R, coalesce_cols_test_0 AS S "
+        "WHERE R.x = S.x AND S.t < time('12:40:23') AND S.d < date('2018-01-01') GROUP "
+        "BY S.y "
+        "ORDER BY S.y;",
+        dt);
+      c("SELECT R.y, COUNT(*) as cnt FROM coalesce_cols_test_2 AS R, "
+        "coalesce_cols_test_1 AS S, coalesce_cols_test_0 AS T WHERE T.str = S.str AND "
+        "S.x = R.x AND S.y < 10 GROUP "
+        "BY R.y ORDER BY R.y;",
+        dt);
+      c("SELECT R.y, COUNT(*) as cnt FROM coalesce_cols_test_2 AS R, "
+        "coalesce_cols_test_1 AS S, coalesce_cols_test_0 AS T WHERE T.y = S.y AND S.x = "
+        "R.x AND T.x = 2 GROUP "
+        "BY R.y ORDER BY R.y;",
+        dt);
+      c("SELECT R.y, COUNT(*) as cnt FROM coalesce_cols_test_2 AS R, "
+        "coalesce_cols_test_1 AS S, coalesce_cols_test_0 AS T WHERE T.x = S.x AND S.y = "
+        "R.y AND R.x < 20 AND S.y > 2 AND S.str <> 'foo' AND T.y < 18 AND T.x > 1 GROUP "
+        "BY R.y ORDER BY R.y;",
+        dt);
+      c("SELECT T.x, COUNT(*) as cnt FROM coalesce_cols_test_2 AS R,"
+        "coalesce_cols_test_1 AS S, "
+        "coalesce_cols_test_0 AS T WHERE T.str = S.dup_str AND S.x = R.x AND T.y"
+        "  = R.y AND R.x > 0 "
+        "AND S.str ='test' AND S.y > 2 AND T.dup_str<> 'test4' GROUP BY T.x ORDER BY "
+        "cnt;",
+        dt);
+      // self-join involved
+      c("SELECT R.y, COUNT(*) as cnt FROM coalesce_cols_test_2 AS R, "
+        "coalesce_cols_test_2 AS S, coalesce_cols_test_0 AS T WHERE T.x = S.x AND S.y = "
+        "R.y AND R.x < 20 AND S.y > 2 AND S.str <> 'foo' AND T.y < 18 AND T.x > 1 GROUP "
+        "BY R.y ORDER BY R.y;",
+        dt);
+    }
+  }
+  // reloading default values
+  g_enable_filter_push_down = default_flag;
+  g_filter_push_down_low_frac = default_lower_frac;
+}
+
 TEST(Select, Joins_InnerJoin_TwoTables) {
   SKIP_ALL_ON_AGGREGATOR();
 
