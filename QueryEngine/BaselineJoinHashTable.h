@@ -96,10 +96,10 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   size_t computeShardCount() const;
 
-  int reify(const int device_count);
+  void reify(const int device_count);
 
-  int reifyWithLayout(const int device_count,
-                      const JoinHashTableInterface::HashType layout);
+  void reifyWithLayout(const int device_count,
+                       const JoinHashTableInterface::HashType layout);
 
   struct ColumnsForDevice {
     const std::vector<JoinColumn> join_columns;
@@ -114,9 +114,9 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
       const int device_id);
 
-  int reifyForDevice(const ColumnsForDevice& columns_for_device,
-                     const JoinHashTableInterface::HashType layout,
-                     const int device_id);
+  void reifyForDevice(const ColumnsForDevice& columns_for_device,
+                      const JoinHashTableInterface::HashType layout,
+                      const int device_id);
 
   void checkHashJoinReplicationConstraint(const int table_id) const;
 

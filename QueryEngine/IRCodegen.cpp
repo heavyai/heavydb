@@ -392,6 +392,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
           ra_exe_unit, eo, query_infos, level_idx, fail_reasons_str);
       // Callback provided to the `JoinLoop` framework to evaluate the (outer) join
       // condition.
+      VLOG(1) << "Unable to build hash table, falling back to loop join: "
+              << fail_reasons_str;
       const auto outer_join_condition_cb =
           [this, level_idx, &co, &current_level_join_conditions](
               const std::vector<llvm::Value*>& prev_iters) {

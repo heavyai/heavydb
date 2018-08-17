@@ -286,28 +286,20 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
                                                                           column_cache,
                                                                           executor,
                                                                           device_count));
-  const int err = join_hash_table->reify(device_count);
-  if (err) {
+  try {
+    join_hash_table->reify(device_count);
 #ifndef ENABLE_MULTIFRAG_JOIN
-    if (err == ERR_MULTI_FRAG) {
-      const auto cols = get_cols(qual_bin_oper, cat, executor->temporary_tables_);
-      const auto inner_col = cols.first;
-      CHECK(inner_col);
-      const auto& table_info = join_hash_table->getInnerQueryInfo(inner_col);
-      throw HashJoinFail("Multi-fragment inner table '" +
-                         get_table_name_by_id(table_info.table_id, cat) +
-                         "' not supported yet");
-    }
+  } catch (const MultiFragJoinNotSupported& e) {
+    const auto cols = get_cols(qual_bin_oper, cat, executor->temporary_tables_);
+    const auto inner_col = cols.first;
+    CHECK(inner_col);
+    const auto& table_info = join_hash_table->getInnerQueryInfo(inner_col);
+    throw MultiFragJoinNotSupported(get_table_name_by_id(table_info.table_id, cat));
 #endif
-    if (err == ERR_FAILED_TO_FETCH_COLUMN) {
-      throw HashJoinFail("Not enough memory for the columns involved in join");
-    }
-    if (err == ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN) {
-      throw HashJoinFail("Cannot join on rowid");
-    }
-
-    throw HashJoinFail(
-        "Could not build a 1-to-1 correspondence for columns involved in equijoin");
+  } catch (const std::exception& e) {
+    throw HashJoinFail(std::string("Could not build a 1-to-1 correspondence for columns "
+                                   "involved in equijoin | ") +
+                       e.what());
   }
   return join_hash_table;
 }
@@ -410,7 +402,7 @@ bool JoinHashTable::needOneToManyHash(const std::vector<int>& errors) const {
   return false;
 }
 
-int JoinHashTable::reify(const int device_count) {
+void JoinHashTable::reify(const int device_count) {
   CHECK_LT(0, device_count);
   const auto& catalog = *executor_->getCatalog();
   const auto cols = get_cols(qual_bin_oper_, catalog, executor_->temporary_tables_);
@@ -418,7 +410,7 @@ int JoinHashTable::reify(const int device_count) {
   checkHashJoinReplicationConstraint(inner_col->get_table_id());
   const auto& query_info = getInnerQueryInfo(inner_col).info;
   if (query_info.fragments.empty()) {
-    return 0;
+    return;
   }
   if (query_info.getNumTuplesUpperBound() >
       static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
@@ -427,50 +419,51 @@ int JoinHashTable::reify(const int device_count) {
 #ifdef HAVE_CUDA
   gpu_hash_table_buff_.resize(device_count);
 #endif  // HAVE_CUDA
-  std::vector<int> errors(device_count);
-  std::vector<std::thread> init_threads;
+  std::vector<std::future<void>> init_threads;
   const int shard_count = shardCount();
 
-  for (int device_id = 0; device_id < device_count; ++device_id) {
-    const auto fragments =
-        shard_count
-            ? only_shards_for_device(query_info.fragments, device_id, device_count)
-            : query_info.fragments;
-    init_threads.emplace_back([&errors, device_id, fragments, this] {
-      errors[device_id] = reifyOneToOneForDevice(fragments, device_id);
-    });
-  }
-  for (auto& init_thread : init_threads) {
-    init_thread.join();
-  }
+  try {
+    for (int device_id = 0; device_id < device_count; ++device_id) {
+      const auto fragments =
+          shard_count
+              ? only_shards_for_device(query_info.fragments, device_id, device_count)
+              : query_info.fragments;
+      init_threads.push_back(std::async(std::launch::async,
+                                        &JoinHashTable::reifyOneToOneForDevice,
+                                        this,
+                                        fragments,
+                                        device_id));
+    }
+    for (auto& init_thread : init_threads) {
+      init_thread.wait();
+    }
+    for (auto& init_thread : init_threads) {
+      init_thread.get();
+    }
 
-  if (needOneToManyHash(errors)) {
+  } catch (const NeedsOneToManyHash& e) {
     hash_type_ = JoinHashTableInterface::HashType::OneToMany;
     cpu_hash_table_buff_.reset();
-    std::vector<int>(device_count, 0).swap(errors);
     init_threads.clear();
     for (int device_id = 0; device_id < device_count; ++device_id) {
       const auto fragments =
           shard_count
               ? only_shards_for_device(query_info.fragments, device_id, device_count)
               : query_info.fragments;
-      init_threads.emplace_back(
-          [&errors, fragments, this](const int dev_id) {
-            errors[dev_id] = reifyOneToManyForDevice(fragments, dev_id);
-          },
-          device_id);
+
+      init_threads.push_back(std::async(std::launch::async,
+                                        &JoinHashTable::reifyOneToManyForDevice,
+                                        this,
+                                        fragments,
+                                        device_id));
     }
     for (auto& init_thread : init_threads) {
-      init_thread.join();
+      init_thread.wait();
+    }
+    for (auto& init_thread : init_threads) {
+      init_thread.get();
     }
   }
-
-  for (const int err : errors) {
-    if (err) {
-      return err;
-    }
-  }
-  return 0;
 }
 
 std::pair<const int8_t*, size_t> JoinHashTable::fetchFragments(
@@ -556,14 +549,14 @@ ChunkKey JoinHashTable::genHashTableKey(
   return hash_table_key;
 }
 
-int JoinHashTable::reifyOneToOneForDevice(
+void JoinHashTable::reifyOneToOneForDevice(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id) {
   std::pair<Data_Namespace::AbstractBuffer*, Data_Namespace::AbstractBuffer*>
       buff_and_err;
 #ifndef ENABLE_MULTIFRAG_JOIN
   if (fragments.size() != 1) {  // we don't support multiple fragment inner tables (yet)
-    return ERR_MULTI_FRAG;
+    throw MultiFragJoinNotSupported();
   }
 #endif
   const auto& catalog = *executor_->getCatalog();
@@ -574,7 +567,7 @@ int JoinHashTable::reifyOneToOneForDevice(
   const auto inner_cd = get_column_descriptor_maybe(
       inner_col->get_column_id(), inner_col->get_table_id(), catalog);
   if (inner_cd && inner_cd->isVirtualCol) {
-    return ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN;
+    throw FailedToJoinOnVirtualColumn();
   }
   CHECK(!inner_cd || !(inner_cd->isVirtualCol));
   // Since we don't have the string dictionary payloads on the GPU, we'll build
@@ -587,7 +580,7 @@ int JoinHashTable::reifyOneToOneForDevice(
     // No data in this fragment. Still need to create a hash table and initialize it
     // properly.
     ChunkKey empty_chunk;
-    return initHashTableForDevice(
+    initHashTableForDevice(
         empty_chunk, nullptr, 0, cols, effective_memory_level, buff_and_err, device_id);
   }
 
@@ -595,30 +588,23 @@ int JoinHashTable::reifyOneToOneForDevice(
   ThrustAllocator dev_buff_owner(&data_mgr, device_id);
   const int8_t* col_buff = nullptr;
   size_t elem_count = 0;
-  try {
-    std::tie(col_buff, elem_count) = fetchFragments(inner_col,
-                                                    fragments,
-                                                    effective_memory_level,
-                                                    device_id,
-                                                    chunks_owner,
-                                                    dev_buff_owner);
-  } catch (...) {
-    return ERR_FAILED_TO_FETCH_COLUMN;
-  }
 
-  int err{0};
+  std::tie(col_buff, elem_count) = fetchFragments(inner_col,
+                                                  fragments,
+                                                  effective_memory_level,
+                                                  device_id,
+                                                  chunks_owner,
+                                                  dev_buff_owner);
+
   try {
-    err = initHashTableForDevice(genHashTableKey(fragments, cols.second, inner_col),
-                                 col_buff,
-                                 elem_count,
-                                 cols,
-                                 effective_memory_level,
-                                 buff_and_err,
-                                 device_id);
-  } catch (...) {
-    return -1;
-  }
-  if (err == ERR_COLUMN_NOT_UNIQUE) {
+    initHashTableForDevice(genHashTableKey(fragments, cols.second, inner_col),
+                           col_buff,
+                           elem_count,
+                           cols,
+                           effective_memory_level,
+                           buff_and_err,
+                           device_id);
+  } catch (const NeedsOneToManyHash& e) {
     if (buff_and_err.first) {
       if (buff_and_err.first) {
         free_gpu_abstract_buffer(&data_mgr, buff_and_err.first);
@@ -627,16 +613,16 @@ int JoinHashTable::reifyOneToOneForDevice(
         free_gpu_abstract_buffer(&data_mgr, buff_and_err.second);
       }
     }
+    throw e;
   }
-  return err;
 }
 
-int JoinHashTable::reifyOneToManyForDevice(
+void JoinHashTable::reifyOneToManyForDevice(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id) {
 #ifndef ENABLE_MULTIFRAG_JOIN
   if (fragments.size() != 1) {  // we don't support multiple fragment inner tables (yet)
-    return ERR_MULTI_FRAG;
+    throw MultiFragJoinNotSupported();
   }
 #endif
   const auto& catalog = *executor_->getCatalog();
@@ -647,7 +633,7 @@ int JoinHashTable::reifyOneToManyForDevice(
   const auto inner_cd = get_column_descriptor_maybe(
       inner_col->get_column_id(), inner_col->get_table_id(), catalog);
   if (inner_cd && inner_cd->isVirtualCol) {
-    return ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN;
+    throw FailedToJoinOnVirtualColumn();
   }
   CHECK(!inner_cd || !(inner_cd->isVirtualCol));
   // Since we don't have the string dictionary payloads on the GPU, we'll build
@@ -660,7 +646,7 @@ int JoinHashTable::reifyOneToManyForDevice(
     ChunkKey empty_chunk;
     initOneToManyHashTable(
         empty_chunk, nullptr, 0, cols, effective_memory_level, device_id);
-    return 0;
+    return;
   }
 
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
@@ -668,28 +654,19 @@ int JoinHashTable::reifyOneToManyForDevice(
   const int8_t* col_buff = nullptr;
   size_t elem_count = 0;
 
-  try {
-    std::tie(col_buff, elem_count) = fetchFragments(inner_col,
-                                                    fragments,
-                                                    effective_memory_level,
-                                                    device_id,
-                                                    chunks_owner,
-                                                    dev_buff_owner);
-  } catch (...) {
-    return ERR_FAILED_TO_FETCH_COLUMN;
-  }
+  std::tie(col_buff, elem_count) = fetchFragments(inner_col,
+                                                  fragments,
+                                                  effective_memory_level,
+                                                  device_id,
+                                                  chunks_owner,
+                                                  dev_buff_owner);
 
-  try {
-    initOneToManyHashTable(genHashTableKey(fragments, cols.second, inner_col),
-                           col_buff,
-                           elem_count,
-                           cols,
-                           effective_memory_level,
-                           device_id);
-  } catch (...) {
-    return -1;
-  }
-  return 0;
+  initOneToManyHashTable(genHashTableKey(fragments, cols.second, inner_col),
+                         col_buff,
+                         elem_count,
+                         cols,
+                         effective_memory_level,
+                         device_id);
 }
 
 void JoinHashTable::checkHashJoinReplicationConstraint(const int table_id) const {
@@ -825,6 +802,9 @@ void JoinHashTable::initOneToManyHashTableOnCpu(
                                          thread_count));
   }
   for (auto& child : init_threads) {
+    child.wait();
+  }
+  for (auto& child : init_threads) {
     child.get();
   }
 
@@ -855,7 +835,7 @@ size_t get_entries_per_shard(const size_t total_entry_count, const size_t shard_
 
 }  // namespace
 
-int JoinHashTable::initHashTableForDevice(
+void JoinHashTable::initHashTableForDevice(
     const ChunkKey& chunk_key,
     const int8_t* col_buff,
     const size_t num_elements,
@@ -866,7 +846,7 @@ int JoinHashTable::initHashTableForDevice(
     const int device_id) {
   auto hash_entry_count = get_hash_entry_count(col_range_, isBitwiseEq());
   if (!hash_entry_count) {
-    return 0;
+    return;
   }
 #ifdef HAVE_CUDA
   const auto shard_count = shardCount();
@@ -901,7 +881,7 @@ int JoinHashTable::initHashTableForDevice(
     CHECK(!chunk_key.empty() && col_buff);
     initHashTableOnCpuFromCache(chunk_key, num_elements, cols);
     if (cpu_hash_table_buff_ && cpu_hash_table_buff_->size() > hash_entry_count) {
-      return ERR_COLUMN_NOT_UNIQUE;
+      throw NeedsOneToManyHash();
     }
     {
       std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
@@ -909,7 +889,7 @@ int JoinHashTable::initHashTableForDevice(
           col_buff, num_elements, cols, hash_entry_count, hash_join_invalid_val);
     }
     if (err == -1) {
-      err = ERR_COLUMN_NOT_UNIQUE;
+      throw NeedsOneToManyHash();
     }
     if (!err && inner_col->get_table_id() > 0) {
       putHashTableOnCpuToCache(chunk_key, num_elements, cols);
@@ -945,7 +925,7 @@ int JoinHashTable::initHashTableForDevice(
         executor_->blockSize(),
         executor_->gridSize());
     if (chunk_key.empty()) {
-      return 0;
+      return;
     }
     JoinColumn join_column{col_buff, num_elements};
     JoinColumnTypeInfo type_info{static_cast<size_t>(ti.get_size()),
@@ -980,13 +960,26 @@ int JoinHashTable::initHashTableForDevice(
     }
     copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
     if (err == -1) {
-      err = ERR_COLUMN_NOT_UNIQUE;
+      throw NeedsOneToManyHash();
     }
 #else
     CHECK(false);
 #endif
   }
-  return err;
+  if (err) {
+    switch (err) {
+      case ERR_FAILED_TO_FETCH_COLUMN:
+        throw FailedToFetchColumn();
+      case ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN:
+        throw FailedToJoinOnVirtualColumn();
+      case ERR_COLUMN_NOT_UNIQUE:
+        throw NeedsOneToManyHash();
+      default:
+        throw HashJoinFail(
+            std::string("Unrecognized error when initializing hash table (") +
+            std::to_string(err) + std::string(")"));
+    }
+  }
 }
 
 void JoinHashTable::initOneToManyHashTable(

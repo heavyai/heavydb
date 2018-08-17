@@ -81,10 +81,12 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
                                                                        executor));
   join_hash_table->checkHashJoinReplicationConstraint(
       getInnerTableId(condition.get(), executor));
-  const int err = join_hash_table->reify(device_count);
-  if (err) {
-    throw HashJoinFail(
-        "Could not build a 1-to-1 correspondence for columns involved in equijoin");
+  try {
+    join_hash_table->reify(device_count);
+  } catch (const std::exception& e) {
+    throw HashJoinFail(std::string("Could not build a 1-to-1 correspondence for columns "
+                                   "involved in equijoin | ") +
+                       e.what());
   }
   return join_hash_table;
 }
@@ -197,7 +199,7 @@ CompositeKeyInfo get_composite_key_info(const std::vector<InnerOuter>& inner_out
 
 }  // namespace
 
-int BaselineJoinHashTable::reify(const int device_count) {
+void BaselineJoinHashTable::reify(const int device_count) {
   CHECK_LT(0, device_count);
 #ifdef HAVE_CUDA
   gpu_hash_table_buff_.resize(device_count);
@@ -208,8 +210,11 @@ int BaselineJoinHashTable::reify(const int device_count) {
   const auto type_and_found = HashTypeCache::get(composite_key_info.cache_key_chunks);
   const auto layout = type_and_found.second ? type_and_found.first
                                             : JoinHashTableInterface::HashType::OneToOne;
-  int err = reifyWithLayout(device_count, layout);
-  if (err) {
+  try {
+    reifyWithLayout(device_count, layout);
+  } catch (const std::exception& e) {
+    VLOG(1) << "Caught Baseline Hash Join Exception, attempting to build 1:Many table: "
+            << e.what();
 #ifdef HAVE_CUDA
     if (memory_level_ == Data_Namespace::GPU_LEVEL) {
       auto& data_mgr = executor_->getCatalog()->get_dataMgr();
@@ -222,9 +227,8 @@ int BaselineJoinHashTable::reify(const int device_count) {
 #endif  // HAVE_CUDA
     HashTypeCache::set(composite_key_info.cache_key_chunks,
                        JoinHashTableInterface::HashType::OneToMany);
-    return reifyWithLayout(device_count, JoinHashTableInterface::HashType::OneToMany);
+    reifyWithLayout(device_count, JoinHashTableInterface::HashType::OneToMany);
   }
-  return 0;
 }
 
 namespace {
@@ -244,13 +248,13 @@ Data_Namespace::MemoryLevel get_effective_memory_level(
 
 }  // namespace
 
-int BaselineJoinHashTable::reifyWithLayout(
+void BaselineJoinHashTable::reifyWithLayout(
     const int device_count,
     const JoinHashTableInterface::HashType layout) {
   layout_ = layout;
   const auto& query_info = get_inner_query_info(getInnerTableId(), query_infos_).info;
   if (query_info.fragments.empty()) {
-    return 0;
+    return;
   }
   std::vector<BaselineJoinHashTable::ColumnsForDevice> columns_per_device;
   const auto shard_count = shardCount();
@@ -260,8 +264,11 @@ int BaselineJoinHashTable::reifyWithLayout(
             ? only_shards_for_device(query_info.fragments, device_id, device_count)
             : query_info.fragments;
     const auto columns_for_device = fetchColumnsForDevice(fragments, device_id);
-    if (columns_for_device.err) {
-      return columns_for_device.err;
+    switch (columns_for_device.err) {
+      case ERR_FAILED_TO_FETCH_COLUMN:
+        throw FailedToFetchColumn();
+      case ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN:
+        throw FailedToJoinOnVirtualColumn();
     }
     columns_per_device.push_back(columns_for_device);
   }
@@ -275,28 +282,25 @@ int BaselineJoinHashTable::reifyWithLayout(
     entry_count_ =
         get_entries_per_device(entry_count, shard_count, device_count, memory_level_);
   }
-  std::vector<int> errors(device_count);
-  std::vector<std::thread> init_threads;
+  std::vector<std::future<void>> init_threads;
   for (int device_id = 0; device_id < device_count; ++device_id) {
     const auto fragments =
         shard_count
             ? only_shards_for_device(query_info.fragments, device_id, device_count)
             : query_info.fragments;
-    init_threads.emplace_back(
-        [&columns_per_device, &errors, device_id, fragments, layout, this] {
-          errors[device_id] =
-              reifyForDevice(columns_per_device[device_id], layout, device_id);
-        });
+    init_threads.push_back(std::async(std::launch::async,
+                                      &BaselineJoinHashTable::reifyForDevice,
+                                      this,
+                                      columns_per_device[device_id],
+                                      layout,
+                                      device_id));
   }
   for (auto& init_thread : init_threads) {
-    init_thread.join();
+    init_thread.wait();
   }
-  for (const int err : errors) {
-    if (err) {
-      return err;
-    }
+  for (auto& init_thread : init_threads) {
+    init_thread.get();
   }
-  return 0;
 }
 
 namespace {
@@ -498,25 +502,31 @@ BaselineJoinHashTable::ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDe
   return {join_columns, join_column_types, chunks_owner, 0};
 }
 
-int BaselineJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_device,
-                                          const JoinHashTableInterface::HashType layout,
-                                          const int device_id) {
+void BaselineJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_device,
+                                           const JoinHashTableInterface::HashType layout,
+                                           const int device_id) {
   const auto& catalog = *executor_->getCatalog();
   const auto inner_outer_pairs =
       normalize_column_pairs(condition_.get(), catalog, executor_->getTemporaryTables());
   const auto effective_memory_level =
       get_effective_memory_level(inner_outer_pairs, memory_level_, executor_);
-  int err{0};
-  try {
-    err = initHashTableForDevice(columns_for_device.join_columns,
-                                 columns_for_device.join_column_types,
-                                 layout,
-                                 effective_memory_level,
-                                 device_id);
-  } catch (...) {
-    return -1;
+  const auto err = initHashTableForDevice(columns_for_device.join_columns,
+                                          columns_for_device.join_column_types,
+                                          layout,
+                                          effective_memory_level,
+                                          device_id);
+  if (err) {
+    switch (err) {
+      case ERR_FAILED_TO_FETCH_COLUMN:
+        throw FailedToFetchColumn();
+      case ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN:
+        throw FailedToJoinOnVirtualColumn();
+      default:
+        throw HashJoinFail(
+            std::string("Unrecognized error when initializing baseline hash table (") +
+            std::to_string(err) + std::string(")"));
+    }
   }
-  return err;
 }
 
 std::pair<const int8_t*, size_t> BaselineJoinHashTable::getAllColumnFragments(

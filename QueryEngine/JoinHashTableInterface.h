@@ -20,6 +20,45 @@
 #include <cstdint>
 #include "CompilationOptions.h"
 
+class TooManyHashEntries : public std::runtime_error {
+ public:
+  TooManyHashEntries()
+      : std::runtime_error("Hash tables with more than 2B entries not supported yet") {}
+};
+
+class HashJoinFail : public std::runtime_error {
+ public:
+  HashJoinFail(const std::string& reason) : std::runtime_error(reason) {}
+};
+
+class NeedsOneToManyHash : public HashJoinFail {
+ public:
+  NeedsOneToManyHash() : HashJoinFail("Needs one to many hash") {}
+};
+
+class FailedToFetchColumn : public HashJoinFail {
+ public:
+  FailedToFetchColumn()
+      : HashJoinFail("Not enough memory for columns involvde in join") {}
+};
+
+class FailedToJoinOnVirtualColumn : public HashJoinFail {
+ public:
+  FailedToJoinOnVirtualColumn() : HashJoinFail("Cannot join on rowid") {}
+};
+
+#ifndef ENABLE_MULTIFRAG_JOIN
+class MultiFragJoinNotSupported : public HashJoinFail {
+ public:
+  MultiFragJoinNotSupported()
+      : HashJoinFail("Muli-fragment inner table not supported yet") {}
+
+  MultiFragJoinNotSupported(const std::string& table_name)
+      : HashJoinFail(std::string("Muli-fragment inner table '") + table_name +
+                     std::string("' not supported yet")) {}
+};
+#endif
+
 struct HashJoinMatchingSet {
   llvm::Value* elements;
   llvm::Value* count;

@@ -46,17 +46,6 @@
 
 class Executor;
 
-class HashJoinFail : public std::runtime_error {
- public:
-  HashJoinFail(const std::string& reason) : std::runtime_error(reason) {}
-};
-
-class TooManyHashEntries : public std::runtime_error {
- public:
-  TooManyHashEntries()
-      : std::runtime_error("Hash tables with more than 2B entries not supported yet") {}
-};
-
 class JoinHashTable : public JoinHashTableInterface {
  public:
   static std::shared_ptr<JoinHashTable> getInstance(
@@ -171,15 +160,15 @@ class JoinHashTable : public JoinHashTableInterface {
       const Analyzer::Expr* outer_col,
       const Analyzer::ColumnVar* inner_col) const;
 
-  int reify(const int device_count);
-  int reifyOneToOneForDevice(
+  void reify(const int device_count);
+  void reifyOneToOneForDevice(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
       const int device_id);
-  int reifyOneToManyForDevice(
+  void reifyOneToManyForDevice(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
       const int device_id);
   void checkHashJoinReplicationConstraint(const int table_id) const;
-  int initHashTableForDevice(
+  void initHashTableForDevice(
       const ChunkKey& chunk_key,
       const int8_t* col_buff,
       const size_t num_elements,
