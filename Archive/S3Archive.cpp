@@ -92,9 +92,11 @@ void S3Archive::init_for_read() {
     }
 
     if (!s3_access_key.empty() && !s3_secret_key.empty())
-      s3_client.reset(new Aws::S3::S3Client(Aws::Auth::AWSCredentials(s3_access_key, s3_secret_key), s3_config));
+      s3_client.reset(new Aws::S3::S3Client(
+          Aws::Auth::AWSCredentials(s3_access_key, s3_secret_key), s3_config));
     else
-      s3_client.reset(new Aws::S3::S3Client(std::make_shared<Aws::Auth::AnonymousAWSCredentialsProvider>(), s3_config));
+      s3_client.reset(new Aws::S3::S3Client(
+          std::make_shared<Aws::Auth::AnonymousAWSCredentialsProvider>(), s3_config));
     while (true) {
       auto list_objects_outcome = s3_client->ListObjectsV2(objects_request);
       if (list_objects_outcome.IsSuccess()) {
@@ -123,13 +125,15 @@ void S3Archive::init_for_read() {
       } else {
         // could not ListObject
         // could be the object is there but we do not have listObject Privilege
-        // We can treat it as a specific object, so should try to parse it and pass to getObject as a singleton
+        // We can treat it as a specific object, so should try to parse it and pass to
+        // getObject as a singleton
         if (objkeys.empty())
           objkeys.push_back(prefix_name);
       }
       // continue to read next 1000 files
       if (list_objects_outcome.GetResult().GetIsTruncated())
-        objects_request.SetContinuationToken(list_objects_outcome.GetResult().GetNextContinuationToken());
+        objects_request.SetContinuationToken(
+            list_objects_outcome.GetResult().GetNextContinuationToken());
       else
         break;
     }
@@ -198,8 +202,8 @@ const std::string S3Archive::land(const std::string& objkey,
   auto get_object_outcome = s3_client->GetObject(object_request);
   if (!get_object_outcome.IsSuccess())
     throw std::runtime_error("failed to get object '" + objkey + "' of s3 url '" + url +
-                             "': " + get_object_outcome.GetError().GetExceptionName() + ": " +
-                             get_object_outcome.GetError().GetMessage());
+                             "': " + get_object_outcome.GetError().GetExceptionName() +
+                             ": " + get_object_outcome.GetError().GetMessage());
 
   // streaming means asynch
   std::atomic<bool> is_get_object_outcome_moved(false);
@@ -216,24 +220,28 @@ const std::string S3Archive::land(const std::string& objkey,
     std::unique_lock<std::mutex> lock(mutex_glog); \
     x;                                             \
   }
-      MAPD_S3_LOG(LOG(INFO) << "downloading s3://" << bucket_name << "/" << objkey << " to "
-                            << (use_pipe ? "pipe " : "file ") << file_path << "...")
-      auto get_object_outcome_moved = decltype(get_object_outcome)(std::move(get_object_outcome));
-      is_get_object_outcome_moved = true;
-      Aws::OFStream local_file;
-      local_file.open(file_path.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
-      local_file << get_object_outcome_moved.GetResult().GetBody().rdbuf();
-      MAPD_S3_LOG(LOG(INFO) << "downloaded s3://" << bucket_name << "/" << objkey << " to "
-                            << (use_pipe ? "pipe " : "file ") << file_path << ".")
-    } catch (...) {
-      // need this way to capture any exception occurring when
-      // this thread runs as a disjoint asynchronous thread
-      if (use_pipe)
-        teptr = std::current_exception();
-      else
-        throw;
-    }
-  });
+          MAPD_S3_LOG(LOG(INFO)
+                      << "downloading s3://" << bucket_name << "/" << objkey << " to "
+                      << (use_pipe ? "pipe " : "file ") << file_path << "...")
+          auto get_object_outcome_moved =
+              decltype(get_object_outcome)(std::move(get_object_outcome));
+          is_get_object_outcome_moved = true;
+          Aws::OFStream local_file;
+          local_file.open(file_path.c_str(),
+                          std::ios::out | std::ios::binary | std::ios::trunc);
+          local_file << get_object_outcome_moved.GetResult().GetBody().rdbuf();
+          MAPD_S3_LOG(LOG(INFO)
+                      << "downloaded s3://" << bucket_name << "/" << objkey << " to "
+                      << (use_pipe ? "pipe " : "file ") << file_path << ".")
+        } catch (...) {
+          // need this way to capture any exception occurring when
+          // this thread runs as a disjoint asynchronous thread
+          if (use_pipe)
+            teptr = std::current_exception();
+          else
+            throw;
+        }
+      });
 
   if (use_pipe) {
     // in async (pipe) case, this function needs to wait for get_object_outcome
