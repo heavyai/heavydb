@@ -2820,7 +2820,8 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
   // then feed into importDelimited, importParquet, and etc.
   auto th_pipe_writer = std::thread([&]() {
     std::unique_ptr<S3Archive> us3arch;
-    for (size_t fi = 0; fi < file_paths.size(); fi++) {
+    bool stop = false;
+    for (size_t fi = 0; !stop && fi < file_paths.size(); fi++) {
       try {
         auto file_path = file_paths[fi];
         std::unique_ptr<Archive> uarch;
@@ -2880,7 +2881,6 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
         size_t size;
         int64_t offset;
         bool just_saw_header;
-        bool stop = false;
         // start reading uncompressed bytes of this archive from libarchive
         // note! this archive may contain more than one files!
         while (!stop && !!(just_saw_header = arch.read_next_header())) {

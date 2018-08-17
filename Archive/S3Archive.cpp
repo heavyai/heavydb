@@ -21,7 +21,7 @@
 #include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/s3/model/GetObjectRequest.h>
-#include <aws/s3/model/ListObjectsRequest.h>
+#include <aws/s3/model/ListObjectsV2Request.h>
 #include <aws/s3/model/Object.h>
 #include <fstream>
 #include <memory>
@@ -47,10 +47,10 @@ void S3Archive::init_for_read() {
       prefix_name = prefix_name.substr(1);
     }
 
-    Aws::S3::Model::ListObjectsRequest objects_request;
+    Aws::S3::Model::ListObjectsV2Request objects_request;
     objects_request.WithBucket(bucket_name);
     objects_request.WithPrefix(prefix_name);
-    objects_request.SetMaxKeys(1 << 16);
+    objects_request.SetMaxKeys(1 << 20);
 
     // for a daemon like mapd_server it seems improper to set s3 credentials
     // via AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env's because that way
@@ -91,47 +91,47 @@ void S3Archive::init_for_read() {
       }
     }
 
-    if (!s3_access_key.empty() && !s3_secret_key.empty()) {
-      s3_client.reset(new Aws::S3::S3Client(
-          Aws::Auth::AWSCredentials(s3_access_key, s3_secret_key), s3_config));
-    } else {
-      s3_client.reset(new Aws::S3::S3Client(
-          std::make_shared<Aws::Auth::AnonymousAWSCredentialsProvider>(), s3_config));
-    }
+    if (!s3_access_key.empty() && !s3_secret_key.empty())
+      s3_client.reset(new Aws::S3::S3Client(Aws::Auth::AWSCredentials(s3_access_key, s3_secret_key), s3_config));
+    else
+      s3_client.reset(new Aws::S3::S3Client(std::make_shared<Aws::Auth::AnonymousAWSCredentialsProvider>(), s3_config));
+    while (true) {
+      auto list_objects_outcome = s3_client->ListObjectsV2(objects_request);
+      if (list_objects_outcome.IsSuccess()) {
+        // pass only object keys to next stage, which may be Importer::import_parquet,
+        // Importer::import_compressed or else, depending on copy_params (eg. .is_parquet)
+        auto object_list = list_objects_outcome.GetResult().GetContents();
+        if (0 == object_list.size())
+          if (objkeys.empty())
+            throw std::runtime_error("no object was found with s3 url '" + url + "'");
 
-    auto list_objects_outcome = s3_client->ListObjects(objects_request);
-    if (list_objects_outcome.IsSuccess()) {
-      // pass only object keys to next stage, which may be Importer::import_parquet,
-      // Importer::import_compressed or else, depending on copy_params (eg. .is_parquet)
-      auto object_list = list_objects_outcome.GetResult().GetContents();
-      if (0 == object_list.size()) {
-        throw std::runtime_error("no object was found with s3 url '" + url + "'");
+        LOG(INFO) << "Found " << (objkeys.empty() ? "" : "another ") << object_list.size()
+                  << " objects with url '" + url + "':";
+        for (auto const& obj : object_list) {
+          std::string objkey = obj.GetKey().c_str();
+          LOG(INFO) << "\t" << objkey << " (size = " << obj.GetSize() << " bytes)";
+          // skip _SUCCESS and keys with trailing / or basename with heading '.'
+          boost::filesystem::path path{objkey};
+          if (0 == obj.GetSize())
+            continue;
+          if ('/' == objkey.back())
+            continue;
+          if ('.' == path.filename().string().front())
+            continue;
+          objkeys.push_back(objkey);
+        }
+      } else {
+        // could not ListObject
+        // could be the object is there but we do not have listObject Privilege
+        // We can treat it as a specific object, so should try to parse it and pass to getObject as a singleton
+        if (objkeys.empty())
+          objkeys.push_back(prefix_name);
       }
-
-      LOG(INFO) << "Found " << object_list.size() << " objects with url '" + url + "':";
-      for (auto const& obj : object_list) {
-        std::string objkey = obj.GetKey().c_str();
-        LOG(INFO) << "\t" << objkey << " (size = " << obj.GetSize() << " bytes)";
-        // skip _SUCCESS and keys with trailing / or basename with heading '.'
-        boost::filesystem::path path{objkey};
-        if (0 == obj.GetSize()) {
-          continue;
-        }
-        if ('/' == objkey.back()) {
-          continue;
-        }
-        if ('.' == path.filename().string().front()) {
-          continue;
-        }
-        objkeys.push_back(objkey);
-      }
-    } else {
-      // could not ListObject
-      // could be the object is there but we do not have listObject Privilege
-      // We can treat it as a specific object, so should try to parse it and pass to
-      // getObject as a singleton
-
-      objkeys.push_back(prefix_name);
+      // continue to read next 1000 files
+      if (list_objects_outcome.GetResult().GetIsTruncated())
+        objects_request.SetContinuationToken(list_objects_outcome.GetResult().GetNextContinuationToken());
+      else
+        break;
     }
   } catch (...) {
     throw;
@@ -196,11 +196,10 @@ const std::string S3Archive::land(const std::string& objkey,
   }
 
   auto get_object_outcome = s3_client->GetObject(object_request);
-  if (!get_object_outcome.IsSuccess()) {
+  if (!get_object_outcome.IsSuccess())
     throw std::runtime_error("failed to get object '" + objkey + "' of s3 url '" + url +
-                             "': " + get_object_outcome.GetError().GetExceptionName() +
-                             ": " + get_object_outcome.GetError().GetMessage());
-  }
+                             "': " + get_object_outcome.GetError().GetExceptionName() + ": " +
+                             get_object_outcome.GetError().GetMessage());
 
   // streaming means asynch
   std::atomic<bool> is_get_object_outcome_moved(false);
@@ -217,29 +216,24 @@ const std::string S3Archive::land(const std::string& objkey,
     std::unique_lock<std::mutex> lock(mutex_glog); \
     x;                                             \
   }
-          MAPD_S3_LOG(LOG(INFO)
-                      << "downloading s3://" << bucket_name << "/" << objkey << " to "
-                      << (use_pipe ? "pipe " : "file ") << file_path << "...")
-          auto get_object_outcome_moved =
-              decltype(get_object_outcome)(std::move(get_object_outcome));
-          is_get_object_outcome_moved = true;
-          Aws::OFStream local_file;
-          local_file.open(file_path.c_str(),
-                          std::ios::out | std::ios::binary | std::ios::trunc);
-          local_file << get_object_outcome_moved.GetResult().GetBody().rdbuf();
-          MAPD_S3_LOG(LOG(INFO)
-                      << "downloaded s3://" << bucket_name << "/" << objkey << " to "
-                      << (use_pipe ? "pipe " : "file ") << file_path << ".")
-        } catch (...) {
-          // need this way to capture any exception occurring when
-          // this thread runs as a disjoint asynchronous thread
-          if (use_pipe) {
-            teptr = std::current_exception();
-          } else {
-            throw;
-          }
-        }
-      });
+      MAPD_S3_LOG(LOG(INFO) << "downloading s3://" << bucket_name << "/" << objkey << " to "
+                            << (use_pipe ? "pipe " : "file ") << file_path << "...")
+      auto get_object_outcome_moved = decltype(get_object_outcome)(std::move(get_object_outcome));
+      is_get_object_outcome_moved = true;
+      Aws::OFStream local_file;
+      local_file.open(file_path.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
+      local_file << get_object_outcome_moved.GetResult().GetBody().rdbuf();
+      MAPD_S3_LOG(LOG(INFO) << "downloaded s3://" << bucket_name << "/" << objkey << " to "
+                            << (use_pipe ? "pipe " : "file ") << file_path << ".")
+    } catch (...) {
+      // need this way to capture any exception occurring when
+      // this thread runs as a disjoint asynchronous thread
+      if (use_pipe)
+        teptr = std::current_exception();
+      else
+        throw;
+    }
+  });
 
   if (use_pipe) {
     // in async (pipe) case, this function needs to wait for get_object_outcome
