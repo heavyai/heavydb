@@ -341,9 +341,9 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper,
   if (ti.get_notnull()) {
     switch (optype) {
       case kAND:
-        return cgen_state_->ir_builder_.CreateAnd(lhs_lv, rhs_lv);
+        return cgen_state_->ir_builder_.CreateAnd(toBool(lhs_lv), toBool(rhs_lv));
       case kOR:
-        return cgen_state_->ir_builder_.CreateOr(lhs_lv, rhs_lv);
+        return cgen_state_->ir_builder_.CreateOr(toBool(lhs_lv), toBool(rhs_lv));
       default:
         CHECK(false);
     }

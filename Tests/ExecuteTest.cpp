@@ -1579,6 +1579,7 @@ TEST(Select, Strings) {
       "HAVING COUNT(*) > 4 ORDER BY "
       "fixed_str;",
       dt);
+    c("SELECT COUNT(*) FROM emp WHERE ename LIKE 'D%%' OR ename = 'Julia';", dt);
     SKIP_ON_AGGREGATOR(
         ASSERT_EQ(2 * g_num_rows,
                   v<int64_t>(run_simple_agg(
@@ -3969,11 +3970,11 @@ void import_emp_table() {
   run_ddl_statement(drop_old_test);
   g_sqlite_comparator.query(drop_old_test);
   const std::string create_test{
-      "CREATE TABLE emp(empno INT, ename TEXT ENCODING DICT, deptno INT) WITH "
+      "CREATE TABLE emp(empno INT, ename TEXT NOT NULL ENCODING DICT, deptno INT) WITH "
       "(fragment_size=2);"};
   run_ddl_statement(create_test);
   g_sqlite_comparator.query(
-      "CREATE TABLE emp(empno INT, ename TEXT ENCODING DICT, deptno INT);");
+      "CREATE TABLE emp(empno INT, ename TEXT NOT NULL, deptno INT);");
   {
     const std::string insert_query{"INSERT INTO emp VALUES(1, 'Brock', 10);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
