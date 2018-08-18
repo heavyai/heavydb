@@ -9597,11 +9597,34 @@ TEST(Select, GeoSpatial_Projection) {
     ASSERT_NEAR(
         static_cast<double>(1193066.02892),
         v<double>(run_simple_agg(
-            "SELECT ST_Perimeter(CAST (ST_GeomFromText('POLYGON((-76.6168198439371 "
+            "SELECT ST_Perimeter(ST_GeogFromText('POLYGON((-76.6168198439371 "
             "39.9703199555959, -80.5189990254673 40.6493554919257, -82.5189990254673 "
-            "42.6493554919257, -76.6168198439371 39.9703199555959))', 4326) as "
-            "GEOGRAPHY)) "
+            "42.6493554919257, -76.6168198439371 39.9703199555959))', 4326)) "
             "from geospatial_test limit 1;",
+            dt)),
+        static_cast<double>(0.01));
+    // Cartesian perimeter of a planar multipolygon
+    ASSERT_NEAR(static_cast<double>(4 * 1.41421 + 4 * 2.82842),
+                v<double>(run_simple_agg("SELECT ST_Perimeter('MULTIPOLYGON("
+                                         "((1 0, 0 1, -1 0, 0 -1, 1 0),"
+                                         " (0.1 0, 0 0.1, -0.1 0, 0 -0.1, 0.1 0)), "
+                                         "((2 0, 0 2, -2 0, 0 -2, 2 0),"
+                                         " (0.2 0, 0 0.2, -0.2 0, 0 -0.2, 0.2 0)))') "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.0001));
+    // Geodesic perimeter of a polygon geography, in meters
+    ASSERT_NEAR(
+        static_cast<double>(1193066.02892 + 1055903.62342 + 907463.55601),
+        v<double>(run_simple_agg(
+            "SELECT ST_Perimeter(ST_GeogFromText('MULTIPOLYGON("
+            "((-76.6168198439371 39.9703199555959, -80.5189990254673 40.6493554919257,"
+            "  -82.5189990254673 42.6493554919257, -76.6168198439371 39.9703199555959)), "
+            "((-66.6168198439371 49.9703199555959, -70.5189990254673 50.6493554919257,"
+            "  -72.5189990254673 52.6493554919257, -66.6168198439371 49.9703199555959)), "
+            "((-56.6168198439371 59.9703199555959, -60.5189990254673 60.6493554919257,"
+            "  -62.5189990254673 62.6493554919257, -56.6168198439371 59.9703199555959)))'"
+            ", 4326)) from geospatial_test limit 1;",
             dt)),
         static_cast<double>(0.01));
 

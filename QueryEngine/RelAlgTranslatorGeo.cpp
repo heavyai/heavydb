@@ -540,8 +540,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     SQLTypeInfo arg_ti;
     auto geoargs = translateGeoFunctionArg(
         rex_function->getOperand(0), arg_ti, lindex, false, false, true);
-    if (arg_ti.get_type() != kPOLYGON) {
-      throw QueryNotSupported(rex_function->getName() + " expects a POLYGON");
+    if (arg_ti.get_type() != kPOLYGON && arg_ti.get_type() != kMULTIPOLYGON) {
+      throw QueryNotSupported(rex_function->getName() +
+                              " expects a POLYGON or MULTIPOLYGON");
     }
     specialized_geofunc += suffix(arg_ti.get_type());
     if (arg_ti.get_subtype() == kGEOGRAPHY && arg_ti.get_output_srid() == 4326) {

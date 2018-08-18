@@ -554,6 +554,91 @@ double ST_Perimeter_Polygon_Geodesic(int8_t* poly,
   return length_linestring(poly, exterior_ring_coords_size, ic, isr, osr, true, true);
 }
 
+DEVICE ALWAYS_INLINE double perimeter_multipolygon(int8_t* mpoly_coords,
+                                                   int64_t mpoly_coords_size,
+                                                   int32_t* mpoly_ring_sizes,
+                                                   int64_t mpoly_num_rings,
+                                                   int32_t* mpoly_poly_sizes,
+                                                   int64_t mpoly_num_polys,
+                                                   int32_t ic,
+                                                   int32_t isr,
+                                                   int32_t osr,
+                                                   bool geodesic) {
+  if (mpoly_num_polys <= 0 || mpoly_num_rings <= 0)
+    return 0.0;
+
+  double perimeter = 0.0;
+
+  // Set specific poly pointers as we move through the coords/ringsizes/polyrings arrays.
+  auto next_poly_coords = mpoly_coords;
+  auto next_poly_ring_sizes = mpoly_ring_sizes;
+
+  for (auto poly = 0; poly < mpoly_num_polys; poly++) {
+    auto poly_coords = next_poly_coords;
+    auto poly_ring_sizes = next_poly_ring_sizes;
+    auto poly_num_rings = mpoly_poly_sizes[poly];
+    // Count number of coords in all of poly's rings, advance ring size pointer.
+    int32_t poly_num_coords = 0;
+    for (auto ring = 0; ring < poly_num_rings; ring++) {
+      poly_num_coords += 2 * *next_poly_ring_sizes++;
+    }
+    auto poly_coords_size = poly_num_coords * compression_unit_size(ic);
+    next_poly_coords += poly_coords_size;
+
+    auto exterior_ring_num_coords = poly_ring_sizes[0] * 2;
+    auto exterior_ring_coords_size = exterior_ring_num_coords * compression_unit_size(ic);
+
+    perimeter += length_linestring(
+        poly_coords, exterior_ring_coords_size, ic, isr, osr, geodesic, true);
+  }
+
+  return perimeter;
+}
+
+EXTENSION_NOINLINE
+double ST_Perimeter_MultiPolygon(int8_t* mpoly_coords,
+                                 int64_t mpoly_coords_size,
+                                 int32_t* mpoly_ring_sizes,
+                                 int64_t mpoly_num_rings,
+                                 int32_t* mpoly_poly_sizes,
+                                 int64_t mpoly_num_polys,
+                                 int32_t ic,
+                                 int32_t isr,
+                                 int32_t osr) {
+  return perimeter_multipolygon(mpoly_coords,
+                                mpoly_coords_size,
+                                mpoly_ring_sizes,
+                                mpoly_num_rings,
+                                mpoly_poly_sizes,
+                                mpoly_num_polys,
+                                ic,
+                                isr,
+                                osr,
+                                false);
+}
+
+EXTENSION_NOINLINE
+double ST_Perimeter_MultiPolygon_Geodesic(int8_t* mpoly_coords,
+                                          int64_t mpoly_coords_size,
+                                          int32_t* mpoly_ring_sizes,
+                                          int64_t mpoly_num_rings,
+                                          int32_t* mpoly_poly_sizes,
+                                          int64_t mpoly_num_polys,
+                                          int32_t ic,
+                                          int32_t isr,
+                                          int32_t osr) {
+  return perimeter_multipolygon(mpoly_coords,
+                                mpoly_coords_size,
+                                mpoly_ring_sizes,
+                                mpoly_num_rings,
+                                mpoly_poly_sizes,
+                                mpoly_num_polys,
+                                ic,
+                                isr,
+                                osr,
+                                true);
+}
+
 EXTENSION_INLINE
 int32_t ST_NPoints(int8_t* coords, int64_t coords_sz, int32_t ic) {
   auto num_pts = coords_sz / compression_unit_size(ic);
