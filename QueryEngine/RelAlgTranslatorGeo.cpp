@@ -536,7 +536,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
     return makeExpr<Analyzer::FunctionOper>(
         rex_function->getType(), specialized_geofunc, geoargs);
-  } else if (rex_function->getName() == std::string("ST_Perimeter")) {
+  } else if (rex_function->getName() == std::string("ST_Perimeter") ||
+             rex_function->getName() == std::string("ST_Area")) {
     SQLTypeInfo arg_ti;
     auto geoargs = translateGeoFunctionArg(
         rex_function->getOperand(0), arg_ti, lindex, false, false, true);

@@ -9628,6 +9628,16 @@ TEST(Select, GeoSpatial_Projection) {
             dt)),
         static_cast<double>(0.01));
 
+    // ST_Area
+    // Area of a planar polygon
+    ASSERT_NEAR(static_cast<double>(2.0 - 0.02),
+                v<double>(run_simple_agg("SELECT ST_Area('POLYGON("
+                                         "(1 0, 0 1, -1 0, 0 -1, 1 0),"
+                                         "(0.1 0, 0 0.1, -0.1 0, 0 -0.1, 0.1 0))') "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.0001));
+
     // ST_Contains
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(

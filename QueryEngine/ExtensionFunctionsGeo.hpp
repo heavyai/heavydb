@@ -639,6 +639,79 @@ double ST_Perimeter_MultiPolygon_Geodesic(int8_t* mpoly_coords,
                                 true);
 }
 
+DEVICE ALWAYS_INLINE double area_triangle(double x1,
+                                          double y1,
+                                          double x2,
+                                          double y2,
+                                          double x3,
+                                          double y3) {
+  return (x1 * y2 - x2 * y1 + x3 * y1 - x1 * y3 + x2 * y3 - x3 * y2) / 2.0;
+}
+
+DEVICE ALWAYS_INLINE double area_polygon(int8_t* poly,
+                                         int64_t polysize,
+                                         int32_t ic,
+                                         int32_t isr,
+                                         int32_t osr) {
+  auto poly_num_coords = polysize / compression_unit_size(ic);
+
+  if (poly_num_coords < 6)
+    return 0.0;
+
+  double area = 0.0;
+
+  double x1 = coord_x(poly, 0, ic, isr, osr);
+  double y1 = coord_y(poly, 1, ic, isr, osr);
+  double x2 = coord_x(poly, 2, ic, isr, osr);
+  double y2 = coord_y(poly, 3, ic, isr, osr);
+  for (int32_t i = 4; i < poly_num_coords; i += 2) {
+    double x3 = coord_x(poly, i, ic, isr, osr);
+    double y3 = coord_y(poly, i + 1, ic, isr, osr);
+    area += area_triangle(x1, y1, x2, y2, x3, y3);
+    x2 = x3;
+    y2 = y3;
+  }
+  return area;
+}
+
+EXTENSION_NOINLINE
+double ST_Area_Polygon(int8_t* poly_coords,
+                       int64_t poly_coords_size,
+                       int32_t* poly_ring_sizes,
+                       int64_t poly_num_rings,
+                       int32_t ic,
+                       int32_t isr,
+                       int32_t osr) {
+  if (poly_num_rings <= 0)
+    return 0.0;
+
+  double area = 0.0;
+  auto ring_coords = poly_coords;
+
+  // Add up the areas of all rings.
+  // External ring is CCW, open - positive area.
+  // Internal rings (holes) are CW, open - negative areas.
+  for (auto r = 0; r < poly_num_rings; r++) {
+    auto ring_coords_size = poly_ring_sizes[r] * 2 * compression_unit_size(ic);
+    area += area_polygon(ring_coords, ring_coords_size, ic, isr, osr);
+    // Advance to the next ring.
+    ring_coords += ring_coords_size;
+  }
+  return area;
+}
+
+EXTENSION_INLINE
+double ST_Area_Polygon_Geodesic(int8_t* poly_coords,
+                                int64_t poly_coords_size,
+                                int32_t* poly_ring_sizes,
+                                int64_t poly_num_rings,
+                                int32_t ic,
+                                int32_t isr,
+                                int32_t osr) {
+  return ST_Area_Polygon(
+      poly_coords, poly_coords_size, poly_ring_sizes, poly_num_rings, ic, isr, osr);
+}
+
 EXTENSION_INLINE
 int32_t ST_NPoints(int8_t* coords, int64_t coords_sz, int32_t ic) {
   auto num_pts = coords_sz / compression_unit_size(ic);
