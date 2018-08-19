@@ -1151,6 +1151,7 @@ std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
   cgen_state_->row_func_ = row_func_with_hoisted_literals;
 
   // and finally replace  literal placeholders
+  std::vector<llvm::Instruction*> placeholders;
   std::string prefix("__placeholder__literal_");
   for (auto it = llvm::inst_begin(row_func_with_hoisted_literals),
             e = llvm::inst_end(row_func_with_hoisted_literals);
@@ -1166,7 +1167,11 @@ std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
 
       it->replaceAllUsesWith(
           query_func_literal_loads_function_arguments[lit_off][lit_idx]);
+      placeholders.push_back(&*it);
     }
+  }
+  for (auto placeholder : placeholders) {
+    placeholder->removeFromParent();
   }
 
   return hoisted_literals;
