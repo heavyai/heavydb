@@ -648,28 +648,53 @@ DEVICE ALWAYS_INLINE double area_triangle(double x1,
   return (x1 * y2 - x2 * y1 + x3 * y1 - x1 * y3 + x2 * y3 - x3 * y2) / 2.0;
 }
 
-DEVICE ALWAYS_INLINE double area_polygon(int8_t* poly,
-                                         int64_t polysize,
-                                         int32_t ic,
-                                         int32_t isr,
-                                         int32_t osr) {
-  auto poly_num_coords = polysize / compression_unit_size(ic);
+DEVICE ALWAYS_INLINE double area_ring(int8_t* ring,
+                                      int64_t ringsize,
+                                      int32_t ic,
+                                      int32_t isr,
+                                      int32_t osr) {
+  auto ring_num_coords = ringsize / compression_unit_size(ic);
 
-  if (poly_num_coords < 6)
+  if (ring_num_coords < 6)
     return 0.0;
 
   double area = 0.0;
 
-  double x1 = coord_x(poly, 0, ic, isr, osr);
-  double y1 = coord_y(poly, 1, ic, isr, osr);
-  double x2 = coord_x(poly, 2, ic, isr, osr);
-  double y2 = coord_y(poly, 3, ic, isr, osr);
-  for (int32_t i = 4; i < poly_num_coords; i += 2) {
-    double x3 = coord_x(poly, i, ic, isr, osr);
-    double y3 = coord_y(poly, i + 1, ic, isr, osr);
+  double x1 = coord_x(ring, 0, ic, isr, osr);
+  double y1 = coord_y(ring, 1, ic, isr, osr);
+  double x2 = coord_x(ring, 2, ic, isr, osr);
+  double y2 = coord_y(ring, 3, ic, isr, osr);
+  for (int32_t i = 4; i < ring_num_coords; i += 2) {
+    double x3 = coord_x(ring, i, ic, isr, osr);
+    double y3 = coord_y(ring, i + 1, ic, isr, osr);
     area += area_triangle(x1, y1, x2, y2, x3, y3);
     x2 = x3;
     y2 = y3;
+  }
+  return area;
+}
+
+DEVICE ALWAYS_INLINE double area_polygon(int8_t* poly_coords,
+                                         int64_t poly_coords_size,
+                                         int32_t* poly_ring_sizes,
+                                         int64_t poly_num_rings,
+                                         int32_t ic,
+                                         int32_t isr,
+                                         int32_t osr) {
+  if (poly_num_rings <= 0)
+    return 0.0;
+
+  double area = 0.0;
+  auto ring_coords = poly_coords;
+
+  // Add up the areas of all rings.
+  // External ring is CCW, open - positive area.
+  // Internal rings (holes) are CW, open - negative areas.
+  for (auto r = 0; r < poly_num_rings; r++) {
+    auto ring_coords_size = poly_ring_sizes[r] * 2 * compression_unit_size(ic);
+    area += area_ring(ring_coords, ring_coords_size, ic, isr, osr);
+    // Advance to the next ring.
+    ring_coords += ring_coords_size;
   }
   return area;
 }
@@ -682,22 +707,8 @@ double ST_Area_Polygon(int8_t* poly_coords,
                        int32_t ic,
                        int32_t isr,
                        int32_t osr) {
-  if (poly_num_rings <= 0)
-    return 0.0;
-
-  double area = 0.0;
-  auto ring_coords = poly_coords;
-
-  // Add up the areas of all rings.
-  // External ring is CCW, open - positive area.
-  // Internal rings (holes) are CW, open - negative areas.
-  for (auto r = 0; r < poly_num_rings; r++) {
-    auto ring_coords_size = poly_ring_sizes[r] * 2 * compression_unit_size(ic);
-    area += area_polygon(ring_coords, ring_coords_size, ic, isr, osr);
-    // Advance to the next ring.
-    ring_coords += ring_coords_size;
-  }
-  return area;
+  return area_polygon(
+      poly_coords, poly_coords_size, poly_ring_sizes, poly_num_rings, ic, isr, osr);
 }
 
 EXTENSION_INLINE
@@ -710,6 +721,64 @@ double ST_Area_Polygon_Geodesic(int8_t* poly_coords,
                                 int32_t osr) {
   return ST_Area_Polygon(
       poly_coords, poly_coords_size, poly_ring_sizes, poly_num_rings, ic, isr, osr);
+}
+
+EXTENSION_NOINLINE
+double ST_Area_MultiPolygon(int8_t* mpoly_coords,
+                            int64_t mpoly_coords_size,
+                            int32_t* mpoly_ring_sizes,
+                            int64_t mpoly_num_rings,
+                            int32_t* mpoly_poly_sizes,
+                            int64_t mpoly_num_polys,
+                            int32_t ic,
+                            int32_t isr,
+                            int32_t osr) {
+  if (mpoly_num_rings <= 0 || mpoly_num_polys <= 0)
+    return 0.0;
+
+  double area = 0.0;
+
+  // Set specific poly pointers as we move through the coords/ringsizes/polyrings arrays.
+  auto next_poly_coords = mpoly_coords;
+  auto next_poly_ring_sizes = mpoly_ring_sizes;
+
+  for (auto poly = 0; poly < mpoly_num_polys; poly++) {
+    auto poly_coords = next_poly_coords;
+    auto poly_ring_sizes = next_poly_ring_sizes;
+    auto poly_num_rings = mpoly_poly_sizes[poly];
+    // Count number of coords in all of poly's rings, advance ring size pointer.
+    int32_t poly_num_coords = 0;
+    for (auto ring = 0; ring < poly_num_rings; ring++) {
+      poly_num_coords += 2 * *next_poly_ring_sizes++;
+    }
+    auto poly_coords_size = poly_num_coords * compression_unit_size(ic);
+    next_poly_coords += poly_coords_size;
+
+    area += area_polygon(
+        poly_coords, poly_coords_size, poly_ring_sizes, poly_num_rings, ic, isr, osr);
+  }
+  return area;
+}
+
+EXTENSION_INLINE
+double ST_Area_MultiPolygon_Geodesic(int8_t* mpoly_coords,
+                                     int64_t mpoly_coords_size,
+                                     int32_t* mpoly_ring_sizes,
+                                     int64_t mpoly_num_rings,
+                                     int32_t* mpoly_poly_sizes,
+                                     int64_t mpoly_num_polys,
+                                     int32_t ic,
+                                     int32_t isr,
+                                     int32_t osr) {
+  return ST_Area_MultiPolygon(mpoly_coords,
+                              mpoly_coords_size,
+                              mpoly_ring_sizes,
+                              mpoly_num_rings,
+                              mpoly_poly_sizes,
+                              mpoly_num_polys,
+                              ic,
+                              isr,
+                              osr);
 }
 
 EXTENSION_INLINE

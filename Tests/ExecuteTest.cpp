@@ -9637,6 +9637,16 @@ TEST(Select, GeoSpatial_Projection) {
                                          "from geospatial_test limit 1;",
                                          dt)),
                 static_cast<double>(0.0001));
+    // Area of a planar multipolygon
+    ASSERT_NEAR(static_cast<double>(2.0 - 0.02 + 8.0 - 0.08),
+                v<double>(run_simple_agg("SELECT ST_Area('MULTIPOLYGON("
+                                         "((1 0, 0 1, -1 0, 0 -1, 1 0),"
+                                         " (0.1 0, 0 0.1, -0.1 0, 0 -0.1, 0.1 0)), "
+                                         "((2 0, 0 2, -2 0, 0 -2, 2 0),"
+                                         " (0.2 0, 0 0.2, -0.2 0, 0 -0.2, 0.2 0)))') "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.0001));
 
     // ST_Contains
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
