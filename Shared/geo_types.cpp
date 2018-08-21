@@ -205,13 +205,8 @@ void GeoPoint::getColumns(std::vector<double>& coords) const {
   if (point_geom->IsEmpty()) {
     // we cannot yet handle NULL fixed-length array
     // so we have to store sentinel values instead
-    // but we can't handle those either for compress/
-    // decompress, so just store zeros for now
-    // simon.eves 8/17/18
-    // coords.push_back(NULL_DOUBLE);
-    // coords.push_back(NULL_DOUBLE);
-    coords.push_back(0.0);
-    coords.push_back(0.0);
+    coords.push_back(NULL_DOUBLE);
+    coords.push_back(NULL_DOUBLE);
     return;
   }
 
@@ -247,10 +242,10 @@ void GeoLineString::getColumns(std::vector<double>& coords,
   CHECK(linestring_geom);
 
   if (linestring_geom->IsEmpty()) {
-    bounds.push_back(0.0);
-    bounds.push_back(0.0);
-    bounds.push_back(0.0);
-    bounds.push_back(0.0);
+    bounds.push_back(NULL_DOUBLE);
+    bounds.push_back(NULL_DOUBLE);
+    bounds.push_back(NULL_DOUBLE);
+    bounds.push_back(NULL_DOUBLE);
     return;
   }
 
@@ -309,10 +304,10 @@ void GeoPolygon::getColumns(std::vector<double>& coords,
   CHECK(poly_geom);
 
   if (poly_geom->IsEmpty()) {
-    bounds.push_back(0.0);
-    bounds.push_back(0.0);
-    bounds.push_back(0.0);
-    bounds.push_back(0.0);
+    bounds.push_back(NULL_DOUBLE);
+    bounds.push_back(NULL_DOUBLE);
+    bounds.push_back(NULL_DOUBLE);
+    bounds.push_back(NULL_DOUBLE);
     return;
   }
 
@@ -394,11 +389,10 @@ void GeoMultiPolygon::getColumns(std::vector<double>& coords,
   CHECK(mpoly);
 
   if (mpoly->IsEmpty()) {
-    bounds.push_back(0.0);
-    bounds.push_back(0.0);
-    bounds.push_back(0.0);
-    bounds.push_back(0.0);
-    poly_rings.push_back(0);
+    bounds.push_back(NULL_DOUBLE);
+    bounds.push_back(NULL_DOUBLE);
+    bounds.push_back(NULL_DOUBLE);
+    bounds.push_back(NULL_DOUBLE);
     return;
   }
 
@@ -556,9 +550,8 @@ void GeoTypesFactory::getGeoColumnsImpl(const std::unique_ptr<GeoBase>& geospati
       geospatial_poly->getColumns(coords, ring_sizes, bounds);
       if (promote_poly_to_mpoly) {
         if (ring_sizes.size()) {
+          CHECK_GT(coords.size(), 0);
           poly_rings.push_back(1 + geospatial_poly->getNumInteriorRings());
-        } else {
-          poly_rings.push_back(0);
         }
       }
       ti.set_type(kPOLYGON);
