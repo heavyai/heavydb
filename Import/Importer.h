@@ -781,7 +781,9 @@ class RenderGroupAnalyzer {
   using Point = boost::geometry::model::point<double, 2, boost::geometry::cs::cartesian>;
   using BoundingBox = boost::geometry::model::box<Point>;
   using Node = std::pair<BoundingBox, int>;
-  boost::geometry::index::rtree<Node, boost::geometry::index::quadratic<16>> _rtree;
+  using RTree =
+      boost::geometry::index::rtree<Node, boost::geometry::index::quadratic<16>>;
+  std::unique_ptr<RTree> _rtree;
   std::mutex _rtreeMutex;
   int _numRenderGroups;
 };

@@ -3947,14 +3947,16 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(
   CHECK(td->fragmenter);
 
   // start with a fresh tree
-  _rtree.clear();
+  _rtree = nullptr;
   _numRenderGroups = 0;
 
-  // if the table is empty, we're done
+  // if the table is empty, just make an empty tree
   if (td->fragmenter->getFragmentsForQuery().getPhysicalNumTuples() == 0) {
     if (DEBUG_RENDER_GROUP_ANALYZER) {
       LOG(INFO) << "DEBUG: Table is empty!";
     }
+    _rtree = std::make_unique<RTree>();
+    CHECK(_rtree);
     return;
   }
 
@@ -3964,25 +3966,19 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(
   const auto cd_render_group =
       cat.getMetadataForColumn(td->tableId, geoColumnBaseName + "_render_group");
   if (!cd_bounds || !cd_render_group) {
-    if (DEBUG_RENDER_GROUP_ANALYZER) {
-      LOG(INFO) << "DEBUG: Table doesn't have bounds or render_group columns!";
-    }
-    return;
+    throw std::runtime_error("RenderGroupAnalyzer: Table " + tableName +
+                             " doesn't have bounds or render_group columns!");
   }
 
   // and validate their types
   if (cd_bounds->columnType.get_type() != kARRAY ||
       cd_bounds->columnType.get_subtype() != kDOUBLE) {
-    if (DEBUG_RENDER_GROUP_ANALYZER) {
-      LOG(INFO) << "DEBUG: Table bounds columns is wrong type!";
-    }
-    return;
+    throw std::runtime_error("RenderGroupAnalyzer: Table " + tableName +
+                             " bounds column is wrong type!");
   }
   if (cd_render_group->columnType.get_type() != kINT) {
-    if (DEBUG_RENDER_GROUP_ANALYZER) {
-      LOG(INFO) << "DEBUG: Table render_group columns is wrong type!";
-    }
-    return;
+    throw std::runtime_error("RenderGroupAnalyzer: Table " + tableName +
+                             " render_group column is wrong type!");
   }
 
   // get chunk accessor table
@@ -3993,6 +3989,14 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(
   if (DEBUG_RENDER_GROUP_ANALYZER) {
     LOG(INFO) << "DEBUG: Scanning existing table geo column set '" << geoColumnBaseName
               << "'";
+  }
+
+  std::vector<Node> nodes;
+  try {
+    nodes.resize(table_count);
+  } catch (const std::exception& e) {
+    throw std::runtime_error("RenderGroupAnalyzer failed to reserve memory for " +
+                             std::to_string(table_count) + " rows");
   }
 
   for (size_t row = 0; row < table_count; row++) {
@@ -4027,8 +4031,8 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(
     int renderGroup = *reinterpret_cast<int32_t*>(vd.pointer);
     CHECK_GE(renderGroup, 0);
 
-    // add to rtree
-    _rtree.insert(std::make_pair(bounding_box, renderGroup));
+    // store
+    nodes[row] = std::make_pair(bounding_box, renderGroup);
 
     // how many render groups do we have now?
     if (renderGroup >= _numRenderGroups) {
@@ -4040,12 +4044,17 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(
     }
   }
 
+  // bulk-load the tree
+  auto bulk_load_timer = timer_start();
+  _rtree = std::make_unique<RTree>(nodes);
+  CHECK(_rtree);
+  LOG(INFO) << "Scanning existing poly render groups of table '" << tableName << "' took "
+            << timer_stop(seedTimer) << "ms (" << timer_stop(bulk_load_timer)
+            << " ms for tree)";
+
   if (DEBUG_RENDER_GROUP_ANALYZER) {
     LOG(INFO) << "DEBUG: Done! Now have " << _numRenderGroups << " Render Groups";
   }
-
-  LOG(INFO) << "Scanning existing poly render groups of table '" << tableName << "' took "
-            << timer_stop(seedTimer) << "ms";
 }
 
 int RenderGroupAnalyzer::insertBoundsAndReturnRenderGroup(
@@ -4064,8 +4073,8 @@ int RenderGroupAnalyzer::insertBoundsAndReturnRenderGroup(
 
   // get the intersecting nodes
   std::vector<Node> intersects;
-  _rtree.query(boost::geometry::index::intersects(bounding_box),
-               std::back_inserter(intersects));
+  _rtree->query(boost::geometry::index::intersects(bounding_box),
+                std::back_inserter(intersects));
 
   // build bitset of render groups of the intersecting rectangles
   // clear bit means available, allows use of find_first()
@@ -4088,7 +4097,7 @@ int RenderGroupAnalyzer::insertBoundsAndReturnRenderGroup(
   }
 
   // insert new node
-  _rtree.insert(std::make_pair(bounding_box, firstAvailableRenderGroup));
+  _rtree->insert(std::make_pair(bounding_box, firstAvailableRenderGroup));
 
   // return it
   return firstAvailableRenderGroup;
