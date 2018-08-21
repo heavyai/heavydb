@@ -251,7 +251,7 @@ WORK          TOK(WORK)
 \n		{ lineno++; }
 	*/
 
-[ \t\r]+	;	/* white space */
+[ \n\t\r]+	;	/* white space */
 
 "--".*	;	/* comment */
 
