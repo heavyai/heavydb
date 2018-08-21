@@ -248,14 +248,15 @@ TEST(Detect, Numeric) {
   d(kTEXT, "1.22.22");
 }
 
-const char* create_table_fix1 =
-    "CREATE TABLE fix1("
-    " pt GEOMETRY(POINT),"
-    " ls GEOMETRY(LINESTRING),"
-    " faii INTEGER[2],"
-    " fadc DECIMAL(5,2)[2],"
-    " fatx TEXT[] ENCODING DICT(32)"
-    ");";
+const char* create_table_fix1 = R"(
+    CREATE TABLE fix1(
+      pt GEOMETRY(POINT),
+      ls GEOMETRY(LINESTRING),
+      faii INTEGER[2],
+      fadc DECIMAL(5,2)[2],
+      fatx TEXT[] ENCODING DICT(32)
+    );
+  )";
 
 class ImportTestFix1 : public ::testing::Test {
  protected:
@@ -278,26 +279,24 @@ TEST_F(ImportTestFix1, Fix_failed_import_arrays_after_geos) {
   CHECK_EQ(int64_t(1), v<int64_t>(crt_row[0]));
 }
 
-// don't use R"()" format; somehow it causes many blank lines
-// to be output on console. how come?
-const char* create_table_trips =
-    "	CREATE TABLE trips (								"
-    "	"
-    "			medallion               TEXT ENCODING DICT,	"
-    "			hack_license            TEXT ENCODING DICT,	"
-    "			vendor_id               TEXT ENCODING DICT,	"
-    "			rate_code_id            SMALLINT,			"
-    "			store_and_fwd_flag      TEXT ENCODING DICT,	"
-    "			pickup_datetime         TIMESTAMP,			"
-    "			dropoff_datetime        TIMESTAMP,			"
-    "			passenger_count         SMALLINT,			"
-    "			trip_time_in_secs       INTEGER,				"
-    "			trip_distance           DECIMAL(14,2),		"
-    "			pickup_longitude        DECIMAL(14,2),		"
-    "			pickup_latitude         DECIMAL(14,2),		"
-    "			dropoff_longitude       DECIMAL(14,2),		"
-    "			dropoff_latitude        DECIMAL(14,2)		"
-    "			) WITH (FRAGMENT_SIZE=75000000);				";
+const char* create_table_trips = R"(
+    CREATE TABLE trips (
+      medallion               TEXT ENCODING DICT,
+      hack_license            TEXT ENCODING DICT,
+      vendor_id               TEXT ENCODING DICT,
+      rate_code_id            SMALLINT,
+      store_and_fwd_flag      TEXT ENCODING DICT,
+      pickup_datetime         TIMESTAMP,
+      dropoff_datetime        TIMESTAMP,
+      passenger_count         SMALLINT,
+      trip_time_in_secs       INTEGER,
+      trip_distance           DECIMAL(14,2),
+      pickup_longitude        DECIMAL(14,2),
+      pickup_latitude         DECIMAL(14,2),
+      dropoff_longitude       DECIMAL(14,2),
+      dropoff_latitude        DECIMAL(14,2)
+    ) WITH (FRAGMENT_SIZE=75000000);
+  )";
 
 class ImportTest : public ::testing::Test {
  protected:
@@ -349,26 +348,26 @@ TEST_F(ImportTest, One_7z_with_many_csv_files) {
 }
 
 // Sharding tests
-const char* create_table_trips_sharded =
-    "	CREATE TABLE trips (								"
-    "	"
-    "     id                      INTEGER,            "
-    "			medallion               TEXT ENCODING DICT,	"
-    "			hack_license            TEXT ENCODING DICT,	"
-    "			vendor_id               TEXT ENCODING DICT,	"
-    "			rate_code_id            SMALLINT,			"
-    "			store_and_fwd_flag      TEXT ENCODING DICT,	"
-    "			pickup_datetime         TIMESTAMP,			"
-    "			dropoff_datetime        TIMESTAMP,			"
-    "			passenger_count         SMALLINT,			"
-    "			trip_time_in_secs       INTEGER,				"
-    "			trip_distance           DECIMAL(14,2),		"
-    "			pickup_longitude        DECIMAL(14,2),		"
-    "			pickup_latitude         DECIMAL(14,2),		"
-    "			dropoff_longitude       DECIMAL(14,2),		"
-    "			dropoff_latitude        DECIMAL(14,2),		"
-    "     shard key (id)                           "
-    "			) WITH (FRAGMENT_SIZE=75000000, SHARD_COUNT=2);";
+const char* create_table_trips_sharded = R"(
+    CREATE TABLE trips (
+      id                      INTEGER,
+      medallion               TEXT ENCODING DICT,
+      hack_license            TEXT ENCODING DICT,
+      vendor_id               TEXT ENCODING DICT,
+      rate_code_id            SMALLINT,
+      store_and_fwd_flag      TEXT ENCODING DICT,
+      pickup_datetime         TIMESTAMP,
+      dropoff_datetime        TIMESTAMP,
+      passenger_count         SMALLINT,
+      trip_time_in_secs       INTEGER,
+      trip_distance           DECIMAL(14,2),
+      pickup_longitude        DECIMAL(14,2),
+      pickup_latitude         DECIMAL(14,2),
+      dropoff_longitude       DECIMAL(14,2),
+      dropoff_latitude        DECIMAL(14,2),
+      shard key (id)
+    ) WITH (FRAGMENT_SIZE=75000000, SHARD_COUNT=2);
+  )";
 class ImportTestSharded : public ::testing::Test {
  protected:
   virtual void SetUp() {
@@ -387,22 +386,25 @@ TEST_F(ImportTestSharded, One_csv_file) {
 }
 
 namespace {
-const char* create_table_geo =
-    "  CREATE TABLE geospatial ("
-    "   p1 POINT,"
-    "   l LINESTRING,"
-    "   poly POLYGON,"
-    "   mpoly MULTIPOLYGON,"
-    "   p2 POINT,"
-    "   p3 POINT,"
-    "   p4 POINT,"
-    "   trip_distance DOUBLE"
-    " ) WITH (FRAGMENT_SIZE=65000000);";
+const char* create_table_geo = R"(
+    CREATE TABLE geospatial (
+      p1 POINT,
+      l LINESTRING,
+      poly POLYGON,
+      mpoly MULTIPOLYGON,
+      p2 POINT,
+      p3 POINT,
+      p4 POINT,
+      trip_distance DOUBLE
+    ) WITH (FRAGMENT_SIZE=65000000);
+  )";
 
 void check_geo_import() {
-  auto rows = run_query(
-      "SELECT p1, l, poly, mpoly, p2, p3, p4, trip_distance FROM geospatial WHERE "
-      "trip_distance = 1.0");
+  auto rows = run_query(R"(
+      SELECT p1, l, poly, mpoly, p2, p3, p4, trip_distance
+        FROM geospatial
+        WHERE trip_distance = 1.0;
+    )");
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(8), crt_row.size());
   const auto p1 = boost::get<std::string>(v<NullableString>(crt_row[0]));
@@ -427,9 +429,7 @@ void check_geo_import() {
 }
 
 void check_geo_gdal_point_import() {
-  auto rows = run_query(
-      "SELECT mapd_geo, trip FROM geospatial WHERE "
-      "trip = 1.0");
+  auto rows = run_query("SELECT mapd_geo, trip FROM geospatial WHERE trip = 1.0");
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(2), crt_row.size());
   const auto point = boost::get<std::string>(v<NullableString>(crt_row[0]));
@@ -439,9 +439,7 @@ void check_geo_gdal_point_import() {
 }
 
 void check_geo_gdal_mpoly_import() {
-  auto rows = run_query(
-      "SELECT mapd_geo, trip FROM geospatial WHERE "
-      "trip = 1.0");
+  auto rows = run_query("SELECT mapd_geo, trip FROM geospatial WHERE trip = 1.0");
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(2), crt_row.size());
   const auto mpoly = boost::get<std::string>(v<NullableString>(crt_row[0]));
@@ -457,9 +455,7 @@ void check_geo_gdal_mpoly_append(const size_t num_expected_rows) {
 }
 
 void check_geo_gdal_point_tv_import() {
-  auto rows = run_query(
-      "SELECT mapd_geo, trip FROM geospatial WHERE "
-      "trip = 1.0");
+  auto rows = run_query("SELECT mapd_geo, trip FROM geospatial WHERE trip = 1.0");
   rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
   auto crt_row = rows->getNextRow(true, true);
   compare_geo_target(crt_row[0], GeoPointTargetValue({1.0, 1.0}), 1e-7);
@@ -468,9 +464,7 @@ void check_geo_gdal_point_tv_import() {
 }
 
 void check_geo_gdal_mpoly_tv_import() {
-  auto rows = run_query(
-      "SELECT mapd_geo, trip FROM geospatial WHERE "
-      "trip = 1.0");
+  auto rows = run_query("SELECT mapd_geo, trip FROM geospatial WHERE trip = 1.0");
   rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
   auto crt_row = rows->getNextRow(true, true);
   compare_geo_target(crt_row[0],
