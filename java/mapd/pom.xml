@@ -24,7 +24,7 @@
     <dependency>
       <groupId>com.mapd</groupId>
       <artifactId>mapdjdbc</artifactId>
-      <version>1.0-SNAPSHOT</version>
+      <version>${mapd.release.version}</version>
     </dependency>
   </dependencies>
   <build>

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <artifactId>parent</artifactId>
@@ -8,7 +9,7 @@
   </parent>
   <groupId>com.mapd</groupId>
   <artifactId>mapdjdbc</artifactId>
-  <version>1.0-SNAPSHOT</version>
+  <version>${mapd.release.version}</version>
   <packaging>jar</packaging>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -16,6 +17,7 @@
     <maven.compiler.target>1.6</maven.compiler.target>
     <thrift.version>0.9.3</thrift.version>
     <skipTests>true</skipTests>
+    <mapd.release.version>need-to-set-mapd.release.version</mapd.release.version>
   </properties>
   <dependencies>
     <dependency>
@@ -59,18 +61,14 @@
   </dependencies>
   <build>
     <plugins>
-<plugin>
-
+      <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>2.22.0</version>
         <configuration>
           <skipTests>${skipTests}</skipTests>
         </configuration>
-
-
-
-</plugin>
+      </plugin>
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>build-helper-maven-plugin</artifactId>
@@ -100,6 +98,7 @@
           <descriptorRefs>
             <descriptorRef>jar-with-dependencies</descriptorRef>
           </descriptorRefs>
+          <appendAssemblyId>false</appendAssemblyId>
         </configuration>
         <executions>
           <execution>
