@@ -50,6 +50,7 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
+#include <llvm/Transforms/Utils/ValueMapper.h>
 #include <rapidjson/document.h>
 #include <boost/functional/hash.hpp>
 
@@ -1502,11 +1503,7 @@ class Executor {
     }
 
     llvm::Value* emitCall(const std::string& fname,
-                          const std::vector<llvm::Value*>& args) {
-      auto f = module_->getFunction(fname);
-      CHECK(f);
-      return ir_builder_.CreateCall(f, args);
-    }
+                          const std::vector<llvm::Value*>& args);
 
     size_t getLiteralBufferUsage(const int device_id) {
       return literal_bytes_[device_id];
@@ -1516,6 +1513,7 @@ class Executor {
     llvm::Function* row_func_;
     std::vector<llvm::Function*> helper_functions_;
     llvm::LLVMContext& context_;
+    llvm::ValueToValueMapTy vmap_;  // used for cloning the runtime module
     llvm::IRBuilder<> ir_builder_;
     std::unordered_map<int, std::vector<llvm::Value*>> fetch_cache_;
     std::vector<llvm::Value*> group_by_expr_cache_;

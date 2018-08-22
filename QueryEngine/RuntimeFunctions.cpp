@@ -29,7 +29,6 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
-#include <set>
 #include <thread>
 #include <tuple>
 
@@ -265,10 +264,6 @@ extern "C" ALWAYS_INLINE uint64_t agg_count(uint64_t* agg, const int64_t) {
   return (*agg)++;
 }
 
-extern "C" ALWAYS_INLINE void agg_count_distinct(int64_t* agg, const int64_t val) {
-  reinterpret_cast<std::set<int64_t>*>(*agg)->insert(val);
-}
-
 extern "C" ALWAYS_INLINE void agg_count_distinct_bitmap(int64_t* agg,
                                                         const int64_t val,
                                                         const int64_t min_val) {
@@ -337,14 +332,6 @@ extern "C" ALWAYS_INLINE void agg_min(int64_t* agg, const int64_t val) {
 
 extern "C" ALWAYS_INLINE void agg_id(int64_t* agg, const int64_t val) {
   *agg = val;
-}
-
-extern "C" ALWAYS_INLINE void agg_count_distinct_skip_val(int64_t* agg,
-                                                          const int64_t val,
-                                                          const int64_t skip_val) {
-  if (val != skip_val) {
-    agg_count_distinct(agg, val);
-  }
 }
 
 extern "C" ALWAYS_INLINE void agg_count_distinct_bitmap_skip_val(int64_t* agg,

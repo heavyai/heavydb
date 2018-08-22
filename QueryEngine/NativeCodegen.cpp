@@ -29,6 +29,7 @@
 #endif
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/IR/Attributes.h>
+#include <llvm/IR/GlobalValue.h>
 #include <llvm/IR/InstIterator.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
@@ -42,6 +43,7 @@
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Instrumentation.h>
+#include <llvm/Transforms/Utils/Cloning.h>
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Intrinsics.h"
 #if LLVM_VERSION_MAJOR >= 4
@@ -959,6 +961,8 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
 
 }  // namespace
 
+std::unique_ptr<llvm::Module> g_rt_module(read_template_module(getGlobalLLVMContext()));
+
 std::unordered_set<llvm::Function*> Executor::markDeadRuntimeFuncs(
     llvm::Module& module,
     const std::vector<llvm::Function*>& roots,
@@ -1177,6 +1181,24 @@ std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
   return hoisted_literals;
 }
 
+namespace {
+
+// A small number of runtime functions don't get through CgenState::emitCall. List them
+// explicitly here and always clone their implementation from the runtime module.
+bool always_clone_runtime_function(const llvm::Function* func) {
+  return func->getName() == "query_stub_hoisted_literals" ||
+         func->getName() == "multifrag_query_hoisted_literals" ||
+         func->getName() == "query_stub" || func->getName() == "multifrag_query" ||
+         func->getName() == "fixed_width_int_decode" ||
+         func->getName() == "fixed_width_unsigned_decode" ||
+         func->getName() == "diff_fixed_width_int_decode" ||
+         func->getName() == "fixed_width_double_decode" ||
+         func->getName() == "fixed_width_float_decode" ||
+         func->getName() == "record_error_code";
+}
+
+}  // namespace
+
 Executor::CompilationResult Executor::compileWorkUnit(
     const std::vector<InputTableInfo>& query_infos,
     const RelAlgExecutionUnit& ra_exe_unit,
@@ -1248,7 +1270,17 @@ Executor::CompilationResult Executor::compileWorkUnit(
   // Read the module template and target either CPU or GPU
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
-  cgen_state_->module_ = read_template_module(cgen_state_->context_);
+  auto rt_module_copy = llvm::CloneModule(
+      g_rt_module.get(), cgen_state_->vmap_, [](const llvm::GlobalValue* gv) {
+        auto func = llvm::dyn_cast<llvm::Function>(gv);
+        if (!func) {
+          return true;
+        }
+        return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
+                func->getLinkage() == llvm::GlobalValue::LinkageTypes::InternalLinkage ||
+                always_clone_runtime_function(func));
+      });
+  cgen_state_->module_ = rt_module_copy.release();
 
   auto agg_fnames =
       get_agg_fnames(ra_exe_unit.target_exprs, !ra_exe_unit.groupby_exprs.empty());

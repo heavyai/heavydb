@@ -45,6 +45,7 @@
 #include "StringDictionaryGenerations.h"
 
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
+#include <llvm/Transforms/Utils/Cloning.h>
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
 
@@ -68,6 +69,7 @@ bool g_left_deep_join_optimization{true};
 bool g_from_table_reordering{true};
 bool g_inner_join_fragment_skipping{false};
 extern bool g_enable_smem_group_by;
+extern std::unique_ptr<llvm::Module> g_rt_module;
 
 Executor::Executor(const int db_id,
                    const size_t block_size_x,
@@ -3176,6 +3178,30 @@ std::pair<bool, int64_t> Executor::skipFragmentInnerJoins(
     }
   }
   return skip_frag;
+}
+
+llvm::Value* Executor::CgenState::emitCall(const std::string& fname,
+                                           const std::vector<llvm::Value*>& args) {
+  // Get the implementation from the runtime module.
+  auto func_impl = g_rt_module->getFunction(fname);
+  CHECK(func_impl);
+  // Get the function reference from the query module.
+  auto func = module_->getFunction(fname);
+  CHECK(func);
+  // If the function called isn't external, clone the implementation from the runtime
+  // module.
+  if (func->isDeclaration() && !func_impl->isDeclaration()) {
+    auto DestI = func->arg_begin();
+    for (auto arg_it = func_impl->arg_begin(); arg_it != func_impl->arg_end(); ++arg_it) {
+      DestI->setName(arg_it->getName());
+      vmap_[&*arg_it] = &*DestI++;
+    }
+
+    llvm::SmallVector<llvm::ReturnInst*, 8> Returns;  // Ignore returns cloned.
+    llvm::CloneFunctionInto(func, func_impl, vmap_, /*ModuleLevelChanges=*/true, Returns);
+  }
+
+  return ir_builder_.CreateCall(func, args);
 }
 
 std::map<std::pair<int, ::QueryRenderer::QueryRenderManager*>, std::shared_ptr<Executor>>

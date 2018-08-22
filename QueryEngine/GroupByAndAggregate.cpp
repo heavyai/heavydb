@@ -3742,6 +3742,18 @@ void GroupByAndAggregate::codegenEstimator(
            {bitmap, &*bitmap_size_lv, key_bytes, &*estimator_comp_bytes_lv});
 }
 
+extern "C" void agg_count_distinct(int64_t* agg, const int64_t val) {
+  reinterpret_cast<std::set<int64_t>*>(*agg)->insert(val);
+}
+
+extern "C" void agg_count_distinct_skip_val(int64_t* agg,
+                                            const int64_t val,
+                                            const int64_t skip_val) {
+  if (val != skip_val) {
+    agg_count_distinct(agg, val);
+  }
+}
+
 void GroupByAndAggregate::codegenCountDistinct(
     const size_t target_idx,
     const Analyzer::Expr* target_expr,
@@ -3801,7 +3813,12 @@ void GroupByAndAggregate::codegenCountDistinct(
     agg_args.push_back(LL_INT(int64_t(count_distinct_descriptor.bitmapPaddedSizeBytes() /
                                       count_distinct_descriptor.sub_bitmap_count)));
   }
-  emitCall(agg_fname, agg_args);
+  if (count_distinct_descriptor.impl_type_ == CountDistinctImplType::Bitmap) {
+    emitCall(agg_fname, agg_args);
+  } else {
+    executor_->cgen_state_->emitExternalCall(
+        agg_fname, llvm::Type::getVoidTy(LL_CONTEXT), agg_args);
+  }
 }
 
 llvm::Value* GroupByAndAggregate::getAdditionalLiteral(const int32_t off) {
