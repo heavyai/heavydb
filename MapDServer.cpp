@@ -640,6 +640,10 @@ int main(int argc, char** argv) {
     LOG(INFO) << " From clause table reordering is disabled";
   }
 
+  if (g_enable_filter_push_down) {
+    LOG(INFO) << " Filter push down for JOIN is enabled";
+  }
+
   boost::algorithm::trim_if(mapd_parameters.ha_brokers, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(mapd_parameters.ha_group_id, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(mapd_parameters.ha_shared_data, boost::is_any_of("\"'"));
