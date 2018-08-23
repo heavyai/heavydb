@@ -144,11 +144,17 @@ list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 
+if(ENABLE_JIT_DEBUG AND NOT ENABLE_CUDA)
+  set(RT_OPT_FLAGS -O0 -g)
+else()
+  set(RT_OPT_FLAGS -O3)
+endif()
+
 add_custom_command(
     DEPENDS RuntimeFunctions.cpp RuntimeFunctions.h ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
     COMMAND ${llvm_clangpp_cmd}
-    ARGS -std=c++11 -O3 -c -emit-llvm
+    ARGS -std=c++11 ${RT_OPT_FLAGS} -c -emit-llvm
     ${CLANG_SDK_INC}
     ${CLANG_CRT_INC}
     ${MAPD_DEFINITIONS}

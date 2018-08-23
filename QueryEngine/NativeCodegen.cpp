@@ -55,8 +55,19 @@
 
 namespace {
 
-void eliminateDeadSelfRecursiveFuncs(llvm::Module& M,
-                                     std::unordered_set<llvm::Function*>& live_funcs) {
+void verify_function_ir(const llvm::Function* func) {
+  std::stringstream err_ss;
+  llvm::raw_os_ostream err_os(err_ss);
+  if (llvm::verifyFunction(*func, &err_os)) {
+    func->print(llvm::outs());
+    LOG(FATAL) << err_ss.str();
+  }
+}
+
+#if defined(HAVE_CUDA) || !defined(WITH_JIT_DEBUG)
+void eliminate_dead_self_recursive_funcs(
+    llvm::Module& M,
+    std::unordered_set<llvm::Function*>& live_funcs) {
   std::vector<llvm::Function*> dead_funcs;
   for (auto& F : M) {
     bool bAlive = false;
@@ -79,21 +90,12 @@ void eliminateDeadSelfRecursiveFuncs(llvm::Module& M,
   }
 }
 
-void verify_function_ir(const llvm::Function* func) {
-  std::stringstream err_ss;
-  llvm::raw_os_ostream err_os(err_ss);
-  if (llvm::verifyFunction(*func, &err_os)) {
-    func->print(llvm::outs());
-    LOG(FATAL) << err_ss.str();
-  }
-}
-
-void optimizeIR(llvm::Function* query_func,
-                llvm::Module* module,
-                std::unordered_set<llvm::Function*>& live_funcs,
-                const CompilationOptions& co,
-                const std::string& debug_dir,
-                const std::string& debug_file) {
+void optimize_ir(llvm::Function* query_func,
+                 llvm::Module* module,
+                 std::unordered_set<llvm::Function*>& live_funcs,
+                 const CompilationOptions& co,
+                 const std::string& debug_dir,
+                 const std::string& debug_file) {
   llvm::legacy::PassManager pass_manager;
 #if LLVM_VERSION_MAJOR < 4
   pass_manager.add(llvm::createAlwaysInlinerPass());
@@ -116,14 +118,9 @@ void optimizeIR(llvm::Function* query_func,
   }
   pass_manager.run(*module);
 
-  eliminateDeadSelfRecursiveFuncs(*module, live_funcs);
-
-  // optimizations might add attributes to the function
-  // and NVPTX doesn't understand all of them; play it
-  // safe and clear all attributes
-  clear_function_attributes(query_func);
-  verify_function_ir(query_func);
+  eliminate_dead_self_recursive_funcs(*module, live_funcs);
 }
+#endif
 
 template <class T>
 std::string serialize_llvm_object(const T* llvm_obj) {
@@ -190,7 +187,9 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
   }
 
   // run optimizations
-  optimizeIR(query_func, module, live_funcs, co, debug_dir_, debug_file_);
+#ifndef WITH_JIT_DEBUG
+  optimize_ir(query_func, module, live_funcs, co, debug_dir_, debug_file_);
+#endif  // WITH_JIT_DEBUG
 
   llvm::ExecutionEngine* execution_engine{nullptr};
 
@@ -278,6 +277,8 @@ std::string gen_translate_null_key_sigs() {
 
 const std::string cuda_rt_decls =
     R"(
+declare void @llvm.dbg.declare(metadata, metadata, metadata)
+declare void @llvm.dbg.value(metadata, metadata, metadata)
 declare void @llvm.lifetime.start(i64, i8* nocapture) nounwind
 declare void @llvm.lifetime.end(i64, i8* nocapture) nounwind
 declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) nounwind
@@ -423,6 +424,12 @@ std::string extension_function_decls() {
 }
 
 void legalize_nvvm_ir(llvm::Function* query_func) {
+  // optimizations might add attributes to the function
+  // and NVPTX doesn't understand all of them; play it
+  // safe and clear all attributes
+  clear_function_attributes(query_func);
+  verify_function_ir(query_func);
+
   std::vector<llvm::Instruction*> unsupported_intrinsics;
   for (auto& BB : *query_func) {
     for (llvm::Instruction& I : BB) {
@@ -499,8 +506,7 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
   module->setTargetTriple("nvptx64-nvidia-cuda");
 
   // run optimizations
-  optimizeIR(query_func, module, live_funcs, co, "", "");
-
+  optimize_ir(query_func, module, live_funcs, co, "", "");
   legalize_nvvm_ir(query_func);
 
   std::stringstream ss;

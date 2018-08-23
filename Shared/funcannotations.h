@@ -44,7 +44,8 @@
 #define FORCE_INLINE inline __attribute__((always_inline))
 #endif
 
-#if defined(__CUDACC__) || (defined(__GNUC__) && defined(__SANITIZE_THREAD__))
+#if defined(__CUDACC__) || (defined(__GNUC__) && defined(__SANITIZE_THREAD__)) || \
+    defined(WITH_JIT_DEBUG)
 #define ALWAYS_INLINE
 #else
 #define ALWAYS_INLINE __attribute__((always_inline))

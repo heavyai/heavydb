@@ -92,6 +92,11 @@ else()
   set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-cpu")
 endif()
 
+option(ENABLE_JIT_DEBUG "Enable debugging symbols for the JIT" OFF)
+if (ENABLE_JIT_DEBUG)
+  add_definitions("-DWITH_JIT_DEBUG")
+endif()
+
 if(XCODE)
   if(ENABLE_CUDA)
     set(CMAKE_EXE_LINKER_FLAGS "-F/Library/Frameworks -framework CUDA")
