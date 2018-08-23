@@ -2880,10 +2880,12 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
         const void* buf;
         size_t size;
         int64_t offset;
-        bool just_saw_header;
+        bool just_saw_archive_header;
+        bool is_detecting = nullptr != dynamic_cast<Detector*>(this);
+        bool first_text_header_skipped = false;
         // start reading uncompressed bytes of this archive from libarchive
         // note! this archive may contain more than one files!
-        while (!stop && !!(just_saw_header = arch.read_next_header())) {
+        while (!stop && !!(just_saw_archive_header = arch.read_next_header())) {
           while (!stop && arch.read_data_block(&buf, &size, &offset)) {
             // one subtle point here is now we concatenate all files
             // to a single FILE stream with which we call importDelimited
@@ -2893,7 +2895,8 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
             // so we need to skip header lines here instead in importDelimited.
             const char* buf2 = (const char*)buf;
             int size2 = size;
-            if (copy_params.has_header && just_saw_header) {
+            if (copy_params.has_header && just_saw_archive_header &&
+                (first_text_header_skipped || !is_detecting)) {
               while (size2-- > 0) {
                 if (*buf2++ == copy_params.line_delim) {
                   break;
@@ -2902,7 +2905,8 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
               if (size2 <= 0) {
                 LOG(WARNING) << "No line delimiter in block." << std::endl;
               }
-              just_saw_header = false;
+              just_saw_archive_header = false;
+              first_text_header_skipped = true;
             }
             // In very rare occasions the write pipe somehow operates in a mode similar to
             // non-blocking while pipe(fds) should behave like pipe2(fds, 0) which means
