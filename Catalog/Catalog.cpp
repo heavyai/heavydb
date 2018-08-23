@@ -566,7 +566,8 @@ void SysCatalog::migrateDBAccessPrivileges() {
         "name='mapd_version_history'");
     if (sqliteConnector_->getNumRows() == 0) {
       sqliteConnector_->query(
-          "CREATE TABLE mapd_version(version integer, migration_history text unique)");
+          "CREATE TABLE mapd_version_history(version integer, migration_history text "
+          "unique)");
     } else {
       sqliteConnector_->query(
           "select version, migration_history from mapd_version_history");
@@ -584,7 +585,7 @@ void SysCatalog::migrateDBAccessPrivileges() {
     }
     // Insert check for migration
     sqliteConnector_->query_with_text_params(
-        "INSERT INTO mapd_version(version, migration_history) values(?,?)",
+        "INSERT INTO mapd_version_history(version, migration_history) values(?,?)",
         std::vector<std::string>{std::to_string(MAPD_VERSION), "sql_editor_privilege"});
 
     sqliteConnector_->query("select dbid, name from mapd_databases");
