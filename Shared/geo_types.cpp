@@ -203,6 +203,8 @@ void GeoPoint::getColumns(std::vector<double>& coords) const {
   CHECK(point_geom);
 
   if (point_geom->IsEmpty()) {
+    // until the run-time can handle empties
+    throw GeoTypesError("Point", "Discarding row with 'POINT EMPTY'");
     // we cannot yet handle NULL fixed-length array
     // so we have to store sentinel values instead
     coords.push_back(NULL_DOUBLE);
@@ -242,6 +244,9 @@ void GeoLineString::getColumns(std::vector<double>& coords,
   CHECK(linestring_geom);
 
   if (linestring_geom->IsEmpty()) {
+    // until the run-time can handle empties
+    throw GeoTypesError("LineString", "Discarding row with 'LINESTRING EMPTY'");
+    // return null bounds
     bounds.push_back(NULL_DOUBLE);
     bounds.push_back(NULL_DOUBLE);
     bounds.push_back(NULL_DOUBLE);
@@ -304,6 +309,9 @@ void GeoPolygon::getColumns(std::vector<double>& coords,
   CHECK(poly_geom);
 
   if (poly_geom->IsEmpty()) {
+    // until the run-time can handle empties
+    throw GeoTypesError("Polygon", "Discarding row with 'POLYGON EMPTY'");
+    // return null bounds
     bounds.push_back(NULL_DOUBLE);
     bounds.push_back(NULL_DOUBLE);
     bounds.push_back(NULL_DOUBLE);
@@ -389,6 +397,9 @@ void GeoMultiPolygon::getColumns(std::vector<double>& coords,
   CHECK(mpoly);
 
   if (mpoly->IsEmpty()) {
+    // until the run-time can handle empties
+    throw GeoTypesError("MultiPolygon", "Discarding row with 'MULTIPOLYGON EMPTY'");
+    // return null bounds
     bounds.push_back(NULL_DOUBLE);
     bounds.push_back(NULL_DOUBLE);
     bounds.push_back(NULL_DOUBLE);
