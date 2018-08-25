@@ -480,9 +480,103 @@ class ResultSet {
 
   StorageLookupResult findStorage(const size_t entry_idx) const;
 
+  struct TargetOffsets {
+    const int8_t* ptr1;
+    const size_t compact_sz1;
+    const int8_t* ptr2;
+    const size_t compact_sz2;
+  };
+
+  struct RowWiseTargetAccessor {
+    RowWiseTargetAccessor(const ResultSet* result_set)
+        : result_set_(result_set)
+        , row_bytes_(get_row_bytes(result_set->query_mem_desc_))
+        , key_width_(result_set_->query_mem_desc_.getEffectiveKeyWidth())
+        , key_bytes_with_padding_(
+              align_to_int64(get_key_bytes_rowwise(result_set->query_mem_desc_))) {
+      initializeOffsetsForStorage();
+    }
+
+    InternalTargetValue getColumnInternal(
+        const int8_t* buff,
+        const size_t entry_idx,
+        const size_t target_logical_idx,
+        const StorageLookupResult& storage_lookup_result) const;
+
+    void initializeOffsetsForStorage();
+
+    inline const int8_t* get_rowwise_ptr(const int8_t* buff,
+                                         const size_t entry_idx) const {
+      return buff + entry_idx * row_bytes_;
+    }
+
+    std::vector<std::vector<TargetOffsets>> offsets_for_storage_;
+
+    const ResultSet* result_set_;
+
+    // Row-wise iteration
+    const size_t row_bytes_;
+    const size_t key_width_;
+    const size_t key_bytes_with_padding_;
+  };
+
+  struct ColumnWiseTargetAccessor {
+    ColumnWiseTargetAccessor(const ResultSet* result_set) : result_set_(result_set) {
+      initializeOffsetsForStorage();
+    }
+
+    void initializeOffsetsForStorage();
+
+    InternalTargetValue getColumnInternal(
+        const int8_t* buff,
+        const size_t entry_idx,
+        const size_t target_logical_idx,
+        const StorageLookupResult& storage_lookup_result) const;
+
+    std::vector<std::vector<TargetOffsets>> offsets_for_storage_;
+
+    const ResultSet* result_set_;
+  };
+
+  template <typename BUFFER_ITERATOR_TYPE>
+  struct ResultSetComparator {
+    using BufferIteratorType = BUFFER_ITERATOR_TYPE;
+
+    ResultSetComparator(const std::list<Analyzer::OrderEntry>& order_entries,
+                        const bool use_heap,
+                        const ResultSet* result_set)
+        : order_entries_(order_entries)
+        , use_heap_(use_heap)
+        , result_set_(result_set)
+        , buffer_itr_(result_set) {}
+
+    bool operator()(const uint32_t lhs, const uint32_t rhs) const;
+
+    // TODO(adb): make order_entries_ a pointer
+    const std::list<Analyzer::OrderEntry> order_entries_;
+    const bool use_heap_;
+    const ResultSet* result_set_;
+    const BufferIteratorType buffer_itr_;
+  };
+
   std::function<bool(const uint32_t, const uint32_t)> createComparator(
       const std::list<Analyzer::OrderEntry>& order_entries,
-      const bool use_heap) const;
+      const bool use_heap) {
+    if (query_mem_desc_.didOutputColumnar()) {
+      column_wise_comparator_ =
+          std::make_unique<ResultSetComparator<ColumnWiseTargetAccessor>>(
+              order_entries, use_heap, this);
+      return [this](const uint32_t lhs, const uint32_t rhs) -> bool {
+        return (*this->column_wise_comparator_)(lhs, rhs);
+      };
+    } else {
+      row_wise_comparator_ = std::make_unique<ResultSetComparator<RowWiseTargetAccessor>>(
+          order_entries, use_heap, this);
+      return [this](const uint32_t lhs, const uint32_t rhs) -> bool {
+        return (*this->row_wise_comparator_)(lhs, rhs);
+      };
+    }
+  }
 
   static void topPermutation(
       std::vector<uint32_t>& to_sort,
@@ -579,6 +673,11 @@ class ResultSet {
 
   // only used by geo
   GeoReturnType geo_return_type_;
+
+  // comparators used for sorting (note that the actual compare function is accessed using
+  // the createComparator method)
+  std::unique_ptr<ResultSetComparator<RowWiseTargetAccessor>> row_wise_comparator_;
+  std::unique_ptr<ResultSetComparator<ColumnWiseTargetAccessor>> column_wise_comparator_;
 
   friend class ResultSetManager;
 };

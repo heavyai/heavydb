@@ -340,7 +340,60 @@ int64_t int_resize_cast(const int64_t ival, const size_t sz) {
 
 }  // namespace
 
-InternalTargetValue ResultSet::getColumnInternal(
+void ResultSet::RowWiseTargetAccessor::initializeOffsetsForStorage() {
+  // Compute offsets for base storage and all appended storage
+  for (size_t storage_idx = 0; storage_idx < result_set_->appended_storage_.size() + 1;
+       ++storage_idx) {
+    offsets_for_storage_.emplace_back();
+
+    const int8_t* rowwise_target_ptr{0};
+
+    size_t agg_col_idx = 0;
+    for (size_t target_idx = 0; target_idx < result_set_->storage_->targets_.size();
+         ++target_idx) {
+      const auto& agg_info = result_set_->storage_->targets_[target_idx];
+
+      auto ptr1 = rowwise_target_ptr;
+      const auto compact_sz1 =
+          result_set_->query_mem_desc_.getColumnWidth(agg_col_idx).compact
+              ? result_set_->query_mem_desc_.getColumnWidth(agg_col_idx).compact
+              : key_width_;
+
+      const int8_t* ptr2{nullptr};
+      int8_t compact_sz2{0};
+      if ((agg_info.is_agg && agg_info.agg_kind == kAVG)) {
+        ptr2 = ptr1 + compact_sz1;
+        compact_sz2 =
+            result_set_->query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact;
+      } else if (is_real_str_or_array(agg_info)) {
+        ptr2 = ptr1 + compact_sz1;
+        if (!result_set_->none_encoded_strings_valid_) {
+          // None encoded strings explicitly attached to ResultSetStorage do not have a
+          // second slot in the QueryMemoryDescriptor col width vector
+          compact_sz2 =
+              result_set_->query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact;
+        }
+      }
+      offsets_for_storage_[storage_idx].push_back(
+          TargetOffsets{ptr1,
+                        static_cast<size_t>(compact_sz1),
+                        ptr2,
+                        static_cast<size_t>(compact_sz2)});
+      rowwise_target_ptr = advance_target_ptr(rowwise_target_ptr,
+                                              agg_info,
+                                              agg_col_idx,
+                                              result_set_->query_mem_desc_,
+                                              result_set_->none_encoded_strings_valid_);
+
+      agg_col_idx =
+          advance_slot(agg_col_idx, agg_info, result_set_->none_encoded_strings_valid_);
+    }
+    CHECK_EQ(offsets_for_storage_[storage_idx].size(),
+             result_set_->storage_->targets_.size());
+  }
+}
+
+InternalTargetValue ResultSet::RowWiseTargetAccessor::getColumnInternal(
     const int8_t* buff,
     const size_t entry_idx,
     const size_t target_logical_idx,
@@ -348,128 +401,153 @@ InternalTargetValue ResultSet::getColumnInternal(
   CHECK(buff);
   const int8_t* rowwise_target_ptr{nullptr};
   const int8_t* keys_ptr{nullptr};
-  const int8_t* crt_col_ptr{nullptr};
-  const size_t key_width{query_mem_desc_.getEffectiveKeyWidth()};
-  if (query_mem_desc_.didOutputColumnar()) {
-    crt_col_ptr = get_cols_ptr(buff, query_mem_desc_);
-  } else {
-    keys_ptr = row_ptr_rowwise(buff, query_mem_desc_, entry_idx);
-    const auto key_bytes_with_padding =
-        align_to_int64(get_key_bytes_rowwise(query_mem_desc_));
-    rowwise_target_ptr = keys_ptr + key_bytes_with_padding;
+
+  const size_t storage_idx = storage_lookup_result.storage_idx;
+
+  CHECK_LT(storage_idx, offsets_for_storage_.size());
+  CHECK_LT(target_logical_idx, offsets_for_storage_[storage_idx].size());
+
+  const auto& offsets_for_target = offsets_for_storage_[storage_idx][target_logical_idx];
+  const auto& agg_info = result_set_->storage_->targets_[target_logical_idx];
+
+  keys_ptr = get_rowwise_ptr(buff, entry_idx);
+  rowwise_target_ptr = keys_ptr + key_bytes_with_padding_;
+  auto ptr1 = rowwise_target_ptr + reinterpret_cast<size_t>(offsets_for_target.ptr1);
+  if (result_set_->query_mem_desc_.targetGroupbyIndicesSize() > 0) {
+    if (result_set_->query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) >= 0) {
+      ptr1 = keys_ptr +
+             result_set_->query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) *
+                 key_width_;
+    }
   }
-  CHECK_LT(target_logical_idx, storage_->targets_.size());
-  size_t agg_col_idx = 0;
-  // TODO(alex): remove this loop, offsets can be computed only once
-  for (size_t target_idx = 0; target_idx < storage_->targets_.size(); ++target_idx) {
-    const auto& agg_info = storage_->targets_[target_idx];
-    if (query_mem_desc_.didOutputColumnar()) {
-      const auto next_col_ptr =
-          advance_to_next_columnar_target_buff(crt_col_ptr, query_mem_desc_, agg_col_idx);
+  const auto i1 =
+      result_set_->lazyReadInt(read_int_from_buff(ptr1, offsets_for_target.compact_sz1),
+                               target_logical_idx,
+                               storage_lookup_result);
+
+  if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
+    CHECK(offsets_for_target.ptr2);
+    const auto ptr2 =
+        rowwise_target_ptr + reinterpret_cast<size_t>(offsets_for_target.ptr2);
+    const auto i2 = read_int_from_buff(ptr2, offsets_for_target.compact_sz2);
+    return InternalTargetValue(i1, i2);
+  } else {
+    if (agg_info.sql_type.is_string() &&
+        agg_info.sql_type.get_compression() == kENCODING_NONE) {
+      CHECK(!agg_info.is_agg);
+      if (!result_set_->lazy_fetch_info_.empty()) {
+        CHECK_LT(target_logical_idx, result_set_->lazy_fetch_info_.size());
+        const auto& col_lazy_fetch = result_set_->lazy_fetch_info_[target_logical_idx];
+        if (col_lazy_fetch.is_lazily_fetched) {
+          return InternalTargetValue(reinterpret_cast<const std::string*>(i1));
+        }
+      }
+      if (result_set_->none_encoded_strings_valid_) {
+        if (i1 < 0) {
+          CHECK_EQ(-1, i1);
+          return InternalTargetValue(static_cast<const std::string*>(nullptr));
+        }
+        CHECK_LT(storage_lookup_result.storage_idx,
+                 result_set_->none_encoded_strings_.size());
+        const auto& none_encoded_strings_for_fragment =
+            result_set_->none_encoded_strings_[storage_lookup_result.storage_idx];
+        CHECK_LT(i1, none_encoded_strings_for_fragment.size());
+        return InternalTargetValue(&none_encoded_strings_for_fragment[i1]);
+      }
+      CHECK(offsets_for_target.ptr2);
+      const auto ptr2 =
+          rowwise_target_ptr + reinterpret_cast<size_t>(offsets_for_target.ptr2);
+      const auto str_len = read_int_from_buff(ptr2, offsets_for_target.compact_sz2);
+      CHECK_GE(str_len, 0);
+      return result_set_->getVarlenOrderEntry(i1, str_len);
+    }
+    return InternalTargetValue(
+        agg_info.sql_type.is_fp()
+            ? i1
+            : int_resize_cast(i1, agg_info.sql_type.get_logical_size()));
+  }
+}
+
+void ResultSet::ColumnWiseTargetAccessor::initializeOffsetsForStorage() {
+  // Compute offsets for base storage and all appended storage
+  for (size_t storage_idx = 0; storage_idx < result_set_->appended_storage_.size() + 1;
+       ++storage_idx) {
+    offsets_for_storage_.emplace_back();
+
+    const int8_t* buff = storage_idx == 0
+                             ? result_set_->storage_->buff_
+                             : result_set_->appended_storage_[storage_idx - 1]->buff_;
+    CHECK(buff);
+
+    const int8_t* crt_col_ptr = get_cols_ptr(buff, result_set_->query_mem_desc_);
+
+    size_t agg_col_idx = 0;
+    for (size_t target_idx = 0; target_idx < result_set_->storage_->targets_.size();
+         ++target_idx) {
+      const auto& agg_info = result_set_->storage_->targets_[target_idx];
+
+      const auto compact_sz1 =
+          result_set_->query_mem_desc_.getColumnWidth(agg_col_idx).compact;
+      const auto next_col_ptr = advance_to_next_columnar_target_buff(
+          crt_col_ptr, result_set_->query_mem_desc_, agg_col_idx);
       const auto col2_ptr =
           (agg_info.is_agg && agg_info.agg_kind == kAVG) ? next_col_ptr : nullptr;
       const auto compact_sz2 =
           (agg_info.is_agg && agg_info.agg_kind == kAVG)
-              ? query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact
+              ? result_set_->query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact
               : 0;
-      if (target_idx == target_logical_idx) {
-        const auto compact_sz1 = query_mem_desc_.getColumnWidth(agg_col_idx).compact;
-        const auto i1 = lazyReadInt(
-            read_int_from_buff(columnar_elem_ptr(entry_idx, crt_col_ptr, compact_sz1),
-                               compact_sz1),
-            target_logical_idx,
-            storage_lookup_result);
-        if (col2_ptr) {
-          const auto i2 = read_int_from_buff(
-              columnar_elem_ptr(entry_idx, col2_ptr, compact_sz2), compact_sz2);
-          return InternalTargetValue(i1, i2);
-        } else {
-          return InternalTargetValue(
-              agg_info.sql_type.is_fp()
-                  ? i1
-                  : int_resize_cast(i1, agg_info.sql_type.get_logical_size()));
-        }
-      }
+
+      offsets_for_storage_[storage_idx].push_back(
+          TargetOffsets{crt_col_ptr,
+                        static_cast<size_t>(compact_sz1),
+                        col2_ptr,
+                        static_cast<size_t>(compact_sz2)});
+
       crt_col_ptr = next_col_ptr;
       if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
         crt_col_ptr = advance_to_next_columnar_target_buff(
-            crt_col_ptr, query_mem_desc_, agg_col_idx + 1);
+            crt_col_ptr, result_set_->query_mem_desc_, agg_col_idx + 1);
       }
-    } else {
-      auto ptr1 = rowwise_target_ptr;
-      if (query_mem_desc_.targetGroupbyIndicesSize() > 0) {
-        if (query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) >= 0) {
-          ptr1 = keys_ptr +
-                 query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) * key_width;
-        }
-      }
-      const auto compact_sz1 = query_mem_desc_.getColumnWidth(agg_col_idx).compact
-                                   ? query_mem_desc_.getColumnWidth(agg_col_idx).compact
-                                   : key_width;
-      const int8_t* ptr2{nullptr};
-      int8_t compact_sz2{0};
-      if ((agg_info.is_agg && agg_info.agg_kind == kAVG)) {
-        ptr2 = rowwise_target_ptr + query_mem_desc_.getColumnWidth(agg_col_idx).compact;
-        compact_sz2 = query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact;
-      } else if (is_real_str_or_array(agg_info)) {
-        ptr2 = rowwise_target_ptr + query_mem_desc_.getColumnWidth(agg_col_idx).compact;
-        if (!none_encoded_strings_valid_) {
-          // None encoded strings explicitly attached to ResultSetStorage do not have a
-          // second slot in the QueryMemoryDescriptor col width vector
-          compact_sz2 = query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact;
-        }
-      }
-      if (target_idx == target_logical_idx) {
-        const auto i1 = lazyReadInt(read_int_from_buff(ptr1, compact_sz1),
-                                    target_logical_idx,
-                                    storage_lookup_result);
-        if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
-          CHECK(ptr2);
-          const auto i2 = read_int_from_buff(ptr2, compact_sz2);
-          return InternalTargetValue(i1, i2);
-        } else {
-          if (agg_info.sql_type.is_string() &&
-              agg_info.sql_type.get_compression() == kENCODING_NONE) {
-            CHECK(!agg_info.is_agg);
-            if (!lazy_fetch_info_.empty()) {
-              CHECK_LT(target_logical_idx, lazy_fetch_info_.size());
-              const auto& col_lazy_fetch = lazy_fetch_info_[target_logical_idx];
-              if (col_lazy_fetch.is_lazily_fetched) {
-                return InternalTargetValue(reinterpret_cast<const std::string*>(i1));
-              }
-            }
-            if (none_encoded_strings_valid_) {
-              if (i1 < 0) {
-                CHECK_EQ(-1, i1);
-                return InternalTargetValue(static_cast<const std::string*>(nullptr));
-              }
-              CHECK_LT(storage_lookup_result.storage_idx, none_encoded_strings_.size());
-              const auto& none_encoded_strings_for_fragment =
-                  none_encoded_strings_[storage_lookup_result.storage_idx];
-              CHECK_LT(i1, none_encoded_strings_for_fragment.size());
-              return InternalTargetValue(&none_encoded_strings_for_fragment[i1]);
-            }
-            CHECK(ptr2);
-            const auto str_len = read_int_from_buff(ptr2, compact_sz2);
-            CHECK_GE(str_len, 0);
-            return getVarlenOrderEntry(i1, str_len);
-          }
-          return InternalTargetValue(
-              agg_info.sql_type.is_fp()
-                  ? i1
-                  : int_resize_cast(i1, agg_info.sql_type.get_logical_size()));
-        }
-      }
-      rowwise_target_ptr = advance_target_ptr(rowwise_target_ptr,
-                                              agg_info,
-                                              agg_col_idx,
-                                              query_mem_desc_,
-                                              none_encoded_strings_valid_);
+      agg_col_idx =
+          advance_slot(agg_col_idx, agg_info, result_set_->none_encoded_strings_valid_);
     }
-    agg_col_idx = advance_slot(agg_col_idx, agg_info, none_encoded_strings_valid_);
+    CHECK_EQ(offsets_for_storage_[storage_idx].size(),
+             result_set_->storage_->targets_.size());
   }
-  CHECK(false);
-  return InternalTargetValue(int64_t(0));
+}
+
+InternalTargetValue ResultSet::ColumnWiseTargetAccessor::getColumnInternal(
+    const int8_t* buff,
+    const size_t entry_idx,
+    const size_t target_logical_idx,
+    const StorageLookupResult& storage_lookup_result) const {
+  const size_t storage_idx = storage_lookup_result.storage_idx;
+
+  CHECK_LT(storage_idx, offsets_for_storage_.size());
+  CHECK_LT(target_logical_idx, offsets_for_storage_[storage_idx].size());
+
+  const auto& offsets_for_target = offsets_for_storage_[storage_idx][target_logical_idx];
+  const auto& agg_info = result_set_->storage_->targets_[target_logical_idx];
+
+  const auto i1 = result_set_->lazyReadInt(
+      read_int_from_buff(
+          columnar_elem_ptr(
+              entry_idx, offsets_for_target.ptr1, offsets_for_target.compact_sz1),
+          offsets_for_target.compact_sz1),
+      target_logical_idx,
+      storage_lookup_result);
+  if (offsets_for_target.ptr2) {
+    const auto i2 = read_int_from_buff(
+        columnar_elem_ptr(
+            entry_idx, offsets_for_target.ptr2, offsets_for_target.compact_sz2),
+        offsets_for_target.compact_sz2);
+    return InternalTargetValue(i1, i2);
+  } else {
+    return InternalTargetValue(
+        agg_info.sql_type.is_fp()
+            ? i1
+            : int_resize_cast(i1, agg_info.sql_type.get_logical_size()));
+  }
 }
 
 InternalTargetValue ResultSet::getVarlenOrderEntry(const int64_t str_ptr,

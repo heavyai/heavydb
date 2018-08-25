@@ -661,124 +661,123 @@ ResultSet::StorageLookupResult ResultSet::findStorage(const size_t entry_idx) co
           static_cast<size_t>(stg_idx)};
 }
 
-std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
-    const std::list<Analyzer::OrderEntry>& order_entries,
-    const bool use_heap) const {
-  return [this, &order_entries, use_heap](const uint32_t lhs, const uint32_t rhs) {
-    // NB: The compare function must define a strict weak ordering, otherwise
-    // std::sort will trigger a segmentation fault (or corrupt memory).
-    const auto lhs_storage_lookup_result = findStorage(lhs);
-    const auto rhs_storage_lookup_result = findStorage(rhs);
-    const auto lhs_storage = lhs_storage_lookup_result.storage_ptr;
-    const auto rhs_storage = rhs_storage_lookup_result.storage_ptr;
-    const auto fixedup_lhs = lhs_storage_lookup_result.fixedup_entry_idx;
-    const auto fixedup_rhs = rhs_storage_lookup_result.fixedup_entry_idx;
-    for (const auto order_entry : order_entries) {
-      CHECK_GE(order_entry.tle_no, 1);
-      const auto& agg_info = targets_[order_entry.tle_no - 1];
-      const auto& entry_ti = get_compact_type(agg_info);
-      bool float_argument_input = takes_float_argument(agg_info);
-      // Need to determine if the float value has been stored as float
-      // or if it has been compacted to a different (often larger 8 bytes)
-      // in distributed case the floats are actually 4 bytes
-      // TODO the above takes_float_argument() is widely used  wonder if this problem
-      // exists elsewhere
-      if (entry_ti.get_type() == kFLOAT) {
-        if (query_mem_desc_.getColumnWidth(order_entry.tle_no - 1).compact ==
-            sizeof(float)) {
-          float_argument_input = true;
-        }
-      }
-      const auto lhs_v = getColumnInternal(lhs_storage->buff_,
-                                           fixedup_lhs,
-                                           order_entry.tle_no - 1,
-                                           lhs_storage_lookup_result);
-      const auto rhs_v = getColumnInternal(rhs_storage->buff_,
-                                           fixedup_rhs,
-                                           order_entry.tle_no - 1,
-                                           rhs_storage_lookup_result);
-      if (UNLIKELY(isNull(entry_ti, lhs_v, float_argument_input) &&
-                   isNull(entry_ti, rhs_v, float_argument_input))) {
-        return false;
-      }
-      if (UNLIKELY(isNull(entry_ti, lhs_v, float_argument_input) &&
-                   !isNull(entry_ti, rhs_v, float_argument_input))) {
-        return use_heap ? !order_entry.nulls_first : order_entry.nulls_first;
-      }
-      if (UNLIKELY(isNull(entry_ti, rhs_v, float_argument_input) &&
-                   !isNull(entry_ti, lhs_v, float_argument_input))) {
-        return use_heap ? order_entry.nulls_first : !order_entry.nulls_first;
-      }
-      const bool use_desc_cmp = use_heap ? !order_entry.is_desc : order_entry.is_desc;
-      if (LIKELY(lhs_v.isInt())) {
-        CHECK(rhs_v.isInt());
-        if (UNLIKELY(entry_ti.is_string() &&
-                     entry_ti.get_compression() == kENCODING_DICT)) {
-          CHECK_EQ(4, entry_ti.get_logical_size());
-          const auto string_dict_proxy = executor_->getStringDictionaryProxy(
-              entry_ti.get_comp_param(), row_set_mem_owner_, false);
-          auto lhs_str = string_dict_proxy->getString(lhs_v.i1);
-          auto rhs_str = string_dict_proxy->getString(rhs_v.i1);
-          if (lhs_str == rhs_str) {
-            continue;
-          }
-          return use_desc_cmp ? lhs_str > rhs_str : lhs_str < rhs_str;
-        }
-        if (UNLIKELY(is_distinct_target(targets_[order_entry.tle_no - 1]))) {
-          const auto lhs_sz = count_distinct_set_size(
-              lhs_v.i1,
-              query_mem_desc_.getCountDistinctDescriptor(order_entry.tle_no - 1));
-          const auto rhs_sz = count_distinct_set_size(
-              rhs_v.i1,
-              query_mem_desc_.getCountDistinctDescriptor(order_entry.tle_no - 1));
-          if (lhs_sz == rhs_sz) {
-            continue;
-          }
-          return use_desc_cmp ? lhs_sz > rhs_sz : lhs_sz < rhs_sz;
-        }
-        if (lhs_v.i1 == rhs_v.i1) {
-          continue;
-        }
-        if (entry_ti.is_fp()) {
-          if (float_argument_input) {
-            const auto lhs_dval =
-                *reinterpret_cast<const float*>(may_alias_ptr(&lhs_v.i1));
-            const auto rhs_dval =
-                *reinterpret_cast<const float*>(may_alias_ptr(&rhs_v.i1));
-            return use_desc_cmp ? lhs_dval > rhs_dval : lhs_dval < rhs_dval;
-          } else {
-            const auto lhs_dval =
-                *reinterpret_cast<const double*>(may_alias_ptr(&lhs_v.i1));
-            const auto rhs_dval =
-                *reinterpret_cast<const double*>(may_alias_ptr(&rhs_v.i1));
-            return use_desc_cmp ? lhs_dval > rhs_dval : lhs_dval < rhs_dval;
-          }
-        }
-        return use_desc_cmp ? lhs_v.i1 > rhs_v.i1 : lhs_v.i1 < rhs_v.i1;
-      } else {
-        if (lhs_v.isPair()) {
-          CHECK(rhs_v.isPair());
-          const auto lhs =
-              pair_to_double({lhs_v.i1, lhs_v.i2}, entry_ti, float_argument_input);
-          const auto rhs =
-              pair_to_double({rhs_v.i1, rhs_v.i2}, entry_ti, float_argument_input);
-          if (lhs == rhs) {
-            continue;
-          }
-          return use_desc_cmp ? lhs > rhs : lhs < rhs;
-        } else {
-          CHECK(lhs_v.isStr() && rhs_v.isStr());
-          const auto lhs = lhs_v.strVal();
-          const auto rhs = rhs_v.strVal();
-          if (lhs == rhs) {
-            continue;
-          }
-          return use_desc_cmp ? lhs > rhs : lhs < rhs;
-        }
+template <typename BUFFER_ITERATOR_TYPE>
+bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
+    const uint32_t lhs,
+    const uint32_t rhs) const {
+  // NB: The compare function must define a strict weak ordering, otherwise
+  // std::sort will trigger a segmentation fault (or corrupt memory).
+  const auto lhs_storage_lookup_result = result_set_->findStorage(lhs);
+  const auto rhs_storage_lookup_result = result_set_->findStorage(rhs);
+  const auto lhs_storage = lhs_storage_lookup_result.storage_ptr;
+  const auto rhs_storage = rhs_storage_lookup_result.storage_ptr;
+  const auto fixedup_lhs = lhs_storage_lookup_result.fixedup_entry_idx;
+  const auto fixedup_rhs = rhs_storage_lookup_result.fixedup_entry_idx;
+  for (const auto order_entry : order_entries_) {
+    CHECK_GE(order_entry.tle_no, 1);
+    const auto& agg_info = result_set_->targets_[order_entry.tle_no - 1];
+    const auto& entry_ti = get_compact_type(agg_info);
+    bool float_argument_input = takes_float_argument(agg_info);
+    // Need to determine if the float value has been stored as float
+    // or if it has been compacted to a different (often larger 8 bytes)
+    // in distributed case the floats are actually 4 bytes
+    // TODO the above takes_float_argument() is widely used  wonder if this problem
+    // exists elsewhere
+    if (entry_ti.get_type() == kFLOAT) {
+      if (result_set_->query_mem_desc_.getColumnWidth(order_entry.tle_no - 1).compact ==
+          sizeof(float)) {
+        float_argument_input = true;
       }
     }
-    return false;
-  };
+    const auto lhs_v = buffer_itr_.getColumnInternal(lhs_storage->buff_,
+                                                     fixedup_lhs,
+                                                     order_entry.tle_no - 1,
+                                                     lhs_storage_lookup_result);
+    const auto rhs_v = buffer_itr_.getColumnInternal(rhs_storage->buff_,
+                                                     fixedup_rhs,
+                                                     order_entry.tle_no - 1,
+                                                     rhs_storage_lookup_result);
+    if (UNLIKELY(isNull(entry_ti, lhs_v, float_argument_input) &&
+                 isNull(entry_ti, rhs_v, float_argument_input))) {
+      return false;
+    }
+    if (UNLIKELY(isNull(entry_ti, lhs_v, float_argument_input) &&
+                 !isNull(entry_ti, rhs_v, float_argument_input))) {
+      return use_heap_ ? !order_entry.nulls_first : order_entry.nulls_first;
+    }
+    if (UNLIKELY(isNull(entry_ti, rhs_v, float_argument_input) &&
+                 !isNull(entry_ti, lhs_v, float_argument_input))) {
+      return use_heap_ ? order_entry.nulls_first : !order_entry.nulls_first;
+    }
+    const bool use_desc_cmp = use_heap_ ? !order_entry.is_desc : order_entry.is_desc;
+    if (LIKELY(lhs_v.isInt())) {
+      CHECK(rhs_v.isInt());
+      if (UNLIKELY(entry_ti.is_string() &&
+                   entry_ti.get_compression() == kENCODING_DICT)) {
+        CHECK_EQ(4, entry_ti.get_logical_size());
+        const auto string_dict_proxy = result_set_->executor_->getStringDictionaryProxy(
+            entry_ti.get_comp_param(), result_set_->row_set_mem_owner_, false);
+        auto lhs_str = string_dict_proxy->getString(lhs_v.i1);
+        auto rhs_str = string_dict_proxy->getString(rhs_v.i1);
+        if (lhs_str == rhs_str) {
+          continue;
+        }
+        return use_desc_cmp ? lhs_str > rhs_str : lhs_str < rhs_str;
+      }
+      if (UNLIKELY(is_distinct_target(result_set_->targets_[order_entry.tle_no - 1]))) {
+        const auto lhs_sz = count_distinct_set_size(
+            lhs_v.i1,
+            result_set_->query_mem_desc_.getCountDistinctDescriptor(order_entry.tle_no -
+                                                                    1));
+        const auto rhs_sz = count_distinct_set_size(
+            rhs_v.i1,
+            result_set_->query_mem_desc_.getCountDistinctDescriptor(order_entry.tle_no -
+                                                                    1));
+        if (lhs_sz == rhs_sz) {
+          continue;
+        }
+        return use_desc_cmp ? lhs_sz > rhs_sz : lhs_sz < rhs_sz;
+      }
+      if (lhs_v.i1 == rhs_v.i1) {
+        continue;
+      }
+      if (entry_ti.is_fp()) {
+        if (float_argument_input) {
+          const auto lhs_dval = *reinterpret_cast<const float*>(may_alias_ptr(&lhs_v.i1));
+          const auto rhs_dval = *reinterpret_cast<const float*>(may_alias_ptr(&rhs_v.i1));
+          return use_desc_cmp ? lhs_dval > rhs_dval : lhs_dval < rhs_dval;
+        } else {
+          const auto lhs_dval =
+              *reinterpret_cast<const double*>(may_alias_ptr(&lhs_v.i1));
+          const auto rhs_dval =
+              *reinterpret_cast<const double*>(may_alias_ptr(&rhs_v.i1));
+          return use_desc_cmp ? lhs_dval > rhs_dval : lhs_dval < rhs_dval;
+        }
+      }
+      return use_desc_cmp ? lhs_v.i1 > rhs_v.i1 : lhs_v.i1 < rhs_v.i1;
+    } else {
+      if (lhs_v.isPair()) {
+        CHECK(rhs_v.isPair());
+        const auto lhs =
+            pair_to_double({lhs_v.i1, lhs_v.i2}, entry_ti, float_argument_input);
+        const auto rhs =
+            pair_to_double({rhs_v.i1, rhs_v.i2}, entry_ti, float_argument_input);
+        if (lhs == rhs) {
+          continue;
+        }
+        return use_desc_cmp ? lhs > rhs : lhs < rhs;
+      } else {
+        CHECK(lhs_v.isStr() && rhs_v.isStr());
+        const auto lhs = lhs_v.strVal();
+        const auto rhs = rhs_v.strVal();
+        if (lhs == rhs) {
+          continue;
+        }
+        return use_desc_cmp ? lhs > rhs : lhs < rhs;
+      }
+    }
+  }
+  return false;
 }
 
 void ResultSet::topPermutation(
