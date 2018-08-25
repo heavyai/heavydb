@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 2.8)
 
+if("${CMAKE_VERSION}" VERSION_GREATER_EQUAL 3.12.0)
+  cmake_policy(SET CMP0074 NEW)
+endif()
+
 find_program(CCACHE_EXE ccache)
 if(CCACHE_EXE)
   set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_EXE}")
