@@ -15,15 +15,15 @@
  */
 
 #include "ExpressionRange.h"
+#include <algorithm>
+#include <cfenv>
+#include <cmath>
 #include "DateTruncate.h"
 #include "Execute.h"
 #include "ExtractFromTime.h"
 #include "GroupByAndAggregate.h"
 #include "InputDescriptors.h"
 #include "QueryPhysicalInputsCollector.h"
-
-#include <cfenv>
-#include <cmath>
 
 #define DEF_OPERATOR(fname, op)                                                    \
   ExpressionRange fname(const ExpressionRange& other) const {                      \
@@ -76,15 +76,15 @@ void apply_fp_qual(const Datum const_datum,
   switch (sql_op) {
     case kGT:
     case kGE:
-      qual_range.setFpMin(MAX(qual_range.getFpMin(), const_val));
+      qual_range.setFpMin(std::max(qual_range.getFpMin(), const_val));
       break;
     case kLT:
     case kLE:
-      qual_range.setFpMax(MIN(qual_range.getFpMax(), const_val));
+      qual_range.setFpMax(std::min(qual_range.getFpMax(), const_val));
       break;
     case kEQ:
-      qual_range.setFpMin(MAX(qual_range.getFpMin(), const_val));
-      qual_range.setFpMax(MIN(qual_range.getFpMax(), const_val));
+      qual_range.setFpMin(std::max(qual_range.getFpMin(), const_val));
+      qual_range.setFpMax(std::min(qual_range.getFpMax(), const_val));
       break;
     default:  // there may be other operators, but don't do anything with them
       break;
@@ -97,20 +97,20 @@ void apply_int_qual(const Datum const_datum,
   int64_t const_val = get_value_from_datum<int64_t>(const_datum, const_type);
   switch (sql_op) {
     case kGT:
-      qual_range.setIntMin(MAX(qual_range.getIntMin(), const_val + 1));
+      qual_range.setIntMin(std::max(qual_range.getIntMin(), const_val + 1));
       break;
     case kGE:
-      qual_range.setIntMin(MAX(qual_range.getIntMin(), const_val));
+      qual_range.setIntMin(std::max(qual_range.getIntMin(), const_val));
       break;
     case kLT:
-      qual_range.setIntMax(MIN(qual_range.getIntMax(), const_val - 1));
+      qual_range.setIntMax(std::min(qual_range.getIntMax(), const_val - 1));
       break;
     case kLE:
-      qual_range.setIntMax(MIN(qual_range.getIntMax(), const_val));
+      qual_range.setIntMax(std::min(qual_range.getIntMax(), const_val));
       break;
     case kEQ:
-      qual_range.setIntMin(MAX(qual_range.getIntMin(), const_val));
-      qual_range.setIntMax(MIN(qual_range.getIntMax(), const_val));
+      qual_range.setIntMin(std::max(qual_range.getIntMin(), const_val));
+      qual_range.setIntMax(std::min(qual_range.getIntMax(), const_val));
       break;
     default:  // there may be other operators, but don't do anything with them
       break;
