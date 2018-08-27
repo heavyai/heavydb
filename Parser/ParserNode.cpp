@@ -49,6 +49,7 @@
 #include "../Shared/measure.h"
 #include "DataMgr/LockMgr.h"
 #include "ReservedKeywords.h"
+#include "gen-cpp/CalciteServer.h"
 #include "parser.h"
 
 size_t g_leaf_count{0};

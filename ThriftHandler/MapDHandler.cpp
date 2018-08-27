@@ -40,6 +40,7 @@
 #include "MapDRelease.h"
 
 #include "Calcite/Calcite.h"
+#include "gen-cpp/CalciteServer.h"
 
 #include "QueryEngine/RelAlgExecutor.h"
 

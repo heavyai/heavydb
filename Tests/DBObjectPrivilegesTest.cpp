@@ -9,6 +9,7 @@
 #include "../Parser/parser.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "Shared/MapDParameters.h"
+#include "gen-cpp/CalciteServer.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"

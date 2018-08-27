@@ -17,6 +17,7 @@
 #include "LockMgr.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "QueryEngine/JsonAccessors.h"
+#include "gen-cpp/CalciteServer.h"
 
 namespace Lock_Namespace {
 

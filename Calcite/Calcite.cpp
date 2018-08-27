@@ -32,6 +32,16 @@
 #include <utility>
 #include "Catalog/Catalog.h"
 
+#include "Shared/fixautotools.h"
+
+#include <thrift/protocol/TBinaryProtocol.h>
+#include <thrift/transport/TSocket.h>
+#include <thrift/transport/TTransportUtils.h>
+
+#include "Shared/fixautotools.h"
+
+#include "gen-cpp/CalciteServer.h"
+
 using namespace rapidjson;
 using namespace apache::thrift;
 using namespace apache::thrift::protocol;

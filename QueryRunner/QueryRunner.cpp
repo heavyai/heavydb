@@ -24,6 +24,7 @@
 #include "Shared/ConfigResolve.h"
 #include "Shared/MapDParameters.h"
 #include "bcrypt.h"
+#include "gen-cpp/CalciteServer.h"
 
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/RelAlgExecutor.h"

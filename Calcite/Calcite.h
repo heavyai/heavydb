@@ -24,21 +24,19 @@
 #ifndef CALCITE_H
 #define CALCITE_H
 
-#include "Shared/fixautotools.h"
-
-#include <thrift/protocol/TBinaryProtocol.h>
-#include <thrift/transport/TSocket.h>
-#include <thrift/transport/TTransportUtils.h>
-
-#include "Shared/fixautotools.h"
-
+#include <string>
 #include <thread>
-#include "gen-cpp/CalciteServer.h"
+#include <vector>
 #include "rapidjson/document.h"
 
 namespace Catalog_Namespace {
 class SessionInfo;
 }
+
+// Forward declares for Thrift-generated classes
+class TFilterPushDownInfo;
+class TPlanResult;
+class TCompletionHint;
 
 class Calcite {
  public:
