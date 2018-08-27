@@ -1411,16 +1411,8 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
                                        target_logical_idx,
                                        entry_buff_idx);
   }
-  if (query_mem_desc_.targetGroupbyIndicesSize() == 0) {
-    return makeTargetValue(ptr1,
-                           compact_sz1,
-                           target_info,
-                           target_logical_idx,
-                           translate_strings,
-                           decimal_to_double,
-                           entry_buff_idx);
-  }
-  if (query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) < 0) {
+  if (query_mem_desc_.targetGroupbyIndicesSize() == 0 ||
+      query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) < 0) {
     return makeTargetValue(ptr1,
                            compact_sz1,
                            target_info,
