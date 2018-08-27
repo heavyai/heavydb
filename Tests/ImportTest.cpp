@@ -449,14 +449,10 @@ void check_geo_gdal_mpoly_import() {
   ASSERT_NEAR(1.0, trip_distance, 1e-7);
 }
 
-void check_geo_num_rows(const size_t num_expected_rows) {
-  auto rows = run_query("SELECT count(*) FROM geospatial");
-  auto crt_row = rows->getNextRow(true, true);
-  CHECK_EQ(size_t(1), crt_row.size());
-  auto crt_element_0 = v<int64_t>(crt_row[0]);
-  CHECK_GE(crt_element_0, int64_t(0));
-  size_t num_rows = size_t(crt_element_0);
-  ASSERT_TRUE(num_rows == num_expected_rows);
+void check_geo_num_rows(const std::string& project_columns,
+                        const size_t num_expected_rows) {
+  auto rows = run_query("SELECT " + project_columns + " FROM geospatial");
+  ASSERT_TRUE(rows->entryCount() == num_expected_rows);
 }
 
 void check_geo_gdal_point_tv_import() {
@@ -499,7 +495,7 @@ TEST_F(GeoImportTest, CSV_Import) {
       boost::filesystem::path("../../Tests/Import/datafiles/geospatial.csv");
   run_ddl_statement("COPY geospatial FROM '" + file_path.string() + "';");
   check_geo_import();
-  check_geo_num_rows(10);
+  check_geo_num_rows("p1, l, poly, mpoly, p2, p3, p4, trip_distance", 10);
 }
 
 TEST_F(GeoImportTest, CSV_Import_Empties) {
@@ -507,7 +503,8 @@ TEST_F(GeoImportTest, CSV_Import_Empties) {
       boost::filesystem::path("../../Tests/Import/datafiles/geospatial_empties.csv");
   run_ddl_statement("COPY geospatial FROM '" + file_path.string() + "';");
   check_geo_import();
-  check_geo_num_rows(6);  // we expect it to drop the 4 rows containing 'EMPTY'
+  check_geo_num_rows("p1, l, poly, mpoly, p2, p3, p4, trip_distance",
+                     6);  // we expect it to drop the 4 rows containing 'EMPTY'
 }
 
 // the remaining tests in this group are incomplete but leave them as placeholders
@@ -583,7 +580,7 @@ TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import) {
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
   check_geo_gdal_mpoly_import();
-  check_geo_num_rows(10);
+  check_geo_num_rows("mapd_geo, trip", 10);
 }
 
 TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import_Empties) {
@@ -591,7 +588,7 @@ TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import_Empties) {
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_empties.geojson");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
   check_geo_gdal_mpoly_import();
-  check_geo_num_rows(8);  // we expect it to drop 2 of the 10 rows
+  check_geo_num_rows("mapd_geo, trip", 8);  // we expect it to drop 2 of the 10 rows
 }
 
 TEST_F(GeoGDALImportTest, Shapefile_Point_Import) {
@@ -636,10 +633,10 @@ TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Append) {
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
-  check_geo_num_rows(10);
+  check_geo_num_rows("mapd_geo, trip", 10);
   ASSERT_NO_THROW(
       import_test_geofile_importer(file_path.string(), "geospatial", false, false));
-  check_geo_num_rows(20);
+  check_geo_num_rows("mapd_geo, trip", 20);
 }
 
 #ifdef HAVE_AWS_S3
