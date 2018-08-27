@@ -121,14 +121,22 @@ set_tests_properties(${SANITY_TESTS} PROPERTIES LABELS "sanity")
 add_custom_target(sanity_tests
     COMMAND mkdir -p ${TEST_BASE_PATH}
     COMMAND initdb -f ${TEST_BASE_PATH}
-    COMMAND env AWS_REGION=${AWS_REGION} AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} ${CMAKE_CTEST_COMMAND} --verbose --label-regex sanity
-    DEPENDS ${SANITY_TESTS})
+    COMMAND env AWS_REGION=${AWS_REGION}
+                AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                ${CMAKE_CTEST_COMMAND} --verbose --label-regex sanity
+    DEPENDS ${SANITY_TESTS}
+    USES_TERMINAL)
 
 add_custom_target(all_tests
     COMMAND mkdir -p ${TEST_BASE_PATH}
     COMMAND initdb -f ${TEST_BASE_PATH}
-    COMMAND env AWS_REGION=${AWS_REGION} AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS ${SANITY_TESTS} ProfileTest UtilTest RunQueryLoop StringDictionaryTest StoragePerfTest)
+    COMMAND env AWS_REGION=${AWS_REGION}
+                AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                ${CMAKE_CTEST_COMMAND} --verbose
+    DEPENDS ${SANITY_TESTS} ProfileTest UtilTest RunQueryLoop StringDictionaryTest StoragePerfTest
+    USES_TERMINAL)
 
 add_custom_target(storage_perf_tests
     COMMAND mkdir -p ${TEST_BASE_PATH}
