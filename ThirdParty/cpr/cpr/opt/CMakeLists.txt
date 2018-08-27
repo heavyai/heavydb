@@ -1,6 +1,6 @@
 macro(set_cache_variable VAR_NAME VAR_DESCRIPTION)
     set(${VAR_NAME} ${${VAR_NAME}} CACHE INTERNAL ${VAR_DESCRIPTION})
-    message(STATUS "Set ${VAR_NAME} to ${${VAR_NAME}}.")
+#    message(STATUS "Set ${VAR_NAME} to ${${VAR_NAME}}.")
 endmacro()
 
 
@@ -8,7 +8,7 @@ endmacro()
 
 if(BUILD_CPR_TESTS AND GENERATE_COVERAGE)
     set(CMAKE_BUILD_TYPE COVERAGE CACHE INTERNAL "Coverage enabled build")
-    message(STATUS "Enabling gcov support")
+#    message(STATUS "Enabling gcov support")
     if(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
         set(COVERAGE_FLAG "--coverage")
     endif()
@@ -42,7 +42,7 @@ if(USE_SYSTEM_CURL)
     find_package(CURL QUIET)
 endif()
 if(NOT USE_SYSTEM_CURL OR NOT CURL_FOUND)
-    message(STATUS "Not using system Curl, using built-in curl project instead.")
+#    message(STATUS "Not using system Curl, using built-in curl project instead.")
     option(BUILD_CURL_TESTS "Set to ON to build cURL tests." OFF)
     add_subdirectory(curl)
     set(CURL_FOUND TRUE)
@@ -68,7 +68,7 @@ if(BUILD_CPR_TESTS)
         find_package(GTest)
     endif()
     if(NOT USE_SYSTEM_GTEST OR NOT GTEST_FOUND)
-        message(STATUS "Not using system gtest, using built-in googletest project instead.")
+#        message(STATUS "Not using system gtest, using built-in googletest project instead.")
         if(MSVC)
             # By default, GTest compiles on Windows in CRT static linkage mode. We use this
             # variable to force it into using the CRT in dynamic linkage (DLL), just as CPR
@@ -98,7 +98,7 @@ endif()
 # Mongoose configuration
 
 if(BUILD_CPR_TESTS)
-    message(STATUS "Building mongoose project for test support.")
+#    message(STATUS "Building mongoose project for test support.")
     add_subdirectory(mongoose)
     set(MONGOOSE_FOUND TRUE)
     set(MONGOOSE_LIBRARIES mongoose)
