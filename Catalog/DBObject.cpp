@@ -14,6 +14,8 @@ const AccessPrivileges AccessPrivileges::ALL_DATABASE =
     AccessPrivileges(DatabasePrivileges::ALL);
 const AccessPrivileges AccessPrivileges::VIEW_SQL_EDITOR =
     AccessPrivileges(DatabasePrivileges::VIEW_SQL_EDITOR);
+const AccessPrivileges AccessPrivileges::ACCESS =
+    AccessPrivileges(DatabasePrivileges::ACCESS);
 
 const AccessPrivileges AccessPrivileges::ALL_TABLE =
     AccessPrivileges(TablePrivileges::ALL);

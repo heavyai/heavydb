@@ -861,7 +861,10 @@ static void print_privs(const std::vector<bool>& privs, TDBObjectType::type type
       std::cout << " drop";
     }
     if (privs[2]) {
-      std::cout << " view sql editor";
+      std::cout << " view-sql-editor";
+    }
+    if (privs[3]) {
+      std::cout << " login-access";
     }
   } else if (type == TDBObjectType::TableDBObjectType) {
     if (privs[0]) {

@@ -290,6 +290,7 @@ TEST(UserRoles, InvalidGrantsRevokesTest) {
   EXPECT_THROW(run_ddl_statement("REVOKE Max from Antazin;"), std::runtime_error);
 
   run_ddl_statement("DROP USER Antazin;");
+  run_ddl_statement("DROP USER Max;");
 }
 
 TEST(UserRoles, ValidNames) {
@@ -380,6 +381,61 @@ TEST_F(DatabaseObject, SqlEditorAccessTest) {
   EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
   EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), false);
   EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), true);
+}
+
+TEST_F(DatabaseObject, DBLoginAccessTest) {
+  std::unique_ptr<Catalog_Namespace::SessionInfo> session_juve;
+  boost::filesystem::path base_path{BASE_PATH};
+  auto system_db_file = base_path / "mapd_catalogs" / "mapd";
+  auto data_dir = base_path / "mapd_data";
+  MapDParameters mapd_parms;
+  auto dataMgr =
+      std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
+  CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
+  CHECK(sys_cat.getMetadataForUser("Bayern", user_meta));
+  session_juve.reset(new Catalog_Namespace::SessionInfo(
+      std::make_shared<Catalog_Namespace::Catalog>(
+          base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
+      user_meta,
+      ExecutorDeviceType::GPU,
+      ""));
+  auto& cat_mapd = session_juve->get_catalog();
+  DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
+  privObjects.clear();
+  mapd_object.loadKey(cat_mapd);
+  mapd_object.setPermissionType(DatabaseDBObjectType);
+  mapd_object.resetPrivileges();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::ACCESS));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
+  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), false);
+  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
+
+  mapd_object.resetPrivileges();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::ACCESS));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Arsenal", mapd_object, cat_mapd));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", mapd_object, cat_mapd));
+
+  mapd_object.resetPrivileges();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::ACCESS));
+  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), false);
+  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), true);
+
+  mapd_object.resetPrivileges();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::ACCESS));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Bayern", mapd_object, cat_mapd));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Arsenal", mapd_object, cat_mapd));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Juventus", mapd_object, cat_mapd));
+
+  mapd_object.resetPrivileges();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::VIEW_SQL_EDITOR));
+  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
+  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
 }
 
 TEST_F(DatabaseObject, TableAccessTest) {
