@@ -526,12 +526,7 @@ TDatum columnar_val_to_datum(const TColumn& col,
       datum.val.int_val = col.data.int_col[row_idx];
       break;
     }
-    case TDatumType::DECIMAL: {
-      datum.val.real_val = col.data.real_col.size()
-                               ? col.data.real_col[row_idx]
-                               : col.data.int_col[row_idx] / pow(10, col_type.scale);
-      break;
-    }
+    case TDatumType::DECIMAL:
     case TDatumType::FLOAT:
     case TDatumType::DOUBLE: {
       datum.val.real_val = col.data.real_col[row_idx];

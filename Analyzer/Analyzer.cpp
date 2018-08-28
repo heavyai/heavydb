@@ -1067,8 +1067,7 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
     type_info = new_type_info;
     constval.timeval *= static_cast<int64_t>(pow(10, type_info.get_dimension()));
   } else if (new_type_info.is_array() && type_info.is_array()) {
-    auto new_sub_ti =
-        SQLTypeInfo(new_type_info.get_subtype(), new_type_info.get_notnull());
+    auto new_sub_ti = new_type_info.get_elem_type();
     for (auto& v : value_list) {
       auto c = std::dynamic_pointer_cast<Analyzer::Constant>(v);
       if (!c) {

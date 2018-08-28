@@ -2248,13 +2248,14 @@ namespace {
 
 template <class T>
 int64_t insert_one_dict_str(T* col_data,
-                            const ColumnDescriptor* cd,
+                            const std::string& columnName,
+                            const SQLTypeInfo& columnType,
                             const Analyzer::Constant* col_cv,
                             const Catalog_Namespace::Catalog& catalog) {
   if (col_cv->get_is_null()) {
-    *col_data = inline_fixed_encoding_null_val(cd->columnType);
+    *col_data = inline_fixed_encoding_null_val(columnType);
   } else {
-    const int dict_id = cd->columnType.get_comp_param();
+    const int dict_id = columnType.get_comp_param();
     const auto col_datum = col_cv->get_constval();
     const auto& str = *col_datum.stringval;
     const auto dd = catalog.getMetadataForDict(dict_id);
@@ -2263,7 +2264,7 @@ int64_t insert_one_dict_str(T* col_data,
     const bool checkpoint_ok = dd->stringDict->checkpoint();
     if (!checkpoint_ok) {
       throw std::runtime_error("Failed to checkpoint dictionary for column " +
-                               cd->columnName);
+                               columnName);
     }
     const bool invalid = str_id > max_valid_int_value<T>();
     if (invalid || str_id == inline_int_null_value<int32_t>()) {
@@ -2272,11 +2273,19 @@ int64_t insert_one_dict_str(T* col_data,
                    << ", the encoded value doesn't fit in " << sizeof(T) * 8
                    << " bits. Will store NULL instead.";
       }
-      str_id = inline_fixed_encoding_null_val(cd->columnType);
+      str_id = inline_fixed_encoding_null_val(columnType);
     }
     *col_data = str_id;
   }
   return *col_data;
+}
+
+template <class T>
+int64_t insert_one_dict_str(T* col_data,
+                            const ColumnDescriptor* cd,
+                            const Analyzer::Constant* col_cv,
+                            const Catalog_Namespace::Catalog& catalog) {
+  return insert_one_dict_str(col_data, cd->columnName, cd->columnType, col_cv, catalog);
 }
 
 }  // namespace
@@ -2471,14 +2480,35 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
                                    std::to_string(size / elem_ti.get_size()) +
                                    " values, " + "received " + std::to_string(l.size()));
         }
-        int8_t* buf = (int8_t*)checked_malloc(len);
-        int8_t* p = buf;
-        for (auto& e : l) {
-          auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
-          CHECK(c);
-          p = Importer_NS::appendDatum(p, c->get_constval(), elem_ti);
+        if (elem_ti.is_string()) {
+          CHECK(kENCODING_DICT == elem_ti.get_compression());
+          CHECK(4 == elem_ti.get_size());
+
+          int8_t* buf = (int8_t*)checked_malloc(len);
+          int32_t* p = reinterpret_cast<int32_t*>(buf);
+
+          int elemIndex = 0;
+          for (auto& e : l) {
+            auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
+            CHECK(c);
+
+            int_col_val =
+                insert_one_dict_str(&p[elemIndex], cd->columnName, elem_ti, c.get(), cat);
+
+            elemIndex++;
+          }
+          arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, len == 0));
+
+        } else {
+          int8_t* buf = (int8_t*)checked_malloc(len);
+          int8_t* p = buf;
+          for (auto& e : l) {
+            auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
+            CHECK(c);
+            p = Importer_NS::appendDatum(p, c->get_constval(), elem_ti);
+          }
+          arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, len == 0));
         }
-        arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, len == 0));
         break;
       }
       case kPOINT:

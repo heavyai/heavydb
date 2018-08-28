@@ -60,6 +60,7 @@
 #include "QueryEngine/JoinFilterPushDown.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "Shared/MapDParameters.h"
+#include "Shared/SQLTypeUtilities.h"
 #include "Shared/StringTransform.h"
 #include "Shared/geosupport.h"
 #include "Shared/import_helpers.h"
@@ -508,7 +509,17 @@ void MapDHandler::value_to_thrift_column(const TargetValue& tv,
     CHECK(scalar_tv);
     if (boost::get<int64_t>(scalar_tv)) {
       int64_t data = *(boost::get<int64_t>(scalar_tv));
-      column.data.int_col.push_back(data);
+
+      if (is_member_of_typeset<kNUMERIC, kDECIMAL>(ti)) {
+        double val = static_cast<double>(data);
+        if (ti.get_scale() > 0) {
+          val /= pow(10.0, std::abs(ti.get_scale()));
+        }
+        column.data.real_col.push_back(val);
+      } else {
+        column.data.int_col.push_back(data);
+      }
+
       switch (ti.get_type()) {
         case kBOOLEAN:
           column.nulls.push_back(data == NULL_BOOLEAN && !ti.get_notnull());
@@ -522,6 +533,8 @@ void MapDHandler::value_to_thrift_column(const TargetValue& tv,
         case kINT:
           column.nulls.push_back(data == NULL_INT && !ti.get_notnull());
           break;
+        case kNUMERIC:
+        case kDECIMAL:
         case kBIGINT:
           column.nulls.push_back(data == NULL_BIGINT && !ti.get_notnull());
           break;
@@ -584,7 +597,18 @@ TDatum MapDHandler::value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti
     return datum;
   }
   if (boost::get<int64_t>(scalar_tv)) {
-    datum.val.int_val = *(boost::get<int64_t>(scalar_tv));
+    int64_t data = *(boost::get<int64_t>(scalar_tv));
+
+    if (is_member_of_typeset<kNUMERIC, kDECIMAL>(ti)) {
+      double val = static_cast<double>(data);
+      if (ti.get_scale() > 0) {
+        val /= pow(10.0, std::abs(ti.get_scale()));
+      }
+      datum.val.real_val = val;
+    } else {
+      datum.val.int_val = data;
+    }
+
     switch (ti.get_type()) {
       case kBOOLEAN:
         datum.is_null = (datum.val.int_val == NULL_BOOLEAN);
@@ -598,6 +622,8 @@ TDatum MapDHandler::value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti
       case kINT:
         datum.is_null = (datum.val.int_val == NULL_INT);
         break;
+      case kDECIMAL:
+      case kNUMERIC:
       case kBIGINT:
         datum.is_null = (datum.val.int_val == NULL_BIGINT);
         break;
