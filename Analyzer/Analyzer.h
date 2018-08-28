@@ -1244,7 +1244,7 @@ class ArrayExpr : public Expr {
  private:
   SQLTypeInfo& preInitTweakedTypeInfo(SQLTypeInfo const& array_ti) {
     tweaked_type_info_ = array_ti;
-    tweaked_type_info_.setSyntheticTransport();
+    tweaked_type_info_.setStandardBufferPackaging();
     return tweaked_type_info_;
   }
 

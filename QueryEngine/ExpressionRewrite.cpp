@@ -202,6 +202,35 @@ class IndirectToDirectColVisitor : public DeepCopyVisitor {
   std::unordered_map<int, const InputColDescriptor*> ind_col_id_to_desc_;
 };
 
+class ArrayElementStringLiteralEncodingVisitor : public DeepCopyVisitor {
+ protected:
+  using RetType = DeepCopyVisitor::RetType;
+
+  RetType visitArrayOper(const Analyzer::ArrayExpr* array_expr) const override {
+    std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
+    for (size_t i = 0; i < array_expr->getElementCount(); ++i) {
+      auto const element_expr_ptr = visit(array_expr->getElement(i));
+      auto const& element_expr_type_info = element_expr_ptr->get_type_info();
+
+      if (!element_expr_type_info.is_string() ||
+          element_expr_type_info.get_compression() != kENCODING_NONE) {
+        args_copy.push_back(element_expr_ptr);
+      } else {
+        auto transient_dict_type_info = element_expr_type_info;
+
+        transient_dict_type_info.set_compression(kENCODING_DICT);
+        transient_dict_type_info.set_comp_param(TRANSIENT_DICT_ID);
+        transient_dict_type_info.set_fixed_size();
+        args_copy.push_back(element_expr_ptr->add_cast(transient_dict_type_info));
+      }
+    }
+
+    const auto& type_info = array_expr->get_type_info();
+    return makeExpr<Analyzer::ArrayExpr>(
+        type_info, args_copy, array_expr->getExprIndex());
+  }
+};
+
 class ConstantFoldingVisitor : public DeepCopyVisitor {
  protected:
   template <typename T1, typename T2>
@@ -558,7 +587,11 @@ const Analyzer::Expr* strip_likelihood(const Analyzer::Expr* expr) {
 
 }  // namespace
 
-std::shared_ptr<Analyzer::Expr> rewrite_expr(const Analyzer::Expr* expr) {
+Analyzer::ExpressionPtr rewrite_array_elements(Analyzer::Expr const* expr) {
+  return ArrayElementStringLiteralEncodingVisitor().visit(expr);
+}
+
+Analyzer::ExpressionPtr rewrite_expr(const Analyzer::Expr* expr) {
   const auto expr_no_likelihood = strip_likelihood(expr);
   // The following check is not strictly needed, but seems silly to transform a
   // simple string comparison to an IN just to codegen the same thing anyway.

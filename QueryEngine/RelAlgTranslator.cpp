@@ -1155,6 +1155,70 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOffsetInFragment() co
   return makeExpr<Analyzer::OffsetInFragment>();
 }
 
+Analyzer::ExpressionPtr RelAlgTranslator::translateArrayFunction(
+    const RexFunctionOperator* rex_function) const {
+  if (rex_function->getType().get_subtype() == kNULLT) {
+    auto sql_type = rex_function->getType();
+    CHECK(sql_type.get_type() == kARRAY);
+
+    // FIX-ME:  Deal with NULL arrays
+    auto translated_function_args(translateFunctionArgs(rex_function));
+    if (translated_function_args.size() > 0) {
+      auto const& first_element_logical_type(
+          get_logical_type_info(translated_function_args[0]->get_type_info()));
+
+      on_member_of_typeset<kCHAR, kVARCHAR, kTEXT>(
+          first_element_logical_type,
+          [&] {
+            bool same_type_status = true;
+            for (auto const& expr_ptr : translated_function_args) {
+              same_type_status =
+                  same_type_status && (expr_ptr->get_type_info().is_string());
+            }
+
+            if (same_type_status == false) {
+              throw std::runtime_error(
+                  "All elements of the array are not of the same logical subtype; "
+                  "consider casting to force this condition.");
+            }
+
+            sql_type.set_subtype(first_element_logical_type.get_type());
+            sql_type.set_compression(kENCODING_FIXED);
+            sql_type.set_comp_param(TRANSIENT_DICT_ID);
+          },
+          [&] {
+            // Non string types
+            bool same_type_status = true;
+            for (auto const& expr_ptr : translated_function_args) {
+              same_type_status =
+                  same_type_status && (first_element_logical_type ==
+                                       get_logical_type_info(expr_ptr->get_type_info()));
+            }
+
+            if (same_type_status == false) {
+              throw std::runtime_error(
+                  "All elements of the array are not of the same logical subtype; "
+                  "consider casting to force this condition.");
+            }
+            sql_type.set_subtype(first_element_logical_type.get_type());
+            sql_type.set_scale(first_element_logical_type.get_scale());
+            sql_type.set_precision(first_element_logical_type.get_precision());
+          });
+
+      feature_stash_.setCPUOnlyExecutionRequired();
+      return makeExpr<Analyzer::ArrayExpr>(
+          sql_type, translated_function_args, feature_stash_.getAndBumpArrayExprCount());
+    } else {
+      throw std::runtime_error("NULL ARRAY[] expressions not supported yet.  FIX-ME.");
+    }
+  } else {
+    feature_stash_.setCPUOnlyExecutionRequired();
+    return makeExpr<Analyzer::ArrayExpr>(rex_function->getType(),
+                                         translateFunctionArgs(rex_function),
+                                         feature_stash_.getAndBumpArrayExprCount());
+  }
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     const RexFunctionOperator* rex_function) const {
   if (rex_function->getName() == std::string("LIKE") ||
@@ -1288,6 +1352,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     CHECK_EQ(size_t(0), rex_function->size());
     return translateOffsetInFragment();
   }
+  if (rex_function->getName() == std::string("ARRAY")) {
+    // Var args; currently no check.  Possible fix-me -- can array have 0 elements?
+    return translateArrayFunction(rex_function);
+  }
+
   if (!ExtensionFunctionsWhitelist::get(rex_function->getName())) {
     throw QueryNotSupported("Function " + rex_function->getName() + " not supported");
   }
@@ -1296,7 +1365,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                                           translateFunctionArgs(rex_function));
 }
 
-std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateFunctionArgs(
+Analyzer::ExpressionPtrVector RelAlgTranslator::translateFunctionArgs(
     const RexFunctionOperator* rex_function) const {
   std::vector<std::shared_ptr<Analyzer::Expr>> args;
   for (size_t i = 0; i < rex_function->size(); ++i) {

@@ -21,6 +21,54 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Type.h>
 
+inline llvm::ArrayType* get_int_array_type(int const width,
+                                           int count,
+                                           llvm::LLVMContext& context) {
+  switch (width) {
+    case 64:
+      return llvm::ArrayType::get(llvm::Type::getInt64Ty(context), count);
+    case 32:
+      return llvm::ArrayType::get(llvm::Type::getInt32Ty(context), count);
+      break;
+    case 16:
+      return llvm::ArrayType::get(llvm::Type::getInt16Ty(context), count);
+      break;
+    case 8:
+      return llvm::ArrayType::get(llvm::Type::getInt8Ty(context), count);
+      break;
+    case 1:
+      return llvm::ArrayType::get(llvm::Type::getInt1Ty(context), count);
+      break;
+    default:
+      LOG(FATAL) << "Unsupported integer width: " << width;
+  }
+  return nullptr;
+}
+
+inline llvm::VectorType* get_int_vector_type(int const width,
+                                             int count,
+                                             llvm::LLVMContext& context) {
+  switch (width) {
+    case 64:
+      return llvm::VectorType::get(llvm::Type::getInt64Ty(context), count);
+    case 32:
+      return llvm::VectorType::get(llvm::Type::getInt32Ty(context), count);
+      break;
+    case 16:
+      return llvm::VectorType::get(llvm::Type::getInt16Ty(context), count);
+      break;
+    case 8:
+      return llvm::VectorType::get(llvm::Type::getInt8Ty(context), count);
+      break;
+    case 1:
+      return llvm::VectorType::get(llvm::Type::getInt1Ty(context), count);
+      break;
+    default:
+      LOG(FATAL) << "Unsupported integer width: " << width;
+  }
+  return nullptr;
+}
+
 inline llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
   switch (width) {
     case 64:

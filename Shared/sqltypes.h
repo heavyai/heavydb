@@ -157,29 +157,30 @@ enum EncodingType {
 #define REGULAR_DICT(TRANSIENTID) (-(TRANSIENTID))
 
 template <typename CORE_TYPE>
-class ExecutorTypeTransport {
+class ExecutorTypePackaging {
  public:
-  enum TransportType { Chunk, Synthetic };
+  enum PackagingType { Chunk, StandardBuffer };
 
-  ExecutorTypeTransport() : transport_type_(Chunk) {}
+  ExecutorTypePackaging() : packaging_type_(Chunk) {}
 
-  bool isSyntheticTransport() const { return transport_type_ == Synthetic; }
-  bool isChunkTransport() const { return transport_type_ == Chunk; }
-  void setSyntheticTransport() { transport_type_ = Synthetic; }
-  void setChunkTransport() { transport_type_ = Chunk; }
+  bool isStandardBufferPackaging() const { return packaging_type_ == StandardBuffer; }
+  bool isChunkIteratorPackaging() const { return packaging_type_ == Chunk; }
+  void setStandardBufferPackaging() { packaging_type_ = StandardBuffer; }
+  void setChunkIteratorPackaging() { packaging_type_ = Chunk; }
 
  private:
-  TransportType transport_type_;
+  PackagingType packaging_type_;
 };
 
 template <typename CORE_TYPE>
 class ArrayContextTypeSizer {
  public:
-  inline int get_array_context_logical_size() {
-    CORE_TYPE* derived(static_cast<CORE_TYPE*>(this));
+  inline int get_array_context_logical_size() const {
+    CORE_TYPE const* derived(static_cast<CORE_TYPE const*>(this));
     if (is_member_of_typeset<kCHAR, kTEXT, kVARCHAR>(*derived)) {
       auto comp_type(derived->get_compression());
-      if (comp_type == kENCODING_DICT || comp_type == kENCODING_NONE) {
+      if (comp_type == kENCODING_DICT || comp_type == kENCODING_FIXED ||
+          comp_type == kENCODING_NONE) {
         return sizeof(int32_t);
       }
     }
@@ -687,7 +688,7 @@ std::string SQLTypeInfoCore<TYPE_FACET_PACK...>::comp_name[kENCODING_LAST] =
     {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED"};
 #endif
 
-using SQLTypeInfo = SQLTypeInfoCore<ArrayContextTypeSizer, ExecutorTypeTransport>;
+using SQLTypeInfo = SQLTypeInfoCore<ArrayContextTypeSizer, ExecutorTypePackaging>;
 
 SQLTypes decimal_to_int_type(const SQLTypeInfo&);
 

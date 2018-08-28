@@ -2279,6 +2279,16 @@ void add_transient_string_literals_for_expression(
   if (!expr) {
     return;
   }
+
+  const auto array_expr = dynamic_cast<const Analyzer::ArrayExpr*>(expr);
+  if (array_expr) {
+    for (size_t i = 0; i < array_expr->getElementCount(); i++) {
+      add_transient_string_literals_for_expression(
+          array_expr->getElement(i), executor, row_set_mem_owner);
+    }
+    return;
+  }
+
   const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr);
   const auto& expr_ti = expr->get_type_info();
   if (cast_expr && cast_expr->get_optype() == kCAST && expr_ti.is_string()) {
@@ -3840,21 +3850,28 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
     if (target_ti.is_array() && !executor_->plan_state_->isLazyFetchColumn(target_expr)) {
       const auto target_lvs =
           executor_->codegen(target_expr, !executor_->plan_state_->allow_lazy_fetch_, co);
-      CHECK_EQ(size_t(1), target_lvs.size());
-      CHECK(!agg_expr);
-      const auto i32_ty = get_int_type(32, executor_->cgen_state_->context_);
-      const auto i8p_ty =
-          llvm::PointerType::get(get_int_type(8, executor_->cgen_state_->context_), 0);
-      const auto& elem_ti = target_ti.get_elem_type();
-      return {
-          executor_->cgen_state_->emitExternalCall(
-              "array_buff", i8p_ty, {target_lvs.front(), executor_->posArg(target_expr)}),
-          executor_->cgen_state_->emitExternalCall(
-              "array_size",
-              i32_ty,
-              {target_lvs.front(),
-               executor_->posArg(target_expr),
-               executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))})};
+      if (target_ti.isChunkIteratorPackaging()) {
+        // Something with the chunk transport is code that was generated from a source
+        // other than an ARRAY[] expression
+        CHECK_EQ(size_t(1), target_lvs.size());
+        CHECK(!agg_expr);
+        const auto i32_ty = get_int_type(32, executor_->cgen_state_->context_);
+        const auto i8p_ty =
+            llvm::PointerType::get(get_int_type(8, executor_->cgen_state_->context_), 0);
+        const auto& elem_ti = target_ti.get_elem_type();
+        return {executor_->cgen_state_->emitExternalCall(
+                    "array_buff",
+                    i8p_ty,
+                    {target_lvs.front(), executor_->posArg(target_expr)}),
+                executor_->cgen_state_->emitExternalCall(
+                    "array_size",
+                    i32_ty,
+                    {target_lvs.front(),
+                     executor_->posArg(target_expr),
+                     executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))})};
+      } else if (target_ti.isStandardBufferPackaging()) {
+        return {target_lvs[0], target_lvs[1]};
+      }
     }
     if (target_ti.is_geometry() &&
         !executor_->plan_state_->isLazyFetchColumn(target_expr)) {

@@ -57,6 +57,7 @@
 #include <unistd.h>
 #include <algorithm>
 #include <condition_variable>
+#include <cstddef>
 #include <deque>
 #include <functional>
 #include <limits>
@@ -476,9 +477,12 @@ class Executor {
                                     const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::UOper*, const CompilationOptions&);
+
   std::vector<llvm::Value*> codegen(const Analyzer::ColumnVar*,
                                     const bool fetch_column,
                                     const CompilationOptions&);
+  std::vector<llvm::Value*> codegenArrayExpr(const Analyzer::ArrayExpr*,
+                                             const CompilationOptions&);
   std::vector<llvm::Value*> codegenColVar(const Analyzer::ColumnVar*,
                                           const bool fetch_column,
                                           const bool update_query_plan,
@@ -1197,6 +1201,7 @@ class Executor {
                     const JoinInfo& join_info,
                     const std::vector<InputTableInfo>& query_infos,
                     const RelAlgExecutionUnit& ra_exe_unit);
+
   std::vector<std::pair<void*, void*>> optimizeAndCodegenCPU(
       llvm::Function*,
       llvm::Function*,
@@ -1768,5 +1773,7 @@ std::unordered_set<int> get_available_gpus(const Catalog_Namespace::Catalog& cat
 size_t get_context_count(const ExecutorDeviceType device_type,
                          const size_t cpu_count,
                          const size_t gpu_count);
+
+extern "C" void register_buffer_with_executor_rsm(int64_t exec, int8_t* buffer);
 
 #endif  // QUERYENGINE_EXECUTE_H

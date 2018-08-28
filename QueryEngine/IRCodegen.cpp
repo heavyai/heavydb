@@ -115,6 +115,10 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
     return {codegenFunctionOperWithCustomTypeHandling(
         function_oper_with_custom_type_handling_expr, co)};
   }
+  auto array_oper_expr = dynamic_cast<const Analyzer::ArrayExpr*>(expr);
+  if (array_oper_expr) {
+    return {codegenArrayExpr(array_oper_expr, co)};
+  }
   auto function_oper_expr = dynamic_cast<const Analyzer::FunctionOper*>(expr);
   if (function_oper_expr) {
     return {codegenFunctionOper(function_oper_expr, co)};

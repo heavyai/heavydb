@@ -1127,7 +1127,9 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
       // for the sake of taking memory ownership, no real work needed here.
       continue;
     }
-    const auto scalar_expr = translator.translateScalarRex(scalar_rex);
+
+    const auto scalar_expr =
+        rewrite_array_elements(translator.translateScalarRex(scalar_rex).get());
     const auto rewritten_expr = rewrite_expr(scalar_expr.get());
     try {
       scalar_sources.push_back(set_transient_dict(fold_expr(rewritten_expr.get())));
@@ -1135,6 +1137,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
       scalar_sources.push_back(fold_expr(rewritten_expr.get()));
     }
   }
+
   return scalar_sources;
 }
 
@@ -1456,10 +1459,14 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
                                                 const int64_t queue_time_ms) {
   const auto work_unit = createCompoundWorkUnit(
       compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  CompilationOptions co_compound = co;
+  if (work_unit.exe_unit.query_features.isCPUOnlyExecutionRequired()) {
+    co_compound.device_type_ = ExecutorDeviceType::CPU;
+  }
   return executeWorkUnit(work_unit,
                          compound->getOutputMetainfo(),
                          compound->isAggregate(),
-                         co,
+                         co_compound,
                          eo,
                          render_info,
                          queue_time_ms);
@@ -1489,6 +1496,9 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
   auto work_unit =
       createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   CompilationOptions co_project = co;
+  if (work_unit.exe_unit.query_features.isCPUOnlyExecutionRequired()) {
+    co_project.device_type_ = ExecutorDeviceType::CPU;
+  }
 
   if (project->isSimple()) {
     CHECK_EQ(size_t(1), project->inputCount());
@@ -1907,28 +1917,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   int32_t error_code{0};
 
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
-
-  /*
-  executor_->executeUpdate(work_unit.exe_unit,
-                           table_infos.front(),
-                           co,
-                           eo,
-                           cat_,
-                           executor_->row_set_mem_owner_,
-                           [](const UpdateLogForFragment& update_log) {
-                             LOG(ERROR) << "Fragment: " << update_log.getFragmentIndex();
-                             for (size_t i = 0; i < update_log.getEntryCount(); ++i) {
-                               const auto row = update_log.getEntryAt(i);
-                               CHECK(!row.empty());
-                               for (const auto& col : row) {
-                                 const auto scalar_tv =
-  boost::get<ScalarTargetValue>(&col); CHECK(scalar_tv); int64_t data =
-  *(boost::get<int64_t>(scalar_tv)); printf("%ld ", data);
-                               }
-                               puts("");
-                             }
-                           });
-  */
 
   auto ra_exe_unit = decide_approx_count_distinct_implementation(
       work_unit.exe_unit, table_infos, executor_, co.device_type_, target_exprs_owned_);
@@ -2643,8 +2631,14 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
         left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
-  RelAlgTranslator translator(
-      cat_, executor_, input_to_nest_level, join_types, now_, just_explain);
+  QueryFeatureDescriptor query_features;
+  RelAlgTranslator translator(cat_,
+                              executor_,
+                              input_to_nest_level,
+                              join_types,
+                              now_,
+                              just_explain,
+                              query_features);
   const auto scalar_sources = translate_scalar_sources(compound, translator);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
   const auto quals_cf = translate_quals(compound, translator);
@@ -2709,7 +2703,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
       {},
       nullptr,
       sort_info,
-      0};
+      0,
+      query_features};
   QueryRewriter* query_rewriter =
       new QueryRewriter(exe_unit, query_infos, executor_, nullptr);
   const auto rewritten_exe_unit = query_rewriter->rewrite();
@@ -2756,8 +2751,14 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
         left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
-  RelAlgTranslator translator(
-      cat_, executor_, input_to_nest_level, join_types, now_, just_explain);
+  QueryFeatureDescriptor query_features;
+  RelAlgTranslator translator(cat_,
+                              executor_,
+                              input_to_nest_level,
+                              join_types,
+                              now_,
+                              just_explain,
+                              query_features);
   const auto scalar_sources = translate_scalar_sources(compound, translator);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
   const auto quals_cf = translate_quals(compound, translator);
@@ -2790,7 +2791,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
       {},
       nullptr,
       sort_info,
-      0};
+      0,
+      query_features};
   QueryRewriter* query_rewriter =
       new QueryRewriter(exe_unit, query_infos, executor_, nullptr);
   const auto rewritten_exe_unit = query_rewriter->rewrite();
@@ -2903,8 +2905,14 @@ std::list<std::shared_ptr<Analyzer::Expr>> RelAlgExecutor::makeJoinQuals(
     const std::vector<JoinType>& join_types,
     const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
     const bool just_explain) const {
-  RelAlgTranslator translator(
-      cat_, executor_, input_to_nest_level, join_types, now_, just_explain);
+  QueryFeatureDescriptor query_features;
+  RelAlgTranslator translator(cat_,
+                              executor_,
+                              input_to_nest_level,
+                              join_types,
+                              now_,
+                              just_explain,
+                              query_features);
   const auto rex_condition_cf = rex_to_conjunctive_form(join_condition);
   std::list<std::shared_ptr<Analyzer::Expr>> join_condition_quals;
   for (const auto rex_condition_component : rex_condition_cf) {
@@ -3046,8 +3054,14 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createJoinWorkUnit(const RelJoin* join,
       get_input_desc(join, input_to_nest_level, {}, cat_);
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
   const auto join_type = join->getJoinType();
-  RelAlgTranslator translator(
-      cat_, executor_, input_to_nest_level, {join_type}, now_, just_explain);
+  QueryFeatureDescriptor query_features;
+  RelAlgTranslator translator(cat_,
+                              executor_,
+                              input_to_nest_level,
+                              {join_type},
+                              now_,
+                              just_explain,
+                              query_features);
   auto inner_join_quals = get_inner_join_quals(join, translator);
   auto outer_join_quals = get_outer_join_quals(join, translator);
   CHECK((join_type == JoinType::INNER && outer_join_quals.empty()) ||
@@ -3077,7 +3091,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createJoinWorkUnit(const RelJoin* join,
            get_exprs_not_owned(orig_target_exprs_owned),
            nullptr,
            sort_info,
-           0},
+           0,
+           query_features},
           join,
           max_groups_buffer_entry_default_guess,
           nullptr};
@@ -3125,8 +3140,14 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
       get_input_desc(aggregate, input_to_nest_level, {}, cat_);
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
   const auto join_type = get_join_type(aggregate);
-  RelAlgTranslator translator(
-      cat_, executor_, input_to_nest_level, {join_type}, now_, just_explain);
+  QueryFeatureDescriptor query_features;
+  RelAlgTranslator translator(cat_,
+                              executor_,
+                              input_to_nest_level,
+                              {join_type},
+                              now_,
+                              just_explain,
+                              query_features);
   CHECK_EQ(size_t(1), aggregate->inputCount());
   const auto source = aggregate->getInput(0);
   const auto& in_metainfo = source->getOutputMetainfo();
@@ -3152,7 +3173,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
            {},
            nullptr,
            sort_info,
-           0},
+           0,
+           query_features},
           aggregate,
           max_groups_buffer_entry_default_guess,
           nullptr};
@@ -3184,8 +3206,14 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
     left_deep_inner_joins = translateLeftDeepJoinFilter(
         left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
-  RelAlgTranslator translator(
-      cat_, executor_, input_to_nest_level, join_types, now_, just_explain);
+  QueryFeatureDescriptor query_features;
+  RelAlgTranslator translator(cat_,
+                              executor_,
+                              input_to_nest_level,
+                              join_types,
+                              now_,
+                              just_explain,
+                              query_features);
   const auto target_exprs_owned = translate_scalar_sources(project, translator);
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
@@ -3231,7 +3259,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
            {},
            nullptr,
            sort_info,
-           0},
+           0,
+           query_features},
           project,
           max_groups_buffer_entry_default_guess,
           nullptr};
@@ -3269,8 +3298,15 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
     left_deep_inner_joins = translateLeftDeepJoinFilter(
         left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
-  RelAlgTranslator translator(
-      cat_, executor_, input_to_nest_level, join_types, now_, just_explain);
+
+  QueryFeatureDescriptor query_features;
+  RelAlgTranslator translator(cat_,
+                              executor_,
+                              input_to_nest_level,
+                              join_types,
+                              now_,
+                              just_explain,
+                              query_features);
   const auto target_exprs_owned = translate_scalar_sources(project, translator);
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
@@ -3292,7 +3328,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
            {},
            nullptr,
            sort_info,
-           0},
+           0,
+           query_features},
           project,
           max_groups_buffer_entry_default_guess,
           nullptr,
@@ -3357,8 +3394,14 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
       get_input_desc(filter, input_to_nest_level, {}, cat_);
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
   const auto join_type = get_join_type(filter);
-  RelAlgTranslator translator(
-      cat_, executor_, input_to_nest_level, {join_type}, now_, just_explain);
+  QueryFeatureDescriptor query_features;
+  RelAlgTranslator translator(cat_,
+                              executor_,
+                              input_to_nest_level,
+                              {join_type},
+                              now_,
+                              just_explain,
+                              query_features);
   std::tie(in_metainfo, target_exprs_owned) =
       get_inputs_meta(filter, translator, used_inputs_owned, input_to_nest_level);
   const auto filter_expr = translator.translateScalarRex(filter->getCondition());

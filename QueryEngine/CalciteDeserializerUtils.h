@@ -154,6 +154,9 @@ inline SQLTypes to_sql_type(const std::string& type_name) {
   if (type_name == std::string("NULL")) {
     return kNULLT;
   }
+  if (type_name == std::string("ARRAY")) {
+    return kARRAY;
+  }
   if (type_name == std::string("INTERVAL_DAY") ||
       type_name == std::string("INTERVAL_HOUR") ||
       type_name == std::string("INTERVAL_MINUTE") ||

@@ -118,6 +118,16 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
                                            visit(extract->get_from_expr()));
   }
 
+  RetType visitArrayOper(const Analyzer::ArrayExpr* array_expr) const override {
+    std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
+    for (size_t i = 0; i < array_expr->getElementCount(); ++i) {
+      args_copy.push_back(visit(array_expr->getElement(i)));
+    }
+    const auto& type_info = array_expr->get_type_info();
+    return makeExpr<Analyzer::ArrayExpr>(
+        type_info, args_copy, array_expr->getExprIndex());
+  }
+
   RetType visitFunctionOper(const Analyzer::FunctionOper* func_oper) const override {
     std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
     for (size_t i = 0; i < func_oper->getArity(); ++i) {

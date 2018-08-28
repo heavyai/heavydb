@@ -93,6 +93,10 @@ class ScalarExprVisitor {
     if (func) {
       return visitFunctionOper(func);
     }
+    const auto array = dynamic_cast<const Analyzer::ArrayExpr*>(expr);
+    if (array) {
+      return visitArrayOper(array);
+    }
     const auto datediff = dynamic_cast<const Analyzer::DatediffExpr*>(expr);
     if (datediff) {
       return visitDatediffExpr(datediff);
@@ -207,6 +211,14 @@ class ScalarExprVisitor {
   virtual T visitFunctionOperWithCustomTypeHandling(
       const Analyzer::FunctionOperWithCustomTypeHandling* func_oper) const {
     return visitFunctionOper(func_oper);
+  }
+
+  virtual T visitArrayOper(Analyzer::ArrayExpr const* array_expr) const {
+    T result = defaultResult();
+    for (size_t i = 0; i < array_expr->getElementCount(); ++i) {
+      result = aggregateResult(result, visit(array_expr->getElement(i)));
+    }
+    return result;
   }
 
   virtual T visitFunctionOper(const Analyzer::FunctionOper* func_oper) const {

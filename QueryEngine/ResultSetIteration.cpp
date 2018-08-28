@@ -739,12 +739,19 @@ TargetValue build_string_array_target_value(
   const size_t num_elems = buff_sz / sizeof(int32_t);
   for (size_t i = 0; i < num_elems; ++i) {
     const auto string_id = buff[i];
-    values.emplace_back(
-        string_id == NULL_INT
-            ? NullableString(nullptr)
-            : NullableString(
-                  executor->getStringDictionaryProxy(dict_id, row_set_mem_owner, false)
-                      ->getString(string_id)));
+
+    if (string_id == NULL_INT) {
+      values.emplace_back(NullableString(nullptr));
+    } else {
+      if (dict_id == 0) {
+        StringDictionaryProxy* sdp = row_set_mem_owner->getLiteralStringDictProxy();
+        values.emplace_back(sdp->getString(string_id));
+      } else {
+        values.emplace_back(NullableString(
+            executor->getStringDictionaryProxy(dict_id, row_set_mem_owner, false)
+                ->getString(string_id)));
+      }
+    }
   }
   return values;
 }
@@ -756,11 +763,7 @@ TargetValue build_array_target_value(const SQLTypeInfo& array_ti,
                                      const Executor* executor) {
   CHECK(array_ti.is_array());
   const auto& elem_ti = array_ti.get_elem_type();
-  CHECK_EQ(elem_ti.get_size(),
-           elem_ti.get_logical_size());  // no fixed encoding for arrays yet
   if (elem_ti.is_string()) {
-    CHECK_EQ(kENCODING_DICT, elem_ti.get_compression());
-    CHECK_EQ(size_t(4), elem_ti.get_size());
     return build_string_array_target_value(reinterpret_cast<const int32_t*>(buff),
                                            buff_sz,
                                            elem_ti.get_comp_param(),
@@ -914,7 +917,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
   auto length = read_int_from_buff(ptr2, compact_sz2);
   if (target_info.sql_type.is_array()) {
     const auto& elem_ti = target_info.sql_type.get_elem_type();
-    length *= elem_ti.get_logical_size();
+    length *= elem_ti.get_array_context_logical_size();
   }
   std::vector<int8_t> cpu_buffer;
   if (varlen_ptr && device_type_ == ExecutorDeviceType::GPU) {

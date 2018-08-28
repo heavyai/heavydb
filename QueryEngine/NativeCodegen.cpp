@@ -1290,6 +1290,7 @@ Executor::CompilationResult Executor::compileWorkUnit(
 
   auto agg_fnames =
       get_agg_fnames(ra_exe_unit.target_exprs, !ra_exe_unit.groupby_exprs.empty());
+
   const auto agg_slot_count = ra_exe_unit.estimator ? size_t(1) : agg_fnames.size();
 
   const bool is_group_by{query_mem_desc.isGroupBy()};

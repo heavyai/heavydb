@@ -28,6 +28,7 @@
 
 #include "../Shared/sqldefs.h"
 #include "InputDescriptors.h"
+#include "QueryFeatures.h"
 
 #include <list>
 #include <memory>
@@ -74,6 +75,7 @@ struct RelAlgExecutionUnit {
   const std::shared_ptr<Analyzer::NDVEstimator> estimator;
   const SortInfo sort_info;
   size_t scan_limit;
+  QueryFeatureDescriptor query_features;
 };
 
 #endif  // QUERYENGINE_RELALGEXECUTIONUNIT_H

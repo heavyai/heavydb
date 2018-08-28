@@ -1254,9 +1254,6 @@ class RelModify : public RelAlgNode {
                                    int index, RelProject::ConstRexScalarPtr& expr_ptr) {
       if (index >= target_update_column_expr_start &&
           index <= target_update_column_expr_end) {
-        RelProject::ConstRexScalarPtrVector operand_stash;
-        operand_stash.emplace_back(std::move(expr_ptr));
-
         auto target_index = index - target_update_column_expr_start;
 
         auto* column_desc = catalog_.getMetadataForColumn(
@@ -1277,9 +1274,16 @@ class RelModify : public RelAlgNode {
         // Type needs to be scrubbed because otherwise NULL values could get cut off or
         // truncated
         auto cast_target_type = get_logical_type_info(column_desc->columnType);
-        auto capped_result_expr_ptr =
-            boost::make_unique<RexOperator const>(kCAST, operand_stash, cast_target_type);
-        transform_stash.emplace_back(std::move(capped_result_expr_ptr));
+        if (cast_target_type.is_varlen() && cast_target_type.is_array()) {
+          transform_stash.emplace_back(std::move(expr_ptr));
+        } else {
+          RelProject::ConstRexScalarPtrVector operand_stash;
+          operand_stash.emplace_back(std::move(expr_ptr));
+
+          auto capped_result_expr_ptr =
+              std::make_unique<RexOperator const>(kCAST, operand_stash, cast_target_type);
+          transform_stash.emplace_back(std::move(capped_result_expr_ptr));
+        }
       } else {
         transform_stash.emplace_back(std::move(expr_ptr));
       }

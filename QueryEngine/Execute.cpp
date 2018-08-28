@@ -2921,8 +2921,6 @@ llvm::Value* Executor::castToTypeIn(llvm::Value* val, const size_t dst_bits) {
   }
   // real (not dictionary-encoded) strings; store the pointer to the payload
   if (val->getType()->isPointerTy()) {
-    const auto val_ptr_type = static_cast<llvm::PointerType*>(val->getType());
-    CHECK(val_ptr_type->getElementType()->isIntegerTy(8));
     return cgen_state_->ir_builder_.CreatePointerCast(
         val, get_int_type(dst_bits, cgen_state_->context_));
   }

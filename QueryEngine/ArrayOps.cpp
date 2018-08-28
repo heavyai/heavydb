@@ -193,6 +193,17 @@ ARRAY_AT_CHECKED(double)
 
 #undef ARRAY_AT_CHECKED
 
+extern "C" DEVICE int8_t* allocate_varlen_buffer(int64_t element_count,
+                                                 int64_t element_size) {
+#ifndef __CUDACC__
+  int8_t* varlen_buffer =
+      reinterpret_cast<int8_t*>(checked_malloc((element_count + 1) * element_size));
+  return varlen_buffer;
+#else
+  return nullptr;
+#endif
+}
+
 extern "C" DEVICE int8_t* array_buff(int8_t* chunk_iter_, const uint64_t row_pos) {
   ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
   ArrayDatum ad;

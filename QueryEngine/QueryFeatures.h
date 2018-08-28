@@ -31,7 +31,7 @@ class ExecutionRestrictions {
   void setCPUOnlyExecutionRequired() { cpu_only_required_ = true; }
 
  private:
-  bool cpu_only_required_;
+  bool cpu_only_required_ = false;
 };
 
 template <typename... FEATURE_MARKERS>
