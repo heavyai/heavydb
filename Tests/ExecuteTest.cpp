@@ -3079,6 +3079,25 @@ TEST(Select, ReturnNullFromDivByZero) {
   }
 }
 
+TEST(Select, ConstantFolding) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT 1 + 2 FROM test limit 1;", dt);
+    c("SELECT 1 + 2.3 FROM test limit 1;", dt);
+    c("SELECT 2.3 + 1 FROM test limit 1;", dt);
+    c("SELECT 2 * 3 FROM test limit 1;", dt);
+    c("SELECT 9.1 + 2.9999999999 FROM test limit 1;", dt);
+    c("SELECT -9.1 - 2.9999999999 FROM test limit 1;", dt);
+    c("SELECT 3/2 FROM test limit 1;", dt);
+    c("SELECT 3/2.0 FROM test limit 1;", dt);
+    c("SELECT 11.1 * 2.22 FROM test limit 1;", dt);
+    c("SELECT 1.01 * 1.00001 FROM test limit 1;", dt);
+    c("SELECT 11.1 * 2.222222222 FROM test limit 1;", dt);
+    c("SELECT 9.99 * 9999.9 FROM test limit 1;", dt);
+    c("SELECT 9.22337203685477 * 9.223 FROM test limit 1;", dt);
+  }
+}
+
 TEST(Select, OverflowAndUnderFlow) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

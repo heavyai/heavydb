@@ -486,6 +486,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
     const auto const_lhs = std::dynamic_pointer_cast<const Analyzer::Constant>(lhs);
     const auto const_rhs = std::dynamic_pointer_cast<const Analyzer::Constant>(rhs);
     const auto optype = bin_oper->get_optype();
+    const auto& ti = bin_oper->get_type_info();
     const auto& lhs_ti = lhs->get_type_info();
     const auto& rhs_ti = rhs->get_type_info();
     auto lhs_type = lhs_ti.is_decimal() ? decimal_to_int_type(lhs_ti) : lhs_ti.get_type();
@@ -515,7 +516,13 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
       Datum result_datum;
       SQLTypes result_type;
       if (foldOper(optype, lhs_type, lhs_datum, rhs_datum, result_datum, result_type)) {
-        return makeExpr<Analyzer::Constant>(result_type, false, result_datum);
+        if (!ti.is_decimal()) {
+          return makeExpr<Analyzer::Constant>(result_type, false, result_datum);
+        }
+        if (optype == kPLUS || optype == kMINUS || optype == kMULTIPLY) {
+          CHECK(lhs_ti.is_decimal());
+          return makeExpr<Analyzer::Constant>(ti, false, result_datum);
+        }
       }
     }
 

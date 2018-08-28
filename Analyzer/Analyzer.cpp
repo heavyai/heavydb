@@ -334,6 +334,20 @@ SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
       throw std::runtime_error("non-integer operands in modulo operation.");
     }
     common_type = common_numeric_type(left_type, right_type);
+    if (common_type.is_decimal()) {
+      if (op == kMULTIPLY) {
+        // Decimal multiplication requires common_type adjustment:
+        // dimension and scale of the result should be increased.
+        auto new_dimension = left_type.get_dimension() + right_type.get_dimension();
+        // If new dimension is over 20 digits, the result may overflow, or it may not.
+        // Rely on the runtime overflow detection rather than a static check here.
+        common_type.set_dimension(new_dimension);
+        common_type.set_scale(left_type.get_scale() + right_type.get_scale());
+      } else if (op == kPLUS || op == kMINUS) {
+        // Scale should remain the same but dimension could actually go up
+        common_type.set_dimension(common_type.get_dimension() + 1);
+      }
+    }
     *new_left_type = common_type;
     new_left_type->set_notnull(left_type.get_notnull());
     *new_right_type = common_type;
