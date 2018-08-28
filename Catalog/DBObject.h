@@ -74,6 +74,7 @@ struct DatabasePrivileges {
   static const int32_t CREATE_DATABASE = 1 << 0;
   static const int32_t DROP_DATABASE = 1 << 1;
   static const int32_t VIEW_SQL_EDITOR = 1 << 2;
+  static const int32_t ACCESS = 1 << 3;
 };
 
 struct TablePrivileges {
@@ -137,6 +138,7 @@ struct AccessPrivileges {
   // database permissions
   static const AccessPrivileges ALL_DATABASE;
   static const AccessPrivileges VIEW_SQL_EDITOR;
+  static const AccessPrivileges ACCESS;
 
   // table permissions
   static const AccessPrivileges ALL_TABLE_MIGRATE;

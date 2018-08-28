@@ -559,6 +559,8 @@ void SysCatalog::updatePasswordsToHashes() {
 
 void SysCatalog::migrateDBAccessPrivileges() {
   sys_sqlite_lock sqlite_lock(this);
+  bool priv_access = false;
+  bool priv_sql_editor = false;
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     sqliteConnector_->query(
@@ -569,14 +571,13 @@ void SysCatalog::migrateDBAccessPrivileges() {
           "CREATE TABLE mapd_version_history(version integer, migration_history text "
           "unique)");
     } else {
-      sqliteConnector_->query(
-          "select version, migration_history from mapd_version_history");
+      sqliteConnector_->query("select migration_history from mapd_version_history");
       if (sqliteConnector_->getNumRows() != 0) {
         for (size_t i = 0; i < sqliteConnector_->getNumRows(); i++) {
-          const auto ver = sqliteConnector_->getData<int>(i, 0);
-          const auto mig = sqliteConnector_->getData<std::string>(i, 1);
-          if (ver == 4002000 && mig == "sql_editor_privilege") {
-            // migration done
+          const auto mig = sqliteConnector_->getData<std::string>(i, 0);
+          if (mig == "db_access_privileges") {
+            // both privileges migrated
+            // no need for further execution
             sqliteConnector_->query("END TRANSACTION");
             return;
           }
@@ -586,7 +587,7 @@ void SysCatalog::migrateDBAccessPrivileges() {
     // Insert check for migration
     sqliteConnector_->query_with_text_params(
         "INSERT INTO mapd_version_history(version, migration_history) values(?,?)",
-        std::vector<std::string>{std::to_string(MAPD_VERSION), "sql_editor_privilege"});
+        std::vector<std::string>{std::to_string(MAPD_VERSION), "db_access_privileges"});
 
     sqliteConnector_->query("select dbid, name from mapd_databases");
     std::unordered_map<int, string> databases;
@@ -603,29 +604,40 @@ void SysCatalog::migrateDBAccessPrivileges() {
     }
 
     // All existing users by default will be granted DB Access permissions
+    // and view sql editor privileges
     DBMetadata dbmeta;
     for (auto db_ : databases) {
       CHECK(SysCatalog::instance().getMetadataForDB(db_.second, dbmeta));
       for (auto user : users) {
         if (user.first != MAPD_ROOT_USER_ID) {
-          // database level permissions;
           {
             DBObjectKey key;
             key.permissionType = DBObjectType::DatabaseDBObjectType;
             key.dbId = dbmeta.dbId;
-            DBObject object(key, AccessPrivileges::VIEW_SQL_EDITOR, dbmeta.dbOwner);
-            insertOrUpdateObjectPrivileges(sqliteConnector_, user.second, true, object);
+
+            // access permission;
+            DBObject object_access(key, AccessPrivileges::ACCESS, dbmeta.dbOwner);
+            object_access.setObjectType(DBObjectType::DatabaseDBObjectType);
+            object_access.setName(dbmeta.dbName);
+            // sql_editor permission
+            DBObject object_editor(
+                key, AccessPrivileges::VIEW_SQL_EDITOR, dbmeta.dbOwner);
+            object_editor.setObjectType(DBObjectType::DatabaseDBObjectType);
+            object_editor.setName(dbmeta.dbName);
+            object_editor.updatePrivileges(object_access);
+            insertOrUpdateObjectPrivileges(
+                sqliteConnector_, user.second, true, object_editor);
           }
         }
       }
     }
   } catch (const std::exception& e) {
-    LOG(ERROR) << "Failed to migrate sql editor privileges: " << e.what();
+    LOG(ERROR) << "Failed to migrate db access privileges: " << e.what();
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
-  LOG(INFO) << "Successfully migrated sql editor privileges";
+  LOG(INFO) << "Successfully migrated db access privileges";
 }
 
 // migration will be done as two step process this release

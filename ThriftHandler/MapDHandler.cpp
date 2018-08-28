@@ -280,6 +280,17 @@ void MapDHandler::internal_connect(TSessionId& session,
   } catch (std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }
+  if (SysCatalog::instance().arePrivilegesOn()) {
+    DBObject dbObject(dbname, DatabaseDBObjectType);
+    dbObject.loadKey(*cat);
+    dbObject.setPrivileges(AccessPrivileges::ACCESS);
+    std::vector<DBObject> dbObjects;
+    dbObjects.push_back(dbObject);
+    if (!SysCatalog::instance().checkPrivileges(user_meta, dbObjects)) {
+      THROW_MAPD_EXCEPTION("Unauthorized Access: user " + user_meta.userName +
+                           " is not allowed to access database " + dbname + ".");
+    }
+  }
   connectImpl(session, user, std::string(""), dbname, user_meta, cat);
 }
 
@@ -289,7 +300,9 @@ void MapDHandler::connect(TSessionId& session,
                           const std::string& dbname) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   Catalog_Namespace::UserMetadata user_meta;
-
+  if (!SysCatalog::instance().getMetadataForUser(user, user_meta)) {
+    THROW_MAPD_EXCEPTION(std::string("User ") + user + " does not exist.");
+  }
   std::shared_ptr<Catalog> cat = nullptr;
   try {
     cat = SysCatalog::instance().login(
@@ -297,7 +310,17 @@ void MapDHandler::connect(TSessionId& session,
   } catch (std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }
-
+  if (SysCatalog::instance().arePrivilegesOn()) {
+    DBObject dbObject(dbname, DatabaseDBObjectType);
+    dbObject.loadKey(*cat);
+    dbObject.setPrivileges(AccessPrivileges::ACCESS);
+    std::vector<DBObject> dbObjects;
+    dbObjects.push_back(dbObject);
+    if (!SysCatalog::instance().checkPrivileges(user_meta, dbObjects)) {
+      THROW_MAPD_EXCEPTION("Unauthorized Access: user " + user_meta.userName +
+                           " is not allowed to access database " + dbname + ".");
+    }
+  }
   connectImpl(session, user, passwd, dbname, user_meta, cat);
 }
 
@@ -1068,6 +1091,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
       outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::CREATE_DATABASE));
       outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::DROP_DATABASE));
       outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::VIEW_SQL_EDITOR));
+      outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::ACCESS));
 
       break;
     case TableDBObjectType:
