@@ -3452,10 +3452,10 @@ void MapDHandler::check_session_exp(const SessionMap::iterator& session_it) {
   time_t creation_time = session_it->second->get_creation_time();
   if ((time(0) - last_used_time) > idle_session_duration_) {
     sessions_.erase(session_it);  // Already checked session existance in get_session_it
-    THROW_MAPD_EXCEPTION("Idle Session Timeout. User should Re-authenticate.")
+    THROW_MAPD_EXCEPTION("Idle Session Timeout. User should re-authenticate.")
   } else if ((time(0) - creation_time) > max_session_duration_) {
     sessions_.erase(session_it);  // Already checked session existance in get_session_it
-    THROW_MAPD_EXCEPTION("Maximum active Session Timeout. User should Re-authenticate.")
+    THROW_MAPD_EXCEPTION("Maximum active Session Timeout. User should re-authenticate.")
   }
 }
 

@@ -559,8 +559,6 @@ void SysCatalog::updatePasswordsToHashes() {
 
 void SysCatalog::migrateDBAccessPrivileges() {
   sys_sqlite_lock sqlite_lock(this);
-  bool priv_access = false;
-  bool priv_sql_editor = false;
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     sqliteConnector_->query(
