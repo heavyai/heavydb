@@ -8504,6 +8504,7 @@ TEST(Delete, IntraFragment) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists vacuum_test;");
     run_ddl_statement(
         "create table vacuum_test (i1 integer, t1 text) with (vacuum='delayed');");
     run_multiple_agg("insert into vacuum_test values(1, '1');", dt);
@@ -9162,6 +9163,7 @@ TEST(Delete, ExtraFragment) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists vacuum_test;");
     run_ddl_statement(
         "create table vacuum_test (i1 integer, t1 text) with (vacuum='delayed', "
         "fragment_size=10);");
@@ -9257,6 +9259,7 @@ TEST(Create, Delete) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists vacuum_test;");
     run_ddl_statement(
         "create table vacuum_test (i1 integer, t1 text) with (vacuum='delayed');");
     run_multiple_agg("insert into vacuum_test values(1, '1');", dt);
@@ -9264,9 +9267,9 @@ TEST(Create, Delete) {
     ASSERT_EQ(int64_t(3),
               v<int64_t>(run_simple_agg("SELECT SUM(i1) FROM vacuum_test;", dt)));
     run_multiple_agg("insert into vacuum_test values(3, '3');", dt);
-    run_multiple_agg("insert into vacuum_test values(4, '4');", dt);
-    // add a real delete in here
-    ASSERT_EQ(int64_t(10),
+    SKIP_ON_AGGREGATOR(run_multiple_agg("insert into vacuum_test values(4, '4');", dt));
+    SKIP_ON_AGGREGATOR(run_multiple_agg("delete from vacuum_test where i1 = 4;", dt));
+    ASSERT_EQ(int64_t(6),
               v<int64_t>(run_simple_agg("SELECT SUM(i1) FROM vacuum_test;", dt)));
     run_ddl_statement("drop table vacuum_test;");
   }
