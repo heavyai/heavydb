@@ -94,9 +94,7 @@ class QueryMemoryDescriptor {
                         const int32_t idx_target_as_key,
                         const int64_t init_val,
                         const std::vector<int8_t>& group_col_widths,
-#ifdef ENABLE_KEY_COMPACTION
                         const int8_t group_col_compact_width,
-#endif
                         const std::vector<ColWidths>& agg_col_widths,
                         const std::vector<ssize_t>& target_groupby_indices,
                         const size_t entry_count,
@@ -185,9 +183,7 @@ class QueryMemoryDescriptor {
 
   bool isGroupBy() const { return !group_col_widths_.empty(); }
 
-#ifdef ENABLE_KEY_COMPACTION
   void setGroupColCompactWidth(const int8_t val) { group_col_compact_width_ = val; }
-#endif
 
   size_t getColCount() const { return agg_col_widths_.size(); }
   const ColWidths getColumnWidth(const size_t idx) const {
@@ -324,11 +320,7 @@ class QueryMemoryDescriptor {
   size_t getConsistColOffInBytes(const size_t bin, const size_t col_idx) const;
 
   inline size_t getEffectiveKeyWidth() const {
-#ifdef ENABLE_KEY_COMPACTION
     return group_col_compact_width_ ? group_col_compact_width_ : sizeof(int64_t);
-#else
-    return sizeof(int64_t);
-#endif
   }
 
   bool isWarpSyncRequired(const ExecutorDeviceType) const;
@@ -348,11 +340,9 @@ class QueryMemoryDescriptor {
   int32_t idx_target_as_key_;
   int64_t init_val_;
   std::vector<int8_t> group_col_widths_;
-#ifdef ENABLE_KEY_COMPACTION
   int8_t group_col_compact_width_;  // compact width for all group
                                     // cols if able to be consistent
                                     // otherwise 0
-#endif
   std::vector<ssize_t> target_groupby_indices_;
   size_t entry_count_;        // the number of entries in the main buffer
   size_t entry_count_small_;  // the number of entries in the small

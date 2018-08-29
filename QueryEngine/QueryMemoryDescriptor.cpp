@@ -39,9 +39,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor()
     , interleaved_bins_on_gpu_(false)
     , idx_target_as_key_(0)
     , init_val_(0)
-#ifdef ENABLE_KEY_COMPACTION
     , group_col_compact_width_(0)
-#endif
     , entry_count_(0)
     , entry_count_small_(0)
     , min_val_(0)
@@ -66,9 +64,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
     , interleaved_bins_on_gpu_(false)
     , idx_target_as_key_(0)
     , init_val_(0)
-#ifdef ENABLE_KEY_COMPACTION
     , group_col_compact_width_(0)
-#endif
     , entry_count_(entry_count)
     , entry_count_small_(0)
     , min_val_(0)
@@ -96,9 +92,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const GroupByColRangeType hash_type
     , idx_target_as_key_(0)
     , init_val_(0)
     , group_col_widths_(group_col_widths)
-#ifdef ENABLE_KEY_COMPACTION
     , group_col_compact_width_(0)
-#endif
     , entry_count_(0)
     , entry_count_small_(0)
     , min_val_(min_val)
@@ -122,9 +116,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     const int32_t idx_target_as_key,
     const int64_t init_val,
     const std::vector<int8_t>& group_col_widths,
-#ifdef ENABLE_KEY_COMPACTION
     const int8_t group_col_compact_width,
-#endif
     const std::vector<ColWidths>& agg_col_widths,
     const std::vector<ssize_t>& target_groupby_indices,
     const size_t entry_count,
@@ -150,9 +142,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , idx_target_as_key_(idx_target_as_key)
     , init_val_(init_val)
     , group_col_widths_(group_col_widths)
-#ifdef ENABLE_KEY_COMPACTION
     , group_col_compact_width_(group_col_compact_width)
-#endif
     , target_groupby_indices_(target_groupby_indices)
     , entry_count_(entry_count)
     , entry_count_small_(entry_count_small)
@@ -195,11 +185,9 @@ bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const
   if (group_col_widths_ != other.group_col_widths_) {
     return false;
   }
-#ifdef ENABLE_KEY_COMPACTION
   if (group_col_compact_width_ != other.group_col_compact_width_) {
     return false;
   }
-#endif
   if (agg_col_widths_ != other.agg_col_widths_) {
     return false;
   }

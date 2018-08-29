@@ -360,11 +360,6 @@ if(ENABLE_COMPACTION)
   add_definitions("-DENABLE_COMPACTION")
 endif()
 
-option(ENABLE_KEY_COMPACTION "Enable Key Compaction for Multi-column Baseline Hash" ON)
-if(ENABLE_KEY_COMPACTION)
-  add_definitions("-DENABLE_KEY_COMPACTION")
-endif()
-
 option(ENABLE_PROFILER "Enable google perftools" OFF)
 if(ENABLE_PROFILER)
   find_package(Gperftools REQUIRED COMPONENTS TCMALLOC PROFILER)

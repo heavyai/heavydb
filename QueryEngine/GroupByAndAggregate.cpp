@@ -1745,7 +1745,6 @@ GroupByAndAggregate::GroupByAndAggregate(
 
 namespace {
 
-#ifdef ENABLE_KEY_COMPACTION
 int8_t pick_baseline_key_component_width(const ExpressionRange& range) {
   if (range.getType() == ExpressionRangeType::Invalid) {
     return sizeof(int64_t);
@@ -1776,7 +1775,6 @@ int8_t pick_baseline_key_width(const RelAlgExecutionUnit& ra_exe_unit,
   }
   return compact_width;
 }
-#endif
 
 std::vector<ssize_t> target_expr_group_by_indices(
     const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
@@ -1936,9 +1934,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(
                               -1,
                               0,
                               group_col_widths,
-#ifdef ENABLE_KEY_COMPACTION
                               0,
-#endif
                               agg_col_widths,
                               {},
                               1,
@@ -2055,9 +2051,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(
           keyless_info.target_index,
           keyless_info.init_val,
           group_col_widths,
-#ifdef ENABLE_KEY_COMPACTION
           0,
-#endif
           agg_col_widths,
           target_group_by_indices,
           bin_count,
@@ -2101,9 +2095,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(
           -1,
           0,
           group_col_widths,
-#ifdef ENABLE_KEY_COMPACTION
           0,
-#endif
           agg_col_widths,
           {},
           max_groups_buffer_entry_count,
@@ -2147,9 +2139,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(
           -1,
           0,
           group_col_widths,
-#ifdef ENABLE_KEY_COMPACTION
           pick_baseline_key_width(ra_exe_unit_, query_infos_, executor_),
-#endif
           agg_col_widths,
           target_group_by_indices,
           entries_per_shard,
@@ -2194,9 +2184,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(
                                 -1,
                                 0,
                                 group_col_widths,
-#ifdef ENABLE_KEY_COMPACTION
                                 0,
-#endif
                                 agg_col_widths,
                                 target_indices,
                                 group_slots,
@@ -2230,9 +2218,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(
                                               -1,
                                               0,
                                               group_col_widths,
-#ifdef ENABLE_KEY_COMPACTION
                                               0,
-#endif
                                               agg_col_widths,
                                               {},
                                               static_cast<size_t>(col_range_info.max),
@@ -3101,18 +3087,12 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
       auto key_size_lv =
           LL_INT(static_cast<int32_t>(query_mem_desc_.groupColWidthsSize()));
 // create the key buffer
-#ifdef ENABLE_KEY_COMPACTION
       const auto key_width = query_mem_desc_.getEffectiveKeyWidth();
       llvm::Value* group_key =
           query_mem_desc_.getGroupByColRangeType() == GroupByColRangeType::MultiCol &&
                   key_width == sizeof(int32_t)
               ? LL_BUILDER.CreateAlloca(llvm::Type::getInt32Ty(LL_CONTEXT), key_size_lv)
               : LL_BUILDER.CreateAlloca(llvm::Type::getInt64Ty(LL_CONTEXT), key_size_lv);
-#else
-      const auto key_width = sizeof(int64_t);
-      llvm::Value* group_key =
-          LL_BUILDER.CreateAlloca(llvm::Type::getInt64Ty(LL_CONTEXT), key_size_lv);
-#endif
       int32_t subkey_idx = 0;
       for (const auto group_expr : ra_exe_unit_.groupby_exprs) {
         auto col_range_info = getExprRangeInfo(group_expr.get());
@@ -3149,14 +3129,12 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
                                          LL_INT(row_size_quad)}),
                                nullptr);
       }
-#ifdef ENABLE_KEY_COMPACTION
       if (group_key->getType() != llvm::Type::getInt64PtrTy(LL_CONTEXT)) {
         CHECK(query_mem_desc_.getGroupByColRangeType() == GroupByColRangeType::MultiCol &&
               key_width == sizeof(int32_t));
         group_key = LL_BUILDER.CreatePointerCast(group_key,
                                                  llvm::Type::getInt64PtrTy(LL_CONTEXT));
       }
-#endif
       return std::make_tuple(
           emitCall(co.with_dynamic_watchdog_ ? "get_group_value_with_watchdog"
                                              : "get_group_value",

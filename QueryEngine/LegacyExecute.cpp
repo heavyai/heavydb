@@ -461,9 +461,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                        -1,
                                        0,
                                        {sizeof(int64_t)},
-#ifdef ENABLE_KEY_COMPACTION
                                        0,
-#endif
                                        agg_col_widths,
                                        {},
                                        row_count,

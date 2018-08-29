@@ -54,9 +54,7 @@ QueryMemoryDescriptor baseline_sort_desc(const std::vector<TargetInfo>& target_i
                                          const size_t key_bytewidth) {
   QueryMemoryDescriptor query_mem_desc(
       GroupByColRangeType::MultiCol, 0, 0, false, {8, 8});
-#ifdef ENABLE_KEY_COMPACTION
   query_mem_desc.setGroupColCompactWidth(key_bytewidth);
-#endif  // ENABLE_KEY_COMPACTION
   static const size_t slot_bytes = 8;
   for (size_t i = 0; i < target_infos.size(); ++i) {
     query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
@@ -194,12 +192,10 @@ int64_t empty_key_val<int64_t>() {
   return EMPTY_KEY_64;
 }
 
-#ifdef ENABLE_KEY_COMPACTION
 template <>
 int64_t empty_key_val<int32_t>() {
   return EMPTY_KEY_32;
 }
-#endif  // ENABLE_KEY_COMPACTION
 
 template <class K>
 void SortBaselineIntegersTestImpl(const bool desc) {
@@ -231,13 +227,11 @@ TEST(SortBaseline, IntegersKey64) {
   }
 }
 
-#ifdef ENABLE_KEY_COMPACTION
 TEST(SortBaseline, IntegersKey32) {
   for (const bool desc : {true, false}) {
     SortBaselineIntegersTestImpl<int32_t>(desc);
   }
 }
-#endif  // ENABLE_KEY_COMPACTION
 
 TEST(SortBaseline, Floats) {
   for (const bool desc : {true, false}) {

@@ -603,11 +603,7 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
     GroupByAndAggregate::DiamondCodegen& diamond_codegen,
     std::stack<llvm::BasicBlock*>& array_loops,
     const bool thread_mem_shared) {
-#ifdef ENABLE_KEY_COMPACTION
   CHECK_GE(col_width, sizeof(int32_t));
-#else
-  CHECK_EQ(col_width, sizeof(int64_t));
-#endif
   auto group_key = codegen(group_by_col, true, co).front();
   auto key_to_cache = group_key;
   if (dynamic_cast<Analyzer::UOper*>(group_by_col) &&
