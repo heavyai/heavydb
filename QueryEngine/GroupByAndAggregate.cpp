@@ -26,7 +26,6 @@
 #include "MaxwellCodegenPatch.h"
 #include "OutputBufferInitialization.h"
 #include "QueryMemoryDescriptor.h"
-#include "ScalarExprVisitor.h"
 
 #include "../CudaMgr/CudaMgr.h"
 #include "../Shared/checked_alloc.h"
@@ -51,7 +50,6 @@
 bool g_cluster{false};
 bool g_bigint_count{false};
 int g_hll_precision_bits{11};
-bool g_enable_smem_group_by{true};
 extern size_t g_leaf_count;
 
 namespace {
@@ -1558,7 +1556,7 @@ bool has_count_distinct(const RelAlgExecutionUnit& ra_exe_unit) {
 
 }  // namespace
 
-GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
+ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   // Use baseline layout more eagerly on the GPU if the query uses count distinct,
   // because our HyperLogLog implementation is 4x less memory efficient on GPU.
   // Technically, this only applies to APPROX_COUNT_DISTINCT, but in practice we
@@ -1622,8 +1620,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   return col_range_info;
 }
 
-GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(
-    const Analyzer::Expr* expr) const {
+ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const Analyzer::Expr* expr) const {
   if (!expr) {
     return {GroupByColRangeType::Projection, 0, 0, 0, false};
   }
@@ -1651,8 +1648,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(
   return {GroupByColRangeType::Scan, 0, 0, 0, false};
 }
 
-int64_t GroupByAndAggregate::getBucketedCardinality(
-    const GroupByAndAggregate::ColRangeInfo& col_range_info) {
+int64_t GroupByAndAggregate::getBucketedCardinality(const ColRangeInfo& col_range_info) {
   auto crt_col_cardinality = col_range_info.max - col_range_info.min;
   if (col_range_info.bucket) {
     crt_col_cardinality /= col_range_info.bucket;
@@ -1743,62 +1739,6 @@ GroupByAndAggregate::GroupByAndAggregate(
   }
 }
 
-namespace {
-
-int8_t pick_baseline_key_component_width(const ExpressionRange& range) {
-  if (range.getType() == ExpressionRangeType::Invalid) {
-    return sizeof(int64_t);
-  }
-  switch (range.getType()) {
-    case ExpressionRangeType::Integer:
-      return range.getIntMax() < EMPTY_KEY_32 - 1 ? sizeof(int32_t) : sizeof(int64_t);
-    case ExpressionRangeType::Float:
-    case ExpressionRangeType::Double:
-      return sizeof(int64_t);  // No compaction for floating point yet.
-    default:
-      CHECK(false);
-  }
-  return sizeof(int64_t);
-}
-
-// TODO(miyu): make sure following setting of compact width is correct in all cases.
-int8_t pick_baseline_key_width(const RelAlgExecutionUnit& ra_exe_unit,
-                               const std::vector<InputTableInfo>& query_infos,
-                               const Executor* executor) {
-  int8_t compact_width{4};
-  for (const auto groupby_expr : ra_exe_unit.groupby_exprs) {
-    const auto actual_expr =
-        redirect_expr(groupby_expr.get(), ra_exe_unit.input_col_descs);
-    const auto expr_range = getExpressionRange(actual_expr.get(), query_infos, executor);
-    compact_width =
-        std::max(compact_width, pick_baseline_key_component_width(expr_range));
-  }
-  return compact_width;
-}
-
-std::vector<ssize_t> target_expr_group_by_indices(
-    const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
-    const std::vector<Analyzer::Expr*>& target_exprs) {
-  std::vector<ssize_t> indices(target_exprs.size(), -1);
-  for (size_t target_idx = 0; target_idx < target_exprs.size(); ++target_idx) {
-    const auto target_expr = target_exprs[target_idx];
-    if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
-      continue;
-    }
-    size_t group_idx = 0;
-    for (const auto groupby_expr : groupby_exprs) {
-      if (*target_expr == *groupby_expr) {
-        indices[target_idx] = group_idx;
-        break;
-      }
-      ++group_idx;
-    }
-  }
-  return indices;
-}
-
-}  // namespace
-
 int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_info,
                                                  const size_t shard_count) const {
   int device_count{0};
@@ -1821,84 +1761,6 @@ int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_i
   return bucket;
 }
 
-namespace {
-
-class UsedColumnsVisitor : public ScalarExprVisitor<std::unordered_set<int>> {
- protected:
-  virtual std::unordered_set<int> visitColumnVar(
-      const Analyzer::ColumnVar* column) const override {
-    return {column->get_column_id()};
-  }
-
-  virtual std::unordered_set<int> aggregateResult(
-      const std::unordered_set<int>& aggregate,
-      const std::unordered_set<int>& next_result) const override {
-    auto result = aggregate;
-    result.insert(next_result.begin(), next_result.end());
-    return result;
-  }
-};
-
-std::vector<ssize_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_unit,
-                                              const Catalog_Namespace::Catalog& cat) {
-  if (ra_exe_unit.input_descs.size() > 1 ||
-      !ra_exe_unit.sort_info.order_entries.empty()) {
-    return {};
-  }
-  std::vector<ssize_t> target_indices(ra_exe_unit.target_exprs.size(), -1);
-  UsedColumnsVisitor columns_visitor;
-  std::unordered_set<int> used_columns;
-  for (const auto& simple_qual : ra_exe_unit.simple_quals) {
-    const auto crt_used_columns = columns_visitor.visit(simple_qual.get());
-    used_columns.insert(crt_used_columns.begin(), crt_used_columns.end());
-  }
-  for (const auto& qual : ra_exe_unit.quals) {
-    const auto crt_used_columns = columns_visitor.visit(qual.get());
-    used_columns.insert(crt_used_columns.begin(), crt_used_columns.end());
-  }
-  for (const auto& target : ra_exe_unit.target_exprs) {
-    const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target);
-    if (col_var) {
-      const auto cd = get_column_descriptor_maybe(
-          col_var->get_column_id(), col_var->get_table_id(), cat);
-      if (!cd || !cd->isVirtualCol) {
-        continue;
-      }
-    }
-    const auto crt_used_columns = columns_visitor.visit(target);
-    used_columns.insert(crt_used_columns.begin(), crt_used_columns.end());
-  }
-  for (size_t target_idx = 0; target_idx < ra_exe_unit.target_exprs.size();
-       ++target_idx) {
-    const auto target_expr = ra_exe_unit.target_exprs[target_idx];
-    CHECK(target_expr);
-    const auto& ti = target_expr->get_type_info();
-    const bool is_real_str_or_array =
-        (ti.is_string() && ti.get_compression() == kENCODING_NONE) || ti.is_array();
-    if (is_real_str_or_array) {
-      continue;
-    }
-    if (ti.is_geometry()) {
-      // TODO(adb): Ideally we could determine which physical columns are required for a
-      // given query and fetch only those. For now, we bail on the memory optimization,
-      // since it is possible that adding the physical columns could have unintended
-      // consequences further down the execution path.
-      return {};
-    }
-    const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
-    if (!col_var) {
-      continue;
-    }
-    if (!is_real_str_or_array &&
-        used_columns.find(col_var->get_column_id()) == used_columns.end()) {
-      target_indices[target_idx] = 0;
-    }
-  }
-  return target_indices;
-}
-
-}  // namespace
-
 void GroupByAndAggregate::initQueryMemoryDescriptor(
     const bool allow_multifrag,
     const size_t max_groups_buffer_entry_count,
@@ -1911,46 +1773,22 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(
 
   const auto count_distinct_descriptors = initCountDistinctDescriptors();
 
-  std::vector<ColWidths> agg_col_widths;
-  const auto min_byte_width = QueryMemoryDescriptor::pick_target_compact_width(
-      ra_exe_unit_, query_infos_, crt_min_byte_width);
-  for (auto wid : get_col_byte_widths(ra_exe_unit_.target_exprs, {})) {
-    agg_col_widths.push_back(
-        {wid, static_cast<int8_t>(compact_byte_width(wid, min_byte_width))});
-  }
   auto group_col_widths = get_col_byte_widths(ra_exe_unit_.groupby_exprs, {});
 
   const bool is_group_by{!group_col_widths.empty()};
   if (!is_group_by) {
     CHECK(!must_use_baseline_sort);
     CHECK(!render_info || !render_info->isPotentialInSituRender());
-    query_mem_desc_ =
-        QueryMemoryDescriptor(executor_,
-                              allow_multifrag,
-                              ra_exe_unit_.estimator ? GroupByColRangeType::Estimator
-                                                     : GroupByColRangeType::Scan,
-                              false,
-                              false,
-                              -1,
-                              0,
-                              group_col_widths,
-                              0,
-                              agg_col_widths,
-                              {},
-                              1,
-                              0,
-                              0,
-                              0,
-                              0,
-                              false,
-                              GroupByMemSharing::Shared,
-                              count_distinct_descriptors,
-                              false,
-                              false,
-                              false,
-                              {},
-                              {},
-                              false);
+    query_mem_desc_ = QueryMemoryDescriptor(executor_,
+                                            ra_exe_unit_,
+                                            query_infos_,
+                                            group_col_widths,
+                                            allow_multifrag,
+                                            is_group_by,
+                                            crt_min_byte_width,
+                                            render_info,
+                                            count_distinct_descriptors,
+                                            must_use_baseline_sort);
     return;
   }
 
@@ -1982,266 +1820,21 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(
     throw WatchdogException("Query would use too much memory");
   }
 
-  switch (col_range_info.hash_type_) {
-    case GroupByColRangeType::OneColKnownRange: {
-      CHECK(!render_info || !render_info->isPotentialInSituRender());
-      const auto redirected_targets =
-          redirect_exprs(ra_exe_unit_.target_exprs, ra_exe_unit_.input_col_descs);
-      const auto keyless_info =
-          getKeylessInfo(get_exprs_not_owned(redirected_targets), is_group_by);
-      bool keyless =
-          (!sort_on_gpu_hint ||
-           !QueryMemoryDescriptor::many_entries(
-               col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
-          !col_range_info.bucket && !must_use_baseline_sort && keyless_info.keyless;
-      size_t bin_count = std::max(getBucketedCardinality(col_range_info), int64_t(1));
-      const size_t interleaved_max_threshold{512};
-
-      size_t gpu_smem_max_threshold{0};
-      if (device_type_ == ExecutorDeviceType::GPU) {
-        const auto cuda_manager = executor_->getCatalog()->get_dataMgr().cudaMgr_;
-        CHECK(cuda_manager);
-        /*
-         *  We only use shared memory strategy if GPU hardware provides native shared
-         *memory atomics support. From CUDA Toolkit documentation:
-         *https://docs.nvidia.com/cuda/pascal-tuning-guide/index.html#atomic-ops "Like
-         *Maxwell, Pascal [and Volta] provides native shared memory atomic operations for
-         *32-bit integer arithmetic, along with native 32 or 64-bit compare-and-swap
-         *(CAS)."
-         *
-         **/
-        if (cuda_manager->isArchMaxwellOrLaterForAll()) {
-          // TODO(Saman): threshold should be eventually set as an optimized policy per
-          // architecture.
-          gpu_smem_max_threshold =
-              std::min((cuda_manager->isArchVoltaForAll()) ? 4095LU : 2047LU,
-                       (cuda_manager->maxSharedMemoryForAll / sizeof(int64_t) - 1));
-        }
-      }
-
-      const auto group_expr = ra_exe_unit_.groupby_exprs.front().get();
-      bool shared_mem_for_group_by =
-          g_enable_smem_group_by && keyless && keyless_info.shared_mem_support &&
-          (bin_count <= gpu_smem_max_threshold) &&
-          (supportedExprForGpuSharedMemUsage(group_expr)) &&
-          QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
-              count_distinct_descriptors);
-
-      // No need to interleave results if we use shared memory.
-      bool interleaved_bins = !shared_mem_for_group_by && keyless &&
-                              (bin_count <= interleaved_max_threshold) &&
-                              QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
-                                  count_distinct_descriptors);
-      std::vector<ssize_t> target_group_by_indices;
-      if (must_use_baseline_sort) {
-        target_group_by_indices = target_expr_group_by_indices(ra_exe_unit_.groupby_exprs,
-                                                               ra_exe_unit_.target_exprs);
-        agg_col_widths.clear();
-        for (auto wid :
-             get_col_byte_widths(ra_exe_unit_.target_exprs, target_group_by_indices)) {
-          agg_col_widths.push_back({wid, static_cast<int8_t>(wid ? 8 : 0)});
-        }
-      }
-      query_mem_desc_ = QueryMemoryDescriptor(
-          executor_,
-          allow_multifrag,
-          col_range_info.hash_type_,
-          keyless,
-          interleaved_bins,
-          keyless_info.target_index,
-          keyless_info.init_val,
-          group_col_widths,
-          0,
-          agg_col_widths,
-          target_group_by_indices,
-          bin_count,
-          0,
-          col_range_info.min,
-          col_range_info.max,
-          col_range_info.bucket,
-          col_range_info.has_nulls,
-          shared_mem_for_group_by ? GroupByMemSharing::SharedForKeylessOneColumnKnownRange
-                                  : GroupByMemSharing::Shared,
-          count_distinct_descriptors,
-          false,
-          false,
-          false,
-          {},
-          {},
-          must_use_baseline_sort);
-      // TODO(Saman): should remove this after implementing shared memory path completely
-      // through codegen
-      if (shared_mem_for_group_by && (query_mem_desc_.getRowSize() > sizeof(int64_t))) {
-        // We should not use the current shared memory path if more than 8 bytes per group
-        // is required
-        query_mem_desc_.setGpuMemSharing(
-            GroupByMemSharing::Shared);  // disable the new shared memory path
-        query_mem_desc_.setHasInterleavedBinsOnGpu(
-            keyless && (bin_count <= interleaved_max_threshold) &&
-            QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
-                count_distinct_descriptors));
-      }
-      return;
-    }
-    case GroupByColRangeType::OneColGuessedRange: {
-      CHECK(!must_use_baseline_sort);
-      auto doRender = render_info && render_info->isPotentialInSituRender();
-      query_mem_desc_ = QueryMemoryDescriptor(
-          executor_,
-          allow_multifrag,
-          col_range_info.hash_type_,
-          false,
-          false,
-          -1,
-          0,
-          group_col_widths,
-          0,
-          agg_col_widths,
-          {},
-          max_groups_buffer_entry_count,
-          doRender ? render_info->render_small_groups_buffer_entry_count
-                   : small_groups_buffer_entry_count,
-          col_range_info.min,
-          col_range_info.max,
-          0,
-          col_range_info.has_nulls,
-          GroupByMemSharing::Shared,
-          count_distinct_descriptors,
-          false,
-          false,
-          doRender,
-          {},
-          {},
-          false);
-      return;
-    }
-    case GroupByColRangeType::MultiCol: {
-      CHECK(!render_info || !render_info->isPotentialInSituRender());
-      const auto target_group_by_indices = target_expr_group_by_indices(
-          ra_exe_unit_.groupby_exprs, ra_exe_unit_.target_exprs);
-      agg_col_widths.clear();
-      for (auto wid :
-           get_col_byte_widths(ra_exe_unit_.target_exprs, target_group_by_indices)) {
-        // Baseline layout goes through new result set and
-        // ResultSetStorage::initializeRowWise assumes everything is padded to 8 bytes,
-        // make it so.
-        agg_col_widths.push_back({wid, static_cast<int8_t>(wid ? 8 : 0)});
-      }
-      const auto entries_per_shard =
-          shard_count ? (max_groups_buffer_entry_count + shard_count - 1) / shard_count
-                      : max_groups_buffer_entry_count;
-      query_mem_desc_ = QueryMemoryDescriptor(
-          executor_,
-          allow_multifrag,
-          col_range_info.hash_type_,
-          false,
-          false,
-          -1,
-          0,
-          group_col_widths,
-          pick_baseline_key_width(ra_exe_unit_, query_infos_, executor_),
-          agg_col_widths,
-          target_group_by_indices,
-          entries_per_shard,
-          0,
-          0,
-          0,
-          0,
-          false,
-          GroupByMemSharing::Shared,
-          count_distinct_descriptors,
-          false,
-          false,
-          false,
-          {},
-          {},
-          false);
-      return;
-    }
-    case GroupByColRangeType::Projection: {
-      CHECK(!must_use_baseline_sort);
-      size_t group_slots = ra_exe_unit_.scan_limit
-                               ? static_cast<size_t>(ra_exe_unit_.scan_limit)
-                               : max_groups_buffer_entry_count;
-      const auto catalog = executor_->getCatalog();
-      CHECK(catalog);
-      const auto target_indices = executor_->plan_state_->allow_lazy_fetch_
-                                      ? target_expr_proj_indices(ra_exe_unit_, *catalog)
-                                      : std::vector<ssize_t>{};
-      agg_col_widths.clear();
-      for (auto wid : get_col_byte_widths(ra_exe_unit_.target_exprs, target_indices)) {
-        // Baseline layout goes through new result set and
-        // ResultSetStorage::initializeRowWise assumes everything is padded to 8 bytes,
-        // make it so.
-        agg_col_widths.push_back({wid, static_cast<int8_t>(wid ? 8 : 0)});
-      }
-      query_mem_desc_ =
-          QueryMemoryDescriptor(executor_,
-                                allow_multifrag,
-                                col_range_info.hash_type_,
-                                false,
-                                false,
-                                -1,
-                                0,
-                                group_col_widths,
-                                0,
-                                agg_col_widths,
-                                target_indices,
-                                group_slots,
-                                0,
-                                col_range_info.min,
-                                col_range_info.max,
-                                0,
-                                col_range_info.has_nulls,
-                                GroupByMemSharing::Shared,
-                                count_distinct_descriptors,
-                                false,
-                                false,
-                                render_info && render_info->isPotentialInSituRender(),
-                                {},
-                                {},
-                                false);
-      if (use_streaming_top_n(ra_exe_unit_, query_mem_desc_)) {
-        query_mem_desc_.setEntryCount(ra_exe_unit_.sort_info.offset +
-                                      ra_exe_unit_.sort_info.limit);
-      }
-
-      return;
-    }
-    case GroupByColRangeType::MultiColPerfectHash: {
-      CHECK(!render_info || !render_info->isPotentialInSituRender());
-      query_mem_desc_ = QueryMemoryDescriptor(executor_,
-                                              allow_multifrag,
-                                              col_range_info.hash_type_,
-                                              false,
-                                              false,
-                                              -1,
-                                              0,
-                                              group_col_widths,
-                                              0,
-                                              agg_col_widths,
-                                              {},
-                                              static_cast<size_t>(col_range_info.max),
-                                              0,
-                                              col_range_info.min,
-                                              col_range_info.max,
-                                              0,
-                                              col_range_info.has_nulls,
-                                              GroupByMemSharing::Shared,
-                                              count_distinct_descriptors,
-                                              false,
-                                              false,
-                                              false,
-                                              {},
-                                              {},
-                                              false);
-      return;
-    }
-    default:
-      CHECK(false);
-  }
-  CHECK(false);
-  return;
+  query_mem_desc_ = QueryMemoryDescriptor(executor_,
+                                          ra_exe_unit_,
+                                          query_infos_,
+                                          this,
+                                          group_col_widths,
+                                          col_range_info,
+                                          allow_multifrag,
+                                          is_group_by,
+                                          crt_min_byte_width,
+                                          sort_on_gpu_hint,
+                                          shard_count,
+                                          max_groups_buffer_entry_count,
+                                          render_info,
+                                          count_distinct_descriptors,
+                                          must_use_baseline_sort);
 }
 
 void GroupByAndAggregate::addTransientStringLiterals() {
@@ -2360,8 +1953,7 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
       if (agg_info.is_distinct && arg_ti.is_geometry()) {
         throw std::runtime_error("COUNT DISTINCT on geometry columns not supported");
       }
-      GroupByAndAggregate::ColRangeInfo no_range_info{
-          GroupByColRangeType::OneColGuessedRange, 0, 0, 0, false};
+      ColRangeInfo no_range_info{GroupByColRangeType::OneColGuessedRange, 0, 0, 0, false};
       auto arg_range_info =
           arg_ti.is_fp() ? no_range_info : getExprRangeInfo(agg_expr->get_arg());
       CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::StdSet};
@@ -3086,7 +2678,7 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
     case GroupByColRangeType::MultiColPerfectHash: {
       auto key_size_lv =
           LL_INT(static_cast<int32_t>(query_mem_desc_.groupColWidthsSize()));
-// create the key buffer
+      // create the key buffer
       const auto key_width = query_mem_desc_.getEffectiveKeyWidth();
       llvm::Value* group_key =
           query_mem_desc_.getGroupByColRangeType() == GroupByColRangeType::MultiCol &&
@@ -3890,8 +3482,9 @@ llvm::Value* GroupByAndAggregate::emitCall(const std::string& fname,
 #undef LL_BUILDER
 #undef LL_CONTEXT
 
-size_t shard_count_for_top_groups(const RelAlgExecutionUnit& ra_exe_unit,
-                                  const Catalog_Namespace::Catalog& catalog) {
+size_t GroupByAndAggregate::shard_count_for_top_groups(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const Catalog_Namespace::Catalog& catalog) {
   if (ra_exe_unit.sort_info.order_entries.size() != 1 || !ra_exe_unit.sort_info.limit) {
     return 0;
   }

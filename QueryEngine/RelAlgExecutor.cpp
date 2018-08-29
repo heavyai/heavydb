@@ -305,8 +305,8 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(
   size_t shard_count{0};
   if (sort) {
     const auto source_work_unit = createSortInputWorkUnit(sort, eo.just_explain);
-    shard_count =
-        shard_count_for_top_groups(source_work_unit.exe_unit, *executor_->getCatalog());
+    shard_count = GroupByAndAggregate::shard_count_for_top_groups(
+        source_work_unit.exe_unit, *executor_->getCatalog());
     if (!shard_count) {
       // No point in sorting on the leaf, only execute the input to the sort node.
       CHECK_EQ(size_t(1), sort->inputCount());

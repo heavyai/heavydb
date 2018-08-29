@@ -71,10 +71,41 @@ enum class GroupByMemSharing { Shared, SharedForKeylessOneColumnKnownRange };
 
 struct RelAlgExecutionUnit;
 class TResultSetBufferDescriptor;
+class GroupByAndAggregate;
+struct ColRangeInfo;
 
 class QueryMemoryDescriptor {
  public:
   QueryMemoryDescriptor();
+
+  // Constructor for non-group by queries
+  QueryMemoryDescriptor(const Executor* executor,
+                        const RelAlgExecutionUnit& ra_exe_unit,
+                        const std::vector<InputTableInfo>& query_infos,
+                        const std::vector<int8_t>& group_col_widths,
+                        const bool allow_multifrag,
+                        const bool is_group_by,
+                        const int8_t crt_min_byte_width,
+                        RenderInfo* render_info,
+                        const CountDistinctDescriptors count_distinct_descriptors,
+                        const bool must_use_baseline_sort);
+
+  // Constructor for group-by queries
+  QueryMemoryDescriptor(const Executor* executor,
+                        const RelAlgExecutionUnit& ra_exe_unit,
+                        const std::vector<InputTableInfo>& query_infos,
+                        const GroupByAndAggregate* group_by_and_agg,
+                        const std::vector<int8_t>& group_col_widths,
+                        const ColRangeInfo& col_range_info,
+                        const bool allow_multifrag,
+                        const bool is_group_by,
+                        const int8_t crt_min_byte_width,
+                        const bool sort_on_gpu_hint,
+                        const size_t shard_count,
+                        const size_t max_groups_buffer_entry_count,
+                        RenderInfo* render_info,
+                        const CountDistinctDescriptors count_distinct_descriptors,
+                        const bool must_use_baseline_sort);
 
   QueryMemoryDescriptor(const Executor* executor,
                         const size_t entry_count,
@@ -107,7 +138,7 @@ class QueryMemoryDescriptor {
                         const CountDistinctDescriptors count_distinct_descriptors,
                         const bool sort_on_gpu,
                         const bool output_columnar,
-                        const bool reder_output,
+                        const bool render_output,
                         const std::vector<int8_t>& key_column_pad_bytes,
                         const std::vector<int8_t>& target_column_pad_bytes,
                         const bool must_use_baseline_sort);

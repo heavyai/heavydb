@@ -1338,9 +1338,10 @@ RowSetPtr Executor::collectAllDeviceResults(
     return reduceSpeculativeTopN(
         ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
   }
-  const auto shard_count = execution_dispatch.getDeviceType() == ExecutorDeviceType::GPU
-                               ? shard_count_for_top_groups(ra_exe_unit, *catalog_)
-                               : 0;
+  const auto shard_count =
+      execution_dispatch.getDeviceType() == ExecutorDeviceType::GPU
+          ? GroupByAndAggregate::shard_count_for_top_groups(ra_exe_unit, *catalog_)
+          : 0;
 
   if (shard_count && !result_per_device.empty()) {
     return collectAllDeviceShardedTopResults(execution_dispatch);

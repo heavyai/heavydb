@@ -306,6 +306,15 @@ class QueryExecutionContext : boost::noncopyable {
       const bool prepend_index_buffer);
 };
 
+struct ColRangeInfo {
+  const GroupByColRangeType hash_type_;
+  const int64_t min;
+  const int64_t max;
+  const int64_t bucket;
+  const bool has_nulls;
+  bool isEmpty() { return min == 0 && max == -1; }
+};
+
 class GroupByAndAggregate {
  public:
   GroupByAndAggregate(Executor* executor,
@@ -338,16 +347,10 @@ class GroupByAndAggregate {
       Executor* executor,
       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
- private:
-  struct ColRangeInfo {
-    const GroupByColRangeType hash_type_;
-    const int64_t min;
-    const int64_t max;
-    const int64_t bucket;
-    const bool has_nulls;
-    bool isEmpty() { return min == 0 && max == -1; }
-  };
+  static size_t shard_count_for_top_groups(const RelAlgExecutionUnit& ra_exe_unit,
+                                           const Catalog_Namespace::Catalog& catalog);
 
+ private:
   struct DiamondCodegen {
     DiamondCodegen(llvm::Value* cond,
                    Executor* executor,
@@ -397,12 +400,11 @@ class GroupByAndAggregate {
 
   llvm::Function* codegenPerfectHashFunction();
 
-  GroupByAndAggregate::ColRangeInfo getColRangeInfo();
+  ColRangeInfo getColRangeInfo();
 
-  GroupByAndAggregate::ColRangeInfo getExprRangeInfo(const Analyzer::Expr* expr) const;
+  ColRangeInfo getExprRangeInfo(const Analyzer::Expr* expr) const;
 
-  static int64_t getBucketedCardinality(
-      const GroupByAndAggregate::ColRangeInfo& col_range_info);
+  static int64_t getBucketedCardinality(const ColRangeInfo& col_range_info);
 
   struct KeylessInfo {
     const bool keyless;
@@ -466,6 +468,7 @@ class GroupByAndAggregate {
   const ExecutorDeviceType device_type_;
 
   friend class Executor;
+  friend class QueryMemoryDescriptor;
 };
 
 inline std::vector<Analyzer::Expr*> get_agg_target_exprs(
@@ -590,8 +593,5 @@ inline int8_t get_min_byte_width() {
 }
 
 struct RelAlgExecutionUnit;
-
-size_t shard_count_for_top_groups(const RelAlgExecutionUnit& ra_exe_unit,
-                                  const Catalog_Namespace::Catalog& catalog);
 
 #endif  // QUERYENGINE_GROUPBYANDAGGREGATE_H
