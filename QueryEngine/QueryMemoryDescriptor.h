@@ -68,7 +68,7 @@ inline bool operator==(const ColWidths& lhs, const ColWidths& rhs) {
 // Shared: threads in the same block share memory, atomic operations required
 // SharedForKeylessOneColumnKnownRange: special case of "Shared", but for keyless
 // aggregates with single column group by
-enum class GroupByMemSharing { Private, Shared, SharedForKeylessOneColumnKnownRange };
+enum class GroupByMemSharing { Shared, SharedForKeylessOneColumnKnownRange };
 
 struct RelAlgExecutionUnit;
 class TResultSetBufferDescriptor;

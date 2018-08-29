@@ -1955,7 +1955,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(
                               0,
                               0,
                               false,
-                              GroupByMemSharing::Private,
+                              GroupByMemSharing::Shared,
                               count_distinct_descriptors,
                               false,
                               false,

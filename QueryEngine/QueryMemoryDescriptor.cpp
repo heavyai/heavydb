@@ -48,7 +48,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor()
     , max_val_(0)
     , bucket_(0)
     , has_nulls_(false)
-    , sharing_(GroupByMemSharing::Private)
+    , sharing_(GroupByMemSharing::Shared)
     , sort_on_gpu_(false)
     , output_columnar_(false)
     , render_output_(false)
@@ -75,7 +75,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
     , max_val_(0)
     , bucket_(0)
     , has_nulls_(false)
-    , sharing_(GroupByMemSharing::Private)
+    , sharing_(GroupByMemSharing::Shared)
     , sort_on_gpu_(false)
     , output_columnar_(false)
     , render_output_(false)
@@ -105,7 +105,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const GroupByColRangeType hash_type
     , max_val_(max_val)
     , bucket_(0)
     , has_nulls_(false)
-    , sharing_(GroupByMemSharing::Private)
+    , sharing_(GroupByMemSharing::Shared)
     , sort_on_gpu_(false)
     , output_columnar_(false)
     , render_output_(false)
@@ -639,8 +639,7 @@ bool QueryMemoryDescriptor::usesCachedContext() const {
 }
 
 bool QueryMemoryDescriptor::threadsShareMemory() const {
-  return sharing_ == GroupByMemSharing::Shared ||
-         sharing_ == GroupByMemSharing::SharedForKeylessOneColumnKnownRange;
+  return hash_type_ != GroupByColRangeType::Scan;
 }
 
 bool QueryMemoryDescriptor::blocksShareMemory() const {
