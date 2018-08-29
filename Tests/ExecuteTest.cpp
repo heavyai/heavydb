@@ -11001,11 +11001,6 @@ int main(int argc, char** argv) {
 
   desc.add_options()("disable-literal-hoisting", "Disable literal hoisting");
   desc.add_options()("with-sharding", "Create sharded tables");
-  desc.add_options()("use-result-set",
-                     po::value<bool>(&g_use_result_set)
-                         ->default_value(g_use_result_set)
-                         ->implicit_value(true),
-                     "Use the new result set");
   desc.add_options()("left-deep-join-optimization",
                      po::value<bool>(&g_left_deep_join_optimization)
                          ->default_value(g_left_deep_join_optimization)

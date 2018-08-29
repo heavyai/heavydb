@@ -49,7 +49,6 @@
 #include <thread>
 
 bool g_cluster{false};
-bool g_use_result_set{true};
 bool g_bigint_count{false};
 int g_hll_precision_bits{11};
 bool g_enable_smem_group_by{true};
@@ -1628,7 +1627,6 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(
   if (!expr) {
     return {GroupByColRangeType::Projection, 0, 0, 0, false};
   }
-  const int64_t guessed_range_max{255};  // TODO(alex): replace with educated guess
 
   const auto expr_range =
       getExpressionRange(redirect_expr(expr, ra_exe_unit_.input_col_descs).get(),
@@ -1645,13 +1643,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(
     case ExpressionRangeType::Float:
     case ExpressionRangeType::Double:
     case ExpressionRangeType::Invalid:
-      return (g_cluster || g_use_result_set)
-                 ? ColRangeInfo{GroupByColRangeType::MultiCol, 0, 0, 0, false}
-                 : ColRangeInfo{GroupByColRangeType::OneColGuessedRange,
-                                0,
-                                guessed_range_max,
-                                0,
-                                false};
+      return ColRangeInfo{GroupByColRangeType::MultiCol, 0, 0, 0, false};
     default:
       CHECK(false);
   }

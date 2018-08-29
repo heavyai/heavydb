@@ -374,11 +374,6 @@ int main(int argc, char** argv) {
                          po::value<std::string>(&db_convert_dir),
                          "Directory path to mapd DB to convert from");
 
-  desc_adv.add_options()("use-result-set",
-                         po::value<bool>(&g_use_result_set)
-                             ->default_value(g_use_result_set)
-                             ->implicit_value(true),
-                         "Use the new result set");
   desc_adv.add_options()("bigint-count",
                          po::value<bool>(&g_bigint_count)
                              ->default_value(g_bigint_count)

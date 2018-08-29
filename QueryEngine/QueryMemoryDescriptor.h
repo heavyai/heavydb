@@ -37,7 +37,6 @@
 #include <vector>
 
 extern bool g_cluster;
-extern bool g_use_result_set;
 
 class Executor;
 class QueryExecutionContext;
