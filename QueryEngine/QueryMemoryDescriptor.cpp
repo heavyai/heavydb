@@ -183,7 +183,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , group_col_widths_(group_col_widths)
     , group_col_compact_width_(0)
     , entry_count_(1)
-    , entry_count_small_(0)
     , min_val_(0)
     , max_val_(0)
     , bucket_(0)
@@ -236,7 +235,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , group_col_widths_(group_col_widths)
     , group_col_compact_width_(0)
     , entry_count_(1)
-    , entry_count_small_(0)
     , min_val_(col_range_info.min)
     , max_val_(col_range_info.max)
     , bucket_(col_range_info.bucket)
@@ -343,9 +341,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
       }
       return;
     }
-    case GroupByColRangeType::OneColGuessedRange: {
-      CHECK(false) << "OneColGuessedRange has been deprecated.";
-    }
     case GroupByColRangeType::MultiCol: {
       CHECK(!render_info || !render_info->isPotentialInSituRender());
       entry_count_ = shard_count
@@ -424,7 +419,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor()
     , init_val_(0)
     , group_col_compact_width_(0)
     , entry_count_(0)
-    , entry_count_small_(0)
     , min_val_(0)
     , max_val_(0)
     , bucket_(0)
@@ -448,7 +442,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
     , init_val_(0)
     , group_col_compact_width_(0)
     , entry_count_(entry_count)
-    , entry_count_small_(0)
     , min_val_(0)
     , max_val_(0)
     , bucket_(0)
@@ -475,7 +468,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const GroupByColRangeType hash_type
     , group_col_widths_(group_col_widths)
     , group_col_compact_width_(0)
     , entry_count_(0)
-    , entry_count_small_(0)
     , min_val_(min_val)
     , max_val_(max_val)
     , bucket_(0)
@@ -500,7 +492,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     const std::vector<ColWidths>& agg_col_widths,
     const std::vector<ssize_t>& target_groupby_indices,
     const size_t entry_count,
-    const size_t entry_count_small,
     const int64_t min_val,
     const int64_t max_val,
     const int64_t bucket,
@@ -525,7 +516,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , group_col_compact_width_(group_col_compact_width)
     , target_groupby_indices_(target_groupby_indices)
     , entry_count_(entry_count)
-    , entry_count_small_(entry_count_small)
     , min_val_(min_val)
     , max_val_(max_val)
     , bucket_(bucket)
@@ -542,7 +532,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
 
 bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const {
   // Note that this method does not check ptr reference members (e.g. executor_) or
-  // entry count (though it does check entry_count_small)
+  // entry_count_
   if (hash_type_ != other.hash_type_) {
     return false;
   }
@@ -571,9 +561,6 @@ bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const
     return false;
   }
   if (target_groupby_indices_ != other.target_groupby_indices_) {
-    return false;
-  }
-  if (entry_count_small_ != other.entry_count_small_) {
     return false;
   }
   if (min_val_ != other.min_val_) {
@@ -954,11 +941,6 @@ size_t QueryMemoryDescriptor::getBufferSizeQuad(
   return getBufferSizeBytes(device_type) / sizeof(int64_t);
 }
 
-size_t QueryMemoryDescriptor::getSmallBufferSizeQuad() const {
-  CHECK(!keyless_hash_ || entry_count_small_ == 0);
-  return (group_col_widths_.size() + agg_col_widths_.size()) * entry_count_small_;
-}
-
 size_t QueryMemoryDescriptor::getBufferSizeBytes(
     const RelAlgExecutionUnit& ra_exe_unit,
     const unsigned thread_count,
@@ -991,13 +973,8 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(
   return total_bytes;
 }
 
-size_t QueryMemoryDescriptor::getSmallBufferSizeBytes() const {
-  return getSmallBufferSizeQuad() * sizeof(int64_t);
-}
-
 bool QueryMemoryDescriptor::usesGetGroupValueFast() const {
-  return (hash_type_ == GroupByColRangeType::OneColKnownRange &&
-          !getSmallBufferSizeBytes());
+  return hash_type_ == GroupByColRangeType::OneColKnownRange;
 }
 
 bool QueryMemoryDescriptor::usesCachedContext() const {
@@ -1028,7 +1005,6 @@ bool QueryMemoryDescriptor::blocksShareMemory() const {
 
 bool QueryMemoryDescriptor::lazyInitGroups(const ExecutorDeviceType device_type) const {
   return device_type == ExecutorDeviceType::GPU && !render_output_ &&
-         !getSmallBufferSizeQuad() &&
          countDescriptorsLogicallyEmpty(count_distinct_descriptors_);
 }
 

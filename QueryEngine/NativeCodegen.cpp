@@ -1238,7 +1238,7 @@ Executor::CompilationResult Executor::compileWorkUnit(
   const auto& query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
 
   if (query_mem_desc.getGroupByColRangeType() == GroupByColRangeType::MultiCol &&
-      !query_mem_desc.getSmallBufferSizeBytes() && !has_cardinality_estimation &&
+      !has_cardinality_estimation &&
       (!render_info || !render_info->isPotentialInSituRender()) && !eo.just_explain) {
     throw CardinalityEstimationRequired();
   }

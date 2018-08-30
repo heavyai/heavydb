@@ -45,8 +45,7 @@ class RowSetMemoryOwner;
 struct InputTableInfo;
 
 enum class GroupByColRangeType {
-  OneColKnownRange,    // statically known range, only possible for column expressions
-  OneColGuessedRange,  // best guess: small hash for the guess plus overflow for outliers
+  OneColKnownRange,  // statically known range, only possible for column expressions
   MultiCol,
   MultiColPerfectHash,
   Projection,
@@ -129,7 +128,6 @@ class QueryMemoryDescriptor {
                         const std::vector<ColWidths>& agg_col_widths,
                         const std::vector<ssize_t>& target_groupby_indices,
                         const size_t entry_count,
-                        const size_t entry_count_small,
                         const int64_t min_val,
                         const int64_t max_val,
                         const int64_t bucket,
@@ -251,9 +249,6 @@ class QueryMemoryDescriptor {
   size_t getEntryCount() const { return entry_count_; }
   void setEntryCount(const size_t val) { entry_count_ = val; }
 
-  size_t getEntryCountSmall() const { return entry_count_small_; }
-  void setEntryCountSmall(const size_t val) { entry_count_small_ = val; }
-
   int64_t getMinVal() const { return min_val_; }
   int64_t getMaxVal() const { return max_val_; }
   int64_t getBucket() const { return bucket_; }
@@ -300,7 +295,6 @@ class QueryMemoryDescriptor {
 
   // Getters derived from state
   size_t getBufferSizeQuad(const ExecutorDeviceType device_type) const;
-  size_t getSmallBufferSizeQuad() const;
 
   size_t getGroupbyColCount() const { return group_col_widths_.size(); }
   size_t getKeyCount() const { return keyless_hash_ ? 0 : getGroupbyColCount(); }
@@ -317,7 +311,6 @@ class QueryMemoryDescriptor {
                             const unsigned thread_count,
                             const ExecutorDeviceType device_type) const;
   size_t getBufferSizeBytes(const ExecutorDeviceType device_type) const;
-  size_t getSmallBufferSizeBytes() const;
 
   // TODO(alex): remove
   bool usesGetGroupValueFast() const;
@@ -375,11 +368,9 @@ class QueryMemoryDescriptor {
                                     // cols if able to be consistent
                                     // otherwise 0
   std::vector<ssize_t> target_groupby_indices_;
-  size_t entry_count_;        // the number of entries in the main buffer
-  size_t entry_count_small_;  // the number of entries in the small
-                              // buffer
-  int64_t min_val_;           // meaningful for OneColKnownRange,
-                              // MultiColPerfectHash only
+  size_t entry_count_;  // the number of entries in the main buffer
+  int64_t min_val_;     // meaningful for OneColKnownRange,
+                        // MultiColPerfectHash only
   int64_t max_val_;
   int64_t bucket_;
   bool has_nulls_;

@@ -55,7 +55,6 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
                                const std::list<Analyzer::OrderEntry>& order_entries,
                                const size_t top_n) {
   CHECK_EQ(size_t(1), order_entries.size());
-  CHECK_EQ(size_t(0), query_mem_desc_.getEntryCountSmall());
   CHECK(!query_mem_desc_.didOutputColumnar());
   const auto& oe = order_entries.front();
   CHECK_GT(oe.tle_no, 0);
@@ -172,7 +171,7 @@ bool ResultSet::canUseFastBaselineSort(
   return (query_mem_desc_.getGroupByColRangeType() == GroupByColRangeType::MultiCol ||
           query_mem_desc_.getGroupByColRangeType() ==
               GroupByColRangeType::OneColKnownRange) &&
-         !query_mem_desc_.getSmallBufferSizeQuad() && top_n;
+         top_n;
 }
 
 Data_Namespace::DataMgr* ResultSet::getDataManager() const {

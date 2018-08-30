@@ -129,13 +129,6 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
   }
   switch (query_mem_desc_.getGroupByColRangeType()) {
     case GroupByColRangeType::MultiCol:
-      CHECK_EQ(size_t(0), query_mem_desc_.getEntryCountSmall());
-      CHECK_GE(entry_count, that.query_mem_desc_.getEntryCount());
-      break;
-    case GroupByColRangeType::OneColGuessedRange:
-      CHECK_NE(size_t(0), query_mem_desc_.getEntryCountSmall());
-      CHECK_EQ(query_mem_desc_.getEntryCountSmall(),
-               that.query_mem_desc_.getEntryCountSmall());
       CHECK_GE(entry_count, that.query_mem_desc_.getEntryCount());
       break;
     default:
@@ -180,19 +173,6 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
       }
     }
     return;
-  }
-  if (query_mem_desc_.getGroupByColRangeType() ==
-      GroupByColRangeType::OneColGuessedRange) {
-    CHECK(!query_mem_desc_.didOutputColumnar());
-    for (size_t i = 0; i < that.query_mem_desc_.getEntryCount(); ++i) {
-      reduceOneEntryBaseline(
-          this_buff, that_buff, i, that.query_mem_desc_.getEntryCount(), that);
-    }
-    entry_count = query_mem_desc_.getEntryCountSmall();
-    const auto row_bytes = get_row_bytes(query_mem_desc_);
-    CHECK_EQ(get_row_bytes(that.query_mem_desc_), row_bytes);
-    this_buff += query_mem_desc_.getEntryCount() * row_bytes;
-    that_buff += that.query_mem_desc_.getEntryCount() * row_bytes;
   }
   if (use_multithreaded_reduction(entry_count)) {
     const size_t thread_count = cpu_threads();
@@ -591,9 +571,7 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
                                               const ResultSetStorage& that) const {
   check_watchdog(that_entry_idx);
   const auto key_count = query_mem_desc_.getGroupbyColCount();
-  CHECK(GroupByColRangeType::MultiCol == query_mem_desc_.getGroupByColRangeType() ||
-        GroupByColRangeType::OneColGuessedRange ==
-            query_mem_desc_.getGroupByColRangeType());
+  CHECK(query_mem_desc_.getGroupByColRangeType() == GroupByColRangeType::MultiCol);
   CHECK(!query_mem_desc_.hasKeylessHash());
   const auto key_off =
       query_mem_desc_.didOutputColumnar()

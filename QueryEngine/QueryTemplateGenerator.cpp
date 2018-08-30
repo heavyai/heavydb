@@ -661,19 +661,6 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
       bb_entry);
   LoadInst* col_buffer = new LoadInst(group_by_buffers_gep, "", false, bb_entry);
   col_buffer->setAlignment(8);
-  LoadInst* small_buffer{nullptr};
-  if (query_mem_desc.getSmallBufferSizeBytes()) {
-    auto small_buffer_gep = GetElementPtrInst::Create(
-#if !(LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5)
-        Ty->getElementType(),
-#endif
-        small_groups_buffer,
-        group_buff_idx,
-        "",
-        bb_entry);
-    small_buffer = new LoadInst(small_buffer_gep, "", false, bb_entry);
-    small_buffer->setAlignment(8);
-  }
 
   llvm::ConstantInt* shared_mem_num_elements_lv = nullptr;
   llvm::ConstantInt* shared_mem_bytes_lv = nullptr;
@@ -713,11 +700,8 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
 
   std::vector<Value*> row_process_params;
   row_process_params.push_back(result_buffer);
-  if (query_mem_desc.getSmallBufferSizeBytes()) {
-    row_process_params.push_back(small_buffer);
-  } else {
-    row_process_params.push_back(Constant::getNullValue(pi64_type));
-  }
+  // TODO(adb): Remove the below small buffer placeholder?
+  row_process_params.push_back(Constant::getNullValue(pi64_type));
   row_process_params.push_back(crt_matched_ptr);
   row_process_params.push_back(total_matched);
   row_process_params.push_back(old_total_matched_ptr);

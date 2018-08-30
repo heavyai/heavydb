@@ -638,9 +638,7 @@ size_t ResultSet::advanceCursorToNextEntry() const {
 }
 
 size_t ResultSet::entryCount() const {
-  return permutation_.empty()
-             ? (query_mem_desc_.getEntryCount() + query_mem_desc_.getEntryCountSmall())
-             : permutation_.size();
+  return permutation_.empty() ? query_mem_desc_.getEntryCount() : permutation_.size();
 }
 
 size_t ResultSet::getBufferSizeBytes(const ExecutorDeviceType device_type) const {

@@ -252,12 +252,6 @@ IterTabPtr QueryExecutionContext::groupBufferToTab(
     return table;
   };
   IterTabPtr table{nullptr};
-  if (query_mem_desc_.getSmallBufferSizeBytes()) {
-    CHECK(!sort_on_gpu_);
-    table = impl(
-        query_mem_desc_.getEntryCountSmall(), small_group_by_buffers_[buf_idx], frag_idx);
-    CHECK(table);
-  }
   CHECK_LT(buf_idx, group_by_buffers_.size());
   auto other_table =
       impl(query_mem_desc_.getEntryCount(), group_by_buffers_[buf_idx], frag_idx);

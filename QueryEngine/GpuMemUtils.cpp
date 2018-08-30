@@ -94,11 +94,9 @@ std::pair<CUdeviceptr, CUdeviceptr> create_dev_group_by_buffers(
     return std::make_pair(0, 0);
   }
 
-  CHECK(!small_buffers || !prepend_index_buffer);
+  CHECK(!small_buffers);  // deprecating
 
-  size_t groups_buffer_size{
-      small_buffers ? query_mem_desc.getSmallBufferSizeBytes()
-                    : query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU)};
+  size_t groups_buffer_size{query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU)};
 
   CHECK_GT(groups_buffer_size, size_t(0));
 
@@ -192,20 +190,6 @@ GpuQueryMemory create_dev_group_by_buffers(
                                                           prepend_index_buffer,
                                                           always_init_group_by_on_host,
                                                           render_allocator);
-  if (query_mem_desc.getSmallBufferSizeBytes()) {
-    auto small_dev_group_by_buffers =
-        create_dev_group_by_buffers(data_mgr,
-                                    small_group_by_buffers,
-                                    query_mem_desc,
-                                    block_size_x,
-                                    grid_size_x,
-                                    device_id,
-                                    true,
-                                    prepend_index_buffer,
-                                    always_init_group_by_on_host,
-                                    render_allocator);
-    return {dev_group_by_buffers, small_dev_group_by_buffers};
-  }
   return GpuQueryMemory{dev_group_by_buffers};
 }
 
@@ -288,20 +272,6 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                  grid_size_x,
                                  device_id,
                                  prepend_index_buffer);
-  if (query_exe_context->query_mem_desc_.getSmallBufferSizeBytes()) {
-    CHECK(!prepend_index_buffer);
-    CHECK(!query_exe_context->small_group_by_buffers_.empty());
-    copy_group_by_buffers_from_gpu(
-        data_mgr,
-        query_exe_context->small_group_by_buffers_,
-        query_exe_context->query_mem_desc_.getSmallBufferSizeBytes(),
-        gpu_query_mem.small_group_by_buffers.second,
-        query_exe_context->query_mem_desc_,
-        block_size_x,
-        grid_size_x,
-        device_id,
-        false);
-  }
 }
 
 // TODO(alex): remove

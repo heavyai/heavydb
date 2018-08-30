@@ -269,9 +269,6 @@ void ResultSet::append(ResultSet& that) {
   query_mem_desc_.setEntryCount(
       query_mem_desc_.getEntryCount() +
       appended_storage_.back()->query_mem_desc_.getEntryCount());
-  query_mem_desc_.setEntryCountSmall(
-      query_mem_desc_.getEntryCountSmall() +
-      appended_storage_.back()->query_mem_desc_.getEntryCountSmall());
   chunks_.insert(chunks_.end(), that.chunks_.begin(), that.chunks_.end());
   col_buffers_.insert(
       col_buffers_.end(), that.col_buffers_.begin(), that.col_buffers_.end());
@@ -484,9 +481,6 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
     CHECK(padding == 0 || padding == 4);
     query_mem_desc_copy.agg_col_widths_[col_idx - 1].compact += padding;
   }
-  if (query_mem_desc_copy.getEntryCountSmall() > 0) {
-    query_mem_desc_copy.setGroupByColRangeType(GroupByColRangeType::OneColGuessedRange);
-  }
   return query_mem_desc_copy;
 }
 
@@ -518,8 +512,6 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
     throw RowSortException("Sorting more than 4B elements not supported");
   }
 
-  CHECK(size_t(0) == query_mem_desc_.getEntryCountSmall() ||
-        !query_mem_desc_.didOutputColumnar());  // TODO(alex)
   CHECK(permutation_.empty());
 
   const bool use_heap{order_entries.size() == 1 && top_n};
@@ -566,8 +558,7 @@ std::vector<uint32_t> ResultSet::initPermutationBuffer(const size_t start,
                                                        const size_t step) {
   CHECK_NE(size_t(0), step);
   std::vector<uint32_t> permutation;
-  const auto total_entries =
-      query_mem_desc_.getEntryCount() + query_mem_desc_.getEntryCountSmall();
+  const auto total_entries = query_mem_desc_.getEntryCount();
   permutation.reserve(total_entries / step);
   for (size_t i = start; i < total_entries; i += step) {
     const auto storage_lookup_result = findStorage(i);
@@ -628,9 +619,6 @@ std::pair<ssize_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) co
   size_t fixedup_entry_idx = entry_idx;
   auto entry_count = storage_->query_mem_desc_.getEntryCount();
   const bool is_rowwise_layout = !storage_->query_mem_desc_.didOutputColumnar();
-  if (is_rowwise_layout) {
-    entry_count += storage_->query_mem_desc_.getEntryCountSmall();
-  }
   if (fixedup_entry_idx < entry_count) {
     return {0, fixedup_entry_idx};
   }
@@ -639,9 +627,6 @@ std::pair<ssize_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) co
     const auto& desc = appended_storage_[i]->query_mem_desc_;
     CHECK_NE(is_rowwise_layout, desc.didOutputColumnar());
     entry_count = desc.getEntryCount();
-    if (is_rowwise_layout) {
-      entry_count += desc.getEntryCountSmall();
-    }
     if (fixedup_entry_idx < entry_count) {
       return {i + 1, fixedup_entry_idx};
     }

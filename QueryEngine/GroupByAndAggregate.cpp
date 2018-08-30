@@ -55,8 +55,7 @@ extern size_t g_leaf_count;
 namespace {
 
 void check_total_bitmap_memory(const QueryMemoryDescriptor& query_mem_desc) {
-  const int32_t groups_buffer_entry_count =
-      query_mem_desc.getEntryCount() + query_mem_desc.getEntryCountSmall();
+  const int32_t groups_buffer_entry_count = query_mem_desc.getEntryCount();
   if (g_enable_watchdog) {
     checked_int64_t total_bytes_per_group = 0;
     const size_t num_count_distinct_descs =
@@ -201,23 +200,7 @@ QueryExecutionContext::QueryExecutionContext(
     CHECK(query_mem_desc_.hasKeylessHash());
   }
 
-  if (query_mem_desc_.hasKeylessHash()) {
-    CHECK_EQ(size_t(0), query_mem_desc_.getSmallBufferSizeQuad());
-  }
-
   std::unique_ptr<int64_t, CheckedAllocDeleter> group_by_small_buffer_template;
-  if (query_mem_desc_.getSmallBufferSizeBytes()) {
-    CHECK(!output_columnar_ && !query_mem_desc_.hasKeylessHash());
-    OOM_TRACE_PUSH(+": getSmallBufferSizeBytes " +
-                   std::to_string(query_mem_desc_.getSmallBufferSizeBytes()));
-    group_by_small_buffer_template.reset(
-        static_cast<int64_t*>(checked_malloc(query_mem_desc_.getSmallBufferSizeBytes())));
-    initGroups(group_by_small_buffer_template.get(),
-               &init_agg_vals[0],
-               query_mem_desc_.getEntryCountSmall(),
-               false,
-               1);
-  }
 
   const auto step = device_type_ == ExecutorDeviceType::GPU &&
                             query_mem_desc_.threadsShareMemory() &&
@@ -230,13 +213,11 @@ QueryExecutionContext::QueryExecutionContext(
                                    : size_t(0);
   const auto actual_group_buffer_size =
       group_buffer_size + index_buffer_qw * sizeof(int64_t);
-  const auto actual_small_buffer_size = query_mem_desc_.getSmallBufferSizeBytes();
   const auto group_buffers_count = !query_mem_desc_.isGroupBy() ? 1 : num_buffers_;
   for (size_t i = 0; i < group_buffers_count; i += step) {
-    OOM_TRACE_PUSH(+": group_by_buffer " +
-                   std::to_string(actual_group_buffer_size + actual_small_buffer_size));
-    auto group_by_buffer = alloc_group_by_buffer(
-        actual_group_buffer_size + actual_small_buffer_size, render_allocator_map);
+    OOM_TRACE_PUSH(+": group_by_buffer " + std::to_string(actual_group_buffer_size));
+    auto group_by_buffer =
+        alloc_group_by_buffer(actual_group_buffer_size, render_allocator_map);
     if (!query_mem_desc_.lazyInitGroups(device_type)) {
       memcpy(group_by_buffer + index_buffer_qw,
              group_by_buffer_template.get(),
@@ -248,17 +229,6 @@ QueryExecutionContext::QueryExecutionContext(
     group_by_buffers_.push_back(group_by_buffer);
     for (size_t j = 1; j < step; ++j) {
       group_by_buffers_.push_back(nullptr);
-    }
-    if (actual_small_buffer_size) {
-      auto group_by_small_buffer =
-          &group_by_buffer[actual_group_buffer_size / sizeof(int64_t)];
-      memcpy(group_by_small_buffer,
-             group_by_small_buffer_template.get(),
-             actual_small_buffer_size);
-      small_group_by_buffers_.push_back(group_by_small_buffer);
-      for (size_t j = 1; j < step; ++j) {
-        small_group_by_buffers_.push_back(nullptr);
-      }
     }
 #ifdef ENABLE_MULTIFRAG_JOIN
     const auto column_frag_offsets =
@@ -305,8 +275,7 @@ void QueryExecutionContext::allocateCountDistinctGpuMem() {
     total_bytes_per_entry += count_distinct_desc.bitmapPaddedSizeBytes();
   }
   count_distinct_bitmap_mem_bytes_ =
-      total_bytes_per_entry *
-      (query_mem_desc_.getEntryCount() + query_mem_desc_.getEntryCountSmall());
+      total_bytes_per_entry * query_mem_desc_.getEntryCount();
   count_distinct_bitmap_mem_ =
       alloc_gpu_mem(data_mgr, count_distinct_bitmap_mem_bytes_, device_id_, nullptr);
   data_mgr->cudaMgr_->zeroDeviceMem(reinterpret_cast<int8_t*>(count_distinct_bitmap_mem_),
@@ -1953,7 +1922,7 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
       if (agg_info.is_distinct && arg_ti.is_geometry()) {
         throw std::runtime_error("COUNT DISTINCT on geometry columns not supported");
       }
-      ColRangeInfo no_range_info{GroupByColRangeType::OneColGuessedRange, 0, 0, 0, false};
+      ColRangeInfo no_range_info{GroupByColRangeType::Projection, 0, 0, 0, false};
       auto arg_range_info =
           arg_ti.is_fp() ? no_range_info : getExprRangeInfo(agg_expr->get_arg());
       CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::StdSet};
@@ -2596,7 +2565,6 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
 
   switch (query_mem_desc_.getGroupByColRangeType()) {
     case GroupByColRangeType::OneColKnownRange:
-    case GroupByColRangeType::OneColGuessedRange:
     case GroupByColRangeType::Scan: {
       CHECK_EQ(size_t(1), ra_exe_unit_.groupby_exprs.size());
       const auto group_expr = ra_exe_unit_.groupby_exprs.front();
@@ -2664,8 +2632,8 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
                                                : "get_group_value_one_key",
                      {&*groups_buffer,
                       LL_INT(static_cast<int32_t>(query_mem_desc_.getEntryCount())),
-                      &*small_groups_buffer,
-                      LL_INT(static_cast<int32_t>(query_mem_desc_.getEntryCountSmall())),
+                      &*small_groups_buffer,            // TODO(adb): remove
+                      LL_INT(static_cast<int32_t>(0)),  // TODO(adb): remove
                       &*group_expr_lv,
                       LL_INT(query_mem_desc_.getMinVal()),
                       LL_INT(row_size_quad),
