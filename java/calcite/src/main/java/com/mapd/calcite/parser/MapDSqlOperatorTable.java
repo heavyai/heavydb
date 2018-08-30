@@ -176,6 +176,10 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new LastSample());
     opTab.addOperator(new MapD_GeoPolyBoundsPtr());
     opTab.addOperator(new MapD_GeoPolyRenderGroup());
+    opTab.addOperator(new convert_meters_to_pixel_width());
+    opTab.addOperator(new convert_meters_to_pixel_height());
+    opTab.addOperator(new is_point_in_view());
+    opTab.addOperator(new is_point_size_in_view());
     if (extSigs == null) {
       return;
     }
@@ -1252,6 +1256,97 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       assert opBinding.getOperandCount() == 1;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
+    }
+  }
+
+  static class convert_meters_to_pixel_width extends SqlFunction {
+    convert_meters_to_pixel_width() {
+      super("convert_meters_to_pixel_width",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.NUMERIC,
+                      SqlTypeFamily.ANY,
+                      SqlTypeFamily.NUMERIC,
+                      SqlTypeFamily.NUMERIC,
+                      SqlTypeFamily.NUMERIC,
+                      SqlTypeFamily.NUMERIC),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 6;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.DOUBLE);
+    }
+  }
+
+  static class convert_meters_to_pixel_height extends SqlFunction {
+    convert_meters_to_pixel_height() {
+      super("convert_meters_to_pixel_height",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.NUMERIC,
+                      SqlTypeFamily.ANY,
+                      SqlTypeFamily.NUMERIC,
+                      SqlTypeFamily.NUMERIC,
+                      SqlTypeFamily.NUMERIC,
+                      SqlTypeFamily.NUMERIC),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 6;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.DOUBLE);
+    }
+  }
+
+  static class is_point_in_view extends SqlFunction {
+    is_point_in_view() {
+      super("is_point_in_view",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.ANY,
+                      SqlTypeFamily.NUMERIC,
+                      SqlTypeFamily.NUMERIC,
+                      SqlTypeFamily.NUMERIC,
+                      SqlTypeFamily.NUMERIC),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 5;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+    }
+  }
+
+  static class is_point_size_in_view extends SqlFunction {
+    is_point_size_in_view() {
+      super("is_point_size_in_view",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.ANY,
+                      SqlTypeFamily.NUMERIC,
+                      SqlTypeFamily.NUMERIC,
+                      SqlTypeFamily.NUMERIC,
+                      SqlTypeFamily.NUMERIC,
+                      SqlTypeFamily.NUMERIC),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 6;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
     }
   }
 }

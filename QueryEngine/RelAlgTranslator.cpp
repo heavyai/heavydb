@@ -1342,6 +1342,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     CHECK_EQ(rex_function->size(), size_t(1));
     return translateUnaryGeoFunction(rex_function);
   }
+  if (rex_function->getName() == std::string("convert_meters_to_pixel_width") ||
+      rex_function->getName() == std::string("convert_meters_to_pixel_height") ||
+      rex_function->getName() == std::string("is_point_in_view") ||
+      rex_function->getName() == std::string("is_point_size_in_view")) {
+    return translateFunctionWithGeoArg(rex_function);
+  }
   if (rex_function->getName() == std::string("ST_Distance") ||
       rex_function->getName() == std::string("ST_Contains") ||
       rex_function->getName() == std::string("ST_Within")) {

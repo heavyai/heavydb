@@ -1791,3 +1791,96 @@ EXTENSION_INLINE
 int32_t MapD_GeoPolyRenderGroup(int32_t render_group) {
   return render_group;
 }
+
+EXTENSION_NOINLINE
+double convert_meters_to_pixel_width(const double meters,
+                                     int8_t* p,
+                                     const int64_t psize,
+                                     const int32_t ic,
+                                     const int32_t isr,
+                                     const int32_t osr,
+                                     const double min_lon,
+                                     const double max_lon,
+                                     const int32_t img_width,
+                                     const double min_width) {
+  const double const1 = 0.017453292519943295769236907684886;
+  const double const2 = 6372797.560856;
+  const auto lon = decompress_coord(p, 0, ic, true);
+  const auto lat = decompress_coord(p, 1, ic, false);
+  double t1 = sinf(meters / (2.0 * const2));
+  double t2 = cosf(const1 * lat);
+  const double newlon = lon - (2.0 * asinf(t1 / t2)) / const1;
+  t1 = transform_coord(lon, isr, osr, true);
+  t2 = transform_coord(newlon, isr, osr, true);
+  const double min_domain_x = transform_coord(min_lon, isr, osr, true);
+  const double max_domain_x = transform_coord(max_lon, isr, osr, true);
+  const double domain_diff = max_domain_x - min_domain_x;
+  t1 = ((t1 - min_domain_x) / domain_diff) * static_cast<double>(img_width);
+  t2 = ((t2 - min_domain_x) / domain_diff) * static_cast<double>(img_width);
+
+  // TODO(croot): need to account for edge cases, such as getting close to the poles.
+  const double sz = fabs(t1 - t2);
+  return (sz < min_width ? min_width : sz);
+}
+
+EXTENSION_NOINLINE
+double convert_meters_to_pixel_height(const double meters,
+                                      int8_t* p,
+                                      const int64_t psize,
+                                      const int32_t ic,
+                                      const int32_t isr,
+                                      const int32_t osr,
+                                      const double min_lat,
+                                      const double max_lat,
+                                      const int32_t img_height,
+                                      const double min_height) {
+  const double const1 = 0.017453292519943295769236907684886;
+  const double const2 = 6372797.560856;
+  const auto lat = decompress_coord(p, 1, ic, false);
+  const double latdiff = meters / (const1 * const2);
+  const double newlat =
+      (lat < 0) ? lat + latdiff : lat - latdiff;  // assumes a lat range of [-90, 90]
+  double t1 = transform_coord(lat, isr, osr, false);
+  double t2 = transform_coord(newlat, isr, osr, false);
+  const double min_domain_y = transform_coord(min_lat, isr, osr, false);
+  const double max_domain_y = transform_coord(max_lat, isr, osr, false);
+  const double domain_diff = max_domain_y - min_domain_y;
+  t1 = ((t1 - min_domain_y) / domain_diff) * static_cast<double>(img_height);
+  t2 = ((t2 - min_domain_y) / domain_diff) * static_cast<double>(img_height);
+
+  // TODO(croot): need to account for edge cases, such as getting close to the poles.
+  const double sz = fabs(t1 - t2);
+  return (sz < min_height ? min_height : sz);
+}
+
+EXTENSION_NOINLINE bool is_point_in_view(int8_t* p,
+                                         const int64_t psize,
+                                         const int32_t ic,
+                                         const double min_lon,
+                                         const double max_lon,
+                                         const double min_lat,
+                                         const double max_lat) {
+  const auto lon = decompress_coord(p, 0, ic, true);
+  const auto lat = decompress_coord(p, 1, ic, false);
+  return !(lon < min_lon || lon > max_lon || lat < min_lat || lat > max_lat);
+}
+
+EXTENSION_NOINLINE bool is_point_size_in_view(int8_t* p,
+                                              const int64_t psize,
+                                              const int32_t ic,
+                                              const double meters,
+                                              const double min_lon,
+                                              const double max_lon,
+                                              const double min_lat,
+                                              const double max_lat) {
+  const double const1 = 0.017453292519943295769236907684886;
+  const double const2 = 6372797.560856;
+  const auto lon = decompress_coord(p, 0, ic, true);
+  const auto lat = decompress_coord(p, 1, ic, false);
+  const double latdiff = meters / (const1 * const2);
+  const double t1 = sinf(meters / (2.0 * const2));
+  const double t2 = cosf(const1 * lat);
+  const double londiff = (2.0 * asinf(t1 / t2)) / const1;
+  return !(lon + londiff < min_lon || lon - londiff > max_lon ||
+           lat + latdiff < min_lat || lat - latdiff > max_lat);
+}

@@ -776,4 +776,82 @@ float reg_hex_vert_pixel_bin_y(const float valx,
   return hexsize * sqrt3 * (rz + rx / 2.0f) + yoffset;
 }
 
+EXTENSION_NOINLINE
+double convert_meters_to_merc_pixel_width(const double meters,
+                                          const double lon,
+                                          const double lat,
+                                          const double min_lon,
+                                          const double max_lon,
+                                          const int32_t img_width,
+                                          const double min_width) {
+  const double const1 = 0.017453292519943295769236907684886;
+  const double const2 = 6372797.560856;
+  double t1 = sinf(meters / (2.0 * const2));
+  double t2 = cosf(const1 * lat);
+  const double newlon = lon - (2.0 * asinf(t1 / t2)) / const1;
+  t1 = conv_4326_900913_x(lon);
+  t2 = conv_4326_900913_x(newlon);
+  const double min_merc_x = conv_4326_900913_x(min_lon);
+  const double max_merc_x = conv_4326_900913_x(max_lon);
+  const double merc_diff = max_merc_x - min_merc_x;
+  t1 = ((t1 - min_merc_x) / merc_diff) * static_cast<double>(img_width);
+  t2 = ((t2 - min_merc_x) / merc_diff) * static_cast<double>(img_width);
+
+  // TODO(croot): need to account for edge cases, such as getting close to the poles.
+  const double sz = fabs(t1 - t2);
+  return (sz < min_width ? min_width : sz);
+}
+
+EXTENSION_NOINLINE
+double convert_meters_to_merc_pixel_height(const double meters,
+                                           const double lon,
+                                           const double lat,
+                                           const double min_lat,
+                                           const double max_lat,
+                                           const int32_t img_height,
+                                           const double min_height) {
+  const double const1 = 0.017453292519943295769236907684886;
+  const double const2 = 6372797.560856;
+  const double latdiff = meters / (const1 * const2);
+  const double newlat =
+      (lat < 0) ? lat + latdiff : lat - latdiff;  // assumes a lat range of [-90, 90]
+  double t1 = conv_4326_900913_y(lat);
+  double t2 = conv_4326_900913_y(newlat);
+  const double min_merc_y = conv_4326_900913_y(min_lat);
+  const double max_merc_y = conv_4326_900913_y(max_lat);
+  const double merc_diff = max_merc_y - min_merc_y;
+  t1 = ((t1 - min_merc_y) / merc_diff) * static_cast<double>(img_height);
+  t2 = ((t2 - min_merc_y) / merc_diff) * static_cast<double>(img_height);
+
+  // TODO(croot): need to account for edge cases, such as getting close to the poles.
+  const double sz = fabs(t1 - t2);
+  return (sz < min_height ? min_height : sz);
+}
+
+EXTENSION_INLINE bool is_point_in_merc_view(const double lon,
+                                            const double lat,
+                                            const double min_lon,
+                                            const double max_lon,
+                                            const double min_lat,
+                                            const double max_lat) {
+  return !(lon < min_lon || lon > max_lon || lat < min_lat || lat > max_lat);
+}
+
+EXTENSION_NOINLINE bool is_point_size_in_merc_view(const double lon,
+                                                   const double lat,
+                                                   const double meters,
+                                                   const double min_lon,
+                                                   const double max_lon,
+                                                   const double min_lat,
+                                                   const double max_lat) {
+  const double const1 = 0.017453292519943295769236907684886;
+  const double const2 = 6372797.560856;
+  const double latdiff = meters / (const1 * const2);
+  const double t1 = sinf(meters / (2.0 * const2));
+  const double t2 = cosf(const1 * lat);
+  const double londiff = (2.0 * asinf(t1 / t2)) / const1;
+  return !(lon + londiff < min_lon || lon - londiff > max_lon ||
+           lat + latdiff < min_lat || lat - latdiff > max_lat);
+}
+
 #include "ExtensionFunctionsGeo.hpp"

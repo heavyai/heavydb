@@ -798,3 +798,121 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   return makeExpr<Analyzer::FunctionOper>(
       rex_function->getType(), specialized_geofunc, geoargs);
 }
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunctionWithGeoArg(
+    const RexFunctionOperator* rex_function) const {
+  int32_t lindex = 0;
+  std::string specialized_geofunc{rex_function->getName()};
+  if (rex_function->getName() == std::string("convert_meters_to_pixel_width") ||
+      rex_function->getName() == std::string("convert_meters_to_pixel_height")) {
+    CHECK_EQ(rex_function->size(), 6);
+    SQLTypeInfo arg_ti;
+    std::vector<std::shared_ptr<Analyzer::Expr>> args;
+    args.push_back(translateScalarRex(rex_function->getOperand(0)));
+    auto geoargs = translateGeoFunctionArg(
+        rex_function->getOperand(1), arg_ti, lindex, false, true, false);
+    // only works on points
+    if (arg_ti.get_type() != kPOINT) {
+      throw QueryNotSupported(rex_function->getName() +
+                              " expects a point for the second argument");
+    }
+
+    args.insert(args.end(), geoargs.begin(), geoargs.begin() + 1);
+
+    // Add compression information
+    Datum input_compression;
+    input_compression.intval =
+        (arg_ti.get_compression() == kENCODING_GEOINT && arg_ti.get_comp_param() == 32)
+            ? 1
+            : 0;
+    args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
+    if (arg_ti.get_input_srid() != 4326) {
+      throw QueryNotSupported(
+          rex_function->getName() +
+          " currently only supports points of with SRID WGS84/EPSG:4326");
+    }
+    Datum input_srid;
+    input_srid.intval = arg_ti.get_input_srid();
+    args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_srid));
+    Datum output_srid;
+    // Forcing web-mercator projection for now
+    // TODO(croot): check that the input-to-output conversion routines exist?
+    output_srid.intval =
+        arg_ti.get_output_srid() != 900913 ? 900913 : arg_ti.get_output_srid();
+    args.push_back(makeExpr<Analyzer::Constant>(kINT, false, output_srid));
+
+    args.push_back(translateScalarRex(rex_function->getOperand(2)));
+    args.push_back(translateScalarRex(rex_function->getOperand(3)));
+    args.push_back(translateScalarRex(rex_function->getOperand(4)));
+    args.push_back(translateScalarRex(rex_function->getOperand(5)));
+    return makeExpr<Analyzer::FunctionOper>(
+        rex_function->getType(), specialized_geofunc, args);
+  } else if (rex_function->getName() == std::string("is_point_in_view")) {
+    CHECK_EQ(rex_function->size(), 5);
+    SQLTypeInfo arg_ti;
+    std::vector<std::shared_ptr<Analyzer::Expr>> args;
+    auto geoargs = translateGeoFunctionArg(
+        rex_function->getOperand(0), arg_ti, lindex, false, true, false);
+    // only works on points
+    if (arg_ti.get_type() != kPOINT) {
+      throw QueryNotSupported(rex_function->getName() +
+                              " expects a point for the second argument");
+    }
+
+    args.insert(args.end(), geoargs.begin(), geoargs.begin() + 1);
+
+    // Add compression information
+    Datum input_compression;
+    input_compression.intval =
+        (arg_ti.get_compression() == kENCODING_GEOINT && arg_ti.get_comp_param() == 32)
+            ? 1
+            : 0;
+    args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
+    if (arg_ti.get_input_srid() != 4326) {
+      throw QueryNotSupported(
+          rex_function->getName() +
+          " currently only supports points of with SRID WGS84/EPSG:4326");
+    }
+    args.push_back(translateScalarRex(rex_function->getOperand(1)));
+    args.push_back(translateScalarRex(rex_function->getOperand(2)));
+    args.push_back(translateScalarRex(rex_function->getOperand(3)));
+    args.push_back(translateScalarRex(rex_function->getOperand(4)));
+    return makeExpr<Analyzer::FunctionOper>(
+        rex_function->getType(), specialized_geofunc, args);
+  } else if (rex_function->getName() == std::string("is_point_size_in_view")) {
+    CHECK_EQ(rex_function->size(), 6);
+    SQLTypeInfo arg_ti;
+    std::vector<std::shared_ptr<Analyzer::Expr>> args;
+    auto geoargs = translateGeoFunctionArg(
+        rex_function->getOperand(0), arg_ti, lindex, false, true, false);
+    // only works on points
+    if (arg_ti.get_type() != kPOINT) {
+      throw QueryNotSupported(rex_function->getName() +
+                              " expects a point for the second argument");
+    }
+
+    args.insert(args.end(), geoargs.begin(), geoargs.begin() + 1);
+
+    // Add compression information
+    Datum input_compression;
+    input_compression.intval =
+        (arg_ti.get_compression() == kENCODING_GEOINT && arg_ti.get_comp_param() == 32)
+            ? 1
+            : 0;
+    args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
+    if (arg_ti.get_input_srid() != 4326) {
+      throw QueryNotSupported(
+          rex_function->getName() +
+          " currently only supports points of with SRID WGS84/EPSG:4326");
+    }
+    args.push_back(translateScalarRex(rex_function->getOperand(1)));
+    args.push_back(translateScalarRex(rex_function->getOperand(2)));
+    args.push_back(translateScalarRex(rex_function->getOperand(3)));
+    args.push_back(translateScalarRex(rex_function->getOperand(4)));
+    args.push_back(translateScalarRex(rex_function->getOperand(5)));
+    return makeExpr<Analyzer::FunctionOper>(
+        rex_function->getType(), specialized_geofunc, args);
+  }
+  CHECK(false);
+  return nullptr;
+}
