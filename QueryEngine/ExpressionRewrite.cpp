@@ -513,7 +513,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
           }
         }
       }
-      Datum result_datum;
+      Datum result_datum = {};
       SQLTypes result_type;
       if (foldOper(optype, lhs_type, lhs_datum, rhs_datum, result_datum, result_type)) {
         if (!ti.is_decimal()) {
