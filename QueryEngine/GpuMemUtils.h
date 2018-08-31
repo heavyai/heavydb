@@ -70,12 +70,14 @@ struct GpuQueryMemory {
   std::pair<CUdeviceptr, CUdeviceptr> small_group_by_buffers;
 };
 
-class QueryMemoryDescriptor;
+using GpuGroupByBuffers = std::pair<CUdeviceptr, CUdeviceptr>;
 
-GpuQueryMemory create_dev_group_by_buffers(
-    Data_Namespace::DataMgr* data_mgr,
+class QueryMemoryDescriptor;
+class CudaAllocator;
+
+GpuGroupByBuffers create_dev_group_by_buffers(
+    const CudaAllocator& cuda_allocator,
     const std::vector<int64_t*>& group_by_buffers,
-    const std::vector<int64_t*>& small_group_by_buffers,
     const QueryMemoryDescriptor&,
     const unsigned block_size_x,
     const unsigned grid_size_x,

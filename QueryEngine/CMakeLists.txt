@@ -19,6 +19,7 @@ set(query_engine_source_files
     ColumnIR.cpp
     CompareIR.cpp
     ConstantIR.cpp
+    CudaAllocator.cpp
     DateTimeIR.cpp
     DateTimePlusRewrite.cpp
     EquiJoinCondition.cpp

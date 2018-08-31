@@ -23,8 +23,11 @@
  */
 
 #include "ResultSet.h"
+
+#include "CudaAllocator.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Execute.h"
+#include "GpuMemUtils.h"
 #include "InPlaceSort.h"
 #include "OutputBufferInitialization.h"
 #include "RuntimeFunctions.h"
@@ -789,25 +792,28 @@ void ResultSet::radixSortOnGpu(
     const std::list<Analyzer::OrderEntry>& order_entries) const {
   auto data_mgr = &executor_->catalog_->get_dataMgr();
   const int device_id{0};
+  CudaAllocator cuda_allocator(data_mgr, device_id);
   std::vector<int64_t*> group_by_buffers(executor_->blockSize());
   group_by_buffers[0] = reinterpret_cast<int64_t*>(storage_->getUnderlyingBuffer());
-  auto gpu_query_mem = create_dev_group_by_buffers(data_mgr,
-                                                   group_by_buffers,
-                                                   {},
-                                                   query_mem_desc_,
-                                                   executor_->blockSize(),
-                                                   executor_->gridSize(),
-                                                   device_id,
-                                                   true,
-                                                   true,
-                                                   nullptr);
-  ResultRows::inplaceSortGpuImpl(
-      order_entries, query_mem_desc_, gpu_query_mem, data_mgr, device_id);
+  auto dev_group_by_buffers = create_dev_group_by_buffers(cuda_allocator,
+                                                          group_by_buffers,
+                                                          query_mem_desc_,
+                                                          executor_->blockSize(),
+                                                          executor_->gridSize(),
+                                                          device_id,
+                                                          true,
+                                                          true,
+                                                          nullptr);
+  ResultRows::inplaceSortGpuImpl(order_entries,
+                                 query_mem_desc_,
+                                 GpuQueryMemory{dev_group_by_buffers},
+                                 data_mgr,
+                                 device_id);
   copy_group_by_buffers_from_gpu(
       data_mgr,
       group_by_buffers,
       query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU),
-      gpu_query_mem.group_by_buffers.second,
+      dev_group_by_buffers.second,
       query_mem_desc_,
       executor_->blockSize(),
       executor_->gridSize(),

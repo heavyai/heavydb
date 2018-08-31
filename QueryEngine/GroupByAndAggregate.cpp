@@ -16,6 +16,7 @@
 
 #include "GroupByAndAggregate.h"
 #include "AggregateUtils.h"
+#include "CudaAllocator.h"
 
 #include "CardinalityEstimator.h"
 #include "ExpressionRange.h"
@@ -95,12 +96,12 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   INJECT_TIMER(lauchGpuCode);
 #ifdef HAVE_CUDA
   bool is_group_by{query_mem_desc_.isGroupBy()};
-  data_mgr->cudaMgr_->setContext(device_id);
 
   RenderAllocator* render_allocator = nullptr;
   if (render_allocator_map) {
     render_allocator = render_allocator_map->getRenderAllocator(device_id);
   }
+  CudaAllocator cuda_allocator(data_mgr, device_id);
 
   auto cu_func = static_cast<CUfunction>(cu_functions[device_id].first);
   std::vector<int64_t*> out_vec;
@@ -154,7 +155,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   if (is_group_by) {
     CHECK(!group_by_buffers_.empty() || render_allocator);
     bool can_sort_on_gpu = query_mem_desc_.sortOnGpu();
-    auto gpu_query_mem = prepareGroupByDevBuffer(data_mgr,
+    auto gpu_query_mem = prepareGroupByDevBuffer(cuda_allocator,
                                                  render_allocator,
                                                  ra_exe_unit,
                                                  kernel_params[INIT_AGG_VALS],
@@ -164,7 +165,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                                  can_sort_on_gpu);
 
     kernel_params[GROUPBY_BUF] = gpu_query_mem.group_by_buffers.first;
-    kernel_params[SMALL_BUF] = gpu_query_mem.small_group_by_buffers.first;
+    kernel_params[SMALL_BUF] = CUdeviceptr(0);  // TODO(adb): remove
     std::vector<void*> param_ptrs;
     for (auto& param : kernel_params) {
       param_ptrs.push_back(&param);
@@ -224,11 +225,10 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       cuEventRecord(start2, 0);
     }
 
-    copy_from_gpu(data_mgr,
-                  &error_codes[0],
-                  err_desc,
-                  error_codes.size() * sizeof(error_codes[0]),
-                  device_id);
+    cuda_allocator.copyFromDevice(&error_codes[0],
+                                  err_desc,
+                                  error_codes.size() * sizeof(error_codes[0]),
+                                  device_id);
     *error_code = aggregate_error_codes(error_codes);
     if (*error_code > 0) {
       return {};

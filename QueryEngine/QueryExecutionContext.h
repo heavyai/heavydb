@@ -18,6 +18,8 @@
 #define QUERYENGINE_QUERYEXECUTIONCONTEXT_H
 
 #include "CompilationOptions.h"
+#include "CudaAllocator.h"
+#include "GpuMemUtils.h"
 #include "IteratorTable.h"
 #include "Rendering/RenderInfo.h"
 
@@ -167,14 +169,14 @@ class QueryExecutionContext : boost::noncopyable {
       const bool is_group_by) const;
 
   std::pair<CUdeviceptr, CUdeviceptr> prepareTopNHeapsDevBuffer(
-      Data_Namespace::DataMgr* data_mgr,
+      const CudaAllocator& cuda_allocator,
       const CUdeviceptr init_agg_vals_dev_ptr,
       const size_t n,
       const int device_id,
       const unsigned block_size_x,
       const unsigned grid_size_x) const;
 
-  GpuQueryMemory prepareGroupByDevBuffer(Data_Namespace::DataMgr* data_mgr,
+  GpuQueryMemory prepareGroupByDevBuffer(const CudaAllocator& cuda_allocator,
                                          RenderAllocator* render_allocator,
                                          const RelAlgExecutionUnit& ra_exe_unit,
                                          const CUdeviceptr init_agg_vals_dev_ptr,
