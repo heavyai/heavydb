@@ -53,6 +53,7 @@ set(query_engine_source_files
     QueryPhysicalInputsCollector.cpp
     QueryRewrite.cpp
     QueryTemplateGenerator.cpp
+    QueryExecutionContext.cpp
     QueryFragmentDescriptor.cpp
     QueryMemoryDescriptor.cpp
     RelAlgAbstractInterpreter.cpp
