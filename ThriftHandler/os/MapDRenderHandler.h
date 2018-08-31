@@ -84,6 +84,8 @@ class MapDRenderHandler {
     return nullptr;
   }
 
+  void handle_ddl(Parser::DDLStmt*) { CHECK(false); }
+
   friend class MapDHandler;
 };
 

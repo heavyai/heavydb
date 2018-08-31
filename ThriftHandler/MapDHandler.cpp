@@ -4109,6 +4109,10 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
 
           // @TODO Get and store replicated (create_params)
         }
+
+        if (render_handler_) {
+          render_handler_->handle_ddl(ddl);
+        }
       } else {
         const Parser::DMLStmt* dml;
         if (explain_stmt != nullptr) {
