@@ -1058,6 +1058,9 @@ class RenameTableStmt : public DDLStmt {
  public:
   RenameTableStmt(std::string* tab, std::string* new_tab_name)
       : table(tab), new_table_name(new_tab_name) {}
+
+  const std::string* get_prev_table() const { return table.get(); }
+  const std::string* get_new_table() const { return new_table_name.get(); }
   virtual void execute(const Catalog_Namespace::SessionInfo& session);
 
  private:
