@@ -244,10 +244,10 @@ makej
 make install
 popd
 
-# geo
+# GEO STUFF
+# expat
 download_make_install https://github.com/libexpat/libexpat/releases/download/R_2_2_5/expat-2.2.5.tar.bz2
-
-# https://github.com/google/libkml/archive/master.zip
+# kml
 download ${HTTP_DEPS}/libkml-master.zip
 unzip -u libkml-master.zip
 pushd libkml-master
@@ -256,10 +256,10 @@ CXXFLAGS="-std=c++03" ./configure --with-expat-include-dir=$PREFIX/include/ --wi
 makej
 make install
 popd
-
-download_make_install https://github.com/OSGeo/proj.4/releases/download/5.1.0/proj-5.1.0.tar.gz
-# http://download.osgeo.org/gdal/2.3.1/gdal-2.3.1.tar.xz
-download_make_install ${HTTP_DEPS}/gdal-2.3.1.tar.xz "" "--without-geos --with-libkml=$PREFIX --with-static-proj4=$PREFIX"
+# proj
+download_make_install ${HTTP_DEPS}/proj-5.2.0.tar.gz
+# gdal
+download_make_install ${HTTP_DEPS}/gdal-2.3.2.tar.xz "" "--without-geos --with-libkml=$PREFIX --with-proj=$PREFIX"
 
 # Apache Arrow (see common-functions.sh)
 install_arrow

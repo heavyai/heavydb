@@ -3,6 +3,8 @@
 set -e
 set -x
 
+HTTP_DEPS="https://dependencies.mapd.com/thirdparty"
+
 PREFIX=/usr/local/mapd-deps
 
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -42,7 +44,6 @@ sudo apt install -y \
     google-perftools \
     libdouble-conversion-dev \
     libevent-dev \
-    libgdal-dev \
     libgflags-dev \
     libgoogle-perftools-dev \
     libiberty-dev \
@@ -61,6 +62,23 @@ sudo apt install -y \
     automake \
     bison \
     flex-old
+
+# GEO STUFF
+# expat
+download_make_install https://github.com/libexpat/libexpat/releases/download/R_2_2_5/expat-2.2.5.tar.bz2
+# kml
+download ${HTTP_DEPS}/libkml-master.zip
+unzip -u libkml-master.zip
+pushd libkml-master
+./autogen.sh || true
+CXXFLAGS="-std=c++03" ./configure --with-expat-include-dir=$PREFIX/include/ --with-expat-lib-dir=$PREFIX/lib --prefix=$PREFIX --enable-static --disable-java --disable-python --disable-swig
+makej
+make install
+popd
+# proj.4
+download_make_install ${HTTP_DEPS}/proj-5.2.0.tar.gz
+# gdal
+download_make_install ${HTTP_DEPS}/gdal-2.3.2.tar.xz "" "--without-geos --with-libkml=$PREFIX --with-proj=$PREFIX"
 
 # install AWS core and s3 sdk
 install_awscpp -j $(nproc)
