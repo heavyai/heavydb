@@ -141,32 +141,32 @@ struct Users {
 };
 struct Roles {
   void setup_roles() {
-    if (!sys_cat.getMetadataForRole("OldLady")) {
+    if (!sys_cat.getRoleGrantee("OldLady")) {
       sys_cat.createRole("OldLady", false);
-      CHECK(sys_cat.getMetadataForRole("OldLady"));
+      CHECK(sys_cat.getRoleGrantee("OldLady"));
     }
-    if (!sys_cat.getMetadataForRole("Gunners")) {
+    if (!sys_cat.getRoleGrantee("Gunners")) {
       sys_cat.createRole("Gunners", false);
-      CHECK(sys_cat.getMetadataForRole("Gunners"));
+      CHECK(sys_cat.getRoleGrantee("Gunners"));
     }
-    if (!sys_cat.getMetadataForRole("Sudens")) {
+    if (!sys_cat.getRoleGrantee("Sudens")) {
       sys_cat.createRole("Sudens", false);
-      CHECK(sys_cat.getMetadataForRole("Sudens"));
+      CHECK(sys_cat.getRoleGrantee("Sudens"));
     }
   }
 
   void drop_roles() {
-    if (sys_cat.getMetadataForRole("OldLady")) {
+    if (sys_cat.getRoleGrantee("OldLady")) {
       sys_cat.dropRole("OldLady");
-      CHECK(!sys_cat.getMetadataForRole("OldLady"));
+      CHECK(!sys_cat.getRoleGrantee("OldLady"));
     }
-    if (sys_cat.getMetadataForRole("Gunners")) {
+    if (sys_cat.getRoleGrantee("Gunners")) {
       sys_cat.dropRole("Gunners");
-      CHECK(!sys_cat.getMetadataForRole("Gunners"));
+      CHECK(!sys_cat.getRoleGrantee("Gunners"));
     }
-    if (sys_cat.getMetadataForRole("Sudens")) {
+    if (sys_cat.getRoleGrantee("Sudens")) {
       sys_cat.dropRole("Sudens");
-      CHECK(!sys_cat.getMetadataForRole("sudens"));
+      CHECK(!sys_cat.getRoleGrantee("sudens"));
     }
   }
   Roles() { setup_roles(); }

@@ -2,7 +2,8 @@ set(catalog_source_files
     Catalog.cpp
     Catalog.h
     DBObject.cpp
-    Role.cpp
+    Grantee.cpp
+    Grantee.h
     SharedDictionaryValidator.cpp
 )
 

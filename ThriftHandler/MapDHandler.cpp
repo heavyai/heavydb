@@ -1102,7 +1102,7 @@ void MapDHandler::get_roles(std::vector<std::string>& roles, const TSessionId& s
         SysCatalog::instance().getRoles(session_info.get_catalog().get_currentDB().dbId);
   } else {
     roles = SysCatalog::instance().getRoles(
-        false, true, session_info.get_currentUser().userId);
+        false, true, session_info.get_currentUser().userName);
   }
 }
 
@@ -1163,21 +1163,19 @@ void MapDHandler::get_db_objects_for_grantee(std::vector<TDBObject>& TDBObjectsF
   auto session = get_session(sessionId);
   auto user = session.get_currentUser();
   if (!user.isSuper &&
-      !SysCatalog::instance().isRoleGrantedToUser(user.userId, roleName)) {
+      !SysCatalog::instance().isRoleGrantedToGrantee(user.userName, roleName)) {
     return;
   }
-  Role* rl = SysCatalog::instance().getMetadataForRole(roleName);
+  auto* rl = SysCatalog::instance().getGrantee(roleName);
   if (rl) {
     auto dbId = session.get_catalog().get_currentDB().dbId;
-    for (auto dbObjectIt = rl->getDbObject()->begin();
-         dbObjectIt != rl->getDbObject()->end();
-         ++dbObjectIt) {
-      if (dbObjectIt->first.dbId != dbId) {
+    for (auto& dbObject : *rl->getDbObjects(false)) {
+      if (dbObject.first.dbId != dbId) {
         // TODO (max): it doesn't scale well in case we have many DBs (not a typical
         // usecase for now, though)
         continue;
       }
-      TDBObject tdbObject = serialize_db_object(roleName, *dbObjectIt->second);
+      TDBObject tdbObject = serialize_db_object(roleName, *dbObject.second);
       TDBObjectsForRole.push_back(tdbObject);
     }
   } else {
@@ -1246,15 +1244,16 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
   };
 
   std::vector<std::string> roles = SysCatalog::instance().getRoles(
-      true, session.get_currentUser().isSuper, session.get_currentUser().userId);
+      true, session.get_currentUser().isSuper, session.get_currentUser().userName);
   for (const auto& role : roles) {
     DBObject* object_found;
-    Role* rl = SysCatalog::instance().getMetadataForRole(role);
-    if (rl && (object_found = rl->findDbObject(object_to_find.getObjectKey()))) {
+    auto* rl = SysCatalog::instance().getRoleGrantee(role);
+    if (rl && (object_found = rl->findDbObject(object_to_find.getObjectKey(), false))) {
       TDBObjects.push_back(serialize_db_object(role, *object_found));
     }
     // check object permissions on Database level
-    if (rl && (object_found = rl->findDbObject(object_to_find_dblevel.getObjectKey()))) {
+    if (rl &&
+        (object_found = rl->findDbObject(object_to_find_dblevel.getObjectKey(), false))) {
       TDBObjects.push_back(serialize_db_object(role, *object_found));
     }
   }
@@ -1268,7 +1267,10 @@ void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
   if (SysCatalog::instance().getMetadataForUser(userName, user_meta)) {
     if (session.get_currentUser().isSuper ||
         session.get_currentUser().userId == user_meta.userId) {
-      roles = SysCatalog::instance().getUserRoles(user_meta.userId);
+      auto* user = SysCatalog::instance().getUserGrantee(user_meta.userName);
+      if (user) {
+        roles = user->getRoles();
+      }
     } else {
       THROW_MAPD_EXCEPTION(
           "Only a superuser is authorized to request list of roles granted to another "
@@ -2807,8 +2809,7 @@ std::vector<std::string> MapDHandler::get_valid_groups(const TSessionId& session
   Catalog_Namespace::UserMetadata user_meta;
   for (auto& group : groups) {
     user_meta.isSuper = false;  // initialize default flag
-    if (!SysCatalog::instance().getMetadataForUser(group, user_meta) &&
-        !SysCatalog::instance().getMetadataForRole(group)) {
+    if (!SysCatalog::instance().getGrantee(group)) {
       THROW_MAPD_EXCEPTION("Exception: User/Role " + group + " does not exist");
     } else if (!user_meta.isSuper) {
       valid_groups.push_back(group);

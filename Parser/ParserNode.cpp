@@ -3385,8 +3385,8 @@ void DropRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("DROP ROLE " + get_role() +
                              " failed. It can only be executed by super user.");
   }
-  Role* rl = SysCatalog::instance().getMetadataForRole(get_role());
-  if (!rl || rl->isUserPrivateRole()) {
+  auto* rl = SysCatalog::instance().getRoleGrantee(get_role());
+  if (!rl) {
     throw std::runtime_error("DROP ROLE " + get_role() +
                              " failed because role with this name does not exist.");
   }
@@ -3718,9 +3718,8 @@ void GrantRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         "Request to grant role " + get_role() +
         " failed because mapd root user has all privileges by default.");
   }
-  Catalog_Namespace::UserMetadata user;
-  Role* rl = SysCatalog::instance().getMetadataForRole(get_role());
-  if (!rl || SysCatalog::instance().getMetadataForUser(get_role(), user)) {
+  auto* rl = SysCatalog::instance().getRoleGrantee(get_role());
+  if (!rl) {
     // check role is userRole
     // reason for placing the check here instead of Catalog.cpp is to
     // bypass grantRole_unsafe when createUser statement is kicked off.
