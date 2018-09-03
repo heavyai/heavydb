@@ -85,7 +85,7 @@ const int8_t* advance_col_buff_to_slot(const int8_t* buff,
                                        const QueryMemoryDescriptor& query_mem_desc,
                                        const std::vector<TargetInfo>& targets,
                                        const size_t slot_idx,
-                                       const bool none_encoded_strings_valid) {
+                                       const bool separate_varlen_storage) {
   auto crt_col_ptr = get_cols_ptr(buff, query_mem_desc);
   const auto buffer_col_count = query_mem_desc.getBufferColSlotCount();
   size_t agg_col_idx{0};
@@ -104,7 +104,7 @@ const int8_t* advance_col_buff_to_slot(const int8_t* buff,
       crt_col_ptr = advance_to_next_columnar_target_buff(
           crt_col_ptr, query_mem_desc, agg_col_idx + 1);
     }
-    agg_col_idx = advance_slot(agg_col_idx, agg_info, none_encoded_strings_valid);
+    agg_col_idx = advance_slot(agg_col_idx, agg_info, separate_varlen_storage);
   }
   CHECK(false);
   return nullptr;
@@ -182,9 +182,9 @@ std::vector<TargetValue> ResultSet::getRowAt(
                                               agg_info,
                                               agg_col_idx,
                                               query_mem_desc_,
-                                              none_encoded_strings_valid_);
+                                              separate_varlen_storage_valid_);
     }
-    agg_col_idx = advance_slot(agg_col_idx, agg_info, none_encoded_strings_valid_);
+    agg_col_idx = advance_slot(agg_col_idx, agg_info, separate_varlen_storage_valid_);
   }
 
   return row;
@@ -367,7 +367,7 @@ void ResultSet::RowWiseTargetAccessor::initializeOffsetsForStorage() {
             result_set_->query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact;
       } else if (is_real_str_or_array(agg_info)) {
         ptr2 = ptr1 + compact_sz1;
-        if (!result_set_->none_encoded_strings_valid_) {
+        if (!result_set_->separate_varlen_storage_valid_) {
           // None encoded strings explicitly attached to ResultSetStorage do not have a
           // second slot in the QueryMemoryDescriptor col width vector
           compact_sz2 =
@@ -379,14 +379,15 @@ void ResultSet::RowWiseTargetAccessor::initializeOffsetsForStorage() {
                         static_cast<size_t>(compact_sz1),
                         ptr2,
                         static_cast<size_t>(compact_sz2)});
-      rowwise_target_ptr = advance_target_ptr(rowwise_target_ptr,
-                                              agg_info,
-                                              agg_col_idx,
-                                              result_set_->query_mem_desc_,
-                                              result_set_->none_encoded_strings_valid_);
+      rowwise_target_ptr =
+          advance_target_ptr(rowwise_target_ptr,
+                             agg_info,
+                             agg_col_idx,
+                             result_set_->query_mem_desc_,
+                             result_set_->separate_varlen_storage_valid_);
 
-      agg_col_idx =
-          advance_slot(agg_col_idx, agg_info, result_set_->none_encoded_strings_valid_);
+      agg_col_idx = advance_slot(
+          agg_col_idx, agg_info, result_set_->separate_varlen_storage_valid_);
     }
     CHECK_EQ(offsets_for_storage_[storage_idx].size(),
              result_set_->storage_->targets_.size());
@@ -442,17 +443,17 @@ InternalTargetValue ResultSet::RowWiseTargetAccessor::getColumnInternal(
           return InternalTargetValue(reinterpret_cast<const std::string*>(i1));
         }
       }
-      if (result_set_->none_encoded_strings_valid_) {
+      if (result_set_->separate_varlen_storage_valid_) {
         if (i1 < 0) {
           CHECK_EQ(-1, i1);
           return InternalTargetValue(static_cast<const std::string*>(nullptr));
         }
         CHECK_LT(storage_lookup_result.storage_idx,
-                 result_set_->none_encoded_strings_.size());
-        const auto& none_encoded_strings_for_fragment =
-            result_set_->none_encoded_strings_[storage_lookup_result.storage_idx];
-        CHECK_LT(i1, none_encoded_strings_for_fragment.size());
-        return InternalTargetValue(&none_encoded_strings_for_fragment[i1]);
+                 result_set_->serialized_varlen_buffer_.size());
+        const auto& varlen_buffer_for_fragment =
+            result_set_->serialized_varlen_buffer_[storage_lookup_result.storage_idx];
+        CHECK_LT(i1, varlen_buffer_for_fragment.size());
+        return InternalTargetValue(&varlen_buffer_for_fragment[i1]);
       }
       CHECK(offsets_for_target.ptr2);
       const auto ptr2 =
@@ -508,8 +509,8 @@ void ResultSet::ColumnWiseTargetAccessor::initializeOffsetsForStorage() {
         crt_col_ptr = advance_to_next_columnar_target_buff(
             crt_col_ptr, result_set_->query_mem_desc_, agg_col_idx + 1);
       }
-      agg_col_idx =
-          advance_slot(agg_col_idx, agg_info, result_set_->none_encoded_strings_valid_);
+      agg_col_idx = advance_slot(
+          agg_col_idx, agg_info, result_set_->separate_varlen_storage_valid_);
     }
     CHECK_EQ(offsets_for_storage_[storage_idx].size(),
              result_set_->storage_->targets_.size());
@@ -732,25 +733,32 @@ TargetValue build_string_array_target_value(
     const int32_t* buff,
     const size_t buff_sz,
     const int dict_id,
+    const bool translate_strings,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const Executor* executor) {
   std::vector<ScalarTargetValue> values;
   CHECK_EQ(size_t(0), buff_sz % sizeof(int32_t));
   const size_t num_elems = buff_sz / sizeof(int32_t);
-  for (size_t i = 0; i < num_elems; ++i) {
-    const auto string_id = buff[i];
+  if (translate_strings) {
+    for (size_t i = 0; i < num_elems; ++i) {
+      const auto string_id = buff[i];
 
-    if (string_id == NULL_INT) {
-      values.emplace_back(NullableString(nullptr));
-    } else {
-      if (dict_id == 0) {
-        StringDictionaryProxy* sdp = row_set_mem_owner->getLiteralStringDictProxy();
-        values.emplace_back(sdp->getString(string_id));
+      if (string_id == NULL_INT) {
+        values.emplace_back(NullableString(nullptr));
       } else {
-        values.emplace_back(NullableString(
-            executor->getStringDictionaryProxy(dict_id, row_set_mem_owner, false)
-                ->getString(string_id)));
+        if (dict_id == 0) {
+          StringDictionaryProxy* sdp = row_set_mem_owner->getLiteralStringDictProxy();
+          values.emplace_back(sdp->getString(string_id));
+        } else {
+          values.emplace_back(NullableString(
+              executor->getStringDictionaryProxy(dict_id, row_set_mem_owner, false)
+                  ->getString(string_id)));
+        }
       }
+    }
+  } else {
+    for (size_t i = 0; i < num_elems; i++) {
+      values.emplace_back(static_cast<int64_t>(buff[i]));
     }
   }
   return values;
@@ -759,6 +767,7 @@ TargetValue build_string_array_target_value(
 TargetValue build_array_target_value(const SQLTypeInfo& array_ti,
                                      const int8_t* buff,
                                      const size_t buff_sz,
+                                     const bool translate_strings,
                                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                      const Executor* executor) {
   CHECK(array_ti.is_array());
@@ -767,6 +776,7 @@ TargetValue build_array_target_value(const SQLTypeInfo& array_ti,
     return build_string_array_target_value(reinterpret_cast<const int32_t*>(buff),
                                            buff_sz,
                                            elem_ti.get_comp_param(),
+                                           translate_strings,
                                            row_set_mem_owner,
                                            executor);
   }
@@ -853,18 +863,36 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
                                              const int8_t compact_sz2,
                                              const TargetInfo& target_info,
                                              const size_t target_logical_idx,
+                                             const bool translate_strings,
                                              const size_t entry_buff_idx) const {
   auto varlen_ptr = read_int_from_buff(ptr1, compact_sz1);
-  if (none_encoded_strings_valid_) {
+  if (separate_varlen_storage_valid_) {
     if (varlen_ptr < 0) {
       CHECK_EQ(-1, varlen_ptr);
       return TargetValue(nullptr);
     }
     const auto storage_idx = getStorageIndex(entry_buff_idx);
-    CHECK_LT(static_cast<size_t>(storage_idx.first), none_encoded_strings_.size());
-    const auto none_encoded_strings = none_encoded_strings_[storage_idx.first];
-    CHECK_LT(static_cast<size_t>(varlen_ptr), none_encoded_strings.size());
-    return none_encoded_strings[varlen_ptr];
+    if (target_info.sql_type.is_string()) {
+      CHECK(target_info.sql_type.get_compression() == kENCODING_NONE);
+      CHECK_LT(static_cast<size_t>(storage_idx.first), serialized_varlen_buffer_.size());
+      const auto varlen_buffer_for_storage = serialized_varlen_buffer_[storage_idx.first];
+      CHECK_LT(static_cast<size_t>(varlen_ptr), varlen_buffer_for_storage.size());
+      return varlen_buffer_for_storage[varlen_ptr];
+    } else if (target_info.sql_type.get_type() == kARRAY) {
+      CHECK_LT(static_cast<size_t>(storage_idx.first), serialized_varlen_buffer_.size());
+      const auto varlen_buffer = serialized_varlen_buffer_[storage_idx.first];
+      CHECK_LT(static_cast<size_t>(varlen_ptr), varlen_buffer.size());
+
+      return build_array_target_value(
+          target_info.sql_type,
+          reinterpret_cast<const int8_t*>(varlen_buffer[varlen_ptr].data()),
+          varlen_buffer[varlen_ptr].size(),
+          translate_strings,
+          row_set_mem_owner_,
+          executor_);
+    } else {
+      CHECK(false);
+    }
   }
   if (!lazy_fetch_info_.empty()) {
     CHECK_LT(target_logical_idx, lazy_fetch_info_.size());
@@ -906,8 +934,12 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
         }
         CHECK(ad.pointer);
         CHECK_GT(ad.length, 0);
-        return build_array_target_value(
-            target_info.sql_type, ad.pointer, ad.length, row_set_mem_owner_, executor_);
+        return build_array_target_value(target_info.sql_type,
+                                        ad.pointer,
+                                        ad.length,
+                                        translate_strings,
+                                        row_set_mem_owner_,
+                                        executor_);
       }
     }
   }
@@ -936,6 +968,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
     return build_array_target_value(target_info.sql_type,
                                     reinterpret_cast<const int8_t*>(varlen_ptr),
                                     length,
+                                    translate_strings,
                                     row_set_mem_owner_,
                                     executor_);
   }
@@ -1294,6 +1327,7 @@ TargetValue ResultSet::getTargetValueFromBufferColwise(
                                        compact_sz2,
                                        target_info,
                                        target_logical_idx,
+                                       translate_strings,
                                        entry_idx);
   }
   return makeTargetValue(ptr1,
@@ -1399,8 +1433,10 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
     int8_t compact_sz2 = 0;
     // Skip reading the second slot if we have a none encoded string and are using the
     // none encoded strings buffer attached to ResultSetStorage
-    if (!(none_encoded_strings_valid_ && target_info.sql_type.is_string() &&
-          target_info.sql_type.get_compression() == kENCODING_NONE)) {
+    if (!(separate_varlen_storage_valid_ &&
+          (target_info.sql_type.is_array() ||
+           (target_info.sql_type.is_string() &&
+            target_info.sql_type.get_compression() == kENCODING_NONE)))) {
       compact_sz2 = query_mem_desc_.getColumnWidth(slot_idx + 1).compact;
     }
     CHECK(ptr2);
@@ -1412,6 +1448,7 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
                                        compact_sz2,
                                        target_info,
                                        target_logical_idx,
+                                       translate_strings,
                                        entry_buff_idx);
   }
   if (query_mem_desc_.targetGroupbyIndicesSize() == 0 ||

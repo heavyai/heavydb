@@ -100,7 +100,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , estimator_buffer_(nullptr)
     , host_estimator_buffer_(nullptr)
     , data_mgr_(nullptr)
-    , none_encoded_strings_valid_(false)
+    , separate_varlen_storage_valid_(false)
     , just_explain_(false)
     , cached_row_count_(-1)
     , geo_return_type_(GeoReturnType::WktString) {}
@@ -140,7 +140,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     estimator_buffer_(nullptr)
     , host_estimator_buffer_(nullptr)
     , data_mgr_(nullptr)
-    , none_encoded_strings_valid_(false)
+    , separate_varlen_storage_valid_(false)
     , just_explain_(false)
     , cached_row_count_(-1)
     , geo_return_type_(GeoReturnType::WktString) {
@@ -158,7 +158,7 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator> estimat
     , estimator_buffer_(nullptr)
     , host_estimator_buffer_(nullptr)
     , data_mgr_(data_mgr)
-    , none_encoded_strings_valid_(false)
+    , separate_varlen_storage_valid_(false)
     , just_explain_(false)
     , cached_row_count_(-1)
     , geo_return_type_(GeoReturnType::WktString) {
@@ -183,7 +183,7 @@ ResultSet::ResultSet(const std::string& explanation)
     , render_time_ms_(0)
     , estimator_buffer_(nullptr)
     , host_estimator_buffer_(nullptr)
-    , none_encoded_strings_valid_(false)
+    , separate_varlen_storage_valid_(false)
     , explanation_(explanation)
     , just_explain_(true)
     , cached_row_count_(-1)
@@ -199,7 +199,7 @@ ResultSet::ResultSet(int64_t queue_time_ms,
     , render_time_ms_(render_time_ms)
     , estimator_buffer_(nullptr)
     , host_estimator_buffer_(nullptr)
-    , none_encoded_strings_valid_(false)
+    , separate_varlen_storage_valid_(false)
     , just_explain_(true)
     , cached_row_count_(-1)
     , geo_return_type_(GeoReturnType::WktString){};
@@ -284,11 +284,11 @@ void ResultSet::append(ResultSet& that) {
 #endif
   chunk_iters_.insert(
       chunk_iters_.end(), that.chunk_iters_.begin(), that.chunk_iters_.end());
-  if (none_encoded_strings_valid_) {
-    CHECK(that.none_encoded_strings_valid_);
-    none_encoded_strings_.insert(none_encoded_strings_.end(),
-                                 that.none_encoded_strings_.begin(),
-                                 that.none_encoded_strings_.end());
+  if (separate_varlen_storage_valid_) {
+    CHECK(that.separate_varlen_storage_valid_);
+    serialized_varlen_buffer_.insert(serialized_varlen_buffer_.end(),
+                                     that.serialized_varlen_buffer_.begin(),
+                                     that.serialized_varlen_buffer_.end());
   }
   for (auto& buff : that.literal_buffers_) {
     literal_buffers_.push_back(std::move(buff));

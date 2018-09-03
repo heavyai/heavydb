@@ -42,6 +42,23 @@ void compare_array(const TargetValue& r,
   }
 }
 
+template <>
+void compare_array(const TargetValue& r,
+                   const std::vector<std::string>& arr,
+                   const double tol) {
+  auto scalar_tv_vector = boost::get<std::vector<ScalarTargetValue>>(&r);
+  CHECK(scalar_tv_vector);
+  ASSERT_EQ(scalar_tv_vector->size(), arr.size());
+  size_t ctr = 0;
+  for (const ScalarTargetValue scalar_tv : *scalar_tv_vector) {
+    auto ns = boost::get<NullableString>(&scalar_tv);
+    CHECK(ns);
+    auto str = boost::get<std::string>(ns);
+    CHECK(str);
+    ASSERT_TRUE(*str == arr[ctr++]);
+  }
+}
+
 template <class T>
 void compare_array(const std::vector<T>& a,
                    const std::vector<T>& b,

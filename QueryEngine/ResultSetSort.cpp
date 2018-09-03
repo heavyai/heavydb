@@ -65,7 +65,7 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
   for (size_t i = 0; i < static_cast<size_t>(oe.tle_no - 1); ++i) {
     physical_slot_off += query_mem_desc_.getColumnWidth(logical_slot_idx).compact;
     logical_slot_idx =
-        advance_slot(logical_slot_idx, targets_[i], none_encoded_strings_valid_);
+        advance_slot(logical_slot_idx, targets_[i], separate_varlen_storage_valid_);
   }
   const auto col_off =
       get_slot_off_quad(query_mem_desc_) * sizeof(int64_t) + physical_slot_off;

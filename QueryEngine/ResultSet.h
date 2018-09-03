@@ -435,6 +435,7 @@ class ResultSet {
                                     const int8_t compact_sz2,
                                     const TargetInfo& target_info,
                                     const size_t target_logical_idx,
+                                    const bool translate_strings,
                                     const size_t entry_buff_idx) const;
 
   struct VarlenTargetPtrPair {
@@ -664,8 +665,10 @@ class ResultSet {
   Data_Namespace::DataMgr* data_mgr_;
 
   // only used by serialization
-  std::vector<std::vector<std::string>> none_encoded_strings_;
-  bool none_encoded_strings_valid_;
+  using SerializedVarlenBufferStorage = std::vector<std::string>;
+
+  std::vector<SerializedVarlenBufferStorage> serialized_varlen_buffer_;
+  bool separate_varlen_storage_valid_;
   std::string explanation_;
   const bool just_explain_;
   mutable std::atomic<ssize_t> cached_row_count_;

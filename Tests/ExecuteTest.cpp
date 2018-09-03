@@ -25,6 +25,7 @@
 #include "../Shared/ConfigResolve.h"
 #include "../Shared/TimeGM.h"
 #include "../SqliteConnector/SqliteConnector.h"
+#include "DistributedLoader.h"
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
@@ -996,6 +997,98 @@ TEST(Select, FilterAndGroupBy) {
   }
 }
 
+TEST(Select, Arrays) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    // Simple lazy projection
+    compare_array(run_simple_agg("SELECT arr_i16 FROM array_test WHERE x = 8;", dt),
+                  std::vector<int64_t>({2, 3, 4}));
+    compare_array(run_simple_agg("SELECT arr_i32 FROM array_test WHERE x = 8;", dt),
+                  std::vector<int64_t>({20, 30, 40}));
+    compare_array(run_simple_agg("SELECT arr_i64 FROM array_test WHERE x = 8;", dt),
+                  std::vector<int64_t>({200, 300, 400}));
+    compare_array(run_simple_agg("SELECT arr_str FROM array_test WHERE x = 8;", dt),
+                  std::vector<std::string>({"bb", "cc", "dd"}));
+    compare_array(run_simple_agg("SELECT arr_float FROM array_test WHERE x = 8;", dt),
+                  std::vector<float>({2.2, 3.3, 4.4}));
+    compare_array(run_simple_agg("SELECT arr_double FROM array_test WHERE x = 8;", dt),
+                  std::vector<double>({22.2, 33.3, 44.4}));
+    compare_array(run_simple_agg("SELECT arr_bool FROM array_test WHERE x = 8;", dt),
+                  std::vector<int64_t>({1, 0, 1, 0, 1, 0}));
+
+    compare_array(run_simple_agg("SELECT arr3_i8 FROM array_test WHERE x = 8;", dt),
+                  std::vector<int64_t>({2, 3, 4}));
+    compare_array(run_simple_agg("SELECT arr3_i16 FROM array_test WHERE x = 8;", dt),
+                  std::vector<int64_t>({2, 3, 4}));
+    compare_array(run_simple_agg("SELECT arr3_i32 FROM array_test WHERE x = 8;", dt),
+                  std::vector<int64_t>({20, 30, 40}));
+    compare_array(run_simple_agg("SELECT arr3_i64 FROM array_test WHERE x = 8;", dt),
+                  std::vector<int64_t>({200, 300, 400}));
+    compare_array(run_simple_agg("SELECT arr3_float FROM array_test WHERE x = 8;", dt),
+                  std::vector<float>({2.2, 3.3, 4.4}));
+    compare_array(run_simple_agg("SELECT arr3_double FROM array_test WHERE x = 8;", dt),
+                  std::vector<double>({22.2, 33.3, 44.4}));
+    compare_array(run_simple_agg("SELECT arr6_bool FROM array_test WHERE x = 8;", dt),
+                  std::vector<int64_t>({1, 0, 1, 0, 1, 0}));
+
+    // Simple non-lazy projection
+    compare_array(
+        run_simple_agg("SELECT arr_i16 FROM array_test WHERE arr_i16[1] = 2;", dt),
+        std::vector<int64_t>({2, 3, 4}));
+    compare_array(
+        run_simple_agg("SELECT arr_i32 FROM array_test WHERE arr_i32[1] = 20;", dt),
+        std::vector<int64_t>({20, 30, 40}));
+    compare_array(
+        run_simple_agg("SELECT arr_i64 FROM array_test WHERE arr_i64[1] = 200;", dt),
+        std::vector<int64_t>({200, 300, 400}));
+    compare_array(
+        run_simple_agg("SELECT arr_str FROM array_test WHERE arr_str[1] = 'bb';", dt),
+        std::vector<std::string>({"bb", "cc", "dd"}));
+    // TODO(adb): Calcite is casting the column value to DOUBLE to do the comparison,
+    // which results in the comparison failing. Is this desired behavior or a bug? Adding
+    // the CAST below for now to test projection.
+    compare_array(
+        run_simple_agg(
+            "SELECT arr_float FROM array_test WHERE arr_float[1] = CAST(2.2 as FLOAT);",
+            dt),
+        std::vector<float>({2.2, 3.3, 4.4}));
+    compare_array(
+        run_simple_agg("SELECT arr_double FROM array_test WHERE arr_double[1] = 22.2;",
+                       dt),
+        std::vector<double>({22.2, 33.3, 44.4}));
+    compare_array(run_simple_agg(
+                      "SELECT arr_bool FROM array_test WHERE x < 9 AND arr_bool[1];", dt),
+                  std::vector<int64_t>({1, 0, 1, 0, 1, 0}));
+
+    compare_array(
+        run_simple_agg("SELECT arr3_i8 FROM array_test WHERE arr3_i8[1] = 2;", dt),
+        std::vector<int64_t>({2, 3, 4}));
+    compare_array(
+        run_simple_agg("SELECT arr3_i16 FROM array_test WHERE arr3_i16[1] = 2;", dt),
+        std::vector<int64_t>({2, 3, 4}));
+    compare_array(
+        run_simple_agg("SELECT arr3_i32 FROM array_test WHERE arr3_i32[1] = 20;", dt),
+        std::vector<int64_t>({20, 30, 40}));
+    compare_array(
+        run_simple_agg("SELECT arr3_i64 FROM array_test WHERE arr3_i64[1] = 200;", dt),
+        std::vector<int64_t>({200, 300, 400}));
+    compare_array(
+        run_simple_agg(
+            "SELECT arr3_float FROM array_test WHERE arr3_float[1] = CAST(2.2 AS FLOAT);",
+            dt),
+        std::vector<float>({2.2, 3.3, 4.4}));
+    compare_array(
+        run_simple_agg("SELECT arr3_double FROM array_test WHERE arr3_double[1] = 22.2;",
+                       dt),
+        std::vector<double>({22.2, 33.3, 44.4}));
+    compare_array(
+        run_simple_agg("SELECT arr6_bool FROM array_test WHERE x < 9 AND arr6_bool[1];",
+                       dt),
+        std::vector<int64_t>({1, 0, 1, 0, 1, 0}));
+  }
+}
+
 TEST(Select, FilterCastToDecimal) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -1096,8 +1189,6 @@ TEST(Select, CountDistinct) {
 }
 
 TEST(Select, ApproxCountDistinct) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT APPROX_COUNT_DISTINCT(x) FROM test;",
@@ -1153,13 +1244,14 @@ TEST(Select, ApproxCountDistinct) {
     c("SELECT AVG(z), APPROX_COUNT_DISTINCT(x) AS dx FROM test GROUP BY y HAVING dx > 1;",
       "SELECT AVG(z), COUNT(distinct x) AS dx FROM test GROUP BY y HAVING dx > 1;",
       dt);
-    c("SELECT approx_value, exact_value FROM (SELECT APPROX_COUNT_DISTINCT(x) AS "
-      "approx_value FROM test), (SELECT "
-      "COUNT(distinct x) AS exact_value FROM test);",
-      "SELECT approx_value, exact_value FROM (SELECT COUNT(distinct x) AS approx_value "
-      "FROM test), (SELECT "
-      "COUNT(distinct x) AS exact_value FROM test);",
-      dt);
+    SKIP_ON_AGGREGATOR(c(
+        "SELECT approx_value, exact_value FROM (SELECT APPROX_COUNT_DISTINCT(x) AS "
+        "approx_value FROM test), (SELECT "
+        "COUNT(distinct x) AS exact_value FROM test);",
+        "SELECT approx_value, exact_value FROM (SELECT COUNT(distinct x) AS approx_value "
+        "FROM test), (SELECT "
+        "COUNT(distinct x) AS exact_value FROM test);",
+        dt));
     c("SELECT APPROX_COUNT_DISTINCT(x, 1) FROM test;",
       "SELECT COUNT(distinct x) FROM test;",
       dt);
@@ -3284,7 +3376,7 @@ TEST(Select, UnsupportedCast) {
 TEST(Select, CastFromLiteral) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    SKIP_ON_AGGREGATOR(c("SELECT CAST(2.3 AS TINYINT) FROM test;", dt));
+    c("SELECT CAST(2.3 AS TINYINT) FROM test;", dt);
     c("SELECT CAST(2.3 AS SMALLINT) FROM test;", dt);
     c("SELECT CAST(2.3 AS INT) FROM test;", dt);
     c("SELECT CAST(2.3 AS BIGINT) FROM test;", dt);
@@ -3304,7 +3396,7 @@ TEST(Select, CastFromLiteral) {
 TEST(Select, CastFromNull) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    SKIP_ON_AGGREGATOR(c("SELECT CAST(NULL AS TINYINT) FROM test;", dt));
+    c("SELECT CAST(NULL AS TINYINT) FROM test;", dt);
     c("SELECT CAST(NULL AS SMALLINT) FROM test;", dt);
     c("SELECT CAST(NULL AS INT) FROM test;", dt);
     c("SELECT CAST(NULL AS BIGINT) FROM test;", dt);
@@ -3600,7 +3692,7 @@ void import_array_test(const std::string& table_name) {
   auto& cat = g_session->get_catalog();
   const auto td = cat.getMetadataForTable(table_name);
   CHECK(td);
-  Importer_NS::Loader loader(cat, td);
+  auto loader = std::make_unique<Importer_NS::Loader>(cat, td);
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
   const auto col_descs =
       cat.getAllColumnMetadataForTable(td->tableId, false, false, false);
@@ -3693,7 +3785,7 @@ void import_array_test(const std::string& table_name) {
       }
     }
   }
-  loader.load(import_buffers, g_array_test_row_count);
+  loader->load(import_buffers, g_array_test_row_count);
 }
 
 template <typename T>
@@ -4902,8 +4994,6 @@ TEST(Select, Joins_FilterPushDown) {
 }
 
 TEST(Select, Joins_InnerJoin_TwoTables) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM test a JOIN single_row_test b ON a.x = b.x;", dt);
@@ -4911,16 +5001,19 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
     c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x;", dt);
     c("SELECT a.y, z FROM test a JOIN test_inner b ON a.x = b.x order by a.y;", dt);
     c("SELECT COUNT(*) FROM test a JOIN join_test b ON a.str = b.dup_str;", dt);
-    c("SELECT COUNT(*) FROM test_inner_x a JOIN test_x b ON a.x = b.x;", dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test_inner_x a JOIN test_x b ON a.x = b.x;", dt));
     c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str ORDER BY a.x;", dt);
-    c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x ORDER BY a.x;", dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x ORDER BY a.x;", dt));
 
     c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str GROUP BY a.x ORDER "
       "BY a.x;",
       dt);
-    c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x GROUP BY a.x ORDER BY "
-      "a.x;",
-      dt);
+    SKIP_ON_AGGREGATOR(c(
+        "SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x GROUP BY a.x ORDER BY "
+        "a.x;",
+        dt));
     c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x AND test.rowid "
       "= test_inner.rowid;",
       dt);
@@ -4931,6 +5024,7 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
       "(test.str IS NULL AND "
       "join_test.dup_str IS NULL));",
       dt);
+
     SKIP_ON_AGGREGATOR(
         c("SELECT t1.fixed_null_str FROM (SELECT fixed_null_str, SUM(x) n1 FROM test "
           "GROUP BY fixed_null_str) t1 INNER "
