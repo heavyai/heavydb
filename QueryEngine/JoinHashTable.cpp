@@ -26,20 +26,24 @@
 #include <numeric>
 #include <thread>
 
-std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> normalize_column_pair(
-    const Analyzer::Expr* lhs,
-    const Analyzer::Expr* rhs,
-    const Catalog_Namespace::Catalog& cat,
-    const TemporaryTables* temporary_tables) {
+InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
+                                 const Analyzer::Expr* rhs,
+                                 const Catalog_Namespace::Catalog& cat,
+                                 const TemporaryTables* temporary_tables,
+                                 const bool is_overlaps_join) {
   const auto& lhs_ti = lhs->get_type_info();
   const auto& rhs_ti = rhs->get_type_info();
-  if (lhs_ti.get_type() != rhs_ti.get_type()) {
-    throw HashJoinFail("Equijoin types must be identical, found: " +
-                       lhs_ti.get_type_name() + ", " + rhs_ti.get_type_name());
+  if (!is_overlaps_join) {
+    if (lhs_ti.get_type() != rhs_ti.get_type()) {
+      throw HashJoinFail("Equijoin types must be identical, found: " +
+                         lhs_ti.get_type_name() + ", " + rhs_ti.get_type_name());
+    }
+    if (!lhs_ti.is_integer() && !lhs_ti.is_time() && !lhs_ti.is_string()) {
+      throw HashJoinFail("Cannot apply hash join to inner column type " +
+                         lhs_ti.get_type_name());
+    }
   }
-  if (!lhs_ti.is_integer() && !lhs_ti.is_time() && !lhs_ti.is_string()) {
-    throw HashJoinFail("Cannot apply hash join to " + lhs_ti.get_type_name());
-  }
+
   const auto lhs_cast = dynamic_cast<const Analyzer::UOper*>(lhs);
   const auto rhs_cast = dynamic_cast<const Analyzer::UOper*>(rhs);
   if (static_cast<bool>(lhs_cast) != static_cast<bool>(rhs_cast) ||
@@ -94,17 +98,70 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> normalize_column_pa
                                                  inner_col->get_table_id(),
                                                  inner_col_cd,
                                                  temporary_tables);
-  const auto& outer_col_ti = outer_col ? outer_col->get_type_info() : outer_ti;
-  if (outer_col_ti.get_notnull() != inner_col_real_ti.get_notnull()) {
+  const auto& outer_col_ti =
+      !(dynamic_cast<const Analyzer::FunctionOper*>(lhs)) && outer_col
+          ? outer_col->get_type_info()
+          : outer_ti;
+  if (!is_overlaps_join &&
+      outer_col_ti.get_notnull() != inner_col_real_ti.get_notnull()) {
     throw HashJoinFail("For hash join, both sides must have the same nullability");
   }
-  if (!(inner_col_real_ti.is_integer() || inner_col_real_ti.is_time() ||
-        (inner_col_real_ti.is_string() &&
-         inner_col_real_ti.get_compression() == kENCODING_DICT))) {
-    throw HashJoinFail(
-        "Can only apply hash join to integer-like types and dictionary encoded strings");
+  if (is_overlaps_join) {
+    if (!inner_col_real_ti.is_array()) {
+      throw HashJoinFail(
+          "Overlaps join only supported for inner columns with array type");
+    }
+    if (!(inner_col_real_ti.is_fixlen_array() && inner_col_real_ti.get_size() == 32)) {
+      throw HashJoinFail(
+          "Overlaps join only supported for 4-element double fixed length arrays");
+    }
+    if (!(outer_col_ti.get_type() == kPOINT)) {
+      throw HashJoinFail(
+          "Overlaps join only supported for geometry outer columns of type point");
+    }
+  } else {
+    if (!(inner_col_real_ti.is_integer() || inner_col_real_ti.is_time() ||
+          (inner_col_real_ti.is_string() &&
+           inner_col_real_ti.get_compression() == kENCODING_DICT))) {
+      throw HashJoinFail(
+          "Can only apply hash join to integer-like types and dictionary encoded "
+          "strings");
+    }
   }
   return {inner_col, outer_col ? outer_col : outer_expr};
+}
+
+std::vector<InnerOuter> normalize_column_pairs(const Analyzer::BinOper* condition,
+                                               const Catalog_Namespace::Catalog& cat,
+                                               const TemporaryTables* temporary_tables) {
+  std::vector<InnerOuter> result;
+  const auto lhs_tuple_expr =
+      dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_left_operand());
+  const auto rhs_tuple_expr =
+      dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_right_operand());
+
+  CHECK_EQ(static_cast<bool>(lhs_tuple_expr), static_cast<bool>(rhs_tuple_expr));
+  if (lhs_tuple_expr) {
+    const auto& lhs_tuple = lhs_tuple_expr->getTuple();
+    const auto& rhs_tuple = rhs_tuple_expr->getTuple();
+    CHECK_EQ(lhs_tuple.size(), rhs_tuple.size());
+    for (size_t i = 0; i < lhs_tuple.size(); ++i) {
+      result.push_back(normalize_column_pair(lhs_tuple[i].get(),
+                                             rhs_tuple[i].get(),
+                                             cat,
+                                             temporary_tables,
+                                             condition->is_overlaps_oper()));
+    }
+  } else {
+    CHECK(!lhs_tuple_expr && !rhs_tuple_expr);
+    result.push_back(normalize_column_pair(condition->get_left_operand(),
+                                           condition->get_right_operand(),
+                                           cat,
+                                           temporary_tables,
+                                           condition->is_overlaps_oper()));
+  }
+
+  return result;
 }
 
 namespace {
@@ -804,8 +861,8 @@ void JoinHashTable::initHashTableForDevice(
   const auto shard_count = shardCount();
   const size_t entries_per_shard{
       shard_count ? get_entries_per_shard(hash_entry_count, shard_count) : 0};
-  // Even if we join on dictionary encoded strings, the memory on the GPU is still needed
-  // once the join hash table has been built on the CPU.
+  // Even if we join on dictionary encoded strings, the memory on the GPU is still
+  // needed once the join hash table has been built on the CPU.
   const auto catalog = executor_->getCatalog();
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
     auto& data_mgr = catalog->get_dataMgr();
@@ -946,8 +1003,8 @@ void JoinHashTable::initOneToManyHashTable(
   const auto shard_count = get_shard_count(qual_bin_oper_.get(), ra_exe_unit_, executor_);
   const size_t entries_per_shard =
       (shard_count ? get_entries_per_shard(hash_entry_count, shard_count) : 0);
-  // Even if we join on dictionary encoded strings, the memory on the GPU is still needed
-  // once the join hash table has been built on the CPU.
+  // Even if we join on dictionary encoded strings, the memory on the GPU is still
+  // needed once the join hash table has been built on the CPU.
   if (memory_level_ == Data_Namespace::GPU_LEVEL && shard_count) {
     const auto shards_per_device = (shard_count + device_count_ - 1) / device_count_;
     CHECK_GT(shards_per_device, 0);
@@ -1345,6 +1402,22 @@ const InputTableInfo& get_inner_query_info(
   return query_infos[ti_idx];
 }
 
+size_t get_entries_per_device(const size_t total_entries,
+                              const size_t shard_count,
+                              const size_t device_count,
+                              const Data_Namespace::MemoryLevel memory_level) {
+  const auto entries_per_shard =
+      shard_count ? (total_entries + shard_count - 1) / shard_count : total_entries;
+  size_t entries_per_device = entries_per_shard;
+  if (memory_level == Data_Namespace::GPU_LEVEL && shard_count) {
+    const auto shards_per_device = (shard_count + device_count - 1) / device_count;
+    CHECK_GT(shards_per_device, 0);
+    entries_per_device = entries_per_shard * shards_per_device;
+  }
+  return entries_per_device;
+}
+
+// TODO(adb): unify with BaselineJoinHashTable
 size_t JoinHashTable::shardCount() const {
   return memory_level_ == Data_Namespace::GPU_LEVEL
              ? get_shard_count(qual_bin_oper_.get(), ra_exe_unit_, executor_)

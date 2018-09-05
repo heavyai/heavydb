@@ -48,6 +48,8 @@ extern bool g_multi_subquery_exc;
 extern int g_test_against_columnId_gap;
 extern bool g_enable_smem_group_by;
 
+extern bool g_enable_overlaps_hashjoin;
+
 namespace {
 
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
@@ -4335,6 +4337,38 @@ void import_geospatial_test() {
                          linestring,
                          poly),
                      ExecutorDeviceType::CPU);
+  }
+}
+
+void import_geospatial_join_test(const bool replicate_inner_table = false) {
+  // Create a single fragment inner table that is half the size of the geospatial_test
+  // (outer) table
+  const std::string geospatial_test("DROP TABLE IF EXISTS geospatial_inner_join_test;");
+  run_ddl_statement(geospatial_test);
+  constexpr char create_ddl[] = R"(CREATE TABLE geospatial_inner_join_test (
+        id INT,
+        p POINT,
+        l LINESTRING,
+        poly POLYGON,
+        mpoly MULTIPOLYGON
+      ) WITH (fragment_size=20); 
+  )";
+  run_ddl_statement(create_ddl);
+  ValuesGenerator gen("geospatial_inner_join_test");
+  for (ssize_t i = 0; i < g_num_rows; i += 2) {
+    const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) +
+                            ")'"};
+    const std::string linestring{
+        "'LINESTRING(" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " +
+        std::to_string(2 * i) +
+        ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1))
+                 : "") +
+        ")'"};
+    const std::string poly{"'POLYGON((0 0, " + std::to_string(i + 1) + " 0, 0 " +
+                           std::to_string(i + 1) + ", 0 0))'"};
+    const std::string mpoly{"'MULTIPOLYGON(((0 0, " + std::to_string(i + 1) + " 0, 0 " +
+                            std::to_string(i + 1) + ", 0 0)))'"};
+    run_multiple_agg(gen(i, point, linestring, poly, mpoly), ExecutorDeviceType::CPU);
   }
 }
 
@@ -10914,6 +10948,53 @@ TEST(Select, GeoSpatial_Projection) {
   }
 }
 
+TEST(Select, GeoSpatial_GeoJoin) {
+  if (!g_enable_overlaps_hashjoin) {
+    return;
+  }
+  SKIP_ALL_ON_AGGREGATOR();  // TODO(adb): if we replicate the poly table during table
+                             // creation we should be able to lift this constraint
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
+            "b ON ST_Contains(b.poly, a.p) WHERE b.id = 2;",
+            dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(2),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM geospatial_test a INNER JOIN "
+            "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p) WHERE b.id = 4",
+            dt)));
+    // re-run to test hash join cache (currently CPU only)
+    ASSERT_EQ(
+        static_cast<int64_t>(2),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM geospatial_test a INNER JOIN "
+            "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p) WHERE b.id = 4",
+            dt)));
+
+    // with compression
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
+            "b ON ST_Contains(b.poly, a.gp4326) WHERE b.id = 2;",
+            dt)));
+
+    ASSERT_EQ(
+        static_cast<int64_t>(2),
+        v<int64_t>(run_simple_agg("SELECT count(*) FROM geospatial_test a INNER JOIN "
+                                  "geospatial_inner_join_test b ON ST_Contains(b.poly, "
+                                  "a.gp4326) WHERE b.id = 4;",
+                                  dt)));
+  }
+}
+
 TEST(Rounding, ROUND) {
   SKIP_ALL_ON_AGGREGATOR();
 
@@ -11778,6 +11859,11 @@ int create_and_populate_tables(bool with_delete_support = true) {
     return -EEXIST;
   }
   try {
+    import_geospatial_join_test(g_aggregator);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'geospatial_inner_join_test'";
+  }
+  try {
     const std::string drop_old_empty{"DROP TABLE IF EXISTS emptytab;"};
     run_ddl_statement(drop_old_empty);
     g_sqlite_comparator.query(drop_old_empty);
@@ -12061,6 +12147,12 @@ int main(int argc, char** argv) {
                          ->default_value(g_enable_columnar_output)
                          ->implicit_value(true),
                      "Enable/disable using columnar output format.");
+  desc.add_options()("enable-overlaps-hashjoin",
+                     po::value<bool>(&g_enable_overlaps_hashjoin)
+                         ->default_value(g_enable_overlaps_hashjoin)
+                         ->implicit_value(true),
+                     "Enable the overlaps hash join framework allowing for range "
+                     "join (e.g. spatial overlaps) computation using a hash table");
   desc.add_options()("keep-data", "Don't drop tables at the end of the tests");
   desc.add_options()(
       "use-existing-data",

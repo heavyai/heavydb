@@ -28,6 +28,9 @@
 #include <stdint.h>
 #include <vector>
 
+struct GenericKeyHandler;
+struct OverlapsKeyHandler;
+
 const size_t g_maximum_conditions_to_coalesce{8};
 
 void init_hash_join_buff(int32_t* buff,
@@ -86,6 +89,11 @@ struct JoinColumnTypeInfo {
   bool uses_bw_eq;
   int64_t translated_null_val;
   bool is_unsigned;
+};
+
+struct JoinBucketInfo {
+  std::vector<double> bucket_sizes_for_dimension;
+  bool is_double;  // TODO(adb): assume float otherwise (?)
 };
 
 int fill_hash_join_buff(int32_t* buff,
@@ -157,53 +165,77 @@ void fill_one_to_many_hash_table_on_device_sharded(int32_t* buff,
                                                    const size_t block_size_x,
                                                    const size_t grid_size_x);
 
-int fill_baseline_hash_join_buff_32(
-    int8_t* hash_buff,
-    const size_t entry_count,
-    const int32_t invalid_slot_val,
-    const size_t key_component_count,
-    const bool with_val_slot,
-    const std::vector<JoinColumn>& join_column_per_key,
-    const std::vector<JoinColumnTypeInfo>& type_info_per_key,
-    const std::vector<const void*>& sd_inner_proxy_per_key,
-    const std::vector<const void*>& sd_outer_proxy_per_key,
-    const int32_t cpu_thread_idx,
-    const int32_t cpu_thread_count);
+int fill_baseline_hash_join_buff_32(int8_t* hash_buff,
+                                    const size_t entry_count,
+                                    const int32_t invalid_slot_val,
+                                    const size_t key_component_count,
+                                    const bool with_val_slot,
+                                    const GenericKeyHandler* key_handler,
+                                    const size_t num_elems,
+                                    const int32_t cpu_thread_idx,
+                                    const int32_t cpu_thread_count);
 
-int fill_baseline_hash_join_buff_64(
-    int8_t* hash_buff,
-    const size_t entry_count,
-    const int32_t invalid_slot_val,
-    const size_t key_component_count,
-    const bool with_val_slot,
-    const std::vector<JoinColumn>& join_column_per_key,
-    const std::vector<JoinColumnTypeInfo>& type_info_per_key,
-    const std::vector<const void*>& sd_inner_proxy_per_key,
-    const std::vector<const void*>& sd_outer_proxy_per_key,
-    const int32_t cpu_thread_idx,
-    const int32_t cpu_thread_count);
+int overlaps_fill_baseline_hash_join_buff_32(int8_t* hash_buff,
+                                             const size_t entry_count,
+                                             const int32_t invalid_slot_val,
+                                             const size_t key_component_count,
+                                             const bool with_val_slot,
+                                             const OverlapsKeyHandler* key_handler,
+                                             const size_t num_elems,
+                                             const int32_t cpu_thread_idx,
+                                             const int32_t cpu_thread_count);
 
-void fill_baseline_hash_join_buff_on_device_32(
+int fill_baseline_hash_join_buff_64(int8_t* hash_buff,
+                                    const size_t entry_count,
+                                    const int32_t invalid_slot_val,
+                                    const size_t key_component_count,
+                                    const bool with_val_slot,
+                                    const GenericKeyHandler* key_handler,
+                                    const size_t num_elems,
+                                    const int32_t cpu_thread_idx,
+                                    const int32_t cpu_thread_count);
+
+int overlaps_fill_baseline_hash_join_buff_64(int8_t* hash_buff,
+                                             const size_t entry_count,
+                                             const int32_t invalid_slot_val,
+                                             const size_t key_component_count,
+                                             const bool with_val_slot,
+                                             const OverlapsKeyHandler* key_handler,
+                                             const size_t num_elems,
+                                             const int32_t cpu_thread_idx,
+                                             const int32_t cpu_thread_count);
+
+void fill_baseline_hash_join_buff_on_device_32(int8_t* hash_buff,
+                                               const size_t entry_count,
+                                               const int32_t invalid_slot_val,
+                                               const size_t key_component_count,
+                                               const bool with_val_slot,
+                                               int* dev_err_buff,
+                                               const GenericKeyHandler* key_handler,
+                                               const size_t num_elems,
+                                               const size_t block_size_x,
+                                               const size_t grid_size_x);
+
+void fill_baseline_hash_join_buff_on_device_64(int8_t* hash_buff,
+                                               const size_t entry_count,
+                                               const int32_t invalid_slot_val,
+                                               const size_t key_component_count,
+                                               const bool with_val_slot,
+                                               int* dev_err_buff,
+                                               const GenericKeyHandler* key_handler,
+                                               const size_t num_elems,
+                                               const size_t block_size_x,
+                                               const size_t grid_size_x);
+
+void overlaps_fill_baseline_hash_join_buff_on_device_64(
     int8_t* hash_buff,
     const size_t entry_count,
     const int32_t invalid_slot_val,
     const size_t key_component_count,
     const bool with_val_slot,
     int* dev_err_buff,
-    const JoinColumn* join_column_per_key,
-    const JoinColumnTypeInfo* type_info_per_key,
-    const size_t block_size_x,
-    const size_t grid_size_x);
-
-void fill_baseline_hash_join_buff_on_device_64(
-    int8_t* hash_buff,
-    const size_t entry_count,
-    const int32_t invalid_slot_val,
-    const size_t key_component_count,
-    const bool with_val_slot,
-    int* dev_err_buff,
-    const JoinColumn* join_column_per_key,
-    const JoinColumnTypeInfo* type_info_per_key,
+    const OverlapsKeyHandler* key_handler,
+    const size_t num_elems,
     const size_t block_size_x,
     const size_t grid_size_x);
 
@@ -215,6 +247,7 @@ void fill_one_to_many_baseline_hash_table_32(
     const size_t key_component_count,
     const std::vector<JoinColumn>& join_column_per_key,
     const std::vector<JoinColumnTypeInfo>& type_info_per_key,
+    const std::vector<JoinBucketInfo>& join_bucket_info,
     const std::vector<const void*>& sd_inner_proxy_per_key,
     const std::vector<const void*>& sd_outer_proxy_per_key,
     const int32_t cpu_thread_count);
@@ -227,6 +260,7 @@ void fill_one_to_many_baseline_hash_table_64(
     const size_t key_component_count,
     const std::vector<JoinColumn>& join_column_per_key,
     const std::vector<JoinColumnTypeInfo>& type_info_per_key,
+    const std::vector<JoinBucketInfo>& join_bucket_info,
     const std::vector<const void*>& sd_inner_proxy_per_key,
     const std::vector<const void*>& sd_outer_proxy_per_key,
     const int32_t cpu_thread_count);
@@ -237,8 +271,8 @@ void fill_one_to_many_baseline_hash_table_on_device_32(
     const size_t hash_entry_count,
     const int32_t invalid_slot_val,
     const size_t key_component_count,
-    const JoinColumn* join_column_per_key,
-    const JoinColumnTypeInfo* type_info_per_key,
+    const GenericKeyHandler* key_handler,
+    const size_t num_elems,
     const size_t block_size_x,
     const size_t grid_size_x);
 
@@ -247,9 +281,18 @@ void fill_one_to_many_baseline_hash_table_on_device_64(
     const int64_t* composite_key_dict,
     const size_t hash_entry_count,
     const int32_t invalid_slot_val,
-    const size_t key_component_count,
-    const JoinColumn* join_column_per_key,
-    const JoinColumnTypeInfo* type_info_per_key,
+    const GenericKeyHandler* key_handler,
+    const size_t num_elems,
+    const size_t block_size_x,
+    const size_t grid_size_x);
+
+void overlaps_fill_one_to_many_baseline_hash_table_on_device_64(
+    int32_t* buff,
+    const int64_t* composite_key_dict,
+    const size_t hash_entry_count,
+    const int32_t invalid_slot_val,
+    const OverlapsKeyHandler* key_handler,
+    const size_t num_elems,
     const size_t block_size_x,
     const size_t grid_size_x);
 
@@ -260,12 +303,40 @@ void approximate_distinct_tuples(uint8_t* hll_buffer_all_cpus,
                                  const std::vector<JoinColumnTypeInfo>& type_info_per_key,
                                  const int thread_count);
 
+void approximate_distinct_tuples_overlaps(
+    uint8_t* hll_buffer_all_cpus,
+    std::vector<int32_t>& row_counts,
+    const uint32_t b,
+    const size_t padded_size_bytes,
+    const std::vector<JoinColumn>& join_column_per_key,
+    const std::vector<JoinColumnTypeInfo>& type_info_per_key,
+    const std::vector<JoinBucketInfo>& join_buckets_per_key,
+    const int thread_count);
+
 void approximate_distinct_tuples_on_device(uint8_t* hll_buffer,
                                            const uint32_t b,
-                                           const size_t padded_size_bytes,
-                                           const JoinColumn* join_column_per_key,
-                                           const JoinColumnTypeInfo* type_info_per_key,
+                                           const GenericKeyHandler* key_handler,
+                                           const size_t num_elems,
                                            const size_t block_size_x,
                                            const size_t grid_size_x);
+
+void approximate_distinct_tuples_on_device_overlaps(uint8_t* hll_buffer,
+                                                    const uint32_t b,
+                                                    int32_t* row_counts_buffer,
+                                                    const OverlapsKeyHandler* key_handler,
+                                                    const size_t num_elems,
+                                                    const size_t block_size_x,
+                                                    const size_t grid_size_x);
+
+void compute_bucket_sizes(std::vector<double>& bucket_sizes_for_dimension,
+                          const JoinColumn& join_column,
+                          const double bucket_size_threshold,
+                          const int thread_count);
+
+void compute_bucket_sizes_on_device(double* bucket_sizes_buffer,
+                                    const JoinColumn* join_column_for_key,
+                                    const double bucket_sz_threshold,
+                                    const size_t block_size_x,
+                                    const size_t grid_size_x);
 
 #endif  // QUERYENGINE_HASHJOINRUNTIME_H

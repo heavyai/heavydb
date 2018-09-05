@@ -509,6 +509,13 @@ DEVICE ALWAYS_INLINE bool box_contains_point(double* bounds,
           tol_le(py, bounds[3]));
 }
 
+EXTENSION_NOINLINE bool Point_Overlaps_Box(double* bounds,
+                                           int64_t bounds_size,
+                                           double px,
+                                           double py) {
+  return box_contains_point(bounds, bounds_size, px, py);
+}
+
 DEVICE ALWAYS_INLINE bool box_contains_box(double* bounds1,
                                            int64_t bounds1_size,
                                            double* bounds2,

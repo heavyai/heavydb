@@ -51,6 +51,7 @@ set(query_engine_source_files
     NativeCodegen.cpp
     NvidiaKernel.cpp
     OutputBufferInitialization.cpp
+    OverlapsJoinHashTable.cpp
     QueryPhysicalInputsCollector.cpp
     QueryRewrite.cpp
     QueryTemplateGenerator.cpp

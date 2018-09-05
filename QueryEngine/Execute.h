@@ -83,6 +83,9 @@ extern float g_filter_push_down_low_frac;
 extern float g_filter_push_down_high_frac;
 extern size_t g_filter_push_down_passing_row_ubound;
 extern bool g_enable_columnar_output;
+extern bool g_enable_overlaps_hashjoin;
+extern double g_overlaps_hashjoin_bucket_threshold;
+
 class ExecutionResult;
 
 class WatchdogException : public std::runtime_error {
@@ -537,6 +540,11 @@ class Executor {
                           const SQLTypeInfo&,
                           const Analyzer::Expr*,
                           const CompilationOptions&);
+  llvm::Value* codegenOverlaps(const SQLOps,
+                               const SQLQualifier,
+                               const std::shared_ptr<Analyzer::Expr>,
+                               const std::shared_ptr<Analyzer::Expr>,
+                               const CompilationOptions&);
   llvm::Value* codegenStrCmp(const SQLOps,
                              const SQLQualifier,
                              const std::shared_ptr<Analyzer::Expr>,
@@ -1622,6 +1630,7 @@ class Executor {
   static const int32_t ERR_STRING_CONST_IN_RESULTSET{13};
   static const int32_t ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY{14};
   friend class BaselineJoinHashTable;
+  friend class OverlapsJoinHashTable;
   friend class GroupByAndAggregate;
   friend class QueryMemoryDescriptor;
   friend class QueryFragmentDescriptor;

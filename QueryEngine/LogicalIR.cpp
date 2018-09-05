@@ -57,12 +57,18 @@ bool should_defer_eval(const std::shared_ptr<Analyzer::Expr> expr) {
   if (std::dynamic_pointer_cast<Analyzer::RegexpExpr>(expr)) {
     return true;
   }
+  if (std::dynamic_pointer_cast<Analyzer::FunctionOper>(expr)) {
+    return true;
+  }
   if (!std::dynamic_pointer_cast<Analyzer::BinOper>(expr)) {
     return false;
   }
   const auto bin_expr = std::static_pointer_cast<Analyzer::BinOper>(expr);
   if (contains_unsafe_division(bin_expr.get())) {
     return true;
+  }
+  if (bin_expr->is_overlaps_oper()) {
+    return false;
   }
   const auto rhs = bin_expr->get_right_operand();
   return rhs->get_type_info().is_array();

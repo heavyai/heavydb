@@ -25,6 +25,7 @@
 #include "InPlaceSort.h"
 #include "JsonAccessors.h"
 #include "OutputBufferInitialization.h"
+#include "OverlapsJoinHashTable.h"
 #include "QueryFragmentDescriptor.h"
 #include "QueryRewrite.h"
 #include "QueryTemplateGenerator.h"
@@ -75,6 +76,8 @@ float g_filter_push_down_high_frac{-1.0f};
 size_t g_filter_push_down_passing_row_ubound{0};
 bool g_multi_subquery_exc{true};
 bool g_enable_columnar_output{false};
+bool g_enable_overlaps_hashjoin{false};
+double g_overlaps_hashjoin_bucket_threshold{0.1};
 
 Executor::Executor(const int db_id,
                    const size_t block_size_x,
@@ -1550,10 +1553,15 @@ bool Executor::skipFragmentPair(
   if (!join_condition) {
     return false;
   }
+  // TODO(adb): support fragment skipping based on the overlaps operator
+  if (join_condition->is_overlaps_oper()) {
+    return false;
+  }
   size_t shard_count{0};
   if (dynamic_cast<const Analyzer::ExpressionTuple*>(
           join_condition->get_left_operand())) {
-    shard_count = get_baseline_shard_count(join_condition, ra_exe_unit, this);
+    shard_count = BaselineJoinHashTable::getShardCountForCondition(
+        join_condition, ra_exe_unit, this);
   } else {
     shard_count = get_shard_count(join_condition, ra_exe_unit, this);
   }
@@ -2548,9 +2556,22 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount()
                                : 1;
   CHECK_GT(device_count, 0);
+  if (!g_enable_overlaps_hashjoin && qual_bin_oper->is_overlaps_oper()) {
+    return {nullptr, "Overlaps hash join disabled, attempting to fall back to loop join"};
+  }
   try {
-    if (dynamic_cast<const Analyzer::ExpressionTuple*>(
-            qual_bin_oper->get_left_operand())) {
+    if (qual_bin_oper->is_overlaps_oper()) {
+      OOM_TRACE_PUSH();
+      join_hash_table = OverlapsJoinHashTable::getInstance(qual_bin_oper,
+                                                           query_infos,
+                                                           ra_exe_unit,
+                                                           memory_level,
+                                                           device_count,
+                                                           visited_tables,
+                                                           column_cache,
+                                                           this);
+    } else if (dynamic_cast<const Analyzer::ExpressionTuple*>(
+                   qual_bin_oper->get_left_operand())) {
       OOM_TRACE_PUSH();
       join_hash_table = BaselineJoinHashTable::getInstance(qual_bin_oper,
                                                            query_infos,

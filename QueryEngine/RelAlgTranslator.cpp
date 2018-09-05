@@ -802,6 +802,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
       return date_minus;
     }
   }
+  if (sql_op == kOVERLAPS) {
+    return translateOverlapsOper(rex_operator);
+  }
   auto lhs = translateScalarRex(rex_operator->getOperand(0));
   for (size_t i = 1; i < rex_operator->size(); ++i) {
     std::shared_ptr<Analyzer::Expr> rhs;
@@ -815,6 +818,21 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
     lhs = Parser::OperExpr::normalize(sql_op, sql_qual, lhs, rhs);
   }
   return lhs;
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOverlapsOper(
+    const RexOperator* rex_operator) const {
+  const auto sql_op = rex_operator->getOperator();
+  CHECK(sql_op == kOVERLAPS);
+
+  const auto lhs = translateScalarRex(rex_operator->getOperand(0));
+  const auto lhs_ti = lhs->get_type_info();
+  if (lhs_ti.is_geometry()) {
+    return translateGeoOverlapsOper(rex_operator);
+  } else {
+    throw std::runtime_error(
+        "Overlaps equivalence is currently only supported for geospatial types");
+  }
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCase(
@@ -1385,11 +1403,12 @@ Analyzer::ExpressionPtrVector RelAlgTranslator::translateFunctionArgs(
 QualsConjunctiveForm qual_to_conjunctive_form(
     const std::shared_ptr<Analyzer::Expr> qual_expr) {
   CHECK(qual_expr);
-  const auto bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(qual_expr);
+  auto bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(qual_expr);
   if (!bin_oper) {
     const auto rewritten_qual_expr = rewrite_expr(qual_expr.get());
     return {{}, {rewritten_qual_expr ? rewritten_qual_expr : qual_expr}};
   }
+
   if (bin_oper->get_optype() == kAND) {
     const auto lhs_cf = qual_to_conjunctive_form(bin_oper->get_own_left_operand());
     const auto rhs_cf = qual_to_conjunctive_form(bin_oper->get_own_right_operand());

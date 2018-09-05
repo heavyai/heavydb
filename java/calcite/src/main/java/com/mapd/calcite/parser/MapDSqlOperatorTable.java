@@ -100,19 +100,19 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   }
 
   /**
-   * Mock operator table for testing purposes. Contains the standard SQL
-   * operator table, plus a list of operators.
+   * Mock operator table for testing purposes. Contains the standard SQL operator
+   * table, plus a list of operators.
    */
-  //~ Instance fields --------------------------------------------------------
+  // ~ Instance fields --------------------------------------------------------
   private final ListSqlOperatorTable listOpTab;
 
-  //~ Constructors -----------------------------------------------------------
+  // ~ Constructors -----------------------------------------------------------
   public MapDSqlOperatorTable(SqlOperatorTable parentTable) {
     super(ImmutableList.of(parentTable, new CaseInsensitiveListSqlOperatorTable()));
     listOpTab = (ListSqlOperatorTable) tableList.get(1);
   }
 
-  //~ Methods ----------------------------------------------------------------
+  // ~ Methods ----------------------------------------------------------------
   /**
    * Adds an operator to this table.
    *

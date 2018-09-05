@@ -319,6 +319,8 @@ declare i64 @baseline_hash_join_idx_32(i8*, i8*, i64, i64);
 declare i64 @baseline_hash_join_idx_64(i8*, i8*, i64, i64);
 declare i64 @get_composite_key_index_32(i32*, i64, i32*, i64);
 declare i64 @get_composite_key_index_64(i64*, i64, i64*, i64);
+declare i64 @get_bucket_key_for_range_compressed(i8*, i64, double);
+declare i64 @get_bucket_key_for_range_double(i8*, i64, double);
 declare i64 @agg_count_shared(i64*, i64);
 declare i64 @agg_count_skip_val_shared(i64*, i64, i64);
 declare i32 @agg_count_int32_shared(i32*, i32);

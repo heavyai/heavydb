@@ -917,3 +917,32 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunctionWithGeoArg(
   CHECK(false);
   return nullptr;
 }
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoOverlapsOper(
+    const RexOperator* rex_operator) const {
+  CHECK_EQ(rex_operator->size(), 2);
+
+  auto translate_input =
+      [&](const RexScalar* operand) -> std::shared_ptr<Analyzer::Expr> {
+    const auto input = dynamic_cast<const RexInput*>(operand);
+    CHECK(input);
+
+    SQLTypeInfo ti;
+    const auto exprs = translateGeoColumn(input, ti, true, false, false);
+    CHECK_GT(exprs.size(), 0);
+    if (ti.get_type() == kPOINT) {
+      return exprs.front();
+    } else {
+      return exprs.back();
+    }
+  };
+
+  SQLQualifier sql_qual{kONE};
+  SQLOps sql_op{kOVERLAPS};
+  return makeExpr<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, false),
+                                     false,
+                                     sql_op,
+                                     sql_qual,
+                                     translate_input(rex_operator->getOperand(1)),
+                                     translate_input(rex_operator->getOperand(0)));
+}

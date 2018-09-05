@@ -154,27 +154,20 @@ void fill_one_to_many_hash_table_on_device_sharded(int32_t* buff,
       buff, hash_entry_count, invalid_slot_val, join_column, type_info, shard_info);
 }
 
-template <typename T>
-void fill_one_to_many_baseline_hash_table_on_device(
-    int32_t* buff,
-    const T* composite_key_dict,
-    const size_t hash_entry_count,
-    const int32_t invalid_slot_val,
-    const size_t key_component_count,
-    const JoinColumn* join_column_per_key,
-    const JoinColumnTypeInfo* type_info_per_key,
-    const size_t block_size_x,
-    const size_t grid_size_x) {
+template <typename T, typename KEY_HANDLER>
+void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
+                                                    const T* composite_key_dict,
+                                                    const size_t hash_entry_count,
+                                                    const int32_t invalid_slot_val,
+                                                    const KEY_HANDLER* key_handler,
+                                                    const size_t num_elems,
+                                                    const size_t block_size_x,
+                                                    const size_t grid_size_x) {
   auto pos_buff = buff;
   auto count_buff = buff + hash_entry_count;
   cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
-  count_matches_baseline_gpu<<<grid_size_x, block_size_x>>>(count_buff,
-                                                            composite_key_dict,
-                                                            hash_entry_count,
-                                                            invalid_slot_val,
-                                                            key_component_count,
-                                                            join_column_per_key,
-                                                            type_info_per_key);
+  count_matches_baseline_gpu<<<grid_size_x, block_size_x>>>(
+      count_buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
 
   set_valid_pos_flag<<<grid_size_x, block_size_x>>>(
       pos_buff, count_buff, hash_entry_count);
@@ -188,9 +181,8 @@ void fill_one_to_many_baseline_hash_table_on_device(
                                                            composite_key_dict,
                                                            hash_entry_count,
                                                            invalid_slot_val,
-                                                           key_component_count,
-                                                           join_column_per_key,
-                                                           type_info_per_key);
+                                                           key_handler,
+                                                           num_elems);
 }
 
 template <typename T>
@@ -230,41 +222,37 @@ void init_baseline_hash_join_buff_on_device_64(int8_t* hash_join_buff,
       hash_join_buff, entry_count, key_component_count, with_val_slot, invalid_slot_val);
 }
 
-template <typename T>
-__global__ void fill_baseline_hash_join_buff_wrapper(
-    int8_t* hash_buff,
-    const size_t entry_count,
-    const int32_t invalid_slot_val,
-    const size_t key_component_count,
-    const bool with_val_slot,
-    int* err,
-    const JoinColumn* join_column_per_key,
-    const JoinColumnTypeInfo* type_info_per_key) {
+template <typename T, typename KEY_HANDLER>
+__global__ void fill_baseline_hash_join_buff_wrapper(int8_t* hash_buff,
+                                                     const size_t entry_count,
+                                                     const int32_t invalid_slot_val,
+                                                     const size_t key_component_count,
+                                                     const bool with_val_slot,
+                                                     int* err,
+                                                     const KEY_HANDLER* key_handler,
+                                                     const size_t num_elems) {
   int partial_err = SUFFIX(fill_baseline_hash_join_buff)<T>(hash_buff,
                                                             entry_count,
                                                             invalid_slot_val,
                                                             key_component_count,
                                                             with_val_slot,
-                                                            join_column_per_key,
-                                                            type_info_per_key,
-                                                            nullptr,
-                                                            nullptr,
+                                                            key_handler,
+                                                            num_elems,
                                                             -1,
                                                             -1);
   atomicCAS(err, 0, partial_err);
 }
 
-void fill_baseline_hash_join_buff_on_device_32(
-    int8_t* hash_buff,
-    const size_t entry_count,
-    const int32_t invalid_slot_val,
-    const size_t key_component_count,
-    const bool with_val_slot,
-    int* dev_err_buff,
-    const JoinColumn* join_column_per_key,
-    const JoinColumnTypeInfo* type_info_per_key,
-    const size_t block_size_x,
-    const size_t grid_size_x) {
+void fill_baseline_hash_join_buff_on_device_32(int8_t* hash_buff,
+                                               const size_t entry_count,
+                                               const int32_t invalid_slot_val,
+                                               const size_t key_component_count,
+                                               const bool with_val_slot,
+                                               int* dev_err_buff,
+                                               const GenericKeyHandler* key_handler,
+                                               const size_t num_elems,
+                                               const size_t block_size_x,
+                                               const size_t grid_size_x) {
   fill_baseline_hash_join_buff_wrapper<int32_t>
       <<<grid_size_x, block_size_x>>>(hash_buff,
                                       entry_count,
@@ -272,19 +260,40 @@ void fill_baseline_hash_join_buff_on_device_32(
                                       key_component_count,
                                       with_val_slot,
                                       dev_err_buff,
-                                      join_column_per_key,
-                                      type_info_per_key);
+                                      key_handler,
+                                      num_elems);
 }
 
-void fill_baseline_hash_join_buff_on_device_64(
+void fill_baseline_hash_join_buff_on_device_64(int8_t* hash_buff,
+                                               const size_t entry_count,
+                                               const int32_t invalid_slot_val,
+                                               const size_t key_component_count,
+                                               const bool with_val_slot,
+                                               int* dev_err_buff,
+                                               const GenericKeyHandler* key_handler,
+                                               const size_t num_elems,
+                                               const size_t block_size_x,
+                                               const size_t grid_size_x) {
+  fill_baseline_hash_join_buff_wrapper<unsigned long long>
+      <<<grid_size_x, block_size_x>>>(hash_buff,
+                                      entry_count,
+                                      invalid_slot_val,
+                                      key_component_count,
+                                      with_val_slot,
+                                      dev_err_buff,
+                                      key_handler,
+                                      num_elems);
+}
+
+void overlaps_fill_baseline_hash_join_buff_on_device_64(
     int8_t* hash_buff,
     const size_t entry_count,
     const int32_t invalid_slot_val,
     const size_t key_component_count,
     const bool with_val_slot,
     int* dev_err_buff,
-    const JoinColumn* join_column_per_key,
-    const JoinColumnTypeInfo* type_info_per_key,
+    const OverlapsKeyHandler* key_handler,
+    const size_t num_elems,
     const size_t block_size_x,
     const size_t grid_size_x) {
   fill_baseline_hash_join_buff_wrapper<unsigned long long>
@@ -294,8 +303,8 @@ void fill_baseline_hash_join_buff_on_device_64(
                                       key_component_count,
                                       with_val_slot,
                                       dev_err_buff,
-                                      join_column_per_key,
-                                      type_info_per_key);
+                                      key_handler,
+                                      num_elems);
 }
 
 void fill_one_to_many_baseline_hash_table_on_device_32(
@@ -304,17 +313,16 @@ void fill_one_to_many_baseline_hash_table_on_device_32(
     const size_t hash_entry_count,
     const int32_t invalid_slot_val,
     const size_t key_component_count,
-    const JoinColumn* join_column_per_key,
-    const JoinColumnTypeInfo* type_info_per_key,
+    const GenericKeyHandler* key_handler,
+    const size_t num_elems,
     const size_t block_size_x,
     const size_t grid_size_x) {
   fill_one_to_many_baseline_hash_table_on_device<int32_t>(buff,
                                                           composite_key_dict,
                                                           hash_entry_count,
                                                           invalid_slot_val,
-                                                          key_component_count,
-                                                          join_column_per_key,
-                                                          type_info_per_key,
+                                                          key_handler,
+                                                          num_elems,
                                                           block_size_x,
                                                           grid_size_x);
 }
@@ -324,29 +332,69 @@ void fill_one_to_many_baseline_hash_table_on_device_64(
     const int64_t* composite_key_dict,
     const size_t hash_entry_count,
     const int32_t invalid_slot_val,
-    const size_t key_component_count,
-    const JoinColumn* join_column_per_key,
-    const JoinColumnTypeInfo* type_info_per_key,
+    const GenericKeyHandler* key_handler,
+    const size_t num_elems,
     const size_t block_size_x,
     const size_t grid_size_x) {
   fill_one_to_many_baseline_hash_table_on_device<int64_t>(buff,
                                                           composite_key_dict,
                                                           hash_entry_count,
                                                           invalid_slot_val,
-                                                          key_component_count,
-                                                          join_column_per_key,
-                                                          type_info_per_key,
+                                                          key_handler,
+                                                          num_elems,
                                                           block_size_x,
                                                           grid_size_x);
 }
 
+void overlaps_fill_one_to_many_baseline_hash_table_on_device_64(
+    int32_t* buff,
+    const int64_t* composite_key_dict,
+    const size_t hash_entry_count,
+    const int32_t invalid_slot_val,
+    const OverlapsKeyHandler* key_handler,
+    const size_t num_elems,
+    const size_t block_size_x,
+    const size_t grid_size_x) {
+  fill_one_to_many_baseline_hash_table_on_device<int64_t>(buff,
+                                                          composite_key_dict,
+                                                          hash_entry_count,
+                                                          invalid_slot_val,
+                                                          key_handler,
+                                                          num_elems,
+                                                          block_size_x,
+                                                          grid_size_x);
+}
+
+void approximate_distinct_tuples_on_device_overlaps(uint8_t* hll_buffer,
+                                                    const uint32_t b,
+                                                    int32_t* row_counts_buffer,
+                                                    const OverlapsKeyHandler* key_handler,
+                                                    const size_t num_elems,
+                                                    const size_t block_size_x,
+                                                    const size_t grid_size_x) {
+  approximate_distinct_tuples_impl_gpu<<<grid_size_x, block_size_x>>>(
+      hll_buffer, row_counts_buffer, b, num_elems, key_handler);
+
+  auto row_counts_buffer_ptr = thrust::device_pointer_cast(row_counts_buffer);
+  thrust::inclusive_scan(
+      row_counts_buffer_ptr, row_counts_buffer_ptr + num_elems, row_counts_buffer_ptr);
+}
+
 void approximate_distinct_tuples_on_device(uint8_t* hll_buffer,
                                            const uint32_t b,
-                                           const size_t padded_size_bytes,
-                                           const JoinColumn* join_column_per_key,
-                                           const JoinColumnTypeInfo* type_info_per_key,
+                                           const GenericKeyHandler* key_handler,
+                                           const size_t num_elems,
                                            const size_t block_size_x,
                                            const size_t grid_size_x) {
   approximate_distinct_tuples_impl_gpu<<<grid_size_x, block_size_x>>>(
-      hll_buffer, b, padded_size_bytes, join_column_per_key, type_info_per_key);
+      hll_buffer, nullptr, b, num_elems, key_handler);
+}
+
+void compute_bucket_sizes_on_device(double* bucket_sizes_buffer,
+                                    const JoinColumn* join_column,
+                                    const double bucket_sz_threshold,
+                                    const size_t block_size_x,
+                                    const size_t grid_size_x) {
+  compute_bucket_sizes_impl_gpu<2><<<grid_size_x, block_size_x>>>(
+      bucket_sizes_buffer, join_column, bucket_sz_threshold, block_size_x, grid_size_x);
 }

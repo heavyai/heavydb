@@ -302,11 +302,16 @@ bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
                                   const Executor* executor);
 
 // Swap the columns if needed and make the inner column the first component.
-std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> normalize_column_pair(
-    const Analyzer::Expr* lhs,
-    const Analyzer::Expr* rhs,
-    const Catalog_Namespace::Catalog& cat,
-    const TemporaryTables* temporary_tables);
+InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
+                                 const Analyzer::Expr* rhs,
+                                 const Catalog_Namespace::Catalog& cat,
+                                 const TemporaryTables* temporary_tables,
+                                 const bool is_overlaps_join = false);
+
+// Normalize each expression tuple
+std::vector<InnerOuter> normalize_column_pairs(const Analyzer::BinOper* condition,
+                                               const Catalog_Namespace::Catalog& cat,
+                                               const TemporaryTables* temporary_tables);
 
 std::deque<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
@@ -316,5 +321,10 @@ std::deque<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
 const InputTableInfo& get_inner_query_info(
     const int inner_table_id,
     const std::vector<InputTableInfo>& query_infos);
+
+size_t get_entries_per_device(const size_t total_entries,
+                              const size_t shard_count,
+                              const size_t device_count,
+                              const Data_Namespace::MemoryLevel memory_level);
 
 #endif  // QUERYENGINE_JOINHASHTABLE_H

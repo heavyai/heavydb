@@ -19,9 +19,11 @@
 #include "../Shared/sqldefs.h"
 #include "DeepCopyVisitor.h"
 #include "Execute.h"
+#include "RelAlgTranslator.h"
 #include "ScalarExprVisitor.h"
 
 #include <glog/logging.h>
+#include <unordered_set>
 
 namespace {
 
@@ -647,6 +649,44 @@ Analyzer::ExpressionPtr rewrite_expr(const Analyzer::Expr* expr) {
         rewritten_expr, expr_with_likelihood->get_likelihood());
   }
   return rewritten_expr;
+}
+
+namespace {
+
+static const std::unordered_set<std::string> overlaps_supported_functions = {
+    "ST_Contains_MultiPolygon_Point",
+    "ST_Contains_Polygon_Point"};
+
+}  // namespace
+
+boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
+    const std::shared_ptr<Analyzer::Expr> expr) {
+  auto func_oper = dynamic_cast<Analyzer::FunctionOper*>(expr.get());
+  if (func_oper) {
+    // TODO(adb): consider converting unordered set to an unordered map, potentially
+    // storing the rewrite function we want to apply in the map
+    if (overlaps_supported_functions.find(func_oper->getName()) !=
+        overlaps_supported_functions.end()) {
+      CHECK_GE(func_oper->getArity(), size_t(3));
+
+      DeepCopyVisitor deep_copy_visitor;
+      auto lhs = func_oper->getOwnArg(2);
+      auto rewritten_lhs = deep_copy_visitor.visit(lhs.get());
+      CHECK(rewritten_lhs);
+
+      // Read the bounds arg from the ST_Contains FuncOper (second argument)instead of the
+      // poly column (first argument)
+      auto rhs = func_oper->getOwnArg(1);
+      auto rewritten_rhs = deep_copy_visitor.visit(rhs.get());
+      CHECK(rewritten_rhs);
+
+      auto overlaps_oper = makeExpr<Analyzer::BinOper>(
+          kBOOLEAN, kOVERLAPS, kONE, rewritten_lhs, rewritten_rhs);
+
+      return OverlapsJoinConjunction{{expr}, {overlaps_oper}};
+    }
+  }
+  return boost::none;
 }
 
 std::shared_ptr<Analyzer::Expr> fold_expr(const Analyzer::Expr* expr) {

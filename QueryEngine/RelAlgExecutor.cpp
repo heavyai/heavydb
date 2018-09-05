@@ -2234,8 +2234,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
                                         sort_info,
                                         0,
                                         query_features};
-  auto query_rewriter = std::make_unique<QueryRewriter>(exe_unit, query_infos, executor_);
-  const auto rewritten_exe_unit = query_rewriter->rewrite();
+  auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
+  const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
   const auto targets_meta =
       get_modify_manipulated_targets_meta(compound, rewritten_exe_unit.target_exprs);
   compound->setOutputMetainfo(targets_meta);
@@ -2303,8 +2303,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                         sort_info,
                                         0,
                                         query_features};
-  auto query_rewriter = std::make_unique<QueryRewriter>(exe_unit, query_infos, executor_);
-  const auto rewritten_exe_unit = query_rewriter->rewrite();
+  auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
+  const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
   const auto targets_meta = get_targets_meta(compound, rewritten_exe_unit.target_exprs);
   compound->setOutputMetainfo(targets_meta);
   return {rewritten_exe_unit,

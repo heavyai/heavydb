@@ -53,6 +53,8 @@ struct HashJoinMatchingSet {
   llvm::Value* slot;
 };
 
+using InnerOuter = std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>;
+
 class JoinHashTableInterface {
  public:
   virtual int64_t getJoinHashBuffer(const ExecutorDeviceType device_type,
@@ -67,10 +69,7 @@ class JoinHashTableInterface {
 
   virtual int getInnerTableRteIdx() const noexcept = 0;
 
-  enum class HashType {
-    OneToOne,
-    OneToMany,
-  };
+  enum class HashType { OneToOne, OneToMany };
 
   virtual HashType getHashType() const noexcept = 0;
 };

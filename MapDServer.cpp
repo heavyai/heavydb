@@ -463,6 +463,18 @@ int main(int argc, char** argv) {
                          "Upperbound on the number of rows that should pass the filter "
                          "if the selectivity is less than "
                          "the high fraction threshold.");
+  desc_adv.add_options()("enable-overlaps-hashjoin",
+                         po::value<bool>(&g_enable_overlaps_hashjoin)
+                             ->default_value(g_enable_overlaps_hashjoin)
+                             ->implicit_value(true),
+                         "Enable the overlaps hash join framework allowing for range "
+                         "join (e.g. spatial overlaps) computation using a hash table");
+  desc_adv.add_options()(
+      "overlaps-bucket-threshold",
+      po::value<double>(&g_overlaps_hashjoin_bucket_threshold)
+          ->default_value(g_overlaps_hashjoin_bucket_threshold),
+      "The minimum size of a bucket corresponding to a given inner table "
+      "range for the overlaps hash join");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);

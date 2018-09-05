@@ -77,6 +77,8 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateOper(const RexOperator*) const;
 
+  std::shared_ptr<Analyzer::Expr> translateOverlapsOper(const RexOperator*) const;
+
   std::shared_ptr<Analyzer::Expr> translateCase(const RexCase*) const;
 
   std::shared_ptr<Analyzer::Expr> translateLike(const RexFunctionOperator*) const;
@@ -126,6 +128,8 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateFunctionWithGeoArg(
       const RexFunctionOperator*) const;
+
+  std::shared_ptr<Analyzer::Expr> translateGeoOverlapsOper(const RexOperator*) const;
 
   std::vector<std::shared_ptr<Analyzer::Expr>> translateGeoFunctionArg(
       const RexScalar* rex_scalar,
