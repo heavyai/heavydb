@@ -32,6 +32,8 @@
 #include "SqlTypesLayout.h"
 #include "TypePunning.h"
 
+#include <utility>
+
 namespace {
 
 // Interprets ptr1, ptr2 as the sum and count pair used for AVG.
@@ -802,27 +804,130 @@ TargetValue build_array_target_value(const SQLTypeInfo& array_ti,
   return TargetValue(nullptr);
 }
 
-template <SQLTypes GEO_SOURCE_TYPE, typename... T>
-TargetValue build_geo_target_value(const SQLTypeInfo& geo_ti,
-                                   const ResultSet::GeoReturnType return_type,
-                                   T&&... vals) {
-  switch (return_type) {
-    case ResultSet::GeoReturnType::GeoTargetValue: {
-      return GeoReturnTypeTraits<ResultSet::GeoReturnType::GeoTargetValue,
-                                 GEO_SOURCE_TYPE>::GeoSerializerType::serialize(geo_ti,
-                                                                                vals...);
+template <class Tuple, size_t... indices>
+inline std::vector<std::pair<const int8_t*, const int64_t>> make_vals_vector(
+    std::index_sequence<indices...>,
+    const Tuple& tuple) {
+  return std::vector<std::pair<const int8_t*, const int64_t>>{
+      std::make_pair(std::get<2 * indices>(tuple), std::get<2 * indices + 1>(tuple))...};
+}
+
+inline std::unique_ptr<ArrayDatum> lazy_fetch_chunk(const int8_t* ptr,
+                                                    const int64_t varlen_ptr) {
+  auto ad = std::make_unique<ArrayDatum>();
+  bool is_end;
+  ChunkIter_get_nth(reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(ptr)),
+                    varlen_ptr,
+                    ad.get(),
+                    &is_end);
+  CHECK(!is_end);
+  return ad;
+}
+
+struct GeoLazyFetchHandler {
+  template <typename... T>
+  static inline auto fetch(T&&... vals) {
+    constexpr int num_vals = sizeof...(vals);
+    static_assert(
+        num_vals % 2 == 0,
+        "Must have consistent pointer/size pairs for lazy fetch of geo target values.");
+    const auto vals_vector = make_vals_vector(std::make_index_sequence<num_vals / 2>{},
+                                              std::make_tuple(vals...));
+    std::array<VarlenDatumPtr, num_vals / 2> ad_arr;
+    size_t ctr = 0;
+    for (const auto& col_pair : vals_vector) {
+      ad_arr[ctr++] = lazy_fetch_chunk(col_pair.first, col_pair.second);
     }
-    case ResultSet::GeoReturnType::WktString: {
-      return GeoReturnTypeTraits<ResultSet::GeoReturnType::WktString,
-                                 GEO_SOURCE_TYPE>::GeoSerializerType::serialize(geo_ti,
-                                                                                vals...);
-    }
-    default: {
-      CHECK(false);
-      return TargetValue(nullptr);
+    return ad_arr;
+  }
+};
+
+inline std::unique_ptr<ArrayDatum> fetch_data_from_gpu(int64_t varlen_ptr,
+                                                       const int64_t length,
+                                                       Data_Namespace::DataMgr* data_mgr,
+                                                       const int device_id) {
+  int8_t* cpu_buf = new int8_t[length];
+  copy_from_gpu(
+      data_mgr, cpu_buf, static_cast<CUdeviceptr>(varlen_ptr), length, device_id);
+  return std::make_unique<ArrayDatum>(length, cpu_buf, false);
+}
+
+struct GeoQueryOutputFetchHandler {
+  static inline auto yieldGpuDatumFetcher(Data_Namespace::DataMgr* data_mgr_ptr,
+                                          const int device_id) {
+    return [data_mgr_ptr, device_id](const int64_t ptr,
+                                     const int64_t length) -> VarlenDatumPtr {
+      return fetch_data_from_gpu(ptr, length, data_mgr_ptr, device_id);
+    };
+  }
+
+  static inline auto yieldCpuDatumFetcher() {
+    return [](const int64_t ptr, const int64_t length) -> VarlenDatumPtr {
+      return std::make_unique<VarlenDatum>(length, reinterpret_cast<int8_t*>(ptr), false);
+    };
+  }
+
+  template <typename... T>
+  static inline auto fetch(Data_Namespace::DataMgr* data_mgr,
+                           const bool fetch_data_from_gpu,
+                           const int device_id,
+                           T&&... vals) {
+    auto ad_arr_generator = [&](auto datum_fetcher) {
+      constexpr int num_vals = sizeof...(vals);
+      static_assert(num_vals % 2 == 0,
+                    "Must have consistent pointer/size pairs for lazy fetch of geo "
+                    "target values.");
+      const auto vals_vector = std::vector<int64_t>{vals...};
+
+      std::array<VarlenDatumPtr, num_vals / 2> ad_arr;
+      size_t ctr = 0;
+      for (size_t i = 0; i < vals_vector.size(); i += 2) {
+        ad_arr[ctr++] = datum_fetcher(vals_vector[i], vals_vector[i + 1]);
+      }
+      return ad_arr;
+    };
+
+    if (fetch_data_from_gpu) {
+      auto datum_fetcher = yieldGpuDatumFetcher(data_mgr, device_id);
+      return ad_arr_generator(datum_fetcher);
+    } else {
+      auto datum_fetcher = yieldCpuDatumFetcher();
+      return ad_arr_generator(datum_fetcher);
     }
   }
-}
+};
+
+template <SQLTypes GEO_SOURCE_TYPE, typename GeoTargetFetcher>
+struct GeoTargetValueBuilder {
+  template <typename... T>
+  static inline TargetValue build(const SQLTypeInfo& geo_ti,
+                                  const ResultSet::GeoReturnType return_type,
+                                  T&&... vals) {
+    auto ad_arr = GeoTargetFetcher::fetch(std::forward<T>(vals)...);
+    static_assert(std::tuple_size<decltype(ad_arr)>::value > 0,
+                  "ArrayDatum array for Geo Target must contain at least one value.");
+
+    switch (return_type) {
+      case ResultSet::GeoReturnType::GeoTargetValue: {
+        if (ad_arr[0]->is_null) {
+          return TargetValue(std::vector<ScalarTargetValue>{});
+        }
+        return GeoReturnTypeTraits<ResultSet::GeoReturnType::GeoTargetValue,
+                                   GEO_SOURCE_TYPE>::GeoSerializerType::serialize(geo_ti,
+                                                                                  ad_arr);
+      }
+      case ResultSet::GeoReturnType::WktString: {
+        return GeoReturnTypeTraits<ResultSet::GeoReturnType::WktString,
+                                   GEO_SOURCE_TYPE>::GeoSerializerType::serialize(geo_ti,
+                                                                                  ad_arr);
+      }
+      default: {
+        CHECK(false);
+        return TargetValue(nullptr);
+      }
+    }
+  }
+};
 
 }  // namespace
 
@@ -971,202 +1076,168 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
 }
 
 // Reads a geo value from a series of ptrs to var len types
-TargetValue ResultSet::makeGeoTargetValue(const VarlenTargetPtrPair& coords,
-                                          const VarlenTargetPtrPair& ring_sizes,
-                                          const VarlenTargetPtrPair& poly_rings,
+TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
+                                          const size_t slot_idx,
                                           const TargetInfo& target_info,
                                           const size_t target_logical_idx,
                                           const size_t entry_buff_idx) const {
   CHECK(target_info.sql_type.is_geometry());
-  if (!lazy_fetch_info_.empty()) {
-    CHECK_LT(target_logical_idx, lazy_fetch_info_.size());
-    const auto col_lazy_fetch = lazy_fetch_info_[target_logical_idx];
-    if (col_lazy_fetch.is_lazily_fetched) {
-      auto varlen_ptr = read_int_from_buff(coords.ptr1, coords.compact_sz1);
 
-      const auto storage_idx = getStorageIndex(entry_buff_idx);
-      CHECK_LT(static_cast<size_t>(storage_idx.first), col_buffers_.size());
-      auto& frag_col_buffers =
-          getColumnFrag(storage_idx.first, target_logical_idx, varlen_ptr);
-
-      auto lazy_fetch_chunk = [](const int8_t* ptr, const int64_t varlen_ptr) {
-        ArrayDatum ad;
-        bool is_end;
-        ChunkIter_get_nth(reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(ptr)),
-                          varlen_ptr,
-                          &ad,
-                          &is_end);
-        CHECK(!is_end);
-        return ad;
-      };
-
-      ArrayDatum coords_ad =
-          lazy_fetch_chunk(frag_col_buffers[col_lazy_fetch.local_col_id], varlen_ptr);
-
-      // If encoding geo types as WKT strings, step through the encoding anyway to return
-      // proper WKT string syntax for empty geo type.
-      if (coords_ad.is_null && (geo_return_type_ == GeoReturnType::GeoTargetValue)) {
-        std::vector<ScalarTargetValue> empty_array;
-        return TargetValue(empty_array);
-      }
-
-      switch (target_info.sql_type.get_type()) {
-        case kPOINT:
-          return build_geo_target_value<kPOINT>(target_info.sql_type,
-                                                geo_return_type_,
-                                                coords_ad.pointer,
-                                                coords_ad.length);
-        case kLINESTRING:
-          return build_geo_target_value<kLINESTRING>(target_info.sql_type,
-                                                     geo_return_type_,
-                                                     coords_ad.pointer,
-                                                     coords_ad.length);
-        case kPOLYGON: {
-          const auto ring_sizes_id = col_lazy_fetch.local_col_id + 1;
-          const ArrayDatum ring_sizes_ad =
-              lazy_fetch_chunk(frag_col_buffers[ring_sizes_id], varlen_ptr);
-          return build_geo_target_value<kPOLYGON>(target_info.sql_type,
-                                                  geo_return_type_,
-                                                  coords_ad.pointer,
-                                                  coords_ad.length,
-                                                  ring_sizes_ad.pointer,
-                                                  ring_sizes_ad.length);
-        }
-        case kMULTIPOLYGON: {
-          const auto ring_sizes_id = col_lazy_fetch.local_col_id + 1;
-          const ArrayDatum ring_sizes_ad =
-              lazy_fetch_chunk(frag_col_buffers[ring_sizes_id], varlen_ptr);
-          const auto poly_rings_id = col_lazy_fetch.local_col_id + 2;
-          const ArrayDatum poly_rings_ad =
-              lazy_fetch_chunk(frag_col_buffers[poly_rings_id], varlen_ptr);
-          return build_geo_target_value<kMULTIPOLYGON>(target_info.sql_type,
-                                                       geo_return_type_,
-                                                       coords_ad.pointer,
-                                                       coords_ad.length,
-                                                       ring_sizes_ad.pointer,
-                                                       ring_sizes_ad.length,
-                                                       poly_rings_ad.pointer,
-                                                       poly_rings_ad.length);
-        }
-        default:
-          throw std::runtime_error("Unknown Geometry type encountered: " +
-                                   target_info.sql_type.get_type_name());
-      }
-    }
-  }
-  auto fetch_data_from_gpu = [](std::vector<int8_t>& cpu_buffer,
-                                int64_t varlen_ptr,
-                                const int64_t arr_length,
-                                Data_Namespace::DataMgr& data_mgr,
-                                const int device_id) {
-    cpu_buffer.resize(arr_length);
-    copy_from_gpu(&data_mgr,
-                  &cpu_buffer[0],
-                  static_cast<CUdeviceptr>(varlen_ptr),
-                  arr_length,
-                  device_id);
+  auto getCoordsDataPtr = [&](const int8_t* geo_target_ptr) {
+    return read_int_from_buff(geo_target_ptr,
+                              query_mem_desc_.getColumnWidth(slot_idx).compact);
   };
 
-  auto coords_varlen_ptr = read_int_from_buff(coords.ptr1, coords.compact_sz1);
-  auto coords_length = read_int_from_buff(coords.ptr2, coords.compact_sz2);
-  std::vector<int8_t> coords_cpu_buffer;
-  if (device_type_ == ExecutorDeviceType::GPU) {
-    const auto executor = query_mem_desc_.getExecutor();
+  auto getCoordsLength = [&](const int8_t* geo_target_ptr) {
+    return read_int_from_buff(
+        geo_target_ptr + query_mem_desc_.getColumnWidth(slot_idx).compact,
+        query_mem_desc_.getColumnWidth(slot_idx + 1).compact);
+  };
+
+  auto getRingSizesPtr = [&](const int8_t* geo_target_ptr) {
+    return read_int_from_buff(
+        geo_target_ptr + query_mem_desc_.getPaddedColWidthForRange(slot_idx, 2),
+        query_mem_desc_.getColumnWidth(slot_idx + 2).compact);
+  };
+
+  auto getRingSizesLength = [&](const int8_t* geo_target_ptr) {
+    return read_int_from_buff(
+        geo_target_ptr + query_mem_desc_.getPaddedColWidthForRange(slot_idx, 3),
+        query_mem_desc_.getColumnWidth(slot_idx + 3).compact);
+  };
+
+  auto getPolyRingsPtr = [&](const int8_t* geo_target_ptr) {
+    return read_int_from_buff(
+        geo_target_ptr + query_mem_desc_.getPaddedColWidthForRange(slot_idx, 4),
+        query_mem_desc_.getColumnWidth(slot_idx + 4).compact);
+  };
+
+  auto getPolyRingsLength = [&](const int8_t* geo_target_ptr) {
+    return read_int_from_buff(
+        geo_target_ptr + query_mem_desc_.getPaddedColWidthForRange(slot_idx, 5),
+        query_mem_desc_.getColumnWidth(slot_idx + 5).compact);
+  };
+
+  auto getFragColBuffers = [&]() {
+    const auto storage_idx = getStorageIndex(entry_buff_idx);
+    CHECK_LT(static_cast<size_t>(storage_idx.first), col_buffers_.size());
+    auto global_idx = getCoordsDataPtr(geo_target_ptr);
+    return getColumnFrag(storage_idx.first, target_logical_idx, global_idx);
+  };
+
+  const bool is_gpu_fetch = device_type_ == ExecutorDeviceType::GPU;
+
+  auto getDataMgr = [&]() {
+    auto executor = query_mem_desc_.getExecutor();
     CHECK(executor);
     auto& data_mgr = executor->catalog_->get_dataMgr();
-    fetch_data_from_gpu(
-        coords_cpu_buffer, coords_varlen_ptr, coords_length, data_mgr, device_id_);
-    coords_varlen_ptr = reinterpret_cast<int64_t>(&coords_cpu_buffer[0]);
+    return &data_mgr;
+  };
+
+  const ColumnLazyFetchInfo* col_lazy_fetch = nullptr;
+  if (!lazy_fetch_info_.empty()) {
+    CHECK_LT(target_logical_idx, lazy_fetch_info_.size());
+    col_lazy_fetch = &lazy_fetch_info_[target_logical_idx];
   }
 
-  // TODO(adb): How to handle empty cols / null types?
   switch (target_info.sql_type.get_type()) {
-    case kPOINT:
-      return build_geo_target_value<kPOINT>(
-          target_info.sql_type,
-          geo_return_type_,
-          reinterpret_cast<const int8_t*>(coords_varlen_ptr),
-          coords_length);
-    case kLINESTRING:
-      return build_geo_target_value<kLINESTRING>(
-          target_info.sql_type,
-          geo_return_type_,
-          reinterpret_cast<const int8_t*>(coords_varlen_ptr),
-          coords_length);
-    case kPOLYGON: {
-      auto ring_sizes_varlen_ptr =
-          read_int_from_buff(ring_sizes.ptr1, ring_sizes.compact_sz1);
-      auto ring_sizes_length =
-          read_int_from_buff(ring_sizes.ptr2, ring_sizes.compact_sz2) * 4;
-      std::vector<int8_t> ring_sizes_cpu_buffer;
-      if (device_type_ == ExecutorDeviceType::GPU) {
-        const auto executor = query_mem_desc_.getExecutor();
-        CHECK(executor);
-        auto& data_mgr = executor->catalog_->get_dataMgr();
-        fetch_data_from_gpu(ring_sizes_cpu_buffer,
-                            ring_sizes_varlen_ptr,
-                            ring_sizes_length,
-                            data_mgr,
-                            device_id_);
-        ring_sizes_varlen_ptr = reinterpret_cast<int64_t>(&ring_sizes_cpu_buffer[0]);
+    case kPOINT: {
+      if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
+        auto frag_col_buffers = getFragColBuffers();
+
+        return GeoTargetValueBuilder<kPOINT, GeoLazyFetchHandler>::build(
+            target_info.sql_type,
+            geo_return_type_,
+            frag_col_buffers[col_lazy_fetch->local_col_id],
+            getCoordsDataPtr(geo_target_ptr));
+      } else {
+        return GeoTargetValueBuilder<kPOINT, GeoQueryOutputFetchHandler>::build(
+            target_info.sql_type,
+            geo_return_type_,
+            is_gpu_fetch ? getDataMgr() : nullptr,
+            is_gpu_fetch,
+            device_id_,
+            getCoordsDataPtr(geo_target_ptr),
+            getCoordsLength(geo_target_ptr));
       }
-      return build_geo_target_value<kPOLYGON>(
-          target_info.sql_type,
-          geo_return_type_,
-          reinterpret_cast<const int8_t*>(coords_varlen_ptr),
-          coords_length,
-          reinterpret_cast<int8_t*>(ring_sizes_varlen_ptr),
-          ring_sizes_length);
+    } break;
+    case kLINESTRING: {
+      if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
+        auto frag_col_buffers = getFragColBuffers();
+
+        return GeoTargetValueBuilder<kLINESTRING, GeoLazyFetchHandler>::build(
+            target_info.sql_type,
+            geo_return_type_,
+            frag_col_buffers[col_lazy_fetch->local_col_id],
+            getCoordsDataPtr(geo_target_ptr));
+      } else {
+        return GeoTargetValueBuilder<kLINESTRING, GeoQueryOutputFetchHandler>::build(
+            target_info.sql_type,
+            geo_return_type_,
+            is_gpu_fetch ? getDataMgr() : nullptr,
+            is_gpu_fetch,
+            device_id_,
+            getCoordsDataPtr(geo_target_ptr),
+            getCoordsLength(geo_target_ptr));
+      }
+    } break;
+    case kPOLYGON: {
+      if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
+        auto frag_col_buffers = getFragColBuffers();
+
+        return GeoTargetValueBuilder<kPOLYGON, GeoLazyFetchHandler>::build(
+            target_info.sql_type,
+            geo_return_type_,
+            frag_col_buffers[col_lazy_fetch->local_col_id],
+            getCoordsDataPtr(geo_target_ptr),
+            frag_col_buffers[col_lazy_fetch->local_col_id + 1],
+            getCoordsDataPtr(geo_target_ptr));
+      } else {
+        return GeoTargetValueBuilder<kPOLYGON, GeoQueryOutputFetchHandler>::build(
+            target_info.sql_type,
+            geo_return_type_,
+            is_gpu_fetch ? getDataMgr() : nullptr,
+            is_gpu_fetch,
+            device_id_,
+            getCoordsDataPtr(geo_target_ptr),
+            getCoordsLength(geo_target_ptr),
+            getRingSizesPtr(geo_target_ptr),
+            getRingSizesLength(geo_target_ptr) * 4);
+      }
     } break;
     case kMULTIPOLYGON: {
-      auto ring_sizes_varlen_ptr =
-          read_int_from_buff(ring_sizes.ptr1, ring_sizes.compact_sz1);
-      auto ring_sizes_length =
-          read_int_from_buff(ring_sizes.ptr2, ring_sizes.compact_sz2) * 4;
-      std::vector<int8_t> ring_sizes_cpu_buffer;
-      if (device_type_ == ExecutorDeviceType::GPU) {
-        const auto executor = query_mem_desc_.getExecutor();
-        CHECK(executor);
-        auto& data_mgr = executor->catalog_->get_dataMgr();
-        fetch_data_from_gpu(ring_sizes_cpu_buffer,
-                            ring_sizes_varlen_ptr,
-                            ring_sizes_length,
-                            data_mgr,
-                            device_id_);
-        ring_sizes_varlen_ptr = reinterpret_cast<int64_t>(&ring_sizes_cpu_buffer[0]);
-      }
+      if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
+        auto frag_col_buffers = getFragColBuffers();
 
-      auto poly_rings_varlen_ptr =
-          read_int_from_buff(poly_rings.ptr1, poly_rings.compact_sz1);
-      auto poly_rings_length =
-          read_int_from_buff(poly_rings.ptr2, poly_rings.compact_sz2) * 4;
-      std::vector<int8_t> poly_rings_cpu_buffer;
-      if (device_type_ == ExecutorDeviceType::GPU) {
-        const auto executor = query_mem_desc_.getExecutor();
-        CHECK(executor);
-        auto& data_mgr = executor->catalog_->get_dataMgr();
-        fetch_data_from_gpu(poly_rings_cpu_buffer,
-                            poly_rings_varlen_ptr,
-                            poly_rings_length,
-                            data_mgr,
-                            device_id_);
-        poly_rings_varlen_ptr = reinterpret_cast<int64_t>(&poly_rings_cpu_buffer[0]);
+        return GeoTargetValueBuilder<kMULTIPOLYGON, GeoLazyFetchHandler>::build(
+            target_info.sql_type,
+            geo_return_type_,
+            frag_col_buffers[col_lazy_fetch->local_col_id],
+            getCoordsDataPtr(geo_target_ptr),
+            frag_col_buffers[col_lazy_fetch->local_col_id + 1],
+            getCoordsDataPtr(geo_target_ptr),
+            frag_col_buffers[col_lazy_fetch->local_col_id + 2],
+            getCoordsDataPtr(geo_target_ptr));
+      } else {
+        return GeoTargetValueBuilder<kMULTIPOLYGON, GeoQueryOutputFetchHandler>::build(
+            target_info.sql_type,
+            geo_return_type_,
+            is_gpu_fetch ? getDataMgr() : nullptr,
+            is_gpu_fetch,
+            device_id_,
+            getCoordsDataPtr(geo_target_ptr),
+            getCoordsLength(geo_target_ptr),
+            getRingSizesPtr(geo_target_ptr),
+            getRingSizesLength(geo_target_ptr) * 4,
+            getPolyRingsPtr(geo_target_ptr),
+            getPolyRingsLength(geo_target_ptr) * 4);
       }
-
-      return build_geo_target_value<kMULTIPOLYGON>(
-          target_info.sql_type,
-          geo_return_type_,
-          reinterpret_cast<const int8_t*>(coords_varlen_ptr),
-          coords_length,
-          reinterpret_cast<int8_t*>(ring_sizes_varlen_ptr),
-          ring_sizes_length,
-          reinterpret_cast<int8_t*>(poly_rings_varlen_ptr),
-          poly_rings_length);
     } break;
     default:
       throw std::runtime_error("Unknown Geometry type encountered: " +
                                target_info.sql_type.get_type_name());
   }
+  UNREACHABLE();
   return TargetValue(nullptr);
 }
 
@@ -1181,10 +1252,10 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
   // The logic to get the actual size of the buffer value
   // Here we have to consider every major type and process it accordingly
 
-  // For All sizes of ints it is a simple matter of getting the corresponding width of
-  // column. For floats we simply check the case when floats were NOT expanded to a 64 bit
-  // float i.e. double during query execution. All timestamps data types are basically
-  // interpreted as corresponding int type.
+  // For All sizes of ints it is a simple matter of getting the corresponding
+  // width of column. For floats we simply check the case when floats were NOT
+  // expanded to a 64 bit float i.e. double during query execution. All timestamps
+  // data types are basically interpreted as corresponding int type.
 
   // For double we simply pick sizeof(double)
   auto actual_compact_sz = compact_sz;
@@ -1198,11 +1269,11 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
     }
   }
 
-  // All the IDs of strings in encoded string dictionary are stored as 32 bit wide ints.
-  // Hence we interpret ID of that column as 32 bit int. We need to do it becase NULL for
-  // encoded dict is INT_MIN. For temp dictionaries check if target_info's comp_param is
-  // 0. If it is a temp dictionary interpret it using the size of the current target
-  // value.
+  // All the IDs of strings in encoded string dictionary are stored as 32 bit wide
+  // ints. Hence we interpret ID of that column as 32 bit int. We need to do it
+  // becase NULL for encoded dict is INT_MIN. For temp dictionaries check if
+  // target_info's comp_param is 0. If it is a temp dictionary interpret it using
+  // the size of the current target value.
 
   // Check Target is Encoded string and not a temp String Dictionary
   if (target_info.sql_type.is_string() &&
@@ -1254,8 +1325,8 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
       return TargetValue(count_distinct_set_size(
           ival, query_mem_desc_.getCountDistinctDescriptor(target_logical_idx)));
     }
-    // TODO(alex): remove int_resize_cast, make read_int_from_buff return the right type
-    // instead
+    // TODO(alex): remove int_resize_cast, make read_int_from_buff return the
+    // right type instead
     if (inline_int_null_val(chosen_type) ==
         int_resize_cast(ival, chosen_type.get_logical_size())) {
       return inline_int_null_val(target_info.sql_type);
@@ -1334,7 +1405,8 @@ TargetValue ResultSet::getTargetValueFromBufferColwise(
                          entry_idx);
 }
 
-// Gets the TargetValue stored in slot_idx (and slot_idx for AVG) of rowwise_target_ptr.
+// Gets the TargetValue stored in slot_idx (and slot_idx for AVG) of
+// rowwise_target_ptr.
 TargetValue ResultSet::getTargetValueFromBufferRowwise(
     int8_t* rowwise_target_ptr,
     int8_t* keys_ptr,
@@ -1368,44 +1440,8 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
     return int64_t(0);
   }
   if (target_info.sql_type.is_geometry()) {
-    auto geo_varlen_ptr = rowwise_target_ptr;
-    VarlenTargetPtrPair coords;
-    coords.ptr1 = geo_varlen_ptr;
-    coords.compact_sz1 = query_mem_desc_.getColumnWidth(slot_idx).compact;
-    coords.ptr2 = geo_varlen_ptr + query_mem_desc_.getColumnWidth(slot_idx).compact;
-    coords.compact_sz2 = query_mem_desc_.getColumnWidth(slot_idx + 1).compact;
-    CHECK(coords.ptr2);
-
-    VarlenTargetPtrPair ring_sizes, poly_rings;
-    if (target_info.sql_type.get_type() == kPOLYGON ||
-        target_info.sql_type.get_type() == kMULTIPOLYGON) {
-      const auto ring_slot_idx = slot_idx + 2;
-      geo_varlen_ptr =
-          coords.ptr2 + query_mem_desc_.getColumnWidth(ring_slot_idx).compact;
-      CHECK(geo_varlen_ptr);
-      ring_sizes.ptr1 = geo_varlen_ptr;
-      ring_sizes.compact_sz1 = query_mem_desc_.getColumnWidth(ring_slot_idx).compact;
-      ring_sizes.ptr2 =
-          geo_varlen_ptr + query_mem_desc_.getColumnWidth(ring_slot_idx).compact;
-      ring_sizes.compact_sz2 = query_mem_desc_.getColumnWidth(ring_slot_idx + 1).compact;
-      CHECK(ring_sizes.ptr2);
-    }
-    if (target_info.sql_type.get_type() == kMULTIPOLYGON) {
-      const auto poly_rings_slot_idx = slot_idx + 4;
-      geo_varlen_ptr =
-          ring_sizes.ptr2 + query_mem_desc_.getColumnWidth(poly_rings_slot_idx).compact;
-      CHECK(geo_varlen_ptr);
-      poly_rings.ptr1 = geo_varlen_ptr;
-      poly_rings.compact_sz1 =
-          query_mem_desc_.getColumnWidth(poly_rings_slot_idx).compact;
-      poly_rings.ptr2 =
-          geo_varlen_ptr + query_mem_desc_.getColumnWidth(poly_rings_slot_idx).compact;
-      poly_rings.compact_sz2 =
-          query_mem_desc_.getColumnWidth(poly_rings_slot_idx + 1).compact;
-      CHECK(poly_rings.ptr2);
-    }
     return makeGeoTargetValue(
-        coords, ring_sizes, poly_rings, target_info, target_logical_idx, entry_buff_idx);
+        rowwise_target_ptr, slot_idx, target_info, target_logical_idx, entry_buff_idx);
   }
 
   auto ptr1 = rowwise_target_ptr;
@@ -1426,8 +1462,8 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
         rowwise_target_ptr + query_mem_desc_.getColumnWidth(slot_idx).compact;
     compact_sz1 = query_mem_desc_.getColumnWidth(slot_idx).compact;
     int8_t compact_sz2 = 0;
-    // Skip reading the second slot if we have a none encoded string and are using the
-    // none encoded strings buffer attached to ResultSetStorage
+    // Skip reading the second slot if we have a none encoded string and are using
+    // the none encoded strings buffer attached to ResultSetStorage
     if (!(separate_varlen_storage_valid_ &&
           (target_info.sql_type.is_array() ||
            (target_info.sql_type.is_string() &&

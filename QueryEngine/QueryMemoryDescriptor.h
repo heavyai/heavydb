@@ -219,6 +219,14 @@ class QueryMemoryDescriptor {
     CHECK_LT(idx, agg_col_widths_.size());
     return agg_col_widths_[idx];
   }
+  size_t getPaddedColWidthForRange(const size_t offset, const size_t range) const {
+    CHECK_LE(offset + range, agg_col_widths_.size());
+    size_t ret = 0;
+    for (size_t i = offset; i < offset + range; i++) {
+      ret += agg_col_widths_[i].compact;
+    }
+    return ret;
+  }
   size_t getRowWidth() const {
     // Note: Actual row size may include padding (see ResultSetBufferAccessors.h)
     size_t ret = 0;

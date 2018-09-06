@@ -117,22 +117,27 @@ std::shared_ptr<std::vector<double>> decompress_coords<double>(const SQLTypeInfo
 
 }  // namespace
 
+using VarlenDatumPtr = std::unique_ptr<VarlenDatum>;
+
 // Point
 template <>
 struct GeoTargetValueSerializer<kPOINT> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
-                                      const int8_t* coords,
-                                      const size_t coords_sz) {
-    return GeoPointTargetValue(*decompress_coords<double>(geo_ti, coords, coords_sz));
+                                      std::array<VarlenDatumPtr, 1>& vals) {
+    if (vals[0]->is_null) {
+      return GeoPointTargetValue(std::vector<double>{});
+    }
+    return GeoPointTargetValue(
+        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length));
   }
 };
 
 template <>
 struct GeoWktSerializer<kPOINT> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
-                                      const int8_t* coords,
-                                      const size_t coords_sz) {
-    Geo_namespace::GeoPoint point(*decompress_coords<double>(geo_ti, coords, coords_sz));
+                                      std::array<VarlenDatumPtr, 1>& vals) {
+    Geo_namespace::GeoPoint point(
+        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length));
     return NullableString(point.getWktString());
   }
 };
@@ -141,20 +146,21 @@ struct GeoWktSerializer<kPOINT> {
 template <>
 struct GeoTargetValueSerializer<kLINESTRING> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
-                                      const int8_t* coords,
-                                      const size_t coords_sz) {
+                                      std::array<VarlenDatumPtr, 1>& vals) {
+    if (vals[0]->is_null) {
+      return GeoLineStringTargetValue(std::vector<double>{});
+    }
     return GeoLineStringTargetValue(
-        *decompress_coords<double>(geo_ti, coords, coords_sz));
+        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length));
   }
 };
 
 template <>
 struct GeoWktSerializer<kLINESTRING> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
-                                      const int8_t* coords,
-                                      const size_t coords_sz) {
+                                      std::array<VarlenDatumPtr, 1>& vals) {
     Geo_namespace::GeoLineString linestring(
-        *decompress_coords<double>(geo_ti, coords, coords_sz));
+        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length));
     return NullableString(linestring.getWktString());
   }
 };
@@ -163,28 +169,24 @@ struct GeoWktSerializer<kLINESTRING> {
 template <>
 struct GeoTargetValueSerializer<kPOLYGON> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
-                                      const int8_t* coords,
-                                      const size_t coords_sz,
-                                      const int8_t* ring_sizes,
-                                      const size_t ring_sizes_sz) {
+                                      std::array<VarlenDatumPtr, 2>& vals) {
     std::vector<int32_t> ring_sizes_vec;
-    unpack_geo_vector(ring_sizes_vec, ring_sizes, ring_sizes_sz);
-    return GeoPolyTargetValue(*decompress_coords<double>(geo_ti, coords, coords_sz),
-                              ring_sizes_vec);
+    unpack_geo_vector(ring_sizes_vec, vals[1]->pointer, vals[1]->length);
+    return GeoPolyTargetValue(
+        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length),
+        ring_sizes_vec);
   }
 };
 
 template <>
 struct GeoWktSerializer<kPOLYGON> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
-                                      const int8_t* coords,
-                                      const size_t coords_sz,
-                                      const int8_t* ring_sizes,
-                                      const size_t ring_sizes_sz) {
+                                      std::array<VarlenDatumPtr, 2>& vals) {
     std::vector<int32_t> ring_sizes_vec;
-    unpack_geo_vector(ring_sizes_vec, ring_sizes, ring_sizes_sz);
-    Geo_namespace::GeoPolygon poly(*decompress_coords<double>(geo_ti, coords, coords_sz),
-                                   ring_sizes_vec);
+    unpack_geo_vector(ring_sizes_vec, vals[1]->pointer, vals[1]->length);
+    Geo_namespace::GeoPolygon poly(
+        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length),
+        ring_sizes_vec);
     return NullableString(poly.getWktString());
   };
 };
@@ -193,37 +195,28 @@ struct GeoWktSerializer<kPOLYGON> {
 template <>
 struct GeoTargetValueSerializer<kMULTIPOLYGON> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
-                                      const int8_t* coords,
-                                      const size_t coords_sz,
-                                      const int8_t* ring_sizes,
-                                      const size_t ring_sizes_sz,
-                                      const int8_t* poly_rings,
-                                      const size_t poly_rings_sz) {
+                                      std::array<VarlenDatumPtr, 3>& vals) {
     std::vector<int32_t> ring_sizes_vec;
-    unpack_geo_vector(ring_sizes_vec, ring_sizes, ring_sizes_sz);
+    unpack_geo_vector(ring_sizes_vec, vals[1]->pointer, vals[1]->length);
     std::vector<int32_t> poly_rings_vec;
-    unpack_geo_vector(poly_rings_vec, poly_rings, poly_rings_sz);
-    return GeoMultiPolyTargetValue(*decompress_coords<double>(geo_ti, coords, coords_sz),
-                                   ring_sizes_vec,
-                                   poly_rings_vec);
+    unpack_geo_vector(poly_rings_vec, vals[2]->pointer, vals[2]->length);
+    return GeoMultiPolyTargetValue(
+        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length),
+        ring_sizes_vec,
+        poly_rings_vec);
   }
 };
 
 template <>
 struct GeoWktSerializer<kMULTIPOLYGON> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
-                                      const int8_t* coords,
-                                      const size_t coords_sz,
-                                      const int8_t* ring_sizes,
-                                      const size_t ring_sizes_sz,
-                                      const int8_t* poly_rings,
-                                      const size_t poly_rings_sz) {
+                                      std::array<VarlenDatumPtr, 3>& vals) {
     std::vector<int32_t> ring_sizes_vec;
-    unpack_geo_vector(ring_sizes_vec, ring_sizes, ring_sizes_sz);
+    unpack_geo_vector(ring_sizes_vec, vals[1]->pointer, vals[1]->length);
     std::vector<int32_t> poly_rings_vec;
-    unpack_geo_vector(poly_rings_vec, poly_rings, poly_rings_sz);
+    unpack_geo_vector(poly_rings_vec, vals[2]->pointer, vals[2]->length);
     Geo_namespace::GeoMultiPolygon mpoly(
-        *decompress_coords<double>(geo_ti, coords, coords_sz),
+        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length),
         ring_sizes_vec,
         poly_rings_vec);
     return NullableString(mpoly.getWktString());

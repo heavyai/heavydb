@@ -445,9 +445,8 @@ class ResultSet {
     VarlenTargetPtrPair()
         : ptr1(nullptr), compact_sz1(0), ptr2(nullptr), compact_sz2(0) {}
   };
-  TargetValue makeGeoTargetValue(const VarlenTargetPtrPair& coords,
-                                 const VarlenTargetPtrPair& ring_sizes,
-                                 const VarlenTargetPtrPair& poly_rings,
+  TargetValue makeGeoTargetValue(const int8_t* geo_target_ptr,
+                                 const size_t slot_idx,
                                  const TargetInfo& target_info,
                                  const size_t target_logical_idx,
                                  const size_t entry_buff_idx) const;
