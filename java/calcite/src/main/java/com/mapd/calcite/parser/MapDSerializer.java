@@ -24,7 +24,6 @@ import org.apache.calcite.rel.externalize.MapDRelJsonWriter;
  * @author michael
  */
 public class MapDSerializer {
-
   public static String toString(final RelNode rel) {
     if (rel == null) {
       return null;

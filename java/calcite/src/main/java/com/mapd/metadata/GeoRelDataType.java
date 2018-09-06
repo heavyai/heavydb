@@ -30,114 +30,114 @@ import org.apache.calcite.sql.SqlIntervalQualifier;
 import org.apache.calcite.sql.type.SqlTypeName;
 
 public class GeoRelDataType implements RelDataType {
+  @Override
+  public boolean isStruct() {
+    return false;
+  }
 
-    @Override
-    public boolean isStruct() {
-        return false;
-    }
+  @Override
+  public List<RelDataTypeField> getFieldList() {
+    return new ArrayList<RelDataTypeField>();
+  }
 
-    @Override
-    public List<RelDataTypeField> getFieldList() {
-        return new ArrayList<RelDataTypeField>();
-    }
+  @Override
+  public List<String> getFieldNames() {
+    return new ArrayList<String>();
+  }
 
-    @Override
-    public List<String> getFieldNames() {
-        return new ArrayList<String>();
-    }
+  @Override
+  public int getFieldCount() {
+    return 0;
+  }
 
-    @Override
-    public int getFieldCount() {
-        return 0;
-    }
+  @Override
+  public StructKind getStructKind() {
+    return StructKind.NONE;
+  }
 
-    @Override
-    public StructKind getStructKind() {
-        return StructKind.NONE;
-    }
+  @Override
+  public RelDataTypeField getField(
+          String fieldName, boolean caseSensitive, boolean elideRecord) {
+    return null;
+  }
 
-    @Override
-    public RelDataTypeField getField(String fieldName, boolean caseSensitive, boolean elideRecord) {
-        return null;
-    }
+  @Override
+  public boolean isNullable() {
+    return false;
+  }
 
-    @Override
-    public boolean isNullable() {
-        return false;
-    }
+  @Override
+  public RelDataType getComponentType() {
+    return null;
+  }
 
-    @Override
-    public RelDataType getComponentType() {
-        return null;
-    }
+  @Override
+  public RelDataType getKeyType() {
+    return null;
+  }
 
-    @Override
-    public RelDataType getKeyType() {
-        return null;
-    }
+  @Override
+  public RelDataType getValueType() {
+    return null;
+  }
 
-    @Override
-    public RelDataType getValueType() {
-        return null;
-    }
+  @Override
+  public Charset getCharset() {
+    return null;
+  }
 
-    @Override
-    public Charset getCharset() {
-        return null;
-    }
+  @Override
+  public SqlCollation getCollation() {
+    return null;
+  }
 
-    @Override
-    public SqlCollation getCollation() {
-        return null;
-    }
+  @Override
+  public SqlIntervalQualifier getIntervalQualifier() {
+    return null;
+  }
 
-    @Override
-    public SqlIntervalQualifier getIntervalQualifier() {
-        return null;
-    }
+  @Override
+  public int getPrecision() {
+    return -1;
+  }
 
-    @Override
-    public int getPrecision() {
-        return -1;
-    }
+  @Override
+  public int getScale() {
+    return -1;
+  }
 
-    @Override
-    public int getScale() {
-        return -1;
-    }
+  @Override
+  public SqlTypeName getSqlTypeName() {
+    return null;
+  }
 
-    @Override
-    public SqlTypeName getSqlTypeName() {
-        return null;
-    }
+  @Override
+  public SqlIdentifier getSqlIdentifier() {
+    return null;
+  }
 
-    @Override
-    public SqlIdentifier getSqlIdentifier() {
-        return null;
-    }
+  @Override
+  public String getFullTypeString() {
+    return "Geometry";
+  }
 
-    @Override
-    public String getFullTypeString() {
-        return "Geometry";
-    }
+  @Override
+  public RelDataTypeFamily getFamily() {
+    return null;
+  }
 
-    @Override
-    public RelDataTypeFamily getFamily() {
-        return null;
-    }
+  @Override
+  public RelDataTypePrecedenceList getPrecedenceList() {
+    return null;
+  }
 
-    @Override
-    public RelDataTypePrecedenceList getPrecedenceList() {
-        return null;
-    }
+  @Override
+  public RelDataTypeComparability getComparability() {
+    return RelDataTypeComparability.NONE;
+  }
 
-    @Override
-    public RelDataTypeComparability getComparability() {
-        return RelDataTypeComparability.NONE;
-    }
-
-    @Override
-    public boolean isDynamicStruct() {
-        return false;
-    }
+  @Override
+  public boolean isDynamicStruct() {
+    return false;
+  }
 }

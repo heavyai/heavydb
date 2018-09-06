@@ -67,12 +67,10 @@ import java.util.Map;
  */
 public class MapDRelJson {
   private final Map<String, Constructor> constructorMap =
-      new HashMap<String, Constructor>();
+          new HashMap<String, Constructor>();
   private final JsonBuilder jsonBuilder;
 
-  public static final List<String> PACKAGES =
-      ImmutableList.of(
-          "org.apache.calcite.rel.",
+  public static final List<String> PACKAGES = ImmutableList.of("org.apache.calcite.rel.",
           "org.apache.calcite.rel.core.",
           "org.apache.calcite.rel.logical.",
           "org.apache.calcite.adapter.jdbc.",
@@ -89,17 +87,13 @@ public class MapDRelJson {
     try {
       return (RelNode) constructor.newInstance(map);
     } catch (InstantiationException e) {
-      throw new RuntimeException(
-          "while invoking constructor for type '" + type + "'", e);
+      throw new RuntimeException("while invoking constructor for type '" + type + "'", e);
     } catch (IllegalAccessException e) {
-      throw new RuntimeException(
-          "while invoking constructor for type '" + type + "'", e);
+      throw new RuntimeException("while invoking constructor for type '" + type + "'", e);
     } catch (InvocationTargetException e) {
-      throw new RuntimeException(
-          "while invoking constructor for type '" + type + "'", e);
+      throw new RuntimeException("while invoking constructor for type '" + type + "'", e);
     } catch (ClassCastException e) {
-      throw new RuntimeException(
-          "while invoking constructor for type '" + type + "'", e);
+      throw new RuntimeException("while invoking constructor for type '" + type + "'", e);
     }
   }
 
@@ -108,11 +102,11 @@ public class MapDRelJson {
     if (constructor == null) {
       Class clazz = typeNameToClass(type);
       try {
-        //noinspection unchecked
+        // noinspection unchecked
         constructor = clazz.getConstructor(RelInput.class);
       } catch (NoSuchMethodException e) {
-        throw new RuntimeException("class does not have required constructor, "
-            + clazz + "(RelInput)");
+        throw new RuntimeException(
+                "class does not have required constructor, " + clazz + "(RelInput)");
       }
       constructorMap.put(type, constructor);
     }
@@ -168,10 +162,8 @@ public class MapDRelJson {
     return list;
   }
 
-  public RelCollation toCollation(
-      List<Map<String, Object>> jsonFieldCollations) {
-    final List<RelFieldCollation> fieldCollations =
-        new ArrayList<RelFieldCollation>();
+  public RelCollation toCollation(List<Map<String, Object>> jsonFieldCollations) {
+    final List<RelFieldCollation> fieldCollations = new ArrayList<RelFieldCollation>();
     for (Map<String, Object> map : jsonFieldCollations) {
       fieldCollations.add(toFieldCollation(map));
     }
@@ -180,12 +172,10 @@ public class MapDRelJson {
 
   public RelFieldCollation toFieldCollation(Map<String, Object> map) {
     final Integer field = (Integer) map.get("field");
-    final RelFieldCollation.Direction direction =
-        Util.enumVal(RelFieldCollation.Direction.class,
-            (String) map.get("direction"));
-    final RelFieldCollation.NullDirection nullDirection =
-        Util.enumVal(RelFieldCollation.NullDirection.class,
-            (String) map.get("nulls"));
+    final RelFieldCollation.Direction direction = Util.enumVal(
+            RelFieldCollation.Direction.class, (String) map.get("direction"));
+    final RelFieldCollation.NullDirection nullDirection = Util.enumVal(
+            RelFieldCollation.NullDirection.class, (String) map.get("nulls"));
     return new RelFieldCollation(field, direction, nullDirection);
   }
 
@@ -205,7 +195,7 @@ public class MapDRelJson {
     } else {
       final Map<String, Object> map = (Map<String, Object>) o;
       final SqlTypeName sqlTypeName =
-          Util.enumVal(SqlTypeName.class, (String) map.get("type"));
+              Util.enumVal(SqlTypeName.class, (String) map.get("type"));
       final Integer precision = (Integer) map.get("precision");
       final Integer scale = (Integer) map.get("scale");
       final RelDataType type;
@@ -231,10 +221,8 @@ public class MapDRelJson {
   }
 
   Object toJson(Object value) {
-    if (value == null
-        || value instanceof Number
-        || value instanceof String
-        || value instanceof Boolean) {
+    if (value == null || value instanceof Number || value instanceof String
+            || value instanceof Boolean) {
       return value;
     } else if (value instanceof RexNode) {
       return toJson((RexNode) value);
@@ -265,8 +253,8 @@ public class MapDRelJson {
     } else if (value instanceof Operation) {
       return value.toString();
     } else {
-      throw new UnsupportedOperationException("type not serializable: "
-          + value + " (type " + value.getClass().getCanonicalName() + ")");
+      throw new UnsupportedOperationException("type not serializable: " + value
+              + " (type " + value.getClass().getCanonicalName() + ")");
     }
   }
 
@@ -292,8 +280,7 @@ public class MapDRelJson {
   }
 
   private Object toJson(RelDataTypeField node) {
-    final Map<String, Object> map =
-        (Map<String, Object>) toJson(node.getType());
+    final Map<String, Object> map = (Map<String, Object>) toJson(node.getType());
     map.put("name", node.getName());
     return map;
   }
@@ -305,75 +292,75 @@ public class MapDRelJson {
   private Object toJson(RexNode node) {
     final Map<String, Object> map;
     switch (node.getKind()) {
-    case FIELD_ACCESS:
-      map = jsonBuilder.map();
-      final RexFieldAccess fieldAccess = (RexFieldAccess) node;
-      map.put("field", fieldAccess.getField().getName());
-      map.put("expr", toJson(fieldAccess.getReferenceExpr()));
-      return map;
-    case LITERAL:
-      final RexLiteral literal = (RexLiteral) node;
-      final Object value2 = literal.getValue2();
-      map = jsonBuilder.map();
-      if (value2 instanceof TimeUnitRange) {
-        map.put("literal", value2.toString());
-      } else {
-        if (value2 instanceof String) {
-          map.put("literal", ((String) value2).replace("\\", "\\\\"));
-        } else {
-          map.put("literal", value2);
-        }
-      }
-      map.put("type", literal.getTypeName().name());
-      map.put("target_type", literal.getType().getSqlTypeName().toString());
-      final Object value = literal.getValue();
-      if (value instanceof BigDecimal) {
-        map.put("scale", ((BigDecimal) value).scale());
-        map.put("precision", ((BigDecimal) value).precision());
-      } else {
-        map.put("scale", literal.getType().getScale());
-        map.put("precision", literal.getType().getPrecision());
-      }
-      map.put("type_scale", literal.getType().getScale());
-      map.put("type_precision", literal.getType().getPrecision());
-      return map;
-    case INPUT_REF:
-      map = jsonBuilder.map();
-      map.put("input", ((RexInputRef) node).getIndex());
-      return map;
-    case CORREL_VARIABLE:
-      map = jsonBuilder.map();
-      map.put("correl", ((RexCorrelVariable) node).getName());
-      map.put("type", toJson(node.getType()));
-      return map;
-    default:
-      if (node instanceof RexCall) {
-        final RexCall call = (RexCall) node;
+      case FIELD_ACCESS:
         map = jsonBuilder.map();
-        map.put("op", toJson(call.getOperator()));
-        final List<Object> list = jsonBuilder.list();
-        for (RexNode operand : call.getOperands()) {
-          list.add(toJson(operand));
-        }
-        map.put("operands", list);
-        map.put("type", toJson(node.getType()));
-        if (node instanceof RexSubQuery) {
-          final MapDRelJsonWriter subqueryWriter = new MapDRelJsonWriter();
-          ((RexSubQuery) node).rel.explain(subqueryWriter);
-          map.put("subquery", subqueryWriter.asJsonMap());
-        }
-        if (call.getOperator() instanceof SqlFunction) {
-          switch (((SqlFunction) call.getOperator()).getFunctionType()) {
-          case USER_DEFINED_CONSTRUCTOR:
-          case USER_DEFINED_FUNCTION:
-          case USER_DEFINED_PROCEDURE:
-          case USER_DEFINED_SPECIFIC_FUNCTION:
-            map.put("class", call.getOperator().getClass().getName());
+        final RexFieldAccess fieldAccess = (RexFieldAccess) node;
+        map.put("field", fieldAccess.getField().getName());
+        map.put("expr", toJson(fieldAccess.getReferenceExpr()));
+        return map;
+      case LITERAL:
+        final RexLiteral literal = (RexLiteral) node;
+        final Object value2 = literal.getValue2();
+        map = jsonBuilder.map();
+        if (value2 instanceof TimeUnitRange) {
+          map.put("literal", value2.toString());
+        } else {
+          if (value2 instanceof String) {
+            map.put("literal", ((String) value2).replace("\\", "\\\\"));
+          } else {
+            map.put("literal", value2);
           }
         }
+        map.put("type", literal.getTypeName().name());
+        map.put("target_type", literal.getType().getSqlTypeName().toString());
+        final Object value = literal.getValue();
+        if (value instanceof BigDecimal) {
+          map.put("scale", ((BigDecimal) value).scale());
+          map.put("precision", ((BigDecimal) value).precision());
+        } else {
+          map.put("scale", literal.getType().getScale());
+          map.put("precision", literal.getType().getPrecision());
+        }
+        map.put("type_scale", literal.getType().getScale());
+        map.put("type_precision", literal.getType().getPrecision());
         return map;
-      }
-      throw new UnsupportedOperationException("unknown rex " + node);
+      case INPUT_REF:
+        map = jsonBuilder.map();
+        map.put("input", ((RexInputRef) node).getIndex());
+        return map;
+      case CORREL_VARIABLE:
+        map = jsonBuilder.map();
+        map.put("correl", ((RexCorrelVariable) node).getName());
+        map.put("type", toJson(node.getType()));
+        return map;
+      default:
+        if (node instanceof RexCall) {
+          final RexCall call = (RexCall) node;
+          map = jsonBuilder.map();
+          map.put("op", toJson(call.getOperator()));
+          final List<Object> list = jsonBuilder.list();
+          for (RexNode operand : call.getOperands()) {
+            list.add(toJson(operand));
+          }
+          map.put("operands", list);
+          map.put("type", toJson(node.getType()));
+          if (node instanceof RexSubQuery) {
+            final MapDRelJsonWriter subqueryWriter = new MapDRelJsonWriter();
+            ((RexSubQuery) node).rel.explain(subqueryWriter);
+            map.put("subquery", subqueryWriter.asJsonMap());
+          }
+          if (call.getOperator() instanceof SqlFunction) {
+            switch (((SqlFunction) call.getOperator()).getFunctionType()) {
+              case USER_DEFINED_CONSTRUCTOR:
+              case USER_DEFINED_FUNCTION:
+              case USER_DEFINED_PROCEDURE:
+              case USER_DEFINED_SPECIFIC_FUNCTION:
+                map.put("class", call.getOperator().getClass().getName());
+            }
+          }
+          return map;
+        }
+        throw new UnsupportedOperationException("unknown rex " + node);
     }
   }
 
@@ -427,7 +414,7 @@ public class MapDRelJson {
       if (map.containsKey("literal")) {
         final Object literal = map.get("literal");
         final SqlTypeName sqlTypeName =
-            Util.enumVal(SqlTypeName.class, (String) map.get("type"));
+                Util.enumVal(SqlTypeName.class, (String) map.get("type"));
         if (literal == null) {
           return rexBuilder.makeNullLiteral(sqlTypeName);
         }
@@ -441,11 +428,9 @@ public class MapDRelJson {
     } else if (o instanceof Number) {
       final Number number = (Number) o;
       if (number instanceof Double || number instanceof Float) {
-        return rexBuilder.makeApproxLiteral(
-            BigDecimal.valueOf(number.doubleValue()));
+        return rexBuilder.makeApproxLiteral(BigDecimal.valueOf(number.doubleValue()));
       } else {
-        return rexBuilder.makeExactLiteral(
-            BigDecimal.valueOf(number.longValue()));
+        return rexBuilder.makeExactLiteral(BigDecimal.valueOf(number.longValue()));
       }
     } else {
       throw new UnsupportedOperationException("cannot convert to rex " + o);
@@ -464,7 +449,7 @@ public class MapDRelJson {
     // TODO: build a map, for more efficient lookup
     // TODO: look up based on SqlKind
     final List<SqlOperator> operatorList =
-        SqlStdOperatorTable.instance().getOperatorList();
+            SqlStdOperatorTable.instance().getOperatorList();
     for (SqlOperator operator : operatorList) {
       if (operator.getName().equals(op)) {
         return operator;

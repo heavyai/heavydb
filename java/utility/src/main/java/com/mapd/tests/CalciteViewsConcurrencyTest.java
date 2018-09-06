@@ -30,42 +30,48 @@ public class CalciteViewsConcurrencyTest {
     CalciteViewsConcurrencyTest test = new CalciteViewsConcurrencyTest();
     test.testViewsResolutionConcurrency();
   }
-  
+
   public void testViewsResolutionConcurrency() throws Exception {
     logger.info("testViewsResolutionConcurrency()");
-    
-    MapdTestClient su = MapdTestClient.getClient("localhost", 9091, "mapd", "mapd", "HyperInteractive");
+
+    MapdTestClient su = MapdTestClient.getClient(
+            "localhost", 9091, "mapd", "mapd", "HyperInteractive");
 
     su.runSql("CREATE DATABASE db1;");
     su.runSql("CREATE DATABASE db2;");
-    
-    MapdTestClient db1 = MapdTestClient.getClient("localhost", 9091, "db1", "mapd", "HyperInteractive");
+
+    MapdTestClient db1 = MapdTestClient.getClient(
+            "localhost", 9091, "db1", "mapd", "HyperInteractive");
     db1.runSql("create table table1 (id integer, description varchar(30));");
     db1.runSql("create table table2 (id integer, description varchar(30));");
     db1.runSql("insert into table1 values (1, 'hello');");
     db1.runSql("insert into table2 values (1, 'db1');");
-    db1.runSql("create view v_goodview as select t1.id, t1.description, t2.description as tbl2Desc from db1.table1 t1, db1.table2 t2;");
-    
-    MapdTestClient db2 = MapdTestClient.getClient("localhost", 9091, "db2", "mapd", "HyperInteractive");
+    db1.runSql(
+            "create view v_goodview as select t1.id, t1.description, t2.description as tbl2Desc from db1.table1 t1, db1.table2 t2;");
+
+    MapdTestClient db2 = MapdTestClient.getClient(
+            "localhost", 9091, "db2", "mapd", "HyperInteractive");
     db2.runSql("create table table1 (id integer, description varchar(30));");
     db2.runSql("create table table2 (id integer, description varchar(30));");
     db2.runSql("insert into table1 values (1, 'hello');");
     db2.runSql("insert into table2 values (1, 'db2');");
-    db2.runSql("create view v_goodview as select t1.id, t1.description, t2.description as tbl2Desc from db2.table1 t1, db2.table2 t2;");
-    
+    db2.runSql(
+            "create view v_goodview as select t1.id, t1.description, t2.description as tbl2Desc from db2.table1 t1, db2.table2 t2;");
+
     int num_threads = 10;
     Exception exceptions[] = new Exception[num_threads];
     List<Thread> threads = new ArrayList<>();
-    for (int i=0; i<num_threads; i++) {
+    for (int i = 0; i < num_threads; i++) {
       final int threadId = i;
-      MapdTestClient con1 = MapdTestClient.getClient("localhost", 9091, "db1", "mapd", "HyperInteractive");
-      MapdTestClient con2 = MapdTestClient.getClient("localhost", 9091, "db2", "mapd", "HyperInteractive");
+      MapdTestClient con1 = MapdTestClient.getClient(
+              "localhost", 9091, "db1", "mapd", "HyperInteractive");
+      MapdTestClient con2 = MapdTestClient.getClient(
+              "localhost", 9091, "db2", "mapd", "HyperInteractive");
       Thread t = new Thread(new Runnable() {
-        
         @Override
         public void run() {
           try {
-            for (int i=0; i<25; i++) {
+            for (int i = 0; i < 25; i++) {
               con1.runSql("SELECT * FROM v_goodview;");
               con2.runSql("SELECT * FROM v_goodview;");
             }
@@ -75,24 +81,22 @@ public class CalciteViewsConcurrencyTest {
           }
         }
       });
-      
+
       t.start();
       threads.add(t);
     }
-    
-    for (Thread t:threads) {
+
+    for (Thread t : threads) {
       t.join();
     }
-    
+
     su.runSql("DROP DATABASE db1;");
     su.runSql("DROP DATABASE db2;");
-    
-    for (Exception e:exceptions) {
-      if (null!=e) {
+
+    for (Exception e : exceptions) {
+      if (null != e) {
         throw e;
       }
     }
   }
-
-
 }

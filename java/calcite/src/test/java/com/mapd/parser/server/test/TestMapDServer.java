@@ -37,7 +37,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class TestMapDServer {
-
   private final static Logger MAPDLOGGER = LoggerFactory.getLogger(TestMapDServer.class);
   private final static int TEST_THREAD_COUNT = 2;
   private volatile int threadsRun = 0;
@@ -55,16 +54,16 @@ public class TestMapDServer {
         try {
           ConnInfo conn = createMapDConnection();
           Random r = new Random();
-          int calCount = r.nextInt(9)+1;
+          int calCount = r.nextInt(9) + 1;
           int calls = 0;
           for (int i = 1; i <= 100; i++) {
-            //if (i%100 == 0){
-              System.out.println("i is " + i);
+            // if (i%100 == 0){
+            System.out.println("i is " + i);
             //}
-            if (calls > calCount){
+            if (calls > calCount) {
               closeMapDConnection(conn);
               conn = createMapDConnection();
-              calCount = r.nextInt(9)+1;
+              calCount = r.nextInt(9) + 1;
               calls = 0;
             }
             randomMapDCall(conn);
@@ -87,23 +86,23 @@ public class TestMapDServer {
       pool.submit(r);
     }
     while (!pool.isShutdown()) {
-      //stay alive
+      // stay alive
     }
     if (threadHadFailure) {
       throw ae;
     }
-
   }
 
   private void randomMapDCall(ConnInfo conn) {
     Random r = new Random();
     int aliasID = r.nextInt(100000) + 1000000;
     int limit = r.nextInt(20) + 1;
-    //  executeQuery(conn, String.format("Select TABALIAS%d.dest_lon AS COLALIAS%d from flights TABALIAS%d LIMIT %d",
+    //  executeQuery(conn, String.format("Select TABALIAS%d.dest_lon AS COLALIAS%d from
+    //  flights TABALIAS%d LIMIT %d",
     //          aliasID, aliasID, aliasID, limit), limit);
     executeQuery(conn,
-            "SELECT date_trunc(day, arr_timestamp) as key0,CASE when carrier_name IN ('Southwest Airlines','American Airlines','Skywest Airlines','American Eagle Airlines','US Airways') then carrier_name ELSE 'other' END as key1,COUNT(*) AS val FROM flights_2008_7m WHERE (arr_timestamp >= TIMESTAMP(0) '2008-01-01 00:57:00' AND arr_timestamp < TIMESTAMP(0) '2009-01-01 18:27:00') GROUP BY key0, key1 ORDER BY key0,key1", 2202);
-
+            "SELECT date_trunc(day, arr_timestamp) as key0,CASE when carrier_name IN ('Southwest Airlines','American Airlines','Skywest Airlines','American Eagle Airlines','US Airways') then carrier_name ELSE 'other' END as key1,COUNT(*) AS val FROM flights_2008_7m WHERE (arr_timestamp >= TIMESTAMP(0) '2008-01-01 00:57:00' AND arr_timestamp < TIMESTAMP(0) '2009-01-01 18:27:00') GROUP BY key0, key1 ORDER BY key0,key1",
+            2202);
   }
 
   private ConnInfo createMapDConnection() {
@@ -126,7 +125,8 @@ public class TestMapDServer {
     try {
       TQueryResult res = conn.client.sql_execute(conn.session, query, true, null, -1, -1);
       if (resultCount != res.row_set.columns.get(0).nulls.size()) {
-        fail("result doesn't match " + resultCount + " != " + res.row_set.columns.get(0).nulls.size());
+        fail("result doesn't match " + resultCount
+                + " != " + res.row_set.columns.get(0).nulls.size());
       }
     } catch (TMapDException x) {
       fail("Exception on EXECUTE " + x.toString());
@@ -145,7 +145,6 @@ public class TestMapDServer {
   }
 
   private static class ConnInfo {
-
     public String session;
     public TTransport transport;
     public MapD.Client client;

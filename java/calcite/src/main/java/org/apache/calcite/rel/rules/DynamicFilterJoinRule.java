@@ -43,8 +43,9 @@ import static org.apache.calcite.plan.RelOptUtil.conjunctions;
 
 public class DynamicFilterJoinRule extends FilterJoinRule.FilterIntoJoinRule {
   public DynamicFilterJoinRule(boolean smart,
-      RelBuilderFactory relBuilderFactory, Predicate predicate,
-      final List<MapDParser.FilterPushDownInfo> filter_push_down_info) {
+          RelBuilderFactory relBuilderFactory,
+          Predicate predicate,
+          final List<MapDParser.FilterPushDownInfo> filter_push_down_info) {
     super(smart, relBuilderFactory, predicate);
     this.filter_push_down_info = filter_push_down_info;
     this.smart = smart;
@@ -52,45 +53,41 @@ public class DynamicFilterJoinRule extends FilterJoinRule.FilterIntoJoinRule {
   private final List<MapDParser.FilterPushDownInfo> filter_push_down_info;
   private final boolean smart;
 
-  @Override public void onMatch(RelOptRuleCall call) {
+  @Override
+  public void onMatch(RelOptRuleCall call) {
     Filter filter = call.rel(0);
-    Join join = call.rel(1);      
+    Join join = call.rel(1);
     performSelectivePushDown(call, filter, join);
   }
 
-  /** 
-   * This function is a special case of the implementation that originally exists 
-   * in Calcite's method FilterJoinRule.perform: the main difference is that it does not 
-   * attempt to push down all above filters, but it only pushes down filters that 
-   * have been previously identified to be helpful (through selectivity analysis).  
-  */
-  public void performSelectivePushDown(RelOptRuleCall call, Filter filter,
-    Join join) {
-
+  /**
+   * This function is a special case of the implementation that originally exists
+   * in Calcite's method FilterJoinRule.perform: the main difference is that it does not
+   * attempt to push down all above filters, but it only pushes down filters that
+   * have been previously identified to be helpful (through selectivity analysis).
+   */
+  public void performSelectivePushDown(RelOptRuleCall call, Filter filter, Join join) {
     // Splitting filters into two categories: those that have been previously identified
-    // to be pushed down and those that remain. 
-    // It is also assumed that we would only push down filters with singular reference 
+    // to be pushed down and those that remain.
+    // It is also assumed that we would only push down filters with singular reference
     List<RexNode> filtersToBePushedDown = new ArrayList<>();
-    List<RexNode> filtersAboveRemained =         
-      filter != null
-      ? conjunctions(filter.getCondition())
-      : new ArrayList<>();
+    List<RexNode> filtersAboveRemained =
+            filter != null ? conjunctions(filter.getCondition()) : new ArrayList<>();
 
     for (RexNode each_filter : conjunctions(filter.getCondition())) {
       ImmutableBitSet filterRefs = RelOptUtil.InputFinder.bits(each_filter);
-      if(filterRefs.cardinality() == 1) {
+      if (filterRefs.cardinality() == 1) {
         Integer ref_index = filterRefs.toList().get(0);
         for (final MapDParser.FilterPushDownInfo cand : filter_push_down_info) {
-          if(ref_index >= cand.input_start && ref_index < cand.input_next) { 
+          if (ref_index >= cand.input_start && ref_index < cand.input_next) {
             filtersToBePushedDown.add(each_filter);
             filtersAboveRemained.remove(each_filter);
           }
         }
       }
-    } 
+    }
 
-    final List<RexNode> joinFilters =
-        RelOptUtil.conjunctions(join.getCondition());
+    final List<RexNode> joinFilters = RelOptUtil.conjunctions(join.getCondition());
     final List<RexNode> origJoinFilters = ImmutableList.copyOf(joinFilters);
 
     // If there is only the joinRel,
@@ -102,14 +99,11 @@ public class DynamicFilterJoinRule extends FilterJoinRule.FilterIntoJoinRule {
     }
 
     final List<RexNode> aboveFilters = filtersAboveRemained;
-    final ImmutableList<RexNode> origAboveFilters =
-        ImmutableList.copyOf(aboveFilters);
+    final ImmutableList<RexNode> origAboveFilters = ImmutableList.copyOf(aboveFilters);
 
     // Simplify Outer Joins
     JoinRelType joinType = join.getJoinType();
-    if (smart
-        && !origAboveFilters.isEmpty()
-        && join.getJoinType() != JoinRelType.INNER) {
+    if (smart && !origAboveFilters.isEmpty() && join.getJoinType() != JoinRelType.INNER) {
       joinType = RelOptUtil.simplifyJoin(join, origAboveFilters, joinType);
     }
 
@@ -126,54 +120,48 @@ public class DynamicFilterJoinRule extends FilterJoinRule.FilterIntoJoinRule {
     // filters. They can be pushed down if they are not on the NULL
     // generating side.
     boolean filterPushed = false;
-    if (RelOptUtil.classifyFilters(
-        join,
-        filtersToBePushedDown,
-        joinType,
-        !(join instanceof EquiJoin),
-        !joinType.generatesNullsOnLeft(),
-        !joinType.generatesNullsOnRight(),
-        joinFilters,
-        leftFilters,
-        rightFilters)) {
+    if (RelOptUtil.classifyFilters(join,
+                filtersToBePushedDown,
+                joinType,
+                !(join instanceof EquiJoin),
+                !joinType.generatesNullsOnLeft(),
+                !joinType.generatesNullsOnRight(),
+                joinFilters,
+                leftFilters,
+                rightFilters)) {
       filterPushed = true;
     }
     // Move join filters up if needed
     validateJoinFilters(aboveFilters, joinFilters, join, joinType);
 
     // If no filter got pushed after validate, reset filterPushed flag
-    if (leftFilters.isEmpty()
-        && rightFilters.isEmpty()
-        && joinFilters.size() == origJoinFilters.size()) {
-      if (Sets.newHashSet(joinFilters)
-          .equals(Sets.newHashSet(origJoinFilters))) {
-            filterPushed = false;
+    if (leftFilters.isEmpty() && rightFilters.isEmpty()
+            && joinFilters.size() == origJoinFilters.size()) {
+      if (Sets.newHashSet(joinFilters).equals(Sets.newHashSet(origJoinFilters))) {
+        filterPushed = false;
       }
     }
 
     // Try to push down filters in ON clause. A ON clause filter can only be
     // pushed down if it does not affect the non-matching set, i.e. it is
     // not on the side which is preserved.
-    if (RelOptUtil.classifyFilters(
-        join,
-        joinFilters,
-        joinType,
-        false,
-        !joinType.generatesNullsOnLeft(),
-        !joinType.generatesNullsOnRight(),
-        joinFilters,
-        leftFilters,
-        rightFilters)) {
+    if (RelOptUtil.classifyFilters(join,
+                joinFilters,
+                joinType,
+                false,
+                !joinType.generatesNullsOnLeft(),
+                !joinType.generatesNullsOnRight(),
+                joinFilters,
+                leftFilters,
+                rightFilters)) {
       filterPushed = true;
     }
 
     // if nothing actually got pushed and there is nothing leftover,
     // then this rule is a no-op
-    if ((!filterPushed
-            && joinType == join.getJoinType())
-        || (joinFilters.isEmpty()
-            && leftFilters.isEmpty()
-            && rightFilters.isEmpty())) {
+    if ((!filterPushed && joinType == join.getJoinType())
+            || (joinFilters.isEmpty() && leftFilters.isEmpty()
+                       && rightFilters.isEmpty())) {
       return;
     }
 
@@ -181,34 +169,28 @@ public class DynamicFilterJoinRule extends FilterJoinRule.FilterIntoJoinRule {
     // pushed to them
     final RexBuilder rexBuilder = join.getCluster().getRexBuilder();
     final RelBuilder relBuilder = call.builder();
-    final RelNode leftRel =
-        relBuilder.push(join.getLeft()).filter(leftFilters).build();
+    final RelNode leftRel = relBuilder.push(join.getLeft()).filter(leftFilters).build();
     final RelNode rightRel =
-        relBuilder.push(join.getRight()).filter(rightFilters).build();
+            relBuilder.push(join.getRight()).filter(rightFilters).build();
 
     // create the new join node referencing the new children and
     // containing its new join filters (if there are any)
     final ImmutableList<RelDataType> fieldTypes =
-        ImmutableList.<RelDataType>builder()
-            .addAll(RelOptUtil.getFieldTypeList(leftRel.getRowType()))
-            .addAll(RelOptUtil.getFieldTypeList(rightRel.getRowType())).build();
-    final RexNode joinFilter =
-        RexUtil.composeConjunction(rexBuilder,
-            RexUtil.fixUp(rexBuilder, joinFilters, fieldTypes),
-            false);
+            ImmutableList.<RelDataType>builder()
+                    .addAll(RelOptUtil.getFieldTypeList(leftRel.getRowType()))
+                    .addAll(RelOptUtil.getFieldTypeList(rightRel.getRowType()))
+                    .build();
+    final RexNode joinFilter = RexUtil.composeConjunction(
+            rexBuilder, RexUtil.fixUp(rexBuilder, joinFilters, fieldTypes), false);
 
     // If nothing actually got pushed and there is nothing leftover,
     // then this rule is a no-op
-    if (joinFilter.isAlwaysTrue()
-        && leftFilters.isEmpty()
-        && rightFilters.isEmpty()
-        && joinType == join.getJoinType()) {
+    if (joinFilter.isAlwaysTrue() && leftFilters.isEmpty() && rightFilters.isEmpty()
+            && joinType == join.getJoinType()) {
       return;
     }
 
-    RelNode newJoinRel =
-        join.copy(
-            join.getTraitSet(),
+    RelNode newJoinRel = join.copy(join.getTraitSet(),
             joinFilter,
             leftRel,
             rightRel,
@@ -229,8 +211,8 @@ public class DynamicFilterJoinRule extends FilterJoinRule.FilterIntoJoinRule {
     relBuilder.convert(join.getRowType(), false);
 
     // create a FilterRel on top of the join if needed
-    relBuilder.filter(
-        RexUtil.fixUp(rexBuilder, aboveFilters,
+    relBuilder.filter(RexUtil.fixUp(rexBuilder,
+            aboveFilters,
             RelOptUtil.getFieldTypeList(relBuilder.peek().getRowType())));
 
     call.transformTo(relBuilder.build());

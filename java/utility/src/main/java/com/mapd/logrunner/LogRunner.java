@@ -60,7 +60,6 @@ import org.slf4j.LoggerFactory;
  * @author michael
  */
 public class LogRunner {
-
   final static Logger logger = LoggerFactory.getLogger(LogRunner.class);
   private HashMap<Integer, String> sqlquery;
   private HashMap<Integer, String> originalSql;
@@ -90,62 +89,67 @@ public class LogRunner {
     logger.info("In doWork here");
 
     int numberThreads = 3;
-//    Runnable[] worker = new Runnable[numberThreads];
-//
-//    for (int i = 0; i < numberThreads; i++){
-//
+    //    Runnable[] worker = new Runnable[numberThreads];
+    //
+    //    for (int i = 0; i < numberThreads; i++){
+    //
     MapD.Client client = getClient(args[0], Integer.valueOf(args[1]));
     String session = getSession(client);
-//      worker[i] = new myThread(client, session);
-//    }
+    //      worker[i] = new myThread(client, session);
+    //    }
 
     logger.info("got session");
     try {
-      //ExecutorService executor = Executors.newFixedThreadPool(6);
-      ExecutorService executor = new ThreadPoolExecutor(numberThreads, numberThreads, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(15), new ThreadPoolExecutor.CallerRunsPolicy());
+      // ExecutorService executor = Executors.newFixedThreadPool(6);
+      ExecutorService executor = new ThreadPoolExecutor(numberThreads,
+              numberThreads,
+              0L,
+              TimeUnit.MILLISECONDS,
+              new ArrayBlockingQueue<Runnable>(15),
+              new ThreadPoolExecutor.CallerRunsPolicy());
       while (true) {
-        //BufferedReader in = new BufferedReader(new FileReader("/data/logfiles/log1"));
+        // BufferedReader in = new BufferedReader(new FileReader("/data/logfiles/log1"));
         BufferedReader in = new BufferedReader(new FileReader(args[2]));
         String str;
         int current = 0;
         while ((str = in.readLine()) != null) {
           Runnable worker = new myThread(str, client, session);
-          //executor.execute(worker);
+          // executor.execute(worker);
           worker.run();
         }
         in.close();
         logger.info("############loop complete");
       }
-      //executor.shutdown();
+      // executor.shutdown();
     } catch (IOException e) {
       logger.error("IOException " + e.getMessage());
     }
-
   }
 
   private MapD.Client getClient(String hostname, int port) throws TTransportException {
-
     TTransport transport = null;
 
-    //transport = new TSocket("localhost", 9091);
+    // transport = new TSocket("localhost", 9091);
     transport = new THttpClient("http://" + hostname + ":" + port);
 
     transport.open();
 
-    //TProtocol protocol = new TBinaryProtocol(transport);
+    // TProtocol protocol = new TBinaryProtocol(transport);
     TProtocol protocol = new TJSONProtocol(transport);
-    //TProtocol protocol = new TProtocol(transport);
+    // TProtocol protocol = new TProtocol(transport);
 
     return new MapD.Client(protocol);
   }
 
-  private String getSession(MapD.Client client) throws TTransportException, TMapDException, TException {
+  private String getSession(MapD.Client client)
+          throws TTransportException, TMapDException, TException {
     String session = client.connect("mapd", "HyperInteractive", "mapd");
     logger.info("Connected session is " + session);
     return session;
   }
 
-  private void closeSession(MapD.Client client, String session) throws TMapDException, TException {
+  private void closeSession(MapD.Client client, String session)
+          throws TMapDException, TException {
     // Now disconnect
     logger.info("Trying to disconnect session " + session);
     client.disconnect(session);
@@ -167,8 +171,7 @@ public class LogRunner {
     }
 
     // lets get the version
-    logger.info(
-            "Version " + client.get_version());
+    logger.info("Version " + client.get_version());
 
     // get table_details
     TTableDetails table_details = client.get_table_details(session, "flights");
@@ -180,43 +183,39 @@ public class LogRunner {
       logger.info("\tcol type :" + col.col_type.type);
     }
 
-    //client.set_execution_mode(session, TExecuteMode.CPU);
-    logger.info(
-            " -- before query -- ");
+    // client.set_execution_mode(session, TExecuteMode.CPU);
+    logger.info(" -- before query -- ");
 
-    TQueryResult sql_execute = client.sql_execute(session, "Select uniquecarrier,flightnum  from flights LIMIT 3;", true, null, -1, -1);
-    //client.send_sql_execute(session, "Select BRAND  from ACV ;", true);
-    //logger.info(" -- before query recv -- ");
-    //TQueryResult sql_execute = client.recv_sql_execute();
+    TQueryResult sql_execute = client.sql_execute(session,
+            "Select uniquecarrier,flightnum  from flights LIMIT 3;",
+            true,
+            null,
+            -1,
+            -1);
+    // client.send_sql_execute(session, "Select BRAND  from ACV ;", true);
+    // logger.info(" -- before query recv -- ");
+    // TQueryResult sql_execute = client.recv_sql_execute();
 
-    logger.info(
-            " -- after query -- ");
+    logger.info(" -- after query -- ");
 
-    logger.info(
-            "TQueryResult execution time is " + sql_execute.getExecution_time_ms());
-    logger.info(
-            "TQueryResult is " + sql_execute.toString());
-    logger.info(
-            "TQueryResult getFieldValue is " + sql_execute.getFieldValue(TQueryResult._Fields.ROW_SET));
+    logger.info("TQueryResult execution time is " + sql_execute.getExecution_time_ms());
+    logger.info("TQueryResult is " + sql_execute.toString());
+    logger.info("TQueryResult getFieldValue is "
+            + sql_execute.getFieldValue(TQueryResult._Fields.ROW_SET));
 
     TRowSet row_set = sql_execute.getRow_set();
     Object fieldValue = sql_execute.getFieldValue(TQueryResult._Fields.ROW_SET);
 
-    logger.info(
-            "fieldValue " + fieldValue);
+    logger.info("fieldValue " + fieldValue);
 
-    logger.info(
-            "TRowSet is " + row_set.toString());
+    logger.info("TRowSet is " + row_set.toString());
 
-    logger.info(
-            "Get rows size " + row_set.getRowsSize());
-    logger.info(
-            "Get col size " + row_set.getRowsSize());
+    logger.info("Get rows size " + row_set.getRowsSize());
+    logger.info("Get col size " + row_set.getRowsSize());
 
     List<TRow> rows = row_set.getRows();
     int count = 1;
     for (TRow row : rows) {
-
       List<TDatum> cols = row.getCols();
       if (cols != null) {
         for (TDatum dat : cols) {
@@ -228,22 +227,18 @@ public class LogRunner {
 
     List<TColumn> columns = row_set.getColumns();
 
-    logger.info(
-            "columns " + columns);
+    logger.info("columns " + columns);
     count = 1;
     for (TColumn col : columns) {
-
       TColumnData data = col.getData();
       if (data != null) {
         logger.info("COL " + count + " " + data.toString());
-
       }
       count++;
     }
   }
 
   public class myThread implements Runnable {
-
     private String str;
     private MapD.Client client;
     private String session;
@@ -258,12 +253,12 @@ public class LogRunner {
     public void run() {
       int logStart = str.indexOf(']');
       if (logStart != -1) {
-
         String det = str.substring(logStart + 1).trim();
         String header = str.substring(0, logStart).trim();
 
         String[] headDet = header.split(" .");
-        //logger.info("header "+ header + " count " + headDet.length +  " detail " + det );
+        // logger.info("header "+ header + " count " + headDet.length +  " detail " + det
+        // );
         if (headDet.length != 4 || headDet[0].equals("Log")) {
           return;
         }
@@ -283,8 +278,10 @@ public class LogRunner {
           return;
         }
 
-        //get_result_row_for_pixel :5pFFQUCKs17GLHOqI7ykK09U8mX7GnLF:widget_id:3:pixel.x:396:pixel.y:53:column_format:1
-        //:PixelRadius:2:table_col_names::points,dest,conv_4326_900913_x(dest_lon) as x,conv_4326_900913_y(dest_lat) as y,arrdelay as size
+        // get_result_row_for_pixel
+        // :5pFFQUCKs17GLHOqI7ykK09U8mX7GnLF:widget_id:3:pixel.x:396:pixel.y:53:column_format:1
+        //:PixelRadius:2:table_col_names::points,dest,conv_4326_900913_x(dest_lon) as
+        //x,conv_4326_900913_y(dest_lat) as y,arrdelay as size
         if (det.contains("get_result_row_for_pixel :")) {
           logger.info("det " + det);
           String ss[] = det.split(":");
@@ -302,7 +299,6 @@ public class LogRunner {
             tcn.put(name[0], col);
           }
           try {
-
             client.get_result_row_for_pixel(session,
                     Integer.parseInt(ss[3]),
                     new TPixel(Integer.parseInt(ss[5]), Integer.parseInt(ss[7])),
@@ -311,9 +307,11 @@ public class LogRunner {
                     Integer.parseInt(ss[11]),
                     null);
           } catch (TMapDException ex1) {
-            logger.error("Failed to execute get_result_row_for_pixel exception " + ex1.toString());
+            logger.error("Failed to execute get_result_row_for_pixel exception "
+                    + ex1.toString());
           } catch (TException ex) {
-            logger.error("Failed to execute get_result_row_for_pixel exception " + ex.toString());
+            logger.error("Failed to execute get_result_row_for_pixel exception "
+                    + ex.toString());
           }
           return;
         }
@@ -386,7 +384,8 @@ public class LogRunner {
           try {
             client.set_execution_mode(session, TExecuteMode.GPU);
           } catch (TException ex) {
-            logger.error("Failed to execute set_execution_mode exception " + ex.toString());
+            logger.error(
+                    "Failed to execute set_execution_mode exception " + ex.toString());
           }
           return;
         }

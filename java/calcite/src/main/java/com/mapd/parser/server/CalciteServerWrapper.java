@@ -28,8 +28,8 @@ import org.slf4j.LoggerFactory;
  * @author michael
  */
 public class CalciteServerWrapper implements Runnable {
-
-  private final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteServerWrapper.class);
+  private final static Logger MAPDLOGGER =
+          LoggerFactory.getLogger(CalciteServerWrapper.class);
   private final CalciteServerHandler handler;
   private final Processor processor;
   private TServer server;
@@ -43,20 +43,25 @@ public class CalciteServerWrapper implements Runnable {
     processor = new com.mapd.thrift.calciteserver.CalciteServer.Processor(handler);
   }
 
-  public CalciteServerWrapper(int calcitePort, int mapDPort, String dataDir, String extensionFunctionsAstFile) {
+  public CalciteServerWrapper(int calcitePort,
+          int mapDPort,
+          String dataDir,
+          String extensionFunctionsAstFile) {
     handler = new CalciteServerHandler(mapDPort, dataDir, extensionFunctionsAstFile);
     processor = new com.mapd.thrift.calciteserver.CalciteServer.Processor(handler);
     this.calcitePort = calcitePort;
     this.mapDPort = mapDPort;
   }
 
-  private void startServer(com.mapd.thrift.calciteserver.CalciteServer.Processor processor) {
+  private void startServer(
+          com.mapd.thrift.calciteserver.CalciteServer.Processor processor) {
     try {
       TServerTransport serverTransport = new TServerSocket(calcitePort);
-      server = new TThreadPoolServer(new TThreadPoolServer.Args(serverTransport).processor(processor));
+      server = new TThreadPoolServer(
+              new TThreadPoolServer.Args(serverTransport).processor(processor));
 
-      MAPDLOGGER.debug("Starting a threaded pool server... Listening on port " + calcitePort + " MapD on port "
-              + mapDPort);
+      MAPDLOGGER.debug("Starting a threaded pool server... Listening on port "
+              + calcitePort + " MapD on port " + mapDPort);
       handler.setServer(server);
       server.serve();
       // we have been told to shut down (only way to get to this piece of code

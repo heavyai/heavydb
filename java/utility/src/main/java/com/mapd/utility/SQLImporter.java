@@ -48,7 +48,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class SQLImporter {
-
   protected String session = null;
   protected MapD.Client client = null;
   private CommandLine cmd = null;
@@ -60,7 +59,6 @@ public class SQLImporter {
   }
 
   void doWork(String[] args) {
-
     // create Options object
     Options options = new Options();
 
@@ -68,98 +66,84 @@ public class SQLImporter {
     options.addOption("r", true, "Row Load Limit");
 
     Option driver = Option.builder("d")
-            .hasArg()
-            .desc("JDBC driver class")
-            .longOpt("driver")
-            .build();
+                            .hasArg()
+                            .desc("JDBC driver class")
+                            .longOpt("driver")
+                            .build();
 
     Option sqlStmt = Option.builder("ss")
-            .hasArg()
-            .desc("SQL Select statement")
-            .longOpt("sqlStmt")
-            .required()
-            .build();
+                             .hasArg()
+                             .desc("SQL Select statement")
+                             .longOpt("sqlStmt")
+                             .required()
+                             .build();
 
     Option jdbcConnect = Option.builder("c")
-            .hasArg()
-            .desc("JDBC Connection string")
-            .longOpt("jdbcConnect")
-            .required()
-            .build();
+                                 .hasArg()
+                                 .desc("JDBC Connection string")
+                                 .longOpt("jdbcConnect")
+                                 .required()
+                                 .build();
 
-    Option user = Option.builder("u")
-            .hasArg()
-            .desc("MapD User")
-            .longOpt("user")
-            .build();
+    Option user = Option.builder("u").hasArg().desc("MapD User").longOpt("user").build();
 
     Option sourceUser = Option.builder("su")
-            .hasArg()
-            .desc("Source User")
-            .longOpt("sourceUser")
-            .required()
-            .build();
+                                .hasArg()
+                                .desc("Source User")
+                                .longOpt("sourceUser")
+                                .required()
+                                .build();
 
     Option sourcePasswd = Option.builder("sp")
-            .hasArg()
-            .desc("Source Password")
-            .longOpt("sourcePasswd")
-            .required()
-            .build();
+                                  .hasArg()
+                                  .desc("Source Password")
+                                  .longOpt("sourcePasswd")
+                                  .required()
+                                  .build();
 
-    Option passwd = Option.builder("p")
-            .hasArg()
-            .desc("MapD Password")
-            .longOpt("passwd")
-            .build();
+    Option passwd =
+            Option.builder("p").hasArg().desc("MapD Password").longOpt("passwd").build();
 
-    Option server = Option.builder("s")
-            .hasArg()
-            .desc("MapD Server")
-            .longOpt("server")
-            .build();
+    Option server =
+            Option.builder("s").hasArg().desc("MapD Server").longOpt("server").build();
 
     Option targetTable = Option.builder("t")
-            .hasArg()
-            .desc("MapD Target Table")
-            .longOpt("targetTable")
-            .required()
-            .build();
+                                 .hasArg()
+                                 .desc("MapD Target Table")
+                                 .longOpt("targetTable")
+                                 .required()
+                                 .build();
 
-    Option port = Option.builder()
-            .hasArg()
-            .desc("MapD Port")
-            .longOpt("port")
-            .build();
+    Option port = Option.builder().hasArg().desc("MapD Port").longOpt("port").build();
 
     Option bufferSize = Option.builder("b")
-            .hasArg()
-            .desc("transfer buffer size")
-            .longOpt("bufferSize")
-            .build();
+                                .hasArg()
+                                .desc("transfer buffer size")
+                                .longOpt("bufferSize")
+                                .build();
 
     Option fragmentSize = Option.builder("f")
-            .hasArg()
-            .desc("table fragment size")
-            .longOpt("fragmentSize")
-            .build();
+                                  .hasArg()
+                                  .desc("table fragment size")
+                                  .longOpt("fragmentSize")
+                                  .build();
 
     Option database = Option.builder("db")
-            .hasArg()
-            .desc("MapD Database")
-            .longOpt("database")
-            .build();
+                              .hasArg()
+                              .desc("MapD Database")
+                              .longOpt("database")
+                              .build();
 
     Option truncate = Option.builder("tr")
-            .desc("Truncate table if it exists")
-            .longOpt("truncate")
-            .build();
+                              .desc("Truncate table if it exists")
+                              .longOpt("truncate")
+                              .build();
 
     Option initFile = Option.builder("i")
-            .hasArg()
-            .desc("File containing init command for DB")
-            .longOpt("initializeFile")
-            .build();
+                              .hasArg()
+                              .desc("File containing init command for DB")
+                              .longOpt("initializeFile")
+                              .build();
 
     options.addOption(driver);
     options.addOption(sqlStmt);
@@ -196,7 +180,7 @@ public class SQLImporter {
     long totalTime = 0;
 
     try {
-      //Open a connection
+      // Open a connection
       LOGGER.info("Connecting to database url :" + cmd.getOptionValue("jdbcConnect"));
       conn = DriverManager.getConnection(cmd.getOptionValue("jdbcConnect"),
               cmd.getOptionValue("sourceUser"),
@@ -213,20 +197,23 @@ public class SQLImporter {
       try {
         conn.setAutoCommit(false);
       } catch (SQLException se) {
-        LOGGER.warn("SQLException when attempting to setAutoCommit to false, jdbc driver probably doesnt support it.  Error is " + se.toString());
+        LOGGER.warn(
+                "SQLException when attempting to setAutoCommit to false, jdbc driver probably doesnt support it.  Error is "
+                + se.toString());
       }
 
-      //Execute a query
+      // Execute a query
       stmt = conn.createStatement();
 
       int bufferSize = Integer.valueOf(cmd.getOptionValue("bufferSize", "10000"));
-      // set the jdbc fetch buffer size to reduce the amount of records being moved to java from postgress
+      // set the jdbc fetch buffer size to reduce the amount of records being moved to
+      // java from postgress
       stmt.setFetchSize(bufferSize);
       long timer;
 
       ResultSet rs = stmt.executeQuery(cmd.getOptionValue("sqlStmt"));
 
-      //check if table already exists and is compatible in MapD with the query metadata
+      // check if table already exists and is compatible in MapD with the query metadata
       ResultSetMetaData md = rs.getMetaData();
       checkMapDTable(md);
 
@@ -251,8 +238,9 @@ public class SQLImporter {
         bufferCount++;
         if (bufferCount == bufferSize) {
           bufferCount = 0;
-          //send the buffer to mapD
-          client.load_table_binary_columnar(session, cmd.getOptionValue("targetTable"), cols); // old
+          // send the buffer to mapD
+          client.load_table_binary_columnar(
+                  session, cmd.getOptionValue("targetTable"), cols); // old
           // recreate columnar store for use
           for (int i = 1; i <= md.getColumnCount(); i++) {
             resetBinaryColumn(i, md, bufferSize, cols.get(i - 1));
@@ -264,13 +252,15 @@ public class SQLImporter {
         }
       }
       if (bufferCount > 0) {
-        //send the LAST buffer to mapD
-        client.load_table_binary_columnar(session, cmd.getOptionValue("targetTable"), cols);
+        // send the LAST buffer to mapD
+        client.load_table_binary_columnar(
+                session, cmd.getOptionValue("targetTable"), cols);
         bufferCount = 0;
       }
-      LOGGER.info("result set count is " + resultCount + " read time is " + (System.currentTimeMillis() - timer) + "ms");
+      LOGGER.info("result set count is " + resultCount + " read time is "
+              + (System.currentTimeMillis() - timer) + "ms");
 
-      //Clean-up environment
+      // Clean-up environment
       rs.close();
       stmt.close();
 
@@ -286,13 +276,13 @@ public class SQLImporter {
       LOGGER.error("TException failed - " + ex.toString());
       ex.printStackTrace();
     } finally {
-      //finally block used to close resources
+      // finally block used to close resources
       try {
         if (stmt != null) {
           stmt.close();
         }
       } catch (SQLException se2) {
-      }// nothing we can do
+      } // nothing we can do
       try {
         if (conn != null) {
           conn.close();
@@ -300,15 +290,16 @@ public class SQLImporter {
       } catch (SQLException se) {
         LOGGER.error("SQlException in close - " + se.toString());
         se.printStackTrace();
-      }//end finally try
-    }//end try
+      } // end finally try
+    } // end try
   }
 
   private void run_init(Connection conn) {
-    //attempt to open file
+    // attempt to open file
     String line = "";
     try {
-      BufferedReader reader = new BufferedReader(new FileReader(cmd.getOptionValue("initializeFile")));
+      BufferedReader reader =
+              new BufferedReader(new FileReader(cmd.getOptionValue("initializeFile")));
       Statement stmt = conn.createStatement();
       while ((line = reader.readLine()) != null) {
         if (line.isEmpty()) {
@@ -320,10 +311,12 @@ public class SQLImporter {
       stmt.close();
       reader.close();
     } catch (IOException e) {
-      LOGGER.error("Exception occurred trying to read initialize file: " + cmd.getOptionValue("initFile"));
+      LOGGER.error("Exception occurred trying to read initialize file: "
+              + cmd.getOptionValue("initFile"));
       exit(1);
     } catch (SQLException e) {
-      LOGGER.error("Exception occurred trying to execute initialize file entry : " + line);
+      LOGGER.error(
+              "Exception occurred trying to execute initialize file entry : " + line);
       exit(1);
     }
   }
@@ -347,15 +340,19 @@ public class SQLImporter {
         List<TColumnType> columnInfo = getColumnInfo(tName);
         // table exists lets check it has same number of columns
         if (md.getColumnCount() != columnInfo.size()) {
-          LOGGER.error("Table sizes do not match - Mapd " + columnInfo.size() + " versus Select " + md.getColumnCount());
+          LOGGER.error("Table sizes do not match - Mapd " + columnInfo.size()
+                  + " versus Select " + md.getColumnCount());
           exit(1);
         }
         // table exists lets check it is same layout - check names will do for now
         for (int colNum = 1; colNum <= columnInfo.size(); colNum++) {
-          if (!columnInfo.get(colNum - 1).col_name.equalsIgnoreCase(md.getColumnName(colNum))) {
-            LOGGER.error("MapD Table does not have matching column in same order for column number"
-                    + colNum + " MapD column name is " + columnInfo.get(colNum - 1).col_name
-                    + " versus Select " + md.getColumnName(colNum));
+          if (!columnInfo.get(colNum - 1)
+                          .col_name.equalsIgnoreCase(md.getColumnName(colNum))) {
+            LOGGER.error(
+                    "MapD Table does not have matching column in same order for column number"
+                    + colNum + " MapD column name is "
+                    + columnInfo.get(colNum - 1).col_name + " versus Select "
+                    + md.getColumnName(colNum));
             exit(1);
           }
         }
@@ -366,7 +363,6 @@ public class SQLImporter {
   }
 
   private void createMapDTable(ResultSetMetaData metaData) {
-
     StringBuilder sb = new StringBuilder();
     sb.append("Create table ").append(cmd.getOptionValue("targetTable")).append("(");
 
@@ -382,7 +378,8 @@ public class SQLImporter {
 
         sb.append(metaData.getColumnName(i)).append(" ");
 
-        sb.append(getColType(metaData.getColumnType(i), metaData.getPrecision(i),
+        sb.append(getColType(metaData.getColumnType(i),
+                metaData.getPrecision(i),
                 metaData.getScale(i)));
       }
       sb.append(")");
@@ -399,7 +396,6 @@ public class SQLImporter {
     }
 
     executeMapDCommand(sb.toString());
-
   }
 
   private void createMapDConnection() {
@@ -514,7 +510,8 @@ public class SQLImporter {
       case java.sql.Types.DATE:
         return ("DATE");
       case java.sql.Types.BOOLEAN:
-      case java.sql.Types.BIT:  // deal with postgress treating boolean as bit... this will bite me
+      case java.sql.Types
+              .BIT: // deal with postgress treating boolean as bit... this will bite me
         return ("BOOLEAN");
       case java.sql.Types.NVARCHAR:
       case java.sql.Types.VARCHAR:
@@ -528,7 +525,8 @@ public class SQLImporter {
     }
   }
 
-  private TColumn setupBinaryColumn(int i, ResultSetMetaData md, int bufferSize) throws SQLException {
+  private TColumn setupBinaryColumn(int i, ResultSetMetaData md, int bufferSize)
+          throws SQLException {
     TColumn col = new TColumn();
 
     col.nulls = new ArrayList<Boolean>(bufferSize);
@@ -542,7 +540,8 @@ public class SQLImporter {
       case java.sql.Types.BIGINT:
       case java.sql.Types.TIME:
       case java.sql.Types.TIMESTAMP:
-      case java.sql.Types.BIT:  // deal with postgress treating boolean as bit... this will bite me
+      case java.sql.Types
+              .BIT: // deal with postgress treating boolean as bit... this will bite me
       case java.sql.Types.BOOLEAN:
       case java.sql.Types.DATE:
       case java.sql.Types.DECIMAL:
@@ -571,10 +570,12 @@ public class SQLImporter {
     return col;
   }
 
-  private void setColValue(ResultSet rs, TColumn col, int columnType, int colNum, int scale) throws SQLException {
-
+  private void setColValue(
+          ResultSet rs, TColumn col, int columnType, int colNum, int scale)
+          throws SQLException {
     switch (columnType) {
-      case java.sql.Types.BIT:  // deal with postgress treating boolean as bit... this will bite me
+      case java.sql.Types
+              .BIT: // deal with postgress treating boolean as bit... this will bite me
       case java.sql.Types.BOOLEAN:
         Boolean b = rs.getBoolean(colNum);
         if (rs.wasNull()) {
@@ -683,8 +684,8 @@ public class SQLImporter {
     }
   }
 
-  private void resetBinaryColumn(int i, ResultSetMetaData md, int bufferSize, TColumn col) throws SQLException {
-
+  private void resetBinaryColumn(int i, ResultSetMetaData md, int bufferSize, TColumn col)
+          throws SQLException {
     col.nulls.clear();
 
     switch (md.getColumnType(i)) {
@@ -694,7 +695,8 @@ public class SQLImporter {
       case java.sql.Types.BIGINT:
       case java.sql.Types.TIME:
       case java.sql.Types.TIMESTAMP:
-      case java.sql.Types.BIT:  // deal with postgress treating boolean as bit... this will bite me
+      case java.sql.Types
+              .BIT: // deal with postgress treating boolean as bit... this will bite me
       case java.sql.Types.BOOLEAN:
       case java.sql.Types.DATE:
       case java.sql.Types.DECIMAL:

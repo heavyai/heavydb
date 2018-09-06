@@ -30,8 +30,6 @@ import org.slf4j.LoggerFactory;
  * @author michael
  */
 public class MapDDriver implements java.sql.Driver {
-
-
   static final int DriverMajorVersion = 2;
   static final int DriverMinorVersion = 1;
 
@@ -47,7 +45,8 @@ public class MapDDriver implements java.sql.Driver {
   }
 
   @Override
-  public Connection connect(String url, Properties info) throws SQLException { //logger.debug("Entered");
+  public Connection connect(String url, Properties info)
+          throws SQLException { // logger.debug("Entered");
     if (!isValidURL(url)) {
       return null;
     }
@@ -57,7 +56,7 @@ public class MapDDriver implements java.sql.Driver {
   }
 
   @Override
-  public boolean acceptsURL(String url) throws SQLException { //logger.debug("Entered");
+  public boolean acceptsURL(String url) throws SQLException { // logger.debug("Entered");
     return isValidURL(url);
   }
 
@@ -72,7 +71,8 @@ public class MapDDriver implements java.sql.Driver {
   }
 
   @Override
-  public DriverPropertyInfo[] getPropertyInfo(String url, Properties info) throws SQLException { //logger.debug("Entered");
+  public DriverPropertyInfo[] getPropertyInfo(String url, Properties info)
+          throws SQLException { // logger.debug("Entered");
     return null;
   }
 
@@ -84,7 +84,6 @@ public class MapDDriver implements java.sql.Driver {
   @Override
   public int getMinorVersion() {
     return DriverMinorVersion;
-
   }
 
   @Override
@@ -96,5 +95,4 @@ public class MapDDriver implements java.sql.Driver {
   public Logger getParentLogger() throws SQLFeatureNotSupportedException {
     return null;
   }
-
 }

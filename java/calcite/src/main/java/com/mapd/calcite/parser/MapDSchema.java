@@ -24,15 +24,17 @@ import org.slf4j.LoggerFactory;
  * @author michael
  */
 public class MapDSchema implements Schema {
-
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDSchema.class);
 
   final private MetaConnect metaConnect;
 
   public MapDSchema(String dataDir, MapDParser mp, int mapdPort, MapDUser mapdUser) {
-    System.setProperty("saffron.default.charset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
-    System.setProperty("saffron.default.nationalcharset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
-    System.setProperty("saffron.default.collation.name", ConversionUtil.NATIVE_UTF16_CHARSET_NAME + "$en_US");
+    System.setProperty(
+            "saffron.default.charset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
+    System.setProperty(
+            "saffron.default.nationalcharset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
+    System.setProperty("saffron.default.collation.name",
+            ConversionUtil.NATIVE_UTF16_CHARSET_NAME + "$en_US");
     metaConnect = new MetaConnect(mapdPort, dataDir, mapdUser, mp);
   }
 

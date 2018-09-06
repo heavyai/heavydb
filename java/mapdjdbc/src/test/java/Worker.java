@@ -24,7 +24,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 class Worker implements Runnable {
-
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(Worker.class);
   // JDBC driver name and database URL
   static final String JDBC_DRIVER = "com.mapd.jdbc.MapDDriver";
@@ -47,68 +46,68 @@ class Worker implements Runnable {
     numOfTables = nt;
 
     try {
-      //STEP 2: Register JDBC driver
+      // STEP 2: Register JDBC driver
       Class.forName(JDBC_DRIVER);
 
-      //STEP 3: Open a connection
+      // STEP 3: Open a connection
       MAPDLOGGER.info(threadId + ": Connecting to database...");
       conn = DriverManager.getConnection(DB_URL, USER, PASS);
       stmt = conn.createStatement();
 
       for (int i = 0; i < numOfTables; i++) {
-        //doQuery(conn, "drop table t" + i, stmt);
+        // doQuery(conn, "drop table t" + i, stmt);
         doQuery(conn, "create  table if not exists t" + i + " (newn int)", stmt);
       }
     } catch (SQLException se) {
-      //Handle errors for JDBC
+      // Handle errors for JDBC
       se.printStackTrace();
 
     } catch (ClassNotFoundException ex) {
       ex.printStackTrace();
-    }//end try
+    } // end try
   }
 
   public void run() {
     try {
       int tab = this.threadId;
       for (int i = 0; i < 100; i++) {
-        doInsertQuery(conn, stmt,tab);
+        doInsertQuery(conn, stmt, tab);
         doSelectQuery(conn, stmt, tab);
         tab++;
-        if (tab >= this.numOfTables){
+        if (tab >= this.numOfTables) {
           tab = 0;
         }
       }
 
       conn.close();
     } catch (SQLException se) {
-      //Handle errors for JDBC
+      // Handle errors for JDBC
       se.printStackTrace();
     } catch (Exception e) {
-      //Handle errors for Class.forName
+      // Handle errors for Class.forName
       e.printStackTrace();
     } finally {
-      //finally block used to close resources
+      // finally block used to close resources
       try {
         if (stmt != null) {
           stmt.close();
         }
       } catch (SQLException se2) {
-      }// nothing we can do
+      } // nothing we can do
       try {
         if (conn != null) {
           conn.close();
         }
       } catch (SQLException se) {
         se.printStackTrace();
-      }//end finally try
-    }//end try
-  }//end main
+      } // end finally try
+    } // end try
+  } // end main
 
   private void doQuery(Connection conn, String sql, Statement stmt) throws SQLException {
     ResultSet rs = null;
     try {
-       rs = stmt.executeQuery(sql);
+      rs = stmt.executeQuery(sql);
     } catch (SQLException se) {
       if (se.getMessage().contains("does not exist")) {
         MAPDLOGGER.info(threadId + ": table not present");
@@ -125,14 +124,14 @@ class Worker implements Runnable {
     rs.close();
   }
 
-  private void doInsertQuery(Connection conn, Statement stmt, int tab) throws SQLException {
-
-    doQuery(conn, "insert into t"+tab+" values (1)", stmt);
-
+  private void doInsertQuery(Connection conn, Statement stmt, int tab)
+          throws SQLException {
+    doQuery(conn, "insert into t" + tab + " values (1)", stmt);
   }
 
-  private void doSelectQuery(Connection conn, Statement stmt, int tab) throws SQLException {
-    doQuery(conn, ("select sum(newn) from t"+tab), stmt);
+  private void doSelectQuery(Connection conn, Statement stmt, int tab)
+          throws SQLException {
+    doQuery(conn, ("select sum(newn) from t" + tab), stmt);
   }
 
-}//end FirstExample
+} // end FirstExample

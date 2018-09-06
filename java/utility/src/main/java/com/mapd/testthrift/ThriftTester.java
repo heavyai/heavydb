@@ -45,7 +45,6 @@ import org.slf4j.LoggerFactory;
  * @author michael
  */
 public class ThriftTester {
-
   final static Logger logger = LoggerFactory.getLogger(ThriftTester.class);
 
   public static void main(String[] args) {
@@ -61,13 +60,13 @@ public class ThriftTester {
     TTransport transport = null;
     try {
       transport = new TSocket("localhost", 9091);
-      //transport = new THttpClient("http://localhost:9090");
+      // transport = new THttpClient("http://localhost:9090");
 
       transport.open();
 
       TProtocol protocol = new TBinaryProtocol(transport);
-      //TProtocol protocol = new TJSONProtocol(transport);
-      //TProtocol protocol = new TProtocol(transport);
+      // TProtocol protocol = new TJSONProtocol(transport);
+      // TProtocol protocol = new TProtocol(transport);
 
       MapD.Client client = new MapD.Client(protocol);
 
@@ -104,19 +103,25 @@ public class ThriftTester {
         logger.info("\tcol type :" + col.col_type.type);
       }
 
-      //client.set_execution_mode(session, TExecuteMode.CPU);
+      // client.set_execution_mode(session, TExecuteMode.CPU);
       logger.info(" -- before query -- ");
 
-      TQueryResult sql_execute = client.sql_execute(session, "Select uniquecarrier,flightnum  from flights LIMIT 3;", true, null, -1, -1);
-      //client.send_sql_execute(session, "Select BRAND  from ACV ;", true);
-      //logger.info(" -- before query recv -- ");
-      //TQueryResult sql_execute = client.recv_sql_execute();
+      TQueryResult sql_execute = client.sql_execute(session,
+              "Select uniquecarrier,flightnum  from flights LIMIT 3;",
+              true,
+              null,
+              -1,
+              -1);
+      // client.send_sql_execute(session, "Select BRAND  from ACV ;", true);
+      // logger.info(" -- before query recv -- ");
+      // TQueryResult sql_execute = client.recv_sql_execute();
 
       logger.info(" -- after query -- ");
 
       logger.info("TQueryResult execution time is " + sql_execute.getExecution_time_ms());
       logger.info("TQueryResult is " + sql_execute.toString());
-      logger.info("TQueryResult getFieldValue is " + sql_execute.getFieldValue(TQueryResult._Fields.ROW_SET));
+      logger.info("TQueryResult getFieldValue is "
+              + sql_execute.getFieldValue(TQueryResult._Fields.ROW_SET));
 
       TRowSet row_set = sql_execute.getRow_set();
       Object fieldValue = sql_execute.getFieldValue(TQueryResult._Fields.ROW_SET);
@@ -130,7 +135,6 @@ public class ThriftTester {
       List<TRow> rows = row_set.getRows();
       int count = 1;
       for (TRow row : rows) {
-
         List<TDatum> cols = row.getCols();
         if (cols != null) {
           for (TDatum dat : cols) {
@@ -145,26 +149,26 @@ public class ThriftTester {
       logger.info("columns " + columns);
       count = 1;
       for (TColumn col : columns) {
-
         TColumnData data = col.getData();
         if (data != null) {
           logger.info("COL " + count + " " + data.toString());
-
         }
         count++;
       }
-      
+
       int dash = client.create_dashboard(session, "test1", "state", "image", "metadata");
-      
-      logger.info ("dash id is " + dash);
-      
-      int dash2 = client.create_dashboard(session, "test2", "state2", "image2", "metadata2");
-      
-      logger.info ("dash2 id is " + dash2);
-      
-      client.replace_dashboard(session, dash2, "test3", "mapd", "state3", "image3", "metadata3");
-      
-      logger.info ("replaced");
+
+      logger.info("dash id is " + dash);
+
+      int dash2 =
+              client.create_dashboard(session, "test2", "state2", "image2", "metadata2");
+
+      logger.info("dash2 id is " + dash2);
+
+      client.replace_dashboard(
+              session, dash2, "test3", "mapd", "state3", "image3", "metadata3");
+
+      logger.info("replaced");
 
       // Now disconnect
       logger.info("Trying to disconnect session " + session);
@@ -182,6 +186,5 @@ public class ThriftTester {
 
     logger.info("Connection Ended");
     logger.info("Exit");
-
   }
 }

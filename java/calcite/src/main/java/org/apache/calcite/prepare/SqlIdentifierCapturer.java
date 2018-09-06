@@ -34,7 +34,8 @@ import com.mapd.calcite.parser.MapDSchema;
  * used in a query.
  */
 public class SqlIdentifierCapturer {
-  private static final Map<Class<?>, Set<Method>> GETTERS_CACHE = new ConcurrentHashMap<>();
+  private static final Map<Class<?>, Set<Method>> GETTERS_CACHE =
+          new ConcurrentHashMap<>();
 
   private IdentityHashMap<SqlNode, SqlNode> visitedNodes = new IdentityHashMap<>();
 
@@ -44,15 +45,12 @@ public class SqlIdentifierCapturer {
   public final Set<String> inserts = new HashSet<>();
   public final Set<String> updates = new HashSet<>();
   public final Set<String> deletes = new HashSet<>();
-  
+
   private final Set<String> ignore = new HashSet<>();
-  
-  {
-    currentList.push(ignore);
-  }
+
+  { currentList.push(ignore); }
 
   public void scan(SqlNode root) {
-
     if (null == root) {
       return;
     }
@@ -87,7 +85,7 @@ public class SqlIdentifierCapturer {
         return;
       }
     }
-    
+
     if (root instanceof SqlOrderBy) {
       scan(((SqlOrderBy) root).fetch);
       scan(((SqlOrderBy) root).offset);
@@ -124,8 +122,8 @@ public class SqlIdentifierCapturer {
       currentList.push(ignore);
       scan(((SqlJoin) root).getCondition());
       currentList.pop();
-    } 
-    
+    }
+
     Set<Method> methods = getRelevantGetters(root);
     for (Method m : methods) {
       Object value = null;
@@ -142,24 +140,22 @@ public class SqlIdentifierCapturer {
       } else if (value instanceof SqlNode) {
         scan((SqlNode) value);
       } else if (value instanceof Collection) {
-        for (Object vobj:((Collection<?>) value)) {
+        for (Object vobj : ((Collection<?>) value)) {
           if (vobj instanceof SqlNode) {
             scan((SqlNode) vobj);
           }
         }
       }
     }
-    
+
     if (root instanceof SqlWith) {
       SqlWith with = (SqlWith) root;
-      
-      
-      for (SqlNode node:with.withList)  {
+
+      for (SqlNode node : with.withList) {
         SqlWithItem item = (SqlWithItem) node;
         selects.remove(item.name.getSimple());
       }
     }
-
 
     if (needsPop) {
       currentList.pop();
@@ -177,19 +173,16 @@ public class SqlIdentifierCapturer {
     }
 
     while (root != null) {
-      if (root == SqlNode.class)
-        break;
+      if (root == SqlNode.class) break;
 
       for (Method m : root.getDeclaredMethods()) {
-        if (m.getParameterTypes().length > 0)
-          continue;
+        if (m.getParameterTypes().length > 0) continue;
 
-        if (!Modifier.isPublic(m.getModifiers()))
-          continue;
+        if (!Modifier.isPublic(m.getModifiers())) continue;
 
         Class<?> returnType = m.getReturnType();
         if (!SqlNode.class.isAssignableFrom(returnType) && SqlNode[].class != returnType
-            && !Collection.class.isAssignableFrom(returnType)) {
+                && !Collection.class.isAssignableFrom(returnType)) {
           continue;
         }
 

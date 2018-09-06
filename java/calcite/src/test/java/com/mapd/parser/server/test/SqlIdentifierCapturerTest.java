@@ -27,9 +27,7 @@ import org.junit.Test;
 import com.mapd.calcite.parser.MapDSqlOperatorTable;
 
 public class SqlIdentifierCapturerTest {
-
   private class MockSchema implements Schema {
-
     @Override
     public Table getTable(String name) {
       return null;
@@ -74,7 +72,6 @@ public class SqlIdentifierCapturerTest {
     public Schema snapshot(SchemaVersion version) {
       return null;
     }
-
   }
 
   private Planner getPlanner() {
@@ -82,10 +79,16 @@ public class SqlIdentifierCapturerTest {
 
     };
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
-    final FrameworkConfig config = Frameworks.newConfigBuilder().defaultSchema(rootSchema.add("mapd", mapd))
-        .operatorTable(new MapDSqlOperatorTable(SqlStdOperatorTable.instance()))
-        .parserConfig(SqlParser.configBuilder().setUnquotedCasing(Casing.UNCHANGED).setCaseSensitive(false).build())
-        .build();
+    final FrameworkConfig config =
+            Frameworks.newConfigBuilder()
+                    .defaultSchema(rootSchema.add("mapd", mapd))
+                    .operatorTable(
+                            new MapDSqlOperatorTable(SqlStdOperatorTable.instance()))
+                    .parserConfig(SqlParser.configBuilder()
+                                          .setUnquotedCasing(Casing.UNCHANGED)
+                                          .setCaseSensitive(false)
+                                          .build())
+                    .build();
     return new MapDPlanner(config);
   }
 
@@ -107,7 +110,8 @@ public class SqlIdentifierCapturerTest {
     assertEquals("deletes", asSet(), capturer.deletes);
   }
 
-  public void testUpdate(String sql, String[] expectedUpdates, String[] expectedSelects) throws Exception {
+  public void testUpdate(String sql, String[] expectedUpdates, String[] expectedSelects)
+          throws Exception {
     SqlIdentifierCapturer capturer = new SqlIdentifierCapturer();
     capturer.scan(getPlanner().parse(sql));
 
@@ -117,7 +121,8 @@ public class SqlIdentifierCapturerTest {
     assertEquals("deletes", asSet(), capturer.deletes);
   }
 
-  public void testInsert(String sql, String[] expectedInserts, String[] expectedSelects) throws Exception {
+  public void testInsert(String sql, String[] expectedInserts, String[] expectedSelects)
+          throws Exception {
     SqlIdentifierCapturer capturer = new SqlIdentifierCapturer();
     capturer.scan(getPlanner().parse(sql));
 
@@ -127,7 +132,8 @@ public class SqlIdentifierCapturerTest {
     assertEquals("deletes", asSet(), capturer.deletes);
   }
 
-  public void testDelete(String sql, String[] expectedDeletes, String[] expectedSelects) throws Exception {
+  public void testDelete(String sql, String[] expectedDeletes, String[] expectedSelects)
+          throws Exception {
     SqlIdentifierCapturer capturer = new SqlIdentifierCapturer();
     capturer.scan(getPlanner().parse(sql));
 
@@ -156,13 +162,13 @@ public class SqlIdentifierCapturerTest {
 
     sql = "SELECT * FROM sales UNION SELECT * FROM reports UNION SELECT * FROM marketing";
     testSelect(sql, asArray("sales", "reports", "marketing"));
-    
+
     sql = "SELECT COUNT(*) AS n, str FROM query_rewrite_test WHERE str IN ('str2', 'str99') GROUP BY str HAVING n > 0 ORDER BY n DESC";
     testSelect(sql, asArray("query_rewrite_test"));
-    
+
     sql = "SELECT str, SUM(y) as total_y FROM test GROUP BY str ORDER BY total_y DESC, str LIMIT 1";
     testSelect(sql, asArray("test"));
-    
+
     sql = "SELECT str FROM (SELECT str, SUM(y) as total_y FROM test GROUP BY str ORDER BY total_y DESC, str LIMIT 1)";
     testSelect(sql, asArray("test"));
 
@@ -171,7 +177,6 @@ public class SqlIdentifierCapturerTest {
 
     sql = "WITH d1 AS (SELECT deptno, dname FROM dept LIMIT 10) SELECT ename, dname FROM emp, d1 WHERE emp.deptno = d1.deptno ORDER BY ename ASC LIMIT 10";
     testSelect(sql, asArray("emp", "dept"));
-    
   }
 
   @Test
@@ -193,13 +198,13 @@ public class SqlIdentifierCapturerTest {
 
     sql = "SELECT * FROM mapd.sales UNION SELECT * FROM mapd.reports UNION SELECT * FROM mapd.marketing";
     testSelect(sql, asArray("sales", "reports", "marketing"));
-    
+
     sql = "SELECT COUNT(*) AS n, str FROM mapd.query_rewrite_test WHERE str IN ('str2', 'str99') GROUP BY str HAVING n > 0 ORDER BY n DESC";
     testSelect(sql, asArray("query_rewrite_test"));
-    
+
     sql = "SELECT str, SUM(y) as total_y FROM mapd.test GROUP BY str ORDER BY total_y DESC, str LIMIT 1";
     testSelect(sql, asArray("test"));
-    
+
     sql = "SELECT str FROM (SELECT str, SUM(y) as total_y FROM mapd.test GROUP BY str ORDER BY total_y DESC, str LIMIT 1)";
     testSelect(sql, asArray("test"));
 
@@ -208,7 +213,6 @@ public class SqlIdentifierCapturerTest {
 
     sql = "WITH d1 AS (SELECT deptno, dname FROM mapd.dept LIMIT 10) SELECT ename, dname FROM mapd.emp, d1 WHERE emp.deptno = d1.deptno ORDER BY ename ASC LIMIT 10";
     testSelect(sql, asArray("emp", "dept"));
-    
   }
 
   @Test
@@ -291,7 +295,7 @@ public class SqlIdentifierCapturerTest {
     sql = "DELETE FROM sales WHERE id=(SELECT max(r.val) FROM reports AS r) AND id=(SELECT max(m.val) FROM marketing AS m)";
     testDelete(sql, asArray("sales"), asArray("reports", "marketing"));
   }
-  
+
   @Test
   public void testDeletesWithSchema() throws Exception {
     String sql = "DELETE FROM mapd.sales";

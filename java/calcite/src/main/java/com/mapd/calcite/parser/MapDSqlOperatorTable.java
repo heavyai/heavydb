@@ -45,7 +45,6 @@ import org.apache.calcite.sql.util.ListSqlOperatorTable;
 import org.apache.calcite.sql.util.ReflectiveSqlOperatorTable;
 
 class CaseInsensitiveListSqlOperatorTable extends ListSqlOperatorTable {
-
   @Override
   public void lookupOperatorOverloads(SqlIdentifier opName,
           SqlFunctionCategory category,
@@ -79,15 +78,14 @@ class CaseInsensitiveListSqlOperatorTable extends ListSqlOperatorTable {
  * @author michael
  */
 public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
-
   static {
     try {
       // some nasty bit to remove the std APPROX_COUNT_DISTINCT function definition
-      
+
       Field f = ReflectiveSqlOperatorTable.class.getDeclaredField("operators");
       f.setAccessible(true);
       Multimap operators = (Multimap) f.get(SqlStdOperatorTable.instance());
-      for (Iterator i = operators.entries().iterator(); i.hasNext(); ) {
+      for (Iterator i = operators.entries().iterator(); i.hasNext();) {
         Map.Entry entry = (Map.Entry) i.next();
         if (entry.getValue() == SqlStdOperatorTable.APPROX_COUNT_DISTINCT) {
           i.remove();
@@ -96,7 +94,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
-    
+
     // register our approx count distinct against std table
     SqlStdOperatorTable.instance().register(new ApproxCountDistinct());
   }
@@ -124,11 +122,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     listOpTab.add(op);
   }
 
-  public static void addUDF(MapDSqlOperatorTable opTab, final Map<String, ExtensionFunction> extSigs) {
+  public static void addUDF(
+          MapDSqlOperatorTable opTab, final Map<String, ExtensionFunction> extSigs) {
     // Don't use anonymous inner classes. They can't be instantiated
     // using reflection when we are deserializing from JSON.
-    //opTab.addOperator(new RampFunction());
-    //opTab.addOperator(new DedupFunction());
+    // opTab.addOperator(new RampFunction());
+    // opTab.addOperator(new DedupFunction());
     opTab.addOperator(new MyUDFFunction());
     opTab.addOperator(new PgUnnest());
     opTab.addOperator(new Any());
@@ -204,7 +203,6 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
    * "RAMP" user-defined function.
    */
   public static class RampFunction extends SqlFunction {
-
     public RampFunction() {
       super("RAMP",
               SqlKind.OTHER_FUNCTION,
@@ -216,11 +214,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
-      return typeFactory.builder()
-              .add("I", SqlTypeName.INTEGER)
-              .build();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.builder().add("I", SqlTypeName.INTEGER).build();
     }
   }
 
@@ -228,7 +223,6 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
    * "DEDUP" user-defined function.
    */
   public static class DedupFunction extends SqlFunction {
-
     public DedupFunction() {
       super("DEDUP",
               SqlKind.OTHER_FUNCTION,
@@ -240,11 +234,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
-      return typeFactory.builder()
-              .add("NAME", SqlTypeName.VARCHAR, 1024)
-              .build();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.builder().add("NAME", SqlTypeName.VARCHAR, 1024).build();
     }
   }
 
@@ -253,7 +244,6 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
    * functions to calcite as it has no access to the code
    */
   public static class MyUDFFunction extends SqlFunction {
-
     public MyUDFFunction() {
       super("MyUDF",
               SqlKind.OTHER_FUNCTION,
@@ -265,15 +255,13 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.BIGINT);
     }
   }
 
   /* Postgres-style UNNEST */
   public static class PgUnnest extends SqlFunction {
-
     public PgUnnest() {
       super("PG_UNNEST",
               SqlKind.OTHER_FUNCTION,
@@ -294,7 +282,6 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
   /* ANY qualifier */
   public static class Any extends SqlFunction {
-
     public Any() {
       super("PG_ANY",
               SqlKind.OTHER_FUNCTION,
@@ -315,7 +302,6 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
   /* ALL qualifier */
   public static class All extends SqlFunction {
-
     public All() {
       super("PG_ALL",
               SqlKind.OTHER_FUNCTION,
@@ -336,7 +322,6 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
   /* NOW() */
   public static class Now extends SqlFunction {
-
     public Now() {
       super("NOW",
               SqlKind.OTHER_FUNCTION,
@@ -349,15 +334,13 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 0;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
     }
   }
 
   /* DATETIME */
   public static class Datetime extends SqlFunction {
-
     public Datetime() {
       super("DATETIME",
               SqlKind.OTHER_FUNCTION,
@@ -370,15 +353,13 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
     }
   }
 
   /* Postgres-style EXTRACT */
   public static class PgExtract extends SqlFunction {
-
     public PgExtract() {
       super("PG_EXTRACT",
               SqlKind.OTHER_FUNCTION,
@@ -390,15 +371,14 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
-      return typeFactory.createTypeWithNullability(typeFactory.createSqlType(SqlTypeName.BIGINT),
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createTypeWithNullability(
+              typeFactory.createSqlType(SqlTypeName.BIGINT),
               opBinding.getOperandType(1).isNullable());
     }
   }
 
   public static class Datepart extends SqlFunction {
-
     public Datepart() {
       super("DATEPART",
               SqlKind.OTHER_FUNCTION,
@@ -410,56 +390,58 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
-      return typeFactory.createTypeWithNullability(typeFactory.createSqlType(SqlTypeName.BIGINT),
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createTypeWithNullability(
+              typeFactory.createSqlType(SqlTypeName.BIGINT),
               opBinding.getOperandType(1).isNullable());
     }
   }
 
   public static class Dateadd extends SqlFunction {
-
     public Dateadd() {
       super("DATEADD",
               SqlKind.OTHER_FUNCTION,
               null,
               null,
-              OperandTypes.family(SqlTypeFamily.STRING, SqlTypeFamily.INTEGER, SqlTypeFamily.DATETIME),
+              OperandTypes.family(SqlTypeFamily.STRING,
+                      SqlTypeFamily.INTEGER,
+                      SqlTypeFamily.DATETIME),
               SqlFunctionCategory.TIMEDATE);
     }
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
-      return typeFactory.createTypeWithNullability(typeFactory.createSqlType(SqlTypeName.TIMESTAMP),
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createTypeWithNullability(
+              typeFactory.createSqlType(SqlTypeName.TIMESTAMP),
               opBinding.getOperandType(2).isNullable());
     }
   }
 
   public static class Datediff extends SqlFunction {
-
     public Datediff() {
       super("DATEDIFF",
               SqlKind.OTHER_FUNCTION,
               null,
               null,
-              OperandTypes.family(SqlTypeFamily.STRING, SqlTypeFamily.DATETIME, SqlTypeFamily.DATETIME),
+              OperandTypes.family(SqlTypeFamily.STRING,
+                      SqlTypeFamily.DATETIME,
+                      SqlTypeFamily.DATETIME),
               SqlFunctionCategory.TIMEDATE);
     }
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
-      return typeFactory.createTypeWithNullability(typeFactory.createSqlType(SqlTypeName.BIGINT),
-              opBinding.getOperandType(1).isNullable() || opBinding.getOperandType(2).isNullable());
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createTypeWithNullability(
+              typeFactory.createSqlType(SqlTypeName.BIGINT),
+              opBinding.getOperandType(1).isNullable()
+                      || opBinding.getOperandType(2).isNullable());
     }
   }
 
   /* Postgres-style DATE_TRUNC */
   public static class PgDateTrunc extends SqlFunction {
-
     public PgDateTrunc() {
       super("PG_DATE_TRUNC",
               SqlKind.OTHER_FUNCTION,
@@ -471,15 +453,14 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
-      return typeFactory.createTypeWithNullability(typeFactory.createSqlType(SqlTypeName.TIMESTAMP),
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createTypeWithNullability(
+              typeFactory.createSqlType(SqlTypeName.TIMESTAMP),
               opBinding.getOperandType(1).isNullable());
     }
   }
 
   public static class Length extends SqlFunction {
-
     public Length() {
       super("LENGTH",
               SqlKind.OTHER_FUNCTION,
@@ -491,14 +472,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
   }
 
   public static class CharLength extends SqlFunction {
-
     public CharLength() {
       super("CHAR_LENGTH",
               SqlKind.OTHER_FUNCTION,
@@ -510,14 +489,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
   }
 
   public static class PgILike extends SqlFunction {
-
     public PgILike() {
       super("PG_ILIKE",
               SqlKind.OTHER_FUNCTION,
@@ -528,7 +505,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     }
 
     private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
-      java.util.ArrayList<SqlTypeFamily> families = new java.util.ArrayList<SqlTypeFamily>();
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
       families.add(SqlTypeFamily.STRING);
       families.add(SqlTypeFamily.STRING);
       families.add(SqlTypeFamily.STRING);
@@ -536,7 +514,6 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     }
 
     private static class EscapeOptional implements Predicate<Integer> {
-
       @Override
       public boolean apply(Integer t) {
         return t == 2;
@@ -545,14 +522,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
     }
   }
 
   public static class RegexpLike extends SqlFunction {
-
     public RegexpLike() {
       super("REGEXP_LIKE",
               SqlKind.OTHER_FUNCTION,
@@ -563,7 +538,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     }
 
     private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
-      java.util.ArrayList<SqlTypeFamily> families = new java.util.ArrayList<SqlTypeFamily>();
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
       families.add(SqlTypeFamily.STRING);
       families.add(SqlTypeFamily.STRING);
       families.add(SqlTypeFamily.STRING);
@@ -571,7 +547,6 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     }
 
     private static class EscapeOptional implements Predicate<Integer> {
-
       @Override
       public boolean apply(Integer t) {
         return t == 2;
@@ -580,14 +555,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
     }
   }
 
   public static class Likely extends SqlFunction {
-
     public Likely() {
       super("LIKELY",
               SqlKind.OTHER_FUNCTION,
@@ -604,7 +577,6 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   }
 
   public static class Unlikely extends SqlFunction {
-
     public Unlikely() {
       super("UNLIKELY",
               SqlKind.OTHER_FUNCTION,
@@ -621,9 +593,13 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   }
 
   public static class Sign extends SqlFunction {
-
     public Sign() {
-      super("SIGN", SqlKind.OTHER_FUNCTION, null, null, OperandTypes.NUMERIC, SqlFunctionCategory.NUMERIC);
+      super("SIGN",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.NUMERIC,
+              SqlFunctionCategory.NUMERIC);
     }
 
     @Override
@@ -633,9 +609,13 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   }
 
   static class Truncate extends SqlFunction {
-
     Truncate() {
-      super("TRUNCATE", SqlKind.OTHER_FUNCTION, null, null, OperandTypes.family(signature()), SqlFunctionCategory.NUMERIC);
+      super("TRUNCATE",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.NUMERIC);
     }
 
     @Override
@@ -644,9 +624,9 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       return opBinding.getOperandType(0);
     }
 
-
     private static java.util.List<SqlTypeFamily> signature() {
-      java.util.List<SqlTypeFamily> truncate_sig = new java.util.ArrayList<SqlTypeFamily>();
+      java.util.List<SqlTypeFamily> truncate_sig =
+              new java.util.ArrayList<SqlTypeFamily>();
       truncate_sig.add(SqlTypeFamily.NUMERIC);
       truncate_sig.add(SqlTypeFamily.INTEGER);
       return truncate_sig;
@@ -654,21 +634,25 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   }
 
   static class ST_Contains extends SqlFunction {
-
     ST_Contains() {
-      super("ST_Contains", SqlKind.OTHER_FUNCTION, null, null, OperandTypes.family(signature()), SqlFunctionCategory.SYSTEM);
+      super("ST_Contains",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.SYSTEM);
     }
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 2;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
     }
 
     private static java.util.List<SqlTypeFamily> signature() {
-      java.util.List<SqlTypeFamily> st_contains_sig = new java.util.ArrayList<SqlTypeFamily>();
+      java.util.List<SqlTypeFamily> st_contains_sig =
+              new java.util.ArrayList<SqlTypeFamily>();
       st_contains_sig.add(SqlTypeFamily.ANY);
       st_contains_sig.add(SqlTypeFamily.ANY);
       return st_contains_sig;
@@ -676,21 +660,25 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   }
 
   static class ST_Within extends SqlFunction {
-
     ST_Within() {
-      super("ST_Within", SqlKind.OTHER_FUNCTION, null, null, OperandTypes.family(signature()), SqlFunctionCategory.SYSTEM);
+      super("ST_Within",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.SYSTEM);
     }
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 2;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
     }
 
     private static java.util.List<SqlTypeFamily> signature() {
-      java.util.List<SqlTypeFamily> st_within_sig = new java.util.ArrayList<SqlTypeFamily>();
+      java.util.List<SqlTypeFamily> st_within_sig =
+              new java.util.ArrayList<SqlTypeFamily>();
       st_within_sig.add(SqlTypeFamily.ANY);
       st_within_sig.add(SqlTypeFamily.ANY);
       return st_within_sig;
@@ -698,21 +686,25 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   }
 
   static class ST_Distance extends SqlFunction {
-
     ST_Distance() {
-      super("ST_Distance", SqlKind.OTHER_FUNCTION, null, null, OperandTypes.family(signature()), SqlFunctionCategory.SYSTEM);
+      super("ST_Distance",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.SYSTEM);
     }
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 2;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.DOUBLE);
     }
 
     private static java.util.List<SqlTypeFamily> signature() {
-      java.util.List<SqlTypeFamily> st_distance_sig = new java.util.ArrayList<SqlTypeFamily>();
+      java.util.List<SqlTypeFamily> st_distance_sig =
+              new java.util.ArrayList<SqlTypeFamily>();
       st_distance_sig.add(SqlTypeFamily.ANY);
       st_distance_sig.add(SqlTypeFamily.ANY);
       return st_distance_sig;
@@ -720,14 +712,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   }
 
   static class ST_GeogFromText extends SqlFunction {
-
     ST_GeogFromText() {
       super("ST_GeogFromText",
               SqlKind.OTHER_FUNCTION,
               null,
               null,
-              OperandTypes.or(
-                      OperandTypes.family(SqlTypeFamily.ANY),
+              OperandTypes.or(OperandTypes.family(SqlTypeFamily.ANY),
                       OperandTypes.family(SqlTypeFamily.ANY, SqlTypeFamily.INTEGER)),
               SqlFunctionCategory.SYSTEM);
     }
@@ -735,21 +725,18 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
   }
 
   static class ST_GeomFromText extends SqlFunction {
-
     ST_GeomFromText() {
       super("ST_GeomFromText",
               SqlKind.OTHER_FUNCTION,
               null,
               null,
-              OperandTypes.or(
-                      OperandTypes.family(SqlTypeFamily.ANY),
+              OperandTypes.or(OperandTypes.family(SqlTypeFamily.ANY),
                       OperandTypes.family(SqlTypeFamily.ANY, SqlTypeFamily.INTEGER)),
               SqlFunctionCategory.SYSTEM);
     }
@@ -757,14 +744,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
   }
 
   static class ST_Transform extends SqlFunction {
-
     ST_Transform() {
       super("ST_Transform",
               SqlKind.OTHER_FUNCTION,
@@ -777,14 +762,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
   }
 
   static class ST_X extends SqlFunction {
-
     ST_X() {
       super("ST_X",
               SqlKind.OTHER_FUNCTION,
@@ -797,14 +780,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.DOUBLE);
     }
   }
 
   static class ST_Y extends SqlFunction {
-
     ST_Y() {
       super("ST_Y",
               SqlKind.OTHER_FUNCTION,
@@ -817,14 +798,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.DOUBLE);
     }
   }
 
   static class ST_XMin extends SqlFunction {
-
     ST_XMin() {
       super("ST_XMin",
               SqlKind.OTHER_FUNCTION,
@@ -837,14 +816,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.DOUBLE);
     }
   }
 
   static class ST_XMax extends SqlFunction {
-
     ST_XMax() {
       super("ST_XMax",
               SqlKind.OTHER_FUNCTION,
@@ -857,14 +834,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.DOUBLE);
     }
   }
 
   static class ST_YMin extends SqlFunction {
-
     ST_YMin() {
       super("ST_YMin",
               SqlKind.OTHER_FUNCTION,
@@ -877,14 +852,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.DOUBLE);
     }
   }
 
   static class ST_YMax extends SqlFunction {
-
     ST_YMax() {
       super("ST_YMax",
               SqlKind.OTHER_FUNCTION,
@@ -897,14 +870,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.DOUBLE);
     }
   }
 
   static class ST_PointN extends SqlFunction {
-
     ST_PointN() {
       super("ST_PointN",
               SqlKind.OTHER_FUNCTION,
@@ -917,14 +888,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
   }
 
   static class ST_EndPoint extends SqlFunction {
-
     ST_EndPoint() {
       super("ST_EndPoint",
               SqlKind.OTHER_FUNCTION,
@@ -937,14 +906,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
   }
 
   static class ST_StartPoint extends SqlFunction {
-
     ST_StartPoint() {
       super("ST_StartPoint",
               SqlKind.OTHER_FUNCTION,
@@ -957,14 +924,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
   }
 
   static class ST_Length extends SqlFunction {
-
     ST_Length() {
       super("ST_Length",
               SqlKind.OTHER_FUNCTION,
@@ -977,14 +942,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.DOUBLE);
     }
   }
 
   static class ST_Perimeter extends SqlFunction {
-
     ST_Perimeter() {
       super("ST_Perimeter",
               SqlKind.OTHER_FUNCTION,
@@ -997,14 +960,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.DOUBLE);
     }
   }
 
   static class ST_Area extends SqlFunction {
-
     ST_Area() {
       super("ST_Area",
               SqlKind.OTHER_FUNCTION,
@@ -1017,14 +978,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.DOUBLE);
     }
   }
 
   static class ST_NPoints extends SqlFunction {
-    
     ST_NPoints() {
       super("ST_NPoints",
               SqlKind.OTHER_FUNCTION,
@@ -1037,14 +996,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-             = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
   }
 
   static class ST_NRings extends SqlFunction {
-    
     ST_NRings() {
       super("ST_NRings",
               SqlKind.OTHER_FUNCTION,
@@ -1057,14 +1014,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-             = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
   }
 
   static class ST_SRID extends SqlFunction {
-
     ST_SRID() {
       super("ST_SRID",
               SqlKind.OTHER_FUNCTION,
@@ -1077,14 +1032,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
   }
 
   static class ST_SetSRID extends SqlFunction {
-
     ST_SetSRID() {
       super("ST_SetSRID",
               SqlKind.OTHER_FUNCTION,
@@ -1097,14 +1050,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
   }
 
   static class CastToGeography extends SqlFunction {
-
     CastToGeography() {
       super("CastToGeography",
               SqlKind.OTHER_FUNCTION,
@@ -1117,15 +1068,13 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
   }
 
   /* OFFSET_IN_FRAGMENT() */
   public static class OffsetInFragment extends SqlFunction {
-
     public OffsetInFragment() {
       super("OFFSET_IN_FRAGMENT",
               SqlKind.OTHER_FUNCTION,
@@ -1138,36 +1087,31 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 0;
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
   }
 
   static class ApproxCountDistinct extends SqlAggFunction {
-
     ApproxCountDistinct() {
       super("APPROX_COUNT_DISTINCT",
               null,
               SqlKind.OTHER_FUNCTION,
               null,
               null,
-              OperandTypes.or(
-                      OperandTypes.family(SqlTypeFamily.ANY),
+              OperandTypes.or(OperandTypes.family(SqlTypeFamily.ANY),
                       OperandTypes.family(SqlTypeFamily.ANY, SqlTypeFamily.INTEGER)),
               SqlFunctionCategory.SYSTEM);
     }
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.BIGINT);
     }
   }
 
   public static class Sample extends SqlAggFunction {
-
     public Sample() {
       super("SAMPLE",
               SqlKind.OTHER_FUNCTION,
@@ -1185,7 +1129,6 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
   // for backwards compatibility
   public static class LastSample extends SqlAggFunction {
-    
     public LastSample() {
       super("LAST_SAMPLE",
               SqlKind.OTHER_FUNCTION,
@@ -1199,11 +1142,9 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       return opBinding.getOperandType(0);
     }
-  
   }
 
   static class ExtFunction extends SqlFunction {
-
     ExtFunction(final String name, final ExtensionFunction sig) {
       super(name,
               SqlKind.OTHER_FUNCTION,
@@ -1214,7 +1155,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       ret = toSqlTypeName(sig.getRet());
     }
 
-    private static java.util.List<SqlTypeFamily> toSqlSignature(final ExtensionFunction sig) {
+    private static java.util.List<SqlTypeFamily> toSqlSignature(
+            final ExtensionFunction sig) {
       java.util.List<SqlTypeFamily> sql_sig = new java.util.ArrayList<SqlTypeFamily>();
       for (int arg_idx = 0; arg_idx < sig.getArgs().size(); ++arg_idx) {
         final ExtensionFunction.ExtArgumentType arg_type = sig.getArgs().get(arg_idx);
@@ -1241,7 +1183,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       return typeFactory.createTypeWithNullability(typeFactory.createSqlType(ret), true);
     }
 
-    private static SqlTypeName toSqlTypeName(final ExtensionFunction.ExtArgumentType type) {
+    private static SqlTypeName toSqlTypeName(
+            final ExtensionFunction.ExtArgumentType type) {
       switch (type) {
         case Bool:
           return SqlTypeName.BOOLEAN;
@@ -1277,7 +1220,6 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   //
 
   static class MapD_GeoPolyBoundsPtr extends SqlFunction {
-    
     MapD_GeoPolyBoundsPtr() {
       super("MapD_GeoPolyBoundsPtr",
               SqlKind.OTHER_FUNCTION,
@@ -1290,14 +1232,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-             = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.BIGINT);
     }
   }
 
   static class MapD_GeoPolyRenderGroup extends SqlFunction {
-    
     MapD_GeoPolyRenderGroup() {
       super("MapD_GeoPolyRenderGroup",
               SqlKind.OTHER_FUNCTION,
@@ -1310,8 +1250,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory
-             = opBinding.getTypeFactory();
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
   }

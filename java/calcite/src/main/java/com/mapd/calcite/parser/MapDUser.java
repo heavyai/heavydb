@@ -20,7 +20,6 @@ package com.mapd.calcite.parser;
  * @author michael
  */
 public class MapDUser {
-
   private final String user;
   private final String catalog;
   private final int mapDPort;

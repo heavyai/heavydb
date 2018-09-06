@@ -27,7 +27,8 @@ import org.apache.calcite.sql.validate.SqlMonotonicity;
 import java.math.BigDecimal;
 
 // MAPD: TODO: this is a modified version of 1.16 version
-// MAPD: TODO: can be removed once https://issues.apache.org/jira/browse/CALCITE-2416 is resolved
+// MAPD: TODO: can be removed once https://issues.apache.org/jira/browse/CALCITE-2416 is
+// resolved
 
 /**
  * Base class for binary operators such as addition, subtraction, and
@@ -37,10 +38,20 @@ import java.math.BigDecimal;
 public class SqlMonotonicBinaryOperator extends SqlBinaryOperator {
   // ~ Constructors -----------------------------------------------------------
 
-  public SqlMonotonicBinaryOperator(String name, SqlKind kind, int prec, boolean isLeftAssoc,
-      SqlReturnTypeInference returnTypeInference, SqlOperandTypeInference operandTypeInference,
-      SqlOperandTypeChecker operandTypeChecker) {
-    super(name, kind, prec, isLeftAssoc, returnTypeInference, operandTypeInference, operandTypeChecker);
+  public SqlMonotonicBinaryOperator(String name,
+          SqlKind kind,
+          int prec,
+          boolean isLeftAssoc,
+          SqlReturnTypeInference returnTypeInference,
+          SqlOperandTypeInference operandTypeInference,
+          SqlOperandTypeChecker operandTypeChecker) {
+    super(name,
+            kind,
+            prec,
+            isLeftAssoc,
+            returnTypeInference,
+            operandTypeInference,
+            operandTypeChecker);
   }
 
   private BigDecimal getOperandLiteralValueSignumSafe(SqlOperatorBinding call, int num) {
@@ -75,17 +86,17 @@ public class SqlMonotonicBinaryOperator extends SqlBinaryOperator {
       BigDecimal op1 = getOperandLiteralValueSignumSafe(call, 1);
       if (null != op1) {
         switch (op1.signum()) {
-        case -1:
-          // mono0 * negative constant --> reverse mono0
-          return mono0.reverse();
+          case -1:
+            // mono0 * negative constant --> reverse mono0
+            return mono0.reverse();
 
-        case 0:
-          // mono0 * 0 --> constant (zero)
-          return SqlMonotonicity.CONSTANT;
+          case 0:
+            // mono0 * 0 --> constant (zero)
+            return SqlMonotonicity.CONSTANT;
 
-        default:
-          // mono0 * positive constant --> mono0
-          return mono0;
+          default:
+            // mono0 * positive constant --> mono0
+            return mono0;
         }
       }
     }
@@ -106,17 +117,17 @@ public class SqlMonotonicBinaryOperator extends SqlBinaryOperator {
       if (null != op0) {
         if (!call.isOperandNull(0, true)) {
           switch (op0.signum()) {
-          case -1:
-            // negative constant * mono1 --> reverse mono1
-            return mono1.reverse();
+            case -1:
+              // negative constant * mono1 --> reverse mono1
+              return mono1.reverse();
 
-          case 0:
-            // 0 * mono1 --> constant (zero)
-            return SqlMonotonicity.CONSTANT;
+            case 0:
+              // 0 * mono1 --> constant (zero)
+              return SqlMonotonicity.CONSTANT;
 
-          default:
-            // positive constant * mono1 --> mono1
-            return mono1;
+            default:
+              // positive constant * mono1 --> mono1
+              return mono1;
           }
         }
       }

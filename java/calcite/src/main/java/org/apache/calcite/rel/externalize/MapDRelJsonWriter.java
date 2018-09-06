@@ -44,11 +44,9 @@ public class MapDRelJsonWriter implements RelWriter {
 
   private final JsonBuilder jsonBuilder;
   private final MapDRelJson relJson;
-  private final Map<RelNode, String> relIdMap =
-      new IdentityHashMap<RelNode, String>();
+  private final Map<RelNode, String> relIdMap = new IdentityHashMap<RelNode, String>();
   private final List<Object> relList;
-  private final List<Pair<String, Object>> values =
-      new ArrayList<Pair<String, Object>>();
+  private final List<Pair<String, Object>> values = new ArrayList<Pair<String, Object>>();
   private String previousId;
 
   //~ Constructors -------------------------------------------------------------
@@ -74,7 +72,7 @@ public class MapDRelJsonWriter implements RelWriter {
     if (rel instanceof LogicalAggregate) {
       map.put("fields", rel.getRowType().getFieldNames());
     }
-    if (rel instanceof LogicalTableModify ) {
+    if (rel instanceof LogicalTableModify) {
       // FIX-ME:  What goes here?
     }
 
@@ -135,7 +133,7 @@ public class MapDRelJsonWriter implements RelWriter {
   private List<Object> getList(List<Pair<String, Object>> values, String tag) {
     for (Pair<String, Object> value : values) {
       if (value.left.equals(tag)) {
-        //noinspection unchecked
+        // noinspection unchecked
         return (List<Object>) value.right;
       }
     }
@@ -152,8 +150,7 @@ public class MapDRelJsonWriter implements RelWriter {
   }
 
   public RelWriter done(RelNode node) {
-    final List<Pair<String, Object>> valuesCopy =
-        ImmutableList.copyOf(values);
+    final List<Pair<String, Object>> valuesCopy = ImmutableList.copyOf(values);
     values.clear();
     explain_(node, valuesCopy);
     return this;

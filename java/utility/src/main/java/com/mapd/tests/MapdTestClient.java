@@ -49,7 +49,7 @@ public class MapdTestClient {
   public TClusterHardwareInfo get_hardware_info() throws TMapDException, TException {
     return client.get_hardware_info(sessionId);
   }
-  
+
   public TTableDetails get_table_details(String table_name) throws Exception {
     return client.get_table_details(sessionId, table_name);
   }
@@ -59,11 +59,20 @@ public class MapdTestClient {
   }
 
   public int create_dashboard(String name) throws Exception {
-    return client.create_dashboard(sessionId, name, "STATE", name + "_hash", name + "_meta");
+    return client.create_dashboard(
+            sessionId, name, "STATE", name + "_hash", name + "_meta");
   }
 
-  public void replace_dashboard(int dashboard_id, java.lang.String name, java.lang.String new_owner) throws Exception {
-    client.replace_dashboard(sessionId, dashboard_id, name, new_owner, "STATE", name + "_hash", name + "_meta");
+  public void replace_dashboard(
+          int dashboard_id, java.lang.String name, java.lang.String new_owner)
+          throws Exception {
+    client.replace_dashboard(sessionId,
+            dashboard_id,
+            name,
+            new_owner,
+            "STATE",
+            name + "_hash",
+            name + "_meta");
   }
 
   public TDashboard get_dashboard(int id) throws Exception {
@@ -87,7 +96,8 @@ public class MapdTestClient {
     return client.get_roles(sessionId);
   }
 
-  public List<TDBObject> get_db_object_privs(String objectName, TDBObjectType type) throws Exception {
+  public List<TDBObject> get_db_object_privs(String objectName, TDBObjectType type)
+          throws Exception {
     return client.get_db_object_privs(sessionId, objectName, type);
   }
 
@@ -100,8 +110,9 @@ public class MapdTestClient {
     return new HashSet<String>(roles);
   }
 
-  public static MapdTestClient getClient(String host, int port, String db, String user, String password)
-      throws Exception {
+  public static MapdTestClient getClient(
+          String host, int port, String db, String user, String password)
+          throws Exception {
     TSocket transport = new TSocket(host, port);
     transport.open();
     TProtocol protocol = new TBinaryProtocol(transport);
@@ -111,5 +122,4 @@ public class MapdTestClient {
     session.sessionId = client.connect(user, password, db);
     return session;
   }
-
 }

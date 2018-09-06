@@ -54,7 +54,6 @@ import org.slf4j.LoggerFactory;
  * @author michael
  */
 class MapDPreparedStatement implements PreparedStatement {
-
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDPreparedStatement.class);
   public SQLWarning rootWarning = null;
 
@@ -81,7 +80,8 @@ class MapDPreparedStatement implements PreparedStatement {
     this.session = session;
     this.stmt = new MapDStatement(session, client);
     MAPDLOGGER.debug("Prepared statement is " + currentSQL);
-    //TODO in real life this needs to check if the ? is inside quotes before we assume it a parameter
+    // TODO in real life this needs to check if the ? is inside quotes before we assume it
+    // a parameter
     brokenSQL = currentSQL.split("\\?", -1);
     parmCount = brokenSQL.length - 1;
     parmRep = new String[parmCount];
@@ -89,7 +89,8 @@ class MapDPreparedStatement implements PreparedStatement {
     parmIsString = new boolean[parmCount];
     repCount = 0;
     if (currentSQL.toUpperCase().contains("INSERT ")) {
-      // remove double quotes required for queries generated with " around all names like kafka connect
+      // remove double quotes required for queries generated with " around all names like
+      // kafka connect
       currentSQL = currentSQL.replaceAll("\"", " ");
       MAPDLOGGER.debug("Insert Prepared statement is " + currentSQL);
       isInsert = true;
@@ -103,10 +104,11 @@ class MapDPreparedStatement implements PreparedStatement {
 
   private String getQuery() {
     String qsql;
-    //put string together if required
+    // put string together if required
     if (parmCount > 0) {
       if (repCount != parmCount) {
-        throw new UnsupportedOperationException("Incorrect number of replace parameters for prepared statement "
+        throw new UnsupportedOperationException(
+                "Incorrect number of replace parameters for prepared statement "
                 + currentSQL + " has only " + repCount + " parameters");
       }
       StringBuilder modQuery = new StringBuilder(currentSQL.length() * 5);
@@ -130,7 +132,7 @@ class MapDPreparedStatement implements PreparedStatement {
 
     qsql = qsql.replace(" WHERE 1=0", " LIMIT 1 ");
     MAPDLOGGER.debug("Query is now " + qsql);
-    repCount = 0; //reset the parameters
+    repCount = 0; // reset the parameters
     return qsql;
   }
 
@@ -141,9 +143,10 @@ class MapDPreparedStatement implements PreparedStatement {
       MAPDLOGGER.debug("executeQuery, sql=" + qsql);
       return stmt.executeQuery(qsql);
     }
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
@@ -172,9 +175,10 @@ class MapDPreparedStatement implements PreparedStatement {
   @Override
   public void setByte(int parameterIndex, byte x) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
@@ -239,9 +243,10 @@ class MapDPreparedStatement implements PreparedStatement {
   @Override
   public void setBytes(int parameterIndex, byte[] x) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
@@ -265,56 +270,66 @@ class MapDPreparedStatement implements PreparedStatement {
   @Override
   public void setTimestamp(int parameterIndex, Timestamp x) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    parmRep[parameterIndex - 1] = x.toString(); //new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(x);
+    parmRep[parameterIndex - 1] =
+            x.toString(); // new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(x);
     parmIsString[parameterIndex - 1] = true;
     parmIsNull[parameterIndex - 1] = false;
     repCount++;
   }
 
   @Override
-  public void setAsciiStream(int parameterIndex, InputStream x, int length) throws SQLException {
+  public void setAsciiStream(int parameterIndex, InputStream x, int length)
+          throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
-  public void setUnicodeStream(int parameterIndex, InputStream x, int length) throws SQLException {
+  public void setUnicodeStream(int parameterIndex, InputStream x, int length)
+          throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
-  public void setBinaryStream(int parameterIndex, InputStream x, int length) throws SQLException {
+  public void setBinaryStream(int parameterIndex, InputStream x, int length)
+          throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void clearParameters() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    //TODO MAT we will actually need to do something here one day
+    // TODO MAT we will actually need to do something here one day
   }
 
   @Override
-  public void setObject(int parameterIndex, Object x, int targetSqlType) throws SQLException {
+  public void setObject(int parameterIndex, Object x, int targetSqlType)
+          throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setObject(int parameterIndex, Object x) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
@@ -350,280 +365,325 @@ class MapDPreparedStatement implements PreparedStatement {
       rows.add(tsr);
       MAPDLOGGER.debug("addBatch, rows=" + rows.size());
     } else {
-      throw new UnsupportedOperationException("addBatch only supported for insert, line:" + new Throwable().
-              getStackTrace()[0].getLineNumber());
+      throw new UnsupportedOperationException("addBatch only supported for insert, line:"
+              + new Throwable().getStackTrace()[0].getLineNumber());
     }
   }
 
   @Override
-  public void setCharacterStream(int parameterIndex, Reader reader, int length) throws SQLException {
+  public void setCharacterStream(int parameterIndex, Reader reader, int length)
+          throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setRef(int parameterIndex, Ref x) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setBlob(int parameterIndex, Blob x) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setClob(int parameterIndex, Clob x) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setArray(int parameterIndex, Array x) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public ResultSetMetaData getMetaData() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setDate(int parameterIndex, Date x, Calendar cal) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setTime(int parameterIndex, Time x, Calendar cal) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
-  public void setTimestamp(int parameterIndex, Timestamp x, Calendar cal) throws SQLException {
+  public void setTimestamp(int parameterIndex, Timestamp x, Calendar cal)
+          throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
-  public void setNull(int parameterIndex, int sqlType, String typeName) throws SQLException {
+  public void setNull(int parameterIndex, int sqlType, String typeName)
+          throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setURL(int parameterIndex, URL x) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public ParameterMetaData getParameterMetaData() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setRowId(int parameterIndex, RowId x) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setNString(int parameterIndex, String value) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
-  public void setNCharacterStream(int parameterIndex, Reader value, long length) throws SQLException {
+  public void setNCharacterStream(int parameterIndex, Reader value, long length)
+          throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setNClob(int parameterIndex, NClob value) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
-  public void setClob(int parameterIndex, Reader reader, long length) throws SQLException {
+  public void setClob(int parameterIndex, Reader reader, long length)
+          throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
-  public void setBlob(int parameterIndex, InputStream inputStream, long length) throws SQLException {
+  public void setBlob(int parameterIndex, InputStream inputStream, long length)
+          throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
-  public void setNClob(int parameterIndex, Reader reader, long length) throws SQLException {
+  public void setNClob(int parameterIndex, Reader reader, long length)
+          throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setSQLXML(int parameterIndex, SQLXML xmlObject) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
-  public void setObject(int parameterIndex, Object x, int targetSqlType, int scaleOrLength) throws SQLException {
+  public void setObject(
+          int parameterIndex, Object x, int targetSqlType, int scaleOrLength)
+          throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
-  public void setAsciiStream(int parameterIndex, InputStream x, long length) throws SQLException {
+  public void setAsciiStream(int parameterIndex, InputStream x, long length)
+          throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
-  public void setBinaryStream(int parameterIndex, InputStream x, long length) throws SQLException {
+  public void setBinaryStream(int parameterIndex, InputStream x, long length)
+          throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
-  public void setCharacterStream(int parameterIndex, Reader reader, long length) throws SQLException {
+  public void setCharacterStream(int parameterIndex, Reader reader, long length)
+          throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setAsciiStream(int parameterIndex, InputStream x) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setBinaryStream(int parameterIndex, InputStream x) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setCharacterStream(int parameterIndex, Reader reader) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setNCharacterStream(int parameterIndex, Reader value) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setClob(int parameterIndex, Reader reader) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setBlob(int parameterIndex, InputStream inputStream) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setNClob(int parameterIndex, Reader reader) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public ResultSet executeQuery(String sql) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public int executeUpdate(String sql) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void close() throws SQLException {
     MAPDLOGGER.debug("close");
     if (stmt != null) {
-      //TODO MAT probably more needed here
+      // TODO MAT probably more needed here
       stmt.close();
       stmt = null;
     }
@@ -632,17 +692,19 @@ class MapDPreparedStatement implements PreparedStatement {
   @Override
   public int getMaxFieldSize() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setMaxFieldSize(int max) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
@@ -661,9 +723,10 @@ class MapDPreparedStatement implements PreparedStatement {
   @Override
   public void setEscapeProcessing(boolean enable) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
@@ -675,7 +738,8 @@ class MapDPreparedStatement implements PreparedStatement {
   @Override
   public void setQueryTimeout(int seconds) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    SQLWarning warning = new SQLWarning("Query timeouts are not supported.  Substituting a value of zero.");
+    SQLWarning warning = new SQLWarning(
+            "Query timeouts are not supported.  Substituting a value of zero.");
     if (rootWarning == null)
       rootWarning = warning;
     else
@@ -685,9 +749,10 @@ class MapDPreparedStatement implements PreparedStatement {
   @Override
   public void cancel() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
@@ -705,9 +770,10 @@ class MapDPreparedStatement implements PreparedStatement {
   @Override
   public void setCursorName(String name) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
@@ -716,8 +782,7 @@ class MapDPreparedStatement implements PreparedStatement {
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName()
-    );
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
@@ -729,7 +794,7 @@ class MapDPreparedStatement implements PreparedStatement {
   @Override
   public int getUpdateCount() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    //TODO MAT this needs to change when updates are added
+    // TODO MAT this needs to change when updates are added
     return 0;
   }
 
@@ -742,55 +807,62 @@ class MapDPreparedStatement implements PreparedStatement {
   @Override
   public void setFetchDirection(int direction) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public int getFetchDirection() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setFetchSize(int rows) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    //TODO we need to chnage the model to allow smaller select chunks at the moment you get everything
+    // TODO we need to chnage the model to allow smaller select chunks at the moment you
+    // get everything
   }
 
   @Override
   public int getFetchSize() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public int getResultSetConcurrency() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public int getResultSetType() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void addBatch(String sql) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
@@ -826,136 +898,153 @@ class MapDPreparedStatement implements PreparedStatement {
   @Override
   public Connection getConnection() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public boolean getMoreResults(int current) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public ResultSet getGeneratedKeys() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public int executeUpdate(String sql, int autoGeneratedKeys) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public int executeUpdate(String sql, int[] columnIndexes) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public int executeUpdate(String sql, String[] columnNames) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public boolean execute(String sql, int autoGeneratedKeys) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public boolean execute(String sql, int[] columnIndexes) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public boolean execute(String sql, String[] columnNames) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public int getResultSetHoldability() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public boolean isClosed() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void setPoolable(boolean poolable) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public boolean isPoolable() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public void closeOnCompletion() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public boolean isCloseOnCompletion() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public <T> T unwrap(Class<T> iface) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
   public boolean isWrapperFor(Class<?> iface) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    throw new UnsupportedOperationException("Not supported yet,"
+            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+            + " class:" + new Throwable().getStackTrace()[0].getClassName()
+            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 }

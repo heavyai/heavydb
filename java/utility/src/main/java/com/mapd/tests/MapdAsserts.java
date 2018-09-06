@@ -18,21 +18,16 @@ package com.mapd.tests;
 import com.mapd.thrift.server.TDashboard;
 
 public class MapdAsserts {
-
-  public static interface TestRun {
-    void run() throws Exception;
-  }
+  public static interface TestRun { void run() throws Exception; }
 
   public static void assertEqual(Object a, Object b) {
-    if (a.equals(b))
-      return;
-    throw new RuntimeException("assert failed:\nExpected: "+a+"\n     got: " +b);
+    if (a.equals(b)) return;
+    throw new RuntimeException("assert failed:\nExpected: " + a + "\n     got: " + b);
   }
 
   public static void assertEqual(int a, int b) {
-    if (a == b)
-      return;
-    throw new RuntimeException("assert failed:\nExpected: "+a+"\n     got: " +b);
+    if (a == b) return;
+    throw new RuntimeException("assert failed:\nExpected: " + a + "\n     got: " + b);
   }
 
   public static void assertEqual(String name, TDashboard db) {
@@ -54,5 +49,4 @@ public class MapdAsserts {
       throw new RuntimeException(msg);
     }
   }
-
 }

@@ -23,27 +23,31 @@ import java.sql.DatabaseMetaData;
  * @author michael
  */
 class MapDType {
-
   protected String typeName; // String => Type name
   protected int dataType; // int => SQL data type from java.sql.Types
-  protected int precision; //int => maximum precision
-  protected String literalPrefix; // String => prefix used to quote a literal (may be null)
-  protected String literalSuffix; // String => suffix used to quote a literal (may be null)
-  protected String createParams; // String => parameters used in creating the type (may be null)
+  protected int precision; // int => maximum precision
+  protected String
+          literalPrefix; // String => prefix used to quote a literal (may be null)
+  protected String
+          literalSuffix; // String => suffix used to quote a literal (may be null)
+  protected String
+          createParams; // String => parameters used in creating the type (may be null)
   protected short nullable; // short => can you use NULL for this type.
-//typeNoNulls - does not allow NULL values
-//typeNullable - allows NULL values
-//typeNullableUnknown - nullability unknown
+  // typeNoNulls - does not allow NULL values
+  // typeNullable - allows NULL values
+  // typeNullableUnknown - nullability unknown
   protected boolean caseSensitive; // boolean=> is it case sensitive.
   protected short searchable; // short => can you use "WHERE" based on this type:
-//typePredNone - No support
-//typePredChar - Only supported with WHERE .. LIKE
-//typePredBasic - Supported except for WHERE .. LIKE
-//typeSearchable - Supported for all WHERE ..
+  // typePredNone - No support
+  // typePredChar - Only supported with WHERE .. LIKE
+  // typePredBasic - Supported except for WHERE .. LIKE
+  // typeSearchable - Supported for all WHERE ..
   protected boolean unsignedAttribute; // boolean => is it unsigned.
   protected boolean fixedPrecScale; // boolean => can it be a money value.
-  protected boolean autoIncrement; // boolean => can it be used for an auto-increment value.
-  protected String localTypeName; // String => localized version of type name (may be null)
+  protected boolean
+          autoIncrement; // boolean => can it be used for an auto-increment value.
+  protected String
+          localTypeName; // String => localized version of type name (may be null)
   protected short minimumScale; // short => minimum scale supported
   protected short maximumScale; // short => maximum scale supported
   protected int SqlDataType; // int => unused

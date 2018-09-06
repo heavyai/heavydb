@@ -15,7 +15,7 @@
  */
 package com.mapd.bench;
 
-//STEP 1. Import required packages
+// STEP 1. Import required packages
 import com.mapd.jdbc.MapDStatement;
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
@@ -33,7 +33,6 @@ import org.slf4j.LoggerFactory;
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 
 public class BenchmarkCloud {
-
   final static Logger logger = LoggerFactory.getLogger(BenchmarkCloud.class);
 
   // JDBC driver name and database URL
@@ -60,14 +59,38 @@ public class BenchmarkCloud {
   Connection bencherCon;
   private List<String> LResult = new ArrayList<String>();
 
-  private String headDescriptor = "%3s, %8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s";
-  private String header2 = String.format(headDescriptor, "QRY", "T-Avg", "T-Min", "T-Max", "T-85%",
-          "E-Avg", "E-Min", "E-Max", "E-85%", "E-25%", "E-StdD",
-          "J-Avg", "J-Min", "J-Max", "J-85%",
-          "I-Avg", "I-Min", "I-Max", "I-85%",
-          "F-Exec", "F-jdbc", "F-iter", "ITER", "Total", "Account");
-  private String lineDescriptor = "%3s, %8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8d,%8d,%8d,%8d,%8d,%8d";
-  private String insertDescriptor = "('%s','%s','%s','%s','%s',%s,'%s','%s',%d,'%s', %8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8d,%8d,%8d,%8d,%8d,%8d, '%s')";
+  private String headDescriptor =
+          "%3s, %8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s";
+  private String header2 = String.format(headDescriptor,
+          "QRY",
+          "T-Avg",
+          "T-Min",
+          "T-Max",
+          "T-85%",
+          "E-Avg",
+          "E-Min",
+          "E-Max",
+          "E-85%",
+          "E-25%",
+          "E-StdD",
+          "J-Avg",
+          "J-Min",
+          "J-Max",
+          "J-85%",
+          "I-Avg",
+          "I-Min",
+          "I-Max",
+          "I-85%",
+          "F-Exec",
+          "F-jdbc",
+          "F-iter",
+          "ITER",
+          "Total",
+          "Account");
+  private String lineDescriptor =
+          "%3s, %8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8d,%8d,%8d,%8d,%8d,%8d";
+  private String insertDescriptor =
+          "('%s','%s','%s','%s','%s',%s,'%s','%s',%d,'%s', %8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8d,%8d,%8d,%8d,%8d,%8d, '%s')";
 
   public static void main(String[] args) {
     BenchmarkCloud bm = new BenchmarkCloud();
@@ -75,8 +98,7 @@ public class BenchmarkCloud {
   }
 
   void doWork(String[] args, int query) {
-
-    //Grab parameters from args
+    // Grab parameters from args
     // parm0 number of iterations per query
     // parm1 file containing sql queries {contains quoted query, expected result count]
     // parm2 table name
@@ -95,7 +117,7 @@ public class BenchmarkCloud {
     label = args[3];
     gpuCount = args[4];
 
-    //int expectedResults = Integer.valueOf(args[2]);
+    // int expectedResults = Integer.valueOf(args[2]);
     queryResultMachine = (args.length > 5) ? args[5] : QUERY_RESULT_MACHINE;
     url = (args.length > 6) ? args[6] : DB_URL;
     driver = (args.length > 7) ? args[7] : JDBC_DRIVER;
@@ -103,9 +125,9 @@ public class BenchmarkCloud {
     iUser = (args.length > 8) ? args[8] : USER;
     iPasswd = (args.length > 9) ? args[9] : PASS;
 
-    //register the driver
+    // register the driver
     try {
-      //Register JDBC driver
+      // Register JDBC driver
       Class.forName(driver);
     } catch (ClassNotFoundException ex) {
       logger.error("Could not load class " + driver + " " + ex.getMessage());
@@ -129,7 +151,6 @@ public class BenchmarkCloud {
       br = new BufferedReader(new FileReader(queryFile));
 
       while ((sCurrentLine = br.readLine()) != null) {
-
         queryIDMap.put(sCurrentLine, null);
       }
       br.close();
@@ -142,7 +163,8 @@ public class BenchmarkCloud {
       System.exit(3);
     }
 
-    bencherCon = getConnection("jdbc:mapd:" + queryResultMachine + ":9091:mapd", "mapd", "HyperInteractive");
+    bencherCon = getConnection(
+            "jdbc:mapd:" + queryResultMachine + ":9091:mapd", "mapd", "HyperInteractive");
 
     getQueries(queryIDMap, bencherCon, tableName);
 
@@ -156,11 +178,10 @@ public class BenchmarkCloud {
     for (String s : resultArray) {
       System.out.println(s);
     }
-
   }
 
   Connection getConnection(String url, String iUser, String iPasswd) {
-//Open a connection
+    // Open a connection
     logger.debug("Connecting to database url :" + url);
     try {
       Connection conn = DriverManager.getConnection(url, iUser, iPasswd);
@@ -170,7 +191,8 @@ public class BenchmarkCloud {
 
       return conn;
     } catch (SQLException ex) {
-      logger.error("Exception making connection to " + url + " text is " + ex.getMessage());
+      logger.error(
+              "Exception making connection to " + url + " text is " + ex.getMessage());
       System.exit(2);
     }
     return null;
@@ -192,11 +214,9 @@ public class BenchmarkCloud {
     long totalTime = 0;
     int resultCount = 0;
     try {
-
       long startTime = System.currentTimeMillis();
       for (int loop = 0; loop < iterations; loop++) {
-
-        //Execute a query
+        // Execute a query
         stmt = conn.createStatement();
 
         long timer = System.currentTimeMillis();
@@ -217,12 +237,12 @@ public class BenchmarkCloud {
           executeTime = 0;
         }
         // this is fake to get our intenal execute time.
-        logger.debug(
-                "Query Timeout/AKA internal Execution Time was " + stmt.getQueryTimeout() + " ms Elapsed time in JVM space was " + (System.
-                currentTimeMillis() - timer) + "ms");
+        logger.debug("Query Timeout/AKA internal Execution Time was "
+                + stmt.getQueryTimeout() + " ms Elapsed time in JVM space was "
+                + (System.currentTimeMillis() - timer) + "ms");
 
         timer = System.currentTimeMillis();
-        //Extract data from result set
+        // Extract data from result set
         resultCount = 0;
         while (rs.next()) {
           Object obj = rs.getObject(1);
@@ -233,11 +253,12 @@ public class BenchmarkCloud {
         }
         long iterateTime = (System.currentTimeMillis() - timer);
 
-//        if (resultCount != expected) {
-//          logger.error("Expect " + expected + " actual " + resultCount + " for query " + sql);
-//          // don't run anymore
-//          break;
-//        }
+        //        if (resultCount != expected) {
+        //          logger.error("Expect " + expected + " actual " + resultCount + " for
+        //          query " + sql);
+        //          // don't run anymore
+        //          break;
+        //        }
         if (loop == 0) {
           firstJdbc = jdbcTime;
           firstExecute = executeTime;
@@ -250,28 +271,28 @@ public class BenchmarkCloud {
           statsTotal.addValue(jdbcTime + executeTime + iterateTime);
         }
 
-        //Clean-up environment
+        // Clean-up environment
         rs.close();
         stmt.close();
       }
       totalTime = System.currentTimeMillis() - startTime;
       conn.close();
     } catch (SQLException se) {
-      //Handle errors for JDBC
+      // Handle errors for JDBC
       se.printStackTrace();
       System.exit(4);
     } catch (Exception e) {
-      //Handle errors for Class.forName
+      // Handle errors for Class.forName
       e.printStackTrace();
       System.exit(3);
     } finally {
-      //finally block used to close resources
+      // finally block used to close resources
       try {
         if (stmt != null) {
           stmt.close();
         }
       } catch (SQLException se2) {
-      }// nothing we can do
+      } // nothing we can do
       try {
         if (conn != null) {
           conn.close();
@@ -279,12 +300,18 @@ public class BenchmarkCloud {
       } catch (SQLException se) {
         se.printStackTrace();
         System.exit(6);
-      }//end finally try
-    }//end try
+      } // end finally try
+    } // end try
 
     // write it to the db here as well
     String insertPart = String.format(insertDescriptor,
-            this.rid, this.rTimestamp, url, this.driver, label, gpuCount, this.tableName,
+            this.rid,
+            this.rTimestamp,
+            url,
+            this.driver,
+            label,
+            gpuCount,
+            this.tableName,
             qid,
             resultCount,
             "",
@@ -342,11 +369,10 @@ public class BenchmarkCloud {
             iterations,
             totalTime,
             (long) statsTotal.getSum() + firstExecute + firstJdbc + firstIterate);
-
   }
 
-  private void getQueries(Map<String, String> queryIDMap, Connection benderCon, String tableName) {
-
+  private void getQueries(
+          Map<String, String> queryIDMap, Connection benderCon, String tableName) {
     for (Map.Entry<String, String> entry : queryIDMap.entrySet()) {
       String key = entry.getKey();
       String value = entry.getValue();
@@ -358,7 +384,8 @@ public class BenchmarkCloud {
         logger.error("Exception creating statement text is " + ex.getMessage());
         System.exit(2);
       }
-      String sql = String.format("Select query_text from queries where query_id = '%s'", key);
+      String sql =
+              String.format("Select query_text from queries where query_id = '%s'", key);
       ResultSet rs = null;
       try {
         rs = stmt.executeQuery(sql);
@@ -371,7 +398,8 @@ public class BenchmarkCloud {
         while (rs.next()) {
           String qString = rs.getString(1);
           qString = qString.replaceAll("##TAB##", tableName);
-          //System.out.println(String.format("Query Id is %s : query is '%s'", key, qString));
+          // System.out.println(String.format("Query Id is %s : query is '%s'", key,
+          // qString));
           queryIDMap.put(key, qString);
           resultCount++;
         }
@@ -385,7 +413,8 @@ public class BenchmarkCloud {
     }
   }
 
-  private void runQueries(List<String> resultArray, Map<String, String> queryIDMap, int iterations) {
+  private void runQueries(
+          List<String> resultArray, Map<String, String> queryIDMap, int iterations) {
     Connection conn = getConnection(url, iUser, iPasswd);
     for (Map.Entry<String, String> entry : queryIDMap.entrySet()) {
       String id = entry.getKey();
@@ -402,7 +431,8 @@ public class BenchmarkCloud {
         sin = bencherCon.createStatement();
         sin.execute(insertPart);
       } catch (SQLException ex) {
-        logger.error("Exception performing insert '" + insertPart + "' text is " + ex.getMessage());
+        logger.error("Exception performing insert '" + insertPart + "' text is "
+                + ex.getMessage());
         System.exit(2);
       }
     }

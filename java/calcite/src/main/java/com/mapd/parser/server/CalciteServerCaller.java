@@ -32,8 +32,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class CalciteServerCaller {
-
-  private final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteServerCaller.class);
+  private final static Logger MAPDLOGGER =
+          LoggerFactory.getLogger(CalciteServerCaller.class);
   private CommandLine cmd = null;
 
   public static void main(String[] args) {
@@ -47,30 +47,27 @@ public class CalciteServerCaller {
     // create Options object
     Options options = new Options();
 
-    Option port = Option.builder("p")
-            .hasArg()
-            .desc("port number")
-            .longOpt("port")
-            .build();
+    Option port =
+            Option.builder("p").hasArg().desc("port number").longOpt("port").build();
 
     Option mapdPort = Option.builder("m")
-            .hasArg()
-            .desc("mapd port number")
-            .longOpt("mapd_port")
-            .build();
+                              .hasArg()
+                              .desc("mapd port number")
+                              .longOpt("mapd_port")
+                              .build();
 
     Option data = Option.builder("d")
-            .hasArg()
-            .desc("data directory")
-            .required()
-            .longOpt("data")
-            .build();
+                          .hasArg()
+                          .desc("data directory")
+                          .required()
+                          .longOpt("data")
+                          .build();
 
     Option extensions = Option.builder("e")
-            .hasArg()
-            .desc("extension signatures directory")
-            .longOpt("extensions")
-            .build();
+                                .hasArg()
+                                .desc("extension signatures directory")
+                                .longOpt("extensions")
+                                .build();
 
     options.addOption(port);
     options.addOption(data);
@@ -91,19 +88,22 @@ public class CalciteServerCaller {
     int mapdPortNum = Integer.valueOf(cmd.getOptionValue("mapd_port", "9091"));
     String dataDir = cmd.getOptionValue("data", "data");
     String extensionsDir = cmd.getOptionValue("extensions", "build/QueryEngine");
-    final Path extensionFunctionsAstFile = Paths.get(extensionsDir, "ExtensionFunctions.ast");
+    final Path extensionFunctionsAstFile =
+            Paths.get(extensionsDir, "ExtensionFunctions.ast");
 
-    //Add logging to our log files directories
+    // Add logging to our log files directories
     Properties p = new Properties();
     try {
       p.load(getClass().getResourceAsStream("/log4j.properties"));
     } catch (IOException ex) {
-      MAPDLOGGER.error("Could not load log4j property file from resources " + ex.getMessage());
+      MAPDLOGGER.error(
+              "Could not load log4j property file from resources " + ex.getMessage());
     }
     p.put("log.dir", dataDir); // overwrite "log.dir"
     PropertyConfigurator.configure(p);
 
-    calciteServerWrapper = new CalciteServerWrapper(portNum, mapdPortNum, dataDir, extensionFunctionsAstFile.toString());
+    calciteServerWrapper = new CalciteServerWrapper(
+            portNum, mapdPortNum, dataDir, extensionFunctionsAstFile.toString());
 
     while (true) {
       try {
@@ -128,5 +128,4 @@ public class CalciteServerCaller {
     HelpFormatter formatter = new HelpFormatter();
     formatter.printHelp("CalciteServerCaller", options);
   }
-
 }

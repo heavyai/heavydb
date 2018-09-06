@@ -71,7 +71,10 @@ import java.util.List;
 import java.util.Properties;
 
 /** Implementation of {@link org.apache.calcite.tools.Planner}. */
-/** MAT duplicated from MapDPlanner at /core/src/main/java/org/apache/calcite/prepare/MapDPlanner.java */
+/**
+ * MAT duplicated from MapDPlanner at
+ * /core/src/main/java/org/apache/calcite/prepare/MapDPlanner.java
+ */
 public class MapDPlanner implements Planner {
   private final SqlOperatorTable operatorTable;
   private final ImmutableList<Program> programs;
@@ -104,8 +107,10 @@ public class MapDPlanner implements Planner {
 
   private List<MapDParser.FilterPushDownInfo> filterPushDownInfo = new ArrayList<>();
 
-  /** Creates a planner. Not a public API; call
-   * {@link org.apache.calcite.tools.Frameworks#getPlanner} instead. */
+  /**
+   * Creates a planner. Not a public API; call
+   * {@link org.apache.calcite.tools.Frameworks#getPlanner} instead.
+   */
   public MapDPlanner(FrameworkConfig config) {
     this.config = config;
     this.defaultSchema = config.getDefaultSchema();
@@ -126,8 +131,8 @@ public class MapDPlanner implements Planner {
       return;
     }
     if (state.ordinal() < this.state.ordinal()) {
-      throw new IllegalArgumentException("cannot move to " + state + " from "
-          + this.state);
+      throw new IllegalArgumentException(
+              "cannot move to " + state + " from " + this.state);
     }
     state.from(this);
   }
@@ -150,22 +155,20 @@ public class MapDPlanner implements Planner {
 
   private void ready() {
     switch (state) {
-    case STATE_0_CLOSED:
-      reset();
+      case STATE_0_CLOSED:
+        reset();
     }
     ensure(State.STATE_1_RESET);
-    Frameworks.withPlanner(
-        new Frameworks.PlannerAction<Void>() {
-          public Void apply(RelOptCluster cluster, RelOptSchema relOptSchema,
-              SchemaPlus rootSchema) {
-            Util.discard(rootSchema); // use our own defaultSchema
-            typeFactory = (JavaTypeFactory) cluster.getTypeFactory();
-            planner = cluster.getPlanner();
-            planner.setExecutor(executor);
-            return null;
-          }
-        },
-        config);
+    Frameworks.withPlanner(new Frameworks.PlannerAction<Void>() {
+      public Void apply(
+              RelOptCluster cluster, RelOptSchema relOptSchema, SchemaPlus rootSchema) {
+        Util.discard(rootSchema); // use our own defaultSchema
+        typeFactory = (JavaTypeFactory) cluster.getTypeFactory();
+        planner = cluster.getPlanner();
+        planner.setExecutor(executor);
+        return null;
+      }
+    }, config);
 
     state = State.STATE_2_READY;
 
@@ -191,28 +194,30 @@ public class MapDPlanner implements Planner {
   }
 
   public CompletionResult getCompletionHints(
-      final String sql,
-      final int cursor,
-      final List<String> visibleTables) {
+          final String sql, final int cursor, final List<String> visibleTables) {
     switch (state) {
-    case STATE_0_CLOSED:
-    case STATE_1_RESET:
-      ready();
+      case STATE_0_CLOSED:
+      case STATE_1_RESET:
+        ready();
     }
     MapDSqlAdvisorValidator advisor_validator = new MapDSqlAdvisorValidator(visibleTables,
-      config.getOperatorTable(), createCatalogReader(), getTypeFactory(), SqlConformanceEnum.LENIENT);
+            config.getOperatorTable(),
+            createCatalogReader(),
+            getTypeFactory(),
+            SqlConformanceEnum.LENIENT);
     SqlAdvisor advisor = new MapDSqlAdvisor(advisor_validator);
     String[] replaced = new String[1];
     int adjusted_cursor = cursor < 0 ? sql.length() : cursor;
-    java.util.List<SqlMoniker> hints = advisor.getCompletionHints(sql, adjusted_cursor, replaced);
+    java.util.List<SqlMoniker> hints =
+            advisor.getCompletionHints(sql, adjusted_cursor, replaced);
     return new CompletionResult(hints, replaced[0]);
   }
 
   public SqlNode parse(final String sql) throws SqlParseException {
     switch (state) {
-    case STATE_0_CLOSED:
-    case STATE_1_RESET:
-      ready();
+      case STATE_0_CLOSED:
+      case STATE_1_RESET:
+        ready();
     }
     ensure(State.STATE_2_READY);
     SqlParser parser = SqlParser.create(sql, parserConfig);
@@ -225,9 +230,8 @@ public class MapDPlanner implements Planner {
     ensure(State.STATE_3_PARSED);
     final SqlConformance conformance = SqlConformanceEnum.LENIENT;
     final CalciteCatalogReader catalogReader = createCatalogReader();
-    this.validator =
-        new CalciteSqlValidator(operatorTable, catalogReader, typeFactory,
-            conformance);
+    this.validator = new CalciteSqlValidator(
+            operatorTable, catalogReader, typeFactory, conformance);
     this.validator.setIdentifierExpansion(true);
     try {
       validatedSqlNode = validator.validate(sqlNode);
@@ -242,7 +246,7 @@ public class MapDPlanner implements Planner {
     final Context context = config.getContext();
     if (context != null) {
       final CalciteConnectionConfig connectionConfig =
-          context.unwrap(CalciteConnectionConfig.class);
+              context.unwrap(CalciteConnectionConfig.class);
       if (connectionConfig != null) {
         return connectionConfig.conformance();
       }
@@ -251,10 +255,9 @@ public class MapDPlanner implements Planner {
   }
 
   public Pair<SqlNode, RelDataType> validateAndGetType(SqlNode sqlNode)
-      throws ValidationException {
+          throws ValidationException {
     final SqlNode validatedNode = this.validate(sqlNode);
-    final RelDataType type =
-        this.validator.getValidatedNodeType(validatedNode);
+    final RelDataType type = this.validator.getValidatedNodeType(validatedNode);
     return Pair.of(validatedNode, type);
   }
 
@@ -268,32 +271,36 @@ public class MapDPlanner implements Planner {
     assert validatedSqlNode != null;
     final RexBuilder rexBuilder = createRexBuilder();
     final RelOptCluster cluster = RelOptCluster.create(planner, rexBuilder);
-    final SqlToRelConverter.Config config = SqlToRelConverter.configBuilder()
-        .withConfig(sqlToRelConverterConfig)
-        //MAT custom code mods to stop expansion and allow for any number IN
-        .withExpand(false)
-        .withInSubQueryThreshold(Integer.MAX_VALUE)
-        //
-        .withTrimUnusedFields(false)
-        .withConvertTableAccess(false)
-        .build();
+    final SqlToRelConverter.Config config =
+            SqlToRelConverter.configBuilder()
+                    .withConfig(sqlToRelConverterConfig)
+                    // MAT custom code mods to stop expansion and allow for any number IN
+                    .withExpand(false)
+                    .withInSubQueryThreshold(Integer.MAX_VALUE)
+                    //
+                    .withTrimUnusedFields(false)
+                    .withConvertTableAccess(false)
+                    .build();
     final SqlToRelConverter sqlToRelConverter =
-        new SqlToRelConverter(new ViewExpanderImpl(), validator,
-            createCatalogReader(), cluster, convertletTable, config);
-    root =
-        sqlToRelConverter.convertQuery(validatedSqlNode, false, true);
+            new SqlToRelConverter(new ViewExpanderImpl(),
+                    validator,
+                    createCatalogReader(),
+                    cluster,
+                    convertletTable,
+                    config);
+    root = sqlToRelConverter.convertQuery(validatedSqlNode, false, true);
     root = root.withRel(sqlToRelConverter.flattenTypes(root.rel, true));
     root = root.withRel(RelDecorrelator.decorrelateQuery(root.rel));
     state = State.STATE_5_CONVERTED;
     if (filterPushDownInfo.isEmpty()) {
       return root;
     }
-    final DynamicFilterJoinRule dynamicFilterJoinRule = new DynamicFilterJoinRule(
-        true, RelFactories.LOGICAL_BUILDER, FilterJoinRule.TRUE_PREDICATE, filterPushDownInfo);
+    final DynamicFilterJoinRule dynamicFilterJoinRule = new DynamicFilterJoinRule(true,
+            RelFactories.LOGICAL_BUILDER,
+            FilterJoinRule.TRUE_PREDICATE,
+            filterPushDownInfo);
     final HepProgram program =
-      HepProgram.builder()
-          .addRuleInstance(dynamicFilterJoinRule)
-          .build();
+            HepProgram.builder().addRuleInstance(dynamicFilterJoinRule).build();
     HepPlanner prePlanner = new HepPlanner(program);
     prePlanner.setRoot(root.rel);
     final RelNode rootRelNode = prePlanner.findBestExp();
@@ -301,15 +308,21 @@ public class MapDPlanner implements Planner {
     return root.withRel(rootRelNode);
   }
 
-  public void setFilterPushDownInfo(final List<MapDParser.FilterPushDownInfo> filterPushDownInfo) {
+  public void setFilterPushDownInfo(
+          final List<MapDParser.FilterPushDownInfo> filterPushDownInfo) {
     this.filterPushDownInfo = filterPushDownInfo;
   }
 
-  /** Implements {@link org.apache.calcite.plan.RelOptTable.ViewExpander}
-   * interface for {@link org.apache.calcite.tools.Planner}. */
+  /**
+   * Implements {@link org.apache.calcite.plan.RelOptTable.ViewExpander}
+   * interface for {@link org.apache.calcite.tools.Planner}.
+   */
   public class ViewExpanderImpl implements ViewExpander {
-    @Override public RelRoot expandView(RelDataType rowType, String queryString,
-      List<String> schemaPath, List<String> viewPath) {
+    @Override
+    public RelRoot expandView(RelDataType rowType,
+            String queryString,
+            List<String> schemaPath,
+            List<String> viewPath) {
       SqlParser parser = SqlParser.create(queryString, parserConfig);
       SqlNode sqlNode;
       try {
@@ -320,24 +333,26 @@ public class MapDPlanner implements Planner {
 
       final SqlConformance conformance = conformance();
       final CalciteCatalogReader catalogReader =
-          createCatalogReader().withSchemaPath(schemaPath);
-      final SqlValidator validator =
-          new CalciteSqlValidator(operatorTable, catalogReader, typeFactory,
-              conformance);
+              createCatalogReader().withSchemaPath(schemaPath);
+      final SqlValidator validator = new CalciteSqlValidator(
+              operatorTable, catalogReader, typeFactory, conformance);
       validator.setIdentifierExpansion(true);
       final SqlNode validatedSqlNode = validator.validate(sqlNode);
 
       final RexBuilder rexBuilder = createRexBuilder();
       final RelOptCluster cluster = RelOptCluster.create(planner, rexBuilder);
-      final SqlToRelConverter.Config config = SqlToRelConverter
-          .configBuilder()
-          .withConfig(sqlToRelConverterConfig)
-          .withTrimUnusedFields(false)
-          .withConvertTableAccess(false)
-          .build();
+      final SqlToRelConverter.Config config = SqlToRelConverter.configBuilder()
+                                                      .withConfig(sqlToRelConverterConfig)
+                                                      .withTrimUnusedFields(false)
+                                                      .withConvertTableAccess(false)
+                                                      .build();
       final SqlToRelConverter sqlToRelConverter =
-          new SqlToRelConverter(new ViewExpanderImpl(), validator,
-              catalogReader, cluster, convertletTable, config);
+              new SqlToRelConverter(new ViewExpanderImpl(),
+                      validator,
+                      catalogReader,
+                      cluster,
+                      convertletTable,
+                      config);
 
       root = sqlToRelConverter.convertQuery(validatedSqlNode, true, false);
       root = root.withRel(sqlToRelConverter.flattenTypes(root.rel, true));
@@ -362,10 +377,10 @@ public class MapDPlanner implements Planner {
       connectionConfig = new CalciteConnectionConfigImpl(properties);
     }
 
-    return new CalciteCatalogReader(
-        CalciteSchema.from(rootSchema),
-        CalciteSchema.from(defaultSchema).path(null),
-        typeFactory, connectionConfig);
+    return new CalciteCatalogReader(CalciteSchema.from(rootSchema),
+            CalciteSchema.from(defaultSchema).path(null),
+            typeFactory,
+            connectionConfig);
   }
 
   private static SchemaPlus rootSchema(SchemaPlus schema) {
@@ -386,34 +401,38 @@ public class MapDPlanner implements Planner {
     return typeFactory;
   }
 
-  public RelNode transform(int ruleSetIndex, RelTraitSet requiredOutputTraits,
-      RelNode rel) throws RelConversionException {
+  public RelNode transform(
+          int ruleSetIndex, RelTraitSet requiredOutputTraits, RelNode rel)
+          throws RelConversionException {
     ensure(State.STATE_5_CONVERTED);
-    rel.getCluster().setMetadataProvider(
-        new CachingRelMetadataProvider(
-            rel.getCluster().getMetadataProvider(),
-            rel.getCluster().getPlanner()));
+    rel.getCluster().setMetadataProvider(new CachingRelMetadataProvider(
+            rel.getCluster().getMetadataProvider(), rel.getCluster().getPlanner()));
     Program program = programs.get(ruleSetIndex);
-    return program.run(planner, rel, requiredOutputTraits,
-        ImmutableList.<RelOptMaterialization>of(),
-        ImmutableList.<RelOptLattice>of());
+    return program.run(planner,
+            rel,
+            requiredOutputTraits,
+            ImmutableList.<RelOptMaterialization>of(),
+            ImmutableList.<RelOptLattice>of());
   }
 
   /** Stage of a statement in the query-preparation lifecycle. */
   private enum State {
     STATE_0_CLOSED {
-      @Override void from(MapDPlanner planner) {
+      @Override
+      void from(MapDPlanner planner) {
         planner.close();
       }
     },
     STATE_1_RESET {
-      @Override void from(MapDPlanner planner) {
+      @Override
+      void from(MapDPlanner planner) {
         planner.ensure(STATE_0_CLOSED);
         planner.reset();
       }
     },
     STATE_2_READY {
-      @Override void from(MapDPlanner planner) {
+      @Override
+      void from(MapDPlanner planner) {
         STATE_1_RESET.from(planner);
         planner.ready();
       }
@@ -424,8 +443,8 @@ public class MapDPlanner implements Planner {
 
     /** Moves planner's state to this state. This must be a higher state. */
     void from(MapDPlanner planner) {
-      throw new IllegalArgumentException("cannot move from " + planner.state
-          + " to " + this);
+      throw new IllegalArgumentException(
+              "cannot move from " + planner.state + " to " + this);
     }
   }
 }

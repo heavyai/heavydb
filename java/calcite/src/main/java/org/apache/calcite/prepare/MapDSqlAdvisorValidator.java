@@ -32,8 +32,11 @@ import org.apache.calcite.sql.validate.SqlValidatorScope;
 import org.apache.calcite.util.Util;
 
 class MapDSqlAdvisorValidator extends SqlAdvisorValidator {
-  MapDSqlAdvisorValidator(List<String> visibleTables, SqlOperatorTable opTab, SqlValidatorCatalogReader catalogReader,
-      RelDataTypeFactory typeFactory, SqlConformance conformance) {
+  MapDSqlAdvisorValidator(List<String> visibleTables,
+          SqlOperatorTable opTab,
+          SqlValidatorCatalogReader catalogReader,
+          RelDataTypeFactory typeFactory,
+          SqlConformance conformance) {
     super(opTab, catalogReader, typeFactory, conformance);
     this.visibleTables = visibleTables;
   }
@@ -58,12 +61,14 @@ class MapDSqlAdvisorValidator extends SqlAdvisorValidator {
   }
 
   @Override
-  protected void validateFrom(SqlNode node, RelDataType targetRowType, SqlValidatorScope scope) {
+  protected void validateFrom(
+          SqlNode node, RelDataType targetRowType, SqlValidatorScope scope) {
     try {
       // Must not return columns from a table which is not visible. Since column
       // hints are returned without their table, we must keep track of visibility
       // violations during validation.
-      if (node.getKind() == SqlKind.IDENTIFIER && tableViolatesPermissions(node.toString())) {
+      if (node.getKind() == SqlKind.IDENTIFIER
+              && tableViolatesPermissions(node.toString())) {
         violatedTablePermissions = true;
       }
       super.validateFrom(node, targetRowType, scope);
@@ -76,7 +81,8 @@ class MapDSqlAdvisorValidator extends SqlAdvisorValidator {
   // table inserted by the partial parser is allowed (starts with underscore).
   boolean tableViolatesPermissions(final String tableName) {
     return !tableName.isEmpty() && Character.isAlphabetic(tableName.charAt(0))
-        && visibleTables.stream().noneMatch(visibleTableName -> visibleTableName.equalsIgnoreCase(tableName));
+            && visibleTables.stream().noneMatch(
+                       visibleTableName -> visibleTableName.equalsIgnoreCase(tableName));
   }
 
   boolean hasViolatedTablePermissions() {

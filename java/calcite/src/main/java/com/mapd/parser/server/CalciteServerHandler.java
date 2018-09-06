@@ -49,7 +49,6 @@ import org.slf4j.LoggerFactory;
  * @author michael
  */
 class CalciteServerHandler implements CalciteServer.Iface {
-
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteServerHandler.class);
   private TServer server;
 
@@ -61,7 +60,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
 
   private final String extSigsJson;
 
-  //TODO MAT we need to merge this into common code base for these funictions with
+  // TODO MAT we need to merge this into common code base for these funictions with
   // CalciteDirect since we are not deprecating this stuff yet
   CalciteServerHandler(int mapdPort, String dataDir, String extensionFunctionsAstFile) {
     this.parserPool = new GenericObjectPool();
@@ -71,11 +70,13 @@ class CalciteServerHandler implements CalciteServer.Iface {
     try {
       extSigs = ExtensionFunctionSignatureParser.parse(extensionFunctionsAstFile);
     } catch (IOException ex) {
-      MAPDLOGGER.error("Could not load extension function signatures: " + ex.getMessage());
+      MAPDLOGGER.error(
+              "Could not load extension function signatures: " + ex.getMessage());
     }
     this.extSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(extSigs);
 
-    PoolableObjectFactory parserFactory = new CalciteParserFactory(dataDir, extSigs, mapdPort);
+    PoolableObjectFactory parserFactory =
+            new CalciteParserFactory(dataDir, extSigs, mapdPort);
 
     parserPool.setFactory(parserFactory);
   }
@@ -86,8 +87,13 @@ class CalciteServerHandler implements CalciteServer.Iface {
   }
 
   @Override
-  public TPlanResult process(String user, String session, String catalog, String sqlText,
-      java.util.List<TFilterPushDownInfo> thriftFilterPushDownInfo, boolean legacySyntax, boolean isExplain) throws InvalidParseRequest, TException {
+  public TPlanResult process(String user,
+          String session,
+          String catalog,
+          String sqlText,
+          java.util.List<TFilterPushDownInfo> thriftFilterPushDownInfo,
+          boolean legacySyntax,
+          boolean isExplain) throws InvalidParseRequest, TException {
     long timer = System.currentTimeMillis();
     callCount++;
     MapDParser parser;
@@ -99,7 +105,8 @@ class CalciteServerHandler implements CalciteServer.Iface {
       throw new InvalidParseRequest(-1, msg);
     }
     MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort);
-    MAPDLOGGER.debug("process was called User: " + user + " Catalog: " + catalog + " sql: " + sqlText);
+    MAPDLOGGER.debug("process was called User: " + user + " Catalog: " + catalog
+            + " sql: " + sqlText);
     parser.setUser(mapDUser);
     CURRENT_PARSER.set(parser);
 
@@ -117,20 +124,23 @@ class CalciteServerHandler implements CalciteServer.Iface {
     try {
       final List<MapDParser.FilterPushDownInfo> filterPushDownInfo = new ArrayList<>();
       for (final TFilterPushDownInfo req : thriftFilterPushDownInfo) {
-        filterPushDownInfo.add(new MapDParser.FilterPushDownInfo(req.input_prev, req.input_start, req.input_next));
+        filterPushDownInfo.add(new MapDParser.FilterPushDownInfo(
+                req.input_prev, req.input_start, req.input_next));
       }
-      relAlgebra = parser.getRelAlgebra(sqlText, filterPushDownInfo, legacySyntax, mapDUser, isExplain);
+      relAlgebra = parser.getRelAlgebra(
+              sqlText, filterPushDownInfo, legacySyntax, mapDUser, isExplain);
       capturer = parser.captureIdentifiers(sqlText, legacySyntax);
-      
+
       primaryAccessedObjects.tables_selected_from = new ArrayList<>(capturer.selects);
       primaryAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
       primaryAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
       primaryAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
-      
+
       // also resolve all the views in the select part
-      // resolution of the other parts is not 
+      // resolution of the other parts is not
       // necessary as these cannot be views
-      resolvedAccessedObjects.tables_selected_from = new ArrayList<>(parser.resolveSelectIdentifiers(capturer));
+      resolvedAccessedObjects.tables_selected_from =
+              new ArrayList<>(parser.resolveSelectIdentifiers(capturer));
       resolvedAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
       resolvedAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
       resolvedAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
@@ -164,7 +174,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
     result.resolved_accessed_objects = resolvedAccessedObjects;
     result.plan_result = relAlgebra;
     result.execution_time_ms = System.currentTimeMillis() - timer;
-    
+
     return result;
   }
 
@@ -214,8 +224,12 @@ class CalciteServerHandler implements CalciteServer.Iface {
   }
 
   @Override
-  public List<TCompletionHint> getCompletionHints(String user, String session, String catalog,
-      List<String> visible_tables, String sql, int cursor) throws TException {
+  public List<TCompletionHint> getCompletionHints(String user,
+          String session,
+          String catalog,
+          List<String> visible_tables,
+          String sql,
+          int cursor) throws TException {
     callCount++;
     MapDParser parser;
     try {
@@ -226,7 +240,8 @@ class CalciteServerHandler implements CalciteServer.Iface {
       throw new TException(msg);
     }
     MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort);
-    MAPDLOGGER.debug("getCompletionHints was called User: " + user + " Catalog: " + catalog + " sql: " + sql);
+    MAPDLOGGER.debug("getCompletionHints was called User: " + user
+            + " Catalog: " + catalog + " sql: " + sql);
     parser.setUser(mapDUser);
     CURRENT_PARSER.set(parser);
 
@@ -251,31 +266,32 @@ class CalciteServerHandler implements CalciteServer.Iface {
     List<TCompletionHint> result = new ArrayList<>();
     for (final SqlMoniker hint : completion_result.hints) {
       result.add(new TCompletionHint(hintTypeToThrift(hint.getType()),
-        hint.getFullyQualifiedNames(), completion_result.replaced));
+              hint.getFullyQualifiedNames(),
+              completion_result.replaced));
     }
     return result;
   }
 
   private static TCompletionHintType hintTypeToThrift(final SqlMonikerType type) {
     switch (type) {
-    case COLUMN:
-      return TCompletionHintType.COLUMN;
-    case TABLE:
-      return TCompletionHintType.TABLE;
-    case VIEW:
-      return TCompletionHintType.VIEW;
-    case SCHEMA:
-      return TCompletionHintType.SCHEMA;
-    case CATALOG:
-      return TCompletionHintType.CATALOG;
-    case REPOSITORY:
-      return TCompletionHintType.REPOSITORY;
-    case FUNCTION:
-      return TCompletionHintType.FUNCTION;
-    case KEYWORD:
-      return TCompletionHintType.KEYWORD;
-    default:
-      return null;
+      case COLUMN:
+        return TCompletionHintType.COLUMN;
+      case TABLE:
+        return TCompletionHintType.TABLE;
+      case VIEW:
+        return TCompletionHintType.VIEW;
+      case SCHEMA:
+        return TCompletionHintType.SCHEMA;
+      case CATALOG:
+        return TCompletionHintType.CATALOG;
+      case REPOSITORY:
+        return TCompletionHintType.REPOSITORY;
+      case FUNCTION:
+        return TCompletionHintType.FUNCTION;
+      case KEYWORD:
+        return TCompletionHintType.KEYWORD;
+      default:
+        return null;
     }
   }
 }

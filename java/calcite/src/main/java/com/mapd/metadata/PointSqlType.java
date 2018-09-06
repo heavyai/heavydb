@@ -32,9 +32,8 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import com.mapd.metadata.GeoRelDataType;
 
 public class PointSqlType extends GeoRelDataType {
-
-    @Override
-    public String getFullTypeString() {
-        return "Point";
-    }
+  @Override
+  public String getFullTypeString() {
+    return "Point";
+  }
 }

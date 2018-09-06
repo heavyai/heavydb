@@ -49,7 +49,8 @@ class MapDSqlAdvisor extends SqlAdvisor {
     // Search forwards to the end of the word we should remove. Eat up
     // trailing double-quote, if any
     int wordEnd = cursor;
-    while (wordEnd < sql.length() && Character.isJavaIdentifierPart(sql.charAt(wordEnd))) {
+    while (wordEnd < sql.length()
+            && Character.isJavaIdentifierPart(sql.charAt(wordEnd))) {
       ++wordEnd;
     }
     if (quoted && (wordEnd < sql.length()) && (sql.charAt(wordEnd) == '"')) {
@@ -65,7 +66,8 @@ class MapDSqlAdvisor extends SqlAdvisor {
 
     // The table hints come from validator with a database prefix,
     // which is inconsistent with how tables are used in the query.
-    List<SqlMoniker> completionHints = stripDatabaseFromTableHints(getCompletionHints0(sql, wordStart));
+    List<SqlMoniker> completionHints =
+            stripDatabaseFromTableHints(getCompletionHints0(sql, wordStart));
 
     if (permissionsAwareValidator.hasViolatedTablePermissions()) {
       return new ArrayList<>();
@@ -91,7 +93,8 @@ class MapDSqlAdvisor extends SqlAdvisor {
         // Regular identifier. Case-insensitive match.
         for (SqlMoniker hint : completionHints) {
           String cname = hint.toString();
-          if ((cname.length() >= word.length()) && cname.substring(0, word.length()).equalsIgnoreCase(word)) {
+          if ((cname.length() >= word.length())
+                  && cname.substring(0, word.length()).equalsIgnoreCase(word)) {
             result.add(hint);
           }
         }
@@ -103,10 +106,12 @@ class MapDSqlAdvisor extends SqlAdvisor {
     return result;
   }
 
-  private static List<SqlMoniker> stripDatabaseFromTableHints(final List<SqlMoniker> completionHints) {
+  private static List<SqlMoniker> stripDatabaseFromTableHints(
+          final List<SqlMoniker> completionHints) {
     List<SqlMoniker> strippedCompletionHints = new ArrayList<>();
     for (final SqlMoniker hint : completionHints) {
-      if (hint.getType() == SqlMonikerType.TABLE && hint.getFullyQualifiedNames().size() == 2) {
+      if (hint.getType() == SqlMonikerType.TABLE
+              && hint.getFullyQualifiedNames().size() == 2) {
         final String tableName = hint.getFullyQualifiedNames().get(1);
         strippedCompletionHints.add(new SqlMonikerImpl(tableName, SqlMonikerType.TABLE));
       } else {
@@ -116,7 +121,8 @@ class MapDSqlAdvisor extends SqlAdvisor {
     return strippedCompletionHints;
   }
 
-  private List<SqlMoniker> applyPermissionsToTableHints(final List<SqlMoniker> completionHints) {
+  private List<SqlMoniker> applyPermissionsToTableHints(
+          final List<SqlMoniker> completionHints) {
     List<SqlMoniker> completionHintsWithPermissions = new ArrayList<>();
     for (final SqlMoniker hint : completionHints) {
       if (hint.getType() == SqlMonikerType.TABLE) {

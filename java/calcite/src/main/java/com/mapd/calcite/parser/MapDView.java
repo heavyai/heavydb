@@ -35,7 +35,6 @@ import org.slf4j.LoggerFactory;
 import com.mapd.thrift.server.TTableDetails;
 
 public class MapDView extends MapDTable implements TranslatableTable {
-
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDView.class);
   private final String viewSql;
   private SqlIdentifierCapturer accessObjects;
@@ -50,7 +49,7 @@ public class MapDView extends MapDTable implements TranslatableTable {
       accessObjects = new SqlIdentifierCapturer();
     }
   }
-  
+
   public SqlIdentifierCapturer getAccessedObjects() {
     return accessObjects;
   }
@@ -83,7 +82,8 @@ public class MapDView extends MapDTable implements TranslatableTable {
   @Override
   public RelDataType getRowType(RelDataTypeFactory rdtf) {
     try {
-      final RelRoot relAlg = CURRENT_PARSER.get().queryToSqlNode(viewSql, new ArrayList<>(), true);
+      final RelRoot relAlg =
+              CURRENT_PARSER.get().queryToSqlNode(viewSql, new ArrayList<>(), true);
       return relAlg.validatedRowType;
     } catch (SqlParseException e) {
       assert false;

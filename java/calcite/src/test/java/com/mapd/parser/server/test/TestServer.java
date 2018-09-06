@@ -39,7 +39,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class TestServer {
-
   private final static Logger MAPDLOGGER = LoggerFactory.getLogger(TestServer.class);
   private final static int TEST_THREAD_COUNT = 3;
   private volatile int threadsRun = 0;
@@ -85,70 +84,17 @@ public class TestServer {
       pool.submit(r);
     }
     while (!pool.isShutdown()) {
-      //stay alive
+      // stay alive
     }
     if (threadHadFailure) {
       throw ae;
     }
-
   }
 
   @Ignore
   public void testSimpleCall() {
     callCalciteCheck("Select ENAME from EMP",
             "{\n"
-            + "  \"rels\": [\n"
-            + "    {\n"
-            + "      \"id\": \"0\",\n"
-            + "      \"relOp\": \"LogicalTableScan\",\n"
-            + "      \"fieldNames\": [\n"
-            + "        \"EMPNO\",\n"
-            + "        \"ENAME\",\n"
-            + "        \"JOB\",\n"
-            + "        \"MGR\",\n"
-            + "        \"HIREDATE\",\n"
-            + "        \"SAL\",\n"
-            + "        \"COMM\",\n"
-            + "        \"DEPTNO\",\n"
-            + "        \"SLACKER\",\n"
-            + "        \"SLACKARR1\",\n"
-            + "        \"SLACKARR2\"\n"
-            + "      ],\n"
-            + "      \"table\": [\n"
-            + "        \"CATALOG\",\n"
-            + "        \"SALES\",\n"
-            + "        \"EMP\"\n"
-            + "      ],\n"
-            + "      \"inputs\": []\n"
-            + "    },\n"
-            + "    {\n"
-            + "      \"id\": \"1\",\n"
-            + "      \"relOp\": \"LogicalProject\",\n"
-            + "      \"fields\": [\n"
-            + "        \"ENAME\"\n"
-            + "      ],\n"
-            + "      \"exprs\": [\n"
-            + "        {\n"
-            + "          \"input\": 1\n"
-            + "        }\n"
-            + "      ]\n"
-            + "    }\n"
-            + "  ]\n"
-            + "}");
-  }
-
-  @Ignore
-  public void testRandomCall() {
-    randomCalciteCall();
-  }
-
-  private void randomCalciteCall() {
-    Random r = new Random();
-    int aliasID = r.nextInt(100000) + 1000000;
-    callCalciteCheck(String.format("Select TABALIAS%d.ENAME AS COLALIAS%d from EMP TABALIAS%d LIMIT %d",
-            aliasID, aliasID, aliasID, aliasID),
-            String.format(
-                    "{\n"
                     + "  \"rels\": [\n"
                     + "    {\n"
                     + "      \"id\": \"0\",\n"
@@ -177,54 +123,114 @@ public class TestServer {
                     + "      \"id\": \"1\",\n"
                     + "      \"relOp\": \"LogicalProject\",\n"
                     + "      \"fields\": [\n"
-                    + "        \"COLALIAS%d\"\n"
+                    + "        \"ENAME\"\n"
                     + "      ],\n"
                     + "      \"exprs\": [\n"
                     + "        {\n"
                     + "          \"input\": 1\n"
                     + "        }\n"
                     + "      ]\n"
-                    + "    },\n"
-                    + "    {\n"
-                    + "      \"id\": \"2\",\n"
-                    + "      \"relOp\": \"LogicalSort\",\n"
-                    + "      \"collation\": [],\n"
-                    + "      \"fetch\": {\n"
-                    + "        \"literal\": %d,\n"
-                    + "        \"type\": \"DECIMAL\",\n"
-                    + "        \"scale\": 0,\n"
-                    + "        \"precision\": 7,\n"
-                    + "        \"type_scale\": 0,\n"
-                    + "        \"type_precision\": 10\n"
-                    + "      }\n"
-                    + "    },\n"
-                    + "    {\n"
-                    + "      \"id\": \"3\",\n"
-                    + "      \"relOp\": \"LogicalProject\",\n"
-                    + "      \"fields\": [\n"
-                    + "        \"COLALIAS%d\"\n"
-                    + "      ],\n"
-                    + "      \"exprs\": [\n"
-                    + "        {\n"
-                    + "          \"input\": 0\n"
-                    + "        }\n"
-                    + "      ]\n"
-                    + "    },\n"
-                    + "    {\n"
-                    + "      \"id\": \"4\",\n"
-                    + "      \"relOp\": \"LogicalSort\",\n"
-                    + "      \"collation\": [],\n"
-                    + "      \"fetch\": {\n"
-                    + "        \"literal\": %d,\n"
-                    + "        \"type\": \"DECIMAL\",\n"
-                    + "        \"scale\": 0,\n"
-                    + "        \"precision\": 7,\n"
-                    + "        \"type_scale\": 0,\n"
-                    + "        \"type_precision\": 10\n"
-                    + "      }\n"
                     + "    }\n"
                     + "  ]\n"
-                    + "}", aliasID, aliasID, aliasID, aliasID));
+                    + "}");
+  }
+
+  @Ignore
+  public void testRandomCall() {
+    randomCalciteCall();
+  }
+
+  private void randomCalciteCall() {
+    Random r = new Random();
+    int aliasID = r.nextInt(100000) + 1000000;
+    callCalciteCheck(
+            String.format(
+                    "Select TABALIAS%d.ENAME AS COLALIAS%d from EMP TABALIAS%d LIMIT %d",
+                    aliasID,
+                    aliasID,
+                    aliasID,
+                    aliasID),
+            String.format("{\n"
+                            + "  \"rels\": [\n"
+                            + "    {\n"
+                            + "      \"id\": \"0\",\n"
+                            + "      \"relOp\": \"LogicalTableScan\",\n"
+                            + "      \"fieldNames\": [\n"
+                            + "        \"EMPNO\",\n"
+                            + "        \"ENAME\",\n"
+                            + "        \"JOB\",\n"
+                            + "        \"MGR\",\n"
+                            + "        \"HIREDATE\",\n"
+                            + "        \"SAL\",\n"
+                            + "        \"COMM\",\n"
+                            + "        \"DEPTNO\",\n"
+                            + "        \"SLACKER\",\n"
+                            + "        \"SLACKARR1\",\n"
+                            + "        \"SLACKARR2\"\n"
+                            + "      ],\n"
+                            + "      \"table\": [\n"
+                            + "        \"CATALOG\",\n"
+                            + "        \"SALES\",\n"
+                            + "        \"EMP\"\n"
+                            + "      ],\n"
+                            + "      \"inputs\": []\n"
+                            + "    },\n"
+                            + "    {\n"
+                            + "      \"id\": \"1\",\n"
+                            + "      \"relOp\": \"LogicalProject\",\n"
+                            + "      \"fields\": [\n"
+                            + "        \"COLALIAS%d\"\n"
+                            + "      ],\n"
+                            + "      \"exprs\": [\n"
+                            + "        {\n"
+                            + "          \"input\": 1\n"
+                            + "        }\n"
+                            + "      ]\n"
+                            + "    },\n"
+                            + "    {\n"
+                            + "      \"id\": \"2\",\n"
+                            + "      \"relOp\": \"LogicalSort\",\n"
+                            + "      \"collation\": [],\n"
+                            + "      \"fetch\": {\n"
+                            + "        \"literal\": %d,\n"
+                            + "        \"type\": \"DECIMAL\",\n"
+                            + "        \"scale\": 0,\n"
+                            + "        \"precision\": 7,\n"
+                            + "        \"type_scale\": 0,\n"
+                            + "        \"type_precision\": 10\n"
+                            + "      }\n"
+                            + "    },\n"
+                            + "    {\n"
+                            + "      \"id\": \"3\",\n"
+                            + "      \"relOp\": \"LogicalProject\",\n"
+                            + "      \"fields\": [\n"
+                            + "        \"COLALIAS%d\"\n"
+                            + "      ],\n"
+                            + "      \"exprs\": [\n"
+                            + "        {\n"
+                            + "          \"input\": 0\n"
+                            + "        }\n"
+                            + "      ]\n"
+                            + "    },\n"
+                            + "    {\n"
+                            + "      \"id\": \"4\",\n"
+                            + "      \"relOp\": \"LogicalSort\",\n"
+                            + "      \"collation\": [],\n"
+                            + "      \"fetch\": {\n"
+                            + "        \"literal\": %d,\n"
+                            + "        \"type\": \"DECIMAL\",\n"
+                            + "        \"scale\": 0,\n"
+                            + "        \"precision\": 7,\n"
+                            + "        \"type_scale\": 0,\n"
+                            + "        \"type_precision\": 10\n"
+                            + "      }\n"
+                            + "    }\n"
+                            + "  ]\n"
+                            + "}",
+                    aliasID,
+                    aliasID,
+                    aliasID,
+                    aliasID));
   }
 
   private void callCalciteCheck(String query, String result) {
@@ -234,7 +240,8 @@ public class TestServer {
       transport.open();
       TProtocol protocol = new TBinaryProtocol(transport);
       CalciteServer.Client client = new CalciteServer.Client(protocol);
-      TPlanResult algebra = client.process("user", "passwd", "SALES", query, new ArrayList<>(), false, false);
+      TPlanResult algebra = client.process(
+              "user", "passwd", "SALES", query, new ArrayList<>(), false, false);
       transport.close();
       try {
         assertEquals(algebra.plan_result, result);

@@ -27,14 +27,14 @@ import org.slf4j.LoggerFactory;
  * @author michael
  */
 class CalciteParserFactory implements PoolableObjectFactory {
-
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteParserFactory.class);
 
   private final String dataDir;
   private final Map<String, ExtensionFunction> extSigs;
   private final int mapdPort;
 
-  public CalciteParserFactory(String dataDir, final Map<String, ExtensionFunction> extSigs, int mapdPort) {
+  public CalciteParserFactory(
+          String dataDir, final Map<String, ExtensionFunction> extSigs, int mapdPort) {
     this.dataDir = dataDir;
     this.extSigs = extSigs;
     this.mapdPort = mapdPort;
@@ -48,7 +48,7 @@ class CalciteParserFactory implements PoolableObjectFactory {
 
   @Override
   public void destroyObject(Object obj) throws Exception {
-    //no need to do anything
+    // no need to do anything
   }
 
   @Override
@@ -71,5 +71,4 @@ class CalciteParserFactory implements PoolableObjectFactory {
   public void passivateObject(Object obj) throws Exception {
     // nothing to currently do here
   }
-
 }

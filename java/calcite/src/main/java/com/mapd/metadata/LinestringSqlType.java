@@ -32,9 +32,8 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import com.mapd.metadata.GeoRelDataType;
 
 public class LinestringSqlType extends GeoRelDataType {
-
-    @Override
-    public String getFullTypeString() {
-        return "Linestring";
-    }
+  @Override
+  public String getFullTypeString() {
+    return "Linestring";
+  }
 }

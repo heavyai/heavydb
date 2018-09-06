@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
  * @author michael
  */
 class MapDData {
-
   final static Logger logger = LoggerFactory.getLogger(MapDData.class);
   private TDatumType colType;
 
@@ -55,5 +54,4 @@ class MapDData {
   TColumn getTColumn() {
     return tcolumn;
   }
-
 }
