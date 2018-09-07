@@ -371,6 +371,9 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     case GroupByColRangeType::Projection: {
       CHECK(!must_use_baseline_sort);
 
+      // Only projection queries support in-situ rendering
+      render_output_ = render_info && render_info->isPotentialInSituRender();
+
       // TODO(adb): Can we attach this to the QMD as a class member?
       if (use_streaming_top_n(ra_exe_unit, *this)) {
         entry_count_ = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
