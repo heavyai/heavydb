@@ -156,25 +156,6 @@ extern "C" int64_t* get_matching_group_value_perfect_hash(int64_t* groups_buffer
                                                           const uint32_t key_qw_count,
                                                           const uint32_t row_size_quad);
 
-extern "C" int64_t* get_group_value_one_key(int64_t* groups_buffer,
-                                            const uint32_t groups_buffer_entry_count,
-                                            int64_t* small_groups_buffer,
-                                            const uint32_t small_groups_buffer_qw_count,
-                                            const int64_t key,
-                                            const int64_t min_key,
-                                            const uint32_t row_size_quad,
-                                            const int64_t* init_vals);
-
-extern "C" int64_t* get_group_value_one_key_with_watchdog(
-    int64_t* groups_buffer,
-    const uint32_t groups_buffer_entry_count,
-    int64_t* small_groups_buffer,
-    const uint32_t small_groups_buffer_qw_count,
-    const int64_t key,
-    const int64_t min_key,
-    const uint32_t row_size_quad,
-    const int64_t* init_vals);
-
 extern "C" int32_t* get_hash_slot(int32_t* buff,
                                   const int64_t key,
                                   const int64_t min_key);

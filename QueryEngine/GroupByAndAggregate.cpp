@@ -1699,68 +1699,44 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
           array_loops,
           query_mem_desc_.threadsShareMemory());
       const auto group_expr_lv = group_expr_lvs.translated_value;
-      auto small_groups_buffer = arg_it;
-      if (query_mem_desc_.usesGetGroupValueFast()) {
-        std::string get_group_fn_name{outputColumnar() &&
-                                              !query_mem_desc_.hasKeylessHash()
-                                          ? "get_columnar_group_bin_offset"
-                                          : "get_group_value_fast"};
-        if (query_mem_desc_.hasKeylessHash()) {
-          get_group_fn_name += "_keyless";
-        }
-        if (query_mem_desc_.interleavedBins(co.device_type_)) {
-          CHECK(!outputColumnar());
-          CHECK(query_mem_desc_.hasKeylessHash());
-          get_group_fn_name += "_semiprivate";
-        }
-        std::vector<llvm::Value*> get_group_fn_args{&*groups_buffer, &*group_expr_lv};
-        if (group_expr_lvs.original_value &&
-            get_group_fn_name == "get_group_value_fast" &&
-            query_mem_desc_.mustUseBaselineSort()) {
-          get_group_fn_name += "_with_original_key";
-          get_group_fn_args.push_back(group_expr_lvs.original_value);
-        }
-        get_group_fn_args.push_back(LL_INT(query_mem_desc_.getMinVal()));
-        get_group_fn_args.push_back(LL_INT(query_mem_desc_.getBucket()));
-        if (!query_mem_desc_.hasKeylessHash()) {
-          if (!outputColumnar()) {
-            get_group_fn_args.push_back(LL_INT(row_size_quad));
-          }
-        } else {
-          CHECK(!outputColumnar());
-          get_group_fn_args.push_back(LL_INT(row_size_quad));
-          if (query_mem_desc_.interleavedBins(co.device_type_)) {
-            auto warp_idx = emitCall("thread_warp_idx", {LL_INT(executor_->warpSize())});
-            get_group_fn_args.push_back(warp_idx);
-            get_group_fn_args.push_back(LL_INT(executor_->warpSize()));
-          }
-        }
-        if (get_group_fn_name == "get_columnar_group_bin_offset") {
-          return std::make_tuple(&*groups_buffer,
-                                 emitCall(get_group_fn_name, get_group_fn_args));
-        }
-        return std::make_tuple(emitCall(get_group_fn_name, get_group_fn_args), nullptr);
-      } else {
-        ++arg_it;
-        ++arg_it;
-        ++arg_it;
-        if (group_expr) {
-          LOG(INFO) << "Use get_group_value_one_key";
-        }
-        return std::make_tuple(
-            emitCall(co.with_dynamic_watchdog_ ? "get_group_value_one_key_with_watchdog"
-                                               : "get_group_value_one_key",
-                     {&*groups_buffer,
-                      LL_INT(static_cast<int32_t>(query_mem_desc_.getEntryCount())),
-                      &*small_groups_buffer,            // TODO(adb): remove
-                      LL_INT(static_cast<int32_t>(0)),  // TODO(adb): remove
-                      &*group_expr_lv,
-                      LL_INT(query_mem_desc_.getMinVal()),
-                      LL_INT(row_size_quad),
-                      &*(++arg_it)}),
-            nullptr);
+      CHECK(query_mem_desc_.usesGetGroupValueFast());
+      std::string get_group_fn_name{outputColumnar() && !query_mem_desc_.hasKeylessHash()
+                                        ? "get_columnar_group_bin_offset"
+                                        : "get_group_value_fast"};
+      if (query_mem_desc_.hasKeylessHash()) {
+        get_group_fn_name += "_keyless";
       }
-      break;
+      if (query_mem_desc_.interleavedBins(co.device_type_)) {
+        CHECK(!outputColumnar());
+        CHECK(query_mem_desc_.hasKeylessHash());
+        get_group_fn_name += "_semiprivate";
+      }
+      std::vector<llvm::Value*> get_group_fn_args{&*groups_buffer, &*group_expr_lv};
+      if (group_expr_lvs.original_value && get_group_fn_name == "get_group_value_fast" &&
+          query_mem_desc_.mustUseBaselineSort()) {
+        get_group_fn_name += "_with_original_key";
+        get_group_fn_args.push_back(group_expr_lvs.original_value);
+      }
+      get_group_fn_args.push_back(LL_INT(query_mem_desc_.getMinVal()));
+      get_group_fn_args.push_back(LL_INT(query_mem_desc_.getBucket()));
+      if (!query_mem_desc_.hasKeylessHash()) {
+        if (!outputColumnar()) {
+          get_group_fn_args.push_back(LL_INT(row_size_quad));
+        }
+      } else {
+        CHECK(!outputColumnar());
+        get_group_fn_args.push_back(LL_INT(row_size_quad));
+        if (query_mem_desc_.interleavedBins(co.device_type_)) {
+          auto warp_idx = emitCall("thread_warp_idx", {LL_INT(executor_->warpSize())});
+          get_group_fn_args.push_back(warp_idx);
+          get_group_fn_args.push_back(LL_INT(executor_->warpSize()));
+        }
+      }
+      if (get_group_fn_name == "get_columnar_group_bin_offset") {
+        return std::make_tuple(&*groups_buffer,
+                               emitCall(get_group_fn_name, get_group_fn_args));
+      }
+      return std::make_tuple(emitCall(get_group_fn_name, get_group_fn_args), nullptr);
     }
     case GroupByColRangeType::MultiCol:
     case GroupByColRangeType::MultiColPerfectHash: {

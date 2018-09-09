@@ -187,50 +187,6 @@ get_columnar_group_bin_offset(int64_t* key_base_ptr,
   return off;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_one_key(
-    int64_t* groups_buffer,
-    const uint32_t groups_buffer_entry_count,
-    int64_t* small_groups_buffer,
-    const uint32_t small_groups_buffer_qw_count,
-    const int64_t key,
-    const int64_t min_key,
-    const uint32_t row_size_quad,
-    const int64_t* init_vals) {
-  int64_t off = key - min_key;
-  if (0 <= off && off < small_groups_buffer_qw_count) {
-    return get_group_value_fast(small_groups_buffer, key, min_key, 0, row_size_quad);
-  }
-  return get_group_value(groups_buffer,
-                         groups_buffer_entry_count,
-                         &key,
-                         1,
-                         sizeof(int64_t),
-                         row_size_quad,
-                         init_vals);
-}
-
-extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_one_key_with_watchdog(
-    int64_t* groups_buffer,
-    const uint32_t groups_buffer_entry_count,
-    int64_t* small_groups_buffer,
-    const uint32_t small_groups_buffer_qw_count,
-    const int64_t key,
-    const int64_t min_key,
-    const uint32_t row_size_quad,
-    const int64_t* init_vals) {
-  int64_t off = key - min_key;
-  if (0 <= off && off < small_groups_buffer_qw_count) {
-    return get_group_value_fast(small_groups_buffer, key, min_key, 0, row_size_quad);
-  }
-  return get_group_value_with_watchdog(groups_buffer,
-                                       groups_buffer_entry_count,
-                                       &key,
-                                       1,
-                                       sizeof(int64_t),
-                                       row_size_quad,
-                                       init_vals);
-}
-
 extern "C" ALWAYS_INLINE DEVICE int64_t* get_scan_output_slot(
     int64_t* output_buffer,
     const uint32_t output_buffer_entry_count,

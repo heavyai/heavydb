@@ -304,8 +304,6 @@ declare i64* @get_group_value_with_watchdog(i64*, i32, i64*, i32, i32, i32, i64*
 declare i64* @get_group_value_fast(i64*, i64, i64, i64, i32);
 declare i64* @get_group_value_fast_with_original_key(i64*, i64, i64, i64, i64, i32);
 declare i32 @get_columnar_group_bin_offset(i64*, i64, i64, i64);
-declare i64* @get_group_value_one_key(i64*, i32, i64*, i32, i64, i64, i32, i64*);
-declare i64* @get_group_value_one_key_with_watchdog(i64*, i32, i64*, i32, i64, i64, i32, i64*);
 declare i64 @baseline_hash_join_idx_32(i8*, i8*, i64, i64);
 declare i64 @baseline_hash_join_idx_64(i8*, i8*, i64, i64);
 declare i64 @get_composite_key_index_32(i32*, i64, i32*, i64);
@@ -469,10 +467,6 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
   if (!cached_code.empty()) {
     return cached_code;
   }
-
-  auto get_group_value_func = module->getFunction("get_group_value_one_key");
-  CHECK(get_group_value_func);
-  clear_function_attributes(get_group_value_func);
 
   bool row_func_not_inlined = false;
   if (no_inline) {
