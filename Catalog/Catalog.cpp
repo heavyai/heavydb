@@ -1169,7 +1169,14 @@ void SysCatalog::grantAllOnDatabase_unsafe(const std::string& roleName,
                                            const Catalog_Namespace::Catalog& catalog) {
   // It's a separate use case because it's easier for implementation to convert ALL ON
   // DATABASE into ALL ON DASHBOARDS, ALL ON VIEWS and ALL ON TABLES
+  // Add DB Access privileges
   DBObject tmp_object = object;
+  tmp_object.setPrivileges(AccessPrivileges::ACCESS);
+  tmp_object.setPermissionType(DatabaseDBObjectType);
+  grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
+  tmp_object.setPrivileges(AccessPrivileges::VIEW_SQL_EDITOR);
+  tmp_object.setPermissionType(DatabaseDBObjectType);
+  grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
   tmp_object.setPrivileges(AccessPrivileges::ALL_TABLE);
   tmp_object.setPermissionType(TableDBObjectType);
   grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
