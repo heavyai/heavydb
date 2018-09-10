@@ -67,30 +67,30 @@ enum SQLTypes {
 };
 
 struct VarlenDatum {
-  int length;
+  size_t length;
   int8_t* pointer;
   bool is_null;
 
   DEVICE VarlenDatum() : length(0), pointer(NULL), is_null(true) {}
-  VarlenDatum(int l, int8_t* p, bool n) : length(l), pointer(p), is_null(n) {}
+  DEVICE virtual ~VarlenDatum() {}
+
+  VarlenDatum(const size_t l, int8_t* p, const bool n)
+      : length(l), pointer(p), is_null(n) {}
 };
 
 // ArrayDatum is idential to VarlenDatum except that it takes ownership of
 // the memory holding array data.
-struct ArrayDatum {
-  size_t length;
-  int8_t* pointer;
-  bool is_null;
+struct ArrayDatum : public VarlenDatum {
 #ifndef __CUDACC__
   std::shared_ptr<int8_t> data_ptr;
 #endif
 
-  DEVICE ArrayDatum() : length(0), pointer(NULL), is_null(true) {}
+  DEVICE ArrayDatum() : VarlenDatum() {}
 #ifndef __CUDACC__
-  ArrayDatum(int l, int8_t* p, bool n)
-      : length(l), pointer(p), is_null(n), data_ptr(p, [](int8_t* p) { free(p); }) {}
+  ArrayDatum(const size_t l, int8_t* p, const bool n)
+      : VarlenDatum(l, p, n), data_ptr(p, [](int8_t* p) { free(p); }) {}
 #else
-  ArrayDatum(int l, int8_t* p, bool n) : length(l), pointer(p), is_null(n) {}
+  ArrayDatum(const size_t l, int8_t* p, const bool n) : VarlenDatum(l, p, n) {}
 #endif
 };
 
