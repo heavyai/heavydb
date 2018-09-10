@@ -42,6 +42,7 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Transforms/IPO.h>
+#include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Instrumentation.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 #include "llvm/IR/IntrinsicInst.h"
@@ -52,6 +53,11 @@
 #include <llvm/Support/Casting.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
+
+#if LLVM_VERSION_MAJOR >= 7
+#include <llvm/Transforms/Scalar/InstSimplifyPass.h>
+#include <llvm/Transforms/Utils.h>
+#endif
 
 namespace {
 
@@ -103,7 +109,11 @@ void optimize_ir(llvm::Function* query_func,
   pass_manager.add(llvm::createAlwaysInlinerLegacyPass());
 #endif
   pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
+#if LLVM_VERSION_MAJOR >= 7
+  pass_manager.add(llvm::createInstSimplifyLegacyPass());
+#else
   pass_manager.add(llvm::createInstructionSimplifierPass());
+#endif
   pass_manager.add(llvm::createInstructionCombiningPass());
   pass_manager.add(llvm::createGlobalOptimizerPass());
 // FIXME(miyu): need investigate how 3.7+ dump debug IR.
@@ -619,8 +629,13 @@ std::string Executor::generatePTX(const std::string& cuda_llir) const {
     module->setDataLayout(nvptx_target_machine_->createDataLayout());
 #endif
 
+#if LLVM_VERSION_MAJOR >= 7
+    nvptx_target_machine_->addPassesToEmitFile(
+        ptxgen_pm, formatted_os, nullptr, llvm::TargetMachine::CGFT_AssemblyFile);
+#else
     nvptx_target_machine_->addPassesToEmitFile(
         ptxgen_pm, formatted_os, llvm::TargetMachine::CGFT_AssemblyFile);
+#endif
     ptxgen_pm.run(*module);
 #if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5
     formatted_os.flush();
@@ -1271,7 +1286,13 @@ Executor::CompilationResult Executor::compileWorkUnit(
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
   auto rt_module_copy = llvm::CloneModule(
-      g_rt_module.get(), cgen_state_->vmap_, [](const llvm::GlobalValue* gv) {
+#if LLVM_VERSION_MAJOR >= 7
+      *g_rt_module.get(),
+#else
+      g_rt_module.get(),
+#endif
+      cgen_state_->vmap_,
+      [](const llvm::GlobalValue* gv) {
         auto func = llvm::dyn_cast<llvm::Function>(gv);
         if (!func) {
           return true;
