@@ -3730,30 +3730,35 @@ std::vector<std::string> MapDHandler::getTargetNames(
   return names;
 }
 
+TColumnType MapDHandler::convert_target_metainfo(const TargetMetaInfo& target,
+                                                 const size_t idx) const {
+  TColumnType proj_info;
+  proj_info.col_name = target.get_resname();
+  if (proj_info.col_name.empty()) {
+    proj_info.col_name = "result_" + std::to_string(idx + 1);
+  }
+  const auto& target_ti = target.get_type_info();
+  proj_info.col_type.type = type_to_thrift(target_ti);
+  proj_info.col_type.encoding = encoding_to_thrift(target_ti);
+  proj_info.col_type.nullable = !target_ti.get_notnull();
+  proj_info.col_type.is_array = target_ti.get_type() == kARRAY;
+  if (IS_GEO(target_ti.get_type())) {
+    fixup_geo_column_descriptor(
+        proj_info, target_ti.get_subtype(), target_ti.get_output_srid());
+  } else {
+    proj_info.col_type.precision = target_ti.get_precision();
+    proj_info.col_type.scale = target_ti.get_scale();
+  }
+  proj_info.col_type.comp_param = target_ti.get_comp_param();
+  return proj_info;
+}
+
 TRowDescriptor MapDHandler::convert_target_metainfo(
     const std::vector<TargetMetaInfo>& targets) const {
   TRowDescriptor row_desc;
-  TColumnType proj_info;
   size_t i = 0;
   for (const auto target : targets) {
-    proj_info.col_name = target.get_resname();
-    if (proj_info.col_name.empty()) {
-      proj_info.col_name = "result_" + std::to_string(i + 1);
-    }
-    const auto& target_ti = target.get_type_info();
-    proj_info.col_type.type = type_to_thrift(target_ti);
-    proj_info.col_type.encoding = encoding_to_thrift(target_ti);
-    proj_info.col_type.nullable = !target_ti.get_notnull();
-    proj_info.col_type.is_array = target_ti.get_type() == kARRAY;
-    if (IS_GEO(target_ti.get_type())) {
-      fixup_geo_column_descriptor(
-          proj_info, target_ti.get_subtype(), target_ti.get_output_srid());
-    } else {
-      proj_info.col_type.precision = target_ti.get_precision();
-      proj_info.col_type.scale = target_ti.get_scale();
-    }
-    proj_info.col_type.comp_param = target_ti.get_comp_param();
-    row_desc.push_back(proj_info);
+    row_desc.push_back(convert_target_metainfo(target, i));
     ++i;
   }
   return row_desc;

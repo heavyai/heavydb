@@ -553,6 +553,9 @@ class MapDHandler : public MapDIf {
   std::vector<std::string> getTargetNames(
       const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) const;
 
+  TColumnType convert_target_metainfo(const TargetMetaInfo& target,
+                                      const size_t idx) const;
+
   TRowDescriptor convert_target_metainfo(
       const std::vector<TargetMetaInfo>& targets) const;
 

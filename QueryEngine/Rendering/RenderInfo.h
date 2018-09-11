@@ -46,6 +46,7 @@ class RenderInfo {
   bool queryRanWithInSituData() const;
   bool hasInSituData() const;
   bool isInSituDataFlagUnset() const;
+  bool couldRunInSitu() const;
   bool isPotentialInSituRender() const;
   bool useCudaBuffers() const;
   void disableCudaBuffers();
