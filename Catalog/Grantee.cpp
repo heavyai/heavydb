@@ -15,6 +15,7 @@
  */
 
 #include "Grantee.h"
+#include <stack>
 
 using std::runtime_error;
 using std::string;
@@ -48,8 +49,25 @@ std::vector<std::string> Grantee::getRoles() const {
   return roles;
 }
 
-bool Grantee::hasRole(Role* role) const {
-  return roles_.find(role) != roles_.end();
+bool Grantee::hasRole(Role* role, bool recursive) const {
+  if (!recursive) {
+    return roles_.find(role) != roles_.end();
+  } else {
+    std::stack<const Grantee*> roles;
+    roles.push(this);
+    while (!roles.empty()) {
+      auto r = roles.top();
+      roles.pop();
+      if (r == role) {
+        return true;
+      } else {
+        for (auto granted_role : r->roles_) {
+          roles.push(granted_role);
+        }
+      }
+    }
+    return false;
+  }
 }
 
 void Grantee::getPrivileges(DBObject& object, bool recursive) {
@@ -130,6 +148,7 @@ void Grantee::grantRole(Role* role) {
     throw runtime_error("Role " + role->getName() + " have been granted to " + name_ +
                         " already.");
   }
+  checkCycles(role);
   roles_.insert(role);
   role->addGrantee(this);
   updatePrivileges();
@@ -210,7 +229,7 @@ bool Grantee::checkPrivileges(const DBObject& objectRequested) const {
 }
 
 void Grantee::updatePrivileges(Role* role) {
-  for (auto& roleDbObject : *role->getDbObjects(false)) {
+  for (auto& roleDbObject : *role->getDbObjects(true)) {
     auto dbObject = findDbObject(roleDbObject.first, true);
     if (dbObject) {  // found
       dbObject->updatePrivileges(*roleDbObject.second);
@@ -221,6 +240,7 @@ void Grantee::updatePrivileges(Role* role) {
   }
 }
 
+// Pull privileges from upper roles
 void Grantee::updatePrivileges() {
   for (auto& dbObject : cachedPrivileges_) {
     dbObject.second->resetPrivileges();
@@ -259,6 +279,26 @@ void Grantee::revokeAllOnDatabase(int32_t dbId) {
   updatePrivileges();
 }
 
+void Grantee::checkCycles(Role* newRole) {
+  std::stack<Grantee*> grantees;
+  grantees.push(this);
+  while (!grantees.empty()) {
+    auto* grantee = grantees.top();
+    grantees.pop();
+    if (!grantee->isUser()) {
+      Role* r = dynamic_cast<Role*>(grantee);
+      CHECK(r);
+      if (r == newRole) {
+        throw runtime_error("Granting role " + newRole->getName() + " to " + getName() +
+                            " creates cycle in grantee graph.");
+      }
+      for (auto g : r->getGrantees()) {
+        grantees.push(g);
+      }
+    }
+  }
+}
+
 Role::~Role() {
   for (auto it = grantees_.begin(); it != grantees_.end();) {
     auto current_grantee = *it;
@@ -286,10 +326,10 @@ void Role::removeGrantee(Grantee* grantee) {
   }
 }
 
-std::vector<std::string> Role::getGrantees() const {
-  std::vector<std::string> grantees;
-  for (const auto& role : grantees_) {
-    grantees.push_back(role->getName());
+std::vector<Grantee*> Role::getGrantees() const {
+  std::vector<Grantee*> grantees;
+  for (const auto grantee : grantees_) {
+    grantees.push_back(grantee);
   }
   return grantees;
 }
@@ -301,6 +341,7 @@ void Role::revokeAllOnDatabase(int32_t dbId) {
   }
 }
 
+// Pull privileges from upper roles and push those to grantees
 void Role::updatePrivileges() {
   Grantee::updatePrivileges();
   for (auto grantee : grantees_) {

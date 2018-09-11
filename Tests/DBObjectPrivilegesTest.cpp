@@ -314,6 +314,75 @@ TEST(UserRoles, ValidNames) {
   EXPECT_NO_THROW(run_ddl_statement("DROP ROLE developer-backend-rendering;"));
 }
 
+TEST(UserRoles, RoleHierarchies) {
+  // hr prefix here stands for hierarchical roles
+
+  // create objects
+  EXPECT_NO_THROW(run_ddl_statement("CREATE USER hr_u1 (password = 'u1');"));
+  EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE hr_r1;"));
+  EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE hr_r2;"));
+  EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE hr_r3;"));
+  EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE hr_r4;"));
+  EXPECT_NO_THROW(run_ddl_statement("CREATE TABLE hr_tbl1 (i INTEGER);"));
+
+  // check that we can't create cycles
+  EXPECT_NO_THROW(run_ddl_statement("GRANT hr_r4 TO hr_r3;"));
+  EXPECT_THROW(run_ddl_statement("GRANT hr_r3 TO hr_r4;"), std::runtime_error);
+  EXPECT_NO_THROW(run_ddl_statement("GRANT hr_r3 TO hr_r2;"));
+  EXPECT_THROW(run_ddl_statement("GRANT hr_r2 TO hr_r4;"), std::runtime_error);
+
+  // make the grant hierarchy
+  EXPECT_NO_THROW(run_ddl_statement("GRANT hr_r2 TO hr_r1;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT hr_r1 TO hr_u1;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT SELECT ON TABLE hr_tbl1 TO hr_r1;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT INSERT ON TABLE hr_tbl1 TO hr_r2;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT DELETE ON TABLE hr_tbl1 TO hr_r3;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT UPDATE ON TABLE hr_tbl1 TO hr_r4;"));
+
+  // check that we see privileges gratnted via roles' hierarchy
+  auto& g_cat = g_session->get_catalog();
+  AccessPrivileges tbl_privs;
+  ASSERT_NO_THROW(tbl_privs.add(AccessPrivileges::SELECT_FROM_TABLE));
+  ASSERT_NO_THROW(tbl_privs.add(AccessPrivileges::INSERT_INTO_TABLE));
+  ASSERT_NO_THROW(tbl_privs.add(AccessPrivileges::DELETE_FROM_TABLE));
+  ASSERT_NO_THROW(tbl_privs.add(AccessPrivileges::UPDATE_IN_TABLE));
+  DBObject tbl1_object("hr_tbl1", DBObjectType::TableDBObjectType);
+  tbl1_object.loadKey(g_cat);
+  ASSERT_NO_THROW(tbl1_object.setPrivileges(tbl_privs));
+  privObjects.clear();
+  privObjects.push_back(tbl1_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("hr_u1", privObjects), true);
+  // check that when we remove privilege from one role, it's grantees are updated
+  EXPECT_NO_THROW(run_ddl_statement("REVOKE DELETE ON TABLE hr_tbl1 FROM hr_r3;"));
+  EXPECT_EQ(sys_cat.checkPrivileges("hr_u1", privObjects), false);
+  tbl_privs.remove(AccessPrivileges::DELETE_FROM_TABLE);
+  ASSERT_NO_THROW(tbl1_object.setPrivileges(tbl_privs));
+  privObjects.clear();
+  privObjects.push_back(tbl1_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("hr_u1", privObjects), true);
+  // check that if we remove a role from a middle of hierarchy everythings is fine
+  EXPECT_NO_THROW(run_ddl_statement("REVOKE hr_r2 FROM hr_r1;"));
+  EXPECT_EQ(sys_cat.checkPrivileges("hr_u1", privObjects), false);
+  tbl_privs.remove(AccessPrivileges::UPDATE_IN_TABLE);
+  ASSERT_NO_THROW(tbl1_object.setPrivileges(tbl_privs));
+  privObjects.clear();
+  privObjects.push_back(tbl1_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("hr_u1", privObjects), false);
+  tbl_privs.remove(AccessPrivileges::INSERT_INTO_TABLE);
+  ASSERT_NO_THROW(tbl1_object.setPrivileges(tbl_privs));
+  privObjects.clear();
+  privObjects.push_back(tbl1_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("hr_u1", privObjects), true);
+
+  // clean-up objects
+  EXPECT_NO_THROW(run_ddl_statement("DROP USER hr_u1;"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP ROLE hr_r1;"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP ROLE hr_r2;"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP ROLE hr_r3;"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP ROLE hr_r4;"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP TABLE hr_tbl1;"));
+}
+
 TEST_F(DatabaseObject, AccessDefaultsTest) {
   auto cat_mapd = Catalog_Namespace::Catalog::get("mapd");
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);

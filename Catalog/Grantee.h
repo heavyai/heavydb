@@ -41,8 +41,7 @@ class Grantee {
   virtual DBObject* revokePrivileges(const DBObject& object);
   virtual void grantRole(Role* role);
   virtual void revokeRole(Role* role);
-  virtual bool hasAnyPrivileges(const DBObject& objectRequested,
-                                bool recursive) const;
+  virtual bool hasAnyPrivileges(const DBObject& objectRequested, bool recursive) const;
   virtual bool checkPrivileges(const DBObject& objectRequested) const;
   virtual void updatePrivileges();
   virtual void updatePrivileges(Role* role);
@@ -51,10 +50,11 @@ class Grantee {
   DBObject* findDbObject(const DBObjectKey& objectKey, bool recursive) const;
   const std::string& getName() const { return name_; }
   std::vector<std::string> getRoles() const;
-  bool hasRole(Role* role) const;
+  bool hasRole(Role* role, bool recursive) const;
   const DBObjectMap* getDbObjects(bool recursive) const {
     return recursive ? &cachedPrivileges_ : &privileges_;
   }
+  void checkCycles(Role* newRole);
 
  protected:
   std::string name_;
@@ -86,7 +86,7 @@ class Role : public Grantee {
   virtual void removeGrantee(Grantee* grantee);
 
   virtual void revokeAllOnDatabase(int32_t dbId);
-  std::vector<std::string> getGrantees() const;
+  std::vector<Grantee*> getGrantees() const;
 
  private:
   std::unordered_set<Grantee*> grantees_;

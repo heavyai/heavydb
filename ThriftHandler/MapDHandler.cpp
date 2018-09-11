@@ -1163,7 +1163,7 @@ void MapDHandler::get_db_objects_for_grantee(std::vector<TDBObject>& TDBObjectsF
   auto session = get_session(sessionId);
   auto user = session.get_currentUser();
   if (!user.isSuper &&
-      !SysCatalog::instance().isRoleGrantedToGrantee(user.userName, roleName)) {
+      !SysCatalog::instance().isRoleGrantedToGrantee(user.userName, roleName, true)) {
     return;
   }
   auto* rl = SysCatalog::instance().getGrantee(roleName);

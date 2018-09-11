@@ -1358,7 +1358,7 @@ void SysCatalog::grantRole_unsafe(const std::string& roleName,
                         granteeName + " does not exist.");
   }
   sys_write_lock write_lock(this);
-  if (!grantee->hasRole(rl)) {
+  if (!grantee->hasRole(rl, false)) {
     grantee->grantRole(rl);
     sys_sqlite_lock sqlite_lock(this);
     sqliteConnector_->query_with_text_params(
@@ -1535,7 +1535,8 @@ SysCatalog::getMetadataForObject(int32_t dbId, int32_t dbType, int32_t objectId)
 }
 
 bool SysCatalog::isRoleGrantedToGrantee(const std::string& granteeName,
-                                        const std::string& roleName) const {
+                                        const std::string& roleName,
+                                        bool recursive) const {
   sys_read_lock read_lock(this);
   if (roleName == granteeName) {
     return true;
@@ -1544,7 +1545,7 @@ bool SysCatalog::isRoleGrantedToGrantee(const std::string& granteeName,
   auto* user_rl = instance().getUserGrantee(granteeName);
   if (user_rl) {
     auto* rl = instance().getRoleGrantee(roleName);
-    if (rl && user_rl->hasRole(rl)) {
+    if (rl && user_rl->hasRole(rl, recursive)) {
       rc = true;
     }
   }
@@ -1578,7 +1579,7 @@ std::vector<std::string> SysCatalog::getRoles(bool userPrivateRole,
     if (!userPrivateRole && grantee.second->isUser()) {
       continue;
     }
-    if (!isSuper && !isRoleGrantedToGrantee(userName, grantee.second->getName())) {
+    if (!isSuper && !isRoleGrantedToGrantee(userName, grantee.second->getName(), true)) {
       continue;
     }
     roles.push_back(grantee.second->getName());
