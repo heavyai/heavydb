@@ -281,6 +281,7 @@ void MapDHandler::internal_connect(TSessionId& session,
   } catch (std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }
+
   if (SysCatalog::instance().arePrivilegesOn()) {
     DBObject dbObject(dbname, DatabaseDBObjectType);
     dbObject.loadKey(*cat);
@@ -301,15 +302,15 @@ void MapDHandler::connect(TSessionId& session,
                           const std::string& dbname) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   Catalog_Namespace::UserMetadata user_meta;
-  if (!SysCatalog::instance().getMetadataForUser(user, user_meta)) {
-    THROW_MAPD_EXCEPTION(std::string("User ") + user + " does not exist.");
-  }
   std::shared_ptr<Catalog> cat = nullptr;
   try {
     cat = SysCatalog::instance().login(
         dbname, user, passwd, user_meta, !super_user_rights_);
   } catch (std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
+  }
+  if (!SysCatalog::instance().getMetadataForUser(user, user_meta)) {
+    THROW_MAPD_EXCEPTION(std::string("User ") + user + " does not exist.");
   }
   if (SysCatalog::instance().arePrivilegesOn()) {
     DBObject dbObject(dbname, DatabaseDBObjectType);
