@@ -4154,15 +4154,22 @@ void import_dept_table() {
 void import_geospatial_test() {
   const std::string geospatial_test("DROP TABLE IF EXISTS geospatial_test;");
   run_ddl_statement(geospatial_test);
-  run_ddl_statement(
-      "CREATE TABLE geospatial_test ("
-      "p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON, gp GEOMETRY(POINT), "
-      "gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), gp4326none "
-      "GEOMETRY(POINT,4326) ENCODING NONE, "
-      "gp900913 GEOMETRY(POINT,900913), "
-      "gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE, gpoly4326 "
-      "GEOMETRY(POLYGON,4326)"
-      ") WITH (fragment_size=2);");
+  constexpr char create_ddl[] = R"(CREATE TABLE geospatial_test (
+        id INT,
+        p POINT,
+        l LINESTRING,
+        poly POLYGON,
+        mpoly MULTIPOLYGON,
+        gp GEOMETRY(POINT),
+        gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32),
+        gp4326none GEOMETRY(POINT,4326) ENCODING NONE,
+        gp900913 GEOMETRY(POINT,900913),
+        gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE,
+        gpoly4326 GEOMETRY(POLYGON,4326)
+      ) WITH (fragment_size=2); 
+  )";
+  run_ddl_statement(create_ddl);
+  ValuesGenerator gen("geospatial_test");
   for (ssize_t i = 0; i < g_num_rows; ++i) {
     const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) +
                             ")'"};
@@ -4176,11 +4183,18 @@ void import_geospatial_test() {
                            std::to_string(i + 1) + ", 0 0))'"};
     const std::string mpoly{"'MULTIPOLYGON(((0 0, " + std::to_string(i + 1) + " 0, 0 " +
                             std::to_string(i + 1) + ", 0 0)))'"};
-    const std::string insert_query{"INSERT INTO geospatial_test VALUES(" + point + ", " +
-                                   linestring + ", " + poly + ", " + mpoly + ", " +
-                                   point + ", " + point + ", " + point + ", " + point +
-                                   ", " + linestring + ", " + poly + ");"};
-    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    run_multiple_agg(gen(i,
+                         point,
+                         linestring,
+                         poly,
+                         mpoly,
+                         point,
+                         point,
+                         point,
+                         point,
+                         linestring,
+                         poly),
+                     ExecutorDeviceType::CPU);
   }
 }
 
@@ -9447,22 +9461,18 @@ TEST(Select, GeoSpatial_Basics) {
 }
 
 TEST(Select, GeoSpatial_Projection) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     // Projection (return GeoTargetValue)
+    compare_geo_target(run_simple_agg("SELECT p FROM geospatial_test WHERE id = 1;", dt),
+                       GeoPointTargetValue({1., 1.}));
+    compare_geo_target(run_simple_agg("SELECT l FROM geospatial_test WHERE id = 1;", dt),
+                       GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.}));
     compare_geo_target(
-        run_simple_agg("SELECT p FROM geospatial_test WHERE rowid = 1;", dt),
-        GeoPointTargetValue({1., 1.}));
-    compare_geo_target(
-        run_simple_agg("SELECT l FROM geospatial_test WHERE rowid = 1;", dt),
-        GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.}));
-    compare_geo_target(
-        run_simple_agg("SELECT poly FROM geospatial_test WHERE rowid = 1;", dt),
+        run_simple_agg("SELECT poly FROM geospatial_test WHERE id = 1;", dt),
         GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}));
     compare_geo_target(
-        run_simple_agg("SELECT mpoly FROM geospatial_test WHERE rowid = 1;", dt),
+        run_simple_agg("SELECT mpoly FROM geospatial_test WHERE id = 1;", dt),
         GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1}));
     ASSERT_EQ(
         static_cast<int64_t>(1),
@@ -9520,16 +9530,16 @@ TEST(Select, GeoSpatial_Projection) {
     // Projection (return WKT strings)
     ASSERT_EQ("POINT (1 1)",
               boost::get<std::string>(v<NullableString>(run_simple_agg(
-                  "SELECT p FROM geospatial_test WHERE rowid = 1;", dt, false))));
+                  "SELECT p FROM geospatial_test WHERE id = 1;", dt, false))));
     ASSERT_EQ("LINESTRING (1 0,2 2,3 3)",
               boost::get<std::string>(v<NullableString>(run_simple_agg(
-                  "SELECT l FROM geospatial_test WHERE rowid = 1;", dt, false))));
+                  "SELECT l FROM geospatial_test WHERE id = 1;", dt, false))));
     ASSERT_EQ("POLYGON ((0 0,2 0,0 2,0 0))",
               boost::get<std::string>(v<NullableString>(run_simple_agg(
-                  "SELECT poly FROM geospatial_test WHERE rowid = 1;", dt, false))));
+                  "SELECT poly FROM geospatial_test WHERE id = 1;", dt, false))));
     ASSERT_EQ("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))",
               boost::get<std::string>(v<NullableString>(run_simple_agg(
-                  "SELECT mpoly FROM geospatial_test WHERE rowid = 1;", dt, false))));
+                  "SELECT mpoly FROM geospatial_test WHERE id = 1;", dt, false))));
     ASSERT_EQ("LINESTRING (5 0,10 10,11 11)",
               boost::get<std::string>(v<NullableString>(run_simple_agg(
                   "SELECT l FROM geospatial_test WHERE "

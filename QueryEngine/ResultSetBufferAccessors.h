@@ -47,7 +47,7 @@ inline bool is_real_str_or_array(const TargetInfo& target_info) {
 inline size_t advance_slot(const size_t j,
                            const TargetInfo& target_info,
                            const bool separate_varlen_storage) {
-  if (target_info.sql_type.is_geometry()) {
+  if (target_info.sql_type.is_geometry() && !separate_varlen_storage) {
     return j + 2 * target_info.sql_type.get_physical_coord_cols();
   }
   return j + ((target_info.agg_kind == kAVG ||
@@ -160,7 +160,7 @@ inline T advance_target_ptr(T target_ptr,
       (is_real_str_or_array(target_info) && !separate_varlen_storage)) {
     return result + query_mem_desc.getColumnWidth(slot_idx + 1).compact;
   }
-  if (target_info.sql_type.is_geometry()) {
+  if (target_info.sql_type.is_geometry() && !separate_varlen_storage) {
     for (auto i = 1; i < 2 * target_info.sql_type.get_physical_coord_cols(); ++i) {
       result += query_mem_desc.getColumnWidth(slot_idx + i).compact;
     }

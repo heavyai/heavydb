@@ -670,7 +670,7 @@ class ResultSet {
   mutable std::mutex row_iteration_mutex_;
 
   // only used by geo
-  GeoReturnType geo_return_type_;
+  mutable GeoReturnType geo_return_type_;
 
   // comparators used for sorting (note that the actual compare function is accessed using
   // the createComparator method)

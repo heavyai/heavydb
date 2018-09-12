@@ -922,7 +922,7 @@ struct GeoTargetValueBuilder {
                                                                                   ad_arr);
       }
       default: {
-        CHECK(false);
+        UNREACHABLE();
         return TargetValue(nullptr);
       }
     }
@@ -1134,6 +1134,28 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
     return &data_mgr;
   };
 
+  auto getSeparateVarlenStorage = [&]() {
+    const auto storage_idx = getStorageIndex(entry_buff_idx);
+    CHECK_LT(static_cast<size_t>(storage_idx.first), serialized_varlen_buffer_.size());
+    const auto& varlen_buffer = serialized_varlen_buffer_[storage_idx.first];
+    return varlen_buffer;
+  };
+
+  auto removeCompressionFromGeoType = [](const SQLTypeInfo& ti) {
+    return SQLTypeInfo(ti.get_type(),
+                       ti.get_dimension(),
+                       ti.get_scale(),
+                       ti.get_notnull(),
+                       kENCODING_NONE,
+                       0,
+                       ti.get_subtype());
+  };
+
+  if (separate_varlen_storage_valid_ && getCoordsDataPtr(geo_target_ptr) < 0) {
+    CHECK_EQ(-1, getCoordsDataPtr(geo_target_ptr));
+    return TargetValue(nullptr);
+  }
+
   const ColumnLazyFetchInfo* col_lazy_fetch = nullptr;
   if (!lazy_fetch_info_.empty()) {
     CHECK_LT(target_logical_idx, lazy_fetch_info_.size());
@@ -1142,7 +1164,21 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
 
   switch (target_info.sql_type.get_type()) {
     case kPOINT: {
-      if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
+      if (separate_varlen_storage_valid_) {
+        auto varlen_buffer = getSeparateVarlenStorage();
+        CHECK_LT(static_cast<size_t>(getCoordsDataPtr(geo_target_ptr)),
+                 varlen_buffer.size());
+
+        return GeoTargetValueBuilder<kPOINT, GeoQueryOutputFetchHandler>::build(
+            removeCompressionFromGeoType(target_info.sql_type),
+            geo_return_type_,
+            nullptr,
+            false,
+            device_id_,
+            reinterpret_cast<int64_t>(
+                varlen_buffer[getCoordsDataPtr(geo_target_ptr)].data()),
+            static_cast<int64_t>(varlen_buffer[getCoordsDataPtr(geo_target_ptr)].size()));
+      } else if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
         auto frag_col_buffers = getFragColBuffers();
 
         return GeoTargetValueBuilder<kPOINT, GeoLazyFetchHandler>::build(
@@ -1162,7 +1198,21 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
       }
     } break;
     case kLINESTRING: {
-      if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
+      if (separate_varlen_storage_valid_) {
+        auto varlen_buffer = getSeparateVarlenStorage();
+        CHECK_LT(static_cast<size_t>(getCoordsDataPtr(geo_target_ptr)),
+                 varlen_buffer.size());
+
+        return GeoTargetValueBuilder<kLINESTRING, GeoQueryOutputFetchHandler>::build(
+            removeCompressionFromGeoType(target_info.sql_type),
+            geo_return_type_,
+            nullptr,
+            false,
+            device_id_,
+            reinterpret_cast<int64_t>(
+                varlen_buffer[getCoordsDataPtr(geo_target_ptr)].data()),
+            static_cast<int64_t>(varlen_buffer[getCoordsDataPtr(geo_target_ptr)].size()));
+      } else if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
         auto frag_col_buffers = getFragColBuffers();
 
         return GeoTargetValueBuilder<kLINESTRING, GeoLazyFetchHandler>::build(
@@ -1182,7 +1232,25 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
       }
     } break;
     case kPOLYGON: {
-      if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
+      if (separate_varlen_storage_valid_) {
+        auto varlen_buffer = getSeparateVarlenStorage();
+        CHECK_LT(static_cast<size_t>(getCoordsDataPtr(geo_target_ptr) + 1),
+                 varlen_buffer.size());
+
+        return GeoTargetValueBuilder<kPOLYGON, GeoQueryOutputFetchHandler>::build(
+            removeCompressionFromGeoType(target_info.sql_type),
+            geo_return_type_,
+            nullptr,
+            false,
+            device_id_,
+            reinterpret_cast<int64_t>(
+                varlen_buffer[getCoordsDataPtr(geo_target_ptr)].data()),
+            static_cast<int64_t>(varlen_buffer[getCoordsDataPtr(geo_target_ptr)].size()),
+            reinterpret_cast<int64_t>(
+                varlen_buffer[getCoordsDataPtr(geo_target_ptr) + 1].data()),
+            static_cast<int64_t>(
+                varlen_buffer[getCoordsDataPtr(geo_target_ptr) + 1].size()));
+      } else if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
         auto frag_col_buffers = getFragColBuffers();
 
         return GeoTargetValueBuilder<kPOLYGON, GeoLazyFetchHandler>::build(
@@ -1206,7 +1274,29 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
       }
     } break;
     case kMULTIPOLYGON: {
-      if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
+      if (separate_varlen_storage_valid_) {
+        auto varlen_buffer = getSeparateVarlenStorage();
+        CHECK_LT(static_cast<size_t>(getCoordsDataPtr(geo_target_ptr) + 2),
+                 varlen_buffer.size());
+
+        return GeoTargetValueBuilder<kMULTIPOLYGON, GeoQueryOutputFetchHandler>::build(
+            removeCompressionFromGeoType(target_info.sql_type),
+            geo_return_type_,
+            nullptr,
+            false,
+            device_id_,
+            reinterpret_cast<int64_t>(
+                varlen_buffer[getCoordsDataPtr(geo_target_ptr)].data()),
+            static_cast<int64_t>(varlen_buffer[getCoordsDataPtr(geo_target_ptr)].size()),
+            reinterpret_cast<int64_t>(
+                varlen_buffer[getCoordsDataPtr(geo_target_ptr) + 1].data()),
+            static_cast<int64_t>(
+                varlen_buffer[getCoordsDataPtr(geo_target_ptr) + 1].size()),
+            reinterpret_cast<int64_t>(
+                varlen_buffer[getCoordsDataPtr(geo_target_ptr) + 2].data()),
+            static_cast<int64_t>(
+                varlen_buffer[getCoordsDataPtr(geo_target_ptr) + 2].size()));
+      } else if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
         auto frag_col_buffers = getFragColBuffers();
 
         return GeoTargetValueBuilder<kMULTIPOLYGON, GeoLazyFetchHandler>::build(
