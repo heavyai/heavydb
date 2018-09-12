@@ -10329,6 +10329,26 @@ TEST(Select, Sample) {
       const auto empty_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(0), empty_row.size());
     });
+    SKIP_ON_AGGREGATOR({
+      const auto rows = run_multiple_agg(
+          "SELECT SAMPLE(arr_i64), COUNT(*) FROM array_test WHERE x = 8;", dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(2), crt_row.size());
+      compare_array(crt_row[0], std::vector<int64_t>{200, 300, 400});
+      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(crt_row[1]));
+      const auto empty_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(0), empty_row.size());
+    });
+    SKIP_ON_AGGREGATOR({
+      const auto rows = run_multiple_agg(
+          "SELECT SAMPLE(arr3_i64), COUNT(*) FROM array_test WHERE x = 8;", dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(2), crt_row.size());
+      compare_array(crt_row[0], std::vector<int64_t>{200, 300, 400});
+      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(crt_row[1]));
+      const auto empty_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(0), empty_row.size());
+    });
     auto check_sample_rowid = [](const int64_t val) {
       const std::set<int64_t> valid_row_ids{15, 16, 17, 18, 19};
       ASSERT_TRUE(valid_row_ids.find(val) != valid_row_ids.end())

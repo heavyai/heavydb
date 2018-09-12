@@ -603,7 +603,8 @@ int32_t get_agg_count(const std::vector<Analyzer::Expr*>& target_exprs) {
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
     if (!agg_expr || agg_expr->get_aggtype() == kSAMPLE) {
       const auto& ti = target_expr->get_type_info();
-      if (ti.is_string() && ti.get_compression() != kENCODING_DICT) {
+      // TODO(pavan): or if is_geometry()
+      if (ti.is_array() || (ti.is_string() && ti.get_compression() == kENCODING_NONE)) {
         agg_count += 2;
       } else {
         ++agg_count;
@@ -2475,12 +2476,14 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
     const auto& target_ti = target_expr->get_type_info();
     if (target_ti.is_array() && !executor_->plan_state_->isLazyFetchColumn(target_expr)) {
       const auto target_lvs =
-          executor_->codegen(target_expr, !executor_->plan_state_->allow_lazy_fetch_, co);
+          agg_expr ? executor_->codegen(agg_expr->get_arg(), true, co)
+                   : executor_->codegen(
+                         target_expr, !executor_->plan_state_->allow_lazy_fetch_, co);
       if (target_ti.isChunkIteratorPackaging()) {
         // Something with the chunk transport is code that was generated from a source
         // other than an ARRAY[] expression
         CHECK_EQ(size_t(1), target_lvs.size());
-        CHECK(!agg_expr);
+        CHECK(!agg_expr || agg_expr->get_aggtype() == kSAMPLE);
         const auto i32_ty = get_int_type(32, executor_->cgen_state_->context_);
         const auto i8p_ty =
             llvm::PointerType::get(get_int_type(8, executor_->cgen_state_->context_), 0);
@@ -2496,6 +2499,11 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
                      executor_->posArg(target_expr),
                      executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))})};
       } else if (target_ti.isStandardBufferPackaging()) {
+        if (agg_expr) {
+          throw std::runtime_error(
+              "Using array[] operator as argument to an aggregate operator is not "
+              "supported");
+        }
         return {target_lvs[0], target_lvs[1]};
       }
     }
