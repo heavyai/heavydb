@@ -1263,21 +1263,28 @@ void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
                                          const TSessionId& sessionId,
                                          const std::string& userName) {
   auto session = get_session(sessionId);
-  Catalog_Namespace::UserMetadata user_meta;
-  if (SysCatalog::instance().getMetadataForUser(userName, user_meta)) {
-    if (session.get_currentUser().isSuper ||
-        session.get_currentUser().userId == user_meta.userId) {
-      auto* user = SysCatalog::instance().getUserGrantee(user_meta.userName);
-      if (user) {
-        roles = user->getRoles();
+  auto* grantee = SysCatalog::instance().getGrantee(userName);
+  if (grantee) {
+    if (session.get_currentUser().isSuper) {
+      roles = grantee->getRoles();
+    } else if (grantee->isUser()) {
+      if (session.get_currentUser().userName == userName) {
+        roles = grantee->getRoles();
+      } else {
+        THROW_MAPD_EXCEPTION(
+            "Only a superuser is authorized to request list of roles granted to another "
+            "user.");
       }
     } else {
-      THROW_MAPD_EXCEPTION(
-          "Only a superuser is authorized to request list of roles granted to another "
-          "user.");
+      if (SysCatalog::instance().isRoleGrantedToGrantee(
+              session.get_currentUser().userName, userName, true)) {
+        roles = grantee->getRoles();
+      } else {
+        THROW_MAPD_EXCEPTION("A user can check only roles granted to him.");
+      }
     }
   } else {
-    THROW_MAPD_EXCEPTION("User " + userName + " does not exist.");
+    THROW_MAPD_EXCEPTION("Grantee " + userName + " does not exist.");
   }
 }
 

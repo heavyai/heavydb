@@ -88,7 +88,7 @@ class ContextOperations {
     thrift_op<kGET_ROLES_FOR_USER>(
         context, context.privs_user_name.c_str(), [](ContextType& lambda_context) {
           if (lambda_context.role_names.size() == 0) {
-            std::cout << "No roles are granted to user "
+            std::cout << "No roles are granted to "
                       << lambda_context.privs_user_name.c_str() << std::endl;
           } else {
             for (auto role_name : lambda_context.role_names) {
