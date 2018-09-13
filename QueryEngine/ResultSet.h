@@ -85,7 +85,11 @@ class ResultSetStorage {
                    int8_t* buff,
                    const bool buff_is_provided);
 
-  void reduce(const ResultSetStorage& that) const;
+  void reduce(const ResultSetStorage& that,
+              const std::vector<std::string>& serialized_varlen_buffer) const;
+
+  void rewriteAggregateBufferOffsets(
+      const std::vector<std::string>& serialized_varlen_buffer) const;
 
   int8_t* getUnderlyingBuffer() const;
 
@@ -93,20 +97,24 @@ class ResultSetStorage {
   void moveEntriesToBuffer(int8_t* new_buff, const size_t new_entry_count) const;
 
  private:
-  void reduceEntriesNoCollisionsColWise(int8_t* this_buff,
-                                        const int8_t* that_buff,
-                                        const ResultSetStorage& that,
-                                        const size_t start_index,
-                                        const size_t end_index) const;
+  void reduceEntriesNoCollisionsColWise(
+      int8_t* this_buff,
+      const int8_t* that_buff,
+      const ResultSetStorage& that,
+      const size_t start_index,
+      const size_t end_index,
+      const std::vector<std::string>& serialized_varlen_buffer) const;
 
   void copyKeyColWise(const size_t entry_idx,
                       int8_t* this_buff,
                       const int8_t* that_buff) const;
 
-  void reduceOneEntryNoCollisionsRowWise(const size_t i,
-                                         int8_t* this_buff,
-                                         const int8_t* that_buff,
-                                         const ResultSetStorage& that) const;
+  void reduceOneEntryNoCollisionsRowWise(
+      const size_t i,
+      int8_t* this_buff,
+      const int8_t* that_buff,
+      const ResultSetStorage& that,
+      const std::vector<std::string>& serialized_varlen_buffer) const;
 
   bool isEmptyEntry(const size_t entry_idx, const int8_t* buff) const;
   bool isEmptyEntry(const size_t entry_idx) const;
@@ -145,7 +153,8 @@ class ResultSetStorage {
                      const size_t target_logical_idx,
                      const size_t target_slot_idx,
                      const size_t init_agg_val_idx,
-                     const ResultSetStorage& that) const;
+                     const ResultSetStorage& that,
+                     const std::vector<std::string>& serialized_varlen_buffer) const;
 
   void reduceOneCountDistinctSlot(int8_t* this_ptr1,
                                   const int8_t* that_ptr1,
@@ -706,6 +715,8 @@ class ResultSet {
                                 const int32_t first_n) const;
 
   std::string serializeProjection() const;
+  void serializeVarlenAggColumn(int8_t* buf,
+                                std::vector<std::string>& varlen_bufer) const;
 
   void serializeCountDistinctColumns(TSerializedRows&) const;
 
@@ -802,6 +813,8 @@ class ResultSetManager {
   ResultSet* reduce(std::vector<ResultSet*>&);
 
   std::shared_ptr<ResultSet> getOwnResultSet();
+
+  void rewriteVarlenAggregates(ResultSet*);
 
  private:
   std::shared_ptr<ResultSet> rs_;

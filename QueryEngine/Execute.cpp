@@ -839,7 +839,8 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
   }
 
   for (size_t i = 1; i < results_per_device.size(); ++i) {
-    reduced_results->getStorage()->reduce(*(results_per_device[i].first->getStorage()));
+    reduced_results->getStorage()->reduce(*(results_per_device[i].first->getStorage()),
+                                          {});
   }
 
   return reduced_results;

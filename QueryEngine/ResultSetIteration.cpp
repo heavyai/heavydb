@@ -1036,7 +1036,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
                                              const bool translate_strings,
                                              const size_t entry_buff_idx) const {
   auto varlen_ptr = read_int_from_buff(ptr1, compact_sz1);
-  if (separate_varlen_storage_valid_) {
+  if (separate_varlen_storage_valid_ && !target_info.is_agg) {
     if (varlen_ptr < 0) {
       CHECK_EQ(-1, varlen_ptr);
       return TargetValue(nullptr);
@@ -1255,7 +1255,7 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
 
   switch (target_info.sql_type.get_type()) {
     case kPOINT: {
-      if (separate_varlen_storage_valid_) {
+      if (separate_varlen_storage_valid_ && !target_info.is_agg) {
         auto varlen_buffer = getSeparateVarlenStorage();
         CHECK_LT(static_cast<size_t>(getCoordsDataPtr(geo_target_ptr)),
                  varlen_buffer.size());
@@ -1288,7 +1288,7 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
       }
     } break;
     case kLINESTRING: {
-      if (separate_varlen_storage_valid_) {
+      if (separate_varlen_storage_valid_ && !target_info.is_agg) {
         auto varlen_buffer = getSeparateVarlenStorage();
         CHECK_LT(static_cast<size_t>(getCoordsDataPtr(geo_target_ptr)),
                  varlen_buffer.size());
@@ -1321,7 +1321,7 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
       }
     } break;
     case kPOLYGON: {
-      if (separate_varlen_storage_valid_) {
+      if (separate_varlen_storage_valid_ && !target_info.is_agg) {
         auto varlen_buffer = getSeparateVarlenStorage();
         CHECK_LT(static_cast<size_t>(getCoordsDataPtr(geo_target_ptr) + 1),
                  varlen_buffer.size());
@@ -1363,7 +1363,7 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
       }
     } break;
     case kMULTIPOLYGON: {
-      if (separate_varlen_storage_valid_) {
+      if (separate_varlen_storage_valid_ && !target_info.is_agg) {
         auto varlen_buffer = getSeparateVarlenStorage();
         CHECK_LT(static_cast<size_t>(getCoordsDataPtr(geo_target_ptr) + 2),
                  varlen_buffer.size());
@@ -1685,6 +1685,9 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
            (target_info.sql_type.is_string() &&
             target_info.sql_type.get_compression() == kENCODING_NONE)))) {
       compact_sz2 = query_mem_desc_.getColumnWidth(slot_idx + 1).compact;
+    }
+    if (separate_varlen_storage_valid_ && target_info.is_agg) {
+      compact_sz2 = 8;  // TODO(adb): is there a better way to do this?
     }
     CHECK(ptr2);
     return target_info.agg_kind == kAVG

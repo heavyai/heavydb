@@ -9523,29 +9523,39 @@ TEST(Select, GeoSpatial_Projection) {
             GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}));
         compare_geo_target(
             run_simple_agg("SELECT SAMPLE(mpoly) FROM geospatial_test WHERE id = 1;", dt),
-            GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1}));
+            GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1})));
 
-        // Sample() version of above with GROUP BY
-        compare_geo_target(
-            run_simple_agg(
-                "SELECT SAMPLE(p) FROM geospatial_test WHERE id = 1 GROUP BY id;", dt),
-            GeoPointTargetValue({1., 1.}));
-        compare_geo_target(
-            run_simple_agg(
-                "SELECT SAMPLE(l) FROM geospatial_test WHERE id = 1 GROUP BY id;", dt),
-            GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.}));
+    // Sample() version of above with GROUP BY
+    compare_geo_target(
+        run_simple_agg("SELECT SAMPLE(p) FROM geospatial_test WHERE id = 1 GROUP BY id;",
+                       dt),
+        GeoPointTargetValue({1., 1.}));
+    compare_geo_target(
+        run_simple_agg("SELECT SAMPLE(l) FROM geospatial_test WHERE id = 1 GROUP BY id;",
+                       dt),
+        GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.}));
 
-        compare_geo_target(
-            run_simple_agg(
-                "SELECT SAMPLE(poly) FROM geospatial_test WHERE id = 1 GROUP BY id;", dt),
-            GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}));
-        compare_geo_target(
-            run_simple_agg(
-                "SELECT SAMPLE(mpoly) FROM geospatial_test WHERE id = 1 GROUP BY id;",
-                dt),
-            GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1}));
+    compare_geo_target(
+        run_simple_agg(
+            "SELECT SAMPLE(poly) FROM geospatial_test WHERE id = 1 GROUP BY id;", dt),
+        GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}));
+    compare_geo_target(
+        run_simple_agg(
+            "SELECT SAMPLE(mpoly) FROM geospatial_test WHERE id = 1 GROUP BY id;", dt),
+        GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1}));
 
-    );
+    // Sample() with compression
+    compare_geo_target(
+        run_simple_agg(
+            "SELECT SAMPLE(gp4326) FROM geospatial_test WHERE id = 1 GROUP BY id;", dt),
+        GeoPointTargetValue({1., 1.}),
+        0.01);
+    compare_geo_target(
+        run_simple_agg(
+            "SELECT SAMPLE(gpoly4326) FROM geospatial_test WHERE id = 1 GROUP BY id;",
+            dt),
+        GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}),
+        0.01);
 
     ASSERT_EQ(
         static_cast<int64_t>(1),
@@ -10712,6 +10722,19 @@ TEST(Select, Sample) {
       const auto empty_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(0), empty_row.size());
     });
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT SAMPLE(real_str), COUNT(*) FROM test WHERE x > 7 GROUP BY x;", dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(2), crt_row.size());
+      const auto nullable_str = v<NullableString>(crt_row[0]);
+      const auto str_ptr = boost::get<std::string>(&nullable_str);
+      ASSERT_TRUE(str_ptr);
+      ASSERT_EQ("real_bar", boost::get<std::string>(*str_ptr));
+      ASSERT_EQ(g_num_rows / 2, v<int64_t>(crt_row[1]));
+      const auto empty_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(0), empty_row.size());
+    }
     SKIP_ON_AGGREGATOR({
       const auto rows = run_multiple_agg(
           "SELECT SAMPLE(arr_i64), COUNT(*) FROM array_test WHERE x = 8;", dt);
@@ -10722,6 +10745,16 @@ TEST(Select, Sample) {
       const auto empty_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(0), empty_row.size());
     });
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT SAMPLE(arr_i64), COUNT(*) FROM array_test WHERE x = 8 GROUP BY x;", dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(2), crt_row.size());
+      compare_array(crt_row[0], std::vector<int64_t>{200, 300, 400});
+      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(crt_row[1]));
+      const auto empty_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(0), empty_row.size());
+    }
     SKIP_ON_AGGREGATOR({
       const auto rows = run_multiple_agg(
           "SELECT SAMPLE(arr3_i64), COUNT(*) FROM array_test WHERE x = 8;", dt);
@@ -10732,29 +10765,22 @@ TEST(Select, Sample) {
       const auto empty_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(0), empty_row.size());
     });
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT SAMPLE(arr3_i64), COUNT(*) FROM array_test WHERE x = 8 GROUP BY x;",
+          dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(2), crt_row.size());
+      compare_array(crt_row[0], std::vector<int64_t>{200, 300, 400});
+      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(crt_row[1]));
+      const auto empty_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(0), empty_row.size());
+    }
     auto check_sample_rowid = [](const int64_t val) {
       const std::set<int64_t> valid_row_ids{15, 16, 17, 18, 19};
       ASSERT_TRUE(valid_row_ids.find(val) != valid_row_ids.end())
           << "Last sample rowid value " << val << " is invalid";
     };
-    SKIP_ON_AGGREGATOR({
-      const auto rows = run_multiple_agg(
-          "SELECT SAMPLE(rowid), AVG(d), AVG(f), str FROM test WHERE d > 2.4 GROUP "
-          "BY str;",
-          dt);
-      const auto crt_row = rows->getNextRow(true, true);
-      ASSERT_EQ(size_t(4), crt_row.size());
-      const auto rowid = v<int64_t>(crt_row[0]);
-      check_sample_rowid(rowid);
-      const auto d = v<double>(crt_row[1]);
-      ASSERT_EQ(2.6, d);
-      const auto f = v<double>(crt_row[2]);
-      ASSERT_EQ(1.3, f);
-      const auto nullable_str = v<NullableString>(crt_row[3]);
-      const auto str_ptr = boost::get<std::string>(&nullable_str);
-      ASSERT_TRUE(str_ptr);
-      ASSERT_EQ("baz", boost::get<std::string>(*str_ptr));
-    });
     SKIP_ON_AGGREGATOR({
       const auto rows = run_multiple_agg(
           "SELECT AVG(d), AVG(f), str, SAMPLE(rowid) FROM test WHERE d > 2.4 GROUP "
@@ -10773,13 +10799,13 @@ TEST(Select, Sample) {
       const auto rowid = v<int64_t>(crt_row[3]);
       check_sample_rowid(rowid);
     });
-    {
+    SKIP_ON_AGGREGATOR({
       const auto rows = run_multiple_agg("SELECT SAMPLE(str) FROM test WHERE x > 8;", dt);
       const auto crt_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(1), crt_row.size());
       const auto nullable_str = v<NullableString>(crt_row[0]);
       ASSERT_FALSE(boost::get<void*>(nullable_str));
-    }
+    });
   }
 }
 
