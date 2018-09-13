@@ -443,7 +443,7 @@ void FileMgr::closeRemovePhysical() {
   boost::filesystem::path pathToTableDS(getFileMgrBasePath());
   boost::filesystem::remove_all(pathToTableDS, ec);
 
-  if (ec != boost::system::errc::success) {
+  if (ec.value() != boost::system::errc::success) {
     LOG(FATAL) << "failed to remove file " << getFileMgrBasePath() << "error was " << ec;
   }
 }
