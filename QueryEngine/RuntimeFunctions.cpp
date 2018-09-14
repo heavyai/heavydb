@@ -1004,11 +1004,7 @@ extern "C" void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
     query_stub_hoisted_literals(col_buffers ? col_buffers[i] : nullptr,
                                 literals,
                                 &num_rows[i * (*num_tables_ptr)],
-#ifdef ENABLE_MULTIFRAG_JOIN
                                 &frag_row_offsets[i * (*num_tables_ptr)],
-#else
-                                &frag_row_offsets[i],
-#endif
                                 max_matched,
                                 init_agg_value,
                                 out,
@@ -1058,11 +1054,7 @@ extern "C" void multifrag_query(const int8_t*** col_buffers,
   for (uint32_t i = 0; i < *num_fragments; i += *frag_stride) {
     query_stub(col_buffers ? col_buffers[i] : nullptr,
                &num_rows[i * (*num_tables_ptr)],
-#ifdef ENABLE_MULTIFRAG_JOIN
                &frag_row_offsets[i * (*num_tables_ptr)],
-#else
-               &frag_row_offsets[i],
-#endif
                max_matched,
                init_agg_value,
                out,

@@ -3926,12 +3926,7 @@ void import_join_test(bool with_delete_support) {
                                    "join_test",
                                    {g_shard_count ? "dup_str" : "", g_shard_count},
                                    {},
-#ifdef ENABLE_MULTIFRAG_JOIN
-                                   2
-#else
-                                   3
-#endif
-                                   ,
+                                   2,
                                    with_delete_support,
                                    g_aggregator);
   run_ddl_statement(create_test);
@@ -3964,16 +3959,9 @@ void import_hash_join_test() {
   std::string replicated_dec{!g_aggregator ? "" : ", PARTITIONS='REPLICATED'"};
 
   const std::string create_test{
-#ifdef ENABLE_MULTIFRAG_JOIN
       "CREATE TABLE hash_join_test(x int not null, str text encoding dict, t BIGINT) "
       "WITH (fragment_size=2" +
-      replicated_dec + ");"
-#else
-      "CREATE TABLE hash_join_test(x int not null, str text encoding dict, t BIGINT) "
-      "WITH (fragment_size=3" +
-      replicated_dec + ");"
-#endif
-  };
+      replicated_dec + ");"};
   run_ddl_statement(create_test);
   g_sqlite_comparator.query(
       "CREATE TABLE hash_join_test(x int not null, str text, t BIGINT);");
@@ -4008,13 +3996,8 @@ void import_coalesce_cols_join_test(const int id, bool with_delete_support) {
                                                         table_name,
                                                         {"", g_shard_count},
                                                         {},
-#ifdef ENABLE_MULTIFRAG_JOIN
 
-                                                        id == 2 ? 2 : 20
-#else
-                                                        20
-#endif
-                                                        ,
+                                                        id == 2 ? 2 : 20,
                                                         with_delete_support,
                                                         g_aggregator);
   run_ddl_statement(create_test);

@@ -101,20 +101,11 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
   const bool hoist_literals = co.hoist_literals_;
   auto col_id = col_var->get_column_id();
   const int rte_idx = adjusted_range_table_index(col_var);
-#ifdef ENABLE_MULTIFRAG_JOIN
   CHECK_LT(rte_idx, cgen_state_->frag_offsets_.size());
-#endif
   if (col_var->get_table_id() > 0) {
     auto cd = get_column_descriptor(col_id, col_var->get_table_id(), *catalog_);
     if (cd->isVirtualCol) {
       CHECK(cd->columnName == "rowid");
-#ifndef ENABLE_MULTIFRAG_JOIN
-      if (rte_idx > 0) {
-        // rowid for inner scan, the fragment offset from the outer scan
-        // is meaningless, the relative position in the scan is the rowid
-        return {posArg(col_var)};
-      }
-#endif
       return {codegenRowId(col_var, co)};
     }
     auto col_ti = cd->columnType;
@@ -173,7 +164,6 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
       plan_state_->columns_to_not_fetch_.insert(
           std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
     }
-#ifdef ENABLE_MULTIFRAG_JOIN
     if (rte_idx > 0) {
       const auto offset = cgen_state_->frag_offsets_[rte_idx];
       if (offset) {
@@ -182,7 +172,6 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
         return {pos_arg};
       }
     }
-#endif
     return {pos_arg};
   }
   const auto& col_ti = col_var->get_type_info();

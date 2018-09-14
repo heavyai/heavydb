@@ -141,7 +141,6 @@ inline std::pair<int64_t, int64_t> get_frag_id_and_local_idx(
   return {-1, -1};
 }
 
-#ifdef ENABLE_MULTIFRAG_JOIN
 inline std::vector<int64_t> get_consistent_frags_sizes(
     const std::vector<Analyzer::Expr*>& target_exprs,
     const std::vector<int64_t>& table_frag_sizes) {
@@ -185,7 +184,6 @@ inline std::vector<std::vector<int64_t>> get_col_frag_offsets(
   }
   return col_frag_offsets;
 }
-#endif
 
 typedef std::vector<int64_t> ValueTuple;
 

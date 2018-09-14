@@ -200,20 +200,16 @@ QueryExecutionContext::QueryExecutionContext(
     for (size_t j = 1; j < step; ++j) {
       group_by_buffers_.push_back(nullptr);
     }
-#ifdef ENABLE_MULTIFRAG_JOIN
     const auto column_frag_offsets =
         get_col_frag_offsets(ra_exe_unit.target_exprs, frag_offsets);
     const auto column_frag_sizes =
         get_consistent_frags_sizes(ra_exe_unit.target_exprs, consistent_frag_sizes_);
-#endif
     result_sets_.emplace_back(
         new ResultSet(target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc_),
                       getColLazyFetchInfo(ra_exe_unit.target_exprs),
                       col_buffers,
-#ifdef ENABLE_MULTIFRAG_JOIN
                       column_frag_offsets,
                       column_frag_sizes,
-#endif
                       device_type_,
                       device_id,
                       ResultSet::fixupQueryMemoryDescriptor(query_mem_desc_),

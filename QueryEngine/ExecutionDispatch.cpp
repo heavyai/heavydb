@@ -71,7 +71,6 @@ bool needs_skip_result(const ResultPtr& res) {
 
 uint32_t Executor::ExecutionDispatch::getFragmentStride(
     const FragmentsList& frag_ids) const {
-#ifdef ENABLE_MULTIFRAG_JOIN
   if (!ra_exe_unit_.inner_joins.empty()) {
     CHECK_EQ(ra_exe_unit_.input_descs.size(), frag_ids.size());
     const auto table_count = ra_exe_unit_.input_descs.size();
@@ -93,7 +92,6 @@ uint32_t Executor::ExecutionDispatch::getFragmentStride(
     CHECK_EQ(ra_exe_unit_.input_descs.back().getTableId(), frag_ids[1].table_id);
     return static_cast<uint32_t>(frag_ids[1].fragment_ids.size());
   }
-#endif
   return 1u;
 }
 
@@ -633,7 +631,6 @@ const int8_t* Executor::ExecutionDispatch::getScanColumn(
   }
 }
 
-#ifdef ENABLE_MULTIFRAG_JOIN
 const int8_t* Executor::ExecutionDispatch::getAllScanColumnFrags(
     const int table_id,
     const int col_id,
@@ -685,7 +682,6 @@ const int8_t* Executor::ExecutionDispatch::getAllScanColumnFrags(
   }
   return getColumn(table_column, 0, &cat_.get_dataMgr(), memory_level, device_id);
 }
-#endif
 
 const int8_t* Executor::ExecutionDispatch::getColumn(
     const InputColDescriptor* col_desc,
@@ -797,7 +793,6 @@ const int8_t* Executor::ExecutionDispatch::getColumn(
                                                    iter_col_id,
                                                    frag_offsets[ref_frag_id])));
         } else {
-#ifdef ENABLE_MULTIFRAG_JOIN
           // Each dispatch has only one fragment of outer table.
           if (ref_table_id != ra_exe_unit_.join_dimensions[0].first) {
             auto ref_frags =
@@ -809,9 +804,7 @@ const int8_t* Executor::ExecutionDispatch::getColumn(
                                                       frag_offsets,
                                                       *frag_id_to_iters[frag_id],
                                                       iter_col_id)));
-          } else
-#endif
-          {
+          } else {
             const auto fragments_it = all_tables_fragments.find(ref_table_id);
             CHECK(fragments_it != all_tables_fragments.end());
             const auto fragments = fragments_it->second;

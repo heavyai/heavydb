@@ -29,7 +29,6 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   }
   auto iter_expr = dynamic_cast<const Analyzer::IterExpr*>(expr);
   if (iter_expr) {
-#ifdef ENABLE_MULTIFRAG_JOIN
     if (iter_expr->get_rte_idx() > 0) {
       const auto offset = cgen_state_->frag_offsets_[iter_expr->get_rte_idx()];
       if (offset) {
@@ -38,7 +37,6 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
         return {posArg(iter_expr)};
       }
     }
-#endif
     return {posArg(iter_expr)};
   }
   auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);

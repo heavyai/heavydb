@@ -830,7 +830,6 @@ const std::vector<const int8_t*>& ResultSet::getColumnFrag(const size_t storage_
                                                            const size_t col_logical_idx,
                                                            int64_t& global_idx) const {
   CHECK_LT(static_cast<size_t>(storage_idx), col_buffers_.size());
-#ifdef ENABLE_MULTIFRAG_JOIN
   if (col_buffers_[storage_idx].size() > 1) {
     int64_t frag_id = 0;
     int64_t local_idx = global_idx;
@@ -846,9 +845,7 @@ const std::vector<const int8_t*>& ResultSet::getColumnFrag(const size_t storage_
     CHECK_LT(frag_id, col_buffers_[storage_idx].size());
     global_idx = local_idx;
     return col_buffers_[storage_idx][frag_id];
-  } else
-#endif
-  {
+  } else {
     CHECK_EQ(size_t(1), col_buffers_[storage_idx].size());
     return col_buffers_[storage_idx][0];
   }

@@ -49,7 +49,6 @@ class ColumnarResults {
                   const size_t num_rows,
                   const SQLTypeInfo& target_type);
 
-#ifdef ENABLE_MULTIFRAG_JOIN
   static std::unique_ptr<ColumnarResults> createIndexedResults(
       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
       const std::vector<const ColumnarResults*>& val_frags,
@@ -60,7 +59,6 @@ class ColumnarResults {
   static std::unique_ptr<ColumnarResults> mergeResults(
       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
       const std::vector<std::unique_ptr<ColumnarResults>>& sub_results);
-#endif  // ENABLE_MULTIFRAG_JOIN
 
   static std::unique_ptr<ColumnarResults> createIndexedResults(
       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,

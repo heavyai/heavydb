@@ -70,7 +70,6 @@ void ResultRows::inplaceSortGpuImpl(const std::list<Analyzer::OrderEntry>& order
 const std::vector<const int8_t*>& QueryExecutionContext::getColumnFrag(
     const size_t table_idx,
     int64_t& global_idx) const {
-#ifdef ENABLE_MULTIFRAG_JOIN
   if (col_buffers_.size() > 1) {
     int64_t frag_id = 0;
     int64_t local_idx = global_idx;
@@ -85,9 +84,7 @@ const std::vector<const int8_t*>& QueryExecutionContext::getColumnFrag(
     CHECK_LT(frag_id, col_buffers_.size());
     global_idx = local_idx;
     return col_buffers_[frag_id];
-  } else
-#endif
-  {
+  } else {
     CHECK_EQ(size_t(1), col_buffers_.size());
     return col_buffers_.front();
   }
@@ -116,10 +113,8 @@ RowSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(const size_t 
       std::make_shared<ResultSet>(result_set->getTargetInfos(),
                                   std::vector<ColumnLazyFetchInfo>{},
                                   std::vector<std::vector<const int8_t*>>{},
-#ifdef ENABLE_MULTIFRAG_JOIN
                                   std::vector<std::vector<int64_t>>{},
                                   std::vector<int64_t>{},
-#endif
                                   ExecutorDeviceType::CPU,
                                   -1,
                                   deinterleaved_query_mem_desc,

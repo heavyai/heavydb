@@ -1533,13 +1533,6 @@ std::vector<size_t> Executor::getTableFragmentIndices(
   const auto& outer_fragment_info = (*outer_table_fragments)[outer_frag_idx];
   auto& inner_frags = table_frags_it->second;
   CHECK_LT(size_t(1), ra_exe_unit.input_descs.size());
-#ifndef ENABLE_MULTIFRAG_JOIN
-  if (inner_frags->size() > 1) {
-    throw std::runtime_error("Multi-fragment inner table '" +
-                             get_table_name(ra_exe_unit.input_descs[1], *catalog_) +
-                             "' not supported yet");
-  }
-#endif
   std::vector<size_t> all_frag_ids;
   for (size_t inner_frag_idx = 0; inner_frag_idx < inner_frags->size();
        ++inner_frag_idx) {
@@ -1724,7 +1717,6 @@ Executor::getRowCountAndOffsetForAllFrags(
   return {all_num_rows, all_frag_offsets};
 }
 
-#ifdef ENABLE_MULTIFRAG_JOIN
 // Only fetch columns of hash-joined inner fact table whose fetch are not deferred from
 // all the table fragments.
 bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
@@ -1749,7 +1741,6 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
   const auto& fragments = selected_fragments[nest_level].fragment_ids;
   return fragments.size() > 1;
 }
-#endif
 
 Executor::FetchResult Executor::fetchChunks(
     const ExecutionDispatch& execution_dispatch,
@@ -1827,7 +1818,6 @@ Executor::FetchResult Executor::fetchChunks(
                                          device_id,
                                          is_rowid);
       } else {
-#ifdef ENABLE_MULTIFRAG_JOIN
         if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
           frag_col_buffers[it->second] =
               execution_dispatch.getAllScanColumnFrags(table_id,
@@ -1835,9 +1825,7 @@ Executor::FetchResult Executor::fetchChunks(
                                                        all_tables_fragments,
                                                        memory_level_for_column,
                                                        device_id);
-        } else
-#endif
-        {
+        } else {
           frag_col_buffers[it->second] =
               execution_dispatch.getScanColumn(table_id,
                                                frag_id,
@@ -2573,11 +2561,7 @@ void Executor::nukeOldState(const bool allow_lazy_fetch,
 
 void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_descs,
                                   const std::vector<InputTableInfo>& query_infos) {
-#ifdef ENABLE_MULTIFRAG_JOIN
   const auto ld_count = input_descs.size();
-#else
-  const size_t ld_count = 1;
-#endif
   auto frag_off_ptr = get_arg_by_name(cgen_state_->row_func_, "frag_row_off");
   for (size_t i = 0; i < ld_count; ++i) {
     CHECK_LT(i, query_infos.size());

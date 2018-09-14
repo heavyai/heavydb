@@ -198,7 +198,6 @@ ColumnarResults::ColumnarResults(
   row_set_mem_owner->addColBuffer(column_buffers_[0]);
 }
 
-#ifdef ENABLE_MULTIFRAG_JOIN
 std::unique_ptr<ColumnarResults> ColumnarResults::createIndexedResults(
     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const std::vector<const ColumnarResults*>& val_frags,
@@ -301,7 +300,6 @@ std::unique_ptr<ColumnarResults> ColumnarResults::mergeResults(
   }
   return merged_results;
 }
-#endif  // ENABLE_MULTIFRAG_JOIN
 
 std::unique_ptr<ColumnarResults> ColumnarResults::createIndexedResults(
     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,

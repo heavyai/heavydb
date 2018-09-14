@@ -288,14 +288,6 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
                                                                           device_count));
   try {
     join_hash_table->reify(device_count);
-#ifndef ENABLE_MULTIFRAG_JOIN
-  } catch (const MultiFragJoinNotSupported& e) {
-    const auto cols = get_cols(qual_bin_oper, cat, executor->temporary_tables_);
-    const auto inner_col = cols.first;
-    CHECK(inner_col);
-    const auto& table_info = join_hash_table->getInnerQueryInfo(inner_col);
-    throw MultiFragJoinNotSupported(get_table_name_by_id(table_info.table_id, cat));
-#endif
   } catch (const std::exception& e) {
     throw HashJoinFail(std::string("Could not build a 1-to-1 correspondence for columns "
                                    "involved in equijoin | ") +
@@ -474,29 +466,21 @@ std::pair<const int8_t*, size_t> JoinHashTable::fetchFragments(
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
     ThrustAllocator& dev_buff_owner) {
   static std::mutex fragment_fetch_mutex;
-#ifndef ENABLE_MULTIFRAG_JOIN
-  CHECK_EQ(fragments.size(), size_t(1));
-  const bool has_multi_frag = false;
-#else
   const bool has_multi_frag = fragment_info.size() > 1;
-#endif
   const auto& catalog = *executor_->getCatalog();
   auto& data_mgr = catalog.get_dataMgr();
   const auto& first_frag = fragment_info.front();
   const int8_t* col_buff = nullptr;
   size_t elem_count = 0;
 
-#ifdef ENABLE_MULTIFRAG_JOIN
   const size_t elem_width = hash_col->get_type_info().get_size();
   if (has_multi_frag) {
     std::tie(col_buff, elem_count) =
         getAllColumnFragments(*hash_col, fragment_info, chunks_owner);
   }
-#endif
 
   {
     std::lock_guard<std::mutex> fragment_fetch_lock(fragment_fetch_mutex);
-#ifdef ENABLE_MULTIFRAG_JOIN
     if (has_multi_frag) {
       if (effective_memory_level == Data_Namespace::GPU_LEVEL) {
         CHECK(col_buff != nullptr);
@@ -510,9 +494,7 @@ std::pair<const int8_t*, size_t> JoinHashTable::fetchFragments(
                     device_id);
         col_buff = dev_col_buff;
       }
-    } else
-#endif
-    {
+    } else {
       std::tie(col_buff, elem_count) = getColumnFragment(
           *hash_col, first_frag, effective_memory_level, device_id, chunks_owner);
     }
@@ -539,11 +521,7 @@ ChunkKey JoinHashTable::genHashTableKey(
     }
     hash_table_key.push_back(outer_elem_count);
   }
-#ifdef ENABLE_MULTIFRAG_JOIN
   if (fragments.size() < 2) {
-#else
-  {
-#endif
     hash_table_key.push_back(fragments.front().fragmentId);
   }
   return hash_table_key;
@@ -554,11 +532,6 @@ void JoinHashTable::reifyOneToOneForDevice(
     const int device_id) {
   std::pair<Data_Namespace::AbstractBuffer*, Data_Namespace::AbstractBuffer*>
       buff_and_err;
-#ifndef ENABLE_MULTIFRAG_JOIN
-  if (fragments.size() != 1) {  // we don't support multiple fragment inner tables (yet)
-    throw MultiFragJoinNotSupported();
-  }
-#endif
   const auto& catalog = *executor_->getCatalog();
   auto& data_mgr = catalog.get_dataMgr();
   const auto cols = get_cols(qual_bin_oper_, catalog, executor_->temporary_tables_);
@@ -620,11 +593,6 @@ void JoinHashTable::reifyOneToOneForDevice(
 void JoinHashTable::reifyOneToManyForDevice(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id) {
-#ifndef ENABLE_MULTIFRAG_JOIN
-  if (fragments.size() != 1) {  // we don't support multiple fragment inner tables (yet)
-    throw MultiFragJoinNotSupported();
-  }
-#endif
   const auto& catalog = *executor_->getCatalog();
   auto& data_mgr = catalog.get_dataMgr();
   const auto cols = get_cols(qual_bin_oper_, catalog, executor_->temporary_tables_);

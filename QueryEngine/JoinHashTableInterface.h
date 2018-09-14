@@ -47,18 +47,6 @@ class FailedToJoinOnVirtualColumn : public HashJoinFail {
   FailedToJoinOnVirtualColumn() : HashJoinFail("Cannot join on rowid") {}
 };
 
-#ifndef ENABLE_MULTIFRAG_JOIN
-class MultiFragJoinNotSupported : public HashJoinFail {
- public:
-  MultiFragJoinNotSupported()
-      : HashJoinFail("Muli-fragment inner table not supported yet") {}
-
-  MultiFragJoinNotSupported(const std::string& table_name)
-      : HashJoinFail(std::string("Muli-fragment inner table '") + table_name +
-                     std::string("' not supported yet")) {}
-};
-#endif
-
 struct HashJoinMatchingSet {
   llvm::Value* elements;
   llvm::Value* count;
