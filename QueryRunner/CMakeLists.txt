@@ -8,4 +8,5 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
 endif()
 
 add_library(QueryRunner ${query_runner_source_files})
+add_dependencies(QueryRunner Parser)
 target_link_libraries(QueryRunner ${MAPD_LIBRARIES} ${Boost_LIBRARIES})
