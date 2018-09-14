@@ -232,23 +232,21 @@ class ArrayElementStringLiteralEncodingVisitor : public DeepCopyVisitor {
 };
 
 class ConstantFoldingVisitor : public DeepCopyVisitor {
- protected:
-  template <typename T1, typename T2>
-  auto foldComparison(SQLOps optype, T1&& t1, T2&& t2) const
-      -> decltype(std::forward<T1>(t1) == std::forward<T2>(t2)) {
+  template <typename T>
+  bool foldComparison(SQLOps optype, T t1, T t2) const {
     switch (optype) {
       case kEQ:
-        return std::forward<T1>(t1) == std::forward<T2>(t2);
+        return t1 == t2;
       case kNE:
-        return std::forward<T1>(t1) != std::forward<T2>(t2);
+        return t1 != t2;
       case kLT:
-        return std::forward<T1>(t1) < std::forward<T2>(t2);
+        return t1 < t2;
       case kLE:
-        return std::forward<T1>(t1) <= std::forward<T2>(t2);
+        return t1 <= t2;
       case kGT:
-        return std::forward<T1>(t1) > std::forward<T2>(t2);
+        return t1 > t2;
       case kGE:
-        return std::forward<T1>(t1) >= std::forward<T2>(t2);
+        return t1 >= t2;
       default:
         break;
     }
@@ -256,16 +254,15 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
     return false;
   }
 
-  template <typename T1, typename T2>
-  auto foldLogic(SQLOps optype, T1&& t1, T2&& t2) const
-      -> decltype(std::forward<T1>(t1) && std::forward<T2>(t2)) {
+  template <typename T>
+  bool foldLogic(SQLOps optype, T t1, T t2) const {
     switch (optype) {
       case kAND:
-        return std::forward<T1>(t1) && std::forward<T2>(t2);
+        return t1 && t2;
       case kOR:
-        return std::forward<T1>(t1) || std::forward<T2>(t2);
+        return t1 || t2;
       case kNOT:
-        return !std::forward<T1>(t1);
+        return !t1;
       default:
         break;
     }
@@ -273,37 +270,59 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
     return false;
   }
 
-  template <typename T1, typename T2>
-  auto foldArithmetic(SQLOps optype, T1&& t1, T2&& t2) const
-      -> decltype(std::forward<T1>(t1) + std::forward<T2>(t2)) {
+  template <typename T>
+  T foldArithmetic(SQLOps optype, T t1, T t2) const {
+    bool t2_is_zero = (t2 == (t2 - t2));
+    bool t2_is_negative = (t2 < (t2 - t2));
     switch (optype) {
       case kPLUS:
-        if (((std::forward<T1>(t1) + std::forward<T2>(t2)) - std::forward<T2>(t2)) !=
-            std::forward<T1>(t1)) {
+        // The MIN limit for float and double is the smallest representable value,
+        // not the lowest negative value! Switching to C++11 lowest.
+        if ((t2_is_negative && t1 < std::numeric_limits<T>::lowest() - t2) ||
+            (!t2_is_negative && t1 > std::numeric_limits<T>::max() - t2)) {
+          num_overflows_++;
           throw std::runtime_error("Plus overflow");
         }
-        return std::forward<T1>(t1) + std::forward<T2>(t2);
+        return t1 + t2;
       case kMINUS:
-        if (((std::forward<T1>(t1) - std::forward<T2>(t2)) + std::forward<T2>(t2)) !=
-            std::forward<T1>(t1)) {
+        if ((t2_is_negative && t1 > std::numeric_limits<T>::max() + t2) ||
+            (!t2_is_negative && t1 < std::numeric_limits<T>::lowest() + t2)) {
+          num_overflows_++;
           throw std::runtime_error("Minus overflow");
         }
-        return std::forward<T1>(t1) - std::forward<T2>(t2);
-      case kMULTIPLY:
-        if ((std::forward<T2>(t1) * std::forward<T2>(t2)) ==
-            (std::forward<T1>(t1) - std::forward<T1>(t1))) {
-          return (std::forward<T2>(t1) * std::forward<T2>(t2));
+        return t1 - t2;
+      case kMULTIPLY: {
+        if (t2_is_zero)
+          return t2;
+        auto ct1 = t1;
+        auto ct2 = t2;
+        // Need to keep t2's sign on the left
+        if (t2_is_negative) {
+          if (t1 == std::numeric_limits<T>::lowest() ||
+              t2 == std::numeric_limits<T>::lowest()) {
+            // negation could overflow - bail
+            num_overflows_++;
+            throw std::runtime_error("Mul neg overflow");
+          }
+          ct1 = -t1;  // ct1 gets t2's negativity
+          ct2 = -t2;  // ct2 is now positive
         }
-        if (((std::forward<T1>(t1) * std::forward<T2>(t2)) / std::forward<T2>(t2)) !=
-            std::forward<T1>(t1)) {
-          throw std::runtime_error("Mul overflow");
+        // Don't check overlow if we are folding FP mul by a fraction
+        bool ct2_is_fraction = (ct2 < (ct2 / ct2));
+        if (!ct2_is_fraction) {
+          if (ct1 > std::numeric_limits<T>::max() / ct2 ||
+              ct1 < std::numeric_limits<T>::lowest() / ct2) {
+            num_overflows_++;
+            throw std::runtime_error("Mul overflow");
+          }
         }
-        return std::forward<T1>(t1) * std::forward<T2>(t2);
+        return t1 * t2;
+      }
       case kDIVIDE:
-        if ((std::forward<T2>(t2) + std::forward<T2>(t2)) == std::forward<T2>(t2)) {
+        if (t2_is_zero) {
           throw std::runtime_error("Will not fold division by zero");
         }
-        return std::forward<T1>(t1) / std::forward<T2>(t2);
+        return t1 / t2;
       default:
         break;
     }
@@ -322,12 +341,12 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
       switch (type) {
         case kBOOLEAN:
           if (IS_COMPARISON(optype)) {
-            result.boolval = foldComparison(optype, lhs.boolval, rhs.boolval);
+            result.boolval = foldComparison<bool>(optype, lhs.boolval, rhs.boolval);
             result_type = kBOOLEAN;
             return true;
           }
           if (IS_LOGIC(optype)) {
-            result.boolval = foldLogic(optype, lhs.boolval, rhs.boolval);
+            result.boolval = foldLogic<bool>(optype, lhs.boolval, rhs.boolval);
             result_type = kBOOLEAN;
             return true;
           }
@@ -335,72 +354,85 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
           break;
         case kTINYINT:
           if (IS_COMPARISON(optype)) {
-            result.boolval = foldComparison(optype, lhs.tinyintval, rhs.tinyintval);
+            result.boolval =
+                foldComparison<int8_t>(optype, lhs.tinyintval, rhs.tinyintval);
             result_type = kBOOLEAN;
             return true;
           }
           if (IS_ARITHMETIC(optype)) {
-            result.tinyintval = foldArithmetic(optype, lhs.tinyintval, rhs.tinyintval);
+            result.tinyintval =
+                foldArithmetic<int8_t>(optype, lhs.tinyintval, rhs.tinyintval);
+            result_type = kTINYINT;
             return true;
           }
           CHECK(!IS_LOGIC(optype));
           break;
         case kSMALLINT:
           if (IS_COMPARISON(optype)) {
-            result.boolval = foldComparison(optype, lhs.smallintval, rhs.smallintval);
+            result.boolval =
+                foldComparison<int16_t>(optype, lhs.smallintval, rhs.smallintval);
             result_type = kBOOLEAN;
             return true;
           }
           if (IS_ARITHMETIC(optype)) {
-            result.smallintval = foldArithmetic(optype, lhs.smallintval, rhs.smallintval);
+            result.smallintval =
+                foldArithmetic<int16_t>(optype, lhs.smallintval, rhs.smallintval);
+            result_type = kSMALLINT;
             return true;
           }
           CHECK(!IS_LOGIC(optype));
           break;
         case kINT:
           if (IS_COMPARISON(optype)) {
-            result.boolval = foldComparison(optype, lhs.intval, rhs.intval);
+            result.boolval = foldComparison<int32_t>(optype, lhs.intval, rhs.intval);
             result_type = kBOOLEAN;
             return true;
           }
           if (IS_ARITHMETIC(optype)) {
-            result.intval = foldArithmetic(optype, lhs.intval, rhs.intval);
+            result.intval = foldArithmetic<int32_t>(optype, lhs.intval, rhs.intval);
+            result_type = kINT;
             return true;
           }
           CHECK(!IS_LOGIC(optype));
           break;
         case kBIGINT:
           if (IS_COMPARISON(optype)) {
-            result.boolval = foldComparison(optype, lhs.bigintval, rhs.bigintval);
+            result.boolval =
+                foldComparison<int64_t>(optype, lhs.bigintval, rhs.bigintval);
             result_type = kBOOLEAN;
             return true;
           }
           if (IS_ARITHMETIC(optype)) {
-            result.bigintval = foldArithmetic(optype, lhs.bigintval, rhs.bigintval);
+            result.bigintval =
+                foldArithmetic<int64_t>(optype, lhs.bigintval, rhs.bigintval);
+            result_type = kBIGINT;
             return true;
           }
           CHECK(!IS_LOGIC(optype));
           break;
         case kFLOAT:
           if (IS_COMPARISON(optype)) {
-            result.boolval = foldComparison(optype, lhs.floatval, rhs.floatval);
+            result.boolval = foldComparison<float>(optype, lhs.floatval, rhs.floatval);
             result_type = kBOOLEAN;
             return true;
           }
           if (IS_ARITHMETIC(optype)) {
-            result.floatval = foldArithmetic(optype, lhs.floatval, rhs.floatval);
+            result.floatval = foldArithmetic<float>(optype, lhs.floatval, rhs.floatval);
+            result_type = kFLOAT;
             return true;
           }
           CHECK(!IS_LOGIC(optype));
           break;
         case kDOUBLE:
           if (IS_COMPARISON(optype)) {
-            result.boolval = foldComparison(optype, lhs.doubleval, rhs.doubleval);
+            result.boolval = foldComparison<double>(optype, lhs.doubleval, rhs.doubleval);
             result_type = kBOOLEAN;
             return true;
           }
           if (IS_ARITHMETIC(optype)) {
-            result.doubleval = foldArithmetic(optype, lhs.doubleval, rhs.doubleval);
+            result.doubleval =
+                foldArithmetic<double>(optype, lhs.doubleval, rhs.doubleval);
+            result_type = kDOUBLE;
             return true;
           }
           CHECK(!IS_LOGIC(optype));
@@ -418,12 +450,12 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
       const Analyzer::UOper* uoper) const override {
     const auto unvisited_operand = uoper->get_operand();
     const auto optype = uoper->get_optype();
-    const Analyzer::BinOper* unvisited_binoper = nullptr;
+    const auto& ti = uoper->get_type_info();
     if (optype == kCAST) {
-      unvisited_binoper = dynamic_cast<const Analyzer::BinOper*>(unvisited_operand);
+      // Cache the cast type so it could be used in operand rewriting/folding
+      casts_.insert({unvisited_operand, ti});
     }
-    const auto operand = (unvisited_binoper) ? visitBinOper(unvisited_binoper, uoper)
-                                             : visit(unvisited_operand);
+    const auto operand = visit(unvisited_operand);
     const auto& operand_ti = operand->get_type_info();
     const auto operand_type =
         operand_ti.is_decimal() ? decimal_to_int_type(operand_ti) : operand_ti.get_type();
@@ -432,38 +464,55 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
 
     if (const_operand) {
       const auto operand_datum = const_operand->get_constval();
-      Datum result_datum;
+      Datum zero_datum = {};
+      Datum result_datum = {};
       SQLTypes result_type;
       switch (optype) {
-        case kNOT:
-          if (foldOper(optype,
-                       operand_type,
-                       operand_datum,
-                       operand_datum,
-                       result_datum,
-                       result_type)) {
-            return makeExpr<Analyzer::Constant>(result_type, false, result_datum);
-          }
-          break;
-        case kMINUS: {
-          Datum zero_datum;
-          if (!foldOper(optype,
-                        operand_type,
-                        operand_datum,
-                        operand_datum,
-                        zero_datum,
-                        result_type)) {
-            break;
-          }
-          if (foldOper(optype,
+        case kNOT: {
+          if (foldOper(kEQ,
                        operand_type,
                        zero_datum,
                        operand_datum,
                        result_datum,
                        result_type)) {
+            CHECK_EQ(result_type, kBOOLEAN);
             return makeExpr<Analyzer::Constant>(result_type, false, result_datum);
           }
           break;
+        }
+        case kUMINUS: {
+          if (foldOper(kMINUS,
+                       operand_type,
+                       zero_datum,
+                       operand_datum,
+                       result_datum,
+                       result_type)) {
+            if (!operand_ti.is_decimal()) {
+              return makeExpr<Analyzer::Constant>(result_type, false, result_datum);
+            }
+            return makeExpr<Analyzer::Constant>(ti, false, result_datum);
+          }
+          break;
+        }
+        case kCAST: {
+          // Trying to fold number to number casts only
+          if (!ti.is_number() || !operand_ti.is_number())
+            break;
+          // Disallowing folding of FP to DECIMAL casts for now:
+          // allowing them would make this test pass:
+          //    update dectest set d=cast( 1234.0 as float );
+          // which is expected to throw in Update.ImplicitCastToNumericTypes
+          // due to cast codegen currently not supporting these casts
+          if (operand_ti.is_fp())
+            break;
+          auto operand_copy = const_operand->deep_copy();
+          auto cast_operand = operand_copy->add_cast(ti);
+          auto const_cast_operand =
+              std::dynamic_pointer_cast<const Analyzer::Constant>(cast_operand);
+          if (const_cast_operand) {
+            auto const_cast_datum = const_cast_operand->get_constval();
+            return makeExpr<Analyzer::Constant>(ti, false, const_cast_datum);
+          }
         }
         default:
           break;
@@ -476,17 +525,32 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
 
   std::shared_ptr<Analyzer::Expr> visitBinOper(
       const Analyzer::BinOper* bin_oper) const override {
-    return visitBinOper(bin_oper, nullptr);
-  }
-
-  std::shared_ptr<Analyzer::Expr> visitBinOper(const Analyzer::BinOper* bin_oper,
-                                               const Analyzer::UOper* cast) const {
-    const auto lhs = visit(bin_oper->get_left_operand());
-    const auto rhs = visit(bin_oper->get_right_operand());
-    const auto const_lhs = std::dynamic_pointer_cast<const Analyzer::Constant>(lhs);
-    const auto const_rhs = std::dynamic_pointer_cast<const Analyzer::Constant>(rhs);
     const auto optype = bin_oper->get_optype();
-    const auto& ti = bin_oper->get_type_info();
+    auto ti = bin_oper->get_type_info();
+    auto left_operand = bin_oper->get_own_left_operand();
+    auto right_operand = bin_oper->get_own_right_operand();
+
+    // Check if bin_oper result is cast to a larger int or fp type
+    if (casts_.find(bin_oper) != casts_.end()) {
+      const auto cast_ti = casts_[bin_oper];
+      const auto& lhs_ti = bin_oper->get_left_operand()->get_type_info();
+      // Propagate cast down to the operands for folding
+      if ((cast_ti.is_integer() || cast_ti.is_fp()) && lhs_ti.is_integer() &&
+          cast_ti.get_size() > lhs_ti.get_size() &&
+          (optype == kMINUS || optype == kPLUS || optype == kMULTIPLY)) {
+        // Before folding, cast the operands to the bigger type to avoid overflows.
+        // Currently upcasting smaller integer types to larger integers or double.
+        left_operand = left_operand->deep_copy()->add_cast(cast_ti);
+        right_operand = right_operand->deep_copy()->add_cast(cast_ti);
+        ti = cast_ti;
+      }
+    }
+
+    const auto lhs = visit(left_operand.get());
+    const auto rhs = visit(right_operand.get());
+
+    auto const_lhs = std::dynamic_pointer_cast<Analyzer::Constant>(lhs);
+    auto const_rhs = std::dynamic_pointer_cast<Analyzer::Constant>(rhs);
     const auto& lhs_ti = lhs->get_type_info();
     const auto& rhs_ti = rhs->get_type_info();
     auto lhs_type = lhs_ti.is_decimal() ? decimal_to_int_type(lhs_ti) : lhs_ti.get_type();
@@ -495,32 +559,16 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
     if (const_lhs && const_rhs && lhs_type == rhs_type) {
       auto lhs_datum = const_lhs->get_constval();
       auto rhs_datum = const_rhs->get_constval();
-      if (cast) {
-        if (optype == kMINUS || optype == kPLUS || optype == kMULTIPLY) {
-          const auto cast_ti = cast->get_type_info();
-          auto lhs_copy = const_lhs->deep_copy();
-          auto rhs_copy = const_rhs->deep_copy();
-          auto cast_lhs = lhs_copy->add_cast(cast_ti);
-          auto cast_rhs = rhs_copy->add_cast(cast_ti);
-          auto const_cast_lhs =
-              std::dynamic_pointer_cast<const Analyzer::Constant>(cast_lhs);
-          auto const_cast_rhs =
-              std::dynamic_pointer_cast<const Analyzer::Constant>(cast_rhs);
-          if (const_cast_lhs && const_cast_rhs) {
-            lhs_datum = const_cast_lhs->get_constval();
-            rhs_datum = const_cast_rhs->get_constval();
-            lhs_type = cast_ti.get_type();
-          }
-        }
-      }
       Datum result_datum = {};
       SQLTypes result_type;
       if (foldOper(optype, lhs_type, lhs_datum, rhs_datum, result_datum, result_type)) {
-        if (!ti.is_decimal()) {
+        // Fold all ops that don't take in decimal operands, and also decimal comparisons
+        if (!lhs_ti.is_decimal() || IS_COMPARISON(optype)) {
           return makeExpr<Analyzer::Constant>(result_type, false, result_datum);
         }
-        if (optype == kPLUS || optype == kMINUS || optype == kMULTIPLY) {
-          CHECK(lhs_ti.is_decimal());
+        // Decimal arithmetic has been done as kBIGINT. Selectively fold some decimal ops,
+        // using result_datum and BinOper expr typeinfo which was adjusted for these ops.
+        if (optype == kMINUS || optype == kPLUS || optype == kMULTIPLY) {
           return makeExpr<Analyzer::Constant>(ti, false, result_datum);
         }
       }
@@ -574,14 +622,42 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
         return rhs;
       }
     }
+    if (*lhs == *rhs) {
+      // Tautologies: v=v; v<=v; v>=v
+      if (optype == kEQ || optype == kLE || optype == kGE) {
+        Datum d;
+        d.boolval = true;
+        return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+      }
+      // Contradictions: v!=v; v<v; v>v
+      if (optype == kNE || optype == kLT || optype == kGT) {
+        Datum d;
+        d.boolval = false;
+        return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+      }
+      // v-v
+      if (optype == kMINUS) {
+        Datum d = {};
+        return makeExpr<Analyzer::Constant>(lhs_type, false, d);
+      }
+    }
 
-    return makeExpr<Analyzer::BinOper>(bin_oper->get_type_info(),
+    return makeExpr<Analyzer::BinOper>(ti,
                                        bin_oper->get_contains_agg(),
                                        bin_oper->get_optype(),
                                        bin_oper->get_qualifier(),
                                        lhs,
                                        rhs);
   }
+
+ protected:
+  mutable std::unordered_map<const Analyzer::Expr*, const SQLTypeInfo> casts_;
+  mutable int32_t num_overflows_;
+
+ public:
+  ConstantFoldingVisitor() : num_overflows_(0) {}
+  int32_t get_num_overflows() { return num_overflows_; }
+  void reset_num_overflows() { num_overflows_ = 0; }
 };
 
 const Analyzer::Expr* strip_likelihood(const Analyzer::Expr* expr) {
@@ -681,6 +757,24 @@ std::shared_ptr<Analyzer::Expr> fold_expr(const Analyzer::Expr* expr) {
   const auto expr_no_likelihood = strip_likelihood(expr);
   ConstantFoldingVisitor visitor;
   auto rewritten_expr = visitor.visit(expr_no_likelihood);
+  if (visitor.get_num_overflows() > 0 && rewritten_expr->get_type_info().is_integer() &&
+      rewritten_expr->get_type_info().get_type() != kBIGINT) {
+    auto rewritten_expr_const =
+        std::dynamic_pointer_cast<const Analyzer::Constant>(rewritten_expr);
+    if (!rewritten_expr_const) {
+      // Integer expression didn't fold completely the first time due to
+      // overflows in smaller type subexpressions, trying again with a cast
+      const auto& ti = SQLTypeInfo(kBIGINT, false);
+      auto bigint_expr_no_likelihood = expr_no_likelihood->deep_copy()->add_cast(ti);
+      auto rewritten_expr_take2 = visitor.visit(bigint_expr_no_likelihood.get());
+      auto rewritten_expr_take2_const =
+          std::dynamic_pointer_cast<Analyzer::Constant>(rewritten_expr_take2);
+      if (rewritten_expr_take2_const) {
+        // Managed to fold, switch to the new constant
+        rewritten_expr = rewritten_expr_take2_const;
+      }
+    }
+  }
   const auto expr_with_likelihood = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
   if (expr_with_likelihood) {
     // Add back likelihood

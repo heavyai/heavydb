@@ -3178,8 +3178,18 @@ TEST(Select, ConstantFolding) {
     c("SELECT 1 + 2.3 FROM test limit 1;", dt);
     c("SELECT 2.3 + 1 FROM test limit 1;", dt);
     c("SELECT 2 * 3 FROM test limit 1;", dt);
+    c("SELECT 604 * 575 FROM test limit 1;", dt);
+    c("SELECT 604 * (75 + 500) FROM test limit 1;", dt);
+    c("SELECT 604 * (5 * 115) FROM test limit 1;", dt);
+    c("SELECT 100000 + (1 - 604 * 575) FROM test limit 1;", dt);
+    c("SELECT 1 + 604 * 575 FROM test limit 1;", dt);
+    c("SELECT 2 + (1 - 604 * 575) FROM test limit 1;", dt);
+    c("SELECT t + 604 * 575 FROM test limit 1;", dt);  // mul is folded in BIGINT
+    EXPECT_THROW(run_simple_agg("SELECT z + 604 * 575 FROM test limit 1;", dt),
+                 std::runtime_error);  // z is SMALLINT, mul overflows
     c("SELECT 9.1 + 2.9999999999 FROM test limit 1;", dt);
     c("SELECT -9.1 - 2.9999999999 FROM test limit 1;", dt);
+    c("SELECT -(9.1 + 99.22) FROM test limit 1;", dt);
     c("SELECT 3/2 FROM test limit 1;", dt);
     c("SELECT 3/2.0 FROM test limit 1;", dt);
     c("SELECT 11.1 * 2.22 FROM test limit 1;", dt);
@@ -3187,6 +3197,20 @@ TEST(Select, ConstantFolding) {
     c("SELECT 11.1 * 2.222222222 FROM test limit 1;", dt);
     c("SELECT 9.99 * 9999.9 FROM test limit 1;", dt);
     c("SELECT 9.22337203685477 * 9.223 FROM test limit 1;", dt);
+    c("SELECT 3.0+8 from test limit 1;", dt);
+    c("SELECT 3.0*8 from test limit 1;", dt);
+    c("SELECT 1.79769e+308 * 0.1 FROM test limit 1;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 3.0+8 < 30;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 3.0*8 > 30.01;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 3.0*8 > 30.0001;", dt);
+    c("SELECT COUNT(*) FROM test WHERE ff + 3.0*8 < 60.0/2;", dt);
+    c("SELECT COUNT(*) FROM test WHERE t > 0 AND t = t;", dt);
+    c("SELECT COUNT(*) FROM test WHERE t > 0 AND t <> t;", dt);
+    c("SELECT COUNT(*) FROM test WHERE t > 0 OR t = t;", dt);
+    c("SELECT COUNT(*) FROM test WHERE t > 0 OR t <> t;", dt);
+    c("SELECT COUNT(*) FROM test where (604=575) OR (33.0<>12 AND 2.0001e+4>20000.9) "
+      "OR (NOT t>=t OR f<>f OR (x=x AND x-x=0));",
+      dt);
   }
 }
 
@@ -8210,6 +8234,8 @@ TEST(Update, ImplicitCastToNumericTypes) {
         int64_t(946598400),
         v<int64_t>(run_simple_agg("select cast( d as integer ) from dectest;", dt)));
 
+    // If ConstantFoldingVisitor is allowed to fold FP to DECIMAL casts then
+    // these two tests will pass, otherwise we'll keep hitting cast codegen assert.
     EXPECT_THROW(run_multiple_agg("update dectest set d=cast( 1234.0 as float );", dt),
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("update dectest set d=cast( 1234.0 as double );", dt),

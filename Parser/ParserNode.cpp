@@ -302,9 +302,6 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
     right_expr = right_expr->decompress();
   }
   bool has_agg = (left_expr->get_contains_agg() || right_expr->get_contains_agg());
-  if (left_type.is_decimal() && right_type.is_decimal() && optype == kMULTIPLY) {
-    result_type.set_scale(left_type.get_scale() + right_type.get_scale());
-  }
   return makeExpr<Analyzer::BinOper>(
       result_type, has_agg, optype, qual, left_expr, right_expr);
 }
