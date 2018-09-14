@@ -163,12 +163,11 @@ StringDictionary::StringDictionary(const std::string& folder,
                    curr_id < string_id + items_per_thread && curr_id < str_count;
                    curr_id++) {
                 const auto recovered = getStringFromStorage(curr_id);
-                if (std::get<2>(recovered)) {
+                if (recovered.canary) {
                   // hit the canary, recovery finished
                   break;
                 } else {
-                  std::string temp =
-                      std::string(std::get<0>(recovered), std::get<1>(recovered));
+                  std::string temp(recovered.c_str_ptr, recovered.size);
                   hashVec.emplace_back(std::make_pair(rk_hash(temp), temp.size()));
                 }
               }
@@ -258,21 +257,37 @@ void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec,
     return;
   }
   size_t out_idx{0};
+  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
 
   for (const auto& str : string_vec) {
-    const auto string_id = getOrAddImpl(str);
-    const bool invalid = string_id > max_valid_int_value<T>();
-    if (invalid || string_id == inline_int_null_value<int32_t>()) {
-      if (invalid) {
-        log_encoding_error<T>(str);
-      }
+    if (str.empty()) {
       encoded_vec[out_idx++] = inline_int_null_value<T>();
       continue;
     }
-    encoded_vec[out_idx++] = string_id;
-  }
-}
+    CHECK(str.size() <= MAX_STRLEN);
+    int32_t bucket;
+    const size_t hash = rk_hash(str);
+    bucket = computeBucket(hash, str, str_ids_, false);
+    if (str_ids_[bucket] != INVALID_STR_ID) {
+      encoded_vec[out_idx++] = str_ids_[bucket];
+      continue;
+    }
+    if (str_ids_[bucket] == INVALID_STR_ID) {
+      if (fillRateIsHigh()) {
+        // resize when more than 50% is full
+        increaseCapacity();
+        bucket = computeBucket(hash, str, str_ids_, false);
+      }
+      appendToStorage(str);
 
+      str_ids_[bucket] = static_cast<int32_t>(str_count_);
+      ++str_count_;
+    }
+    encoded_vec[out_idx++] = str_ids_[bucket];
+  }
+
+  invalidateInvertedIndex();
+}
 template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec,
                                              uint8_t* encoded_vec);
 template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec,
@@ -436,51 +451,6 @@ std::vector<int32_t> StringDictionary::getLike(const std::string& pattern,
   return result;
 }
 
-StringDictionary::compare_cache_value_t* StringDictionary::binary_search_cache(
-    const std::string& pattern) const {
-  int32_t start = 0;
-  int32_t end = str_count_ - 1;
-  int32_t mid;
-  int32_t cmp;
-
-  compare_cache_value_t* ret = new compare_cache_value_t();
-  while (start < end) {
-    mid = start + ((end - start) / 2);
-    auto mid_str = getStringFromStorage(sorted_cache[mid]);
-    cmp = StringCompare(
-        std::get<0>(mid_str), std::get<1>(mid_str), pattern.c_str(), pattern.size());
-    if (cmp == 0) {
-      ret->index = mid;
-      ret->diff = 0;
-      return ret;
-    } else if (cmp < 0) {
-      start = mid + 1;
-    } else {
-      end = mid - 1;
-    }
-  }
-  // The logic below ensures that if the key element is not found in the cache it will
-  // return the index of "biggest" element smaller than pattern.
-  auto start_str = getStringFromStorage(sorted_cache[start]);
-  cmp = StringCompare(
-      std::get<0>(start_str), std::get<1>(start_str), pattern.c_str(), pattern.size());
-  // please pardon my bad code here
-  if (start > 0 && cmp > 0) {
-    auto lhs_str = getStringFromStorage(sorted_cache[start - 1]);
-    auto l_cmp = StringCompare(
-        std::get<0>(lhs_str), std::get<1>(lhs_str), pattern.c_str(), pattern.size());
-    if (l_cmp < 0) {
-      ret->index = start - 1;
-      ret->diff = l_cmp;
-      return ret;
-    }
-  }
-
-  ret->index = start;
-  ret->diff = cmp;
-  return ret;
-}
-
 std::vector<int32_t> StringDictionary::getEquals(std::string pattern,
                                                  std::string comp_operator,
                                                  size_t generation) {
@@ -559,26 +529,50 @@ std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
 
     buildSortedCache();
   }
-  StringDictionary::compare_cache_value_t* cache_index = compare_cache_.get(pattern);
+  auto cache_index = compare_cache_.get(pattern);
 
   if (!cache_index) {
-    cache_index = binary_search_cache(pattern);
-    std::shared_ptr<StringDictionary::compare_cache_value_t> cache_value(cache_index);
-    compare_cache_.put(pattern, cache_value);
+    cache_index = std::make_shared<StringDictionary::compare_cache_value_t>();
+    const auto cache_itr = std::lower_bound(
+        sorted_cache.begin(),
+        sorted_cache.end(),
+        pattern,
+        [this](decltype(sorted_cache)::value_type const& a, decltype(pattern) const& b) {
+          auto a_str = this->getStringFromStorage(a);
+          return string_lt(a_str.c_str_ptr, a_str.size, b.c_str(), b.size());
+        });
+
+    if (cache_itr == sorted_cache.end()) {
+      cache_index->index = sorted_cache.size() - 1;
+      cache_index->diff = 1;
+    } else {
+      const auto cache_str = getStringFromStorage(*cache_itr);
+      if (!string_eq(
+              cache_str.c_str_ptr, cache_str.size, pattern.c_str(), pattern.size())) {
+        cache_index->index = cache_itr - sorted_cache.begin() - 1;
+        cache_index->diff = 1;
+      } else {
+        cache_index->index = cache_itr - sorted_cache.begin();
+        cache_index->diff = 0;
+      }
+    }
+
+    compare_cache_.put(pattern, cache_index);
   }
 
   // since we have a cache in form of vector of ints which is sorted according to
-  // corresponding strings in the dictionary all we need is the index of the element which
-  // equal to the pattern that we are trying to match or the index of “biggest” element
-  // smaller than the pattern, to perform all the comparison operators over string. The
-  // search function guarantees we have such index so now it is just the matter to include
-  // all the elements in the result vector.
+  // corresponding strings in the dictionary all we need is the index of the element
+  // which equal to the pattern that we are trying to match or the index of “biggest”
+  // element smaller than the pattern, to perform all the comparison operators over
+  // string. The search function guarantees we have such index so now it is just the
+  // matter to include all the elements in the result vector.
 
-  // For < operator if the index that we have points to the element which is equal to the
-  // pattern that we are searching for we simply get all the elements less than the index.
-  // If the element pointed by the index is not equal to the pattern we are comparing with
-  // we also need to include that index in result vector, except when the index points to
-  // 0 and the pattern is lesser than the smallest value in the string dictionary.
+  // For < operator if the index that we have points to the element which is equal to
+  // the pattern that we are searching for we simply get all the elements less than the
+  // index. If the element pointed by the index is not equal to the pattern we are
+  // comparing with we also need to include that index in result vector, except when the
+  // index points to 0 and the pattern is lesser than the smallest value in the string
+  // dictionary.
 
   if (comp_operator == "<") {
     size_t idx = cache_index->index;
@@ -593,11 +587,11 @@ std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
     }
 
     // For <= operator if the index that we have points to the element which is equal to
-    // the pattern that we are searching for we want to include the element pointed by the
-    // index in the result set. If the element pointed by the index is not equal to the
-    // pattern we are comparing with we just want to include all the ids with index less
-    // than the index that is cached, except when pattern that we are searching for is
-    // smaller than the smallest string in the dictionary.
+    // the pattern that we are searching for we want to include the element pointed by
+    // the index in the result set. If the element pointed by the index is not equal to
+    // the pattern we are comparing with we just want to include all the ids with index
+    // less than the index that is cached, except when pattern that we are searching for
+    // is smaller than the smallest string in the dictionary.
 
   } else if (comp_operator == "<=") {
     size_t idx = cache_index->index + 1;
@@ -610,8 +604,8 @@ std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
 
     // For > operator we want to get all the elements with index greater than the index
     // that we have except, when the pattern we are searching for is lesser than the
-    // smallest string in the dictionary we also want to include the id of the index that
-    // we have.
+    // smallest string in the dictionary we also want to include the id of the index
+    // that we have.
 
   } else if (comp_operator == ">") {
     size_t idx = cache_index->index + 1;
@@ -644,8 +638,8 @@ std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
       ret.push_back(sorted_cache[cache_index->index]);
     }
 
-    // For <> operator it is simple matter of not including id of string which is equal to
-    // pattern we are searching for.
+    // For <> operator it is simple matter of not including id of string which is equal
+    // to pattern we are searching for.
   } else if (comp_operator == "<>") {
     if (!cache_index->diff) {
       size_t idx = cache_index->index;
@@ -832,34 +826,17 @@ int32_t StringDictionary::getOrAddImpl(const std::string& str) noexcept {
   return str_ids_[bucket];
 }
 
-/* TO BE DELETED
-void StringDictionary::insertInSortedCache(std::string str, int32_t str_id) {
-  auto idx = binary_search_cache(str);
-  auto itr = sorted_cache.begin();
-  CHECK(idx->diff != 0);
-  if (idx->index == 0) {
-    if (idx->diff > 0) {
-      sorted_cache.emplace(itr, str_id);
-    } else {
-      sorted_cache.emplace(itr + 1, str_id);
-    }
-  } else {
-    sorted_cache.emplace(itr + idx->index, str_id);
-  }
-}
-*/
-
 std::string StringDictionary::getStringChecked(const int string_id) const noexcept {
   const auto str_canary = getStringFromStorage(string_id);
-  CHECK(!std::get<2>(str_canary));
-  return std::string(std::get<0>(str_canary), std::get<1>(str_canary));
+  CHECK(!str_canary.canary);
+  return std::string(str_canary.c_str_ptr, str_canary.size);
 }
 
 std::pair<char*, size_t> StringDictionary::getStringBytesChecked(
     const int string_id) const noexcept {
   const auto str_canary = getStringFromStorage(string_id);
-  CHECK(!std::get<2>(str_canary));
-  return std::make_pair(std::get<0>(str_canary), std::get<1>(str_canary));
+  CHECK(!str_canary.canary);
+  return std::make_pair(str_canary.c_str_ptr, str_canary.size);
 }
 
 int32_t StringDictionary::computeBucket(const size_t hash,
@@ -875,9 +852,9 @@ int32_t StringDictionary::computeBucket(const size_t hash,
     // if records are unique I don't need to do this test as I know it will not be the
     // same
     if (!unique) {
-      const auto old_str = getStringChecked(data[bucket]);
-      if (str.size() == old_str.size() &&
-          !memcmp(str.c_str(), old_str.c_str(), str.size())) {
+      const auto old_str = getStringFromStorage(data[bucket]);
+      if (str.size() == old_str.size &&
+          !memcmp(str.c_str(), old_str.c_str_ptr, str.size())) {
         // found the string
         break;
       }
@@ -943,7 +920,7 @@ void StringDictionary::appendToStorage(const std::string& str) noexcept {
   memcpy(offset_map_ + str_count_, &str_meta, sizeof(str_meta));
 }
 
-std::tuple<char*, size_t, bool> StringDictionary::getStringFromStorage(
+StringDictionary::PayloadString StringDictionary::getStringFromStorage(
     const int string_id) const noexcept {
   if (!isTemp_) {
     CHECK_GE(payload_fd_, 0);
@@ -953,9 +930,9 @@ std::tuple<char*, size_t, bool> StringDictionary::getStringFromStorage(
   const StringIdxEntry* str_meta = offset_map_ + string_id;
   if (str_meta->size == 0xffff) {
     // hit the canary
-    return std::make_tuple(nullptr, 0, true);
+    return {nullptr, 0, true};
   }
-  return std::make_tuple(payload_map_ + str_meta->off, str_meta->size, false);
+  return {payload_map_ + str_meta->off, str_meta->size, false};
 }
 
 void StringDictionary::addPayloadCapacity() noexcept {
@@ -1055,8 +1032,7 @@ void StringDictionary::sortCache(std::vector<int32_t>& cache) {
   std::sort(cache.begin(), cache.end(), [this](int32_t a, int32_t b) {
     auto a_str = this->getStringFromStorage(a);
     auto b_str = this->getStringFromStorage(b);
-    return string_lt(
-        std::get<0>(a_str), std::get<1>(a_str), std::get<0>(b_str), std::get<1>(b_str));
+    return string_lt(a_str.c_str_ptr, a_str.size, b_str.c_str_ptr, b_str.size);
   });
 }
 
@@ -1067,10 +1043,8 @@ void StringDictionary::mergeSortedCache(std::vector<int32_t>& temp_sorted_cache)
   for (; t_idx < temp_sorted_cache.size() && s_idx < sorted_cache.size(); idx++) {
     auto t_string = getStringFromStorage(temp_sorted_cache[t_idx]);
     auto s_string = getStringFromStorage(sorted_cache[s_idx]);
-    const auto insert_from_temp_cache = string_lt(std::get<0>(t_string),
-                                                  std::get<1>(t_string),
-                                                  std::get<0>(s_string),
-                                                  std::get<1>(s_string));
+    const auto insert_from_temp_cache =
+        string_lt(t_string.c_str_ptr, t_string.size, s_string.c_str_ptr, s_string.size);
     if (insert_from_temp_cache) {
       updated_cache[idx] = temp_sorted_cache[t_idx++];
     } else {

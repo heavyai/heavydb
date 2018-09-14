@@ -35,12 +35,12 @@ class DictionaryCache {
     cache_items.insert({key, value});
   }
 
-  value_t* get(const key_t& key) {
+  std::shared_ptr<value_t> get(const key_t& key) {
     auto it = cache_items.find(key);
     if (it == cache_items.end()) {
       return nullptr;
     }
-    return it->second.get();
+    return it->second;
   }
 
   void remove(const key_t& key) { cache_items.erase(key); }

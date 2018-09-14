@@ -55,7 +55,7 @@ target_link_libraries(StringDictionaryTest StringDictionary gtest ${Boost_LIBRAR
 target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd_thrift ${Boost_LIBRARIES})
 set(EXECUTE_TEST_LIBS gtest QueryRunner ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
 list(APPEND EXECUTE_TEST_LIBS Calcite)
-list(APPEND EXECUTE_TEST_LIBS Calcite mapd_thrift)
+list(APPEND EXECUTE_TEST_LIBS Calcite mapd_thrift ${PROFILER_LIBS})
 
 target_link_libraries(ExecuteTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS} bcrypt)

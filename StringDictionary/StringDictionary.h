@@ -90,10 +90,16 @@ class StringDictionary {
   // The diff component represents whether the index the cache is pointing to is equal to
   // the pattern it is cached for. We want to use diff so we don't have compare string
   // again when we are retrieving it from the cache.
-  typedef struct {
+  struct compare_cache_value_t {
     int32_t index;
     int32_t diff;
-  } compare_cache_value_t;
+  };
+
+  struct PayloadString {
+    char* c_str_ptr;
+    size_t size;
+    bool canary;
+  };
 
   void processDictionaryFutures(
       std::vector<std::future<std::vector<std::pair<unsigned int, unsigned int>>>>&
@@ -114,8 +120,7 @@ class StringDictionary {
   int32_t computeUniqueBucketWithHash(const size_t hash,
                                       const std::vector<int32_t>& data) const noexcept;
   void appendToStorage(const std::string& str) noexcept;
-  std::tuple<char*, size_t, bool> getStringFromStorage(const int string_id) const
-      noexcept;
+  PayloadString getStringFromStorage(const int string_id) const noexcept;
   void addPayloadCapacity() noexcept;
   void addOffsetCapacity() noexcept;
   size_t addStorageCapacity(int fd) noexcept;
