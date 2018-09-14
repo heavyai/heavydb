@@ -36,7 +36,9 @@ struct QueryDataLayout;
 
 class OutOfRenderMemory : public std::runtime_error {
  public:
-  OutOfRenderMemory() : std::runtime_error("OutOfMemory") {}
+  OutOfRenderMemory(const size_t device_id,
+                    const size_t total_bytes,
+                    const size_t requested_bytes);
 };
 
 class StreamingTopNNotSupportedInRenderQuery : public std::runtime_error {
@@ -51,6 +53,7 @@ class RenderAllocator {
  public:
   RenderAllocator(int8_t* preallocated_ptr,
                   const size_t preallocated_size,
+                  const size_t device_id,
                   const unsigned block_size_x,
                   const unsigned grid_size_x,
                   const RAExecutionPolicy execution_policy = RAExecutionPolicy::Device);
@@ -70,6 +73,7 @@ class RenderAllocator {
  private:
   int8_t* preallocated_ptr_;
   const size_t preallocated_size_;
+  const size_t device_id_;
   size_t crt_chunk_offset_bytes_;
   size_t crt_allocated_bytes_;
 
