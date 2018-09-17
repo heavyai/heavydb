@@ -1,6 +1,8 @@
 #ifndef SQLTYPEUTILITIES_H
 #define SQLTYPEUTILITIES_H
 
+#include "ExperimentalTypeUtilities.h"
+
 template <SQLTypes... TYPE_SET>
 class OnTypesetMember {
  public:
