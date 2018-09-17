@@ -54,7 +54,7 @@ class FixedLengthEncoder : public Encoder {
         }
       }
     }
-    numElems += numAppendElems;
+    num_elems_ += numAppendElems;
 
     // assume always CPU_BUFFER?
     buffer_->append((int8_t*)(encodedData.get()), numAppendElems * sizeof(V));
@@ -110,7 +110,7 @@ class FixedLengthEncoder : public Encoder {
   }
 
   void copyMetadata(const Encoder* copyFromEncoder) {
-    numElems = copyFromEncoder->numElems;
+    num_elems_ = copyFromEncoder->getNumElems();
     auto castedEncoder =
         reinterpret_cast<const FixedLengthEncoder<T, V>*>(copyFromEncoder);
     dataMin = castedEncoder->dataMin;
@@ -120,7 +120,7 @@ class FixedLengthEncoder : public Encoder {
 
   void writeMetadata(FILE* f) {
     // assumes pointer is already in right place
-    fwrite((int8_t*)&numElems, sizeof(size_t), 1, f);
+    fwrite((int8_t*)&num_elems_, sizeof(size_t), 1, f);
     fwrite((int8_t*)&dataMin, sizeof(T), 1, f);
     fwrite((int8_t*)&dataMax, sizeof(T), 1, f);
     fwrite((int8_t*)&has_nulls, sizeof(bool), 1, f);
@@ -128,7 +128,7 @@ class FixedLengthEncoder : public Encoder {
 
   void readMetadata(FILE* f) {
     // assumes pointer is already in right place
-    fread((int8_t*)&numElems, sizeof(size_t), 1, f);
+    fread((int8_t*)&num_elems_, sizeof(size_t), 1, f);
     fread((int8_t*)&dataMin, 1, sizeof(T), f);
     fread((int8_t*)&dataMax, 1, sizeof(T), f);
     fread((int8_t*)&has_nulls, 1, sizeof(bool), f);

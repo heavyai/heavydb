@@ -66,20 +66,36 @@ class StringNoneEncoder : public Encoder {
     chunkMetadata.chunkStats.has_nulls = has_nulls;
   }
 
+  // Only called from the executor for synthesized meta-information.
+  ChunkMetadata getMetadata(const SQLTypeInfo& ti) {
+    auto chunk_stats = ChunkStats{};
+    chunk_stats.min.stringval = nullptr;
+    chunk_stats.max.stringval = nullptr;
+    chunk_stats.has_nulls = has_nulls;
+    ChunkMetadata chunk_metadata{ti, 0, 0, chunk_stats};
+    return chunk_metadata;
+  }
+
+  void updateStats(const int64_t, const bool) { CHECK(false); }
+
+  void updateStats(const double, const bool) { CHECK(false); }
+
+  void reduceStats(const Encoder&) { CHECK(false); }
+
   void writeMetadata(FILE* f) {
     // assumes pointer is already in right place
-    fwrite((int8_t*)&numElems, sizeof(size_t), 1, f);
+    fwrite((int8_t*)&num_elems_, sizeof(size_t), 1, f);
     fwrite((int8_t*)&has_nulls, sizeof(bool), 1, f);
   }
 
   void readMetadata(FILE* f) {
     // assumes pointer is already in right place
-    CHECK_NE(fread((int8_t*)&numElems, sizeof(size_t), size_t(1), f), size_t(0));
+    CHECK_NE(fread((int8_t*)&num_elems_, sizeof(size_t), size_t(1), f), size_t(0));
     CHECK_NE(fread((int8_t*)&has_nulls, sizeof(bool), size_t(1), f), size_t(0));
   }
 
   void copyMetadata(const Encoder* copyFromEncoder) {
-    numElems = copyFromEncoder->numElems;
+    num_elems_ = copyFromEncoder->getNumElems();
     has_nulls = static_cast<const StringNoneEncoder*>(copyFromEncoder)->has_nulls;
   }
 

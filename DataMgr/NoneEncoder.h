@@ -54,7 +54,7 @@ class NoneEncoder : public Encoder {
         dataMax = std::max(dataMax, data);
       }
     }
-    numElems += numAppendElems;
+    num_elems_ += numAppendElems;
     buffer_->append(replicating ? (int8_t*)encodedData.get() : srcData,
                     numAppendElems * sizeof(T));
     ChunkMetadata chunkMetadata;
@@ -110,7 +110,7 @@ class NoneEncoder : public Encoder {
 
   void writeMetadata(FILE* f) {
     // assumes pointer is already in right place
-    fwrite((int8_t*)&numElems, sizeof(size_t), 1, f);
+    fwrite((int8_t*)&num_elems_, sizeof(size_t), 1, f);
     fwrite((int8_t*)&dataMin, sizeof(T), 1, f);
     fwrite((int8_t*)&dataMax, sizeof(T), 1, f);
     fwrite((int8_t*)&has_nulls, sizeof(bool), 1, f);
@@ -118,14 +118,14 @@ class NoneEncoder : public Encoder {
 
   void readMetadata(FILE* f) {
     // assumes pointer is already in right place
-    fread((int8_t*)&numElems, sizeof(size_t), 1, f);
+    fread((int8_t*)&num_elems_, sizeof(size_t), 1, f);
     fread((int8_t*)&dataMin, sizeof(T), 1, f);
     fread((int8_t*)&dataMax, sizeof(T), 1, f);
     fread((int8_t*)&has_nulls, sizeof(bool), 1, f);
   }
 
   void copyMetadata(const Encoder* copyFromEncoder) {
-    numElems = copyFromEncoder->numElems;
+    num_elems_ = copyFromEncoder->getNumElems();
     auto castedEncoder = reinterpret_cast<const NoneEncoder<T>*>(copyFromEncoder);
     dataMin = castedEncoder->dataMin;
     dataMax = castedEncoder->dataMax;

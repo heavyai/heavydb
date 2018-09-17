@@ -82,7 +82,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     if (!buffer_->isDirty())
       buffer_->setDirty();
 
-    numElems += numAppendElems;
+    num_elems_ += numAppendElems;
     ChunkMetadata chunkMetadata;
     getMetadata(chunkMetadata);
     return chunkMetadata;
@@ -93,9 +93,21 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     chunkMetadata.fillChunkStats(elem_min, elem_max, has_nulls);
   }
 
+  // Only called from the executor for synthesized meta-information.
+  ChunkMetadata getMetadata(const SQLTypeInfo& ti) {
+    ChunkMetadata chunk_metadata{ti, 0, 0, ChunkStats{elem_min, elem_max, has_nulls}};
+    return chunk_metadata;
+  }
+
+  void updateStats(const int64_t, const bool) { CHECK(false); }
+
+  void updateStats(const double, const bool) { CHECK(false); }
+
+  void reduceStats(const Encoder&) { CHECK(false); }
+
   void writeMetadata(FILE* f) {
     // assumes pointer is already in right place
-    fwrite((int8_t*)&numElems, sizeof(size_t), 1, f);
+    fwrite((int8_t*)&num_elems_, sizeof(size_t), 1, f);
     fwrite((int8_t*)&elem_min, sizeof(Datum), 1, f);
     fwrite((int8_t*)&elem_max, sizeof(Datum), 1, f);
     fwrite((int8_t*)&has_nulls, sizeof(bool), 1, f);
@@ -104,7 +116,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
 
   void readMetadata(FILE* f) {
     // assumes pointer is already in right place
-    fread((int8_t*)&numElems, sizeof(size_t), 1, f);
+    fread((int8_t*)&num_elems_, sizeof(size_t), 1, f);
     fread((int8_t*)&elem_min, sizeof(Datum), 1, f);
     fread((int8_t*)&elem_max, sizeof(Datum), 1, f);
     fread((int8_t*)&has_nulls, sizeof(bool), 1, f);
@@ -112,7 +124,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
   }
 
   void copyMetadata(const Encoder* copyFromEncoder) {
-    numElems = copyFromEncoder->numElems;
+    num_elems_ = copyFromEncoder->getNumElems();
     auto array_encoder =
         dynamic_cast<const FixedLengthArrayNoneEncoder*>(copyFromEncoder);
     elem_min = array_encoder->elem_min;
