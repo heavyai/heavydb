@@ -192,22 +192,5 @@ void Encoder::getMetadata(ChunkMetadata& chunkMetadata) {
   // chunkMetadata = metadataTemplate_; // invoke copy constructor
   chunkMetadata.sqlType = buffer_->sqlType;
   chunkMetadata.numBytes = buffer_->size();
-  chunkMetadata.numElements = numElems;
-}
-
-ChunkMetadata Encoder::getMetadata(const SQLTypeInfo& ti) {
-  CHECK(false);
-  return {};
-}
-
-void Encoder::updateStats(const int64_t, const bool) {
-  CHECK(false);
-}
-
-void Encoder::updateStats(const double, const bool) {
-  CHECK(false);
-}
-
-void Encoder::reduceStats(const Encoder&) {
-  CHECK(false);
+  chunkMetadata.numElements = num_elems_;
 }
