@@ -23,9 +23,9 @@ public class MapDDatabaseMetaDataTest {
     static Properties PROPERTIES = new Property_loader();
 
     static final ArrayList<String> default_tables = new ArrayList<String>(){{
-        add("mapd_states");
-        add("mapd_counties");
-        add("mapd_countries");}};
+        add("omnisci_states");
+        add("omnisci_counties");
+        add("omnisci_countries");}};
 
     static final ArrayList<String> default_perms = new ArrayList<String>(){{
         add("CREATE");
