@@ -1821,9 +1821,12 @@ static ImportStatus import_thread_shapefile(
 
         // is this a geo column?
         const auto& col_ti = cd->columnType;
-        if (cd->columnName == MAPD_GEO_PREFIX && col_ti.get_physical_cols() > 0) {
+        if (col_ti.is_geometry()) {
+          // Note that this assumes there is one and only one geo column in the table.
+          // Currently, the importer only supports reading a single geospatial feature
+          // from an input shapefile / geojson file, but this code will need to be
+          // modified if that changes
           SQLTypes col_type = col_ti.get_type();
-          CHECK(IS_GEO(col_type));
 
           // store null string in the base column
           import_buffers[col_idx]->add_value(cd, copy_params.null_str, true, copy_params);
@@ -4119,7 +4122,7 @@ void ImportDriver::import_geo_table(const std::string& file_path,
                                     const std::string& table_name,
                                     const bool compression,
                                     const bool create_table) {
-  const std::string geo_column_name(MAPD_GEO_PREFIX);
+  const std::string geo_column_name(OMNISCI_GEO_PREFIX);
 
   CopyParams copy_params;
   if (compression) {

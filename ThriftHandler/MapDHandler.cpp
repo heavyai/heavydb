@@ -2519,7 +2519,7 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
       }
     } else if (copy_params.table_type == Importer_NS::TableType::POLYGON) {
       // @TODO simon.eves get this from somewhere!
-      const std::string geoColumnName(MAPD_GEO_PREFIX);
+      const std::string geoColumnName(OMNISCI_GEO_PREFIX);
 
       check_geospatial_files(file_path, copy_params);
       std::list<ColumnDescriptor> cds = Importer_NS::Importer::gdalToColumnDescriptors(
@@ -3306,8 +3306,13 @@ void MapDHandler::import_geo_table(const TSessionId& session,
       TColumnType cd_col_type = populateThriftColumnType(&cat, cd);
       if (rd[rd_index].col_name != cd->columnName ||
           rd[rd_index].col_type != cd_col_type.col_type) {
-        structure_matches = false;
-        break;
+        if (cd->columnName == "mapd_geo" && rd[rd_index].col_name == OMNISCI_GEO_PREFIX) {
+          // Support legacy geo column names
+          rd[rd_index].col_name = cd->columnName;
+        } else {
+          structure_matches = false;
+          break;
+        }
       }
       rd_index++;
     }
@@ -3337,14 +3342,20 @@ void MapDHandler::import_geo_table(const TSessionId& session,
         r.col_type.type == TDatumType::LINESTRING ||
         r.col_type.type == TDatumType::POLYGON ||
         r.col_type.type == TDatumType::MULTIPOLYGON) {
-      if (r.col_name == MAPD_GEO_PREFIX) {
+      // TODO(team): allow user to override the geo column name
+      if (r.col_name == OMNISCI_GEO_PREFIX) {
+        have_geo_column_with_correct_name = true;
+      } else if (r.col_name == "mapd_geo") {
+        CHECK(colname_to_src.find(r.col_name) != colname_to_src.end());
+        // Normalize column names for geo append with legacy column naming scheme
+        colname_to_src[r.col_name] = r.col_name;
         have_geo_column_with_correct_name = true;
       }
     }
   }
   if (!have_geo_column_with_correct_name) {
     THROW_MAPD_EXCEPTION("Table " + table_name +
-                         " does not have a geo column with name '" + MAPD_GEO_PREFIX +
+                         " does not have a geo column with name '" + OMNISCI_GEO_PREFIX +
                          "'. Import aborted!");
   }
 

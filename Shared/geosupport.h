@@ -20,7 +20,7 @@
 #include <cmath>
 #include <string>
 
-const std::string MAPD_GEO_PREFIX{"mapd_geo"};
+const std::string OMNISCI_GEO_PREFIX{"omnisci_geo"};
 
 inline std::pair<double, double> geotransform_4326_to_900913(const double lon,
                                                              const double lat) {
