@@ -30,9 +30,9 @@
 static const std::array<std::string, 3> SampleGeoFileNames{"us-states.json",
                                                            "us-counties.json",
                                                            "countries.json"};
-static const std::array<std::string, 3> SampleGeoTableNames{"mapd_states",
-                                                            "mapd_counties",
-                                                            "mapd_countries"};
+static const std::array<std::string, 3> SampleGeoTableNames{"omnisci_states",
+                                                            "omnisci_counties",
+                                                            "omnisci_countries"};
 
 int main(int argc, char* argv[]) {
   std::string base_path;
