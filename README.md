@@ -49,13 +49,30 @@ MapD uses CMake for its build system.
 
 The following `cmake`/`ccmake` options can enable/disable different features:
 
-- `-DCMAKE_BUILD_TYPE=release` build type and compiler options to use. Options: `Debug`, `Release`, `RelWithDebInfo`, `MinSizeRel`, and unset.
-- `-DENABLE_CUDA=off` disable CUDA. Default `on`.
-- `-DMAPD_IMMERSE_DOWNLOAD=on` download the latest master build of Immerse / `mapd2-frontend`. Default `on`.
-- `-DMAPD_DOCS_DOWNLOAD=on` download the latest master build of the documentation / `docs.mapd.com`. Default `off`. Note: this is a >50MB download.
-- `-DPREFER_STATIC_LIBS=on` static link dependencies, if available. Default `off`.
-- `-DENABLE_AWS_S3=on` enable AWS S3 support, if available. Default `on`.
-- `-DENABLE_TESTS=on` build unit tests. Default `on`.
+- `-DCMAKE_BUILD_TYPE=release` - Build type and compiler options to use.
+                                 Options are `Debug`, `Release`, `RelWithDebInfo`, `MinSizeRel`, and unset.
+- `-DENABLE_ASAN=off` - Enable address sanitizer. Default is `off`.
+- `-DENABLE_AWS_S3=on` - Enable AWS S3 support, if available. Default is `on`.
+- `-DENABLE_CALCITE_DELETE_PATH=on` - Enable Calcite Delete Path. Default is `on`.
+- `-DENABLE_CALCITE_UPDATE_PATH=on` - Enable Calcite Update Path. Default is `on`.
+- `-DENABLE_COMPACTION=off` - Enable Compaction and Overflow/Underflow Detection. Default is `off`.
+- `-DENABLE_CUDA=off` - Disable CUDA. Default is `on`.
+- `-DENABLE_DECODERS_BOUNDS_CHECKING=off` - Enable bounds checking for column decoding. Default is `off`.
+- `-DENABLE_FOLLY=on` - Use Folly. Default is `on`.
+- `-DENABLE_IWYU=off` - Enable include-what-you-use. Default is `off`.
+- `-DENABLE_JIT_DEBUG=off` - Enable debugging symbols for the JIT. Default is `off`.
+- `-DENABLE_JOIN_EXEC=on` - Enable RA vm to execute join node. Default is `on`.
+- `-DENABLE_MULTIFRAG_JOIN=on` - Enable Join on Multi-frag table. Default is `on`.
+- `-DENABLE_ONE_TO_MANY_HASH_JOIN=on` - Enable hash join on a column w/ duplicate values. Default is `on`.
+- `-DENABLE_PROFILER=off` - Enable google perftools. Default is `off`.
+- `-DENABLE_STANDALONE_CALCITE=off` - Require standalone Calcite server. Default is `off`.
+- `-DENABLE_TESTS=on` - Build unit tests. Default is `on`.
+- `-DENABLE_TSAN=off` - Enable thread sanitizer. Default is `off`.
+- `-DENALBE_JAVA_REMOTE_DEBUG=on` - Enable Java Remote Debug. Default is `off`.
+- `-DMAPD_DOCS_DOWNLOAD=on` - Download the latest master build of the documentation / `docs.mapd.com`. Default is `off`.
+                              **Note:** this is a >50MB download.
+- `-DMAPD_IMMERSE_DOWNLOAD=on` - Download the latest master build of Immerse / `mapd2-frontend`. Default is `on`.
+- `-DPREFER_STATIC_LIBS=off` - Static link dependencies, if available. Default is `off`.
 
 # Testing
 
