@@ -89,15 +89,15 @@ mapd::shared_ptr<MapDHandler> g_warmup_handler =
         // between "MapDHandler" & function "run_warmup_queries"
 mapd::shared_ptr<MapDHandler> g_mapd_handler = 0;
 
-void calcite_shutdown_handler() {
+void shutdown_handler() {
   if (g_mapd_handler) {
-    g_mapd_handler->close_calcite_server();
+    g_mapd_handler->shutdown();
   }
 }
 
 void mapd_signal_handler(int signal_number) {
   LOG(INFO) << "Interrupt signal (" << signal_number << ") received.\n";
-  calcite_shutdown_handler();
+  shutdown_handler();
   // shut down logging force a flush
   google::ShutdownGoogleLogging();
   // terminate program
@@ -682,7 +682,7 @@ int main(int argc, char** argv) {
   // rudimetary signal handling to try to guarantee the logging gets flushed to files
   // on shutdown
   register_signal_handler();
-  google::InstallFailureFunction(&calcite_shutdown_handler);
+  google::InstallFailureFunction(&shutdown_handler);
 
   g_mapd_handler = mapd::make_shared<MapDHandler>(db_leaves,
                                                   string_leaves,

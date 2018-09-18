@@ -85,6 +85,7 @@ class MapDRenderHandler {
   }
 
   void handle_ddl(Parser::DDLStmt*) { CHECK(false); }
+  void shutdown() { CHECK(false); }
 
   friend class MapDHandler;
 };

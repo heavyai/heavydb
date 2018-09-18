@@ -379,7 +379,7 @@ class MapDHandler : public MapDIf {
   void get_license_claims(TLicenseInfo& _return,
                           const TSessionId& session,
                           const std::string& nonce);
-  void close_calcite_server();
+  void shutdown();
   // end of sync block for HAHandler and mapd.thrift
 
   TSessionId getInvalidSessionId() const;
