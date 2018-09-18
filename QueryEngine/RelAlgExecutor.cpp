@@ -20,7 +20,6 @@
 #include "CalciteDeserializerUtils.h"
 #include "CardinalityEstimator.h"
 #include "EquiJoinCondition.h"
-#include "ExecutionException.h"
 #include "ExpressionRewrite.h"
 #include "InputMetadata.h"
 #include "JoinFilterPushDown.h"
@@ -97,9 +96,8 @@ void scanForTablesAndAggsInRelAlgSeqForRender(std::vector<RaExecutionDesc>& exec
       const auto aggregate = dynamic_cast<const RelAggregate*>(walker);
       const auto filter = dynamic_cast<const RelFilter*>(walker);
       const auto sort = dynamic_cast<const RelSort*>(walker);
-      const auto multijoin = dynamic_cast<const RelMultiJoin*>(walker);
       const auto leftdeepinnerjoin = dynamic_cast<const RelLeftDeepInnerJoin*>(walker);
-      if (compound || join || project || aggregate || filter || sort || multijoin ||
+      if (compound || join || project || aggregate || filter || sort ||
           leftdeepinnerjoin) {
         for (int i = walker->inputCount(); i > 0; --i) {
           work_set.push_back(walker->getInput(i - 1));
@@ -446,55 +444,6 @@ class RexInputRedirector : public RexDeepCopyVisitor {
 
 }  // namespace
 
-void RelAlgExecutor::executeUnfoldedMultiJoin(const RelAlgNode* user,
-                                              RaExecutionDesc& exec_desc,
-                                              const CompilationOptions& co,
-                                              const ExecutionOptions& eo,
-                                              const int64_t queue_time_ms) {
-  CHECK(!dynamic_cast<const RelJoin*>(user));
-  CHECK_EQ(size_t(1), user->inputCount());
-  auto sort = dynamic_cast<const RelSort*>(user);
-  CHECK(!sort || sort->getInput(0)->inputCount() == 1);
-  auto multi_join =
-      sort ? std::dynamic_pointer_cast<const RelMultiJoin>(
-                 sort->getInput(0)->getAndOwnInput(0))
-           : std::dynamic_pointer_cast<const RelMultiJoin>(user->getAndOwnInput(0));
-  CHECK(multi_join);
-  const auto join_count = multi_join->joinCount();
-  CHECK_LE(size_t(2), join_count);
-  auto tail = multi_join->getAndOwnJoinAt(join_count - 1);
-  std::vector<const RelAlgNode*> retry_sequence;
-  if (!temporary_tables_.count(-tail->getId())) {
-    for (size_t i = 0; i < join_count - 1; ++i) {
-      retry_sequence.push_back(multi_join->getJoinAt(i));
-    }
-  }
-  std::shared_ptr<RelAlgNode> copy;
-  RexInputRedirector patcher(multi_join->getJoinAt(0), tail.get());
-  if (sort) {
-    auto source_copy = sort->getInput(0)->deepCopy();
-    patcher.visitNode(source_copy.get());
-    source_copy->RelAlgNode::replaceInput(multi_join, tail);
-    copy = sort->deepCopy();
-    copy->replaceInput(sort->getAndOwnInput(0), source_copy);
-    retry_sequence.push_back(copy.get());
-  } else {
-    copy = user->deepCopy();
-    patcher.visitNode(copy.get());
-    copy->RelAlgNode::replaceInput(multi_join, tail);
-    retry_sequence.push_back(copy.get());
-  }
-  auto retry_descs = get_execution_descriptors(retry_sequence);
-  CHECK(!eo.just_explain);
-  for (size_t i = 0; i < retry_descs.size(); ++i) {
-    executeRelAlgStep(i, retry_descs, co, eo, nullptr, queue_time_ms);
-  }
-
-  CHECK(!retry_descs.empty());
-  exec_desc.setResult(retry_descs.back().getResult());
-  addTemporaryTable(-user->getId(), exec_desc.getResult().getDataPtr());
-}
-
 void RelAlgExecutor::executeRelAlgStep(const size_t i,
                                        std::vector<RaExecutionDesc>& exec_descs,
                                        const CompilationOptions& co,
@@ -530,88 +479,81 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
     scanForTablesAndAggsInRelAlgSeqForRender(exec_descs, render_info);
   }
 
-  try {
-    const auto compound = dynamic_cast<const RelCompound*>(body);
-    if (compound) {
-      if (compound->isDeleteViaSelect()) {
-        executeDeleteViaCompound(compound, co, eo_work_unit, render_info, queue_time_ms);
-      } else if (compound->isUpdateViaSelect()) {
-        executeUpdateViaCompound(compound, co, eo_work_unit, render_info, queue_time_ms);
-      } else {
-        exec_desc.setResult(
-            executeCompound(compound, co, eo_work_unit, render_info, queue_time_ms));
-        if (exec_desc.getResult().isFilterPushDownEnabled()) {
-          return;
-        }
-        addTemporaryTable(-compound->getId(), exec_desc.getResult().getDataPtr());
-      }
-      return;
-    }
-    const auto project = dynamic_cast<const RelProject*>(body);
-    if (project) {
-      if (project->isDeleteViaSelect()) {
-        executeDeleteViaProject(project, co, eo_work_unit, render_info, queue_time_ms);
-      } else if (project->isUpdateViaSelect()) {
-        executeUpdateViaProject(project, co, eo_work_unit, render_info, queue_time_ms);
-      } else {
-        exec_desc.setResult(
-            executeProject(project, co, eo_work_unit, render_info, queue_time_ms));
-        if (exec_desc.getResult().isFilterPushDownEnabled()) {
-          return;
-        }
-        addTemporaryTable(-project->getId(), exec_desc.getResult().getDataPtr());
-      }
-      return;
-    }
-    const auto aggregate = dynamic_cast<const RelAggregate*>(body);
-    if (aggregate) {
+  const auto compound = dynamic_cast<const RelCompound*>(body);
+  if (compound) {
+    if (compound->isDeleteViaSelect()) {
+      executeDeleteViaCompound(compound, co, eo_work_unit, render_info, queue_time_ms);
+    } else if (compound->isUpdateViaSelect()) {
+      executeUpdateViaCompound(compound, co, eo_work_unit, render_info, queue_time_ms);
+    } else {
       exec_desc.setResult(
-          executeAggregate(aggregate, co, eo_work_unit, render_info, queue_time_ms));
-      addTemporaryTable(-aggregate->getId(), exec_desc.getResult().getDataPtr());
-      return;
-    }
-    const auto filter = dynamic_cast<const RelFilter*>(body);
-    if (filter) {
-      exec_desc.setResult(
-          executeFilter(filter, co, eo_work_unit, render_info, queue_time_ms));
-      addTemporaryTable(-filter->getId(), exec_desc.getResult().getDataPtr());
-      return;
-    }
-    const auto sort = dynamic_cast<const RelSort*>(body);
-    if (sort) {
-      exec_desc.setResult(
-          executeSort(sort, co, eo_work_unit, render_info, queue_time_ms));
+          executeCompound(compound, co, eo_work_unit, render_info, queue_time_ms));
       if (exec_desc.getResult().isFilterPushDownEnabled()) {
         return;
       }
-      addTemporaryTable(-sort->getId(), exec_desc.getResult().getDataPtr());
-      return;
+      addTemporaryTable(-compound->getId(), exec_desc.getResult().getDataPtr());
     }
-#ifdef ENABLE_JOIN_EXEC
-    const auto join = dynamic_cast<const RelJoin*>(body);
-    if (join) {
-      exec_desc.setResult(
-          executeJoin(join, co, eo_work_unit, render_info, queue_time_ms));
-      addTemporaryTable(-join->getId(), exec_desc.getResult().getDataPtr());
-      return;
-    }
-#endif
-    const auto logical_values = dynamic_cast<const RelLogicalValues*>(body);
-    if (logical_values) {
-      exec_desc.setResult(executeLogicalValues(logical_values, eo_work_unit));
-      addTemporaryTable(-logical_values->getId(), exec_desc.getResult().getDataPtr());
-      return;
-    }
-    const auto modify = dynamic_cast<const RelModify*>(body);
-    if (modify) {
-      exec_desc.setResult(executeModify(modify, eo_work_unit));
-      return;
-    }
-
-    CHECK(false);
-  } catch (const UnfoldedMultiJoinRequired&) {
-    executeUnfoldedMultiJoin(body, exec_desc, co, eo, queue_time_ms);
+    return;
   }
+  const auto project = dynamic_cast<const RelProject*>(body);
+  if (project) {
+    if (project->isDeleteViaSelect()) {
+      executeDeleteViaProject(project, co, eo_work_unit, render_info, queue_time_ms);
+    } else if (project->isUpdateViaSelect()) {
+      executeUpdateViaProject(project, co, eo_work_unit, render_info, queue_time_ms);
+    } else {
+      exec_desc.setResult(
+          executeProject(project, co, eo_work_unit, render_info, queue_time_ms));
+      if (exec_desc.getResult().isFilterPushDownEnabled()) {
+        return;
+      }
+      addTemporaryTable(-project->getId(), exec_desc.getResult().getDataPtr());
+    }
+    return;
+  }
+  const auto aggregate = dynamic_cast<const RelAggregate*>(body);
+  if (aggregate) {
+    exec_desc.setResult(
+        executeAggregate(aggregate, co, eo_work_unit, render_info, queue_time_ms));
+    addTemporaryTable(-aggregate->getId(), exec_desc.getResult().getDataPtr());
+    return;
+  }
+  const auto filter = dynamic_cast<const RelFilter*>(body);
+  if (filter) {
+    exec_desc.setResult(
+        executeFilter(filter, co, eo_work_unit, render_info, queue_time_ms));
+    addTemporaryTable(-filter->getId(), exec_desc.getResult().getDataPtr());
+    return;
+  }
+  const auto sort = dynamic_cast<const RelSort*>(body);
+  if (sort) {
+    exec_desc.setResult(executeSort(sort, co, eo_work_unit, render_info, queue_time_ms));
+    if (exec_desc.getResult().isFilterPushDownEnabled()) {
+      return;
+    }
+    addTemporaryTable(-sort->getId(), exec_desc.getResult().getDataPtr());
+    return;
+  }
+#ifdef ENABLE_JOIN_EXEC
+  const auto join = dynamic_cast<const RelJoin*>(body);
+  if (join) {
+    exec_desc.setResult(executeJoin(join, co, eo_work_unit, render_info, queue_time_ms));
+    addTemporaryTable(-join->getId(), exec_desc.getResult().getDataPtr());
+    return;
+  }
+#endif
+  const auto logical_values = dynamic_cast<const RelLogicalValues*>(body);
+  if (logical_values) {
+    exec_desc.setResult(executeLogicalValues(logical_values, eo_work_unit));
+    addTemporaryTable(-logical_values->getId(), exec_desc.getResult().getDataPtr());
+    return;
+  }
+  const auto modify = dynamic_cast<const RelModify*>(body);
+  if (modify) {
+    exec_desc.setResult(executeModify(modify, eo_work_unit));
+    return;
+  }
+  CHECK(false);
 }
 
 void RelAlgExecutor::handleNop(RaExecutionDesc& ed) {
@@ -683,14 +625,9 @@ const RelAlgNode* get_data_sink(const RelAlgNode* ra_node) {
     CHECK_EQ(size_t(2), join->inputCount());
     return join;
   }
-  if (auto multi_join = dynamic_cast<const RelMultiJoin*>(ra_node)) {
-    CHECK_LT(2, multi_join->inputCount());
-    return multi_join;
-  }
   CHECK_EQ(size_t(1), ra_node->inputCount());
   auto only_src = ra_node->getInput(0);
   const bool is_join = dynamic_cast<const RelJoin*>(only_src) ||
-                       dynamic_cast<const RelMultiJoin*>(only_src) ||
                        dynamic_cast<const RelLeftDeepInnerJoin*>(only_src);
   return is_join ? only_src : ra_node;
 }
@@ -835,18 +772,6 @@ get_join_source_used_inputs(const RelAlgNode* ra_node,
     return std::make_pair(condition_inputs, condition_inputs_owned);
   }
 
-  if (auto multi_join = dynamic_cast<const RelMultiJoin*>(data_sink_node)) {
-    CHECK_GT(multi_join->inputCount(), 2);
-    RexUsedInputsVisitor visitor(cat);
-    std::unordered_set<const RexInput*> input_set;
-    for (auto& condition : multi_join->getConditions()) {
-      auto inputs = visitor.visit(condition.get());
-      input_set.insert(inputs.begin(), inputs.end());
-    }
-    std::vector<std::shared_ptr<RexInput>> used_inputs_owned(visitor.get_inputs_owned());
-    return std::make_pair(input_set, used_inputs_owned);
-  }
-
   if (auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(data_sink_node)) {
     CHECK_GE(left_deep_join->inputCount(), 2);
     const auto condition = left_deep_join->getInnerCondition();
@@ -905,14 +830,6 @@ size_t get_target_list_size(const RelAlgNode* ra_node) {
 
 std::vector<const RelAlgNode*> get_non_join_sequence(const RelAlgNode* ra) {
   std::vector<const RelAlgNode*> seq;
-  if (auto multi_join = dynamic_cast<const RelMultiJoin*>(ra)) {
-    CHECK_GT(multi_join->joinCount(), size_t(1));
-    seq = get_non_join_sequence(multi_join->getJoinAt(0)->getInput(0));
-    for (size_t i = 0; i < multi_join->joinCount(); ++i) {
-      seq.push_back(multi_join->getJoinAt(i)->getInput(1));
-    }
-    return seq;
-  }
   for (auto join = dynamic_cast<const RelJoin*>(ra); join;
        join = static_cast<const RelJoin*>(join->getInput(0))) {
     CHECK_EQ(size_t(2), join->inputCount());
@@ -2361,9 +2278,6 @@ JoinType get_join_type(const RelAlgNode* ra) {
   if (auto join = dynamic_cast<const RelJoin*>(sink)) {
     return join->getJoinType();
   }
-  if (auto multi_join = dynamic_cast<const RelMultiJoin*>(sink)) {
-    return multi_join->getJoinType();
-  }
   if (dynamic_cast<const RelLeftDeepInnerJoin*>(sink)) {
     return JoinType::INNER;
   }
@@ -2478,13 +2392,6 @@ std::list<std::shared_ptr<Analyzer::Expr>> get_inner_join_quals(
       if (join->getJoinType() == JoinType::INNER) {
         work_set.push_back(join->getCondition());
       }
-    } else if (auto multi_join = dynamic_cast<const RelMultiJoin*>(only_src)) {
-      CHECK_EQ(multi_join->joinCount(), multi_join->getConditions().size());
-      for (size_t i = 0; i < multi_join->joinCount(); ++i) {
-        if (multi_join->getJoinAt(i)->getJoinType() == JoinType::INNER) {
-          work_set.push_back(multi_join->getConditions()[i].get());
-        }
-      }
     }
   }
   std::list<std::shared_ptr<Analyzer::Expr>> quals;
@@ -2506,9 +2413,6 @@ std::list<std::shared_ptr<Analyzer::Expr>> get_inner_join_quals(
 std::vector<std::pair<int, size_t>> get_join_dimensions(const RelAlgNode* ra,
                                                         Executor* executor) {
   std::vector<std::pair<int, size_t>> dims;
-  if (auto mj = dynamic_cast<const RelMultiJoin*>(ra)) {
-    ra = mj->getJoinAt(mj->joinCount() - 1);
-  }
   for (auto join = dynamic_cast<const RelJoin*>(ra); join;
        join = static_cast<const RelJoin*>(join->getInput(0))) {
     CHECK_EQ(size_t(2), join->inputCount());

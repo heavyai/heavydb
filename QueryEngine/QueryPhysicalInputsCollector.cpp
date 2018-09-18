@@ -29,7 +29,6 @@ class RelAlgPhysicalInputsVisitor : public RelAlgVisitor<PhysicalInputSet> {
   PhysicalInputSet visitCompound(const RelCompound* compound) const override;
   PhysicalInputSet visitFilter(const RelFilter* filter) const override;
   PhysicalInputSet visitJoin(const RelJoin* join) const override;
-  PhysicalInputSet visitMultiJoin(const RelMultiJoin*) const override;
   PhysicalInputSet visitLeftDeepInnerJoin(const RelLeftDeepInnerJoin*) const override;
   PhysicalInputSet visitProject(const RelProject* project) const override;
 
@@ -47,12 +46,6 @@ class RexPhysicalInputsVisitor : public RexVisitor<PhysicalInputSet> {
       const auto join_ra = dynamic_cast<const RelJoin*>(source_ra);
       if (join_ra) {
         const auto node_inputs = get_node_output(join_ra);
-        CHECK_LT(input->getIndex(), node_inputs.size());
-        return visitInput(&node_inputs[input->getIndex()]);
-      }
-      const auto multi_join_ra = dynamic_cast<const RelMultiJoin*>(source_ra);
-      if (multi_join_ra) {
-        const auto node_inputs = get_node_output(multi_join_ra);
         CHECK_LT(input->getIndex(), node_inputs.size());
         return visitInput(&node_inputs[input->getIndex()]);
       }
@@ -115,21 +108,6 @@ PhysicalInputSet RelAlgPhysicalInputsVisitor::visitJoin(const RelJoin* join) con
   }
   RexPhysicalInputsVisitor visitor;
   return visitor.visit(condition);
-}
-
-PhysicalInputSet RelAlgPhysicalInputsVisitor::visitMultiJoin(
-    const RelMultiJoin* multi_join) const {
-  PhysicalInputSet result;
-  RexPhysicalInputsVisitor visitor;
-  for (size_t i = 0; i < multi_join->joinCount(); ++i) {
-    const auto condition = multi_join->getConditions()[i].get();
-    if (!condition) {
-      continue;
-    }
-    const auto phys_inputs = visitor.visit(condition);
-    result.insert(phys_inputs.begin(), phys_inputs.end());
-  }
-  return result;
 }
 
 PhysicalInputSet RelAlgPhysicalInputsVisitor::visitLeftDeepInnerJoin(

@@ -16,7 +16,6 @@
 
 #include "JoinHashTable.h"
 #include "Execute.h"
-#include "ExecutionException.h"
 #include "ExpressionRewrite.h"
 #include "HashJoinRuntime.h"
 #include "RangeTableIndexVisitor.h"

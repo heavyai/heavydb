@@ -20,7 +20,6 @@
 #include "BaselineJoinHashTable.h"
 #include "DynamicWatchdog.h"
 #include "EquiJoinCondition.h"
-#include "ExecutionException.h"
 #include "ExpressionRewrite.h"
 #include "GpuMemUtils.h"
 #include "InPlaceSort.h"
@@ -1043,11 +1042,6 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                                ra_exe_unit,
                                device_type,
                                column_cache);
-  }
-
-  if (join_info.join_impl_type_ == JoinImplType::Loop &&
-      ra_exe_unit.input_descs.size() > 2) {
-    throw UnfoldedMultiJoinRequired();
   }
 
   if ((join_info.join_impl_type_ == JoinImplType::Loop ||

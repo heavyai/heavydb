@@ -43,10 +43,6 @@ class RelAlgVisitor {
     if (join) {
       return aggregateResult(result, visitJoin(join));
     }
-    const auto multi_join = dynamic_cast<const RelMultiJoin*>(rel_alg);
-    if (multi_join) {
-      return aggregateResult(result, visitMultiJoin(multi_join));
-    }
     const auto left_deep_inner_join = dynamic_cast<const RelLeftDeepInnerJoin*>(rel_alg);
     if (left_deep_inner_join) {
       return aggregateResult(result, visitLeftDeepInnerJoin(left_deep_inner_join));
@@ -82,8 +78,6 @@ class RelAlgVisitor {
   virtual T visitFilter(const RelFilter*) const { return defaultResult(); }
 
   virtual T visitJoin(const RelJoin*) const { return defaultResult(); }
-
-  virtual T visitMultiJoin(const RelMultiJoin*) const { return defaultResult(); }
 
   virtual T visitLeftDeepInnerJoin(const RelLeftDeepInnerJoin*) const {
     return defaultResult();

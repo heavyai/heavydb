@@ -16,7 +16,6 @@
 
 #include "DynamicWatchdog.h"
 #include "Execute.h"
-#include "ExecutionException.h"
 #include "QueryFragmentDescriptor.h"
 
 #include "DataMgr/BufferMgr/BufferMgr.h"

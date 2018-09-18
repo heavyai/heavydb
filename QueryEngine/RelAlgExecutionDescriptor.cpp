@@ -60,8 +60,7 @@ std::vector<Vertex> merge_join_with_non_join(const std::vector<Vertex>& vertices
   DAG::out_edge_iterator oe_iter, oe_end;
   std::unordered_set<Vertex> joins;
   for (const auto vert : vertices) {
-    if (dynamic_cast<const RelMultiJoin*>(graph[vert]) ||
-        dynamic_cast<const RelLeftDeepInnerJoin*>(graph[vert])) {
+    if (dynamic_cast<const RelLeftDeepInnerJoin*>(graph[vert])) {
       joins.insert(vert);
       continue;
     }
@@ -74,8 +73,7 @@ std::vector<Vertex> merge_join_with_non_join(const std::vector<Vertex>& vertices
     boost::tie(oe_iter, oe_end) = boost::out_edges(vert, graph);
     CHECK(boost::next(oe_iter) == oe_end);
     const auto out_vert = boost::target(*oe_iter, graph);
-    if (!dynamic_cast<const RelJoin*>(graph[out_vert]) &&
-        !dynamic_cast<const RelMultiJoin*>(graph[out_vert])) {
+    if (!dynamic_cast<const RelJoin*>(graph[out_vert])) {
       joins.insert(vert);
     }
   }
@@ -109,8 +107,7 @@ DAG build_dag(const RelAlgNode* sink) {
           (dynamic_cast<const RelModify*>(node) && input_num == 1) ||
           (input_num == 2 && (dynamic_cast<const RelJoin*>(node) ||
                               dynamic_cast<const RelLeftDeepInnerJoin*>(node))) ||
-          (input_num > 2 && (dynamic_cast<const RelMultiJoin*>(node) ||
-                             dynamic_cast<const RelLeftDeepInnerJoin*>(node))));
+          (input_num > 2 && (dynamic_cast<const RelLeftDeepInnerJoin*>(node))));
     for (size_t i = 0; i < input_num; ++i) {
       const auto input = node->getInput(i);
       CHECK(input);

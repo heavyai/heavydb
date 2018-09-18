@@ -144,19 +144,6 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node) {
     lhs_out.insert(lhs_out.end(), rhs_out.begin(), rhs_out.end());
     return lhs_out;
   }
-  const auto multi_join_node = dynamic_cast<const RelMultiJoin*>(ra_node);
-  if (multi_join_node) {
-    CHECK_LT(size_t(2), multi_join_node->inputCount());
-    auto first_out = n_outputs(multi_join_node->getInput(0),
-                               get_node_output(multi_join_node->getInput(0)).size());
-    for (size_t i = 1; i < multi_join_node->inputCount(); ++i) {
-      const auto next_out =
-          n_outputs(multi_join_node->getInput(i),
-                    get_node_output(multi_join_node->getInput(i)).size());
-      first_out.insert(first_out.end(), next_out.begin(), next_out.end());
-    }
-    return first_out;
-  }
   const auto sort_node = dynamic_cast<const RelSort*>(ra_node);
   if (sort_node) {
     // Sort preserves shape
@@ -254,20 +241,6 @@ bool RelProject::isRenaming() const {
     }
   }
   return false;
-}
-
-void RelMultiJoin::append(std::shared_ptr<RelJoin> join) {
-  if (sequence_.empty()) {
-    const auto src0 = join->getAndOwnInput(0);
-    addManagedInput(src0);
-  } else {
-    CHECK_EQ(sequence_.back().get(), join->getInput(0));
-  }
-  addManagedInput(join->getAndOwnInput(1));
-  sequence_.push_back(join);
-  RexDeepCopyVisitor copier;
-  auto condition = copier.visit(join->getCondition());
-  conditions_.push_back(std::move(condition));
 }
 
 void RelJoin::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
@@ -1162,190 +1135,6 @@ class RexInputRedirector : public RexDeepCopyVisitor {
   const std::unordered_set<const RelJoin*>& join_set_;
 };
 
-void redirect_inputs(
-    std::shared_ptr<RelMultiJoin> multi_join,
-    const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>
-        du_web,
-    const std::unordered_map<const RelAlgNode*, std::shared_ptr<RelAlgNode>>&
-        deconst_mapping) {
-  CHECK(multi_join);
-  CHECK_LE(size_t(2), multi_join->joinCount());
-  std::unordered_set<const RelJoin*> joins;
-  for (size_t i = 0; i < multi_join->joinCount(); ++i) {
-    joins.insert(multi_join->getJoinAt(i));
-  }
-  RexInputRedirector redirector(joins);
-  auto tail = multi_join->getJoinAt(multi_join->joinCount() - 1);
-  auto usrs_it = du_web.find(tail);
-  CHECK(usrs_it != du_web.end());
-  for (auto usr : usrs_it->second) {
-    auto usr_it = deconst_mapping.find(usr);
-    CHECK(usr_it != deconst_mapping.end());
-    redirector.visitNode(usr_it->second.get());
-  }
-
-  std::vector<std::unique_ptr<const RexScalar>> new_conditions;
-  for (size_t i = 0; i < multi_join->joinCount(); ++i) {
-    auto old_condition = multi_join->getConditions()[i].get();
-    CHECK(old_condition);
-    auto new_condition = redirector.visit(old_condition);
-    new_conditions.push_back(std::move(new_condition));
-  }
-  multi_join->setConditions(new_conditions);
-}
-
-class JoinKeyReplacer : public RexDeepCopyVisitor {
- public:
-  JoinKeyReplacer(const RelAlgNode* last_lhs,
-                  const std::unordered_map<size_t, size_t>& lhs_new_numbering,
-                  const RelAlgNode* last_rhs,
-                  const std::unordered_map<size_t, size_t>& rhs_new_numbering)
-      : lhs_(last_lhs)
-      , lhs_old_to_new_idx_(lhs_new_numbering)
-      , rhs_(last_rhs)
-      , rhs_old_to_new_idx_(rhs_new_numbering) {}
-  RetType visitInput(const RexInput* input) const override {
-    auto source = input->getSourceNode();
-    if (source == lhs_) {
-      auto renum_it = lhs_old_to_new_idx_.find(input->getIndex());
-      if (renum_it != lhs_old_to_new_idx_.end()) {
-        return boost::make_unique<RexInput>(input->getSourceNode(), renum_it->second);
-      } else {
-        return input->deepCopy();
-      }
-    }
-    CHECK(source == rhs_);
-    auto renum_it = rhs_old_to_new_idx_.find(input->getIndex());
-    if (renum_it != lhs_old_to_new_idx_.end()) {
-      return boost::make_unique<RexInput>(lhs_, renum_it->second);
-    } else {
-      return input->deepCopy();
-    }
-  }
-
- private:
-  const RelAlgNode* lhs_;
-  const std::unordered_map<size_t, size_t>& lhs_old_to_new_idx_;
-  const RelAlgNode* rhs_;
-  const std::unordered_map<size_t, size_t>& rhs_old_to_new_idx_;
-};
-
-std::unordered_map<const RelAlgNode*, size_t> get_node_to_col_base(
-    const RelMultiJoin* multi_join) {
-  std::unordered_map<const RelAlgNode*, size_t> node_to_col_base;
-  for (size_t i = 0; i < multi_join->joinCount(); ++i) {
-    auto join = multi_join->getJoinAt(i);
-    auto lhs = join->getInput(0);
-    auto rhs = join->getInput(1);
-    node_to_col_base.insert(std::make_pair(lhs, 0));
-    node_to_col_base.insert(std::make_pair(rhs, lhs->size()));
-  }
-  auto tail = multi_join->getJoinAt(multi_join->joinCount() - 1);
-  node_to_col_base.insert(std::make_pair(tail, 0));
-  return node_to_col_base;
-}
-
-void replace_equijoin_keys(
-    const std::shared_ptr<RelMultiJoin> multi_join,
-    const std::vector<const RexScalar*>& condition_set,
-    const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>
-        du_web,
-    const std::unordered_map<const RelAlgNode*, std::shared_ptr<RelAlgNode>>&
-        deconst_mapping) {
-  CHECK_LE(size_t(2), multi_join->joinCount());
-  auto tail = multi_join->getJoinAt(multi_join->joinCount() - 1);
-  auto last_lhs = tail->getInput(0);
-  auto last_rhs = tail->getInput(1);
-  auto usrs_it = du_web.find(tail);
-  CHECK(usrs_it != du_web.end());
-  CHECK_EQ(condition_set.size(), multi_join->joinCount());
-  auto node_to_col_base = get_node_to_col_base(multi_join.get());
-  std::unordered_map<size_t, size_t> lhs_old_to_new_idx;
-  std::unordered_map<size_t, size_t> rhs_old_to_new_idx;
-  std::unordered_map<size_t, size_t> old_to_new_flattened_idx;
-  for (size_t i = 0; i < condition_set.size(); ++i) {
-    auto rex_operator = dynamic_cast<const RexOperator*>(condition_set[i]);
-    if (!rex_operator || !IS_EQUIVALENCE(rex_operator->getOperator())) {
-      continue;
-    }
-    auto lhs_table = multi_join->getJoinAt(i)->getInput(0);
-    auto rhs_table = multi_join->getJoinAt(i)->getInput(1);
-    CHECK(node_to_col_base.count(lhs_table));
-    CHECK(node_to_col_base.count(rhs_table));
-    const auto lhs_col_base = node_to_col_base[lhs_table];
-    const auto rhs_col_base = node_to_col_base[rhs_table];
-    auto lhs = dynamic_cast<const RexInput*>(rex_operator->getOperand(0));
-    auto rhs = dynamic_cast<const RexInput*>(rex_operator->getOperand(1));
-    CHECK(lhs && rhs);
-    if (lhs->getSourceNode() == lhs_table) {
-      CHECK_EQ(rhs->getSourceNode(), rhs_table);
-    } else {
-      CHECK_EQ(rhs->getSourceNode(), lhs_table);
-      CHECK_EQ(lhs->getSourceNode(), rhs_table);
-      std::swap(lhs, rhs);
-    }
-    // Direct users of tail join need special handling due to indirect pointing of inputs.
-    if (rhs->getSourceNode() == last_rhs) {
-      rhs_old_to_new_idx.insert(
-          std::make_pair(rhs->getIndex(), lhs->getIndex() + lhs_col_base));
-    } else {
-      lhs_old_to_new_idx.insert(
-          std::make_pair(rhs->getIndex() + rhs_col_base, lhs->getIndex() + lhs_col_base));
-    }
-    old_to_new_flattened_idx.insert(
-        std::make_pair(rhs->getIndex() + rhs_col_base, lhs->getIndex() + lhs_col_base));
-  }
-
-  JoinKeyReplacer replacer(last_lhs, lhs_old_to_new_idx, last_rhs, rhs_old_to_new_idx);
-  std::vector<const RelAlgNode*> direct_usrs(usrs_it->second.begin(),
-                                             usrs_it->second.end());
-  std::vector<const RelAlgNode*> indirect_usrs;
-  // Direct users of tail join need special handling due to indirect pointing of inputs.
-  while (!direct_usrs.empty()) {
-    auto walker = direct_usrs.back();
-    direct_usrs.pop_back();
-    auto walker_it = deconst_mapping.find(walker);
-    CHECK(walker_it != deconst_mapping.end());
-    if (auto project = std::dynamic_pointer_cast<RelProject>(walker_it->second)) {
-      std::vector<std::unique_ptr<const RexScalar>> new_exprs;
-      for (size_t i = 0; i < project->size(); ++i) {
-        new_exprs.push_back(replacer.visit(project->getProjectAt(i)));
-      }
-      project->setExpressions(new_exprs);
-      continue;
-    }
-    if (auto filter = std::dynamic_pointer_cast<RelFilter>(walker_it->second)) {
-      auto new_condition = replacer.visit(filter->getCondition());
-      filter->setCondition(new_condition);
-      auto filter_usrs_it = du_web.find(filter.get());
-      CHECK(filter_usrs_it != du_web.end());
-      indirect_usrs.insert(indirect_usrs.end(),
-                           filter_usrs_it->second.begin(),
-                           filter_usrs_it->second.end());
-      continue;
-    }
-    throw std::runtime_error(walker->toString() + " after join not supported yet");
-  }
-
-  RexInputRenumber<true> renumber(old_to_new_flattened_idx);
-  while (!indirect_usrs.empty()) {
-    auto walker = indirect_usrs.back();
-    indirect_usrs.pop_back();
-    auto walker_it = deconst_mapping.find(walker);
-    CHECK(walker_it != deconst_mapping.end());
-    if (auto project = std::dynamic_pointer_cast<RelProject>(walker_it->second)) {
-      std::vector<std::unique_ptr<const RexScalar>> new_exprs;
-      for (size_t i = 0; i < project->size(); ++i) {
-        new_exprs.push_back(renumber.visit(project->getProjectAt(i)));
-      }
-      project->setExpressions(new_exprs);
-      continue;
-    }
-    throw std::runtime_error(walker->toString() +
-                             " after join + filter not supported yet");
-  }
-}
-
 void coalesce_joins(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   std::unordered_map<const RelAlgNode*, std::shared_ptr<RelAlgNode>> deconst_mapping;
   for (auto node : nodes) {
@@ -1372,7 +1161,7 @@ void coalesce_joins(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
       CHECK_EQ(web.count(tail.get()), size_t(1));
       for (auto usr : web[tail.get()]) {
         // TODO(miyu): check if safe to relax this limitation
-        if (dynamic_cast<const RelJoin*>(usr) || dynamic_cast<const RelMultiJoin*>(usr)) {
+        if (dynamic_cast<const RelJoin*>(usr)) {
           new_nodes.push_back(node);
           continue;
         }
@@ -1399,14 +1188,6 @@ void coalesce_joins(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
         CHECK(mj);
         managed_sequence.push_back(mj);
       }
-      auto multi_join = std::make_shared<RelMultiJoin>(managed_sequence);
-      for (auto usr : web[tail.get()]) {
-        CHECK_EQ(deconst_mapping.count(usr), size_t(1));
-        deconst_mapping[usr]->replaceInput(tail, multi_join);
-      }
-      replace_equijoin_keys(multi_join, condition_set, web, deconst_mapping);
-      redirect_inputs(multi_join, web, deconst_mapping);
-      new_nodes.push_back(multi_join);
     } else {
       new_nodes.push_back(node);
     }
