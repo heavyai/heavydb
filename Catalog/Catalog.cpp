@@ -246,6 +246,15 @@ void SysCatalog::init(const std::string& basePath,
     buildUserRoleMap();
     buildObjectDescriptorMap();
   }
+  // check if mapd db catalog is loaded in cat_map
+  // if not, load mapd-cat here
+  if (!Catalog::get(MAPD_SYSTEM_DB) && string_dict_hosts_) {
+    Catalog_Namespace::DBMetadata db_meta;
+    CHECK(getMetadataForDB(MAPD_SYSTEM_DB, db_meta));
+    auto mapd_cat = std::make_shared<Catalog>(
+        basePath_, db_meta, dataMgr_, *string_dict_hosts_, calciteMgr_);
+    Catalog::set(MAPD_SYSTEM_DB, mapd_cat);
+  }
 }
 
 SysCatalog::~SysCatalog() {
