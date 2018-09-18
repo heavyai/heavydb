@@ -1910,8 +1910,112 @@ class OutVecOwner {
  private:
   std::vector<int64_t*> out_vec_;
 };
-
 }  // namespace
+
+class AggregateReductionEgressCore {
+ public:
+  // TODO:  Remove need for this struct -- it's ugly; would prefer direct forwards.
+  // TODO:  Cleanup, once tests pass.
+  struct Parameters {
+    Parameters(int const entry_count,
+               int& error_code,
+               TargetInfo const& agg_info,
+               size_t& out_vec_idx,
+               std::vector<int64_t*>& out_vec,
+               std::vector<int64_t>& reduced_outs,
+               QueryExecutionContext* query_exe_context)
+        : entry_count_param(entry_count)
+        , error_code_param(error_code)
+        , agg_info_param(agg_info)
+        , out_vec_idx_param(out_vec_idx)
+        , out_vec_param(out_vec)
+        , reduced_outs_param(reduced_outs)
+        , query_exe_context_param(query_exe_context) {}
+
+    int const entry_count_param;
+    int& error_code_param;
+    TargetInfo const& agg_info_param;
+    size_t& out_vec_idx_param;
+    std::vector<int64_t*>& out_vec_param;
+    std::vector<int64_t>& reduced_outs_param;
+    QueryExecutionContext* query_exe_context_param;
+  };
+};
+
+template <typename META_TYPE_CLASS>
+class AggregateReductionEgress : public AggregateReductionEgressCore {
+ public:
+  using ReturnType = void;
+
+  // TODO:  Avoid parameter struct indirection and forward directly
+  ReturnType operator()(AggregateReductionEgressCore::Parameters& parameters) {
+    auto const entry_count(parameters.entry_count_param);
+    auto& error_code(parameters.error_code_param);
+    auto& agg_info(parameters.agg_info_param);
+    auto& out_vec(parameters.out_vec_param);
+    auto& reduced_outs(parameters.reduced_outs_param);
+    auto& out_vec_idx(parameters.out_vec_idx_param);
+    auto* query_exe_context(parameters.query_exe_context_param);
+
+    int64_t val1;
+    const bool float_argument_input = takes_float_argument(agg_info);
+    if (is_distinct_target(agg_info)) {
+      CHECK(agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT);
+      val1 = out_vec[out_vec_idx][0];
+      error_code = 0;
+    } else {
+      const auto chosen_bytes = static_cast<size_t>(
+          query_exe_context->query_mem_desc_.getColumnWidth(out_vec_idx).compact);
+      std::tie(val1, error_code) =
+          Executor::reduceResults(agg_info.agg_kind,
+                                  agg_info.sql_type,
+                                  query_exe_context->init_agg_vals_[out_vec_idx],
+                                  float_argument_input ? sizeof(int32_t) : chosen_bytes,
+                                  out_vec[out_vec_idx],
+                                  entry_count,
+                                  false,
+                                  float_argument_input);
+    }
+    if (error_code) {
+      return;
+    }
+    reduced_outs.push_back(val1);
+    if (agg_info.agg_kind == kAVG ||
+        (agg_info.agg_kind == kSAMPLE &&
+         (agg_info.sql_type.is_varlen() || agg_info.sql_type.is_geometry()))) {
+      const auto chosen_bytes = static_cast<size_t>(
+          query_exe_context->query_mem_desc_.getColumnWidth(out_vec_idx + 1).compact);
+      int64_t val2;
+      std::tie(val2, error_code) =
+          Executor::reduceResults(agg_info.agg_kind == kAVG ? kCOUNT : agg_info.agg_kind,
+                                  agg_info.sql_type,
+                                  query_exe_context->init_agg_vals_[out_vec_idx + 1],
+                                  float_argument_input ? sizeof(int32_t) : chosen_bytes,
+                                  out_vec[out_vec_idx + 1],
+                                  entry_count,
+                                  false,
+                                  false);
+      if (error_code) {
+        return;
+      }
+      reduced_outs.push_back(val2);
+      ++out_vec_idx;
+    }
+    ++out_vec_idx;
+  }
+};
+
+// Handles reduction for geo-types
+template <>
+class AggregateReductionEgress<Experimental::MetaTypeClass<Experimental::Geometry>>
+    : public AggregateReductionEgressCore {
+ public:
+  using ReturnType = void;
+
+  ReturnType operator()(AggregateReductionEgressCore::Parameters& parameters) {
+    throw std::runtime_error("Geo reduction path not implemented yet.");
+  }
+};
 
 int32_t Executor::executePlanWithoutGroupBy(
     const RelAlgExecutionUnit& ra_exe_unit,
@@ -2023,53 +2127,25 @@ int32_t Executor::executePlanWithoutGroupBy(
     }
   } else {
     size_t out_vec_idx = 0;
+
     for (const auto target_expr : target_exprs) {
       const auto agg_info = target_info(target_expr);
       CHECK(agg_info.is_agg);
-      int64_t val1;
-      const bool float_argument_input = takes_float_argument(agg_info);
-      if (is_distinct_target(agg_info)) {
-        CHECK(agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT);
-        val1 = out_vec[out_vec_idx][0];
-        error_code = 0;
-      } else {
-        const auto chosen_bytes = static_cast<size_t>(
-            query_exe_context->query_mem_desc_.getColumnWidth(out_vec_idx).compact);
-        std::tie(val1, error_code) =
-            reduceResults(agg_info.agg_kind,
-                          agg_info.sql_type,
-                          query_exe_context->init_agg_vals_[out_vec_idx],
-                          float_argument_input ? sizeof(int32_t) : chosen_bytes,
-                          out_vec[out_vec_idx],
-                          entry_count,
-                          false,
-                          float_argument_input);
-      }
-      if (error_code) {
+
+      auto meta_class(
+          Experimental::GeoMetaTypeClassFactory::getMetaTypeClass(agg_info.sql_type));
+      auto agg_reduction_impl =
+          Experimental::GeoVsNonGeoClassHandler<AggregateReductionEgress>();
+      AggregateReductionEgressCore::Parameters parameters(entry_count,
+                                                          error_code,
+                                                          agg_info,
+                                                          out_vec_idx,
+                                                          out_vec,
+                                                          reduced_outs,
+                                                          query_exe_context);
+      agg_reduction_impl(meta_class, parameters);
+      if (error_code)
         break;
-      }
-      reduced_outs.push_back(val1);
-      if (agg_info.agg_kind == kAVG ||
-          (agg_info.agg_kind == kSAMPLE && agg_info.sql_type.is_varlen())) {
-        const auto chosen_bytes = static_cast<size_t>(
-            query_exe_context->query_mem_desc_.getColumnWidth(out_vec_idx + 1).compact);
-        int64_t val2;
-        std::tie(val2, error_code) =
-            reduceResults(agg_info.agg_kind == kAVG ? kCOUNT : agg_info.agg_kind,
-                          agg_info.sql_type,
-                          query_exe_context->init_agg_vals_[out_vec_idx + 1],
-                          float_argument_input ? sizeof(int32_t) : chosen_bytes,
-                          out_vec[out_vec_idx + 1],
-                          entry_count,
-                          false,
-                          false);
-        if (error_code) {
-          break;
-        }
-        reduced_outs.push_back(val2);
-        ++out_vec_idx;
-      }
-      ++out_vec_idx;
     }
   }
 

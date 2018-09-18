@@ -1065,14 +1065,18 @@ class Executor {
       const uint32_t start_rowid,
       const uint32_t num_tables,
       RenderInfo* render_info);
-  std::pair<int64_t, int32_t> reduceResults(const SQLAgg agg,
-                                            const SQLTypeInfo& ti,
-                                            const int64_t agg_init_val,
-                                            const int8_t out_byte_width,
-                                            const int64_t* out_vec,
-                                            const size_t out_vec_sz,
-                                            const bool is_group_by,
-                                            const bool float_argument_input);
+
+ public:  // Temporary, ask saman about this
+  static std::pair<int64_t, int32_t> reduceResults(const SQLAgg agg,
+                                                   const SQLTypeInfo& ti,
+                                                   const int64_t agg_init_val,
+                                                   const int8_t out_byte_width,
+                                                   const int64_t* out_vec,
+                                                   const size_t out_vec_sz,
+                                                   const bool is_group_by,
+                                                   const bool float_argument_input);
+
+ private:
   static ResultPtr resultsUnion(ExecutionDispatch& execution_dispatch);
   std::vector<int64_t> getJoinHashTablePtrs(const ExecutorDeviceType device_type,
                                             const int device_id);
@@ -1734,6 +1738,9 @@ class Executor {
   friend class QueryRewriter;
   friend class PendingExecutionClosure;
   friend class RelAlgExecutor;
+
+  template <typename META_TYPE_CLASS>
+  friend class AggregateReductionEgress;
 };
 
 inline std::string get_null_check_suffix(const SQLTypeInfo& lhs_ti,

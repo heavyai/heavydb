@@ -222,6 +222,11 @@ class QueryExecutionContext : boost::noncopyable {
   size_t count_distinct_bitmap_mem_bytes_;
 
   friend class Executor;
+
+  // Temporary; Reduction egress needs to become part of executor
+  template <typename META_CLASS_TYPE>
+  friend class AggregateReductionEgress;
+
   friend void copy_group_by_buffers_from_gpu(
       Data_Namespace::DataMgr* data_mgr,
       const QueryExecutionContext* query_exe_context,

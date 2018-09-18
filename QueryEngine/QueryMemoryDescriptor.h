@@ -397,6 +397,9 @@ class QueryMemoryDescriptor {
 
   friend class ResultSet;
   friend class QueryExecutionContext;
+
+  template <typename META_CLASS_TYPE>
+  friend class AggregateReductionEgress;
 };
 
 #endif  // QUERYENGINE_QUERYMEMORYDESCRIPTOR_H
