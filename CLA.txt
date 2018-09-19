@@ -1,7 +1,7 @@
-MAPD TECHNOLOGIES CONTRIBUTOR LICENSE AGREEMENT
+OMNISCI CONTRIBUTOR LICENSE AGREEMENT
 
 This Contributor License Agreement ("Agreement") is between the contributor
-specified below ("you") and MapD Technologies, Inc. ("we" or "us").  This
+specified below ("you") and OmniSci, Inc. ("we" or "us").  This
 Agreement applies to all Contributions (as defined below) submitted by you to
 an open source project owned or managed by us (each, a "Project").
 
