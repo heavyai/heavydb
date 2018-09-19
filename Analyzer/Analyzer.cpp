@@ -341,8 +341,9 @@ SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
         auto new_dimension = left_type.get_dimension() + right_type.get_dimension();
         // If new dimension is over 20 digits, the result may overflow, or it may not.
         // Rely on the runtime overflow detection rather than a static check here.
-        if (common_type.get_dimension() < new_dimension)
+        if (common_type.get_dimension() < new_dimension) {
           common_type.set_dimension(new_dimension);
+        }
         common_type.set_scale(left_type.get_scale() + right_type.get_scale());
       } else if (op == kPLUS || op == kMINUS) {
         // Scale should remain the same but dimension could actually go up
@@ -2152,14 +2153,16 @@ bool OffsetInFragment::operator==(const Expr& rhs) const {
 }
 
 bool ArrayExpr::operator==(Expr const& rhs) const {
-  if (typeid(rhs) != typeid(ArrayExpr))
+  if (typeid(rhs) != typeid(ArrayExpr)) {
     return false;
+  }
   ArrayExpr const& casted_rhs = static_cast<ArrayExpr const&>(rhs);
   for (unsigned i = 0; i < contained_expressions_.size(); i++) {
     auto& lhs_expr = contained_expressions_[i];
     auto& rhs_expr = casted_rhs.contained_expressions_[i];
-    if (!(lhs_expr == rhs_expr))
+    if (!(lhs_expr == rhs_expr)) {
       return false;
+    }
   }
   return true;
 }
@@ -2458,8 +2461,9 @@ void ArrayExpr::print() const {
   auto iter(contained_expressions_.begin());
   while (iter != contained_expressions_.end()) {
     (*iter)->print();
-    if (iter + 1 != contained_expressions_.end())
+    if (iter + 1 != contained_expressions_.end()) {
       std::cout << ", ";
+    }
     iter++;
   }
   std::cout << "]";

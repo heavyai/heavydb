@@ -292,8 +292,9 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
         }
         return t1 - t2;
       case kMULTIPLY: {
-        if (t2_is_zero)
+        if (t2_is_zero) {
           return t2;
+        }
         auto ct1 = t1;
         auto ct2 = t2;
         // Need to keep t2's sign on the left
@@ -496,15 +497,17 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
         }
         case kCAST: {
           // Trying to fold number to number casts only
-          if (!ti.is_number() || !operand_ti.is_number())
+          if (!ti.is_number() || !operand_ti.is_number()) {
             break;
+          }
           // Disallowing folding of FP to DECIMAL casts for now:
           // allowing them would make this test pass:
           //    update dectest set d=cast( 1234.0 as float );
           // which is expected to throw in Update.ImplicitCastToNumericTypes
           // due to cast codegen currently not supporting these casts
-          if (operand_ti.is_fp())
+          if (operand_ti.is_fp()) {
             break;
+          }
           auto operand_copy = const_operand->deep_copy();
           auto cast_operand = operand_copy->add_cast(ti);
           auto const_cast_operand =

@@ -1540,8 +1540,9 @@ std::string SQLType::to_string() const {
   }
   if (is_array) {
     str += "[";
-    if (array_size > 0)
+    if (array_size > 0) {
       str += boost::lexical_cast<std::string>(array_size);
+    }
     str += "]";
   }
   return str;
@@ -2925,11 +2926,13 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         }
 
         // TODO: remove is_geometry below once if null is allowed for geo
-        if (isnull)
+        if (isnull) {
           if (cd->columnType.is_geometry() ||
-              (column_constraint && column_constraint->get_notnull()))
+              (column_constraint && column_constraint->get_notnull())) {
             throw std::runtime_error("Default value required for column" +
                                      cd->columnName + "(NULL not supported)");
+          }
+        }
 
         for (auto it = import_buffers.begin(); it < import_buffers.end(); ++it) {
           auto& import_buffer = *it;
@@ -2944,9 +2947,15 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                 std::vector<int> ring_sizes, poly_rings;
                 int render_group = 0;
                 SQLTypeInfo tinfo;
-                if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
-                        defaultval, tinfo, coords, bounds, ring_sizes, poly_rings, false))
+                if (!Geo_namespace::GeoTypesFactory::getGeoColumns(defaultval,
+                                                                   tinfo,
+                                                                   coords,
+                                                                   bounds,
+                                                                   ring_sizes,
+                                                                   poly_rings,
+                                                                   false)) {
                   throw std::runtime_error("Bad geometry data: '" + defaultval + "'");
+                }
                 size_t col_idx = 1 + std::distance(import_buffers.begin(), it);
                 Importer_NS::Importer::set_geo_physical_import_buffer(catalog,
                                                                       cd,

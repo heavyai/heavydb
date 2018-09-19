@@ -144,12 +144,14 @@ Importer::Importer(Loader* providedLoader, const std::string& f, const CopyParam
   int skip_physical_cols = 0;
   for (auto& p : loader->get_column_descs()) {
     // phy geo columns can't be in input file
-    if (skip_physical_cols-- > 0)
+    if (skip_physical_cols-- > 0) {
       continue;
+    }
     // neither are rowid or $deleted$
     // note: columns can be added after rowid/$deleted$
-    if (p->isVirtualCol || p->isDeletedCol)
+    if (p->isVirtualCol || p->isDeletedCol) {
       continue;
+    }
     skip_physical_cols = p->columnType.get_physical_cols();
     if (p->columnType.get_type() == kARRAY) {
       is_array.get()[i] = true;
@@ -1704,7 +1706,7 @@ static ImportStatus import_thread_delimited(
                   }
                 }
 
-                if (columnIdToRenderGroupAnalyzerMap.size())
+                if (columnIdToRenderGroupAnalyzerMap.size()) {
                   if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
                     if (ring_sizes.size()) {
                       // get a suitable render group for these poly coords
@@ -1717,6 +1719,7 @@ static ImportStatus import_thread_delimited(
                       render_group = -1;
                     }
                   }
+                }
               }
 
               Importer::set_geo_physical_import_buffer(importer->get_catalog(),
@@ -1728,8 +1731,9 @@ static ImportStatus import_thread_delimited(
                                                        ring_sizes,
                                                        poly_rings,
                                                        render_group);
-              for (int i = 0; i < cd->columnType.get_physical_cols(); ++i)
+              for (int i = 0; i < cd->columnType.get_physical_cols(); ++i) {
                 ++cd_it;
+              }
             }
           }
           import_status.rows_completed++;

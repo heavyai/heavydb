@@ -75,8 +75,9 @@ bool alter_common(const string& table,
   if (expect_throw) {
     EXPECT_THROW(run_ddl_statement(alter_query + ";"), E);
     return true;
-  } else
+  } else {
     EXPECT_NO_THROW(run_ddl_statement(alter_query + ";"););
+  }
 
   if (val2 != "") {
     std::string query_str = "SELECT " + column + " FROM " + table;
@@ -84,12 +85,14 @@ bool alter_common(const string& table,
     int r_cnt = 0;
     while (true) {
       auto crt_row = rows->getNextRow(true, true);
-      if (0 == crt_row.size())
+      if (0 == crt_row.size()) {
         break;
+      }
       auto geo = boost::get<std::string>(v<NullableString>(crt_row[0]));
 #if 1
-      if (geo == val2)
+      if (geo == val2) {
         ++r_cnt;
+      }
 #else
       // somehow these do not work as advertised ...
       using namespace Geo_namespace;
@@ -233,7 +236,7 @@ TEST_F(AlterColumnTest, Add_column_with_default) {
 TEST_F(AlterColumnTest, Add_column_with_null) {
   int cid = 0;
   for (const auto& tv : type_vals) {
-    if (std::get<3>(tv) == "")
+    if (std::get<3>(tv) == "") {
       EXPECT_TRUE(alter_common("trips",
                                "x" + std::to_string(++cid),
                                std::get<0>(tv),
@@ -241,7 +244,7 @@ TEST_F(AlterColumnTest, Add_column_with_null) {
                                "",
                                "",
                                false));
-    else
+    } else {
       EXPECT_TRUE(alter_common("trips",
                                "x" + std::to_string(++cid),
                                std::get<0>(tv),
@@ -249,6 +252,7 @@ TEST_F(AlterColumnTest, Add_column_with_null) {
                                "",
                                std::get<3>(tv),
                                true));
+    }
   }
 }
 

@@ -1511,9 +1511,9 @@ SQLException - if a database access error occurs
     dataMap.get("DATA_TYPE").setNull(true); // int => SQL data type from java.sql.Types
     dataMap.get("PRECISION").setNull(true); // int => maximum precision
     dataMap.get("LITERAL_PREFIX").setNull(true); //.setNull(true);// String => prefix used
-                                                 //to quote a literal (may be null)
+                                                 // to quote a literal (may be null)
     dataMap.get("LITERAL_SUFFIX").setNull(true); //.setNull(true);// String => suffix used
-                                                 //to quote a literal (may be null)
+                                                 // to quote a literal (may be null)
     dataMap.get("CREATE_PARAMS")
             .setNull(
                     true); // String => parameters used in creating the type (may be null)

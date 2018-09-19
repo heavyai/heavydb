@@ -3173,9 +3173,11 @@ void Catalog::roll(const bool forward) {
       }
       if (ncd) {
         // append columnId if its new and not phy geo
-        if (vc.end() == std::find(vc.begin(), vc.end(), ncd->columnId))
-          if (!ncd->isGeoPhyCol)
+        if (vc.end() == std::find(vc.begin(), vc.end(), ncd->columnId)) {
+          if (!ncd->isGeoPhyCol) {
             vc.push_back(ncd->columnId);
+          }
+        }
       }
       tds.insert(td);
     } else {
@@ -3351,8 +3353,9 @@ void Catalog::createTable(
     }
     columns.push_back(cd);
     toplevel_column_names.insert(cd.columnName);
-    if (cd.columnType.is_geometry())
+    if (cd.columnType.is_geometry()) {
       expandGeoColumn(cd, columns);
+    }
   }
 
   ColumnDescriptor cd;
@@ -3428,8 +3431,9 @@ void Catalog::createTable(
           if (colId > 1) {
             colId += g_test_against_columnId_gap;
           }
-          if (!cd.isGeoPhyCol)
+          if (!cd.isGeoPhyCol) {
             td.columnIdBySpi_.push_back(colId);
+          }
         }
 
         sqliteConnector_.query_with_text_params(

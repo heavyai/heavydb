@@ -281,7 +281,7 @@ public class LogRunner {
         // get_result_row_for_pixel
         // :5pFFQUCKs17GLHOqI7ykK09U8mX7GnLF:widget_id:3:pixel.x:396:pixel.y:53:column_format:1
         //:PixelRadius:2:table_col_names::points,dest,conv_4326_900913_x(dest_lon) as
-        //x,conv_4326_900913_y(dest_lat) as y,arrdelay as size
+        // x,conv_4326_900913_y(dest_lat) as y,arrdelay as size
         if (det.contains("get_result_row_for_pixel :")) {
           logger.info("det " + det);
           String ss[] = det.split(":");

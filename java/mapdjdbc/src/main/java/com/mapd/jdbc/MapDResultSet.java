@@ -51,7 +51,7 @@ import org.slf4j.LoggerFactory;
 // Useful debug string
 // System.out.println("Entered " + " line:" + new
 // Throwable().getStackTrace()[0].getLineNumber() + " class:" + new
-//Throwable().getStackTrace()[0].getClassName() + " method:" + new
+// Throwable().getStackTrace()[0].getClassName() + " method:" + new
 // Throwable().getStackTrace()[0].getMethodName());
 class MapDResultSet implements java.sql.ResultSet {
   final static Logger logger = LoggerFactory.getLogger(MapDResultSet.class);
