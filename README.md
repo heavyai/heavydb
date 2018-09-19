@@ -30,8 +30,6 @@ This project is licensed under the [Apache License, Version 2.0](https://www.apa
 
 The repository includes a number of third party packages provided under separate licenses. Details about these packages and their respective licenses is at [ThirdParty/licenses/index.md](ThirdParty/licenses/index.md).
 
-The standard build process for this project downloads the Community Edition of the MapD Immerse visual analytics client. This version of MapD Immerse is governed by a separate license agreement, included in the file `EULA-CE.txt`, and may only be used for non-commercial purposes.
-
 # Contributing
 
 In order to clarify the intellectual property license granted with Contributions from any person or entity, MapD must have a Contributor License Agreement ("CLA") on file that has been signed by each Contributor, indicating agreement to the [Contributor License Agreement](CLA.txt). After making a pull request, a bot will notify you if a signed CLA is required and provide instructions for how to sign it. Please read the agreement carefully before signing and keep a copy for your records.
@@ -51,7 +49,6 @@ The following `cmake`/`ccmake` options can enable/disable different features:
 
 - `-DCMAKE_BUILD_TYPE=release` build type and compiler options to use. Options: `Debug`, `Release`, `RelWithDebInfo`, `MinSizeRel`, and unset.
 - `-DENABLE_CUDA=off` disable CUDA. Default `on`.
-- `-DMAPD_IMMERSE_DOWNLOAD=on` download the latest master build of Immerse / `mapd2-frontend`. Default `on`.
 - `-DMAPD_DOCS_DOWNLOAD=on` download the latest master build of the documentation / `docs.mapd.com`. Default `off`. Note: this is a >50MB download.
 - `-DPREFER_STATIC_LIBS=on` static link dependencies, if available. Default `off`.
 - `-DENABLE_AWS_S3=on` enable AWS S3 support, if available. Default `on`.

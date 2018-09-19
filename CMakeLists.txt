@@ -523,7 +523,7 @@ set_dpkg_arch(${CMAKE_SYSTEM_PROCESSOR} CPACK_DEBIAN_PACKAGE_ARCHITECTURE)
 install(DIRECTORY ThirdParty/licenses DESTINATION "ThirdParty/")
 
 # Frontend
-option(MAPD_IMMERSE_DOWNLOAD "Download MapD Immerse for packaging" ON)
+option(MAPD_IMMERSE_DOWNLOAD "Download MapD Immerse for packaging" OFF)
 set(MAPD_IMMERSE_URL ${MAPD_IMMERSE_URL} CACHE STRING "URL to bundled frontend")
 if(MAPD_IMMERSE_DOWNLOAD)
   include(ExternalProject)
