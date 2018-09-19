@@ -9555,6 +9555,44 @@ TEST(Select, GeoSpatial_Projection) {
     compare_geo_target(
         run_simple_agg("SELECT mpoly FROM geospatial_test WHERE id = 1;", dt),
         GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1}));
+
+    // Sample() version of above
+    SKIP_ON_AGGREGATOR(
+        compare_geo_target(
+            run_simple_agg("SELECT SAMPLE(p) FROM geospatial_test WHERE id = 1;", dt),
+            GeoPointTargetValue({1., 1.}));
+        compare_geo_target(
+            run_simple_agg("SELECT SAMPLE(l) FROM geospatial_test WHERE id = 1;", dt),
+            GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.}));
+        compare_geo_target(
+            run_simple_agg("SELECT SAMPLE(poly) FROM geospatial_test WHERE id = 1;", dt),
+            GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}));
+        compare_geo_target(
+            run_simple_agg("SELECT SAMPLE(mpoly) FROM geospatial_test WHERE id = 1;", dt),
+            GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1}));
+
+        // Sample() version of above with GROUP BY
+        compare_geo_target(
+            run_simple_agg(
+                "SELECT SAMPLE(p) FROM geospatial_test WHERE id = 1 GROUP BY id;", dt),
+            GeoPointTargetValue({1., 1.}));
+        compare_geo_target(
+            run_simple_agg(
+                "SELECT SAMPLE(l) FROM geospatial_test WHERE id = 1 GROUP BY id;", dt),
+            GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.}));
+
+        compare_geo_target(
+            run_simple_agg(
+                "SELECT SAMPLE(poly) FROM geospatial_test WHERE id = 1 GROUP BY id;", dt),
+            GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}));
+        compare_geo_target(
+            run_simple_agg(
+                "SELECT SAMPLE(mpoly) FROM geospatial_test WHERE id = 1 GROUP BY id;",
+                dt),
+            GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1}));
+
+    );
+
     ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "

@@ -63,7 +63,8 @@ enum SQLTypes {
   kTINYINT = 22,
   kGEOMETRY = 23,
   kGEOGRAPHY = 24,
-  kSQLTYPE_LAST = 25
+  kEVAL_CONTEXT_TYPE = 25,  // Placeholder Type for ANY
+  kSQLTYPE_LAST = 26
 };
 
 struct VarlenDatum {

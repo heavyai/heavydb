@@ -1261,7 +1261,11 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
       entry.push_back(inline_null_val(agg_info.agg_arg_type, float_argument_input));
       entry.push_back(0);
     } else if (agg_info.agg_kind == kSAMPLE) {
-      if (agg_info.sql_type.is_varlen()) {
+      if (agg_info.sql_type.is_geometry()) {
+        for (int i = 0; i < agg_info.sql_type.get_physical_coord_cols() * 2; i++) {
+          entry.push_back(0);
+        }
+      } else if (agg_info.sql_type.is_varlen()) {
         entry.push_back(0);
         entry.push_back(0);
       } else {
@@ -2013,7 +2017,33 @@ class AggregateReductionEgress<Experimental::MetaTypeClass<Experimental::Geometr
   using ReturnType = void;
 
   ReturnType operator()(AggregateReductionEgressCore::Parameters& parameters) {
-    throw std::runtime_error("Geo reduction path not implemented yet.");
+    auto const entry_count(parameters.entry_count_param);
+    auto& error_code(parameters.error_code_param);
+    auto& agg_info(parameters.agg_info_param);
+    auto& out_vec(parameters.out_vec_param);
+    auto& reduced_outs(parameters.reduced_outs_param);
+    auto& out_vec_idx(parameters.out_vec_idx_param);
+    auto* query_exe_context(parameters.query_exe_context_param);
+
+    for (int i = 0; i < agg_info.sql_type.get_physical_coord_cols() * 2; i++) {
+      int64_t val1;
+      const auto chosen_bytes = static_cast<size_t>(
+          query_exe_context->query_mem_desc_.getColumnWidth(out_vec_idx).compact);
+      std::tie(val1, error_code) =
+          Executor::reduceResults(agg_info.agg_kind,
+                                  agg_info.sql_type,
+                                  query_exe_context->init_agg_vals_[out_vec_idx],
+                                  chosen_bytes,
+                                  out_vec[out_vec_idx],
+                                  entry_count,
+                                  false,
+                                  false);
+      if (error_code) {
+        return;
+      }
+      reduced_outs.push_back(val1);
+      out_vec_idx++;
+    }
   }
 };
 

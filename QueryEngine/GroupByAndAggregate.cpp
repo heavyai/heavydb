@@ -606,6 +606,8 @@ int32_t get_agg_count(const std::vector<Analyzer::Expr*>& target_exprs) {
       // TODO(pavan): or if is_geometry()
       if (ti.is_array() || (ti.is_string() && ti.get_compression() == kENCODING_NONE)) {
         agg_count += 2;
+      } else if (ti.is_geometry()) {
+        agg_count += ti.get_physical_coord_cols() * 2;
       } else {
         ++agg_count;
       }
@@ -2080,10 +2082,7 @@ bool GroupByAndAggregate::codegenAggCalls(
       }
     } else {
       if (agg_has_geo) {
-        if (agg_info.is_agg) {
-          CHECK_EQ(static_cast<size_t>(agg_info.agg_arg_type.get_physical_coord_cols()),
-                   target_lvs.size());
-        } else {
+        if (!agg_info.is_agg) {
           CHECK_EQ(static_cast<size_t>(2 * agg_info.sql_type.get_physical_coord_cols()),
                    target_lvs.size());
           CHECK_EQ(agg_fn_names.size(), target_lvs.size());
@@ -2504,32 +2503,45 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
     }
     if (target_ti.is_geometry() &&
         !executor_->plan_state_->isLazyFetchColumn(target_expr)) {
-      const auto target_lvs =
-          executor_->codegen(target_expr, !executor_->plan_state_->allow_lazy_fetch_, co);
-      CHECK_EQ(target_ti.get_physical_coord_cols(), target_lvs.size());
-      CHECK(!agg_expr);
-      const auto i32_ty = get_int_type(32, executor_->cgen_state_->context_);
-      const auto i8p_ty =
-          llvm::PointerType::get(get_int_type(8, executor_->cgen_state_->context_), 0);
-      std::vector<llvm::Value*> coords;
-      size_t ctr = 0;
-      for (const auto& target_lv : target_lvs) {
-        // TODO(adb): consider adding a utility to sqltypes so we can get the types of
-        // the physical coords cols based on the sqltype (e.g. TINYINT for col 0, INT
-        // for col 1 for pols / mpolys, etc). Hardcoding for now. first array is the
-        // coords array (TINYINT). Subsequent arrays are regular INT.
-        const size_t elem_sz = ctr == 0 ? 1 : 4;
-        ctr++;
-        coords.push_back(executor_->cgen_state_->emitExternalCall(
-            "array_buff", i8p_ty, {target_lv, executor_->posArg(target_expr)}));
-        coords.push_back(executor_->cgen_state_->emitExternalCall(
-            "array_size",
-            i32_ty,
-            {target_lv,
-             executor_->posArg(target_expr),
-             executor_->ll_int(log2_bytes(elem_sz))}));
+      auto generate_coord_lvs = [&](auto* selected_target_expr,
+                                    bool const fetch_columns) -> LLVMValueVector {
+        const auto target_lvs =
+            executor_->codegen(selected_target_expr, fetch_columns, co);
+        CHECK_EQ(target_ti.get_physical_coord_cols(), target_lvs.size());
+
+        const auto i32_ty = get_int_type(32, executor_->cgen_state_->context_);
+        const auto i8p_ty =
+            llvm::PointerType::get(get_int_type(8, executor_->cgen_state_->context_), 0);
+        std::vector<llvm::Value*> coords;
+        size_t ctr = 0;
+        for (const auto& target_lv : target_lvs) {
+          // TODO(adb): consider adding a utility to sqltypes so we can get the types of
+          // the physical coords cols based on the sqltype (e.g. TINYINT for col 0, INT
+          // for col 1 for pols / mpolys, etc). Hardcoding for now. first array is the
+          // coords array (TINYINT). Subsequent arrays are regular INT.
+
+          const size_t elem_sz = ctr == 0 ? 1 : 4;
+          ctr++;
+          coords.push_back(executor_->cgen_state_->emitExternalCall(
+              "array_buff",
+              i8p_ty,
+              {target_lv, executor_->posArg(selected_target_expr)}));
+          coords.push_back(executor_->cgen_state_->emitExternalCall(
+              "array_size",
+              i32_ty,
+              {target_lv,
+               executor_->posArg(selected_target_expr),
+               executor_->ll_int(log2_bytes(elem_sz))}));
+        }
+        return coords;
+      };
+
+      if (agg_expr) {
+        return generate_coord_lvs(agg_expr->get_arg(), true);
+      } else {
+        return generate_coord_lvs(target_expr,
+                                  !executor_->plan_state_->allow_lazy_fetch_);
       }
-      return coords;
     }
   }
   return agg_expr ? executor_->codegen(agg_expr->get_arg(), true, co)

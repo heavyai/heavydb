@@ -299,6 +299,8 @@ class UpdateLogForFragment {
   std::shared_ptr<ResultSet> rs_;
 };
 
+using LLVMValueVector = std::vector<llvm::Value*>;
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");

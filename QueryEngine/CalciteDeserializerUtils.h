@@ -167,6 +167,10 @@ inline SQLTypes to_sql_type(const std::string& type_name) {
       type_name == std::string("INTERVAL_YEAR")) {
     return kINTERVAL_YEAR_MONTH;
   }
+  if (type_name == std::string("ANY")) {
+    return kEVAL_CONTEXT_TYPE;
+  }
+
   throw std::runtime_error("Unsupported type: " + type_name);
 }
 

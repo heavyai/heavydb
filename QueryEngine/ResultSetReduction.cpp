@@ -39,6 +39,18 @@ extern bool g_enable_dynamic_watchdog;
 
 namespace {
 
+inline bool const is_permissable_sample_agg(TargetInfo const& agg_info) {
+  if (agg_info.agg_kind == kSAMPLE) {
+    if (agg_info.sql_type.is_varlen()) {
+      return true;
+    }
+    if (agg_info.sql_type.is_geometry()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool use_multithreaded_reduction(const size_t entry_count) {
   return entry_count > 100000;
 }
@@ -268,8 +280,7 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(int8_t* this_buff,
       int8_t* this_ptr2{nullptr};
       const int8_t* that_ptr2{nullptr};
       if (agg_info.is_agg &&
-          (agg_info.agg_kind == kAVG ||
-           (agg_info.agg_kind == kSAMPLE && agg_info.sql_type.is_varlen()))) {
+          (agg_info.agg_kind == kAVG || (is_permissable_sample_agg(agg_info)))) {
         this_ptr2 = this_next_col_ptr +
                     entry_idx * query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact;
         that_ptr2 = that_next_col_ptr +
@@ -342,8 +353,7 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
     int8_t* this_ptr2{nullptr};
     const int8_t* that_ptr2{nullptr};
     if (target_info.is_agg &&
-        (target_info.agg_kind == kAVG ||
-         (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()))) {
+        (target_info.agg_kind == kAVG || is_permissable_sample_agg(target_info))) {
       this_ptr2 =
           this_targets_ptr + query_mem_desc_.getColumnWidth(target_slot_idx).compact;
       that_ptr2 =
@@ -671,8 +681,7 @@ void ResultSetStorage::reduceOneSlotBaseline(int64_t* this_buff,
   int8_t* this_ptr2{nullptr};
   const int8_t* that_ptr2{nullptr};
   if (target_info.is_agg &&
-      (target_info.agg_kind == kAVG ||
-       (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()))) {
+      (target_info.agg_kind == kAVG || is_permissable_sample_agg(target_info))) {
     const auto this_count_off =
         query_mem_desc_.didOutputColumnar() ? query_mem_desc_.getEntryCount() : 1;
     const auto that_count_off =
@@ -1132,7 +1141,7 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
         if (rhs_proj_col != init_val) {
           *reinterpret_cast<int64_t*>(this_ptr1) = rhs_proj_col;
         }
-        if (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()) {
+        if (is_permissable_sample_agg(target_info)) {
           CHECK(this_ptr2 && that_ptr2);
           *reinterpret_cast<int64_t*>(this_ptr2) =
               *reinterpret_cast<const int64_t*>(that_ptr2);

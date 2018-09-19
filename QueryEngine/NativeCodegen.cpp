@@ -899,7 +899,7 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
       }
       if (target_type_info.is_geometry()) {
         result.push_back("agg_id");
-        for (auto i = 1; i < 2 * target_type_info.get_physical_coord_cols(); ++i) {
+        for (auto i = 2; i < 2 * target_type_info.get_physical_coord_cols(); ++i) {
           result.push_back("agg_id");
         }
       }
