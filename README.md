@@ -30,8 +30,6 @@ This project is licensed under the [Apache License, Version 2.0](https://www.apa
 
 The repository includes a number of third party packages provided under separate licenses. Details about these packages and their respective licenses is at [ThirdParty/licenses/index.md](ThirdParty/licenses/index.md).
 
-The standard build process for this project downloads the Community Edition of the MapD Immerse visual analytics client. This version of MapD Immerse is governed by a separate license agreement, included in the file `EULA-CE.txt`, and may only be used for non-commercial purposes.
-
 # Contributing
 
 In order to clarify the intellectual property license granted with Contributions from any person or entity, MapD must have a Contributor License Agreement ("CLA") on file that has been signed by each Contributor, indicating agreement to the [Contributor License Agreement](CLA.txt). After making a pull request, a bot will notify you if a signed CLA is required and provide instructions for how to sign it. Please read the agreement carefully before signing and keep a copy for your records.
@@ -70,7 +68,6 @@ The following `cmake`/`ccmake` options can enable/disable different features:
 - `-DENALBE_JAVA_REMOTE_DEBUG=on` - Enable Java Remote Debug. Default is `off`.
 - `-DMAPD_DOCS_DOWNLOAD=on` - Download the latest master build of the documentation / `docs.mapd.com`. Default is `off`.
                               **Note:** this is a >50MB download.
-- `-DMAPD_IMMERSE_DOWNLOAD=on` - Download the latest master build of Immerse / `mapd2-frontend`. Default is `on`.
 - `-DPREFER_STATIC_LIBS=off` - Static link dependencies, if available. Default is `off`.
 
 # Testing

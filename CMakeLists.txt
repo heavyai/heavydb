@@ -34,7 +34,7 @@ set(MAPD_VERSION_MINOR "2")
 set(MAPD_VERSION_PATCH "0")
 set(MAPD_VERSION_EXTRA "dev")
 set(MAPD_VERSION_RAW "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}${MAPD_VERSION_EXTRA}")
-set(MAPD_IMMERSE_URL "http://builds.mapd.com/frontend/immerse-v2-latest-master-prod.zip")
+set(MAPD_IMMERSE_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v2-137-release-prod.zip")
 set(MAPD_DOCS_URL "http://docs.builds.mapd.com/master/docs-master.zip")
 string(TIMESTAMP MAPD_BUILD_DATE "%Y%m%d")
 
@@ -534,7 +534,7 @@ set_dpkg_arch(${CMAKE_SYSTEM_PROCESSOR} CPACK_DEBIAN_PACKAGE_ARCHITECTURE)
 install(DIRECTORY ThirdParty/licenses DESTINATION "ThirdParty/")
 
 # Frontend
-option(MAPD_IMMERSE_DOWNLOAD "Download MapD Immerse for packaging" ON)
+option(MAPD_IMMERSE_DOWNLOAD "Download MapD Immerse for packaging" OFF)
 set(MAPD_IMMERSE_URL ${MAPD_IMMERSE_URL} CACHE STRING "URL to bundled frontend")
 if(MAPD_IMMERSE_DOWNLOAD)
   include(ExternalProject)
