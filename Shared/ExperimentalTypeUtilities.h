@@ -16,10 +16,12 @@
 
 #ifndef EXPERIMENTALTYPEUTILITIES_H
 #define EXPERIMENTALTYPEUTILITIES_H
+#ifndef __CUDACC__
 
 #include <boost/optional.hpp>
 #include <iostream>
 #include <tuple>
+#include <utility>
 
 namespace Experimental {
 
@@ -63,7 +65,7 @@ struct MetaTypeClass {
 };
 
 template <typename T>
-using MetaTypeOptional = boost::optional<T>;
+using MetaTypeOptional = boost::optional<T>;  // Switch after C++17
 
 using UncapturedMetaTypeOptional = MetaTypeOptional<UncapturedMetaType>;
 using UncapturedMetaTypeClassOptional = MetaTypeOptional<UncapturedMetaTypeClass>;
@@ -168,29 +170,47 @@ class MetaTypeClassHandler {
   using TypeList = std::tuple<MetaTypeClass<HANDLED_TYPE_CLASSES_PACK>...>;
   static constexpr std::size_t handled_type_count = sizeof...(HANDLED_TYPE_CLASSES_PACK);
 
-  // Quick fix until I get perfect argument forwarding working
-  template <typename META_TYPE_CLASS, typename ARG_PACKAGING>
-  void operator()(META_TYPE_CLASS& meta_type_class, ARG_PACKAGING& arg_packaging) {
-    handleMetaTypeClass<META_TYPE_CLASS, ARG_PACKAGING, HANDLED_TYPE_CLASSES_PACK...>(
-        meta_type_class, arg_packaging);
+  template <typename META_TYPE_CLASS, typename... ARG_PACK>
+  void operator()(META_TYPE_CLASS& meta_type_class, ARG_PACK&&... args) {
+    using ArgumentPackaging = decltype(std::forward_as_tuple(args...));
+    handleMetaTypeClass<META_TYPE_CLASS, ArgumentPackaging, HANDLED_TYPE_CLASSES_PACK...>(
+        meta_type_class, std::forward_as_tuple(args...));
   }
 
  private:
+  // Needed until C++17; then we can just use std::apply()
+  // Use a back-channel to retrieve the return value for now
+  template <class FUNCTION_TYPE, class TUPLE_TYPE, std::size_t... I>
+  void internalApplyImpl(FUNCTION_TYPE&& f, TUPLE_TYPE&& t, std::index_sequence<I...>) {
+    f(std::get<I>(std::forward<TUPLE_TYPE>(t))...);
+  }
+
+  // Needed until C++17; then we can just use std::apply()
+  // Use a back-channel to retrieve the return value for now
+  template <class FUNCTION_TYPE, class TUPLE_TYPE>
+  void internalApply(FUNCTION_TYPE&& f, TUPLE_TYPE&& t) {
+    internalApplyImpl(std::forward<FUNCTION_TYPE>(f),
+                      std::forward<TUPLE_TYPE>(t),
+                      std::make_index_sequence<
+                          std::tuple_size<std::remove_reference_t<TUPLE_TYPE>>::value>{});
+  }
+
   template <typename META_TYPE_CLASS,
             typename ARG_PACKAGING,
             MetaTypeClassifications HANDLED_TYPE>
   void handleMetaTypeClass(META_TYPE_CLASS& meta_type_class,
-                           ARG_PACKAGING& arg_packaging) {
+                           ARG_PACKAGING&& arg_packaging) {
     using InspectionClass = MetaTypeClass<HANDLED_TYPE>;
     using CastAssistClass =
         CapturedMetaTypeClassOptional<InspectionClass::sql_type_class>;
 
     auto& lhs_ref = static_cast<CastAssistClass&>(meta_type_class);
     if (!lhs_ref) {
-      META_TYPE_CLASS_HANDLER<UncapturedMetaTypeClassOptional>()(arg_packaging);
+      internalApply(META_TYPE_CLASS_HANDLER<UncapturedMetaTypeClassOptional>(),
+                    arg_packaging);
       return;
     }
-    META_TYPE_CLASS_HANDLER<InspectionClass>()(arg_packaging);
+    internalApply(META_TYPE_CLASS_HANDLER<InspectionClass>(), arg_packaging);
   }
 
   template <typename META_TYPE_CLASS,
@@ -199,7 +219,7 @@ class MetaTypeClassHandler {
             MetaTypeClassifications SECOND_HANDLED_TYPE,
             MetaTypeClassifications... REMAINING_TYPES>
   void handleMetaTypeClass(META_TYPE_CLASS& meta_type_class,
-                           ARG_PACKAGING& arg_packaging) {
+                           ARG_PACKAGING&& arg_packaging) {
     using InspectionClass = MetaTypeClass<FIRST_HANDLED_TYPE>;
     using CastAssistClass =
         CapturedMetaTypeClassOptional<InspectionClass::sql_type_class>;
@@ -212,7 +232,7 @@ class MetaTypeClassHandler {
                           REMAINING_TYPES...>(arg_packaging);
       return;
     }
-    META_TYPE_CLASS_HANDLER<InspectionClass>()(arg_packaging);
+    internalApply(META_TYPE_CLASS_HANDLER<InspectionClass>(), arg_packaging);
   }
 };
 
@@ -251,4 +271,5 @@ using GeoVsNonGeoClassHandler = MetaTypeClassHandler<META_TYPE_CLASS_HANDLER, Ge
 
 }  // namespace Experimental
 
+#endif
 #endif
