@@ -24,8 +24,7 @@ namespace {
 llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type,
                                       llvm::LLVMContext& ctx) {
   switch (ext_arg_type) {
-    case ExtArgumentType::Bool:
-      return get_int_type(1, ctx);
+    case ExtArgumentType::Bool:  // pass thru to Int8
     case ExtArgumentType::Int8:
       return get_int_type(8, ctx);
     case ExtArgumentType::Int16:
@@ -80,9 +79,7 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
       ret_ti.is_fp()
           ? (ret_ti.get_type() == kDOUBLE ? llvm::Type::getDoubleTy(cgen_state_->context_)
                                           : llvm::Type::getFloatTy(cgen_state_->context_))
-          : (ret_ti.is_boolean()
-                 ? llvm::Type::getInt1Ty(cgen_state_->context_)
-                 : get_int_type(ret_ti.get_logical_size() * 8, cgen_state_->context_));
+          : get_int_type(ret_ti.get_logical_size() * 8, cgen_state_->context_);
   if (ret_ty != ext_arg_type_to_llvm_type(ext_func_sig.getRet(), cgen_state_->context_)) {
     throw std::runtime_error("Inconsistent return type for " + function_oper->getName());
   }

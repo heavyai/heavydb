@@ -95,7 +95,7 @@ namespace {
 
 ExtArgumentType deserialize_type(const std::string& type_name) {
   if (type_name == "bool" || type_name == "i1") {
-    return ExtArgumentType::Bool;
+    return ExtArgumentType::Int8;  // need to handle the possibility of nulls
   }
   if (type_name == "i8") {
     return ExtArgumentType::Int8;
