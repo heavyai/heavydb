@@ -1916,51 +1916,19 @@ class OutVecOwner {
 };
 }  // namespace
 
-class AggregateReductionEgressCore {
- public:
-  // TODO:  Remove need for this struct -- it's ugly; would prefer direct forwards.
-  // TODO:  Cleanup, once tests pass.
-  struct Parameters {
-    Parameters(int const entry_count,
-               int& error_code,
-               TargetInfo const& agg_info,
-               size_t& out_vec_idx,
-               std::vector<int64_t*>& out_vec,
-               std::vector<int64_t>& reduced_outs,
-               QueryExecutionContext* query_exe_context)
-        : entry_count_param(entry_count)
-        , error_code_param(error_code)
-        , agg_info_param(agg_info)
-        , out_vec_idx_param(out_vec_idx)
-        , out_vec_param(out_vec)
-        , reduced_outs_param(reduced_outs)
-        , query_exe_context_param(query_exe_context) {}
-
-    int const entry_count_param;
-    int& error_code_param;
-    TargetInfo const& agg_info_param;
-    size_t& out_vec_idx_param;
-    std::vector<int64_t*>& out_vec_param;
-    std::vector<int64_t>& reduced_outs_param;
-    QueryExecutionContext* query_exe_context_param;
-  };
-};
-
 template <typename META_TYPE_CLASS>
-class AggregateReductionEgress : public AggregateReductionEgressCore {
+class AggregateReductionEgress {
  public:
   using ReturnType = void;
 
   // TODO:  Avoid parameter struct indirection and forward directly
-  ReturnType operator()(AggregateReductionEgressCore::Parameters& parameters) {
-    auto const entry_count(parameters.entry_count_param);
-    auto& error_code(parameters.error_code_param);
-    auto& agg_info(parameters.agg_info_param);
-    auto& out_vec(parameters.out_vec_param);
-    auto& reduced_outs(parameters.reduced_outs_param);
-    auto& out_vec_idx(parameters.out_vec_idx_param);
-    auto* query_exe_context(parameters.query_exe_context_param);
-
+  ReturnType operator()(int const entry_count,
+                        int& error_code,
+                        TargetInfo const& agg_info,
+                        size_t& out_vec_idx,
+                        std::vector<int64_t*>& out_vec,
+                        std::vector<int64_t>& reduced_outs,
+                        QueryExecutionContext* query_exe_context) {
     int64_t val1;
     const bool float_argument_input = takes_float_argument(agg_info);
     if (is_distinct_target(agg_info)) {
@@ -2011,20 +1979,17 @@ class AggregateReductionEgress : public AggregateReductionEgressCore {
 
 // Handles reduction for geo-types
 template <>
-class AggregateReductionEgress<Experimental::MetaTypeClass<Experimental::Geometry>>
-    : public AggregateReductionEgressCore {
+class AggregateReductionEgress<Experimental::MetaTypeClass<Experimental::Geometry>> {
  public:
   using ReturnType = void;
 
-  ReturnType operator()(AggregateReductionEgressCore::Parameters& parameters) {
-    auto const entry_count(parameters.entry_count_param);
-    auto& error_code(parameters.error_code_param);
-    auto& agg_info(parameters.agg_info_param);
-    auto& out_vec(parameters.out_vec_param);
-    auto& reduced_outs(parameters.reduced_outs_param);
-    auto& out_vec_idx(parameters.out_vec_idx_param);
-    auto* query_exe_context(parameters.query_exe_context_param);
-
+  ReturnType operator()(int const entry_count,
+                        int& error_code,
+                        TargetInfo const& agg_info,
+                        size_t& out_vec_idx,
+                        std::vector<int64_t*>& out_vec,
+                        std::vector<int64_t>& reduced_outs,
+                        QueryExecutionContext* query_exe_context) {
     for (int i = 0; i < agg_info.sql_type.get_physical_coord_cols() * 2; i++) {
       int64_t val1;
       const auto chosen_bytes = static_cast<size_t>(
@@ -2166,14 +2131,14 @@ int32_t Executor::executePlanWithoutGroupBy(
           Experimental::GeoMetaTypeClassFactory::getMetaTypeClass(agg_info.sql_type));
       auto agg_reduction_impl =
           Experimental::GeoVsNonGeoClassHandler<AggregateReductionEgress>();
-      AggregateReductionEgressCore::Parameters parameters(entry_count,
-                                                          error_code,
-                                                          agg_info,
-                                                          out_vec_idx,
-                                                          out_vec,
-                                                          reduced_outs,
-                                                          query_exe_context);
-      agg_reduction_impl(meta_class, parameters);
+      agg_reduction_impl(meta_class,
+                         entry_count,
+                         error_code,
+                         agg_info,
+                         out_vec_idx,
+                         out_vec,
+                         reduced_outs,
+                         query_exe_context);
       if (error_code)
         break;
     }
