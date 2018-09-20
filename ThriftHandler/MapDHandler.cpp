@@ -1163,13 +1163,13 @@ void MapDHandler::get_db_objects_for_grantee(std::vector<TDBObject>& TDBObjectsF
   auto session = get_session(sessionId);
   auto user = session.get_currentUser();
   if (!user.isSuper &&
-      !SysCatalog::instance().isRoleGrantedToGrantee(user.userName, roleName, true)) {
+      !SysCatalog::instance().isRoleGrantedToGrantee(user.userName, roleName, false)) {
     return;
   }
   auto* rl = SysCatalog::instance().getGrantee(roleName);
   if (rl) {
     auto dbId = session.get_catalog().get_currentDB().dbId;
-    for (auto& dbObject : *rl->getDbObjects(false)) {
+    for (auto& dbObject : *rl->getDbObjects(true)) {
       if (dbObject.first.dbId != dbId) {
         // TODO (max): it doesn't scale well in case we have many DBs (not a typical
         // usecase for now, though)
@@ -1248,12 +1248,12 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
   for (const auto& role : roles) {
     DBObject* object_found;
     auto* rl = SysCatalog::instance().getRoleGrantee(role);
-    if (rl && (object_found = rl->findDbObject(object_to_find.getObjectKey(), false))) {
+    if (rl && (object_found = rl->findDbObject(object_to_find.getObjectKey(), true))) {
       TDBObjects.push_back(serialize_db_object(role, *object_found));
     }
     // check object permissions on Database level
     if (rl &&
-        (object_found = rl->findDbObject(object_to_find_dblevel.getObjectKey(), false))) {
+        (object_found = rl->findDbObject(object_to_find_dblevel.getObjectKey(), true))) {
       TDBObjects.push_back(serialize_db_object(role, *object_found));
     }
   }
@@ -1261,14 +1261,14 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
 
 void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
                                          const TSessionId& sessionId,
-                                         const std::string& userName) {
+                                         const std::string& granteeName) {
   auto session = get_session(sessionId);
-  auto* grantee = SysCatalog::instance().getGrantee(userName);
+  auto* grantee = SysCatalog::instance().getGrantee(granteeName);
   if (grantee) {
     if (session.get_currentUser().isSuper) {
       roles = grantee->getRoles();
     } else if (grantee->isUser()) {
-      if (session.get_currentUser().userName == userName) {
+      if (session.get_currentUser().userName == granteeName) {
         roles = grantee->getRoles();
       } else {
         THROW_MAPD_EXCEPTION(
@@ -1276,15 +1276,18 @@ void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
             "user.");
       }
     } else {
+      CHECK(!grantee->isUser());
+      // granteeName is actually a roleName here and we can check a role
+      // only if it is granted to us
       if (SysCatalog::instance().isRoleGrantedToGrantee(
-              session.get_currentUser().userName, userName, true)) {
+              session.get_currentUser().userName, granteeName, false)) {
         roles = grantee->getRoles();
       } else {
         THROW_MAPD_EXCEPTION("A user can check only roles granted to him.");
       }
     }
   } else {
-    THROW_MAPD_EXCEPTION("Grantee " + userName + " does not exist.");
+    THROW_MAPD_EXCEPTION("Grantee " + granteeName + " does not exist.");
   }
 }
 

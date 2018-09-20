@@ -318,12 +318,12 @@ TEST(UserRoles, RoleHierarchies) {
   // hr prefix here stands for hierarchical roles
 
   // create objects
-  EXPECT_NO_THROW(run_ddl_statement("CREATE USER hr_u1 (password = 'u1');"));
-  EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE hr_r1;"));
-  EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE hr_r2;"));
-  EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE hr_r3;"));
-  EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE hr_r4;"));
-  EXPECT_NO_THROW(run_ddl_statement("CREATE TABLE hr_tbl1 (i INTEGER);"));
+  run_ddl_statement("CREATE USER hr_u1 (password = 'u1');");
+  run_ddl_statement("CREATE ROLE hr_r1;");
+  run_ddl_statement("CREATE ROLE hr_r2;");
+  run_ddl_statement("CREATE ROLE hr_r3;");
+  run_ddl_statement("CREATE ROLE hr_r4;");
+  run_ddl_statement("CREATE TABLE hr_tbl1 (i INTEGER);");
 
   // check that we can't create cycles
   EXPECT_NO_THROW(run_ddl_statement("GRANT hr_r4 TO hr_r3;"));
@@ -375,12 +375,12 @@ TEST(UserRoles, RoleHierarchies) {
   EXPECT_EQ(sys_cat.checkPrivileges("hr_u1", privObjects), true);
 
   // clean-up objects
-  EXPECT_NO_THROW(run_ddl_statement("DROP USER hr_u1;"));
-  EXPECT_NO_THROW(run_ddl_statement("DROP ROLE hr_r1;"));
-  EXPECT_NO_THROW(run_ddl_statement("DROP ROLE hr_r2;"));
-  EXPECT_NO_THROW(run_ddl_statement("DROP ROLE hr_r3;"));
-  EXPECT_NO_THROW(run_ddl_statement("DROP ROLE hr_r4;"));
-  EXPECT_NO_THROW(run_ddl_statement("DROP TABLE hr_tbl1;"));
+  run_ddl_statement("DROP USER hr_u1;");
+  run_ddl_statement("DROP ROLE hr_r1;");
+  run_ddl_statement("DROP ROLE hr_r2;");
+  run_ddl_statement("DROP ROLE hr_r3;");
+  run_ddl_statement("DROP ROLE hr_r4;");
+  run_ddl_statement("DROP TABLE hr_tbl1;");
 }
 
 TEST_F(DatabaseObject, AccessDefaultsTest) {

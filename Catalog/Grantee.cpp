@@ -22,22 +22,12 @@ using std::string;
 
 Grantee::Grantee(const std::string& name) : name_(name) {}
 
-Grantee::Grantee(const Grantee& grantee) : name_(grantee.name_), roles_(grantee.roles_) {
-  for (auto it = grantee.cachedPrivileges_.begin(); it != grantee.cachedPrivileges_.end();
-       ++it) {
-    cachedPrivileges_[it->first] = boost::make_unique<DBObject>(*it->second.get());
-  }
-  for (auto it = grantee.privileges_.begin(); it != grantee.privileges_.end(); ++it) {
-    privileges_[it->first] = boost::make_unique<DBObject>(*it->second.get());
-  }
-}
-
 Grantee::~Grantee() {
   for (auto role : roles_) {
     role->removeGrantee(this);
   }
-  cachedPrivileges_.clear();
-  privileges_.clear();
+  effectivePrivileges_.clear();
+  directPrivileges_.clear();
   roles_.clear();
 }
 
@@ -49,8 +39,8 @@ std::vector<std::string> Grantee::getRoles() const {
   return roles;
 }
 
-bool Grantee::hasRole(Role* role, bool recursive) const {
-  if (!recursive) {
+bool Grantee::hasRole(Role* role, bool only_direct) const {
+  if (only_direct) {
     return roles_.find(role) != roles_.end();
   } else {
     std::stack<const Grantee*> roles;
@@ -70,8 +60,8 @@ bool Grantee::hasRole(Role* role, bool recursive) const {
   }
 }
 
-void Grantee::getPrivileges(DBObject& object, bool recursive) {
-  auto dbObject = findDbObject(object.getObjectKey(), recursive);
+void Grantee::getPrivileges(DBObject& object, bool only_direct) {
+  auto dbObject = findDbObject(object.getObjectKey(), only_direct);
   if (!dbObject) {  // not found
     throw runtime_error("Can not get privileges because " + getName() +
                         " has no privileges to " + object.getName());
@@ -79,8 +69,8 @@ void Grantee::getPrivileges(DBObject& object, bool recursive) {
   object.grantPrivileges(*dbObject);
 }
 
-DBObject* Grantee::findDbObject(const DBObjectKey& objectKey, bool recursive) const {
-  const DBObjectMap& privs = recursive ? cachedPrivileges_ : privileges_;
+DBObject* Grantee::findDbObject(const DBObjectKey& objectKey, bool only_direct) const {
+  const DBObjectMap& privs = only_direct ? directPrivileges_ : effectivePrivileges_;
   DBObject* dbObject = nullptr;
   auto dbObjectIt = privs.find(objectKey);
   if (dbObjectIt != privs.end()) {
@@ -90,27 +80,26 @@ DBObject* Grantee::findDbObject(const DBObjectKey& objectKey, bool recursive) co
 }
 
 void Grantee::grantPrivileges(const DBObject& object) {
-  auto* dbObject = findDbObject(object.getObjectKey(), true);
+  auto* dbObject = findDbObject(object.getObjectKey(), false);
   if (!dbObject) {  // not found
-    cachedPrivileges_[object.getObjectKey()] = boost::make_unique<DBObject>(object);
+    effectivePrivileges_[object.getObjectKey()] = boost::make_unique<DBObject>(object);
   } else {  // found
     dbObject->grantPrivileges(object);
   }
-  dbObject = findDbObject(object.getObjectKey(), false);
+  dbObject = findDbObject(object.getObjectKey(), true);
   if (!dbObject) {  // not found
-    privileges_[object.getObjectKey()] = boost::make_unique<DBObject>(object);
+    directPrivileges_[object.getObjectKey()] = boost::make_unique<DBObject>(object);
   } else {  // found
     dbObject->grantPrivileges(object);
   }
   updatePrivileges();
 }
 
-// I think the sematics here are to send in a object to revoke
-// if the revoke completely removed all permissions from the object get rid of it
-// but then there is nothing to send back to catalog to have rest of delete for
-// DB done
+// Revoke privileges from the object.
+// If there are no privileges left - erase object and return nullptr.
+// Otherwise, return the changed object.
 DBObject* Grantee::revokePrivileges(const DBObject& object) {
-  auto dbObject = findDbObject(object.getObjectKey(), false);
+  auto dbObject = findDbObject(object.getObjectKey(), true);
   if (!dbObject ||
       !dbObject->getPrivileges().hasAny()) {  // not found or has none of privileges set
     throw runtime_error("Can not revoke privileges because " + getName() +
@@ -119,15 +108,15 @@ DBObject* Grantee::revokePrivileges(const DBObject& object) {
   bool object_removed = false;
   dbObject->revokePrivileges(object);
   if (!dbObject->getPrivileges().hasAny()) {
-    privileges_.erase(object.getObjectKey());
+    directPrivileges_.erase(object.getObjectKey());
     object_removed = true;
   }
 
-  auto* cachedDbObject = findDbObject(object.getObjectKey(), true);
+  auto* cachedDbObject = findDbObject(object.getObjectKey(), false);
   if (cachedDbObject && cachedDbObject->getPrivileges().hasAny()) {
     cachedDbObject->revokePrivileges(object);
     if (!cachedDbObject->getPrivileges().hasAny()) {
-      cachedPrivileges_.erase(object.getObjectKey());
+      effectivePrivileges_.erase(object.getObjectKey());
     }
   }
 
@@ -180,16 +169,16 @@ static bool hasAnyPrivs(const DBObject* real, const DBObject* /* requested*/) {
   }
 }
 
-bool Grantee::hasAnyPrivileges(const DBObject& objectRequested, bool recursive) const {
+bool Grantee::hasAnyPrivileges(const DBObject& objectRequested, bool only_direct) const {
   DBObjectKey objectKey = objectRequested.getObjectKey();
-  if (hasAnyPrivs(findDbObject(objectKey, recursive), &objectRequested)) {
+  if (hasAnyPrivs(findDbObject(objectKey, only_direct), &objectRequested)) {
     return true;
   }
 
   // if we have an object associated -> ignore it
   if (objectKey.objectId != -1) {
     objectKey.objectId = -1;
-    if (hasAnyPrivs(findDbObject(objectKey, recursive), &objectRequested)) {
+    if (hasAnyPrivs(findDbObject(objectKey, only_direct), &objectRequested)) {
       return true;
     }
   }
@@ -197,7 +186,7 @@ bool Grantee::hasAnyPrivileges(const DBObject& objectRequested, bool recursive) 
   // if we have an
   if (objectKey.dbId != -1) {
     objectKey.dbId = -1;
-    if (hasAnyPrivs(findDbObject(objectKey, recursive), &objectRequested)) {
+    if (hasAnyPrivs(findDbObject(objectKey, only_direct), &objectRequested)) {
       return true;
     }
   }
@@ -206,14 +195,14 @@ bool Grantee::hasAnyPrivileges(const DBObject& objectRequested, bool recursive) 
 
 bool Grantee::checkPrivileges(const DBObject& objectRequested) const {
   DBObjectKey objectKey = objectRequested.getObjectKey();
-  if (hasEnoughPrivs(findDbObject(objectKey, true), &objectRequested)) {
+  if (hasEnoughPrivs(findDbObject(objectKey, false), &objectRequested)) {
     return true;
   }
 
   // if we have an object associated -> ignore it
   if (objectKey.objectId != -1) {
     objectKey.objectId = -1;
-    if (hasEnoughPrivs(findDbObject(objectKey, true), &objectRequested)) {
+    if (hasEnoughPrivs(findDbObject(objectKey, false), &objectRequested)) {
       return true;
     }
   }
@@ -221,7 +210,7 @@ bool Grantee::checkPrivileges(const DBObject& objectRequested) const {
   // if we have an
   if (objectKey.dbId != -1) {
     objectKey.dbId = -1;
-    if (hasEnoughPrivs(findDbObject(objectKey, true), &objectRequested)) {
+    if (hasEnoughPrivs(findDbObject(objectKey, false), &objectRequested)) {
       return true;
     }
   }
@@ -229,12 +218,12 @@ bool Grantee::checkPrivileges(const DBObject& objectRequested) const {
 }
 
 void Grantee::updatePrivileges(Role* role) {
-  for (auto& roleDbObject : *role->getDbObjects(true)) {
-    auto dbObject = findDbObject(roleDbObject.first, true);
+  for (auto& roleDbObject : *role->getDbObjects(false)) {
+    auto dbObject = findDbObject(roleDbObject.first, false);
     if (dbObject) {  // found
       dbObject->updatePrivileges(*roleDbObject.second);
     } else {  // not found
-      cachedPrivileges_[roleDbObject.first] =
+      effectivePrivileges_[roleDbObject.first] =
           boost::make_unique<DBObject>(*roleDbObject.second.get());
     }
   }
@@ -242,12 +231,12 @@ void Grantee::updatePrivileges(Role* role) {
 
 // Pull privileges from upper roles
 void Grantee::updatePrivileges() {
-  for (auto& dbObject : cachedPrivileges_) {
+  for (auto& dbObject : effectivePrivileges_) {
     dbObject.second->resetPrivileges();
   }
-  for (auto it = privileges_.begin(); it != privileges_.end(); ++it) {
-    if (cachedPrivileges_.find(it->first) != cachedPrivileges_.end()) {
-      cachedPrivileges_[it->first]->updatePrivileges(*it->second);
+  for (auto it = directPrivileges_.begin(); it != directPrivileges_.end(); ++it) {
+    if (effectivePrivileges_.find(it->first) != effectivePrivileges_.end()) {
+      effectivePrivileges_[it->first]->updatePrivileges(*it->second);
     }
   }
   for (auto role : roles_) {
@@ -255,10 +244,10 @@ void Grantee::updatePrivileges() {
       updatePrivileges(role);
     }
   }
-  for (auto dbObjectIt = cachedPrivileges_.begin();
-       dbObjectIt != cachedPrivileges_.end();) {
+  for (auto dbObjectIt = effectivePrivileges_.begin();
+       dbObjectIt != effectivePrivileges_.end();) {
     if (!dbObjectIt->second->getPrivileges().hasAny()) {
-      dbObjectIt = cachedPrivileges_.erase(dbObjectIt);
+      dbObjectIt = effectivePrivileges_.erase(dbObjectIt);
     } else {
       ++dbObjectIt;
     }
@@ -266,7 +255,7 @@ void Grantee::updatePrivileges() {
 }
 
 void Grantee::revokeAllOnDatabase(int32_t dbId) {
-  std::vector<DBObjectMap*> sources = {&cachedPrivileges_, &privileges_};
+  std::vector<DBObjectMap*> sources = {&effectivePrivileges_, &directPrivileges_};
   for (auto privs : sources) {
     for (auto iter = privs->begin(); iter != privs->end();) {
       if (iter->first.dbId == dbId) {

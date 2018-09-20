@@ -367,7 +367,7 @@ class MapDHandler : public MapDIf {
                            const TDBObjectType::type type);
   void get_all_roles_for_user(std::vector<std::string>& _return,
                               const TSessionId& session,
-                              const std::string& userName);
+                              const std::string& granteeName);
   std::vector<std::string> get_valid_groups(const TSessionId& session,
                                             int32_t dashboard_id,
                                             std::vector<std::string> groups);

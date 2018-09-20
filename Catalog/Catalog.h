@@ -464,7 +464,7 @@ class SysCatalog {
                                                           int32_t objectId) const;
   bool isRoleGrantedToGrantee(const std::string& granteeName,
                               const std::string& roleName,
-                              bool recursive) const;
+                              bool only_direct) const;
   std::vector<std::string> getRoles(bool userPrivateRole,
                                     bool isSuper,
                                     const std::string& userName);

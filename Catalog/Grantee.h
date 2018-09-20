@@ -34,25 +34,24 @@ class Grantee {
 
  public:
   Grantee(const std::string& name);
-  Grantee(const Grantee& grantee);
   virtual ~Grantee();
   virtual bool isUser() const = 0;
   virtual void grantPrivileges(const DBObject& object);
   virtual DBObject* revokePrivileges(const DBObject& object);
   virtual void grantRole(Role* role);
   virtual void revokeRole(Role* role);
-  virtual bool hasAnyPrivileges(const DBObject& objectRequested, bool recursive) const;
+  virtual bool hasAnyPrivileges(const DBObject& objectRequested, bool only_direct) const;
   virtual bool checkPrivileges(const DBObject& objectRequested) const;
   virtual void updatePrivileges();
   virtual void updatePrivileges(Role* role);
   virtual void revokeAllOnDatabase(int32_t dbId);
-  void getPrivileges(DBObject& object, bool recursive);
-  DBObject* findDbObject(const DBObjectKey& objectKey, bool recursive) const;
+  void getPrivileges(DBObject& object, bool only_direct);
+  DBObject* findDbObject(const DBObjectKey& objectKey, bool only_direct) const;
   const std::string& getName() const { return name_; }
   std::vector<std::string> getRoles() const;
-  bool hasRole(Role* role, bool recursive) const;
-  const DBObjectMap* getDbObjects(bool recursive) const {
-    return recursive ? &cachedPrivileges_ : &privileges_;
+  bool hasRole(Role* role, bool only_direct) const;
+  const DBObjectMap* getDbObjects(bool only_direct) const {
+    return only_direct ? &directPrivileges_ : &effectivePrivileges_;
   }
   void checkCycles(Role* newRole);
 
@@ -60,22 +59,20 @@ class Grantee {
   std::string name_;
   std::unordered_set<Role*> roles_;
   // tracks all privileges, including privileges from granted roles recursively
-  DBObjectMap cachedPrivileges_;
+  DBObjectMap effectivePrivileges_;
   // tracks only privileges granted directly to this grantee
-  DBObjectMap privileges_;
+  DBObjectMap directPrivileges_;
 };
 
 class User : public Grantee {
  public:
   User(const std::string& name) : Grantee(name) {}
-  User(const User& user) : Grantee(user) {}
   virtual bool isUser() const { return true; }
 };
 
 class Role : public Grantee {
  public:
   Role(const std::string& name) : Grantee(name) {}
-  Role(const Role& role) : Grantee(role) {}
   virtual ~Role();
 
   virtual bool isUser() const { return false; }

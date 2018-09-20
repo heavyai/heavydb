@@ -1154,7 +1154,7 @@ void SysCatalog::grantDBObjectPrivileges_unsafe(
   /* apply grant privileges statement to sqlite DB */
   std::vector<std::string> objectKey = object.toString();
   object.resetPrivileges();
-  grantee->getPrivileges(object, false);
+  grantee->getPrivileges(object, true);
 
   sys_sqlite_lock sqlite_lock(this);
   insertOrUpdateObjectPrivileges(
@@ -1256,7 +1256,7 @@ void SysCatalog::revokeDBObjectPrivilegesFromAll_unsafe(DBObject dbObject,
   for (size_t i = 0; i < roles.size(); i++) {
     auto* grantee = instance().getGrantee(roles[i]);
     assert(grantee);
-    if (grantee->findDbObject(dbObject.getObjectKey(), false)) {
+    if (grantee->findDbObject(dbObject.getObjectKey(), true)) {
       revokeDBObjectPrivileges_unsafe(roles[i], dbObject, *catalog);
     }
   }
@@ -1270,7 +1270,7 @@ bool SysCatalog::verifyDBObjectOwnership(const UserMetadata& user,
   auto* grantee = instance().getUserGrantee(user.userName);
   if (grantee) {
     object.loadKey(catalog);
-    auto* found_object = grantee->findDbObject(object.getObjectKey(), true);
+    auto* found_object = grantee->findDbObject(object.getObjectKey(), false);
     if (found_object && found_object->getOwner() == user.userId) {
       return true;
     }
@@ -1292,7 +1292,7 @@ void SysCatalog::getDBObjectPrivileges(const std::string& granteeName,
                         " failed because role or user with this name does not exist.");
   }
   object.loadKey(catalog);
-  grantee->getPrivileges(object, false);
+  grantee->getPrivileges(object, true);
 }
 
 void SysCatalog::createRole_unsafe(const std::string& roleName,
@@ -1358,7 +1358,7 @@ void SysCatalog::grantRole_unsafe(const std::string& roleName,
                         granteeName + " does not exist.");
   }
   sys_write_lock write_lock(this);
-  if (!grantee->hasRole(rl, false)) {
+  if (!grantee->hasRole(rl, true)) {
     grantee->grantRole(rl);
     sys_sqlite_lock sqlite_lock(this);
     sqliteConnector_->query_with_text_params(
@@ -1469,7 +1469,7 @@ bool SysCatalog::hasAnyPrivileges(const UserMetadata& user,
   for (std::vector<DBObject>::iterator objectIt = privObjects.begin();
        objectIt != privObjects.end();
        ++objectIt) {
-    if (!user_rl->hasAnyPrivileges(*objectIt, true)) {
+    if (!user_rl->hasAnyPrivileges(*objectIt, false)) {
       return false;
     }
   }
@@ -1536,7 +1536,7 @@ SysCatalog::getMetadataForObject(int32_t dbId, int32_t dbType, int32_t objectId)
 
 bool SysCatalog::isRoleGrantedToGrantee(const std::string& granteeName,
                                         const std::string& roleName,
-                                        bool recursive) const {
+                                        bool only_direct) const {
   sys_read_lock read_lock(this);
   if (roleName == granteeName) {
     return true;
@@ -1545,7 +1545,7 @@ bool SysCatalog::isRoleGrantedToGrantee(const std::string& granteeName,
   auto* user_rl = instance().getUserGrantee(granteeName);
   if (user_rl) {
     auto* rl = instance().getRoleGrantee(roleName);
-    if (rl && user_rl->hasRole(rl, recursive)) {
+    if (rl && user_rl->hasRole(rl, only_direct)) {
       rc = true;
     }
   }
@@ -1579,7 +1579,7 @@ std::vector<std::string> SysCatalog::getRoles(bool userPrivateRole,
     if (!userPrivateRole && grantee.second->isUser()) {
       continue;
     }
-    if (!isSuper && !isRoleGrantedToGrantee(userName, grantee.second->getName(), true)) {
+    if (!isSuper && !isRoleGrantedToGrantee(userName, grantee.second->getName(), false)) {
       continue;
     }
     roles.push_back(grantee.second->getName());
