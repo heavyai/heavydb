@@ -32,9 +32,9 @@ add_library(mapd_sample_thrift
     ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/completion_hints_types.cpp)
 target_link_libraries(mapd_sample_thrift ${Thrift_LIBRARIES})
 
-target_link_libraries(StreamInsertSimple mapd_sample_thrift ${Boost_LIBRARIES} ${CMAKE_DL_LIBS})
-target_link_libraries(StreamInsert mapd_sample_thrift ${CMAKE_DL_LIBS} ${Boost_LIBRARIES})
-target_link_libraries(DataGen mapd_sample_thrift ${CMAKE_DL_LIBS})
+target_link_libraries(StreamInsertSimple mapd_sample_thrift ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${PROFILER_LIBS})
+target_link_libraries(StreamInsert mapd_sample_thrift ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${PROFILER_LIBS})
+target_link_libraries(DataGen mapd_sample_thrift ${CMAKE_DL_LIBS} ${PROFILER_LIBS})
 
 install(TARGETS StreamInsertSimple StreamInsert DataGen DESTINATION SampleCode)
 install(DIRECTORY . DESTINATION SampleCode)

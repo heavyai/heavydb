@@ -310,4 +310,4 @@ add_custom_command(
     )
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})
-target_link_libraries(group_by_hash_test gtest ${Glog_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(group_by_hash_test gtest ${Glog_LIBRARIES} ${Boost_LIBRARIES} ${PROFILER_LIBS})

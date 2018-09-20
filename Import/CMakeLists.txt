@@ -20,9 +20,9 @@ add_custom_target(geo_samples ALL COMMAND ${CMAKE_COMMAND} -E copy_directory "${
 
 add_library(RowToColumn RowToColumnLoader.cpp RowToColumnLoader.h)
 add_executable(StreamImporter StreamImporter.cpp)
-target_link_libraries(StreamImporter RowToColumn mapd_thrift Shared ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${Boost_LIBRARIES})
+target_link_libraries(StreamImporter RowToColumn mapd_thrift Shared ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${PROFILER_LIBS})
 
 add_executable(KafkaImporter KafkaImporter.cpp)
-target_link_libraries(KafkaImporter RowToColumn mapd_thrift rdkafka++ Shared ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${Boost_LIBRARIES})
+target_link_libraries(KafkaImporter RowToColumn mapd_thrift rdkafka++ Shared ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${PROFILER_LIBS})
 
 install(TARGETS StreamImporter KafkaImporter DESTINATION bin)
