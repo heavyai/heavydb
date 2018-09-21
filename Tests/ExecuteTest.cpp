@@ -2059,6 +2059,19 @@ void check_one_date_trunc_group(const ResultSet& rows, const int64_t ref_ts) {
   ASSERT_TRUE(empty_row.empty());
 }
 
+void check_one_date_trunc_group_with_agg(const ResultSet& rows,
+                                         const int64_t ref_ts,
+                                         const int64_t ref_agg) {
+  const auto crt_row = rows.getNextRow(true, true);
+  ASSERT_EQ(size_t(2), crt_row.size());
+  const auto actual_ts = v<int64_t>(crt_row[0]);
+  ASSERT_EQ(ref_ts, actual_ts);
+  const auto actual_agg = v<int64_t>(crt_row[1]);
+  ASSERT_EQ(ref_agg, actual_agg);
+  const auto empty_row = rows.getNextRow(true, true);
+  ASSERT_TRUE(empty_row.empty());
+}
+
 }  // namespace
 
 TEST(Select, Time) {
@@ -3099,6 +3112,74 @@ TEST(Select, Time) {
                                         "EXTRACT(DOW from TIMESTAMPADD(HOUR, -5, "
                                         "TIMESTAMP '2017-05-31 1:11:11')) = 2;",
                                         dt)));
+    std::vector<std::tuple<std::string, int64_t, int64_t>> date_trunc_queries{
+        /*TIMESTAMP(0) */
+        std::make_tuple("year, m", 1388534400L, 20),
+        std::make_tuple("month, m", 1417392000L, 20),
+        std::make_tuple("day, m", 1418428800L, 15),
+        std::make_tuple("hour, m", 1418508000L, 15),
+        std::make_tuple("minute, m", 1418509380L, 15),
+        std::make_tuple("second, m", 1418509395L, 15),
+        std::make_tuple("millennium, m", 978307200L, 20),
+        std::make_tuple("century, m", 978307200L, 20),
+        std::make_tuple("decade, m", 1293840000L, 20),
+        std::make_tuple("week, m", 1417910400L, 15),
+        std::make_tuple("nanosecond, m", 1418509395L, 15),
+        std::make_tuple("microsecond, m", 1418509395L, 15),
+        std::make_tuple("millisecond, m", 1418509395L, 15),
+        /* TIMESTAMP(3) */
+        std::make_tuple("year, m_3", 1388534400000L, 20),
+        std::make_tuple("month, m_3", 1417392000000L, 20),
+        std::make_tuple("day, m_3", 1418428800000L, 15),
+        std::make_tuple("hour, m_3", 1418508000000L, 15),
+        std::make_tuple("minute, m_3", 1418509380000L, 15),
+        std::make_tuple("second, m_3", 1418509395000L, 15),
+        std::make_tuple("millennium, m_3", 978307200000L, 20),
+        std::make_tuple("century, m_3", 978307200000L, 20),
+        std::make_tuple("decade, m_3", 1293840000000L, 20),
+        std::make_tuple("week, m_3", 1417910400000L, 15),
+        std::make_tuple("nanosecond, m_3", 1418509395323L, 15),
+        std::make_tuple("microsecond, m_3", 1418509395323L, 15),
+        std::make_tuple("millisecond, m_3", 1418509395323L, 15),
+        /* TIMESTAMP(6) */
+        std::make_tuple("year, m_6", 915148800000000L, 10),
+        std::make_tuple("month, m_6", 930787200000000L, 10),
+        std::make_tuple("day, m_6", 931651200000000L, 10),
+        std::make_tuple("hour, m_6", 931701600000000L, 10),
+        /* std::make_tuple("minute, m_6", 931701720000000L, 10), // Exception with sort
+           watchdog */
+        std::make_tuple("second, m_6", 931701773000000L, 10),
+        std::make_tuple("millennium, m_6", -30578688000000000L, 10),
+        std::make_tuple("century, m_6", -2177452800000000L, 10),
+        std::make_tuple("decade, m_6", 662688000000000L, 10),
+        std::make_tuple("week, m_6", 931651200000000L, 10),
+        std::make_tuple("nanosecond, m_6", 931701773874533L, 10),
+        std::make_tuple("microsecond, m_6", 931701773874533L, 10),
+        std::make_tuple("millisecond, m_6", 931701773874000L, 10),
+        /* TIMESTAMP(9) */
+        std::make_tuple("year, m_9", 1136073600000000000L, 10),
+        std::make_tuple("month, m_9", 1143849600000000000L, 10),
+        std::make_tuple("day, m_9", 1146009600000000000L, 10),
+        std::make_tuple("hour, m_9", 1146020400000000000L, 10),
+        /* std::make_tuple("minute, m_9", 1146023340000000000L, 10), // Exception with
+           sort watchdog */
+        std::make_tuple("second, m_9", 1146023344000000000L, 10),
+        std::make_tuple("millennium, m_9", 978307200000000000L, 20),
+        std::make_tuple("century, m_9", 978307200000000000L, 20),
+        std::make_tuple("decade, m_9", 978307200000000000L, 10),
+        std::make_tuple("week, m_9", 1145750400000000000L, 10),
+        std::make_tuple("nanosecond, m_9", 1146023344607435125L, 10),
+        std::make_tuple("microsecond, m_9", 1146023344607435000L, 10),
+        std::make_tuple("millisecond, m_9", 1146023344607000000L, 10)};
+    for (auto& query : date_trunc_queries) {
+      const auto one_row = run_multiple_agg(
+          "SELECT date_trunc(" + std::get<0>(query) +
+              ") as key0,COUNT(*) AS val FROM test group by key0 order by key0 "
+              "limit 1;",
+          dt);
+      check_one_date_trunc_group_with_agg(
+          *one_row, std::get<1>(query), std::get<2>(query));
+    }
   }
 }
 
