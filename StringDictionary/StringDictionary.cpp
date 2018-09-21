@@ -537,7 +537,7 @@ std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
         sorted_cache.begin(),
         sorted_cache.end(),
         pattern,
-        [this](decltype(sorted_cache)::value_type const& a, decltype(pattern) const& b) {
+        [this](decltype(sorted_cache)::value_type const& a, decltype(pattern)& b) {
           auto a_str = this->getStringFromStorage(a);
           return string_lt(a_str.c_str_ptr, a_str.size, b.c_str(), b.size());
         });

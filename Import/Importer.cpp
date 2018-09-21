@@ -3106,8 +3106,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
       while (threads.size() > 0) {
         int nready = 0;
         for (std::list<std::future<ImportStatus>>::iterator it = threads.begin();
-             it != threads.end();
-             it = it) {
+             it != threads.end();) {
           auto& p = *it;
           std::chrono::milliseconds span(
               0);  //(std::distance(it, threads.end()) == 1? 1: 0);
@@ -3846,8 +3845,7 @@ ImportStatus Importer::importGDAL(
     while (threads.size() > 0) {
       int nready = 0;
       for (std::list<std::future<ImportStatus>>::iterator it = threads.begin();
-           it != threads.end();
-           it = it) {
+           it != threads.end();) {
         auto& p = *it;
         std::chrono::milliseconds span(
             0);  //(std::distance(it, threads.end()) == 1? 1: 0);
