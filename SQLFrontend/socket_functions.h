@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #ifndef SOCKET_FNC_H
 #define SOCKET_FNC_H
 #include <thrift/transport/TBufferTransports.h>
@@ -23,5 +24,13 @@ mapd::shared_ptr<::apache::thrift::transport::TTransport> openBufferedClientTran
     const std::string& server_host,
     const int port,
     const std::string& ca_cert_name);
+
+mapd::shared_ptr<::apache::thrift::transport::TTransport> openHttpClientTransport(
+    const std::string& server_host,
+    const int port,
+    const std::string& trust_cert_file,
+    const std::string& trust_cert_dir,
+    bool use_https,
+    bool skip_verify);
 
 #endif

@@ -49,8 +49,6 @@
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/protocol/TJSONProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
-#include <thrift/transport/THttpClient.h>
-#include <thrift/transport/TSSLSocket.h>
 #include <thrift/transport/TSocket.h>
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "MapDRelease.h"
@@ -602,9 +600,13 @@ bool backchannel(int action, ClientContext* cc, const std::string& ccn = "") {
     mapd::shared_ptr<TTransport> transport2;
     mapd::shared_ptr<TProtocol> protocol2;
     mapd::shared_ptr<TTransport> socket2;
-    if (context->http) {
-      transport2 = mapd::shared_ptr<TTransport>(
-          new THttpClient(context->server_host, context->port, "/"));
+    if (context->http || context->https) {
+      transport2 = openHttpClientTransport(context->server_host,
+                                           context->port,
+                                           ca_cert_name,
+                                           "",
+                                           context->https,
+                                           context->skip_host_verify);
       protocol2 = mapd::shared_ptr<TProtocol>(new TJSONProtocol(transport2));
     } else {
       transport2 =
@@ -1011,6 +1013,8 @@ int main(int argc, char** argv) {
   bool print_connection = true;
   bool print_timing = false;
   bool http = false;
+  bool https = false;
+  bool skip_host_verify = false;
   TQueryResult _return;
   std::string db_name{"mapd"};
   std::string user_name{"mapd"};
@@ -1047,6 +1051,13 @@ int main(int argc, char** argv) {
   desc.add_options()("http",
                      po::bool_switch(&http)->default_value(http)->implicit_value(true),
                      "Use HTTP transport");
+  desc.add_options()("https",
+                     po::bool_switch(&https)->default_value(https)->implicit_value(true),
+                     "Use HTTPS transport");
+  desc.add_options()(
+      "skip-verify",
+      po::bool_switch(&skip_host_verify)->default_value(skip_host_verify)->implicit_value(true),
+      "Don't verify SSL certificate validity");
   desc.add_options()("quiet,q", "Do not print result headers or connection strings ");
 
   po::variables_map vm;
@@ -1095,8 +1106,10 @@ int main(int argc, char** argv) {
 
   mapd::shared_ptr<TTransport> transport;
   mapd::shared_ptr<TProtocol> protocol;
-  if (http) {
-    transport = mapd::shared_ptr<TTransport>(new THttpClient(server_host, port, "/"));
+  mapd::shared_ptr<TTransport> socket;
+  if (https || http) {
+    transport = openHttpClientTransport(
+        server_host, port, ca_cert_name, "", https, skip_host_verify);
     protocol = mapd::shared_ptr<TProtocol>(new TJSONProtocol(transport));
   } else {
     transport = openBufferedClientTransport(server_host, port, ca_cert_name);
@@ -1112,7 +1125,8 @@ int main(int argc, char** argv) {
   context.server_host = server_host;
   context.port = port;
   context.http = http;
-
+  context.https = https;
+  context.skip_host_verify = skip_host_verify;
   context.session = INVALID_SESSION_ID;
 
   try {

@@ -143,6 +143,7 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
     std::cerr << e.error_msg << std::endl;
     return false;
   } catch (TException& te) {
+    std::cerr << "Thrift error: " << te.what() << std::endl;
     try {
       std::cerr << "Thrift connection error: " << te.what() << std::endl;
       std::cerr << "Retrying connection" << std::endl;

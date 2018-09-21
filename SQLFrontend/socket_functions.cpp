@@ -13,9 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include <SQLFrontend/socket_functions.h>
+#include <thrift/transport/THttpClient.h>
 #include <thrift/transport/TSSLSocket.h>
 #include <thrift/transport/TSocket.h>
+
 using namespace ::apache::thrift::transport;
 using Decision = AccessManager::Decision;
 
@@ -29,6 +32,7 @@ class InsecureAccessManager : public AccessManager {
     return ALLOW;
   };
 };
+
 mapd::shared_ptr<TTransport> openBufferedClientTransport(
     const std::string& server_host,
     const int port,
@@ -49,6 +53,32 @@ mapd::shared_ptr<TTransport> openBufferedClientTransport(
     factory->access(mapd::shared_ptr<InsecureAccessManager>(new InsecureAccessManager()));
     mapd::shared_ptr<TSocket> secure_socket = factory->createSocket(server_host, port);
     transport = mapd::shared_ptr<TTransport>(new TBufferedTransport(secure_socket));
+  }
+  return transport;
+}
+
+mapd::shared_ptr<TTransport> openHttpClientTransport(const std::string& server_host,
+                                                     const int port,
+                                                     const std::string& trust_cert_file,
+                                                     const std::string& trust_cert_dir,
+                                                     bool use_https,
+                                                     bool skip_verify) {
+  mapd::shared_ptr<TTransport> transport;
+  mapd::shared_ptr<TTransport> socket;
+  if (use_https) {
+    mapd::shared_ptr<TSSLSocketFactory> sslSocketFactory =
+        mapd::shared_ptr<TSSLSocketFactory>(new TSSLSocketFactory());
+    if (skip_verify) {
+      sslSocketFactory->authenticate(false);
+      sslSocketFactory->access(
+          mapd::shared_ptr<InsecureAccessManager>(new InsecureAccessManager()));
+    }
+    sslSocketFactory->loadTrustedCertificates(
+        trust_cert_file.c_str(), trust_cert_dir != "" ? trust_cert_dir.c_str() : nullptr);
+    socket = sslSocketFactory->createSocket(server_host, port);
+    transport = mapd::shared_ptr<TTransport>(new THttpClient(socket, server_host, "/"));
+  } else {
+    transport = mapd::shared_ptr<TTransport>(new THttpClient(server_host, port, "/"));
   }
   return transport;
 }

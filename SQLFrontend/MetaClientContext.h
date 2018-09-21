@@ -19,6 +19,8 @@ struct MetaClientContext {
   std::string server_host;
   int port;
   bool http;
+  bool https;
+  bool skip_host_verify;
   TRANSPORT_TYPE transport;
   CLIENT_TYPE client;
   TSessionId session;
