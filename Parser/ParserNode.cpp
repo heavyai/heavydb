@@ -3645,6 +3645,7 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
   SysCatalog::instance().revokeDBObjectPrivileges(get_role(), dbObject, catalog);
 }
 
+// NOTE: not used currently, will we ever use it?
 // SHOW ON TABLE payroll_table FOR payroll_dept_role;
 void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!SysCatalog::instance().arePrivilegesOn()) {

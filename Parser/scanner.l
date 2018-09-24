@@ -22,6 +22,7 @@ using namespace std;
 
 	/* literal keyword tokens */
 
+ACCESS        TOK(ACCESS)
 ALL		{ yylval.qualval = kALL; TOK(ALL) }
 ALTER         TOK(ALTER)
 ADD           TOK(ADD)
@@ -48,6 +49,7 @@ COPY          TOK(COPY);
 CREATE        TOK(CREATE)
 CURRENT       TOK(CURRENT)
 CURSOR        TOK(CURSOR)
+DASHBOARD     TOK(DASHBOARD)
 DATABASE      TOK(DATABASE)
 DATE          TOK(DATE)
 DATETIME      TOK(DATETIME)
@@ -61,6 +63,8 @@ DICTIONARY    TOK(DICTIONARY)
 DISTINCT      TOK(DISTINCT)
 DOUBLE        TOK(DOUBLE)
 DROP          TOK(DROP)
+EDIT          TOK(EDIT)
+EDITOR        TOK(EDITOR)
 ELSE          TOK(ELSE)
 END           TOK(END)
 EXISTS        TOK(EXISTS)
@@ -115,6 +119,7 @@ REAL          TOK(REAL)
 REFERENCES		TOK(REFERENCES)
 RENAME        TOK(RENAME)
 REVOKE        TOK(REVOKE)
+ROLE          TOK(ROLE)
 ROLLBACK      TOK(ROLLBACK)
 SCHEMA        TOK(SCHEMA)
 SELECT        TOK(SELECT)
@@ -124,6 +129,7 @@ SHARED        TOK(SHARED)
 SHOW          TOK(SHOW)
 SMALLINT      TOK(SMALLINT)
 SOME          { yylval.qualval = kANY; TOK(SOME) } /* SOME = ANY */
+SQL           TOK(SQL)
 TABLE         TOK(TABLE)
 TEMPORARY     TOK(TEMPORARY)
 TEXT          TOK(TEXT)
@@ -159,6 +165,9 @@ WORK          TOK(WORK)
 
 	/* names */
 [A-Za-z_][A-Za-z0-9\$_]*	{ yylval.stringval = new std::string(yytext); TOK(NAME) }
+
+  /* names with dashes */
+[A-Za-z_][A-Za-z0-9\$_\-]*	{ yylval.stringval = new std::string(yytext); TOK(DASHEDNAME) }
 
 	/* emails */
 ([^[:space:]\"]+|\".+\")@[A-Za-z0-9][A-Za-z0-9\-\.]*\.[A-Za-z]+	{ yylval.stringval = new std::string(yytext); TOK(EMAIL) }
