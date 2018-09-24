@@ -328,11 +328,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
         // TODO(adb / saman): Move this into a different enum so we can remove
         // GroupByMemSharing
         sharing_ = GroupByMemSharing::SharedForKeylessOneColumnKnownRange;
-
-        interleaved_bins_on_gpu_ = !shared_mem_for_group_by && keyless_hash_ &&
-                                   (entry_count_ <= interleaved_max_threshold) &&
-                                   QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
-                                       count_distinct_descriptors);
+        interleaved_bins_on_gpu_ = false;
       } else {
         interleaved_bins_on_gpu_ = keyless_hash_ &&
                                    (entry_count_ <= interleaved_max_threshold) &&
