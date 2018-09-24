@@ -9909,6 +9909,11 @@ TEST(Select, GeoSpatial_Projection) {
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(p,p);", dt)));
+    ASSERT_EQ(static_cast<int64_t>(2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM geospatial_test WHERE "
+                  "ST_Contains('POINT(0 0)', p) OR ST_Contains('POINT(1 1)', p);",
+                  dt)));
     ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(

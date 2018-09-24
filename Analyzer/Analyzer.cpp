@@ -30,6 +30,7 @@
 #include <stdexcept>
 #include "../Catalog/Catalog.h"
 #include "../Shared/sqltypes.h"
+#include "../Shared/unreachable.h"
 
 namespace Analyzer {
 
@@ -1945,9 +1946,10 @@ bool Datum_equal(const SQLTypeInfo& ti, Datum val1, Datum val2) {
     case kMULTIPOLYGON:
       return *val1.stringval == *val2.stringval;
     default:
-      CHECK(false);
+      throw std::runtime_error("Unrecognized type for Constant Datum equality: " +
+                               ti.get_type_name());
   }
-  CHECK(false);
+  UNREACHABLE();
   return false;
 }
 
@@ -1961,6 +1963,9 @@ bool Constant::operator==(const Expr& rhs) const {
   }
   if (is_null && rhs_c.get_is_null()) {
     return true;
+  }
+  if (type_info.is_array()) {
+    return false;
   }
   return Datum_equal(type_info, constval, rhs_c.get_constval());
 }
