@@ -10023,6 +10023,22 @@ TEST(Select, GeoSpatial_Projection) {
                   "ST_GeomFromText('POLYGON((1 0, 0 1, -1 0, 0 -1, 1 0))')) "
                   "FROM geospatial_test limit 1;",
                   dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),  // multipolygon containing linestring
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_Contains("
+                  "ST_GeomFromText('MULTIPOLYGON(((3 3, 4 3, 4 4)), "
+                  "((2 0, 0 2, -2 0, 0 -2, 2 0)))'), "
+                  "ST_GeomFromText('LINESTRING(1 0, 0 1, -1 0, 0 -1, 1 0)')) "
+                  "FROM geospatial_test limit 1;",
+                  dt)));
+    ASSERT_EQ(static_cast<int64_t>(0),    // multipolygon containing linestring vertices
+              v<int64_t>(run_simple_agg(  // but not all of linestring's segments
+                  "SELECT ST_Contains("
+                  "ST_GeomFromText('MULTIPOLYGON(((2 2, 0 1, -2 2, -2 0, 2 0, 2 2)), "
+                  "((3 3, 4 3, 4 4)))'), "
+                  "ST_GeomFromText('LINESTRING(1.5 1.5, -1.5 1.5, 0 0.5, 1.5 1.5)')) "
+                  "FROM geospatial_test limit 1;",
+                  dt)));
     // Tolerance
     ASSERT_EQ(static_cast<int64_t>(1),  // point containing an extremely close point
               v<int64_t>(run_simple_agg(

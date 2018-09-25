@@ -1828,6 +1828,104 @@ bool ST_Contains_MultiPolygon_Point(int8_t* mpoly_coords,
   return false;
 }
 
+EXTENSION_NOINLINE
+bool ST_Contains_MultiPolygon_LineString(int8_t* mpoly_coords,
+                                         int64_t mpoly_coords_size,
+                                         int32_t* mpoly_ring_sizes,
+                                         int64_t mpoly_num_rings,
+                                         int32_t* mpoly_poly_sizes,
+                                         int64_t mpoly_num_polys,
+                                         double* mpoly_bounds,
+                                         int64_t mpoly_bounds_size,
+                                         int8_t* l,
+                                         int64_t lsize,
+                                         double* lbounds,
+                                         int64_t lbounds_size,
+                                         int32_t li,
+                                         int32_t ic1,
+                                         int32_t isr1,
+                                         int32_t ic2,
+                                         int32_t isr2,
+                                         int32_t osr) {
+  if (mpoly_num_polys <= 0)
+    return false;
+
+  auto lnum_coords = lsize / compression_unit_size(ic2);
+  auto lnum_points = lnum_coords / 2;
+  if (li != 0) {
+    // Indexed linestring
+    if (li < 0 || li > lnum_points)
+      li = lnum_points;
+    double lx = coord_x(l, 2 * (li - 1), ic2, isr2, osr);
+    double ly = coord_y(l, 2 * (li - 1) + 1, ic2, isr2, osr);
+
+    if (mpoly_bounds) {
+      if (!box_contains_point(mpoly_bounds, mpoly_bounds_size, lx, ly))
+        return false;
+    }
+    auto p = l + li * compression_unit_size(ic2);
+    auto psize = 2 * compression_unit_size(ic2);
+    return ST_Contains_MultiPolygon_Point(mpoly_coords,
+                                          mpoly_coords_size,
+                                          mpoly_ring_sizes,
+                                          mpoly_num_rings,
+                                          mpoly_poly_sizes,
+                                          mpoly_num_polys,
+                                          mpoly_bounds,
+                                          mpoly_bounds_size,
+                                          p,
+                                          psize,
+                                          ic1,
+                                          isr1,
+                                          ic2,
+                                          isr2,
+                                          osr);
+  }
+
+  if (mpoly_bounds && lbounds) {
+    if (!box_contains_box(mpoly_bounds, mpoly_bounds_size, lbounds, lbounds_size))
+      return false;
+  }
+
+  // Set specific poly pointers as we move through the coords/ringsizes/polyrings arrays.
+  auto next_poly_coords = mpoly_coords;
+  auto next_poly_ring_sizes = mpoly_ring_sizes;
+
+  for (auto poly = 0; poly < mpoly_num_polys; poly++) {
+    auto poly_coords = next_poly_coords;
+    auto poly_ring_sizes = next_poly_ring_sizes;
+    auto poly_num_rings = mpoly_poly_sizes[poly];
+    // Count number of coords in all of poly's rings, advance ring size pointer.
+    int32_t poly_num_coords = 0;
+    for (auto ring = 0; ring < poly_num_rings; ring++) {
+      poly_num_coords += 2 * *next_poly_ring_sizes++;
+    }
+    auto poly_coords_size = poly_num_coords * compression_unit_size(ic1);
+    next_poly_coords += poly_coords_size;
+
+    if (ST_Contains_Polygon_LineString(poly_coords,
+                                       poly_coords_size,
+                                       poly_ring_sizes,
+                                       poly_num_rings,
+                                       nullptr,
+                                       0,
+                                       l,
+                                       lsize,
+                                       nullptr,
+                                       0,
+                                       li,
+                                       ic1,
+                                       isr1,
+                                       ic2,
+                                       isr2,
+                                       osr)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 //
 // Accessors for poly bounds and render group for in-situ poly render queries
 //
