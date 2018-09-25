@@ -181,7 +181,7 @@ orientation(double px, double py, double qx, double qy, double rx, double ry) {
 
 // Cartesian intersection of two line segments l11-l12 and l21-l22
 DEVICE
-bool intersects_line_line(double l11x,
+bool line_intersects_line(double l11x,
                           double l11y,
                           double l12x,
                           double l12y,
@@ -218,6 +218,51 @@ bool intersects_line_line(double l11x,
   return false;
 }
 
+DEVICE
+bool linestring_intersects_line(int8_t* l,
+                                int32_t lnum_coords,
+                                double l1x,
+                                double l1y,
+                                double l2x,
+                                double l2y,
+                                int32_t ic1,
+                                int32_t isr1,
+                                int32_t osr) {
+  double e1x = coord_x(l, 0, ic1, isr1, osr);
+  double e1y = coord_y(l, 1, ic1, isr1, osr);
+  for (int64_t i = 2; i < lnum_coords; i += 2) {
+    double e2x = coord_x(l, i, ic1, isr1, osr);
+    double e2y = coord_y(l, i + 1, ic1, isr1, osr);
+    if (line_intersects_line(e1x, e1y, e2x, e2y, l1x, l1y, l2x, l2y)) {
+      return true;
+    }
+    e1x = e2x;
+    e1y = e2y;
+  }
+  return false;
+}
+
+DEVICE
+bool ring_intersects_line(int8_t* ring,
+                          int32_t ring_num_coords,
+                          double l1x,
+                          double l1y,
+                          double l2x,
+                          double l2y,
+                          int32_t ic1,
+                          int32_t isr1,
+                          int32_t osr) {
+  double e1x = coord_x(ring, ring_num_coords - 2, ic1, isr1, osr);
+  double e1y = coord_y(ring, ring_num_coords - 1, ic1, isr1, osr);
+  double e2x = coord_x(ring, 0, ic1, isr1, osr);
+  double e2y = coord_y(ring, 1, ic1, isr1, osr);
+  if (line_intersects_line(e1x, e1y, e2x, e2y, l1x, l1y, l2x, l2y)) {
+    return true;
+  }
+  return linestring_intersects_line(
+      ring, ring_num_coords, l1x, l1y, l2x, l2y, ic1, isr1, osr);
+}
+
 // Cartesian distance between two line segments l11-l12 and l21-l22
 DEVICE
 double distance_line_line(double l11x,
@@ -228,7 +273,7 @@ double distance_line_line(double l11x,
                           double l21y,
                           double l22x,
                           double l22y) {
-  if (intersects_line_line(l11x, l11y, l12x, l12y, l21x, l21y, l22x, l22y))
+  if (line_intersects_line(l11x, l11y, l12x, l12y, l21x, l21y, l22x, l22y))
     return 0.0;
   double dist12 = fmin(distance_point_line(l11x, l11y, l21x, l21y, l22x, l22y),
                        distance_point_line(l12x, l12y, l21x, l21y, l22x, l22y));
@@ -261,7 +306,7 @@ bool polygon_contains_point(int8_t* poly,
     // Overshoot the xray to detect an intersection if there is one.
     double xray = fmax(e2x, e1x) + 1.0;
     if (px <= xray &&  // Only check for intersection if the edge is on the right
-        intersects_line_line(px,  // xray shooting from point p to the right
+        line_intersects_line(px,  // xray shooting from point p to the right
                              py,
                              xray,
                              py,
@@ -304,6 +349,7 @@ bool polygon_contains_point(int8_t* poly,
   return result;
 }
 
+// Returns true if simple polygon (no holes) contains a linestring
 DEVICE
 bool polygon_contains_linestring(int8_t* poly,
                                  int32_t poly_num_coords,
@@ -314,12 +360,21 @@ bool polygon_contains_linestring(int8_t* poly,
                                  int32_t ic2,
                                  int32_t isr2,
                                  int32_t osr) {
-  // Check if each of the linestring vertices are inside the polygon.
-  for (int32_t i = 0; i < lnum_coords; i += 2) {
-    double lx = coord_x(l, i, ic2, isr2, osr);
-    double ly = coord_y(l, i + 1, ic2, isr2, osr);
-    if (!polygon_contains_point(poly, poly_num_coords, lx, ly, ic1, isr1, osr))
+  // Check that the first point is in the polygon
+  double l1x = coord_x(l, 0, ic2, isr2, osr);
+  double l1y = coord_y(l, 1, ic2, isr2, osr);
+  if (!polygon_contains_point(poly, poly_num_coords, l1x, l1y, ic1, isr1, osr))
+    return false;
+
+  // Go through line segments and check if there are no intersections with poly edges,
+  // i.e. linestring doesn't escape
+  for (int32_t i = 2; i < lnum_coords; i += 2) {
+    double l2x = coord_x(l, i, ic2, isr2, osr);
+    double l2y = coord_y(l, i + 1, ic2, isr2, osr);
+    if (ring_intersects_line(poly, poly_num_coords, l1x, l1y, l2x, l2y, ic1, isr1, osr))
       return false;
+    l1x = l2x;
+    l1y = l2y;
   }
   return true;
 }
@@ -1162,7 +1217,7 @@ double ST_Distance_LineString_Polygon(int8_t* l,
   if (lindex > 0) {
     // Indexed linestring
     auto p = l + lindex * compression_unit_size(ic1);
-    auto psize = 2 * compression_unit_size(ic2);
+    auto psize = 2 * compression_unit_size(ic1);
     return ST_Distance_Point_Polygon(p,
                                      psize,
                                      poly_coords,
@@ -1631,12 +1686,12 @@ bool ST_Contains_Polygon_LineString(int8_t* poly_coords,
     return false;  // TODO: support polygons with interior rings
 
   auto poly_num_coords = poly_coords_size / compression_unit_size(ic1);
-  auto l_num_coords = lsize / compression_unit_size(ic2);
-  auto l_num_points = l_num_coords / 2;
+  auto lnum_coords = lsize / compression_unit_size(ic2);
+  auto lnum_points = lnum_coords / 2;
   if (li != 0) {
     // Indexed linestring
-    if (li < 0 || li > l_num_points)
-      li = l_num_points;
+    if (li < 0 || li > lnum_points)
+      li = lnum_points;
     double lx = coord_x(l, 2 * (li - 1), ic2, isr2, osr);
     double ly = coord_y(l, 2 * (li - 1) + 1, ic2, isr2, osr);
 
@@ -1647,19 +1702,14 @@ bool ST_Contains_Polygon_LineString(int8_t* poly_coords,
     return polygon_contains_point(poly_coords, poly_num_coords, lx, ly, ic1, isr1, osr);
   }
 
+  // Bail out if poly bounding box doesn't contain linestring bounding box
   if (poly_bounds && lbounds) {
     if (!box_contains_box(poly_bounds, poly_bounds_size, lbounds, lbounds_size))
       return false;
   }
 
-  for (int64_t i = 0; i < l_num_coords; i += 2) {
-    // Check if polygon contains each point in the LineString
-    double lx = coord_x(l, i, ic2, isr2, osr);
-    double ly = coord_y(l, i + 1, ic2, isr2, osr);
-    if (!polygon_contains_point(poly_coords, poly_num_coords, lx, ly, ic1, isr1, osr))
-      return false;
-  }
-  return true;
+  return polygon_contains_linestring(
+      poly_coords, poly_num_coords, l, lnum_coords, ic1, isr1, ic2, isr2, osr);
 }
 
 EXTENSION_NOINLINE

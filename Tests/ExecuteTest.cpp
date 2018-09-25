@@ -10009,6 +10009,13 @@ TEST(Select, GeoSpatial_Projection) {
                   "ST_GeomFromText('LINESTRING(1 0, 0 1, -1 0, 0 -1, 3 0)')) "
                   "FROM geospatial_test limit 1;",
                   dt)));
+    ASSERT_EQ(static_cast<int64_t>(0),    // polygon containing linestring vertices
+              v<int64_t>(run_simple_agg(  // but not all of linestring's segments
+                  "SELECT ST_Contains("
+                  "ST_GeomFromText('POLYGON((2 2, 0 1, -2 2, -2 0, 2 0, 2 2))'), "
+                  "ST_GeomFromText('LINESTRING(1.5 1.5, -1.5 1.5, 0 0.5, 1.5 1.5)')) "
+                  "FROM geospatial_test limit 1;",
+                  dt)));
     ASSERT_EQ(static_cast<int64_t>(1),  // polygon containing another polygon
               v<int64_t>(run_simple_agg(
                   "SELECT ST_Contains("
