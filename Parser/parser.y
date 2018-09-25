@@ -333,27 +333,27 @@ drop_role_statement:
 		}
 		;
 grant_privileges_statement:
-		GRANT privilege ON privileges_target_type privileges_target TO grantee
+		GRANT privileges ON privileges_target_type privileges_target TO grantees
 		{
-		    $<nodeval>$ = new GrantPrivilegesStmt($<stringval>2, $<stringval>4, $<stringval>5, $<stringval>7);
+		    $<nodeval>$ = new GrantPrivilegesStmt($<slistval>2, $<stringval>4, $<stringval>5, $<slistval>7);
 		}
 		;
 revoke_privileges_statement:
-		REVOKE privilege ON privileges_target_type privileges_target FROM grantee
+		REVOKE privileges ON privileges_target_type privileges_target FROM grantees
 		{
-		    $<nodeval>$ = new RevokePrivilegesStmt($<stringval>2, $<stringval>4, $<stringval>5, $<stringval>7);
+		    $<nodeval>$ = new RevokePrivilegesStmt($<slistval>2, $<stringval>4, $<stringval>5, $<slistval>7);
 		}
 		;
 grant_role_statement:
-		GRANT rolename TO grantee
+		GRANT rolenames TO grantees
 		{
-		    $<nodeval>$ = new GrantRoleStmt($<stringval>2, $<stringval>4);
+		    $<nodeval>$ = new GrantRoleStmt($<slistval>2, $<slistval>4);
 		}
 		;
 revoke_role_statement:
-		REVOKE rolename FROM grantee
+		REVOKE rolenames FROM grantees
 		{
-		    $<nodeval>$ = new RevokeRoleStmt($<stringval>2, $<stringval>4);
+		    $<nodeval>$ = new RevokeRoleStmt($<slistval>2, $<slistval>4);
 		}
 		;
 
@@ -1072,13 +1072,40 @@ username:
         NAME | EMAIL
     ;
 
+rolenames:
+		rolename { $<slistval>$ = new std::list<std::string*>(1, $<stringval>1); }
+	|	rolenames ',' rolename
+	{
+		$<slistval>$ = $<slistval>1;
+		$<slistval>$->push_back($<stringval>3);
+	}
+	;
+
 rolename:
         NAME | DASHEDNAME
     ;
 
+grantees:
+		grantee { $<slistval>$ = new std::list<std::string*>(1, $<stringval>1); }
+	|	grantees ',' grantee
+	{
+		$<slistval>$ = $<slistval>1;
+		$<slistval>$->push_back($<stringval>3);
+	}
+	;
+
 grantee:
         username | rolename
     ;
+
+privileges:
+		privilege { $<slistval>$ = new std::list<std::string*>(1, $<stringval>1); }
+	|	privileges ',' privilege
+	{
+		$<slistval>$ = $<slistval>1;
+		$<slistval>$->push_back($<stringval>3);
+	}
+	;
 
 privilege:
 		ALL { $<stringval>$ = new std::string("ALL"); }

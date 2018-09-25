@@ -1181,19 +1181,36 @@ class DropRoleStmt : public DDLStmt {
  */
 class GrantPrivilegesStmt : public DDLStmt {
  public:
-  GrantPrivilegesStmt(std::string* p, std::string* t, std::string* o, std::string* r)
-      : priv(p), object_type(t), object(o), role(r) {}
-  const std::string& get_priv() const { return *priv; }
+  GrantPrivilegesStmt(std::list<std::string*>* p,
+                      std::string* t,
+                      std::string* o,
+                      std::list<std::string*>* g)
+      : object_type(t), object(o) {
+    CHECK(p);
+    for (auto priv : *p) {
+      privs.push_back(*priv);
+      delete priv;
+    }
+    delete p;
+    CHECK(g);
+    for (auto grantee : *g) {
+      grantees.push_back(*grantee);
+      delete grantee;
+    }
+    delete g;
+  }
+
+  const std::vector<std::string>& get_privs() const { return privs; }
   const std::string& get_object_type() const { return *object_type; }
   const std::string& get_object() const { return *object; }
-  const std::string& get_role() const { return *role; }
+  const std::vector<std::string>& get_grantees() const { return grantees; }
   virtual void execute(const Catalog_Namespace::SessionInfo& session);
 
  private:
-  std::unique_ptr<std::string> priv;
+  std::vector<std::string> privs;
   std::unique_ptr<std::string> object_type;
   std::unique_ptr<std::string> object;
-  std::unique_ptr<std::string> role;
+  std::vector<std::string> grantees;
 };
 
 /*
@@ -1202,19 +1219,36 @@ class GrantPrivilegesStmt : public DDLStmt {
  */
 class RevokePrivilegesStmt : public DDLStmt {
  public:
-  RevokePrivilegesStmt(std::string* p, std::string* t, std::string* o, std::string* r)
-      : priv(p), object_type(t), object(o), role(r) {}
-  const std::string& get_priv() const { return *priv; }
+  RevokePrivilegesStmt(std::list<std::string*>* p,
+                       std::string* t,
+                       std::string* o,
+                       std::list<std::string*>* g)
+      : object_type(t), object(o) {
+    CHECK(p);
+    for (auto priv : *p) {
+      privs.push_back(*priv);
+      delete priv;
+    }
+    delete p;
+    CHECK(g);
+    for (auto grantee : *g) {
+      grantees.push_back(*grantee);
+      delete grantee;
+    }
+    delete g;
+  }
+
+  const std::vector<std::string>& get_privs() const { return privs; }
   const std::string& get_object_type() const { return *object_type; }
   const std::string& get_object() const { return *object; }
-  const std::string& get_role() const { return *role; }
+  const std::vector<std::string>& get_grantees() const { return grantees; }
   virtual void execute(const Catalog_Namespace::SessionInfo& session);
 
  private:
-  std::unique_ptr<std::string> priv;
+  std::vector<std::string> privs;
   std::unique_ptr<std::string> object_type;
   std::unique_ptr<std::string> object;
-  std::unique_ptr<std::string> role;
+  std::vector<std::string> grantees;
 };
 
 /*
@@ -1242,14 +1276,27 @@ class ShowPrivilegesStmt : public DDLStmt {
  */
 class GrantRoleStmt : public DDLStmt {
  public:
-  GrantRoleStmt(std::string* r, std::string* u) : role(r), user(u) {}
-  const std::string& get_role() const { return *role; }
-  const std::string& get_user() const { return *user; }
+  GrantRoleStmt(std::list<std::string*>* r, std::list<std::string*>* g) {
+    CHECK(r);
+    for (auto role : *r) {
+      roles.push_back(*role);
+      delete role;
+    }
+    delete r;
+    CHECK(g);
+    for (auto grantee : *g) {
+      grantees.push_back(*grantee);
+      delete grantee;
+    }
+    delete g;
+  }
+  const std::vector<std::string>& get_roles() const { return roles; }
+  const std::vector<std::string>& get_grantees() const { return grantees; }
   virtual void execute(const Catalog_Namespace::SessionInfo& session);
 
  private:
-  std::unique_ptr<std::string> role;
-  std::unique_ptr<std::string> user;
+  std::vector<std::string> roles;
+  std::vector<std::string> grantees;
 };
 
 /*
@@ -1258,14 +1305,27 @@ class GrantRoleStmt : public DDLStmt {
  */
 class RevokeRoleStmt : public DDLStmt {
  public:
-  RevokeRoleStmt(std::string* r, std::string* u) : role(r), user(u) {}
-  const std::string& get_role() const { return *role; }
-  const std::string& get_user() const { return *user; }
+  RevokeRoleStmt(std::list<std::string*>* r, std::list<std::string*>* g) {
+    CHECK(r);
+    for (auto role : *r) {
+      roles.push_back(*role);
+      delete role;
+    }
+    delete r;
+    CHECK(g);
+    for (auto grantee : *g) {
+      grantees.push_back(*grantee);
+      delete grantee;
+    }
+    delete g;
+  }
+  const std::vector<std::string>& get_roles() const { return roles; }
+  const std::vector<std::string>& get_grantees() const { return grantees; }
   virtual void execute(const Catalog_Namespace::SessionInfo& session);
 
  private:
-  std::unique_ptr<std::string> role;
-  std::unique_ptr<std::string> user;
+  std::vector<std::string> roles;
+  std::vector<std::string> grantees;
 };
 
 /*

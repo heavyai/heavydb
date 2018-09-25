@@ -2867,13 +2867,7 @@ void MapDHandler::share_dashboard(const TSessionId& session,
 
     object.setPrivileges(privs);
   }
-  for (auto role : valid_groups) {
-    try {
-      SysCatalog::instance().grantDBObjectPrivileges(role, object, cat);
-    } catch (const std::exception& e) {
-      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
-    }
-  }
+  SysCatalog::instance().grantDBObjectPrivilegesBatch(valid_groups, {object}, cat);
 }
 
 void MapDHandler::unshare_dashboard(const TSessionId& session,
@@ -2914,13 +2908,7 @@ void MapDHandler::unshare_dashboard(const TSessionId& session,
 
     object.setPrivileges(privs);
   }
-  for (auto role : valid_groups) {
-    try {
-      SysCatalog::instance().revokeDBObjectPrivileges(role, object, cat);
-    } catch (const std::exception& e) {
-      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
-    }
-  }
+  SysCatalog::instance().revokeDBObjectPrivilegesBatch(valid_groups, {object}, cat);
 }
 
 void MapDHandler::get_dashboard_grantees(

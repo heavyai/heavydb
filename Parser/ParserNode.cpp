@@ -3584,9 +3584,9 @@ static DBObject createObject(const std::string& objectName, DBObjectType objectT
 // GRANT SELECT/INSERT/CREATE ON TABLE payroll_table TO payroll_dept_role;
 void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!SysCatalog::instance().arePrivilegesOn()) {
-    throw std::runtime_error("GRANT " + get_priv() +
-                             " failed. This command may be executed only when DB object "
-                             "level access privileges check turned on.");
+    throw std::runtime_error(
+        "GRANT failed. This command may be executed only when DB object "
+        "level access privileges check turned on.");
   }
   auto& catalog = session.get_catalog();
   const auto& currentUser = session.get_currentUser();
@@ -3599,26 +3599,26 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
   if (!currentUser.isSuper) {
     if (!SysCatalog::instance().verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
       throw std::runtime_error(
-          "GRANT " + get_priv() +
-          " failed. It can only be executed by super user or owner of the object.");
+          "GRANT failed. It can only be executed by super user or owner of the object.");
     }
   }
   /* set proper values of privileges & grant them to the object */
-  std::pair<AccessPrivileges, DBObjectType> privs = parseStringPrivs(
-      boost::to_upper_copy<std::string>(get_priv()), objectType, get_object());
-
-  dbObject.setPrivileges(privs.first);
-  dbObject.setPermissionType(privs.second);
-
-  SysCatalog::instance().grantDBObjectPrivileges(get_role(), dbObject, catalog);
+  std::vector<DBObject> objects(get_privs().size(), dbObject);
+  for (size_t i = 0; i < get_privs().size(); ++i) {
+    std::pair<AccessPrivileges, DBObjectType> priv = parseStringPrivs(
+        boost::to_upper_copy<std::string>(get_privs()[i]), objectType, get_object());
+    objects[i].setPrivileges(priv.first);
+    objects[i].setPermissionType(priv.second);
+  }
+  SysCatalog::instance().grantDBObjectPrivilegesBatch(grantees, objects, catalog);
 }
 
 // REVOKE SELECT/INSERT/CREATE ON TABLE payroll_table FROM payroll_dept_role;
 void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!SysCatalog::instance().arePrivilegesOn()) {
-    throw std::runtime_error("REVOKE " + get_priv() +
-                             " failed. This command may be executed only when DB object "
-                             "level access privileges check turned on.");
+    throw std::runtime_error(
+        "REVOKE failed. This command may be executed only when DB object "
+        "level access privileges check turned on.");
   }
   auto& catalog = session.get_catalog();
   const auto& currentUser = session.get_currentUser();
@@ -3631,18 +3631,18 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
   if (!currentUser.isSuper) {
     if (!SysCatalog::instance().verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
       throw std::runtime_error(
-          "REVOKE " + get_priv() +
-          " failed. It can only be executed by super user or owner of the object.");
+          "REVOKE failed. It can only be executed by super user or owner of the object.");
     }
   }
-  /* set proper values of privileges & revoke them from the object */
-  std::pair<AccessPrivileges, DBObjectType> privs = parseStringPrivs(
-      boost::to_upper_copy<std::string>(get_priv()), objectType, get_object());
-
-  dbObject.setPrivileges(privs.first);
-  dbObject.setPermissionType(privs.second);
-
-  SysCatalog::instance().revokeDBObjectPrivileges(get_role(), dbObject, catalog);
+  /* set proper values of privileges & grant them to the object */
+  std::vector<DBObject> objects(get_privs().size(), dbObject);
+  for (size_t i = 0; i < get_privs().size(); ++i) {
+    std::pair<AccessPrivileges, DBObjectType> priv = parseStringPrivs(
+        boost::to_upper_copy<std::string>(get_privs()[i]), objectType, get_object());
+    objects[i].setPrivileges(priv.first);
+    objects[i].setPermissionType(priv.second);
+  }
+  SysCatalog::instance().revokeDBObjectPrivilegesBatch(grantees, objects, catalog);
 }
 
 // NOTE: not used currently, will we ever use it?
@@ -3746,49 +3746,43 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) 
 // GRANT payroll_dept_role TO joe;
 void GrantRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!SysCatalog::instance().arePrivilegesOn()) {
-    throw std::runtime_error("GRANT " + get_role() + " TO " + get_user() +
-                             " failed. This command may be executed only when DB object "
-                             "level access privileges check turned on.");
+    throw std::runtime_error(
+        "GRANT failed. This command may be executed only when DB object "
+        "level access privileges check turned on.");
   }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
-    throw std::runtime_error("GRANT " + get_role() + " TO " + get_user() +
-                             "; failed, because it can only be executed by super user.");
-  }
-  if (!get_user().compare(MAPD_ROOT_USER)) {
     throw std::runtime_error(
-        "Request to grant role " + get_role() +
-        " failed because mapd root user has all privileges by default.");
+        "GRANT failed, because it can only be executed by super user.");
   }
-  auto* rl = SysCatalog::instance().getRoleGrantee(get_role());
-  if (!rl) {
-    // check role is userRole
-    // reason for placing the check here instead of Catalog.cpp is to
-    // bypass grantRole_unsafe when createUser statement is kicked off.
-    throw std::runtime_error("Request to grant role " + get_role() +
-                             " failed because role does not exist.");
+  if (std::find(get_grantees().begin(), get_grantees().end(), MAPD_ROOT_USER) !=
+      get_grantees().end()) {
+    throw std::runtime_error(
+        "Request to grant role failed because mapd root user has all privileges by "
+        "default.");
   }
-  SysCatalog::instance().grantRole(get_role(), get_user());
+  SysCatalog::instance().grantRoleBatch(get_roles(), get_grantees());
 }
 
-// REVOKE payroll_dept_role FROM joe;
+// REVOKE payroll_dept_role FROM joe;get_users
 void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!SysCatalog::instance().arePrivilegesOn()) {
-    throw std::runtime_error("REVOKE " + get_role() + " FROM " + get_user() +
-                             " failed. This command may be executed only when DB object "
-                             "level access privileges check turned on.");
+    throw std::runtime_error(
+        "REVOKE failed. This command may be executed only when DB object "
+        "level access privileges check turned on.");
   }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
-    throw std::runtime_error("REVOKE " + get_role() + " FROM " + get_user() +
-                             "; failed, because it can only be executed by super user.");
-  }
-  if (!get_user().compare(MAPD_ROOT_USER)) {
     throw std::runtime_error(
-        "Request to revoke role " + get_role() +
-        " failed because privileges can not be revoked from mapd root user.");
+        "REVOKE failed, because it can only be executed by super user.");
   }
-  SysCatalog::instance().revokeRole(get_role(), get_user());
+  if (std::find(get_grantees().begin(), get_grantees().end(), MAPD_ROOT_USER) !=
+      get_grantees().end()) {
+    throw std::runtime_error(
+        "Request to revoke role failed because privileges can not be revoked from mapd "
+        "root user.");
+  }
+  SysCatalog::instance().revokeRoleBatch(get_roles(), get_grantees());
 }
 
 using dbl = std::numeric_limits<double>;

@@ -1127,10 +1127,21 @@ void SysCatalog::createDBObject(const UserMetadata& user,
   sqliteConnector_->query("END TRANSACTION");
 }
 
+void SysCatalog::grantDBObjectPrivilegesBatch_unsafe(
+    const vector<string>& grantees,
+    const vector<DBObject>& objects,
+    const Catalog_Namespace::Catalog& catalog) {
+  for (const auto& grantee : grantees) {
+    for (const auto& object : objects) {
+      grantDBObjectPrivileges_unsafe(grantee, object, catalog);
+    }
+  }
+}
+
 // GRANT INSERT ON TABLE payroll_table TO payroll_dept_role;
 void SysCatalog::grantDBObjectPrivileges_unsafe(
     const std::string& granteeName,
-    DBObject& object,
+    DBObject object,
     const Catalog_Namespace::Catalog& catalog) {
   object.loadKey(catalog);
   if (object.getPrivileges().hasPermission(DatabasePrivileges::ALL) &&
@@ -1185,6 +1196,17 @@ void SysCatalog::grantAllOnDatabase_unsafe(const std::string& roleName,
   tmp_object.setPermissionType(DashboardDBObjectType);
   grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
   return;
+}
+
+void SysCatalog::revokeDBObjectPrivilegesBatch_unsafe(
+    const vector<string>& grantees,
+    const vector<DBObject>& objects,
+    const Catalog_Namespace::Catalog& catalog) {
+  for (const auto& grantee : grantees) {
+    for (const auto& object : objects) {
+      revokeDBObjectPrivileges_unsafe(grantee, object, catalog);
+    }
+  }
 }
 
 // REVOKE INSERT ON TABLE payroll_table FROM payroll_dept_role;
@@ -1344,6 +1366,15 @@ void SysCatalog::dropRole_unsafe(const std::string& roleName) {
       "DELETE FROM mapd_object_permissions WHERE roleName = ?", roleName);
 }
 
+void SysCatalog::grantRoleBatch_unsafe(const std::vector<std::string>& roles,
+                                       const std::vector<std::string>& grantees) {
+  for (const auto& role : roles) {
+    for (const auto& grantee : grantees) {
+      grantRole_unsafe(role, grantee);
+    }
+  }
+}
+
 // GRANT ROLE payroll_dept_role TO joe;
 void SysCatalog::grantRole_unsafe(const std::string& roleName,
                                   const std::string& granteeName) {
@@ -1364,6 +1395,15 @@ void SysCatalog::grantRole_unsafe(const std::string& roleName,
     sqliteConnector_->query_with_text_params(
         "INSERT INTO mapd_roles(roleName, userName) VALUES (?, ?)",
         std::vector<std::string>{roleName, granteeName});
+  }
+}
+
+void SysCatalog::revokeRoleBatch_unsafe(const std::vector<std::string>& roles,
+                                        const std::vector<std::string>& grantees) {
+  for (const auto& role : roles) {
+    for (const auto& grantee : grantees) {
+      revokeRole_unsafe(role, grantee);
+    }
   }
 }
 
@@ -4306,34 +4346,67 @@ void SysCatalog::dropRole(const std::string& roleName) {
   execInTransaction(&SysCatalog::dropRole_unsafe, roleName);
 }
 
-void SysCatalog::grantRole(const std::string& roleName, const std::string& userName) {
+void SysCatalog::grantRoleBatch(const std::vector<std::string>& roles,
+                                const std::vector<std::string>& grantees) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
-  execInTransaction(&SysCatalog::grantRole_unsafe, roleName, userName);
+  execInTransaction(&SysCatalog::grantRoleBatch_unsafe, roles, grantees);
 }
 
-void SysCatalog::revokeRole(const std::string& roleName, const std::string& userName) {
+void SysCatalog::grantRole(const std::string& role, const std::string& grantee) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
-  execInTransaction(&SysCatalog::revokeRole_unsafe, roleName, userName);
+  execInTransaction(&SysCatalog::grantRole_unsafe, role, grantee);
 }
 
-void SysCatalog::grantDBObjectPrivileges(const std::string& roleName,
-                                         DBObject& object,
+void SysCatalog::revokeRoleBatch(const std::vector<std::string>& roles,
+                                 const std::vector<std::string>& grantees) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  execInTransaction(&SysCatalog::revokeRoleBatch_unsafe, roles, grantees);
+}
+
+void SysCatalog::revokeRole(const std::string& role, const std::string& grantee) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  execInTransaction(&SysCatalog::revokeRole_unsafe, role, grantee);
+}
+
+void SysCatalog::grantDBObjectPrivileges(const string& grantee,
+                                         const DBObject& object,
                                          const Catalog_Namespace::Catalog& catalog) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   execInTransaction(
-      &SysCatalog::grantDBObjectPrivileges_unsafe, roleName, object, catalog);
+      &SysCatalog::grantDBObjectPrivileges_unsafe, grantee, object, catalog);
 }
 
-void SysCatalog::revokeDBObjectPrivileges(const std::string& roleName,
-                                          DBObject object,
+void SysCatalog::grantDBObjectPrivilegesBatch(const vector<string>& grantees,
+                                              const vector<DBObject>& objects,
+                                              const Catalog_Namespace::Catalog& catalog) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  execInTransaction(
+      &SysCatalog::grantDBObjectPrivilegesBatch_unsafe, grantees, objects, catalog);
+}
+
+void SysCatalog::revokeDBObjectPrivileges(const string& grantee,
+                                          const DBObject& object,
                                           const Catalog_Namespace::Catalog& catalog) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   execInTransaction(
-      &SysCatalog::revokeDBObjectPrivileges_unsafe, roleName, object, catalog);
+      &SysCatalog::revokeDBObjectPrivileges_unsafe, grantee, object, catalog);
+}
+
+void SysCatalog::revokeDBObjectPrivilegesBatch(
+    const vector<string>& grantees,
+    const vector<DBObject>& objects,
+    const Catalog_Namespace::Catalog& catalog) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  execInTransaction(
+      &SysCatalog::revokeDBObjectPrivilegesBatch_unsafe, grantees, objects, catalog);
 }
 
 }  // namespace Catalog_Namespace
