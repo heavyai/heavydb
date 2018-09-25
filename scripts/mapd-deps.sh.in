@@ -22,3 +22,6 @@ export CXX=$PREFIX/bin/g++
 
 export PATH=$PREFIX/go/bin:$PATH
 export GOROOT=$PREFIX/go
+
+export VULKAN_SDK=$PREFIX
+export VK_LAYER_PATH=$PREFIX/etc/explicit_layer.d

@@ -26,3 +26,6 @@ setenv CXX $root/bin/g++
 
 prepend-path PATH $root/go/bin
 setenv GOROOT $root/go
+
+setenv VULKAN_SDK $root
+setenv VK_LAYER_PATH $root/etc/explicit_layer.d

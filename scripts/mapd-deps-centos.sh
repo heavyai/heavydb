@@ -276,6 +276,37 @@ mv go $PREFIX
 # install AWS core and s3 sdk
 install_awscpp -j $(nproc)
 
+# glslang (with spirv-tools)
+VERS=7.9.2888 # 8/13/18
+rm -rf glslang
+mkdir -p glslang
+pushd glslang
+wget --continue https://github.com/KhronosGroup/glslang/archive/$VERS.tar.gz
+tar xvf $VERS.tar.gz
+pushd glslang-$VERS
+./update_glslang_sources.py
+mkdir build
+pushd build
+cmake \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DCMAKE_INSTALL_PREFIX=$PREFIX \
+    ..
+make -j $(nproc)
+make install
+popd # build
+popd # glslang-$VERS
+popd # glslang
+
+# Vulkan
+VERS=1.1.82.1 # 8/20/18
+rm -rf vulkan
+mkdir -p vulkan
+pushd vulkan
+wget --continue https://vulkan.lunarg.com/sdk/download/$VERS/linux/vulkansdk-linux-x86_64-$VERS.tar.gz?Human=true -O vulkansdk-linux-x86_64-$VERS.tar.gz
+tar xvf vulkansdk-linux-x86_64-$VERS.tar.gz
+rsync -av $VERS/x86_64/* $PREFIX
+popd # vulkan
+
 sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.modulefile.in > mapd-deps-$SUFFIX.modulefile
 sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.sh.in > mapd-deps-$SUFFIX.sh
 
