@@ -195,7 +195,7 @@ MapD has the following dependencies:
 | [CUDA](http://nvidia.com/cuda) | 8.0 | yes, if compiling with GPU support |
 | [gperftools](https://github.com/gperftools/gperftools) | | yes |
 | [gdal](http://gdal.org/) | | yes |
-| [Arrow](https://arrow.apache.org/) | 0.7.0 | yes |
+| [Arrow](https://arrow.apache.org/) | 0.10.0 | yes |
 
 Dependencies for `mapd_web_server` and other Go utils are in [`ThirdParty/go`](ThirdParty/go). See [`ThirdParty/go/src/mapd/vendor/README.md`](ThirdParty/go/src/mapd/vendor/README.md) for instructions on how to add new deps.
 
