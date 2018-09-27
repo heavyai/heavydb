@@ -9769,9 +9769,50 @@ TEST(Select, GeoSpatial_Projection) {
         static_cast<double>(0.01));
     ASSERT_NEAR(static_cast<double>(2.0),
                 v<double>(run_simple_agg("SELECT ST_Distance("
-                                         "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2), "
-                                         "(1 1, -1 1, -1 -1, 1 -1, 1 1)))', "
+                                         "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), "
+                                         "((1 1, -1 1, -1 -1, 1 -1, 1 1)))', "
                                          "'POINT(4 2)') "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<double>(2.0),
+                v<double>(run_simple_agg("SELECT ST_Distance("
+                                         "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), "
+                                         "((1 1, -1 1, -1 -1, 1 -1, 1 1)))', "
+                                         "'LINESTRING(4 2, 5 3)') "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<double>(2.0),
+                v<double>(run_simple_agg("SELECT ST_Distance("
+                                         "'LINESTRING(4 2, 5 3)', "
+                                         "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), "
+                                         "((1 1, -1 1, -1 -1, 1 -1, 1 1)))') "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<double>(2.0),
+                v<double>(run_simple_agg("SELECT ST_Distance("
+                                         "'POLYGON((4 2, 5 3, 4 3))', "
+                                         "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), "
+                                         "((1 1, -1 1, -1 -1, 1 -1, 1 1)))') "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<double>(2.0),
+                v<double>(run_simple_agg("SELECT ST_Distance("
+                                         "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), "
+                                         "((1 1, -1 1, -1 -1, 1 -1, 1 1)))', "
+                                         "'POLYGON((4 2, 5 3, 4 3))') "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<double>(1.4142),
+                v<double>(run_simple_agg("SELECT ST_Distance("
+                                         "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), "
+                                         "((1 1, -1 1, -1 -1, 1 -1, 1 1)))', "
+                                         "'MULTIPOLYGON(((4 2, 5 3, 4 3)), "
+                                         "((3 3, 4 3, 3 4)))') "
                                          "from geospatial_test limit 1;",
                                          dt)),
                 static_cast<double>(0.01));

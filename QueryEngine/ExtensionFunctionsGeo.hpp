@@ -1264,6 +1264,87 @@ double ST_Distance_LineString_Polygon(int8_t* l,
   return 0.0;
 }
 
+EXTENSION_NOINLINE
+double ST_Distance_LineString_MultiPolygon(int8_t* l,
+                                           int64_t lsize,
+                                           int32_t lindex,
+                                           int8_t* mpoly_coords,
+                                           int64_t mpoly_coords_size,
+                                           int32_t* mpoly_ring_sizes,
+                                           int64_t mpoly_num_rings,
+                                           int32_t* mpoly_poly_sizes,
+                                           int64_t mpoly_num_polys,
+                                           int32_t ic1,
+                                           int32_t isr1,
+                                           int32_t ic2,
+                                           int32_t isr2,
+                                           int32_t osr) {
+  // TODO: revisit implementation, cover all cases
+
+  auto lnum_coords = lsize / compression_unit_size(ic1);
+  auto lnum_points = lnum_coords / 2;
+  if (lindex != 0) {
+    // Statically indexed linestring
+    if (lindex < 0 || lindex > lnum_points)
+      lindex = lnum_points;
+    auto p = l + lindex * compression_unit_size(ic1);
+    auto psize = 2 * compression_unit_size(ic1);
+    return ST_Distance_Point_MultiPolygon(p,
+                                          psize,
+                                          mpoly_coords,
+                                          mpoly_coords_size,
+                                          mpoly_ring_sizes,
+                                          mpoly_num_rings,
+                                          mpoly_poly_sizes,
+                                          mpoly_num_polys,
+                                          ic1,
+                                          isr1,
+                                          ic2,
+                                          isr2,
+                                          osr);
+  }
+
+  double min_distance = 0.0;
+
+  // Set specific poly pointers as we move through the coords/ringsizes/polyrings arrays.
+  auto next_poly_coords = mpoly_coords;
+  auto next_poly_ring_sizes = mpoly_ring_sizes;
+
+  for (auto poly = 0; poly < mpoly_num_polys; poly++) {
+    auto poly_coords = next_poly_coords;
+    auto poly_ring_sizes = next_poly_ring_sizes;
+    auto poly_num_rings = mpoly_poly_sizes[poly];
+    // Count number of coords in all of poly's rings, advance ring size pointer.
+    int32_t poly_num_coords = 0;
+    for (auto ring = 0; ring < poly_num_rings; ring++) {
+      poly_num_coords += 2 * *next_poly_ring_sizes++;
+    }
+    auto poly_coords_size = poly_num_coords * compression_unit_size(ic2);
+    next_poly_coords += poly_coords_size;
+    double distance = ST_Distance_LineString_Polygon(l,
+                                                     lsize,
+                                                     lindex,
+                                                     poly_coords,
+                                                     poly_coords_size,
+                                                     poly_ring_sizes,
+                                                     poly_num_rings,
+                                                     ic1,
+                                                     isr1,
+                                                     ic2,
+                                                     isr2,
+                                                     osr);
+    if (poly == 0 || min_distance > distance) {
+      min_distance = distance;
+      if (tol_zero(min_distance)) {
+        min_distance = 0.0;
+        break;
+      }
+    }
+  }
+
+  return min_distance;
+}
+
 EXTENSION_INLINE
 double ST_Distance_Polygon_Point(int8_t* poly_coords,
                                  int64_t poly_coords_size,
@@ -1451,6 +1532,64 @@ double ST_Distance_Polygon_Polygon(int8_t* poly1_coords,
                                            osr);
 }
 
+EXTENSION_NOINLINE
+double ST_Distance_Polygon_MultiPolygon(int8_t* poly1_coords,
+                                        int64_t poly1_coords_size,
+                                        int32_t* poly1_ring_sizes,
+                                        int64_t poly1_num_rings,
+                                        int8_t* mpoly_coords,
+                                        int64_t mpoly_coords_size,
+                                        int32_t* mpoly_ring_sizes,
+                                        int64_t mpoly_num_rings,
+                                        int32_t* mpoly_poly_sizes,
+                                        int64_t mpoly_num_polys,
+                                        int32_t ic1,
+                                        int32_t isr1,
+                                        int32_t ic2,
+                                        int32_t isr2,
+                                        int32_t osr) {
+  double min_distance = 0.0;
+
+  // Set specific poly pointers as we move through the coords/ringsizes/polyrings arrays.
+  auto next_poly_coords = mpoly_coords;
+  auto next_poly_ring_sizes = mpoly_ring_sizes;
+
+  for (auto poly = 0; poly < mpoly_num_polys; poly++) {
+    auto poly_coords = next_poly_coords;
+    auto poly_ring_sizes = next_poly_ring_sizes;
+    auto poly_num_rings = mpoly_poly_sizes[poly];
+    // Count number of coords in all of poly's rings, advance ring size pointer.
+    int32_t poly_num_coords = 0;
+    for (auto ring = 0; ring < poly_num_rings; ring++) {
+      poly_num_coords += 2 * *next_poly_ring_sizes++;
+    }
+    auto poly_coords_size = poly_num_coords * compression_unit_size(ic2);
+    next_poly_coords += poly_coords_size;
+    double distance = ST_Distance_Polygon_Polygon(poly1_coords,
+                                                  poly1_coords_size,
+                                                  poly1_ring_sizes,
+                                                  poly1_num_rings,
+                                                  poly_coords,
+                                                  poly_coords_size,
+                                                  poly_ring_sizes,
+                                                  poly_num_rings,
+                                                  ic1,
+                                                  isr1,
+                                                  ic2,
+                                                  isr2,
+                                                  osr);
+    if (poly == 0 || min_distance > distance) {
+      min_distance = distance;
+      if (tol_zero(min_distance)) {
+        min_distance = 0.0;
+        break;
+      }
+    }
+  }
+
+  return min_distance;
+}
+
 EXTENSION_INLINE
 double ST_Distance_MultiPolygon_Point(int8_t* mpoly_coords,
                                       int64_t mpoly_coords_size,
@@ -1478,6 +1617,133 @@ double ST_Distance_MultiPolygon_Point(int8_t* mpoly_coords,
                                         ic1,
                                         isr1,
                                         osr);
+}
+
+EXTENSION_INLINE
+double ST_Distance_MultiPolygon_LineString(int8_t* mpoly_coords,
+                                           int64_t mpoly_coords_size,
+                                           int32_t* mpoly_ring_sizes,
+                                           int64_t mpoly_num_rings,
+                                           int32_t* mpoly_poly_sizes,
+                                           int64_t mpoly_num_polys,
+                                           int8_t* l,
+                                           int64_t lsize,
+                                           int32_t lindex,
+                                           int32_t ic1,
+                                           int32_t isr1,
+                                           int32_t ic2,
+                                           int32_t isr2,
+                                           int32_t osr) {
+  return ST_Distance_LineString_MultiPolygon(l,
+                                             lsize,
+                                             lindex,
+                                             mpoly_coords,
+                                             mpoly_coords_size,
+                                             mpoly_ring_sizes,
+                                             mpoly_num_rings,
+                                             mpoly_poly_sizes,
+                                             mpoly_num_polys,
+                                             ic2,
+                                             isr2,
+                                             ic1,
+                                             isr1,
+                                             osr);
+}
+
+EXTENSION_INLINE
+double ST_Distance_MultiPolygon_Polygon(int8_t* mpoly_coords,
+                                        int64_t mpoly_coords_size,
+                                        int32_t* mpoly_ring_sizes,
+                                        int64_t mpoly_num_rings,
+                                        int32_t* mpoly_poly_sizes,
+                                        int64_t mpoly_num_polys,
+                                        int8_t* poly1_coords,
+                                        int64_t poly1_coords_size,
+                                        int32_t* poly1_ring_sizes,
+                                        int64_t poly1_num_rings,
+                                        int32_t ic1,
+                                        int32_t isr1,
+                                        int32_t ic2,
+                                        int32_t isr2,
+                                        int32_t osr) {
+  return ST_Distance_Polygon_MultiPolygon(poly1_coords,
+                                          poly1_coords_size,
+                                          poly1_ring_sizes,
+                                          poly1_num_rings,
+                                          mpoly_coords,
+                                          mpoly_coords_size,
+                                          mpoly_ring_sizes,
+                                          mpoly_num_rings,
+                                          mpoly_poly_sizes,
+                                          mpoly_num_polys,
+                                          ic2,
+                                          isr2,
+                                          ic1,
+                                          isr1,
+                                          osr);
+}
+
+EXTENSION_NOINLINE
+double ST_Distance_MultiPolygon_MultiPolygon(int8_t* mpoly1_coords,
+                                             int64_t mpoly1_coords_size,
+                                             int32_t* mpoly1_ring_sizes,
+                                             int64_t mpoly1_num_rings,
+                                             int32_t* mpoly1_poly_sizes,
+                                             int64_t mpoly1_num_polys,
+                                             int8_t* mpoly2_coords,
+                                             int64_t mpoly2_coords_size,
+                                             int32_t* mpoly2_ring_sizes,
+                                             int64_t mpoly2_num_rings,
+                                             int32_t* mpoly2_poly_sizes,
+                                             int64_t mpoly2_num_polys,
+                                             int32_t ic1,
+                                             int32_t isr1,
+                                             int32_t ic2,
+                                             int32_t isr2,
+                                             int32_t osr) {
+  double min_distance = 0.0;
+
+  // Set specific poly pointers as we move through mpoly1's coords/ringsizes/polyrings
+  // arrays.
+  auto next_poly_coords = mpoly1_coords;
+  auto next_poly_ring_sizes = mpoly1_ring_sizes;
+
+  for (auto poly = 0; poly < mpoly1_num_polys; poly++) {
+    auto poly_coords = next_poly_coords;
+    auto poly_ring_sizes = next_poly_ring_sizes;
+    auto poly_num_rings = mpoly1_poly_sizes[poly];
+    // Count number of coords in all of poly's rings, advance ring size pointer.
+    int32_t poly_num_coords = 0;
+    for (auto ring = 0; ring < poly_num_rings; ring++) {
+      poly_num_coords += 2 * *next_poly_ring_sizes++;
+    }
+    auto poly_coords_size = poly_num_coords * compression_unit_size(ic1);
+    next_poly_coords += poly_coords_size;
+    double distance = ST_Distance_Polygon_MultiPolygon(poly_coords,
+                                                       poly_coords_size,
+                                                       poly_ring_sizes,
+                                                       poly_num_rings,
+                                                       mpoly2_coords,
+                                                       mpoly2_coords_size,
+                                                       mpoly2_ring_sizes,
+                                                       mpoly2_num_rings,
+                                                       mpoly2_poly_sizes,
+                                                       mpoly2_num_polys,
+                                                       ic1,
+                                                       isr1,
+                                                       ic2,
+                                                       isr2,
+                                                       osr);
+    if (poly == 0 || min_distance > distance) {
+      min_distance = distance;
+      if (tol_zero(min_distance)) {
+        min_distance = 0.0;
+        break;
+      }
+    }
+  }
+
+  return min_distance;
 }
 
 EXTENSION_NOINLINE
