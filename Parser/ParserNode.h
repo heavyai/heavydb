@@ -1175,6 +1175,16 @@ class DropRoleStmt : public DDLStmt {
   std::unique_ptr<std::string> role;
 };
 
+inline void parser_slistval_to_vector(std::list<std::string*>* l,
+                                      std::vector<std::string>& v) {
+  CHECK(l);
+  for (auto str : *l) {
+    v.push_back(*str);
+    delete str;
+  }
+  delete l;
+}
+
 /*
  * @type GrantPrivilegesStmt
  * @brief GRANT PRIVILEGES statement
@@ -1186,18 +1196,8 @@ class GrantPrivilegesStmt : public DDLStmt {
                       std::string* o,
                       std::list<std::string*>* g)
       : object_type(t), object(o) {
-    CHECK(p);
-    for (auto priv : *p) {
-      privs.push_back(*priv);
-      delete priv;
-    }
-    delete p;
-    CHECK(g);
-    for (auto grantee : *g) {
-      grantees.push_back(*grantee);
-      delete grantee;
-    }
-    delete g;
+    parser_slistval_to_vector(p, privs);
+    parser_slistval_to_vector(g, grantees);
   }
 
   const std::vector<std::string>& get_privs() const { return privs; }
@@ -1224,18 +1224,8 @@ class RevokePrivilegesStmt : public DDLStmt {
                        std::string* o,
                        std::list<std::string*>* g)
       : object_type(t), object(o) {
-    CHECK(p);
-    for (auto priv : *p) {
-      privs.push_back(*priv);
-      delete priv;
-    }
-    delete p;
-    CHECK(g);
-    for (auto grantee : *g) {
-      grantees.push_back(*grantee);
-      delete grantee;
-    }
-    delete g;
+    parser_slistval_to_vector(p, privs);
+    parser_slistval_to_vector(g, grantees);
   }
 
   const std::vector<std::string>& get_privs() const { return privs; }
@@ -1277,18 +1267,8 @@ class ShowPrivilegesStmt : public DDLStmt {
 class GrantRoleStmt : public DDLStmt {
  public:
   GrantRoleStmt(std::list<std::string*>* r, std::list<std::string*>* g) {
-    CHECK(r);
-    for (auto role : *r) {
-      roles.push_back(*role);
-      delete role;
-    }
-    delete r;
-    CHECK(g);
-    for (auto grantee : *g) {
-      grantees.push_back(*grantee);
-      delete grantee;
-    }
-    delete g;
+    parser_slistval_to_vector(r, roles);
+    parser_slistval_to_vector(g, grantees);
   }
   const std::vector<std::string>& get_roles() const { return roles; }
   const std::vector<std::string>& get_grantees() const { return grantees; }
@@ -1306,18 +1286,8 @@ class GrantRoleStmt : public DDLStmt {
 class RevokeRoleStmt : public DDLStmt {
  public:
   RevokeRoleStmt(std::list<std::string*>* r, std::list<std::string*>* g) {
-    CHECK(r);
-    for (auto role : *r) {
-      roles.push_back(*role);
-      delete role;
-    }
-    delete r;
-    CHECK(g);
-    for (auto grantee : *g) {
-      grantees.push_back(*grantee);
-      delete grantee;
-    }
-    delete g;
+    parser_slistval_to_vector(r, roles);
+    parser_slistval_to_vector(g, grantees);
   }
   const std::vector<std::string>& get_roles() const { return roles; }
   const std::vector<std::string>& get_grantees() const { return grantees; }

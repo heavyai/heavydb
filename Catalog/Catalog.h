@@ -464,8 +464,10 @@ class SysCatalog {
   // check if the user has any permissions on all the given objects
   bool hasAnyPrivileges(const UserMetadata& user, std::vector<DBObject>& privObjects);
   // check if the user has the requested permissions on all the given objects
-  bool checkPrivileges(const UserMetadata& user, std::vector<DBObject>& privObjects);
-  bool checkPrivileges(const std::string& userName, std::vector<DBObject>& privObjects);
+  bool checkPrivileges(const UserMetadata& user,
+                       const std::vector<DBObject>& privObjects) const;
+  bool checkPrivileges(const std::string& userName,
+                       const std::vector<DBObject>& privObjects) const;
   Grantee* getGrantee(const std::string& name) const;
   Role* getRoleGrantee(const std::string& name) const;
   User* getUserGrantee(const std::string& name) const;

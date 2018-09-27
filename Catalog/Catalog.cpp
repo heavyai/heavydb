@@ -1517,7 +1517,7 @@ bool SysCatalog::hasAnyPrivileges(const UserMetadata& user,
 }
 
 bool SysCatalog::checkPrivileges(const UserMetadata& user,
-                                 std::vector<DBObject>& privObjects) {
+                                 const std::vector<DBObject>& privObjects) const {
   sys_read_lock read_lock(this);
   if (user.isSuper) {
     return true;
@@ -1534,7 +1534,7 @@ bool SysCatalog::checkPrivileges(const UserMetadata& user,
 }
 
 bool SysCatalog::checkPrivileges(const std::string& userName,
-                                 std::vector<DBObject>& privObjects) {
+                                 const std::vector<DBObject>& privObjects) const {
   UserMetadata user;
   if (!instance().getMetadataForUser(userName, user)) {
     throw runtime_error("Request to check privileges for user " + userName +
