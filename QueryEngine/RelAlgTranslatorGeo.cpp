@@ -704,7 +704,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
     function_name = "ST_Contains";
     swap_args = true;
   }
-  if (function_name == std::string("ST_Contains")) {
+  if (function_name == std::string("ST_Contains") ||
+      function_name == std::string("ST_Intersects")) {
     with_bounds = true;
   }
 

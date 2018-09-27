@@ -1349,6 +1349,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     return translateFunctionWithGeoArg(rex_function);
   }
   if (rex_function->getName() == std::string("ST_Distance") ||
+      rex_function->getName() == std::string("ST_Intersects") ||
       rex_function->getName() == std::string("ST_Contains") ||
       rex_function->getName() == std::string("ST_Within")) {
     CHECK_EQ(rex_function->size(), size_t(2));
