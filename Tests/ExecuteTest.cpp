@@ -9817,6 +9817,22 @@ TEST(Select, GeoSpatial_Projection) {
                                          dt)),
                 static_cast<double>(0.01));
 
+    ASSERT_NEAR(static_cast<double>(25.4558441),
+                v<double>(run_simple_agg(
+                    "SELECT ST_MaxDistance('POINT(1 1)', 'LINESTRING (9 0,18 18,19 19)') "
+                    "FROM geospatial_test limit 1;",
+                    dt)),
+                static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<double>(26.87005768),
+                v<double>(run_simple_agg("SELECT Max(ST_MaxDistance(l, 'POINT(0 0)')) "
+                                         "FROM geospatial_test;",
+                                         dt)),
+                static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<double>(14.142135),
+                v<double>(run_simple_agg(
+                    " SELECT Max(ST_MaxDistance(p, l)) FROM geospatial_test;", dt)),
+                static_cast<double>(0.01));
+
     // Geodesic distance between Paris and LA geographic points: ~9105km
     ASSERT_NEAR(
         static_cast<double>(9105643.0),

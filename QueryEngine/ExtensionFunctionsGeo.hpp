@@ -182,7 +182,7 @@ orientation(double px, double py, double qx, double qy, double rx, double ry) {
   if (val > 0.0) {
     return 1;  // Clockwise point orientation
   }
-  return 2;    // Counterclockwise point orientation
+  return 2;  // Counterclockwise point orientation
 }
 
 // Cartesian intersection of two line segments l11-l12 and l21-l22
@@ -569,6 +569,10 @@ double ST_YMax_Bounds(double* bounds, int64_t size, int32_t isr, int32_t osr) {
   return transform_coord(bounds[3], isr, osr, false);
 }
 
+//
+// ST_Length
+//
+
 DEVICE ALWAYS_INLINE double length_linestring(int8_t* l,
                                               int64_t lsize,
                                               int32_t ic,
@@ -618,6 +622,10 @@ double ST_Length_LineString_Geodesic(int8_t* coords,
                                      int32_t osr) {
   return length_linestring(coords, coords_sz, ic, isr, osr, true, false);
 }
+
+//
+// ST_Perimeter
+//
 
 EXTENSION_NOINLINE
 double ST_Perimeter_Polygon(int8_t* poly,
@@ -740,6 +748,10 @@ double ST_Perimeter_MultiPolygon_Geodesic(int8_t* mpoly_coords,
                                 osr,
                                 true);
 }
+
+//
+// ST_Area
+//
 
 DEVICE ALWAYS_INLINE double area_triangle(double x1,
                                           double y1,
@@ -896,6 +908,10 @@ EXTENSION_INLINE
 int32_t ST_NRings(int32_t* poly_ring_sizes, int64_t poly_num_rings) {
   return static_cast<int32_t>(poly_num_rings);
 }
+
+//
+// ST_Distance
+//
 
 EXTENSION_NOINLINE
 double ST_Distance_Point_Point(int8_t* p1,
@@ -1801,6 +1817,110 @@ double ST_Distance_MultiPolygon_MultiPolygon(int8_t* mpoly1_coords,
 
   return min_distance;
 }
+
+//
+// ST_MaxDistance
+//
+
+// Max cartesian distance between a point and a line segment
+DEVICE
+double max_distance_point_line(double px,
+                               double py,
+                               double l1x,
+                               double l1y,
+                               double l2x,
+                               double l2y) {
+  double length1 = distance_point_point(px, py, l1x, l1y);
+  double length2 = distance_point_point(px, py, l2x, l2y);
+  if (length1 > length2) {
+    return length1;
+  }
+  return length2;
+}
+
+DEVICE ALWAYS_INLINE double max_distance_point_linestring(int8_t* p,
+                                                          int64_t psize,
+                                                          int8_t* l,
+                                                          int64_t lsize,
+                                                          int32_t lindex,
+                                                          int32_t ic1,
+                                                          int32_t isr1,
+                                                          int32_t ic2,
+                                                          int32_t isr2,
+                                                          int32_t osr,
+                                                          bool check_closed) {
+  double px = coord_x(p, 0, ic1, isr1, osr);
+  double py = coord_y(p, 1, ic1, isr1, osr);
+
+  auto l_num_coords = lsize / compression_unit_size(ic2);
+  auto l_num_points = l_num_coords / 2;
+  if (lindex != 0) {  // Statically indexed linestring
+    if (lindex < 0 || lindex > l_num_points)
+      lindex = l_num_points;  // Endpoint
+    double lx = coord_x(l, 2 * (lindex - 1), ic2, isr2, osr);
+    double ly = coord_y(l, 2 * (lindex - 1) + 1, ic2, isr2, osr);
+    return distance_point_point(px, py, lx, ly);
+  }
+
+  double l1x = coord_x(l, 0, ic2, isr2, osr);
+  double l1y = coord_y(l, 1, ic2, isr2, osr);
+  double l2x = coord_x(l, 2, ic2, isr2, osr);
+  double l2y = coord_y(l, 3, ic2, isr2, osr);
+
+  double max_dist = max_distance_point_line(px, py, l1x, l1y, l2x, l2y);
+  for (int32_t i = 4; i < l_num_coords; i += 2) {
+    l1x = l2x;  // advance one point
+    l1y = l2y;
+    l2x = coord_x(l, i, ic2, isr2, osr);
+    l2y = coord_y(l, i + 1, ic2, isr2, osr);
+    double ldist = max_distance_point_line(px, py, l1x, l1y, l2x, l2y);
+    if (max_dist < ldist)
+      max_dist = ldist;
+  }
+  if (l_num_coords > 4 && check_closed) {
+    // Also check distance to the closing edge between the first and the last points
+    l1x = coord_x(l, 0, ic2, isr2, osr);
+    l1y = coord_y(l, 1, ic2, isr2, osr);
+    double ldist = max_distance_point_line(px, py, l1x, l1y, l2x, l2y);
+    if (max_dist < ldist)
+      max_dist = ldist;
+  }
+  return max_dist;
+}
+
+EXTENSION_NOINLINE
+double ST_MaxDistance_Point_LineString(int8_t* p,
+                                       int64_t psize,
+                                       int8_t* l,
+                                       int64_t lsize,
+                                       int32_t lindex,
+                                       int32_t ic1,
+                                       int32_t isr1,
+                                       int32_t ic2,
+                                       int32_t isr2,
+                                       int32_t osr) {
+  return max_distance_point_linestring(
+      p, psize, l, lsize, lindex, ic1, isr1, ic2, isr2, osr, false);
+}
+
+EXTENSION_NOINLINE
+double ST_MaxDistance_LineString_Point(int8_t* l,
+                                       int64_t lsize,
+                                       int32_t lindex,
+                                       int8_t* p,
+                                       int64_t psize,
+                                       int32_t ic1,
+                                       int32_t isr1,
+                                       int32_t ic2,
+                                       int32_t isr2,
+                                       int32_t osr) {
+  return max_distance_point_linestring(
+      p, psize, l, lsize, lindex, ic2, isr2, ic1, isr1, osr, false);
+}
+
+//
+// ST_Contains
+//
 
 EXTENSION_NOINLINE
 bool ST_Contains_Point_Point(int8_t* p1,
