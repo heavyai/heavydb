@@ -25,11 +25,67 @@
 
 #include <arrow/api.h>
 
+class ArrowResultSet;
+
+class ArrowResultSetRowIterator {
+ public:
+  using value_type = std::vector<TargetValue>;
+  using difference_type = std::ptrdiff_t;
+  using pointer = std::vector<TargetValue>*;
+  using reference = std::vector<TargetValue>&;
+  using iterator_category = std::input_iterator_tag;
+
+  bool operator==(const ArrowResultSetRowIterator& other) const {
+    return result_set_ == other.result_set_ && crt_row_idx_ == other.crt_row_idx_;
+  }
+  bool operator!=(const ArrowResultSetRowIterator& other) const {
+    return !(*this == other);
+  }
+
+  inline value_type operator*() const;
+  ArrowResultSetRowIterator& operator++(void) {
+    crt_row_idx_++;
+    return *this;
+  }
+  ArrowResultSetRowIterator operator++(int) {
+    ArrowResultSetRowIterator iter(*this);
+    ++(*this);
+    return iter;
+  }
+
+ private:
+  const ArrowResultSet* result_set_;
+  size_t crt_row_idx_;
+
+  ArrowResultSetRowIterator(const ArrowResultSet* rs)
+      : result_set_(rs), crt_row_idx_(0){};
+
+  friend class ArrowResultSet;
+};
+
 // Expose Arrow buffers as a subset of the ResultSet interface
 // to make it work within the existing execution test framework.
 class ArrowResultSet {
  public:
   ArrowResultSet(const std::shared_ptr<arrow::RecordBatch>& record_batch);
+
+  ArrowResultSetRowIterator rowIterator(size_t from_index,
+                                        bool translate_strings,
+                                        bool decimal_to_double) const {
+    ArrowResultSetRowIterator iter(this);
+    for (size_t i = 0; i < from_index; i++) {
+      ++iter;
+    }
+
+    return iter;
+  }
+
+  ArrowResultSetRowIterator rowIterator(bool translate_strings,
+                                        bool decimal_to_double) const {
+    return rowIterator(0, translate_strings, decimal_to_double);
+  }
+
+  std::vector<TargetValue> getRowAt(const size_t index) const;
 
   std::vector<TargetValue> getNextRow(const bool translate_strings,
                                       const bool decimal_to_double) const;
@@ -51,6 +107,10 @@ class ArrowResultSet {
   mutable size_t crt_row_idx_;
   std::vector<TargetMetaInfo> column_metainfo_;
 };
+
+ArrowResultSetRowIterator::value_type ArrowResultSetRowIterator::operator*() const {
+  return result_set_->getRowAt(crt_row_idx_);
+}
 
 class ExecutionResult;
 

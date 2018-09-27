@@ -619,6 +619,46 @@ int64_t ResultSet::lazyReadInt(const int64_t ival,
 
 // Not all entries in the buffer represent a valid row. Advance the internal cursor
 // used for the getNextRow method to the next row which is valid.
+void ResultSet::advanceCursorToNextEntry(ResultSetRowIterator& iter) const {
+  if (keep_first_ && iter.fetched_so_far_ >= drop_first_ + keep_first_) {
+    iter.global_entry_idx_valid_ = false;
+    return;
+  }
+
+  while (iter.crt_row_buff_idx_ < entryCount()) {
+    const auto entry_idx = permutation_.empty() ? iter.crt_row_buff_idx_
+                                                : permutation_[iter.crt_row_buff_idx_];
+    const auto storage_lookup_result = findStorage(entry_idx);
+    const auto storage = storage_lookup_result.storage_ptr;
+    const auto fixedup_entry_idx = storage_lookup_result.fixedup_entry_idx;
+    if (!storage->isEmptyEntry(fixedup_entry_idx)) {
+      if (iter.fetched_so_far_ < drop_first_) {
+        ++iter.fetched_so_far_;
+      } else {
+        break;
+      }
+    }
+    ++iter.crt_row_buff_idx_;
+  }
+  if (permutation_.empty()) {
+    iter.global_entry_idx_ = iter.crt_row_buff_idx_;
+  } else {
+    CHECK_LE(iter.crt_row_buff_idx_, permutation_.size());
+    iter.global_entry_idx_ = iter.crt_row_buff_idx_ == permutation_.size()
+                                 ? iter.crt_row_buff_idx_
+                                 : permutation_[iter.crt_row_buff_idx_];
+  }
+
+  iter.global_entry_idx_valid_ = iter.crt_row_buff_idx_ < entryCount();
+
+  if (iter.global_entry_idx_valid_) {
+    ++iter.crt_row_buff_idx_;
+    ++iter.fetched_so_far_;
+  }
+}
+
+// Not all entries in the buffer represent a valid row. Advance the internal cursor
+// used for the getNextRow method to the next row which is valid.
 size_t ResultSet::advanceCursorToNextEntry() const {
   while (crt_row_buff_idx_ < entryCount()) {
     const auto entry_idx =

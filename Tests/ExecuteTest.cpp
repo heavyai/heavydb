@@ -53,6 +53,7 @@ std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
 std::unique_ptr<QueryRunner::IROutputFile> g_ir_output_file;
 bool g_hoist_literals{true};
 size_t g_shard_count{0};
+bool g_use_row_iterator{true};
 
 size_t choose_shard_count() {
   CHECK(g_session);
@@ -230,8 +231,10 @@ class SQLiteComparator {
     }
     CHECK_EQ(connector_.getNumCols(), mapd_results->colCount());
     const int num_cols{static_cast<int>(connector_.getNumCols())};
+    auto row_iterator = mapd_results->rowIterator(true, true);
     for (int row_idx = 0; row_idx < num_rows; ++row_idx) {
-      const auto crt_row = mapd_results->getNextRow(true, true);
+      const auto crt_row =
+          g_use_row_iterator ? *row_iterator++ : mapd_results->getNextRow(true, true);
       CHECK(!crt_row.empty());
       CHECK_EQ(static_cast<size_t>(num_cols), crt_row.size());
       for (int col_idx = 0; col_idx < num_cols; ++col_idx) {

@@ -214,6 +214,62 @@ void deallocate_arrow_result(const ArrowResult& result,
                              const size_t device_id,
                              Data_Namespace::DataMgr* data_mgr);
 
+class ResultSet;
+
+class ResultSetRowIterator {
+ public:
+  using value_type = std::vector<TargetValue>;
+  using difference_type = std::ptrdiff_t;
+  using pointer = std::vector<TargetValue>*;
+  using reference = std::vector<TargetValue>&;
+  using iterator_category = std::input_iterator_tag;
+
+  bool operator==(const ResultSetRowIterator& other) const {
+    return result_set_ == other.result_set_ &&
+           crt_row_buff_idx_ == other.crt_row_buff_idx_;
+  }
+  bool operator!=(const ResultSetRowIterator& other) const { return !(*this == other); }
+
+  inline value_type operator*() const;
+  inline ResultSetRowIterator& operator++(void);
+  ResultSetRowIterator operator++(int) {
+    ResultSetRowIterator iter(*this);
+    ++(*this);
+    return iter;
+  }
+
+  size_t getCurrentRowBufferIndex() const {
+    if (crt_row_buff_idx_ == 0) {
+      throw std::runtime_error("current row buffer iteration index is undefined");
+    }
+    return crt_row_buff_idx_ - 1;
+  }
+
+ private:
+  const ResultSet* result_set_;
+  size_t crt_row_buff_idx_;
+  size_t global_entry_idx_;
+  bool global_entry_idx_valid_;
+  size_t fetched_so_far_;
+  bool translate_strings_;
+  bool decimal_to_double_;
+
+  ResultSetRowIterator(const ResultSet* rs,
+                       bool translate_strings,
+                       bool decimal_to_double)
+      : result_set_(rs)
+      , crt_row_buff_idx_(0)
+      , global_entry_idx_(0)
+      , global_entry_idx_valid_(false)
+      , fetched_so_far_(0)
+      , translate_strings_(translate_strings)
+      , decimal_to_double_(decimal_to_double){};
+
+  ResultSetRowIterator(const ResultSet* rs) : ResultSetRowIterator(rs, false, false){};
+
+  friend class ResultSet;
+};
+
 class TSerializedRows;
 
 class ResultSet {
@@ -247,6 +303,26 @@ class ResultSet {
             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
   ~ResultSet();
+
+  inline ResultSetRowIterator rowIterator(size_t from_logical_index,
+                                          bool translate_strings,
+                                          bool decimal_to_double) const {
+    ResultSetRowIterator rowIterator(this, translate_strings, decimal_to_double);
+
+    // move to first logical position
+    ++rowIterator;
+
+    for (size_t index = 0; index < from_logical_index; index++) {
+      ++rowIterator;
+    }
+
+    return rowIterator;
+  }
+
+  inline ResultSetRowIterator rowIterator(bool translate_strings,
+                                          bool decimal_to_double) const {
+    return rowIterator(0, translate_strings, decimal_to_double);
+  }
 
   ExecutorDeviceType getDeviceType() const;
 
@@ -375,6 +451,8 @@ class ResultSet {
   void setGeoReturnType(const GeoReturnType val) { geo_return_type_ = val; }
 
  private:
+  void advanceCursorToNextEntry(ResultSetRowIterator& iter) const;
+
   std::vector<TargetValue> getNextRowImpl(const bool translate_strings,
                                           const bool decimal_to_double) const;
 
@@ -678,7 +756,33 @@ class ResultSet {
   std::unique_ptr<ResultSetComparator<ColumnWiseTargetAccessor>> column_wise_comparator_;
 
   friend class ResultSetManager;
+  friend class ResultSetRowIterator;
 };
+
+ResultSetRowIterator::value_type ResultSetRowIterator::operator*() const {
+  if (!global_entry_idx_valid_) {
+    return {};
+  }
+
+  if (result_set_->just_explain_) {
+    return {result_set_->explanation_};
+  }
+
+  return result_set_->getRowAt(
+      global_entry_idx_, translate_strings_, decimal_to_double_, false);
+}
+
+inline ResultSetRowIterator& ResultSetRowIterator::operator++(void) {
+  if (!result_set_->storage_ && !result_set_->just_explain_) {
+    global_entry_idx_valid_ = false;
+  } else if (result_set_->just_explain_) {
+    global_entry_idx_valid_ = 0 == fetched_so_far_;
+    fetched_so_far_ = 1;
+  } else {
+    result_set_->advanceCursorToNextEntry(*this);
+  }
+  return *this;
+}
 
 class ResultSetManager {
  public:
