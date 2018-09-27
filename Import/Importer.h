@@ -44,7 +44,6 @@
 #include "../Catalog/TableDescriptor.h"
 #include "../Chunk/Chunk.h"
 #include "../Fragmenter/Fragmenter.h"
-#include "../Shared/ShapeDrawData.h"
 #include "../Shared/checked_alloc.h"
 
 // Some builds of boost::geometry require iostream, but don't explicitly include it.
