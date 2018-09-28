@@ -2139,8 +2139,9 @@ int32_t Executor::executePlanWithoutGroupBy(
                          out_vec,
                          reduced_outs,
                          query_exe_context);
-      if (error_code)
+      if (error_code) {
         break;
+      }
     }
   }
 
