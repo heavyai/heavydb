@@ -74,8 +74,8 @@ makej
 make install PREFIX=$PREFIX
 popd
 
-# https://www.openssl.org/source/openssl-1.0.2o.tar.gz
-download_make_install ${HTTP_DEPS}/openssl-1.0.2o.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
+# https://www.openssl.org/source/openssl-1.0.2p.tar.gz
+download_make_install ${HTTP_DEPS}/openssl-1.0.2p.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
 
 # libarchive
 download_make_install ${HTTP_DEPS}/xz-5.2.4.tar.xz "" "--disable-shared"
@@ -99,8 +99,8 @@ pushd boost_$VERS
 ./b2 cxxflags=-fPIC install --prefix=$PREFIX || true
 popd
 
-# https://cmake.org/files/v3.12/cmake-3.12.1.tar.gz
-download_make_install ${HTTP_DEPS}/cmake-3.12.1.tar.gz
+# https://cmake.org/files/v3.12/cmake-3.12.2.tar.gz
+download_make_install ${HTTP_DEPS}/cmake-3.12.2.tar.gz
 
 # folly
 VERS=3.0.0
@@ -232,7 +232,7 @@ make install
 popd
 
 # c-blosc
-VERS=1.14.3
+VERS=1.14.4
 download https://github.com/Blosc/c-blosc/archive/v$VERS.tar.gz
 extract v$VERS.tar.gz
 BDIR="c-blosc-$VERS/build"
@@ -264,13 +264,13 @@ download_make_install ${HTTP_DEPS}/gdal-2.3.2.tar.xz "" "--without-geos --with-l
 # Apache Arrow (see common-functions.sh)
 install_arrow
 
-VERS=1.10.3
+VERS=1.11
 ARCH=$(uname -m)
 ARCH=${ARCH//x86_64/amd64}
 ARCH=${ARCH//aarch64/arm64}
 # https://dl.google.com/go/go$VERS.linux-$ARCH.tar.gz
 download ${HTTP_DEPS}/go$VERS.linux-$ARCH.tar.gz
-extract go$VERS.linux-amd64.tar.gz
+extract go$VERS.linux-$ARCH.tar.gz
 mv go $PREFIX
 
 # install AWS core and s3 sdk
