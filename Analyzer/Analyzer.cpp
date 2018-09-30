@@ -154,7 +154,7 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::deep_copy() const {
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
       new_list;
   for (auto p : expr_pair_list) {
-    new_list.push_back(std::make_pair(p.first->deep_copy(), p.second->deep_copy()));
+    new_list.emplace_back(p.first->deep_copy(), p.second->deep_copy());
   }
   return makeExpr<CaseExpr>(type_info,
                             contains_agg,
@@ -1751,8 +1751,8 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_with_targetlist(
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
       epair_list;
   for (auto p : expr_pair_list) {
-    epair_list.push_back(std::make_pair(p.first->rewrite_with_targetlist(tlist),
-                                        p.second->rewrite_with_targetlist(tlist)));
+    epair_list.emplace_back(p.first->rewrite_with_targetlist(tlist),
+                            p.second->rewrite_with_targetlist(tlist));
   }
   return makeExpr<CaseExpr>(
       type_info,
@@ -1794,8 +1794,8 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_with_child_targetlist(
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
       epair_list;
   for (auto p : expr_pair_list) {
-    epair_list.push_back(std::make_pair(p.first->rewrite_with_child_targetlist(tlist),
-                                        p.second->rewrite_with_child_targetlist(tlist)));
+    epair_list.emplace_back(p.first->rewrite_with_child_targetlist(tlist),
+                            p.second->rewrite_with_child_targetlist(tlist));
   }
   return makeExpr<CaseExpr>(
       type_info,
@@ -1837,8 +1837,8 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_agg_to_var(
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
       epair_list;
   for (auto p : expr_pair_list) {
-    epair_list.push_back(std::make_pair(p.first->rewrite_agg_to_var(tlist),
-                                        p.second->rewrite_agg_to_var(tlist)));
+    epair_list.emplace_back(p.first->rewrite_agg_to_var(tlist),
+                            p.second->rewrite_agg_to_var(tlist));
   }
   return makeExpr<CaseExpr>(type_info,
                             contains_agg,

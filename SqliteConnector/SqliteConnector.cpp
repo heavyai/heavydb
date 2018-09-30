@@ -85,7 +85,7 @@ void SqliteConnector::query_with_text_params(
     if (atFirstResult_) {
       numCols_ = sqlite3_column_count(stmt);
       for (size_t c = 0; c < numCols_; ++c) {
-        columnNames.push_back(sqlite3_column_name(stmt, c));
+        columnNames.emplace_back(sqlite3_column_name(stmt, c));
         columnTypes.push_back(sqlite3_column_type(stmt, c));
       }
       results_.resize(numCols_);

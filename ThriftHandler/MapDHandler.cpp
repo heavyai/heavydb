@@ -499,7 +499,7 @@ void MapDHandler::value_to_thrift_column(const TargetValue& tv,
       if (s) {
         column.data.str_col.push_back(*s);
       } else {
-        column.data.str_col.push_back("");  // null string
+        column.data.str_col.emplace_back("");  // null string
         auto null_p = boost::get<void*>(s_n);
         CHECK(null_p && !*null_p);
       }
@@ -572,7 +572,7 @@ void MapDHandler::value_to_thrift_column(const TargetValue& tv,
       if (s) {
         column.data.str_col.push_back(*s);
       } else {
-        column.data.str_col.push_back("");  // null string
+        column.data.str_col.emplace_back("");  // null string
         auto null_p = boost::get<void*>(s_n);
         CHECK(null_p && !*null_p);
       }

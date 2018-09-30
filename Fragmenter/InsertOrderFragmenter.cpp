@@ -108,7 +108,7 @@ void InsertOrderFragmenter::getChunkMetadata() {
       if (fragmentInfoVec_.empty() ||
           curFragmentId != fragmentInfoVec_.back().fragmentId) {
         maxFragmentId_ = curFragmentId;
-        fragmentInfoVec_.push_back(FragmentInfo());
+        fragmentInfoVec_.emplace_back();
         fragmentInfoVec_.back().fragmentId = curFragmentId;
         fragmentInfoVec_.back().setPhysicalNumTuples(chunkIt->second.numElements);
         numTuples_ += fragmentInfoVec_.back().getPhysicalNumTuples();

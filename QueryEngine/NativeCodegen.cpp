@@ -153,8 +153,8 @@ std::vector<std::pair<void*, void*>> Executor::getCodeFromCache(
     std::vector<std::pair<void*, void*>> native_functions;
     for (auto& native_code : it->second.first) {
       GpuCompilationContext* gpu_context = std::get<2>(native_code).get();
-      native_functions.push_back(std::make_pair(
-          std::get<0>(native_code), gpu_context ? gpu_context->module() : nullptr));
+      native_functions.emplace_back(std::get<0>(native_code),
+                                    gpu_context ? gpu_context->module() : nullptr);
     }
     return native_functions;
   }
@@ -584,7 +584,7 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
     auto native_module = gpu_context->module();
     CHECK(native_code);
     CHECK(native_module);
-    native_functions.push_back(std::make_pair(native_code, native_module));
+    native_functions.emplace_back(native_code, native_module);
     cached_functions.emplace_back(native_code, nullptr, gpu_context);
   }
   addCodeToCache(key, cached_functions, module, gpu_code_cache_);
@@ -893,14 +893,14 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
          target_type_info.get_compression() == kENCODING_NONE) ||
         target_type_info.is_array();  // TODO: should it use is_varlen_array() ?
     if (!agg_expr || agg_expr->get_aggtype() == kSAMPLE) {
-      result.push_back(target_type_info.is_fp() ? "agg_id_double" : "agg_id");
+      result.emplace_back(target_type_info.is_fp() ? "agg_id_double" : "agg_id");
       if (is_varlen) {
-        result.push_back("agg_id");
+        result.emplace_back("agg_id");
       }
       if (target_type_info.is_geometry()) {
-        result.push_back("agg_id");
+        result.emplace_back("agg_id");
         for (auto i = 2; i < 2 * target_type_info.get_physical_coord_cols(); ++i) {
-          result.push_back("agg_id");
+          result.emplace_back("agg_id");
         }
       }
       continue;
@@ -914,30 +914,30 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
             !agg_type_info.is_fp()) {
           throw std::runtime_error("AVG is only valid on integer and floating point");
         }
-        result.push_back((agg_type_info.is_integer() || agg_type_info.is_time())
-                             ? "agg_sum"
-                             : "agg_sum_double");
-        result.push_back((agg_type_info.is_integer() || agg_type_info.is_time())
-                             ? "agg_count"
-                             : "agg_count_double");
+        result.emplace_back((agg_type_info.is_integer() || agg_type_info.is_time())
+                                ? "agg_sum"
+                                : "agg_sum_double");
+        result.emplace_back((agg_type_info.is_integer() || agg_type_info.is_time())
+                                ? "agg_count"
+                                : "agg_count_double");
         break;
       }
       case kMIN: {
         if (agg_type_info.is_string() || agg_type_info.is_array()) {
           throw std::runtime_error("MIN on strings or arrays not supported yet");
         }
-        result.push_back((agg_type_info.is_integer() || agg_type_info.is_time())
-                             ? "agg_min"
-                             : "agg_min_double");
+        result.emplace_back((agg_type_info.is_integer() || agg_type_info.is_time())
+                                ? "agg_min"
+                                : "agg_min_double");
         break;
       }
       case kMAX: {
         if (agg_type_info.is_string() || agg_type_info.is_array()) {
           throw std::runtime_error("MAX on strings or arrays not supported yet");
         }
-        result.push_back((agg_type_info.is_integer() || agg_type_info.is_time())
-                             ? "agg_max"
-                             : "agg_max_double");
+        result.emplace_back((agg_type_info.is_integer() || agg_type_info.is_time())
+                                ? "agg_max"
+                                : "agg_max_double");
         break;
       }
       case kSUM: {
@@ -945,14 +945,14 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
             !agg_type_info.is_fp()) {
           throw std::runtime_error("SUM is only valid on integer and floating point");
         }
-        result.push_back((agg_type_info.is_integer() || agg_type_info.is_time())
-                             ? "agg_sum"
-                             : "agg_sum_double");
+        result.emplace_back((agg_type_info.is_integer() || agg_type_info.is_time())
+                                ? "agg_sum"
+                                : "agg_sum_double");
         break;
       }
       case kCOUNT:
-        result.push_back(agg_expr->get_is_distinct() ? "agg_count_distinct"
-                                                     : "agg_count");
+        result.emplace_back(agg_expr->get_is_distinct() ? "agg_count_distinct"
+                                                        : "agg_count");
         break;
       case kSAMPLE: {
         if ((agg_type_info.is_string() &&
@@ -961,11 +961,11 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
           throw std::runtime_error(
               "SAMPLE on none encoded strings or arrays not supported yet");
         }
-        result.push_back(agg_type_info.is_fp() ? "agg_id_double" : "agg_id");
+        result.emplace_back(agg_type_info.is_fp() ? "agg_id_double" : "agg_id");
         break;
       }
       case kAPPROX_COUNT_DISTINCT:
-        result.push_back("agg_approximate_count_distinct");
+        result.emplace_back("agg_approximate_count_distinct");
         break;
       default:
         CHECK(false);

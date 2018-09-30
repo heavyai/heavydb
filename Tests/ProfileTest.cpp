@@ -799,7 +799,7 @@ TEST(Hash, Baseline) {
 
   std::vector<std::vector<size_t>> selected_tries;
   for (size_t i = 0; i < dist_tries.size(); ++i) {
-    selected_tries.push_back(std::vector<size_t>(key_count, i));
+    selected_tries.emplace_back(key_count, i);
   }
   selected_tries.push_back({3, 2, 4, 3, 4, 5, 1});
   for (size_t i = 0; i < selected_tries.size(); ++i) {
@@ -1312,7 +1312,7 @@ TEST(Reduction, Baseline) {
 
   std::vector<std::pair<int64_t, int64_t>> ranges;
   for (size_t k = 0; k < key_count; ++k) {
-    ranges.push_back({-(entry_count / 2), (entry_count / 2)});
+    ranges.emplace_back(-(entry_count / 2), (entry_count / 2));
   }
 
   for (size_t v = 0; v < val_count; ++v) {

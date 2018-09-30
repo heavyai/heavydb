@@ -909,7 +909,7 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
       cast_expr_pair_list;
   for (auto p : expr_pair_list) {
     ti.set_notnull(false);
-    cast_expr_pair_list.push_back(std::make_pair(p.first, p.second->add_cast(ti)));
+    cast_expr_pair_list.emplace_back(p.first, p.second->add_cast(ti));
   }
   if (else_e != nullptr) {
     else_e = else_e->add_cast(ti);

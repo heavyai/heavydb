@@ -3828,11 +3828,11 @@ void import_array_test(const std::string& table_name) {
             case kBOOLEAN: {
               for (size_t i = 0; i < 3; ++i) {
                 if (row_idx % 2) {
-                  array_elems.push_back("T");
-                  array_elems.push_back("F");
+                  array_elems.emplace_back("T");
+                  array_elems.emplace_back("F");
                 } else {
-                  array_elems.push_back("F");
-                  array_elems.push_back("T");
+                  array_elems.emplace_back("F");
+                  array_elems.emplace_back("T");
                 }
               }
               break;

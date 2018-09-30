@@ -331,34 +331,34 @@ int create_and_populate_tables() {
 
     // Insert data into the table
     std::vector<std::string> data_col_value_list;
-    data_col_value_list.push_back(
+    data_col_value_list.emplace_back(
         "1, 't', 23, 2349923, 111.1, 1.1, 'SFO', '15:13:14', '1999-09-09', '2014-12-13 "
         "22:23:15', 'paris'");
-    data_col_value_list.push_back(
+    data_col_value_list.emplace_back(
         "2, 'f', null, -973273, 7263.11, 87.1, null, '20:05:00', '2017-12-12', "
         "'2017-12-12 20:05:00', 'toronto'");
-    data_col_value_list.push_back(
+    data_col_value_list.emplace_back(
         "3, 'f', 702, 87395, 333.5, null, 'YVR', '11:11:11', '2010-01-01', '2010-01-02 "
         "04:11:45', 'vancouver'");
-    data_col_value_list.push_back(
+    data_col_value_list.emplace_back(
         "4, null, 864, 100001, null, 9.9, 'SJC', null, '2015-05-05', '2010-05-05 "
         "05:15:55', 'london'");
-    data_col_value_list.push_back(
+    data_col_value_list.emplace_back(
         "5, 'f', 333, 112233, 99.9, 9.9, 'ABQ', '22:22:22', '2015-05-05', '2010-05-05 "
         "05:15:55', 'new york'");
-    data_col_value_list.push_back(
+    data_col_value_list.emplace_back(
         "6, 't', -3, 18, 765.8, 2.2, 'YYZ', '00:00:01', null, '2009-01-08 12:13:14', "
         "null");
-    data_col_value_list.push_back(
+    data_col_value_list.emplace_back(
         "7, 'f', -9873, 3789, 789.3, 4.7, 'DCA', '11:22:33', '2001-02-03', '2005-04-03 "
         "15:16:17', 'rio de janerio'");
-    data_col_value_list.push_back(
+    data_col_value_list.emplace_back(
         "8, 't', 12, 4321, 83.9, 1.2, 'DXB', '21:20:10', null, '2007-12-01 23:22:21', "
         "'dubai'");
-    data_col_value_list.push_back(
+    data_col_value_list.emplace_back(
         "9, 't', 48, null, 83.9, 1.2, 'BWI', '09:08:07', '2001-09-11', null, "
         "'washington'");
-    data_col_value_list.push_back(
+    data_col_value_list.emplace_back(
         "10, 'f', 99, 777, 77.7, 7.7, 'LLBG', '07:07:07', '2017-07-07', '2017-07-07 "
         "07:07:07', 'Tel Aviv'");
 

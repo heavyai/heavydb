@@ -163,7 +163,7 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec,
 
       } else {  // page was checkpointed properly
         Page page(fileId, pageNum);
-        headerVec.push_back(HeaderInfo(chunkKey, pageId, versionEpoch, page));
+        headerVec.emplace_back(chunkKey, pageId, versionEpoch, page);
         // std::cout << "Inserted into headerVec" << std::endl;
       }
     } else {  // no header for this page - insert into free list

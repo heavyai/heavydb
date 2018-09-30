@@ -584,7 +584,7 @@ class CalciteAdapter {
     for (auto field_it = col_names_node.Begin(); field_it != col_names_node.End();
          ++field_it) {
       CHECK(field_it->IsString());
-      result.push_back(field_it->GetString());
+      result.emplace_back(field_it->GetString());
     }
     return result;
   }

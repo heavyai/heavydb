@@ -191,7 +191,7 @@ void populate_TColumn(TStringValue ts,
     case SQLTypes::kVARCHAR:
       if (ts.is_null) {
         input_col.nulls.push_back(true);
-        input_col.data.str_col.push_back("");
+        input_col.data.str_col.emplace_back("");
 
       } else {
         input_col.nulls.push_back(false);

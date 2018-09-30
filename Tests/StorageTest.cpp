@@ -151,8 +151,7 @@ bool storage_test_parallel(const string& table_name,
   // Constructs a number of threads and have them push records to the table in parallel
   vector<std::thread> myThreads;
   for (size_t i = 0; i < thread_count; i++) {
-    myThreads.push_back(
-        std::thread(simple_thread_wrapper, table_name, num_rows / thread_count, i));
+    myThreads.emplace_back(simple_thread_wrapper, table_name, num_rows / thread_count, i);
   }
   for (auto& t : myThreads) {
     t.join();

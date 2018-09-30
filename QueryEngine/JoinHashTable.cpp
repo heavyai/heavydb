@@ -1283,8 +1283,7 @@ llvm::Value* JoinHashTable::codegenOneToManyHashJoin(
   executor->cgen_state_->ir_builder_.SetInsertPoint(match_scan_cont);
 
   executor->cgen_state_->match_scan_labels_.push_back(match_loop_head);
-  executor->cgen_state_->match_iterators_.push_back(
-      std::make_pair(match_pos, match_pos_ptr));
+  executor->cgen_state_->match_iterators_.emplace_back(match_pos, match_pos_ptr);
 
   return matching_set.slot;
 }

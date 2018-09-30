@@ -3023,7 +3023,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
   }
 
   for (size_t i = 0; i < max_threads; i++) {
-    import_buffers_vec.push_back(std::vector<std::unique_ptr<TypedImportBuffer>>());
+    import_buffers_vec.emplace_back();
     for (const auto cd : loader->get_column_descs()) {
       import_buffers_vec[i].push_back(std::unique_ptr<TypedImportBuffer>(
           new TypedImportBuffer(cd, loader->get_string_dict(cd))));

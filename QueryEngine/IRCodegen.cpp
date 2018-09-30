@@ -501,14 +501,14 @@ std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
     std::vector<std::string>& fail_reasons) {
   if (current_level_join_conditions.type != JoinType::INNER &&
       current_level_join_conditions.quals.size() > 1) {
-    fail_reasons.push_back("No equijoin expression found for outer join");
+    fail_reasons.emplace_back("No equijoin expression found for outer join");
     return nullptr;
   }
   std::shared_ptr<JoinHashTableInterface> current_level_hash_table;
   for (const auto& join_qual : current_level_join_conditions.quals) {
     auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(join_qual);
     if (!qual_bin_oper || !IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
-      fail_reasons.push_back("No equijoin expression found");
+      fail_reasons.emplace_back("No equijoin expression found");
       if (current_level_join_conditions.type == JoinType::INNER) {
         add_qualifier_to_execution_unit(ra_exe_unit, join_qual);
       }

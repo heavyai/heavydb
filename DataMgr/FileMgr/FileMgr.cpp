@@ -805,7 +805,7 @@ void FileMgr::requestFreePages(size_t numPagesRequested,
     do {
       pageNum = fileInfo->getFreePage();
       if (pageNum != -1) {
-        pages.push_back(Page(fileInfo->fileId, pageNum));
+        pages.emplace_back(fileInfo->fileId, pageNum);
         numPagesNeeded--;
       }
     } while (pageNum != -1 && numPagesNeeded > 0);
@@ -824,7 +824,7 @@ void FileMgr::requestFreePages(size_t numPagesRequested,
     do {
       pageNum = fileInfo->getFreePage();
       if (pageNum != -1) {
-        pages.push_back(Page(fileInfo->fileId, pageNum));
+        pages.emplace_back(fileInfo->fileId, pageNum);
         numPagesNeeded--;
       }
     } while (pageNum != -1 && numPagesNeeded > 0);
@@ -906,7 +906,7 @@ void FileMgr::getChunkMetadataVec(
     if (chunkIt->second->hasEncoder) {
       ChunkMetadata chunkMetadata;
       chunkIt->second->encoder->getMetadata(chunkMetadata);
-      chunkMetadataVec.push_back(std::make_pair(chunkIt->first, chunkMetadata));
+      chunkMetadataVec.emplace_back(chunkIt->first, chunkMetadata);
     }
   }
 }
@@ -935,7 +935,7 @@ void FileMgr::getChunkMetadataVecForKeyPrefix(
     if (chunkIt->second->hasEncoder) {
       ChunkMetadata chunkMetadata;
       chunkIt->second->encoder->getMetadata(chunkMetadata);
-      chunkMetadataVec.push_back(std::make_pair(chunkIt->first, chunkMetadata));
+      chunkMetadataVec.emplace_back(chunkIt->first, chunkMetadata);
     }
     chunkIt++;
   }
