@@ -113,7 +113,7 @@ RowSetPtr SpeculativeTopNMap::asRows(const RelAlgExecutionUnit& ra_exe_unit,
   }
   CHECK_EQ(size_t(2), ra_exe_unit.target_exprs.size());
   auto query_mem_desc_rs = query_mem_desc;
-  query_mem_desc_rs.setGroupByColRangeType(GroupByColRangeType::MultiCol);
+  query_mem_desc_rs.setQueryDescriptionType(QueryDescriptionType::GroupByBaselineHash);
   query_mem_desc_rs.setOutputColumnar(false);
   query_mem_desc_rs.setEntryCount(num_rows);
   query_mem_desc_rs.clearAggColWidths();

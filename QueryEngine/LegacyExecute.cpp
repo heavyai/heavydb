@@ -455,7 +455,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
   }
   QueryMemoryDescriptor query_mem_desc(this,
                                        allow_multifrag,
-                                       GroupByColRangeType::Projection,
+                                       QueryDescriptionType::Projection,
                                        false,
                                        false,
                                        -1,

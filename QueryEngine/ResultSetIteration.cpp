@@ -1635,14 +1635,13 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
 
 // Returns true iff the entry at position entry_idx in buff contains a valid row.
 bool ResultSetStorage::isEmptyEntry(const size_t entry_idx, const int8_t* buff) const {
-  if (GroupByColRangeType::Scan == query_mem_desc_.getGroupByColRangeType()) {
+  if (QueryDescriptionType::NonGroupedAggregate ==
+      query_mem_desc_.getQueryDescriptionType()) {
     return false;
   }
   if (query_mem_desc_.hasKeylessHash()) {
-    CHECK(query_mem_desc_.getGroupByColRangeType() ==
-              GroupByColRangeType::OneColKnownRange ||
-          query_mem_desc_.getGroupByColRangeType() ==
-              GroupByColRangeType::MultiColPerfectHash);
+    CHECK(query_mem_desc_.getQueryDescriptionType() ==
+          QueryDescriptionType::GroupByPerfectHash);
     CHECK_GE(query_mem_desc_.getTargetIdxForKey(), 0);
     CHECK_LT(static_cast<size_t>(query_mem_desc_.getTargetIdxForKey()),
              target_init_vals_.size());
@@ -1676,7 +1675,8 @@ bool ResultSetStorage::isEmptyEntry(const size_t entry_idx, const int8_t* buff) 
   const auto keys_ptr = row_ptr_rowwise(buff, query_mem_desc_, entry_idx);
   switch (query_mem_desc_.getEffectiveKeyWidth()) {
     case 4:
-      CHECK(GroupByColRangeType::MultiCol == query_mem_desc_.getGroupByColRangeType());
+      CHECK(QueryDescriptionType::GroupByBaselineHash ==
+            query_mem_desc_.getQueryDescriptionType());
       return *reinterpret_cast<const int32_t*>(keys_ptr) == EMPTY_KEY_32;
     case 8:
       return *reinterpret_cast<const int64_t*>(keys_ptr) == EMPTY_KEY_64;

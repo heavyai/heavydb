@@ -133,14 +133,13 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
   auto entry_count = query_mem_desc_.getEntryCount();
   CHECK_GT(entry_count, size_t(0));
   if (query_mem_desc_.didOutputColumnar()) {
-    CHECK(query_mem_desc_.getGroupByColRangeType() ==
-              GroupByColRangeType::OneColKnownRange ||
-          query_mem_desc_.getGroupByColRangeType() ==
-              GroupByColRangeType::MultiColPerfectHash ||
-          query_mem_desc_.getGroupByColRangeType() == GroupByColRangeType::MultiCol);
+    CHECK(query_mem_desc_.getQueryDescriptionType() ==
+              QueryDescriptionType::GroupByPerfectHash ||
+          query_mem_desc_.getQueryDescriptionType() ==
+              QueryDescriptionType::GroupByBaselineHash);
   }
-  switch (query_mem_desc_.getGroupByColRangeType()) {
-    case GroupByColRangeType::MultiCol:
+  switch (query_mem_desc_.getQueryDescriptionType()) {
+    case QueryDescriptionType::GroupByBaselineHash:
       CHECK_GE(entry_count, that.query_mem_desc_.getEntryCount());
       break;
     default:
@@ -150,7 +149,8 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
   CHECK(this_buff);
   auto that_buff = that.buff_;
   CHECK(that_buff);
-  if (query_mem_desc_.getGroupByColRangeType() == GroupByColRangeType::MultiCol) {
+  if (query_mem_desc_.getQueryDescriptionType() ==
+      QueryDescriptionType::GroupByBaselineHash) {
     if (use_multithreaded_reduction(that.query_mem_desc_.getEntryCount())) {
       const size_t thread_count = cpu_threads();
       std::vector<std::future<void>> reduction_threads;
@@ -581,7 +581,8 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
                                               const ResultSetStorage& that) const {
   check_watchdog(that_entry_idx);
   const auto key_count = query_mem_desc_.getGroupbyColCount();
-  CHECK(query_mem_desc_.getGroupByColRangeType() == GroupByColRangeType::MultiCol);
+  CHECK(query_mem_desc_.getQueryDescriptionType() ==
+        QueryDescriptionType::GroupByBaselineHash);
   CHECK(!query_mem_desc_.hasKeylessHash());
   const auto key_off =
       query_mem_desc_.didOutputColumnar()
@@ -710,7 +711,8 @@ void ResultSetStorage::moveEntriesToBuffer(int8_t* new_buff,
   CHECK_GT(new_entry_count, query_mem_desc_.getEntryCount());
   auto new_buff_i64 = reinterpret_cast<int64_t*>(new_buff);
   const auto key_count = query_mem_desc_.getGroupbyColCount();
-  CHECK(GroupByColRangeType::MultiCol == query_mem_desc_.getGroupByColRangeType());
+  CHECK(QueryDescriptionType::GroupByBaselineHash ==
+        query_mem_desc_.getQueryDescriptionType());
   const auto this_buff = reinterpret_cast<const int64_t*>(buff_);
   const auto row_qw_count = get_row_qw_count(query_mem_desc_);
   const auto key_byte_width = query_mem_desc_.getEffectiveKeyWidth();
@@ -772,8 +774,8 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
   for (const auto result_set : result_sets) {
     CHECK_EQ(executor, result_set->executor_);
   }
-  if (first_result.query_mem_desc_.getGroupByColRangeType() ==
-      GroupByColRangeType::MultiCol) {
+  if (first_result.query_mem_desc_.getQueryDescriptionType() ==
+      QueryDescriptionType::GroupByBaselineHash) {
     const auto total_entry_count =
         std::accumulate(result_sets.begin(),
                         result_sets.end(),

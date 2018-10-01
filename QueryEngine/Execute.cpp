@@ -835,7 +835,8 @@ RowSetPtr Executor::reduceMultiDeviceResultSets(
   const auto& first = boost::get<RowSetPtr>(results_per_device.front().first);
   CHECK(first);
 
-  if (query_mem_desc.getGroupByColRangeType() == GroupByColRangeType::MultiCol &&
+  if (query_mem_desc.getQueryDescriptionType() ==
+          QueryDescriptionType::GroupByBaselineHash &&
       results_per_device.size() > 1) {
     const auto total_entry_count = std::accumulate(
         results_per_device.begin(),
@@ -1327,8 +1328,8 @@ RowSetPtr Executor::collectAllDeviceResults(
         query_exe_context->getRowSet(ra_exe_unit, query_mem_desc), std::vector<size_t>{});
   }
   auto& result_per_device = execution_dispatch.getFragmentResults();
-  if (result_per_device.empty() &&
-      query_mem_desc.getGroupByColRangeType() == GroupByColRangeType::Scan) {
+  if (result_per_device.empty() && query_mem_desc.getQueryDescriptionType() ==
+                                       QueryDescriptionType::NonGroupedAggregate) {
     return build_row_for_empty_input(
         target_exprs, query_mem_desc, execution_dispatch.getDeviceType());
   }
@@ -1434,8 +1435,9 @@ void Executor::dispatchFragments(
       eo.allow_multifrag &&
       (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext() ||
 
-       query_mem_desc.getGroupByColRangeType() == GroupByColRangeType::MultiCol ||
-       query_mem_desc.getGroupByColRangeType() == GroupByColRangeType::Projection);
+       query_mem_desc.getQueryDescriptionType() ==
+           QueryDescriptionType::GroupByBaselineHash ||
+       query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection);
   const bool use_multifrag_kernel =
       (device_type == ExecutorDeviceType::GPU) && allow_multifrag && is_agg;
 

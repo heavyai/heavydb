@@ -168,9 +168,9 @@ bool ResultSet::canUseFastBaselineSort(
   if (!target_info.sql_type.is_number() || is_distinct_target(target_info)) {
     return false;
   }
-  return (query_mem_desc_.getGroupByColRangeType() == GroupByColRangeType::MultiCol ||
-          query_mem_desc_.getGroupByColRangeType() ==
-              GroupByColRangeType::OneColKnownRange) &&
+  return (query_mem_desc_.getQueryDescriptionType() ==
+              QueryDescriptionType::GroupByBaselineHash ||
+          query_mem_desc_.isSingleColumnGroupByWithPerfectHash()) &&
          top_n;
 }
 

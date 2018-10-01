@@ -1246,7 +1246,8 @@ Executor::CompilationResult Executor::compileWorkUnit(
       eo.output_columnar_hint && co.device_type_ == ExecutorDeviceType::GPU);
   const auto& query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
 
-  if (query_mem_desc.getGroupByColRangeType() == GroupByColRangeType::MultiCol &&
+  if (query_mem_desc.getQueryDescriptionType() ==
+          QueryDescriptionType::GroupByBaselineHash &&
       !has_cardinality_estimation &&
       (!render_info || !render_info->isPotentialInSituRender()) && !eo.just_explain) {
     throw CardinalityEstimationRequired();
@@ -1269,8 +1270,9 @@ Executor::CompilationResult Executor::compileWorkUnit(
   }
 
   if (co.device_type_ == ExecutorDeviceType::GPU &&
-      query_mem_desc.getGroupByColRangeType() ==
-          GroupByColRangeType::MultiColPerfectHash) {
+      query_mem_desc.getQueryDescriptionType() ==
+          QueryDescriptionType::GroupByPerfectHash &&
+      query_mem_desc.getGroupbyColCount() > 1) {
     const auto grid_size = query_mem_desc.blocksShareMemory() ? 1 : gridSize();
     const size_t required_memory{
         (grid_size * query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU))};

@@ -44,12 +44,14 @@ class RenderInfo;
 class RowSetMemoryOwner;
 struct InputTableInfo;
 
-enum class GroupByColRangeType {
-  OneColKnownRange,  // statically known range, only possible for column expressions
-  MultiCol,
-  MultiColPerfectHash,
+/**
+ *
+ */
+enum class QueryDescriptionType {
+  GroupByPerfectHash,
+  GroupByBaselineHash,
   Projection,
-  Scan,  // the plan is not a group by plan
+  NonGroupedAggregate,
   Estimator
 };
 
@@ -108,9 +110,9 @@ class QueryMemoryDescriptor {
 
   QueryMemoryDescriptor(const Executor* executor,
                         const size_t entry_count,
-                        const GroupByColRangeType hash_type);
+                        const QueryDescriptionType query_desc_type);
 
-  QueryMemoryDescriptor(const GroupByColRangeType hash_type,
+  QueryMemoryDescriptor(const QueryDescriptionType query_desc_type,
                         const int64_t min_val,
                         const int64_t max_val,
                         const bool has_nulls,
@@ -118,7 +120,7 @@ class QueryMemoryDescriptor {
 
   QueryMemoryDescriptor(const Executor* executor,
                         const bool allow_multifrag,
-                        const GroupByColRangeType hash_type,
+                        const QueryDescriptionType query_desc_type,
                         const bool keyless_hash,
                         const bool interleaved_bins_on_gpu,
                         const int32_t idx_target_as_key,
@@ -187,8 +189,12 @@ class QueryMemoryDescriptor {
   // Getters and Setters
   const Executor* getExecutor() const { return executor_; }
 
-  GroupByColRangeType getGroupByColRangeType() const { return hash_type_; }
-  void setGroupByColRangeType(const GroupByColRangeType val) { hash_type_ = val; }
+  QueryDescriptionType getQueryDescriptionType() const { return query_desc_type_; }
+  void setQueryDescriptionType(const QueryDescriptionType val) { query_desc_type_ = val; }
+  bool isSingleColumnGroupByWithPerfectHash() const {
+    return getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash &&
+           getGroupbyColCount() == 1;
+  }
 
   bool hasKeylessHash() const { return keyless_hash_; }
   void setHasKeylessHash(const bool val) { keyless_hash_ = val; }
@@ -366,7 +372,7 @@ class QueryMemoryDescriptor {
  private:
   const Executor* executor_;
   bool allow_multifrag_;
-  GroupByColRangeType hash_type_;
+  QueryDescriptionType query_desc_type_;
   bool keyless_hash_;
   bool interleaved_bins_on_gpu_;
   int32_t idx_target_as_key_;

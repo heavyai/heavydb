@@ -174,8 +174,8 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     const bool must_use_baseline_sort)
     : executor_(executor)
     , allow_multifrag_(allow_multifrag)
-    , hash_type_(ra_exe_unit.estimator ? GroupByColRangeType::Estimator
-                                       : GroupByColRangeType::Scan)
+    , query_desc_type_(ra_exe_unit.estimator ? QueryDescriptionType::Estimator
+                                             : QueryDescriptionType::NonGroupedAggregate)
     , keyless_hash_(false)
     , interleaved_bins_on_gpu_(false)
     , idx_target_as_key_(-1)
@@ -227,7 +227,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     const bool must_use_baseline_sort)
     : executor_(executor)
     , allow_multifrag_(allow_multifrag)
-    , hash_type_(col_range_info.hash_type_)
+    , query_desc_type_(col_range_info.hash_type_)
     , keyless_hash_(false)
     , interleaved_bins_on_gpu_(false)
     , idx_target_as_key_(-1)
@@ -259,10 +259,17 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
         {wid, static_cast<int8_t>(compact_byte_width(wid, min_byte_width))});
   }
 
-  switch (hash_type_) {
-    case GroupByColRangeType::OneColKnownRange: {
+  switch (query_desc_type_) {
+    case QueryDescriptionType::GroupByPerfectHash: {
       CHECK(!render_info || !render_info->isPotentialInSituRender());
-
+      // multi-column group by query:
+      if (group_col_widths_.size() > 1) {
+        // max_val_ contains the expected cardinality of the output
+        entry_count_ = static_cast<size_t>(max_val_);
+        bucket_ = 0;
+        return;
+      }
+      // single-column group by query:
       const auto redirected_targets =
           redirect_exprs(ra_exe_unit.target_exprs, ra_exe_unit.input_col_descs);
 
@@ -337,7 +344,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
       }
       return;
     }
-    case GroupByColRangeType::MultiCol: {
+    case QueryDescriptionType::GroupByBaselineHash: {
       CHECK(!render_info || !render_info->isPotentialInSituRender());
       entry_count_ = shard_count
                          ? (max_groups_buffer_entry_count + shard_count - 1) / shard_count
@@ -364,7 +371,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
       has_nulls_ = false;
       return;
     }
-    case GroupByColRangeType::Projection: {
+    case QueryDescriptionType::Projection: {
       CHECK(!must_use_baseline_sort);
 
       // Only projection queries support in-situ rendering
@@ -397,12 +404,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
 
       return;
     }
-    case GroupByColRangeType::MultiColPerfectHash: {
-      CHECK(!render_info || !render_info->isPotentialInSituRender());
-      entry_count_ = static_cast<size_t>(max_val_);
-      bucket_ = 0;
-      return;
-    }
     default:
       CHECK(false);
   }
@@ -411,7 +412,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
 QueryMemoryDescriptor::QueryMemoryDescriptor()
     : executor_(nullptr)
     , allow_multifrag_(false)
-    , hash_type_(GroupByColRangeType::Projection)
+    , query_desc_type_(QueryDescriptionType::Projection)
     , keyless_hash_(false)
     , interleaved_bins_on_gpu_(false)
     , idx_target_as_key_(0)
@@ -431,10 +432,10 @@ QueryMemoryDescriptor::QueryMemoryDescriptor()
 
 QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
                                              const size_t entry_count,
-                                             const GroupByColRangeType hash_type)
+                                             const QueryDescriptionType query_desc_type)
     : executor_(nullptr)
     , allow_multifrag_(false)
-    , hash_type_(hash_type)
+    , query_desc_type_(query_desc_type)
     , keyless_hash_(false)
     , interleaved_bins_on_gpu_(false)
     , idx_target_as_key_(0)
@@ -452,14 +453,14 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
     , must_use_baseline_sort_(false)
     , force_4byte_float_(false) {}
 
-QueryMemoryDescriptor::QueryMemoryDescriptor(const GroupByColRangeType hash_type,
+QueryMemoryDescriptor::QueryMemoryDescriptor(const QueryDescriptionType query_desc_type,
                                              const int64_t min_val,
                                              const int64_t max_val,
                                              const bool has_nulls,
                                              const std::vector<int8_t>& group_col_widths)
     : executor_(nullptr)
     , allow_multifrag_(false)
-    , hash_type_(hash_type)
+    , query_desc_type_(query_desc_type)
     , keyless_hash_(false)
     , interleaved_bins_on_gpu_(false)
     , idx_target_as_key_(0)
@@ -481,7 +482,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const GroupByColRangeType hash_type
 QueryMemoryDescriptor::QueryMemoryDescriptor(
     const Executor* executor,
     const bool allow_multifrag,
-    const GroupByColRangeType hash_type,
+    const QueryDescriptionType query_desc_type,
     const bool keyless_hash,
     const bool interleaved_bins_on_gpu,
     const int32_t idx_target_as_key,
@@ -506,7 +507,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     : agg_col_widths_(agg_col_widths)
     , executor_(executor)
     , allow_multifrag_(allow_multifrag)
-    , hash_type_(hash_type)
+    , query_desc_type_(query_desc_type)
     , keyless_hash_(keyless_hash)
     , interleaved_bins_on_gpu_(interleaved_bins_on_gpu)
     , idx_target_as_key_(idx_target_as_key)
@@ -532,7 +533,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
 bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const {
   // Note that this method does not check ptr reference members (e.g. executor_) or
   // entry_count_
-  if (hash_type_ != other.hash_type_) {
+  if (query_desc_type_ != other.query_desc_type_) {
     return false;
   }
   if (keyless_hash_ != other.keyless_hash_) {
@@ -973,16 +974,18 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(
 }
 
 bool QueryMemoryDescriptor::usesGetGroupValueFast() const {
-  return hash_type_ == GroupByColRangeType::OneColKnownRange;
+  return (query_desc_type_ == QueryDescriptionType::GroupByPerfectHash &&
+          getGroupbyColCount() == 1);
 }
 
 bool QueryMemoryDescriptor::usesCachedContext() const {
-  return allow_multifrag_ && (usesGetGroupValueFast() ||
-                              hash_type_ == GroupByColRangeType::MultiColPerfectHash);
+  return allow_multifrag_ &&
+         (usesGetGroupValueFast() ||
+          query_desc_type_ == QueryDescriptionType::GroupByPerfectHash);
 }
 
 bool QueryMemoryDescriptor::threadsShareMemory() const {
-  return hash_type_ != GroupByColRangeType::Scan;
+  return query_desc_type_ != QueryDescriptionType::NonGroupedAggregate;
 }
 
 bool QueryMemoryDescriptor::blocksShareMemory() const {
@@ -993,9 +996,10 @@ bool QueryMemoryDescriptor::blocksShareMemory() const {
     return true;
   }
   if (executor_->isCPUOnly() || render_output_ ||
-      hash_type_ == GroupByColRangeType::MultiCol ||
-      hash_type_ == GroupByColRangeType::Projection ||
-      hash_type_ == GroupByColRangeType::MultiColPerfectHash) {
+      query_desc_type_ == QueryDescriptionType::GroupByBaselineHash ||
+      query_desc_type_ == QueryDescriptionType::Projection ||
+      (query_desc_type_ == QueryDescriptionType::GroupByPerfectHash &&
+       getGroupbyColCount() > 1)) {
     return true;
   }
   return usesCachedContext() && !sharedMemBytes(ExecutorDeviceType::GPU) &&

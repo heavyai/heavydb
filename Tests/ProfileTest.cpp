@@ -1284,7 +1284,7 @@ TEST(Reduction, Baseline) {
   size_t row_size = key_count * sizeof(int64_t);
   std::vector<int8_t> group_col_widths(key_count, sizeof(int64_t));
   QueryMemoryDescriptor query_mem_desc(
-      GroupByColRangeType::MultiCol, 0, 0, false, group_col_widths);
+      QueryDescriptionType::GroupByBaselineHash, 0, 0, false, group_col_widths);
   query_mem_desc.setHasKeylessHash(false);
   query_mem_desc.setOutputColumnar(is_columnar);
   query_mem_desc.setEntryCount(entry_count);
@@ -1547,8 +1547,7 @@ TEST(Reduction, PerfectHash) {
   const auto device_type = ExecutorDeviceType::CPU;
   size_t row_size = key_count * sizeof(int64_t);
   std::vector<int8_t> group_col_widths(key_count, sizeof(int64_t));
-  const auto hash_type = key_count == 1 ? GroupByColRangeType::OneColKnownRange
-                                        : GroupByColRangeType::MultiColPerfectHash;
+  const auto hash_type = QueryDescriptionType::GroupByPerfectHash;
   QueryMemoryDescriptor query_mem_desc(hash_type, 0, 0, false, group_col_widths);
   query_mem_desc.setHasKeylessHash(false);
   query_mem_desc.setOutputColumnar(is_columnar);

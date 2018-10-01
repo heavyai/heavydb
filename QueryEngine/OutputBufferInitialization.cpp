@@ -272,7 +272,8 @@ std::vector<int64_t> init_agg_val_vec(
     auto target = target_info(target_expr);
     auto arg_expr = agg_arg(target_expr);
     if (arg_expr) {
-      if (query_mem_desc.getGroupByColRangeType() == GroupByColRangeType::Scan &&
+      if (query_mem_desc.getQueryDescriptionType() ==
+              QueryDescriptionType::NonGroupedAggregate &&
           target.is_agg &&
           (target.agg_kind == kMIN ||
            target.agg_kind == kMAX)) {  // TODO(alex): fix SUM and AVG as well

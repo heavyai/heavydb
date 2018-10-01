@@ -364,7 +364,8 @@ inline std::vector<TargetInfo> target_exprs_to_infos(
   std::vector<TargetInfo> target_infos;
   for (const auto target_expr : targets) {
     auto target = target_info(target_expr);
-    if (query_mem_desc.getGroupByColRangeType() == GroupByColRangeType::Scan) {
+    if (query_mem_desc.getQueryDescriptionType() ==
+        QueryDescriptionType::NonGroupedAggregate) {
       set_notnull(target, false);
       target.sql_type.set_notnull(false);
     }

@@ -468,9 +468,8 @@ void fill_storage_buffer(int8_t* buff,
                          const QueryMemoryDescriptor& query_mem_desc,
                          NumberGenerator& generator,
                          const size_t step) {
-  switch (query_mem_desc.getGroupByColRangeType()) {
-    case GroupByColRangeType::OneColKnownRange:
-    case GroupByColRangeType::MultiColPerfectHash: {
+  switch (query_mem_desc.getQueryDescriptionType()) {
+    case QueryDescriptionType::GroupByPerfectHash: {
       if (query_mem_desc.didOutputColumnar()) {
         fill_storage_buffer_perfect_hash_colwise(
             buff, target_infos, query_mem_desc, generator);
@@ -480,7 +479,7 @@ void fill_storage_buffer(int8_t* buff,
       }
       break;
     }
-    case GroupByColRangeType::MultiCol: {
+    case QueryDescriptionType::GroupByBaselineHash: {
       if (query_mem_desc.didOutputColumnar()) {
         fill_storage_buffer_baseline_colwise(
             buff, target_infos, query_mem_desc, generator, step);
@@ -503,7 +502,7 @@ QueryMemoryDescriptor perfect_hash_one_col_desc_small(
     const std::vector<TargetInfo>& target_infos,
     const int8_t num_bytes) {
   QueryMemoryDescriptor query_mem_desc(
-      GroupByColRangeType::OneColKnownRange, 0, 19, false, {8});
+      QueryDescriptionType::GroupByPerfectHash, 0, 19, false, {8});
   for (const auto& target_info : target_infos) {
     const auto slot_bytes =
         std::max(num_bytes, static_cast<int8_t>(target_info.sql_type.get_size()));
@@ -524,7 +523,7 @@ QueryMemoryDescriptor perfect_hash_one_col_desc(
     const size_t min_val,
     const size_t max_val) {
   QueryMemoryDescriptor query_mem_desc(
-      GroupByColRangeType::OneColKnownRange, min_val, max_val, false, {8});
+      QueryDescriptionType::GroupByPerfectHash, min_val, max_val, false, {8});
   for (const auto& target_info : target_infos) {
     const auto slot_bytes =
         std::max(num_bytes, static_cast<int8_t>(target_info.sql_type.get_size()));
@@ -543,7 +542,7 @@ QueryMemoryDescriptor perfect_hash_two_col_desc(
     const std::vector<TargetInfo>& target_infos,
     const int8_t num_bytes) {
   QueryMemoryDescriptor query_mem_desc(
-      GroupByColRangeType::MultiColPerfectHash, 0, 36, false, {8, 8});
+      QueryDescriptionType::GroupByPerfectHash, 0, 36, false, {8, 8});
   for (const auto& target_info : target_infos) {
     const auto slot_bytes =
         std::max(num_bytes, static_cast<int8_t>(target_info.sql_type.get_size()));
@@ -561,7 +560,7 @@ QueryMemoryDescriptor baseline_hash_two_col_desc_large(
     const std::vector<TargetInfo>& target_infos,
     const int8_t num_bytes) {
   QueryMemoryDescriptor query_mem_desc(
-      GroupByColRangeType::MultiCol, 0, 19, false, {8, 8});
+      QueryDescriptionType::GroupByBaselineHash, 0, 19, false, {8, 8});
   for (const auto& target_info : target_infos) {
     const auto slot_bytes =
         std::max(num_bytes, static_cast<int8_t>(target_info.sql_type.get_size()));
@@ -580,7 +579,7 @@ QueryMemoryDescriptor baseline_hash_two_col_desc(
     const std::vector<TargetInfo>& target_infos,
     const int8_t num_bytes) {
   QueryMemoryDescriptor query_mem_desc(
-      GroupByColRangeType::MultiCol, 0, 3, false, {8, 8});
+      QueryDescriptionType::GroupByBaselineHash, 0, 3, false, {8, 8});
   for (const auto& target_info : target_infos) {
     const auto slot_bytes =
         std::max(num_bytes, static_cast<int8_t>(target_info.sql_type.get_size()));
@@ -1122,9 +1121,8 @@ void ResultSetEmulator::rse_fill_storage_buffer(int8_t* buff,
                                                 NumberGenerator& generator,
                                                 const std::vector<bool>& rs_groups,
                                                 std::vector<int64_t>& rs_values) {
-  switch (rs_query_mem_desc.getGroupByColRangeType()) {
-    case GroupByColRangeType::OneColKnownRange:
-    case GroupByColRangeType::MultiColPerfectHash: {
+  switch (rs_query_mem_desc.getQueryDescriptionType()) {
+    case QueryDescriptionType::GroupByPerfectHash: {
       if (rs_query_mem_desc.didOutputColumnar()) {
         rse_fill_storage_buffer_perfect_hash_colwise(
             buff, generator, rs_groups, rs_values);
@@ -1134,7 +1132,7 @@ void ResultSetEmulator::rse_fill_storage_buffer(int8_t* buff,
       }
       break;
     }
-    case GroupByColRangeType::MultiCol: {
+    case QueryDescriptionType::GroupByBaselineHash: {
       if (rs_query_mem_desc.didOutputColumnar()) {
         rse_fill_storage_buffer_baseline_colwise(buff, generator, rs_groups, rs_values);
       } else {
@@ -1607,9 +1605,8 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
   std::unique_ptr<ResultSet> rs1;
   std::unique_ptr<ResultSet> rs2;
   const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
-  switch (query_mem_desc.getGroupByColRangeType()) {
-    case GroupByColRangeType::OneColKnownRange:
-    case GroupByColRangeType::MultiColPerfectHash: {
+  switch (query_mem_desc.getQueryDescriptionType()) {
+    case QueryDescriptionType::GroupByPerfectHash: {
       rs1.reset(new ResultSet(target_infos,
                               ExecutorDeviceType::CPU,
                               query_mem_desc,
@@ -1624,7 +1621,7 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
       storage2 = rs2->allocateStorage();
       break;
     }
-    case GroupByColRangeType::MultiCol: {
+    case QueryDescriptionType::GroupByBaselineHash: {
       rs1.reset(new ResultSet(target_infos,
                               ExecutorDeviceType::CPU,
                               query_mem_desc,
