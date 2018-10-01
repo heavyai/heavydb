@@ -211,8 +211,8 @@ VERS=1.6.21
 # http://download.sourceforge.net/libpng/libpng-$VERS.tar.xz
 download_make_install ${HTTP_DEPS}/libpng-$VERS.tar.xz
 
-VERS=2.1.4_egl
-download https://github.com/vastcharade/glbinding/archive/v$VERS.tar.gz
+VERS=3.0.2
+download https://github.com/cginternals/glbinding/archive/v$VERS.tar.gz
 extract v$VERS.tar.gz
 BDIR="glbinding-$VERS/build"
 mkdir -p $BDIR
@@ -221,7 +221,6 @@ cmake \
     -DCMAKE_BUILD_TYPE=Release \
     -DOPTION_BUILD_DOCS=OFF \
     -DOPTION_BUILD_EXAMPLES=OFF \
-    -DOPTION_BUILD_GPU_TESTS=OFF \
     -DOPTION_BUILD_TESTS=OFF \
     -DOPTION_BUILD_TOOLS=OFF \
     -DOPTION_BUILD_WITH_BOOST_THREAD=OFF \

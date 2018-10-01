@@ -40,20 +40,38 @@ find_library(glbinding_LIBRARY
   PATH_SUFFIXES lib64)
 get_filename_component(glbinding_LIB_DIR ${glbinding_LIBRARY} DIRECTORY)
 get_filename_component(glbinding_INST_DIR ${glbinding_LIB_DIR} DIRECTORY)
-find_path(glbinding_INCLUDE_DIR glbinding/Binding.h HINTS ${glbinding_INST_DIR}/include)
+find_path(glbinding_INCLUDE_DIR glbinding/glbinding.h HINTS ${glbinding_INST_DIR}/include)
 
-set(glbinding_INCLUDE_DIRS ${glbinding_INCLUDE_DIR})
-set(glbinding_LIBRARIES ${glbinding_LIBRARY})
+find_library(glbinding-aux_LIBRARY
+  NAMES glbinding-aux
+  HINTS ENV LD_LIBRARY_PATH
+  PATH_SUFFIXES lib64)
+get_filename_component(glbinding-aux_LIB_DIR ${glbinding_LIBRARY} DIRECTORY)
+get_filename_component(glbinding-aux_INST_DIR ${glbinding_LIB_DIR} DIRECTORY)
+find_path(glbinding-aux_INCLUDE_DIR glbinding-aux/glbinding-aux_api.h HINTS ${glbinding_INST_DIR}/include)
+
+set(glbinding_INCLUDE_DIRS ${glbinding_INCLUDE_DIR} ${glbinding-aux_INCLUDE_DIR})
+set(glbinding_LIBRARIES ${glbinding_LIBRARY} ${glbinding-aux_LIBRARY})
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(glbinding
                                   REQUIRED_VARS glbinding_INCLUDE_DIR glbinding_LIBRARY)
+
+find_package_handle_standard_args(glbinding-aux
+                                  REQUIRED_VARS glbinding-aux_INCLUDE_DIR glbinding-aux_LIBRARY)
 
 if(glbinding_FOUND AND NOT TARGET glbinding::glbinding)
   add_library(glbinding::glbinding UNKNOWN IMPORTED)
   set_target_properties(glbinding::glbinding PROPERTIES
     IMPORTED_LOCATION "${glbinding_LIBRARY}"
     INTERFACE_INCLUDE_DIRECTORIES "${glbinding_INCLUDE_DIRS}")
+endif()
+
+if(glbinding-aux_FOUND AND NOT TARGET glbinding::glbinding-aux)
+  add_library(glbinding::glbinding-aux UNKNOWN IMPORTED)
+  set_target_properties(glbinding::glbinding-aux PROPERTIES
+    IMPORTED_LOCATION "${glbinding-aux_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${glbinding-aux_INCLUDE_DIRS}")
 endif()
 
 mark_as_advanced(glbinding_INCLUDE_DIR glbinding_LIBRARY)

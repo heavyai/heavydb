@@ -124,8 +124,8 @@ popd
 ARROW_BOOST_USE_SHARED="ON"
 install_arrow
 
-VERS=2.1.4_egl
-wget --continue https://github.com/vastcharade/glbinding/archive/v$VERS.tar.gz
+VERS=3.0.2
+wget --continue https://github.com/cginternals/glbinding/archive/v$VERS.tar.gz
 tar xvf v$VERS.tar.gz
 mkdir -p glbinding-$VERS/build
 pushd glbinding-$VERS/build

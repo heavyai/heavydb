@@ -135,8 +135,8 @@ popd
 ARROW_BOOST_USE_SHARED="ON"
 install_arrow
 
-VERS=2.1.4_egl
-wget --continue https://github.com/vastcharade/glbinding/archive/v$VERS.tar.gz
+VERS=3.0.2
+wget --continue https://github.com/cginternals/glbinding/archive/v$VERS.tar.gz
 tar xvf v$VERS.tar.gz
 mkdir -p glbinding-$VERS/build
 pushd glbinding-$VERS/build
@@ -145,7 +145,6 @@ cmake \
     -DCMAKE_INSTALL_PREFIX=$PREFIX \
     -DOPTION_BUILD_DOCS=OFF \
     -DOPTION_BUILD_EXAMPLES=OFF \
-    -DOPTION_BUILD_GPU_TESTS=OFF \
     -DOPTION_BUILD_TESTS=OFF \
     -DOPTION_BUILD_TOOLS=OFF \
     -DOPTION_BUILD_WITH_BOOST_THREAD=OFF \
