@@ -135,6 +135,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const std::string& que
                                                           const ExecutionOptions& eo,
                                                           RenderInfo* render_info) {
   INJECT_TIMER(executeRelAlgQueryNoRetry);
+
   const auto ra = deserialize_ra_dag(query_ra, cat_, this);
   // capture the lock acquistion time
   auto clock_begin = timer_start();
@@ -359,6 +360,15 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
   executor_->catalog_ = &cat_;
   executor_->temporary_tables_ = &temporary_tables_;
+
+  // we will have to make sure the temp tables generated as a result of execution of inner
+  // subqueries are available throughout the execution of the sequence.
+  for (auto subquery : subqueries_) {
+    auto temp_table = subquery->getExecutionResult();
+    if (temp_table.get()) {
+      addTemporaryTable(-(subquery->getRelAlg()->getId()), temp_table->getDataPtr());
+    }
+  }
   time(&now_);
   CHECK(!exec_descs.empty());
   const auto exec_desc_count = eo.just_explain ? size_t(1) : exec_descs.size();

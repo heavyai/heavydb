@@ -43,6 +43,7 @@ using namespace std;
 using namespace TestHelpers;
 
 extern bool g_aggregator;
+extern bool g_multi_subquery_exc;
 
 extern int g_test_against_columnId_gap;
 extern bool g_enable_smem_group_by;
@@ -54,12 +55,13 @@ std::unique_ptr<QueryRunner::IROutputFile> g_ir_output_file;
 bool g_hoist_literals{true};
 size_t g_shard_count{0};
 bool g_use_row_iterator{true};
+size_t g_num_leafs{1};
 
 size_t choose_shard_count() {
   CHECK(g_session);
   const auto cuda_mgr = g_session->get_catalog().get_dataMgr().cudaMgr_;
   const int device_count = cuda_mgr ? cuda_mgr->getDeviceCount() : 0;
-  return device_count > 1 ? device_count : 0;
+  return g_num_leafs * (device_count > 1 ? device_count : 0);
 }
 
 struct ShardInfo {
@@ -95,7 +97,8 @@ std::string build_create_table_statement(
 
   std::ostringstream with_statement_assembly;
   if (!shard_info.shard_col.empty()) {
-    with_statement_assembly << "shard_count=" << shard_info.shard_count << ", ";
+    with_statement_assembly << "shard_count=" << shard_info.shard_count * g_num_leafs
+                            << ", ";
   }
   with_statement_assembly << "fragment_size=" << fragment_size;
 
@@ -3795,12 +3798,18 @@ namespace {
 
 const size_t g_array_test_row_count{20};
 
+std::unique_ptr<Importer_NS::Loader> get_loader(const TableDescriptor* td) {
+  auto& cat = g_session->get_catalog();
+  auto loader = std::make_unique<Importer_NS::Loader>(cat, td);
+  return loader;
+}
+
 void import_array_test(const std::string& table_name) {
   CHECK_EQ(size_t(0), g_array_test_row_count % 4);
   auto& cat = g_session->get_catalog();
   const auto td = cat.getMetadataForTable(table_name);
   CHECK(td);
-  auto loader = std::make_unique<Importer_NS::Loader>(cat, td);
+  auto loader = get_loader(td);
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
   const auto col_descs =
       cat.getAllColumnMetadataForTable(td->tableId, false, false, false);
@@ -4972,14 +4981,14 @@ TEST(Select, Joins_EmptyTable) {
 }
 
 TEST(Select, Joins_ImplicitJoins) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x;", dt);
     c("SELECT COUNT(*) FROM test, hash_join_test WHERE test.t = hash_join_test.t;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x < test_inner.x + 1;", dt);
-    c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str = test_inner.str;", dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str = test_inner.str;",
+          dt));
     c("SELECT test_inner.x, COUNT(*) AS n FROM test, test_inner WHERE test.x = "
       "test_inner.x GROUP BY test_inner.x "
       "ORDER BY n;",
@@ -5007,16 +5016,22 @@ TEST(Select, Joins_ImplicitJoins) {
     c("SELECT a.x, b.str FROM test a, join_test b WHERE a.str = b.str ORDER BY a.x, "
       "b.str;",
       dt);
-    c("SELECT COUNT(1) FROM test a, join_test b, test_inner c WHERE a.str = b.str AND "
-      "b.x = c.x",
-      dt);
-    c("SELECT COUNT(*) FROM test a, join_test b, test_inner c WHERE a.x = b.x AND a.y = "
-      "b.x AND a.x = c.x AND c.str = "
-      "'foo';",
-      dt);
-    c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.y = b.y;", dt);
-    c("SELECT SUM(b.y) FROM test a, test b WHERE a.x = b.x AND a.y = b.y;", dt);
-    c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.str = b.str;", dt);
+    SKIP_ON_AGGREGATOR(c(
+        "SELECT COUNT(1) FROM test a, join_test b, test_inner c WHERE a.str = b.str AND "
+        "b.x = c.x",
+        dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test a, join_test b, test_inner c WHERE a.x = b.x AND "
+          "a.y = "
+          "b.x AND a.x = c.x AND c.str = "
+          "'foo';",
+          dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.y = b.y;", dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT SUM(b.y) FROM test a, test b WHERE a.x = b.x AND a.y = b.y;", dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.str = b.str;", dt));
     c("SELECT COUNT(*) FROM test, test_inner WHERE (test.x = test_inner.x AND test.y = "
       "42 AND test_inner.str = 'foo') "
       "OR (test.x = test_inner.x AND test.y = 43 AND test_inner.str = 'foo');",
@@ -5024,7 +5039,7 @@ TEST(Select, Joins_ImplicitJoins) {
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x OR test.x = "
       "test_inner.x;",
       dt);
-    c("SELECT bar.str FROM test, bar WHERE test.str = bar.str;", dt);
+    SKIP_ON_AGGREGATOR(c("SELECT bar.str FROM test, bar WHERE test.str = bar.str;", dt));
     ASSERT_EQ(
         int64_t(3),
         v<int64_t>(run_simple_agg(
@@ -5111,7 +5126,6 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
     c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str ORDER BY a.x;", dt);
     SKIP_ON_AGGREGATOR(
         c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x ORDER BY a.x;", dt));
-
     c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str GROUP BY a.x ORDER "
       "BY a.x;",
       dt);
@@ -5129,7 +5143,6 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
       "(test.str IS NULL AND "
       "join_test.dup_str IS NULL));",
       dt);
-
     SKIP_ON_AGGREGATOR(
         c("SELECT t1.fixed_null_str FROM (SELECT fixed_null_str, SUM(x) n1 FROM test "
           "GROUP BY fixed_null_str) t1 INNER "
@@ -5141,73 +5154,10 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
   }
 }
 
-int create_sharded_join_table(const std::string& table_name,
-                              size_t fragment_size,
-                              size_t num_rows,
-                              const ShardInfo& shard_info,
-                              bool with_delete_support = true) {
-  std::string columns_definition{"i INTEGER, j INTEGER, s TEXT ENCODING DICT(32)"};
-
-  try {
-    std::string drop_ddl{"DROP TABLE IF EXISTS " + table_name + ";"};
-    run_ddl_statement(drop_ddl);
-    g_sqlite_comparator.query(drop_ddl);
-
-    const auto create_ddl = build_create_table_statement(columns_definition,
-                                                         table_name,
-                                                         shard_info,
-                                                         {},
-                                                         fragment_size,
-                                                         with_delete_support);
-    run_ddl_statement(create_ddl);
-    g_sqlite_comparator.query("CREATE TABLE " + table_name + "(i int, j int, s text);");
-
-    const std::vector<std::string> alphabet{"a", "b", "c", "d", "e", "f", "g", "h", "i",
-                                            "j", "k", "l", "m", "n", "o", "p", "q", "r",
-                                            "s", "t", "u", "v", "w", "x", "y", "z"};
-    const auto alphabet_sz = alphabet.size();
-
-    int i = 0;
-    int j = num_rows;
-    for (size_t x = 0; x < num_rows; x++) {
-      const std::string insert_query{"INSERT INTO " + table_name + " VALUES(" +
-                                     std::to_string(i) + "," + std::to_string(j) + ",'" +
-                                     alphabet[i % alphabet_sz] + "');"};
-      LOG(INFO) << insert_query;
-      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
-      g_sqlite_comparator.query(insert_query);
-      i++;
-      j--;
-    }
-  } catch (const std::exception& e) {
-    LOG(ERROR) << "Failed to (re-)create tables for Inner Join sharded test: "
-               << e.what();
-    return -EEXIST;
-  }
-  return 0;
-}
-
 TEST(Select, Joins_InnerJoin_Sharded) {
   SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-
-    size_t num_shards = 1;
-    if (dt == ExecutorDeviceType::GPU && choose_shard_count() > 0) {
-      num_shards = choose_shard_count();
-    }
-    ShardInfo shard_info{"i", num_shards};
-    size_t fragment_size = 2;
-    bool delete_support = false;
-
-    ASSERT_EQ(create_sharded_join_table(
-                  "st1", fragment_size, 10 * num_shards, shard_info, delete_support),
-              0);
-    ASSERT_EQ(
-        create_sharded_join_table(
-            "st2", fragment_size, num_shards * fragment_size, shard_info, delete_support),
-        0);
 
     // Sharded Inner Joins
     c("SELECT st1.i, st2.i FROM st1 INNER JOIN st2 ON st1.i = st2.i ORDER BY st1.i;", dt);
@@ -5260,36 +5210,32 @@ TEST(Select, Joins_InnerJoin_Sharded) {
       "st2.j > 0 and st1.s <> 'foo' "
       "and st2.s <> 'foo' ORDER BY st1.i;",
       dt);
-
-    ASSERT_EQ(create_sharded_join_table(
-                  "st2", fragment_size, 8 * num_shards, shard_info, delete_support),
-              0);
     // Non-sharded inner join (multi frag)
-    c("SELECT st1.i, st2.i FROM st1 INNER JOIN st2 ON st1.j = st2.j ORDER BY st1.i;", dt);
-    c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j ORDER BY st1.i;", dt);
-    c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > -1 "
+    c("SELECT st1.i, st3.i FROM st1 INNER JOIN st3 ON st1.j = st3.j ORDER BY st1.i;", dt);
+    c("SELECT st1.j, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j ORDER BY st1.i;", dt);
+    c("SELECT st1.j, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE st3.j > -1 "
       "ORDER BY st1.i;",
       dt);
-    c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > 0 "
+    c("SELECT st1.j, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE st3.j > 0 "
       "ORDER BY st1.i;",
       dt);
-    c("SELECT st1.j, st1.s, st2.j, st2.s FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE "
-      "st2.j > 0 ORDER BY st1.i;",
+    c("SELECT st1.j, st1.s, st3.j, st3.s FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE "
+      "st3.j > 0 ORDER BY st1.i;",
       dt);
-    c("SELECT st1.i, st1.j, st1.s, st2.i, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j "
-      "= st2.j WHERE st2.i > 0 ORDER "
+    c("SELECT st1.i, st1.j, st1.s, st3.i, st3.s, st3.j FROM st1 INNER JOIN st3 ON st1.j "
+      "= st3.j WHERE st3.i > 0 ORDER "
       "BY st1.i;",
       dt);
-    c("SELECT st1.i, st1.j, st1.s, st2.i, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j "
-      "= st2.j WHERE st2.j > 0 ORDER "
+    c("SELECT st1.i, st1.j, st1.s, st3.i, st3.s, st3.j FROM st1 INNER JOIN st3 ON st1.j "
+      "= st3.j WHERE st3.j > 0 ORDER "
       "BY st1.i;",
       dt);
-    c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE "
-      "st2.j > 0 ORDER BY st1.i;",
+    c("SELECT st1.j, st1.s, st3.s, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE "
+      "st3.j > 0 ORDER BY st1.i;",
       dt);
-    c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE "
-      "st2.j > 0 and st1.s <> 'foo' "
-      "and st2.s <> 'foo' ORDER BY st1.i;",
+    c("SELECT st1.j, st1.s, st3.s, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE "
+      "st3.j > 0 and st1.s <> 'foo' "
+      "and st3.s <> 'foo' ORDER BY st1.i;",
       dt);
   }
 }
@@ -10792,6 +10738,53 @@ TEST(Select, Sample) {
 
 namespace {
 
+int create_sharded_join_table(const std::string& table_name,
+                              size_t fragment_size,
+                              size_t num_rows,
+                              const ShardInfo& shard_info,
+                              bool with_delete_support = true) {
+  std::string columns_definition{"i INTEGER, j INTEGER, s TEXT ENCODING DICT(32)"};
+
+  try {
+    std::string drop_ddl{"DROP TABLE IF EXISTS " + table_name + ";"};
+    run_ddl_statement(drop_ddl);
+    g_sqlite_comparator.query(drop_ddl);
+
+    const auto create_ddl = build_create_table_statement(columns_definition,
+                                                         table_name,
+                                                         shard_info,
+                                                         {},
+                                                         fragment_size,
+                                                         with_delete_support);
+    run_ddl_statement(create_ddl);
+    g_sqlite_comparator.query("CREATE TABLE " + table_name + "(i int, j int, s text);");
+
+    const std::vector<std::string> alphabet{"a", "b", "c", "d", "e", "f", "g", "h", "i",
+                                            "j", "k", "l", "m", "n", "o", "p", "q", "r",
+                                            "s", "t", "u", "v", "w", "x", "y", "z"};
+    const auto alphabet_sz = alphabet.size();
+
+    int i = 0;
+    int j = num_rows;
+    for (size_t x = 0; x < num_rows; x++) {
+      const std::string insert_query{"INSERT INTO " + table_name + " VALUES(" +
+                                     std::to_string(i) + "," + std::to_string(j) + ",'" +
+                                     alphabet[i % alphabet_sz] + "');"};
+      LOG(INFO) << insert_query;
+
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+      i++;
+      j--;
+    }
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Failed to (re-)create tables for Inner Join sharded test: "
+               << e.what();
+    return -EEXIST;
+  }
+  return 0;
+}
+
 int create_and_populate_rounding_table() {
   try {
     const std::string drop_test_table{"DROP TABLE IF EXISTS test_rounding;"};
@@ -11154,6 +11147,32 @@ int create_and_populate_tables(bool with_delete_support = true) {
     return -EEXIST;
   }
   import_array_test("array_test_inner");
+  if (!g_aggregator) {
+    try {
+      size_t num_shards = choose_shard_count();
+      // check if the oversubscriptions to GPU for multiple Shard is correctly functional
+      // or not.
+      const size_t num_oversubscription = 10;
+
+      ShardInfo shard_info{(num_shards) ? "i" : "", num_shards};
+      size_t fragment_size = 2;
+      bool delete_support = false;
+
+      create_sharded_join_table("st1",
+                                fragment_size,
+                                num_oversubscription * num_shards,
+                                shard_info,
+                                delete_support);
+      create_sharded_join_table(
+          "st2", fragment_size, num_shards * fragment_size, shard_info, delete_support);
+      create_sharded_join_table(
+          "st3", fragment_size, 8 * num_shards, shard_info, delete_support);
+
+    } catch (...) {
+      LOG(ERROR) << "Failed to (re-)create table 'array_test_inner'";
+      return -EEXIST;
+    }
+  }
   try {
     const std::string drop_old_single_row_test{"DROP TABLE IF EXISTS single_row_test;"};
     run_ddl_statement(drop_old_single_row_test);
@@ -11541,7 +11560,6 @@ int main(int argc, char** argv) {
                          ->default_value(g_fast_strcmp)
                          ->implicit_value(false),
                      "Disable fast string comparison");
-
   desc.add_options()(
       "test-help",
       "Print all ExecuteTest specific options (for gtest options use `--help`).");

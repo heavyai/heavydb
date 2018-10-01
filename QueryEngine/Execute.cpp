@@ -73,6 +73,7 @@ bool g_enable_filter_push_down{false};
 float g_filter_push_down_low_frac{-1.0f};
 float g_filter_push_down_high_frac{-1.0f};
 size_t g_filter_push_down_passing_row_ubound{0};
+bool g_multi_subquery_exc{true};
 
 Executor::Executor(const int db_id,
                    const size_t block_size_x,
