@@ -25,7 +25,13 @@ RUN yum install -y \
         openldap-devel \
         libX11-devel \
         mesa-libGL-devel \
-        environment-modules && \
+        environment-modules \
+        PyYAML \
+        valgrind && \
+    rm -rf /var/cache/yum/*
+RUN yum install -y \
+        cloc \
+        jq && \
     rm -rf /var/cache/yum/*
 
 WORKDIR /libglvnd/
