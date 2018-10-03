@@ -1243,18 +1243,18 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
     TDBObjects.push_back(serialize_db_object(session.get_currentUser().userName, dbObj));
   };
 
-  std::vector<std::string> roles = SysCatalog::instance().getRoles(
+  std::vector<std::string> grantees = SysCatalog::instance().getRoles(
       true, session.get_currentUser().isSuper, session.get_currentUser().userName);
-  for (const auto& role : roles) {
+  for (const auto& grantee : grantees) {
     DBObject* object_found;
-    auto* rl = SysCatalog::instance().getRoleGrantee(role);
-    if (rl && (object_found = rl->findDbObject(object_to_find.getObjectKey(), true))) {
-      TDBObjects.push_back(serialize_db_object(role, *object_found));
+    auto* gr = SysCatalog::instance().getGrantee(grantee);
+    if (gr && (object_found = gr->findDbObject(object_to_find.getObjectKey(), true))) {
+      TDBObjects.push_back(serialize_db_object(grantee, *object_found));
     }
     // check object permissions on Database level
-    if (rl &&
-        (object_found = rl->findDbObject(object_to_find_dblevel.getObjectKey(), true))) {
-      TDBObjects.push_back(serialize_db_object(role, *object_found));
+    if (gr &&
+        (object_found = gr->findDbObject(object_to_find_dblevel.getObjectKey(), true))) {
+      TDBObjects.push_back(serialize_db_object(grantee, *object_found));
     }
   }
 }
