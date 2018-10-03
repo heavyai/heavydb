@@ -151,7 +151,7 @@ add_custom_command(
     DEPENDS RuntimeFunctions.cpp RuntimeFunctions.h ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
     COMMAND ${llvm_clangpp_cmd}
-    ARGS -std=c++11 ${RT_OPT_FLAGS} -c -emit-llvm
+    ARGS -std=c++14 ${RT_OPT_FLAGS} -c -emit-llvm
     ${CLANG_SDK_INC}
     ${CLANG_CRT_INC}
     ${MAPD_DEFINITIONS}
@@ -161,7 +161,7 @@ add_custom_command(
     DEPENDS ExtensionFunctions.hpp ExtensionFunctionsGeo.hpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
     COMMAND ${llvm_clangpp_cmd}
-    ARGS -std=c++11 -fsyntax-only -Xclang -ast-dump -fno-diagnostics-color
+    ARGS -std=c++14 -fsyntax-only -Xclang -ast-dump -fno-diagnostics-color
     ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp | grep FunctionDecl | grep ExtensionFunctions |
     sed -E "s/\\-FunctionDecl.*line:[0-9]+:[0-9]+//g" > ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast)
 
@@ -211,7 +211,7 @@ add_custom_command(
         ${MAPD_DEFINITIONS}
         --device-link
         -arch sm_30
-        -std=c++11
+        -std=c++14
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu
     )
@@ -223,7 +223,7 @@ add_custom_command(
     ARGS
         ${MAPD_HOST_COMPILER_FLAG}
         -Xcompiler -fPIC
-        -std=c++11
+        -std=c++14
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         -arch sm_30
@@ -241,7 +241,7 @@ add_custom_command(
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         -arch sm_30
-        -std=c++11
+        -std=c++14
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/InPlaceSortImpl.cu
     )
@@ -253,7 +253,7 @@ add_custom_command(
     ARGS
         ${MAPD_HOST_COMPILER_FLAG}
         -Xcompiler -fPIC
-        -std=c++11
+        -std=c++14
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         -arch sm_30
@@ -271,7 +271,7 @@ add_custom_command(
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         -arch sm_30
-        -std=c++11
+        -std=c++14
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuInitGroups.cu
     )
@@ -286,7 +286,7 @@ add_custom_command(
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         -arch sm_30
-        -std=c++11
+        -std=c++14
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/HashJoinRuntimeGpu.cu
     )
@@ -303,7 +303,7 @@ add_custom_command(
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         -arch sm_30
-        -std=c++11
+        -std=c++14
         -Xcudafe "--diag_suppress=virtual_function_decl_hidden"
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/ThrustPolygons.cu
