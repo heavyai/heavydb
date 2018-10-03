@@ -1256,18 +1256,19 @@ void fill_one_to_many_baseline_hash_table(
   memset(count_buff, 0, hash_entry_count * sizeof(int32_t));
   std::vector<std::future<void>> rowid_threads;
   for (int cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
-    SUFFIX(fill_row_ids_baseline)
-    (buff,
-     composite_key_dict,
-     hash_entry_count,
-     invalid_slot_val,
-     key_component_count,
-     &join_column_per_key[0],
-     &type_info_per_key[0],
-     &sd_inner_proxy_per_key[0],
-     &sd_outer_proxy_per_key[0],
-     cpu_thread_idx,
-     cpu_thread_count);
+    rowid_threads.push_back(std::async(std::launch::async,
+                                       SUFFIX(fill_row_ids_baseline<T>),
+                                       buff,
+                                       composite_key_dict,
+                                       hash_entry_count,
+                                       invalid_slot_val,
+                                       key_component_count,
+                                       &join_column_per_key[0],
+                                       &type_info_per_key[0],
+                                       &sd_inner_proxy_per_key[0],
+                                       &sd_outer_proxy_per_key[0],
+                                       cpu_thread_idx,
+                                       cpu_thread_count));
   }
 
   for (auto& child : rowid_threads) {
