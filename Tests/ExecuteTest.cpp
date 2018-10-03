@@ -5040,19 +5040,21 @@ TEST(Select, Joins_ImplicitJoins) {
       "test_inner.x;",
       dt);
     SKIP_ON_AGGREGATOR(c("SELECT bar.str FROM test, bar WHERE test.str = bar.str;", dt));
-    ASSERT_EQ(
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
         int64_t(3),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test, join_test WHERE test.rowid = join_test.rowid;",
-            dt)));
-    ASSERT_EQ(7,
-              v<int64_t>(run_simple_agg("SELECT test.x FROM test, test_inner WHERE "
-                                        "test.x = test_inner.x AND test.rowid = 9;",
-                                        dt)));
-    ASSERT_EQ(0,
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, test_inner WHERE "
-                                        "test.x = test_inner.x AND test.rowid = 20;",
-                                        dt)));
+            dt))));
+    SKIP_ON_AGGREGATOR(
+        ASSERT_EQ(7,
+                  v<int64_t>(run_simple_agg("SELECT test.x FROM test, test_inner WHERE "
+                                            "test.x = test_inner.x AND test.rowid = 9;",
+                                            dt))));
+    SKIP_ON_AGGREGATOR(
+        ASSERT_EQ(0,
+                  v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, test_inner WHERE "
+                                            "test.x = test_inner.x AND test.rowid = 20;",
+                                            dt))));
   }
 }
 
