@@ -618,7 +618,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       addGeoString(val);
       break;
     default:
-      CHECK(false);
+      CHECK(false) << "TypedImportBuffer::add_value() does not support type " << type;
   }
 }
 
@@ -629,6 +629,9 @@ void TypedImportBuffer::pop_value() {
   switch (type) {
     case kBOOLEAN:
       bool_buffer_->pop_back();
+      break;
+    case kTINYINT:
+      tinyint_buffer_->pop_back();
       break;
     case kSMALLINT:
       smallint_buffer_->pop_back();
@@ -669,7 +672,7 @@ void TypedImportBuffer::pop_value() {
       geo_string_buffer_->pop_back();
       break;
     default:
-      CHECK(false);
+      CHECK(false) << "TypedImportBuffer::pop_value() does not support type " << type;
   }
 }
 
@@ -922,6 +925,10 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
     case kBOOLEAN:
       append_arrow_boolean(cd, col, bool_buffer_);
       break;
+    case kTINYINT:
+      ARROW_THROW_IF(col.type_id() != arrow::Type::INT8, "Expected int8 type");
+      append_arrow_integer<arrow::Int8Type, int8_t>(cd, col, tinyint_buffer_);
+      break;
     case kSMALLINT:
       ARROW_THROW_IF(col.type_id() != arrow::Type::INT16, "Expected int16 type");
       append_arrow_integer<arrow::Int16Type, int16_t>(cd, col, smallint_buffer_);
@@ -982,6 +989,18 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
           bool_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
         } else {
           bool_buffer_->push_back((int8_t)col.data.int_col[i]);
+        }
+      }
+      break;
+    }
+    case kTINYINT: {
+      dataSize = col.data.int_col.size();
+      tinyint_buffer_->reserve(dataSize);
+      for (size_t i = 0; i < dataSize; i++) {
+        if (col.nulls[i]) {
+          tinyint_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
+        } else {
+          tinyint_buffer_->push_back((int8_t)col.data.int_col[i]);
         }
       }
       break;
@@ -1103,6 +1122,24 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
                 for (size_t j = 0; j < len; ++j) {
                   *(bool*)p = static_cast<bool>(col.data.arr_col[i].data.int_col[j]);
                   p += sizeof(bool);
+                }
+                addArray(ArrayDatum(byteSize, buf, len == 0));
+              }
+            }
+            break;
+          }
+          case kTINYINT: {
+            for (size_t i = 0; i < dataSize; i++) {
+              if (col.nulls[i]) {
+                addArray(ArrayDatum(0, NULL, true));
+              } else {
+                size_t len = col.data.arr_col[i].data.int_col.size();
+                size_t byteSize = len * sizeof(int8_t);
+                int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
+                int8_t* p = buf;
+                for (size_t j = 0; j < len; ++j) {
+                  *(int8_t*)p = static_cast<int8_t>(col.data.arr_col[i].data.int_col[j]);
+                  p += sizeof(int8_t);
                 }
                 addArray(ArrayDatum(byteSize, buf, len == 0));
               }
@@ -1370,7 +1407,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       }
       break;
     default:
-      CHECK(false);
+      CHECK(false) << "TypedImportBuffer::add_value() does not support type " << type;
   }
 }
 
