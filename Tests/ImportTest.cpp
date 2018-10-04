@@ -507,6 +507,15 @@ TEST_F(GeoImportTest, CSV_Import_Empties) {
                      6);  // we expect it to drop the 4 rows containing 'EMPTY'
 }
 
+TEST_F(GeoImportTest, CSV_Import_Degenerate) {
+  const auto file_path =
+      boost::filesystem::path("../../Tests/Import/datafiles/geospatial_degenerate.csv");
+  run_ddl_statement("COPY geospatial FROM '" + file_path.string() + "';");
+  check_geo_import();
+  check_geo_num_rows("p1, l, poly, mpoly, p2, p3, p4, trip_distance",
+                     6);  // we expect it to drop the 4 rows containing degenerate polys
+}
+
 // the remaining tests in this group are incomplete but leave them as placeholders
 
 TEST_F(GeoImportTest, Geo_CSV_Local_Type_Geometry) {
@@ -586,6 +595,14 @@ TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import) {
 TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import_Empties) {
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_empties.geojson");
+  import_test_geofile_importer(file_path.string(), "geospatial", false);
+  check_geo_gdal_mpoly_import();
+  check_geo_num_rows("omnisci_geo, trip", 8);  // we expect it to drop 2 of the 10 rows
+}
+
+TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import_Degenerate) {
+  const auto file_path =
+      boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_degenerate.geojson");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
   check_geo_gdal_mpoly_import();
   check_geo_num_rows("omnisci_geo, trip", 8);  // we expect it to drop 2 of the 10 rows

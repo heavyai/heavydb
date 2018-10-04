@@ -1581,7 +1581,8 @@ static ImportStatus import_thread_delimited(
     size_t begin_pos,
     size_t end_pos,
     size_t total_size,
-    const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap) {
+    const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap,
+    size_t first_row_index_this_buffer) {
   ImportStatus import_status;
   int64_t total_get_row_time_us = 0;
   int64_t total_str_to_val_time_us = 0;
@@ -1602,6 +1603,7 @@ static ImportStatus import_thread_delimited(
       p->clear();
     }
     std::vector<std::string> row;
+    size_t row_index_plus_one = 0;
     for (const char* p = thread_buf; p < thread_buf_end; p++) {
       row.clear();
       if (DEBUG_TIMING) {
@@ -1626,6 +1628,7 @@ static ImportStatus import_thread_delimited(
                     row,
                     try_single_thread);
       }
+      row_index_plus_one++;
       int phys_cols = 0;
       int point_cols = 0;
       for (const auto cd : col_descs) {
@@ -1728,8 +1731,11 @@ static ImportStatus import_thread_delimited(
                         ring_sizes,
                         poly_rings,
                         PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
-                  throw std::runtime_error("Cannot read geometry to insert into column " +
-                                           cd->columnName);
+                  std::string msg =
+                      "Failed to extract valid geometry from row " +
+                      std::to_string(first_row_index_this_buffer + row_index_plus_one) +
+                      " for column " + cd->columnName;
+                  throw std::runtime_error(msg);
                 }
 
                 // validate types
@@ -1780,8 +1786,7 @@ static ImportStatus import_thread_delimited(
           }
           import_status.rows_rejected++;
           LOG(ERROR) << "Input exception thrown: " << e.what()
-                     << ". Row discarded, issue at column : " << (col_idx + 1)
-                     << " data :" << row;
+                     << ". Row discarded. Data: " << row;
         }
       });
       total_str_to_val_time_us += us;
@@ -1811,6 +1816,7 @@ static ImportStatus import_thread_shapefile(
     Importer* importer,
     OGRSpatialReference* poGeographicSR,
     const FeaturePtrVector& features,
+    size_t firstFeature,
     size_t numFeatures,
     const FieldNameToIndexMapType& fieldNameToIndexMap,
     const ColumnNameToSourceNameMapType& columnNameToSourceNameMap,
@@ -1887,8 +1893,10 @@ static ImportStatus import_thread_shapefile(
                   ring_sizes,
                   poly_rings,
                   PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
-            throw std::runtime_error("Cannot read geometry to insert into column " +
-                                     cd->columnName);
+            std::string msg = "Failed to extract valid geometry from feature " +
+                              std::to_string(firstFeature + iFeature + 1) +
+                              " for column " + cd->columnName;
+            throw std::runtime_error(msg);
           }
 
           // validate types
@@ -2012,8 +2020,7 @@ static ImportStatus import_thread_shapefile(
         import_buffers[col_idx_to_pop]->pop_value();
       }
       import_status.rows_rejected++;
-      LOG(ERROR) << "Input exception thrown: " << e.what()
-                 << ". Row discarded, issue at column : " << (col_idx + 1);
+      LOG(ERROR) << "Input exception thrown: " << e.what() << ". Row discarded.";
     }
   }
   float convert_ms =
@@ -3101,6 +3108,8 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
       stack_thread_ids.push(i);
     }
 
+    size_t first_row_index_this_buffer = 0;
+
     auto start_epoch = loader->getTableEpoch();
     while (size > 0) {
       if (eof_reached) {
@@ -3113,6 +3122,23 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
       std::unique_ptr<char> unbuf(nresidual > 0 ? new char[nresidual] : nullptr);
       if (unbuf) {
         memcpy(unbuf.get(), sbuffer.get() + end_pos, nresidual);
+      }
+
+      // added for true row index on error
+      unsigned int num_rows_this_buffer = 0;
+      {
+        // we could multi-thread this, but not worth it
+        // additional cost here is ~1.4ms per chunk and
+        // probably free because this thread will spend
+        // most of its time waiting for the child threads
+        char* p = sbuffer.get() + begin_pos;
+        char* pend = sbuffer.get() + end_pos;
+        char d = copy_params.line_delim;
+        while (p < pend) {
+          if (*p++ == d) {
+            num_rows_this_buffer++;
+          }
+        }
       }
 
       // get a thread_id not in use
@@ -3128,7 +3154,10 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
                                    begin_pos,
                                    end_pos,
                                    end_pos,
-                                   columnIdToRenderGroupAnalyzerMap));
+                                   columnIdToRenderGroupAnalyzerMap,
+                                   first_row_index_this_buffer));
+
+      first_row_index_this_buffer += num_rows_this_buffer;
 
       current_pos += end_pos;
       sbuffer.reset(new char[alloc_size]);
@@ -3860,6 +3889,7 @@ ImportStatus Importer::importGDAL(
                                                      this,
                                                      poGeographicSR.get(),
                                                      std::move(features[thread_id]),
+                                                     firstFeatureThisChunk,
                                                      numFeaturesThisChunk,
                                                      fieldNameToIndexMap,
                                                      columnNameToSourceNameMap,
@@ -3876,6 +3906,7 @@ ImportStatus Importer::importGDAL(
                                  this,
                                  poGeographicSR.get(),
                                  std::move(features[thread_id]),
+                                 firstFeatureThisChunk,
                                  numFeaturesThisChunk,
                                  fieldNameToIndexMap,
                                  columnNameToSourceNameMap,
@@ -4100,9 +4131,9 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(
   auto bulk_load_timer = timer_start();
   _rtree = std::make_unique<RTree>(nodes);
   CHECK(_rtree);
-  LOG(INFO) << "Scanning existing poly render groups of table '" << tableName << "' took "
-            << timer_stop(seedTimer) << "ms (" << timer_stop(bulk_load_timer)
-            << " ms for tree)";
+  LOG(INFO) << "Scanning render groups of poly column '" << geoColumnBaseName
+            << "' of table '" << tableName << "' took " << timer_stop(seedTimer) << "ms ("
+            << timer_stop(bulk_load_timer) << " ms for tree)";
 
   if (DEBUG_RENDER_GROUP_ANALYZER) {
     LOG(INFO) << "DEBUG: Done! Now have " << _numRenderGroups << " Render Groups";
