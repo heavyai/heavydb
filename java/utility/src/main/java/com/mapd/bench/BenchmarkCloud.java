@@ -43,6 +43,10 @@ public class BenchmarkCloud {
   static final String USER = "mapd";
   static final String PASS = "HyperInteractive";
 
+  //  Database credentials
+  static final String RESULTS_USER = "mapd";
+  static final String RESULTS_PASS = "HyperInteractive";
+
   static final String QUERY_RESULT_MACHINE = "bencher";
 
   private String driver;
@@ -50,6 +54,8 @@ public class BenchmarkCloud {
   private String iUser;
   private String queryResultMachine;
   private String iPasswd;
+  private String iResultsUser;
+  private String iResultsPasswd;
   private String rid;
   private String rTimestamp;
   private String tableName;
@@ -109,6 +115,8 @@ public class BenchmarkCloud {
     // parm7 optional JDBC Driver class name
     // parm8 optional user
     // parm9 optional passwd
+    // parm10 optional query results db user
+    // parm11 optional query results db passwd
     int iterations = Integer.valueOf(args[0]);
     logger.debug("Iterations per query is " + iterations);
 
@@ -124,6 +132,9 @@ public class BenchmarkCloud {
 
     iUser = (args.length > 8) ? args[8] : USER;
     iPasswd = (args.length > 9) ? args[9] : PASS;
+
+    iResultsUser = (args.length > 10) ? args[10] : RESULTS_USER;
+    iResultsPasswd = (args.length > 11) ? args[11] : RESULTS_PASS;
 
     // register the driver
     try {
@@ -163,8 +174,9 @@ public class BenchmarkCloud {
       System.exit(3);
     }
 
-    bencherCon = getConnection(
-            "jdbc:mapd:" + queryResultMachine + ":9091:mapd", "mapd", "HyperInteractive");
+    bencherCon = getConnection("jdbc:mapd:" + queryResultMachine + ":9091:mapd",
+            iResultsUser,
+            iResultsPasswd);
 
     getQueries(queryIDMap, bencherCon, tableName);
 
