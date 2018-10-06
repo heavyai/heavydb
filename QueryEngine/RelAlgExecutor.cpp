@@ -491,6 +491,7 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
 
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
+  	std::cout<<"!!!------executeRelAlgStep:compound------!!!"<<endl;
     if (compound->isDeleteViaSelect()) {
       executeDeleteViaCompound(compound, co, eo_work_unit, render_info, queue_time_ms);
     } else if (compound->isUpdateViaSelect()) {
@@ -507,6 +508,7 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
   }
   const auto project = dynamic_cast<const RelProject*>(body);
   if (project) {
+  	std::cout<<"!!!------executeRelAlgStep:project-------!!!"<<endl;
     if (project->isDeleteViaSelect()) {
       executeDeleteViaProject(project, co, eo_work_unit, render_info, queue_time_ms);
     } else if (project->isUpdateViaSelect()) {
@@ -523,6 +525,7 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
   }
   const auto aggregate = dynamic_cast<const RelAggregate*>(body);
   if (aggregate) {
+  	std::cout<<"!!!------executeRelAlgStep:aggregate-----!!!"<<endl;
     exec_desc.setResult(
         executeAggregate(aggregate, co, eo_work_unit, render_info, queue_time_ms));
     addTemporaryTable(-aggregate->getId(), exec_desc.getResult().getDataPtr());
@@ -530,6 +533,7 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
   }
   const auto filter = dynamic_cast<const RelFilter*>(body);
   if (filter) {
+  	std::cout<<"!!!------executeRelAlgStep:filter--------!!!"<<endl;
     exec_desc.setResult(
         executeFilter(filter, co, eo_work_unit, render_info, queue_time_ms));
     addTemporaryTable(-filter->getId(), exec_desc.getResult().getDataPtr());
@@ -537,6 +541,7 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
   }
   const auto sort = dynamic_cast<const RelSort*>(body);
   if (sort) {
+  	std::cout<<"!!!------executeRelAlgStep:sort----------!!!"<<endl;
     exec_desc.setResult(executeSort(sort, co, eo_work_unit, render_info, queue_time_ms));
     if (exec_desc.getResult().isFilterPushDownEnabled()) {
       return;
@@ -547,6 +552,7 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
 #ifdef ENABLE_JOIN_EXEC
   const auto join = dynamic_cast<const RelJoin*>(body);
   if (join) {
+  	std::cout<<"!!!------executeRelAlgStep:join----------!!!"<<endl;
     exec_desc.setResult(executeJoin(join, co, eo_work_unit, render_info, queue_time_ms));
     addTemporaryTable(-join->getId(), exec_desc.getResult().getDataPtr());
     return;
@@ -554,12 +560,14 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
 #endif
   const auto logical_values = dynamic_cast<const RelLogicalValues*>(body);
   if (logical_values) {
+  	std::cout<<"!!!------executeRelAlgStep:logical_values!!!"<<endl;
     exec_desc.setResult(executeLogicalValues(logical_values, eo_work_unit));
     addTemporaryTable(-logical_values->getId(), exec_desc.getResult().getDataPtr());
     return;
   }
   const auto modify = dynamic_cast<const RelModify*>(body);
   if (modify) {
+  	std::cout<<"!!!------executeRelAlgStep:modify--------!!!"<<endl;
     exec_desc.setResult(executeModify(modify, eo_work_unit));
     return;
   }

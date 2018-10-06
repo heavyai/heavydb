@@ -174,7 +174,7 @@ using namespace Parser;
 %token GEOGRAPHY GEOMETRY GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
 %token IS LANGUAGE LAST LENGTH LIKE LIMIT LINESTRING MOD MULTIPOLYGON NOW NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER POINT POLYGON PRECISION PRIMARY PRIVILEGES PROCEDURE
-%token SMALLINT SOME TABLE TEMPORARY TEXT THEN TIME TIMESTAMP TINYINT TO TRUNCATE UNION
+%token SKYLINE SMALLINT SOME TABLE TEMPORARY TEXT THEN TIME TIMESTAMP TINYINT TO TRUNCATE UNION
 %token PUBLIC REAL REFERENCES RENAME REVOKE ROLE ROLLBACK SCHEMA SELECT SET SHARD SHARED SHOW
 %token UNIQUE UPDATE USER VALUES VIEW WHEN WHENEVER WHERE WITH WORK
 
@@ -806,13 +806,14 @@ query_term:
 	;
 
 query_spec:
-		SELECT opt_all_distinct selection from_clause opt_where_clause opt_group_by_clause opt_having_clause
+		SELECT opt_all_distinct selection from_clause opt_where_clause opt_group_by_clause opt_having_clause opt_skyline_of_clause
 		{ $<nodeval>$ = new QuerySpec($<boolval>2,
 																	reinterpret_cast<std::list<SelectEntry*>*>($<listval>3),
 																	reinterpret_cast<std::list<TableRef*>*>($<listval>4),
 																	dynamic_cast<Expr*>($<nodeval>5),
 																	reinterpret_cast<std::list<Expr*>*>($<listval>6),
-																	dynamic_cast<Expr*>($<nodeval>7));
+																	dynamic_cast<Expr*>($<nodeval>7)),
+																	reinterpret_cast<std::list<SkylineSpec*>*>($<listval>8);
 		}
 	;
 
@@ -864,7 +865,34 @@ opt_having_clause:
 
 	/* search conditions */
 
-general_exp:
+opt_skyline_of_clause:
+		/* empty */ { $<listval>$ = nullptr; }
+	|	SKYLINE BY skyline_spec_commalist { $<listval>$ = $<listval>3; }
+	;
+
+skyline_spec_commalist:
+		skyline_spec { $<listval>$ = new std::list<Node*>(1, $<nodeval>1); }
+	|   skyline_spec_commalist ',' skyline_spec
+	{
+		$<listval>$ = $<listval>1;
+		$<listval>$->push_back($<nodeval>3);
+	}
+	;
+
+skyline_spec:
+		INTNUM opt_type_desc
+        { $<nodeval>$ = new SkylineSpec($<intval>1, nullptr, $<boolval>2); }
+	|   column_ref opt_type_desc
+        { $<nodeval>$ = new SkylineSpec(0, dynamic_cast<ColumnRef*>($<nodeval>1), $<boolval>2); }
+    ;
+
+opt_type_desc:
+		/* empty */ { $<intval>$ = 0; /* default is DIFF */ }
+        |	MIN { $<intval>$ = 1; }
+        |	MAX { $<intval>$ = 2; }
+    ;
+
+	general_exp:
 	general_exp OR general_exp
 	{ $<nodeval>$ = new OperExpr(kOR, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); }
 	|	general_exp AND general_exp

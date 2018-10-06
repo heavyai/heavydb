@@ -1234,7 +1234,33 @@ void UnionQuery::analyze(const Catalog_Namespace::Catalog& catalog,
   query.set_next_query(right_query);
   query.set_is_unionall(is_unionall);
 }
-
+void QuerySpec::analyze_skyline_of(const Catalog_Namespace::Catalog& catalog,
+                                      Analyzer::Query& query) const {
+  std::list<Analyzer::SkylineEntry> skyline_of;
+  if (!skylineof_clause.empty()) {
+    for (auto& p : skylineof_clause) {
+      int tle_no = p->get_colno();
+      if (tle_no == 0) {
+        // use column name
+        // search through targetlist for matching name
+        const std::string* name = p->get_column()->get_column();
+        tle_no = 1;
+        bool found = false;
+        for (auto tle : tlist) {
+          if (tle->get_resname() == *name) {
+            found = true;
+            break;
+          }
+          tle_no++;
+        }
+        if (!found) {
+          throw std::runtime_error("invalid name in skylineof: " + *name);
+        }  
+      }
+    skyline_of->push_back(Analyzer::SkylineEntry(tle_no,p->get_type()));
+  }
+  query.set_skyline_of(skyline_of);  
+}
 void QuerySpec::analyze_having_clause(const Catalog_Namespace::Catalog& catalog,
                                       Analyzer::Query& query) const {
   std::shared_ptr<Analyzer::Expr> p;

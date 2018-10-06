@@ -1326,7 +1326,8 @@ class QuerySpec : public QueryExpr {
             std::list<TableRef*>* f,
             Expr* w,
             std::list<Expr*>* g,
-            Expr* h)
+            Expr* h,
+            std::list<SkylineSpec*>* sky)
       : is_distinct(d), where_clause(w), having_clause(h) {
     if (s) {
       for (const auto e : *s) {
@@ -1344,6 +1345,12 @@ class QuerySpec : public QueryExpr {
         groupby_clause.emplace_back(e);
       }
       delete g;
+    }
+    if (sky) {
+      for (const auto e : *sky) {
+        skylineof_clause.emplace_back(e);
+      }
+      delete sky;
     }
   }
   bool get_is_distinct() const { return is_distinct; }
@@ -1369,6 +1376,7 @@ class QuerySpec : public QueryExpr {
   std::unique_ptr<Expr> where_clause;
   std::list<std::unique_ptr<Expr>> groupby_clause;
   std::unique_ptr<Expr> having_clause;
+  std::list<SkylineSpec> skylineof_clause;
   void analyze_from_clause(const Catalog_Namespace::Catalog& catalog,
                            Analyzer::Query& query) const;
   void analyze_select_clause(const Catalog_Namespace::Catalog& catalog,
@@ -1379,6 +1387,26 @@ class QuerySpec : public QueryExpr {
                         Analyzer::Query& query) const;
   void analyze_having_clause(const Catalog_Namespace::Catalog& catalog,
                              Analyzer::Query& query) const;
+  void analyze_skyline_of(const Catalog_Namespace::Catalog& catalog,
+                             Analyzer::Query& query) const;
+};
+
+/*
+ * @type SkylineSpec
+ * @brief skyline spec for a column in SKYLINE OF clause
+ * @hao shangbo 2018/10/05
+ */
+class SkylineSpec : public Node {
+ public:
+  SkylineSpec(int n, ColumnRef* c, int t) : colno(n), column(c), type(t){}
+  int get_colno() const { return colno; }
+  const ColumnRef* get_column() const { return column.get(); }
+  int get_type() const { return type; }
+
+ private:
+  int colno; /* 0 means use column name */
+  std::unique_ptr<ColumnRef> column;
+  int type;  /* 0:DIFF,1:MIN,2:MAX */
 };
 
 /*

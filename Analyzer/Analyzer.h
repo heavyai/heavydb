@@ -1328,6 +1328,12 @@ struct OrderEntry {
   bool nulls_first; /* true if nulls are ordered first.  otherwise last. */
 };
 
+struct SkylineEntry {
+  SkylineEntry(int n, int t): tle_no(n), type(t) {}
+  int tle_no;/* targetlist entry number: 1-based */
+  int type;  /* 0:DIFF,1:MIN,2:MAX */
+};
+
 /*
  * @type Query
  * @brief parse tree for a query
@@ -1345,7 +1351,9 @@ class Query {
       , num_aggs(0)
       , result_table_id(0)
       , limit(0)
-      , offset(0) {}
+      , offset(0)
+      , skyline_of(nullptr)
+       {}
   virtual ~Query();
   bool get_is_distinct() const { return is_distinct; }
   int get_num_aggs() const { return num_aggs; }
@@ -1360,6 +1368,7 @@ class Query {
   const std::list<std::shared_ptr<Analyzer::Expr>>& get_group_by() const {
     return group_by;
   };
+  const std::list<SkylineEntry>& get_skyline_of() const { return skyline_of; }
   const Expr* get_having_predicate() const { return having_predicate.get(); }
   const std::list<OrderEntry>* get_order_by() const { return order_by; }
   const Query* get_next_query() const { return next_query; }
@@ -1372,6 +1381,7 @@ class Query {
   void set_is_distinct(bool d) { is_distinct = d; }
   void set_where_predicate(std::shared_ptr<Analyzer::Expr> p) { where_predicate = p; }
   void set_group_by(std::list<std::shared_ptr<Analyzer::Expr>>& g) { group_by = g; }
+  void set_skyline_of(const std::list<SkylineEntry>& s) { skyline_of = s; }
   void set_having_predicate(std::shared_ptr<Analyzer::Expr> p) { having_predicate = p; }
   void set_order_by(std::list<OrderEntry>* o) { order_by = o; }
   void set_next_query(Query* q) { next_query = q; }
@@ -1396,6 +1406,7 @@ class Query {
   std::shared_ptr<Analyzer::Expr> where_predicate;      // represents the WHERE clause
   std::list<std::shared_ptr<Analyzer::Expr>> group_by;  // represents the GROUP BY clause
   std::shared_ptr<Analyzer::Expr> having_predicate;     // represents the HAVING clause
+  std::list<SkylineEntry>* skyline_of;                  // represents the SKYLINE OF clause
   std::list<OrderEntry>* order_by;                      // represents the ORDER BY clause
   Query* next_query;                                    // the next query to UNION
   bool is_unionall;                                     // true only if it is UNION ALL

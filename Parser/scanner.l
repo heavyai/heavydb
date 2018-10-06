@@ -122,6 +122,7 @@ SET           TOK(SET)
 SHARD         TOK(SHARD)
 SHARED        TOK(SHARED)
 SHOW          TOK(SHOW)
+SKYLINE       TOK(SKYLINE)
 SMALLINT      TOK(SMALLINT)
 SOME          { yylval.qualval = kANY; TOK(SOME) } /* SOME = ANY */
 TABLE         TOK(TABLE)
