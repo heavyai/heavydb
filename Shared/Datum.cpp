@@ -52,16 +52,17 @@ int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
   int64_t result;
   result = std::abs(std::stoll(before_dot));
   int64_t fraction = 0;
+  const size_t before_dot_digits = before_dot.length() - (is_negative ? 1 : 0);
   if (!after_dot.empty()) {
     fraction = std::stoll(after_dot);
   }
   if (ti.get_dimension() == 0) {
     // set the type info based on the literal string
     ti.set_scale(after_dot.length());
-    ti.set_dimension(before_dot.length() + ti.get_scale());
+    ti.set_dimension(before_dot_digits + ti.get_scale());
     ti.set_notnull(false);
   } else {
-    if (before_dot.length() + ti.get_scale() > static_cast<size_t>(ti.get_dimension())) {
+    if (before_dot_digits + ti.get_scale() > static_cast<size_t>(ti.get_dimension())) {
       throw std::runtime_error("numeric value " + s +
                                " exceeds the maximum precision of " +
                                std::to_string(ti.get_dimension()));

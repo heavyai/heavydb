@@ -4007,6 +4007,12 @@ void import_big_decimal_range_test() {
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
+  {
+    const std::string insert_query{
+        "INSERT INTO big_decimal_range_test VALUES(-999999999999.99, 1.3);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
 }
 
 void import_decimal_compression_test() {
@@ -4765,13 +4771,13 @@ TEST(Select, RedundantGroupBy) {
 TEST(Select, BigDecimalRange) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT CAST(d AS INT) AS di, COUNT(*) FROM big_decimal_range_test GROUP BY di "
-      "HAVING di > 0;",
+    c("SELECT CAST(d AS BIGINT) AS di, COUNT(*) FROM big_decimal_range_test GROUP BY d "
+      "HAVING di > 0 ORDER BY d;",
       dt);
-    c("select d1*2 from big_decimal_range_test;", dt);
-    c("select 2*d1 from big_decimal_range_test;", dt);
-    c("select d1 * (CAST(d1 as INT) + 1) from big_decimal_range_test;", dt);
-    c("select (CAST(d1 as INT) + 1) * d1 from big_decimal_range_test;", dt);
+    c("SELECT d1*2 FROM big_decimal_range_test ORDER BY d1;", dt);
+    c("SELECT 2*d1 FROM big_decimal_range_test ORDER BY d1;", dt);
+    c("SELECT d1 * (CAST(d1 as INT) + 1) FROM big_decimal_range_test ORDER BY d1;", dt);
+    c("SELECT (CAST(d1 as INT) + 1) * d1 FROM big_decimal_range_test ORDER BY d1;", dt);
   }
 }
 
