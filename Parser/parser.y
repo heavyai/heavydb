@@ -867,7 +867,7 @@ opt_having_clause:
 
 opt_skyline_of_clause:
 		/* empty */ { $<listval>$ = nullptr; }
-	|	SKYLINE BY skyline_spec_commalist { $<listval>$ = $<listval>3; }
+	|	SKYLINE OF skyline_spec_commalist { $<listval>$ = $<listval>3; }
 	;
 
 skyline_spec_commalist:
