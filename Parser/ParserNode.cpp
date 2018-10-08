@@ -49,6 +49,7 @@
 #include "../Shared/measure.h"
 #include "DataMgr/LockMgr.h"
 #include "ReservedKeywords.h"
+#include "TargetValueConvertersFactories.h"
 #include "gen-cpp/CalciteServer.h"
 #include "parser.h"
 
@@ -2436,28 +2437,29 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
   std::vector<TargetMetaInfo> target_metainfos;
   const auto result_rows = getResultRows(session, select_query_, target_metainfos);
-  std::list<ColumnDescriptor> column_descriptors;
-  std::vector<SQLTypeInfo> logical_column_types;
+  result_rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
+
+  std::list<ColumnDescriptor> column_descriptors_for_create;
+  std::vector<ColumnDescriptor> column_descriptors;
+  std::vector<std::unique_ptr<TargetValueConverter>> value_converters;
+  const auto num_rows = result_rows->rowCount();
+
   for (const auto& target_metainfo : target_metainfos) {
     ColumnDescriptor cd;
     cd.columnName = target_metainfo.get_resname();
-    cd.columnType = target_metainfo.get_type_info();
-    if (cd.columnType.get_size() < 0) {
-      throw std::runtime_error("Variable-length type " + cd.columnType.get_type_name() +
-                               " not supported in CTAS");
-    }
-    if (cd.columnType.get_compression() == kENCODING_FIXED) {
-      throw std::runtime_error("Fixed encoding integers not supported in CTAS");
-    }
+    cd.columnType = target_metainfo.get_physical_type_info();
+
+    ColumnDescriptor cd_for_create = cd;
+
     if (cd.columnType.get_compression() == kENCODING_DICT) {
-      cd.columnType.set_comp_param(cd.columnType.get_size() * 8);
-      logical_column_types.push_back(target_metainfo.get_type_info());
-    } else {
-      logical_column_types.push_back(
-          get_logical_type_info(target_metainfo.get_type_info()));
+      // we need to reset the comp param (as this points to the actual dictionary)
+      cd_for_create.columnType.set_comp_param(cd.columnType.get_size() * 8);
     }
+
+    column_descriptors_for_create.push_back(cd_for_create);
     column_descriptors.push_back(cd);
   }
+
   TableDescriptor td;
   td.tableName = table_name_;
   td.userId = session.get_currentUser().userId;
@@ -2475,50 +2477,90 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   } else {
     td.persistenceLevel = Data_Namespace::MemoryLevel::DISK_LEVEL;
   }
-  catalog.createTable(td, column_descriptors, {}, true);
+  catalog.createTable(td, column_descriptors_for_create, {}, true);
   if (result_rows->definitelyHasNoRows()) {
     return;
   }
-  const TableDescriptor* created_td{nullptr};
+
+  const TableDescriptor* created_td = catalog.getMetadataForTable(table_name_);
+
+  TargetValueConverterFactory factory;
+
+  for (const auto& cd : column_descriptors) {
+    const ColumnDescriptor* sourceDescriptor = &cd;
+    const ColumnDescriptor* targetDescriptor =
+        catalog.getMetadataForColumn(created_td->tableId, cd.columnName);
+
+    ConverterCreateParameter param{num_rows,
+                                   catalog,
+                                   sourceDescriptor,
+                                   targetDescriptor,
+                                   targetDescriptor->columnType,
+                                   !targetDescriptor->columnType.get_notnull()};
+    auto converter = factory.create(param);
+    value_converters.push_back(std::move(converter));
+  }
+
+  const int num_cols = value_converters.size();
+  bool can_go_parallel = !result_rows->isTruncated() && num_rows > 20000;
+
+  if (can_go_parallel) {
+    const size_t entryCount = result_rows->entryCount();
+    const size_t num_worker_threads = cpu_threads();
+    std::atomic<size_t> row_idx{0};
+    std::vector<std::future<size_t>> worker_threads;
+    for (size_t i = 0,
+                start_entry = 0,
+                stride = (entryCount + num_worker_threads - 1) / num_worker_threads;
+         i < num_worker_threads && start_entry < entryCount;
+         ++i, start_entry += stride) {
+      const auto end_entry = std::min(start_entry + stride, entryCount);
+      worker_threads.push_back(
+          std::async(std::launch::async,
+                     [&result_rows, &value_converters, &num_cols, &row_idx](
+                         const size_t start, const size_t end) {
+                       size_t row_count{0};
+                       for (size_t i = start; i < end; ++i) {
+                         const auto result_row = result_rows->getRowAtNoTranslations(i);
+                         if (!result_row.empty()) {
+                           size_t target_row = row_idx.fetch_add(1);
+                           for (unsigned int col = 0; col < num_cols; col++) {
+                             const auto& mapd_variant = result_row[col];
+                             value_converters[col]->convertToColumnarFormat(
+                                 target_row, &mapd_variant);
+                           }
+                         }
+                       }
+                       return row_count;
+                     },
+                     start_entry,
+                     end_entry));
+    }
+
+    for (auto& child : worker_threads) {
+      child.wait();
+    }
+
+  } else {
+    for (size_t row = 0; row < num_rows; row++) {
+      const auto result_row = result_rows->getNextRow(false, false);
+      for (unsigned int col = 0; col < num_cols; col++) {
+        const auto& mapd_variant = result_row[col];
+        value_converters[col]->convertToColumnarFormat(row, &mapd_variant);
+      }
+    }
+  }
+
   try {
-    const auto row_set_mem_owner = result_rows->getRowSetMemOwner();
-    ColumnarResults columnar_results(
-        row_set_mem_owner, *result_rows, column_descriptors.size(), logical_column_types);
     Fragmenter_Namespace::InsertData insert_data;
     insert_data.databaseId = catalog.get_currentDB().dbId;
-    created_td = catalog.getMetadataForTable(table_name_);
     CHECK(created_td);
     insert_data.tableId = created_td->tableId;
-    std::vector<int> column_ids;
-    const auto& column_buffers = columnar_results.getColumnBuffers();
-    CHECK_EQ(column_descriptors.size(), column_buffers.size());
-    size_t col_idx = 0;
-    std::vector<std::unique_ptr<int8_t[]>> dest_string_ids_owner;
+
+    int col_idx = 0;
     for (const auto cd : column_descriptors) {
-      DataBlockPtr p;
-      const auto created_cd =
-          catalog.getMetadataForColumn(insert_data.tableId, cd.columnName);
-      CHECK(created_cd);
-      column_ids.push_back(created_cd->columnId);
-      if (created_cd->columnType.get_compression() == kENCODING_DICT) {
-        const auto source_dd = catalog.getMetadataForDict(
-            target_metainfos[col_idx].get_type_info().get_comp_param());
-        CHECK(source_dd);
-        const auto dest_dd =
-            catalog.getMetadataForDict(created_cd->columnType.get_comp_param());
-        CHECK(dest_dd);
-        const auto dest_ids = fill_dict_column(dest_string_ids_owner,
-                                               dest_dd->stringDict.get(),
-                                               column_buffers[col_idx],
-                                               source_dd->stringDict.get(),
-                                               columnar_results.size(),
-                                               created_cd->columnType);
-        p.numbersPtr = reinterpret_cast<int8_t*>(dest_ids);
-      } else {
-        p.numbersPtr = const_cast<int8_t*>(column_buffers[col_idx]);
-      }
-      insert_data.data.push_back(p);
-      ++col_idx;
+      value_converters[col_idx++]->addDataBlocksToInsertData(insert_data);
+      continue;
     }
     // get CheckpointLock+UpdateDeleteLock locks on the table before trying to create its
     // 1st fragment
@@ -2528,8 +2570,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
             Lock_Namespace::LockType::CheckpointLock, chunkKey));
     // [ write UpdateDeleteLocks ] lock is deferred in
     // InsertOrderFragmenter::deleteFragments
-    insert_data.columnIds = column_ids;
-    insert_data.numRows = columnar_results.size();
+    insert_data.numRows = num_rows;
     created_td->fragmenter->insertData(insert_data);
   } catch (...) {
     if (created_td) {

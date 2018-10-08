@@ -2527,9 +2527,6 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
       case kARRAY: {
         const auto l = col_cv->get_value_list();
         SQLTypeInfo elem_ti = cd->columnType.get_elem_type();
-        if (elem_ti.is_string()) {
-          throw std::runtime_error("INSERT INTO text arrays is not yet supported.");
-        }
         size_t len = l.size() * elem_ti.get_size();
         auto size = cd->columnType.get_size();
         if (size > 0 && static_cast<size_t>(size) != len) {

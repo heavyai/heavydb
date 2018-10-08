@@ -1196,7 +1196,8 @@ std::vector<TargetMetaInfo> get_targets_meta(
         ra_node->getFieldName(i),
         is_count_distinct(target_exprs[i])
             ? SQLTypeInfo(kBIGINT, false)
-            : get_logical_type_info(target_exprs[i]->get_type_info()));
+            : get_logical_type_info(target_exprs[i]->get_type_info()),
+        target_exprs[i]->get_type_info());
   }
   return targets_meta;
 }
