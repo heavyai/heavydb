@@ -106,11 +106,11 @@ class QueryExecutionContext : boost::noncopyable {
   void initColumnPerRow(const QueryMemoryDescriptor& query_mem_desc,
                         int8_t* row_ptr,
                         const size_t bin,
-                        const int64_t* init_vals,
+                        const std::vector<int64_t>& init_vals,
                         const std::vector<ssize_t>& bitmap_sizes);
 
   void initGroups(int64_t* groups_buffer,
-                  const int64_t* init_vals,
+                  const std::vector<int64_t>& init_vals,
                   const int32_t groups_buffer_entry_count,
                   const bool keyless,
                   const size_t warp_size);
@@ -119,7 +119,7 @@ class QueryExecutionContext : boost::noncopyable {
   int8_t* initColumnarBuffer(T* buffer_ptr, const T init_val, const uint32_t entry_count);
 
   void initColumnarGroups(int64_t* groups_buffer,
-                          const int64_t* init_vals,
+                          const std::vector<int64_t>& init_vals,
                           const int32_t groups_buffer_entry_count,
                           const bool keyless);
 
