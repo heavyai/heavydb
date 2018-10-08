@@ -33,6 +33,7 @@
 #include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/format.hpp>
 #include <boost/program_options.hpp>
 #include <cmath>
 #include <csignal>
@@ -411,7 +412,8 @@ std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_in
       return std::to_string(datum.val.int_val);
     case TDatumType::DECIMAL: {
       std::ostringstream dout;
-      dout << std::setprecision(type_info.precision) << datum.val.real_val;
+      const auto format_str = "%." + std::to_string(type_info.scale) + "f";
+      dout << boost::format(format_str) % datum.val.real_val;
       return dout.str();
     }
     case TDatumType::DOUBLE: {
