@@ -172,7 +172,7 @@ using namespace Parser;
 %token CURSOR DATABASE DATE DATETIME DATE_TRUNC DECIMAL DECLARE DEFAULT DELETE DESC DICTIONARY DISTINCT DOUBLE DROP
 %token ELSE END EXISTS EXPLAIN EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM
 %token GEOGRAPHY GEOMETRY GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
-%token IS LANGUAGE LAST LENGTH LIKE LIMIT LINESTRING MOD MULTIPOLYGON NOW NULLX NUMERIC OF OFFSET ON OPEN OPTION
+%token IS LANGUAGE LAST LENGTH LIKE LIMIT LINESTRING MOD MAX MIN MULTIPOLYGON NOW NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER POINT POLYGON PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token SKYLINE SMALLINT SOME TABLE TEMPORARY TEXT THEN TIME TIMESTAMP TINYINT TO TRUNCATE UNION
 %token PUBLIC REAL REFERENCES RENAME REVOKE ROLE ROLLBACK SCHEMA SELECT SET SHARD SHARED SHOW
@@ -812,8 +812,8 @@ query_spec:
 																	reinterpret_cast<std::list<TableRef*>*>($<listval>4),
 																	dynamic_cast<Expr*>($<nodeval>5),
 																	reinterpret_cast<std::list<Expr*>*>($<listval>6),
-																	dynamic_cast<Expr*>($<nodeval>7)),
-																	reinterpret_cast<std::list<SkylineSpec*>*>($<listval>8);
+																	dynamic_cast<Expr*>($<nodeval>7),
+																	reinterpret_cast<std::list<SkylineSpec*>*>($<listval>8));
 		}
 	;
 

@@ -1344,6 +1344,7 @@ class Query {
       : is_distinct(false)
       , where_predicate(nullptr)
       , having_predicate(nullptr)
+      , skyline_of(nullptr)
       , order_by(nullptr)
       , next_query(nullptr)
       , is_unionall(false)
@@ -1352,7 +1353,6 @@ class Query {
       , result_table_id(0)
       , limit(0)
       , offset(0)
-      , skyline_of(nullptr)
        {}
   virtual ~Query();
   bool get_is_distinct() const { return is_distinct; }
@@ -1368,8 +1368,8 @@ class Query {
   const std::list<std::shared_ptr<Analyzer::Expr>>& get_group_by() const {
     return group_by;
   };
-  const std::list<SkylineEntry>& get_skyline_of() const { return skyline_of; }
   const Expr* get_having_predicate() const { return having_predicate.get(); }
+  const std::list<SkylineEntry>* get_skyline_of() const { return skyline_of; }
   const std::list<OrderEntry>* get_order_by() const { return order_by; }
   const Query* get_next_query() const { return next_query; }
   SQLStmtType get_stmt_type() const { return stmt_type; }
@@ -1381,8 +1381,8 @@ class Query {
   void set_is_distinct(bool d) { is_distinct = d; }
   void set_where_predicate(std::shared_ptr<Analyzer::Expr> p) { where_predicate = p; }
   void set_group_by(std::list<std::shared_ptr<Analyzer::Expr>>& g) { group_by = g; }
-  void set_skyline_of(const std::list<SkylineEntry>& s) { skyline_of = s; }
   void set_having_predicate(std::shared_ptr<Analyzer::Expr> p) { having_predicate = p; }
+  void set_skyline_of(std::list<SkylineEntry>* s) { skyline_of = s; }
   void set_order_by(std::list<OrderEntry>* o) { order_by = o; }
   void set_next_query(Query* q) { next_query = q; }
   void set_is_unionall(bool u) { is_unionall = u; }

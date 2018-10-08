@@ -1236,7 +1236,9 @@ void UnionQuery::analyze(const Catalog_Namespace::Catalog& catalog,
 }
 void QuerySpec::analyze_skyline_of(const Catalog_Namespace::Catalog& catalog,
                                       Analyzer::Query& query) const {
-  std::list<Analyzer::SkylineEntry> skyline_of;
+  std::list<Analyzer::SkylineEntry>* skyline_of = new std::list<Analyzer::SkylineEntry>();
+  std::vector<std::shared_ptr<Analyzer::TargetEntry>>& tlist =
+      query.get_targetlist_nonconst();
   if (!skylineof_clause.empty()) {
     for (auto& p : skylineof_clause) {
       int tle_no = p->get_colno();
@@ -1255,11 +1257,12 @@ void QuerySpec::analyze_skyline_of(const Catalog_Namespace::Catalog& catalog,
         }
         if (!found) {
           throw std::runtime_error("invalid name in skylineof: " + *name);
-        }  
+        }
       }
     skyline_of->push_back(Analyzer::SkylineEntry(tle_no,p->get_type()));
+    }
+    query.set_skyline_of(skyline_of);  
   }
-  query.set_skyline_of(skyline_of);  
 }
 void QuerySpec::analyze_having_clause(const Catalog_Namespace::Catalog& catalog,
                                       Analyzer::Query& query) const {
@@ -1439,6 +1442,7 @@ void QuerySpec::analyze(const Catalog_Namespace::Catalog& catalog,
   analyze_where_clause(catalog, query);
   analyze_group_by(catalog, query);
   analyze_having_clause(catalog, query);
+  analyze_skyline_of(catalog, query);
 }
 
 void SelectStmt::analyze(const Catalog_Namespace::Catalog& catalog,
