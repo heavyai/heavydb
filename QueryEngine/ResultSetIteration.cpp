@@ -137,7 +137,8 @@ std::vector<TargetValue> ResultSet::getRowAt(
   int8_t* keys_ptr{nullptr};
   const int8_t* crt_col_ptr{nullptr};
   if (query_mem_desc_.didOutputColumnar()) {
-    crt_col_ptr = get_cols_ptr(buff, query_mem_desc_);
+    keys_ptr = buff;
+    crt_col_ptr = get_cols_ptr(buff, storage->query_mem_desc_);
   } else {
     keys_ptr = row_ptr_rowwise(buff, query_mem_desc_, local_entry_idx);
     const auto key_bytes_with_padding =
@@ -147,29 +148,21 @@ std::vector<TargetValue> ResultSet::getRowAt(
   for (size_t target_idx = 0; target_idx < storage_->targets_.size(); ++target_idx) {
     const auto& agg_info = storage_->targets_[target_idx];
     if (query_mem_desc_.didOutputColumnar()) {
-      const auto next_col_ptr =
-          advance_to_next_columnar_target_buff(crt_col_ptr, query_mem_desc_, agg_col_idx);
-      const auto col2_ptr =
-          (agg_info.is_agg && agg_info.agg_kind == kAVG) ? next_col_ptr : nullptr;
-      const auto compact_sz2 =
-          (agg_info.is_agg && agg_info.agg_kind == kAVG)
-              ? query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact
-              : 0;
-      row.push_back(getTargetValueFromBufferColwise(
-          crt_col_ptr,
-          query_mem_desc_.getColumnWidth(agg_col_idx).compact,
-          col2_ptr,
-          compact_sz2,
-          global_entry_idx,
-          agg_info,
-          target_idx,
-          translate_strings,
-          decimal_to_double));
-      crt_col_ptr = next_col_ptr;
-      if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
-        crt_col_ptr = advance_to_next_columnar_target_buff(
-            crt_col_ptr, query_mem_desc_, agg_col_idx + 1);
-      }
+      row.push_back(getTargetValueFromBufferColwise(crt_col_ptr,
+                                                    keys_ptr,
+                                                    storage->query_mem_desc_,
+                                                    local_entry_idx,
+                                                    global_entry_idx,
+                                                    agg_info,
+                                                    target_idx,
+                                                    agg_col_idx,
+                                                    translate_strings,
+                                                    decimal_to_double));
+      crt_col_ptr = advance_target_ptr_col_wise(crt_col_ptr,
+                                                agg_info,
+                                                agg_col_idx,
+                                                storage->query_mem_desc_,
+                                                separate_varlen_storage_valid_);
     } else {
       row.push_back(getTargetValueFromBufferRowwise(rowwise_target_ptr,
                                                     keys_ptr,
@@ -180,11 +173,11 @@ std::vector<TargetValue> ResultSet::getRowAt(
                                                     translate_strings,
                                                     decimal_to_double,
                                                     fixup_count_distinct_pointers));
-      rowwise_target_ptr = advance_target_ptr(rowwise_target_ptr,
-                                              agg_info,
-                                              agg_col_idx,
-                                              query_mem_desc_,
-                                              separate_varlen_storage_valid_);
+      rowwise_target_ptr = advance_target_ptr_row_wise(rowwise_target_ptr,
+                                                       agg_info,
+                                                       agg_col_idx,
+                                                       query_mem_desc_,
+                                                       separate_varlen_storage_valid_);
     }
     agg_col_idx = advance_slot(agg_col_idx, agg_info, separate_varlen_storage_valid_);
   }
@@ -382,11 +375,11 @@ void ResultSet::RowWiseTargetAccessor::initializeOffsetsForStorage() {
                         ptr2,
                         static_cast<size_t>(compact_sz2)});
       rowwise_target_ptr =
-          advance_target_ptr(rowwise_target_ptr,
-                             agg_info,
-                             agg_col_idx,
-                             result_set_->query_mem_desc_,
-                             result_set_->separate_varlen_storage_valid_);
+          advance_target_ptr_row_wise(rowwise_target_ptr,
+                                      agg_info,
+                                      agg_col_idx,
+                                      result_set_->query_mem_desc_,
+                                      result_set_->separate_varlen_storage_valid_);
 
       agg_col_idx = advance_slot(
           agg_col_idx, agg_info, result_set_->separate_varlen_storage_valid_);
@@ -482,22 +475,27 @@ void ResultSet::ColumnWiseTargetAccessor::initializeOffsetsForStorage() {
                              : result_set_->appended_storage_[storage_idx - 1]->buff_;
     CHECK(buff);
 
-    const int8_t* crt_col_ptr = get_cols_ptr(buff, result_set_->query_mem_desc_);
+    const auto& crt_query_mem_desc =
+        storage_idx == 0
+            ? result_set_->storage_->query_mem_desc_
+            : result_set_->appended_storage_[storage_idx - 1]->query_mem_desc_;
+    const int8_t* crt_col_ptr = get_cols_ptr(buff, crt_query_mem_desc);
 
     size_t agg_col_idx = 0;
     for (size_t target_idx = 0; target_idx < result_set_->storage_->targets_.size();
          ++target_idx) {
       const auto& agg_info = result_set_->storage_->targets_[target_idx];
 
-      const auto compact_sz1 =
-          result_set_->query_mem_desc_.getColumnWidth(agg_col_idx).compact;
+      const auto compact_sz1 = crt_query_mem_desc.getColumnWidth(agg_col_idx).compact;
       const auto next_col_ptr = advance_to_next_columnar_target_buff(
-          crt_col_ptr, result_set_->query_mem_desc_, agg_col_idx);
-      const auto col2_ptr =
-          (agg_info.is_agg && agg_info.agg_kind == kAVG) ? next_col_ptr : nullptr;
+          crt_col_ptr, crt_query_mem_desc, agg_col_idx);
+      const auto col2_ptr = ((agg_info.is_agg && agg_info.agg_kind == kAVG) ||
+                             is_real_str_or_array(agg_info))
+                                ? next_col_ptr
+                                : nullptr;
       const auto compact_sz2 =
-          (agg_info.is_agg && agg_info.agg_kind == kAVG)
-              ? result_set_->query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact
+          (agg_info.is_agg && agg_info.agg_kind == kAVG) || is_real_str_or_array(agg_info)
+              ? crt_query_mem_desc.getColumnWidth(agg_col_idx + 1).compact
               : 0;
 
       offsets_for_storage_[storage_idx].push_back(
@@ -509,7 +507,7 @@ void ResultSet::ColumnWiseTargetAccessor::initializeOffsetsForStorage() {
       crt_col_ptr = next_col_ptr;
       if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
         crt_col_ptr = advance_to_next_columnar_target_buff(
-            crt_col_ptr, result_set_->query_mem_desc_, agg_col_idx + 1);
+            crt_col_ptr, crt_query_mem_desc, agg_col_idx + 1);
       }
       agg_col_idx = advance_slot(
           agg_col_idx, agg_info, result_set_->separate_varlen_storage_valid_);
@@ -539,13 +537,45 @@ InternalTargetValue ResultSet::ColumnWiseTargetAccessor::getColumnInternal(
           offsets_for_target.compact_sz1),
       target_logical_idx,
       storage_lookup_result);
-  if (offsets_for_target.ptr2) {
+  if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
+    CHECK(offsets_for_target.ptr2);
     const auto i2 = read_int_from_buff(
         columnar_elem_ptr(
             entry_idx, offsets_for_target.ptr2, offsets_for_target.compact_sz2),
         offsets_for_target.compact_sz2);
     return InternalTargetValue(i1, i2);
   } else {
+    // for TEXT ENCODING NONE:
+    if (agg_info.sql_type.is_string() &&
+        agg_info.sql_type.get_compression() == kENCODING_NONE) {
+      CHECK(!agg_info.is_agg);
+      if (!result_set_->lazy_fetch_info_.empty()) {
+        CHECK_LT(target_logical_idx, result_set_->lazy_fetch_info_.size());
+        const auto& col_lazy_fetch = result_set_->lazy_fetch_info_[target_logical_idx];
+        if (col_lazy_fetch.is_lazily_fetched) {
+          return InternalTargetValue(reinterpret_cast<const std::string*>(i1));
+        }
+      }
+      if (result_set_->separate_varlen_storage_valid_) {
+        if (i1 < 0) {
+          CHECK_EQ(-1, i1);
+          return InternalTargetValue(static_cast<const std::string*>(nullptr));
+        }
+        CHECK_LT(storage_lookup_result.storage_idx,
+                 result_set_->serialized_varlen_buffer_.size());
+        const auto& varlen_buffer_for_fragment =
+            result_set_->serialized_varlen_buffer_[storage_lookup_result.storage_idx];
+        CHECK_LT(i1, varlen_buffer_for_fragment.size());
+        return InternalTargetValue(&varlen_buffer_for_fragment[i1]);
+      }
+      CHECK(offsets_for_target.ptr2);
+      const auto i2 = read_int_from_buff(
+          columnar_elem_ptr(
+              entry_idx, offsets_for_target.ptr2, offsets_for_target.compact_sz2),
+          offsets_for_target.compact_sz2);
+      CHECK_GE(i2, 0);
+      return result_set_->getVarlenOrderEntry(i1, i2);
+    }
     return InternalTargetValue(
         agg_info.sql_type.is_fp()
             ? i1
@@ -1116,6 +1146,8 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
 }
 
 // Reads a geo value from a series of ptrs to var len types
+// In Columnar format, geo_target_ptr is the geo column ptr (a pointer to the beginning of
+// that specific geo column) and should be appropriately adjusted with the entry_buff_idx
 TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
                                           const size_t slot_idx,
                                           const TargetInfo& target_info,
@@ -1123,39 +1155,58 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
                                           const size_t entry_buff_idx) const {
   CHECK(target_info.sql_type.is_geometry());
 
+  auto getNextTargetBufferRowWise = [&](const size_t slot_idx, const size_t range) {
+    return geo_target_ptr + query_mem_desc_.getPaddedColWidthForRange(slot_idx, range);
+  };
+
+  auto getNextTargetBufferColWise = [&](const size_t slot_idx, const size_t range) {
+    const auto storage_info = findStorage(entry_buff_idx);
+    auto crt_geo_col_ptr = geo_target_ptr;
+    for (size_t i = slot_idx; i < slot_idx + range; i++) {
+      crt_geo_col_ptr = advance_to_next_columnar_target_buff(
+          crt_geo_col_ptr, storage_info.storage_ptr->query_mem_desc_, i);
+    }
+    // adjusting the column pointer to represent a pointer to the geo target value
+    return crt_geo_col_ptr +
+           storage_info.fixedup_entry_idx *
+               storage_info.storage_ptr->query_mem_desc_.getColumnWidth(slot_idx + range)
+                   .compact;
+  };
+
+  auto getNextTargetBuffer = [&](const size_t slot_idx, const size_t range) {
+    return query_mem_desc_.didOutputColumnar()
+               ? getNextTargetBufferColWise(slot_idx, range)
+               : getNextTargetBufferRowWise(slot_idx, range);
+  };
+
   auto getCoordsDataPtr = [&](const int8_t* geo_target_ptr) {
-    return read_int_from_buff(geo_target_ptr,
+    return read_int_from_buff(getNextTargetBuffer(slot_idx, 0),
                               query_mem_desc_.getColumnWidth(slot_idx).compact);
   };
 
   auto getCoordsLength = [&](const int8_t* geo_target_ptr) {
-    return read_int_from_buff(
-        geo_target_ptr + query_mem_desc_.getColumnWidth(slot_idx).compact,
-        query_mem_desc_.getColumnWidth(slot_idx + 1).compact);
+    return read_int_from_buff(getNextTargetBuffer(slot_idx, 1),
+                              query_mem_desc_.getColumnWidth(slot_idx + 1).compact);
   };
 
   auto getRingSizesPtr = [&](const int8_t* geo_target_ptr) {
-    return read_int_from_buff(
-        geo_target_ptr + query_mem_desc_.getPaddedColWidthForRange(slot_idx, 2),
-        query_mem_desc_.getColumnWidth(slot_idx + 2).compact);
+    return read_int_from_buff(getNextTargetBuffer(slot_idx, 2),
+                              query_mem_desc_.getColumnWidth(slot_idx + 2).compact);
   };
 
   auto getRingSizesLength = [&](const int8_t* geo_target_ptr) {
-    return read_int_from_buff(
-        geo_target_ptr + query_mem_desc_.getPaddedColWidthForRange(slot_idx, 3),
-        query_mem_desc_.getColumnWidth(slot_idx + 3).compact);
+    return read_int_from_buff(getNextTargetBuffer(slot_idx, 3),
+                              query_mem_desc_.getColumnWidth(slot_idx + 3).compact);
   };
 
   auto getPolyRingsPtr = [&](const int8_t* geo_target_ptr) {
-    return read_int_from_buff(
-        geo_target_ptr + query_mem_desc_.getPaddedColWidthForRange(slot_idx, 4),
-        query_mem_desc_.getColumnWidth(slot_idx + 4).compact);
+    return read_int_from_buff(getNextTargetBuffer(slot_idx, 4),
+                              query_mem_desc_.getColumnWidth(slot_idx + 4).compact);
   };
 
   auto getPolyRingsLength = [&](const int8_t* geo_target_ptr) {
-    return read_int_from_buff(
-        geo_target_ptr + query_mem_desc_.getPaddedColWidthForRange(slot_idx, 5),
-        query_mem_desc_.getColumnWidth(slot_idx + 5).compact);
+    return read_int_from_buff(getNextTargetBuffer(slot_idx, 5),
+                              query_mem_desc_.getColumnWidth(slot_idx + 5).compact);
   };
 
   auto getFragColBuffers = [&]() {
@@ -1220,7 +1271,6 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
             static_cast<int64_t>(varlen_buffer[getCoordsDataPtr(geo_target_ptr)].size()));
       } else if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
         auto frag_col_buffers = getFragColBuffers();
-
         return GeoTargetValueBuilder<kPOINT, GeoLazyFetchHandler>::build(
             target_info.sql_type,
             geo_return_type_,
@@ -1254,7 +1304,6 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
             static_cast<int64_t>(varlen_buffer[getCoordsDataPtr(geo_target_ptr)].size()));
       } else if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
         auto frag_col_buffers = getFragColBuffers();
-
         return GeoTargetValueBuilder<kLINESTRING, GeoLazyFetchHandler>::build(
             target_info.sql_type,
             geo_return_type_,
@@ -1497,24 +1546,47 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
   return TargetValue(int64_t(0));
 }
 
-// Gets the TargetValue stored at position entry_idx in the col1_ptr and col2_ptr
+// Gets the TargetValue stored at position local_entry_idx in the col1_ptr and col2_ptr
 // column buffers. The second column is only used for AVG.
+// the global_entry_idx is passed to makeTargetValue to be used for
+// final lazy fetch (if there's any).
 TargetValue ResultSet::getTargetValueFromBufferColwise(
-    const int8_t* col1_ptr,
-    const int8_t compact_sz1,
-    const int8_t* col2_ptr,
-    const int8_t compact_sz2,
-    const size_t entry_idx,
+    const int8_t* col_ptr,
+    const int8_t* keys_ptr,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const size_t local_entry_idx,
+    const size_t global_entry_idx,
     const TargetInfo& target_info,
     const size_t target_logical_idx,
+    const size_t slot_idx,
     const bool translate_strings,
     const bool decimal_to_double) const {
   CHECK(query_mem_desc_.didOutputColumnar());
-  const auto ptr1 = columnar_elem_ptr(entry_idx, col1_ptr, compact_sz1);
+  const auto col1_ptr = col_ptr;
+  const auto compact_sz1 = query_mem_desc.getColumnWidth(slot_idx).compact;
+  const auto next_col_ptr =
+      advance_to_next_columnar_target_buff(col1_ptr, query_mem_desc, slot_idx);
+  const auto col2_ptr = ((target_info.is_agg && target_info.agg_kind == kAVG) ||
+                         is_real_str_or_array(target_info))
+                            ? next_col_ptr
+                            : nullptr;
+  const auto compact_sz2 = ((target_info.is_agg && target_info.agg_kind == kAVG) ||
+                            is_real_str_or_array(target_info))
+                               ? query_mem_desc.getColumnWidth(slot_idx + 1).compact
+                               : 0;
+
+  // TODO(Saman): add required logics for count distinct
+  // geospatial target values:
+  if (target_info.sql_type.is_geometry()) {
+    return makeGeoTargetValue(
+        col1_ptr, slot_idx, target_info, target_logical_idx, global_entry_idx);
+  }
+
+  const auto ptr1 = columnar_elem_ptr(local_entry_idx, col1_ptr, compact_sz1);
   if (target_info.agg_kind == kAVG || is_real_str_or_array(target_info)) {
     CHECK(col2_ptr);
     CHECK(compact_sz2);
-    const auto ptr2 = columnar_elem_ptr(entry_idx, col2_ptr, compact_sz2);
+    const auto ptr2 = columnar_elem_ptr(local_entry_idx, col2_ptr, compact_sz2);
     return target_info.agg_kind == kAVG
                ? make_avg_target_value(ptr1, compact_sz1, ptr2, compact_sz2, target_info)
                : makeVarlenTargetValue(ptr1,
@@ -1524,15 +1596,29 @@ TargetValue ResultSet::getTargetValueFromBufferColwise(
                                        target_info,
                                        target_logical_idx,
                                        translate_strings,
-                                       entry_idx);
+                                       global_entry_idx);
   }
-  return makeTargetValue(ptr1,
-                         compact_sz1,
+  if (query_mem_desc_.targetGroupbyIndicesSize() == 0 ||
+      query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) < 0) {
+    return makeTargetValue(ptr1,
+                           compact_sz1,
+                           target_info,
+                           target_logical_idx,
+                           translate_strings,
+                           decimal_to_double,
+                           global_entry_idx);
+  }
+  const auto key_width = query_mem_desc_.getEffectiveKeyWidth();
+  const auto key_idx = query_mem_desc_.getTargetGroupbyIndex(target_logical_idx);
+  CHECK_GE(key_idx, 0);
+  auto key_col_ptr = keys_ptr + key_idx * query_mem_desc_.getEntryCount() * key_width;
+  return makeTargetValue(columnar_elem_ptr(local_entry_idx, key_col_ptr, key_width),
+                         key_width,
                          target_info,
                          target_logical_idx,
                          translate_strings,
                          decimal_to_double,
-                         entry_idx);
+                         global_entry_idx);
 }
 
 // Gets the TargetValue stored in slot_idx (and slot_idx for AVG) of

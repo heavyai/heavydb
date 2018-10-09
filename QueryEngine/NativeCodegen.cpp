@@ -1232,18 +1232,17 @@ Executor::CompilationResult Executor::compileWorkUnit(
   nukeOldState(allow_lazy_fetch, join_info, query_infos, ra_exe_unit);
   OOM_TRACE_PUSH(+": " + (co.device_type_ == ExecutorDeviceType::GPU ? "gpu" : "cpu"));
 
-  GroupByAndAggregate group_by_and_aggregate(
-      this,
-      co.device_type_,
-      ra_exe_unit,
-      render_info,
-      query_infos,
-      row_set_mem_owner,
-      max_groups_buffer_entry_guess,
-      small_groups_buffer_entry_count,
-      crt_min_byte_width,
-      eo.allow_multifrag,
-      eo.output_columnar_hint && co.device_type_ == ExecutorDeviceType::GPU);
+  GroupByAndAggregate group_by_and_aggregate(this,
+                                             co.device_type_,
+                                             ra_exe_unit,
+                                             render_info,
+                                             query_infos,
+                                             row_set_mem_owner,
+                                             max_groups_buffer_entry_guess,
+                                             small_groups_buffer_entry_count,
+                                             crt_min_byte_width,
+                                             eo.allow_multifrag,
+                                             eo.output_columnar_hint);
   const auto& query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
 
   if (query_mem_desc.getQueryDescriptionType() ==

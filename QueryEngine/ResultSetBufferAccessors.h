@@ -150,11 +150,11 @@ inline T row_ptr_rowwise(T buff,
 }
 
 template <class T>
-inline T advance_target_ptr(T target_ptr,
-                            const TargetInfo& target_info,
-                            const size_t slot_idx,
-                            const QueryMemoryDescriptor& query_mem_desc,
-                            const bool separate_varlen_storage) {
+inline T advance_target_ptr_row_wise(T target_ptr,
+                                     const TargetInfo& target_info,
+                                     const size_t slot_idx,
+                                     const QueryMemoryDescriptor& query_mem_desc,
+                                     const bool separate_varlen_storage) {
   auto result = target_ptr + query_mem_desc.getColumnWidth(slot_idx).compact;
   if ((target_info.is_agg && target_info.agg_kind == kAVG) ||
       (is_real_str_or_array(target_info) && !separate_varlen_storage)) {
@@ -166,6 +166,27 @@ inline T advance_target_ptr(T target_ptr,
     }
   }
   return result;
+}
+
+template <class T>
+inline T advance_target_ptr_col_wise(T target_ptr,
+                                     const TargetInfo& target_info,
+                                     const size_t slot_idx,
+                                     const QueryMemoryDescriptor& query_mem_desc,
+                                     const bool separate_varlen_storage) {
+  auto result =
+      advance_to_next_columnar_target_buff(target_ptr, query_mem_desc, slot_idx);
+  if ((target_info.is_agg && target_info.agg_kind == kAVG) ||
+      (is_real_str_or_array(target_info) && !separate_varlen_storage)) {
+    return advance_to_next_columnar_target_buff(result, query_mem_desc, slot_idx + 1);
+  } else if (target_info.sql_type.is_geometry() && !separate_varlen_storage) {
+    for (auto i = 1; i < 2 * target_info.sql_type.get_physical_coord_cols(); ++i) {
+      result = advance_to_next_columnar_target_buff(result, query_mem_desc, slot_idx + i);
+    }
+    return result;
+  } else {
+    return result;
+  }
 }
 
 inline size_t get_slot_off_quad(const QueryMemoryDescriptor& query_mem_desc) {

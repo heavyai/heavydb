@@ -56,6 +56,7 @@ bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
   }
 
   if (!query_mem_desc.canOutputColumnar() &&  // TODO(miyu): relax this limitation
+      !query_mem_desc.didOutputColumnar() &&
       ra_exe_unit.sort_info.order_entries.size() == 1 && ra_exe_unit.sort_info.limit &&
       ra_exe_unit.sort_info.algorithm == SortAlgorithm::StreamingTopN) {
     const auto only_order_entry = ra_exe_unit.sort_info.order_entries.front();

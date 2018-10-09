@@ -106,7 +106,8 @@ class QueryMemoryDescriptor {
                         const size_t max_groups_buffer_entry_count,
                         RenderInfo* render_info,
                         const CountDistinctDescriptors count_distinct_descriptors,
-                        const bool must_use_baseline_sort);
+                        const bool must_use_baseline_sort,
+                        const bool output_columanr_hint);
 
   QueryMemoryDescriptor(const Executor* executor,
                         const size_t entry_count,

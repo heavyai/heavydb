@@ -52,6 +52,7 @@ bool g_cluster{false};
 bool g_bigint_count{false};
 int g_hll_precision_bits{11};
 extern size_t g_leaf_count;
+extern bool g_enable_columnar_output;
 
 #ifdef HAVE_CUDA
 namespace {
@@ -809,16 +810,22 @@ GroupByAndAggregate::GroupByAndAggregate(
                               crt_min_byte_width,
                               sort_on_gpu_hint,
                               render_info,
-                              must_use_baseline_sort);
+                              must_use_baseline_sort,
+                              output_columnar_hint);
     if (device_type != ExecutorDeviceType::GPU) {
       // TODO(miyu): remove w/ interleaving
       query_mem_desc_.setHasInterleavedBinsOnGpu(false);
     }
+
     query_mem_desc_.setSortOnGpu(sort_on_gpu_hint &&
                                  query_mem_desc_.canOutputColumnar() &&
                                  !query_mem_desc_.hasKeylessHash());
-    output_columnar_ = (output_columnar_hint && query_mem_desc_.canOutputColumnar()) ||
-                       query_mem_desc_.sortOnGpu();
+
+    output_columnar_ =
+        (output_columnar_hint &&
+         query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection) ||
+        query_mem_desc_.sortOnGpu();
+
     query_mem_desc_.setOutputColumnar(output_columnar_);
     if (query_mem_desc_.sortOnGpu() &&
         (query_mem_desc_.getBufferSizeBytes(device_type_) +
@@ -861,7 +868,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(
     const int8_t crt_min_byte_width,
     const bool sort_on_gpu_hint,
     RenderInfo* render_info,
-    const bool must_use_baseline_sort) {
+    const bool must_use_baseline_sort,
+    const bool output_columnar_hint) {
   addTransientStringLiterals();
 
   const auto count_distinct_descriptors = initCountDistinctDescriptors();
@@ -923,7 +931,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(
                                           max_groups_buffer_entry_count,
                                           render_info,
                                           count_distinct_descriptors,
-                                          must_use_baseline_sort);
+                                          must_use_baseline_sort,
+                                          output_columnar_hint);
 }
 
 void GroupByAndAggregate::addTransientStringLiterals() {
@@ -1537,17 +1546,18 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
         can_return_error = codegenAggCalls(agg_out_ptr_w_idx, {}, co);
       } else {
         {
-          CHECK(!outputColumnar() || query_mem_desc.hasKeylessHash());
+          llvm::Value* nullcheck_cond{nullptr};
+          if (query_mem_desc.didOutputColumnar()) {
+            nullcheck_cond = LL_BUILDER.CreateICmpSGE(std::get<1>(agg_out_ptr_w_idx),
+                                                      LL_INT(int32_t(0)));
+          } else {
+            nullcheck_cond = LL_BUILDER.CreateICmpNE(
+                std::get<0>(agg_out_ptr_w_idx),
+                llvm::ConstantPointerNull::get(
+                    llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0)));
+          }
           DiamondCodegen nullcheck_cfg(
-              LL_BUILDER.CreateICmpNE(
-                  std::get<0>(agg_out_ptr_w_idx),
-                  llvm::ConstantPointerNull::get(
-                      llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0))),
-              executor_,
-              false,
-              "groupby_nullcheck",
-              &filter_cfg,
-              false);
+              nullcheck_cond, executor_, false, "groupby_nullcheck", &filter_cfg, false);
           codegenAggCalls(agg_out_ptr_w_idx, {}, co);
         }
         can_return_error = true;
@@ -1659,12 +1669,18 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(llvm::Value* groups_buffer,
   } else {
     const auto group_expr_lv =
         LL_BUILDER.CreateLoad(get_arg_by_name(ROW_FUNC, "old_total_matched"));
-    return emitCall("get_scan_output_slot",
-                    {groups_buffer,
-                     LL_INT(static_cast<int32_t>(query_mem_desc_.getEntryCount())),
-                     group_expr_lv,
-                     executor_->posArg(nullptr),
-                     LL_INT(row_size_quad)});
+    std::vector<llvm::Value*> args{
+        groups_buffer,
+        LL_INT(static_cast<int32_t>(query_mem_desc_.getEntryCount())),
+        group_expr_lv,
+        executor_->posArg(nullptr)};
+    if (query_mem_desc_.didOutputColumnar()) {
+      const auto columnar_output_offset =
+          emitCall("get_columnar_scan_output_offset", args);
+      return columnar_output_offset;
+    }
+    args.push_back(LL_INT(row_size_quad));
+    return emitCall("get_scan_output_slot", args);
   }
 }
 
@@ -1678,8 +1694,13 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
 
   // TODO(Saman): move this logic outside of this function.
   if (query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection) {
-    return std::tuple<llvm::Value*, llvm::Value*>{
-        codegenOutputSlot(&*groups_buffer, co, diamond_codegen), nullptr};
+    if (query_mem_desc_.didOutputColumnar()) {
+      return std::tuple<llvm::Value*, llvm::Value*>{
+          &*groups_buffer, codegenOutputSlot(&*groups_buffer, co, diamond_codegen)};
+    } else {
+      return std::tuple<llvm::Value*, llvm::Value*>{
+          codegenOutputSlot(&*groups_buffer, co, diamond_codegen), nullptr};
+    }
   }
 
   CHECK(query_mem_desc_.getQueryDescriptionType() ==

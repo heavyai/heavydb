@@ -154,6 +154,8 @@ class ResultSetStorage {
 
   void fillOneEntryRowWise(const std::vector<int64_t>& entry);
 
+  void fillOneEntryColWise(const std::vector<int64_t>& entry);
+
   void initializeRowWise() const;
 
   void initializeColWise() const;
@@ -406,7 +408,11 @@ class ResultSet {
 
   void fillOneEntry(const std::vector<int64_t>& entry) {
     CHECK(storage_);
-    storage_->fillOneEntryRowWise(entry);
+    if (storage_->query_mem_desc_.didOutputColumnar()) {
+      storage_->fillOneEntryColWise(entry);
+    } else {
+      storage_->fillOneEntryRowWise(entry);
+    }
   }
 
   void initializeStorage() const;
@@ -487,13 +493,14 @@ class ResultSet {
       const bool decimal_to_double,
       const bool fixup_count_distinct_pointers) const;
 
-  TargetValue getTargetValueFromBufferColwise(const int8_t* col1_ptr,
-                                              const int8_t compact_sz1,
-                                              const int8_t* col2_ptr,
-                                              const int8_t compact_sz2,
-                                              const size_t entry_idx,
+  TargetValue getTargetValueFromBufferColwise(const int8_t* col_ptr,
+                                              const int8_t* keys_ptr,
+                                              const QueryMemoryDescriptor& query_mem_desc,
+                                              const size_t local_entry_idx,
+                                              const size_t global_entry_idx,
                                               const TargetInfo& target_info,
                                               const size_t target_logical_idx,
+                                              const size_t slot_idx,
                                               const bool translate_strings,
                                               const bool decimal_to_double) const;
 

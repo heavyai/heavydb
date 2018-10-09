@@ -234,7 +234,7 @@ ExecutionResult run_select_query(
   auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
-  ExecutionOptions eo = {false,
+  ExecutionOptions eo = {g_enable_columnar_output,
                          true,
                          just_explain,
                          allow_loop_joins,
@@ -264,7 +264,7 @@ ExecutionResult run_select_query_with_filter_push_down(
   auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
-  ExecutionOptions eo = {false,
+  ExecutionOptions eo = {g_enable_columnar_output,
                          true,
                          just_explain,
                          allow_loop_joins,

@@ -8576,6 +8576,7 @@ TEST(Delete, ShardedTableDeleteTest) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists shardkey;");
     run_ddl_statement(
         "create table shardkey ( x integer, y integer, shard key (x) ) with "
         "(vacuum='delayed', shard_count=4);");
@@ -11549,6 +11550,11 @@ int main(int argc, char** argv) {
                          ->default_value(g_enable_smem_group_by)
                          ->implicit_value(false),
                      "Enable/disable using GPU shared memory for GROUP BY.");
+  desc.add_options()("enable-columnar-output",
+                     po::value<bool>(&g_enable_columnar_output)
+                         ->default_value(g_enable_columnar_output)
+                         ->implicit_value(true),
+                     "Enable/disable using columnar output format.");
   desc.add_options()("keep-data", "Don't drop tables at the end of the tests");
   desc.add_options()(
       "use-existing-data",

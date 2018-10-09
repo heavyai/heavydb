@@ -180,7 +180,8 @@ class GroupByAndAggregate {
                                  const int8_t crt_min_byte_width,
                                  const bool sort_on_gpu_hint,
                                  RenderInfo* render_info,
-                                 const bool must_use_baseline_sort);
+                                 const bool must_use_baseline_sort,
+                                 const bool output_columnar_hint);
 
   int64_t getShardedTopBucket(const ColRangeInfo& col_range_info,
                               const size_t shard_count) const;

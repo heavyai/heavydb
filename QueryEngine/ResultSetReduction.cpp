@@ -296,6 +296,7 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(int8_t* this_buff,
                     agg_col_idx,
                     that);
     }
+
     this_crt_col_ptr = this_next_col_ptr;
     that_crt_col_ptr = that_next_col_ptr;
     if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
@@ -368,9 +369,9 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
                   target_slot_idx,
                   init_agg_val_idx,
                   that);
-    this_targets_ptr = advance_target_ptr(
+    this_targets_ptr = advance_target_ptr_row_wise(
         this_targets_ptr, target_info, target_slot_idx, query_mem_desc_, false);
-    that_targets_ptr = advance_target_ptr(
+    that_targets_ptr = advance_target_ptr_row_wise(
         that_targets_ptr, target_info, target_slot_idx, query_mem_desc_, false);
     target_slot_idx = advance_slot(target_slot_idx, target_info, false);
     if (query_mem_desc_.targetGroupbyIndicesSize() == 0) {
@@ -869,6 +870,25 @@ void ResultSetStorage::initializeRowWise() const {
     }
     default:
       CHECK(false);
+  }
+}
+
+void ResultSetStorage::fillOneEntryColWise(const std::vector<int64_t>& entry) {
+  CHECK(query_mem_desc_.didOutputColumnar());
+  CHECK_EQ(size_t(1), query_mem_desc_.getEntryCount());
+  const auto slot_count = query_mem_desc_.getBufferColSlotCount();
+  const auto key_count = query_mem_desc_.getGroupbyColCount();
+  CHECK_EQ(slot_count + key_count, entry.size());
+  auto this_buff = reinterpret_cast<int64_t*>(buff_);
+
+  for (size_t i = 0; i < key_count; i++) {
+    const auto key_offset = key_offset_colwise(0, i, 1);
+    this_buff[key_offset] = entry[i];
+  }
+
+  for (size_t i = 0; i < target_init_vals_.size(); i++) {
+    const auto slot_offset = slot_offset_colwise(0, i, key_count, 1);
+    this_buff[slot_offset] = entry[key_count + i];
   }
 }
 

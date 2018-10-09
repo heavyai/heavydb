@@ -201,6 +201,18 @@ extern "C" ALWAYS_INLINE DEVICE int64_t* get_scan_output_slot(
   return NULL;
 }
 
+extern "C" ALWAYS_INLINE DEVICE int32_t
+get_columnar_scan_output_offset(int64_t* output_buffer,
+                                const uint32_t output_buffer_entry_count,
+                                const uint32_t pos,
+                                const int64_t offset_in_fragment) {
+  if (pos < output_buffer_entry_count) {
+    output_buffer[pos] = offset_in_fragment;
+    return pos;
+  }
+  return -1;
+}
+
 extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx(int64_t hash_buff,
                                                       const int64_t key,
                                                       const int64_t min_key,

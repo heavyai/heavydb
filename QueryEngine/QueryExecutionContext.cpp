@@ -397,6 +397,7 @@ void QueryExecutionContext::initColumnarGroups(int64_t* groups_buffer,
                                                const std::vector<int64_t>& init_vals,
                                                const int32_t groups_buffer_entry_count,
                                                const bool keyless) {
+  CHECK(groups_buffer);
   for (const auto target_expr : executor_->plan_state_->target_exprs_) {
     const auto agg_info = target_info(target_expr);
     CHECK(!is_distinct_target(agg_info));
@@ -405,38 +406,46 @@ void QueryExecutionContext::initColumnarGroups(int64_t* groups_buffer,
   const int32_t agg_col_count = query_mem_desc_.getColCount();
   const int32_t key_qw_count = query_mem_desc_.groupColWidthsSize();
   auto buffer_ptr = reinterpret_cast<int8_t*>(groups_buffer);
+
   CHECK(key_qw_count == 1);
   if (!keyless) {
     buffer_ptr = initColumnarBuffer<int64_t>(
         reinterpret_cast<int64_t*>(buffer_ptr), EMPTY_KEY_64, groups_buffer_entry_count);
   }
+  // initializing all aggregate columns:
+  int32_t init_val_idx = 0;
   for (int32_t i = 0; i < agg_col_count; ++i) {
-    CHECK_LT(i, init_vals.size());
-    switch (query_mem_desc_.getColumnWidth(i).compact) {
-      case 1:
-        buffer_ptr = initColumnarBuffer<int8_t>(
-            buffer_ptr, init_vals[i], groups_buffer_entry_count);
-        break;
-      case 2:
-        buffer_ptr = initColumnarBuffer<int16_t>(reinterpret_cast<int16_t*>(buffer_ptr),
-                                                 init_vals[i],
-                                                 groups_buffer_entry_count);
-        break;
-      case 4:
-        buffer_ptr = initColumnarBuffer<int32_t>(reinterpret_cast<int32_t*>(buffer_ptr),
-                                                 init_vals[i],
-                                                 groups_buffer_entry_count);
-        break;
-      case 8:
-        buffer_ptr = initColumnarBuffer<int64_t>(reinterpret_cast<int64_t*>(buffer_ptr),
-                                                 init_vals[i],
-                                                 groups_buffer_entry_count);
-        break;
-      default:
-        CHECK(false);
-    }
-    if (need_padding) {
-      buffer_ptr = align_to_int64(buffer_ptr);
+    if (query_mem_desc_.getColumnWidth(i).compact > 0) {
+      CHECK_LT(init_val_idx, init_vals.size());
+      switch (query_mem_desc_.getColumnWidth(i).compact) {
+        case 1:
+          buffer_ptr = initColumnarBuffer<int8_t>(
+              buffer_ptr, init_vals[init_val_idx++], groups_buffer_entry_count);
+          break;
+        case 2:
+          buffer_ptr = initColumnarBuffer<int16_t>(reinterpret_cast<int16_t*>(buffer_ptr),
+                                                   init_vals[init_val_idx++],
+                                                   groups_buffer_entry_count);
+          break;
+        case 4:
+          buffer_ptr = initColumnarBuffer<int32_t>(reinterpret_cast<int32_t*>(buffer_ptr),
+                                                   init_vals[init_val_idx++],
+                                                   groups_buffer_entry_count);
+          break;
+        case 8:
+          buffer_ptr = initColumnarBuffer<int64_t>(reinterpret_cast<int64_t*>(buffer_ptr),
+                                                   init_vals[init_val_idx++],
+                                                   groups_buffer_entry_count);
+          break;
+        case 0:
+          break;
+        default:
+          CHECK(false);
+      }
+      // TODO(Saman): should not need padding for columnar; look into removing this
+      if (need_padding) {
+        buffer_ptr = align_to_int64(buffer_ptr);
+      }
     }
   }
 }

@@ -3720,7 +3720,7 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
   const auto& cat = session_info.get_catalog();
   CompilationOptions co = {
       executor_device_type, true, ExecutorOptLevel::Default, g_enable_dynamic_watchdog};
-  ExecutionOptions eo = {false,
+  ExecutionOptions eo = {g_enable_columnar_output,
                          allow_multifrag_,
                          just_explain,
                          allow_loop_joins_ || just_validate,

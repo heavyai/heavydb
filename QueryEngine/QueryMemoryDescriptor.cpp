@@ -23,6 +23,7 @@
 #include "StreamingTopN.h"
 
 bool g_enable_smem_group_by{true};
+extern bool g_enable_columnar_output;
 
 namespace {
 
@@ -224,7 +225,8 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     const size_t max_groups_buffer_entry_count,
     RenderInfo* render_info,
     const CountDistinctDescriptors count_distinct_descriptors,
-    const bool must_use_baseline_sort)
+    const bool must_use_baseline_sort,
+    const bool output_columnar_hint)
     : executor_(executor)
     , allow_multifrag_(allow_multifrag)
     , query_desc_type_(col_range_info.hash_type_)
@@ -319,14 +321,15 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
           agg_col_widths_.push_back({wid, static_cast<int8_t>(wid ? 8 : 0)});
         }
       }
-
       const auto group_expr = ra_exe_unit.groupby_exprs.front().get();
       bool shared_mem_for_group_by =
           g_enable_smem_group_by && keyless_hash_ && keyless_info.shared_mem_support &&
           (entry_count_ <= gpu_smem_max_threshold) &&
           (group_by_and_agg->supportedExprForGpuSharedMemUsage(group_expr)) &&
           QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
-              count_distinct_descriptors);
+              count_distinct_descriptors) &&
+          !output_columnar_;  // TODO(Saman): add columnar support with the new smem
+                              // support.
 
       // TODO(Saman): should remove this after implementing shared memory path completely
       // through codegen We should not use the current shared memory path if more than 8
@@ -374,11 +377,13 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     case QueryDescriptionType::Projection: {
       CHECK(!must_use_baseline_sort);
 
+      output_columnar_ = output_columnar_hint;
+
       // Only projection queries support in-situ rendering
       render_output_ = render_info && render_info->isPotentialInSituRender();
 
       // TODO(adb): Can we attach this to the QMD as a class member?
-      if (use_streaming_top_n(ra_exe_unit, *this)) {
+      if (use_streaming_top_n(ra_exe_unit, *this) && !output_columnar_hint) {
         entry_count_ = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
       } else {
         entry_count_ = ra_exe_unit.scan_limit
@@ -401,7 +406,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
       }
 
       bucket_ = 0;
-
       return;
     }
     default:
@@ -850,7 +854,7 @@ size_t QueryMemoryDescriptor::getColOffInBytes(const size_t bin,
   CHECK_LT(col_idx, agg_col_widths_.size());
   const auto warp_count = getWarpCount();
   if (output_columnar_) {
-    CHECK_LT(bin, entry_count_);
+    CHECK((bin < entry_count_) || (bin == 0 && entry_count_ == 0));
     CHECK_EQ(size_t(1), group_col_widths_.size());
     CHECK_EQ(size_t(1), warp_count);
     size_t offset{0};

@@ -257,7 +257,6 @@ size_t ResultSet::getCurrentRowBufferIndex() const {
 
 void ResultSet::append(ResultSet& that) {
   CHECK_EQ(-1, cached_row_count_);
-  CHECK(!query_mem_desc_.didOutputColumnar());  // TODO(miyu)
   if (!that.storage_) {
     return;
   }
