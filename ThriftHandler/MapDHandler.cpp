@@ -62,6 +62,7 @@
 #include "Shared/MapDParameters.h"
 #include "Shared/SQLTypeUtilities.h"
 #include "Shared/StringTransform.h"
+#include "Shared/geo_types.h"
 #include "Shared/geosupport.h"
 #include "Shared/import_helpers.h"
 #include "Shared/mapd_shared_mutex.h"
@@ -2209,30 +2210,74 @@ void MapDHandler::load_table(const TSessionId& session,
   } else {
     loader.reset(new Importer_NS::Loader(cat, td));
   }
-  Importer_NS::CopyParams copy_params;
+  auto col_descs = loader->get_column_descs();
+  auto geo_physical_cols = std::count_if(
+      col_descs.begin(), col_descs.end(), [](auto cd) { return cd->isGeoPhyCol; });
   // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
   //               Subtracting 1 (rowid) until TableDescriptor is updated.
-  if (rows.front().cols.size() !=
-      static_cast<size_t>(td->nColumns) - (td->hasDeletedCol ? 2 : 1)) {
+  if (rows.front().cols.size() != static_cast<size_t>(td->nColumns) - geo_physical_cols -
+                                      (td->hasDeletedCol ? 2 : 1)) {
     THROW_MAPD_EXCEPTION("Wrong number of columns to load into Table " + table_name +
                          " (" + std::to_string(rows.front().cols.size()) + " vs " +
-                         std::to_string(td->nColumns - 1) + ")");
+                         std::to_string(td->nColumns - geo_physical_cols - 1) + ")");
   }
-  auto col_descs = loader->get_column_descs();
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
   for (auto cd : col_descs) {
     import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
         new Importer_NS::TypedImportBuffer(cd, loader->get_string_dict(cd))));
   }
+  Importer_NS::CopyParams copy_params;
   size_t rows_completed = 0;
-  size_t col_idx = 0;
   for (auto const& row : rows) {
+    size_t import_idx = 0;  // index into the TStringRow being loaded
+    size_t col_idx = 0;     // index into column description vector
     try {
-      col_idx = 0;
+      size_t skip_physical_cols = 0;
       for (auto cd : col_descs) {
+        if (skip_physical_cols > 0) {
+          if (!cd->isGeoPhyCol) {
+            throw std::runtime_error("Unexpected physical column");
+          }
+          skip_physical_cols--;
+          continue;
+        }
         import_buffers[col_idx]->add_value(
-            cd, row.cols[col_idx].str_val, row.cols[col_idx].is_null, copy_params);
+            cd, row.cols[import_idx].str_val, row.cols[import_idx].is_null, copy_params);
+        // Advance to the next column within the table
         col_idx++;
+
+        if (cd->columnType.is_geometry()) {
+          // Populate physical columns
+          std::vector<double> coords, bounds;
+          std::vector<int> ring_sizes, poly_rings;
+          int render_group = 0;
+          SQLTypeInfo ti;
+          if (row.cols[import_idx].is_null ||
+              !Geo_namespace::GeoTypesFactory::getGeoColumns(row.cols[import_idx].str_val,
+                                                             ti,
+                                                             coords,
+                                                             bounds,
+                                                             ring_sizes,
+                                                             poly_rings,
+                                                             false)) {
+            throw std::runtime_error("Invalid geometry");
+          }
+          if (cd->columnType.get_type() != ti.get_type()) {
+            throw std::runtime_error("Geometry type mismatch");
+          }
+          Importer_NS::Importer::set_geo_physical_import_buffer(cat,
+                                                                cd,
+                                                                import_buffers,
+                                                                col_idx,
+                                                                coords,
+                                                                bounds,
+                                                                ring_sizes,
+                                                                poly_rings,
+                                                                render_group);
+          skip_physical_cols = cd->columnType.get_physical_cols();
+        }
+        // Advance to the next field within the row
+        import_idx++;
       }
       rows_completed++;
     } catch (const std::exception& e) {
