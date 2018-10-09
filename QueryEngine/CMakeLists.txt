@@ -12,6 +12,7 @@ set(query_engine_source_files
     BaselineJoinHashTable.cpp
     CalciteAdapter.cpp
     CalciteDeserializerUtils.cpp
+    CardinalityEstimator.cpp
     CaseIR.cpp
     CastIR.cpp
     Codec.cpp

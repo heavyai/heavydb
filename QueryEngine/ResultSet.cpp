@@ -142,7 +142,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , cached_row_count_(-1)
     , geo_return_type_(GeoReturnType::WktString) {}
 
-ResultSet::ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator> estimator,
+ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
                      const ExecutorDeviceType device_type,
                      const int device_id,
                      Data_Namespace::DataMgr* data_mgr)
@@ -159,15 +159,15 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator> estimat
     , cached_row_count_(-1)
     , geo_return_type_(GeoReturnType::WktString) {
   if (device_type == ExecutorDeviceType::GPU) {
-    estimator_buffer_ = reinterpret_cast<int8_t*>(alloc_gpu_mem(
-        data_mgr_, estimator_->getEstimatorBufferSize(), device_id_, nullptr));
+    estimator_buffer_ = reinterpret_cast<int8_t*>(
+        alloc_gpu_mem(data_mgr_, estimator_->getBufferSize(), device_id_, nullptr));
     data_mgr->cudaMgr_->zeroDeviceMem(
-        estimator_buffer_, estimator_->getEstimatorBufferSize(), device_id_);
+        estimator_buffer_, estimator_->getBufferSize(), device_id_);
   } else {
     OOM_TRACE_PUSH(+": host_estimator_buffer_ " +
-                   std::to_string(estimator_->getEstimatorBufferSize()));
+                   std::to_string(estimator_->getBufferSize()));
     host_estimator_buffer_ =
-        static_cast<int8_t*>(checked_calloc(estimator_->getEstimatorBufferSize(), 1));
+        static_cast<int8_t*>(checked_calloc(estimator_->getBufferSize(), 1));
   }
 }
 
@@ -400,30 +400,16 @@ int8_t* ResultSet::getHostEstimatorBuffer() const {
 void ResultSet::syncEstimatorBuffer() const {
   CHECK(device_type_ == ExecutorDeviceType::GPU);
   CHECK(!host_estimator_buffer_);
-  CHECK_EQ(size_t(0), estimator_->getEstimatorBufferSize() % sizeof(int64_t));
+  CHECK_EQ(size_t(0), estimator_->getBufferSize() % sizeof(int64_t));
   OOM_TRACE_PUSH(+": host_estimator_buffer_ " +
-                 std::to_string(estimator_->getEstimatorBufferSize()));
+                 std::to_string(estimator_->getBufferSize()));
   host_estimator_buffer_ =
-      static_cast<int8_t*>(checked_calloc(estimator_->getEstimatorBufferSize(), 1));
+      static_cast<int8_t*>(checked_calloc(estimator_->getBufferSize(), 1));
   copy_from_gpu(data_mgr_,
                 host_estimator_buffer_,
                 reinterpret_cast<CUdeviceptr>(estimator_buffer_),
-                estimator_->getEstimatorBufferSize(),
+                estimator_->getBufferSize(),
                 device_id_);
-}
-
-size_t ResultSet::getNDVEstimator() const {
-  CHECK(host_estimator_buffer_);
-  auto bits_set =
-      bitmap_set_size(host_estimator_buffer_, estimator_->getEstimatorBufferSize());
-  const auto total_bits = estimator_->getEstimatorBufferSize() * 8;
-  CHECK_LE(bits_set, total_bits);
-  const auto unset_bits = total_bits - bits_set;
-  const auto ratio = static_cast<double>(unset_bits) / total_bits;
-  if (ratio == 0.) {
-    throw std::runtime_error("Failed to get a high quality cardinality estimation");
-  }
-  return -static_cast<double>(total_bits) * log(ratio);
 }
 
 void ResultSet::setQueueTime(const int64_t queue_time) {
@@ -869,4 +855,12 @@ int64_t ResultSetStorage::mappedPtr(const int64_t remote_ptr) const {
 
 size_t ResultSet::getLimit() {
   return keep_first_;
+}
+
+bool can_use_parallel_algorithms(const ResultSet& rows) {
+  return !rows.isTruncated();
+}
+
+bool use_parallel_algorithms(const ResultSet& rows) {
+  return can_use_parallel_algorithms(rows) && rows.entryCount() >= 20000;
 }

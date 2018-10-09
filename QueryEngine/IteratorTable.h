@@ -115,8 +115,4 @@ inline bool contains_iter_expr(const std::vector<Analyzer::Expr*>& target_exprs)
   return false;
 }
 
-typedef std::unique_ptr<IteratorTable> IterTabPtr;
-
-typedef boost::variant<RowSetPtr, IterTabPtr> ResultPtr;
-
 #endif  // QUERYENGINE_ITERATORTABLE_H

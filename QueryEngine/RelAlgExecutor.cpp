@@ -1931,42 +1931,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                      queue_time_ms);
 }
 
-size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
-                                        const bool is_agg,
-                                        const CompilationOptions& co,
-                                        const ExecutionOptions& eo) {
-  const auto estimator_exe_unit = create_ndv_execution_unit(work_unit.exe_unit);
-  int32_t error_code{0};
-  size_t one{1};
-  const auto estimator_result =
-      executor_->executeWorkUnit(&error_code,
-                                 one,
-                                 is_agg,
-                                 get_table_infos(work_unit.exe_unit, executor_),
-                                 estimator_exe_unit,
-                                 co,
-                                 eo,
-                                 cat_,
-                                 executor_->row_set_mem_owner_,
-                                 nullptr,
-                                 false);
-  if (error_code == Executor::ERR_OUT_OF_TIME) {
-    throw std::runtime_error("Cardinality estimation query ran out of time");
-  }
-  if (error_code == Executor::ERR_INTERRUPTED) {
-    throw std::runtime_error("Cardinality estimation query has been interrupted");
-  }
-  if (error_code) {
-    throw std::runtime_error("Failed to run the cardinality estimation query: " +
-                             getErrorMessageFromCode(error_code));
-  }
-  const auto& estimator_result_rows = boost::get<RowSetPtr>(estimator_result);
-  if (!estimator_result_rows) {
-    return 1;
-  }
-  return std::max(estimator_result_rows->getNDVEstimator(), size_t(1));
-}
-
 ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
                                             const bool is_agg,
                                             const CompilationOptions& co,

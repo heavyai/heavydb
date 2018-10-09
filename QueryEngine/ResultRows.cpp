@@ -19,6 +19,7 @@
 #include "GpuMemUtils.h"
 #include "GroupByAndAggregate.h"
 #include "InPlaceSort.h"
+#include "ResultSet.h"
 #include "ThrustAllocator.h"
 
 void ResultRows::inplaceSortGpuImpl(const std::list<Analyzer::OrderEntry>& order_entries,

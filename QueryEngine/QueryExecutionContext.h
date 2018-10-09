@@ -22,6 +22,7 @@
 #include "GpuMemUtils.h"
 #include "IteratorTable.h"
 #include "Rendering/RenderInfo.h"
+#include "ResultSet.h"
 
 #include <boost/core/noncopyable.hpp>
 #include <vector>

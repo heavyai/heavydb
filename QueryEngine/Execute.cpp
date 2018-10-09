@@ -775,34 +775,6 @@ ResultPtr Executor::resultsUnion(ExecutionDispatch& execution_dispatch) {
   return RowSetPtr(nullptr);
 }
 
-namespace {
-
-RowSetPtr reduce_estimator_results(
-    const RelAlgExecutionUnit& ra_exe_unit,
-    std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device) {
-  if (results_per_device.empty()) {
-    return nullptr;
-  }
-  auto first = boost::get<RowSetPtr>(&results_per_device.front().first);
-  CHECK(first && *first);
-  const auto& result_set = *first;
-  CHECK(result_set);
-  auto estimator_buffer = result_set->getHostEstimatorBuffer();
-  CHECK(estimator_buffer);
-  for (size_t i = 1; i < results_per_device.size(); ++i) {
-    auto next = boost::get<RowSetPtr>(&results_per_device[i].first);
-    CHECK(next && *next);
-    const auto& next_result_set = *next;
-    const auto other_estimator_buffer = next_result_set->getHostEstimatorBuffer();
-    for (size_t off = 0; off < ra_exe_unit.estimator->getEstimatorBufferSize(); ++off) {
-      estimator_buffer[off] |= other_estimator_buffer[off];
-    }
-  }
-  return std::move(*first);
-}
-
-}  // namespace
-
 RowSetPtr Executor::reduceMultiDeviceResults(
     const RelAlgExecutionUnit& ra_exe_unit,
     std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device,

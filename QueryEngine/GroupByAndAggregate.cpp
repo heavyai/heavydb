@@ -2420,8 +2420,8 @@ void GroupByAndAggregate::codegenEstimator(
   const auto estimator_comp_bytes_lv =
       LL_INT(static_cast<int32_t>(estimator_arg.size() * sizeof(int64_t)));
   const auto bitmap_size_lv =
-      LL_INT(static_cast<uint32_t>(ra_exe_unit_.estimator->getEstimatorBufferSize()));
-  emitCall("linear_probabilistic_count",
+      LL_INT(static_cast<uint32_t>(ra_exe_unit_.estimator->getBufferSize()));
+  emitCall(ra_exe_unit_.estimator->getRuntimeFunctionName(),
            {bitmap, &*bitmap_size_lv, key_bytes, &*estimator_comp_bytes_lv});
 }
 

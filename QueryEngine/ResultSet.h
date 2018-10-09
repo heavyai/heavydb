@@ -183,7 +183,7 @@ class ResultSetStorage {
 namespace Analyzer {
 
 class Expr;
-class NDVEstimator;
+class Estimator;
 struct OrderEntry;
 
 }  // namespace Analyzer
@@ -291,7 +291,7 @@ class ResultSet {
             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
             const Executor* executor);
 
-  ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator>,
+  ResultSet(const std::shared_ptr<const Analyzer::Estimator>,
             const ExecutorDeviceType device_type,
             const int device_id,
             Data_Namespace::DataMgr* data_mgr);
@@ -732,7 +732,7 @@ class ResultSet {
   std::vector<std::vector<std::vector<int64_t>>> frag_offsets_;
   std::vector<std::vector<int64_t>> consistent_frag_sizes_;
 
-  const std::shared_ptr<const Analyzer::NDVEstimator> estimator_;
+  const std::shared_ptr<const Analyzer::Estimator> estimator_;
   int8_t* estimator_buffer_;
   mutable int8_t* host_estimator_buffer_;
   Data_Namespace::DataMgr* data_mgr_;
@@ -804,5 +804,9 @@ int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch,
                     const int64_t pos);
 
 void fill_empty_key(void* key_ptr, const size_t key_count, const size_t key_width);
+
+bool can_use_parallel_algorithms(const ResultSet& rows);
+
+bool use_parallel_algorithms(const ResultSet& rows);
 
 #endif  // QUERYENGINE_RESULTSET_H
