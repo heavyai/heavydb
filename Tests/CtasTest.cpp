@@ -47,6 +47,7 @@ class TestColumnDescriptor {
 
     return check_column_value(row, type, scalar_mapd_variant);
   }
+  virtual ~TestColumnDescriptor() = default;
 };
 
 template <typename T>
