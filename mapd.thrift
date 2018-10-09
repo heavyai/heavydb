@@ -449,6 +449,13 @@ struct TViewPermissions {
   6: bool delete_;
 }
 
+union TDBObjectPermissions {
+  1: TDatabasePermissions database_permissions_
+  2: TTablePermissions table_permissions_
+  3: TDashboardPermissions dashboard_permissions_
+  4: TViewPermissions view_permissions_
+}
+
 enum TDBObjectType {
   AbstractDBObjectType = 0,
   DatabaseDBObjectType,
@@ -555,6 +562,7 @@ service MapD {
   list<TDBObject> get_db_objects_for_grantee(1: TSessionId session 2: string roleName) throws (1: TMapDException e)
   list<TDBObject> get_db_object_privs(1: TSessionId session 2: string objectName 3: TDBObjectType type) throws (1: TMapDException e)
   list<string> get_all_roles_for_user(1: TSessionId session 2: string userName) throws (1: TMapDException e)
+  bool has_object_privilege(1: TSessionId session 2: string granteeName 3: string ObjectName 4: TDBObjectType objectType 5: TDBObjectPermissions permissions) throws (1: TMapDException e)
   # licensing
   TLicenseInfo set_license_key(1: TSessionId session, 2: string key, 3: string nonce = "") throws (1: TMapDException e)
   TLicenseInfo get_license_claims(1: TSessionId session, 2: string nonce = "") throws (1: TMapDException e)

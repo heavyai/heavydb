@@ -92,6 +92,8 @@
 #include <unordered_map>
 #include "gen-cpp/MapD.h"
 
+using namespace std::string_literals;
+
 class MapDRenderHandler;
 class MapDAggHandler;
 class MapDLeafHandler;
@@ -99,6 +101,7 @@ class MapDLeafHandler;
 enum GetTablesType { GET_PHYSICAL_TABLES_AND_VIEWS, GET_PHYSICAL_TABLES, GET_VIEWS };
 
 typedef std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> SessionMap;
+typedef bool (*permissionFuncPtr)(const AccessPrivileges&, const TDBObjectPermissions&);
 
 class MapDHandler : public MapDIf {
  public:
@@ -358,6 +361,11 @@ class MapDHandler : public MapDIf {
                           const std::string& table_name);
   // DB Object Privileges
   void get_roles(std::vector<std::string>& _return, const TSessionId& session);
+  bool has_object_privilege(const TSessionId& sessionId,
+                            const std::string& granteeName,
+                            const std::string& objectName,
+                            const TDBObjectType::type object_type,
+                            const TDBObjectPermissions& permissions);
   void get_db_objects_for_grantee(std::vector<TDBObject>& _return,
                                   const TSessionId& session,
                                   const std::string& roleName);
@@ -580,6 +588,15 @@ class MapDHandler : public MapDIf {
   fill_column_names_by_table(const std::vector<std::string>& table_names,
                              const TSessionId& session);
 
+  static bool has_database_permission(const AccessPrivileges& privs,
+                                      const TDBObjectPermissions& permissions);
+  static bool has_table_permission(const AccessPrivileges& privs,
+                                   const TDBObjectPermissions& permission);
+  static bool has_dashboard_permission(const AccessPrivileges& privs,
+                                       const TDBObjectPermissions& permissions);
+  static bool has_view_permission(const AccessPrivileges& privs,
+                                  const TDBObjectPermissions& permissions);
+
   // For the provided upper case column names `uc_column_names`, return the tables
   // from `table_names` which contain at least one of them. Used to rank the TABLE
   // auto-completion hints by the columns specified in the projection.
@@ -610,6 +627,12 @@ class MapDHandler : public MapDIf {
   friend class MapDRenderHandler;
   friend class MapDAggHandler;
   friend class MapDLeafHandler;
+
+  std::map<const std::string, const permissionFuncPtr> permissionFuncMap_ = {
+      {"database"s, has_database_permission},
+      {"dashboard"s, has_dashboard_permission},
+      {"table"s, has_table_permission},
+      {"view"s, has_view_permission}};
 };
 
 #endif /* MAPDHANDLER_H */

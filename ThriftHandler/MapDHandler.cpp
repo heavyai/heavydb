@@ -1157,6 +1157,137 @@ static TDBObject serialize_db_object(const std::string& roleName,
   return outObject;
 }
 
+bool MapDHandler::has_database_permission(const AccessPrivileges& privs,
+                                          const TDBObjectPermissions& permissions) {
+  if (!permissions.__isset.database_permissions_) {
+    THROW_MAPD_EXCEPTION("Database permissions not set for check.")
+  }
+  auto perms = permissions.database_permissions_;
+  if ((perms.create_ && !privs.hasPermission(DatabasePrivileges::CREATE_DATABASE)) ||
+      (perms.delete_ && !privs.hasPermission(DatabasePrivileges::DROP_DATABASE)) ||
+      (perms.view_sql_editor_ &&
+       !privs.hasPermission(DatabasePrivileges::VIEW_SQL_EDITOR)) ||
+      (perms.access_ && !privs.hasPermission(DatabasePrivileges::ACCESS))) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
+bool MapDHandler::has_table_permission(const AccessPrivileges& privs,
+                                       const TDBObjectPermissions& permissions) {
+  if (!permissions.__isset.table_permissions_) {
+    THROW_MAPD_EXCEPTION("Table permissions not set for check.")
+  }
+  auto perms = permissions.table_permissions_;
+  if ((perms.create_ && !privs.hasPermission(TablePrivileges::CREATE_TABLE)) ||
+      (perms.drop_ && !privs.hasPermission(TablePrivileges::DROP_TABLE)) ||
+      (perms.select_ && !privs.hasPermission(TablePrivileges::SELECT_FROM_TABLE)) ||
+      (perms.insert_ && !privs.hasPermission(TablePrivileges::INSERT_INTO_TABLE)) ||
+      (perms.update_ && !privs.hasPermission(TablePrivileges::UPDATE_IN_TABLE)) ||
+      (perms.delete_ && !privs.hasPermission(TablePrivileges::DELETE_FROM_TABLE)) ||
+      (perms.truncate_ && !privs.hasPermission(TablePrivileges::TRUNCATE_TABLE))) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
+bool MapDHandler::has_dashboard_permission(const AccessPrivileges& privs,
+                                           const TDBObjectPermissions& permissions) {
+  if (!permissions.__isset.dashboard_permissions_) {
+    THROW_MAPD_EXCEPTION("Dashboard permissions not set for check.")
+  }
+  auto perms = permissions.dashboard_permissions_;
+  if ((perms.create_ && !privs.hasPermission(DashboardPrivileges::CREATE_DASHBOARD)) ||
+      (perms.delete_ && !privs.hasPermission(DashboardPrivileges::DELETE_DASHBOARD)) ||
+      (perms.view_ && !privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD)) ||
+      (perms.edit_ && !privs.hasPermission(DashboardPrivileges::EDIT_DASHBOARD))) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
+bool MapDHandler::has_view_permission(const AccessPrivileges& privs,
+                                      const TDBObjectPermissions& permissions) {
+  if (!permissions.__isset.view_permissions_) {
+    THROW_MAPD_EXCEPTION("View permissions not set for check.")
+  }
+  auto perms = permissions.view_permissions_;
+  if ((perms.create_ && !privs.hasPermission(ViewPrivileges::CREATE_VIEW)) ||
+      (perms.drop_ && !privs.hasPermission(ViewPrivileges::DROP_VIEW)) ||
+      (perms.select_ && !privs.hasPermission(ViewPrivileges::SELECT_FROM_VIEW)) ||
+      (perms.insert_ && !privs.hasPermission(ViewPrivileges::INSERT_INTO_VIEW)) ||
+      (perms.update_ && !privs.hasPermission(ViewPrivileges::UPDATE_IN_VIEW)) ||
+      (perms.delete_ && !privs.hasPermission(ViewPrivileges::DELETE_FROM_VIEW))) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
+bool MapDHandler::has_object_privilege(const TSessionId& sessionId,
+                                       const std::string& granteeName,
+                                       const std::string& objectName,
+                                       const TDBObjectType::type objectType,
+                                       const TDBObjectPermissions& permissions) {
+  auto session = get_session(sessionId);
+  auto& cat = session.get_catalog();
+  auto current_user = session.get_currentUser();
+  if (!SysCatalog::instance().arePrivilegesOn()) {
+    return true;
+  } else if (!current_user.isSuper && !current_user.isReallySuper &&
+             !SysCatalog::instance().isRoleGrantedToGrantee(
+                 current_user.userName, granteeName, false)) {
+    THROW_MAPD_EXCEPTION(
+        "Users except superusers can only check privileges for self or roles granted to "
+        "them.")
+  }
+  Catalog_Namespace::UserMetadata user_meta;
+  if (SysCatalog::instance().getMetadataForUser(granteeName, user_meta) &&
+      (user_meta.isSuper || user_meta.isReallySuper)) {
+    return true;
+  }
+  Grantee* grnt = SysCatalog::instance().getGrantee(granteeName);
+  if (!grnt) {
+    THROW_MAPD_EXCEPTION("User or Role " + granteeName + " does not exist.")
+  }
+  DBObjectType type;
+  std::string func_name;
+  switch (objectType) {
+    case TDBObjectType::DatabaseDBObjectType:
+      type = DBObjectType::DatabaseDBObjectType;
+      func_name = "database";
+      break;
+    case TDBObjectType::TableDBObjectType:
+      type = DBObjectType::TableDBObjectType;
+      func_name = "table";
+      break;
+    case TDBObjectType::DashboardDBObjectType:
+      type = DBObjectType::DashboardDBObjectType;
+      func_name = "dashboard";
+      break;
+    case TDBObjectType::ViewDBObjectType:
+      type = DBObjectType::ViewDBObjectType;
+      func_name = "view";
+      break;
+    default:
+      THROW_MAPD_EXCEPTION("Invalid object type (" + std::to_string(type) + ").");
+  }
+  DBObject req_object(objectName, type);
+  req_object.loadKey(cat);
+
+  auto grantee_object = grnt->findDbObject(req_object.getObjectKey(), false);
+  if (grantee_object) {
+    // if grantee has privs on the object
+    return permissionFuncMap_[func_name](grantee_object->getPrivileges(), permissions);
+  } else {
+    // no privileges on that object
+    return false;
+  }
+}
+
 void MapDHandler::get_db_objects_for_grantee(std::vector<TDBObject>& TDBObjectsForRole,
                                              const TSessionId& sessionId,
                                              const std::string& roleName) {
