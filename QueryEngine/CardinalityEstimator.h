@@ -107,8 +107,8 @@ RelAlgExecutionUnit create_count_all_execution_unit(
     const RelAlgExecutionUnit& ra_exe_unit,
     std::shared_ptr<Analyzer::Expr> replacement_target);
 
-RowSetPtr reduce_estimator_results(
+ResultSetPtr reduce_estimator_results(
     const RelAlgExecutionUnit& ra_exe_unit,
-    std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device);
+    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device);
 
 #endif  // QUERYENGINE_CARDINALITYESTIMATOR_H

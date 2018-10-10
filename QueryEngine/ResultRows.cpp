@@ -91,7 +91,7 @@ const std::vector<const int8_t*>& QueryExecutionContext::getColumnFrag(
   }
 }
 
-RowSetPtr QueryExecutionContext::groupBufferToResults(
+ResultSetPtr QueryExecutionContext::groupBufferToResults(
     const size_t i,
     const std::vector<Analyzer::Expr*>& targets) const {
   if (query_mem_desc_.interleavedBins(device_type_)) {
@@ -101,7 +101,8 @@ RowSetPtr QueryExecutionContext::groupBufferToResults(
   return std::unique_ptr<ResultSet>(result_sets_[i].release());
 }
 
-RowSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(const size_t i) const {
+ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
+    const size_t i) const {
   CHECK(!output_columnar_);
   const auto& result_set = result_sets_[i];
   auto deinterleaved_query_mem_desc =

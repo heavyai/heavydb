@@ -100,7 +100,7 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
                                   0};
   int32_t error_code{0};
   size_t one{1};
-  ResultPtr filtered_result;
+  ResultSetPtr filtered_result;
   const auto table_infos = get_table_infos(input_descs, executor_);
   CHECK_EQ(size_t(1), table_infos.size());
   const size_t total_rows_upper_bound = table_infos.front().info.getNumTuplesUpperBound();
@@ -122,9 +122,7 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
   if (error_code) {
     return {false, 1.0, 0};
   }
-  const auto& filtered_result_rows = boost::get<RowSetPtr>(filtered_result);
-  CHECK(filtered_result_rows);
-  const auto count_row = filtered_result_rows->getNextRow(false, false);
+  const auto count_row = filtered_result->getNextRow(false, false);
   CHECK_EQ(size_t(1), count_row.size());
   const auto& count_tv = count_row.front();
   const auto count_scalar_tv = boost::get<ScalarTargetValue>(&count_tv);

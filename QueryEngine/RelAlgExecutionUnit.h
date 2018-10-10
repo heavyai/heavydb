@@ -78,10 +78,6 @@ struct RelAlgExecutionUnit {
 };
 
 class ResultSet;
-
-// TODO(miyu): make some uses of this pointer able to
-// hold iterator table as well and move decls elsewhere
-typedef std::shared_ptr<ResultSet> RowSetPtr;
-typedef boost::variant<RowSetPtr> ResultPtr;
+typedef std::shared_ptr<ResultSet> ResultSetPtr;
 
 #endif  // QUERYENGINE_RELALGEXECUTIONUNIT_H

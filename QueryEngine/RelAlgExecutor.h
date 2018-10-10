@@ -50,7 +50,6 @@ struct RelAlgExecutorTraits {
 class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
  public:
   using TargetInfoList = std::vector<TargetInfo>;
-  using RowSetPtrSharedPtr = std::shared_ptr<RowSetPtr>;
 
   RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat)
       : StorageIOFacility(executor, cat)
@@ -264,11 +263,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
 
   WorkUnit createJoinWorkUnit(const RelJoin*, const SortInfo&, const bool just_explain);
 
-  void addTemporaryTable(const int table_id, const ResultPtr& result) {
-    auto row_set = boost::get<RowSetPtr>(&result);
-    if (row_set) {
-      CHECK_LT(size_t(0), (*row_set)->colCount());
-    }
+  void addTemporaryTable(const int table_id, const ResultSetPtr& result) {
+    CHECK_LT(size_t(0), result->colCount());
     CHECK_LT(table_id, 0);
     const auto it_ok = temporary_tables_.emplace(table_id, result);
     CHECK(it_ok.second);

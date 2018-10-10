@@ -55,13 +55,8 @@ size_t get_mapped_frag_id_of_src_table(
   return crt_frag_id / combination_count;
 }
 
-bool needs_skip_result(const ResultPtr& res) {
-  auto rows = boost::get<RowSetPtr>(&res);
-  if (rows) {
-    return !*rows || (*rows)->definitelyHasNoRows();
-  }
-
-  return false;
+bool needs_skip_result(const ResultSetPtr& res) {
+  return !res || res->definitelyHasNoRows();
 }
 
 }  // namespace
@@ -139,7 +134,7 @@ std::vector<const ColumnarResults*> Executor::ExecutionDispatch::getAllScanColum
 }
 
 const int8_t* Executor::ExecutionDispatch::getColumn(
-    const ResultPtr& buffer,
+    const ResultSetPtr& buffer,
     const int table_id,
     const int frag_id,
     const int col_id,
@@ -317,7 +312,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
     }
   }
 
-  ResultPtr device_results;
+  ResultSetPtr device_results;
   if (ra_exe_unit_.groupby_exprs.empty()) {
     OOM_TRACE_PUSH();
     err = executor_->executePlanWithoutGroupBy(ra_exe_unit_,
@@ -356,17 +351,15 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                             ra_exe_unit_.input_descs.size(),
                                             do_render ? render_info_ : nullptr);
   }
-  if (auto rows_pp = boost::get<RowSetPtr>(&device_results)) {
-    if (auto& rows_ptr = *rows_pp) {
-      std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks_to_hold;
-      for (const auto chunk : chunks) {
-        if (need_to_hold_chunk(chunk.get(), ra_exe_unit_)) {
-          chunks_to_hold.push_back(chunk);
-        }
+  if (device_results) {
+    std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks_to_hold;
+    for (const auto chunk : chunks) {
+      if (need_to_hold_chunk(chunk.get(), ra_exe_unit_)) {
+        chunks_to_hold.push_back(chunk);
       }
-      rows_ptr->holdChunks(chunks_to_hold);
-      rows_ptr->holdChunkIterators(chunk_iterators_ptr);
     }
+    device_results->holdChunks(chunks_to_hold);
+    device_results->holdChunkIterators(chunk_iterators_ptr);
   }
   {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
@@ -910,7 +903,7 @@ Executor::ExecutionDispatch::getQueryContexts() const {
   return query_contexts_;
 }
 
-std::vector<std::pair<ResultPtr, std::vector<size_t>>>&
+std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>&
 Executor::ExecutionDispatch::getFragmentResults() {
   return all_fragment_results_;
 }

@@ -185,7 +185,7 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultSet* rows) {
   return metadata_map;
 }
 
-Fragmenter_Namespace::TableInfo synthesize_table_info(const RowSetPtr& rows) {
+Fragmenter_Namespace::TableInfo synthesize_table_info(const ResultSetPtr& rows) {
   std::deque<Fragmenter_Namespace::FragmentInfo> result;
   if (rows) {
     result.resize(1);
@@ -221,10 +221,7 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
       CHECK(temporary_tables);
       const auto it = temporary_tables->find(table_id);
       CHECK(it != temporary_tables->end());
-      const auto rows = boost::get<RowSetPtr>(&it->second);
-      CHECK(rows);
-      CHECK(*rows);
-      table_infos.push_back({table_id, synthesize_table_info(*rows)});
+      table_infos.push_back({table_id, synthesize_table_info(it->second)});
     } else {
       CHECK(input_desc.getSourceType() == InputSourceType::TABLE);
       table_infos.push_back({table_id, executor->getTableInfo(table_id)});
@@ -242,7 +239,6 @@ size_t get_frag_count_of_table(const int table_id, Executor* executor) {
   auto it = temporary_tables->find(table_id);
   if (it != temporary_tables->end()) {
     CHECK_GE(int(0), table_id);
-    CHECK(boost::get<RowSetPtr>(&it->second));
     return size_t(1);
   } else {
     const auto table_info = executor->getTableInfo(table_id);

@@ -90,12 +90,13 @@ void SpeculativeTopNMap::reduce(SpeculativeTopNMap& that) {
   unknown_ += that.unknown_;
 }
 
-RowSetPtr SpeculativeTopNMap::asRows(const RelAlgExecutionUnit& ra_exe_unit,
-                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                     const QueryMemoryDescriptor& query_mem_desc,
-                                     const Executor* executor,
-                                     const size_t top_n,
-                                     const bool desc) const {
+std::shared_ptr<ResultSet> SpeculativeTopNMap::asRows(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const Executor* executor,
+    const size_t top_n,
+    const bool desc) const {
   std::vector<SpeculativeTopNEntry> vec;
   for (const auto& kv : map_) {
     vec.emplace_back(SpeculativeTopNEntry{kv.first, kv.second.val, kv.second.unknown});

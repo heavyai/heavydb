@@ -516,16 +516,10 @@ int64_t QueryExecutionContext::allocateCountDistinctSet() {
   return reinterpret_cast<int64_t>(count_distinct_set);
 }
 
-ResultPtr QueryExecutionContext::getResult(
-    const RelAlgExecutionUnit& ra_exe_unit,
-    const std::vector<size_t>& outer_tab_frag_ids) const {
-  return getRowSet(ra_exe_unit, query_mem_desc_);
-}
-
-RowSetPtr QueryExecutionContext::getRowSet(
+ResultSetPtr QueryExecutionContext::getRowSet(
     const RelAlgExecutionUnit& ra_exe_unit,
     const QueryMemoryDescriptor& query_mem_desc) const {
-  std::vector<std::pair<ResultPtr, std::vector<size_t>>> results_per_sm;
+  std::vector<std::pair<ResultSetPtr, std::vector<size_t>>> results_per_sm;
   CHECK_EQ(num_buffers_, group_by_buffers_.size());
   if (device_type_ == ExecutorDeviceType::CPU) {
     CHECK_EQ(size_t(1), num_buffers_);

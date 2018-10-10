@@ -47,14 +47,10 @@ class QueryExecutionContext : boost::noncopyable {
                         const bool sort_on_gpu,
                         RenderInfo*);
 
-  ResultPtr getResult(const RelAlgExecutionUnit& ra_exe_unit,
-                      const std::vector<size_t>& outer_tab_frag_ids) const;
-
-  // TOOD(alex): get rid of targets parameter
-  RowSetPtr getRowSet(const RelAlgExecutionUnit& ra_exe_unit,
-                      const QueryMemoryDescriptor& query_mem_desc) const;
-  RowSetPtr groupBufferToResults(const size_t i,
-                                 const std::vector<Analyzer::Expr*>& targets) const;
+  ResultSetPtr getRowSet(const RelAlgExecutionUnit& ra_exe_unit,
+                         const QueryMemoryDescriptor& query_mem_desc) const;
+  ResultSetPtr groupBufferToResults(const size_t i,
+                                    const std::vector<Analyzer::Expr*>& targets) const;
 
   std::vector<int64_t*> launchGpuCode(
       const RelAlgExecutionUnit& ra_exe_unit,
@@ -188,7 +184,7 @@ class QueryExecutionContext : boost::noncopyable {
 
   void allocateCountDistinctGpuMem();
 
-  RowSetPtr groupBufferToDeinterleavedResults(const size_t i) const;
+  ResultSetPtr groupBufferToDeinterleavedResults(const size_t i) const;
 
   const QueryMemoryDescriptor& query_mem_desc_;
   std::vector<int64_t> init_agg_vals_;

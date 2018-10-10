@@ -108,7 +108,7 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
        ++fragment_index) {
     const auto& fragment_results =
         execution_dispatch.getFragmentResults()[fragment_index];
-    const auto count_result_set = boost::get<RowSetPtr>(fragment_results.first);
+    const auto count_result_set = fragment_results.first;
     CHECK(count_result_set);
     const auto count_row = count_result_set->getNextRow(false, false);
     CHECK_EQ(size_t(1), count_row.size());
@@ -135,7 +135,7 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
         co.device_type_, 0, eo, {FragmentsPerTable{table_id, {fragment_index}}}, 0, -1);
     const auto& proj_fragment_results =
         current_fragment_execution_dispatch.getFragmentResults()[0];
-    const auto proj_result_set = boost::get<RowSetPtr>(proj_fragment_results.first);
+    const auto proj_result_set = proj_fragment_results.first;
     CHECK(proj_result_set);
     cb({outer_fragments[fragment_index], fragment_index, proj_result_set});
   }

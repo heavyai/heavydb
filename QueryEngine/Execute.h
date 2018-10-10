@@ -155,14 +155,12 @@ inline const ColumnDescriptor* get_column_descriptor_maybe(
   return table_id > 0 ? get_column_descriptor(col_id, table_id, cat) : nullptr;
 }
 
-inline const ResultPtr& get_temporary_table(const TemporaryTables* temporary_tables,
-                                            const int table_id) {
+inline const ResultSetPtr& get_temporary_table(const TemporaryTables* temporary_tables,
+                                               const int table_id) {
   CHECK_LT(table_id, 0);
   const auto it = temporary_tables->find(table_id);
   CHECK(it != temporary_tables->end());
-  const auto& temp = it->second;
-  CHECK(boost::get<RowSetPtr>(&temp));
-  return temp;
+  return it->second;
 }
 
 inline const SQLTypeInfo get_column_type(const int col_id,
@@ -176,10 +174,7 @@ inline const SQLTypeInfo get_column_type(const int col_id,
     return cd->columnType;
   }
   const auto& temp = get_temporary_table(temporary_tables, table_id);
-  const auto rows = boost::get<RowSetPtr>(&temp);
-  CHECK(rows);
-  CHECK(*rows);
-  return (*rows)->getColType(col_id);
+  return temp->getColType(col_id);
 }
 
 template <typename PtrTy>
@@ -206,12 +201,10 @@ inline std::vector<Analyzer::Expr*> get_exprs_not_owned(
 
 inline const ColumnarResults* columnarize_result(
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const ResultPtr& result,
+    const ResultSetPtr& result,
     const int frag_id) {
-  const auto rows = boost::get<RowSetPtr>(&result);
-  CHECK(rows);
   CHECK_EQ(0, frag_id);
-  return rows_to_columnar_results(row_set_mem_owner, *rows, (*rows)->colCount());
+  return rows_to_columnar_results(row_set_mem_owner, result, result->colCount());
 }
 
 class CompilationRetryNoLazyFetch : public std::runtime_error {
@@ -689,20 +682,20 @@ class Executor {
       const size_t byte_width,
       const bool is_signed);
 
-  RowSetPtr executeSelectPlan(const Planner::Plan* plan,
-                              const int64_t limit,
-                              const int64_t offset,
-                              const bool hoist_literals,
-                              const ExecutorDeviceType device_type,
-                              const ExecutorOptLevel,
-                              const Catalog_Namespace::Catalog&,
-                              size_t& max_groups_buffer_entry_guess,
-                              int32_t* error_code,
-                              const Planner::Sort* sort_plan,
-                              const bool allow_multifrag,
-                              const bool just_explain,
-                              const bool allow_loop_joins,
-                              RenderInfo* render_info);
+  ResultSetPtr executeSelectPlan(const Planner::Plan* plan,
+                                 const int64_t limit,
+                                 const int64_t offset,
+                                 const bool hoist_literals,
+                                 const ExecutorDeviceType device_type,
+                                 const ExecutorOptLevel,
+                                 const Catalog_Namespace::Catalog&,
+                                 size_t& max_groups_buffer_entry_guess,
+                                 int32_t* error_code,
+                                 const Planner::Sort* sort_plan,
+                                 const bool allow_multifrag,
+                                 const bool just_explain,
+                                 const bool allow_loop_joins,
+                                 RenderInfo* render_info);
 
   struct CompilationResult {
     std::vector<std::pair<void*, void*>> native_functions;
@@ -766,7 +759,7 @@ class Executor {
     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
     int32_t* error_code_;
     RenderInfo* render_info_;
-    std::vector<std::pair<ResultPtr, std::vector<size_t>>> all_fragment_results_;
+    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>> all_fragment_results_;
     std::atomic_flag dynamic_watchdog_set_ = ATOMIC_FLAG_INIT;
     static std::mutex reduce_mutex_;
 
@@ -787,7 +780,7 @@ class Executor {
         const int col_id,
         const std::map<int, const TableFragments*>& all_tables_fragments) const;
 
-    const int8_t* getColumn(const ResultPtr& buffer,
+    const int8_t* getColumn(const ResultSetPtr& buffer,
                             const int table_id,
                             const int frag_id,
                             const int col_id,
@@ -879,7 +872,7 @@ class Executor {
 
     const std::vector<std::unique_ptr<QueryExecutionContext>>& getQueryContexts() const;
 
-    std::vector<std::pair<ResultPtr, std::vector<size_t>>>& getFragmentResults();
+    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& getFragmentResults();
 
     static std::pair<const int8_t*, size_t> getColumnFragment(
         Executor* executor,
@@ -898,17 +891,17 @@ class Executor {
         ColumnCacheMap& column_cache);
   };
 
-  ResultPtr executeWorkUnit(int32_t* error_code,
-                            size_t& max_groups_buffer_entry_guess,
-                            const bool is_agg,
-                            const std::vector<InputTableInfo>&,
-                            const RelAlgExecutionUnit&,
-                            const CompilationOptions&,
-                            const ExecutionOptions& options,
-                            const Catalog_Namespace::Catalog&,
-                            std::shared_ptr<RowSetMemoryOwner>,
-                            RenderInfo* render_info,
-                            const bool has_cardinality_estimation);
+  ResultSetPtr executeWorkUnit(int32_t* error_code,
+                               size_t& max_groups_buffer_entry_guess,
+                               const bool is_agg,
+                               const std::vector<InputTableInfo>&,
+                               const RelAlgExecutionUnit&,
+                               const CompilationOptions&,
+                               const ExecutionOptions& options,
+                               const Catalog_Namespace::Catalog&,
+                               std::shared_ptr<RowSetMemoryOwner>,
+                               RenderInfo* render_info,
+                               const bool has_cardinality_estimation);
 
   void executeUpdate(const RelAlgExecutionUnit& ra_exe_unit,
                      const InputTableInfo& table_info,
@@ -918,19 +911,20 @@ class Executor {
                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                      const UpdateLogForFragment::Callback& cb) __attribute__((hot));
 
-  RowSetPtr executeExplain(const ExecutionDispatch&);
+  ResultSetPtr executeExplain(const ExecutionDispatch&);
 
   // TODO(alex): remove
   ExecutorDeviceType getDeviceTypeForTargets(
       const RelAlgExecutionUnit& ra_exe_unit,
       const ExecutorDeviceType requested_device_type);
 
-  RowSetPtr collectAllDeviceResults(ExecutionDispatch& execution_dispatch,
-                                    const std::vector<Analyzer::Expr*>& target_exprs,
-                                    const QueryMemoryDescriptor& query_mem_desc,
-                                    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
+  ResultSetPtr collectAllDeviceResults(
+      ExecutionDispatch& execution_dispatch,
+      const std::vector<Analyzer::Expr*>& target_exprs,
+      const QueryMemoryDescriptor& query_mem_desc,
+      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
-  RowSetPtr collectAllDeviceShardedTopResults(
+  ResultSetPtr collectAllDeviceShardedTopResults(
       ExecutionDispatch& execution_dispatch) const;
 
   std::unordered_map<int, const Analyzer::BinOper*> getInnerTabIdToJoinCond() const;
@@ -995,34 +989,34 @@ class Executor {
                                        const size_t scan_idx,
                                        const RelAlgExecutionUnit& ra_exe_unit);
 
-  RowSetPtr executeResultPlan(const Planner::Result* result_plan,
-                              const bool hoist_literals,
-                              const ExecutorDeviceType device_type,
-                              const ExecutorOptLevel,
-                              const Catalog_Namespace::Catalog&,
-                              size_t& max_groups_buffer_entry_guess,
-                              int32_t* error_code,
-                              const Planner::Sort* sort_plan,
-                              const bool allow_multifrag,
-                              const bool just_explain,
-                              const bool allow_loop_joins);
-  RowSetPtr executeSortPlan(const Planner::Sort* sort_plan,
-                            const int64_t limit,
-                            const int64_t offset,
-                            const bool hoist_literals,
-                            const ExecutorDeviceType device_type,
-                            const ExecutorOptLevel,
-                            const Catalog_Namespace::Catalog&,
-                            size_t& max_groups_buffer_entry_guess,
-                            int32_t* error_code,
-                            const bool allow_multifrag,
-                            const bool just_explain,
-                            const bool allow_loop_joins);
+  ResultSetPtr executeResultPlan(const Planner::Result* result_plan,
+                                 const bool hoist_literals,
+                                 const ExecutorDeviceType device_type,
+                                 const ExecutorOptLevel,
+                                 const Catalog_Namespace::Catalog&,
+                                 size_t& max_groups_buffer_entry_guess,
+                                 int32_t* error_code,
+                                 const Planner::Sort* sort_plan,
+                                 const bool allow_multifrag,
+                                 const bool just_explain,
+                                 const bool allow_loop_joins);
+  ResultSetPtr executeSortPlan(const Planner::Sort* sort_plan,
+                               const int64_t limit,
+                               const int64_t offset,
+                               const bool hoist_literals,
+                               const ExecutorDeviceType device_type,
+                               const ExecutorOptLevel,
+                               const Catalog_Namespace::Catalog&,
+                               size_t& max_groups_buffer_entry_guess,
+                               int32_t* error_code,
+                               const bool allow_multifrag,
+                               const bool just_explain,
+                               const bool allow_loop_joins);
 
   int32_t executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                  const CompilationResult&,
                                  const bool hoist_literals,
-                                 ResultPtr& results,
+                                 ResultSetPtr& results,
                                  const ExecutorDeviceType device_type,
                                  std::vector<std::vector<const int8_t*>>& col_buffers,
                                  const std::vector<size_t> outer_tab_frag_ids,
@@ -1040,7 +1034,7 @@ class Executor {
       const RelAlgExecutionUnit& ra_exe_unit,
       const CompilationResult&,
       const bool hoist_literals,
-      ResultPtr& results,
+      ResultSetPtr& results,
       const std::vector<Analyzer::Expr*>& target_exprs,
       const ExecutorDeviceType device_type,
       std::vector<std::vector<const int8_t*>>& col_buffers,
@@ -1065,21 +1059,21 @@ class Executor {
                                                    const bool float_argument_input);
 
  private:
-  static ResultPtr resultsUnion(ExecutionDispatch& execution_dispatch);
+  static ResultSetPtr resultsUnion(ExecutionDispatch& execution_dispatch);
   std::vector<int64_t> getJoinHashTablePtrs(const ExecutorDeviceType device_type,
                                             const int device_id);
-  RowSetPtr reduceMultiDeviceResults(
+  ResultSetPtr reduceMultiDeviceResults(
       const RelAlgExecutionUnit&,
-      std::vector<std::pair<ResultPtr, std::vector<size_t>>>& all_fragment_results,
+      std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& all_fragment_results,
       std::shared_ptr<RowSetMemoryOwner>,
       const QueryMemoryDescriptor&) const;
-  RowSetPtr reduceMultiDeviceResultSets(
-      std::vector<std::pair<ResultPtr, std::vector<size_t>>>& all_fragment_results,
+  ResultSetPtr reduceMultiDeviceResultSets(
+      std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& all_fragment_results,
       std::shared_ptr<RowSetMemoryOwner>,
       const QueryMemoryDescriptor&) const;
-  RowSetPtr reduceSpeculativeTopN(
+  ResultSetPtr reduceSpeculativeTopN(
       const RelAlgExecutionUnit&,
-      std::vector<std::pair<ResultPtr, std::vector<size_t>>>& all_fragment_results,
+      std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& all_fragment_results,
       std::shared_ptr<RowSetMemoryOwner>,
       const QueryMemoryDescriptor&) const;
   void executeSimpleInsert(const Planner::RootPlan* root_plan);

@@ -123,20 +123,20 @@ void collect_input_descs(
 
 }  // namespace
 
-RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
-                                      const int64_t limit,
-                                      const int64_t offset,
-                                      const bool hoist_literals,
-                                      const ExecutorDeviceType device_type,
-                                      const ExecutorOptLevel opt_level,
-                                      const Catalog_Namespace::Catalog& cat,
-                                      size_t& max_groups_buffer_entry_guess,
-                                      int32_t* error_code,
-                                      const Planner::Sort* sort_plan_in,
-                                      const bool allow_multifrag,
-                                      const bool just_explain,
-                                      const bool allow_loop_joins,
-                                      RenderInfo* render_info) {
+ResultSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
+                                         const int64_t limit,
+                                         const int64_t offset,
+                                         const bool hoist_literals,
+                                         const ExecutorDeviceType device_type,
+                                         const ExecutorOptLevel opt_level,
+                                         const Catalog_Namespace::Catalog& cat,
+                                         size_t& max_groups_buffer_entry_guess,
+                                         int32_t* error_code,
+                                         const Planner::Sort* sort_plan_in,
+                                         const bool allow_multifrag,
+                                         const bool just_explain,
+                                         const bool allow_loop_joins,
+                                         RenderInfo* render_info) {
   if (dynamic_cast<const Planner::Scan*>(plan) ||
       dynamic_cast<const Planner::AggPlan*>(plan) ||
       dynamic_cast<const Planner::Join*>(plan)) {
@@ -211,14 +211,12 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
           row_set_mem_owner_,
           render_info,
           true);
-      auto& rows = boost::get<RowSetPtr>(result);
       max_groups_buffer_entry_guess = max_groups_buffer_entry_guess_limit;
-      CHECK(rows);
-      rows->dropFirstN(offset);
+      result->dropFirstN(offset);
       if (limit) {
-        rows->keepFirstN(limit);
+        result->keepFirstN(limit);
       }
-      return std::move(rows);
+      return std::move(result);
     }
     auto result = executeWorkUnit(
         error_code,
@@ -240,9 +238,7 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
         row_set_mem_owner_,
         render_info,
         true);
-    auto& rows = boost::get<RowSetPtr>(result);
-    CHECK(rows);
-    return std::move(rows);
+    return std::move(result);
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
   if (result_plan) {
@@ -295,17 +291,17 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
   abort();
 }
 
-RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
-                                      const bool hoist_literals,
-                                      const ExecutorDeviceType device_type,
-                                      const ExecutorOptLevel opt_level,
-                                      const Catalog_Namespace::Catalog& cat,
-                                      size_t& max_groups_buffer_entry_guess,
-                                      int32_t* error_code,
-                                      const Planner::Sort* sort_plan,
-                                      const bool allow_multifrag,
-                                      const bool just_explain,
-                                      const bool allow_loop_joins) {
+ResultSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
+                                         const bool hoist_literals,
+                                         const ExecutorDeviceType device_type,
+                                         const ExecutorOptLevel opt_level,
+                                         const Catalog_Namespace::Catalog& cat,
+                                         size_t& max_groups_buffer_entry_guess,
+                                         int32_t* error_code,
+                                         const Planner::Sort* sort_plan,
+                                         const bool allow_multifrag,
+                                         const bool just_explain,
+                                         const bool allow_loop_joins) {
   const auto agg_plan =
       dynamic_cast<const Planner::AggPlan*>(result_plan->get_child_plan());
   if (!agg_plan) {  // TODO(alex)
@@ -367,10 +363,8 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                       row_set_mem_owner_,
                       nullptr,
                       true);
-  auto& rows = boost::get<RowSetPtr>(result);
-  CHECK(rows);
   if (just_explain) {
-    return std::move(rows);
+    return std::move(result);
   }
 
   const int in_col_count{static_cast<int>(agg_plan->get_targetlist().size())};
@@ -424,8 +418,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
   for (auto in_col : agg_plan->get_targetlist()) {
     target_types.push_back(in_col->get_expr()->get_type_info());
   }
-  CHECK(rows);
-  ColumnarResults result_columns(row_set_mem_owner_, *rows, in_col_count, target_types);
+  ColumnarResults result_columns(row_set_mem_owner_, *result, in_col_count, target_types);
   std::vector<llvm::Value*> col_heads;
   // Nested query, let the compiler know
   ResetIsNested reset_is_nested(this);
@@ -434,7 +427,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
   for (auto target_entry : targets) {
     target_exprs.emplace_back(target_entry->get_expr());
   }
-  const auto row_count = rows->rowCount();
+  const auto row_count = result->rowCount();
   if (!row_count) {
     return std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                        ExecutorDeviceType::CPU,
@@ -537,18 +530,18 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
   return query_exe_context->groupBufferToResults(0, target_exprs);
 }
 
-RowSetPtr Executor::executeSortPlan(const Planner::Sort* sort_plan,
-                                    const int64_t limit,
-                                    const int64_t offset,
-                                    const bool hoist_literals,
-                                    const ExecutorDeviceType device_type,
-                                    const ExecutorOptLevel opt_level,
-                                    const Catalog_Namespace::Catalog& cat,
-                                    size_t& max_groups_buffer_entry_guess,
-                                    int32_t* error_code,
-                                    const bool allow_multifrag,
-                                    const bool just_explain,
-                                    const bool allow_loop_joins) {
+ResultSetPtr Executor::executeSortPlan(const Planner::Sort* sort_plan,
+                                       const int64_t limit,
+                                       const int64_t offset,
+                                       const bool hoist_literals,
+                                       const ExecutorDeviceType device_type,
+                                       const ExecutorOptLevel opt_level,
+                                       const Catalog_Namespace::Catalog& cat,
+                                       size_t& max_groups_buffer_entry_guess,
+                                       int32_t* error_code,
+                                       const bool allow_multifrag,
+                                       const bool just_explain,
+                                       const bool allow_loop_joins) {
   *error_code = 0;
   auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(),
                                         0,

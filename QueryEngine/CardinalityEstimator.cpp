@@ -60,11 +60,7 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
     throw std::runtime_error("Failed to run the cardinality estimation query: " +
                              getErrorMessageFromCode(error_code));
   }
-  const auto& estimator_result_rows = boost::get<RowSetPtr>(estimator_result);
-  if (!estimator_result_rows) {
-    return 1;
-  }
-  return std::max(estimator_result_rows->getNDVEstimator(), size_t(1));
+  return std::max(estimator_result->getNDVEstimator(), size_t(1));
 }
 
 RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_unit) {
@@ -105,27 +101,23 @@ RelAlgExecutionUnit create_count_all_execution_unit(
           0};
 }
 
-RowSetPtr reduce_estimator_results(
+ResultSetPtr reduce_estimator_results(
     const RelAlgExecutionUnit& ra_exe_unit,
-    std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device) {
+    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device) {
   if (results_per_device.empty()) {
     return nullptr;
   }
   CHECK(dynamic_cast<const Analyzer::NDVEstimator*>(ra_exe_unit.estimator.get()));
-  auto first = boost::get<RowSetPtr>(&results_per_device.front().first);
-  CHECK(first && *first);
-  const auto& result_set = *first;
+  const auto& result_set = results_per_device.front().first;
   CHECK(result_set);
   auto estimator_buffer = result_set->getHostEstimatorBuffer();
   CHECK(estimator_buffer);
   for (size_t i = 1; i < results_per_device.size(); ++i) {
-    auto next = boost::get<RowSetPtr>(&results_per_device[i].first);
-    CHECK(next && *next);
-    const auto& next_result_set = *next;
+    const auto& next_result_set = results_per_device[i].first;
     const auto other_estimator_buffer = next_result_set->getHostEstimatorBuffer();
     for (size_t off = 0; off < ra_exe_unit.estimator->getBufferSize(); ++off) {
       estimator_buffer[off] |= other_estimator_buffer[off];
     }
   }
-  return std::move(*first);
+  return std::move(result_set);
 }

@@ -28,7 +28,7 @@ class Catalog;
 
 class Executor;
 
-using TemporaryTables = std::unordered_map<int, const ResultPtr&>;
+using TemporaryTables = std::unordered_map<int, const ResultSetPtr&>;
 
 struct InputTableInfo {
   int table_id;

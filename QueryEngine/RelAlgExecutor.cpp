@@ -570,7 +570,7 @@ void RelAlgExecutor::handleNop(RaExecutionDesc& ed) {
   // set up temp table as it could be used by the outer query or next step
   addTemporaryTable(-body->getId(), it->second);
 
-  ed.setResult({boost::get<RowSetPtr>(it->second), input->getOutputMetainfo()});
+  ed.setResult({it->second, input->getOutputMetainfo()});
 }
 
 namespace {
@@ -1240,9 +1240,8 @@ void RelAlgExecutor::executeUpdateViaProject(const RelProject* project,
     if (dynamic_cast<const RelSort*>(input_ra)) {
       const auto& input_table =
           get_temporary_table(&temporary_tables_, -input_ra->getId());
-      const auto input_rows = boost::get<RowSetPtr>(&input_table);
-      CHECK(input_rows && *input_rows);
-      work_unit.exe_unit.scan_limit = (*input_rows)->rowCount();
+      CHECK(input_table);
+      work_unit.exe_unit.scan_limit = input_table->rowCount();
     }
   }
 
@@ -1327,9 +1326,8 @@ void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
     if (dynamic_cast<const RelSort*>(input_ra)) {
       const auto& input_table =
           get_temporary_table(&temporary_tables_, -input_ra->getId());
-      const auto input_rows = boost::get<RowSetPtr>(&input_table);
-      CHECK(input_rows && *input_rows);
-      work_unit.exe_unit.scan_limit = (*input_rows)->rowCount();
+      CHECK(input_table);
+      work_unit.exe_unit.scan_limit = input_table->rowCount();
     }
   }
 
@@ -1408,10 +1406,9 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
       co_project.device_type_ = ExecutorDeviceType::CPU;
       const auto& input_table =
           get_temporary_table(&temporary_tables_, -input_ra->getId());
-      const auto input_rows = boost::get<RowSetPtr>(&input_table);
-      CHECK(input_rows && *input_rows);
+      CHECK(input_table);
       work_unit.exe_unit.scan_limit =
-          std::min((*input_rows)->getLimit(), (*input_rows)->rowCount());
+          std::min(input_table->getLimit(), input_table->rowCount());
     }
   }
   return executeWorkUnit(work_unit,
@@ -1911,7 +1908,7 @@ ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
       create_count_all_execution_unit(work_unit.exe_unit, count);
   int32_t error_code{0};
   size_t one{1};
-  ResultPtr count_all_result;
+  ResultSetPtr count_all_result;
   try {
     count_all_result =
         executor_->executeWorkUnit(&error_code,
@@ -1931,9 +1928,7 @@ ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
   if (error_code) {
     return -1;
   }
-  const auto& count_all_result_rows = boost::get<RowSetPtr>(count_all_result);
-  CHECK(count_all_result_rows);
-  const auto count_row = count_all_result_rows->getNextRow(false, false);
+  const auto count_row = count_all_result->getNextRow(false, false);
   CHECK_EQ(size_t(1), count_row.size());
   const auto& count_tv = count_row.front();
   const auto count_scalar_tv = boost::get<ScalarTargetValue>(&count_tv);
