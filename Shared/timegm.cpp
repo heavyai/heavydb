@@ -48,16 +48,20 @@ int TimeGM::leap_days(int y1, int y2) {
   return (y2 / 4 - y1 / 4) - (y2 / 100 - y1 / 100) + (y2 / 400 - y1 / 400);
 }
 
-time_t TimeGM::parse_fractional_seconds(std::string sfrac, SQLTypeInfo& ti) {
-  int nfrac = sfrac.length();
-
-  if (nfrac >= 0 && nfrac < ti.get_dimension()) {
-    char d = '0';
-    sfrac += std::string(ti.get_dimension() - nfrac, d);
-  } else if (nfrac > ti.get_dimension()) {
-    sfrac = sfrac.substr(0, ti.get_dimension());
+time_t TimeGM::parse_fractional_seconds(uint sfrac,
+                                        const int ntotal,
+                                        const SQLTypeInfo& ti) {
+  int dimen = ti.get_dimension();
+  int nfrac = log10(sfrac) + 1;
+  if (ntotal - nfrac > dimen) {
+    return 0;
   }
-  return std::stol(sfrac);
+  if (ntotal >= 0 && ntotal < dimen) {
+    sfrac *= pow(10, dimen - ntotal);
+  } else if (ntotal > dimen) {
+    sfrac /= pow(10, ntotal - dimen);
+  }
+  return sfrac;
 }
 
 /*

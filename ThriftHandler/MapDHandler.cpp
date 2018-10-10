@@ -1273,7 +1273,7 @@ bool MapDHandler::has_object_privilege(const TSessionId& sessionId,
       func_name = "view";
       break;
     default:
-      THROW_MAPD_EXCEPTION("Invalid object type (" + std::to_string(type) + ").");
+      THROW_MAPD_EXCEPTION("Invalid object type (" + std::to_string(objectType) + ").");
   }
   DBObject req_object(objectName, type);
   req_object.loadKey(cat);

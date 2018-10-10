@@ -26,6 +26,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <stdexcept>
 #include <string>
 #include "StringTransform.h"
@@ -211,23 +212,22 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       }
       tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = 0;
       // handle fractional seconds
-      if (ti.get_dimension() > 0) {  // check for precision
-        time_t fsc = 0;
+      int dimen = ti.get_dimension();
+      if (dimen > 0) {  // check for precision
+        time_t fsc;
         if (*p == '.') {
           p++;
-          std::string fstr(p);
-          fsc = fstr.length() == static_cast<uint32_t>(ti.get_dimension())
-                    ? std::stol(fstr)
-                    : TimeGM::instance().parse_fractional_seconds(fstr, ti);
-          d.timeval = TimeGM::instance().my_timegm(&tm_struct, fsc, ti);
-          break;
+          uint frac_num = 0;
+          int ntotal = 0;
+          sscanf(p, "%u%n", &frac_num, &ntotal);
+          fsc = TimeGM::instance().parse_fractional_seconds(frac_num, ntotal, ti);
         } else if (*p == '\0') {
-          d.timeval = TimeGM::instance().my_timegm(&tm_struct, fsc, ti);
-          break;
+          fsc = 0;
         } else {  // check for misleading/unclear syntax
           throw std::runtime_error("Unclear syntax for leading fractional seconds: " +
                                    std::string(p));
         }
+        d.timeval = TimeGM::instance().my_timegm(&tm_struct, fsc, ti);
       } else {  // default timestamp(0) precision
         d.timeval = TimeGM::instance().my_timegm(&tm_struct);
       }

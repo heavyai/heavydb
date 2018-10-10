@@ -178,8 +178,8 @@ bool approx_eq(const double v, const double target, const double eps = 0.01) {
   return v_u64 == target_u64 || (target - eps < v && v < target + eps);
 }
 
-int parse_fractional_seconds(std::string sfrac, SQLTypeInfo& mapd_ti) {
-  return TimeGM::instance().parse_fractional_seconds(sfrac, mapd_ti);
+int parse_fractional_seconds(uint sfrac, int ntotal, SQLTypeInfo& ti) {
+  return TimeGM::instance().parse_fractional_seconds(sfrac, ntotal, ti);
 }
 
 class SQLiteComparator {
@@ -337,9 +337,13 @@ class SQLiteComparator {
                 ASSERT_EQ(ref_val.size(), static_cast<size_t>(end_str - ref_val.c_str()));
               }
               if (dimen > 0 && mapd_type == kTIMESTAMP) {
+                int fs = 0;
                 if (*end_str == '.') {
                   end_str++;
-                  int fs = parse_fractional_seconds(std::string(end_str), mapd_ti);
+                  uint frac_num;
+                  int ntotal;
+                  sscanf(end_str, "%d%n", &frac_num, &ntotal);
+                  fs = parse_fractional_seconds(frac_num, ntotal, mapd_ti);
                   nsec = timegm(&tm_struct) * pow(10, dimen);
                   nsec += fs;
                 } else if (*end_str == '\0') {
@@ -7104,6 +7108,105 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(1418509415323L,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(SECOND, 20, m_3) FROM test limit 1;", dt)));
+  }
+}
+
+TEST(Select, TimestampPrecisionFormat) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP TABLE IF EXISTS ts_format;");
+    EXPECT_NO_THROW(
+        run_ddl_statement("CREATE TABLE ts_format (ts_3 TIMESTAMP(3), ts_6 TIMESTAMP(6), "
+                          "ts_9 TIMESTAMP(9));"));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO ts_format VALUES('2012-05-22 01:02:03', "
+                         "'2012-05-22 01:02:03', '2012-05-22 01:02:03');",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO ts_format VALUES('2012-05-22 01:02:03.', "
+                         "'2012-05-22 01:02:03.', '2012-05-22 01:02:03.');",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO ts_format VALUES('2012-05-22 01:02:03.0', "
+                         "'2012-05-22 01:02:03.0', '2012-05-22 01:02:03.0');",
+                         dt));
+
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO ts_format VALUES('2012-05-22 01:02:03.1', "
+                         "'2012-05-22 01:02:03.1', '2012-05-22 01:02:03.1');",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO ts_format VALUES('2012-05-22 01:02:03.10', "
+                         "'2012-05-22 01:02:03.10', '2012-05-22 01:02:03.10');",
+                         dt));
+
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO ts_format VALUES('2012-05-22 01:02:03.03Z', "
+                         "'2012-05-22 01:02:03.03Z', '2012-05-22 01:02:03.03Z');",
+                         dt));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO ts_format VALUES('2012-05-22 01:02:03.003046777Z', '2012-05-22 "
+        "01:02:03.000003046777Z', '2012-05-22 01:02:03.000000003046777Z');",
+        dt));
+
+    ASSERT_EQ(3L,
+              v<int64_t>(run_simple_agg("SELECT count(ts_3) FROM ts_format where "
+                                        "extract(epoch from ts_3) = 1337648523000;",
+                                        dt)));
+    ASSERT_EQ(2L,
+              v<int64_t>(run_simple_agg("SELECT count(ts_3) FROM ts_format where "
+                                        "extract(epoch from ts_3) = 1337648523100;",
+                                        dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg("SELECT count(ts_3) FROM ts_format where "
+                                        "extract(epoch from ts_3) = 1337648523030;",
+                                        dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg("SELECT count(ts_3) FROM ts_format where "
+                                        "extract(epoch from ts_3) = 1337648523003;",
+                                        dt)));
+
+    ASSERT_EQ(3L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(ts_6) FROM ts_format where extract(epoch from ts_6) = "
+                  "1337648523000000;",
+                  dt)));
+    ASSERT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(ts_6) FROM ts_format where extract(epoch from ts_6) = "
+                  "1337648523100000;",
+                  dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(ts_6) FROM ts_format where extract(epoch from ts_6) = "
+                  "1337648523030000;",
+                  dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(ts_6) FROM ts_format where extract(epoch from ts_6) = "
+                  "1337648523000003;",
+                  dt)));
+
+    ASSERT_EQ(3L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(ts_9) FROM ts_format where extract(epoch from ts_9) = "
+                  "1337648523000000000;",
+                  dt)));
+    ASSERT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(ts_9) FROM ts_format where extract(epoch from ts_9) = "
+                  "1337648523100000000;",
+                  dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(ts_9) FROM ts_format where extract(epoch from ts_9) = "
+                  "1337648523030000000;",
+                  dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(ts_9) FROM ts_format where extract(epoch from ts_9) = "
+                  "1337648523000000003;",
+                  dt)));
   }
 }
 
