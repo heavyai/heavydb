@@ -67,6 +67,8 @@ using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
 
+using namespace std::string_literals;
+
 const std::string MapDQLRelease(MAPD_RELEASE);
 
 namespace {
@@ -848,74 +850,34 @@ void print_all_hardware_info(ClientContext& context) {
 }
 
 static void print_privs(const std::vector<bool>& privs, TDBObjectType::type type) {
-  if (type == TDBObjectType::DatabaseDBObjectType) {
-    if (privs[0]) {
-      std::cout << " create";
-    }
-    if (privs[1]) {
-      std::cout << " drop";
-    }
-    if (privs[2]) {
-      std::cout << " view-sql-editor";
-    }
-    if (privs[3]) {
-      std::cout << " login-access";
-    }
-  } else if (type == TDBObjectType::TableDBObjectType) {
-    if (privs[0]) {
-      std::cout << " create";
-    }
-    if (privs[1]) {
-      std::cout << " drop";
-    }
-    if (privs[2]) {
-      std::cout << " select";
-    }
-    if (privs[3]) {
-      std::cout << " insert";
-    }
-    if (privs[4]) {
-      std::cout << " update";
-    }
-    if (privs[5]) {
-      std::cout << " delete";
-    }
-    if (privs[6]) {
-      std::cout << " truncate";
-    }
+  // Client priviliges print lookup
+  static const std::unordered_map<const TDBObjectType::type,
+                                  const std::vector<std::string>>
+      privilege_names_lookup{
+          {TDBObjectType::DatabaseDBObjectType,
+           {" create"s, " drop"s, " view-sql-editor"s, " login-access"s}},
+          {TDBObjectType::TableDBObjectType,
+           {" create"s,
+            " drop"s,
+            " select"s,
+            " insert"s,
+            " update"s,
+            " delete"s,
+            " truncate"s,
+            " alter"s}},
+          {TDBObjectType::DashboardDBObjectType,
+           {" create"s, " delete"s, " view"s, " edit"s}},
+          {TDBObjectType::ViewDBObjectType,
+           {" create"s, " drop"s, " select"s, " insert"s, " update"s, " delete"s}}};
 
-  } else if (type == TDBObjectType::DashboardDBObjectType) {
-    if (privs[0]) {
-      std::cout << " create";
-    }
-    if (privs[1]) {
-      std::cout << " delete";
-    }
-    if (privs[2]) {
-      std::cout << " view";
-    }
-    if (privs[3]) {
-      std::cout << " edit";
-    }
-
-  } else if (type == TDBObjectType::ViewDBObjectType) {
-    if (privs[0]) {
-      std::cout << " create";
-    }
-    if (privs[1]) {
-      std::cout << " drop";
-    }
-    if (privs[2]) {
-      std::cout << " select";
-    }
-    if (privs[3]) {
-      std::cout << " insert";
-    }
-    if (privs[4]) {
-      std::cout << " update";
-    }
-    if (privs[5]) {
-      std::cout << " delete";
+  const auto privilege_names = privilege_names_lookup.find(type);
+  size_t i = 0;
+  if (privilege_names != privilege_names_lookup.end()) {
+    for (const auto& priv : privs) {
+      if (priv) {
+        std::cout << privilege_names->second[i];
+      }
+      ++i;
     }
   }
 }

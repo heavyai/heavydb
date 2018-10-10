@@ -1464,6 +1464,35 @@ void SysCatalog::updateObjectDescriptorMap(const std::string& roleName,
   }
 }
 
+// rename object descriptors
+void SysCatalog::renameObjectsInDescriptorMap(DBObject& object,
+                                              const Catalog_Namespace::Catalog& cat) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  auto range = objectDescriptorMap_.equal_range(
+      std::to_string(cat.get_currentDB().dbId) + ":" +
+      std::to_string(object.getObjectKey().permissionType) + ":" +
+      std::to_string(object.getObjectKey().objectId));
+  for (auto d = range.first; d != range.second; ++d) {
+    // rename object
+    d->second->objectName = object.getName();
+  }
+
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_->query_with_text_params(
+        "UPDATE mapd_object_permissions SET objectName = ?1 WHERE "
+        "dbId = ?2 AND objectId = ?3",
+        std::vector<std::string>{object.getName(),
+                                 std::to_string(cat.get_currentDB().dbId),
+                                 std::to_string(object.getObjectKey().objectId)});
+  } catch (const std::exception& e) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+}
+
 // Remove user/role from ObjectRoleDescriptorMap
 void SysCatalog::deleteObjectDescriptorMap(const std::string& roleName) {
   sys_write_lock write_lock(this);
@@ -4039,6 +4068,25 @@ void Catalog::renameTable(const TableDescriptor* td, const string& newTableName)
     }
   }
   renamePhysicalTable(td, newTableName);
+
+  // update table name in direct and effective priv map
+  if (SysCatalog::instance().arePrivilegesOn()) {
+    DBObject object(newTableName, TableDBObjectType);
+    DBObjectKey key;
+    key.dbId = currentDB_.dbId;
+    key.objectId = td->tableId;
+    key.permissionType = static_cast<int>(DBObjectType::TableDBObjectType);
+    object.setObjectKey(key);
+    auto objdescs = SysCatalog::instance().getMetadataForObject(
+        currentDB_.dbId, static_cast<int>(DBObjectType::TableDBObjectType), td->tableId);
+    for (auto obj : objdescs) {
+      Grantee* grnt = SysCatalog::instance().getGrantee(obj->roleName);
+      if (grnt) {
+        grnt->renameDbObject(object);
+      }
+    }
+    SysCatalog::instance().renameObjectsInDescriptorMap(object, *this);
+  }
 }
 
 void Catalog::renameColumn(const TableDescriptor* td,

@@ -45,6 +45,7 @@ class Grantee {
   virtual void updatePrivileges();
   virtual void updatePrivileges(Role* role);
   virtual void revokeAllOnDatabase(int32_t dbId);
+  virtual void renameDbObject(const DBObject& object);
   void getPrivileges(DBObject& object, bool only_direct);
   DBObject* findDbObject(const DBObjectKey& objectKey, bool only_direct) const;
   const std::string& getName() const { return name_; }
@@ -77,6 +78,7 @@ class Role : public Grantee {
 
   virtual bool isUser() const { return false; }
   virtual void updatePrivileges();
+  virtual void renameDbObject(const DBObject& object);
 
   // NOTE(max): To be used only from Grantee
   virtual void addGrantee(Grantee* grantee);

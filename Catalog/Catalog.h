@@ -490,6 +490,8 @@ class SysCatalog {
 
   void populateRoleDbObjects(const std::vector<DBObject>& objects);
   std::string name() const { return MAPD_SYSTEM_DB; }
+  void renameObjectsInDescriptorMap(DBObject& object,
+                                    const Catalog_Namespace::Catalog& cat);
 
  private:
   typedef std::map<std::string, Grantee*> GranteeMap;

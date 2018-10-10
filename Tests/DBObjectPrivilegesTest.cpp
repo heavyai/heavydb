@@ -596,8 +596,10 @@ TEST_F(DatabaseObject, TableAccessTest) {
       ""));
   auto& cat_mapd = session_ars->get_catalog();
   AccessPrivileges arsenal_privs;
+  AccessPrivileges bayern_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::CREATE_TABLE));
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::DROP_TABLE));
+  ASSERT_NO_THROW(bayern_privs.add(AccessPrivileges::ALTER_TABLE));
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
@@ -622,6 +624,23 @@ TEST_F(DatabaseObject, TableAccessTest) {
   ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::CREATE_TABLE));
   privObjects.push_back(mapd_object);
   EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(bayern_privs));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(bayern_privs));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", mapd_object, cat_mapd));
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(bayern_privs));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), true);
 }
 
 TEST_F(DatabaseObject, ViewAccessTest) {

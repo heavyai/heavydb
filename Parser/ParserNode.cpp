@@ -58,6 +58,7 @@ bool g_fast_strcmp{true};
 
 using namespace Lock_Namespace;
 using Catalog_Namespace::SysCatalog;
+using namespace std::string_literals;
 
 namespace Importer_NS {
 
@@ -2642,18 +2643,33 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   catalog.truncateTable(td);
 }
 
+void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session,
+                                 const TableDescriptor* td) {
+  if (!SysCatalog::instance().arePrivilegesOn()) {
+    return;
+  }
+  if (session.get_currentUser().isSuper ||
+      session.get_currentUser().userId == td->userId) {
+    return;
+  }
+  std::vector<DBObject> privObjects;
+  DBObject dbObject(td->tableName, TableDBObjectType);
+  dbObject.loadKey(session.get_catalog());
+  dbObject.setPrivileges(AccessPrivileges::ALTER_TABLE);
+  privObjects.push_back(dbObject);
+  if (!SysCatalog::instance().checkPrivileges(session.get_currentUser(), privObjects)) {
+    throw std::runtime_error("Current user does not have the privilege to alter table: " +
+                             td->tableName);
+  }
+}
+
 void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
-  // check for superuser/owner
-  if (!session.get_currentUser().isSuper &&
-      session.get_currentUser().userId != td->userId) {
-    throw std::runtime_error("Current user doesn't have the privilege to alter table: " +
-                             *table + " Only superusers or owner can alter a table.");
-  }
   if (td == nullptr) {
     throw std::runtime_error("Table " + *table + " does not exist.");
   }
+  check_alter_table_privilege(session, td);
   if (catalog.getMetadataForTable(*new_table_name) != nullptr) {
     throw std::runtime_error("Table or View " + *new_table_name + " already exists.");
   }
@@ -2853,32 +2869,12 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
       s = array_size * sti.get_size();
     }
     cd.columnType.set_size(s);
+
   } else {
     cd.columnType.set_fixed_size();
   }
   cd.isSystemCol = false;
   cd.isVirtualCol = false;
-}
-
-void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session,
-                                 const TableDescriptor* td) {
-  if (!SysCatalog::instance().arePrivilegesOn()) {
-    return;
-  }
-  if (session.get_currentUser().isSuper ||
-      session.get_currentUser().userId == td->userId) {
-    return;
-  }
-  std::vector<DBObject> privObjects;
-  DBObject dbObject(td->tableName, TableDBObjectType);
-  dbObject.loadKey(session.get_catalog());
-  dbObject.setPrivileges(AccessPrivileges::ALTER_TABLE);
-  privObjects.push_back(dbObject);
-  if (!SysCatalog::instance().checkPrivileges(session.get_currentUser(), privObjects)) {
-    throw std::runtime_error(
-        "Current user doesn't have the privilege to alter columns of table: " +
-        td->tableName);
-  }
 }
 
 void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -3034,15 +3030,10 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
-  // check for superuser/owner
-  if (!session.get_currentUser().isSuper &&
-      session.get_currentUser().userId != td->userId) {
-    throw std::runtime_error("Current user doesn't have the privilege to alter table: " +
-                             *table + " Only superusers or owner can alter a table.");
-  }
   if (td == nullptr) {
     throw std::runtime_error("Table " + *table + " does not exist.");
   }
+  check_alter_table_privilege(session, td);
   const ColumnDescriptor* cd = catalog.getMetadataForColumn(td->tableId, *column);
   if (cd == nullptr) {
     throw std::runtime_error("Column " + *column + " does not exist.");
@@ -3478,90 +3469,86 @@ static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(
     const std::string& privs,
     const DBObjectType& objectType,
     const std::string& object_name) {
-  if (privs.compare("ALL") == 0) {
-    if (objectType == DatabaseDBObjectType) {
-      return {AccessPrivileges::ALL_DATABASE, DatabaseDBObjectType};
-    } else if (objectType == TableDBObjectType) {
-      return {AccessPrivileges::ALL_TABLE, TableDBObjectType};
-    } else if (objectType == DashboardDBObjectType) {
-      return {AccessPrivileges::ALL_DASHBOARD, DashboardDBObjectType};
-    } else if (objectType == ViewDBObjectType) {
-      return {AccessPrivileges::ALL_VIEW, ViewDBObjectType};
-    }
+  static const std::map<std::pair<const std::string, const DBObjectType>,
+                        std::pair<const AccessPrivileges, const DBObjectType>>
+      privileges_lookup{
+          {{"ALL"s, DatabaseDBObjectType},
+           {AccessPrivileges::ALL_DATABASE, DatabaseDBObjectType}},
+          {{"ALL"s, TableDBObjectType}, {AccessPrivileges::ALL_TABLE, TableDBObjectType}},
+          {{"ALL"s, DashboardDBObjectType},
+           {AccessPrivileges::ALL_DASHBOARD, DashboardDBObjectType}},
+          {{"ALL"s, ViewDBObjectType}, {AccessPrivileges::ALL_VIEW, ViewDBObjectType}},
 
-  } else if ((privs.compare("CREATE TABLE") == 0) &&
-             (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::CREATE_TABLE, TableDBObjectType};
-  } else if ((privs.compare("CREATE") == 0) && (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::CREATE_TABLE, TableDBObjectType};
-  } else if (privs.compare("SELECT") == 0 && (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::SELECT_FROM_TABLE, TableDBObjectType};
-  } else if (privs.compare("INSERT") == 0 && (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::INSERT_INTO_TABLE, TableDBObjectType};
-  } else if (privs.compare("TRUNCATE") == 0 && (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::TRUNCATE_TABLE, TableDBObjectType};
-  } else if (privs.compare("UPDATE") == 0 && (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::UPDATE_IN_TABLE, TableDBObjectType};
-  } else if (privs.compare("DELETE") == 0 && (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::DELETE_FROM_TABLE, TableDBObjectType};
-  } else if (privs.compare("DROP") == 0 && (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::DROP_TABLE, TableDBObjectType};
+          {{"CREATE TABLE"s, DatabaseDBObjectType},
+           {AccessPrivileges::CREATE_TABLE, TableDBObjectType}},
+          {{"CREATE"s, DatabaseDBObjectType},
+           {AccessPrivileges::CREATE_TABLE, TableDBObjectType}},
+          {{"SELECT"s, DatabaseDBObjectType},
+           {AccessPrivileges::SELECT_FROM_TABLE, TableDBObjectType}},
+          {{"INSERT"s, DatabaseDBObjectType},
+           {AccessPrivileges::INSERT_INTO_TABLE, TableDBObjectType}},
+          {{"TRUNCATE"s, DatabaseDBObjectType},
+           {AccessPrivileges::TRUNCATE_TABLE, TableDBObjectType}},
+          {{"UPDATE"s, DatabaseDBObjectType},
+           {AccessPrivileges::UPDATE_IN_TABLE, TableDBObjectType}},
+          {{"DELETE"s, DatabaseDBObjectType},
+           {AccessPrivileges::DELETE_FROM_TABLE, TableDBObjectType}},
+          {{"DROP"s, DatabaseDBObjectType},
+           {AccessPrivileges::DROP_TABLE, TableDBObjectType}},
+          {{"ALTER"s, DatabaseDBObjectType},
+           {AccessPrivileges::ALTER_TABLE, TableDBObjectType}},
 
-  } else if (privs.compare("SELECT") == 0 && (objectType == TableDBObjectType)) {
-    return {AccessPrivileges::SELECT_FROM_TABLE, TableDBObjectType};
-  } else if (privs.compare("INSERT") == 0 && (objectType == TableDBObjectType)) {
-    return {AccessPrivileges::INSERT_INTO_TABLE, TableDBObjectType};
-  } else if (privs.compare("TRUNCATE") == 0 && (objectType == TableDBObjectType)) {
-    return {AccessPrivileges::TRUNCATE_TABLE, TableDBObjectType};
-  } else if (privs.compare("UPDATE") == 0 && (objectType == TableDBObjectType)) {
-    return {AccessPrivileges::UPDATE_IN_TABLE, TableDBObjectType};
-  } else if (privs.compare("DELETE") == 0 && (objectType == TableDBObjectType)) {
-    return {AccessPrivileges::DELETE_FROM_TABLE, TableDBObjectType};
-  } else if (privs.compare("DROP") == 0 && (objectType == TableDBObjectType)) {
-    return {AccessPrivileges::DROP_TABLE, TableDBObjectType};
+          {{"SELECT"s, TableDBObjectType},
+           {AccessPrivileges::SELECT_FROM_TABLE, TableDBObjectType}},
+          {{"INSERT"s, TableDBObjectType},
+           {AccessPrivileges::INSERT_INTO_TABLE, TableDBObjectType}},
+          {{"TRUNCATE"s, TableDBObjectType},
+           {AccessPrivileges::TRUNCATE_TABLE, TableDBObjectType}},
+          {{"UPDATE"s, TableDBObjectType},
+           {AccessPrivileges::UPDATE_IN_TABLE, TableDBObjectType}},
+          {{"DELETE"s, TableDBObjectType},
+           {AccessPrivileges::DELETE_FROM_TABLE, TableDBObjectType}},
+          {{"DROP"s, TableDBObjectType},
+           {AccessPrivileges::DROP_TABLE, TableDBObjectType}},
+          {{"ALTER"s, TableDBObjectType},
+           {AccessPrivileges::ALTER_TABLE, TableDBObjectType}},
 
-  } else if ((privs.compare("CREATE VIEW") == 0) &&
-             (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::CREATE_VIEW, ViewDBObjectType};
-  } else if (privs.compare("SELECT VIEW") == 0 && (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::SELECT_FROM_VIEW, ViewDBObjectType};
-  } else if (privs.compare("DROP VIEW") == 0 && (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::DROP_VIEW, ViewDBObjectType};
-  } else if (privs.compare("SELECT") == 0 && (objectType == ViewDBObjectType)) {
-    return {AccessPrivileges::SELECT_FROM_VIEW, ViewDBObjectType};
-  } else if (privs.compare("DROP") == 0 && (objectType == ViewDBObjectType)) {
-    return {AccessPrivileges::DROP_VIEW, ViewDBObjectType};
+          {{"CREATE VIEW"s, DatabaseDBObjectType},
+           {AccessPrivileges::CREATE_VIEW, ViewDBObjectType}},
+          {{"SELECT VIEW"s, DatabaseDBObjectType},
+           {AccessPrivileges::UPDATE_IN_TABLE, ViewDBObjectType}},
+          {{"DROP VIEW"s, DatabaseDBObjectType},
+           {AccessPrivileges::DROP_VIEW, ViewDBObjectType}},
+          {{"SELECT"s, ViewDBObjectType},
+           {AccessPrivileges::SELECT_FROM_VIEW, ViewDBObjectType}},
+          {{"DROP"s, ViewDBObjectType}, {AccessPrivileges::DROP_VIEW, ViewDBObjectType}},
 
-  } else if (privs.compare("CREATE DASHBOARD") == 0 &&
-             (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::CREATE_DASHBOARD, DashboardDBObjectType};
-  } else if (privs.compare("EDIT DASHBOARD") == 0 &&
-             (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::EDIT_DASHBOARD, DashboardDBObjectType};
-  } else if (privs.compare("VIEW DASHBOARD") == 0 &&
-             (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::VIEW_DASHBOARD, DashboardDBObjectType};
-  } else if (privs.compare("DELETE DASHBOARD") == 0 &&
-             (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::DELETE_DASHBOARD, DashboardDBObjectType};
-  } else if (privs.compare("VIEW") == 0 && (objectType == DashboardDBObjectType)) {
-    return {AccessPrivileges::VIEW_DASHBOARD, DashboardDBObjectType};
-  } else if (privs.compare("EDIT") == 0 && (objectType == DashboardDBObjectType)) {
-    return {AccessPrivileges::EDIT_DASHBOARD, DashboardDBObjectType};
-  } else if (privs.compare("DELETE") == 0 && (objectType == DashboardDBObjectType)) {
-    return {AccessPrivileges::DELETE_DASHBOARD, DashboardDBObjectType};
+          {{"CREATE DASHBOARD"s, DatabaseDBObjectType},
+           {AccessPrivileges::CREATE_DASHBOARD, DashboardDBObjectType}},
+          {{"EDIT DASHBOARD"s, DatabaseDBObjectType},
+           {AccessPrivileges::EDIT_DASHBOARD, DashboardDBObjectType}},
+          {{"VIEW DASHBOARD"s, DatabaseDBObjectType},
+           {AccessPrivileges::VIEW_DASHBOARD, DashboardDBObjectType}},
+          {{"DELETE DASHBOARD"s, DashboardDBObjectType},
+           {AccessPrivileges::DELETE_DASHBOARD, DashboardDBObjectType}},
+          {{"VIEW"s, DashboardDBObjectType},
+           {AccessPrivileges::VIEW_DASHBOARD, DashboardDBObjectType}},
+          {{"EDIT"s, DashboardDBObjectType},
+           {AccessPrivileges::EDIT_DASHBOARD, DashboardDBObjectType}},
+          {{"DELETE"s, DashboardDBObjectType},
+           {AccessPrivileges::DELETE_DASHBOARD, DashboardDBObjectType}},
 
-  } else if (privs.compare("VIEW SQL EDITOR") == 0 &&
-             (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::VIEW_SQL_EDITOR, DatabaseDBObjectType};
-  } else if (privs.compare("ACCESS") == 0 && (objectType == DatabaseDBObjectType)) {
-    return {AccessPrivileges::ACCESS, DatabaseDBObjectType};
+          {{"VIEW SQL EDITOR"s, DatabaseDBObjectType},
+           {AccessPrivileges::VIEW_SQL_EDITOR, DatabaseDBObjectType}},
+          {{"ACCESS"s, DatabaseDBObjectType},
+           {AccessPrivileges::ACCESS, DatabaseDBObjectType}}};
+
+  auto result = privileges_lookup.find(std::make_pair(privs, objectType));
+  if (result == privileges_lookup.end()) {
+    throw std::runtime_error("Privileges " + privs + " on DB object " + object_name +
+                             " are not correct.");
   }
-
-  throw std::runtime_error("Privileges " + privs + " on DB object " + object_name +
-                           " are not correct.");
-
-  return {AccessPrivileges::NONE, DatabaseDBObjectType};
+  return result->second;
 }
 
 static DBObject createObject(const std::string& objectName, DBObjectType objectType) {
