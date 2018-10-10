@@ -22,6 +22,7 @@
 #include "HashJoinRuntime.h"
 #include "InputMetadata.h"
 #include "JoinHashTableInterface.h"
+#include "ResultRows.h"
 
 #ifdef HAVE_CUDA
 #include <cuda.h>
@@ -30,6 +31,7 @@
 #include <map>
 #include <mutex>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 class Executor;

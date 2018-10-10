@@ -179,12 +179,6 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                               RenderInfo*,
                               const int64_t queue_time_ms);
 
-  ExecutionResult executeJoin(const RelJoin*,
-                              const CompilationOptions&,
-                              const ExecutionOptions&,
-                              RenderInfo*,
-                              const int64_t queue_time_ms);
-
   ExecutionResult executeLogicalValues(const RelLogicalValues*, const ExecutionOptions&);
   ExecutionResult executeModify(const RelModify* modify, const ExecutionOptions& eo);
 

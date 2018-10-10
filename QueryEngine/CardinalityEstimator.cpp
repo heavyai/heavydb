@@ -80,7 +80,6 @@ RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_
           ra_exe_unit.outer_join_quals,
           {},
           {},
-          {},
           makeExpr<Analyzer::NDVEstimator>(ra_exe_unit.groupby_exprs),
           SortInfo{{}, SortAlgorithm::Default, 0, 0},
           0};
@@ -101,7 +100,6 @@ RelAlgExecutionUnit create_count_all_execution_unit(
           ra_exe_unit.outer_join_quals,
           {},
           {replacement_target.get()},
-          {},
           nullptr,
           SortInfo{{}, SortAlgorithm::Default, 0, 0},
           0};

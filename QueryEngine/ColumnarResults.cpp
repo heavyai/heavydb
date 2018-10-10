@@ -15,6 +15,7 @@
  */
 
 #include "ColumnarResults.h"
+#include "ResultRows.h"
 
 #include "../Shared/thread_count.h"
 
@@ -148,35 +149,6 @@ ColumnarResults::ColumnarResults(
     ++row_idx;
   }
   rows.moveToBegin();
-}
-
-ColumnarResults::ColumnarResults(
-    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const IteratorTable& table,
-    const int frag_id,
-    const std::vector<SQLTypeInfo>& target_types)
-    : num_rows_([&]() {
-      auto fragment = table.getFragAt(frag_id);
-      CHECK(!fragment.row_count || fragment.data);
-      return fragment.row_count;
-    }())
-    , target_types_(target_types) {
-  auto fragment = table.getFragAt(frag_id);
-  const auto col_count = table.colCount();
-  column_buffers_.resize(col_count);
-  if (!num_rows_) {
-    return;
-  }
-  for (size_t i = 0, col_base_off = 0; i < col_count; ++i, col_base_off += num_rows_) {
-    CHECK(target_types[i].get_type() == kBIGINT);
-    const auto buf_size = num_rows_ * target_types[i].get_size();
-    // TODO(miyu): copy offset ptr into frag buffer of 'table' instead of alloc'ing new
-    // buffer
-    //             if it's proved to survive 'this' b/c it's already columnar.
-    column_buffers_[i] = reinterpret_cast<const int8_t*>(checked_malloc(buf_size));
-    memcpy(((void*)column_buffers_[i]), &fragment.data[col_base_off], buf_size);
-    row_set_mem_owner->addColBuffer(column_buffers_[i]);
-  }
 }
 
 ColumnarResults::ColumnarResults(

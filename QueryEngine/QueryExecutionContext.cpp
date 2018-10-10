@@ -516,6 +516,12 @@ int64_t QueryExecutionContext::allocateCountDistinctSet() {
   return reinterpret_cast<int64_t>(count_distinct_set);
 }
 
+ResultPtr QueryExecutionContext::getResult(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<size_t>& outer_tab_frag_ids) const {
+  return getRowSet(ra_exe_unit, query_mem_desc_);
+}
+
 RowSetPtr QueryExecutionContext::getRowSet(
     const RelAlgExecutionUnit& ra_exe_unit,
     const QueryMemoryDescriptor& query_mem_desc) const {

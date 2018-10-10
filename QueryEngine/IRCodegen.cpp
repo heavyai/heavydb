@@ -27,18 +27,6 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (!expr) {
     return {posArg(expr)};
   }
-  auto iter_expr = dynamic_cast<const Analyzer::IterExpr*>(expr);
-  if (iter_expr) {
-    if (iter_expr->get_rte_idx() > 0) {
-      const auto offset = cgen_state_->frag_offsets_[iter_expr->get_rte_idx()];
-      if (offset) {
-        return {cgen_state_->ir_builder_.CreateAdd(posArg(iter_expr), offset)};
-      } else {
-        return {posArg(iter_expr)};
-      }
-    }
-    return {posArg(iter_expr)};
-  }
   auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
   if (bin_oper) {
     return {codegen(bin_oper, co)};

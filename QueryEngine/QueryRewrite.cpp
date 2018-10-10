@@ -137,7 +137,6 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(
   if (!rewrite) {
     return ra_exe_unit_;
   }
-  CHECK(!contains_iter_expr(ra_exe_unit_.target_exprs));
   return {ra_exe_unit_.input_descs,
           ra_exe_unit_.extra_input_descs,
           ra_exe_unit_.input_col_descs,
@@ -150,7 +149,6 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(
           ra_exe_unit_.outer_join_quals,
           new_groupby_list,
           new_target_exprs,
-          ra_exe_unit_.orig_target_exprs,
           nullptr,
           ra_exe_unit_.sort_info,
           ra_exe_unit_.scan_limit};

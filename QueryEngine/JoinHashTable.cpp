@@ -210,9 +210,6 @@ size_t get_shard_count(
   if (!shard_count_less_or_equal_device_count(inner_td->tableId, executor)) {
     return 0;
   }
-  if (contains_iter_expr(ra_exe_unit.target_exprs)) {
-    return 0;
-  }
   // The two columns involved must be the ones on which the tables have been sharded on.
   return (inner_td->shardedColumnId == inner_col->get_column_id() &&
           outer_td->shardedColumnId == outer_col->get_column_id()) ||

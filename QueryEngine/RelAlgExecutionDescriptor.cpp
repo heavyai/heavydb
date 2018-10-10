@@ -170,18 +170,6 @@ std::vector<RaExecutionDesc> get_execution_descriptors(const RelAlgNode* ra_node
     if (dynamic_cast<const RelScan*>(node)) {
       continue;
     }
-    CHECK_GE(node->inputCount(), size_t(0));
-#ifdef ENABLE_JOIN_EXEC
-    CHECK((dynamic_cast<const RelJoin*>(node) && 2 == node->inputCount()) ||
-          (dynamic_cast<const RelModify*>(node) && 1 == node->inputCount()) ||
-          (dynamic_cast<const RelLogicalValues*>(node) && node->inputCount() == 0) ||
-          dynamic_cast<const RelLeftDeepInnerJoin*>(node) || (1 == node->inputCount()));
-#else
-    if (dynamic_cast<const RelJoin*>(node)) {
-      throw std::runtime_error("3+-way join not supported yet");
-    }
-    CHECK_EQ(size_t(1), node->inputCount());
-#endif
     descs.emplace_back(node);
   }
 
@@ -198,10 +186,6 @@ std::vector<RaExecutionDesc> get_execution_descriptors(
       continue;
     }
     CHECK_GT(node->inputCount(), size_t(0));
-#ifdef ENABLE_JOIN_EXEC
-    CHECK((dynamic_cast<const RelJoin*>(node) && 2 == node->inputCount()) ||
-          (1 == node->inputCount()));
-#endif
     descs.emplace_back(node);
   }
 

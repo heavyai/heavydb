@@ -71,20 +71,17 @@ struct RelAlgExecutionUnit {
   const std::list<std::shared_ptr<Analyzer::Expr>> outer_join_quals;
   const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
   std::vector<Analyzer::Expr*> target_exprs;
-  const std::vector<Analyzer::Expr*> orig_target_exprs;
   const std::shared_ptr<Analyzer::Estimator> estimator;
   const SortInfo sort_info;
   size_t scan_limit;
   QueryFeatureDescriptor query_features;
 };
 
-class IteratorTable;
 class ResultSet;
 
 // TODO(miyu): make some uses of this pointer able to
 // hold iterator table as well and move decls elsewhere
 typedef std::shared_ptr<ResultSet> RowSetPtr;
-typedef std::unique_ptr<IteratorTable> IterTabPtr;
-typedef boost::variant<RowSetPtr, IterTabPtr> ResultPtr;
+typedef boost::variant<RowSetPtr> ResultPtr;
 
 #endif  // QUERYENGINE_RELALGEXECUTIONUNIT_H

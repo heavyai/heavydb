@@ -29,23 +29,12 @@ class ExecutionResult {
                   const std::vector<TargetMetaInfo>& targets_meta)
       : result_(rows), targets_meta_(targets_meta), filter_push_down_enabled_(false) {}
 
-  ExecutionResult(const IteratorTable& table,
-                  const std::vector<TargetMetaInfo>& targets_meta)
-      : result_(boost::make_unique<IteratorTable>(table))
-      , targets_meta_(targets_meta)
-      , filter_push_down_enabled_(false) {}
-
   ExecutionResult(ResultPtr&& result, const std::vector<TargetMetaInfo>& targets_meta)
       : targets_meta_(targets_meta), filter_push_down_enabled_(false) {
-    if (auto rows = boost::get<RowSetPtr>(&result)) {
-      result_ = std::move(*rows);
-      CHECK(boost::get<RowSetPtr>(result_));
-    } else if (auto tab = boost::get<IterTabPtr>(&result)) {
-      result_ = std::move(*tab);
-      CHECK(boost::get<IterTabPtr>(result_));
-    } else {
-      CHECK(false);
-    }
+    auto rows = boost::get<RowSetPtr>(&result);
+    CHECK(rows);
+    result_ = std::move(*rows);
+    CHECK(boost::get<RowSetPtr>(result_));
   }
 
   ExecutionResult(const ExecutionResult& that)
@@ -56,17 +45,11 @@ class ExecutionResult {
         (filter_push_down_enabled_ && pushed_down_filter_info_.empty())) {
       return;
     }
-    if (const auto rows = boost::get<RowSetPtr>(&that.result_)) {
-      CHECK(*rows);
-      result_ = *rows;
-      CHECK(boost::get<RowSetPtr>(result_));
-    } else if (const auto tab = boost::get<IterTabPtr>(&that.result_)) {
-      CHECK(*tab);
-      result_ = boost::make_unique<IteratorTable>(**tab);
-      CHECK(boost::get<IterTabPtr>(result_));
-    } else {
-      CHECK(false);
-    }
+    const auto rows = boost::get<RowSetPtr>(&that.result_);
+    CHECK(rows);
+    CHECK(*rows);
+    result_ = *rows;
+    CHECK(boost::get<RowSetPtr>(result_));
   }
 
   ExecutionResult(ExecutionResult&& that)
@@ -77,15 +60,10 @@ class ExecutionResult {
         (filter_push_down_enabled_ && pushed_down_filter_info_.empty())) {
       return;
     }
-    if (auto rows = boost::get<RowSetPtr>(&that.result_)) {
-      result_ = std::move(*rows);
-      CHECK(boost::get<RowSetPtr>(result_));
-    } else if (auto tab = boost::get<IterTabPtr>(&that.result_)) {
-      result_ = std::move(*tab);
-      CHECK(boost::get<IterTabPtr>(result_));
-    } else {
-      CHECK(false);
-    }
+    auto rows = boost::get<RowSetPtr>(&that.result_);
+    CHECK(rows);
+    result_ = std::move(*rows);
+    CHECK(boost::get<RowSetPtr>(result_));
   }
 
   ExecutionResult(const std::vector<PushedDownFilterInfo>& pushed_down_filter_info,
@@ -100,17 +78,11 @@ class ExecutionResult {
       filter_push_down_enabled_ = that.filter_push_down_enabled_;
       return *this;
     }
-    if (const auto rows = boost::get<RowSetPtr>(&that.result_)) {
-      CHECK(*rows);
-      result_ = *rows;
-      CHECK(boost::get<RowSetPtr>(result_));
-    } else if (const auto tab = boost::get<IterTabPtr>(&that.result_)) {
-      CHECK(*tab);
-      result_ = boost::make_unique<IteratorTable>(**tab);
-      CHECK(boost::get<IterTabPtr>(result_));
-    } else {
-      CHECK(false);
-    }
+    const auto rows = boost::get<RowSetPtr>(&that.result_);
+    CHECK(rows);
+    CHECK(*rows);
+    result_ = *rows;
+    CHECK(boost::get<RowSetPtr>(result_));
     targets_meta_ = that.targets_meta_;
     return *this;
   }
@@ -122,14 +94,9 @@ class ExecutionResult {
   }
 
   bool empty() const {
-    if (auto rows = boost::get<RowSetPtr>(&result_)) {
-      return !*rows;
-    } else if (auto tab = boost::get<IterTabPtr>(&result_)) {
-      return !*tab;
-    } else {
-      CHECK(false);
-    }
-    return true;
+    auto rows = boost::get<RowSetPtr>(&result_);
+    CHECK(rows);
+    return !*rows;
   }
 
   const ResultPtr& getDataPtr() const { return result_; }

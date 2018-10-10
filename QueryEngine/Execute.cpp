@@ -767,13 +767,8 @@ ResultPtr Executor::resultsUnion(ExecutionDispatch& execution_dispatch) {
               return lhs.second < rhs.second;
             });
 
-  if (boost::get<RowSetPtr>(&results_per_device.front().first)) {
-    return get_merged_result<RowSetPtr>(results_per_device);
-  } else if (boost::get<IterTabPtr>(&results_per_device.front().first)) {
-    return get_merged_result<IterTabPtr>(results_per_device);
-  }
-  CHECK(false);
-  return RowSetPtr(nullptr);
+  CHECK(boost::get<RowSetPtr>(&results_per_device.front().first));
+  return get_merged_result<RowSetPtr>(results_per_device);
 }
 
 RowSetPtr Executor::reduceMultiDeviceResults(
@@ -1585,24 +1580,6 @@ bool Executor::skipFragmentPair(
   return shard_count;
 }
 
-std::vector<const int8_t*> Executor::fetchIterTabFrags(
-    const size_t frag_id,
-    const ExecutionDispatch& execution_dispatch,
-    const InputDescriptor& table_desc,
-    const int device_id) {
-  CHECK(table_desc.getSourceType() == InputSourceType::RESULT);
-  const auto& temp = get_temporary_table(temporary_tables_, table_desc.getTableId());
-  const auto table = boost::get<IterTabPtr>(&temp);
-  CHECK(table && *table);
-  std::vector<const int8_t*> frag_iter_buffers;
-  for (size_t i = 0; i < (*table)->colCount(); ++i) {
-    const InputColDescriptor desc(i, table_desc.getTableId(), 0);
-    frag_iter_buffers.push_back(execution_dispatch.getColumn(
-        &desc, frag_id, {}, {}, Data_Namespace::CPU_LEVEL, device_id, false));
-  }
-  return frag_iter_buffers;
-}
-
 namespace {
 
 const ColumnDescriptor* try_get_column_descriptor(const InputColDescriptor* col_desc,
@@ -1745,9 +1722,6 @@ Executor::FetchResult Executor::fetchChunks(
   std::vector<std::vector<uint64_t>> all_frag_offsets;
   const auto extra_tab_id_to_frag_offsets =
       get_table_id_to_frag_offsets(ra_exe_unit.extra_input_descs, all_tables_fragments);
-  const bool needs_fetch_iterators =
-      ra_exe_unit.join_dimensions.size() > 2 &&
-      dynamic_cast<Analyzer::IterExpr*>(ra_exe_unit.target_exprs.front());
 
   for (const auto& selected_frag_ids : frag_ids_crossjoin) {
     std::vector<const int8_t*> frag_col_buffers(
@@ -1813,14 +1787,6 @@ Executor::FetchResult Executor::fetchChunks(
       }
     }
     all_frag_col_buffers.push_back(frag_col_buffers);
-    // IteratorTable on the left could only have a single fragment for now.
-    if (needs_fetch_iterators && all_frag_iter_buffers.empty()) {
-      CHECK_EQ(size_t(2), selected_fragments_crossjoin.size());
-      all_frag_iter_buffers.push_back(fetchIterTabFrags(selected_frag_ids[0],
-                                                        execution_dispatch,
-                                                        ra_exe_unit.input_descs[0],
-                                                        device_id));
-    }
   }
   std::tie(all_num_rows, all_frag_offsets) =
       getRowCountAndOffsetForAllFrags(ra_exe_unit,
@@ -2133,12 +2099,9 @@ namespace {
 
 bool check_rows_less_than_needed(const ResultPtr& results, const size_t scan_limit) {
   CHECK(scan_limit);
-  if (const auto rows = boost::get<RowSetPtr>(&results)) {
-    return (*rows && (*rows)->rowCount() < scan_limit);
-  } else if (const auto tab = boost::get<IterTabPtr>(&results)) {
-    return (*tab && (*tab)->rowCount() < scan_limit);
-  }
-  abort();
+  const auto rows = boost::get<RowSetPtr>(&results);
+  CHECK(rows);
+  return *rows && (*rows)->rowCount() < scan_limit;
 }
 
 }  // namespace
@@ -2162,11 +2125,7 @@ int32_t Executor::executePlanWithGroupBy(
     const uint32_t num_tables,
     RenderInfo* render_info) {
   INJECT_TIMER(executePlanWithGroupBy);
-  if (contains_iter_expr(ra_exe_unit.target_exprs)) {
-    results = IterTabPtr(nullptr);
-  } else {
-    results = RowSetPtr(nullptr);
-  }
+  results = RowSetPtr(nullptr);
   if (col_buffers.empty()) {
     return 0;
   }
@@ -3088,10 +3047,6 @@ std::pair<bool, int64_t> Executor::skipFragment(
     const std::vector<uint64_t>& frag_offsets,
     const size_t frag_idx) {
   const int table_id = table_desc.getTableId();
-  if (table_desc.getSourceType() == InputSourceType::RESULT &&
-      boost::get<IterTabPtr>(&get_temporary_table(temporary_tables_, table_id))) {
-    return {false, -1};
-  }
   for (const auto simple_qual : simple_quals) {
     const auto comp_expr =
         std::dynamic_pointer_cast<const Analyzer::BinOper>(simple_qual);

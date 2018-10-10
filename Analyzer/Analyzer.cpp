@@ -180,10 +180,6 @@ std::shared_ptr<Analyzer::Expr> DatetruncExpr::deep_copy() const {
   return makeExpr<DatetruncExpr>(type_info, contains_agg, field, from_expr->deep_copy());
 }
 
-std::shared_ptr<Analyzer::Expr> IterExpr::deep_copy() const {
-  return makeExpr<IterExpr>(type_info, table_id, rte_idx);
-}
-
 std::shared_ptr<Analyzer::Expr> OffsetInFragment::deep_copy() const {
   return makeExpr<OffsetInFragment>();
 }
@@ -2145,14 +2141,6 @@ bool DatetruncExpr::operator==(const Expr& rhs) const {
   return field == rhs_ee.get_field() && *from_expr == *rhs_ee.get_from_expr();
 }
 
-bool IterExpr::operator==(const Expr& rhs) const {
-  if (typeid(rhs) != typeid(IterExpr)) {
-    return false;
-  }
-  const IterExpr& rhs_ie = static_cast<const IterExpr&>(rhs);
-  return get_table_id() == rhs_ie.get_table_id() && get_rte_idx() == rhs_ie.get_rte_idx();
-}
-
 bool OffsetInFragment::operator==(const Expr& rhs) const {
   return typeid(rhs) == typeid(OffsetInFragment);
 }
@@ -2450,10 +2438,6 @@ void DatetruncExpr::print() const {
   std::cout << " , ";
   from_expr->print();
   std::cout << ") ";
-}
-
-void IterExpr::print() const {
-  std::cout << "(Iterator on rte: " << rte_idx << ") ";
 }
 
 void OffsetInFragment::print() const {

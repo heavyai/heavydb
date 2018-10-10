@@ -41,7 +41,6 @@ set(query_engine_source_files
     GroupByAndAggregate.cpp
     InValuesBitmap.cpp
     InputMetadata.cpp
-    IteratorTable.cpp
     JoinFilterPushDown.cpp
     LegacyExecute.cpp
     LogicalIR.cpp

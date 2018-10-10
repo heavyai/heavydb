@@ -4898,12 +4898,10 @@ TEST(Select, Subqueries) {
       "y;",
       dt);
     c("SELECT COUNT(*) FROM test WHERE str IN (SELECT DISTINCT str FROM test);", dt);
-#ifdef ENABLE_JOIN_EXEC
     c("SELECT SUM((x - (SELECT AVG(x) FROM test)) * (x - (SELECT AVG(x) FROM test)) / "
       "((SELECT COUNT(x) FROM test) - "
       "1)) FROM test;",
       dt);
-#endif
     EXPECT_THROW(run_multiple_agg("SELECT * FROM (SELECT * FROM test LIMIT 5);", dt),
                  std::runtime_error);
     EXPECT_THROW(run_simple_agg("SELECT AVG(SELECT x FROM test LIMIT 5) FROM test;", dt),
@@ -5327,7 +5325,6 @@ TEST(Select, Joins_InnerJoin_AtLeastThreeTables) {
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-#ifdef ENABLE_JOIN_EXEC
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner "
       "AS c ON b.str = c.str;",
       dt);
@@ -5388,7 +5385,6 @@ TEST(Select, Joins_InnerJoin_AtLeastThreeTables) {
       "join_test c ON b.x = c.x JOIN "
       "test_inner d ON b.x = d.x ORDER BY a.x, b.str;",
       dt);
-#endif
   }
 
   g_enable_watchdog = save_watchdog;
@@ -5829,60 +5825,6 @@ TEST(Select, Joins_MultipleOuterExpressions) {
       "b.x;",
       "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o AND a.x = b.x;",
       dt);
-  }
-}
-
-TEST(Select, Joins_Unsupported) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-#ifndef ENABLE_JOIN_EXEC
-    EXPECT_THROW(run_multiple_agg("SELECT count(*) FROM test AS a JOIN join_test AS b ON "
-                                  "a.x = b.x JOIN test_inner AS c ON "
-                                  "b.str = c.str;",
-                                  dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT count(*) FROM test AS a JOIN join_test AS b ON "
-                                  "a.x = b.x JOIN test_inner AS c ON b.str = "
-                                  "c.str JOIN join_test AS d ON c.x = d.x;",
-                                  dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT a.x AS x, y, b.str FROM test AS a JOIN "
-                                  "join_test AS b ON a.x = b.x JOIN test_inner AS c "
-                                  "ON b.str = c.str ORDER BY x;",
-                                  dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT count(*) FROM test AS a JOIN join_test AS b ON "
-                                  "a.x = b.x JOIN test_inner AS c ON b.str = "
-                                  "c.str WHERE a.y "
-                                  "< 43;",
-                                  dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT SUM(a.x), b.str FROM test AS a JOIN join_test "
-                                  "AS b ON a.x = b.x JOIN test_inner AS c ON "
-                                  "b.str = c.str WHERE a.y "
-                                  "= 43 group by b.str;",
-                                  dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg(
-                     "SELECT a.str as key0,a.fixed_str as key1,COUNT(*) AS color FROM "
-                     "test a JOIN (select str,count(*) "
-                     "from test group by str order by COUNT(*) desc limit 40) b on "
-                     "a.str=b.str JOIN (select "
-                     "fixed_str,count(*) from test group by fixed_str order by count(*) "
-                     "desc limit 40) c on "
-                     "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
-                     dt),
-                 std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("SELECT x, tnone FROM test LEFT JOIN text_group_by_test ON "
-                         "test.str = text_group_by_test.tdef;",
-                         dt),
-        std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT * FROM test a JOIN test b on a.b = b.x;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT * FROM test a JOIN test b on a.f = b.f;", dt),
-                 std::runtime_error);
-#endif
   }
 }
 
@@ -8851,7 +8793,6 @@ TEST(Delete, Joins_InnerJoin_AtLeastThreeTables) {
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-#ifdef ENABLE_JOIN_EXEC
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner "
       "AS c ON b.str = c.str;",
       dt);
@@ -8912,7 +8853,6 @@ TEST(Delete, Joins_InnerJoin_AtLeastThreeTables) {
       "join_test c ON b.x = c.x JOIN "
       "test_inner d ON b.x = d.x ORDER BY a.x, b.str;",
       dt);
-#endif
   }
 
   g_enable_watchdog = save_watchdog;
@@ -9336,66 +9276,6 @@ TEST(Delete, Joins_MultipleOuterExpressions) {
       "b.x;",
       "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o AND a.x = b.x;",
       dt);
-  }
-}
-
-TEST(Delete, Joins_Unsupported) {
-  SKIP_ALL_ON_AGGREGATOR();
-
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-#ifndef ENABLE_JOIN_EXEC
-    EXPECT_THROW(run_multiple_agg("SELECT count(*) FROM test AS a JOIN join_test AS b ON "
-                                  "a.x = b.x JOIN test_inner AS c ON "
-                                  "b.str = c.str;",
-                                  dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT count(*) FROM test AS a JOIN join_test AS b ON "
-                                  "a.x = b.x JOIN test_inner AS c ON b.str = "
-                                  "c.str JOIN join_test AS d ON c.x = d.x;",
-                                  dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT a.x AS x, y, b.str FROM test AS a JOIN "
-                                  "join_test AS b ON a.x = b.x JOIN test_inner AS c "
-                                  "ON b.str = c.str ORDER BY x;",
-                                  dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT count(*) FROM test AS a JOIN join_test AS b ON "
-                                  "a.x = b.x JOIN test_inner AS c ON b.str = "
-                                  "c.str WHERE a.y "
-                                  "< 43;",
-                                  dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT SUM(a.x), b.str FROM test AS a JOIN join_test "
-                                  "AS b ON a.x = b.x JOIN test_inner AS c ON "
-                                  "b.str = c.str WHERE a.y "
-                                  "= 43 group by b.str;",
-                                  dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg(
-                     "SELECT a.str as key0,a.fixed_str as key1,COUNT(*) AS color FROM "
-                     "test a JOIN (select str,count(*) "
-                     "from test group by str order by COUNT(*) desc limit 40) b on "
-                     "a.str=b.str JOIN (select "
-                     "fixed_str,count(*) from test group by fixed_str order by count(*) "
-                     "desc limit 40) c on "
-                     "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
-                     dt),
-                 std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("SELECT x, tnone FROM test LEFT JOIN text_group_by_test ON "
-                         "test.str = text_group_by_test.tdef;",
-                         dt),
-        std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT * FROM test a JOIN test b on a.b = b.x;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT * FROM test a JOIN test b on a.f = b.f;", dt),
-                 std::runtime_error);
-#endif
   }
 }
 

@@ -18,7 +18,6 @@
 #define QUERYENGINE_INPUTMETADATA_H
 
 #include "InputDescriptors.h"
-#include "IteratorTable.h"
 #include "RelAlgExecutionUnit.h"
 
 #include <unordered_map>

@@ -16,7 +16,6 @@
 
 #ifndef COLUMNAR_RESULTS_H
 #define COLUMNAR_RESULTS_H
-#include "IteratorTable.h"
 #include "ResultSet.h"
 #include "SqlTypesLayout.h"
 
@@ -37,11 +36,6 @@ class ColumnarResults {
   ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                   const ResultSet& rows,
                   const size_t num_columns,
-                  const std::vector<SQLTypeInfo>& target_types);
-
-  ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                  const IteratorTable& table,
-                  const int frag_id,
                   const std::vector<SQLTypeInfo>& target_types);
 
   ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,

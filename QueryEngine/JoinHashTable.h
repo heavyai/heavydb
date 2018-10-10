@@ -32,6 +32,7 @@
 #include "InputDescriptors.h"
 #include "InputMetadata.h"
 #include "JoinHashTableInterface.h"
+#include "ResultRows.h"
 #include "ThrustAllocator.h"
 
 #include <llvm/IR/Value.h>

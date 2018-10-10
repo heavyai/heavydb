@@ -544,14 +544,6 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
     addTemporaryTable(-sort->getId(), exec_desc.getResult().getDataPtr());
     return;
   }
-#ifdef ENABLE_JOIN_EXEC
-  const auto join = dynamic_cast<const RelJoin*>(body);
-  if (join) {
-    exec_desc.setResult(executeJoin(join, co, eo_work_unit, render_info, queue_time_ms));
-    addTemporaryTable(-join->getId(), exec_desc.getResult().getDataPtr());
-    return;
-  }
-#endif
   const auto logical_values = dynamic_cast<const RelLogicalValues*>(body);
   if (logical_values) {
     exec_desc.setResult(executeLogicalValues(logical_values, eo_work_unit));
@@ -717,25 +709,6 @@ get_used_inputs(const RelFilter* filter, const Catalog_Namespace::Catalog& cat) 
         used_inputs_owned.emplace_back(synthesized_used_input);
         used_inputs.insert(synthesized_used_input);
       }
-    }
-  }
-  return std::make_pair(used_inputs, used_inputs_owned);
-}
-
-std::pair<std::unordered_set<const RexInput*>, std::vector<std::shared_ptr<RexInput>>>
-get_used_inputs(const RelJoin* join, const Catalog_Namespace::Catalog& cat) {
-  std::unordered_set<const RexInput*> used_inputs;
-  std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
-  const auto lhs = join->getInput(0);
-  if (dynamic_cast<const RelJoin*>(lhs)) {
-    auto synthesized_used_input = new RexInput(lhs, 0);
-    used_inputs_owned.emplace_back(synthesized_used_input);
-    used_inputs.insert(synthesized_used_input);
-    for (auto previous_join = static_cast<const RelJoin*>(lhs); previous_join;
-         previous_join = dynamic_cast<const RelJoin*>(previous_join->getInput(0))) {
-      synthesized_used_input = new RexInput(lhs, 0);
-      used_inputs_owned.emplace_back(synthesized_used_input);
-      used_inputs.insert(synthesized_used_input);
     }
   }
   return std::make_pair(used_inputs, used_inputs_owned);
@@ -1461,17 +1434,6 @@ ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
       work_unit, filter->getOutputMetainfo(), false, co, eo, render_info, queue_time_ms);
 }
 
-ExecutionResult RelAlgExecutor::executeJoin(const RelJoin* join,
-                                            const CompilationOptions& co,
-                                            const ExecutionOptions& eo,
-                                            RenderInfo* render_info,
-                                            const int64_t queue_time_ms) {
-  const auto work_unit =
-      createJoinWorkUnit(join, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
-  return executeWorkUnit(
-      work_unit, join->getOutputMetainfo(), false, co, eo, render_info, queue_time_ms);
-}
-
 ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify,
                                               const ExecutionOptions& eo) {
   if (eo.just_explain) {
@@ -1698,7 +1660,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
            source_exe_unit.outer_join_quals,
            source_exe_unit.groupby_exprs,
            source_exe_unit.target_exprs,
-           source_exe_unit.orig_target_exprs,
            nullptr,
            {sort_info.order_entries, sort_algorithm, limit, offset},
            scan_total_limit},
@@ -2580,7 +2541,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
       get_outer_join_quals(compound, translator),
       groupby_exprs,
       filtered_target_exprs,
-      {},
       nullptr,
       sort_info,
       0,
@@ -2668,7 +2628,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
       get_outer_join_quals(compound, translator),
       groupby_exprs,
       target_exprs,
-      {},
       nullptr,
       sort_info,
       0,
@@ -2855,131 +2814,6 @@ JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
 
 namespace {
 
-std::vector<TargetMetaInfo> get_inputs_meta(const RelScan* scan,
-                                            const Catalog_Namespace::Catalog& cat) {
-  std::vector<TargetMetaInfo> in_metainfo;
-  for (const auto& col_name : scan->getFieldNames()) {
-    const auto table_desc = scan->getTableDescriptor();
-    const auto cd = cat.getMetadataForColumn(table_desc->tableId, col_name);
-    CHECK(cd);
-    auto col_ti = cd->columnType;
-    in_metainfo.emplace_back(col_name, col_ti);
-  }
-  return in_metainfo;
-}
-
-std::vector<std::shared_ptr<Analyzer::Expr>> get_input_exprs(const RelJoin* join,
-                                                             const bool need_original) {
-  const auto join_type = join->getJoinType();
-  std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned;
-  const auto lhs = join->getInput(0);
-  if (need_original && dynamic_cast<const RelJoin*>(lhs)) {
-    const auto previous_join = static_cast<const RelJoin*>(lhs);
-    auto source_exprs_owned = get_input_exprs(previous_join, true);
-    for (size_t i = 0; i < source_exprs_owned.size(); ++i) {
-      const auto iter_ti = source_exprs_owned[i]->get_type_info();
-      auto iter_expr =
-          std::make_shared<Analyzer::IterExpr>(iter_ti, table_id_from_ra(lhs), 0);
-      target_exprs_owned.push_back(iter_expr);
-    }
-  } else {
-    const auto iter_ti = SQLTypeInfo(kBIGINT, true);
-    auto iter_expr =
-        std::make_shared<Analyzer::IterExpr>(iter_ti, table_id_from_ra(lhs), 0);
-    target_exprs_owned.push_back(iter_expr);
-  }
-
-  const auto rhs = join->getInput(1);
-  CHECK(!dynamic_cast<const RelJoin*>(rhs));
-  const auto iter_ti = SQLTypeInfo(kBIGINT, join_type == JoinType::INNER);
-  auto iter_expr =
-      std::make_shared<Analyzer::IterExpr>(iter_ti, table_id_from_ra(rhs), 1);
-  target_exprs_owned.push_back(iter_expr);
-
-  return target_exprs_owned;
-}
-
-std::pair<std::vector<TargetMetaInfo>, std::vector<std::shared_ptr<Analyzer::Expr>>>
-get_inputs_meta(const RelJoin* join, const Catalog_Namespace::Catalog& cat) {
-  std::vector<TargetMetaInfo> targets_meta;
-  const auto lhs = join->getInput(0);
-  if (auto scan = dynamic_cast<const RelScan*>(lhs)) {
-    const auto lhs_in_meta = get_inputs_meta(scan, cat);
-    targets_meta.insert(targets_meta.end(), lhs_in_meta.begin(), lhs_in_meta.end());
-  } else {
-    const auto& lhs_in_meta = lhs->getOutputMetainfo();
-    targets_meta.insert(targets_meta.end(), lhs_in_meta.begin(), lhs_in_meta.end());
-  }
-  const auto rhs = join->getInput(1);
-  CHECK(!dynamic_cast<const RelJoin*>(rhs));
-  if (auto scan = dynamic_cast<const RelScan*>(rhs)) {
-    const auto rhs_in_meta = get_inputs_meta(scan, cat);
-    targets_meta.insert(targets_meta.end(), rhs_in_meta.begin(), rhs_in_meta.end());
-  } else {
-    const auto& rhs_in_meta = rhs->getOutputMetainfo();
-    targets_meta.insert(targets_meta.end(), rhs_in_meta.begin(), rhs_in_meta.end());
-  }
-  return std::make_pair(targets_meta, get_input_exprs(join, false));
-}
-
-}  // namespace
-
-RelAlgExecutor::WorkUnit RelAlgExecutor::createJoinWorkUnit(const RelJoin* join,
-                                                            const SortInfo& sort_info,
-                                                            const bool just_explain) {
-  std::vector<InputDescriptor> input_descs;
-  std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
-  const auto input_to_nest_level = get_input_nest_levels(join, {});
-  std::tie(input_descs, input_col_descs, std::ignore) =
-      get_input_desc(join, input_to_nest_level, {}, cat_);
-  const auto extra_input_descs = separate_extra_input_descs(input_descs);
-  const auto join_type = join->getJoinType();
-  QueryFeatureDescriptor query_features;
-  RelAlgTranslator translator(cat_,
-                              executor_,
-                              input_to_nest_level,
-                              {join_type},
-                              now_,
-                              just_explain,
-                              query_features);
-  auto inner_join_quals = get_inner_join_quals(join, translator);
-  auto outer_join_quals = get_outer_join_quals(join, translator);
-  CHECK((join_type == JoinType::INNER && outer_join_quals.empty()) ||
-        (join_type == JoinType::LEFT && inner_join_quals.empty()));
-  std::vector<TargetMetaInfo> targets_meta;
-  std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned;
-  std::tie(targets_meta, target_exprs_owned) = get_inputs_meta(join, cat_);
-  target_exprs_owned_.insert(
-      target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
-  auto orig_target_exprs_owned = get_input_exprs(join, true);
-  target_exprs_owned_.insert(target_exprs_owned_.end(),
-                             orig_target_exprs_owned.begin(),
-                             orig_target_exprs_owned.end());
-  join->setOutputMetainfo(targets_meta);
-  return {{input_descs,
-           extra_input_descs,
-           input_col_descs,
-           {},
-           {},
-           join_type,
-           {},
-           get_join_dimensions(join, executor_),
-           inner_join_quals,
-           outer_join_quals,
-           {nullptr},
-           get_exprs_not_owned(target_exprs_owned),
-           get_exprs_not_owned(orig_target_exprs_owned),
-           nullptr,
-           sort_info,
-           0,
-           query_features},
-          join,
-          max_groups_buffer_entry_default_guess,
-          nullptr};
-}
-
-namespace {
-
 std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
     const RelAlgNode* ra_node,
     const size_t nest_level,
@@ -3050,7 +2884,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
            get_outer_join_quals(aggregate, translator),
            groupby_exprs,
            target_exprs,
-           {},
            nullptr,
            sort_info,
            0,
@@ -3136,7 +2969,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
            get_outer_join_quals(project, translator),
            {nullptr},
            filtered_target_exprs,
-           {},
            nullptr,
            sort_info,
            0,
@@ -3205,7 +3037,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
            get_outer_join_quals(project, translator),
            {nullptr},
            target_exprs,
-           {},
            nullptr,
            sort_info,
            0,
@@ -3305,7 +3136,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
            get_outer_join_quals(filter, translator),
            {nullptr},
            target_exprs,
-           {},
            nullptr,
            sort_info,
            0},

@@ -200,24 +200,6 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(const RowSetPtr& rows) {
   return table_info;
 }
 
-Fragmenter_Namespace::TableInfo synthesize_table_info(const IterTabPtr& table) {
-  Fragmenter_Namespace::TableInfo table_info;
-  size_t total_row_count{0};  // rows can be null only for query validation
-  if (!table->definitelyHasNoRows()) {
-    table_info.fragments.resize(table->fragCount());
-    for (size_t i = 0; i < table->fragCount(); ++i) {
-      auto& fragment = table_info.fragments[i];
-      fragment.fragmentId = i;
-      fragment.setPhysicalNumTuples(table->getFragAt(i).row_count);
-      fragment.deviceIds.resize(3);
-      total_row_count += fragment.getPhysicalNumTuples();
-    }
-  }
-
-  table_info.setPhysicalNumTuples(total_row_count);
-  return table_info;
-}
-
 void collect_table_infos(std::vector<InputTableInfo>& table_infos,
                          const std::vector<InputDescriptor>& input_descs,
                          Executor* executor) {
@@ -239,15 +221,10 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
       CHECK(temporary_tables);
       const auto it = temporary_tables->find(table_id);
       CHECK(it != temporary_tables->end());
-      if (const auto rows = boost::get<RowSetPtr>(&it->second)) {
-        CHECK(*rows);
-        table_infos.push_back({table_id, synthesize_table_info(*rows)});
-      } else if (const auto table = boost::get<IterTabPtr>(&it->second)) {
-        CHECK(*table);
-        table_infos.push_back({table_id, synthesize_table_info(*table)});
-      } else {
-        CHECK(false);
-      }
+      const auto rows = boost::get<RowSetPtr>(&it->second);
+      CHECK(rows);
+      CHECK(*rows);
+      table_infos.push_back({table_id, synthesize_table_info(*rows)});
     } else {
       CHECK(input_desc.getSourceType() == InputSourceType::TABLE);
       table_infos.push_back({table_id, executor->getTableInfo(table_id)});

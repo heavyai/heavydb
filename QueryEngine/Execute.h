@@ -161,7 +161,7 @@ inline const ResultPtr& get_temporary_table(const TemporaryTables* temporary_tab
   const auto it = temporary_tables->find(table_id);
   CHECK(it != temporary_tables->end());
   const auto& temp = it->second;
-  CHECK(boost::get<RowSetPtr>(&temp) || boost::get<IterTabPtr>(&temp));
+  CHECK(boost::get<RowSetPtr>(&temp));
   return temp;
 }
 
@@ -176,15 +176,10 @@ inline const SQLTypeInfo get_column_type(const int col_id,
     return cd->columnType;
   }
   const auto& temp = get_temporary_table(temporary_tables, table_id);
-  if (const auto rows = boost::get<RowSetPtr>(&temp)) {
-    CHECK(*rows);
-    return (*rows)->getColType(col_id);
-  } else if (const auto tab = boost::get<IterTabPtr>(&temp)) {
-    CHECK(*tab);
-    return (*tab)->getColType(col_id);
-  }
-
-  abort();
+  const auto rows = boost::get<RowSetPtr>(&temp);
+  CHECK(rows);
+  CHECK(*rows);
+  return (*rows)->getColType(col_id);
 }
 
 template <typename PtrTy>
@@ -213,14 +208,10 @@ inline const ColumnarResults* columnarize_result(
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const ResultPtr& result,
     const int frag_id) {
-  if (const auto rows = boost::get<RowSetPtr>(&result)) {
-    CHECK_EQ(0, frag_id);
-    return rows_to_columnar_results(row_set_mem_owner, *rows, (*rows)->colCount());
-  } else if (const auto table = boost::get<IterTabPtr>(&result)) {
-    return rows_to_columnar_results(row_set_mem_owner, *table, frag_id);
-  }
-  CHECK(false);
-  return nullptr;
+  const auto rows = boost::get<RowSetPtr>(&result);
+  CHECK(rows);
+  CHECK_EQ(0, frag_id);
+  return rows_to_columnar_results(row_set_mem_owner, *rows, (*rows)->colCount());
 }
 
 class CompilationRetryNoLazyFetch : public std::runtime_error {
@@ -975,12 +966,6 @@ class Executor {
                         const RelAlgExecutionUnit& ra_exe_unit,
                         const ExecutorDeviceType device_type);
 
-  std::vector<const int8_t*> fetchIterTabFrags(
-      const size_t frag_id,
-      const ExecutionDispatch& execution_dispatch,
-      const InputDescriptor& table_desc,
-      const int device_id);
-
   FetchResult fetchChunks(const ExecutionDispatch&,
                           const RelAlgExecutionUnit& ra_exe_unit,
                           const int device_id,
@@ -1734,7 +1719,6 @@ class Executor {
   friend class QueryFragmentDescriptor;
   friend class QueryExecutionContext;
   friend class ResultSet;
-  friend class IteratorTable;
   friend class InValuesBitmap;
   friend class JoinHashTable;
   friend class LeafAggregator;

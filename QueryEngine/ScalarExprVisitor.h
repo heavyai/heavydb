@@ -36,10 +36,6 @@ class ScalarExprVisitor {
     if (column_var_tuple) {
       return visitColumnVarTuple(column_var_tuple);
     }
-    const auto iter = dynamic_cast<const Analyzer::IterExpr*>(expr);
-    if (iter) {
-      return visitIterator(iter);
-    }
     const auto constant = dynamic_cast<const Analyzer::Constant*>(expr);
     if (constant) {
       return visitConstant(constant);
@@ -128,8 +124,6 @@ class ScalarExprVisitor {
   virtual T visitColumnVarTuple(const Analyzer::ExpressionTuple*) const {
     return defaultResult();
   }
-
-  virtual T visitIterator(const Analyzer::IterExpr*) const { return defaultResult(); }
 
   virtual T visitConstant(const Analyzer::Constant*) const { return defaultResult(); }
 

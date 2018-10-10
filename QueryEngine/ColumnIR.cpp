@@ -462,22 +462,6 @@ llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
       return inner_it->second.first;
     }
   }
-#ifdef ENABLE_JOIN_EXEC
-  else if (dynamic_cast<const Analyzer::IterExpr*>(expr)) {
-    const auto iter = static_cast<const Analyzer::IterExpr*>(expr);
-    const auto hash_pos_it = cgen_state_->scan_idx_to_hash_pos_.find(iter->get_rte_idx());
-    if (hash_pos_it != cgen_state_->scan_idx_to_hash_pos_.end()) {
-      return hash_pos_it->second;
-    }
-    const auto inner_it = cgen_state_->scan_to_iterator_.find(
-        InputDescriptor(iter->get_table_id(), iter->get_rte_idx()));
-    if (inner_it != cgen_state_->scan_to_iterator_.end()) {
-      CHECK(inner_it->second.first);
-      CHECK(inner_it->second.first->getType()->isIntegerTy(64));
-      return inner_it->second.first;
-    }
-  }
-#endif
   for (auto& arg : cgen_state_->row_func_->args()) {
     if (arg.getName() == "pos") {
       CHECK(arg.getType()->isIntegerTy(64));

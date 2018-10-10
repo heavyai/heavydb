@@ -20,7 +20,6 @@
 #include "CompilationOptions.h"
 #include "CudaAllocator.h"
 #include "GpuMemUtils.h"
-#include "IteratorTable.h"
 #include "Rendering/RenderInfo.h"
 #include "ResultSet.h"
 
@@ -56,9 +55,6 @@ class QueryExecutionContext : boost::noncopyable {
                       const QueryMemoryDescriptor& query_mem_desc) const;
   RowSetPtr groupBufferToResults(const size_t i,
                                  const std::vector<Analyzer::Expr*>& targets) const;
-
-  IterTabPtr getIterTab(const std::vector<Analyzer::Expr*>& targets,
-                        const ssize_t frag_idx) const;
 
   std::vector<int64_t*> launchGpuCode(
       const RelAlgExecutionUnit& ra_exe_unit,
@@ -123,10 +119,6 @@ class QueryExecutionContext : boost::noncopyable {
                           const std::vector<int64_t>& init_vals,
                           const int32_t groups_buffer_entry_count,
                           const bool keyless);
-
-  IterTabPtr groupBufferToTab(const size_t buf_idx,
-                              const ssize_t frag_idx,
-                              const std::vector<Analyzer::Expr*>& targets) const;
 
   uint32_t getFragmentStride(
       const RelAlgExecutionUnit& ra_exe_unit,

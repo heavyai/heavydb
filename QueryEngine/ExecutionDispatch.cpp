@@ -56,11 +56,9 @@ size_t get_mapped_frag_id_of_src_table(
 }
 
 bool needs_skip_result(const ResultPtr& res) {
-  if (auto rows = boost::get<RowSetPtr>(&res)) {
+  auto rows = boost::get<RowSetPtr>(&res);
+  if (rows) {
     return !*rows || (*rows)->definitelyHasNoRows();
-  } else if (auto tab = boost::get<IterTabPtr>(&res)) {
-    // Keep empty table in result array when no error
-    return !*tab;
   }
 
   return false;

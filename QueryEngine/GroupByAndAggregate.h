@@ -22,7 +22,6 @@
 #include "CompilationOptions.h"
 #include "GpuMemUtils.h"
 #include "InputMetadata.h"
-#include "IteratorTable.h"
 #include "QueryExecutionContext.h"
 #include "Rendering/RenderInfo.h"
 #include "RuntimeFunctions.h"

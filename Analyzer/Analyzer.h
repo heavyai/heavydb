@@ -1179,29 +1179,6 @@ class FunctionOperWithCustomTypeHandling : public FunctionOper {
 };
 
 /*
- * @type IterExpr
- * @brief Only used in RelJoin Node Codegen.
- */
-class IterExpr final : public Expr {
- public:
-  IterExpr(const SQLTypeInfo& ti, int r, int i) : Expr(ti), table_id(r), rte_idx(i) {}
-
-  int get_table_id() const { return table_id; }
-
-  int get_rte_idx() const { return rte_idx; }
-
-  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
-
-  bool operator==(const Expr& rhs) const override;
-
-  void print() const override;
-
- private:
-  int table_id;  // the global table id
-  int rte_idx;   // 0-based range table index.
-};
-
-/*
  * @type OffsetInFragment
  * @brief The offset of a row in the current fragment. To be used by updates.
  */
