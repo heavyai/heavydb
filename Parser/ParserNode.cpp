@@ -3529,7 +3529,7 @@ static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(
            {AccessPrivileges::EDIT_DASHBOARD, DashboardDBObjectType}},
           {{"VIEW DASHBOARD"s, DatabaseDBObjectType},
            {AccessPrivileges::VIEW_DASHBOARD, DashboardDBObjectType}},
-          {{"DELETE DASHBOARD"s, DashboardDBObjectType},
+          {{"DELETE DASHBOARD"s, DatabaseDBObjectType},
            {AccessPrivileges::DELETE_DASHBOARD, DashboardDBObjectType}},
           {{"VIEW"s, DashboardDBObjectType},
            {AccessPrivileges::VIEW_DASHBOARD, DashboardDBObjectType}},
