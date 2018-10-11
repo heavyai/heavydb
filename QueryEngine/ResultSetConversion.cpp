@@ -170,8 +170,9 @@ void create_or_append_validity(const ScalarTargetValue& value,
 
 namespace arrow {
 
-static TypePtr get_arrow_type(const SQLTypeInfo& mapd_type,
-                              const std::shared_ptr<Array>& dict_values) {
+static std::shared_ptr<DataType> get_arrow_type(
+    const SQLTypeInfo& mapd_type,
+    const std::shared_ptr<Array>& dict_values) {
   switch (get_physical_type(mapd_type)) {
     case kBOOLEAN:
       return boolean();
