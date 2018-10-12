@@ -460,7 +460,7 @@ std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_in
       }
     }
     case TDatumType::DATE: {
-      time_t t = datum.val.int_val;
+      time_t t = datum.val.int_val * 86400;
       std::tm tm_struct;
       gmtime_r(&t, &tm_struct);
       char buf[11];

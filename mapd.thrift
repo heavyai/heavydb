@@ -32,7 +32,8 @@ enum TEncodingType {
   DIFF,
   DICT,
   SPARSE,
-  GEOINT
+  GEOINT,
+  DATE_IN_DAYS
 }
 
 enum TExecuteMode {

@@ -1101,6 +1101,10 @@ void Constant::set_null_value() {
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
+      if (type_info.get_compression() == kENCODING_DATE_IN_DAYS) {
+        constval.timeval = (type_info.get_compression() == 16) ? NULL_SMALLINT : NULL_INT;
+        break;
+      }
 // @TODO(alex): store it as 64 bit on ARMv7l and remove the ifdef
 #ifdef __ARM_ARCH_7A__
       static_assert(sizeof(time_t) == 4, "Unsupported time_t size");
@@ -1144,7 +1148,9 @@ std::shared_ptr<Analyzer::Expr> Constant::add_cast(const SQLTypeInfo& new_type_i
   if (new_type_info.get_compression() != type_info.get_compression()) {
     if (new_type_info.get_compression() != kENCODING_NONE) {
       SQLTypeInfo new_ti = new_type_info;
-      new_ti.set_compression(kENCODING_NONE);
+      if (new_ti.get_compression() != kENCODING_DATE_IN_DAYS) {
+        new_ti.set_compression(kENCODING_NONE);
+      }
       do_cast(new_ti);
     }
     return Expr::add_cast(new_type_info);

@@ -120,7 +120,8 @@ inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
 }
 
 inline int64_t inline_fixed_encoding_null_val(const SQLTypeInfo& ti) {
-  if (ti.get_compression() == kENCODING_NONE) {
+  if (ti.get_compression() == kENCODING_NONE &&
+      (ti.get_compression() == kENCODING_DATE_IN_DAYS && ti.get_comp_param() != 16)) {
     return inline_int_null_val(ti);
   }
   if (ti.get_compression() == kENCODING_DICT) {
@@ -136,7 +137,8 @@ inline int64_t inline_fixed_encoding_null_val(const SQLTypeInfo& ti) {
         CHECK(false);
     }
   }
-  CHECK_EQ(kENCODING_FIXED, ti.get_compression());
+  CHECK((ti.get_compression() == kENCODING_FIXED) ||
+        (ti.get_compression() == kENCODING_DATE_IN_DAYS));
   CHECK(ti.is_integer() || ti.is_time() || ti.is_decimal());
   CHECK_EQ(0, ti.get_comp_param() % 8);
   return -(1L << (ti.get_comp_param() - 1));

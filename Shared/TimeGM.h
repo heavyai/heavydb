@@ -27,6 +27,7 @@ class TimeGM {
  public:
   time_t my_timegm(const struct tm* tm);
   time_t my_timegm(const struct tm* tm, const time_t& fsc, const SQLTypeInfo& ti);
+  time_t my_timegm_days(const struct tm* tm);
   time_t parse_fractional_seconds(uint64_t sfrac,
                                   const int ntotal,
                                   const SQLTypeInfo& ti);

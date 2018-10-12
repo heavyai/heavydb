@@ -2703,6 +2703,7 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
     cd.columnType.set_dimension(t->get_param1());
     cd.columnType.set_scale(t->get_param2());
   }
+  SQLTypes type = cd.columnType.get_type();
   const ColumnConstraintDef* cc = coldef->get_column_constraint();
   if (cc == nullptr) {
     cd.columnType.set_notnull(false);
@@ -2729,7 +2730,9 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
       cd.columnType.set_compression(kENCODING_GEOINT);
       cd.columnType.set_comp_param(32);
     } else {
-      cd.columnType.set_compression(kENCODING_NONE);
+      // Days encoding for DATE
+      (type == kDATE) ? cd.columnType.set_compression(kENCODING_DATE_IN_DAYS)
+                      : cd.columnType.set_compression(kENCODING_NONE);
       cd.columnType.set_comp_param(0);
     }
   } else {
@@ -2743,7 +2746,6 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
             ": Fixed encoding is only supported for integer or time columns.");
       }
       // fixed-bits encoding
-      SQLTypes type = cd.columnType.get_type();
       if (type == kARRAY) {
         type = cd.columnType.get_subtype();
       }
@@ -2773,7 +2775,6 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
           }
           break;
         case kTIMESTAMP:
-        case kDATE:
         case kTIME:
           if (compression->get_encoding_param() != 32) {
             throw std::runtime_error(cd.columnName +
@@ -2802,12 +2803,19 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
                 cd.columnName + ": Precision too high for Fixed(16) encoding, max 4.");
           }
 
+        case kDATE:
+          if (compression->get_encoding_param() != 16) {
+            throw std::runtime_error(cd.columnName +
+                                     ": Compression parameter for Fixed encoding on "
+                                     "DATE must 16.");
+          }
           break;
         default:
           throw std::runtime_error(cd.columnName + ": Cannot apply FIXED encoding to " +
                                    t->to_string());
       }
-      cd.columnType.set_compression(kENCODING_FIXED);
+      (type == kDATE) ? cd.columnType.set_compression(kENCODING_DATE_IN_DAYS)
+                      : cd.columnType.set_compression(kENCODING_FIXED);
       cd.columnType.set_comp_param(compression->get_encoding_param());
     } else if (boost::iequals(comp, "rl")) {
       // run length encoding

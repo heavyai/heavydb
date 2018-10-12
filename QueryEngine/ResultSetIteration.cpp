@@ -759,11 +759,14 @@ int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch,
        type_info.get_size() < type_info.get_logical_size() && type_info.get_comp_param())
           ? fixed_width_unsigned_decode_noinline(byte_stream, type_bitwidth / 8, pos)
           : fixed_width_int_decode_noinline(byte_stream, type_bitwidth / 8, pos);
-  if (type_info.get_compression() != kENCODING_NONE) {
+  if (type_info.get_compression() != kENCODING_NONE &&
+      (type_info.get_compression() == kENCODING_DATE_IN_DAYS &&
+       type_info.get_comp_param() != 16)) {
     CHECK(type_info.get_compression() == kENCODING_FIXED ||
-          type_info.get_compression() == kENCODING_DICT);
+          type_info.get_compression() == kENCODING_DICT ||
+          type_info.get_compression() == kENCODING_DATE_IN_DAYS);
     auto encoding = type_info.get_compression();
-    if (encoding == kENCODING_FIXED) {
+    if (encoding == kENCODING_FIXED || encoding == kENCODING_DATE_IN_DAYS) {
       encoding = kENCODING_NONE;
     }
     SQLTypeInfo col_logical_ti(type_info.get_type(),

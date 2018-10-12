@@ -123,14 +123,15 @@ union DataBlockPtr {
 
 // must not change because these values persist in catalogs.
 enum EncodingType {
-  kENCODING_NONE = 0,    // no encoding
-  kENCODING_FIXED = 1,   // Fixed-bit encoding
-  kENCODING_RL = 2,      // Run Length encoding
-  kENCODING_DIFF = 3,    // Differential encoding
-  kENCODING_DICT = 4,    // Dictionary encoding
-  kENCODING_SPARSE = 5,  // Null encoding for sparse columns
-  kENCODING_GEOINT = 6,  // Encoding coordinates as intergers
-  kENCODING_LAST = 7
+  kENCODING_NONE = 0,          // no encoding
+  kENCODING_FIXED = 1,         // Fixed-bit encoding
+  kENCODING_RL = 2,            // Run Length encoding
+  kENCODING_DIFF = 3,          // Differential encoding
+  kENCODING_DICT = 4,          // Dictionary encoding
+  kENCODING_SPARSE = 5,        // Null encoding for sparse columns
+  kENCODING_GEOINT = 6,        // Encoding coordinates as intergers
+  kENCODING_DATE_IN_DAYS = 7,  // Date encoding in days
+  kENCODING_LAST = 8
 };
 
 #include "SQLTypeUtilities.h"
@@ -256,7 +257,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
   HOST DEVICE inline int get_comp_param() const { return comp_param; }
   HOST DEVICE inline int get_size() const { return size; }
   inline int get_logical_size() const {
-    if (compression == kENCODING_FIXED) {
+    if (compression == kENCODING_FIXED || compression == kENCODING_DATE_IN_DAYS) {
       SQLTypeInfoCore ti(type, dimension, scale, notnull, kENCODING_NONE, 0, subtype);
       return ti.get_size();
     }
@@ -473,6 +474,9 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
       case kTIME:
       case kTIMESTAMP:
       case kDATE:
+        if (compression == kENCODING_DATE_IN_DAYS) {
+          return d.timeval == NULL_INT;
+        }
 // @TODO(alex): remove the ifdef
 #ifdef __ARM_ARCH_7A__
 #ifndef __CUDACC__
@@ -636,6 +640,16 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
           case kENCODING_SPARSE:
             assert(false);
             break;
+          case kENCODING_DATE_IN_DAYS:
+            switch (comp_param) {
+              case 0:
+                return sizeof(int32_t);
+              case 16:
+                return 2;
+              default:
+                assert(false);
+                break;
+            }
           default:
             assert(false);
         }

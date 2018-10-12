@@ -80,6 +80,26 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
       }
       break;
     }
+    case kENCODING_DATE_IN_DAYS: {
+      switch (sqlType.get_type()) {
+        case kDATE:
+          switch (sqlType.get_comp_param()) {
+            case 16:
+              return new FixedLengthEncoder<int32_t, int16_t>(buffer);
+              break;
+            case 0:
+              return new NoneEncoder<int32_t>(buffer);
+              break;
+            default:
+              return 0;
+              break;
+          }
+          break;
+        default:
+          return 0;
+          break;
+      }
+    }
     case kENCODING_FIXED: {
       switch (sqlType.get_type()) {
         case kSMALLINT: {

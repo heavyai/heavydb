@@ -95,22 +95,26 @@ time_t TimeGM::parse_meridians(const time_t& timeval,
 /*
  * Code adapted from Python 2.4.1 sources (Lib/calendar.py).
  */
-time_t TimeGM::my_timegm(const struct tm* tm) {
+time_t TimeGM::my_timegm_days(const struct tm* tm) {
   int32_t year;
+  time_t days;
+  year = 1900 + tm->tm_year;
+  days = 365 * (year - 1970) + leap_days(1970, year);
+  days += monoff[tm->tm_mon];
+  if (tm->tm_mon > 1 && is_leap_year(year)) {
+    ++days;
+  }
+  days += tm->tm_mday - 1;
+  return days;
+}
+
+time_t TimeGM::my_timegm(const struct tm* tm) {
   time_t days;
   time_t hours;
   time_t minutes;
   time_t seconds;
 
-  year = 1900 + tm->tm_year;
-  days = 365 * (year - 1970) + leap_days(1970, year);
-  days += monoff[tm->tm_mon];
-
-  if (tm->tm_mon > 1 && is_leap_year(year)) {
-    ++days;
-  }
-  days += tm->tm_mday - 1;
-
+  days = my_timegm_days(tm);
   hours = days * 24 + tm->tm_hour;
   minutes = hours * 60 + tm->tm_min;
   seconds = minutes * 60 + tm->tm_sec;
