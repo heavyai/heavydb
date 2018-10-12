@@ -45,6 +45,11 @@ public class ViewPermissionsTest {
 
     su.runSql("CREATE DATABASE db1;");
 
+    su.runSql("GRANT ACCESS on database db1 TO bob;");
+    su.runSql("GRANT ACCESS on database db1 TO bill;");
+    su.runSql("GRANT ACCESS on database db1 TO foo;");
+    su.runSql("GRANT ACCESS on database db1 TO dba;");
+
     MapdTestClient dba =
             MapdTestClient.getClient("localhost", 9091, "db1", "dba", "password");
     MapdTestClient bill =
@@ -88,6 +93,16 @@ public class ViewPermissionsTest {
 
     su.runSql("CREATE DATABASE db1;");
     su.runSql("CREATE DATABASE db2;");
+
+    su.runSql("GRANT ACCESS on database db1 TO bob;");
+    su.runSql("GRANT ACCESS on database db1 TO bill;");
+    su.runSql("GRANT ACCESS on database db1 TO foo;");
+    su.runSql("GRANT ACCESS on database db1 TO dba;");
+
+    su.runSql("GRANT ACCESS on database db2 TO bob;");
+    su.runSql("GRANT ACCESS on database db2 TO bill;");
+    su.runSql("GRANT ACCESS on database db2 TO foo;");
+    su.runSql("GRANT ACCESS on database db2 TO dba;");
 
     MapdTestClient dba =
             MapdTestClient.getClient("localhost", 9091, "db1", "dba", "password");

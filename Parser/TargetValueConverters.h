@@ -18,6 +18,7 @@
 #define TARGET_VALUE_CONVERTERS_H_
 
 #include "../Catalog/Catalog.h"
+#include "../Import/Importer.h"
 #include "../Shared/sqldefs.h"
 #include "../Shared/sqltypes.h"
 
@@ -339,9 +340,9 @@ struct GeoPointValueConverter : public TargetValueConverter {
   }
 };
 
-inline ArrayDatum compute_bounds_of_coords(
+inline std::vector<double> compute_bounds_of_coords(
     const std::shared_ptr<std::vector<double>>& coords) {
-  double* bounds = reinterpret_cast<double*>(checked_malloc(sizeof(double) * 4));
+  std::vector<double> bounds(4);
   constexpr auto DOUBLE_MAX = std::numeric_limits<double>::max();
   constexpr auto DOUBLE_MIN = std::numeric_limits<double>::lowest();
   bounds[0] = DOUBLE_MAX;
@@ -359,7 +360,22 @@ inline ArrayDatum compute_bounds_of_coords(
     bounds[2] = std::max(bounds[2], x);
     bounds[3] = std::max(bounds[3], y);
   }
-  return ArrayDatum(4 * sizeof(double), reinterpret_cast<int8_t*>(bounds), false);
+  return bounds;
+}
+
+template <typename ELEM_TYPE>
+inline ArrayDatum to_array_datum(const std::vector<ELEM_TYPE>& vector) {
+  ELEM_TYPE* array =
+      reinterpret_cast<ELEM_TYPE*>(checked_malloc(sizeof(ELEM_TYPE) * vector.size()));
+  memcpy(array, vector.data(), vector.size() * sizeof(ELEM_TYPE));
+
+  return ArrayDatum(
+      (int)(vector.size() * sizeof(ELEM_TYPE)), reinterpret_cast<int8_t*>(array), false);
+}
+
+template <typename ELEM_TYPE>
+inline ArrayDatum to_array_datum(const std::shared_ptr<std::vector<ELEM_TYPE>>& vector) {
+  return to_array_datum(*vector.get());
 }
 
 struct GeoLinestringValueConverter : public GeoPointValueConverter {
@@ -395,7 +411,8 @@ struct GeoLinestringValueConverter : public GeoPointValueConverter {
 
     (*column_data_)[row] = "";
     (*signed_compressed_coords_data_)[row] = toCompressedCoords(geoLinestring->coords);
-    (*bounds_data_)[row] = compute_bounds_of_coords(geoLinestring->coords);
+    auto bounds = compute_bounds_of_coords(geoLinestring->coords);
+    (*bounds_data_)[row] = to_array_datum(bounds);
   }
 
   virtual void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) {
@@ -410,19 +427,11 @@ struct GeoLinestringValueConverter : public GeoPointValueConverter {
   }
 };
 
-inline ArrayDatum to_array_datum(const std::shared_ptr<std::vector<int32_t>>& vector) {
-  int32_t* array =
-      reinterpret_cast<int32_t*>(checked_malloc(sizeof(int32_t) * vector->size()));
-  memcpy(array, vector->data(), vector->size() * sizeof(int32_t));
-
-  return ArrayDatum(
-      (int)(vector->size() * sizeof(int32_t)), reinterpret_cast<int8_t*>(array), false);
-}
-
 struct GeoPolygonValueConverter : public GeoPointValueConverter {
   const ColumnDescriptor* ring_sizes_column_descriptor_;
   const ColumnDescriptor* bounds_column_descriptor_;
   const ColumnDescriptor* render_group_column_descriptor_;
+  Importer_NS::RenderGroupAnalyzer render_group_analyzer_;
 
   std::unique_ptr<std::vector<ArrayDatum>> ring_sizes_data_;
   std::unique_ptr<std::vector<ArrayDatum>> bounds_data_;
@@ -466,8 +475,10 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
     (*column_data_)[row] = "";
     (*signed_compressed_coords_data_)[row] = toCompressedCoords(geoPoly->coords);
     (*ring_sizes_data_)[row] = to_array_datum(geoPoly->ring_sizes);
-    (*bounds_data_)[row] = compute_bounds_of_coords(geoPoly->coords);
-    render_group_data_[row] = 0;
+    auto bounds = compute_bounds_of_coords(geoPoly->coords);
+    (*bounds_data_)[row] = to_array_datum(bounds);
+    render_group_data_[row] =
+        render_group_analyzer_.insertBoundsAndReturnRenderGroup(bounds);
   }
 
   virtual void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) {
@@ -495,6 +506,7 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
   const ColumnDescriptor* ring_sizes_solumn_descriptor_;
   const ColumnDescriptor* bounds_column_descriptor_;
   const ColumnDescriptor* render_group_column_descriptor_;
+  Importer_NS::RenderGroupAnalyzer render_group_analyzer_;
 
   std::unique_ptr<std::vector<ArrayDatum>> ring_sizes_data_;
   std::unique_ptr<std::vector<ArrayDatum>> poly_rings_data_;
@@ -544,8 +556,10 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
     (*signed_compressed_coords_data_)[row] = toCompressedCoords(geoMultiPoly->coords);
     (*ring_sizes_data_)[row] = to_array_datum(geoMultiPoly->ring_sizes);
     (*poly_rings_data_)[row] = to_array_datum(geoMultiPoly->poly_rings);
-    (*bounds_data_)[row] = compute_bounds_of_coords(geoMultiPoly->coords);
-    render_group_data_[row] = 0;
+    auto bounds = compute_bounds_of_coords(geoMultiPoly->coords);
+    (*bounds_data_)[row] = to_array_datum(bounds);
+    render_group_data_[row] =
+        render_group_analyzer_.insertBoundsAndReturnRenderGroup(bounds);
   }
 
   virtual void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) {

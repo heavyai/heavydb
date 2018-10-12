@@ -784,8 +784,19 @@ INSTANTIATE_TEST_CASE_P(
                                                                        TIMESTAMP}));
 
 int main(int argc, char* argv[]) {
-  testing::InitGoogleTest(&argc, argv);
-  google::InitGoogleLogging(argv[0]);
-  g_session.reset(QueryRunner::get_session(BASE_PATH));
-  return RUN_ALL_TESTS();
+  int err = 0;
+
+  try {
+    testing::InitGoogleTest(&argc, argv);
+    google::InitGoogleLogging(argv[0]);
+    g_session.reset(QueryRunner::get_session(BASE_PATH));
+
+    err = RUN_ALL_TESTS();
+
+  } catch (const std::exception& e) {
+    LOG(ERROR) << e.what();
+    err = -1;
+  }
+
+  return err;
 }
