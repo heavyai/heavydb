@@ -508,11 +508,17 @@ if(DOXYGEN_FOUND)
 endif(DOXYGEN_FOUND)
 
 # Packaging
+
+string(TOLOWER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_LOWER)
+if(NOT "${CMAKE_BUILD_TYPE_LOWER}" STREQUAL "debug" AND NOT "${CMAKE_BUILD_TYPE_LOWER}" STREQUAL "relwithdebinfo")
+  set(CPACK_STRIP_FILES ON)
+else()
+  set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-debug")
+endif()
 set(CPACK_PACKAGE_VENDOR "MapD Technologies, Inc.")
 set(CPACK_PACKAGE_CONTACT "support@mapd.com")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "MapD Core Database")
 set(CPACK_PROJECT_CONFIG_FILE ${CMAKE_SOURCE_DIR}/CMakePackaging.txt)
-set(CPACK_STRIP_FILES ON)
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "default-jre-headless | openjdk-8-jre-headless | java8-runtime-headless, bsdmainutils, curl | wget")
 set(CPACK_RPM_PACKAGE_REQUIRES "java-headless, util-linux, curl")
 set(CPACK_RPM_PACKAGE_AUTOREQ OFF)
