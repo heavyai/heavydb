@@ -613,6 +613,10 @@ class Executor {
   llvm::Value* codegenCastTimestampToDate(llvm::Value* ts_lv,
                                           const int dimen,
                                           const bool nullable);
+  llvm::Value* codegenCastBetweenTimestamps(llvm::Value* ts_lv,
+                                            const int operand_dimen,
+                                            const int target_dimen,
+                                            const bool nullable);
   llvm::Value* codegenCastFromString(llvm::Value* operand_lv,
                                      const SQLTypeInfo& operand_ti,
                                      const SQLTypeInfo& ti,

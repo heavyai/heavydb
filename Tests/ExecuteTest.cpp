@@ -7050,6 +7050,25 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(1418509415323L,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(SECOND, 20, m_3) FROM test limit 1;", dt)));
+
+    // Precisions Cast Tests
+    // TODO(Wamsi): Add test for microsecond and nanosecond
+    // once the calcite issue regarding support above milliseconds is resolved
+    ASSERT_EQ(1418509395000,
+              v<int64_t>(run_simple_agg(
+                  "SELECT CAST(m as TIMESTAMP(3)) FROM test limit 1;", dt)));
+    ASSERT_EQ(g_num_rows + g_num_rows,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM test where CAST(m as TIMESTAMP(3)) < m_3", dt)));
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM test where CAST(m as TIMESTAMP(3)) > m_3;", dt)));
+    ASSERT_EQ(1418509395,
+              v<int64_t>(run_simple_agg(
+                  "SELECT CAST(m_3 as TIMESTAMP(0)) FROM test limit 1;", dt)));
+    ASSERT_EQ(g_num_rows + g_num_rows,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM test where CAST(m_3 as TIMESTAMP(0)) = m", dt)));
   }
 }
 

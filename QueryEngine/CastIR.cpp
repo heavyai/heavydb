@@ -68,6 +68,10 @@ llvm::Value* Executor::codegenCast(llvm::Value* operand_lv,
       return codegenCastTimestampToDate(
           operand_lv, operand_ti.get_dimension(), !ti.get_notnull());
     }
+    if (operand_ti.get_type() == kTIMESTAMP && ti.get_type() == kTIMESTAMP) {
+      return codegenCastBetweenTimestamps(
+          operand_lv, operand_ti.get_dimension(), ti.get_dimension(), !ti.get_notnull());
+    }
     if (ti.is_integer() || ti.is_decimal() || ti.is_time()) {
       return codegenCastBetweenIntTypes(operand_lv, operand_ti, ti);
     } else {
@@ -103,6 +107,35 @@ llvm::Value* Executor::codegenCastTimestampToDate(llvm::Value* ts_lv,
   }
   return cgen_state_->emitExternalCall(
       datetrunc_fname, get_int_type(64, cgen_state_->context_), datetrunc_args);
+}
+
+llvm::Value* Executor::codegenCastBetweenTimestamps(llvm::Value* ts_lv,
+                                                    const int operand_dimen,
+                                                    const int target_dimen,
+                                                    const bool nullable) {
+  static_assert(sizeof(time_t) == 4 || sizeof(time_t) == 8, "Unsupported time_t size");
+  CHECK(ts_lv->getType()->isIntegerTy(32) || ts_lv->getType()->isIntegerTy(64));
+  if (sizeof(time_t) == 4 && ts_lv->getType()->isIntegerTy(64)) {
+    ts_lv = cgen_state_->ir_builder_.CreateCast(llvm::Instruction::CastOps::Trunc,
+                                                ts_lv,
+                                                get_int_type(32, cgen_state_->context_));
+  }
+  static const std::string fname{"DateTruncateAlterPrecision"};
+  static const std::string fname_nullable{"DateTruncateAlterPrecisionNullable"};
+  const auto result = timestamp_precisions_lookup_.find(target_dimen);
+  CHECK(result != timestamp_precisions_lookup_.end());
+  std::vector<llvm::Value*> f_args{ll_int(static_cast<int32_t>(result->second)),
+                                   ts_lv,
+                                   ll_int(static_cast<int32_t>(operand_dimen)),
+                                   ll_int(static_cast<int32_t>(target_dimen))};
+  if (nullable) {
+    f_args.push_back(inlineIntNull(
+        SQLTypeInfo(ts_lv->getType()->isIntegerTy(64) ? kBIGINT : kINT, false)));
+    return cgen_state_->emitExternalCall(
+        fname_nullable, get_int_type(64, cgen_state_->context_), f_args);
+  }
+  return cgen_state_->emitExternalCall(
+      fname, get_int_type(64, cgen_state_->context_), f_args);
 }
 
 llvm::Value* Executor::codegenCastFromString(llvm::Value* operand_lv,

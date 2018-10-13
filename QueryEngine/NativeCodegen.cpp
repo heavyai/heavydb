@@ -363,6 +363,8 @@ declare i64 @DateTruncate(i32, i64);
 declare i64 @DateTruncateNullable(i32, i64, i64);
 declare i64 @DateTruncateHighPrecision(i32, i64, i32);
 declare i64 @DateTruncateHighPrecisionNullable(i32, i64, i32, i64);
+declare i64 @DateTruncateAlterPrecision(i32, i64, i32, i32);
+declare i64 @DateTruncateAlterPrecisionNullable(i32, i64, i32, i32, i64);
 declare i64 @DateDiff(i32, i64, i64, i32, i32);
 declare i64 @DateDiffNullable(i32, i64, i64, i32, i32, i64);
 declare i64 @DateAdd(i32, i64, i64, i32);

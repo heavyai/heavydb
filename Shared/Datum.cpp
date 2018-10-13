@@ -217,9 +217,9 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
         time_t fsc;
         if (*p == '.') {
           p++;
-          uint frac_num = 0;
+          uint64_t frac_num = 0;
           int ntotal = 0;
-          sscanf(p, "%u%n", &frac_num, &ntotal);
+          sscanf(p, "%lu%n", &frac_num, &ntotal);
           fsc = TimeGM::instance().parse_fractional_seconds(frac_num, ntotal, ti);
         } else if (*p == '\0') {
           fsc = 0;

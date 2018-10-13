@@ -18,6 +18,7 @@
 #define QUERYENGINE_DATETRUNCATE_H
 
 #include <stdint.h>
+#include <map>
 
 #include "../Shared/funcannotations.h"
 #include "ExtractFromTime.h"
@@ -57,6 +58,12 @@ enum DatetruncField {
   dtQUARTERDAY,
   dtINVALID
 };
+
+static const std::map<int, DatetruncField> timestamp_precisions_lookup_{
+    {0, DatetruncField::dtSECOND},
+    {3, DatetruncField::dtMILLISECOND},
+    {6, DatetruncField::dtMICROSECOND},
+    {9, DatetruncField::dtNANOSECOND}};
 
 extern "C" NEVER_INLINE DEVICE time_t DateTruncate(DatetruncField field, time_t timeval);
 
