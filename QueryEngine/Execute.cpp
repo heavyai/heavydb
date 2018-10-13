@@ -2201,6 +2201,7 @@ int32_t Executor::executePlanWithGroupBy(
     CHECK(!query_exe_context->query_mem_desc_.sortOnGpu());
     results =
         query_exe_context->getRowSet(ra_exe_unit, query_exe_context->query_mem_desc_);
+    CHECK(results);
     results->holdLiterals(hoist_buf);
   }
   if (error_code && (render_allocator_map_ptr ||

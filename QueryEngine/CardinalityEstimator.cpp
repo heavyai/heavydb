@@ -60,6 +60,9 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
     throw std::runtime_error("Failed to run the cardinality estimation query: " +
                              getErrorMessageFromCode(error_code));
   }
+  if (!estimator_result) {
+    return 1;
+  }
   return std::max(estimator_result->getNDVEstimator(), size_t(1));
 }
 
