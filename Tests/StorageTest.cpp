@@ -171,7 +171,7 @@ TEST(StorageLarge, Numbers) {
   ASSERT_NO_THROW(run_ddl_statement("drop table if exists numbers;"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
   EXPECT_TRUE(storage_test("numbers", LARGE));
   ASSERT_NO_THROW(run_ddl_statement("drop table numbers;"););
@@ -191,7 +191,7 @@ TEST(StorageSmall, AllTypes) {
   ASSERT_NO_THROW(
 #ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
       run_ddl_statement("create table alltypes (a smallint, b int, c bigint, d "
-                        "numeric(7,3), e double, f float, "
+                        "numeric(17,3), e double, f float, "
                         "g timestamp(0), g_3 timestamp(3), g_6 timestamp(6), g_9 "
                         "timestamp(9), h time(0), i date, "
                         "x varchar(10) encoding none, y text encoding none);");
@@ -211,7 +211,7 @@ TEST(StorageRename, AllTypes) {
   ASSERT_NO_THROW(
 #ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
       run_ddl_statement("create table original_table (a smallint, b int, c bigint, d "
-                        "numeric(7,3), e double, f float, "
+                        "numeric(17,3), e double, f float, "
                         "g timestamp(0), g_3 timestamp(3), g_6 timestamp(6), g_9 "
                         "timestamp(9), h time(0), i date, "
                         "x varchar(10) encoding none, y text encoding none);");
@@ -228,7 +228,7 @@ TEST(StorageRename, AllTypes) {
   ASSERT_NO_THROW(
 #ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
       run_ddl_statement("create table new_table (a smallint, b int, c bigint, d "
-                        "numeric(7,3), e double, f float, "
+                        "numeric(17,3), e double, f float, "
                         "g timestamp(0), g_3 timestamp(3), g_6 timestamp(6), g_9 "
                         "timestamp(9), h time(0), i date, "
                         "x varchar(10) encoding none, y text encoding none);");
@@ -250,7 +250,7 @@ TEST(StorageRename, AllTypes) {
   ASSERT_NO_THROW(
 #ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
       run_ddl_statement("create table new_table (a smallint, b int, c bigint, d "
-                        "numeric(7,3), e double, f float, "
+                        "numeric(17,3), e double, f float, "
                         "g timestamp(0), g_3 timestamp(3), g_6 timestamp(6), g_9 "
                         "timestamp(9), h time(0), i date, "
                         "x varchar(10) encoding none, y text encoding none);");
@@ -271,7 +271,8 @@ TEST(StorageSmallParallel, AllTypes) {
   ASSERT_NO_THROW(
 #ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
       run_ddl_statement(
-          "create table alltypes (a smallint, b int, c bigint, d numeric(7,3), e double, "
+          "create table alltypes (a smallint, b int, c bigint, d numeric(17,3), e "
+          "double, "
           "f float, "
           "g timestamp(0), g_3 timestamp(3), g_6 timestamp(6), g_9 timestamp(9), "
           "h time(0), i date, x varchar(10) encoding none, y text encoding none);");

@@ -4003,6 +4003,42 @@ void import_big_decimal_range_test() {
   }
 }
 
+void import_decimal_compression_test() {
+  const std::string decimal_compression_test(
+      "DROP TABLE IF EXISTS decimal_compression_test;");
+  run_ddl_statement(decimal_compression_test);
+  g_sqlite_comparator.query(decimal_compression_test);
+  run_ddl_statement(
+      "CREATE TABLE decimal_compression_test(big_dec DECIMAL(17, 2), med_dec DECIMAL(9, "
+      "2), small_dec DECIMAL(4, 2)) WITH (fragment_size=2);");
+  g_sqlite_comparator.query(
+      "CREATE TABLE decimal_compression_test(big_dec DECIMAL(17, 2), med_dec DECIMAL(9, "
+      "2), small_dec DECIMAL(4, 2));");
+  {
+    const std::string insert_query{
+        "INSERT INTO decimal_compression_test VALUES(999999999999999.99, 9999999.99, "
+        "99.99);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{
+        "INSERT INTO decimal_compression_test VALUES(-999999999999999.99, -9999999.99, "
+        "-99.99);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{
+        "INSERT INTO decimal_compression_test VALUES(12.2382, 12.2382 , 12.2382);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    // sqlite does not do automatic rounding
+    const std::string sqlite_insert_query{
+        "INSERT INTO decimal_compression_test VALUES(12.24, 12.24 , 12.24);"};
+    g_sqlite_comparator.query(sqlite_insert_query);
+  }
+}
+
 void import_subquery_test() {
   const std::string subquery_test("DROP TABLE IF EXISTS subquery_test;");
   run_ddl_statement(subquery_test);
@@ -4698,6 +4734,56 @@ TEST(Select, BigDecimalRange) {
     c("select 2*d1 from big_decimal_range_test;", dt);
     c("select d1 * (CAST(d1 as INT) + 1) from big_decimal_range_test;", dt);
     c("select (CAST(d1 as INT) + 1) * d1 from big_decimal_range_test;", dt);
+  }
+}
+
+TEST(Select, DecimalCompression) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    std::string mapd_sql = "";
+    std::string sqlite_sql = "";
+
+    mapd_sql =
+        "SELECT AVG(big_dec), AVG(med_dec), AVG(small_dec) FROM "
+        "decimal_compression_test;";
+    sqlite_sql =
+        "SELECT 1.0*AVG(big_dec), 1.0*AVG(med_dec), 1.0*AVG(small_dec) FROM "
+        "decimal_compression_test;";
+    c(mapd_sql, sqlite_sql, dt);
+
+    mapd_sql =
+        "SELECT SUM(big_dec), SUM(med_dec), SUM(small_dec) FROM "
+        "decimal_compression_test;";
+    sqlite_sql =
+        "SELECT 1.0*SUM(big_dec), 1.0*SUM(med_dec), 1.0*SUM(small_dec) FROM "
+        "decimal_compression_test;";
+    c(mapd_sql, sqlite_sql, dt);
+
+    mapd_sql =
+        "SELECT MIN(big_dec), MIN(med_dec), MIN(small_dec) FROM "
+        "decimal_compression_test;";
+    sqlite_sql =
+        "SELECT 1.0*MIN(big_dec), 1.0*MIN(med_dec), 1.0*MIN(small_dec) FROM "
+        "decimal_compression_test;";
+    c(mapd_sql, sqlite_sql, dt);
+
+    mapd_sql =
+        "SELECT MAX(big_dec), MAX(med_dec), MAX(small_dec) FROM "
+        "decimal_compression_test;";
+    sqlite_sql =
+        "SELECT 1.0*MAX(big_dec), 1.0*MAX(med_dec), 1.0*MAX(small_dec) FROM "
+        "decimal_compression_test;";
+    c(mapd_sql, sqlite_sql, dt);
+
+    mapd_sql =
+        "SELECT big_dec, COUNT(*) as n, AVG(med_dec) as med_dec_avg, SUM(small_dec) as "
+        "small_dec_sum FROM decimal_compression_test GROUP BY big_dec ORDER BY "
+        "small_dec_sum;";
+    sqlite_sql =
+        "SELECT 1.0*big_dec, COUNT(*) as n, 1.0*AVG(med_dec) as med_dec_avg, "
+        "1.0*SUM(small_dec) as small_dec_sum FROM decimal_compression_test GROUP BY "
+        "big_dec ORDER BY small_dec_sum;";
+    c(mapd_sql, sqlite_sql, dt);
   }
 }
 
@@ -11603,6 +11689,12 @@ int create_and_populate_tables(bool with_delete_support = true) {
     return -EEXIST;
   }
   try {
+    import_decimal_compression_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'decimal_compression_test";
+    return -EEXIST;
+  }
+  try {
     import_subquery_test();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'subquery_test'";
@@ -11813,6 +11905,8 @@ void drop_tables() {
   run_ddl_statement(drop_query_rewrite_test);
   const std::string drop_big_decimal_range_test{"DROP TABLE big_decimal_range_test;"};
   run_ddl_statement(drop_big_decimal_range_test);
+  const std::string drop_decimal_compression_test{"DROP TABLE decimal_compression_test;"};
+  run_ddl_statement(drop_decimal_compression_test);
   g_sqlite_comparator.query(drop_query_rewrite_test);
   const std::string drop_array_test{"DROP TABLE array_test;"};
   run_ddl_statement(drop_array_test);

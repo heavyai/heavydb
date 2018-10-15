@@ -88,7 +88,7 @@ inline bool detect_overflow_and_underflow(const T a,
 }
 
 inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
-  auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+  auto type = ti.get_type();
   if (ti.is_string()) {
     CHECK_EQ(kENCODING_DICT, ti.get_compression());
     CHECK_EQ(4, ti.get_logical_size());
@@ -110,6 +110,9 @@ inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
     case kDATE:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
+      return inline_int_null_value<int64_t>();
+    case kDECIMAL:
+    case kNUMERIC:
       return inline_int_null_value<int64_t>();
     default:
       abort();

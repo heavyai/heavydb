@@ -463,8 +463,7 @@ int Executor::deviceCount(const ExecutorDeviceType device_type) const {
 }
 
 llvm::ConstantInt* Executor::inlineIntNull(const SQLTypeInfo& type_info) {
-  auto type =
-      type_info.is_decimal() ? decimal_to_int_type(type_info) : type_info.get_type();
+  auto type = type_info.get_type();
   if (type_info.is_string()) {
     switch (type_info.get_compression()) {
       case kENCODING_DICT:
@@ -490,6 +489,9 @@ llvm::ConstantInt* Executor::inlineIntNull(const SQLTypeInfo& type_info) {
     case kDATE:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
+      return ll_int(inline_int_null_val(type_info));
+    case kDECIMAL:
+    case kNUMERIC:
       return ll_int(inline_int_null_val(type_info));
     case kARRAY:
       return ll_int(int64_t(0));
@@ -2294,7 +2296,9 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     } else {
       const auto it_ok = col_buffers.emplace(
           col_id,
-          std::unique_ptr<uint8_t[]>(new uint8_t[cd->columnType.get_logical_size()]));
+          std::unique_ptr<uint8_t[]>(
+              new uint8_t[cd->columnType.get_logical_size()]()));  // changed to zero-init
+                                                                   // the buffer
       CHECK(it_ok.second);
     }
     col_descriptors.push_back(cd);
@@ -2316,8 +2320,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     CHECK(col_cv);
     const auto cd = col_descriptors[col_idx];
     auto col_datum = col_cv->get_constval();
-    auto col_type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType)
-                                                : cd->columnType.get_type();
+    auto col_type = cd->columnType.get_type();
     uint8_t* col_data_bytes{nullptr};
     if (!cd->columnType.is_array() && !cd->columnType.is_geometry() &&
         (!cd->columnType.is_string() ||
@@ -2354,7 +2357,9 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
         int_col_val = col_datum.intval;
         break;
       }
-      case kBIGINT: {
+      case kBIGINT:
+      case kDECIMAL:
+      case kNUMERIC: {
         auto col_data = reinterpret_cast<int64_t*>(col_data_bytes);
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
                                           : col_datum.bigintval;

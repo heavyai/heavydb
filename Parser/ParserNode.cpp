@@ -2712,6 +2712,12 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
       // default to 32-bits
       cd.columnType.set_compression(kENCODING_DICT);
       cd.columnType.set_comp_param(32);
+    } else if (cd.columnType.is_decimal() && cd.columnType.get_precision() <= 4) {
+      cd.columnType.set_compression(kENCODING_FIXED);
+      cd.columnType.set_comp_param(16);
+    } else if (cd.columnType.is_decimal() && cd.columnType.get_precision() <= 9) {
+      cd.columnType.set_compression(kENCODING_FIXED);
+      cd.columnType.set_comp_param(32);
     } else if (cd.columnType.is_geometry() && cd.columnType.get_output_srid() == 4326) {
       // default to GEOINT 32-bits
       cd.columnType.set_compression(kENCODING_GEOINT);
@@ -2724,7 +2730,8 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
     const std::string& comp = *compression->get_encoding_name();
     int comp_param;
     if (boost::iequals(comp, "fixed")) {
-      if (!cd.columnType.is_integer() && !cd.columnType.is_time()) {
+      if (!cd.columnType.is_integer() && !cd.columnType.is_time() &&
+          !cd.columnType.is_decimal()) {
         throw std::runtime_error(
             cd.columnName +
             ": Fixed encoding is only supported for integer or time columns.");
@@ -2767,6 +2774,28 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
                                      ": Compression parameter for Fixed encoding on "
                                      "TIME, DATE or TIMESTAMP must 32.");
           }
+          break;
+        case kDECIMAL:
+        case kNUMERIC:
+          if (compression->get_encoding_param() != 32 &&
+              compression->get_encoding_param() != 16) {
+            throw std::runtime_error(
+                cd.columnName +
+                ": Compression parameter for Fixed encoding on DECIMAL must 16 or 32.");
+          }
+
+          if (compression->get_encoding_param() == 32 &&
+              cd.columnType.get_precision() > 9) {
+            throw std::runtime_error(
+                cd.columnName + ": Precision too high for Fixed(32) encoding, max 9.");
+          }
+
+          if (compression->get_encoding_param() == 16 &&
+              cd.columnType.get_precision() > 4) {
+            throw std::runtime_error(
+                cd.columnName + ": Precision too high for Fixed(16) encoding, max 4.");
+          }
+
           break;
         default:
           throw std::runtime_error(cd.columnName + ": Cannot apply FIXED encoding to " +

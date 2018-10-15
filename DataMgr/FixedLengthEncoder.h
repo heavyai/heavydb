@@ -39,11 +39,11 @@ class FixedLengthEncoder : public Encoder {
     auto encodedData = std::unique_ptr<V[]>(new V[numAppendElems]);
     for (size_t i = 0; i < numAppendElems; ++i) {
       size_t ri = replicating ? 0 : i;
-      encodedData.get()[ri] = static_cast<V>(unencodedData[ri]);
-      if (unencodedData[ri] != encodedData.get()[ri]) {
+      encodedData.get()[i] = static_cast<V>(unencodedData[ri]);
+      if (unencodedData[ri] != encodedData.get()[i]) {
         LOG(ERROR) << "Fixed encoding failed, Unencoded: " +
                           std::to_string(unencodedData[ri]) +
-                          " encoded: " + std::to_string(encodedData.get()[ri]);
+                          " encoded: " + std::to_string(encodedData.get()[i]);
       } else {
         T data = unencodedData[ri];
         if (data == std::numeric_limits<V>::min())

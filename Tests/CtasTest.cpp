@@ -704,9 +704,29 @@ NUMBER_COLUMN_TEST(DOUBLE, double, "DOUBLE", kDOUBLE, NULL_DOUBLE);
 ARRAY_COLUMN_TEST(DOUBLE, "DOUBLE[]");
 
 NUMBER_COLUMN_TEST(NUMERIC, int64_t, "NUMERIC(18)", kNUMERIC, NULL_BIGINT);
+NUMBER_COLUMN_TEST(NUMERIC_32,
+                   int64_t,
+                   "NUMERIC(9) ENCODING FIXED(32)",
+                   kNUMERIC,
+                   NULL_BIGINT);
+NUMBER_COLUMN_TEST(NUMERIC_16,
+                   int64_t,
+                   "NUMERIC(4) ENCODING FIXED(16)",
+                   kNUMERIC,
+                   NULL_BIGINT);
 ARRAY_COLUMN_TEST(NUMERIC, "NUMERIC(18)[]");
 
 NUMBER_COLUMN_TEST(DECIMAL, int64_t, "DECIMAL(18,9)", kDECIMAL, NULL_BIGINT);
+NUMBER_COLUMN_TEST(DECIMAL_32,
+                   int64_t,
+                   "DECIMAL(9,2) ENCODING FIXED(32)",
+                   kDECIMAL,
+                   NULL_BIGINT);
+NUMBER_COLUMN_TEST(DECIMAL_16,
+                   int64_t,
+                   "DECIMAL(4,2) ENCODING FIXED(16)",
+                   kDECIMAL,
+                   NULL_BIGINT);
 ARRAY_COLUMN_TEST(DECIMAL, "DECIMAL(18,9)[]");
 
 STRING_COLUMN_TEST(CHAR, "CHAR(100)", kCHAR);

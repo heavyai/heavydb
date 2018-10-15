@@ -170,7 +170,7 @@ TEST(DataLoad, Numbers) {
   ASSERT_NO_THROW(run_ddl_statement("drop table if exists numbers;"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers (a smallint, b int, c bigint, d numeric(17,,3), e "
           "double, f float);"););
   EXPECT_TRUE(load_data_test("numbers", LARGE));
   ASSERT_NO_THROW(run_ddl_statement("drop table numbers;"););
@@ -187,7 +187,7 @@ TEST(StorageSmall, AllTypes) {
   ASSERT_NO_THROW(run_ddl_statement("drop table if exists alltypes;"););
   ASSERT_NO_THROW(
       run_ddl_statement("create table alltypes (a smallint, b int, c bigint, d "
-                        "numeric(7,3), e double, f float, "
+                        "numeric(17,,3), e double, f float, "
                         "g timestamp(0), h time(0), i date, x varchar(10), y text);"););
   EXPECT_TRUE(load_data_test("alltypes", SMALL));
   ASSERT_NO_THROW(run_ddl_statement("drop table alltypes;"););
@@ -203,23 +203,23 @@ TEST(DataLoad, Numbers_Parallel_Load) {
   /* create tables in single thread */
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_1 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_1 (a smallint, b int, c bigint, d numeric(17,,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_2 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_2 (a smallint, b int, c bigint, d numeric(17,,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_3 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_3 (a smallint, b int, c bigint, d numeric(17,,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_4 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_4 (a smallint, b int, c bigint, d numeric(17,,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_5 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_5 (a smallint, b int, c bigint, d numeric(17,,3), e "
           "double, f float);"););
 
   /* load data into tables using parallel threads */
@@ -261,23 +261,23 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropTable) {
   /* create tables in single thread */
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_1 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_1 (a smallint, b int, c bigint, d numeric(17,,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_2 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_2 (a smallint, b int, c bigint, d numeric(17,,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_3 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_3 (a smallint, b int, c bigint, d numeric(17,,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_4 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_4 (a smallint, b int, c bigint, d numeric(17,,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_5 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_5 (a smallint, b int, c bigint, d numeric(17,,3), e "
           "double, f float);"););
 
   /* Load table numbers_4 with data in the main thread, so it will be available for sure
@@ -317,7 +317,7 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropTable) {
   /* create table numbers_6 and load it with data */
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_6 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_6 (a smallint, b int, c bigint, d numeric(17,,3), e "
           "double, f float);"););
   int num_table_rows = SMALL;
   db_table.push_back(table_name + to_string(6));
@@ -346,23 +346,23 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropCreateTable_InsertRows) {
   /* create tables in single thread */
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_1 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_1 (a smallint, b int, c bigint, d numeric(17,,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_2 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_2 (a smallint, b int, c bigint, d numeric(17,,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_3 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_3 (a smallint, b int, c bigint, d numeric(17,,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_4 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_4 (a smallint, b int, c bigint, d numeric(17,,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_5 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_5 (a smallint, b int, c bigint, d numeric(17,,3), e "
           "double, f float);"););
 
   /* Load table numbers_2 with data in the main thread, so it will be available for sure
@@ -403,7 +403,7 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropCreateTable_InsertRows) {
   /* create table numbers_6 and load it with data */
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_6 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_6 (a smallint, b int, c bigint, d numeric(17,,3), e "
           "double, f float);"););
   int num_table_rows = SMALL;
   db_table.push_back(table_name + to_string(6));
