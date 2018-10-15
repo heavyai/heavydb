@@ -44,6 +44,7 @@
 #include <vector>
 #include "../QueryEngine/SqlTypesLayout.h"
 #include "../QueryEngine/TypePunning.h"
+#include "../Shared/geo_compression.h"
 #include "../Shared/geo_types.h"
 #include "../Shared/geosupport.h"
 #include "../Shared/import_helpers.h"
@@ -1446,11 +1447,8 @@ bool importGeoFromLonLat(double lon, double lat, std::vector<double>& coords) {
 
 uint64_t compress_coord(double coord, const SQLTypeInfo& ti, bool x) {
   if (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32) {
-    // compress longitude: -180..180  --->  -2,147,483,647..2,147,483,647
-    // compress latitude: -90..90  --->  -2,147,483,647..2,147,483,647
-    int32_t compressed_coord =
-        static_cast<int32_t>(coord * (2147483647.0 / (x ? 180.0 : 90.0)));
-    return static_cast<uint64_t>(*reinterpret_cast<uint32_t*>(&compressed_coord));
+    return x ? Geo_namespace::compress_longitude_coord_geoint32(coord)
+             : Geo_namespace::compress_lattitude_coord_geoint32(coord);
   }
   return *reinterpret_cast<uint64_t*>(may_alias_ptr(&coord));
 }

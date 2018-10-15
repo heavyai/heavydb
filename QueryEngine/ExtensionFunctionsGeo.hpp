@@ -7,6 +7,8 @@
 #define TOLERANCE_DEFAULT 0.000000001
 #define TOLERANCE_GEOINT32 0.0000001
 
+#include "../Shared/geo_compression.h"
+
 // Adjustable tolerance, determined by compression mode.
 // The criteria is to still recognize a compressed+decompressed number.
 // For example 1.0 longitude compressed with GEOINT32 and then decompressed
@@ -54,11 +56,11 @@ DEVICE ALWAYS_INLINE double decompress_coord(int8_t* data,
   if (ic == COMPRESSION_GEOINT32) {
     auto compressed_coords = reinterpret_cast<int32_t*>(data);
     auto compressed_coord = compressed_coords[index];
-    // decompress longitude: -2,147,483,647..2,147,483,647  --->  -180..180
-    // decompress latitude: -2,147,483,647..2,147,483,647  --->  -90..90
-    return static_cast<double>(compressed_coord) *
-           (x ? 8.3819031754424345e-08    // (180.0 / 2147483647.0)
-              : 4.1909515877212172e-08);  // (90.0 / 2147483647.0)
+    if (x) {
+      return Geo_namespace::decompress_longitude_coord_geoint32(compressed_coord);
+    } else {
+      return Geo_namespace::decompress_lattitude_coord_geoint32(compressed_coord);
+    }
   }
   auto double_coords = reinterpret_cast<double*>(data);
   return double_coords[index];
