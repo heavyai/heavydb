@@ -16,6 +16,7 @@
 
 #include "HashJoinRuntime.h"
 #include "../Shared/shard_key.h"
+#include "../Shared/sqltypes.h"
 #include "CompareKeysInl.h"
 #include "HashJoinKeyHandlers.h"
 #include "HyperLogLogRank.h"
@@ -81,11 +82,23 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
   int32_t step = cpu_thread_count;
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
-    int64_t elem = type_info.is_unsigned
-                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i)
-                       : SUFFIX(fixed_width_int_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i);
+    int64_t elem;
+    switch (type_info.column_type) {
+      case (SmallDate):
+        elem = SUFFIX(fixed_width_small_date_decode_noinline)(
+            join_column.col_buff, 4, NULL_INT, NULL_BIGINT, i);
+        break;
+      case (Signed):
+        elem = SUFFIX(fixed_width_int_decode_noinline)(
+            join_column.col_buff, type_info.elem_sz, i);
+        break;
+      case (Unsigned):
+        elem = SUFFIX(fixed_width_unsigned_decode_noinline)(
+            join_column.col_buff, type_info.elem_sz, i);
+        break;
+      default:
+        elem = NULL_BIGINT;
+    }
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -134,11 +147,23 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
   int32_t step = cpu_thread_count;
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
-    int64_t elem = type_info.is_unsigned
-                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i)
-                       : SUFFIX(fixed_width_int_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i);
+    int64_t elem;
+    switch (type_info.column_type) {
+      case (SmallDate):
+        elem = SUFFIX(fixed_width_small_date_decode_noinline)(
+            join_column.col_buff, 4, NULL_INT, NULL_BIGINT, i);
+        break;
+      case (Signed):
+        elem = SUFFIX(fixed_width_int_decode_noinline)(
+            join_column.col_buff, type_info.elem_sz, i);
+        break;
+      case (Unsigned):
+        elem = SUFFIX(fixed_width_unsigned_decode_noinline)(
+            join_column.col_buff, type_info.elem_sz, i);
+        break;
+      default:
+        elem = NULL_BIGINT;
+    }
     size_t shard = SHARD_FOR_KEY(elem, shard_info.num_shards);
     if (shard != shard_info.shard) {
       continue;
@@ -397,11 +422,23 @@ GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
   int32_t step = cpu_thread_count;
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
-    int64_t elem = type_info.is_unsigned
-                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i)
-                       : SUFFIX(fixed_width_int_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i);
+    int64_t elem;
+    switch (type_info.column_type) {
+      case (SmallDate):
+        elem = SUFFIX(fixed_width_small_date_decode_noinline)(
+            join_column.col_buff, 4, NULL_INT, NULL_BIGINT, i);
+        break;
+      case (Signed):
+        elem = SUFFIX(fixed_width_int_decode_noinline)(
+            join_column.col_buff, type_info.elem_sz, i);
+        break;
+      case (Unsigned):
+        elem = SUFFIX(fixed_width_unsigned_decode_noinline)(
+            join_column.col_buff, type_info.elem_sz, i);
+        break;
+      default:
+        elem = NULL_BIGINT;
+    }
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -451,11 +488,23 @@ GLOBAL void SUFFIX(count_matches_sharded)(int32_t* count_buff,
   int32_t step = cpu_thread_count;
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
-    int64_t elem = type_info.is_unsigned
-                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i)
-                       : SUFFIX(fixed_width_int_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i);
+    int64_t elem;
+    switch (type_info.column_type) {
+      case (SmallDate):
+        elem = SUFFIX(fixed_width_small_date_decode_noinline)(
+            join_column.col_buff, 4, NULL_INT, NULL_BIGINT, i);
+        break;
+      case (Signed):
+        elem = SUFFIX(fixed_width_int_decode_noinline)(
+            join_column.col_buff, type_info.elem_sz, i);
+        break;
+      case (Unsigned):
+        elem = SUFFIX(fixed_width_unsigned_decode_noinline)(
+            join_column.col_buff, type_info.elem_sz, i);
+        break;
+      default:
+        elem = NULL_BIGINT;
+    }
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -536,7 +585,6 @@ GLOBAL void SUFFIX(count_matches_baseline)(int32_t* count_buff,
   int32_t start = cpu_thread_idx;
   int32_t step = cpu_thread_count;
 #endif
-
 #ifdef __CUDACC__
   assert(composite_key_dict);
 #endif
@@ -583,11 +631,23 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
   int32_t step = cpu_thread_count;
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
-    int64_t elem = type_info.is_unsigned
-                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i)
-                       : SUFFIX(fixed_width_int_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i);
+    int64_t elem;
+    switch (type_info.column_type) {
+      case (SmallDate):
+        elem = SUFFIX(fixed_width_small_date_decode_noinline)(
+            join_column.col_buff, 4, NULL_INT, NULL_BIGINT, i);
+        break;
+      case (Signed):
+        elem = SUFFIX(fixed_width_int_decode_noinline)(
+            join_column.col_buff, type_info.elem_sz, i);
+        break;
+      case (Unsigned):
+        elem = SUFFIX(fixed_width_unsigned_decode_noinline)(
+            join_column.col_buff, type_info.elem_sz, i);
+        break;
+      default:
+        elem = NULL_BIGINT;
+    }
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -647,11 +707,23 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
   int32_t step = cpu_thread_count;
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
-    int64_t elem = type_info.is_unsigned
-                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i)
-                       : SUFFIX(fixed_width_int_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i);
+    int64_t elem;
+    switch (type_info.column_type) {
+      case (SmallDate):
+        elem = SUFFIX(fixed_width_small_date_decode_noinline)(
+            join_column.col_buff, 4, NULL_INT, NULL_BIGINT, i);
+        break;
+      case (Signed):
+        elem = SUFFIX(fixed_width_int_decode_noinline)(
+            join_column.col_buff, type_info.elem_sz, i);
+        break;
+      case (Unsigned):
+        elem = SUFFIX(fixed_width_unsigned_decode_noinline)(
+            join_column.col_buff, type_info.elem_sz, i);
+        break;
+      default:
+        elem = NULL_BIGINT;
+    }
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -715,7 +787,6 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
 #endif
 
   T key_scratch_buff[g_maximum_conditions_to_coalesce];
-
 #ifdef __CUDACC__
   assert(composite_key_dict);
 #endif

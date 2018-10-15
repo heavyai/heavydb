@@ -3222,6 +3222,92 @@ TEST(Select, Time) {
       check_one_date_trunc_group_with_agg(
           *one_row, std::get<1>(query), std::get<2>(query));
     }
+    // Compressed DATE - limits test
+    ASSERT_EQ(4708022400L,
+              v<int64_t>(run_simple_agg(
+                  "select CAST('2119-03-12' AS DATE) FROM test limit 1;", dt)));
+    ASSERT_EQ(7998912000L,
+              v<int64_t>(run_simple_agg("select CAST(CAST('2223-06-24 23:13:57' AS "
+                                        "TIMESTAMP) AS DATE) FROM test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('year', 411, o) = TIMESTAMP "
+                                        "'2410-09-12 00:00:00' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('year', -399, o) = TIMESTAMP "
+                                        "'1600-08-31 00:00:00' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('month', 6132, o) = TIMESTAMP "
+                                        "'2510-09-13 00:00:00' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('month', -1100, o) = TIMESTAMP "
+                                        "'1908-01-09 00:00:00' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('day', 312456, o) = TIMESTAMP "
+                                        "'2855-03-01 00:00:00' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('day', -23674, o) = TIMESTAMP "
+                                        "'1934-11-15 00:00:00' from test limit 1 ;",
+                                        dt)));
+    ASSERT_EQ(
+        -303,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEDIFF('year', DATE '2302-04-21', o) from test limit 1;", dt)));
+    ASSERT_EQ(
+        502,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEDIFF('year', o, DATE '2501-04-21') from test limit 1;", dt)));
+    ASSERT_EQ(
+        -4896,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEDIFF('month', DATE '2407-09-01', o) from test limit 1;", dt)));
+    ASSERT_EQ(
+        3818,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEDIFF('month', o, DATE '2317-11-01') from test limit 1;", dt)));
+    ASSERT_EQ(
+        -86972,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEDIFF('day', DATE '2237-10-23', o) from test limit 1;", dt)));
+    ASSERT_EQ(
+        86972,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEDIFF('day', o, DATE '2237-10-23') from test limit 1;", dt)));
+    ASSERT_EQ(
+        2617,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEPART('year', CAST ('2617-12-23' as DATE)) from test limit 1;",
+            dt)));
+    ASSERT_EQ(
+        12,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEPART('month', CAST ('2617-12-23' as DATE)) from test limit 1;",
+            dt)));
+    ASSERT_EQ(
+        23,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEPART('day', CAST ('2617-12-23' as DATE)) from test limit 1;",
+            dt)));
+    ASSERT_EQ(
+        0,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEPART('hour', CAST ('2617-12-23' as DATE)) from test limit 1;",
+            dt)));
+    ASSERT_EQ(
+        0,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEPART('minute', CAST ('2617-12-23' as DATE)) from test limit 1;",
+            dt)));
+    ASSERT_EQ(
+        0,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEPART('second', CAST ('2617-12-23' as DATE)) from test limit 1;",
+            dt)));
   }
 }
 
@@ -11752,7 +11838,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "dict(16), real_str text encoding none, shared_dict text, m timestamp(0), m_3 "
         "timestamp(3), m_6 timestamp(6), "
         "m_9 timestamp(9), n time(0), o date, o1 date encoding "
-        "fixed(32), fx int "
+        "fixed(16), fx int "
         "encoding fixed(16), dd decimal(10, 2), dd_notnull decimal(10, 2) not null, ss "
         "text encoding dict, u int, ofd "
         "int, ufd int not null, ofq bigint, ufq bigint not null"};
@@ -11887,7 +11973,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "float, d double, dn double, str "
         "text, null_str text encoding dict, fixed_str text encoding dict(16), real_str "
         "text encoding none, m "
-        "timestamp(0), n time(0), o date, o1 date encoding fixed(32), fx int encoding "
+        "timestamp(0), n time(0), o date, o1 date encoding fixed(16), fx int encoding "
         "fixed(16), dd decimal(10, 2), "
         "dd_notnull decimal(10, 2) not null, ss text encoding dict, u int, ofd int, ufd "
         "int not null, ofq bigint, ufq "

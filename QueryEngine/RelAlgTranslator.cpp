@@ -363,7 +363,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(
       if (target_ti.is_time() ||
           operand_ti
               .is_string()) {  // TODO(alex): check and unify with the rest of the cases
-        return operand_expr->add_cast(target_ti);
+        return (is_smalldate_type(target_ti) &&
+                (operand_ti.get_type() == kTIMESTAMP || operand_ti.get_type() == kDATE))
+                   ? operand_expr->add_cast_date_in_days()
+                   : operand_expr->add_cast(target_ti);
       }
       if (!operand_ti.is_string() && target_ti.is_string()) {
         return operand_expr->add_cast(target_ti);

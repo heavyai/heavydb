@@ -19,6 +19,7 @@
 
 #include "../Catalog/Catalog.h"
 #include "../Import/Importer.h"
+#include "../QueryEngine/ExtractFromTime.h"
 #include "../Shared/sqldefs.h"
 #include "../Shared/sqltypes.h"
 
@@ -112,8 +113,14 @@ struct NumericValueConverter : public TargetValueConverter {
     if (do_null_check_ && null_check_value_ == val) {
       column_data_.get()[row] = null_value_;
     } else {
-      column_data_.get()[row] = (TARGET_TYPE)val;
+      column_data_.get()[row] = scaledScalarVal(val);
     }
+  }
+
+  TARGET_TYPE scaledScalarVal(int64_t val) {
+    return (column_descriptor_->columnType.is_date_in_days())
+               ? static_cast<TARGET_TYPE>(val / SECSPERDAY)
+               : static_cast<TARGET_TYPE>(val);
   }
 
   virtual void convertToColumnarFormat(size_t row, const TargetValue* value) {

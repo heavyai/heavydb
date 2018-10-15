@@ -1220,6 +1220,7 @@ bool always_clone_runtime_function(const llvm::Function* func) {
          func->getName() == "diff_fixed_width_int_decode" ||
          func->getName() == "fixed_width_double_decode" ||
          func->getName() == "fixed_width_float_decode" ||
+         func->getName() == "fixed_width_small_date_decode" ||
          func->getName() == "record_error_code";
 }
 

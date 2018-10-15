@@ -69,10 +69,10 @@ struct ChunkMetadata {
         if (sqlType.get_compression() == kENCODING_DATE_IN_DAYS) {
           chunkStats.min.timeval = min * SECSPERDAY;
           chunkStats.max.timeval = max * SECSPERDAY;
-          break;
+        } else {
+          chunkStats.min.timeval = min;
+          chunkStats.max.timeval = max;
         }
-        chunkStats.min.timeval = min;
-        chunkStats.max.timeval = max;
         break;
       }
       case kFLOAT: {

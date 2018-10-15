@@ -1518,8 +1518,8 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog* cat,
   col_type.col_type.encoding = encoding_to_thrift(cd->columnType);
   col_type.col_type.nullable = !cd->columnType.get_notnull();
   col_type.col_type.is_array = cd->columnType.get_type() == kARRAY;
-  if (col_type.col_type.is_array) {
-    col_type.col_type.size = cd->columnType.get_size();  // only for arrays
+  if (col_type.col_type.is_array || cd->columnType.get_type() == kDATE) {
+    col_type.col_type.size = cd->columnType.get_size();  // only for arrays and dates
   }
   if (IS_GEO(cd->columnType.get_type())) {
     fixup_geo_column_descriptor(
@@ -4077,6 +4077,9 @@ TColumnType MapDHandler::convert_target_metainfo(const TargetMetaInfo& target,
     proj_info.col_type.encoding =
         comp_param == 16 ? TEncodingType::FIXED : TEncodingType::NONE;
     proj_info.col_type.comp_param = comp_param;
+  }
+  if (target_ti.get_type() == kDATE) {
+    proj_info.col_type.size = target_ti.get_size();
   }
   proj_info.col_type.comp_param = target_ti.get_comp_param();
   return proj_info;

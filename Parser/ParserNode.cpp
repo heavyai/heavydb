@@ -270,6 +270,10 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
   if (right_type != new_right_type) {
     if (qual == kONE) {
       right_expr = right_expr->add_cast(new_right_type);
+      if (is_smalldate_type(new_right_type) &&
+          (right_type.is_string() || right_type.get_type() == kVARCHAR)) {
+        right_expr = right_expr->remove_cast_date_in_days();
+      }
     } else {
       right_expr = right_expr->add_cast(new_right_type.get_array_type());
     }

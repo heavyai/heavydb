@@ -677,6 +677,13 @@ std::shared_ptr<Analyzer::Expr> Expr::add_cast(const SQLTypeInfo& new_type_info)
   return makeExpr<UOper>(new_type_info, contains_agg, kCAST, shared_from_this());
 }
 
+std::shared_ptr<Analyzer::Expr> Expr::add_cast_date_in_days() {
+  return shared_from_this();
+}
+std::shared_ptr<Analyzer::Expr> Expr::remove_cast_date_in_days() {
+  return shared_from_this();
+}
+
 namespace {
 
 struct IntFracRepr {
@@ -1102,7 +1109,7 @@ void Constant::set_null_value() {
     case kTIMESTAMP:
     case kDATE:
       if (type_info.get_compression() == kENCODING_DATE_IN_DAYS) {
-        constval.timeval = (type_info.get_compression() == 16) ? NULL_SMALLINT : NULL_INT;
+        constval.timeval = (type_info.get_comp_param() == 16) ? NULL_SMALLINT : NULL_INT;
         break;
       }
 // @TODO(alex): store it as 64 bit on ARMv7l and remove the ifdef
@@ -1156,6 +1163,15 @@ std::shared_ptr<Analyzer::Expr> Constant::add_cast(const SQLTypeInfo& new_type_i
     return Expr::add_cast(new_type_info);
   }
   do_cast(new_type_info);
+  return shared_from_this();
+}
+
+std::shared_ptr<Analyzer::Expr> Constant::add_cast_date_in_days() {
+  constval.timeval /= SECSPERDAY;
+  return shared_from_this();
+}
+std::shared_ptr<Analyzer::Expr> Constant::remove_cast_date_in_days() {
+  constval.timeval *= SECSPERDAY;
   return shared_from_this();
 }
 

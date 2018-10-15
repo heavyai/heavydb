@@ -77,6 +77,8 @@ void init_baseline_hash_join_buff_on_device_64(int8_t* hash_join_buff,
                                                const size_t block_size_x,
                                                const size_t grid_size_x);
 
+enum ColumnType { SmallDate = 0, Signed = 1, Unsigned = 2 };
+
 struct JoinColumn {
   const int8_t* col_buff;
   size_t num_elems;
@@ -88,7 +90,7 @@ struct JoinColumnTypeInfo {
   int64_t null_val;
   bool uses_bw_eq;
   int64_t translated_null_val;
-  bool is_unsigned;
+  ColumnType column_type;
 };
 
 struct JoinBucketInfo {

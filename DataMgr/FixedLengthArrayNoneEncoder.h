@@ -260,17 +260,34 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       case kTIME:
       case kTIMESTAMP:
       case kDATE: {
-        const time_t* tm_array = (time_t*)array.pointer;
-        for (size_t i = 0; i < array.length / sizeof(time_t); i++) {
-          if (tm_array[i] == NULL_BIGINT)
-            has_nulls = true;
-          else if (initialized) {
-            elem_min.timeval = std::min(elem_min.timeval, tm_array[i]);
-            elem_max.timeval = std::max(elem_max.timeval, tm_array[i]);
-          } else {
-            elem_min.timeval = tm_array[i];
-            elem_max.timeval = tm_array[i];
-            initialized = true;
+        const auto compression = buffer_->sqlType.get_compression();
+        if (compression == kENCODING_DATE_IN_DAYS) {
+          const int32_t* tm_array = (int32_t*)array.pointer;
+          for (size_t i = 0; i < array.length / sizeof(int32_t); i++) {
+            if (tm_array[i] == NULL_INT)
+              has_nulls = true;
+            else if (initialized) {
+              elem_min.timeval = std::min(elem_min.intval, tm_array[i]);
+              elem_max.timeval = std::max(elem_max.intval, tm_array[i]);
+            } else {
+              elem_min.timeval = tm_array[i];
+              elem_max.timeval = tm_array[i];
+              initialized = true;
+            }
+          }
+        } else {
+          const time_t* tm_array = (time_t*)array.pointer;
+          for (size_t i = 0; i < array.length / sizeof(time_t); i++) {
+            if (tm_array[i] == NULL_BIGINT)
+              has_nulls = true;
+            else if (initialized) {
+              elem_min.timeval = std::min(elem_min.timeval, tm_array[i]);
+              elem_max.timeval = std::max(elem_max.timeval, tm_array[i]);
+            } else {
+              elem_min.timeval = tm_array[i];
+              elem_max.timeval = tm_array[i];
+              initialized = true;
+            }
           }
         }
       } break;

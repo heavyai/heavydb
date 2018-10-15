@@ -754,19 +754,26 @@ int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch,
     type_bitwidth = 8 * type_info.get_size();
   }
   CHECK_EQ(size_t(0), type_bitwidth % 8);
-  auto val =
-      (type_info.get_compression() == kENCODING_DICT &&
-       type_info.get_size() < type_info.get_logical_size() && type_info.get_comp_param())
-          ? fixed_width_unsigned_decode_noinline(byte_stream, type_bitwidth / 8, pos)
-          : fixed_width_int_decode_noinline(byte_stream, type_bitwidth / 8, pos);
+  int64_t val;
+  if (is_smalldate_type(type_info)) {
+    val = type_info.get_comp_param() == 16
+              ? fixed_width_small_date_decode_noinline(
+                    byte_stream, 2, NULL_SMALLINT, NULL_BIGINT, pos)
+              : fixed_width_small_date_decode_noinline(
+                    byte_stream, 4, NULL_INT, NULL_BIGINT, pos);
+  } else {
+    val = (type_info.get_compression() == kENCODING_DICT &&
+           type_info.get_size() < type_info.get_logical_size() &&
+           type_info.get_comp_param())
+              ? fixed_width_unsigned_decode_noinline(byte_stream, type_bitwidth / 8, pos)
+              : fixed_width_int_decode_noinline(byte_stream, type_bitwidth / 8, pos);
+  }
   if (type_info.get_compression() != kENCODING_NONE &&
-      (type_info.get_compression() == kENCODING_DATE_IN_DAYS &&
-       type_info.get_comp_param() != 16)) {
+      type_info.get_compression() != kENCODING_DATE_IN_DAYS) {
     CHECK(type_info.get_compression() == kENCODING_FIXED ||
-          type_info.get_compression() == kENCODING_DICT ||
-          type_info.get_compression() == kENCODING_DATE_IN_DAYS);
+          type_info.get_compression() == kENCODING_DICT);
     auto encoding = type_info.get_compression();
-    if (encoding == kENCODING_FIXED || encoding == kENCODING_DATE_IN_DAYS) {
+    if (encoding == kENCODING_FIXED) {
       encoding = kENCODING_NONE;
     }
     SQLTypeInfo col_logical_ti(type_info.get_type(),
@@ -1469,6 +1476,10 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
          target_info.agg_kind == kMIN || target_info.agg_kind == kMAX)) {
       actual_compact_sz = sizeof(float);
     }
+  }
+  // For Date encoding in days, pick 8 bytes
+  if (is_smalldate_type(get_compact_type(target_info))) {
+    actual_compact_sz = sizeof(int64_t);
   }
 
   // All the IDs of strings in encoded string dictionary are stored as 32 bit wide

@@ -78,6 +78,8 @@ class Expr : public std::enable_shared_from_this<Expr> {
   bool get_contains_agg() const { return contains_agg; }
   void set_contains_agg(bool a) { contains_agg = a; }
   virtual std::shared_ptr<Analyzer::Expr> add_cast(const SQLTypeInfo& new_type_info);
+  virtual std::shared_ptr<Analyzer::Expr> add_cast_date_in_days();
+  virtual std::shared_ptr<Analyzer::Expr> remove_cast_date_in_days();
   virtual void check_group_by(
       const std::list<std::shared_ptr<Analyzer::Expr>>& groupby) const {};
   virtual std::shared_ptr<Analyzer::Expr> deep_copy()
@@ -330,6 +332,8 @@ class Constant : public Expr {
   }
   virtual std::shared_ptr<Analyzer::Expr> deep_copy() const;
   virtual std::shared_ptr<Analyzer::Expr> add_cast(const SQLTypeInfo& new_type_info);
+  virtual std::shared_ptr<Analyzer::Expr> add_cast_date_in_days();
+  virtual std::shared_ptr<Analyzer::Expr> remove_cast_date_in_days();
   virtual bool operator==(const Expr& rhs) const;
   virtual void print() const;
 

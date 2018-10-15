@@ -66,6 +66,12 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
       CHECK_EQ(0, bit_width % 8);
       return std::make_shared<FixedWidthInt>(bit_width / 8);
     }
+    case kENCODING_DATE_IN_DAYS: {
+      CHECK(is_smalldate_type(ti));
+      return col_var->get_comp_param() == 16
+                 ? std::make_shared<FixedWidthSmallDate>(2, NULL_SMALLINT)
+                 : std::make_shared<FixedWidthSmallDate>(4, NULL_INT);
+    }
     default:
       abort();
   }

@@ -113,7 +113,8 @@ void scan_chunk(const ChunkMetadata& chunk_metadata,
         break;
       }
       case kDATE:
-        if (sizeof(time_t) == 4) {
+        if (sizeof(time_t) == 4 ||
+            cd->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
           {
             boost::hash_combine(hash, *(int32_t*)vd.pointer);
           }

@@ -396,6 +396,9 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
   inline bool is_high_precision_timestamp() const {
     return type == kTIMESTAMP && dimension > 0;
   }
+  inline bool is_date_in_days() const {
+    return type == kDATE && compression == kENCODING_DATE_IN_DAYS;
+  }
 
   HOST DEVICE inline bool operator!=(const SQLTypeInfoCore& rhs) const {
     return type != rhs.get_type() || subtype != rhs.get_subtype() ||

@@ -327,6 +327,10 @@ int8_t* appendDatum(int8_t* buf, Datum d, const SQLTypeInfo& ti) {
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
+      if (ti.get_compression() == kENCODING_DATE_IN_DAYS) {
+        *(int32_t*)buf = d.timeval;
+        return buf + sizeof(int32_t);
+      }
       *(time_t*)buf = d.timeval;
       return buf + sizeof(time_t);
     default:
@@ -406,7 +410,13 @@ Datum TDatumToDatum(const TDatum& datum, SQLTypeInfo& ti) {
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      d.timeval = datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
+      if (ti.get_compression() == kENCODING_DATE_IN_DAYS) {
+        d.timeval = datum.is_null ? ti.get_comp_param() == 16 ? NULL_SMALLINT : NULL_INT
+                                  : datum.val.int_val;
+      } else {
+        d.timeval =
+            datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
+      }
       break;
     case kPOINT:
     case kLINESTRING:
@@ -588,7 +598,11 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
-        addTime(inline_fixed_encoding_null_val(cd->columnType));
+        if (cd->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
+          addTime(cd->columnType.get_comp_param() == 16 ? NULL_SMALLINT : NULL_INT);
+        } else {
+          addTime(inline_fixed_encoding_null_val(cd->columnType));
+        }
       }
       break;
     case kARRAY:
@@ -1086,11 +1100,21 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
     case kDATE: {
       dataSize = col.data.int_col.size();
       time_buffer_->reserve(dataSize);
+      const auto compression = cd->columnType.get_compression();
       for (size_t i = 0; i < dataSize; i++) {
-        if (col.nulls[i]) {
-          time_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
+        if (compression == kENCODING_DATE_IN_DAYS) {
+          const auto comp_param = cd->columnType.get_comp_param();
+          if (col.nulls[i]) {
+            time_buffer_->push_back(comp_param == 16 ? NULL_SMALLINT : NULL_INT);
+          } else {
+            time_buffer_->push_back((int32_t)col.data.int_col[i]);
+          }
         } else {
-          time_buffer_->push_back((time_t)col.data.int_col[i]);
+          if (col.nulls[i]) {
+            time_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
+          } else {
+            time_buffer_->push_back((time_t)col.data.int_col[i]);
+          }
         }
       }
       break;
@@ -1245,17 +1269,30 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
           case kTIME:
           case kTIMESTAMP:
           case kDATE: {
+            const auto compression = cd->columnType.get_compression();
             for (size_t i = 0; i < dataSize; i++) {
               if (col.nulls[i]) {
                 addArray(ArrayDatum(0, NULL, true));
               } else {
                 size_t len = col.data.arr_col[i].data.int_col.size();
-                size_t byteSize = len * sizeof(time_t);
+                size_t byteWidth = (compression == kENCODING_DATE_IN_DAYS)
+                                       ? sizeof(int32_t)
+                                       : sizeof(time_t);
+                size_t byteSize = len * byteWidth;
                 int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
                 int8_t* p = buf;
-                for (size_t j = 0; j < len; ++j) {
-                  *(time_t*)p = static_cast<time_t>(col.data.arr_col[i].data.int_col[j]);
-                  p += sizeof(time_t);
+                if (compression == kENCODING_DATE_IN_DAYS) {
+                  for (size_t j = 0; j < len; ++j) {
+                    *(int32_t*)p =
+                        static_cast<int32_t>(col.data.arr_col[i].data.int_col[j]);
+                    p += sizeof(int32_t);
+                  }
+                } else {
+                  for (size_t j = 0; j < len; ++j) {
+                    *(time_t*)p =
+                        static_cast<time_t>(col.data.arr_col[i].data.int_col[j]);
+                    p += sizeof(time_t);
+                  }
                 }
                 addArray(ArrayDatum(byteSize, buf, len == 0));
               }
@@ -1369,16 +1406,24 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     }
     case kTIME:
     case kTIMESTAMP:
-    case kDATE:
+    case kDATE: {
+      const auto compression = cd->columnType.get_compression();
       if (!is_null) {
-        addTime((time_t)datum.val.int_val);
+        addTime(compression == kENCODING_DATE_IN_DAYS ? (int32_t)datum.val.int_val
+                                                      : (time_t)datum.val.int_val);
       } else {
         if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
-        addTime(inline_fixed_encoding_null_val(cd->columnType));
+        if (compression == kENCODING_DATE_IN_DAYS) {
+          const auto comp_param = cd->columnType.get_comp_param();
+          addTime(comp_param == 16 ? NULL_SMALLINT : NULL_INT);
+        } else {
+          addTime(inline_fixed_encoding_null_val(cd->columnType));
+        }
       }
       break;
+    }
     case kARRAY:
       if (is_null && cd->columnType.get_notnull()) {
         throw std::runtime_error("NULL for column " + cd->columnName);

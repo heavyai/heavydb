@@ -82,3 +82,20 @@ llvm::Instruction* FixedWidthReal::codegenDecode(llvm::Value* byte_stream,
   llvm::Value* args[] = {byte_stream, pos};
   return llvm::CallInst::Create(f, args);
 }
+
+FixedWidthSmallDate::FixedWidthSmallDate(const size_t byte_width, const int32_t null_val)
+    : byte_width_{byte_width}, null_val_{null_val} {}
+llvm::Instruction* FixedWidthSmallDate::codegenDecode(llvm::Value* byte_stream,
+                                                      llvm::Value* pos,
+                                                      llvm::Module* module) const {
+  auto& context = getGlobalLLVMContext();
+  auto f = module->getFunction("fixed_width_small_date_decode");
+  CHECK(f);
+  llvm::Value* args[] = {
+      byte_stream,
+      llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), byte_width_),
+      llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), null_val_),
+      llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), ret_null_val_),
+      pos};
+  return llvm::CallInst::Create(f, args);
+}

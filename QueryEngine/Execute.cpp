@@ -2420,6 +2420,11 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
       case kTIME:
       case kTIMESTAMP:
       case kDATE: {
+        if (cd->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
+          auto col_data = reinterpret_cast<int32_t*>(col_data_bytes);
+          *col_data = col_datum.timeval;
+          break;
+        }
         auto col_data = reinterpret_cast<time_t*>(col_data_bytes);
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
                                           : col_datum.timeval;
