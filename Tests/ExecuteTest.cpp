@@ -9718,6 +9718,33 @@ TEST(Select, GeoSpatial_Projection) {
             "from geospatial_test limit 1;",
             dt)),
         static_cast<double>(0.01));
+    ASSERT_NEAR(
+        static_cast<double>(1.4142),
+        v<double>(run_simple_agg(
+            "SELECT ST_Distance("
+            "'POLYGON((0 0, 4 0, 4 4, 2 5, 0 4, 0 0), (1 1, 1 3, 2 4, 3 3, 3 1, 1 1))', "
+            "'POLYGON((5 5, 8 2, 8 4, 5 5))') "
+            "from geospatial_test limit 1;",
+            dt)),
+        static_cast<double>(0.01));
+    ASSERT_NEAR(
+        static_cast<double>(0.0),
+        v<double>(run_simple_agg(
+            "SELECT ST_Distance("
+            "'POLYGON((0 0, 4 0, 4 4, 2 5, 0 4, 0 0), (1 1, 1 3, 2 4, 3 3, 3 1, 1 1))', "
+            "'POLYGON((3.5 3.5, 8 2, 8 4, 3.5 3.5))') "
+            "from geospatial_test limit 1;",
+            dt)),
+        static_cast<double>(0.01));
+    ASSERT_NEAR(
+        static_cast<double>(0.0),
+        v<double>(run_simple_agg(
+            "SELECT ST_Distance("
+            "'POLYGON((0 0, 4 0, 4 4, 2 5, 0 4, 0 0), (1 1, 1 3, 2 4, 3 3, 3 1, 1 1))', "
+            "'POLYGON((8 2, 8 4, 2 2, 8 2))') "
+            "from geospatial_test limit 1;",
+            dt)),
+        static_cast<double>(0.01));
     ASSERT_NEAR(static_cast<double>(2.0),
                 v<double>(run_simple_agg("SELECT ST_Distance("
                                          "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), "
@@ -10002,6 +10029,21 @@ TEST(Select, GeoSpatial_Projection) {
             "ST_GeomFromText('MULTIPOLYGON(((2 2, 0 1, -2 2, -2 0, 2 0, 2 2)), ((5 5, 6 "
             "6, 5 6)))'), "
             "ST_GeomFromText('LINESTRING(3 3, 3 2, 2 2)')) FROM geospatial_test limit 1;",
+            dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT ST_Intersects("
+            "ST_GeomFromText('POLYGON((-165.27254008488316 60.286744877866084,"
+            "-164.279755308478 60.286744877866084, -164.279755308478 60.818880025426154,"
+            "-165.27254008488316 60.818880025426154))', 4326), "
+            "ST_GeomFromText('MULTIPOLYGON (((-165.273152946156 60.5488599839382,"
+            "-165.244307548387 60.4963022239955,-165.23881195357 60.4964759808483,"
+            "-165.234271979534 60.4961199595109,-165.23165799921 60.496354988076,"
+            "-165.229399998313 60.4973489979735,-165.225239975948 60.4977589987674,"
+            "-165.217958113746 60.4974514248303,-165.21276192051 60.4972319866052)))', "
+            "4326)) FROM geospatial_test limit "
+            "1;",
             dt)));
 
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),

@@ -318,6 +318,47 @@ double distance_line_line(double l11x,
   return fmin(dist12, dist21);
 }
 
+DEVICE
+double distance_ring_ring(int8_t* ring1,
+                          int32_t ring1_num_coords,
+                          int8_t* ring2,
+                          int32_t ring2_num_coords,
+                          int32_t ic1,
+                          int32_t isr1,
+                          int32_t ic2,
+                          int32_t isr2,
+                          int32_t osr) {
+  double min_distance = 0.0;
+
+  double e11x = coord_x(ring1, ring1_num_coords - 2, ic1, isr1, osr);
+  double e11y = coord_y(ring1, ring1_num_coords - 1, ic1, isr1, osr);
+  for (auto i = 0; i < ring1_num_coords; i += 2) {
+    double e12x = coord_x(ring1, i, ic1, isr1, osr);
+    double e12y = coord_y(ring1, i + 1, ic1, isr1, osr);
+
+    double e21x = coord_x(ring2, ring2_num_coords - 2, ic2, isr2, osr);
+    double e21y = coord_y(ring2, ring2_num_coords - 1, ic2, isr2, osr);
+    for (auto j = 0; j < ring2_num_coords; j += 2) {
+      double e22x = coord_x(ring2, j, ic2, isr2, osr);
+      double e22y = coord_y(ring2, j + 1, ic2, isr2, osr);
+
+      auto distance = distance_line_line(e11x, e11y, e12x, e12y, e21x, e21y, e22x, e22y);
+      if ((i == 0 && j == 0) || min_distance > distance) {
+        min_distance = distance;
+        if (tol_zero(min_distance)) {
+          return 0.0;
+        }
+      }
+      e21x = e22x;
+      e21y = e22y;
+    }
+    e11x = e12x;
+    e11y = e12y;
+  }
+
+  return min_distance;
+}
+
 // Checks if a simple polygon (no holes) contains a point.
 // Poly coords are extracted from raw data, based on compression (ic1) and input/output
 // SRIDs (isr1/osr).
@@ -1483,125 +1524,66 @@ double ST_Distance_Polygon_Polygon(int8_t* poly1_coords,
                                    int32_t ic2,
                                    int32_t isr2,
                                    int32_t osr) {
-  // TODO: revisit implementation
-
-  auto poly1_exterior_ring_num_coords = poly1_coords_size / compression_unit_size(ic1);
-  if (poly1_num_rings > 0)
-    poly1_exterior_ring_num_coords = poly1_ring_sizes[0] * 2;
-  auto poly1_exterior_ring_coords_size =
-      poly1_exterior_ring_num_coords * compression_unit_size(ic1);
-
-  auto poly2_exterior_ring_num_coords = poly2_coords_size / compression_unit_size(ic2);
-  if (poly2_num_rings > 0)
-    poly2_exterior_ring_num_coords = poly2_ring_sizes[0] * 2;
-  auto poly2_exterior_ring_coords_size =
-      poly2_exterior_ring_num_coords * compression_unit_size(ic2);
-
-  // check if poly2 is inside poly1 exterior ring and outside poly1 holes
-  auto poly1 = poly1_coords;
-  if (polygon_contains_linestring(poly1,
-                                  poly1_exterior_ring_num_coords,
-                                  poly2_coords,
-                                  poly2_exterior_ring_num_coords,
-                                  ic1,
-                                  isr1,
-                                  ic2,
-                                  isr2,
-                                  osr)) {
-    // poly1 exterior ring contains poly2 exterior ring
-    poly1 += poly1_exterior_ring_num_coords * compression_unit_size(ic1);
-    // Check if one of the poly1's holes contains that poly2 exterior ring
-    for (auto r = 1; r < poly1_num_rings; r++) {
-      int64_t poly1_interior_ring_num_coords = poly1_ring_sizes[r] * 2;
-      if (polygon_contains_linestring(poly1,
-                                      poly1_interior_ring_num_coords,
-                                      poly2_coords,
-                                      poly2_exterior_ring_num_coords,
-                                      ic1,
-                                      isr1,
-                                      ic2,
-                                      isr2,
-                                      osr)) {
-        // Inside an interior ring - measure the distance of poly2 exterior to that hole's
-        // border
-        auto poly1_interior_ring_coords_size =
-            poly1_interior_ring_num_coords * compression_unit_size(ic1);
-        return ST_Distance_LineString_LineString(poly1,
-                                                 poly1_interior_ring_coords_size,
-                                                 0,
-                                                 poly2_coords,
-                                                 poly2_exterior_ring_coords_size,
-                                                 0,
-                                                 ic1,
-                                                 isr1,
-                                                 ic2,
-                                                 isr2,
-                                                 osr);
-      }
-      poly1 += poly1_interior_ring_num_coords * compression_unit_size(ic1);
-    }
+  // Check if poly1 contains the first point of poly2's shape, i.e. the external ring
+  auto poly2_first_point_coords = poly2_coords;
+  auto poly2_first_point_coords_size = compression_unit_size(ic2) * 2;
+  auto min_distance = ST_Distance_Polygon_Point(poly1_coords,
+                                                poly1_coords_size,
+                                                poly1_ring_sizes,
+                                                poly1_num_rings,
+                                                poly2_first_point_coords,
+                                                poly2_first_point_coords_size,
+                                                ic1,
+                                                isr1,
+                                                ic2,
+                                                isr2,
+                                                osr);
+  if (tol_zero(min_distance)) {
+    // Polygons overlap
     return 0.0;
   }
 
-  // check if poly1 is inside poly2 exterior ring and outside poly2 holes
-  auto poly2 = poly2_coords;
-  if (polygon_contains_linestring(poly2,
-                                  poly2_exterior_ring_num_coords,
-                                  poly1_coords,
-                                  poly1_exterior_ring_num_coords,
-                                  ic2,
-                                  isr2,
-                                  ic1,
-                                  isr1,
-                                  osr)) {
-    // poly2 exterior ring contains poly1 exterior ring
-    poly2 += poly2_exterior_ring_num_coords * compression_unit_size(ic2);
-    // Check if one of the poly2's holes contains that poly1 exterior ring
-    for (auto r = 1; r < poly2_num_rings; r++) {
-      int64_t poly2_interior_ring_num_coords = poly2_ring_sizes[r] * 2;
-      if (polygon_contains_linestring(poly2,
-                                      poly2_interior_ring_num_coords,
-                                      poly1_coords,
-                                      poly1_exterior_ring_num_coords,
-                                      ic2,
-                                      isr2,
-                                      ic1,
-                                      isr1,
-                                      osr)) {
-        // Inside an interior ring - measure the distance of poly1 exterior to that hole's
-        // border
-        auto poly2_interior_ring_coords_size =
-            poly2_interior_ring_num_coords * compression_unit_size(ic2);
-        return ST_Distance_LineString_LineString(poly2,
-                                                 poly2_interior_ring_coords_size,
-                                                 0,
-                                                 poly1_coords,
-                                                 poly1_exterior_ring_coords_size,
-                                                 0,
-                                                 ic2,
-                                                 isr2,
-                                                 ic1,
-                                                 isr1,
-                                                 osr);
+  // Poly2's first point is either outside poly1's external ring or inside one of the
+  // internal rings. Measure the smallest distance between a poly1 ring (external or
+  // internal) and a poly2 ring (external or internal). If poly2 is completely outside
+  // poly1, then the min distance would be between poly1's and poly2's external rings. If
+  // poly2 is completely inside one of poly1 internal rings then the min distance would be
+  // between that poly1 internal ring and poly2's external ring. If poly1 is completely
+  // inside one of poly2 internal rings, min distance is between that internal ring and
+  // poly1's external ring. In each case other rings don't get in the way. Any ring
+  // intersection means zero distance - short-circuit and return.
+
+  auto poly1_ring_coords = poly1_coords;
+  for (auto r1 = 0; r1 < poly1_num_rings; r1++) {
+    int64_t poly1_ring_num_coords = poly1_ring_sizes[r1] * 2;
+
+    auto poly2_ring_coords = poly2_coords;
+    for (auto r2 = 0; r2 < poly2_num_rings; r2++) {
+      int64_t poly2_ring_num_coords = poly2_ring_sizes[r2] * 2;
+
+      auto distance = distance_ring_ring(poly1_ring_coords,
+                                         poly1_ring_num_coords,
+                                         poly2_ring_coords,
+                                         poly2_ring_num_coords,
+                                         ic1,
+                                         isr1,
+                                         ic2,
+                                         isr2,
+                                         osr);
+      if (min_distance > distance) {
+        min_distance = distance;
+        if (tol_zero(min_distance)) {
+          return 0.0;
+        }
       }
-      poly2 += poly2_interior_ring_num_coords * compression_unit_size(ic2);
+
+      poly2_ring_coords += poly2_ring_num_coords * compression_unit_size(ic2);
     }
-    return 0.0;
+
+    poly1_ring_coords += poly1_ring_num_coords * compression_unit_size(ic1);
   }
 
-  // poly1 does not properly contain poly2, poly2 does not properly contain poly1
-  // Assuming disjoint or intersecting shapes: return distance between exterior rings.
-  return ST_Distance_LineString_LineString(poly1_coords,
-                                           poly1_exterior_ring_coords_size,
-                                           0,
-                                           poly2_coords,
-                                           poly2_exterior_ring_coords_size,
-                                           0,
-                                           ic1,
-                                           isr1,
-                                           ic2,
-                                           isr2,
-                                           osr);
+  return min_distance;
 }
 
 EXTENSION_NOINLINE
