@@ -20,6 +20,7 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/types.h>
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -426,10 +427,12 @@ std::shared_ptr<const std::vector<std::string>> ResultSet::getDictionary(
 }
 
 std::shared_ptr<arrow::RecordBatch> ResultSet::getArrowBatch(
-    const std::shared_ptr<arrow::Schema>& schema) const {
+    const std::shared_ptr<arrow::Schema>& schema,
+    const int32_t first_n) const {
   std::vector<std::shared_ptr<arrow::Array>> result_columns;
 
-  const auto entry_count = entryCount();
+  const size_t entry_count =
+      first_n < 0 ? entryCount() : std::min(size_t(first_n), entryCount());
   if (!entry_count) {
     return ARROW_RECORDBATCH_MAKE(schema, 0, result_columns);
   }
@@ -583,7 +586,8 @@ std::shared_ptr<arrow::RecordBatch> ResultSet::getArrowBatch(
 
 std::shared_ptr<arrow::RecordBatch> ResultSet::convertToArrow(
     const std::vector<std::string>& col_names,
-    arrow::ipc::DictionaryMemo& memo) const {
+    arrow::ipc::DictionaryMemo& memo,
+    const int32_t first_n) const {
   const auto col_count = colCount();
   std::vector<std::shared_ptr<arrow::Field>> fields;
   CHECK(col_names.empty() || col_names.size() == col_count);
@@ -609,13 +613,15 @@ std::shared_ptr<arrow::RecordBatch> ResultSet::convertToArrow(
     }
     fields.push_back(arrow::make_field(col_names.empty() ? "" : col_names[i], ti, dict));
   }
-  return getArrowBatch(arrow::schema(fields));
+  return getArrowBatch(arrow::schema(fields), first_n);
 }
 
 ResultSet::SerializedArrowOutput ResultSet::getSerializedArrowOutput(
-    const std::vector<std::string>& col_names) const {
+    const std::vector<std::string>& col_names,
+    const int32_t first_n) const {
   arrow::ipc::DictionaryMemo dict_memo;
-  std::shared_ptr<arrow::RecordBatch> arrow_copy = convertToArrow(col_names, dict_memo);
+  std::shared_ptr<arrow::RecordBatch> arrow_copy =
+      convertToArrow(col_names, dict_memo, first_n);
   std::shared_ptr<arrow::Buffer> serialized_records, serialized_schema;
 
   ARROW_THROW_NOT_OK(arrow::ipc::SerializeSchema(
@@ -633,9 +639,9 @@ ResultSet::SerializedArrowOutput ResultSet::getSerializedArrowOutput(
 //   ...
 //   shmdt(ipc_ptr);
 //   shmctl(shmid, IPC_RMID, 0);
-ArrowResult ResultSet::getArrowCopyOnCpu(
-    const std::vector<std::string>& col_names) const {
-  const auto serialized_arrow_output = getSerializedArrowOutput(col_names);
+ArrowResult ResultSet::getArrowCopyOnCpu(const std::vector<std::string>& col_names,
+                                         const int32_t first_n) const {
+  const auto serialized_arrow_output = getSerializedArrowOutput(col_names, first_n);
   const auto& serialized_schema = serialized_arrow_output.schema;
   const auto& serialized_records = serialized_arrow_output.records;
 
@@ -668,11 +674,11 @@ ArrowResult ResultSet::getArrowCopyOnCpu(
 //   cudaFree(dev_ptr);
 //
 // TODO(miyu): verify if the server still needs to free its own copies after last uses
-ArrowResult ResultSet::getArrowCopyOnGpu(
-    Data_Namespace::DataMgr* data_mgr,
-    const size_t device_id,
-    const std::vector<std::string>& col_names) const {
-  const auto serialized_arrow_output = getSerializedArrowOutput(col_names);
+ArrowResult ResultSet::getArrowCopyOnGpu(Data_Namespace::DataMgr* data_mgr,
+                                         const size_t device_id,
+                                         const std::vector<std::string>& col_names,
+                                         const int32_t first_n) const {
+  const auto serialized_arrow_output = getSerializedArrowOutput(col_names, first_n);
   const auto& serialized_schema = serialized_arrow_output.schema;
 
   const auto schema_key = arrow::get_and_copy_to_shm(serialized_schema);
@@ -713,13 +719,14 @@ ArrowResult ResultSet::getArrowCopyOnGpu(
 ArrowResult ResultSet::getArrowCopy(Data_Namespace::DataMgr* data_mgr,
                                     const ExecutorDeviceType device_type,
                                     const size_t device_id,
-                                    const std::vector<std::string>& col_names) const {
+                                    const std::vector<std::string>& col_names,
+                                    const int32_t first_n) const {
   if (device_type == ExecutorDeviceType::CPU) {
-    return getArrowCopyOnCpu(col_names);
+    return getArrowCopyOnCpu(col_names, first_n);
   }
 
   CHECK(device_type == ExecutorDeviceType::GPU);
-  return getArrowCopyOnGpu(data_mgr, device_id, col_names);
+  return getArrowCopyOnGpu(data_mgr, device_id, col_names, first_n);
 }
 
 void deallocate_arrow_result(const ArrowResult& result,

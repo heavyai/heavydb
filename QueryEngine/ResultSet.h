@@ -443,12 +443,14 @@ class ResultSet {
   };
 
   SerializedArrowOutput getSerializedArrowOutput(
-      const std::vector<std::string>& col_names) const;
+      const std::vector<std::string>& col_names,
+      const int32_t first_n) const;
 
   ArrowResult getArrowCopy(Data_Namespace::DataMgr* data_mgr,
                            const ExecutorDeviceType device_type,
                            const size_t device_id,
-                           const std::vector<std::string>& col_names) const;
+                           const std::vector<std::string>& col_names,
+                           const int32_t first_n) const;
 
   size_t getLimit();
 
@@ -689,15 +691,19 @@ class ResultSet {
 
   std::shared_ptr<arrow::RecordBatch> convertToArrow(
       const std::vector<std::string>& col_names,
-      arrow::ipc::DictionaryMemo& memo) const;
+      arrow::ipc::DictionaryMemo& memo,
+      const int32_t first_n) const;
   std::shared_ptr<const std::vector<std::string>> getDictionary(const int dict_id) const;
   std::shared_ptr<arrow::RecordBatch> getArrowBatch(
-      const std::shared_ptr<arrow::Schema>& schema) const;
+      const std::shared_ptr<arrow::Schema>& schema,
+      const int32_t first_n) const;
 
-  ArrowResult getArrowCopyOnCpu(const std::vector<std::string>& col_names) const;
+  ArrowResult getArrowCopyOnCpu(const std::vector<std::string>& col_names,
+                                const int32_t first_n) const;
   ArrowResult getArrowCopyOnGpu(Data_Namespace::DataMgr* data_mgr,
                                 const size_t device_id,
-                                const std::vector<std::string>& col_names) const;
+                                const std::vector<std::string>& col_names,
+                                const int32_t first_n) const;
 
   std::string serializeProjection() const;
 

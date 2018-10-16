@@ -3838,8 +3838,11 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
   RelAlgExecutor ra_executor(executor.get(), cat);
   const auto result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
   const auto rs = result.getRows();
-  const auto copy = rs->getArrowCopy(
-      data_mgr_.get(), device_type, device_id, getTargetNames(result.getTargetsMeta()));
+  const auto copy = rs->getArrowCopy(data_mgr_.get(),
+                                     device_type,
+                                     device_id,
+                                     getTargetNames(result.getTargetsMeta()),
+                                     first_n);
   _return.sm_handle = std::string(copy.sm_handle.begin(), copy.sm_handle.end());
   _return.sm_size = copy.sm_size;
   _return.df_handle = std::string(copy.df_handle.begin(), copy.df_handle.end());
