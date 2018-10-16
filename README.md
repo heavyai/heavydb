@@ -201,7 +201,7 @@ Dependencies for `mapd_web_server` and other Go utils are in [`ThirdParty/go`](T
 
 ## CentOS 7
 
-MapD Core requires a number of dependencies which are not provided in the common CentOS/RHEL package repositories. The script [scripts/mapd-deps-centos.sh](scripts/mapd-deps-centos.sh) is provided to automatically build and install these dependencies. A prebuilt package containing these dependencies is also provided for CentOS 7 (x86_64).
+MapD Core requires a number of dependencies which are not provided in the common CentOS/RHEL package repositories. A prebuilt package containing all these dependencies is provided for CentOS 7 (x86_64).
 
 First install the basic build tools:
 
@@ -255,7 +255,15 @@ Be sure to reboot after installing in order to activate the NVIDIA drivers.
 
 ### Environment Variables
 
-[scripts/mapd-deps-centos.sh](scripts/mapd-deps-centos.sh) generates two files with the appropriate environment variables: `mapd-deps-<date>.sh` (for sourcing from your shell config) and `mapd-deps-<date>.modulefile` (for use with [Environment Modules](http://modules.sf.net), yum package `environment-modules`). These files are placed in mapd-deps install directory, usually `/usr/local/mapd-deps/<date>`. Either of these may be used to configure your environment: the `.sh` may be sourced in your shell config; the `.modulefile` needs to be moved to the modulespath.
+The `deploy.sh` script includes two files with the appropriate environment variables: `mapd-deps-<date>.sh` (for sourcing from your shell config) and `mapd-deps-<date>.modulefile` (for use with [Environment Modules](http://modules.sf.net), yum package `environment-modules`). These files are placed in mapd-deps install directory, usually `/usr/local/mapd-deps/<date>`. Either of these may be used to configure your environment: the `.sh` may be sourced in your shell config; the `.modulefile` needs to be moved to the modulespath.
+
+### Building Dependencies
+
+The [scripts/mapd-deps-centos.sh](scripts/mapd-deps-centos.sh) script is used to build the dependencies. Modify this script and run if you would like to change dependency versions or to build on alternative CPU architectures.
+
+    cd scripts
+    module unload mapd-deps
+    ./mapd-deps-centos.sh --compress
 
 ## macOS
 
