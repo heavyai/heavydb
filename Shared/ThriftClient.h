@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef SOCKET_FNC_H
-#define SOCKET_FNC_H
+#ifndef THRIFTCLIENT_H
+#define THRIFTCLIENT_H
 #include <thrift/transport/TBufferTransports.h>
 #include <string>
 #include "Shared/mapd_shared_ptr.h"
@@ -33,4 +33,4 @@ mapd::shared_ptr<::apache::thrift::transport::TTransport> openHttpClientTranspor
     bool use_https,
     bool skip_verify);
 
-#endif
+#endif  // THRIFTCLIENT_H

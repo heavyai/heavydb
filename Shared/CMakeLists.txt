@@ -7,3 +7,6 @@ set(shared_source_files
 )
 
 add_library(Shared ${shared_source_files})
+
+add_library(ThriftClient ThriftClient.cpp)
+target_link_libraries(ThriftClient ${Thrift_LIBRARIES})

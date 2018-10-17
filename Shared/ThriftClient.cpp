@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <SQLFrontend/socket_functions.h>
+#include "ThriftClient.h"
 #include <thrift/transport/THttpClient.h>
 #include <thrift/transport/TSSLSocket.h>
 #include <thrift/transport/TSocket.h>

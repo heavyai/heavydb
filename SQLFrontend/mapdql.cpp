@@ -53,7 +53,7 @@
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "MapDRelease.h"
 #include "MapDServer.h"
-#include "SQLFrontend/socket_functions.h"
+#include "Shared/ThriftClient.h"
 #include "Shared/ThriftTypesConvert.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/mapd_shared_ptr.h"
@@ -1054,10 +1054,11 @@ int main(int argc, char** argv) {
   desc.add_options()("https",
                      po::bool_switch(&https)->default_value(https)->implicit_value(true),
                      "Use HTTPS transport");
-  desc.add_options()(
-      "skip-verify",
-      po::bool_switch(&skip_host_verify)->default_value(skip_host_verify)->implicit_value(true),
-      "Don't verify SSL certificate validity");
+  desc.add_options()("skip-verify",
+                     po::bool_switch(&skip_host_verify)
+                         ->default_value(skip_host_verify)
+                         ->implicit_value(true),
+                     "Don't verify SSL certificate validity");
   desc.add_options()("quiet,q", "Do not print result headers or connection strings ");
 
   po::variables_map vm;
