@@ -50,10 +50,12 @@
 #include <thrift/protocol/TJSONProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/THttpClient.h>
+#include <thrift/transport/TSSLSocket.h>
 #include <thrift/transport/TSocket.h>
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "MapDRelease.h"
 #include "MapDServer.h"
+#include "SQLFrontend/socket_functions.h"
 #include "Shared/ThriftTypesConvert.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/mapd_shared_ptr.h"
@@ -574,14 +576,16 @@ std::string mapd_getpass() {
 
 enum Action { INITIALIZE, TURN_ON, TURN_OFF, INTERRUPT };
 
-bool backchannel(int action, ClientContext* cc) {
+bool backchannel(int action, ClientContext* cc, const std::string& ccn = "") {
   enum State { UNINITIALIZED, INITIALIZED, INTERRUPTIBLE };
   static int state = UNINITIALIZED;
   static ClientContext* context{nullptr};
+  static std::string ca_cert_name{};
 
   if (action == INITIALIZE) {
     CHECK(cc);
     context = cc;
+    ca_cert_name = ccn;
     state = INITIALIZED;
     return false;
   }
@@ -603,9 +607,8 @@ bool backchannel(int action, ClientContext* cc) {
           new THttpClient(context->server_host, context->port, "/"));
       protocol2 = mapd::shared_ptr<TProtocol>(new TJSONProtocol(transport2));
     } else {
-      socket2 =
-          mapd::shared_ptr<TTransport>(new TSocket(context->server_host, context->port));
-      transport2 = mapd::shared_ptr<TTransport>(new TBufferedTransport(socket2));
+      transport2 =
+          openBufferedClientTransport(context->server_host, context->port, ca_cert_name);
       protocol2 = mapd::shared_ptr<TProtocol>(new TBinaryProtocol(transport2));
     }
     MapDClient c2(protocol2);
@@ -1011,6 +1014,7 @@ int main(int argc, char** argv) {
   TQueryResult _return;
   std::string db_name{"mapd"};
   std::string user_name{"mapd"};
+  std::string ca_cert_name{""};
   std::string passwd;
 
   namespace po = boost::program_options;
@@ -1031,6 +1035,10 @@ int main(int argc, char** argv) {
   desc.add_options()("user,u",
                      po::value<std::string>(&user_name)->default_value(user_name),
                      "User name");
+  desc.add_options()(
+      "ca-cert",
+      po::value<std::string>(&ca_cert_name)->default_value(ca_cert_name),
+      "Path to trusted server certificate. Initiates an encrypted connection");
   desc.add_options()("passwd,p", po::value<std::string>(&passwd), "Password");
   desc.add_options()("server,s",
                      po::value<std::string>(&server_host)->default_value(server_host),
@@ -1087,13 +1095,11 @@ int main(int argc, char** argv) {
 
   mapd::shared_ptr<TTransport> transport;
   mapd::shared_ptr<TProtocol> protocol;
-  mapd::shared_ptr<TTransport> socket;
   if (http) {
     transport = mapd::shared_ptr<TTransport>(new THttpClient(server_host, port, "/"));
     protocol = mapd::shared_ptr<TProtocol>(new TJSONProtocol(transport));
   } else {
-    socket = mapd::shared_ptr<TTransport>(new TSocket(server_host, port));
-    transport = mapd::shared_ptr<TTransport>(new TBufferedTransport(socket));
+    transport = openBufferedClientTransport(server_host, port, ca_cert_name);
     protocol = mapd::shared_ptr<TProtocol>(new TBinaryProtocol(transport));
   }
   MapDClient c(protocol);
@@ -1130,7 +1136,7 @@ int main(int argc, char** argv) {
   }
 
   register_signal_handler();
-  (void)backchannel(INITIALIZE, &context);
+  (void)backchannel(INITIALIZE, &context, ca_cert_name);
 
   /* Set the completion callback. This will be called every time the
    * user uses the <tab> key. */

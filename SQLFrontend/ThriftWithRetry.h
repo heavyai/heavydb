@@ -144,6 +144,8 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
     return false;
   } catch (TException& te) {
     try {
+      std::cerr << "Thrift connection error: " << te.what() << std::endl;
+      std::cerr << "Retrying connection" << std::endl;
       context.transport.open();
       if (which_service == kDISCONNECT)
         return false;

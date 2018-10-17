@@ -24,6 +24,8 @@
 #include <thrift/server/TThreadedServer.h>
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/THttpServer.h>
+#include <thrift/transport/TSSLServerSocket.h>
+#include <thrift/transport/TSSLSocket.h>
 #include <thrift/transport/TServerSocket.h>
 
 #include "MapDRelease.h"
@@ -117,6 +119,8 @@ void register_signal_handler() {
   std::signal(SIGTERM, mapd_signal_handler);
   std::signal(SIGSEGV, mapd_signal_handler);
   std::signal(SIGABRT, mapd_signal_handler);
+  // Thrift secure socket can cause problems with SIGPIPE
+  std::signal(SIGPIPE, SIG_IGN);
 }
 
 void start_server(TThreadedServer& server) {
@@ -304,6 +308,24 @@ int main(int argc, char** argv) {
                      "normally be used in production.");
 
   po::options_description desc_adv("Advanced options");
+  desc_adv.add_options()("ssl-cert",
+                         po::value<std::string>(&mapd_parameters.ssl_cert_file)
+                             ->default_value(std::string("")),
+                         "SSL Validated public certficate");
+  desc_adv.add_options()("ssl-private-key",
+                         po::value<std::string>(&mapd_parameters.ssl_key_file)
+                             ->default_value(std::string("")),
+                         "SSL private key file");
+  // Note ssl_trust_store is passed through to Calcite via mapd_parameters
+  // todo(jack): add ensure ssl-trust-store exists if cert and private key in use
+  desc_adv.add_options()("ssl-trust-store",
+                         po::value<std::string>(&mapd_parameters.ssl_trust_store)
+                             ->default_value(std::string("")),
+                         "SSL Validated public cert as a java trust store");
+  desc_adv.add_options()("ssl-trust-password",
+                         po::value<std::string>(&mapd_parameters.ssl_trust_password)
+                             ->default_value(std::string("")),
+                         "SSL java trust store password");
   desc_adv.add_options()(
       "jit-debug",
       po::value<bool>(&jit_debug)->default_value(jit_debug)->implicit_value(true),
@@ -683,6 +705,9 @@ int main(int argc, char** argv) {
   boost::algorithm::trim_if(authMetadata.ldapSuperUserRole, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.restToken, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.restUrl, boost::is_any_of("\"'"));
+  boost::algorithm::trim_if(mapd_parameters.ssl_cert_file, boost::is_any_of("\"'"));
+  boost::algorithm::trim_if(mapd_parameters.ssl_key_file, boost::is_any_of("\"'"));
+  boost::algorithm::trim_if(mapd_parameters.ssl_trust_store, boost::is_any_of("\"'"));
 
   // rudimetary signal handling to try to guarantee the logging gets flushed to files
   // on shutdown
@@ -711,15 +736,34 @@ int main(int argc, char** argv) {
                                                   idle_session_duration,
                                                   max_session_duration);
 
+  mapd::shared_ptr<TServerSocket> serverSocket;
+  if (!mapd_parameters.ssl_cert_file.empty() && !mapd_parameters.ssl_key_file.empty()) {
+    mapd::shared_ptr<TSSLSocketFactory> sslSocketFactory;
+    sslSocketFactory =
+        mapd::shared_ptr<TSSLSocketFactory>(new TSSLSocketFactory(SSLProtocol::SSLTLS));
+    sslSocketFactory->loadCertificate(mapd_parameters.ssl_cert_file.c_str());
+    sslSocketFactory->loadPrivateKey(mapd_parameters.ssl_key_file.c_str());
+    sslSocketFactory->authenticate(false);
+    sslSocketFactory->ciphers("ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH");
+    serverSocket = mapd::shared_ptr<TServerSocket>(
+        new TSSLServerSocket(mapd_parameters.mapd_server_port, sslSocketFactory));
+    LOG(INFO) << " MapD server using encrypted connection. Cert file ["
+              << mapd_parameters.ssl_cert_file << "], key file ["
+              << mapd_parameters.ssl_key_file << "]";
+  } else {
+    LOG(INFO) << " MapD server using plain text";
+    serverSocket = mapd::shared_ptr<TServerSocket>(
+        new TServerSocket(mapd_parameters.mapd_server_port));
+  }
+
   if (mapd_parameters.ha_group_id.empty()) {
     mapd::shared_ptr<TProcessor> processor(new MapDProcessor(g_mapd_handler));
-
-    mapd::shared_ptr<TServerTransport> bufServerTransport(
-        new TServerSocket(mapd_parameters.mapd_server_port));
 
     mapd::shared_ptr<TTransportFactory> bufTransportFactory(
         new TBufferedTransportFactory());
     mapd::shared_ptr<TProtocolFactory> bufProtocolFactory(new TBinaryProtocolFactory());
+
+    mapd::shared_ptr<TServerTransport> bufServerTransport(serverSocket);
     TThreadedServer bufServer(
         processor, bufServerTransport, bufTransportFactory, bufProtocolFactory);
 

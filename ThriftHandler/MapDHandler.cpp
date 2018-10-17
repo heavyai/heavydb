@@ -184,11 +184,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
 
   std::string calcite_session_prefix = "calcite-" + generate_random_string(64);
 
-  calcite_ = std::make_shared<Calcite>(mapd_parameters.mapd_server_port,
-                                       mapd_parameters.calcite_port,
-                                       base_data_path_,
-                                       mapd_parameters_.calcite_max_mem,
-                                       calcite_session_prefix);
+  calcite_ =
+      std::make_shared<Calcite>(mapd_parameters, base_data_path_, calcite_session_prefix);
 
   ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
 

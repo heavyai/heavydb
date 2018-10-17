@@ -56,7 +56,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.mapd.parser.server.ExtensionFunction;
-
+import com.mapd.common.SockTransportProperties;
 /**
  *
  * @author michael
@@ -76,9 +76,11 @@ public final class MapDParser {
   private int callCount = 0;
   private final int mapdPort;
   private MapDUser mapdUser;
-
-  public MapDParser(
-          String dataDir, final Map<String, ExtensionFunction> extSigs, int mapdPort) {
+  private SockTransportProperties sock_transport_properties = null;
+  public MapDParser(String dataDir,
+          final Map<String, ExtensionFunction> extSigs,
+          int mapdPort,
+          SockTransportProperties skT) {
     System.setProperty(
             "saffron.default.charset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
     System.setProperty(
@@ -88,10 +90,12 @@ public final class MapDParser {
     this.dataDir = dataDir;
     this.extSigs = extSigs;
     this.mapdPort = mapdPort;
+    this.sock_transport_properties = skT;
   }
 
   private MapDPlanner getPlanner() {
-    MapDSchema mapd = new MapDSchema(dataDir, this, mapdPort, mapdUser);
+    MapDSchema mapd =
+            new MapDSchema(dataDir, this, mapdPort, mapdUser, sock_transport_properties);
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
     final FrameworkConfig config =
             Frameworks.newConfigBuilder()
@@ -148,7 +152,8 @@ public final class MapDParser {
   }
 
   public Set<String> resolveSelectIdentifiers(SqlIdentifierCapturer capturer) {
-    MapDSchema schema = new MapDSchema(dataDir, this, mapdPort, mapdUser);
+    MapDSchema schema =
+            new MapDSchema(dataDir, this, mapdPort, mapdUser, sock_transport_properties);
     HashSet<String> resolved = new HashSet<>();
 
     for (String name : capturer.selects) {
@@ -718,7 +723,8 @@ public final class MapDParser {
 
   public void updateMetaData(String schema, String table) {
     MAPDLOGGER.debug("schema :" + schema + " table :" + table);
-    MapDSchema mapd = new MapDSchema(dataDir, this, mapdPort, null);
+    MapDSchema mapd =
+            new MapDSchema(dataDir, this, mapdPort, null, sock_transport_properties);
     mapd.updateMetaData(schema, table);
   }
 }

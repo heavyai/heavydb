@@ -66,7 +66,9 @@ int wrapped_execl(char const* path,
 static void start_calcite_server_as_daemon(const int mapd_port,
                                            const int port,
                                            const std::string& data_dir,
-                                           const size_t calcite_max_mem) {
+                                           const size_t calcite_max_mem,
+                                           const std::string& ssl_trust_store,
+                                           const std::string& ssl_trust_password) {
   // todo MAT all platforms seem to respect /usr/bin/java - this could be a gotcha on some
   // weird thing
   std::string const xDebug = "-Xdebug";
@@ -84,6 +86,8 @@ static void start_calcite_server_as_daemon(const int mapd_port,
   std::string localPortD = std::to_string(port);
   std::string mapdPortP = "-m";
   std::string mapdPortD = std::to_string(mapd_port);
+  std::string mapdTrustStoreD = "-T";
+  std::string mapdTrustPasswd = "-P";
   std::string mapdLogDirectory = "-DMAPD_LOG_DIR=" + data_dir;
 
   int pid = fork();
@@ -103,6 +107,10 @@ static void start_calcite_server_as_daemon(const int mapd_port,
                           localPortD.c_str(),
                           mapdPortP.c_str(),
                           mapdPortD.c_str(),
+                          mapdTrustStoreD.c_str(),
+                          ssl_trust_store.c_str(),
+                          mapdTrustPasswd.c_str(),
+                          ssl_trust_password.c_str(),
                           (char*)0);
     LOG(INFO) << " Calcite server running after exe, return " << i;
   }
@@ -152,7 +160,8 @@ void Calcite::runServer(const int mapd_port,
   }
 
   // start the calcite server as a seperate process
-  start_calcite_server_as_daemon(mapd_port, port, data_dir, calcite_max_mem);
+  start_calcite_server_as_daemon(
+      mapd_port, port, data_dir, calcite_max_mem, ssl_trust_store_, ssl_trust_password_);
 
   // check for new server for 5 seconds max
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -190,25 +199,44 @@ int Calcite::ping() {
 }
 
 Calcite::Calcite(const int mapd_port,
-                 const int port,
+                 const int calcite_port,
                  const std::string& data_dir,
                  const size_t calcite_max_mem,
                  const std::string& session_prefix)
     : server_available_(false), session_prefix_(session_prefix) {
-  LOG(INFO) << "Creating Calcite Handler,  Calcite Port is " << port
+  init(mapd_port, calcite_port, data_dir, calcite_max_mem);
+}
+
+void Calcite::init(const int mapd_port,
+                   const int calcite_port,
+                   const std::string& data_dir,
+                   const size_t calcite_max_mem) {
+  LOG(INFO) << "Creating Calcite Handler,  Calcite Port is " << calcite_port
             << " base data dir is " << data_dir;
-  if (port < 0) {
+  if (calcite_port < 0) {
     CHECK(false) << "JNI mode no longer supported.";
   }
-  if (port == 0) {
+  if (calcite_port == 0) {
     // dummy process for initdb
-    remote_calcite_port_ = port;
+    remote_calcite_port_ = calcite_port;
     server_available_ = false;
   } else {
-    remote_calcite_port_ = port;
-    runServer(mapd_port, port, data_dir, calcite_max_mem);
+    remote_calcite_port_ = calcite_port;
+    runServer(mapd_port, calcite_port, data_dir, calcite_max_mem);
     server_available_ = true;
   }
+}
+
+Calcite::Calcite(const MapDParameters& mapd_parameter,
+                 const std::string& data_dir,
+                 const std::string& session_prefix)
+    : ssl_trust_store_(mapd_parameter.ssl_trust_store)
+    , ssl_trust_password_(mapd_parameter.ssl_trust_password)
+    , session_prefix_(session_prefix) {
+  init(mapd_parameter.mapd_server_port,
+       mapd_parameter.calcite_port,
+       data_dir,
+       mapd_parameter.calcite_max_mem);
 }
 
 void Calcite::updateMetadata(std::string catalog, std::string table) {

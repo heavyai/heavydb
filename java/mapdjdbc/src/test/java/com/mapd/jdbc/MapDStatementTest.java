@@ -16,7 +16,7 @@ import static org.junit.Assert.*;
 public class MapDStatementTest {
   static Properties PROPERTIES = new Property_loader();
   static final String url = PROPERTIES.getProperty("base_connection_url") + ":"
-          + PROPERTIES.getProperty("default_db");
+          + PROPERTIES.getProperty("default_db") + ":https";
   static final String user = PROPERTIES.getProperty("default_super_user");
   static final String password = PROPERTIES.getProperty("default_user_password");
 
@@ -24,7 +24,15 @@ public class MapDStatementTest {
 
   @Before
   public void setUp() throws Exception {
-    m_conn = DriverManager.getConnection(url, user, password);
+    Properties pt = new Properties();
+    pt.setProperty("user", user);
+    pt.setProperty("password", password);
+    // pt.setProperty("protocol", "http");
+    pt.setProperty("protocol", "https");
+    // pt.setProperty("key_store", "/home/jack/certs/server.jks");
+    // pt.setProperty("key_store", "/home/jack/java_key/t1.jks");
+    // pt.setProperty("key_store_pwd", "XXXXXX");
+    m_conn = DriverManager.getConnection(url, pt);
   }
 
   @After

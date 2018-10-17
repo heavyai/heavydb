@@ -11,7 +11,7 @@ public class MapDConnectionTest {
   // Property_loader loads the values from 'connection.properties in resources
   static Properties PROPERTIES = new Property_loader();
   static final String url = PROPERTIES.getProperty("base_connection_url") + ":"
-          + PROPERTIES.getProperty("default_db");
+          + PROPERTIES.getProperty("default_db") + ":http";
   static final String user = PROPERTIES.getProperty("default_super_user");
   static final String password = PROPERTIES.getProperty("default_user_password");
 
@@ -21,7 +21,16 @@ public class MapDConnectionTest {
     Connection conn = null;
 
     try {
-      conn = DriverManager.getConnection(url, user, password);
+      Properties pt = new Properties();
+      pt.setProperty("user", user);
+      pt.setProperty("password", password);
+      pt.setProperty("protocol", "binary");
+      // pt.setProperty("protocol", "https");
+      pt.setProperty("key_store", "/home/jack/certs/server.jks");
+      pt.setProperty("key_store_pwd", "XXXXXX");
+      // conn = DriverManager.getConnection(url, user, password);
+      conn = DriverManager.getConnection(url, pt);
+
       assertNotEquals(null, conn);
       Statement st = conn.createStatement();
       assertNotEquals(null, st);

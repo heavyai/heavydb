@@ -33,8 +33,7 @@ import java.sql.SQLXML;
 import java.sql.Savepoint;
 import java.sql.Statement;
 import java.sql.Struct;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.Executor;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -46,69 +45,174 @@ import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.mapd.common.SockTransportProperties;
+
+import javax.crypto.Cipher;
 
 /**
  *
  * @author michael
  */
+/*
+ * Param_pair - Simple pair class to hold the label for a component in the url
+ * and an index into the url to that component.
+ * For example in the url jdbc:mapd:hostname:9090 a Param_pair for
+ * hostname would have a label of "hostname" and an index of 2
+
+ */
+class Param_pair {
+  public Param_pair(String l, int i) {
+    label = l;
+    index = i;
+  }
+  public String label;
+  public int index;
+}
+enum Connection_enums {
+  host_name,
+  port_num,
+  db_name,
+  protocol,
+  key_store,
+  key_store_pwd,
+  user,
+  user_passwd
+}
+
 public class MapDConnection implements java.sql.Connection {
   final static Logger logger = LoggerFactory.getLogger(MapDConnection.class);
+  // A simple internal class to hold a summary of the properties passed to the connection
+  // Properties can come two ways - via the url or via a Properties param
+  class Connection_properties extends Hashtable<Connection_enums, Object> {
+    // All 'used' properties should be listed in this enum map
+    EnumMap<Connection_enums, Param_pair> connection_map =
+            new EnumMap<Connection_enums, Param_pair>(Connection_enums.class) {
+              {
+                // the map allows peoperties to be access via a enum rather than string
+                put(Connection_enums.host_name, new Param_pair("host_name", 2));
+                put(Connection_enums.port_num, new Param_pair("port_num", 3));
+                put(Connection_enums.db_name, new Param_pair("db_name", 4));
+                put(Connection_enums.protocol, new Param_pair("protocol", 5));
+                put(Connection_enums.key_store, new Param_pair("key_store", 6));
+                put(Connection_enums.key_store_pwd, new Param_pair("key_store_pwd", 7));
+                put(Connection_enums.user, new Param_pair("user", 100));
+                put(Connection_enums.user_passwd, new Param_pair("password", 101));
+              }
+            };
+
+    public Connection_properties(Properties properties, String connection_url) {
+      super();
+      String[] temp = connection_url.split(":");
+      for (Connection_enums enum_key : connection_map.keySet()) {
+        Param_pair param_pair = connection_map.get(enum_key);
+        String value_from_prop = null;
+        String value_from_url = null;
+        if (param_pair.index < temp.length) {
+          value_from_url = temp[param_pair.index];
+        }
+        value_from_prop = properties.getProperty(param_pair.label, value_from_url);
+        if (value_from_url != null && value_from_prop != null) {
+          if (!value_from_prop.equals(properties.getProperty(param_pair.label))) {
+            logger.warn("Connected property in url[" + value_from_url
+                    + "] differs from Properties class [" + value_from_prop
+                    + "]. Using url version");
+            value_from_prop = value_from_url;
+          }
+        }
+        if (value_from_prop != null) this.put(enum_key, value_from_prop);
+      }
+      validate_params();
+    }
+    private void validate_params() {
+      // if present remove "//" from front of hostname
+      String hN = (String) this.get(Connection_enums.host_name);
+      if (hN.startsWith("//")) {
+        this.put(Connection_enums.host_name, hN.substring(2));
+      }
+      Integer port_num = Integer.parseInt((String) (this.get(Connection_enums.port_num)));
+      this.put(Connection_enums.port_num, port_num);
+      String protocol = "binary";
+      if (this.containsKey(Connection_enums.protocol)) {
+        protocol = (String) this.get(Connection_enums.protocol);
+        protocol.toLowerCase();
+        if (!protocol.equals("binary") && !protocol.equals("http")
+                && !protocol.equals("https")) {
+          logger.warn("Incorrect protcol [" + protocol
+                  + "] supplied. Possible values are [binary | http | https]. Using binary as default");
+          protocol = "binary";
+        }
+        this.put(Connection_enums.protocol, protocol);
+      }
+      if (this.containsKey(Connection_enums.key_store)
+              && !this.containsKey(Connection_enums.key_store_pwd)) {
+        logger.warn("key store [" + (String) this.get(Connection_enums.key_store)
+                + " specfied without a password");
+      }
+      if (this.containsKey(Connection_enums.key_store_pwd)
+              && !this.containsKey(Connection_enums.key_store)) {
+        logger.warn("key store password specified without a keystore file");
+      }
+    }
+
+    boolean isHttpProtocol() {
+      return ((String) this.get(Connection_enums.protocol)).equals("http");
+    }
+    boolean isHttpsProtocol() {
+      return ((String) this.get(Connection_enums.protocol)).equals("https");
+    }
+    boolean isBinary() {
+      return ((String) this.get(Connection_enums.protocol)).equals("binary");
+    }
+    boolean containsTrustStore() {
+      return this.containsKey(Connection_enums.key_store);
+    }
+  } /* End class Connection_properties extends Hashtable<Connection_enums, Object> */
 
   protected String session = null;
   protected MapD.Client client = null;
-  protected String url = null;
-  protected Properties properties = null;
-  protected String user;
   protected String catalog;
   protected TTransport transport;
   protected SQLWarning warnings;
-
+  protected String url;
+  protected Connection_properties cP = null;
   public MapDConnection(String url, Properties info)
           throws SQLException { // logger.debug("Entered");
     this.url = url;
-    this.properties = info;
-    this.user = info.getProperty("user");
-    boolean http_session = false;
-
-    // logger.debug("We got to here " + url + " info: " + info.toString());
-    String[] temp = url.split(":");
-
-    // for (int i = 0; i < temp.length; i++) {
-    //  logger.debug("temp  " + i + " " + temp[i].toString());
-    //}
-    String machine = temp[2];
-
-    // deal with requirement that there may be double // before the machine
-    if (machine.startsWith("//")) {
-      machine = machine.substring(2);
-    }
-
-    // logger.debug("machine : " + machine);
-    int port = Integer.valueOf(temp[3]);
-    this.catalog = temp[4];
-    // test for http protocol request (we could consider using properties)
-    if (temp.length == 6) {
-      if (temp[5].equals("http")) {
-        http_session = true;
-      } else {
-        throw new SQLException("Connection failed invalid protocol option- " + temp[5]);
-      }
-    }
+    this.cP = new Connection_properties(info, url);
+    SockTransportProperties skT = null;
     try {
+      if (this.cP.containsTrustStore()) {
+        skT = new SockTransportProperties(
+                (String) this.cP.get(Connection_enums.key_store),
+                (String) cP.get(Connection_enums.key_store_pwd));
+      }
       TProtocol protocol = null;
-      if (http_session) {
-        transport = new THttpClient("http://" + machine + ":" + port);
+      if (this.cP.isHttpProtocol()) {
+        transport = SockTransportProperties.openHttpClientTransport(
+                (String) this.cP.get(Connection_enums.host_name),
+                ((Integer) this.cP.get(Connection_enums.port_num)).intValue(),
+                skT);
+        transport.open();
+        protocol = new TJSONProtocol(transport);
+      } else if (this.cP.isHttpsProtocol()) {
+        transport = SockTransportProperties.openHttpsClientTransport(
+                (String) this.cP.get(Connection_enums.host_name),
+                ((Integer) this.cP.get(Connection_enums.port_num)).intValue(),
+                skT);
         transport.open();
         protocol = new TJSONProtocol(transport);
       } else {
-        transport = new TSocket(machine, port);
-        transport.open();
+        transport = SockTransportProperties.openClientTransport(
+                (String) this.cP.get(Connection_enums.host_name),
+                ((Integer) this.cP.get(Connection_enums.port_num)).intValue(),
+                skT);
+        if (!transport.isOpen()) transport.open();
         protocol = new TBinaryProtocol(transport);
       }
       client = new MapD.Client(protocol);
-
-      session = client.connect(
-              info.getProperty("user"), info.getProperty("password"), this.catalog);
+      session = client.connect((String) this.cP.get(Connection_enums.user),
+              (String) this.cP.get(Connection_enums.user_passwd),
+              (String) this.cP.get(Connection_enums.db_name));
 
       logger.debug("Connected session is " + session);
 
@@ -117,6 +221,8 @@ public class MapDConnection implements java.sql.Connection {
     } catch (TMapDException ex) {
       throw new SQLException("Connection failed - " + ex.toString());
     } catch (TException ex) {
+      throw new SQLException("Connection failed - " + ex.toString());
+    } catch (java.lang.Exception ex) {
       throw new SQLException("Connection failed - " + ex.toString());
     }
   }

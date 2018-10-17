@@ -38,7 +38,8 @@ public class tester {
     //            new ListSqlOperatorTable(
     //                ImmutableList.<SqlOperator>of(new MyCountAggFunction())));
     MapDUser mdu = new MapDUser("mapd", "passwd", "catalog", -1);
-    MapDSchema mapd = new MapDSchema("/home/michael/mapd2/build/data", null, -1, mdu);
+    MapDSchema mapd =
+            new MapDSchema("/home/michael/mapd2/build/data", null, -1, mdu, null);
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
     final FrameworkConfig config = Frameworks.newConfigBuilder()
                                            .defaultSchema(rootSchema.add("mapd", mapd))
@@ -72,7 +73,7 @@ public class tester {
     MAPDLOGGER.error("Json Version \n" + MapDSerializer.toString(relR.project()));
 
     // now do with MapD parser
-    MapDParser mp = new MapDParser("/home/michael/mapd2/build/data", null, -1);
+    MapDParser mp = new MapDParser("/home/michael/mapd2/build/data", null, -1, null);
     mp.setUser(mdu);
 
     try {

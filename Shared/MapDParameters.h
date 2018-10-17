@@ -39,7 +39,10 @@ struct MapDParameters {
   bool is_decr_start_epoch;         // are we doing a start epoch decrement?
   size_t cpu_buffer_mem_bytes = 0;  // max size of memory reserved for CPU buffers [bytes]
   size_t gpu_buffer_mem_bytes = 0;  // max size of memory reserved for GPU buffers [bytes]
-
+  std::string ssl_cert_file = "";   // file path to server's certified PKI certificate
+  std::string ssl_key_file = "";    // file path to server's' private PKI key
+  std::string ssl_trust_store = "";     // file path to java jks version of ssl_key_fle
+  std::string ssl_trust_password = "";  // pass phrae for java jks trust store.
   MapDParameters() : cuda_block_size(0), cuda_grid_size(0), calcite_max_mem(1024) {}
 };
 

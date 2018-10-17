@@ -57,7 +57,8 @@ option(PREFER_STATIC_LIBS "Prefer linking against static libraries" OFF)
 if(PREFER_STATIC_LIBS)
   set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
   set(Boost_USE_STATIC_LIBS ON)
-
+  set(OPENSSL_USE_STATIC_LIBS ON)
+  set(Thrift_USE_STATIC_LIBS ON)
   if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libgcc -static-libstdc++")
   endif()
@@ -107,6 +108,13 @@ if(XCODE)
   endif()
   add_definitions("-DXCODE")
 endif()
+
+# fixme: hack works for Homebrew, might not work for Conda
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl/")
+endif()
+find_package(OpenSSL REQUIRED)
+include_directories(${OPENSSL_INCLUDE_DIR})
 
 find_package(Thrift REQUIRED)
 include_directories(${Thrift_INCLUDE_DIRS})
@@ -628,14 +636,18 @@ set(MAPD_JAR_RELEASE_VERSION "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD
 if("${MAPD_VERSION_EXTRA}" STREQUAL "dev")
   set (MAPD_JAR_RELEASE_VERSION "${MAPD_JAR_RELEASE_VERSION}-SNAPSHOT")
 endif()
+
+set (MAPD_COMMON_JAR "mapdcommon-${MAPD_JAR_RELEASE_VERSION}.jar")
 set (MAPD_JDBC_JAR "mapdjdbc-${MAPD_JAR_RELEASE_VERSION}.jar")
 
 add_custom_command(
   OUTPUT
+    ${CMAKE_BINARY_DIR}/bin/${MAPD_COMMON_JAR}
     ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
     ${CMAKE_BINARY_DIR}/bin/${MAPD_JDBC_JAR}
     ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar
     COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q clean install -Dthrift.version="${Thrift_VERSION}" -Dmapd.release.version="${MAPD_JAR_RELEASE_VERSION}"
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapdcommon/target/${MAPD_COMMON_JAR} ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapdjdbc/target/${MAPD_JDBC_JAR} ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
@@ -649,6 +661,7 @@ add_custom_command(
     ${JAVA_SOURCES}
   )
 add_custom_target(mapd_java_components ALL DEPENDS
+  ${CMAKE_BINARY_DIR}/bin/${MAPD_COMMON_JAR}
   ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
   ${CMAKE_BINARY_DIR}/bin/${MAPD_JDBC_JAR}
   ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar)

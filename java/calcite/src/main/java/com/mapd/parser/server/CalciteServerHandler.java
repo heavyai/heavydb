@@ -43,6 +43,9 @@ import org.apache.thrift.TException;
 import org.apache.thrift.server.TServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.calcite.tools.RelConversionException;
+import org.apache.calcite.tools.ValidationException;
+import com.mapd.common.SockTransportProperties;
 
 /**
  *
@@ -62,7 +65,10 @@ class CalciteServerHandler implements CalciteServer.Iface {
 
   // TODO MAT we need to merge this into common code base for these funictions with
   // CalciteDirect since we are not deprecating this stuff yet
-  CalciteServerHandler(int mapdPort, String dataDir, String extensionFunctionsAstFile) {
+  CalciteServerHandler(int mapdPort,
+          String dataDir,
+          String extensionFunctionsAstFile,
+          SockTransportProperties skT) {
     this.parserPool = new GenericObjectPool();
     this.mapdPort = mapdPort;
 
@@ -76,7 +82,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
     this.extSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(extSigs);
 
     PoolableObjectFactory parserFactory =
-            new CalciteParserFactory(dataDir, extSigs, mapdPort);
+            new CalciteParserFactory(dataDir, extSigs, mapdPort, skT);
 
     parserPool.setFactory(parserFactory);
   }
@@ -127,8 +133,18 @@ class CalciteServerHandler implements CalciteServer.Iface {
         filterPushDownInfo.add(new MapDParser.FilterPushDownInfo(
                 req.input_prev, req.input_start, req.input_next));
       }
-      relAlgebra = parser.getRelAlgebra(
-              sqlText, filterPushDownInfo, legacySyntax, mapDUser, isExplain);
+      try {
+        relAlgebra = parser.getRelAlgebra(
+                sqlText, filterPushDownInfo, legacySyntax, mapDUser, isExplain);
+      } catch (ValidationException ex) {
+        String msg = "Validation: " + ex.getMessage();
+        MAPDLOGGER.error(msg);
+        throw ex;
+      } catch (RelConversionException ex) {
+        String msg = " RelConversion failed: " + ex.getMessage();
+        MAPDLOGGER.error(msg);
+        throw ex;
+      }
       capturer = parser.captureIdentifiers(sqlText, legacySyntax);
 
       primaryAccessedObjects.tables_selected_from = new ArrayList<>(capturer.selects);

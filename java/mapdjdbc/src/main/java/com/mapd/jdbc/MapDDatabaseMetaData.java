@@ -39,6 +39,8 @@ import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static com.mapd.jdbc.Connection_enums.user;
+
 /**
  *
  * @author michael
@@ -90,7 +92,7 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
   @Override
   public String getUserName() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    return con.user;
+    return (String) con.cP.get(Connection_enums.user);
   }
 
   @Override

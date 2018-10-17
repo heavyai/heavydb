@@ -23,6 +23,7 @@ import com.mapd.thrift.calciteserver.CalciteServer.Processor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.mapd.common.SockTransportProperties;
 /**
  *
  * @author michael
@@ -39,15 +40,16 @@ public class CalciteServerWrapper implements Runnable {
   private boolean shutdown = false;
 
   public CalciteServerWrapper() {
-    handler = new CalciteServerHandler(mapDPort, dataDir, null);
+    handler = new CalciteServerHandler(mapDPort, dataDir, null, null);
     processor = new com.mapd.thrift.calciteserver.CalciteServer.Processor(handler);
   }
 
   public CalciteServerWrapper(int calcitePort,
           int mapDPort,
           String dataDir,
-          String extensionFunctionsAstFile) {
-    handler = new CalciteServerHandler(mapDPort, dataDir, extensionFunctionsAstFile);
+          String extensionFunctionsAstFile,
+          SockTransportProperties skT) {
+    handler = new CalciteServerHandler(mapDPort, dataDir, extensionFunctionsAstFile, skT);
     processor = new com.mapd.thrift.calciteserver.CalciteServer.Processor(handler);
     this.calcitePort = calcitePort;
     this.mapDPort = mapDPort;

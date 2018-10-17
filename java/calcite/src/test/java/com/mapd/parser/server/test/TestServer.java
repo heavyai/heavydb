@@ -21,6 +21,7 @@ import com.mapd.thrift.calciteserver.CalciteServer;
 import com.mapd.thrift.calciteserver.TPlanResult;
 import org.junit.Test;
 
+import com.mapd.common.SockTransportProperties;
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
@@ -45,10 +46,11 @@ public class TestServer {
   private volatile boolean threadHadFailure = false;
   private volatile AssertionError ae;
   private static CalciteServerWrapper csw = null;
+  private static SockTransportProperties skT = null;
 
   @BeforeClass
   public static void startServer() {
-    csw = new CalciteServerWrapper(11000, 11001, "/data", null);
+    csw = new CalciteServerWrapper(11000, 11001, "/data", null, skT);
     new Thread(csw).start();
   }
 
