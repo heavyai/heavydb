@@ -34,6 +34,7 @@
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Parser/ParserNode.h"
+#include "Shared/ExperimentalTypeUtilities.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/measure.h"
