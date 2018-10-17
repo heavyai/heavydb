@@ -18,6 +18,7 @@
 #include <thrift/transport/THttpClient.h>
 #include <thrift/transport/TSSLSocket.h>
 #include <thrift/transport/TSocket.h>
+#include <boost/filesystem.hpp>
 
 using namespace ::apache::thrift::transport;
 using Decision = AccessManager::Decision;
@@ -59,10 +60,28 @@ mapd::shared_ptr<TTransport> openBufferedClientTransport(
 
 mapd::shared_ptr<TTransport> openHttpClientTransport(const std::string& server_host,
                                                      const int port,
-                                                     const std::string& trust_cert_file,
+                                                     const std::string& trust_cert_file_,
                                                      const std::string& trust_cert_dir,
                                                      bool use_https,
                                                      bool skip_verify) {
+  std::string trust_cert_file{trust_cert_file_};
+  if (trust_cert_file_.empty()) {
+    static std::list<std::string> v_known_ca_paths({
+        "/etc/ssl/certs/ca-certificates.crt",
+        "/etc/pki/tls/certs/ca-bundle.crt",
+        "/usr/share/ssl/certs/ca-bundle.crt",
+        "/usr/local/share/certs/ca-root.crt",
+        "/etc/ssl/cert.pem",
+        "/etc/ssl/ca-bundle.pem",
+    });
+    for (const auto& known_ca_path : v_known_ca_paths) {
+      if (boost::filesystem::exists(known_ca_path)) {
+        trust_cert_file = known_ca_path;
+        break;
+      }
+    }
+  }
+
   mapd::shared_ptr<TTransport> transport;
   mapd::shared_ptr<TTransport> socket;
   if (use_https) {

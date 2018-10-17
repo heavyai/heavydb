@@ -19,6 +19,8 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/ThirdParty/geo_samples DESTINATION "ThirdP
 add_custom_target(geo_samples ALL COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/ThirdParty/geo_samples" "${CMAKE_BINARY_DIR}/ThirdParty/geo_samples")
 
 add_library(RowToColumn RowToColumnLoader.cpp RowToColumnLoader.h)
+target_link_libraries(RowToColumn ThriftClient)
+
 add_executable(StreamImporter StreamImporter.cpp)
 target_link_libraries(StreamImporter RowToColumn mapd_thrift Shared ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${PROFILER_LIBS})
 

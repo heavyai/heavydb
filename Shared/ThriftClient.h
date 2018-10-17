@@ -20,6 +20,34 @@
 #include <string>
 #include "Shared/mapd_shared_ptr.h"
 
+enum class ThriftConnectionType { HTTPS, HTTP, BINARY, BINARY_SSL };
+
+struct ThriftClientConnection {
+  std::string server_host_;
+  int port_;
+  ThriftConnectionType conn_type_;
+  bool skip_host_verify_;
+  std::string ca_cert_name_;
+  std::string trust_cert_file_;
+  std::string trust_cert_dir_;
+
+  ThriftClientConnection(const std::string& server_host,
+                         const int port,
+                         const ThriftConnectionType conn_type,
+                         bool skip_host_verify,
+                         const std::string& ca_cert_name = "",
+                         const std::string& trust_cert_file = "",
+                         const std::string& trust_cert_dir = "")
+      : server_host_(server_host)
+      , port_(port)
+      , conn_type_(conn_type)
+      , skip_host_verify_(skip_host_verify)
+      , ca_cert_name_(ca_cert_name)
+      , trust_cert_file_(trust_cert_file)
+      , trust_cert_dir_(trust_cert_dir) {}
+  ThriftClientConnection(){};
+};
+
 mapd::shared_ptr<::apache::thrift::transport::TTransport> openBufferedClientTransport(
     const std::string& server_host,
     const int port,
