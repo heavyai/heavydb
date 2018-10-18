@@ -9667,6 +9667,16 @@ TEST(Select, GeoSpatial_Basics) {
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
                                   "WHERE ST_Distance(p, 'LINESTRING(-1 0, 0 1)') < 2.5;",
                                   dt)));
+
+    // Unsupported aggs
+    EXPECT_THROW(run_simple_agg("SELECT MIN(p) FROM geospatial_test;", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_simple_agg("SELECT MAX(p) FROM geospatial_test;", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_simple_agg("SELECT AVG(p) FROM geospatial_test;", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_simple_agg("SELECT SUM(p) FROM geospatial_test;", dt),
+                 std::runtime_error);
   }
 }
 
