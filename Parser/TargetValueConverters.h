@@ -304,7 +304,7 @@ struct GeoPointValueConverter : public TargetValueConverter {
   inline ArrayDatum toCompressedCoords(
       const std::shared_ptr<std::vector<double>>& coords) {
     const auto compressed_coords_vector =
-        Importer_NS::compress_coords(*coords, coords_column_descriptor_->columnType);
+        Importer_NS::compress_coords(*coords, column_descriptor_->columnType);
 
     uint8_t* compressed_coords_array = reinterpret_cast<uint8_t*>(
         checked_malloc(sizeof(uint8_t) * compressed_coords_vector.size()));
