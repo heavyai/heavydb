@@ -61,7 +61,6 @@ mapd::shared_ptr<TTransport> openBufferedClientTransport(
 mapd::shared_ptr<TTransport> openHttpClientTransport(const std::string& server_host,
                                                      const int port,
                                                      const std::string& trust_cert_file_,
-                                                     const std::string& trust_cert_dir,
                                                      bool use_https,
                                                      bool skip_verify) {
   std::string trust_cert_file{trust_cert_file_};
@@ -92,8 +91,7 @@ mapd::shared_ptr<TTransport> openHttpClientTransport(const std::string& server_h
       sslSocketFactory->access(
           mapd::shared_ptr<InsecureAccessManager>(new InsecureAccessManager()));
     }
-    sslSocketFactory->loadTrustedCertificates(
-        trust_cert_file.c_str(), trust_cert_dir != "" ? trust_cert_dir.c_str() : nullptr);
+    sslSocketFactory->loadTrustedCertificates(trust_cert_file.c_str());
     socket = sslSocketFactory->createSocket(server_host, port);
     transport = mapd::shared_ptr<TTransport>(new THttpClient(socket, server_host, "/"));
   } else {
