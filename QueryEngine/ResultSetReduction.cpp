@@ -1510,6 +1510,11 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
           ++agg_col_idx;
         }
       } else {
+        if (agg_info.agg_kind == kSAMPLE) {
+          CHECK(!agg_info.sql_type.is_varlen())
+              << "Interleaved bins reduction not supported for variable length arguments "
+                 "to SAMPLE";
+        }
         if (agg_vals[agg_col_idx]) {
           if (agg_info.agg_kind == kSAMPLE) {
             continue;

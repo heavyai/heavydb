@@ -9719,7 +9719,6 @@ TEST(Select, GeoSpatial_Projection) {
         run_simple_agg("SELECT SAMPLE(l) FROM geospatial_test WHERE id = 1 GROUP BY id;",
                        dt),
         GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.}));
-
     compare_geo_target(
         run_simple_agg(
             "SELECT SAMPLE(poly) FROM geospatial_test WHERE id = 1 GROUP BY id;", dt),
@@ -9741,6 +9740,28 @@ TEST(Select, GeoSpatial_Projection) {
             dt),
         GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}),
         0.01);
+
+    // Sample with multiple aggs
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT COUNT(*), SAMPLE(l) FROM geospatial_test WHERE id = 1 GROUP BY id;",
+          dt);
+      rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
+      const auto row = rows->getNextRow(false, false);
+      CHECK_EQ(row.size(), size_t(2));
+      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(row[0]));
+      compare_geo_target(row[1], GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.}));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT COUNT(*), SAMPLE(poly) FROM geospatial_test WHERE id = 1 GROUP BY id;",
+          dt);
+      rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
+      const auto row = rows->getNextRow(false, false);
+      CHECK_EQ(row.size(), size_t(2));
+      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(row[0]));
+      compare_geo_target(row[1], GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}));
+    }
 
     ASSERT_EQ(
         static_cast<int64_t>(1),
