@@ -315,16 +315,24 @@ TEST_F(ImportTest, One_csv_file) {
   EXPECT_TRUE(import_test_local("trip_data_9.csv", 100, 1.0));
 }
 
+TEST_F(ImportTest, One_csv_file_no_newline) {
+  EXPECT_TRUE(import_test_local("trip_data_no_newline_1.csv", 100, 1.0));
+}
+
+TEST_F(ImportTest, Many_csv_file) {
+  EXPECT_TRUE(import_test_local("trip_data_*.csv", 1200, 1.0));
+}
+
+TEST_F(ImportTest, Many_csv_file_no_newline) {
+  EXPECT_TRUE(import_test_local("trip_data_no_newline_*.csv", 200, 1.0));
+}
+
 TEST_F(ImportTest, One_gz_file) {
   EXPECT_TRUE(import_test_local("trip_data_9.gz", 100, 1.0));
 }
 
 TEST_F(ImportTest, One_bz2_file) {
   EXPECT_TRUE(import_test_local("trip_data_9.bz2", 100, 1.0));
-}
-
-TEST_F(ImportTest, Many_csv_file) {
-  EXPECT_TRUE(import_test_local("trip_data_*.csv", 1000, 1.0));
 }
 
 TEST_F(ImportTest, One_tar_with_many_csv_files) {
@@ -345,6 +353,10 @@ TEST_F(ImportTest, One_zip_with_many_csv_files) {
 
 TEST_F(ImportTest, One_7z_with_many_csv_files) {
   EXPECT_TRUE(import_test_local("trip_data.7z", 1000, 1.0));
+}
+
+TEST_F(ImportTest, One_tgz_with_many_csv_files_no_newline) {
+  EXPECT_TRUE(import_test_local("trip_data_some_with_no_newline.tgz", 500, 1.0));
 }
 
 // Sharding tests

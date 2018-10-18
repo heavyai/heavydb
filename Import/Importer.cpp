@@ -2947,6 +2947,7 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
         // start reading uncompressed bytes of this archive from libarchive
         // note! this archive may contain more than one files!
         while (!stop && !!(just_saw_archive_header = arch.read_next_header())) {
+          bool insert_line_delim_after_this_file = false;
           while (!stop && arch.read_data_block(&buf, &size, &offset)) {
             // one subtle point here is now we concatenate all files
             // to a single FILE stream with which we call importDelimited
@@ -2975,24 +2976,65 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
             // loop reading till no bytes left, otherwise the annoying `failed to write
             // pipe: Success`...
             if (size2 > 0) {
-              for (int nread = 0, nleft = size2; nleft > 0;
-                   nleft -= (nread > 0 ? nread : 0)) {
-                nread = write(fd[1], buf2, nleft);
-                if (nread == nleft) {
-                  break;  // done
+              int nremaining = size2;
+              while (nremaining > 0) {
+                // try to write the entire remainder of the buffer to the pipe
+                int nwritten = write(fd[1], buf2, nremaining);
+                // how did we do?
+                if (nwritten < 0) {
+                  // something bad happened
+                  if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
+                    // ignore these, assume nothing written, try again
+                    nwritten = 0;
+                  } else {
+                    // a real error
+                    throw std::runtime_error(
+                        std::string("failed or interrupted write to pipe: ") +
+                        strerror(errno));
+                  }
+                } else if (nwritten == nremaining) {
+                  // we wrote everything; we're done
+                  break;
                 }
+                // only wrote some (or nothing), try again
+                nremaining -= nwritten;
+                buf2 += nwritten;
                 // no exception when too many rejected
+                // @simon.eves how would this get set? from the other thread? mutex
+                // needed?
                 if (import_status.load_truncated) {
                   stop = true;
                   break;
                 }
-                // not to overwrite original error
-                if (nread < 0 &&
-                    !(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) {
+              }
+              // check that this file (buf for size) ended with a line delim
+              if (size > 0) {
+                const char* plast = static_cast<const char*>(buf) + (size - 1);
+                insert_line_delim_after_this_file = (*plast != copy_params.line_delim);
+              }
+            }
+          }
+          // if that file didn't end with a line delim, we insert one here to terminate
+          // that file's stream use a loop for the same reason as above
+          if (insert_line_delim_after_this_file) {
+            while (true) {
+              // write the delim char to the pipe
+              int nwritten = write(fd[1], &copy_params.line_delim, 1);
+              // how did we do?
+              if (nwritten < 0) {
+                // something bad happened
+                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
+                  // ignore these, assume nothing written, try again
+                  nwritten = 0;
+                } else {
+                  // a real error
                   throw std::runtime_error(
                       std::string("failed or interrupted write to pipe: ") +
                       strerror(errno));
                 }
+              } else if (nwritten == 1) {
+                // we wrote it; we're done
+                break;
               }
             }
           }
