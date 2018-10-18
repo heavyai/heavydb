@@ -61,7 +61,10 @@ sudo apt install -y \
     autoconf-archive \
     automake \
     bison \
-    flex-old
+    flex-old \
+    libpng-dev \
+    rsync \
+    unzip
 
 # GEO STUFF
 # expat
