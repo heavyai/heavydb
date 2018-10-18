@@ -331,6 +331,19 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
           !output_columnar_;  // TODO(Saman): add columnar support with the new smem
                               // support.
 
+      bool has_varlen_sample_agg = false;
+      for (const auto& target_expr : ra_exe_unit.target_exprs) {
+        if (target_expr->get_contains_agg()) {
+          const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
+          CHECK(agg_expr);
+          if (agg_expr->get_aggtype() == kSAMPLE &&
+              agg_expr->get_type_info().is_varlen()) {
+            has_varlen_sample_agg = true;
+            break;
+          }
+        }
+      }
+
       // TODO(Saman): should remove this after implementing shared memory path completely
       // through codegen We should not use the current shared memory path if more than 8
       // bytes per group is required
@@ -340,7 +353,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
         sharing_ = GroupByMemSharing::SharedForKeylessOneColumnKnownRange;
         interleaved_bins_on_gpu_ = false;
       } else {
-        interleaved_bins_on_gpu_ = keyless_hash_ &&
+        interleaved_bins_on_gpu_ = keyless_hash_ && !has_varlen_sample_agg &&
                                    (entry_count_ <= interleaved_max_threshold) &&
                                    QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
                                        count_distinct_descriptors);
