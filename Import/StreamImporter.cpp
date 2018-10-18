@@ -421,7 +421,7 @@ int main(int argc, char** argv) {
       delim, nulls, line_delim, batch_size, retry_count, retry_wait);
   RowToColumnLoader row_loader(
       ThriftClientConnection(
-          server_host, port, conn_type, skip_host_verify, ca_cert_name, "", ca_cert_name),
+          server_host, port, conn_type, skip_host_verify, ca_cert_name, ca_cert_name),
       user_name,
       passwd,
       db_name,

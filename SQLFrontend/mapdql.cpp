@@ -604,7 +604,6 @@ bool backchannel(int action, ClientContext* cc, const std::string& ccn = "") {
       transport2 = openHttpClientTransport(context->server_host,
                                            context->port,
                                            ca_cert_name,
-                                           "",
                                            context->https,
                                            context->skip_host_verify);
       protocol2 = mapd::shared_ptr<TProtocol>(new TJSONProtocol(transport2));
@@ -1109,8 +1108,8 @@ int main(int argc, char** argv) {
   mapd::shared_ptr<TProtocol> protocol;
   mapd::shared_ptr<TTransport> socket;
   if (https || http) {
-    transport = openHttpClientTransport(
-        server_host, port, ca_cert_name, "", https, skip_host_verify);
+    transport =
+        openHttpClientTransport(server_host, port, ca_cert_name, https, skip_host_verify);
     protocol = mapd::shared_ptr<TProtocol>(new TJSONProtocol(transport));
   } else {
     transport = openBufferedClientTransport(server_host, port, ca_cert_name);
