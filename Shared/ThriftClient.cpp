@@ -84,7 +84,10 @@ mapd::shared_ptr<TTransport> openHttpClientTransport(const std::string& server_h
   mapd::shared_ptr<TTransport> transport;
   mapd::shared_ptr<TTransport> socket;
   if (use_https) {
-    mapd::shared_ptr<TSSLSocketFactory> sslSocketFactory =
+    // Thrift issue 4164 https://jira.apache.org/jira/browse/THRIFT-4164 reports a problem
+    // if TSSLSocketFactory is destroyed before any sockets it creates are destroyed.
+    // Making the factory static should ensure a safe destruction order.
+    static mapd::shared_ptr<TSSLSocketFactory> sslSocketFactory =
         mapd::shared_ptr<TSSLSocketFactory>(new TSSLSocketFactory());
     if (skip_verify) {
       sslSocketFactory->authenticate(false);
