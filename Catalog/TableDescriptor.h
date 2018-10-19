@@ -61,13 +61,17 @@ struct TableDescriptor {
   // RexInput node
   std::vector<int> columnIdBySpi_;  // spi = 1,2,3,...
 
+  // write mutex, only to be used inside catalog package
+  std::shared_ptr<std::mutex> mutex_;
+
   TableDescriptor()
       : tableId(-1)
       , shard(-1)
       , nShards(0)
       , shardedColumnId(0)
       , persistenceLevel(Data_Namespace::MemoryLevel::DISK_LEVEL)
-      , hasDeletedCol(true) {}
+      , hasDeletedCol(true)
+      , mutex_(std::make_shared<std::mutex>()) {}
 };
 
 inline bool table_is_replicated(const TableDescriptor* td) {

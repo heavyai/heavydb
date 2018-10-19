@@ -141,6 +141,11 @@ public class CatalogConcurrencyTest {
     su.runSql("GRANT DROP VIEW on DATABASE db1 TO bob;");
     su.runSql("GRANT DELETE DASHBOARD on DATABASE db1 TO bob;");
 
+    su.runSql("GRANT ACCESS on database mapd TO dba;");
+    su.runSql("GRANT ACCESS on database mapd TO bob;");
+    su.runSql("GRANT ACCESS on database db1 TO dba;");
+    su.runSql("GRANT ACCESS on database db1 TO bob;");
+
     runTest("db1", "mapd", "HyperInteractive", "mapd", "HyperInteractive");
     runTest("db1", "mapd", "HyperInteractive", "dba", "password");
     runTest("db1", "mapd", "HyperInteractive", "bob", "password");
