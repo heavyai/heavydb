@@ -1115,6 +1115,7 @@ privilege:
 	|	TRUNCATE { $<stringval>$ = new std::string("TRUNCATE"); }
 	|	UPDATE { $<stringval>$ = new std::string("UPDATE"); }
 	|	DELETE { $<stringval>$ = new std::string("DELETE"); }
+	| 	ALTER { $<stringval>$ = new std::string("ALTER"); }
 	|	DROP { $<stringval>$ = new std::string("DROP"); }
 	|	VIEW { $<stringval>$ = new std::string("VIEW"); }
 	|	EDIT { $<stringval>$ = new std::string("EDIT"); }
