@@ -2557,6 +2557,7 @@ void Catalog::addTableToMap(TableDescriptor& td,
   cat_write_lock write_lock(this);
   TableDescriptor* new_td = new TableDescriptor();
   *new_td = td;
+  new_td->mutex_ = std::make_shared<std::mutex>();
   tableDescriptorMap_[to_upper(td.tableName)] = new_td;
   tableDescriptorMapById_[td.tableId] = new_td;
   for (auto cd : columns) {
@@ -2689,7 +2690,6 @@ void Catalog::addLinkToMap(LinkDescriptor& ld) {
 }
 
 void Catalog::instantiateFragmenter(TableDescriptor* td) const {
-  cat_sqlite_lock sqlite_lock(this);
   auto time_ms = measure<>::execution([&]() {
     // instanciate table fragmenter upon first use
     // assume only insert order fragmenter is supported
@@ -2725,7 +2725,7 @@ const TableDescriptor* Catalog::getMetadataForTable(const string& tableName,
     return nullptr;
   }
   TableDescriptor* td = tableDescIt->second;
-  cat_sqlite_lock sqlite_lock(this);
+  std::unique_lock<std::mutex> td_lock(*td->mutex_.get());
   if (populateFragmenter && td->fragmenter == nullptr && !td->isView) {
     instantiateFragmenter(td);
   }
@@ -2739,7 +2739,7 @@ const TableDescriptor* Catalog::getMetadataForTable(int tableId) const {
     return nullptr;
   }
   TableDescriptor* td = tableDescIt->second;
-  cat_sqlite_lock sqlite_lock(this);
+  std::unique_lock<std::mutex> td_lock(*td->mutex_.get());
   if (td->fragmenter == nullptr && !td->isView) {
     instantiateFragmenter(td);
   }

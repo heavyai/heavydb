@@ -589,11 +589,11 @@ public class MetaConnect {
     if (table.equals("")) {
       // Drop db and all tables
       // iterate through all and remove matching schema
-      for (List<String> keys : MAPD_TABLE_DETAILS.keySet()) {
-        if (keys.get(1).equals(schema.toUpperCase())) {
-          MAPDLOGGER.debug("removing schema " + keys.get(1) + " table " + keys.get(2));
-          MAPD_TABLE_DETAILS.remove(
-                  ImmutableList.of(keys.get(1).toUpperCase(), keys.get(2).toUpperCase()));
+      Set<List<String>> all = new HashSet<>(MAPD_TABLE_DETAILS.keySet());
+      for (List<String> keys : all) {
+        if (keys.get(0).equals(schema.toUpperCase())) {
+          MAPDLOGGER.debug("removing schema " + keys.get(0) + " table " + keys.get(1));
+          MAPD_TABLE_DETAILS.remove(keys);
         }
       }
     } else {
