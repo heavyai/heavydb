@@ -3075,6 +3075,13 @@ std::pair<bool, int64_t> Executor::skipFragment(
     if (!lhs->get_type_info().is_integer() && !lhs->get_type_info().is_time()) {
       continue;
     }
+    if (lhs->get_type_info().get_type() == kTIMESTAMP &&
+        (lhs_col->get_type_info() != rhs_const->get_type_info())) {
+      // Original lhs col has different precision so
+      // column metadata holds value in original dimension scale
+      // therefore skip meta value comparison check
+      continue;
+    }
     const int col_id = lhs_col->get_column_id();
     auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
     int64_t chunk_min{0};
