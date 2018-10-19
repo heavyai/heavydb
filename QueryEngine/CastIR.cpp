@@ -68,7 +68,8 @@ llvm::Value* Executor::codegenCast(llvm::Value* operand_lv,
       return codegenCastTimestampToDate(
           operand_lv, operand_ti.get_dimension(), !ti.get_notnull());
     }
-    if (operand_ti.get_type() == kTIMESTAMP && ti.get_type() == kTIMESTAMP) {
+    if ((operand_ti.get_type() == kTIMESTAMP || operand_ti.get_type() == kDATE) &&
+        ti.get_type() == kTIMESTAMP) {
       return codegenCastBetweenTimestamps(
           operand_lv, operand_ti.get_dimension(), ti.get_dimension(), !ti.get_notnull());
     }
