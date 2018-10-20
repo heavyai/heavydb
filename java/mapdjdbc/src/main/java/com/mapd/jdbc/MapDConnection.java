@@ -155,13 +155,16 @@ public class MapDConnection implements java.sql.Connection {
     }
 
     boolean isHttpProtocol() {
-      return ((String) this.get(Connection_enums.protocol)).equals("http");
+      return (this.containsKey(Connection_enums.protocol)
+              && this.get(Connection_enums.protocol).equals("http"));
     }
     boolean isHttpsProtocol() {
-      return ((String) this.get(Connection_enums.protocol)).equals("https");
+      return (this.containsKey(Connection_enums.protocol)
+              && this.get(Connection_enums.protocol).equals("https"));
     }
     boolean isBinary() {
-      return ((String) this.get(Connection_enums.protocol)).equals("binary");
+      return (this.containsKey(Connection_enums.protocol)
+              && this.get(Connection_enums.protocol).equals("binary"));
     }
     boolean containsTrustStore() {
       return this.containsKey(Connection_enums.key_store);
