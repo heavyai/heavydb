@@ -48,6 +48,7 @@ class Grantee {
   virtual void renameDbObject(const DBObject& object);
   void getPrivileges(DBObject& object, bool only_direct);
   DBObject* findDbObject(const DBObjectKey& objectKey, bool only_direct) const;
+  bool hasAnyPrivilegesOnDb(int32_t dbId, bool only_direct) const;
   const std::string& getName() const { return name_; }
   std::vector<std::string> getRoles() const;
   bool hasRole(Role* role, bool only_direct) const;

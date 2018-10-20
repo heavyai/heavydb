@@ -948,19 +948,17 @@ void SysCatalog::dropDatabase(const int32_t dbid,
               DBObject(dashboard->viewId, DashboardDBObjectType), db_cat);
         }
       }
-      Catalog::remove(name);
       /* revoke object privileges to the database being dropped */
-      revokeDBObjectPrivilegesFromAll_unsafe(DBObject(name, DatabaseDBObjectType),
-                                             Catalog::get(MAPD_SYSTEM_DB).get());
+      for (const auto& grantee : granteeMap_) {
+        if (grantee.second->hasAnyPrivilegesOnDb(dbid, true)) {
+          revokeAllOnDatabase_unsafe(grantee.second->getName(), dbid, grantee.second);
+        }
+      }
     }
     sqliteConnector_->query_with_text_param("DELETE FROM mapd_databases WHERE dbid = ?",
                                             std::to_string(dbid));
-    boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + name);
-    ChunkKey chunkKeyPrefix = {dbid};
-    calciteMgr_->updateMetadata(name, "");
-    dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
-    /* don't need to checkpoint as database is being dropped */
-    // dataMgr_->checkpoint();
+    db_cat->eraseDBData();
+    Catalog::remove(name);
   } catch (std::exception& e) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
@@ -1274,12 +1272,9 @@ void SysCatalog::revokeDBObjectPrivilegesFromAll_unsafe(DBObject dbObject,
                          ? AccessPrivileges::ALL_DASHBOARD
                          : AccessPrivileges::ALL_TABLE;
   dbObject.setPrivileges(privs);
-  std::vector<std::string> roles = getRoles(true, true, MAPD_ROOT_USER);
-  for (size_t i = 0; i < roles.size(); i++) {
-    auto* grantee = instance().getGrantee(roles[i]);
-    assert(grantee);
-    if (grantee->findDbObject(dbObject.getObjectKey(), true)) {
-      revokeDBObjectPrivileges_unsafe(roles[i], dbObject, *catalog);
+  for (const auto& grantee : granteeMap_) {
+    if (grantee.second->findDbObject(dbObject.getObjectKey(), true)) {
+      revokeDBObjectPrivileges_unsafe(grantee.second->getName(), dbObject, *catalog);
     }
   }
 }
@@ -3949,7 +3944,6 @@ void Catalog::dropTable(const TableDescriptor* td) {
         const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
         CHECK(phys_td);
         doDropTable(phys_td, drop_conn);
-        removeTableFromMap(phys_td->tableName, physical_tb_id);
       }
 
       // remove corresponding record from the logicalToPhysicalTableMap in sqlite database
@@ -3960,7 +3954,6 @@ void Catalog::dropTable(const TableDescriptor* td) {
       logicalToPhysicalTableMapById_.erase(td->tableId);
     }
     doDropTable(td, drop_conn);
-    removeTableFromMap(td->tableName, td->tableId);
   } catch (std::exception& e) {
     if (!is_system_db) {
       drop_conn->query("ROLLBACK TRANSACTION");
@@ -4004,24 +3997,11 @@ void Catalog::doDropTable(const TableDescriptor* td, SqliteConnector* conn) {
     conn->query_with_text_param("DELETE FROM mapd_views WHERE tableid = ?",
                                 std::to_string(tableId));
   }
-  // must destroy fragmenter before deleteChunks is called.
-  if (td->fragmenter != nullptr) {
-    auto tableDescIt = tableDescriptorMapById_.find(tableId);
-    delete td->fragmenter;
-    tableDescIt->second->fragmenter = nullptr;  // get around const-ness
-  }
-  ChunkKey chunkKeyPrefix = {currentDB_.dbId, tableId};
-  // assuming deleteChunksWithPrefix is atomic
-  dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
-  // MAT TODO fix this
-  // NOTE This is unsafe , if there are updates occuring at same time
-  dataMgr_->checkpoint(currentDB_.dbId, tableId);
-  dataMgr_->removeTableRelatedDS(currentDB_.dbId, tableId);
-  calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
   if (SysCatalog::instance().arePrivilegesOn()) {
     SysCatalog::instance().revokeDBObjectPrivilegesFromAll_unsafe(
         DBObject(td->tableName, view ? ViewDBObjectType : TableDBObjectType), this);
   }
+  eraseTablePhysicalData(td);
 }
 
 void Catalog::renamePhysicalTable(const TableDescriptor* td, const string& newTableName) {
@@ -4325,6 +4305,38 @@ void Catalog::checkpoint(const int logicalTableId) const {
   for (const auto shard : shards) {
     get_dataMgr().checkpoint(get_currentDB().dbId, shard->tableId);
   }
+}
+
+void Catalog::eraseDBData() {
+  cat_write_lock write_lock(this);
+  // Physically erase all tables and dictionaries from disc and memory
+  const auto tables = getAllTableMetadata();
+  for (const auto table : tables) {
+    eraseTablePhysicalData(table);
+  }
+  // Physically erase database metadata
+  boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + currentDB_.dbName);
+  calciteMgr_->updateMetadata(currentDB_.dbName, "");
+}
+
+void Catalog::eraseTablePhysicalData(const TableDescriptor* td) {
+  cat_write_lock write_lock(this);
+  const int tableId = td->tableId;
+  // must destroy fragmenter before deleteChunks is called.
+  if (td->fragmenter != nullptr) {
+    auto tableDescIt = tableDescriptorMapById_.find(tableId);
+    delete td->fragmenter;
+    tableDescIt->second->fragmenter = nullptr;  // get around const-ness
+  }
+  ChunkKey chunkKeyPrefix = {currentDB_.dbId, tableId};
+  // assuming deleteChunksWithPrefix is atomic
+  dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
+  // MAT TODO fix this
+  // NOTE This is unsafe , if there are updates occuring at same time
+  dataMgr_->checkpoint(currentDB_.dbId, tableId);
+  dataMgr_->removeTableRelatedDS(currentDB_.dbId, tableId);
+  calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
+  removeTableFromMap(td->tableName, tableId);
 }
 
 std::string Catalog::generatePhysicalTableName(const std::string& logicalTableName,

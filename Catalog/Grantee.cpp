@@ -79,6 +79,16 @@ DBObject* Grantee::findDbObject(const DBObjectKey& objectKey, bool only_direct) 
   return dbObject;
 }
 
+bool Grantee::hasAnyPrivilegesOnDb(int32_t dbId, bool only_direct) const {
+  const DBObjectMap& privs = only_direct ? directPrivileges_ : effectivePrivileges_;
+  for (const auto& priv : privs) {
+    if (priv.second->getObjectKey().dbId == dbId) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void Grantee::grantPrivileges(const DBObject& object) {
   auto* dbObject = findDbObject(object.getObjectKey(), false);
   if (!dbObject) {  // not found

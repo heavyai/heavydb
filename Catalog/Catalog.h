@@ -274,6 +274,8 @@ class Catalog {
   int getLogicalTableId(const int physicalTableId) const;
   void checkpoint(const int logicalTableId) const;
   std::string name() const { return get_currentDB().dbName; }
+  void eraseDBData();
+  void eraseTablePhysicalData(const TableDescriptor* td);
 
  protected:
   typedef std::map<std::string, TableDescriptor*> TableDescriptorMap;
