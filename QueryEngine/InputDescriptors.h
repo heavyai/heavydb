@@ -57,8 +57,8 @@ struct hash<InputDescriptor> {
 
 class InputColDescriptor {
  public:
-  InputColDescriptor(const int col_id, const int table_id, const int input_desc)
-      : col_id_(col_id), input_desc_(table_id, input_desc) {}
+  InputColDescriptor(const int col_id, const int table_id, const int nest_level)
+      : col_id_(col_id), input_desc_(table_id, nest_level) {}
 
   bool operator==(const InputColDescriptor& that) const {
     return col_id_ == that.col_id_ && input_desc_ == that.input_desc_;
