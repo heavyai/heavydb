@@ -172,6 +172,10 @@ extern "C" void linear_probabilistic_count(uint8_t* bitmap,
                                            const uint8_t* key_bytes,
                                            const uint32_t key_len);
 
+extern "C" int32_t agms_random_variable(const uint8_t* key_bytes,
+                                        const uint32_t key_len,
+                                        const uint32_t seed);
+
 // Regular fixed_width_*_decode are only available from the JIT,
 // we need to call them for lazy fetch columns -- create wrappers.
 

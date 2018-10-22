@@ -1026,6 +1026,12 @@ extern "C" NEVER_INLINE void linear_probabilistic_count(uint8_t* bitmap,
   reinterpret_cast<uint32_t*>(bitmap)[word_idx] |= 1 << bit_idx;
 }
 
+extern "C" NEVER_INLINE int32_t agms_random_variable(const uint8_t* key_bytes,
+                                                     const uint32_t key_len,
+                                                     const uint32_t seed) {
+  return MurmurHash1(key_bytes, key_len, seed) % 2 ? 1 : -1;
+}
+
 extern "C" __attribute__((noinline)) void query_stub_hoisted_literals(
     const int8_t** col_buffers,
     const int8_t* literals,

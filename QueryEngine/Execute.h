@@ -530,6 +530,9 @@ class Executor {
                                  const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::InValues*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::InIntegerSet* expr, const CompilationOptions& co);
+  llvm::Value* codegenAgmsRandomVariable(
+      const Analyzer::AgmsRandomVariable* agms_random_variable,
+      const CompilationOptions& co);
   std::unique_ptr<InValuesBitmap> createInValuesBitmap(const Analyzer::InValues*,
                                                        const CompilationOptions&);
   llvm::Value* codegenCmp(const Analyzer::BinOper*, const CompilationOptions&);

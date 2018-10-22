@@ -19,6 +19,7 @@
 
 #include "CalciteDeserializerUtils.h"
 #include "CardinalityEstimator.h"
+#include "DeepCopyVisitor.h"
 #include "EquiJoinCondition.h"
 #include "ExpressionRewrite.h"
 #include "FromTableReordering.h"
@@ -1646,6 +1647,29 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       work_unit.exe_unit, table_infos, executor_, co.device_type_, target_exprs_owned_);
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
 
+  if (work_unit.exe_unit.input_descs.size() == 2) {
+    CHECK_EQ(work_unit.exe_unit.join_quals.size(), size_t(1));
+    const auto& join_conditions_for_level = work_unit.exe_unit.join_quals[0];
+    if (!join_conditions_for_level.quals.empty()) {
+      const auto condition = dynamic_cast<const Analyzer::BinOper*>(
+          join_conditions_for_level.quals.front().get());
+      if (condition && condition->get_optype() == kEQ) {
+        const auto lhs_agms_vector = computeJoinSizeEstimator(
+            work_unit.exe_unit, condition->get_own_left_operand(), co, eo);
+        const auto rhs_agms_vector = computeJoinSizeEstimator(
+            work_unit.exe_unit, condition->get_own_right_operand(), co, eo);
+        if (!lhs_agms_vector.empty() && !rhs_agms_vector.empty()) {
+          CHECK_EQ(lhs_agms_vector.size(), rhs_agms_vector.size());
+          int64_t estimated_join_size = 0;
+          for (size_t i = 0; i < lhs_agms_vector.size(); ++i) {
+            estimated_join_size += lhs_agms_vector[i] * rhs_agms_vector[i];
+          }
+          LOG(ERROR) << "estimated join size: "
+                     << static_cast<double>(estimated_join_size) / lhs_agms_vector.size();
+        }
+      }
+    }
+  }
   if (!eo.just_explain && can_use_scan_limit(ra_exe_unit) && !isRowidLookup(work_unit)) {
     const auto filter_count_all = getFilteredCountAll(work_unit, true, co, eo);
     if (filter_count_all >= 0) {
@@ -1779,6 +1803,209 @@ ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
         table_infos.front().info.getFragmentNumTuplesUpperBound(), count_upper_bound);
   }
   return std::max(count_upper_bound, size_t(1));
+}
+
+namespace {
+
+class UsedTablesVisitor : public ScalarExprVisitor<std::unordered_set<int>> {
+ protected:
+  virtual std::unordered_set<int> visitColumnVar(
+      const Analyzer::ColumnVar* column) const override {
+    return {column->get_table_id()};
+  }
+
+  virtual std::unordered_set<int> aggregateResult(
+      const std::unordered_set<int>& aggregate,
+      const std::unordered_set<int>& next_result) const override {
+    auto result = aggregate;
+    result.insert(next_result.begin(), next_result.end());
+    return result;
+  }
+};
+
+template <typename SET_TYPE>
+class UsedColumnsVisitor : public ScalarExprVisitor<SET_TYPE> {
+ public:
+  using ColumnIdSet = SET_TYPE;
+
+ protected:
+  virtual ColumnIdSet visitColumnVar(const Analyzer::ColumnVar* col_var) const override {
+    return {col_var->get_column_id()};
+  }
+
+  virtual std::unordered_set<int> aggregateResult(
+      const std::unordered_set<int>& aggregate,
+      const std::unordered_set<int>& next_result) const override {
+    auto result = aggregate;
+    result.insert(next_result.begin(), next_result.end());
+    return result;
+  }
+};
+
+class ResetNestLevelVisitor : public DeepCopyVisitor {
+ protected:
+  typedef std::shared_ptr<Analyzer::Expr> RetType;
+  RetType visitColumnVar(const Analyzer::ColumnVar* col_var) const override {
+    return makeExpr<Analyzer::ColumnVar>(
+        col_var->get_type_info(), col_var->get_table_id(), col_var->get_column_id(), 0);
+  }
+
+  RetType visitColumnVarTuple(
+      const Analyzer::ExpressionTuple* col_var_tuple) const override {
+    std::vector<std::shared_ptr<Analyzer::Expr>> tuple_exprs;
+    for (const auto& expr : col_var_tuple->getTuple()) {
+      tuple_exprs.push_back(visit(expr.get()));
+    }
+    return makeExpr<Analyzer::ExpressionTuple>(tuple_exprs);
+  }
+};
+
+std::list<std::shared_ptr<Analyzer::Expr>> quals_for_table(
+    const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
+    const int table_id) {
+  ResetNestLevelVisitor reset_nest_level_visitor;
+  std::list<std::shared_ptr<Analyzer::Expr>> quals_for_table;
+  UsedTablesVisitor visitor;
+  for (const auto& qual : quals) {
+    const auto qual_table_ids = visitor.visit(qual.get());
+    if (qual_table_ids.size() != 1 || *qual_table_ids.begin() != table_id) {
+      continue;
+    }
+    quals_for_table.push_back(reset_nest_level_visitor.visit(qual.get()));
+  }
+  return quals_for_table;
+}
+
+void collect_used_columns(
+    std::list<std::shared_ptr<const InputColDescriptor>>& input_col_descs,
+    const Analyzer::Expr* qual,
+    const int key_table_id) {
+  using ColumnIdSet = std::unordered_set<int>;
+  UsedColumnsVisitor<ColumnIdSet> used_columns_visitor;
+  const auto used_column_ids = used_columns_visitor.visit(qual);
+  for (const int col_id : used_column_ids) {
+    input_col_descs.push_back(
+        std::make_shared<InputColDescriptor>(col_id, key_table_id, 0));
+  }
+}
+
+RelAlgExecutionUnit create_agms_execution_unit(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::shared_ptr<Analyzer::Expr>& join_key_in,
+    std::vector<std::shared_ptr<Analyzer::AggExpr>>& estimator_expr_owner,
+    const size_t estimator_count) {
+  ResetNestLevelVisitor reset_nest_level_visitor;
+  auto join_key = reset_nest_level_visitor.visit(join_key_in.get());
+  UsedTablesVisitor visitor;
+  const auto table_ids = visitor.visit(join_key.get());
+  // The join key expression must use a single table.
+  if (table_ids.size() != 1) {
+    return {};
+  }
+  const int key_table_id = *table_ids.begin();
+  // Only keep qualifiers which use columns from the same table as the join key.
+  const auto simple_quals = quals_for_table(ra_exe_unit.simple_quals, key_table_id);
+  const auto quals = quals_for_table(ra_exe_unit.quals, key_table_id);
+  std::list<std::shared_ptr<Analyzer::Expr>> join_key_components;
+  const auto join_key_tuple =
+      dynamic_cast<const Analyzer::ExpressionTuple*>(join_key.get());
+  if (join_key_tuple) {
+    std::copy(join_key_tuple->getTuple().begin(),
+              join_key_tuple->getTuple().end(),
+              std::back_inserter(join_key_components));
+  } else {
+    join_key_components.push_back(join_key);
+  }
+  std::vector<Analyzer::Expr*> target_exprs;
+  for (size_t i = 0; i < estimator_count; ++i) {
+    uint32_t seed = i;
+    const auto agms_random_variable =
+        makeExpr<Analyzer::AgmsRandomVariable>(join_key_components, seed);
+    // Create the AGMS aggregate expression.
+    const auto agms_estimator = makeExpr<Analyzer::AggExpr>(
+        SQLTypeInfo(kBIGINT, false), kSUM, agms_random_variable, false, nullptr);
+    estimator_expr_owner.push_back(agms_estimator);
+    target_exprs.push_back(agms_estimator.get());
+  }
+  // Only keep the input table for the given key and nesting level.
+  MaxRangeTableIndexVisitor rte_idx_visitor;
+  int nest_level = rte_idx_visitor.visit(join_key_in.get());
+  std::vector<InputDescriptor> input_desc_for_key;
+  for (const auto& input_desc : ra_exe_unit.input_descs) {
+    if (input_desc.getTableId() == key_table_id &&
+        input_desc.getNestLevel() == nest_level) {
+      input_desc_for_key.emplace_back(input_desc.getTableId(), 0);
+    }
+  }
+  CHECK_EQ(input_desc_for_key.size(), size_t(1));
+  std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
+  collect_used_columns(input_col_descs, join_key.get(), key_table_id);
+  for (const auto& qual : simple_quals) {
+    collect_used_columns(input_col_descs, qual.get(), key_table_id);
+  }
+  for (const auto& qual : quals) {
+    collect_used_columns(input_col_descs, qual.get(), key_table_id);
+  }
+  return {input_desc_for_key,
+          input_col_descs,
+          simple_quals,
+          quals,
+          {},
+          {},
+          target_exprs,
+          nullptr,
+          SortInfo{{}, SortAlgorithm::Default, 0, 0},
+          0};
+}
+
+}  // namespace
+
+std::vector<int64_t> RelAlgExecutor::computeJoinSizeEstimator(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::shared_ptr<Analyzer::Expr>& join_key,
+    const CompilationOptions& co,
+    const ExecutionOptions& eo) {
+  std::vector<std::shared_ptr<Analyzer::AggExpr>> estimator_expr_owner;
+  const auto agms_exe_unit = create_agms_execution_unit(ra_exe_unit,
+                                                        join_key,
+                                                        estimator_expr_owner,
+                                                        /*estimator_count=*/3);
+  if (agms_exe_unit.input_descs.empty()) {
+    // the provided key was invalid
+    return {};
+  }
+  int32_t error_code{0};
+  size_t one{1};
+  ResultSetPtr agms_result;
+  try {
+    agms_result =
+        executor_->executeWorkUnit(&error_code,
+                                   one,
+                                   true,
+                                   get_table_infos(agms_exe_unit.input_descs, executor_),
+                                   agms_exe_unit,
+                                   co,
+                                   eo,
+                                   cat_,
+                                   executor_->row_set_mem_owner_,
+                                   nullptr,
+                                   false);
+  } catch (...) {
+    return {};
+  }
+  if (error_code) {
+    return {};
+  }
+  const auto agms_row = agms_result->getNextRow(false, false);
+  std::vector<int64_t> agms_estimator_vector;
+  for (const auto& agms_tv : agms_row) {
+    const auto agms_scalar_tv = boost::get<ScalarTargetValue>(&agms_tv);
+    CHECK(agms_scalar_tv);
+    const auto agms_ptr = boost::get<int64_t>(agms_scalar_tv);
+    CHECK(agms_ptr);
+    agms_estimator_vector.push_back(*agms_ptr);
+  }
+  return agms_estimator_vector;
 }
 
 bool RelAlgExecutor::isRowidLookup(const WorkUnit& work_unit) {
@@ -1982,25 +2209,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createWorkUnit(const RelAlgNode* node,
 }
 
 namespace {
-
-template <typename SET_TYPE>
-class UsedColumnsVisitor : public ScalarExprVisitor<SET_TYPE> {
- public:
-  using ColumnIdSet = SET_TYPE;
-
- protected:
-  virtual ColumnIdSet visitColumnVar(const Analyzer::ColumnVar* col_var) const override {
-    return {col_var->get_column_id()};
-  }
-
-  virtual std::unordered_set<int> aggregateResult(
-      const std::unordered_set<int>& aggregate,
-      const std::unordered_set<int>& next_result) const override {
-    auto result = aggregate;
-    result.insert(next_result.begin(), next_result.end());
-    return result;
-  }
-};
 
 JoinType get_join_type(const RelAlgNode* ra) {
   auto sink = get_data_sink(ra);

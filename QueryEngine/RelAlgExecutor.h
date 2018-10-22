@@ -212,6 +212,12 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                               const CompilationOptions& co,
                               const ExecutionOptions& eo);
 
+  std::vector<int64_t> computeJoinSizeEstimator(
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const std::shared_ptr<Analyzer::Expr>& join_key,
+      const CompilationOptions& co,
+      const ExecutionOptions& eo);
+
   FilterSelectivity getFilterSelectivity(
       const std::vector<std::shared_ptr<Analyzer::Expr>>& filter_expressions,
       const CompilationOptions& co,

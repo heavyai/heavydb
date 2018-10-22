@@ -112,7 +112,41 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (dynamic_cast<const Analyzer::OffsetInFragment*>(expr)) {
     return {posArg(nullptr)};
   }
+  auto agms_random_variable = dynamic_cast<const Analyzer::AgmsRandomVariable*>(expr);
+  if (agms_random_variable) {
+    return {codegenAgmsRandomVariable(agms_random_variable, co)};
+  }
   abort();
+}
+
+llvm::Value* Executor::codegenAgmsRandomVariable(
+    const Analyzer::AgmsRandomVariable* agms_random_variable,
+    const CompilationOptions& co) {
+  const auto& estimator_arg = agms_random_variable->getArgument();
+  auto estimator_comp_count_lv = ll_int(static_cast<int32_t>(estimator_arg.size()));
+  auto estimator_key_lv = cgen_state_->ir_builder_.CreateAlloca(
+      llvm::Type::getInt64Ty(cgen_state_->context_), estimator_comp_count_lv);
+  int32_t subkey_idx = 0;
+  const auto col_width = sizeof(uint64_t);
+  for (const auto estimator_arg_comp : estimator_arg) {
+    auto estimator_arg_comp_lv = codegen(estimator_arg_comp.get(), true, co).front();
+    estimator_arg_comp_lv = cgen_state_->ir_builder_.CreateBitCast(
+        castToTypeIn(estimator_arg_comp_lv, col_width * 8),
+        get_int_type(col_width * 8, cgen_state_->context_));
+    // store the sub-key to the buffer
+    cgen_state_->ir_builder_.CreateStore(
+        estimator_arg_comp_lv,
+        cgen_state_->ir_builder_.CreateGEP(estimator_key_lv, ll_int(subkey_idx++)));
+  }
+  const auto int8_ptr_ty =
+      llvm::PointerType::get(get_int_type(8, cgen_state_->context_), 0);
+  const auto key_bytes =
+      cgen_state_->ir_builder_.CreateBitCast(estimator_key_lv, int8_ptr_ty);
+  const auto estimator_comp_bytes_lv =
+      ll_int(static_cast<int32_t>(estimator_arg.size() * col_width));
+  return cgen_state_->emitCall(
+      "agms_random_variable",
+      {key_bytes, &*estimator_comp_bytes_lv, ll_int(agms_random_variable->getSeed())});
 }
 
 llvm::Value* Executor::codegen(const Analyzer::BinOper* bin_oper,

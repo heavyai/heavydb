@@ -99,6 +99,35 @@ class NDVEstimator : public Analyzer::Estimator {
   const std::list<std::shared_ptr<Analyzer::Expr>> expr_tuple_;
 };
 
+class AgmsRandomVariable : public Analyzer::Expr {
+ public:
+  AgmsRandomVariable(const std::list<std::shared_ptr<Analyzer::Expr>>& expr_tuple,
+                     const uint32_t seed)
+      : Expr(SQLTypeInfo(kINT, true)), expr_tuple_(expr_tuple), seed_(seed) {}
+
+  const std::list<std::shared_ptr<Analyzer::Expr>>& getArgument() const {
+    return expr_tuple_;
+  }
+
+  uint32_t getSeed() const { return seed_; }
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override {
+    CHECK(false);
+    return nullptr;
+  }
+
+  bool operator==(const Expr& rhs) const override {
+    CHECK(false);
+    return false;
+  }
+
+  void print() const override { CHECK(false); }
+
+ private:
+  const std::list<std::shared_ptr<Analyzer::Expr>> expr_tuple_;
+  const uint32_t seed_;
+};
+
 }  // namespace Analyzer
 
 RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_unit);
