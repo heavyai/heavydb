@@ -43,28 +43,9 @@ class ColumnarResults {
                   const size_t num_rows,
                   const SQLTypeInfo& target_type);
 
-  static std::unique_ptr<ColumnarResults> createIndexedResults(
-      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-      const std::vector<const ColumnarResults*>& val_frags,
-      const std::vector<uint64_t>& frag_offsets,
-      const ColumnarResults& indices,
-      const int which);
-
   static std::unique_ptr<ColumnarResults> mergeResults(
       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
       const std::vector<std::unique_ptr<ColumnarResults>>& sub_results);
-
-  static std::unique_ptr<ColumnarResults> createIndexedResults(
-      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-      const ColumnarResults& values,
-      const ColumnarResults& indices,
-      const int which);
-
-  static std::unique_ptr<ColumnarResults> createOffsetResults(
-      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-      const ColumnarResults& values,
-      const int col_idx,
-      const uint64_t offset);
 
   const std::vector<const int8_t*>& getColumnBuffers() const { return column_buffers_; }
 

@@ -110,7 +110,7 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> normalize_column_pa
 namespace {
 
 std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> get_cols(
-    const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+    const Analyzer::BinOper* qual_bin_oper,
     const Catalog_Namespace::Catalog& cat,
     const TemporaryTables* temporary_tables) {
   const auto lhs = qual_bin_oper->get_left_operand();
@@ -145,11 +145,8 @@ size_t get_shard_count(const Analyzer::BinOper* join_condition,
   const Analyzer::Expr* outer_col{nullptr};
   std::shared_ptr<Analyzer::BinOper> redirected_bin_oper;
   try {
-    redirected_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(
-        redirect_expr(join_condition, ra_exe_unit.input_col_descs));
-    CHECK(redirected_bin_oper);
-    std::tie(inner_col, outer_col) = get_cols(
-        redirected_bin_oper, *executor->getCatalog(), executor->getTemporaryTables());
+    std::tie(inner_col, outer_col) =
+        get_cols(join_condition, *executor->getCatalog(), executor->getTemporaryTables());
   } catch (...) {
     return 0;
   }
@@ -229,11 +226,8 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     ColumnCacheMap& column_cache,
     Executor* executor) {
   CHECK(IS_EQUIVALENCE(qual_bin_oper->get_optype()));
-  const auto redirected_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(
-      redirect_expr(qual_bin_oper.get(), ra_exe_unit.input_col_descs));
-  CHECK(redirected_bin_oper);
   const auto cols =
-      get_cols(redirected_bin_oper, *executor->getCatalog(), executor->temporary_tables_);
+      get_cols(qual_bin_oper.get(), *executor->getCatalog(), executor->temporary_tables_);
   const auto inner_col = cols.first;
   CHECK(inner_col);
   // Already handled the table
@@ -393,7 +387,7 @@ bool JoinHashTable::needOneToManyHash(const std::vector<int>& errors) const {
 void JoinHashTable::reify(const int device_count) {
   CHECK_LT(0, device_count);
   const auto& catalog = *executor_->getCatalog();
-  const auto cols = get_cols(qual_bin_oper_, catalog, executor_->temporary_tables_);
+  const auto cols = get_cols(qual_bin_oper_.get(), catalog, executor_->temporary_tables_);
   const auto inner_col = cols.first;
   checkHashJoinReplicationConstraint(inner_col->get_table_id());
   const auto& query_info = getInnerQueryInfo(inner_col).info;
@@ -530,7 +524,7 @@ void JoinHashTable::reifyOneToOneForDevice(
       buff_and_err;
   const auto& catalog = *executor_->getCatalog();
   auto& data_mgr = catalog.get_dataMgr();
-  const auto cols = get_cols(qual_bin_oper_, catalog, executor_->temporary_tables_);
+  const auto cols = get_cols(qual_bin_oper_.get(), catalog, executor_->temporary_tables_);
   const auto inner_col = cols.first;
   CHECK(inner_col);
   const auto inner_cd = get_column_descriptor_maybe(
@@ -591,7 +585,7 @@ void JoinHashTable::reifyOneToManyForDevice(
     const int device_id) {
   const auto& catalog = *executor_->getCatalog();
   auto& data_mgr = catalog.get_dataMgr();
-  const auto cols = get_cols(qual_bin_oper_, catalog, executor_->temporary_tables_);
+  const auto cols = get_cols(qual_bin_oper_.get(), catalog, executor_->temporary_tables_);
   const auto inner_col = cols.first;
   CHECK(inner_col);
   const auto inner_cd = get_column_descriptor_maybe(
@@ -1165,8 +1159,8 @@ llvm::Value* JoinHashTable::codegenOneToManyHashJoin(const CompilationOptions& c
   // TODO(miyu): allow one-to-many hash join in folded join sequence.
   CHECK(executor_->plan_state_->join_info_.join_impl_type_ ==
         Executor::JoinImplType::HashOneToMany);
-  const auto cols =
-      get_cols(qual_bin_oper_, *executor_->getCatalog(), executor_->temporary_tables_);
+  const auto cols = get_cols(
+      qual_bin_oper_.get(), *executor_->getCatalog(), executor_->temporary_tables_);
   auto key_col = cols.second;
   CHECK(key_col);
   auto val_col = cols.first;
@@ -1187,8 +1181,8 @@ llvm::Value* JoinHashTable::codegenOneToManyHashJoin(const CompilationOptions& c
 
 HashJoinMatchingSet JoinHashTable::codegenMatchingSet(const CompilationOptions& co,
                                                       const size_t index) {
-  const auto cols =
-      get_cols(qual_bin_oper_, *executor_->getCatalog(), executor_->temporary_tables_);
+  const auto cols = get_cols(
+      qual_bin_oper_.get(), *executor_->getCatalog(), executor_->temporary_tables_);
   auto key_col = cols.second;
   CHECK(key_col);
   auto val_col = cols.first;
@@ -1332,8 +1326,8 @@ llvm::Value* JoinHashTable::codegenSlotIsValid(const CompilationOptions& co,
                                                const size_t index) {
   const auto slot_lv = codegenSlot(co, index);
   if (getHashType() == JoinHashTableInterface::HashType::OneToOne) {
-    const auto cols =
-        get_cols(qual_bin_oper_, *executor_->getCatalog(), executor_->temporary_tables_);
+    const auto cols = get_cols(
+        qual_bin_oper_.get(), *executor_->getCatalog(), executor_->temporary_tables_);
     const auto inner_col = cols.first;
     CHECK(inner_col);
     const auto it_ok = executor_->cgen_state_->scan_idx_to_hash_pos_.emplace(
@@ -1350,8 +1344,8 @@ llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co,
   if (getHashType() == JoinHashTableInterface::HashType::OneToMany) {
     return codegenOneToManyHashJoin(co, index);
   }
-  const auto cols =
-      get_cols(qual_bin_oper_, *executor_->getCatalog(), executor_->temporary_tables_);
+  const auto cols = get_cols(
+      qual_bin_oper_.get(), *executor_->getCatalog(), executor_->temporary_tables_);
   auto key_col = cols.second;
   CHECK(key_col);
   auto val_col = cols.first;

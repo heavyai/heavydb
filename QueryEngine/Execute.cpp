@@ -1582,11 +1582,9 @@ namespace {
 
 const ColumnDescriptor* try_get_column_descriptor(const InputColDescriptor* col_desc,
                                                   const Catalog_Namespace::Catalog& cat) {
-  const auto ind_col = dynamic_cast<const IndirectInputColDescriptor*>(col_desc);
-  const int ref_table_id = ind_col ? ind_col->getIndirectDesc().getTableId()
-                                   : col_desc->getScanDesc().getTableId();
-  const int ref_col_id = ind_col ? ind_col->getRefColIndex() : col_desc->getColId();
-  return get_column_descriptor_maybe(ref_col_id, ref_table_id, cat);
+  const int table_id = col_desc->getScanDesc().getTableId();
+  const int col_id = col_desc->getColId();
+  return get_column_descriptor_maybe(col_id, table_id, cat);
 }
 
 }  // namespace
@@ -1718,8 +1716,6 @@ Executor::FetchResult Executor::fetchChunks(
   std::vector<std::vector<const int8_t*>> all_frag_iter_buffers;
   std::vector<std::vector<int64_t>> all_num_rows;
   std::vector<std::vector<uint64_t>> all_frag_offsets;
-  const auto extra_tab_id_to_frag_offsets =
-      get_table_id_to_frag_offsets(ra_exe_unit.extra_input_descs, all_tables_fragments);
 
   for (const auto& selected_frag_ids : frag_ids_crossjoin) {
     std::vector<const int8_t*> frag_col_buffers(
@@ -1732,9 +1728,7 @@ Executor::FetchResult Executor::fetchChunks(
       if (cd && cd->isVirtualCol) {
         CHECK_EQ("rowid", cd->columnName);
         is_rowid = true;
-        if (!std::dynamic_pointer_cast<const IndirectInputColDescriptor>(col_id)) {
-          continue;
-        }
+        continue;
       }
       const auto fragments_it = all_tables_fragments.find(table_id);
       CHECK(fragments_it != all_tables_fragments.end());
@@ -1759,7 +1753,6 @@ Executor::FetchResult Executor::fetchChunks(
             execution_dispatch.getColumn(col_id.get(),
                                          frag_id,
                                          all_tables_fragments,
-                                         extra_tab_id_to_frag_offsets,
                                          memory_level_for_column,
                                          device_id,
                                          is_rowid);

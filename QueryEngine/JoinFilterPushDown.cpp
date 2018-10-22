@@ -84,12 +84,9 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
                                   false,
                                   nullptr);
   RelAlgExecutionUnit ra_exe_unit{input_descs,
-                                  {},
                                   input_col_descs,
                                   {},
                                   quals,
-                                  JoinType::INVALID,
-                                  {},
                                   {},
                                   {},
                                   {},

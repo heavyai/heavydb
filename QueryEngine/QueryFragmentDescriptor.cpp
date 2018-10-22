@@ -22,7 +22,7 @@ QueryFragmentDescriptor::QueryFragmentDescriptor(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos) {
   const size_t input_desc_count{ra_exe_unit.input_descs.size()};
-  CHECK_EQ(query_infos.size(), (input_desc_count + ra_exe_unit.extra_input_descs.size()));
+  CHECK_EQ(query_infos.size(), input_desc_count);
   for (size_t table_idx = 0; table_idx < input_desc_count; ++table_idx) {
     const auto table_id = ra_exe_unit.input_descs[table_idx].getTableId();
     if (!selected_tables_fragments_.count(table_id)) {
@@ -36,23 +36,13 @@ void QueryFragmentDescriptor::computeAllTablesFragments(
     std::map<int, const TableFragments*>& all_tables_fragments,
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos) {
-  for (size_t tab_idx = 0, tab_cnt = ra_exe_unit.input_descs.size(); tab_idx < tab_cnt;
-       ++tab_idx) {
+  for (size_t tab_idx = 0; tab_idx < ra_exe_unit.input_descs.size(); ++tab_idx) {
     int table_id = ra_exe_unit.input_descs[tab_idx].getTableId();
     CHECK_EQ(query_infos[tab_idx].table_id, table_id);
     const auto& fragments = query_infos[tab_idx].info.fragments;
     if (!all_tables_fragments.count(table_id)) {
       all_tables_fragments.insert(std::make_pair(table_id, &fragments));
     }
-  }
-  for (size_t tab_idx = 0,
-              extra_tab_base = ra_exe_unit.input_descs.size(),
-              tab_cnt = ra_exe_unit.extra_input_descs.size();
-       tab_idx < tab_cnt;
-       ++tab_idx) {
-    int table_id = ra_exe_unit.extra_input_descs[tab_idx].getTableId();
-    const auto& fragments = query_infos[extra_tab_base + tab_idx].info.fragments;
-    all_tables_fragments.insert(std::make_pair(table_id, &fragments));
   }
 }
 
@@ -220,7 +210,6 @@ bool is_sample_query(const RelAlgExecutionUnit& ra_exe_unit) {
                       ra_exe_unit.sort_info.order_entries.empty() &&
                       ra_exe_unit.scan_limit;
   if (result) {
-    CHECK(ra_exe_unit.join_type == JoinType::INVALID);
     CHECK(ra_exe_unit.inner_join_quals.empty());
     CHECK(ra_exe_unit.outer_join_quals.empty());
     CHECK_EQ(size_t(1), ra_exe_unit.groupby_exprs.size());

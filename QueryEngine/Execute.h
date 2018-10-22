@@ -851,7 +851,6 @@ class Executor {
         const InputColDescriptor* col_desc,
         const int frag_id,
         const std::map<int, const TableFragments*>& all_tables_fragments,
-        const std::map<size_t, std::vector<uint64_t>>& tab_id_to_frag_offsets,
         const Data_Namespace::MemoryLevel memory_level,
         const int device_id,
         const bool is_rowid) const;

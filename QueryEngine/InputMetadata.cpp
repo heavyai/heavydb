@@ -259,7 +259,6 @@ std::vector<InputTableInfo> get_table_infos(const RelAlgExecutionUnit& ra_exe_un
   INJECT_TIMER(get_table_infos);
   std::vector<InputTableInfo> table_infos;
   collect_table_infos(table_infos, ra_exe_unit.input_descs, executor);
-  collect_table_infos(table_infos, ra_exe_unit.extra_input_descs, executor);
   return table_infos;
 }
 

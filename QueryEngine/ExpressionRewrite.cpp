@@ -157,51 +157,6 @@ class RecursiveOrToInVisitor : public DeepCopyVisitor {
   }
 };
 
-class IndirectToDirectColVisitor : public DeepCopyVisitor {
- public:
-  IndirectToDirectColVisitor(
-      const std::list<std::shared_ptr<const InputColDescriptor>>& col_descs) {
-    for (auto& desc : col_descs) {
-      if (!std::dynamic_pointer_cast<const IndirectInputColDescriptor>(desc)) {
-        continue;
-      }
-      ind_col_id_to_desc_.insert(std::make_pair(desc->getColId(), desc.get()));
-    }
-  }
-
- protected:
-  RetType visitColumnVar(const Analyzer::ColumnVar* col_var) const override {
-    if (!ind_col_id_to_desc_.count(col_var->get_column_id())) {
-      return col_var->deep_copy();
-    }
-    auto desc_it = ind_col_id_to_desc_.find(col_var->get_column_id());
-    CHECK(desc_it != ind_col_id_to_desc_.end());
-    CHECK(desc_it->second);
-    if (desc_it->second->getScanDesc().getTableId() != col_var->get_table_id()) {
-      return col_var->deep_copy();
-    }
-    auto ind_col_desc = dynamic_cast<const IndirectInputColDescriptor*>(desc_it->second);
-    CHECK(ind_col_desc);
-    return makeExpr<Analyzer::ColumnVar>(col_var->get_type_info(),
-                                         ind_col_desc->getIndirectDesc().getTableId(),
-                                         ind_col_desc->getRefColIndex(),
-                                         col_var->get_rte_idx());
-  }
-
-  RetType visitColumnVarTuple(
-      const Analyzer::ExpressionTuple* col_var_tuple) const override {
-    std::vector<std::shared_ptr<Analyzer::Expr>> redirected_tuple;
-    for (const auto& tuple_component : col_var_tuple->getTuple()) {
-      const auto redirected_component = visit(tuple_component.get());
-      redirected_tuple.push_back(redirected_component);
-    }
-    return std::make_shared<Analyzer::ExpressionTuple>(redirected_tuple);
-  }
-
- private:
-  std::unordered_map<int, const InputColDescriptor*> ind_col_id_to_desc_;
-};
-
 class ArrayElementStringLiteralEncodingVisitor : public DeepCopyVisitor {
  protected:
   using RetType = DeepCopyVisitor::RetType;
@@ -692,65 +647,6 @@ Analyzer::ExpressionPtr rewrite_expr(const Analyzer::Expr* expr) {
         rewritten_expr, expr_with_likelihood->get_likelihood());
   }
   return rewritten_expr;
-}
-
-std::list<std::shared_ptr<Analyzer::Expr>> redirect_exprs(
-    const std::list<std::shared_ptr<Analyzer::Expr>>& exprs,
-    const std::list<std::shared_ptr<const InputColDescriptor>>& col_descs) {
-  bool has_indirect_col = false;
-  for (const auto& desc : col_descs) {
-    if (std::dynamic_pointer_cast<const IndirectInputColDescriptor>(desc)) {
-      has_indirect_col = true;
-      break;
-    }
-  }
-
-  if (!has_indirect_col) {
-    return exprs;
-  }
-
-  IndirectToDirectColVisitor visitor(col_descs);
-  std::list<std::shared_ptr<Analyzer::Expr>> new_exprs;
-  for (auto& e : exprs) {
-    new_exprs.push_back(e ? visitor.visit(e.get()) : nullptr);
-  }
-  return new_exprs;
-}
-
-std::vector<std::shared_ptr<Analyzer::Expr>> redirect_exprs(
-    const std::vector<Analyzer::Expr*>& exprs,
-    const std::list<std::shared_ptr<const InputColDescriptor>>& col_descs) {
-  bool has_indirect_col = false;
-  for (const auto& desc : col_descs) {
-    if (std::dynamic_pointer_cast<const IndirectInputColDescriptor>(desc)) {
-      has_indirect_col = true;
-      break;
-    }
-  }
-
-  std::vector<std::shared_ptr<Analyzer::Expr>> new_exprs;
-  if (!has_indirect_col) {
-    for (auto& e : exprs) {
-      new_exprs.push_back(e ? e->deep_copy() : nullptr);
-    }
-    return new_exprs;
-  }
-
-  IndirectToDirectColVisitor visitor(col_descs);
-  for (auto& e : exprs) {
-    new_exprs.push_back(e ? visitor.visit(e) : nullptr);
-  }
-  return new_exprs;
-}
-
-std::shared_ptr<Analyzer::Expr> redirect_expr(
-    const Analyzer::Expr* expr,
-    const std::list<std::shared_ptr<const InputColDescriptor>>& col_descs) {
-  if (!expr) {
-    return nullptr;
-  }
-  IndirectToDirectColVisitor visitor(col_descs);
-  return visitor.visit(expr);
 }
 
 std::shared_ptr<Analyzer::Expr> fold_expr(const Analyzer::Expr* expr) {

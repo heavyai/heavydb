@@ -75,39 +75,6 @@ class InputColDescriptor {
   const InputDescriptor input_desc_;
 };
 
-class IndirectInputColDescriptor : public InputColDescriptor {
- public:
-  IndirectInputColDescriptor(const int col_id,
-                             const int table_id,
-                             const int input_desc,
-                             const int iter_col_id,
-                             const int iter_table_id,
-                             const int iter_input_desc,
-                             const int ref_col_id,
-                             const int ref_table_id,
-                             const int ref_input_desc)
-      : InputColDescriptor(col_id, table_id, input_desc)
-      , iter_col_id_(iter_col_id)
-      , iter_input_desc_(iter_table_id, iter_input_desc)
-      , ref_col_id_(ref_col_id)
-      , ref_input_desc_(ref_table_id, ref_input_desc) {}
-
-  int getIterIndex() const { return iter_col_id_; }
-
-  const InputDescriptor& getIterDesc() const { return iter_input_desc_; }
-
-  int getRefColIndex() const { return ref_col_id_; }
-
-  const InputDescriptor& getIndirectDesc() const { return ref_input_desc_; }
-
- private:
-  const int iter_col_id_;
-  const InputDescriptor iter_input_desc_;
-
-  const int ref_col_id_;
-  const InputDescriptor ref_input_desc_;
-};
-
 namespace std {
 template <>
 struct hash<InputColDescriptor> {

@@ -719,11 +719,8 @@ ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const Analyzer::Expr* expr) c
     return {QueryDescriptionType::Projection, 0, 0, 0, false};
   }
 
-  const auto expr_range =
-      getExpressionRange(redirect_expr(expr, ra_exe_unit_.input_col_descs).get(),
-                         query_infos_,
-                         executor_,
-                         boost::make_optional(ra_exe_unit_.simple_quals));
+  const auto expr_range = getExpressionRange(
+      expr, query_infos_, executor_, boost::make_optional(ra_exe_unit_.simple_quals));
   switch (expr_range.getType()) {
     case ExpressionRangeType::Integer:
       return {QueryDescriptionType::GroupByPerfectHash,

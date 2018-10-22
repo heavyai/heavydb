@@ -26,35 +26,6 @@ std::mutex Executor::ExecutionDispatch::reduce_mutex_;
 
 namespace {
 
-size_t get_mapped_frag_id_of_src_table(
-    const std::vector<std::pair<int, size_t>>& join_dimensions,
-    const int src_tab_id,
-    const size_t dst_frag_id) {
-  CHECK(join_dimensions.size());
-  std::unordered_map<int, size_t> tab_id_to_frag_cnt;
-  size_t combination_count{1};
-  for (const auto& table : join_dimensions) {
-    tab_id_to_frag_cnt.insert(table);
-    CHECK(table.second);
-    combination_count *= table.second;
-  }
-
-  auto cnt_it = tab_id_to_frag_cnt.find(src_tab_id);
-  CHECK(cnt_it != tab_id_to_frag_cnt.end());
-  if (size_t(1) == cnt_it->second) {
-    return size_t(0);
-  }
-  size_t crt_frag_id{dst_frag_id};
-  for (auto dim_it = join_dimensions.rbegin();
-       dim_it->first != src_tab_id && dim_it != join_dimensions.rend();
-       ++dim_it) {
-    crt_frag_id %= combination_count;
-    combination_count /= dim_it->second;
-  }
-  combination_count /= cnt_it->second;
-  return crt_frag_id / combination_count;
-}
-
 bool needs_skip_result(const ResultSetPtr& res) {
   return !res || res->definitelyHasNoRows();
 }
@@ -677,161 +648,17 @@ const int8_t* Executor::ExecutionDispatch::getColumn(
     const InputColDescriptor* col_desc,
     const int frag_id,
     const std::map<int, const TableFragments*>& all_tables_fragments,
-    const std::map<size_t, std::vector<uint64_t>>& tab_id_to_frag_offsets,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_id,
     const bool is_rowid) const {
   CHECK(col_desc);
-  auto ind_col_desc = dynamic_cast<const IndirectInputColDescriptor*>(col_desc);
-  if (!ind_col_desc) {
-    const auto table_id = col_desc->getScanDesc().getTableId();
-    return getColumn(get_temporary_table(executor_->temporary_tables_, table_id),
-                     table_id,
-                     frag_id,
-                     col_desc->getColId(),
-                     memory_level,
-                     device_id);
-  }
-
-  const auto ref_table_id = ind_col_desc->getIndirectDesc().getTableId();
-  const auto ref_col_id = ind_col_desc->getRefColIndex();
-  const auto iter_table_id = ind_col_desc->getIterDesc().getTableId();
-  const auto iter_col_id = ind_col_desc->getIterIndex();
-  const auto& iter_buffer =
-      get_temporary_table(executor_->temporary_tables_, iter_table_id);
-  const bool ref_tab_is_result =
-      ind_col_desc->getIndirectDesc().getSourceType() == InputSourceType::RESULT;
-
-  const InputColDescriptor iter_desc(
-      iter_col_id, iter_table_id, ind_col_desc->getIterDesc().getNestLevel());
-  CHECK_LE(size_t(3), ra_exe_unit_.join_dimensions.size());
-  const std::vector<std::pair<int, size_t>> previous_join_dims(
-      ra_exe_unit_.join_dimensions.begin(),
-      std::prev(ra_exe_unit_.join_dimensions.end()));
-  for (const auto& table : previous_join_dims) {
-    if (!table.second) {
-      return nullptr;
-    }
-  }
-  const auto ref_frag_id =
-      get_mapped_frag_id_of_src_table(previous_join_dims, ref_table_id, frag_id);
-  CacheKey sub_key;
-  auto ref_col_id_for_cache = ref_col_id;
-  const ColumnarResults* result{nullptr};
-  {
-    std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex_);
-    if (columnarized_table_cache_.empty() ||
-        !columnarized_table_cache_.count(ref_table_id)) {
-      columnarized_table_cache_.insert(std::make_pair(
-          iter_table_id,
-          std::unordered_map<int, std::shared_ptr<const ColumnarResults>>()));
-    }
-    auto& frag_id_to_iters = columnarized_table_cache_[iter_table_id];
-    if (frag_id_to_iters.empty() || !frag_id_to_iters.count(frag_id)) {
-      frag_id_to_iters.insert(
-          std::make_pair(frag_id,
-                         std::shared_ptr<const ColumnarResults>(columnarize_result(
-                             row_set_mem_owner_, iter_buffer, frag_id))));
-    }
-
-    if (columnarized_ref_table_cache_.empty() ||
-        !columnarized_ref_table_cache_.count(iter_desc)) {
-      columnarized_ref_table_cache_.insert(std::make_pair(
-          iter_desc,
-          std::unordered_map<CacheKey, std::unique_ptr<const ColumnarResults>>()));
-    }
-    auto& frag_id_to_result = columnarized_ref_table_cache_[iter_desc];
-    if (ref_tab_is_result) {
-      CHECK(!is_rowid);
-      const auto& ref_buffer =
-          get_temporary_table(executor_->temporary_tables_, ref_table_id);
-      if (columnarized_table_cache_.empty() ||
-          !columnarized_table_cache_.count(ref_table_id)) {
-        columnarized_table_cache_.insert(std::make_pair(
-            ref_table_id,
-            std::unordered_map<int, std::shared_ptr<const ColumnarResults>>()));
-      }
-      auto& frag_id_to_ref = columnarized_table_cache_[ref_table_id];
-      if (frag_id_to_ref.empty() || !frag_id_to_ref.count(ref_frag_id)) {
-        frag_id_to_ref.insert(
-            std::make_pair(ref_frag_id,
-                           std::shared_ptr<const ColumnarResults>(columnarize_result(
-                               row_set_mem_owner_, ref_buffer, ref_frag_id))));
-      }
-      sub_key = {frag_id};
-      if (frag_id_to_result.empty() || !frag_id_to_result.count(sub_key)) {
-        frag_id_to_result.insert(std::make_pair(
-            sub_key,
-            ColumnarResults::createIndexedResults(row_set_mem_owner_,
-                                                  *frag_id_to_ref[ref_frag_id],
-                                                  *frag_id_to_iters[frag_id],
-                                                  iter_col_id)));
-      }
-    } else {
-      sub_key = {frag_id, ref_col_id};
-      if (frag_id_to_result.empty() || !frag_id_to_result.count(sub_key)) {
-        const auto frag_offsets_it = tab_id_to_frag_offsets.find(ref_table_id);
-        CHECK(frag_offsets_it != tab_id_to_frag_offsets.end());
-        const auto& frag_offsets = frag_offsets_it->second;
-        CHECK_LT(ref_frag_id, frag_offsets.size());
-        // TODO(miyu): Check rowid offseting
-        if (is_rowid) {
-          frag_id_to_result.insert(std::make_pair(
-              sub_key,
-              ColumnarResults::createOffsetResults(row_set_mem_owner_,
-                                                   *frag_id_to_iters[frag_id],
-                                                   iter_col_id,
-                                                   frag_offsets[ref_frag_id])));
-        } else {
-          // Each dispatch has only one fragment of outer table.
-          if (ref_table_id != ra_exe_unit_.join_dimensions[0].first) {
-            auto ref_frags =
-                getAllScanColumnFrags(ref_table_id, ref_col_id, all_tables_fragments);
-            frag_id_to_result.insert(std::make_pair(
-                sub_key,
-                ColumnarResults::createIndexedResults(row_set_mem_owner_,
-                                                      ref_frags,
-                                                      frag_offsets,
-                                                      *frag_id_to_iters[frag_id],
-                                                      iter_col_id)));
-          } else {
-            const auto fragments_it = all_tables_fragments.find(ref_table_id);
-            CHECK(fragments_it != all_tables_fragments.end());
-            const auto fragments = fragments_it->second;
-            const auto& fragment = (*fragments)[ref_frag_id];
-            auto chunk_meta_it = fragment.getChunkMetadataMap().find(ref_col_id);
-            CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
-            std::list<std::shared_ptr<Chunk_NS::Chunk>> chunk_holder;
-            std::list<ChunkIter> chunk_iter_holder;
-            auto col_buffer = getScanColumn(ref_table_id,
-                                            ref_frag_id,
-                                            ref_col_id,
-                                            all_tables_fragments,
-                                            chunk_holder,
-                                            chunk_iter_holder,
-                                            Data_Namespace::CPU_LEVEL,
-                                            device_id);
-            ColumnarResults ref_values(row_set_mem_owner_,
-                                       col_buffer,
-                                       fragment.getNumTuples(),
-                                       chunk_meta_it->second.sqlType);
-            frag_id_to_result.insert(std::make_pair(
-                sub_key,
-                ColumnarResults::createIndexedResults(row_set_mem_owner_,
-                                                      ref_values,
-                                                      *frag_id_to_iters[frag_id],
-                                                      iter_col_id)));
-          }
-        }
-      }
-      ref_col_id_for_cache = 0;
-    }
-    CHECK_NE(size_t(0), columnarized_ref_table_cache_.count(iter_desc));
-    result = columnarized_ref_table_cache_[iter_desc][sub_key].get();
-  }
-  CHECK_GE(ref_col_id, 0);
-  return getColumn(
-      result, ref_col_id_for_cache, &cat_.get_dataMgr(), memory_level, device_id);
+  const auto table_id = col_desc->getScanDesc().getTableId();
+  return getColumn(get_temporary_table(executor_->temporary_tables_, table_id),
+                   table_id,
+                   frag_id,
+                   col_desc->getColId(),
+                   memory_level,
+                   device_id);
 }
 
 const int8_t* Executor::ExecutionDispatch::getColumn(

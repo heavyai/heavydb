@@ -151,9 +151,7 @@ int8_t pick_baseline_key_width(const RelAlgExecutionUnit& ra_exe_unit,
                                const Executor* executor) {
   int8_t compact_width{4};
   for (const auto groupby_expr : ra_exe_unit.groupby_exprs) {
-    const auto actual_expr =
-        redirect_expr(groupby_expr.get(), ra_exe_unit.input_col_descs);
-    const auto expr_range = getExpressionRange(actual_expr.get(), query_infos, executor);
+    const auto expr_range = getExpressionRange(groupby_expr.get(), query_infos, executor);
     compact_width =
         std::max(compact_width, pick_baseline_key_component_width(expr_range));
   }
@@ -272,11 +270,8 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
         return;
       }
       // single-column group by query:
-      const auto redirected_targets =
-          redirect_exprs(ra_exe_unit.target_exprs, ra_exe_unit.input_col_descs);
-
-      const auto keyless_info = group_by_and_agg->getKeylessInfo(
-          get_exprs_not_owned(redirected_targets), is_group_by);
+      const auto keyless_info =
+          group_by_and_agg->getKeylessInfo(ra_exe_unit.target_exprs, is_group_by);
       idx_target_as_key_ = keyless_info.target_index;
       init_val_ = keyless_info.init_val;
 

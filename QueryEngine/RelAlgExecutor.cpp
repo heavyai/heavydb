@@ -777,40 +777,6 @@ get_join_source_used_inputs(const RelAlgNode* ra_node,
                         std::vector<std::shared_ptr<RexInput>>{});
 }
 
-size_t get_target_list_size(const RelAlgNode* ra_node) {
-  const auto scan = dynamic_cast<const RelScan*>(ra_node);
-  if (scan) {
-    return scan->getFieldNames().size();
-  }
-  const auto join = dynamic_cast<const RelJoin*>(ra_node);
-  if (join) {
-    return get_target_list_size(join->getInput(0)) +
-           get_target_list_size(join->getInput(1));
-  }
-  const auto aggregate = dynamic_cast<const RelAggregate*>(ra_node);
-  if (aggregate) {
-    return aggregate->getFields().size();
-  }
-  const auto compound = dynamic_cast<const RelCompound*>(ra_node);
-  if (compound) {
-    return compound->getFields().size();
-  }
-  const auto filter = dynamic_cast<const RelFilter*>(ra_node);
-  if (filter) {
-    return get_target_list_size(filter->getInput(0));
-  }
-  const auto project = dynamic_cast<const RelProject*>(ra_node);
-  if (project) {
-    return project->getFields().size();
-  }
-  const auto sort = dynamic_cast<const RelSort*>(ra_node);
-  if (sort) {
-    return get_target_list_size(sort->getInput(0));
-  }
-  CHECK(false);
-  return 0;
-}
-
 std::vector<const RelAlgNode*> get_non_join_sequence(const RelAlgNode* ra) {
   std::vector<const RelAlgNode*> seq;
   for (auto join = dynamic_cast<const RelJoin*>(ra); join;
@@ -825,25 +791,6 @@ std::vector<const RelAlgNode*> get_non_join_sequence(const RelAlgNode* ra) {
   }
   std::reverse(seq.begin(), seq.end());
   return seq;
-}
-
-std::pair<const RelAlgNode*, int> get_non_join_source_node(const RelAlgNode* crt_source,
-                                                           const int col_id) {
-  CHECK_LE(0, col_id);
-  const auto join = dynamic_cast<const RelJoin*>(crt_source);
-  if (!join) {
-    return std::make_pair(crt_source, col_id);
-  }
-  const auto lhs = join->getInput(0);
-  const auto rhs = join->getInput(1);
-  const size_t left_source_size = get_target_list_size(lhs);
-  if (size_t(col_id) >= left_source_size) {
-    return std::make_pair(rhs, col_id - int(left_source_size));
-  }
-  if (dynamic_cast<const RelJoin*>(lhs)) {
-    return get_non_join_source_node(static_cast<const RelJoin*>(lhs), col_id);
-  }
-  return std::make_pair(lhs, col_id);
 }
 
 void collect_used_input_desc(
@@ -866,49 +813,15 @@ void collect_used_input_desc(
     const auto col_id = used_input->getIndex();
     auto it = input_to_nest_level.find(input_ra);
     if (it == input_to_nest_level.end()) {
-      throw std::runtime_error("Multi-way join not supported");
+      throw std::runtime_error("Bushy joins not supported");
     }
     const int input_desc = it->second;
-
-    const RelAlgNode* indirect_input_ra{nullptr};
-    int indirect_col_id{-1};
-    std::tie(indirect_input_ra, indirect_col_id) =
-        get_non_join_source_node(input_ra, col_id);
-    if (indirect_input_ra == input_ra) {
-      CHECK_EQ(indirect_col_id, static_cast<ssize_t>(col_id));
-      input_col_descs_unique.insert(std::make_shared<const InputColDescriptor>(
-          dynamic_cast<const RelScan*>(input_ra)
-              ? cat.getColumnIdBySpi(table_id, col_id + 1)
-              : col_id,
-          table_id,
-          input_desc));
-      continue;
-    }
-
-    // A column from indirect source indexed by an iterator
-    const int indirect_table_id = table_id_from_ra(indirect_input_ra);
-    CHECK(!input_to_nest_level.count(indirect_input_ra));
-    it = non_join_to_nest_level.find(indirect_input_ra);
-    CHECK(it != non_join_to_nest_level.end());
-    const int nest_level = it->second;
-    if (!input_descs_unique.count(InputDescriptor(indirect_table_id, -1))) {
-      input_descs_unique.emplace(indirect_table_id, -1);
-      input_descs.emplace_back(indirect_table_id, -1);
-    }
-    CHECK(!dynamic_cast<const RelScan*>(input_ra));
-    CHECK_EQ(size_t(0), static_cast<size_t>(input_desc));
-    // Physical columns from a scan node are numbered from 1 in our system.
-    input_col_descs_unique.insert(std::make_shared<const IndirectInputColDescriptor>(
-        cat.getColumnIdBySpi(table_id, col_id),
+    input_col_descs_unique.insert(std::make_shared<const InputColDescriptor>(
+        dynamic_cast<const RelScan*>(input_ra)
+            ? cat.getColumnIdBySpi(table_id, col_id + 1)
+            : col_id,
         table_id,
-        input_desc,
-        nest_level,
-        table_id,
-        input_desc,
-        dynamic_cast<const RelScan*>(indirect_input_ra) ? indirect_col_id + 1
-                                                        : indirect_col_id,
-        indirect_table_id,
-        nest_level));
+        input_desc));
   }
 }
 
@@ -1646,13 +1559,10 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
   // NB: the `body` field of the returned `WorkUnit` needs to be the `source` node,
   // not the `sort`. The aggregator needs the pre-sorted result from leaves.
   return {{source_exe_unit.input_descs,
-           source_exe_unit.extra_input_descs,
            std::move(source_exe_unit.input_col_descs),
            source_exe_unit.simple_quals,
            source_exe_unit.quals,
-           source_exe_unit.join_type,
            source_exe_unit.inner_joins,
-           source_exe_unit.join_dimensions,
            source_exe_unit.inner_join_quals,
            source_exe_unit.outer_join_quals,
            source_exe_unit.groupby_exprs,
@@ -1724,10 +1634,7 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
           (arg_ti.is_string() && arg_ti.get_compression() == kENCODING_DICT))) {
       continue;
     }
-    const auto arg_range =
-        getExpressionRange(redirect_expr(arg.get(), ra_exe_unit.input_col_descs).get(),
-                           table_infos,
-                           executor);
+    const auto arg_range = getExpressionRange(arg.get(), table_infos, executor);
     if (arg_range.getType() != ExpressionRangeType::Integer) {
       continue;
     }
@@ -2342,42 +2249,6 @@ std::list<std::shared_ptr<Analyzer::Expr>> get_inner_join_quals(
   return combine_equi_join_conditions(quals);
 }
 
-std::vector<std::pair<int, size_t>> get_join_dimensions(const RelAlgNode* ra,
-                                                        Executor* executor) {
-  std::vector<std::pair<int, size_t>> dims;
-  for (auto join = dynamic_cast<const RelJoin*>(ra); join;
-       join = static_cast<const RelJoin*>(join->getInput(0))) {
-    CHECK_EQ(size_t(2), join->inputCount());
-    const auto id = table_id_from_ra(join->getInput(1));
-    dims.emplace_back(id, get_frag_count_of_table(id, executor));
-    auto lhs = join->getInput(0);
-    if (!dynamic_cast<const RelJoin*>(lhs)) {
-      const auto id = table_id_from_ra(lhs);
-      dims.emplace_back(id, get_frag_count_of_table(id, executor));
-      break;
-    }
-  }
-  std::reverse(dims.begin(), dims.end());
-  return dims;
-}
-
-std::vector<InputDescriptor> separate_extra_input_descs(
-    std::vector<InputDescriptor>& input_descs) {
-  std::vector<InputDescriptor> new_input_descs;
-  std::vector<InputDescriptor> extra_input_descs;
-
-  for (const auto& input_desc : input_descs) {
-    if (input_desc.getNestLevel() < 0) {
-      extra_input_descs.push_back(input_desc);
-    } else {
-      new_input_descs.push_back(input_desc);
-    }
-  }
-
-  input_descs.swap(new_input_descs);
-  return extra_input_descs;
-}
-
 std::vector<size_t> get_node_input_permutation(
     const std::vector<InputTableInfo>& table_infos) {
   std::vector<size_t> input_permutation(table_infos.size());
@@ -2466,7 +2337,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
     left_deep_inner_joins = translateLeftDeepJoinFilter(
         left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
-  const auto extra_input_descs = separate_extra_input_descs(input_descs);
   QueryFeatureDescriptor query_features;
   RelAlgTranslator translator(cat_,
                               executor_,
@@ -2523,23 +2393,19 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
   inner_join_quals.insert(inner_join_quals.end(),
                           separated_quals.join_quals.begin(),
                           separated_quals.join_quals.end());
-  const RelAlgExecutionUnit exe_unit = {
-      input_descs,
-      extra_input_descs,
-      filtered_input_col_descs,
-      quals_cf.simple_quals,
-      separated_quals.regular_quals,
-      left_deep_join ? JoinType::INVALID : join_types.back(),
-      left_deep_inner_joins,
-      get_join_dimensions(get_data_sink(compound), executor_),
-      inner_join_quals,
-      get_outer_join_quals(compound, translator),
-      groupby_exprs,
-      filtered_target_exprs,
-      nullptr,
-      sort_info,
-      0,
-      query_features};
+  const RelAlgExecutionUnit exe_unit = {input_descs,
+                                        filtered_input_col_descs,
+                                        quals_cf.simple_quals,
+                                        separated_quals.regular_quals,
+                                        left_deep_inner_joins,
+                                        inner_join_quals,
+                                        get_outer_join_quals(compound, translator),
+                                        groupby_exprs,
+                                        filtered_target_exprs,
+                                        nullptr,
+                                        sort_info,
+                                        0,
+                                        query_features};
   QueryRewriter* query_rewriter =
       new QueryRewriter(exe_unit, query_infos, executor_, nullptr);
   const auto rewritten_exe_unit = query_rewriter->rewrite();
@@ -2585,7 +2451,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
     left_deep_inner_joins = translateLeftDeepJoinFilter(
         left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
-  const auto extra_input_descs = separate_extra_input_descs(input_descs);
   QueryFeatureDescriptor query_features;
   RelAlgTranslator translator(cat_,
                               executor_,
@@ -2610,23 +2475,19 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
   inner_join_quals.insert(inner_join_quals.end(),
                           separated_quals.join_quals.begin(),
                           separated_quals.join_quals.end());
-  const RelAlgExecutionUnit exe_unit = {
-      input_descs,
-      extra_input_descs,
-      input_col_descs,
-      quals_cf.simple_quals,
-      separated_quals.regular_quals,
-      left_deep_join ? JoinType::INVALID : join_types.back(),
-      left_deep_inner_joins,
-      get_join_dimensions(get_data_sink(compound), executor_),
-      inner_join_quals,
-      get_outer_join_quals(compound, translator),
-      groupby_exprs,
-      target_exprs,
-      nullptr,
-      sort_info,
-      0,
-      query_features};
+  const RelAlgExecutionUnit exe_unit = {input_descs,
+                                        input_col_descs,
+                                        quals_cf.simple_quals,
+                                        separated_quals.regular_quals,
+                                        left_deep_inner_joins,
+                                        inner_join_quals,
+                                        get_outer_join_quals(compound, translator),
+                                        groupby_exprs,
+                                        target_exprs,
+                                        nullptr,
+                                        sort_info,
+                                        0,
+                                        query_features};
   QueryRewriter* query_rewriter =
       new QueryRewriter(exe_unit, query_infos, executor_, nullptr);
   const auto rewritten_exe_unit = query_rewriter->rewrite();
@@ -2847,7 +2708,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
   const auto input_to_nest_level = get_input_nest_levels(aggregate, {});
   std::tie(input_descs, input_col_descs, used_inputs_owned) =
       get_input_desc(aggregate, input_to_nest_level, {}, cat_);
-  const auto extra_input_descs = separate_extra_input_descs(input_descs);
   const auto join_type = get_join_type(aggregate);
   QueryFeatureDescriptor query_features;
   RelAlgTranslator translator(cat_,
@@ -2868,13 +2728,10 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
   const auto targets_meta = get_targets_meta(aggregate, target_exprs);
   aggregate->setOutputMetainfo(targets_meta);
   return {{input_descs,
-           extra_input_descs,
            input_col_descs,
            {},
            {},
-           join_type,
            {},
-           get_join_dimensions(get_data_sink(aggregate), executor_),
            get_inner_join_quals(aggregate, translator),
            get_outer_join_quals(aggregate, translator),
            groupby_exprs,
@@ -2897,7 +2754,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
   auto input_to_nest_level = get_input_nest_levels(project, {});
   std::tie(input_descs, input_col_descs, std::ignore) =
       get_input_desc(project, input_to_nest_level, {}, cat_);
-  const auto extra_input_descs = separate_extra_input_descs(input_descs);
   const auto left_deep_join =
       dynamic_cast<const RelLeftDeepInnerJoin*>(project->getInput(0));
   JoinQualsPerNestingLevel left_deep_inner_joins;
@@ -2953,13 +2809,10 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
       get_modify_manipulated_targets_meta(project, filtered_target_exprs);
   project->setOutputMetainfo(targets_meta);
   return {{input_descs,
-           extra_input_descs,
            filtered_input_col_descs,
            {},
            {},
-           left_deep_join ? JoinType::INVALID : join_types.back(),
            left_deep_inner_joins,
-           get_join_dimensions(get_data_sink(project), executor_),
            get_inner_join_quals(project, translator),
            get_outer_join_quals(project, translator),
            {nullptr},
@@ -2981,7 +2834,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
   auto input_to_nest_level = get_input_nest_levels(project, {});
   std::tie(input_descs, input_col_descs, std::ignore) =
       get_input_desc(project, input_to_nest_level, {}, cat_);
-  const auto extra_input_descs = separate_extra_input_descs(input_descs);
   const auto left_deep_join =
       dynamic_cast<const RelLeftDeepInnerJoin*>(project->getInput(0));
   JoinQualsPerNestingLevel left_deep_inner_joins;
@@ -3021,13 +2873,10 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
   const auto targets_meta = get_targets_meta(project, target_exprs);
   project->setOutputMetainfo(targets_meta);
   return {{input_descs,
-           extra_input_descs,
            input_col_descs,
            {},
            {},
-           left_deep_join ? JoinType::INVALID : join_types.back(),
            left_deep_inner_joins,
-           get_join_dimensions(get_data_sink(project), executor_),
            get_inner_join_quals(project, translator),
            get_outer_join_quals(project, translator),
            {nullptr},
@@ -3098,7 +2947,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
   const auto input_to_nest_level = get_input_nest_levels(filter, {});
   std::tie(input_descs, input_col_descs, used_inputs_owned) =
       get_input_desc(filter, input_to_nest_level, {}, cat_);
-  const auto extra_input_descs = separate_extra_input_descs(input_descs);
   const auto join_type = get_join_type(filter);
   QueryFeatureDescriptor query_features;
   RelAlgTranslator translator(cat_,
@@ -3120,13 +2968,10 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   filter->setOutputMetainfo(in_metainfo);
   return {{input_descs,
-           extra_input_descs,
            input_col_descs,
            {},
            separated_quals.regular_quals,
-           join_type,
            {},
-           get_join_dimensions(get_data_sink(filter), executor_),
            separated_quals.join_quals,
            get_outer_join_quals(filter, translator),
            {nullptr},

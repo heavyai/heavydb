@@ -45,7 +45,7 @@ size_t get_entries_per_device(const size_t total_entries,
 }  // namespace
 
 std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
-    const std::shared_ptr<Analyzer::BinOper> condition_in,
+    const std::shared_ptr<Analyzer::BinOper> condition,
     const std::vector<InputTableInfo>& query_infos,
     const RelAlgExecutionUnit& ra_exe_unit,
     const Data_Namespace::MemoryLevel memory_level,
@@ -53,8 +53,6 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     const std::unordered_set<int>& skip_tables,
     ColumnCacheMap& column_cache,
     Executor* executor) {
-  const auto condition = std::dynamic_pointer_cast<Analyzer::BinOper>(
-      redirect_expr(condition_in.get(), ra_exe_unit.input_col_descs));
   // Already handled the table
   if (skip_tables.count(getInnerTableId(condition.get(), executor))) {
     throw HashJoinFail("A hash table is already built for the table of this column");
