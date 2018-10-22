@@ -47,8 +47,12 @@ struct RelAlgExecutorTraits {
   using TableDescriptorType = TableDescriptor;
 };
 
+struct RAExeMethodSel;
+
 class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
  public:
+  friend struct RAExeMethodSel;
+
   using TargetInfoList = std::vector<TargetInfo>;
 
   RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat)
@@ -178,8 +182,16 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                               RenderInfo*,
                               const int64_t queue_time_ms);
 
-  ExecutionResult executeLogicalValues(const RelLogicalValues*, const ExecutionOptions&);
-  ExecutionResult executeModify(const RelModify* modify, const ExecutionOptions& eo);
+  ExecutionResult executeLogicalValues(const RelLogicalValues*,
+                                       const CompilationOptions&,
+                                       const ExecutionOptions&,
+                                       RenderInfo*,
+                                       const int64_t);
+  ExecutionResult executeModify(const RelModify* modify,
+                                const CompilationOptions&,
+                                const ExecutionOptions&,
+                                RenderInfo*,
+                                const int64_t);
 
   // TODO(alex): just move max_groups_buffer_entry_guess to RelAlgExecutionUnit once
   //             we deprecate the plan-based executor paths and remove WorkUnit

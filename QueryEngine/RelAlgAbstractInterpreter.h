@@ -32,6 +32,13 @@
 
 using ColumnNameList = std::vector<std::string>;
 
+struct RAProjectionTag {};
+struct RAJoinTag {};
+struct RAAggregationTag {};
+struct RASortTag {};
+struct RAFilterPushDownTag {};
+struct RAModifyTag {};
+
 class Rex {
  public:
   virtual std::string toString() const = 0;
@@ -624,7 +631,10 @@ class ModifyManipulationTarget {
   mutable ColumnNameList target_columns_;
 };
 
-class RelProject : public RelAlgNode, public ModifyManipulationTarget {
+class RelProject : public RelAlgNode,
+                   public RAProjectionTag,
+                   public RAFilterPushDownTag,
+                   public ModifyManipulationTarget {
  public:
   friend class RelModify;
   using ConstRexScalarPtr = std::unique_ptr<const RexScalar>;
@@ -713,7 +723,7 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   mutable std::vector<std::string> fields_;
 };
 
-class RelAggregate : public RelAlgNode {
+class RelAggregate : public RelAlgNode, public RAAggregationTag {
  public:
   // Takes ownership of the aggregate expressions.
   RelAggregate(const size_t groupby_count,
@@ -778,7 +788,7 @@ class RelAggregate : public RelAlgNode {
   std::vector<std::string> fields_;
 };
 
-class RelJoin : public RelAlgNode {
+class RelJoin : public RelAlgNode, public RAJoinTag {
  public:
   RelJoin(std::shared_ptr<const RelAlgNode> lhs,
           std::shared_ptr<const RelAlgNode> rhs,
@@ -886,7 +896,10 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
 // It's the result of combining a sequence of 'RelFilter' (optional), 'RelProject',
 // 'RelAggregate' (optional) and a simple 'RelProject' (optional) into a single node
 // which can be efficiently executed with no intermediate buffers.
-class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
+class RelCompound : public RelAlgNode,
+                    public RAProjectionTag,
+                    public RAFilterPushDownTag,
+                    public ModifyManipulationTarget {
  public:
   // 'target_exprs_' are either scalar expressions owned by 'scalar_sources_'
   // or aggregate expressions owned by 'agg_exprs_', with the arguments
@@ -1016,7 +1029,7 @@ class SortField {
   const NullSortedPosition nulls_pos_;
 };
 
-class RelSort : public RelAlgNode {
+class RelSort : public RelAlgNode, public RASortTag, public RAFilterPushDownTag {
  public:
   RelSort(const std::vector<SortField>& collation,
           const size_t limit,
@@ -1070,7 +1083,7 @@ class RelSort : public RelAlgNode {
   bool hasEquivCollationOf(const RelSort& that) const;
 };
 
-class RelModify : public RelAlgNode {
+class RelModify : public RelAlgNode, public RAModifyTag {
  public:
   enum class ModifyOperation { Insert, Delete, Update };
   using RelAlgNodeInputPtr = std::shared_ptr<const RelAlgNode>;
@@ -1277,5 +1290,21 @@ std::string tree_string(const RelAlgNode*, const size_t indent = 0);
 typedef std::vector<RexInput> RANodeOutput;
 
 RANodeOutput get_node_output(const RelAlgNode* ra_node);
+
+template <typename... REL_NODE_LIST>
+struct RelNodeList {
+  template <typename F, typename NODE_PTR, typename... ARGS>
+  static decltype(auto) dynamic_apply(F&& f, NODE_PTR* ra_node_ptr, ARGS&&... args) {
+    bool return_value = false;
+    [[gnu::unused]] bool discard[sizeof...(REL_NODE_LIST)] = {
+        (return_value |=
+         std::forward<F>(f)(dynamic_cast<REL_NODE_LIST const*>(ra_node_ptr),
+                            std::forward<ARGS>(args)...))...};
+    return return_value;
+  }
+};
+
+template <typename... REL_NODE_LIST>
+using RelNodeResolver = RelNodeList<REL_NODE_LIST...>;
 
 #endif  // QUERYENGINE_RELALGABSTRACTINTERPRETER_H

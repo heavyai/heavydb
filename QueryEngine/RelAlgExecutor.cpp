@@ -454,6 +454,11 @@ class RexInputRedirector : public RexDeepCopyVisitor {
 
 }  // namespace
 
+#define METHOD_MAP(node_type)                        \
+  static auto constexpr methodSel(Rel##node_type*) { \
+    return &RelAlgExecutor::execute##node_type;      \
+  }
+
 void RelAlgExecutor::executeRelAlgStep(const size_t i,
                                        std::vector<RaExecutionDesc>& exec_descs,
                                        const CompilationOptions& co,
@@ -489,6 +494,37 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
     scanForTablesAndAggsInRelAlgSeqForRender(exec_descs, render_info);
   }
 
+  struct RAExeMethodSel {
+    METHOD_MAP(Compound);
+    METHOD_MAP(Project);
+    METHOD_MAP(Aggregate);
+    METHOD_MAP(Filter);
+    METHOD_MAP(Sort);
+    METHOD_MAP(LogicalValues);
+    METHOD_MAP(Modify);
+  };
+
+  auto execute_ra = [this, &exec_desc](auto* ra_node, auto&&... param_list) {
+    if (!ra_node)
+      return false;
+
+    using RANodeType = std::decay_t<decltype(*ra_node)>;      
+    auto *method_select_tag = static_cast< RANodeType * >( nullptr );
+
+    auto const& selected_method( RAExeMethodSel::methodSel( method_select_tag ) );
+    exec_desc.setResult((this->*selected_method)(
+        ra_node, std::forward<decltype(param_list)>(param_list)...));
+    if /* constexpr */ (std::is_base_of<RAFilterPushDownTag, RANodeType>::value) {
+      if (exec_desc.getResult().isFilterPushDownEnabled()) {
+        return true;
+      }
+    }
+    if /* constexpr */ (!std::is_base_of<RAModifyTag, RANodeType>::value) {
+      this->addTemporaryTable(-ra_node->getId(), exec_desc.getResult().getDataPtr());
+    }
+    return true;
+  };
+
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
     if (compound->isDeleteViaSelect()) {
@@ -496,12 +532,8 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
     } else if (compound->isUpdateViaSelect()) {
       executeUpdateViaCompound(compound, co, eo_work_unit, render_info, queue_time_ms);
     } else {
-      exec_desc.setResult(
-          executeCompound(compound, co, eo_work_unit, render_info, queue_time_ms));
-      if (exec_desc.getResult().isFilterPushDownEnabled()) {
-        return;
-      }
-      addTemporaryTable(-compound->getId(), exec_desc.getResult().getDataPtr());
+      execute_ra(compound, co, eo_work_unit, render_info, queue_time_ms);
+      return;
     }
     return;
   }
@@ -512,51 +544,19 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
     } else if (project->isUpdateViaSelect()) {
       executeUpdateViaProject(project, co, eo_work_unit, render_info, queue_time_ms);
     } else {
-      exec_desc.setResult(
-          executeProject(project, co, eo_work_unit, render_info, queue_time_ms));
-      if (exec_desc.getResult().isFilterPushDownEnabled()) {
-        return;
-      }
-      addTemporaryTable(-project->getId(), exec_desc.getResult().getDataPtr());
-    }
-    return;
-  }
-  const auto aggregate = dynamic_cast<const RelAggregate*>(body);
-  if (aggregate) {
-    exec_desc.setResult(
-        executeAggregate(aggregate, co, eo_work_unit, render_info, queue_time_ms));
-    addTemporaryTable(-aggregate->getId(), exec_desc.getResult().getDataPtr());
-    return;
-  }
-  const auto filter = dynamic_cast<const RelFilter*>(body);
-  if (filter) {
-    exec_desc.setResult(
-        executeFilter(filter, co, eo_work_unit, render_info, queue_time_ms));
-    addTemporaryTable(-filter->getId(), exec_desc.getResult().getDataPtr());
-    return;
-  }
-  const auto sort = dynamic_cast<const RelSort*>(body);
-  if (sort) {
-    exec_desc.setResult(executeSort(sort, co, eo_work_unit, render_info, queue_time_ms));
-    if (exec_desc.getResult().isFilterPushDownEnabled()) {
+      execute_ra(project, co, eo_work_unit, render_info, queue_time_ms);
       return;
     }
-    addTemporaryTable(-sort->getId(), exec_desc.getResult().getDataPtr());
     return;
   }
-  const auto logical_values = dynamic_cast<const RelLogicalValues*>(body);
-  if (logical_values) {
-    exec_desc.setResult(executeLogicalValues(logical_values, eo_work_unit));
-    addTemporaryTable(-logical_values->getId(), exec_desc.getResult().getDataPtr());
-    return;
-  }
-  const auto modify = dynamic_cast<const RelModify*>(body);
-  if (modify) {
-    exec_desc.setResult(executeModify(modify, eo_work_unit));
-    return;
-  }
-  CHECK(false);
+
+  auto handled =
+      RelNodeResolver<RelAggregate, RelFilter, RelSort, RelLogicalValues, RelModify>::
+          dynamic_apply(execute_ra, body, co, eo_work_unit, render_info, queue_time_ms);
+
+  CHECK(handled);
 }
+#undef METHOD_MAP
 
 void RelAlgExecutor::handleNop(RaExecutionDesc& ed) {
   // just set the result of the previous node as the result of no op
@@ -1345,7 +1345,10 @@ ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
 }
 
 ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify,
-                                              const ExecutionOptions& eo) {
+                                              const CompilationOptions&,
+                                              const ExecutionOptions& eo,
+                                              RenderInfo*,
+                                              const int64_t) {
   if (eo.just_explain) {
     throw std::runtime_error("EXPLAIN not supported for ModifyTable");
   }
@@ -1362,7 +1365,10 @@ ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify,
 
 ExecutionResult RelAlgExecutor::executeLogicalValues(
     const RelLogicalValues* logical_values,
-    const ExecutionOptions& eo) {
+    const CompilationOptions&,
+    const ExecutionOptions& eo,
+    RenderInfo*,
+    const int64_t) {
   if (eo.just_explain) {
     throw std::runtime_error("EXPLAIN not supported for LogicalValues");
   }
