@@ -1090,11 +1090,16 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
   }
 }
 
-void MapDHandler::get_roles(std::vector<std::string>& roles, const TSessionId& session) {
-  auto session_info = get_session(session);
+static void check_privileges_on(const std::string& api_name) {
+  if (!SysCatalog::instance().arePrivilegesOn()) {
+    THROW_MAPD_EXCEPTION(api_name + " API requires database privileges turned on");
+  }
+}
 
-  if (SysCatalog::instance().arePrivilegesOn() &&
-      !session_info.get_currentUser().isSuper) {
+void MapDHandler::get_roles(std::vector<std::string>& roles, const TSessionId& session) {
+  check_privileges_on("get_roles");
+  auto session_info = get_session(session);
+  if (!session_info.get_currentUser().isSuper) {
     roles =
         SysCatalog::instance().getRoles(session_info.get_catalog().get_currentDB().dbId);
   } else {
@@ -1229,14 +1234,13 @@ bool MapDHandler::has_object_privilege(const TSessionId& sessionId,
                                        const std::string& objectName,
                                        const TDBObjectType::type objectType,
                                        const TDBObjectPermissions& permissions) {
+  check_privileges_on("has_object_privilege");
   auto session = get_session(sessionId);
   auto& cat = session.get_catalog();
   auto current_user = session.get_currentUser();
-  if (!SysCatalog::instance().arePrivilegesOn()) {
-    return true;
-  } else if (!current_user.isSuper && !current_user.isReallySuper &&
-             !SysCatalog::instance().isRoleGrantedToGrantee(
-                 current_user.userName, granteeName, false)) {
+  if (!current_user.isSuper && !current_user.isReallySuper &&
+      !SysCatalog::instance().isRoleGrantedToGrantee(
+          current_user.userName, granteeName, false)) {
     THROW_MAPD_EXCEPTION(
         "Users except superusers can only check privileges for self or roles granted to "
         "them.")
@@ -1288,6 +1292,7 @@ bool MapDHandler::has_object_privilege(const TSessionId& sessionId,
 void MapDHandler::get_db_objects_for_grantee(std::vector<TDBObject>& TDBObjectsForRole,
                                              const TSessionId& sessionId,
                                              const std::string& roleName) {
+  check_privileges_on("get_db_objects_for_grantee");
   auto session = get_session(sessionId);
   auto user = session.get_currentUser();
   if (!user.isSuper &&
@@ -1315,6 +1320,7 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
                                       const TSessionId& sessionId,
                                       const std::string& objectName,
                                       const TDBObjectType::type type) {
+  check_privileges_on("get_db_object_privs");
   auto session = get_session(sessionId);
   DBObjectType object_type;
   switch (type) {
@@ -1390,6 +1396,7 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
 void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
                                          const TSessionId& sessionId,
                                          const std::string& granteeName) {
+  check_privileges_on("get_all_roles_for_user");
   auto session = get_session(sessionId);
   auto* grantee = SysCatalog::instance().getGrantee(granteeName);
   if (grantee) {
