@@ -368,7 +368,7 @@ void RowToColumnLoader::createConnection(const ThriftClientConnection& con) {
       con.conn_type_ == ThriftConnectionType::HTTPS) {
     mytransport_ = openHttpClientTransport(con.server_host_,
                                            con.port_,
-                                           "/etc/ssl/cert.pem",
+                                           con.ca_cert_name_,
                                            con.conn_type_ == ThriftConnectionType::HTTPS,
                                            con.skip_host_verify_);
     protocol = mapd::shared_ptr<TProtocol>(new TJSONProtocol(mytransport_));
