@@ -1101,7 +1101,8 @@ void MapDHandler::get_roles(std::vector<std::string>& roles, const TSessionId& s
   auto session_info = get_session(session);
   if (!session_info.get_currentUser().isSuper) {
     roles =
-        SysCatalog::instance().getRoles(session_info.get_catalog().get_currentDB().dbId);
+        SysCatalog::instance().getRoles(session_info.get_currentUser().userName,
+                                        session_info.get_catalog().get_currentDB().dbId);
   } else {
     roles = SysCatalog::instance().getRoles(
         false, true, session_info.get_currentUser().userName);

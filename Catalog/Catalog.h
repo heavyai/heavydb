@@ -464,7 +464,7 @@ class SysCatalog {
   std::vector<std::string> getRoles(bool userPrivateRole,
                                     bool isSuper,
                                     const std::string& userName);
-  std::vector<std::string> getRoles(const int32_t dbId);
+  std::vector<std::string> getRoles(const std::string& userName, const int32_t dbId);
   bool arePrivilegesOn() const { return check_privileges_; }
 
   static SysCatalog& instance() {

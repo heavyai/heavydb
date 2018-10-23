@@ -1623,9 +1623,8 @@ bool SysCatalog::isRoleGrantedToGrantee(const std::string& granteeName,
   return rc;
 }
 
-std::vector<std::string> SysCatalog::getRoles(const int32_t dbId) {
-  // this call is to return users that have some form of permissions to objects in the db
-  // sadly mapd_object_permissions table is also misused to manage user roles.
+std::vector<std::string> SysCatalog::getRoles(const std::string& userName,
+                                              const int32_t dbId) {
   sys_sqlite_lock sqlite_lock(this);
   std::string sql =
       "SELECT DISTINCT roleName FROM mapd_object_permissions WHERE objectPermissions<>0 "
@@ -1633,10 +1632,12 @@ std::vector<std::string> SysCatalog::getRoles(const int32_t dbId) {
       std::to_string(dbId);
   sqliteConnector_->query(sql);
   int numRows = sqliteConnector_->getNumRows();
-
   std::vector<std::string> roles(0);
   for (int r = 0; r < numRows; ++r) {
-    roles.push_back(sqliteConnector_->getData<string>(r, 0));
+    auto roleName = sqliteConnector_->getData<string>(r, 0);
+    if (isRoleGrantedToGrantee(userName, roleName, false)) {
+      roles.push_back(roleName);
+    }
   }
   return roles;
 }
