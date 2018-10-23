@@ -1497,42 +1497,8 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
             << " quals";
   }
 
-  primary_quals = codegenHashJoinsBeforeLoopJoin(primary_quals, ra_exe_unit, co);
-
-  if (ra_exe_unit.inner_joins.empty()) {
-    allocateInnerScansIterators(ra_exe_unit.input_descs);
-  }
-
-  llvm::Value* outer_join_nomatch_flag_lv = nullptr;
-  if (isOuterJoin()) {
-    if (isOuterLoopJoin()) {
-      CHECK(cgen_state_->outer_join_nomatch_);
-      outer_join_nomatch_flag_lv =
-          cgen_state_->ir_builder_.CreateLoad(cgen_state_->outer_join_nomatch_);
-      cgen_state_->outer_join_cond_lv_ =
-          cgen_state_->ir_builder_.CreateNot(outer_join_nomatch_flag_lv);
-    } else {
-      cgen_state_->outer_join_cond_lv_ = ll_bool(true);
-    }
-    for (auto expr : ra_exe_unit.outer_join_quals) {
-      cgen_state_->outer_join_cond_lv_ = cgen_state_->ir_builder_.CreateAnd(
-          cgen_state_->outer_join_cond_lv_,
-          toBool(codegen(expr.get(), true, co).front()));
-    }
-    if (isOneToManyOuterHashJoin()) {
-      CHECK(cgen_state_->outer_join_nomatch_);
-      // TODO(miyu): Support more than 1 one-to-many hash joins in folded sequence.
-      outer_join_nomatch_flag_lv =
-          cgen_state_->ir_builder_.CreateLoad(cgen_state_->outer_join_nomatch_);
-    }
-  }
-
-  llvm::Value* filter_lv = isOuterLoopJoin() || isOneToManyOuterHashJoin()
-                               ? cgen_state_->outer_join_cond_lv_
-                               : ll_bool(true);
-  llvm::Value* outerjoin_query_filter_lv =
-      (!primary_quals.empty() && (isOuterJoin() || isOuterLoopJoin())) ? ll_bool(true)
-                                                                       : nullptr;
+  llvm::Value* filter_lv = ll_bool(true);
+  llvm::Value* outerjoin_query_filter_lv = nullptr;
   for (auto expr : primary_quals) {
     // Generate the filter for primary quals
     auto cond = toBool(codegen(expr, true, co).front());
@@ -1553,14 +1519,10 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
         cgen_state_->context_, "sc_true", cgen_state_->row_func_);
     sc_false = llvm::BasicBlock::Create(
         cgen_state_->context_, "sc_false", cgen_state_->row_func_);
-    if (isOuterLoopJoin() || isOneToManyOuterHashJoin()) {
-      filter_lv =
-          cgen_state_->ir_builder_.CreateOr(filter_lv, outer_join_nomatch_flag_lv);
-    }
     cgen_state_->ir_builder_.CreateCondBr(filter_lv, sc_true, sc_false);
     cgen_state_->ir_builder_.SetInsertPoint(sc_false);
     if (ra_exe_unit.inner_joins.empty()) {
-      codegenInnerScanNextRowOrMatch();
+      cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
     }
     cgen_state_->ir_builder_.SetInsertPoint(sc_true);
     filter_lv = ll_bool(true);
@@ -1569,10 +1531,6 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
   for (auto expr : deferred_quals) {
     filter_lv = cgen_state_->ir_builder_.CreateAnd(
         filter_lv, toBool(codegen(expr, true, co).front()));
-  }
-  if (isOuterLoopJoin() || isOneToManyOuterHashJoin()) {
-    CHECK(outer_join_nomatch_flag_lv);
-    filter_lv = cgen_state_->ir_builder_.CreateOr(filter_lv, outer_join_nomatch_flag_lv);
   }
 
   CHECK(filter_lv->getType()->isIntegerTy(1));

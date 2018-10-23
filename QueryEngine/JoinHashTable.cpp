@@ -138,9 +138,6 @@ std::mutex JoinHashTable::join_hash_table_cache_mutex_;
 size_t get_shard_count(const Analyzer::BinOper* join_condition,
                        const RelAlgExecutionUnit& ra_exe_unit,
                        const Executor* executor) {
-  if (executor->isOuterJoin()) {
-    return 0;
-  }
   const Analyzer::ColumnVar* inner_col{nullptr};
   const Analyzer::Expr* outer_col{nullptr};
   std::shared_ptr<Analyzer::BinOper> redirected_bin_oper;
@@ -181,9 +178,6 @@ size_t get_shard_count(
     std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> equi_pair,
     const RelAlgExecutionUnit& ra_exe_unit,
     const Executor* executor) {
-  if (executor->isOuterJoin()) {
-    return 0;
-  }
   const auto inner_col = equi_pair.first;
   const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(equi_pair.second);
   if (!outer_col || inner_col->get_table_id() < 0 || outer_col->get_table_id() < 0) {
@@ -1221,9 +1215,6 @@ llvm::Value* JoinHashTable::codegenOneToManyHashJoin(
       get_int_type(64, executor->cgen_state_->context_),
       nullptr,
       "match_scan_" + std::to_string(inner_rte_idx));
-  if (executor->isOuterJoin()) {
-    executor->codegenNomatchInitialization(inner_rte_idx);
-  }
 
   executor->cgen_state_->ir_builder_.CreateStore(executor->ll_int(int64_t(0)),
                                                  match_pos_ptr);
@@ -1258,23 +1249,8 @@ llvm::Value* JoinHashTable::codegenOneToManyHashJoin(
   executor->cgen_state_->ir_builder_.CreateCondBr(
       have_more_matches, match_scan_cont, match_scan_ret);
   executor->cgen_state_->ir_builder_.SetInsertPoint(match_scan_ret);
-  if (executor->isOuterJoin()) {
-    auto init_iters = [executor, &matching_set, &match_pos_ptr]() {
-      executor->cgen_state_->ir_builder_.CreateStore(
-          executor->cgen_state_->ir_builder_.CreateSub(matching_set.count,
-                                                       executor->ll_int(int64_t(1))),
-          match_pos_ptr);
-      executor->cgen_state_->ir_builder_.CreateStore(
-          executor->ll_bool(true), executor->cgen_state_->outer_join_nomatch_);
-      ;
-    };
-    executor->codegenNomatchLoopback(init_iters, match_loop_head);
-  }
   executor->cgen_state_->ir_builder_.CreateRet(executor->ll_int(int32_t(0)));
   executor->cgen_state_->ir_builder_.SetInsertPoint(match_scan_cont);
-
-  executor->cgen_state_->match_scan_labels_.push_back(match_loop_head);
-  executor->cgen_state_->match_iterators_.emplace_back(match_pos, match_pos_ptr);
 
   return matching_set.slot;
 }

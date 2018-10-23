@@ -1564,7 +1564,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
            source_exe_unit.quals,
            source_exe_unit.inner_joins,
            source_exe_unit.inner_join_quals,
-           source_exe_unit.outer_join_quals,
            source_exe_unit.groupby_exprs,
            source_exe_unit.target_exprs,
            nullptr,
@@ -2130,27 +2129,6 @@ bool is_literal_true(const RexScalar* condition) {
   return literal && literal->getType() == kBOOLEAN && literal->getVal<bool>();
 }
 
-std::list<std::shared_ptr<Analyzer::Expr>> get_outer_join_quals(
-    const RelAlgNode* ra,
-    const RelAlgTranslator& translator) {
-  const auto join = dynamic_cast<const RelJoin*>(ra)
-                        ? static_cast<const RelJoin*>(ra)
-                        : dynamic_cast<const RelJoin*>(ra->getInput(0));
-  if (join && join->getCondition() && !is_literal_true(join->getCondition()) &&
-      join->getJoinType() == JoinType::LEFT) {
-    const auto join_cond_cf =
-        qual_to_conjunctive_form(translator.translateScalarRex(join->getCondition()));
-    if (join_cond_cf.simple_quals.empty()) {
-      return join_cond_cf.quals;
-    }
-    std::list<std::shared_ptr<Analyzer::Expr>> all_quals = join_cond_cf.simple_quals;
-    all_quals.insert(
-        all_quals.end(), join_cond_cf.quals.begin(), join_cond_cf.quals.end());
-    return all_quals;
-  }
-  return {};
-}
-
 std::unique_ptr<const RexOperator> get_bitwise_equals(const RexScalar* scalar) {
   const auto condition = dynamic_cast<const RexOperator*>(scalar);
   if (!condition || condition->getOperator() != kOR || condition->size() != 2) {
@@ -2399,7 +2377,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
                                         separated_quals.regular_quals,
                                         left_deep_inner_joins,
                                         inner_join_quals,
-                                        get_outer_join_quals(compound, translator),
                                         groupby_exprs,
                                         filtered_target_exprs,
                                         nullptr,
@@ -2481,7 +2458,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                         separated_quals.regular_quals,
                                         left_deep_inner_joins,
                                         inner_join_quals,
-                                        get_outer_join_quals(compound, translator),
                                         groupby_exprs,
                                         target_exprs,
                                         nullptr,
@@ -2733,7 +2709,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
            {},
            {},
            get_inner_join_quals(aggregate, translator),
-           get_outer_join_quals(aggregate, translator),
            groupby_exprs,
            target_exprs,
            nullptr,
@@ -2814,7 +2789,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
            {},
            left_deep_inner_joins,
            get_inner_join_quals(project, translator),
-           get_outer_join_quals(project, translator),
            {nullptr},
            filtered_target_exprs,
            nullptr,
@@ -2878,7 +2852,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
            {},
            left_deep_inner_joins,
            get_inner_join_quals(project, translator),
-           get_outer_join_quals(project, translator),
            {nullptr},
            target_exprs,
            nullptr,
@@ -2973,7 +2946,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
            separated_quals.regular_quals,
            {},
            separated_quals.join_quals,
-           get_outer_join_quals(filter, translator),
            {nullptr},
            target_exprs,
            nullptr,

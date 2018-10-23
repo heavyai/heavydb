@@ -86,9 +86,8 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
                                             const bool fetch_column,
                                             const CompilationOptions& co) {
   if (col_var->get_rte_idx() <= 0 ||
-      (!cgen_state_->outer_join_cond_lv_ &&
-       (cgen_state_->outer_join_match_found_per_level_.empty() ||
-        !foundOuterJoinMatch(col_var->get_rte_idx())))) {
+      cgen_state_->outer_join_match_found_per_level_.empty() ||
+      !foundOuterJoinMatch(col_var->get_rte_idx())) {
     return codegenColVar(col_var, fetch_column, true, co);
   }
   return codegenOuterJoinNullPlaceholder(col_var, fetch_column, co);
@@ -340,13 +339,7 @@ llvm::Value* Executor::codgenAdjustFixedEncNull(llvm::Value* val,
 llvm::Value* Executor::foundOuterJoinMatch(const ssize_t nesting_level) const {
   CHECK_GE(nesting_level, size_t(0));
   CHECK_LE(nesting_level, cgen_state_->outer_join_match_found_per_level_.size());
-  // The JoinLoop-based outer joins supersede the legacy version which checks
-  // `outer_join_cond_lv_`. They cannot coexist within the same execution unit.
-  CHECK(!cgen_state_->outer_join_cond_lv_ ||
-        !cgen_state_->outer_join_match_found_per_level_[nesting_level - 1]);
-  return cgen_state_->outer_join_cond_lv_
-             ? cgen_state_->outer_join_cond_lv_
-             : cgen_state_->outer_join_match_found_per_level_[nesting_level - 1];
+  return cgen_state_->outer_join_match_found_per_level_[nesting_level - 1];
 }
 
 std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(
@@ -440,27 +433,19 @@ llvm::Value* Executor::colByteStream(const Analyzer::ColumnVar* col_var,
 }
 
 llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
-  if (dynamic_cast<const Analyzer::ColumnVar*>(expr)) {
-    const auto col_var = static_cast<const Analyzer::ColumnVar*>(expr);
+  const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr);
+  if (col_var && col_var->get_rte_idx() > 0) {
     const auto hash_pos_it =
         cgen_state_->scan_idx_to_hash_pos_.find(col_var->get_rte_idx());
-    if (hash_pos_it != cgen_state_->scan_idx_to_hash_pos_.end()) {
-      if (hash_pos_it->second->getType()->isPointerTy()) {
-        CHECK(hash_pos_it->second->getType()->getPointerElementType()->isIntegerTy(32));
-        llvm::Value* result = cgen_state_->ir_builder_.CreateLoad(hash_pos_it->second);
-        result = cgen_state_->ir_builder_.CreateSExt(
-            result, get_int_type(64, cgen_state_->context_));
-        return result;
-      }
-      return hash_pos_it->second;
+    CHECK(hash_pos_it != cgen_state_->scan_idx_to_hash_pos_.end());
+    if (hash_pos_it->second->getType()->isPointerTy()) {
+      CHECK(hash_pos_it->second->getType()->getPointerElementType()->isIntegerTy(32));
+      llvm::Value* result = cgen_state_->ir_builder_.CreateLoad(hash_pos_it->second);
+      result = cgen_state_->ir_builder_.CreateSExt(
+          result, get_int_type(64, cgen_state_->context_));
+      return result;
     }
-    const auto inner_it = cgen_state_->scan_to_iterator_.find(
-        InputDescriptor(col_var->get_table_id(), col_var->get_rte_idx()));
-    if (inner_it != cgen_state_->scan_to_iterator_.end()) {
-      CHECK(inner_it->second.first);
-      CHECK(inner_it->second.first->getType()->isIntegerTy(64));
-      return inner_it->second.first;
-    }
+    return hash_pos_it->second;
   }
   for (auto& arg : cgen_state_->row_func_->args()) {
     if (arg.getName() == "pos") {

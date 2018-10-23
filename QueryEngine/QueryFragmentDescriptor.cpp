@@ -211,7 +211,6 @@ bool is_sample_query(const RelAlgExecutionUnit& ra_exe_unit) {
                       ra_exe_unit.scan_limit;
   if (result) {
     CHECK(ra_exe_unit.inner_join_quals.empty());
-    CHECK(ra_exe_unit.outer_join_quals.empty());
     CHECK_EQ(size_t(1), ra_exe_unit.groupby_exprs.size());
     CHECK(!ra_exe_unit.groupby_exprs.front());
   }

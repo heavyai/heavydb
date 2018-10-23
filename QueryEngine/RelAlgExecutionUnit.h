@@ -65,7 +65,6 @@ struct RelAlgExecutionUnit {
   std::list<std::shared_ptr<Analyzer::Expr>> quals;
   const JoinQualsPerNestingLevel inner_joins;
   const std::list<std::shared_ptr<Analyzer::Expr>> inner_join_quals;
-  const std::list<std::shared_ptr<Analyzer::Expr>> outer_join_quals;
   const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
   std::vector<Analyzer::Expr*> target_exprs;
   const std::shared_ptr<Analyzer::Estimator> estimator;

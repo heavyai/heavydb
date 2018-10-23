@@ -389,19 +389,8 @@ class Executor {
 
   bool isArchMaxwell(const ExecutorDeviceType dt) const;
 
-  bool isOuterJoin() const { return cgen_state_->is_outer_join_; }
-
   bool containsLeftDeepOuterJoin() const {
     return cgen_state_->contains_left_deep_outer_join_;
-  }
-
-  bool isOuterLoopJoin() const {
-    return isOuterJoin() && plan_state_->join_info_.join_impl_type_ == JoinImplType::Loop;
-  }
-
-  bool isOneToManyOuterHashJoin() const {
-    return isOuterJoin() &&
-           plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToMany;
   }
 
   const ColumnDescriptor* getColumnDescriptor(const Analyzer::ColumnVar*) const;
@@ -714,7 +703,7 @@ class Executor {
            catalog_->get_dataMgr().cudaMgr_->isArchPascalOrLater();
   }
 
-  enum class JoinImplType { Invalid, Loop, HashOneToOne, HashOneToMany, HashPlusLoop };
+  enum class JoinImplType { Invalid, Loop, HashOneToOne, HashOneToMany };
 
   struct JoinInfo {
     JoinInfo(const JoinImplType join_impl_type,
@@ -978,8 +967,7 @@ class Executor {
       const RelAlgExecutionUnit& ra_exe_unit,
       const CartesianProduct<std::vector<std::vector<size_t>>>& frag_ids_crossjoin,
       const std::vector<InputDescriptor>& input_descs,
-      const std::map<int, const TableFragments*>& all_tables_fragments,
-      const bool one_to_all_frags);
+      const std::map<int, const TableFragments*>& all_tables_fragments);
 
   void buildSelectedFragsMapping(
       std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
@@ -1140,33 +1128,8 @@ class Executor {
   void createErrorCheckControlFlow(llvm::Function* query_func,
                                    bool run_with_dynamic_watchdog);
 
-  const std::vector<Analyzer::Expr*> codegenOneToManyHashJoins(
-      const std::vector<Analyzer::Expr*>& primary_quals,
-      const RelAlgExecutionUnit& ra_exe_unit,
-      const CompilationOptions& co);
-
-  const std::vector<Analyzer::Expr*> codegenHashJoinsBeforeLoopJoin(
-      const std::vector<Analyzer::Expr*>& primary_quals,
-      const RelAlgExecutionUnit& ra_exe_unit,
-      const CompilationOptions& co);
-
-  void codegenInnerScanNextRowOrMatch();
-
   void preloadFragOffsets(const std::vector<InputDescriptor>& input_descs,
                           const std::vector<InputTableInfo>& query_infos);
-
-  void codegenNomatchInitialization(const int index);
-
-  void codegenNomatchLoopback(const std::function<void()> init_iters,
-                              llvm::BasicBlock* loop_head);
-
-  void allocateInnerScansIterators(const std::vector<InputDescriptor>& input_descs);
-
-  JoinInfo chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>&,
-                          const std::vector<InputTableInfo>&,
-                          const RelAlgExecutionUnit& ra_exe_unit,
-                          const ExecutorDeviceType device_type,
-                          ColumnCacheMap& column_cache);
 
   struct JoinHashTableOrError {
     std::shared_ptr<JoinHashTableInterface> hash_table;
@@ -1314,17 +1277,12 @@ class Executor {
   struct CgenState {
    public:
     CgenState(const std::vector<InputTableInfo>& query_infos,
-              const bool is_outer_join,
               const bool contains_left_deep_outer_join)
         : module_(nullptr)
         , row_func_(nullptr)
         , context_(getGlobalLLVMContext())
         , ir_builder_(context_)
-        , is_outer_join_(is_outer_join)
         , contains_left_deep_outer_join_(contains_left_deep_outer_join)
-        , outer_join_cond_lv_(nullptr)
-        , outer_join_match_found_(nullptr)
-        , outer_join_nomatch_(nullptr)
         , outer_join_match_found_per_level_(std::max(query_infos.size(), size_t(1)) - 1)
         , query_infos_(query_infos)
         , needs_error_check_(false)
@@ -1511,17 +1469,8 @@ class Executor {
     std::vector<llvm::Value*> group_by_expr_cache_;
     std::vector<llvm::Value*> str_constants_;
     std::vector<llvm::Value*> frag_offsets_;
-    std::unordered_map<InputDescriptor, std::pair<llvm::Value*, llvm::Value*>>
-        scan_to_iterator_;
-    std::vector<std::pair<llvm::Value*, llvm::Value*>> match_iterators_;
-    const bool is_outer_join_;
     const bool contains_left_deep_outer_join_;
-    llvm::Value* outer_join_cond_lv_;
-    llvm::Value* outer_join_match_found_;
-    llvm::Value* outer_join_nomatch_;
     std::vector<llvm::Value*> outer_join_match_found_per_level_;
-    std::vector<llvm::BasicBlock*> inner_scan_labels_;
-    std::vector<llvm::BasicBlock*> match_scan_labels_;
     std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
     std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
     const std::vector<InputTableInfo>& query_infos_;

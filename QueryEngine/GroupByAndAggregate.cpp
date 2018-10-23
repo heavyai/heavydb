@@ -1492,12 +1492,6 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
                               false);
     filter_false = filter_cfg.cond_false_;
 
-    if (executor_->isOuterLoopJoin() || executor_->isOneToManyOuterHashJoin()) {
-      auto match_found_ptr = executor_->cgen_state_->outer_join_match_found_;
-      CHECK(match_found_ptr);
-      LL_BUILDER.CreateStore(executor_->ll_bool(true), match_found_ptr);
-    }
-
     std::unique_ptr<DiamondCodegen> nonjoin_filter_cfg;
     if (outerjoin_query_filter_result) {
       nonjoin_filter_cfg.reset(new DiamondCodegen(outerjoin_query_filter_result,
@@ -1593,7 +1587,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
   }
 
   if (ra_exe_unit_.inner_joins.empty()) {
-    executor_->codegenInnerScanNextRowOrMatch();
+    executor_->cgen_state_->ir_builder_.CreateRet(LL_INT(int32_t(0)));
   } else if (sc_false) {
     const auto saved_insert_block = LL_BUILDER.GetInsertBlock();
     LL_BUILDER.SetInsertPoint(sc_false);
