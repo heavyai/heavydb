@@ -404,13 +404,15 @@ void QueryExecutionContext::initColumnarGroups(int64_t* groups_buffer,
   }
   const bool need_padding = !query_mem_desc_.isCompactLayoutIsometric();
   const int32_t agg_col_count = query_mem_desc_.getColCount();
-  const int32_t key_qw_count = query_mem_desc_.groupColWidthsSize();
   auto buffer_ptr = reinterpret_cast<int8_t*>(groups_buffer);
 
-  CHECK(key_qw_count == 1);
   if (!keyless) {
-    buffer_ptr = initColumnarBuffer<int64_t>(
-        reinterpret_cast<int64_t*>(buffer_ptr), EMPTY_KEY_64, groups_buffer_entry_count);
+    const size_t key_count{query_mem_desc_.groupColWidthsSize()};
+    for (size_t i = 0; i < key_count; ++i) {
+      buffer_ptr = initColumnarBuffer<int64_t>(reinterpret_cast<int64_t*>(buffer_ptr),
+                                               EMPTY_KEY_64,
+                                               groups_buffer_entry_count);
+    }
   }
   // initializing all aggregate columns:
   int32_t init_val_idx = 0;

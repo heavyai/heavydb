@@ -84,6 +84,61 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value_with_watchdog(
   return NULL;
 }
 
+extern "C" NEVER_INLINE DEVICE int32_t
+get_group_value_columnar_slot(int64_t* groups_buffer,
+                              const uint32_t groups_buffer_entry_count,
+                              const int64_t* key,
+                              const uint32_t key_count,
+                              const uint32_t key_width) {
+  uint32_t h = key_hash(key, key_count, key_width) % groups_buffer_entry_count;
+  int32_t matching_slot = get_matching_group_value_columnar_slot(
+      groups_buffer, groups_buffer_entry_count, h, key, key_count, key_width);
+  if (matching_slot != -1) {
+    return h;
+  }
+  uint32_t h_probe = (h + 1) % groups_buffer_entry_count;
+  while (h_probe != h) {
+    matching_slot = get_matching_group_value_columnar_slot(
+        groups_buffer, groups_buffer_entry_count, h_probe, key, key_count, key_width);
+    if (matching_slot != -1) {
+      return h_probe;
+    }
+    h_probe = (h_probe + 1) % groups_buffer_entry_count;
+  }
+  return -1;
+}
+
+extern "C" NEVER_INLINE DEVICE int32_t
+get_group_value_columnar_slot_with_watchdog(int64_t* groups_buffer,
+                                            const uint32_t groups_buffer_entry_count,
+                                            const int64_t* key,
+                                            const uint32_t key_count,
+                                            const uint32_t key_width) {
+  uint32_t h = key_hash(key, key_count, key_width) % groups_buffer_entry_count;
+  int32_t matching_slot = get_matching_group_value_columnar_slot(
+      groups_buffer, groups_buffer_entry_count, h, key, key_count, key_width);
+  if (matching_slot != -1) {
+    return h;
+  }
+  uint32_t watchdog_countdown = 100;
+  uint32_t h_probe = (h + 1) % groups_buffer_entry_count;
+  while (h_probe != h) {
+    matching_slot = get_matching_group_value_columnar_slot(
+        groups_buffer, groups_buffer_entry_count, h_probe, key, key_count, key_width);
+    if (matching_slot != -1) {
+      return h_probe;
+    }
+    h_probe = (h_probe + 1) % groups_buffer_entry_count;
+    if (--watchdog_countdown == 0) {
+      if (dynamic_watchdog()) {
+        return -1;
+      }
+      watchdog_countdown = 100;
+    }
+  }
+  return -1;
+}
+
 extern "C" NEVER_INLINE DEVICE int64_t* get_group_value_columnar(
     int64_t* groups_buffer,
     const uint32_t groups_buffer_entry_count,

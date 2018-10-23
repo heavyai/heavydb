@@ -311,6 +311,8 @@ declare void @agg_from_smem_to_gmem_count_binId(i64*, i64*, i32);
 declare void @init_group_by_buffer_gpu(i64*, i64*, i32, i32, i32, i1, i8);
 declare i64* @get_group_value(i64*, i32, i64*, i32, i32, i32, i64*);
 declare i64* @get_group_value_with_watchdog(i64*, i32, i64*, i32, i32, i32, i64*);
+declare i32 @get_group_value_columnar_slot(i64*, i32, i64*, i32, i32);
+declare i32 @get_group_value_columnar_slot_with_watchdog(i64*, i32, i64*, i32, i32);
 declare i64* @get_group_value_fast(i64*, i64, i64, i64, i32);
 declare i64* @get_group_value_fast_with_original_key(i64*, i64, i64, i64, i64, i32);
 declare i32 @get_columnar_group_bin_offset(i64*, i64, i64, i64);

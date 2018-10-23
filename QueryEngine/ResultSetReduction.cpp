@@ -743,11 +743,12 @@ void ResultSetStorage::reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
     const auto& target_info = targets_[target_logical_idx];
     const auto that_slot_off =
         query_mem_desc_.didOutputColumnar()
-            ? slot_offset_colwise(that_entry_idx, j, key_count, that_entry_count)
+            ? slot_offset_colwise(
+                  that_entry_idx, init_agg_val_idx, key_count, that_entry_count)
             : get_row_qw_count(query_mem_desc_) * that_entry_idx +
                   get_slot_off_quad(query_mem_desc_) + init_agg_val_idx;
     const auto this_slot_off = query_mem_desc_.didOutputColumnar()
-                                   ? j * query_mem_desc_.getEntryCount()
+                                   ? init_agg_val_idx * query_mem_desc_.getEntryCount()
                                    : init_agg_val_idx;
     reduceOneSlotBaseline(this_entry_slots,
                           this_slot_off,

@@ -466,6 +466,7 @@ InternalTargetValue ResultSet::RowWiseTargetAccessor::getColumnInternal(
 
 void ResultSet::ColumnWiseTargetAccessor::initializeOffsetsForStorage() {
   // Compute offsets for base storage and all appended storage
+  const auto key_width = result_set_->query_mem_desc_.getEffectiveKeyWidth();
   for (size_t storage_idx = 0; storage_idx < result_set_->appended_storage_.size() + 1;
        ++storage_idx) {
     offsets_for_storage_.emplace_back();
@@ -486,7 +487,10 @@ void ResultSet::ColumnWiseTargetAccessor::initializeOffsetsForStorage() {
          ++target_idx) {
       const auto& agg_info = result_set_->storage_->targets_[target_idx];
 
-      const auto compact_sz1 = crt_query_mem_desc.getColumnWidth(agg_col_idx).compact;
+      const auto compact_sz1 =
+          crt_query_mem_desc.getColumnWidth(agg_col_idx).compact
+              ? crt_query_mem_desc.getColumnWidth(agg_col_idx).compact
+              : key_width;
       const auto next_col_ptr = advance_to_next_columnar_target_buff(
           crt_col_ptr, crt_query_mem_desc, agg_col_idx);
       const auto col2_ptr = ((agg_info.is_agg && agg_info.agg_kind == kAVG) ||
@@ -529,11 +533,19 @@ InternalTargetValue ResultSet::ColumnWiseTargetAccessor::getColumnInternal(
 
   const auto& offsets_for_target = offsets_for_storage_[storage_idx][target_logical_idx];
   const auto& agg_info = result_set_->storage_->targets_[target_logical_idx];
+  auto ptr1 = offsets_for_target.ptr1;
+  if (result_set_->query_mem_desc_.targetGroupbyIndicesSize() > 0) {
+    if (result_set_->query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) >= 0) {
+      ptr1 =
+          buff + result_set_->query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) *
+                     result_set_->query_mem_desc_.getEffectiveKeyWidth() *
+                     result_set_->query_mem_desc_.entry_count_;
+    }
+  }
 
   const auto i1 = result_set_->lazyReadInt(
       read_int_from_buff(
-          columnar_elem_ptr(
-              entry_idx, offsets_for_target.ptr1, offsets_for_target.compact_sz1),
+          columnar_elem_ptr(entry_idx, ptr1, offsets_for_target.compact_sz1),
           offsets_for_target.compact_sz1),
       target_logical_idx,
       storage_lookup_result);

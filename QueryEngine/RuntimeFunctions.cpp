@@ -851,6 +851,54 @@ extern "C" ALWAYS_INLINE int64_t* get_matching_group_value(int64_t* groups_buffe
   return nullptr;
 }
 
+template <typename T>
+ALWAYS_INLINE int32_t get_matching_group_value_columnar_slot(int64_t* groups_buffer,
+                                                             const uint32_t entry_count,
+                                                             const uint32_t h,
+                                                             const T* key,
+                                                             const uint32_t key_count) {
+  auto off = h;
+  auto key_buffer = reinterpret_cast<T*>(groups_buffer);
+  if (key_buffer[off] == get_empty_key<T>()) {
+    for (size_t i = 0; i < key_count; ++i) {
+      key_buffer[off] = key[i];
+      off += entry_count;
+    }
+    return h;
+  }
+  off = h;
+  for (size_t i = 0; i < key_count; ++i) {
+    if (key_buffer[off] != key[i]) {
+      return -1;
+    }
+    off += entry_count;
+  }
+  return h;
+}
+
+extern "C" ALWAYS_INLINE int32_t
+get_matching_group_value_columnar_slot(int64_t* groups_buffer,
+                                       const uint32_t entry_count,
+                                       const uint32_t h,
+                                       const int64_t* key,
+                                       const uint32_t key_count,
+                                       const uint32_t key_width) {
+  switch (key_width) {
+    case 4:
+      return get_matching_group_value_columnar_slot(groups_buffer,
+                                                    entry_count,
+                                                    h,
+                                                    reinterpret_cast<const int32_t*>(key),
+                                                    key_count);
+    case 8:
+      return get_matching_group_value_columnar_slot(
+          groups_buffer, entry_count, h, key, key_count);
+    default:
+      return -1;
+  }
+  return -1;
+}
+
 extern "C" ALWAYS_INLINE int64_t* get_matching_group_value_columnar(
     int64_t* groups_buffer,
     const uint32_t h,

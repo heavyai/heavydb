@@ -820,7 +820,9 @@ GroupByAndAggregate::GroupByAndAggregate(
 
     output_columnar_ =
         (output_columnar_hint &&
-         query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection) ||
+         (query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection ||
+          query_mem_desc_.getQueryDescriptionType() ==
+              QueryDescriptionType::GroupByBaselineHash)) ||
         query_mem_desc_.sortOnGpu();
 
     query_mem_desc_.setOutputColumnar(output_columnar_);
@@ -1861,17 +1863,27 @@ GroupByAndAggregate::codegenMultiColumnBaselineHash(const CompilationOptions& co
     group_key =
         LL_BUILDER.CreatePointerCast(group_key, llvm::Type::getInt64PtrTy(LL_CONTEXT));
   }
-  return std::make_tuple(
-      emitCall(
-          co.with_dynamic_watchdog_ ? "get_group_value_with_watchdog" : "get_group_value",
-          {groups_buffer,
-           LL_INT(static_cast<int32_t>(query_mem_desc_.getEntryCount())),
-           &*group_key,
-           &*key_size_lv,
-           LL_INT(static_cast<int32_t>(key_width)),
-           LL_INT(row_size_quad),
-           &*arg_it}),
-      nullptr);
+  std::vector<llvm::Value*> func_args{
+      groups_buffer,
+      LL_INT(static_cast<int32_t>(query_mem_desc_.getEntryCount())),
+      &*group_key,
+      &*key_size_lv,
+      LL_INT(static_cast<int32_t>(key_width))};
+  std::string func_name{"get_group_value"};
+  if (query_mem_desc_.didOutputColumnar()) {
+    func_name += "_columnar_slot";
+  } else {
+    func_args.push_back(LL_INT(row_size_quad));
+    func_args.push_back(&*arg_it);
+  }
+  if (co.with_dynamic_watchdog_) {
+    func_name += "_with_watchdog";
+  }
+  if (query_mem_desc_.didOutputColumnar()) {
+    return std::make_tuple(groups_buffer, emitCall(func_name, func_args));
+  } else {
+    return std::make_tuple(emitCall(func_name, func_args), nullptr);
+  }
 }
 
 llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {

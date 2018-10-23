@@ -356,6 +356,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
       return;
     }
     case QueryDescriptionType::GroupByBaselineHash: {
+      output_columnar_ = output_columnar_hint;
       CHECK(!render_info || !render_info->isPotentialInSituRender());
       entry_count_ = shard_count
                          ? (max_groups_buffer_entry_count + shard_count - 1) / shard_count
@@ -365,7 +366,8 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
                                                              ra_exe_unit.target_exprs);
 
       group_col_compact_width_ =
-          pick_baseline_key_width(ra_exe_unit, query_infos, executor);
+          output_columnar_ ? 8
+                           : pick_baseline_key_width(ra_exe_unit, query_infos, executor);
 
       agg_col_widths_.clear();
       for (auto wid :
@@ -863,12 +865,11 @@ size_t QueryMemoryDescriptor::getColOffInBytes(const size_t bin,
   const auto warp_count = getWarpCount();
   if (output_columnar_) {
     CHECK((bin < entry_count_) || (bin == 0 && entry_count_ == 0));
-    CHECK_EQ(size_t(1), group_col_widths_.size());
     CHECK_EQ(size_t(1), warp_count);
     size_t offset{0};
     const auto is_isometric = isCompactLayoutIsometric();
     if (!keyless_hash_) {
-      offset = sizeof(int64_t) * entry_count_;
+      offset = group_col_widths_.size() * sizeof(int64_t) * entry_count_;
     }
     for (size_t index = 0; index < col_idx; ++index) {
       offset += agg_col_widths_[index].compact * entry_count_;
