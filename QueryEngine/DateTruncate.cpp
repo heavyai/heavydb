@@ -356,10 +356,11 @@ extern "C" NEVER_INLINE DEVICE time_t DateTruncateHighPrecision(DatetruncField f
   return DateTruncate(field, stimeval) * scale_ret;
 }
 
-extern "C" DEVICE int64_t DateTruncateAlterPrecision(DatetruncField field,
-                                                     time_t timeval,
-                                                     const int32_t st_dimen,
-                                                     const int32_t en_dimen) {
+extern "C" NEVER_INLINE DEVICE int64_t
+DateTruncateAlterPrecision(DatetruncField field,
+                           time_t timeval,
+                           const int32_t st_dimen,
+                           const int32_t en_dimen) {
   const int64_t scale = get_precision(abs(st_dimen - en_dimen));
   const int64_t ntimeval = DateTruncateHighPrecision(field, timeval, st_dimen);
   return (st_dimen > en_dimen) ? ntimeval / scale : ntimeval * scale;

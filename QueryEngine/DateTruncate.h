@@ -70,5 +70,9 @@ extern "C" NEVER_INLINE DEVICE time_t DateTruncate(DatetruncField field, time_t 
 extern "C" NEVER_INLINE DEVICE time_t DateTruncateHighPrecision(DatetruncField field,
                                                                 time_t timeval,
                                                                 const int32_t dimen);
+extern "C" NEVER_INLINE DEVICE int64_t DateTruncateAlterPrecision(DatetruncField field,
+                                                                  time_t timeval,
+                                                                  const int32_t st_dimen,
+                                                                  const int32_t en_dimen);
 
 #endif  // QUERYENGINE_DATETRUNCATE_H

@@ -7244,6 +7244,49 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(o as timestamp(3)) >= m_3", dt)));
+
+    ASSERT_EQ(
+        1418509395000000000,
+        v<int64_t>(run_simple_agg(
+            "SELECT PG_DATE_TRUNC('second', m_9) FROM test where cast(m_9 as "
+            "timestamp(0)) between "
+            "TIMESTAMP(0) '2014-12-13 22:23:14' and TIMESTAMP(0) '2014-12-13 22:23:15'",
+            dt)));
+    ASSERT_EQ(
+        1418509395000,
+        v<int64_t>(run_simple_agg(
+            "SELECT PG_DATE_TRUNC('second', m_3) FROM test where cast(m_3 as "
+            "timestamp(0)) between "
+            "TIMESTAMP(0) '2014-12-13 22:23:14' and TIMESTAMP(0) '2014-12-13 22:23:15'",
+            dt)));
+    ASSERT_EQ(
+        1418509395000000,
+        v<int64_t>(run_simple_agg(
+            "SELECT PG_DATE_TRUNC('second', m_6) FROM test where cast(m_6 as "
+            "timestamp(0)) between "
+            "TIMESTAMP(0) '2014-12-13 22:23:14' and TIMESTAMP(0) '2014-12-13 22:23:15'",
+            dt)));
+    ASSERT_EQ(
+        1418509395,
+        v<int64_t>(run_simple_agg(
+            "SELECT PG_DATE_TRUNC('second', m) FROM test where cast(m as "
+            "timestamp(3)) between "
+            "TIMESTAMP(3) '2014-12-13 22:23:14' and TIMESTAMP(3) '2014-12-13 22:23:15'",
+            dt)));
+    ASSERT_EQ(1418509395000000000,
+              v<int64_t>(run_simple_agg(
+                  "SELECT PG_DATE_TRUNC('second', m_9) FROM test where cast(m_9 as "
+                  "timestamp(3)) between "
+                  "TIMESTAMP(3) '2014-12-13 22:23:14.323' and TIMESTAMP(3) '2014-12-13 "
+                  "22:23:15.999'",
+                  dt)));
+    ASSERT_EQ(1418509395000000,
+              v<int64_t>(run_simple_agg(
+                  "SELECT PG_DATE_TRUNC('second', m_6) FROM test where cast(m_6 as "
+                  "timestamp(3)) between "
+                  "TIMESTAMP(3) '2014-12-13 22:23:14.323' and TIMESTAMP(3) '2014-12-13 "
+                  "22:23:15.999'",
+                  dt)));
   }
 }
 

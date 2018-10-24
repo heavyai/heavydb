@@ -690,6 +690,15 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
       return {QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
     }
   }
+  // For single column groupby on high timestamps, force baseline hash due to wide ranges
+  // we are likely to encounter when applying quals to the expression range
+  // TODO: consider allowing TIMESTAMP(9) (nanoseconds) with quals to use perfect hash if
+  // the range is small enough
+  if (ra_exe_unit_.groupby_exprs.front() &&
+      ra_exe_unit_.groupby_exprs.front()->get_type_info().is_high_precision_timestamp() &&
+      ra_exe_unit_.simple_quals.size() > 0) {
+    return {QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
+  }
   const auto col_range_info = getExprRangeInfo(ra_exe_unit_.groupby_exprs.front().get());
   if (!ra_exe_unit_.groupby_exprs.front()) {
     return col_range_info;
@@ -723,11 +732,14 @@ ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const Analyzer::Expr* expr) c
       expr, query_infos_, executor_, boost::make_optional(ra_exe_unit_.simple_quals));
   switch (expr_range.getType()) {
     case ExpressionRangeType::Integer:
-      return {QueryDescriptionType::GroupByPerfectHash,
-              expr_range.getIntMin(),
-              expr_range.getIntMax(),
-              expr_range.getBucket(),
-              expr_range.hasNulls()};
+      // Force high precision timestamps to baselinehash
+      if (!expr->get_type_info().is_high_precision_timestamp()) {
+        return {QueryDescriptionType::GroupByPerfectHash,
+                expr_range.getIntMin(),
+                expr_range.getIntMax(),
+                expr_range.getBucket(),
+                expr_range.hasNulls()};
+      }
     case ExpressionRangeType::Float:
     case ExpressionRangeType::Double:
     case ExpressionRangeType::Invalid:
