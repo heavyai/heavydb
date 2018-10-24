@@ -166,8 +166,8 @@ class MapDPreparedStatement implements PreparedStatement {
   @Override
   public void setBoolean(int parameterIndex, boolean x) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    parmRep[parameterIndex - 1] = x ? "t" : "f";
-    parmIsString[parameterIndex - 1] = true;
+    parmRep[parameterIndex - 1] = x ? "true" : "false";
+    parmIsString[parameterIndex - 1] = false;
     parmIsNull[parameterIndex - 1] = false;
     repCount++;
   }
