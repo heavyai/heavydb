@@ -10382,6 +10382,18 @@ TEST(Select, GeoSpatial_Projection) {
             "6, 5 6)))'), "
             "ST_GeomFromText('LINESTRING(3 3, 3 2, 2 2)')) FROM geospatial_test limit 1;",
             dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_Intersects("
+                  "ST_GeomFromText('POLYGON((-118.66313066279504 44.533565793694436,"
+                  "-115.28301791070872 44.533565793694436,-115.28301791070872 "
+                  "46.49961643537853,"
+                  "-118.66313066279504 46.49961643537853,-118.66313066279504 "
+                  "44.533565793694436))'),"
+                  "ST_GeomFromText('LINESTRING (-118.526348964556 45.6369689645418,"
+                  "-118.568716970537 45.552529965319,-118.604668964913 45.5192699867856,"
+                  "-118.700612922525 45.4517749629224)')) from test limit 1;",
+                  dt)));
     ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
@@ -10423,13 +10435,13 @@ TEST(Select, GeoSpatial_Projection) {
             "WHERE ST_Intersects(l, ST_GeomFromText('LINESTRING(0.5 0.5, 6.5 0.5)'));",
             dt)));
     ASSERT_EQ(
-        static_cast<int64_t>(3),
+        static_cast<int64_t>(6),
         v<int64_t>(run_simple_agg(
             "SELECT count(*) FROM geospatial_test "
             "WHERE ST_Intersects(poly, ST_GeomFromText('LINESTRING(0 4.5, 7 0.5)'));",
             dt)));
     ASSERT_EQ(
-        static_cast<int64_t>(3),
+        static_cast<int64_t>(6),
         v<int64_t>(run_simple_agg(
             "SELECT count(*) FROM geospatial_test "
             "WHERE ST_Intersects(mpoly, ST_GeomFromText('LINESTRING(0 4.5, 7 0.5)'));",

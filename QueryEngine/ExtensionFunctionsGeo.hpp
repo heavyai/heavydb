@@ -319,6 +319,47 @@ double distance_line_line(double l11x,
 }
 
 DEVICE
+double distance_ring_linestring(int8_t* ring,
+                                int32_t ring_num_coords,
+                                int8_t* l,
+                                int32_t lnum_coords,
+                                int32_t ic1,
+                                int32_t isr1,
+                                int32_t ic2,
+                                int32_t isr2,
+                                int32_t osr) {
+  double min_distance = 0.0;
+
+  double re1x = coord_x(ring, ring_num_coords - 2, ic1, isr1, osr);
+  double re1y = coord_y(ring, ring_num_coords - 1, ic1, isr1, osr);
+  for (auto i = 0; i < ring_num_coords; i += 2) {
+    double re2x = coord_x(ring, i, ic1, isr1, osr);
+    double re2y = coord_y(ring, i + 1, ic1, isr1, osr);
+
+    double le1x = coord_x(l, 0, ic2, isr2, osr);
+    double le1y = coord_y(l, 1, ic2, isr2, osr);
+    for (auto j = 2; j < lnum_coords; j += 2) {
+      double le2x = coord_x(l, j, ic2, isr2, osr);
+      double le2y = coord_y(l, j + 1, ic2, isr2, osr);
+
+      auto distance = distance_line_line(re1x, re1y, re2x, re2y, le1x, le1y, le2x, le2y);
+      if ((i == 0 && j == 2) || min_distance > distance) {
+        min_distance = distance;
+        if (tol_zero(min_distance)) {
+          return 0.0;
+        }
+      }
+      le1x = le2x;
+      le1y = le2y;
+    }
+    re1x = re2x;
+    re1y = re2y;
+  }
+
+  return min_distance;
+}
+
+DEVICE
 double distance_ring_ring(int8_t* ring1,
                           int32_t ring1_num_coords,
                           int8_t* ring2,
@@ -1321,60 +1362,59 @@ double ST_Distance_LineString_Polygon(int8_t* l,
                                       int32_t ic2,
                                       int32_t isr2,
                                       int32_t osr) {
-  // TODO: revisit implementation, cover all cases
-
   auto lnum_coords = lsize / compression_unit_size(ic1);
   auto lnum_points = lnum_coords / 2;
+  if (lindex < 0 || lindex > lnum_points)
+    lindex = lnum_points;
+  auto p = l + lindex * compression_unit_size(ic1);
+  auto psize = 2 * compression_unit_size(ic1);
+  auto min_distance = ST_Distance_Point_Polygon(p,
+                                                psize,
+                                                poly_coords,
+                                                poly_coords_size,
+                                                poly_ring_sizes,
+                                                poly_num_rings,
+                                                ic1,
+                                                isr1,
+                                                ic2,
+                                                isr2,
+                                                osr);
   if (lindex != 0) {
-    // Statically indexed linestring
-    if (lindex < 0 || lindex > lnum_points)
-      lindex = lnum_points;
-    auto p = l + lindex * compression_unit_size(ic1);
-    auto psize = 2 * compression_unit_size(ic1);
-    return ST_Distance_Point_Polygon(p,
-                                     psize,
-                                     poly_coords,
-                                     poly_coords_size,
-                                     poly_ring_sizes,
-                                     poly_num_rings,
-                                     ic1,
-                                     isr1,
-                                     ic2,
-                                     isr2,
-                                     osr);
+    // Statically indexed linestring: return distance from the indexed point to poly
+    return min_distance;
+  }
+  if (tol_zero(min_distance)) {
+    // Linestring's first point is inside the poly
+    return 0.0;
   }
 
-  auto exterior_ring_num_coords = poly_coords_size / compression_unit_size(ic2);
-  if (poly_num_rings > 0)
-    exterior_ring_num_coords = poly_ring_sizes[0] * 2;
-  auto exterior_ring_coords_size = exterior_ring_num_coords * compression_unit_size(ic2);
+  // Otherwise, linestring's first point is outside the external ring or inside
+  // an internal ring. Measure minimum distance between linestring segments and
+  // poly rings. Crossing a ring zeroes the distance and causes an early return.
+  auto poly_ring_coords = poly_coords;
+  for (auto r = 0; r < poly_num_rings; r++) {
+    int64_t poly_ring_num_coords = poly_ring_sizes[r] * 2;
 
-  auto l_num_coords = lsize / compression_unit_size(ic1);
-  auto poly = poly_coords;
-  if (!polygon_contains_linestring(
-          poly, exterior_ring_num_coords, l, l_num_coords, ic2, isr2, ic1, isr1, osr)) {
-    // Linestring is outside poly's exterior ring
-    return ST_Distance_LineString_LineString(
-        poly, exterior_ring_coords_size, 0, l, lsize, 0, ic2, isr2, ic1, isr1, osr);
-  }
-
-  // Linestring is inside poly's exterior ring
-  poly += exterior_ring_coords_size;
-  // Check if one of the polygon's holes contains that linestring
-  for (auto r = 1; r < poly_num_rings; r++) {
-    int64_t interior_ring_num_coords = poly_ring_sizes[r] * 2;
-    if (polygon_contains_linestring(
-            poly, interior_ring_num_coords, l, l_num_coords, ic2, isr2, ic1, isr1, osr)) {
-      // Inside an interior ring
-      auto interior_ring_coords_size =
-          interior_ring_num_coords * compression_unit_size(ic2);
-      return ST_Distance_LineString_LineString(
-          poly, interior_ring_coords_size, 0, l, lsize, 0, ic2, isr2, ic1, isr1, osr);
+    auto distance = distance_ring_linestring(poly_ring_coords,
+                                             poly_ring_num_coords,
+                                             l,
+                                             lnum_coords,
+                                             ic2,
+                                             isr2,
+                                             ic1,
+                                             isr1,
+                                             osr);
+    if (min_distance > distance) {
+      min_distance = distance;
+      if (tol_zero(min_distance)) {
+        return 0.0;
+      }
     }
-    poly += interior_ring_num_coords * compression_unit_size(ic2);
+
+    poly_ring_coords += poly_ring_num_coords * compression_unit_size(ic2);
   }
 
-  return 0.0;
+  return min_distance;
 }
 
 EXTENSION_NOINLINE
