@@ -732,14 +732,11 @@ ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const Analyzer::Expr* expr) c
       expr, query_infos_, executor_, boost::make_optional(ra_exe_unit_.simple_quals));
   switch (expr_range.getType()) {
     case ExpressionRangeType::Integer:
-      // Force high precision timestamps to baselinehash
-      if (!expr->get_type_info().is_high_precision_timestamp()) {
-        return {QueryDescriptionType::GroupByPerfectHash,
-                expr_range.getIntMin(),
-                expr_range.getIntMax(),
-                expr_range.getBucket(),
-                expr_range.hasNulls()};
-      }
+      return {QueryDescriptionType::GroupByPerfectHash,
+              expr_range.getIntMin(),
+              expr_range.getIntMax(),
+              expr_range.getBucket(),
+              expr_range.hasNulls()};
     case ExpressionRangeType::Float:
     case ExpressionRangeType::Double:
     case ExpressionRangeType::Invalid:
