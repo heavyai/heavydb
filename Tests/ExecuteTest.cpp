@@ -3137,6 +3137,7 @@ TEST(Select, Time) {
         std::make_tuple("nanosecond, m", 1418509395L, 15),
         std::make_tuple("microsecond, m", 1418509395L, 15),
         std::make_tuple("millisecond, m", 1418509395L, 15),
+#ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
         /* TIMESTAMP(3) */
         std::make_tuple("year, m_3", 1388534400000L, 20),
         std::make_tuple("month, m_3", 1417392000000L, 20),
@@ -3180,7 +3181,9 @@ TEST(Select, Time) {
         std::make_tuple("week, m_9", 1145750400000000000L, 10),
         std::make_tuple("nanosecond, m_9", 1146023344607435125L, 10),
         std::make_tuple("microsecond, m_9", 1146023344607435000L, 10),
-        std::make_tuple("millisecond, m_9", 1146023344607000000L, 10)};
+        std::make_tuple("millisecond, m_9", 1146023344607000000L, 10)
+#endif
+    };
     for (auto& query : date_trunc_queries) {
       const auto one_row = run_multiple_agg(
           "SELECT date_trunc(" + std::get<0>(query) +
@@ -6095,6 +6098,7 @@ TEST(Select, WatchdogTest) {
   }
 }
 
+#ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
 TEST(Select, TimestampPrecision) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -7289,7 +7293,9 @@ TEST(Select, TimestampPrecision) {
                   dt)));
   }
 }
+#endif
 
+#ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
 TEST(Select, TimestampPrecisionFormat) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -7388,6 +7394,7 @@ TEST(Select, TimestampPrecisionFormat) {
                   dt)));
   }
 }
+#endif
 
 TEST(Truncate, Count) {
   run_ddl_statement("create table trunc_test (i1 integer, t1 text);");
@@ -11287,6 +11294,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
     const std::string drop_old_test{"DROP TABLE IF EXISTS test;"};
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
+#ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
     std::string columns_definition{
         "x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn "
         "float, d double, dn double, str "
@@ -11299,6 +11307,19 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "encoding fixed(16), dd decimal(10, 2), dd_notnull decimal(10, 2) not null, ss "
         "text encoding dict, u int, ofd "
         "int, ufd int not null, ofq bigint, ufq bigint not null"};
+#else
+    std::string columns_definition{
+        "x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn "
+        "float, d double, dn double, str "
+        "varchar(10), null_str text encoding dict, fixed_str text encoding dict(16), "
+        "fixed_null_str text encoding "
+        "dict(16), real_str text encoding none, shared_dict text, m timestamp(0), "
+        "n time(0), o date, o1 date encoding "
+        "fixed(32), fx int "
+        "encoding fixed(16), dd decimal(10, 2), dd_notnull decimal(10, 2) not null, ss "
+        "text encoding dict, u int, ofd "
+        "int, ufd int not null, ofq bigint, ufq bigint not null"};
+#endif
     const std::string create_test = build_create_table_statement(
         columns_definition,
         "test",
@@ -11307,6 +11328,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
         2,
         with_delete_support);
     run_ddl_statement(create_test);
+#ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
     g_sqlite_comparator.query(
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f "
         "float, ff float, fn float, d "
@@ -11318,12 +11340,26 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not "
         "null, ss "
         "text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null);");
+#else
+    g_sqlite_comparator.query(
+        "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f "
+        "float, ff float, fn float, d "
+        "double, dn double, str varchar(10), null_str text, fixed_str text, "
+        "fixed_null_str text, real_str text, "
+        "shared_dict "
+        "text, m timestamp(0), n "
+        "time(0), o date, o1 date, "
+        "fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not "
+        "null, ss "
+        "text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null);");
+#endif
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test'";
     return -EEXIST;
   }
   CHECK_EQ(g_num_rows % 2, 0);
   for (ssize_t i = 0; i < g_num_rows; ++i) {
+#ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
     const std::string insert_query{
         "INSERT INTO test VALUES(7, 42, 101, 1001, 't', 1.1, 1.1, null, 2.2, null, "
         "'foo', null, 'foo', null, "
@@ -11333,10 +11369,20 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "03:49:04.607435125', "
         "'15:13:14', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, 'fish', null, "
         "2147483647, -2147483648, null, -1);"};
+#else
+    const std::string insert_query{
+        "INSERT INTO test VALUES(7, 42, 101, 1001, 't', 1.1, 1.1, null, 2.2, null, "
+        "'foo', null, 'foo', null, "
+        "'real_foo', 'foo',"
+        "'2014-12-13 22:23:15', "
+        "'15:13:14', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, 'fish', null, "
+        "2147483647, -2147483648, null, -1);"};
+#endif
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
+#ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
     const std::string insert_query{
         "INSERT INTO test VALUES(8, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, 2.4, "
         "-2002.4, 'bar', null, 'bar', null, "
@@ -11346,10 +11392,21 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "null, null, null, "
         "-2147483647, "
         "9223372036854775807, -9223372036854775808);"};
+#else
+    const std::string insert_query{
+        "INSERT INTO test VALUES(8, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, 2.4, "
+        "-2002.4, 'bar', null, 'bar', null, "
+        "'real_bar', NULL, '2014-12-13 22:23:15', "
+        "'15:13:14', NULL, NULL, NULL, 222.2, 222.2, "
+        "null, null, null, "
+        "-2147483647, "
+        "9223372036854775807, -9223372036854775808);"};
+#endif
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
+#ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
     const std::string insert_query{
         "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 1000.3, -1000.3, 2.6, "
         "-220.6, 'baz', null, null, null, "
@@ -11359,6 +11416,16 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "333.3, 333.3, "
         "'boat', null, 1, "
         "-1, 1, -9223372036854775808);"};
+#else
+    const std::string insert_query{
+        "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 1000.3, -1000.3, 2.6, "
+        "-220.6, 'baz', null, null, null, "
+        "'real_baz', 'baz', '2014-12-14 22:23:15', "
+        "'15:13:14', '1999-09-09', '1999-09-09', 11, "
+        "333.3, 333.3, "
+        "'boat', null, 1, "
+        "-1, 1, -9223372036854775808);"};
+#endif
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
