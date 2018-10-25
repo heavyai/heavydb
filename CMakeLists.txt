@@ -354,10 +354,14 @@ if(ENABLE_ONE_TO_MANY_HASH_JOIN)
   add_definitions("-DENABLE_ONE_TO_MANY_HASH_JOIN")
 endif()
 
-
 option(ENABLE_COMPACTION "Enable Compaction and Overflow/Underflow Detection" OFF)
 if(ENABLE_COMPACTION)
   add_definitions("-DENABLE_COMPACTION")
+endif()
+
+option(DISABLE_HIGH_PRECISION_TIMESTAMP "Disable parser support for creating milli, micro, and nanosecond timestamp columns" ON)
+if(DISABLE_HIGH_PRECISION_TIMESTAMP) 
+  add_definitions("-DDISABLE_HIGH_PRECISION_TIMESTAMP")
 endif()
 
 option(ENABLE_PROFILER "Enable google perftools" OFF)
