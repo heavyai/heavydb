@@ -35,19 +35,19 @@ import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 public class BenchmarkCloud {
   final static Logger logger = LoggerFactory.getLogger(BenchmarkCloud.class);
 
+  static final String QUERY_RESULT_MACHINE = "bencher";
+
   // JDBC driver name and database URL
-  static final String JDBC_DRIVER = "com.mapd.jdbc.MapDDriver";
   static final String DB_URL = "jdbc:mapd:localhost:9091:mapd";
+  static final String JDBC_DRIVER = "com.mapd.jdbc.MapDDriver";
 
   //  Database credentials
   static final String USER = "mapd";
-  static final String PASS = "HyperInteractive";
+  static final String PASS = "";
 
   //  Database credentials
   static final String RESULTS_USER = "mapd";
-  static final String RESULTS_PASS = "HyperInteractive";
-
-  static final String QUERY_RESULT_MACHINE = "bencher";
+  static final String RESULTS_PASS = "";
 
   private String driver;
   private String url;
