@@ -41,6 +41,7 @@
 #include "../Shared/MapDParameters.h"
 #include "../Shared/measure.h"
 #include "../Shared/thread_count.h"
+#include "../StringDictionary/LruCache.hpp"
 #include "../StringDictionary/StringDictionary.h"
 #include "../StringDictionary/StringDictionaryProxy.h"
 
@@ -1213,15 +1214,17 @@ class Executor {
                                  std::unique_ptr<llvm::ExecutionEngine>,
                                  std::unique_ptr<GpuCompilationContext>>>
       CodeCacheVal;
-  std::vector<std::pair<void*, void*>> getCodeFromCache(
-      const CodeCacheKey&,
-      const std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>>&);
+  typedef std::pair<CodeCacheVal, llvm::Module*> CodeCacheValWithModule;
+  typedef LruCache<CodeCacheKey, CodeCacheValWithModule, boost::hash<CodeCacheKey>>
+      CodeCache;
+  std::vector<std::pair<void*, void*>> getCodeFromCache(const CodeCacheKey&,
+                                                        const CodeCache&);
   void addCodeToCache(
       const CodeCacheKey&,
       const std::vector<
           std::tuple<void*, llvm::ExecutionEngine*, GpuCompilationContext*>>&,
       llvm::Module*,
-      std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>>&);
+      CodeCache&);
 
   std::vector<int8_t> serializeLiterals(
       const std::unordered_map<int, Executor::LiteralValues>& literals,
@@ -1616,14 +1619,15 @@ class Executor {
 
   mutable std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 
-  std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>> cpu_code_cache_;
-  std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>> gpu_code_cache_;
+  CodeCache cpu_code_cache_;
+  CodeCache gpu_code_cache_;
 
   ::QueryRenderer::QueryRenderManager* render_manager_;
 
   const size_t small_groups_buffer_entry_count_{512};
   static const size_t baseline_threshold{
       1000000};  // if a perfect hash needs more entries, use baseline
+  static const size_t code_cache_size{10000};
 
   const unsigned block_size_x_;
   const unsigned grid_size_x_;

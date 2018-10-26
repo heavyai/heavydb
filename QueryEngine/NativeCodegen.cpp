@@ -143,11 +143,10 @@ std::string serialize_llvm_object(const T* llvm_obj) {
 
 }  // namespace
 
-std::vector<std::pair<void*, void*>> Executor::getCodeFromCache(
-    const CodeCacheKey& key,
-    const std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>>& cache) {
+std::vector<std::pair<void*, void*>> Executor::getCodeFromCache(const CodeCacheKey& key,
+                                                                const CodeCache& cache) {
   auto it = cache.find(key);
-  if (it != cache.end()) {
+  if (it != cache.cend()) {
     delete cgen_state_->module_;
     cgen_state_->module_ = it->second.second;
     std::vector<std::pair<void*, void*>> native_functions;
@@ -166,7 +165,7 @@ void Executor::addCodeToCache(
     const std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuCompilationContext*>>&
         native_code,
     llvm::Module* module,
-    std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>>& cache) {
+    CodeCache& cache) {
   CHECK(!native_code.empty());
   CodeCacheVal cache_val;
   for (const auto& native_func : native_code) {
@@ -175,9 +174,9 @@ void Executor::addCodeToCache(
         std::unique_ptr<llvm::ExecutionEngine>(std::get<1>(native_func)),
         std::unique_ptr<GpuCompilationContext>(std::get<2>(native_func)));
   }
-  auto it_ok =
-      cache.insert(std::make_pair(key, std::make_pair(std::move(cache_val), module)));
-  CHECK(it_ok.second);
+  cache.put(key,
+            std::make_pair<decltype(cache_val), decltype(module)>(std::move(cache_val),
+                                                                  std::move(module)));
 }
 
 std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(

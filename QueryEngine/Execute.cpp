@@ -87,6 +87,8 @@ Executor::Executor(const int db_id,
     , is_nested_(false)
     , gpu_active_modules_device_mask_(0x0)
     , interrupted_(false)
+    , cpu_code_cache_(code_cache_size)
+    , gpu_code_cache_(code_cache_size)
     , render_manager_(render_manager)
     , block_size_x_(block_size_x)
     , grid_size_x_(grid_size_x)
