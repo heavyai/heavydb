@@ -19,6 +19,7 @@
 
 #include <stdint.h>
 #include <time.h>
+#include <map>
 #include "../Shared/funcannotations.h"
 
 #define NANOSECSPERSEC 1000000000L
@@ -86,10 +87,22 @@ enum ExtractField {
   kWEEK
 };
 
-// Shared by DateTruncate
-DEVICE int extract_dow(const int64_t* tim_p);
-
-DEVICE tm* gmtime_r_newlib(const int64_t* tim_p, tm* res);
+// Shared by DateTruncate/ DateAdd
+#ifdef __CUDACC__
+__device__
+#endif
+    int32_t
+    extract_dow(const time_t* tim_p);
+#ifdef __CUDACC__
+__device__
+#endif
+    int64_t
+    get_timestamp_precision_scale(const int32_t dimen);
+#ifdef __CUDACC__
+__device__
+#endif
+    tm*
+    gmtime_r_newlib(const time_t* tim_p, tm* res);
 
 extern "C" DEVICE NEVER_INLINE int64_t ExtractFromTime(ExtractField field,
                                                        int64_t timeval);

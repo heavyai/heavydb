@@ -115,7 +115,7 @@ public class MapDTable implements Table {
       case TIME:
         return typeFactory.createSqlType(SqlTypeName.TIME);
       case TIMESTAMP:
-        return typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
+        return typeFactory.createSqlType(SqlTypeName.TIMESTAMP, precision);
       case DATE:
         return typeFactory.createSqlType(SqlTypeName.DATE);
       case BOOL:

@@ -79,4 +79,9 @@ DateTruncateAlterPrecisionScaleDown(DatetruncField field,
   return timeval / scale;
 }
 
+extern "C" NEVER_INLINE DEVICE time_t
+DateTruncateHighPrecisionToDate(DatetruncField field,
+                                time_t timeval,
+                                const int32_t dimen);
+
 #endif  // QUERYENGINE_DATETRUNCATE_H

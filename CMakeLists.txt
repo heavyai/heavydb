@@ -406,8 +406,22 @@ else()
   set(ENABLE_RENDERING OFF CACHE BOOL "Build backend renderer" FORCE)
 endif()
 
-option(DISABLE_HIGH_PRECISION_TIMESTAMP "Disable parser support for creating milli, micro, and nanosecond timestamp columns" ON)
-if(DISABLE_HIGH_PRECISION_TIMESTAMP)
+set(TIME_LIMITED_NUMBER_OF_DAYS "30" CACHE STRING "Number of days this build is valid for if build is time limited")
+
+option(TIME_LIMITED_BUILD "Build Time Limited Build" OFF)
+if(TIME_LIMITED_BUILD)
+  list(APPEND TIME_LIMITED_DEFINITIONS "TIME_LIMITED_BUILD")
+  list(APPEND TIME_LIMITED_DEFINITIONS "TIME_LIMITED_NUMBER_OF_DAYS=${TIME_LIMITED_NUMBER_OF_DAYS}")
+  set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-${TIME_LIMITED_NUMBER_OF_DAYS}d")
+endif()
+
+option(ENABLE_COMPACTION "Enable Compaction and Overflow/Underflow Detection" OFF)
+if(ENABLE_COMPACTION)
+  add_definitions("-DENABLE_COMPACTION")
+endif()
+
+option(DISABLE_HIGH_PRECISION_TIMESTAMP "Disable parser support for creating milli, micro, and nanosecond timestamp columns" OFF)
+if(DISABLE_HIGH_PRECISION_TIMESTAMP) 
   add_definitions("-DDISABLE_HIGH_PRECISION_TIMESTAMP")
 endif()
 

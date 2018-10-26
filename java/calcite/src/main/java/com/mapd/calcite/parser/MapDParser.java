@@ -26,6 +26,7 @@ import org.apache.calcite.prepare.MapDPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
+import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlAsOperator;
@@ -105,6 +106,7 @@ public final class MapDParser {
                                           .setUnquotedCasing(Casing.UNCHANGED)
                                           .setCaseSensitive(false)
                                           .build())
+                    .typeSystem(createTypeSystem())
                     .build();
     return new MapDPlanner(config);
   }
@@ -726,5 +728,10 @@ public final class MapDParser {
     MapDSchema mapd =
             new MapDSchema(dataDir, this, mapdPort, null, sock_transport_properties);
     mapd.updateMetaData(schema, table);
+  }
+
+  protected RelDataTypeSystem createTypeSystem() {
+    final MapDTypeSystem typeSystem = new MapDTypeSystem();
+    return typeSystem;
   }
 }

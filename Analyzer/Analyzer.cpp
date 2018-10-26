@@ -1089,9 +1089,11 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
       constval.bigintval =
           DateConverters::get_epoch_days_from_seconds(constval.bigintval);
     }
-  } else if (type_info.get_type() == kTIMESTAMP &&
+    type_info = new_type_info;
+  } else if ((type_info.get_type() == kTIMESTAMP || type_info.get_type() == kDATE) &&
              new_type_info.get_type() == kTIMESTAMP) {
     if (type_info.get_dimension() != new_type_info.get_dimension()) {
+      auto dimen = (type_info.get_type() == kDATE) ? 0 : type_info.get_dimension();
       const auto result_unit =
           timestamp_precisions_lookup_.find(new_type_info.get_dimension());
       constval.bigintval =

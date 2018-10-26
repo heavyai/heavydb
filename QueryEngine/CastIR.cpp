@@ -98,7 +98,7 @@ llvm::Value* Executor::codegenCastTimestampToDate(llvm::Value* ts_lv,
     datetrunc_args.push_back(ll_int(static_cast<int32_t>(dimen)));
   }
   std::string datetrunc_fname{"DateTruncate"};
-  datetrunc_fname += (dimen > 0) ? "HighPrecision" : "";
+  datetrunc_fname += (dimen > 0) ? "HighPrecisionToDate" : "";
   if (nullable) {
     datetrunc_args.push_back(inlineIntNull(
         SQLTypeInfo(ts_lv->getType()->isIntegerTy(64) ? kBIGINT : kINT, false)));

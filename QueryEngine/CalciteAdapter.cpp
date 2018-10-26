@@ -1378,21 +1378,13 @@ std::string pg_shim_impl(const std::string& query) {
     });
   }
   {
-    boost::regex immediate_cast_expr{R"(TIMESTAMP\(0\)\s+('[^']+'))",
+    boost::regex immediate_cast_expr{R"(TIMESTAMP\(([0369])\)\s+('[^']+'))",
                                      boost::regex::extended | boost::regex::icase};
     apply_shim(
         result, immediate_cast_expr, [](std::string& result, const boost::smatch& what) {
-          result.replace(
-              what.position(), what.length(), "CAST(" + what[1] + " AS TIMESTAMP(0))");
-        });
-  }
-  {
-    boost::regex immediate_cast_expr{R"(TIMESTAMP\(3\)\s+('[^']+'))",
-                                     boost::regex::extended | boost::regex::icase};
-    apply_shim(
-        result, immediate_cast_expr, [](std::string& result, const boost::smatch& what) {
-          result.replace(
-              what.position(), what.length(), "CAST(" + what[1] + " AS TIMESTAMP(3))");
+          result.replace(what.position(),
+                         what.length(),
+                         "CAST(" + what[2] + " AS TIMESTAMP(" + what[1] + "))");
         });
   }
   {

@@ -263,8 +263,18 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
     case kTIME:
     case kTIMESTAMP: {
       Datum d;
+<<<<<<< HEAD
       d.bigintval = rex_literal->getVal<int64_t>() / 1000;
       return makeExpr<Analyzer::Constant>(rex_literal->getType(), false, d);
+=======
+      d.timeval = rex_literal->getType() == kTIMESTAMP && rex_literal->getPrecision() > 0
+                      ? rex_literal->getVal<int64_t>()
+                      : rex_literal->getVal<int64_t>() / 1000;
+      return makeExpr<Analyzer::Constant>(
+          SQLTypeInfo(rex_literal->getType(), rex_literal->getPrecision(), 0, false),
+          false,
+          d);
+>>>>>>> Override Calcite to increase TIMSTAMP precision; Optimize legacy code
     }
     case kDATE: {
       Datum d;
@@ -959,6 +969,11 @@ std::shared_ptr<Analyzer::Constant> makeNumericConstant(const SQLTypeInfo& ti,
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
     const RexFunctionOperator* rex_function) const {
+  /* TODO(Wamsi) : Calcite doesn’t understand us and ns on
+        TIMESTAMPADD/INTERVAL operations and translates internally whatever
+        units it understands. As it is a native calcite function we do not have much
+        control over it. Therefore have to find suitable work around
+        for this. Core Issue: #2638 */
   if (rex_function->getName() == std::string("DATETIME_PLUS")) {
     const auto datetime = translateScalarRex(rex_function->getOperand(0));
     const auto unfolded_number = translateScalarRex(rex_function->getOperand(1));
@@ -1043,11 +1058,17 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateminus(
   const auto rhs = translateScalarRex(rex_operator->getOperand(1));
   const auto rhs_ti = rhs->get_type_info();
   if (rhs_ti.get_type() == kTIMESTAMP || rhs_ti.get_type() == kDATE) {
+<<<<<<< HEAD
     if (datetime_ti.is_high_precision_timestamp() ||
         rhs_ti.is_high_precision_timestamp()) {
       throw std::runtime_error(
           "High Precision timestamps are not supported for TIMESTAMPDIFF operation. Use "
           "DATEDIFF.");
+=======
+    if (datetime_ti.get_dimension() > 0 || rhs_ti.get_dimension() > 0) {
+      throw std::runtime_error(
+          "Only timestamp(0) is supported for TIMESTAMPDIFF operation.");
+>>>>>>> Optimize legacy code; Add more tests
     }
     auto bigint_ti = SQLTypeInfo(kBIGINT, false);
     const auto& rex_operator_ti = rex_operator->getType();

@@ -257,6 +257,19 @@ DEVICE tm* gmtime_r_newlib(const int64_t* tim_p, tm* res) {
   return (res);
 }
 
+DEVICE int64_t get_timestamp_precision_scale(const int32_t dimen) {
+  switch (dimen) {
+    case 3:
+      return MILLISECSPERSEC;
+    case 6:
+      return MICROSECSPERSEC;
+    case 9:
+      return NANOSECSPERSEC;
+    default:
+      return 1;
+  }
+}
+
 /*
  * @brief support the SQL EXTRACT function
  */
@@ -349,22 +362,48 @@ extern "C" DEVICE int64_t ExtractFromTimeHighPrecision(ExtractField field,
                                                        int64_t scale) {
   switch (field) {
     case kMILLISECOND: {
+<<<<<<< HEAD
       int64_t mtime = timeval;
+=======
+<<<<<<< HEAD
+      time_t mtime = timeval;
+>>>>>>> Override Calcite to increase TIMSTAMP precision; Optimize legacy code
       if (scale == MICROSECSPERSEC) {
         mtime = static_cast<int64_t>(timeval / MILLISECSPERSEC);
       } else if (scale == NANOSECSPERSEC) {
+<<<<<<< HEAD
         mtime = static_cast<int64_t>(timeval / MICROSECSPERSEC);
+=======
+        mtime = static_cast<int64_t>(timeval) / MICROSECSPERSEC;
+=======
+      int64_t ntimeval = timeval;
+      if (dimen == 6) {
+        ntimeval = static_cast<int64_t>(timeval) / MILLISECSPERSEC;
+      } else if (dimen == 9) {
+        ntimeval = static_cast<int64_t>(timeval) / MICROSECSPERSEC;
+>>>>>>> Optimize legacy code; Add more tests
+>>>>>>> Override Calcite to increase TIMSTAMP precision; Optimize legacy code
       }
-      return extract_millisecond(&mtime);
+      return extract_millisecond(&ntimeval);
     }
     case kMICROSECOND: {
+<<<<<<< HEAD
       int64_t mtime = timeval;
+=======
+<<<<<<< HEAD
+      time_t mtime = timeval;
+>>>>>>> Override Calcite to increase TIMSTAMP precision; Optimize legacy code
       if (scale == NANOSECSPERSEC) {
         mtime = static_cast<int64_t>(timeval / MILLISECSPERSEC);
       } else if (scale == MILLISECSPERSEC) {
+=======
+      if (dimen == 3) {
+>>>>>>> Optimize legacy code; Add more tests
         return 0;
+      } else {
+        const int64_t ntimeval = (dimen == 9) ? timeval / MILLISECSPERSEC : timeval;
+        return extract_microsecond(&ntimeval);
       }
-      return extract_microsecond(&mtime);
     }
     case kNANOSECOND: {
       if (scale == MILLISECSPERSEC || scale == MICROSECSPERSEC) {
@@ -376,7 +415,17 @@ extern "C" DEVICE int64_t ExtractFromTimeHighPrecision(ExtractField field,
     default:
       break;
   }
+<<<<<<< HEAD
   const int64_t stimeval = static_cast<int64_t>(timeval) / scale;
+=======
+<<<<<<< HEAD
+  const time_t stimeval = static_cast<int64_t>(timeval) / scale;
+=======
+  const time_t stimeval =
+      static_cast<int64_t>(timeval) / get_timestamp_precision_scale(dimen);
+  ;
+>>>>>>> Optimize legacy code; Add more tests
+>>>>>>> Override Calcite to increase TIMSTAMP precision; Optimize legacy code
   return ExtractFromTime(field, stimeval);
 }
 
