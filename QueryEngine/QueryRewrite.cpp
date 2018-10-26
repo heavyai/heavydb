@@ -140,7 +140,6 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(
           ra_exe_unit_.simple_quals,
           ra_exe_unit_.quals,
           ra_exe_unit_.inner_joins,
-          ra_exe_unit_.inner_join_quals,
           new_groupby_list,
           new_target_exprs,
           nullptr,

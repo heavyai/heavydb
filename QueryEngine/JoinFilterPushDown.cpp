@@ -89,7 +89,6 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
                                   quals,
                                   {},
                                   {},
-                                  {},
                                   {count_expr.get()},
                                   nullptr,
                                   {{}, SortAlgorithm::Default, 0, 0},

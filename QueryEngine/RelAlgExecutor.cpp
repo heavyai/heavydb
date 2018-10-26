@@ -1563,7 +1563,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
            source_exe_unit.simple_quals,
            source_exe_unit.quals,
            source_exe_unit.inner_joins,
-           source_exe_unit.inner_join_quals,
            source_exe_unit.groupby_exprs,
            source_exe_unit.target_exprs,
            nullptr,
@@ -2371,12 +2370,13 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
   inner_join_quals.insert(inner_join_quals.end(),
                           separated_quals.join_quals.begin(),
                           separated_quals.join_quals.end());
+  auto quals = separated_quals.regular_quals;
+  quals.insert(quals.end(), inner_join_quals.begin(), inner_join_quals.end());
   const RelAlgExecutionUnit exe_unit = {input_descs,
                                         filtered_input_col_descs,
                                         quals_cf.simple_quals,
-                                        separated_quals.regular_quals,
+                                        quals,
                                         left_deep_inner_joins,
-                                        inner_join_quals,
                                         groupby_exprs,
                                         filtered_target_exprs,
                                         nullptr,
@@ -2452,12 +2452,13 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
   inner_join_quals.insert(inner_join_quals.end(),
                           separated_quals.join_quals.begin(),
                           separated_quals.join_quals.end());
+  auto quals = separated_quals.regular_quals;
+  quals.insert(quals.end(), inner_join_quals.begin(), inner_join_quals.end());
   const RelAlgExecutionUnit exe_unit = {input_descs,
                                         input_col_descs,
                                         quals_cf.simple_quals,
-                                        separated_quals.regular_quals,
+                                        quals,
                                         left_deep_inner_joins,
-                                        inner_join_quals,
                                         groupby_exprs,
                                         target_exprs,
                                         nullptr,
@@ -2706,9 +2707,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
   return {{input_descs,
            input_col_descs,
            {},
-           {},
-           {},
            get_inner_join_quals(aggregate, translator),
+           {},
            groupby_exprs,
            target_exprs,
            nullptr,
@@ -2786,9 +2786,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
   return {{input_descs,
            filtered_input_col_descs,
            {},
-           {},
-           left_deep_inner_joins,
            get_inner_join_quals(project, translator),
+           left_deep_inner_joins,
            {nullptr},
            filtered_target_exprs,
            nullptr,
@@ -2849,9 +2848,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
   return {{input_descs,
            input_col_descs,
            {},
-           {},
-           left_deep_inner_joins,
            get_inner_join_quals(project, translator),
+           left_deep_inner_joins,
            {nullptr},
            target_exprs,
            nullptr,
@@ -2940,12 +2938,16 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
       target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   filter->setOutputMetainfo(in_metainfo);
+  std::list<std::shared_ptr<Analyzer::Expr>> all_quals(
+      separated_quals.regular_quals.begin(), separated_quals.regular_quals.end());
+  all_quals.insert(all_quals.end(),
+                   separated_quals.join_quals.begin(),
+                   separated_quals.join_quals.end());
   return {{input_descs,
            input_col_descs,
            {},
-           separated_quals.regular_quals,
+           all_quals,
            {},
-           separated_quals.join_quals,
            {nullptr},
            target_exprs,
            nullptr,
