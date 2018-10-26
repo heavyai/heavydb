@@ -2122,12 +2122,6 @@ JoinType get_join_type(const RelAlgNode* ra) {
   return JoinType::INVALID;
 }
 
-bool is_literal_true(const RexScalar* condition) {
-  CHECK(condition);
-  const auto literal = dynamic_cast<const RexLiteral*>(condition);
-  return literal && literal->getType() == kBOOLEAN && literal->getVal<bool>();
-}
-
 std::unique_ptr<const RexOperator> get_bitwise_equals(const RexScalar* scalar) {
   const auto condition = dynamic_cast<const RexOperator*>(scalar);
   if (!condition || condition->getOperator() != kOR || condition->size() != 2) {
@@ -2191,39 +2185,6 @@ std::unique_ptr<const RexOperator> get_bitwise_equals_conjunction(
     return acc;
   }
   return get_bitwise_equals(scalar);
-}
-
-std::list<std::shared_ptr<Analyzer::Expr>> get_inner_join_quals(
-    const RelAlgNode* ra,
-    const RelAlgTranslator& translator) {
-  std::vector<const RexScalar*> work_set;
-  if (auto join = dynamic_cast<const RelJoin*>(ra)) {
-    if (join->getJoinType() == JoinType::INNER) {
-      work_set.push_back(join->getCondition());
-    }
-  } else {
-    CHECK_EQ(size_t(1), ra->inputCount());
-    auto only_src = ra->getInput(0);
-    if (auto join = dynamic_cast<const RelJoin*>(only_src)) {
-      if (join->getJoinType() == JoinType::INNER) {
-        work_set.push_back(join->getCondition());
-      }
-    }
-  }
-  std::list<std::shared_ptr<Analyzer::Expr>> quals;
-  for (auto condition : work_set) {
-    if (condition && !is_literal_true(condition)) {
-      const auto bw_equals = get_bitwise_equals_conjunction(condition);
-      const auto eq_condition = bw_equals ? bw_equals.get() : condition;
-      const auto join_cond_cf =
-          qual_to_conjunctive_form(translator.translateScalarRex(eq_condition));
-      quals.insert(quals.end(),
-                   join_cond_cf.simple_quals.begin(),
-                   join_cond_cf.simple_quals.end());
-      quals.insert(quals.end(), join_cond_cf.quals.begin(), join_cond_cf.quals.end());
-    }
-  }
-  return combine_equi_join_conditions(quals);
 }
 
 std::vector<size_t> get_node_input_permutation(
@@ -2366,12 +2327,9 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
     }
   }
 
-  auto inner_join_quals = get_inner_join_quals(compound, translator);
-  inner_join_quals.insert(inner_join_quals.end(),
-                          separated_quals.join_quals.begin(),
-                          separated_quals.join_quals.end());
   auto quals = separated_quals.regular_quals;
-  quals.insert(quals.end(), inner_join_quals.begin(), inner_join_quals.end());
+  quals.insert(
+      quals.end(), separated_quals.join_quals.begin(), separated_quals.join_quals.end());
   const RelAlgExecutionUnit exe_unit = {input_descs,
                                         filtered_input_col_descs,
                                         quals_cf.simple_quals,
@@ -2448,12 +2406,9 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
       target_exprs_owned_, scalar_sources, groupby_exprs, compound, translator);
 
   CHECK_EQ(compound->size(), target_exprs.size());
-  auto inner_join_quals = get_inner_join_quals(compound, translator);
-  inner_join_quals.insert(inner_join_quals.end(),
-                          separated_quals.join_quals.begin(),
-                          separated_quals.join_quals.end());
   auto quals = separated_quals.regular_quals;
-  quals.insert(quals.end(), inner_join_quals.begin(), inner_join_quals.end());
+  quals.insert(
+      quals.end(), separated_quals.join_quals.begin(), separated_quals.join_quals.end());
   const RelAlgExecutionUnit exe_unit = {input_descs,
                                         input_col_descs,
                                         quals_cf.simple_quals,
@@ -2707,7 +2662,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
   return {{input_descs,
            input_col_descs,
            {},
-           get_inner_join_quals(aggregate, translator),
+           {},
            {},
            groupby_exprs,
            target_exprs,
@@ -2786,7 +2741,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
   return {{input_descs,
            filtered_input_col_descs,
            {},
-           get_inner_join_quals(project, translator),
+           {},
            left_deep_inner_joins,
            {nullptr},
            filtered_target_exprs,
@@ -2848,7 +2803,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
   return {{input_descs,
            input_col_descs,
            {},
-           get_inner_join_quals(project, translator),
+           {},
            left_deep_inner_joins,
            {nullptr},
            target_exprs,
