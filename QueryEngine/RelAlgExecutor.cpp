@@ -1562,7 +1562,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
            std::move(source_exe_unit.input_col_descs),
            source_exe_unit.simple_quals,
            source_exe_unit.quals,
-           source_exe_unit.inner_joins,
+           source_exe_unit.join_quals,
            source_exe_unit.groupby_exprs,
            source_exe_unit.target_exprs,
            nullptr,

@@ -200,7 +200,7 @@ void check_if_loop_join_is_allowed(RelAlgExecutionUnit& ra_exe_unit,
   if (eo.allow_loop_joins) {
     return;
   }
-  if (level_idx + 1 != ra_exe_unit.inner_joins.size() ||
+  if (level_idx + 1 != ra_exe_unit.join_quals.size() ||
       !is_trivial_loop_join(query_infos, ra_exe_unit)) {
     throw std::runtime_error("Hash join failed, reason(s): " + fail_reason);
   }
@@ -216,9 +216,9 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
     ColumnCacheMap& column_cache) {
   std::vector<JoinLoop> join_loops;
   for (size_t level_idx = 0, current_hash_table_idx = 0;
-       level_idx < ra_exe_unit.inner_joins.size();
+       level_idx < ra_exe_unit.join_quals.size();
        ++level_idx) {
-    const auto& current_level_join_conditions = ra_exe_unit.inner_joins[level_idx];
+    const auto& current_level_join_conditions = ra_exe_unit.join_quals[level_idx];
     std::vector<std::string> fail_reasons;
     const auto current_level_hash_table =
         buildCurrentLevelHashTable(current_level_join_conditions,

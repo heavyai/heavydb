@@ -1522,7 +1522,7 @@ bool Executor::skipFragmentPair(
   // Don't bother with sharding for non-hash joins.
   if (plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToOne &&
       plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToMany &&
-      ra_exe_unit.inner_joins.empty()) {
+      ra_exe_unit.join_quals.empty()) {
     return false;
   }
   // Both tables need to be sharded the same way.
@@ -1531,7 +1531,7 @@ bool Executor::skipFragmentPair(
     return false;
   }
   const Analyzer::BinOper* join_condition{nullptr};
-  if (ra_exe_unit.inner_joins.empty()) {
+  if (ra_exe_unit.join_quals.empty()) {
     CHECK(!inner_table_id_to_join_condition.empty());
     auto condition_it = inner_table_id_to_join_condition.find(inner_table_id);
     CHECK(condition_it != inner_table_id_to_join_condition.end());
@@ -1558,7 +1558,7 @@ bool Executor::skipFragmentPair(
   } else {
     shard_count = get_shard_count(join_condition, ra_exe_unit, this);
   }
-  if (shard_count && !ra_exe_unit.inner_joins.empty()) {
+  if (shard_count && !ra_exe_unit.join_quals.empty()) {
     plan_state_->join_info_.sharded_range_table_indices_.emplace(table_idx);
   }
   return shard_count;
@@ -1614,7 +1614,7 @@ Executor::getRowCountAndOffsetForAllFrags(
           all_tables_fragments.find(input_descs[tab_idx].getTableId());
       CHECK(fragments_it != all_tables_fragments.end());
       const auto& fragments = *fragments_it->second;
-      if (ra_exe_unit.inner_joins.empty() || tab_idx == 0 ||
+      if (ra_exe_unit.join_quals.empty() || tab_idx == 0 ||
           plan_state_->join_info_.sharded_range_table_indices_.count(tab_idx)) {
         const auto& fragment = fragments[frag_id];
         num_rows.push_back(fragment.getNumTuples());
@@ -1648,11 +1648,11 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
   const int nest_level = inner_col_desc.getScanDesc().getNestLevel();
   if (nest_level < 1 ||
       inner_col_desc.getScanDesc().getSourceType() != InputSourceType::TABLE ||
-      (ra_exe_unit.inner_joins.empty() &&
+      (ra_exe_unit.join_quals.empty() &&
        plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToOne &&
        plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToMany) ||
       input_descs.size() < 2 ||
-      (ra_exe_unit.inner_joins.empty() &&
+      (ra_exe_unit.join_quals.empty() &&
        plan_state_->isLazyFetchColumn(inner_col_desc))) {
     return false;
   }
@@ -1761,7 +1761,7 @@ Executor::FetchResult Executor::fetchChunks(
 std::vector<size_t> Executor::getFragmentCount(const FragmentsList& selected_fragments,
                                                const size_t scan_idx,
                                                const RelAlgExecutionUnit& ra_exe_unit) {
-  if ((ra_exe_unit.input_descs.size() > size_t(2) || !ra_exe_unit.inner_joins.empty()) &&
+  if ((ra_exe_unit.input_descs.size() > size_t(2) || !ra_exe_unit.join_quals.empty()) &&
       scan_idx > 0 &&
       !plan_state_->join_info_.sharded_range_table_indices_.count(scan_idx) &&
       !selected_fragments[scan_idx].fragment_ids.empty()) {
@@ -2507,11 +2507,11 @@ void Executor::nukeOldState(const bool allow_lazy_fetch,
                             const std::vector<InputTableInfo>& query_infos,
                             const RelAlgExecutionUnit& ra_exe_unit) {
   const bool contains_left_deep_outer_join =
-      std::find_if(ra_exe_unit.inner_joins.begin(),
-                   ra_exe_unit.inner_joins.end(),
+      std::find_if(ra_exe_unit.join_quals.begin(),
+                   ra_exe_unit.join_quals.end(),
                    [](const JoinCondition& join_condition) {
                      return join_condition.type == JoinType::LEFT;
-                   }) != ra_exe_unit.inner_joins.end();
+                   }) != ra_exe_unit.join_quals.end();
   cgen_state_.reset(new CgenState(query_infos, contains_left_deep_outer_join));
   plan_state_.reset(
       new PlanState(allow_lazy_fetch && !contains_left_deep_outer_join, join_info, this));
@@ -2866,7 +2866,7 @@ std::pair<bool, int64_t> Executor::skipFragment(
 
 /*
  *   The skipFragmentInnerJoins process all quals stored in the execution unit's
- * inner_joins and gather all the ones that meet the "simple_qual" characteristics
+ * join_quals and gather all the ones that meet the "simple_qual" characteristics
  * (logical expressions with AND operations, etc.). It then uses the skipFragment function
  * to decide whether the fragment should be skipped or not. The fragment will be skipped
  * if at least one of these skipFragment calls return a true statment in its first value.
@@ -2895,7 +2895,7 @@ std::pair<bool, int64_t> Executor::skipFragmentInnerJoins(
     const std::vector<uint64_t>& frag_offsets,
     const size_t frag_idx) {
   std::pair<bool, int64_t> skip_frag{false, -1};
-  for (auto& inner_join : ra_exe_unit.inner_joins) {
+  for (auto& inner_join : ra_exe_unit.join_quals) {
     if (inner_join.type != JoinType::INNER) {
       continue;
     }

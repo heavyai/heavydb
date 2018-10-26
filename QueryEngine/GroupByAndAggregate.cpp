@@ -1597,7 +1597,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
     }
   }
 
-  if (ra_exe_unit_.inner_joins.empty()) {
+  if (ra_exe_unit_.join_quals.empty()) {
     executor_->cgen_state_->ir_builder_.CreateRet(LL_INT(int32_t(0)));
   } else if (sc_false) {
     const auto saved_insert_block = LL_BUILDER.GetInsertBlock();

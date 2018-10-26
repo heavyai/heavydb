@@ -257,7 +257,7 @@ std::vector<PushedDownFilterInfo> find_push_down_filters(
   }
   std::unordered_map<int, std::vector<std::shared_ptr<Analyzer::Expr>>>
       filters_per_nesting_level;
-  for (const auto& level_conditions : ra_exe_unit.inner_joins) {
+  for (const auto& level_conditions : ra_exe_unit.join_quals) {
     AllRangeTableIndexVisitor visitor;
     for (const auto& cond : level_conditions.quals) {
       const auto rte_indices = visitor.visit(cond.get());

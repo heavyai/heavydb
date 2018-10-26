@@ -34,7 +34,7 @@ bool needs_skip_result(const ResultSetPtr& res) {
 
 uint32_t Executor::ExecutionDispatch::getFragmentStride(
     const FragmentsList& frag_ids) const {
-  if (!ra_exe_unit_.inner_joins.empty()) {
+  if (!ra_exe_unit_.join_quals.empty()) {
     CHECK_EQ(ra_exe_unit_.input_descs.size(), frag_ids.size());
     const auto table_count = ra_exe_unit_.input_descs.size();
     uint32_t stride = 1;
