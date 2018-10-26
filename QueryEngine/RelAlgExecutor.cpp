@@ -2070,46 +2070,6 @@ class UsedColumnsVisitor : public ScalarExprVisitor<SET_TYPE> {
   }
 };
 
-class UsedTablesVisitor : public ScalarExprVisitor<std::unordered_set<int>> {
- protected:
-  virtual std::unordered_set<int> visitColumnVar(
-      const Analyzer::ColumnVar* column) const override {
-    return {column->get_table_id()};
-  }
-
-  virtual std::unordered_set<int> aggregateResult(
-      const std::unordered_set<int>& aggregate,
-      const std::unordered_set<int>& next_result) const override {
-    auto result = aggregate;
-    result.insert(next_result.begin(), next_result.end());
-    return result;
-  }
-};
-
-struct SeparatedQuals {
-  const std::list<std::shared_ptr<Analyzer::Expr>> regular_quals;
-  const std::list<std::shared_ptr<Analyzer::Expr>> join_quals;
-};
-
-SeparatedQuals separate_join_quals(
-    const std::list<std::shared_ptr<Analyzer::Expr>>& all_quals) {
-  std::list<std::shared_ptr<Analyzer::Expr>> regular_quals;
-  std::list<std::shared_ptr<Analyzer::Expr>> join_quals;
-  UsedTablesVisitor qual_visitor;
-  for (auto qual_candidate : all_quals) {
-    const auto used_table_ids = qual_visitor.visit(qual_candidate.get());
-    if (used_table_ids.size() > 1) {
-      CHECK_EQ(size_t(2), used_table_ids.size());
-      join_quals.push_back(qual_candidate);
-    } else {
-      const auto rewritten_qual_candidate = rewrite_expr(qual_candidate.get());
-      regular_quals.push_back(rewritten_qual_candidate ? rewritten_qual_candidate
-                                                       : qual_candidate);
-    }
-  }
-  return {regular_quals, join_quals};
-}
-
 JoinType get_join_type(const RelAlgNode* ra) {
   auto sink = get_data_sink(ra);
   if (auto join = dynamic_cast<const RelJoin*>(sink)) {
@@ -2247,6 +2207,16 @@ std::vector<size_t> get_left_deep_join_input_sizes(
   return input_sizes;
 }
 
+std::list<std::shared_ptr<Analyzer::Expr>> rewrite_quals(
+    const std::list<std::shared_ptr<Analyzer::Expr>>& quals) {
+  std::list<std::shared_ptr<Analyzer::Expr>> rewritten_quals;
+  for (const auto& qual : quals) {
+    const auto rewritten_qual = rewrite_expr(qual.get());
+    rewritten_quals.push_back(rewritten_qual ? rewritten_qual : qual);
+  }
+  return rewritten_quals;
+}
+
 }  // namespace
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
@@ -2286,11 +2256,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
   const auto scalar_sources = translate_scalar_sources(compound, translator);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
   const auto quals_cf = translate_quals(compound, translator);
-  const auto separated_quals = (!left_deep_join && join_types.back() == JoinType::LEFT)
-                                   ? SeparatedQuals{quals_cf.quals, {}}
-                                   : separate_join_quals(quals_cf.quals);
-  const auto simple_separated_quals = separate_join_quals(quals_cf.simple_quals);
-  CHECK(simple_separated_quals.join_quals.empty());
   const auto target_exprs = translate_targets(
       target_exprs_owned_, scalar_sources, groupby_exprs, compound, translator);
   CHECK_EQ(compound->size(), target_exprs.size());
@@ -2327,13 +2292,10 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
     }
   }
 
-  auto quals = separated_quals.regular_quals;
-  quals.insert(
-      quals.end(), separated_quals.join_quals.begin(), separated_quals.join_quals.end());
   const RelAlgExecutionUnit exe_unit = {input_descs,
                                         filtered_input_col_descs,
                                         quals_cf.simple_quals,
-                                        quals,
+                                        rewrite_quals(quals_cf.quals),
                                         left_deep_inner_joins,
                                         groupby_exprs,
                                         filtered_target_exprs,
@@ -2397,22 +2359,13 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
   const auto scalar_sources = translate_scalar_sources(compound, translator);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
   const auto quals_cf = translate_quals(compound, translator);
-  const auto separated_quals = (!left_deep_join && join_types.back() == JoinType::LEFT)
-                                   ? SeparatedQuals{quals_cf.quals, {}}
-                                   : separate_join_quals(quals_cf.quals);
-  const auto simple_separated_quals = separate_join_quals(quals_cf.simple_quals);
-  CHECK(simple_separated_quals.join_quals.empty());
   const auto target_exprs = translate_targets(
       target_exprs_owned_, scalar_sources, groupby_exprs, compound, translator);
-
   CHECK_EQ(compound->size(), target_exprs.size());
-  auto quals = separated_quals.regular_quals;
-  quals.insert(
-      quals.end(), separated_quals.join_quals.begin(), separated_quals.join_quals.end());
   const RelAlgExecutionUnit exe_unit = {input_descs,
                                         input_col_descs,
                                         quals_cf.simple_quals,
-                                        quals,
+                                        rewrite_quals(quals_cf.quals),
                                         left_deep_inner_joins,
                                         groupby_exprs,
                                         target_exprs,
@@ -2886,22 +2839,15 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
       get_inputs_meta(filter, translator, used_inputs_owned, input_to_nest_level);
   const auto filter_expr = translator.translateScalarRex(filter->getCondition());
   const auto qual = fold_expr(filter_expr.get());
-  std::list<std::shared_ptr<Analyzer::Expr>> quals{qual};
-  const auto separated_quals = join_type == JoinType::LEFT ? SeparatedQuals{quals, {}}
-                                                           : separate_join_quals(quals);
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   filter->setOutputMetainfo(in_metainfo);
-  std::list<std::shared_ptr<Analyzer::Expr>> all_quals(
-      separated_quals.regular_quals.begin(), separated_quals.regular_quals.end());
-  all_quals.insert(all_quals.end(),
-                   separated_quals.join_quals.begin(),
-                   separated_quals.join_quals.end());
+  const auto rewritten_qual = rewrite_expr(qual.get());
   return {{input_descs,
            input_col_descs,
            {},
-           all_quals,
+           {rewritten_qual ? rewritten_qual : qual},
            {},
            {nullptr},
            target_exprs,
