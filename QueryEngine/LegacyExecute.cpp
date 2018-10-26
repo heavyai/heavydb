@@ -212,7 +212,7 @@ ResultSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
       if (limit) {
         result->keepFirstN(limit);
       }
-      return std::move(result);
+      return result;
     }
     auto result = executeWorkUnit(
         error_code,
@@ -234,7 +234,7 @@ ResultSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
         row_set_mem_owner_,
         render_info,
         true);
-    return std::move(result);
+    return result;
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
   if (result_plan) {
@@ -356,7 +356,7 @@ ResultSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                       nullptr,
                       true);
   if (just_explain) {
-    return std::move(result);
+    return result;
   }
 
   const int in_col_count{static_cast<int>(agg_plan->get_targetlist().size())};

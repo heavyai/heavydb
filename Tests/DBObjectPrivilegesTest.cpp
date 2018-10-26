@@ -324,14 +324,14 @@ TEST_F(GrantSyntax, MultiPrivilegeGrantRevoke) {
 TEST_F(GrantSyntax, MultiRoleGrantRevoke) {
   std::vector<std::string> roles = {"Gunners", "Sudens"};
   std::vector<std::string> grantees = {"Juventus", "Bayern"};
-  auto check_grant = [this]() {
+  auto check_grant = []() {
     EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("Juventus", "Gunners", true), true);
     EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("Bayern", "Gunners", true), true);
     EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("Juventus", "Sudens", true), true);
     EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("Bayern", "Sudens", true), true);
     EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("Arsenal", "Sudens", true), false);
   };
-  auto check_revoke = [this]() {
+  auto check_revoke = []() {
     EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("Juventus", "Gunners", true), false);
     EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("Bayern", "Gunners", true), false);
     EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("Juventus", "Sudens", true), false);
