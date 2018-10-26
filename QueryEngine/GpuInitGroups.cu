@@ -66,6 +66,7 @@ extern "C" __device__ void init_columnar_group_by_buffer_gpu_impl(
       buffer_ptr = align_to_int64(buffer_ptr);
     }
   }
+  int32_t init_idx = 0;
   for (int32_t i = 0; i < agg_col_count; ++i) {
     if (need_padding) {
       buffer_ptr = align_to_int64(buffer_ptr);
@@ -73,25 +74,25 @@ extern "C" __device__ void init_columnar_group_by_buffer_gpu_impl(
     switch (col_sizes[i]) {
       case 1:
         buffer_ptr = init_columnar_buffer<int8_t>(
-            buffer_ptr, init_vals[i], groups_buffer_entry_count, start, step);
+            buffer_ptr, init_vals[init_idx++], groups_buffer_entry_count, start, step);
         break;
       case 2:
         buffer_ptr = init_columnar_buffer<int16_t>(reinterpret_cast<int16_t*>(buffer_ptr),
-                                                   init_vals[i],
+                                                   init_vals[init_idx++],
                                                    groups_buffer_entry_count,
                                                    start,
                                                    step);
         break;
       case 4:
         buffer_ptr = init_columnar_buffer<int32_t>(reinterpret_cast<int32_t*>(buffer_ptr),
-                                                   init_vals[i],
+                                                   init_vals[init_idx++],
                                                    groups_buffer_entry_count,
                                                    start,
                                                    step);
         break;
       case 8:
         buffer_ptr = init_columnar_buffer<int64_t>(reinterpret_cast<int64_t*>(buffer_ptr),
-                                                   init_vals[i],
+                                                   init_vals[init_idx++],
                                                    groups_buffer_entry_count,
                                                    start,
                                                    step);
