@@ -24,6 +24,7 @@
 #include "../Shared/sqltypes.h"
 
 #include <glog/logging.h>
+#include <unordered_map>
 
 inline SQLOps to_sql_op(const std::string& op_str) {
   if (op_str == std::string(">")) {
@@ -90,28 +91,23 @@ inline SQLOps to_sql_op(const std::string& op_str) {
 }
 
 inline SQLAgg to_agg_kind(const std::string& agg_name) {
-  if (agg_name == std::string("COUNT")) {
-    return kCOUNT;
+  using namespace std::string_literals;
+
+  static std::unordered_map<std::string, SQLAgg> agg_lookup{
+      {"COUNT"s, kCOUNT},
+      {"MIN"s, kMIN},
+      {"MAX"s, kMAX},
+      {"SUM"s, kSUM},
+      {"AVG"s, kAVG},
+      {"APPROX_COUNT_DISTINCT"s, kAPPROX_COUNT_DISTINCT},
+      {"SAMPLE"s, kSAMPLE},
+      {"LAST_SAMPLE"s, kSAMPLE}};
+
+  auto find_result = agg_lookup.find(agg_name);
+  if (find_result == agg_lookup.end()) {
+    throw std::runtime_error("Aggregate function" + agg_name + " not supported");
   }
-  if (agg_name == std::string("MIN")) {
-    return kMIN;
-  }
-  if (agg_name == std::string("MAX")) {
-    return kMAX;
-  }
-  if (agg_name == std::string("SUM")) {
-    return kSUM;
-  }
-  if (agg_name == std::string("AVG")) {
-    return kAVG;
-  }
-  if (agg_name == std::string("APPROX_COUNT_DISTINCT")) {
-    return kAPPROX_COUNT_DISTINCT;
-  }
-  if (agg_name == std::string("SAMPLE") || agg_name == std::string("LAST_SAMPLE")) {
-    return kSAMPLE;
-  }
-  throw std::runtime_error("Aggregate function " + agg_name + " not supported");
+  return find_result->second;
 }
 
 inline SQLTypes to_sql_type(const std::string& type_name) {
