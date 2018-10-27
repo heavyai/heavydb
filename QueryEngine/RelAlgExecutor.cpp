@@ -2232,7 +2232,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
   CHECK_EQ(size_t(1), compound->inputCount());
   const auto left_deep_join =
       dynamic_cast<const RelLeftDeepInnerJoin*>(compound->getInput(0));
-  JoinQualsPerNestingLevel left_deep_inner_joins;
+  JoinQualsPerNestingLevel left_deep_join_quals;
   const auto join_types = left_deep_join ? left_deep_join_types(left_deep_join)
                                          : std::vector<JoinType>{get_join_type(compound)};
   if (left_deep_join) {
@@ -2242,7 +2242,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
       do_table_reordering_maybe(
           input_descs, input_col_descs, input_to_nest_level, compound, query_infos, cat_);
     }
-    left_deep_inner_joins = translateLeftDeepJoinFilter(
+    left_deep_join_quals = translateLeftDeepJoinFilter(
         left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
   QueryFeatureDescriptor query_features;
@@ -2296,7 +2296,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
                                         filtered_input_col_descs,
                                         quals_cf.simple_quals,
                                         rewrite_quals(quals_cf.quals),
-                                        left_deep_inner_joins,
+                                        left_deep_join_quals,
                                         groupby_exprs,
                                         filtered_target_exprs,
                                         nullptr,
@@ -2328,7 +2328,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
   CHECK_EQ(size_t(1), compound->inputCount());
   const auto left_deep_join =
       dynamic_cast<const RelLeftDeepInnerJoin*>(compound->getInput(0));
-  JoinQualsPerNestingLevel left_deep_inner_joins;
+  JoinQualsPerNestingLevel left_deep_join_quals;
   const auto join_types = left_deep_join ? left_deep_join_types(left_deep_join)
                                          : std::vector<JoinType>{get_join_type(compound)};
   std::vector<size_t> input_permutation;
@@ -2345,7 +2345,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
       std::tie(input_descs, input_col_descs, std::ignore) =
           get_input_desc(compound, input_to_nest_level, input_permutation, cat_);
     }
-    left_deep_inner_joins = translateLeftDeepJoinFilter(
+    left_deep_join_quals = translateLeftDeepJoinFilter(
         left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
   QueryFeatureDescriptor query_features;
@@ -2366,7 +2366,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                         input_col_descs,
                                         quals_cf.simple_quals,
                                         rewrite_quals(quals_cf.quals),
-                                        left_deep_inner_joins,
+                                        left_deep_join_quals,
                                         groupby_exprs,
                                         target_exprs,
                                         nullptr,
@@ -2639,7 +2639,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
       get_input_desc(project, input_to_nest_level, {}, cat_);
   const auto left_deep_join =
       dynamic_cast<const RelLeftDeepInnerJoin*>(project->getInput(0));
-  JoinQualsPerNestingLevel left_deep_inner_joins;
+  JoinQualsPerNestingLevel left_deep_join_quals;
   const auto join_types = left_deep_join ? left_deep_join_types(left_deep_join)
                                          : std::vector<JoinType>{get_join_type(project)};
   if (left_deep_join) {
@@ -2650,7 +2650,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
       do_table_reordering_maybe(
           input_descs, input_col_descs, input_to_nest_level, project, query_infos, cat_);
     }
-    left_deep_inner_joins = translateLeftDeepJoinFilter(
+    left_deep_join_quals = translateLeftDeepJoinFilter(
         left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
   QueryFeatureDescriptor query_features;
@@ -2695,7 +2695,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
            filtered_input_col_descs,
            {},
            {},
-           left_deep_inner_joins,
+           left_deep_join_quals,
            {nullptr},
            filtered_target_exprs,
            nullptr,
@@ -2717,7 +2717,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
       get_input_desc(project, input_to_nest_level, {}, cat_);
   const auto left_deep_join =
       dynamic_cast<const RelLeftDeepInnerJoin*>(project->getInput(0));
-  JoinQualsPerNestingLevel left_deep_inner_joins;
+  JoinQualsPerNestingLevel left_deep_join_quals;
   const auto join_types = left_deep_join ? left_deep_join_types(left_deep_join)
                                          : std::vector<JoinType>{get_join_type(project)};
   std::vector<size_t> input_permutation;
@@ -2735,7 +2735,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
       std::tie(input_descs, input_col_descs, std::ignore) =
           get_input_desc(project, input_to_nest_level, input_permutation, cat_);
     }
-    left_deep_inner_joins = translateLeftDeepJoinFilter(
+    left_deep_join_quals = translateLeftDeepJoinFilter(
         left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
 
@@ -2757,7 +2757,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
            input_col_descs,
            {},
            {},
-           left_deep_inner_joins,
+           left_deep_join_quals,
            {nullptr},
            target_exprs,
            nullptr,
