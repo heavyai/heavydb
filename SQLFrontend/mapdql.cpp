@@ -1375,16 +1375,6 @@ int main(int argc, char** argv) {
       /* The "/historylen" command will change the history len. */
       int len = atoi(line + 11);
       linenoiseHistorySetMaxLen(len);
-    } else if (!strncmp(line, "\\multiline", 10)) {
-      linenoiseSetMultiLine(1);
-    } else if (!strncmp(line, "\\singleline", 11)) {
-      linenoiseSetMultiLine(0);
-    } else if (!strncmp(line, "\\keycodes", 9)) {
-      linenoisePrintKeyCodes();
-    } else if (!strncmp(line, "\\timing", 7)) {
-      print_timing = true;
-    } else if (!strncmp(line, "\\notiming", 9)) {
-      print_timing = false;
     } else if (!strncmp(line, "\\privileges", 11)) {
       std::string temp_line(line);
       boost::algorithm::trim(temp_line);
@@ -1430,17 +1420,22 @@ int main(int argc, char** argv) {
 
       // clang-format off
       auto resolution_status = CommandResolutionChain<>( line, "\\copygeo", 1, 4, CopyGeoCmd<>(context), "") // deprecated
-  ( "\\copy", 3, 3, [&](Params const& p) { copy_table(p[1].c_str() /* filepath */, p[2].c_str() /* table */, context); } )
-  ( "\\ste", 2, 2, [&](Params const& p) { set_table_epoch(context, p[1] /* table_details */); } )
-  ( "\\gte", 2, 2, [&](Params const& p) { get_table_epoch(context, p[1] /* table_details */); } )
-  ( "\\export_dashboard", 3, 3, ExportDashboardCmd<>( context ), "Usage \\export_dashboard <dash name> <file name>" )
-	( "\\import_dashboard", 3, 3, ImportDashboardCmd<>( context ), "Usage \\import_dashboard <dash name> <file name>"  )
-  ( "\\role_list", 2, 2, RoleListCmd<>(context), "Usage: \\role_list <userName>")
-  ( "\\roles", 1, 1, RolesCmd<>(context))("\\set_license", 2, 2, [&](Params const& p ) { set_license_key(context, p[1]); })
-  ( "\\get_license", 1, 1, [&](Params const&) { get_license_claims(context); })
-  ( "\\status", 1, 1, StatusCmd<>( context ), "Usage \\status" )
-    ( "\\dash", 1, 1, ListDashboardsCmd<>( context ) )
-	.is_resolved();
+        ( "\\copy", 3, 3, [&](Params const& p) { copy_table(p[1].c_str() /* filepath */, p[2].c_str() /* table */, context); } )
+        ( "\\ste", 2, 2, [&](Params const& p) { set_table_epoch(context, p[1] /* table_details */); } )
+        ( "\\gte", 2, 2, [&](Params const& p) { get_table_epoch(context, p[1] /* table_details */); } )
+        ( "\\export_dashboard", 3, 3, ExportDashboardCmd<>( context ), "Usage \\export_dashboard <dash name> <file name>" )
+        ( "\\import_dashboard", 3, 3, ImportDashboardCmd<>( context ), "Usage \\import_dashboard <dash name> <file name>"  )
+        ( "\\role_list", 2, 2, RoleListCmd<>(context), "Usage: \\role_list <userName>")
+        ( "\\roles", 1, 1, RolesCmd<>(context))("\\set_license", 2, 2, [&](Params const& p ) { set_license_key(context, p[1]); })
+        ( "\\get_license", 1, 1, [&](Params const&) { get_license_claims(context); })
+        ( "\\status", 1, 1, StatusCmd<>( context ), "Usage \\status" )
+        ( "\\dash", 1, 1, ListDashboardsCmd<>( context ) )
+        ( "\\multiline", 1, 1, [&](Params const&) { linenoiseSetMultiLine(1); } )
+        ( "\\singleline", 1, 1, [&](Params const&) { linenoiseSetMultiLine(0); } )
+        ( "\\keycodes", 1, 1, [&](Params const&) { linenoisePrintKeyCodes(); } )
+        ( "\\timing", 1, 1, [&](Params const&) { print_timing = true; } )
+        ( "\\notiming", 1, 1, [&](Params const&) { print_timing = false; } )
+        .is_resolved();
 
       if (resolution_status == false) {
         if (line[0] == '\\' && line[1] == 'q') {
