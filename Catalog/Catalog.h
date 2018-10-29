@@ -126,14 +126,6 @@ struct DBMetadata {
 
 class Catalog {
  public:
-  Catalog(const std::string& basePath,
-          const std::string& dbname,
-          std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-          const std::vector<LeafHostInfo>& string_dict_hosts,
-          AuthMetadata authMetadata,
-          bool is_initdb,
-          std::shared_ptr<Calcite> calcite);
-
   /**
    * @brief Constructor - takes basePath to already extant
    * data directory for writing
@@ -142,20 +134,10 @@ class Catalog {
    * @param fragmenter Fragmenter object
    * metadata - expects for this directory to already exist
    */
-
   Catalog(const std::string& basePath,
           const DBMetadata& curDB,
           std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
           const std::vector<LeafHostInfo>& string_dict_hosts,
-          std::shared_ptr<Calcite> calcite);
-
-  /*
-   builds a catalog that uses an ldap server
-   */
-  Catalog(const std::string& basePath,
-          const DBMetadata& curDB,
-          std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-          AuthMetadata authMetadata,
           std::shared_ptr<Calcite> calcite);
 
   /**
@@ -415,7 +397,7 @@ class SysCatalog {
   void grantPrivileges(const int32_t userid, const int32_t dbid, const Privileges& privs);
   bool checkPrivileges(UserMetadata& user, DBMetadata& db, const Privileges& wants_privs);
   void createDatabase(const std::string& dbname, int owner);
-  void dropDatabase(const int32_t dbid, const std::string& name, Catalog* db_cat);
+  void dropDatabase(const DBMetadata& db);
   bool getMetadataForUser(const std::string& name, UserMetadata& user);
   bool getMetadataForUserById(const int32_t idIn, UserMetadata& user);
   bool checkPasswordForUser(const std::string& passwd, UserMetadata& user);

@@ -922,44 +922,47 @@ void SysCatalog::createDatabase(const string& name, int owner) {
       "integer)");
 }
 
-void SysCatalog::dropDatabase(const int32_t dbid,
-                              const std::string& name,
-                              Catalog* db_cat) {
+void SysCatalog::dropDatabase(const DBMetadata& db) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
+
+  auto cat = Catalog::get(db.dbName);
+  if (cat == nullptr) {
+    cat = std::make_shared<Catalog>(
+        basePath_, db, dataMgr_, *string_dict_hosts_, calciteMgr_);
+    Catalog::set(db.dbName, cat);
+  }
 
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     if (arePrivilegesOn()) {
       /* revoke object privileges to all tables of the database being dropped */
-      if (db_cat) {
-        const auto tables = db_cat->getAllTableMetadata();
-        for (const auto table : tables) {
-          if (table->shard >= 0) {
-            // skip shards, they're not standalone tables
-            continue;
-          }
-          revokeDBObjectPrivilegesFromAll_unsafe(
-              DBObject(table->tableName, TableDBObjectType), db_cat);
+      const auto tables = cat->getAllTableMetadata();
+      for (const auto table : tables) {
+        if (table->shard >= 0) {
+          // skip shards, they're not standalone tables
+          continue;
         }
-        const auto dashboards = db_cat->getAllFrontendViewMetadata();
-        for (const auto dashboard : dashboards) {
-          revokeDBObjectPrivilegesFromAll_unsafe(
-              DBObject(dashboard->viewId, DashboardDBObjectType), db_cat);
-        }
+        revokeDBObjectPrivilegesFromAll_unsafe(
+            DBObject(table->tableName, TableDBObjectType), cat.get());
+      }
+      const auto dashboards = cat->getAllFrontendViewMetadata();
+      for (const auto dashboard : dashboards) {
+        revokeDBObjectPrivilegesFromAll_unsafe(
+            DBObject(dashboard->viewId, DashboardDBObjectType), cat.get());
       }
       /* revoke object privileges to the database being dropped */
       for (const auto& grantee : granteeMap_) {
-        if (grantee.second->hasAnyPrivilegesOnDb(dbid, true)) {
-          revokeAllOnDatabase_unsafe(grantee.second->getName(), dbid, grantee.second);
+        if (grantee.second->hasAnyPrivilegesOnDb(db.dbId, true)) {
+          revokeAllOnDatabase_unsafe(grantee.second->getName(), db.dbId, grantee.second);
         }
       }
     }
     sqliteConnector_->query_with_text_param("DELETE FROM mapd_databases WHERE dbid = ?",
-                                            std::to_string(dbid));
-    db_cat->eraseDBData();
-    Catalog::remove(name);
-  } catch (std::exception& e) {
+                                            std::to_string(db.dbId));
+    cat->eraseDBData();
+    Catalog::remove(db.dbName);
+  } catch (const std::exception&) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
   }
@@ -1331,8 +1334,6 @@ void SysCatalog::createRole_unsafe(const std::string& roleName,
   // NOTE (max): Why create an empty privileges record for a role?
   /* grant none privileges to this role and add it to sqlite DB */
   DBObject dbObject(get_currentDB().dbName, DatabaseDBObjectType);
-  auto* catalog = Catalog::get(get_currentDB().dbName).get();
-  CHECK(catalog);
   DBObjectKey objKey;
   // 0 is an id that does not exist
   objKey.dbId = 0;
@@ -1649,52 +1650,6 @@ std::vector<std::string> SysCatalog::getRoles(bool userPrivateRole,
     roles.push_back(grantee.second->getName());
   }
   return roles;
-}
-
-Catalog::Catalog(const string& basePath,
-                 const string& dbname,
-                 std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-                 const std::vector<LeafHostInfo>& string_dict_hosts,
-                 AuthMetadata authMetadata,
-                 bool is_initdb,
-                 std::shared_ptr<Calcite> calcite)
-    : basePath_(basePath)
-    , sqliteConnector_(dbname, basePath + "/mapd_catalogs/")
-    , dataMgr_(dataMgr)
-    , string_dict_hosts_(string_dict_hosts)
-    , calciteMgr_(calcite)
-    , nextTempTableId_(MAPD_TEMP_TABLE_START_ID)
-    , nextTempDictId_(MAPD_TEMP_DICT_START_ID)
-    , sqliteMutex_()
-    , sharedMutex_()
-    , thread_holding_sqlite_lock()
-    , thread_holding_write_lock() {
-  ldap_server_.reset(new LdapServer(authMetadata));
-  rest_server_.reset(new RestServer(authMetadata));
-  if (!is_initdb) {
-    buildMaps();
-  }
-}
-
-Catalog::Catalog(const string& basePath,
-                 const DBMetadata& curDB,
-                 std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-                 AuthMetadata authMetadata,
-                 std::shared_ptr<Calcite> calcite)
-    : basePath_(basePath)
-    , sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/")
-    , currentDB_(curDB)
-    , dataMgr_(dataMgr)
-    , calciteMgr_(calcite)
-    , nextTempTableId_(MAPD_TEMP_TABLE_START_ID)
-    , nextTempDictId_(MAPD_TEMP_DICT_START_ID)
-    , sqliteMutex_()
-    , sharedMutex_()
-    , thread_holding_sqlite_lock()
-    , thread_holding_write_lock() {
-  ldap_server_.reset(new LdapServer(authMetadata));
-  rest_server_.reset(new RestServer(authMetadata));
-  buildMaps();
 }
 
 Catalog::Catalog(const string& basePath,

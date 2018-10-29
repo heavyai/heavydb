@@ -4185,8 +4185,7 @@ void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Only the super user or the owner can drop database.");
   }
 
-  auto db_cat = Catalog_Namespace::Catalog::get(*db_name);
-  SysCatalog::instance().dropDatabase(db.dbId, *db_name, db_cat.get());
+  SysCatalog::instance().dropDatabase(db);
 }
 
 void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
