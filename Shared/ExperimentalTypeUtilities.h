@@ -23,6 +23,7 @@
 #include <tuple>
 #include <utility>
 
+#include "ConstExprLib.h"
 #include "sqltypes.h"
 
 namespace Experimental {
