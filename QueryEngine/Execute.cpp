@@ -2420,7 +2420,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
       case kTIME:
       case kTIMESTAMP:
       case kDATE: {
-        if (cd->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
+        if (cd->columnType.is_date_in_days()) {
           auto col_data = reinterpret_cast<int32_t*>(col_data_bytes);
           *col_data = col_datum.timeval;
           break;

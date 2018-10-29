@@ -677,13 +677,6 @@ std::shared_ptr<Analyzer::Expr> Expr::add_cast(const SQLTypeInfo& new_type_info)
   return makeExpr<UOper>(new_type_info, contains_agg, kCAST, shared_from_this());
 }
 
-std::shared_ptr<Analyzer::Expr> Expr::add_cast_date_in_days() {
-  return shared_from_this();
-}
-std::shared_ptr<Analyzer::Expr> Expr::remove_cast_date_in_days() {
-  return shared_from_this();
-}
-
 namespace {
 
 struct IntFracRepr {
@@ -1061,6 +1054,9 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
   } else if (new_type_info.is_string()) {
     cast_to_string(new_type_info);
   } else if (new_type_info.get_type() == kDATE && type_info.get_type() == kDATE) {
+    if (new_type_info.is_date_in_days()) {
+      constval.timeval /= SECSPERDAY;
+    }
     type_info = new_type_info;
   } else if (new_type_info.get_type() == kDATE && type_info.get_type() == kTIMESTAMP) {
     type_info = new_type_info;
@@ -1068,6 +1064,9 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
     constval.timeval = (dimen > 0)
                            ? DateTruncateHighPrecision(dtDAY, constval.timeval, dimen)
                            : DateTruncate(dtDAY, constval.timeval);
+    if (new_type_info.is_date_in_days()) {
+      constval.timeval /= SECSPERDAY;
+    }
   } else if (type_info.get_type() == kTIMESTAMP &&
              new_type_info.get_type() == kTIMESTAMP) {
     type_info = new_type_info;
@@ -1163,15 +1162,6 @@ std::shared_ptr<Analyzer::Expr> Constant::add_cast(const SQLTypeInfo& new_type_i
     return Expr::add_cast(new_type_info);
   }
   do_cast(new_type_info);
-  return shared_from_this();
-}
-
-std::shared_ptr<Analyzer::Expr> Constant::add_cast_date_in_days() {
-  constval.timeval /= SECSPERDAY;
-  return shared_from_this();
-}
-std::shared_ptr<Analyzer::Expr> Constant::remove_cast_date_in_days() {
-  constval.timeval *= SECSPERDAY;
   return shared_from_this();
 }
 

@@ -27,6 +27,8 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <vector>
+#include "../Shared/sqltypes.h"
+#include "SqlTypesLayout.h"
 
 struct GenericKeyHandler;
 struct OverlapsKeyHandler;
@@ -92,6 +94,14 @@ struct JoinColumnTypeInfo {
   int64_t translated_null_val;
   ColumnType column_type;
 };
+
+inline ColumnType get_join_column_type_kind(const SQLTypeInfo& ti) {
+  if (ti.is_date_in_days()) {
+    return SmallDate;
+  } else {
+    return is_unsigned_type(ti) ? Unsigned : Signed;
+  }
+}
 
 struct JoinBucketInfo {
   std::vector<double> bucket_sizes_for_dimension;

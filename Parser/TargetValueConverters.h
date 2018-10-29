@@ -241,14 +241,8 @@ struct DateValueConverter : public NumericValueConverter<int64_t, TARGET_TYPE> {
     if (this->do_null_check_ && this->null_check_value_ == val) {
       this->column_data_.get()[row] = this->null_value_;
     } else {
-      this->column_data_.get()[row] = scaledDateVal(val);
+      this->column_data_.get()[row] = static_cast<TARGET_TYPE>(val / SECSPERDAY);
     }
-  }
-
-  TARGET_TYPE scaledDateVal(const int64_t val) {
-    return (this->column_descriptor_->columnType.is_date_in_days())
-               ? static_cast<TARGET_TYPE>(val / SECSPERDAY)
-               : static_cast<TARGET_TYPE>(val);
   }
 
   virtual void convertToColumnarFormat(size_t row, const TargetValue* value) {

@@ -755,7 +755,7 @@ int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch,
   }
   CHECK_EQ(size_t(0), type_bitwidth % 8);
   int64_t val;
-  if (is_smalldate_type(type_info)) {
+  if (type_info.is_date_in_days()) {
     val = type_info.get_comp_param() == 16
               ? fixed_width_small_date_decode_noinline(
                     byte_stream, 2, NULL_SMALLINT, NULL_BIGINT, pos)
@@ -1478,7 +1478,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
     }
   }
   // For Date encoding in days, pick 8 bytes
-  if (is_smalldate_type(get_compact_type(target_info))) {
+  if (get_compact_type(target_info).is_date_in_days()) {
     actual_compact_sz = sizeof(int64_t);
   }
 

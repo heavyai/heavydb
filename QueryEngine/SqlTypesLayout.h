@@ -137,7 +137,7 @@ inline int64_t inline_fixed_encoding_null_val(const SQLTypeInfo& ti) {
         CHECK(false);
     }
   }
-  CHECK(ti.get_compression() == kENCODING_FIXED);
+  CHECK_EQ(kENCODING_FIXED, ti.get_compression());
   CHECK(ti.is_integer() || ti.is_time() || ti.is_decimal());
   CHECK_EQ(0, ti.get_comp_param() % 8);
   return -(1L << (ti.get_comp_param() - 1));
@@ -207,10 +207,6 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
 
 inline bool is_unsigned_type(const SQLTypeInfo& ti) {
   return ti.get_compression() == kENCODING_DICT && ti.get_size() < ti.get_logical_size();
-}
-
-inline bool is_smalldate_type(const SQLTypeInfo& ti) {
-  return ti.get_type() == kDATE && ti.get_compression() == kENCODING_DATE_IN_DAYS;
 }
 
 #endif  // QUERYENGINE_SQLTYPESLAYOUT_H

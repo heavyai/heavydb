@@ -451,18 +451,12 @@ BaselineJoinHashTable::ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDe
     join_columns.emplace_back(fetchColumn(
         inner_col, effective_memory_level, fragments, chunks_owner, device_id));
     const auto& ti = inner_col->get_type_info();
-    ColumnType ct;
-    if (is_smalldate_type(ti)) {
-      ct = SmallDate;
-    } else {
-      ct = is_unsigned_type(ti) ? Unsigned : Signed;
-    }
     join_column_types.emplace_back(JoinColumnTypeInfo{static_cast<size_t>(ti.get_size()),
                                                       0,
                                                       inline_fixed_encoding_null_val(ti),
                                                       isBitwiseEq(),
                                                       0,
-                                                      ct});
+                                                      get_join_column_type_kind(ti)});
   }
   return {join_columns, join_column_types, chunks_owner, join_bucket_info};
 }

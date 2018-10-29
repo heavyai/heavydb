@@ -83,8 +83,9 @@ llvm::Instruction* FixedWidthReal::codegenDecode(llvm::Value* byte_stream,
   return llvm::CallInst::Create(f, args);
 }
 
-FixedWidthSmallDate::FixedWidthSmallDate(const size_t byte_width, const int32_t null_val)
-    : byte_width_{byte_width}, null_val_{null_val} {}
+FixedWidthSmallDate::FixedWidthSmallDate(const size_t byte_width)
+    : byte_width_{byte_width}, null_val_{byte_width == 4 ? NULL_INT : NULL_SMALLINT} {}
+
 llvm::Instruction* FixedWidthSmallDate::codegenDecode(llvm::Value* byte_stream,
                                                       llvm::Value* pos,
                                                       llvm::Module* module) const {

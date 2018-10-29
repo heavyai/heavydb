@@ -260,8 +260,7 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       }
       if (!tp) {
         try {
-          d.timeval = ti.get_compression() == kENCODING_DATE_IN_DAYS ? std::stoi(s)
-                                                                     : std::stoll(s);
+          d.timeval = ti.is_date_in_days() ? std::stoi(s) : std::stoll(s);
           break;
         } catch (const std::invalid_argument& ia) {
           throw std::runtime_error("Invalid date string " + s);
@@ -270,9 +269,8 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       tm_struct.tm_sec = tm_struct.tm_min = tm_struct.tm_hour = 0;
       tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = tm_struct.tm_gmtoff =
           0;
-      d.timeval = ti.get_compression() == kENCODING_DATE_IN_DAYS
-                      ? TimeGM::instance().my_timegm_days(&tm_struct)
-                      : TimeGM::instance().my_timegm(&tm_struct);
+      d.timeval = ti.is_date_in_days() ? TimeGM::instance().my_timegm_days(&tm_struct)
+                                       : TimeGM::instance().my_timegm(&tm_struct);
       break;
     }
     case kPOINT:
@@ -343,9 +341,7 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
     }
     case kDATE: {
       std::tm tm_struct;
-      time_t ntimeval = (ti.get_compression() == kENCODING_DATE_IN_DAYS)
-                            ? d.timeval * 86400
-                            : d.timeval;
+      time_t ntimeval = ti.is_date_in_days() ? d.timeval * 86400 : d.timeval;
       gmtime_r(&ntimeval, &tm_struct);
       char buf[11];
       strftime(buf, 11, "%F", &tm_struct);

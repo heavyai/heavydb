@@ -134,8 +134,9 @@ SUFFIX(fixed_width_small_date_decode)(const int8_t* byte_stream,
                                       const int64_t ret_null_val,
                                       const int64_t pos) {
   auto val = SUFFIX(fixed_width_int_decode)(byte_stream, byte_width, pos);
-  return (val == null_val) ? ret_null_val : val * 86400;
+  return val == null_val ? ret_null_val : val * 86400;
 }
+
 extern "C" DEVICE NEVER_INLINE int64_t
 SUFFIX(fixed_width_small_date_decode_noinline)(const int8_t* byte_stream,
                                                const int32_t byte_width,

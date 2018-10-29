@@ -334,8 +334,7 @@ class ArrayNoneEncoder : public Encoder {
       case kTIME:
       case kTIMESTAMP:
       case kDATE: {
-        const auto compression = buffer_->sqlType.get_compression();
-        if (compression == kENCODING_DATE_IN_DAYS) {
+        if (buffer_->sqlType.is_date_in_days()) {
           const int32_t* tm_array = (int32_t*)array.pointer;
           for (size_t i = 0; i < array.length / sizeof(int32_t); i++) {
             if (tm_array[i] == NULL_INT)

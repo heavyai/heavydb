@@ -243,6 +243,12 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
     const SQLQualifier qual,
     std::shared_ptr<Analyzer::Expr> left_expr,
     std::shared_ptr<Analyzer::Expr> right_expr) {
+  if (left_expr->get_type_info().is_date_in_days() ||
+      right_expr->get_type_info().is_date_in_days()) {
+    // Do not propogate encoding
+    left_expr = left_expr->decompress();
+    right_expr = right_expr->decompress();
+  }
   const auto& left_type = left_expr->get_type_info();
   auto right_type = right_expr->get_type_info();
   if (qual != kONE) {

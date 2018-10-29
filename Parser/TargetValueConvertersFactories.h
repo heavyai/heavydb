@@ -142,42 +142,24 @@ struct TextConverterFactory {
   }
 };
 
-template <typename TARGET_TYPE>
 struct DateConverterFactory {
-  using ConverterType = DateValueConverter<TARGET_TYPE>;
-
-  std::unique_ptr<ConverterType> create(ConverterCreateParameter param) {
-    TARGET_TYPE null_value = inline_int_null_value<int32_t>();
-    switch (param.type.get_size()) {
-      case 8:
-        null_value = static_cast<TARGET_TYPE>(inline_int_null_value<int64_t>());
-        break;
-      case 4:
-        null_value = static_cast<TARGET_TYPE>(inline_int_null_value<int32_t>());
-        break;
-      case 2:
-        null_value = static_cast<TARGET_TYPE>(inline_int_null_value<int16_t>());
-        break;
-      default:
-        CHECK(false);
-    }
-
-    return std::make_unique<DateValueConverter<TARGET_TYPE>>(
-        param.target, param.num_rows, null_value, NULL_BIGINT, param.can_be_null);
-  }
-
   std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {
-    return create(param);
-  }
-};
-
-struct DatesConverterFactory {
-  std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {
-    if (param.target->columnType.is_date_in_days()) {
-      DateConverterFactory<int32_t> factory;
-      return factory.create(param);
+    if (param.target->columnType.is_date_in_days() && param.type.get_size() == 4) {
+      return std::make_unique<DateValueConverter<int32_t>>(
+          param.target,
+          param.num_rows,
+          static_cast<int32_t>(inline_int_null_value<int32_t>()),
+          NULL_BIGINT,
+          param.can_be_null);
+    } else if (param.target->columnType.is_date_in_days() && param.type.get_size() == 2) {
+      return std::make_unique<DateValueConverter<int32_t>>(
+          param.target,
+          param.num_rows,
+          static_cast<int32_t>(inline_int_null_value<int16_t>()),
+          NULL_BIGINT,
+          param.can_be_null);
     } else {
-      DateConverterFactory<int64_t> factory;
+      NumericConverterFactory<int64_t, int64_t> factory;
       return factory.create(param);
     }
   }
@@ -271,7 +253,7 @@ struct TargetValueConverterFactory {
                   {kDECIMAL, NumericConverterFactory<int64_t, int64_t>()},
                   {kNUMERIC, NumericConverterFactory<int64_t, int64_t>()},
                   {kTIMESTAMP, NumericConverterFactory<int64_t, int64_t>()},
-                  {kDATE, DatesConverterFactory()},
+                  {kDATE, DateConverterFactory()},
                   {kTIME, NumericConverterFactory<int64_t, int64_t>()},
                   {kBOOLEAN, NumericConverterFactory<int64_t, int8_t>()},
                   {kDOUBLE, NumericConverterFactory<double, double>()},

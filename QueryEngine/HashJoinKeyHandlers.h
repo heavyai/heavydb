@@ -32,6 +32,28 @@
 
 #include "../Shared/funcannotations.h"
 
+DEVICE inline int64_t get_join_column_element_value(const JoinColumnTypeInfo& type_info,
+                                                    const JoinColumn& join_column,
+                                                    const size_t i) {
+  switch (type_info.column_type) {
+    case SmallDate:
+      return SUFFIX(fixed_width_small_date_decode_noinline)(
+          join_column.col_buff,
+          type_info.elem_sz,
+          type_info.elem_sz == 4 ? NULL_INT : NULL_SMALLINT,
+          NULL_BIGINT,
+          i);
+    case Signed:
+      return SUFFIX(fixed_width_int_decode_noinline)(
+          join_column.col_buff, type_info.elem_sz, i);
+    case Unsigned:
+      return SUFFIX(fixed_width_unsigned_decode_noinline)(
+          join_column.col_buff, type_info.elem_sz, i);
+    default:
+      return 0;
+  }
+}
+
 struct GenericKeyHandler {
   GenericKeyHandler(const size_t key_component_count,
                     const bool should_skip_entries,
@@ -67,12 +89,7 @@ struct GenericKeyHandler {
          ++key_component_index) {
       const auto& join_column = join_column_per_key_[key_component_index];
       const auto& type_info = type_info_per_key_[key_component_index];
-      int64_t elem = type_info.is_unsigned
-                         ? SUFFIX(fixed_width_unsigned_decode_noinline)(
-                               join_column.col_buff, type_info.elem_sz, i)
-                         : SUFFIX(fixed_width_int_decode_noinline)(
-                               join_column.col_buff, type_info.elem_sz, i);
-
+      int64_t elem = get_join_column_element_value(type_info, join_column, i);
       if (should_skip_entries_ && elem == type_info.null_val && !type_info.uses_bw_eq) {
         skip_entry = true;
         break;

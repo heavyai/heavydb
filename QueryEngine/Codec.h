@@ -80,7 +80,7 @@ class FixedWidthReal : public Decoder {
 
 class FixedWidthSmallDate : public Decoder {
  public:
-  FixedWidthSmallDate(const size_t byte_width, const int32_t null_val);
+  FixedWidthSmallDate(const size_t byte_width);
   llvm::Instruction* codegenDecode(llvm::Value* byte_stream,
                                    llvm::Value* pos,
                                    llvm::Module* module) const override;
@@ -88,5 +88,5 @@ class FixedWidthSmallDate : public Decoder {
  private:
   const size_t byte_width_;
   const int32_t null_val_;
-  const int64_t ret_null_val_ = NULL_BIGINT;
+  static constexpr int64_t ret_null_val_ = NULL_BIGINT;
 };

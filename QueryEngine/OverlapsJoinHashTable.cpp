@@ -148,7 +148,7 @@ BaselineJoinHashTable::ColumnsForDevice OverlapsJoinHashTable::fetchColumnsForDe
                                                       inline_int_null_value<int64_t>(),
                                                       isBitwiseEq(),
                                                       0,
-                                                      is_unsigned_type(ti)});
+                                                      get_join_column_type_kind(ti)});
     CHECK(ti.is_array()) << "Overlaps join currently only supported for arrays.";
 
     if (bucket_sizes_for_dimension_.empty()) {

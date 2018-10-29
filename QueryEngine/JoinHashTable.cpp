@@ -738,12 +738,6 @@ int JoinHashTable::initHashTableOnCpu(
       t.join();
     }
     init_cpu_buff_threads.clear();
-    ColumnType ct;
-    if (is_smalldate_type(ti)) {
-      ct = SmallDate;
-    } else {
-      ct = is_unsigned_type(ti) ? Unsigned : Signed;
-    }
     for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
       init_cpu_buff_threads.emplace_back([this,
                                           hash_join_invalid_val,
@@ -754,8 +748,7 @@ int JoinHashTable::initHashTableOnCpu(
                                           thread_idx,
                                           thread_count,
                                           &ti,
-                                          &err,
-                                          &ct] {
+                                          &err] {
         int partial_err = fill_hash_join_buff(&(*cpu_hash_table_buff_)[0],
                                               hash_join_invalid_val,
                                               {col_buff, num_elements},
@@ -764,7 +757,7 @@ int JoinHashTable::initHashTableOnCpu(
                                                inline_fixed_encoding_null_val(ti),
                                                isBitwiseEq(),
                                                col_range_.getIntMax() + 1,
-                                               ct},
+                                               get_join_column_type_kind(ti)},
                                               sd_inner_proxy,
                                               sd_outer_proxy,
                                               thread_idx,
@@ -826,12 +819,6 @@ void JoinHashTable::initOneToManyHashTableOnCpu(
   for (auto& child : init_threads) {
     child.get();
   }
-  ColumnType ct;
-  if (is_smalldate_type(ti)) {
-    ct = SmallDate;
-  } else {
-    ct = is_unsigned_type(ti) ? Unsigned : Signed;
-  }
   fill_one_to_many_hash_table(&(*cpu_hash_table_buff_)[0],
                               hash_entry_count,
                               hash_join_invalid_val,
@@ -841,7 +828,7 @@ void JoinHashTable::initOneToManyHashTableOnCpu(
                                inline_fixed_encoding_null_val(ti),
                                isBitwiseEq(),
                                col_range_.getIntMax() + 1,
-                               ct},
+                               get_join_column_type_kind(ti)},
                               sd_inner_proxy,
                               sd_outer_proxy,
                               thread_count);
@@ -952,18 +939,12 @@ void JoinHashTable::initHashTableForDevice(
       return;
     }
     JoinColumn join_column{col_buff, num_elements};
-    ColumnType ct;
-    if (is_smalldate_type(ti)) {
-      ct = SmallDate;
-    } else {
-      ct = is_unsigned_type(ti) ? Unsigned : Signed;
-    }
     JoinColumnTypeInfo type_info{static_cast<size_t>(ti.get_size()),
                                  col_range_.getIntMin(),
                                  inline_fixed_encoding_null_val(ti),
                                  isBitwiseEq(),
                                  col_range_.getIntMax() + 1,
-                                 ct};
+                                 get_join_column_type_kind(ti)};
     if (shard_count) {
       CHECK_GT(device_count_, 0);
       for (size_t shard = device_id; shard < shard_count; shard += device_count_) {
@@ -1086,18 +1067,12 @@ void JoinHashTable::initOneToManyHashTable(
         executor_->blockSize(),
         executor_->gridSize());
     JoinColumn join_column{col_buff, num_elements};
-    ColumnType ct;
-    if (is_smalldate_type(ti)) {
-      ct = SmallDate;
-    } else {
-      ct = is_unsigned_type(ti) ? Unsigned : Signed;
-    }
     JoinColumnTypeInfo type_info{static_cast<size_t>(ti.get_size()),
                                  col_range_.getIntMin(),
                                  inline_fixed_encoding_null_val(ti),
                                  isBitwiseEq(),
                                  col_range_.getIntMax() + 1,
-                                 ct};
+                                 get_join_column_type_kind(ti)};
     if (shard_count) {
       CHECK_GT(device_count_, 0);
       for (size_t shard = device_id; shard < shard_count; shard += device_count_) {

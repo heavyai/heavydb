@@ -266,8 +266,7 @@ size_t random_fill(const ColumnDescriptor* cd,
       break;
     }
     case kDATE:
-      if (sizeof(time_t) == 4 ||
-          cd->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
+      if (sizeof(time_t) == 4 || cd->columnType.is_date_in_days()) {
         hash = random_fill_int32(p.numbersPtr, num_elems);
         data_volumn += num_elems * sizeof(int32_t);
       } else {
