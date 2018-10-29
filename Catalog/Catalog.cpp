@@ -2088,35 +2088,22 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
         "INSERT INTO mapd_record_ownership_marker (dummy) VALUES (?1)",
         std::vector<std::string>{std::to_string(db.dbOwner)});
 
+    static const std::map<const DBObjectType, const AccessPrivileges>
+        object_level_all_privs_lookup{
+            {DatabaseDBObjectType, AccessPrivileges::ALL_DATABASE},
+            {TableDBObjectType, AccessPrivileges::ALL_TABLE},
+            {DashboardDBObjectType, AccessPrivileges::ALL_DASHBOARD},
+            {ViewDBObjectType, AccessPrivileges::ALL_VIEW}};
+
     // grant owner all permissions on DB
-    {
-      DBObjectKey key;
-      DBObjectType type = DBObjectType::TableDBObjectType;
-      key.dbId = currentDB_.dbId;
+    DBObjectKey key;
+    key.dbId = currentDB_.dbId;
+    auto _key_place = [&key](auto type) {
       key.permissionType = type;
-
-      DBObject obj(key, AccessPrivileges::ALL_TABLE, db.dbOwner);
-      objects.push_back(obj);
-    }
-
-    {
-      DBObjectKey key;
-      DBObjectType type = DBObjectType::DashboardDBObjectType;
-      key.dbId = currentDB_.dbId;
-      key.permissionType = type;
-
-      DBObject obj(key, AccessPrivileges::ALL_DASHBOARD, db.dbOwner);
-      objects.push_back(obj);
-    }
-
-    {
-      DBObjectKey key;
-      DBObjectType type = DBObjectType::ViewDBObjectType;
-      key.dbId = currentDB_.dbId;
-      key.permissionType = type;
-
-      DBObject obj(key, AccessPrivileges::ALL_VIEW, db.dbOwner);
-      objects.push_back(obj);
+      return key;
+    };
+    for (auto& it : object_level_all_privs_lookup) {
+      objects.emplace_back(_key_place(it.first), it.second, db.dbOwner);
     }
 
     {
