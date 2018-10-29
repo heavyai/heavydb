@@ -113,14 +113,8 @@ struct NumericValueConverter : public TargetValueConverter {
     if (do_null_check_ && null_check_value_ == val) {
       column_data_.get()[row] = null_value_;
     } else {
-      column_data_.get()[row] = scaledScalarVal(val);
+      column_data_.get()[row] = static_cast<TARGET_TYPE>(val);
     }
-  }
-
-  TARGET_TYPE scaledScalarVal(int64_t val) {
-    return (column_descriptor_->columnType.is_date_in_days())
-               ? static_cast<TARGET_TYPE>(val / SECSPERDAY)
-               : static_cast<TARGET_TYPE>(val);
   }
 
   virtual void convertToColumnarFormat(size_t row, const TargetValue* value) {
@@ -222,6 +216,45 @@ struct StringValueConverter : public TargetValueConverter {
     dataBlock.stringsPtr = column_data_.get();
     insertData.data.push_back(dataBlock);
     insertData.columnIds.push_back(column_descriptor_->columnId);
+  }
+};
+
+template <typename TARGET_TYPE>
+struct DateValueConverter : public NumericValueConverter<int64_t, TARGET_TYPE> {
+  DateValueConverter(const ColumnDescriptor* targetDescriptor,
+                     size_t num_rows,
+                     TARGET_TYPE nullValue,
+                     int64_t nullCheckValue,
+                     bool doNullCheck)
+      : NumericValueConverter<int64_t, TARGET_TYPE>(targetDescriptor,
+                                                    num_rows,
+                                                    nullValue,
+                                                    nullCheckValue,
+                                                    doNullCheck) {}
+
+  virtual ~DateValueConverter() {}
+
+  void convertToColumnarFormat(size_t row, const ScalarTargetValue* scalarValue) {
+    auto mapd_p = checked_get<int64_t>(row, scalarValue, this->SOURCE_TYPE_ACCESSOR);
+    auto val = *mapd_p;
+
+    if (this->do_null_check_ && this->null_check_value_ == val) {
+      this->column_data_.get()[row] = this->null_value_;
+    } else {
+      this->column_data_.get()[row] = scaledDateVal(val);
+    }
+  }
+
+  TARGET_TYPE scaledDateVal(const int64_t val) {
+    return (this->column_descriptor_->columnType.is_date_in_days())
+               ? static_cast<TARGET_TYPE>(val / SECSPERDAY)
+               : static_cast<TARGET_TYPE>(val);
+  }
+
+  virtual void convertToColumnarFormat(size_t row, const TargetValue* value) {
+    auto scalarValue =
+        checked_get<ScalarTargetValue>(row, value, this->SCALAR_TARGET_VALUE_ACCESSOR);
+    convertToColumnarFormat(row, scalarValue);
   }
 };
 
