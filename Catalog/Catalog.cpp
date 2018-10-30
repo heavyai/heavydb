@@ -1118,7 +1118,9 @@ void SysCatalog::createDBObject(const UserMetadata& user,
             MAPD_ROOT_USER)) {  // no need to grant to suser, has all privs by default
       grantDBObjectPrivileges_unsafe(user.userName, object, catalog);
       auto* grantee = instance().getUserGrantee(user.userName);
-      CHECK(grantee);
+      if (!grantee) {
+        throw runtime_error("User " + user.userName + "  does not exist.");
+      }
       grantee->grantPrivileges(object);
     }
   } catch (std::exception& e) {
@@ -1530,7 +1532,9 @@ bool SysCatalog::hasAnyPrivileges(const UserMetadata& user,
     return true;
   }
   auto* user_rl = instance().getUserGrantee(user.userName);
-  CHECK(user_rl);
+  if (!user_rl) {
+    throw runtime_error("User " + user.userName + "  does not exist.");
+  }
   for (std::vector<DBObject>::iterator objectIt = privObjects.begin();
        objectIt != privObjects.end();
        ++objectIt) {
@@ -1549,7 +1553,9 @@ bool SysCatalog::checkPrivileges(const UserMetadata& user,
   }
 
   auto* user_rl = instance().getUserGrantee(user.userName);
-  CHECK(user_rl);
+  if (!user_rl) {
+    throw runtime_error("User " + user.userName + "  does not exist.");
+  }
   for (auto& object : privObjects) {
     if (!user_rl->checkPrivileges(object)) {
       return false;
