@@ -111,16 +111,6 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(
           auto var_case_expr = makeExpr<Analyzer::Var>(
               case_expr->get_type_info(), Analyzer::Var::kGROUPBY, groupby_idx);
           target_exprs_owned_.push_back(var_case_expr);
-          // TODO(alex): fixup for legacy plan-based path, remove
-          if (plan_) {
-            auto& plan_target_list = plan_->get_targetlist();
-            CHECK_EQ(plan_target_list.size(), ra_exe_unit_.target_exprs.size());
-            for (auto& te : plan_target_list) {
-              if (*te->get_expr() == *target) {
-                te->get_expr()->set_type_info(var_case_expr->get_type_info());
-              }
-            }
-          }
           new_target_exprs.push_back(var_case_expr.get());
         } else {
           new_target_exprs.push_back(target);

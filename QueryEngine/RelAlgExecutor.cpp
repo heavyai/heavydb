@@ -2234,8 +2234,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
                                         sort_info,
                                         0,
                                         query_features};
-  QueryRewriter* query_rewriter =
-      new QueryRewriter(exe_unit, query_infos, executor_, nullptr);
+  auto query_rewriter = std::make_unique<QueryRewriter>(exe_unit, query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite();
   const auto targets_meta =
       get_modify_manipulated_targets_meta(compound, rewritten_exe_unit.target_exprs);
@@ -2243,7 +2242,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
   return {rewritten_exe_unit,
           compound,
           max_groups_buffer_entry_default_guess,
-          std::unique_ptr<QueryRewriter>(query_rewriter)};
+          std::move(query_rewriter)};
 }
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
@@ -2304,15 +2303,14 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                         sort_info,
                                         0,
                                         query_features};
-  QueryRewriter* query_rewriter =
-      new QueryRewriter(exe_unit, query_infos, executor_, nullptr);
+  auto query_rewriter = std::make_unique<QueryRewriter>(exe_unit, query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite();
   const auto targets_meta = get_targets_meta(compound, rewritten_exe_unit.target_exprs);
   compound->setOutputMetainfo(targets_meta);
   return {rewritten_exe_unit,
           compound,
           max_groups_buffer_entry_default_guess,
-          std::unique_ptr<QueryRewriter>(query_rewriter),
+          std::move(query_rewriter),
           input_permutation,
           left_deep_join_input_sizes};
 }

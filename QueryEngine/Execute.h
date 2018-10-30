@@ -675,21 +675,6 @@ class Executor {
       const size_t byte_width,
       const bool is_signed);
 
-  ResultSetPtr executeSelectPlan(const Planner::Plan* plan,
-                                 const int64_t limit,
-                                 const int64_t offset,
-                                 const bool hoist_literals,
-                                 const ExecutorDeviceType device_type,
-                                 const ExecutorOptLevel,
-                                 const Catalog_Namespace::Catalog&,
-                                 size_t& max_groups_buffer_entry_guess,
-                                 int32_t* error_code,
-                                 const Planner::Sort* sort_plan,
-                                 const bool allow_multifrag,
-                                 const bool just_explain,
-                                 const bool allow_loop_joins,
-                                 RenderInfo* render_info);
-
   struct CompilationResult {
     std::vector<std::pair<void*, void*>> native_functions;
     std::unordered_map<int, LiteralValues> literal_values;
@@ -979,30 +964,6 @@ class Executor {
   std::vector<size_t> getFragmentCount(const FragmentsList& selected_fragments,
                                        const size_t scan_idx,
                                        const RelAlgExecutionUnit& ra_exe_unit);
-
-  ResultSetPtr executeResultPlan(const Planner::Result* result_plan,
-                                 const bool hoist_literals,
-                                 const ExecutorDeviceType device_type,
-                                 const ExecutorOptLevel,
-                                 const Catalog_Namespace::Catalog&,
-                                 size_t& max_groups_buffer_entry_guess,
-                                 int32_t* error_code,
-                                 const Planner::Sort* sort_plan,
-                                 const bool allow_multifrag,
-                                 const bool just_explain,
-                                 const bool allow_loop_joins);
-  ResultSetPtr executeSortPlan(const Planner::Sort* sort_plan,
-                               const int64_t limit,
-                               const int64_t offset,
-                               const bool hoist_literals,
-                               const ExecutorDeviceType device_type,
-                               const ExecutorOptLevel,
-                               const Catalog_Namespace::Catalog&,
-                               size_t& max_groups_buffer_entry_guess,
-                               int32_t* error_code,
-                               const bool allow_multifrag,
-                               const bool just_explain,
-                               const bool allow_loop_joins);
 
   int32_t executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                  const CompilationResult&,
