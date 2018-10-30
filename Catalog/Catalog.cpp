@@ -4411,4 +4411,14 @@ void SysCatalog::revokeDBObjectPrivilegesBatch(
       &SysCatalog::revokeDBObjectPrivilegesBatch_unsafe, grantees, objects, catalog);
 }
 
+SessionInfo::operator std::string() const {
+  return get_currentUser().userName + "_" + session_id.substr(0, 3);
+}
+
 }  // namespace Catalog_Namespace
+
+std::ostream& operator<<(std::ostream& os,
+                         const Catalog_Namespace::SessionInfo& session_info) {
+  os << std::string(session_info);
+  return os;
+}

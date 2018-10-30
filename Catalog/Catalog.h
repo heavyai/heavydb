@@ -631,6 +631,8 @@ class SessionInfo {
                                const std::string& objectName = "") const;
   time_t get_creation_time() const { return creation_time; }
 
+  operator std::string() const;
+
  private:
   std::shared_ptr<MapDHandler> mapdHandler_;
   std::shared_ptr<Catalog> catalog_;
@@ -642,5 +644,8 @@ class SessionInfo {
 };
 
 }  // namespace Catalog_Namespace
+
+std::ostream& operator<<(std::ostream& os,
+                         const Catalog_Namespace::SessionInfo& session_info);
 
 #endif  // CATALOG_H
