@@ -1298,28 +1298,9 @@ HashJoinMatchingSet JoinHashTable::codegenMatchingSet(
   return {rowid_ptr_i32, row_count_lv, slot_lv};
 }
 
-llvm::Value* JoinHashTable::codegenSlotIsValid(const CompilationOptions& co,
-                                               const size_t index) {
-  const auto slot_lv = codegenSlot(co, index);
-  if (getHashType() == JoinHashTableInterface::HashType::OneToOne) {
-    const auto cols = get_cols(
-        qual_bin_oper_.get(), *executor_->getCatalog(), executor_->temporary_tables_);
-    const auto inner_col = cols.first;
-    CHECK(inner_col);
-    const auto it_ok = executor_->cgen_state_->scan_idx_to_hash_pos_.emplace(
-        inner_col->get_rte_idx(), slot_lv);
-    CHECK(it_ok.second);
-  }
-  const auto slot_valid_lv = executor_->cgen_state_->ir_builder_.CreateICmp(
-      llvm::ICmpInst::ICMP_SGE, slot_lv, executor_->ll_int(int64_t(0)));
-  return slot_valid_lv;
-}
-
 llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co,
                                         const size_t index) {
-  if (getHashType() == JoinHashTableInterface::HashType::OneToMany) {
-    return codegenOneToManyHashJoin(co, index);
-  }
+  CHECK(getHashType() == JoinHashTableInterface::HashType::OneToOne);
   const auto cols = get_cols(
       qual_bin_oper_.get(), *executor_->getCatalog(), executor_->temporary_tables_);
   auto key_col = cols.second;

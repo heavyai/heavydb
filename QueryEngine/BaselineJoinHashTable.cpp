@@ -968,33 +968,14 @@ int BaselineJoinHashTable::initHashTableForDevice(
 #define LL_INT(v) executor_->ll_int(v)
 #define ROW_FUNC executor_->cgen_state_->row_func_
 
-llvm::Value* BaselineJoinHashTable::codegenSlotIsValid(const CompilationOptions& co,
-                                                       const size_t index) {
-  const auto slot_lv = codegenSlot(co, index);
-  if (getHashType() == JoinHashTableInterface::HashType::OneToOne) {
-    const auto inner_outer_pairs = normalize_column_pairs(
-        condition_.get(), *executor_->getCatalog(), executor_->getTemporaryTables());
-    const auto first_inner_col = inner_outer_pairs.front().first;
-    const auto it_ok = executor_->cgen_state_->scan_idx_to_hash_pos_.emplace(
-        first_inner_col->get_rte_idx(), slot_lv);
-    CHECK(it_ok.second);
-  }
-  return executor_->cgen_state_->ir_builder_.CreateICmp(
-      llvm::ICmpInst::ICMP_SGE, slot_lv, executor_->ll_int(int64_t(0)));
-}
-
 llvm::Value* BaselineJoinHashTable::codegenSlot(const CompilationOptions& co,
                                                 const size_t index) {
+  CHECK(getHashType() == JoinHashTableInterface::HashType::OneToOne);
   const auto key_component_width = get_key_component_width(condition_, executor_);
   CHECK(key_component_width == 4 || key_component_width == 8);
   const auto inner_outer_pairs = normalize_column_pairs(
       condition_.get(), *executor_->getCatalog(), executor_->getTemporaryTables());
   auto key_buff_lv = codegenKey(co);
-  if (layout_ == JoinHashTableInterface::HashType::OneToMany) {
-    const auto key_component_count = inner_outer_pairs.size();
-    return codegenOneToManySlot(
-        co, index, key_buff_lv, key_component_count, key_component_width);
-  }
   const auto hash_ptr = hashPtr(index);
   const auto key_ptr_lv =
       LL_BUILDER.CreatePointerCast(key_buff_lv, llvm::Type::getInt8PtrTy(LL_CONTEXT));
@@ -1079,47 +1060,6 @@ llvm::Value* BaselineJoinHashTable::codegenKey(const CompilationOptions& co) {
     LL_BUILDER.CreateStore(col_lv, key_comp_dest_lv);
   }
   return key_buff_lv;
-}
-
-llvm::Value* BaselineJoinHashTable::codegenOneToManySlot(
-    const CompilationOptions& co,
-    const size_t index,
-    llvm::Value* key_buff_lv,
-    const size_t key_component_count,
-    const size_t key_component_width) {
-  auto hash_ptr = JoinHashTable::codegenHashTableLoad(index, executor_);
-  const auto composite_dict_ptr_type =
-      llvm::Type::getIntNPtrTy(LL_CONTEXT, key_component_width * 8);
-  const auto composite_key_dict =
-      hash_ptr->getType()->isPointerTy()
-          ? LL_BUILDER.CreatePointerCast(hash_ptr, composite_dict_ptr_type)
-          : LL_BUILDER.CreateIntToPtr(hash_ptr, composite_dict_ptr_type);
-  const auto key = executor_->cgen_state_->emitExternalCall(
-      "get_composite_key_index_" + std::to_string(key_component_width * 8),
-      get_int_type(64, LL_CONTEXT),
-      {key_buff_lv,
-       LL_INT(key_component_count),
-       composite_key_dict,
-       LL_INT(entry_count_)});
-  auto one_to_many_ptr = hash_ptr;
-  if (one_to_many_ptr->getType()->isPointerTy()) {
-    one_to_many_ptr =
-        LL_BUILDER.CreatePtrToInt(hash_ptr, llvm::Type::getInt64Ty(LL_CONTEXT));
-  } else {
-    CHECK(one_to_many_ptr->getType()->isIntegerTy(64));
-  }
-  const auto composite_key_dict_size =
-      entry_count_ * key_component_count * key_component_width;
-  one_to_many_ptr =
-      LL_BUILDER.CreateAdd(one_to_many_ptr, LL_INT(composite_key_dict_size));
-  return JoinHashTable::codegenOneToManyHashJoin(
-      {one_to_many_ptr, key, LL_INT(int64_t(0)), LL_INT(entry_count_ - 1)},
-      getInnerTableRteIdx(),
-      false,
-      false,
-      false,
-      entry_count_ * sizeof(int32_t),
-      executor_);
 }
 
 llvm::Value* BaselineJoinHashTable::hashPtr(const size_t index) {

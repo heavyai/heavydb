@@ -55,8 +55,6 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   int64_t getJoinHashBuffer(const ExecutorDeviceType device_type,
                             const int device_id) noexcept override;
 
-  llvm::Value* codegenSlotIsValid(const CompilationOptions&, const size_t) override;
-
   llvm::Value* codegenSlot(const CompilationOptions&, const size_t) override;
 
   HashJoinMatchingSet codegenMatchingSet(const CompilationOptions&,
@@ -140,12 +138,6 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
                          const int device_id);
 
   llvm::Value* hashPtr(const size_t index);
-
-  llvm::Value* codegenOneToManySlot(const CompilationOptions& co,
-                                    const size_t index,
-                                    llvm::Value* key_buff_lv,
-                                    const size_t key_component_count,
-                                    const size_t key_component_width);
 
   llvm::Value* codegenKey(const CompilationOptions&);
 

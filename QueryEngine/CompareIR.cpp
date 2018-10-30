@@ -182,12 +182,6 @@ std::shared_ptr<Analyzer::BinOper> lower_multicol_compare(
 
 llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper,
                                   const CompilationOptions& co) {
-  for (size_t i = 0; i < plan_state_->join_info_.equi_join_tautologies_.size(); ++i) {
-    const auto& equi_join_tautology = plan_state_->join_info_.equi_join_tautologies_[i];
-    if (*equi_join_tautology == *bin_oper) {
-      return plan_state_->join_info_.join_hash_tables_[i]->codegenSlotIsValid(co, i);
-    }
-  }
   const auto qualifier = bin_oper->get_qualifier();
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();

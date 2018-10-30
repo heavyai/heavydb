@@ -58,8 +58,6 @@ class JoinHashTableInterface {
   virtual int64_t getJoinHashBuffer(const ExecutorDeviceType device_type,
                                     const int device_id) noexcept = 0;
 
-  virtual llvm::Value* codegenSlotIsValid(const CompilationOptions&, const size_t) = 0;
-
   virtual llvm::Value* codegenSlot(const CompilationOptions&, const size_t) = 0;
 
   virtual HashJoinMatchingSet codegenMatchingSet(const CompilationOptions&,

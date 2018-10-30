@@ -1499,18 +1499,10 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
   }
 
   llvm::Value* filter_lv = ll_bool(true);
-  llvm::Value* outerjoin_query_filter_lv = nullptr;
   for (auto expr : primary_quals) {
     // Generate the filter for primary quals
     auto cond = toBool(codegen(expr, true, co).front());
-    auto new_cond = codegenRetOnHashFail(cond, expr);
-    if (new_cond == cond && !outerjoin_query_filter_lv) {
-      filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, cond);
-    }
-    if (outerjoin_query_filter_lv) {
-      outerjoin_query_filter_lv =
-          cgen_state_->ir_builder_.CreateAnd(outerjoin_query_filter_lv, cond);
-    }
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, cond);
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
@@ -1536,6 +1528,5 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
 
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
-  return group_by_and_aggregate.codegen(
-      filter_lv, outerjoin_query_filter_lv, sc_false, co);
+  return group_by_and_aggregate.codegen(filter_lv, sc_false, co);
 }

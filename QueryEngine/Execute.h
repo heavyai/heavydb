@@ -633,7 +633,6 @@ class Executor {
 
   llvm::Value* codegenFunctionOper(const Analyzer::FunctionOper*,
                                    const CompilationOptions&);
-  llvm::Value* codegenRetOnHashFail(llvm::Value* hash_cond, const Analyzer::Expr* qual);
 
   struct ArgNullcheckBBs {
     llvm::BasicBlock* args_null_bb;

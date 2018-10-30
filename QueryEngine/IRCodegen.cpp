@@ -152,34 +152,6 @@ llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper,
   }
 }
 
-llvm::Value* Executor::codegenRetOnHashFail(llvm::Value* hash_cond_lv,
-                                            const Analyzer::Expr* qual) {
-  std::unordered_map<const Analyzer::Expr*, size_t> equi_join_conds;
-  for (size_t i = 0; i < plan_state_->join_info_.equi_join_tautologies_.size(); ++i) {
-    auto cond = plan_state_->join_info_.equi_join_tautologies_[i];
-    equi_join_conds.insert(std::make_pair(cond.get(), i));
-  }
-  auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(qual);
-  if (!bin_oper || !equi_join_conds.count(bin_oper)) {
-    return hash_cond_lv;
-  }
-
-  auto bb_hash_pass =
-      llvm::BasicBlock::Create(cgen_state_->context_,
-                               "hash_pass_" + std::to_string(equi_join_conds[bin_oper]),
-                               cgen_state_->row_func_);
-  auto bb_hash_fail =
-      llvm::BasicBlock::Create(cgen_state_->context_,
-                               "hash_fail_" + std::to_string(equi_join_conds[bin_oper]),
-                               cgen_state_->row_func_);
-  cgen_state_->ir_builder_.CreateCondBr(hash_cond_lv, bb_hash_pass, bb_hash_fail);
-  cgen_state_->ir_builder_.SetInsertPoint(bb_hash_fail);
-
-  cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
-  cgen_state_->ir_builder_.SetInsertPoint(bb_hash_pass);
-  return ll_bool(true);
-}
-
 namespace {
 
 void add_qualifier_to_execution_unit(RelAlgExecutionUnit& ra_exe_unit,

@@ -1480,7 +1480,6 @@ void GroupByAndAggregate::patchGroupbyCall(llvm::CallInst* call_site) {
 }
 
 bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
-                                  llvm::Value* outerjoin_query_filter_result,
                                   llvm::BasicBlock* sc_false,
                                   const CompilationOptions& co) {
   CHECK(filter_result);
@@ -1502,16 +1501,6 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
                               nullptr,
                               false);
     filter_false = filter_cfg.cond_false_;
-
-    std::unique_ptr<DiamondCodegen> nonjoin_filter_cfg;
-    if (outerjoin_query_filter_result) {
-      nonjoin_filter_cfg.reset(new DiamondCodegen(outerjoin_query_filter_result,
-                                                  executor_,
-                                                  false,
-                                                  "nonjoin_filter",
-                                                  &filter_cfg,
-                                                  is_group_by));
-    }
 
     if (is_group_by) {
       if (query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection &&

@@ -75,8 +75,6 @@ class JoinHashTable : public JoinHashTableInterface {
 #endif
   }
 
-  llvm::Value* codegenSlotIsValid(const CompilationOptions&, const size_t) override;
-
   llvm::Value* codegenSlot(const CompilationOptions&, const size_t) override;
 
   HashJoinMatchingSet codegenMatchingSet(const CompilationOptions&,
