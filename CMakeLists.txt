@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.3)
+# fixme: this should be 3.3, but that breaks static ncurses
+cmake_minimum_required(VERSION 3.2)
 
 if("${CMAKE_VERSION}" VERSION_GREATER 3.11.999)
   cmake_policy(SET CMP0074 NEW)
