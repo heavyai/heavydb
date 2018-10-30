@@ -457,13 +457,14 @@ void SysCatalog::migratePrivileges() {
     // was a grantee
     for (const auto& grantee : db_grantees) {
       user_has_privs[grantee.first] = true;
-
+      auto dbName = dbs_by_id[grantee.second];
       {
         // table level permissions
         DBObjectKey key;
         key.permissionType = DBObjectType::TableDBObjectType;
         key.dbId = grantee.second;
         DBObject object(key, AccessPrivileges::ALL_TABLE_MIGRATE, MAPD_ROOT_USER_ID);
+        object.setName(dbName);
         insertOrUpdateObjectPrivileges(
             sqliteConnector_, users_by_id[grantee.first], true, object);
       }
@@ -474,6 +475,7 @@ void SysCatalog::migratePrivileges() {
         key.permissionType = DBObjectType::DashboardDBObjectType;
         key.dbId = grantee.second;
         DBObject object(key, AccessPrivileges::ALL_DASHBOARD_MIGRATE, MAPD_ROOT_USER_ID);
+        object.setName(dbName);
         insertOrUpdateObjectPrivileges(
             sqliteConnector_, users_by_id[grantee.first], true, object);
       }
@@ -484,17 +486,20 @@ void SysCatalog::migratePrivileges() {
         key.permissionType = DBObjectType::ViewDBObjectType;
         key.dbId = grantee.second;
         DBObject object(key, AccessPrivileges::ALL_VIEW_MIGRATE, MAPD_ROOT_USER_ID);
+        object.setName(dbName);
         insertOrUpdateObjectPrivileges(
             sqliteConnector_, users_by_id[grantee.first], true, object);
       }
     }
     for (auto user : user_has_privs) {
+      auto dbName = dbs_by_id[0];
       if (user.second == false && user.first != MAPD_ROOT_USER_ID) {
         {
           DBObjectKey key;
           key.permissionType = DBObjectType::DatabaseDBObjectType;
           key.dbId = 0;
           DBObject object(key, AccessPrivileges::NONE, MAPD_ROOT_USER_ID);
+          object.setName(dbName);
           insertOrUpdateObjectPrivileges(
               sqliteConnector_, users_by_id[user.first], true, object);
         }
@@ -2066,6 +2071,7 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
     };
     for (auto& it : object_level_all_privs_lookup) {
       objects.emplace_back(_key_place(it.first), it.second, db.dbOwner);
+      objects.back().setName(currentDB_.dbName);
     }
 
     {
