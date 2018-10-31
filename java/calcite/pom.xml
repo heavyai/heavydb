@@ -130,6 +130,9 @@
           <systemPropertyVariables>
             <MAPD_LOG_DIR>.</MAPD_LOG_DIR>
           </systemPropertyVariables>
+          <useSystemClassLoader>
+            false
+          </useSystemClassLoader>
         </configuration>
       </plugin>
       <!-- plugin>
