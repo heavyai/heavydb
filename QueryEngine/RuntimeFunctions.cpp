@@ -370,9 +370,15 @@ extern "C" ALWAYS_INLINE void agg_min_int32(int32_t* agg, const int32_t val) {
   *agg = std::min(*agg, val);
 }
 
-extern "C" ALWAYS_INLINE void agg_id_int32(int32_t* agg, const int32_t val) {
-  *agg = val;
-}
+#define DEF_AGG_ID_INT(n)                                                              \
+  extern "C" ALWAYS_INLINE void agg_id_int##n(int##n##_t* agg, const int##n##_t val) { \
+    *agg = val;                                                                        \
+  }
+
+DEF_AGG_ID_INT(32)
+DEF_AGG_ID_INT(16)
+DEF_AGG_ID_INT(8)
+#undef DEF_AGG_ID_INT
 
 extern "C" ALWAYS_INLINE int64_t agg_sum_skip_val(int64_t* agg,
                                                   const int64_t val,
@@ -622,6 +628,10 @@ extern "C" ALWAYS_INLINE int64_t decimal_ceil(const int64_t x, const int64_t sca
       int64_t* agg, const int64_t val, const int64_t skip_val) {}                        \
   extern "C" GPU_RT_STUB void base_agg_func##_int32_shared(int32_t* agg,                 \
                                                            const int32_t val) {}         \
+  extern "C" GPU_RT_STUB void base_agg_func##_int16_shared(int16_t* agg,                 \
+                                                           const int16_t val) {}         \
+  extern "C" GPU_RT_STUB void base_agg_func##_int8_shared(int8_t* agg,                   \
+                                                          const int8_t val) {}           \
                                                                                          \
   extern "C" GPU_RT_STUB void base_agg_func##_int32_skip_val_shared(                     \
       int32_t* agg, const int32_t val, const int32_t skip_val) {}                        \

@@ -112,9 +112,11 @@ template <class T>
 inline T advance_to_next_columnar_target_buff(T target_ptr,
                                               const QueryMemoryDescriptor& query_mem_desc,
                                               const size_t target_slot_idx) {
-  auto new_target_ptr =
-      target_ptr + query_mem_desc.getEntryCount() *
-                       query_mem_desc.getColumnWidth(target_slot_idx).compact;
+  auto new_target_ptr = target_ptr;
+  const auto column_size = query_mem_desc.getEntryCount() *
+                           query_mem_desc.getPaddedColumnWidthBytes(target_slot_idx);
+  new_target_ptr += align_to_int64(column_size);
+
   if (query_mem_desc.getTargetColumnPadBytesSize() > 0) {
     new_target_ptr += query_mem_desc.getTargetColumnPadBytes(target_slot_idx);
   }

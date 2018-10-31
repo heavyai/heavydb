@@ -1303,6 +1303,10 @@ TEST(Select, ScanNoAggregation) {
     c("SELECT x + z, t FROM test WHERE x <> 7 AND y > 42;", dt);
     c("SELECT * FROM test WHERE x > 8;", dt);
     c("SELECT fx FROM test WHERE fx IS NULL;", dt);
+    c("SELECT z,t,f,m,d,x,real_str,u,z,y FROM test WHERE z = -78 AND t = "
+      "1002 AND x >= 8 AND y = 43 AND d > 1.0 AND f > 1.0 AND real_str = 'real_bar' "
+      "ORDER BY f ASC;",
+      dt);
   }
 }
 
@@ -8368,12 +8372,19 @@ TEST(Update, ImplicitCastToNumericTypes) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists floattest;");
     run_ddl_statement("create table floattest ( f float ) with (vacuum='delayed');");
+    run_ddl_statement("drop table if exists doubletest;");
     run_ddl_statement("create table doubletest ( d double ) with (vacuum='delayed');");
+    run_ddl_statement("drop table if exists inttest;");
     run_ddl_statement("create table inttest ( i integer ) with (vacuum='delayed');");
+    run_ddl_statement("drop table if exists sinttest;");
     run_ddl_statement("create table sinttest ( i integer ) with (vacuum='delayed');");
+    run_ddl_statement("drop table if exists binttest;");
     run_ddl_statement("create table binttest ( i integer ) with (vacuum='delayed');");
+    run_ddl_statement("drop table if exists booltest;");
     run_ddl_statement("create table booltest ( b boolean ) with (vacuum='delayed');");
+    run_ddl_statement("drop table if exists dectest;");
     run_ddl_statement("create table dectest ( d decimal(10) ) with (vacuum='delayed');");
 
     run_multiple_agg("insert into floattest values ( 0.1234 );", dt);

@@ -205,6 +205,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
   for (auto wid : get_col_byte_widths(ra_exe_unit.target_exprs, {})) {
     agg_col_widths_.push_back(
         {wid, static_cast<int8_t>(compact_byte_width(wid, min_byte_width))});
+    padded_agg_col_widths_.push_back(agg_col_widths_.back().compact);
   }
 }
 
@@ -257,6 +258,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
   for (auto wid : get_col_byte_widths(ra_exe_unit.target_exprs, {})) {
     agg_col_widths_.push_back(
         {wid, static_cast<int8_t>(compact_byte_width(wid, min_byte_width))});
+    padded_agg_col_widths_.push_back(agg_col_widths_.back().compact);
   }
 
   switch (query_desc_type_) {
@@ -311,9 +313,11 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
         target_groupby_indices_ = target_expr_group_by_indices(ra_exe_unit.groupby_exprs,
                                                                ra_exe_unit.target_exprs);
         agg_col_widths_.clear();
+        padded_agg_col_widths_.clear();
         for (auto wid :
              get_col_byte_widths(ra_exe_unit.target_exprs, target_groupby_indices_)) {
           agg_col_widths_.push_back({wid, static_cast<int8_t>(wid ? 8 : 0)});
+          padded_agg_col_widths_.push_back(agg_col_widths_.back().compact);
         }
       }
       const auto group_expr = ra_exe_unit.groupby_exprs.front().get();
@@ -370,12 +374,14 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
                            : pick_baseline_key_width(ra_exe_unit, query_infos, executor);
 
       agg_col_widths_.clear();
+      padded_agg_col_widths_.clear();
       for (auto wid :
            get_col_byte_widths(ra_exe_unit.target_exprs, target_groupby_indices_)) {
         // Baseline layout goes through new result set and
         // ResultSetStorage::initializeRowWise assumes everything is padded to 8 bytes,
         // make it so.
         agg_col_widths_.push_back({wid, static_cast<int8_t>(wid ? 8 : 0)});
+        padded_agg_col_widths_.push_back(agg_col_widths_.back().compact);
       }
 
       min_val_ = 0;
@@ -407,12 +413,14 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
                                     ? target_expr_proj_indices(ra_exe_unit, *catalog)
                                     : std::vector<ssize_t>{};
       agg_col_widths_.clear();
+      padded_agg_col_widths_.clear();
       for (auto wid :
            get_col_byte_widths(ra_exe_unit.target_exprs, target_groupby_indices_)) {
         // Baseline layout goes through new result set and
         // ResultSetStorage::initializeRowWise assumes everything is padded to 8 bytes,
         // make it so.
         agg_col_widths_.push_back({wid, static_cast<int8_t>(wid ? 8 : 0)});
+        padded_agg_col_widths_.push_back(agg_col_widths_.back().compact);
       }
 
       bucket_ = 0;
@@ -542,7 +550,12 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , key_column_pad_bytes_(key_column_pad_bytes)
     , target_column_pad_bytes_(target_column_pad_bytes)
     , must_use_baseline_sort_(must_use_baseline_sort)
-    , force_4byte_float_(false) {}
+    , force_4byte_float_(false) {
+  padded_agg_col_widths_.reserve(agg_col_widths_.size());
+  for (auto& col_width : agg_col_widths_) {
+    padded_agg_col_widths_.push_back(col_width.compact);
+  }
+}
 
 bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const {
   // Note that this method does not check ptr reference members (e.g. executor_) or
@@ -572,6 +585,9 @@ bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const
     return false;
   }
   if (agg_col_widths_ != other.agg_col_widths_) {
+    return false;
+  }
+  if (padded_agg_col_widths_ != other.padded_agg_col_widths_) {
     return false;
   }
   if (target_groupby_indices_ != other.target_groupby_indices_) {
@@ -789,30 +805,12 @@ size_t QueryMemoryDescriptor::getCompactByteWidth() const {
   return compact_width;
 }
 
-// TODO(miyu): remove if unnecessary
-bool QueryMemoryDescriptor::isCompactLayoutIsometric() const {
-  if (agg_col_widths_.empty()) {
-    return true;
-  }
-  const auto compact_width = agg_col_widths_.front().compact;
-  for (const auto col_width : agg_col_widths_) {
-    if (col_width.compact != compact_width) {
-      return false;
-    }
-  }
-  return true;
-}
-
 size_t QueryMemoryDescriptor::getTotalBytesOfColumnarBuffers(
     const std::vector<ColWidths>& col_widths) const {
   CHECK(output_columnar_);
   size_t total_bytes{0};
-  const auto is_isometric = isCompactLayoutIsometric();
   for (size_t col_idx = 0; col_idx < col_widths.size(); ++col_idx) {
-    total_bytes += col_widths[col_idx].compact * entry_count_;
-    if (!is_isometric) {
-      total_bytes = align_to_int64(total_bytes);
-    }
+    total_bytes += align_to_int64(col_widths[col_idx].compact * entry_count_);
   }
   return align_to_int64(total_bytes);
 }
@@ -867,17 +865,13 @@ size_t QueryMemoryDescriptor::getColOffInBytes(const size_t bin,
     CHECK((bin < entry_count_) || (bin == 0 && entry_count_ == 0));
     CHECK_EQ(size_t(1), warp_count);
     size_t offset{0};
-    const auto is_isometric = isCompactLayoutIsometric();
     if (!keyless_hash_) {
-      offset = group_col_widths_.size() * sizeof(int64_t) * entry_count_;
+      offset = align_to_int64(group_col_widths_.size() * sizeof(int64_t) * entry_count_);
     }
     for (size_t index = 0; index < col_idx; ++index) {
-      offset += agg_col_widths_[index].compact * entry_count_;
-      if (!is_isometric) {
-        offset = align_to_int64(offset);
-      }
+      offset += align_to_int64(getPaddedColumnWidthBytes(index) * entry_count_);
     }
-    offset += bin * agg_col_widths_[col_idx].compact;
+    offset += align_to_int64(bin * getPaddedColumnWidthBytes(col_idx));
     return offset;
   }
 
@@ -932,10 +926,8 @@ size_t QueryMemoryDescriptor::getNextColOffInBytes(const int8_t* col_ptr,
     CHECK_EQ(size_t(1), group_col_widths_.size());
     CHECK_EQ(size_t(1), warp_count);
 
-    offset = entry_count_ * chosen_bytes;
-    if (!isCompactLayoutIsometric()) {
-      offset = align_to_int64(offset);
-    }
+    offset = align_to_int64(entry_count_ * chosen_bytes);
+
     offset += bin * (next_chosen_bytes - chosen_bytes);
     return offset;
   }

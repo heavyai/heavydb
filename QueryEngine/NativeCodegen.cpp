@@ -353,6 +353,8 @@ declare void @agg_min_float_shared(i32*, float);
 declare void @agg_min_float_skip_val_shared(i32*, float, float);
 declare void @agg_id_shared(i64*, i64);
 declare void @agg_id_int32_shared(i32*, i32);
+declare void @agg_id_int16_shared(i16*, i16);
+declare void @agg_id_int8_shared(i8*, i8);
 declare void @agg_id_double_shared(i64*, double);
 declare void @agg_id_double_shared_slow(i64*, double*);
 declare void @agg_id_float_shared(i32*, float);

@@ -253,6 +253,14 @@ class GroupByAndAggregate {
                        const std::vector<llvm::Value*>& agg_out_vec,
                        const CompilationOptions&);
 
+  llvm::Value* codegenAggColumnPtr(
+      llvm::Value* output_buffer_byte_stream,
+      llvm::Value* out_row_idx,
+      const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
+      const size_t chosen_bytes,
+      const size_t agg_out_off,
+      const size_t target_idx);
+
   void codegenEstimator(std::stack<llvm::BasicBlock*>& array_loops,
                         GroupByAndAggregate::DiamondCodegen& diamond_codegen,
                         const CompilationOptions&);

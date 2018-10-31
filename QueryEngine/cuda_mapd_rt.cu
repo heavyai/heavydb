@@ -527,9 +527,16 @@ extern "C" __device__ void agg_id_shared(int64_t* agg, const int64_t val) {
   *agg = val;
 }
 
-extern "C" __device__ void agg_id_int32_shared(int32_t* agg, const int32_t val) {
-  *agg = val;
-}
+#define DEF_AGG_ID_INT_SHARED(n)                                            \
+  extern "C" __device__ void agg_id_int##n##_shared(int##n##_t* agg,        \
+                                                    const int##n##_t val) { \
+    *agg = val;                                                             \
+  }
+
+DEF_AGG_ID_INT_SHARED(32)
+DEF_AGG_ID_INT_SHARED(16)
+DEF_AGG_ID_INT_SHARED(8)
+#undef DEF_AGG_ID_INT_SHARED
 
 extern "C" __device__ void agg_id_double_shared(int64_t* agg, const double val) {
   *agg = *(reinterpret_cast<const int64_t*>(&val));

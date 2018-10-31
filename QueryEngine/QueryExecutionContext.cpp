@@ -402,7 +402,7 @@ void QueryExecutionContext::initColumnarGroups(int64_t* groups_buffer,
     const auto agg_info = target_info(target_expr);
     CHECK(!is_distinct_target(agg_info));
   }
-  const bool need_padding = !query_mem_desc_.isCompactLayoutIsometric();
+
   const int32_t agg_col_count = query_mem_desc_.getColCount();
   auto buffer_ptr = reinterpret_cast<int8_t*>(groups_buffer);
 
@@ -444,10 +444,8 @@ void QueryExecutionContext::initColumnarGroups(int64_t* groups_buffer,
         default:
           CHECK(false);
       }
-      // TODO(Saman): should not need padding for columnar; look into removing this
-      if (need_padding) {
-        buffer_ptr = align_to_int64(buffer_ptr);
-      }
+
+      buffer_ptr = align_to_int64(buffer_ptr);
     }
   }
 }
@@ -889,7 +887,7 @@ GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(
             query_mem_desc_.groupColWidthsSize(),
             col_count,
             reinterpret_cast<int8_t*>(col_widths_dev_ptr),
-            !query_mem_desc_.isCompactLayoutIsometric(),
+            /*need_padding = */ true,
             query_mem_desc_.hasKeylessHash(),
             sizeof(int64_t),
             block_size_x,

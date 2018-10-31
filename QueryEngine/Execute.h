@@ -83,7 +83,6 @@ extern float g_filter_push_down_low_frac;
 extern float g_filter_push_down_high_frac;
 extern size_t g_filter_push_down_passing_row_ubound;
 extern bool g_enable_columnar_output;
-
 class ExecutionResult;
 
 class WatchdogException : public std::runtime_error {

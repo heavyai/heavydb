@@ -835,6 +835,7 @@ GroupByAndAggregate::GroupByAndAggregate(
         query_mem_desc_.sortOnGpu();
 
     query_mem_desc_.setOutputColumnar(output_columnar_);
+
     if (query_mem_desc_.sortOnGpu() &&
         (query_mem_desc_.getBufferSizeBytes(device_type_) +
          align_to_int64(query_mem_desc_.getEntryCount() * sizeof(int32_t))) >
@@ -2089,6 +2090,22 @@ bool GroupByAndAggregate::codegenAggCalls(
   } else {
     CHECK(!agg_out_vec.empty());
   }
+
+  // output buffer is casted into a byte stream to be able to handle data elements of
+  // different sizes (only used when actual column width sizes are used)
+  llvm::Value* output_buffer_byte_stream{nullptr};
+  llvm::Value* out_row_idx{nullptr};
+  if (outputColumnar() && !g_cluster &&
+      query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection) {
+    output_buffer_byte_stream = LL_BUILDER.CreateBitCast(
+        std::get<0>(agg_out_ptr_w_idx),
+        llvm::PointerType::get(llvm::Type::getInt8Ty(LL_CONTEXT), 0));
+    output_buffer_byte_stream->setName("out_buff_b_stream");
+    out_row_idx = LL_BUILDER.CreateZExt(std::get<1>(agg_out_ptr_w_idx),
+                                        llvm::Type::getInt64Ty(LL_CONTEXT));
+    out_row_idx->setName("out_row_idx");
+  }
+
   int32_t agg_out_off{0};
   for (size_t target_idx = 0; target_idx < ra_exe_unit_.target_exprs.size();
        ++target_idx) {
@@ -2274,7 +2291,10 @@ bool GroupByAndAggregate::codegenAggCalls(
 
       llvm::Value* agg_col_ptr{nullptr};
       const auto chosen_bytes =
-          static_cast<size_t>(query_mem_desc_.getColumnWidth(agg_out_off).compact);
+          outputColumnar()
+              ? static_cast<size_t>(
+                    query_mem_desc_.getPaddedColumnWidthBytes(agg_out_off))
+              : static_cast<size_t>(query_mem_desc_.getColumnWidth(agg_out_off).compact);
       const auto& chosen_type = get_compact_type(agg_info);
       const auto& arg_type =
           ((arg_expr && arg_expr->get_type_info().get_type() != kNULLT) &&
@@ -2284,30 +2304,12 @@ bool GroupByAndAggregate::codegenAggCalls(
       const bool is_fp_arg =
           !lazy_fetched && arg_type.get_type() != kNULLT && arg_type.is_fp();
       if (is_group_by) {
-        if (outputColumnar()) {
-          col_off = query_mem_desc_.getColOffInBytes(0, agg_out_off);
-          CHECK_EQ(size_t(0), col_off % chosen_bytes);
-          col_off /= chosen_bytes;
-          CHECK(std::get<1>(agg_out_ptr_w_idx));
-          auto offset =
-              LL_BUILDER.CreateAdd(std::get<1>(agg_out_ptr_w_idx), LL_INT(col_off));
-          agg_col_ptr = LL_BUILDER.CreateGEP(
-              LL_BUILDER.CreateBitCast(
-                  std::get<0>(agg_out_ptr_w_idx),
-                  llvm::PointerType::get(get_int_type((chosen_bytes << 3), LL_CONTEXT),
-                                         0)),
-              offset);
-        } else {
-          col_off = query_mem_desc_.getColOnlyOffInBytes(agg_out_off);
-          CHECK_EQ(size_t(0), col_off % chosen_bytes);
-          col_off /= chosen_bytes;
-          agg_col_ptr = LL_BUILDER.CreateGEP(
-              LL_BUILDER.CreateBitCast(
-                  std::get<0>(agg_out_ptr_w_idx),
-                  llvm::PointerType::get(get_int_type((chosen_bytes << 3), LL_CONTEXT),
-                                         0)),
-              LL_INT(col_off));
-        }
+        agg_col_ptr = codegenAggColumnPtr(output_buffer_byte_stream,
+                                          out_row_idx,
+                                          agg_out_ptr_w_idx,
+                                          chosen_bytes,
+                                          agg_out_off,
+                                          target_idx);
       }
 
       const bool float_argument_input = takes_float_argument(agg_info);
@@ -2357,6 +2359,12 @@ bool GroupByAndAggregate::codegenAggCalls(
         }
       } else if (agg_chosen_bytes == sizeof(int32_t)) {
         agg_fname += "_int32";
+      } else if (agg_chosen_bytes == sizeof(int16_t) &&
+                 query_mem_desc_.didOutputColumnar()) {
+        agg_fname += "_int16";
+      } else if (agg_chosen_bytes == sizeof(int8_t) &&
+                 query_mem_desc_.didOutputColumnar()) {
+        agg_fname += "_int8";
       }
 
       if (is_distinct_target(agg_info)) {
@@ -2409,6 +2417,64 @@ bool GroupByAndAggregate::codegenAggCalls(
   }
 
   return can_return_error;
+}
+
+/**
+ * @brief: returns the pointer to where the aggregation should be stored.
+ */
+llvm::Value* GroupByAndAggregate::codegenAggColumnPtr(
+    llvm::Value* output_buffer_byte_stream,
+    llvm::Value* out_row_idx,
+    const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
+    const size_t chosen_bytes,
+    const size_t agg_out_off,
+    const size_t target_idx) {
+  llvm::Value* agg_col_ptr{nullptr};
+  if (outputColumnar()) {
+    // TODO(Saman): remove the second columnar branch, and support all query description
+    // types through the first branch. Then, input arguments should also be cleaned up
+    if (!g_cluster &&
+        query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection) {
+      CHECK(chosen_bytes == 1 || chosen_bytes == 2 || chosen_bytes == 4 ||
+            chosen_bytes == 8);
+      CHECK(output_buffer_byte_stream);
+      CHECK(out_row_idx);
+      uint32_t col_off = query_mem_desc_.getColOffInBytes(0, agg_out_off);
+      // multiplying by chosen_bytes, i.e., << log2(chosen_bytes)
+      auto out_per_col_byte_idx =
+          LL_BUILDER.CreateShl(out_row_idx, __builtin_ffs(chosen_bytes) - 1);
+      auto byte_offset = LL_BUILDER.CreateAdd(out_per_col_byte_idx,
+                                              LL_INT(static_cast<int64_t>(col_off)));
+      byte_offset->setName("out_byte_off_target_" + std::to_string(target_idx));
+      auto output_ptr = LL_BUILDER.CreateGEP(output_buffer_byte_stream, byte_offset);
+      agg_col_ptr = LL_BUILDER.CreateBitCast(
+          output_ptr,
+          llvm::PointerType::get(get_int_type((chosen_bytes << 3), LL_CONTEXT), 0));
+      agg_col_ptr->setName("out_ptr_target_" + std::to_string(target_idx));
+    } else {
+      uint32_t col_off = query_mem_desc_.getColOffInBytes(0, agg_out_off);
+      CHECK_EQ(size_t(0), col_off % chosen_bytes);
+      col_off /= chosen_bytes;
+      CHECK(std::get<1>(agg_out_ptr_w_idx));
+      auto offset = LL_BUILDER.CreateAdd(std::get<1>(agg_out_ptr_w_idx), LL_INT(col_off));
+      agg_col_ptr = LL_BUILDER.CreateGEP(
+          LL_BUILDER.CreateBitCast(
+              std::get<0>(agg_out_ptr_w_idx),
+              llvm::PointerType::get(get_int_type((chosen_bytes << 3), LL_CONTEXT), 0)),
+          offset);
+    }
+  } else {
+    uint32_t col_off = query_mem_desc_.getColOnlyOffInBytes(agg_out_off);
+    CHECK_EQ(size_t(0), col_off % chosen_bytes);
+    col_off /= chosen_bytes;
+    agg_col_ptr = LL_BUILDER.CreateGEP(
+        LL_BUILDER.CreateBitCast(
+            std::get<0>(agg_out_ptr_w_idx),
+            llvm::PointerType::get(get_int_type((chosen_bytes << 3), LL_CONTEXT), 0)),
+        LL_INT(col_off));
+  }
+  CHECK(agg_col_ptr);
+  return agg_col_ptr;
 }
 
 void GroupByAndAggregate::codegenEstimator(

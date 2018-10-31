@@ -44,9 +44,6 @@ class RenderInfo;
 class RowSetMemoryOwner;
 struct InputTableInfo;
 
-/**
- *
- */
 enum class QueryDescriptionType {
   GroupByPerfectHash,
   GroupByBaselineHash,
@@ -226,6 +223,34 @@ class QueryMemoryDescriptor {
     CHECK_LT(idx, agg_col_widths_.size());
     return agg_col_widths_[idx];
   }
+
+  const size_t getPaddedColumnWidthBytes(const size_t idx) const {
+    CHECK_LT(idx, padded_agg_col_widths_.size());
+    return padded_agg_col_widths_[idx];
+  }
+
+  /*
+   * This function recompute and set all column widths used in the IR and result set.
+   * padded_agg_col_widths_ are all initialized to be agg_col_widths_'s compact values,
+   * unless they are re-evaluated using this method.
+   * Currently, it is enabled when we have columnar output and not in distributed mode.
+   * NOTE Re. distributed: since result sets are serialized using rowwise
+   * iterators, we should only use actual column widths when we have full support of it
+   * for both columnar and rowwise.
+   * TODO(Saman): enable using actual widths in distributed mode.
+   */
+  void recomputePaddedColumnWidthBytes() {
+    padded_agg_col_widths_.clear();
+    padded_agg_col_widths_.reserve(agg_col_widths_.size());
+    for (size_t col_idx = 0; col_idx < agg_col_widths_.size(); col_idx++) {
+      padded_agg_col_widths_.push_back(
+          (output_columnar_ && !g_cluster &&
+           query_desc_type_ == QueryDescriptionType::Projection)
+              ? getColumnWidth(col_idx).actual
+              : getColumnWidth(col_idx).compact);
+    }
+  }
+
   size_t getPaddedColWidthForRange(const size_t offset, const size_t range) const {
     CHECK_LE(offset + range, agg_col_widths_.size());
     size_t ret = 0;
@@ -287,7 +312,11 @@ class QueryMemoryDescriptor {
 
   bool canOutputColumnar() const;
   bool didOutputColumnar() const { return output_columnar_; }
-  void setOutputColumnar(const bool val) { output_columnar_ = val; }
+  void setOutputColumnar(const bool val) {
+    output_columnar_ = val;
+    // padded column widths are used for all columnar formats
+    recomputePaddedColumnWidthBytes();
+  }
 
   int8_t getKeyColumnPadBytes(const size_t idx) const {
     CHECK_LT(idx, key_column_pad_bytes_.size());
@@ -355,7 +384,7 @@ class QueryMemoryDescriptor {
   size_t getWarpCount() const;
 
   size_t getCompactByteWidth() const;
-  bool isCompactLayoutIsometric() const;
+
   size_t getConsistColOffInBytes(const size_t bin, const size_t col_idx) const;
 
   inline size_t getEffectiveKeyWidth() const {
@@ -369,6 +398,7 @@ class QueryMemoryDescriptor {
     group_col_widths_ = new_group_col_widths;
   }
   std::vector<ColWidths> agg_col_widths_;
+  std::vector<size_t> padded_agg_col_widths_;
 
  private:
   const Executor* executor_;

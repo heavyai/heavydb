@@ -648,8 +648,14 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
     // TODO the above takes_float_argument() is widely used  wonder if this problem
     // exists elsewhere
     if (entry_ti.get_type() == kFLOAT) {
+      const auto is_col_lazy =
+          !result_set_->lazy_fetch_info_.empty() &&
+          result_set_->lazy_fetch_info_[order_entry.tle_no - 1].is_lazily_fetched;
       if (result_set_->query_mem_desc_.getColumnWidth(order_entry.tle_no - 1).compact ==
-          sizeof(float)) {
+              sizeof(float) ||
+          (result_set_->query_mem_desc_.didOutputColumnar() && !is_col_lazy &&
+           result_set_->query_mem_desc_.getPaddedColumnWidthBytes(order_entry.tle_no -
+                                                                  1) == sizeof(float))) {
         float_argument_input = true;
       }
     }
