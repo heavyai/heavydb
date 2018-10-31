@@ -2799,8 +2799,10 @@ std::pair<bool, int64_t> Executor::skipFragment(
     if (!lhs->get_type_info().is_integer() && !lhs->get_type_info().is_time()) {
       continue;
     }
-    if (lhs->get_type_info().get_type() == kTIMESTAMP &&
-        (lhs_col->get_type_info() != rhs_const->get_type_info())) {
+    if (lhs->get_type_info().is_timestamp() &&
+        (lhs_col->get_type_info() != rhs_const->get_type_info()) &&
+        (lhs_col->get_type_info().is_high_precision_timestamp() ||
+         rhs_const->get_type_info().is_high_precision_timestamp())) {
       // Original lhs col has different precision so
       // column metadata holds value in original dimension scale
       // therefore skip meta value comparison check
