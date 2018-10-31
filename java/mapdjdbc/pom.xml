@@ -48,7 +48,7 @@
     <dependency>
       <groupId>com.mapd</groupId>
       <artifactId>mapdcommon</artifactId>
-      <version>4.2.0-SNAPSHOT</version>
+      <version>${mapd.release.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>

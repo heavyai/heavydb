@@ -26,6 +26,11 @@
       <artifactId>mapdjdbc</artifactId>
       <version>${mapd.release.version}</version>
     </dependency>
+    <dependency>
+      <groupId>com.mapd</groupId>
+      <artifactId>mapdcommon</artifactId>
+      <version>${mapd.release.version}</version>
+    </dependency>
   </dependencies>
   <build>
     <plugins>
