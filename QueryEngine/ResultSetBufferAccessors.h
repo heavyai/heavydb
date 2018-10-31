@@ -46,10 +46,13 @@ inline bool is_real_str_or_array(const TargetInfo& target_info) {
 
 inline size_t get_slots_for_geo_target(const TargetInfo& target_info,
                                        const bool separate_varlen_storage) {
-  if (target_info.is_agg || !separate_varlen_storage) {
-    return 2 * target_info.sql_type.get_physical_coord_cols();
+  // Aggregates on geospatial types are serialized directly by rewriting the underlying
+  // buffer. Even if separate varlen storage is valid, treat aggregates the same on
+  // distributed and single node
+  if (separate_varlen_storage && !target_info.is_agg) {
+    return 1;
   } else {
-    return target_info.sql_type.get_physical_coord_cols();
+    return 2 * target_info.sql_type.get_physical_coord_cols();
   }
 }
 

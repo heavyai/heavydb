@@ -9819,6 +9819,14 @@ TEST(Select, GeoSpatial_Basics) {
 TEST(Select, GeoSpatial_Projection) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    // Select *
+    {
+      const auto rows =
+          run_multiple_agg("SELECT * FROM geospatial_test WHERE id = 1", dt);
+      const auto row = rows->getNextRow(false, false);
+      ASSERT_EQ(row.size(), size_t(11));
+    }
+
     // Projection (return GeoTargetValue)
     compare_geo_target(run_simple_agg("SELECT p FROM geospatial_test WHERE id = 1;", dt),
                        GeoPointTargetValue({1., 1.}));
