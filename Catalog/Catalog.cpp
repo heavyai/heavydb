@@ -877,54 +877,92 @@ bool SysCatalog::checkPrivileges(UserMetadata& user,
 }
 
 void SysCatalog::createDatabase(const string& name, int owner) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+
   DBMetadata db;
   if (getMetadataForDB(name, db)) {
     throw runtime_error("Database " + name + " already exists.");
   }
 
-  sys_sqlite_lock sqlite_lock(this);
-  sqliteConnector_->query_with_text_param(
-      "INSERT INTO mapd_databases (name, owner) VALUES (?, " + std::to_string(owner) +
-          ")",
-      name);
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_->query_with_text_param(
+        "INSERT INTO mapd_databases (name, owner) VALUES (?, " + std::to_string(owner) +
+            ")",
+        name);
+    std::unique_ptr<SqliteConnector> dbConnHolder;
+    // Use either the syscat connector here or a new one if we're not
+    // in the system database
+    SqliteConnector* dbConn;
+    if (name != MAPD_SYSTEM_DB) {
+      dbConnHolder.reset(new SqliteConnector(name, basePath_ + "/mapd_catalogs/"));
+      dbConn = dbConnHolder.get();
+    } else {
+      dbConn = sqliteConnector_.get();
+    }
+    dbConn->query(
+        "CREATE TABLE mapd_tables (tableid integer primary key, name text unique, userid "
+        "integer, ncolumns integer, "
+        "isview boolean, "
+        "fragments text, frag_type integer, max_frag_rows integer, max_chunk_size "
+        "bigint, "
+        "frag_page_size integer, "
+        "max_rows bigint, partitions text, shard_column_id integer, shard integer, "
+        "num_shards integer, version_num "
+        "BIGINT DEFAULT 1) ");
+    dbConn->query(
+        "CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid "
+        "integer, name text, coltype "
+        "integer, colsubtype integer, coldim integer, colscale integer, is_notnull "
+        "boolean, compression integer, "
+        "comp_param integer, size integer, chunks text, is_systemcol boolean, "
+        "is_virtualcol boolean, virtual_expr "
+        "text, "
+        "primary key(tableid, columnid), unique(tableid, name))");
+    dbConn->query(
+        "CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text)");
+    dbConn->query(
+        "CREATE TABLE mapd_dashboards (id integer primary key autoincrement, name text , "
+        "userid integer references mapd_users, state text, image_hash text, update_time "
+        "timestamp, "
+        "metadata text, UNIQUE(userid, name) )");
+    dbConn->query(
+        "CREATE TABLE mapd_links (linkid integer primary key, userid integer references "
+        "mapd_users, "
+        "link text unique, view_state text, update_time timestamp, view_metadata text)");
+    dbConn->query(
+        "CREATE TABLE mapd_dictionaries (dictid integer primary key, name text unique, "
+        "nbits int, is_shared boolean, "
+        "refcount int, version_num BIGINT DEFAULT 1)");
+    dbConn->query(
+        "CREATE TABLE mapd_logical_to_physical(logical_table_id integer, "
+        "physical_table_id "
+        "integer)");
+    dbConn->query("CREATE TABLE mapd_record_ownership_marker (dummy integer)");
+    dbConn->query_with_text_params(
+        "INSERT INTO mapd_record_ownership_marker (dummy) VALUES (?1)",
+        std::vector<std::string>{std::to_string(owner)});
 
-  SqliteConnector dbConn(name, basePath_ + "/mapd_catalogs/");
-  dbConn.query(
-      "CREATE TABLE mapd_tables (tableid integer primary key, name text unique, userid "
-      "integer, ncolumns integer, "
-      "isview boolean, "
-      "fragments text, frag_type integer, max_frag_rows integer, max_chunk_size bigint, "
-      "frag_page_size integer, "
-      "max_rows bigint, partitions text, shard_column_id integer, shard integer, "
-      "num_shards integer, version_num "
-      "BIGINT DEFAULT 1) ");
-  dbConn.query(
-      "CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid "
-      "integer, name text, coltype "
-      "integer, colsubtype integer, coldim integer, colscale integer, is_notnull "
-      "boolean, compression integer, "
-      "comp_param integer, size integer, chunks text, is_systemcol boolean, "
-      "is_virtualcol boolean, virtual_expr "
-      "text, "
-      "primary key(tableid, columnid), unique(tableid, name))");
-  dbConn.query(
-      "CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text)");
-  dbConn.query(
-      "CREATE TABLE mapd_dashboards (id integer primary key autoincrement, name text , "
-      "userid integer references mapd_users, state text, image_hash text, update_time "
-      "timestamp, "
-      "metadata text, UNIQUE(userid, name) )");
-  dbConn.query(
-      "CREATE TABLE mapd_links (linkid integer primary key, userid integer references "
-      "mapd_users, "
-      "link text unique, view_state text, update_time timestamp, view_metadata text)");
-  dbConn.query(
-      "CREATE TABLE mapd_dictionaries (dictid integer primary key, name text unique, "
-      "nbits int, is_shared boolean, "
-      "refcount int, version_num BIGINT DEFAULT 1)");
-  dbConn.query(
-      "CREATE TABLE mapd_logical_to_physical(logical_table_id integer, physical_table_id "
-      "integer)");
+    if (owner != MAPD_ROOT_USER_ID) {
+      auto cat = Catalog::get(name);
+      CHECK(!cat);
+      CHECK(getMetadataForDB(name, db));
+      cat = std::make_shared<Catalog>(
+          basePath_, db, dataMgr_, *string_dict_hosts_, calciteMgr_);
+      Catalog::set(db.dbName, cat);
+      DBObject object(name, DBObjectType::DatabaseDBObjectType);
+      object.loadKey(*cat);
+      UserMetadata user;
+      CHECK(getMetadataForUserById(owner, user));
+      grantAllOnDatabase_unsafe(user.userName, object, *cat);
+    }
+  } catch (const std::exception&) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + name);
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
 }
 
 void SysCatalog::dropDatabase(const DBMetadata& db) {
