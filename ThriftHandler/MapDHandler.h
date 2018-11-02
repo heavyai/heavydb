@@ -398,12 +398,6 @@ class MapDHandler : public MapDIf {
   void internal_connect(TSessionId& session,
                         const std::string& user,
                         const std::string& dbname);
-  void connectImpl(TSessionId& session,
-                   const std::string& user,
-                   const std::string& passwd,
-                   const std::string& dbname,
-                   Catalog_Namespace::UserMetadata& user_meta,
-                   std::shared_ptr<Catalog_Namespace::Catalog> cat);
 
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
   std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> sessions_;
@@ -432,6 +426,13 @@ class MapDHandler : public MapDIf {
   Catalog_Namespace::SessionInfo get_session(const TSessionId& session);
 
  private:
+  void connect_impl(TSessionId& session,
+                    const std::string& user,
+                    const std::string& passwd,
+                    const std::string& dbname,
+                    Catalog_Namespace::UserMetadata& user_meta,
+                    std::shared_ptr<Catalog_Namespace::Catalog> cat);
+  void disconnect_impl(const SessionMap::iterator& session_it);
   void check_table_load_privileges(const TSessionId& session,
                                    const std::string& table_name);
   void check_table_load_privileges(const Catalog_Namespace::SessionInfo& session_info,
