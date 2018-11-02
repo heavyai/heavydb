@@ -300,12 +300,15 @@ class SQLTestEnv : public ::testing::Environment {
       sys_cat.createDatabase("gtest_db", user.userId);
       CHECK(sys_cat.getMetadataForDB("gtest_db", db));
     }
-    gsession.reset(new SessionInfo(
-        std::make_shared<Catalog>(
-            base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-        user,
-        ExecutorDeviceType::GPU,
-        ""));
+    gsession.reset(new SessionInfo(std::make_shared<Catalog>(base_path.string(),
+                                                             db,
+                                                             dataMgr,
+                                                             std::vector<LeafHostInfo>{},
+                                                             g_calcite,
+                                                             false),
+                                   user,
+                                   ExecutorDeviceType::GPU,
+                                   ""));
   }
 };
 

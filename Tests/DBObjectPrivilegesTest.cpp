@@ -74,23 +74,13 @@ class DBObjectPermissionsEnv : public ::testing::Environment {
       CHECK(boost::filesystem::exists(system_db_file));
       sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, false, true);
       CHECK(sys_cat.getMetadataForDB(db_name, db));
-      auto cat = Catalog_Namespace::Catalog::get(db_name);
-      if (cat == nullptr) {
-        cat = std::make_shared<Catalog_Namespace::Catalog>(
-            base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite);
-        Catalog_Namespace::Catalog::set(db_name, cat);
-      }
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
     }
     MapDParameters mapd_parms;
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
         data_dir.string(), mapd_parms, false, 0);
     g_session.reset(new Catalog_Namespace::SessionInfo(
-        std::make_shared<Catalog_Namespace::Catalog>(
-            base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-        user,
-        ExecutorDeviceType::GPU,
-        ""));
+        Catalog_Namespace::Catalog::get(db_name), user, ExecutorDeviceType::GPU, ""));
   }
 };
 
@@ -477,12 +467,11 @@ TEST_F(DatabaseObject, SqlEditorAccessTest) {
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
   CHECK(sys_cat.getMetadataForUser("Juventus", user_meta));
-  session_juve.reset(new Catalog_Namespace::SessionInfo(
-      std::make_shared<Catalog_Namespace::Catalog>(
-          base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-      user_meta,
-      ExecutorDeviceType::GPU,
-      ""));
+  session_juve.reset(
+      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db.dbName),
+                                         user_meta,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
   auto& cat_mapd = session_juve->get_catalog();
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
@@ -533,12 +522,11 @@ TEST_F(DatabaseObject, DBLoginAccessTest) {
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
   CHECK(sys_cat.getMetadataForUser("Bayern", user_meta));
-  session_juve.reset(new Catalog_Namespace::SessionInfo(
-      std::make_shared<Catalog_Namespace::Catalog>(
-          base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-      user_meta,
-      ExecutorDeviceType::GPU,
-      ""));
+  session_juve.reset(
+      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db.dbName),
+                                         user_meta,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
   auto& cat_mapd = session_juve->get_catalog();
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
@@ -588,12 +576,11 @@ TEST_F(DatabaseObject, TableAccessTest) {
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
-  session_ars.reset(new Catalog_Namespace::SessionInfo(
-      std::make_shared<Catalog_Namespace::Catalog>(
-          base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-      user_meta,
-      ExecutorDeviceType::GPU,
-      ""));
+  session_ars.reset(
+      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db.dbName),
+                                         user_meta,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
   auto& cat_mapd = session_ars->get_catalog();
   AccessPrivileges arsenal_privs;
   AccessPrivileges bayern_privs;
@@ -653,12 +640,11 @@ TEST_F(DatabaseObject, ViewAccessTest) {
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
-  session_ars.reset(new Catalog_Namespace::SessionInfo(
-      std::make_shared<Catalog_Namespace::Catalog>(
-          base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-      user_meta,
-      ExecutorDeviceType::GPU,
-      ""));
+  session_ars.reset(
+      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db.dbName),
+                                         user_meta,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
   auto& cat_mapd = session_ars->get_catalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_VIEW));
@@ -709,12 +695,11 @@ TEST_F(DatabaseObject, DashboardAccessTest) {
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
-  session_ars.reset(new Catalog_Namespace::SessionInfo(
-      std::make_shared<Catalog_Namespace::Catalog>(
-          base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-      user_meta,
-      ExecutorDeviceType::GPU,
-      ""));
+  session_ars.reset(
+      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db.dbName),
+                                         user_meta,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
   auto& cat_mapd = session_ars->get_catalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DASHBOARD));
@@ -764,12 +749,11 @@ TEST_F(DatabaseObject, DatabaseAllTest) {
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
-  session_ars.reset(new Catalog_Namespace::SessionInfo(
-      std::make_shared<Catalog_Namespace::Catalog>(
-          base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-      user_meta,
-      ExecutorDeviceType::GPU,
-      ""));
+  session_ars.reset(
+      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db.dbName),
+                                         user_meta,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
   auto& cat_mapd = session_ars->get_catalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DATABASE));

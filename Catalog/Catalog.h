@@ -138,7 +138,8 @@ class Catalog {
           const DBMetadata& curDB,
           std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
           const std::vector<LeafHostInfo>& string_dict_hosts,
-          std::shared_ptr<Calcite> calcite);
+          std::shared_ptr<Calcite> calcite,
+          bool is_new_db);
 
   /**
    * @brief Destructor - deletes all
@@ -245,6 +246,12 @@ class Catalog {
 
   static void set(const std::string& dbName, std::shared_ptr<Catalog> cat);
   static std::shared_ptr<Catalog> get(const std::string& dbName);
+  static std::shared_ptr<Catalog> get(const std::string& basePath,
+                                      const DBMetadata& curDB,
+                                      std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+                                      const std::vector<LeafHostInfo>& string_dict_hosts,
+                                      std::shared_ptr<Calcite> calcite,
+                                      bool is_new_db);
   static void remove(const std::string& dbName);
 
   const bool checkMetadataForDeletedRecs(int dbId, int tableId, int columnId) const;

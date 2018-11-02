@@ -133,10 +133,8 @@ int main(int argc, char* argv[]) {
       Catalog_Namespace::DBMetadata cur_db;
       const std::string db_name(MAPD_SYSTEM_DB);
       CHECK(sys_cat.getMetadataForDB(db_name, cur_db));
-      auto cat = std::make_shared<Catalog_Namespace::Catalog>(
-          base_path, cur_db, dummy, std::vector<LeafHostInfo>(), calcite);
-      Catalog_Namespace::Catalog::set(db_name, cat);
-
+      auto cat = Catalog_Namespace::Catalog::get(
+          base_path, cur_db, dummy, std::vector<LeafHostInfo>(), calcite, false);
       Catalog_Namespace::UserMetadata user;
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
 

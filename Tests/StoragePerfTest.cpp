@@ -123,12 +123,15 @@ class SQLTestEnv : public ::testing::Environment {
     MapDParameters mapd_parms;
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
         data_dir.string(), mapd_parms, false, 0);
-    gsession.reset(new SessionInfo(
-        std::make_shared<Catalog>(
-            base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-        user,
-        ExecutorDeviceType::GPU,
-        ""));
+    gsession.reset(new SessionInfo(std::make_shared<Catalog>(base_path.string(),
+                                                             db,
+                                                             dataMgr,
+                                                             std::vector<LeafHostInfo>{},
+                                                             g_calcite,
+                                                             false),
+                                   user,
+                                   ExecutorDeviceType::GPU,
+                                   ""));
   }
 };
 

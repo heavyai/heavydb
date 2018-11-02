@@ -248,11 +248,16 @@ void SysCatalog::init(const std::string& basePath,
   }
   // check if mapd db catalog is loaded in cat_map
   // if not, load mapd-cat here
-  if (!Catalog::get(MAPD_SYSTEM_DB) && string_dict_hosts_) {
+  if (!Catalog::get(MAPD_SYSTEM_DB)) {
     Catalog_Namespace::DBMetadata db_meta;
     CHECK(getMetadataForDB(MAPD_SYSTEM_DB, db_meta));
     auto mapd_cat = std::make_shared<Catalog>(
-        basePath_, db_meta, dataMgr_, *string_dict_hosts_, calciteMgr_);
+        basePath_,
+        db_meta,
+        dataMgr_,
+        string_dict_hosts ? *string_dict_hosts_ : std::vector<LeafHostInfo>{},
+        calciteMgr_,
+        is_new_db);
     Catalog::set(MAPD_SYSTEM_DB, mapd_cat);
   }
 }
@@ -273,37 +278,44 @@ SysCatalog::~SysCatalog() {
 
 void SysCatalog::initDB() {
   sys_sqlite_lock sqlite_lock(this);
-  sqliteConnector_->query(
-      "CREATE TABLE mapd_users (userid integer primary key, name text unique, "
-      "passwd_hash text, issuper boolean)");
-  sqliteConnector_->query_with_text_params(
-      "INSERT INTO mapd_users VALUES (?, ?, ?, 1)",
-      std::vector<std::string>{MAPD_ROOT_USER_ID_STR,
-                               MAPD_ROOT_USER,
-                               hash_with_bcrypt(MAPD_ROOT_PASSWD_DEFAULT)});
-  sqliteConnector_->query(
-      "CREATE TABLE mapd_databases (dbid integer primary key, name text unique, owner "
-      "integer references mapd_users)");
-  if (check_privileges_) {
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
     sqliteConnector_->query(
-        "CREATE TABLE mapd_roles(roleName text, userName text, UNIQUE(roleName, "
-        "userName))");
+        "CREATE TABLE mapd_users (userid integer primary key, name text unique, "
+        "passwd_hash text, issuper boolean)");
+    sqliteConnector_->query_with_text_params(
+        "INSERT INTO mapd_users VALUES (?, ?, ?, 1)",
+        std::vector<std::string>{MAPD_ROOT_USER_ID_STR,
+                                 MAPD_ROOT_USER,
+                                 hash_with_bcrypt(MAPD_ROOT_PASSWD_DEFAULT)});
     sqliteConnector_->query(
-        "CREATE TABLE mapd_object_permissions ("
-        "roleName text, "
-        "roleType bool, "
-        "dbId integer references mapd_databases, "
-        "objectId integer, "
-        "objectPermissionsType integer, "
-        "objectPermissions integer, "
-        "objectOwnerId integer, UNIQUE(roleName, objectPermissionsType, dbId, "
-        "objectId))");
-  } else {
-    sqliteConnector_->query(
-        "CREATE TABLE mapd_privileges (userid integer references mapd_users, dbid "
-        "integer references mapd_databases, "
-        "select_priv boolean, insert_priv boolean, UNIQUE(userid, dbid))");
+        "CREATE TABLE mapd_databases (dbid integer primary key, name text unique, owner "
+        "integer references mapd_users)");
+    if (check_privileges_) {
+      sqliteConnector_->query(
+          "CREATE TABLE mapd_roles(roleName text, userName text, UNIQUE(roleName, "
+          "userName))");
+      sqliteConnector_->query(
+          "CREATE TABLE mapd_object_permissions ("
+          "roleName text, "
+          "roleType bool, "
+          "dbId integer references mapd_databases, "
+          "objectId integer, "
+          "objectPermissionsType integer, "
+          "objectPermissions integer, "
+          "objectOwnerId integer, UNIQUE(roleName, objectPermissionsType, dbId, "
+          "objectId))");
+    } else {
+      sqliteConnector_->query(
+          "CREATE TABLE mapd_privileges (userid integer references mapd_users, dbid "
+          "integer references mapd_databases, "
+          "select_priv boolean, insert_priv boolean, UNIQUE(userid, dbid))");
+    }
+  } catch (const std::exception&) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
   }
+  sqliteConnector_->query("END TRANSACTION");
   createDatabase("mapd", MAPD_ROOT_USER_ID);
 }
 
@@ -735,14 +747,8 @@ std::shared_ptr<Catalog> SysCatalog::login(const std::string& dbname,
     }
   }
 
-  auto cat = Catalog::get(dbname);
-  if (cat == nullptr) {
-    cat = std::make_shared<Catalog>(
-        basePath_, db_meta, dataMgr_, *string_dict_hosts_, calciteMgr_);
-    Catalog::set(dbname, cat);
-  }
-
-  return cat;
+  return Catalog::get(
+      basePath_, db_meta, dataMgr_, *string_dict_hosts_, calciteMgr_, false);
 }
 
 void SysCatalog::createUser(const string& name, const string& passwd, bool issuper) {
@@ -885,22 +891,22 @@ void SysCatalog::createDatabase(const string& name, int owner) {
     throw runtime_error("Database " + name + " already exists.");
   }
 
-  sqliteConnector_->query("BEGIN TRANSACTION");
+  std::unique_ptr<SqliteConnector> dbConnHolder;
+  // Use either the syscat connector here or a new one if we're not
+  // in the system database
+  SqliteConnector* dbConn;
+  if (name != MAPD_SYSTEM_DB) {
+    dbConnHolder.reset(new SqliteConnector(name, basePath_ + "/mapd_catalogs/"));
+    dbConn = dbConnHolder.get();
+  } else {
+    dbConn = sqliteConnector_.get();
+  }
+  // NOTE(max): it's okay to run this in a separate transaction. If we fail later
+  // we delete the database anyways.
+  // If we run it in the same transaction as SysCatalog functions, then Catalog
+  // constructor won't find the tables we have just created.
+  dbConn->query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_->query_with_text_param(
-        "INSERT INTO mapd_databases (name, owner) VALUES (?, " + std::to_string(owner) +
-            ")",
-        name);
-    std::unique_ptr<SqliteConnector> dbConnHolder;
-    // Use either the syscat connector here or a new one if we're not
-    // in the system database
-    SqliteConnector* dbConn;
-    if (name != MAPD_SYSTEM_DB) {
-      dbConnHolder.reset(new SqliteConnector(name, basePath_ + "/mapd_catalogs/"));
-      dbConn = dbConnHolder.get();
-    } else {
-      dbConn = sqliteConnector_.get();
-    }
     dbConn->query(
         "CREATE TABLE mapd_tables (tableid integer primary key, name text unique, userid "
         "integer, ncolumns integer, "
@@ -909,7 +915,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
         "bigint, "
         "frag_page_size integer, "
         "max_rows bigint, partitions text, shard_column_id integer, shard integer, "
-        "num_shards integer, version_num "
+        "num_shards integer, key_metainfo TEXT, version_num "
         "BIGINT DEFAULT 1) ");
     dbConn->query(
         "CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid "
@@ -918,7 +924,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
         "boolean, compression integer, "
         "comp_param integer, size integer, chunks text, is_systemcol boolean, "
         "is_virtualcol boolean, virtual_expr "
-        "text, "
+        "text, is_deletedcol boolean, version_num BIGINT, "
         "primary key(tableid, columnid), unique(tableid, name))");
     dbConn->query(
         "CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text)");
@@ -943,14 +949,29 @@ void SysCatalog::createDatabase(const string& name, int owner) {
     dbConn->query_with_text_params(
         "INSERT INTO mapd_record_ownership_marker (dummy) VALUES (?1)",
         std::vector<std::string>{std::to_string(owner)});
+  } catch (const std::exception&) {
+    dbConn->query("ROLLBACK TRANSACTION");
+    boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + name);
+    throw;
+  }
+  dbConn->query("END TRANSACTION");
 
-    if (owner != MAPD_ROOT_USER_ID) {
-      auto cat = Catalog::get(name);
-      CHECK(!cat);
-      CHECK(getMetadataForDB(name, db));
-      cat = std::make_shared<Catalog>(
-          basePath_, db, dataMgr_, *string_dict_hosts_, calciteMgr_);
-      Catalog::set(db.dbName, cat);
+  // Now update SysCatalog with privileges and the new database
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_->query_with_text_param(
+        "INSERT INTO mapd_databases (name, owner) VALUES (?, " + std::to_string(owner) +
+            ")",
+        name);
+    CHECK(getMetadataForDB(name, db));
+    auto cat = Catalog::get(
+        basePath_,
+        db,
+        dataMgr_,
+        string_dict_hosts_ ? *string_dict_hosts_ : std::vector<LeafHostInfo>{},
+        calciteMgr_,
+        true);
+    if (owner != MAPD_ROOT_USER_ID && arePrivilegesOn()) {
       DBObject object(name, DBObjectType::DatabaseDBObjectType);
       object.loadKey(*cat);
       UserMetadata user;
@@ -968,14 +989,13 @@ void SysCatalog::createDatabase(const string& name, int owner) {
 void SysCatalog::dropDatabase(const DBMetadata& db) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
-
-  auto cat = Catalog::get(db.dbName);
-  if (cat == nullptr) {
-    cat = std::make_shared<Catalog>(
-        basePath_, db, dataMgr_, *string_dict_hosts_, calciteMgr_);
-    Catalog::set(db.dbName, cat);
-  }
-
+  auto cat =
+      Catalog::get(basePath_,
+                   db,
+                   dataMgr_,
+                   string_dict_hosts_ ? *string_dict_hosts_ : std::vector<LeafHostInfo>{},
+                   calciteMgr_,
+                   false);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     if (arePrivilegesOn()) {
@@ -1706,7 +1726,8 @@ Catalog::Catalog(const string& basePath,
                  const DBMetadata& curDB,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
                  const std::vector<LeafHostInfo>& string_dict_hosts,
-                 std::shared_ptr<Calcite> calcite)
+                 std::shared_ptr<Calcite> calcite,
+                 bool is_new_db)
     : basePath_(basePath)
     , sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/")
     , currentDB_(curDB)
@@ -1720,6 +1741,9 @@ Catalog::Catalog(const string& basePath,
     , thread_holding_sqlite_lock()
     , thread_holding_write_lock() {
   ldap_server_.reset(new LdapServer());
+  if (!is_new_db) {
+    CheckAndExecuteMigrations();
+  }
   buildMaps();
 }
 
@@ -2358,8 +2382,6 @@ void Catalog::buildMaps() {
 
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(this);
-
-  CheckAndExecuteMigrations();
 
   string dictQuery(
       "SELECT dictid, name, nbits, is_shared, refcount from mapd_dictionaries");
@@ -4381,6 +4403,23 @@ std::shared_ptr<Catalog> Catalog::get(const std::string& dbName) {
     return cat_it->second;
   }
   return nullptr;
+}
+
+std::shared_ptr<Catalog> Catalog::get(const string& basePath,
+                                      const DBMetadata& curDB,
+                                      std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+                                      const std::vector<LeafHostInfo>& string_dict_hosts,
+                                      std::shared_ptr<Calcite> calcite,
+                                      bool is_new_db) {
+  auto cat = Catalog::get(curDB.dbName);
+  if (cat) {
+    return cat;
+  } else {
+    cat = std::make_shared<Catalog>(
+        basePath, curDB, dataMgr, string_dict_hosts, calcite, is_new_db);
+    Catalog::set(curDB.dbName, cat);
+    return cat;
+  }
 }
 
 void Catalog::remove(const std::string& dbName) {
