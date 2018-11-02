@@ -213,12 +213,14 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       case kDECIMAL: {
         const int64_t* int_array = (int64_t*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(int64_t); i++) {
-          if (int_array[i] == NULL_BIGINT)
+          if (int_array[i] == NULL_BIGINT) {
             has_nulls = true;
-          else if (initialized) {
+          } else if (initialized) {
+            decimal_overflow_validator_.validate(int_array[i]);
             elem_min.bigintval = std::min(elem_min.bigintval, int_array[i]);
             elem_max.bigintval = std::max(elem_max.bigintval, int_array[i]);
           } else {
+            decimal_overflow_validator_.validate(int_array[i]);
             elem_min.bigintval = int_array[i];
             elem_max.bigintval = int_array[i];
             initialized = true;

@@ -2718,6 +2718,8 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
     } else if (cd.columnType.is_decimal() && cd.columnType.get_precision() <= 9) {
       cd.columnType.set_compression(kENCODING_FIXED);
       cd.columnType.set_comp_param(32);
+    } else if (cd.columnType.is_decimal() && cd.columnType.get_precision() > 18) {
+      throw std::runtime_error(cd.columnName + ": Precision too high, max 18.");
     } else if (cd.columnType.is_geometry() && cd.columnType.get_output_srid() == 4326) {
       // default to GEOINT 32-bits
       cd.columnType.set_compression(kENCODING_GEOINT);

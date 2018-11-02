@@ -180,6 +180,7 @@ Catalog_Namespace::SessionInfo* get_session(
 
   auto cat = std::make_shared<Catalog_Namespace::Catalog>(
       base_path.string(), db, dataMgr, string_servers, g_calcite);
+  Catalog_Namespace::Catalog::set(cat->get_currentDB().dbName, cat);
   Catalog_Namespace::SessionInfo* session =
       new Catalog_Namespace::SessionInfo(cat, user, ExecutorDeviceType::GPU, "");
 

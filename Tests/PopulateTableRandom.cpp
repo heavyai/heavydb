@@ -66,9 +66,9 @@ size_t random_fill_int32(int8_t* buf, size_t num_elems) {
   return hash;
 }
 
-size_t random_fill_int64(int8_t* buf, size_t num_elems) {
+size_t random_fill_int64(int8_t* buf, size_t num_elems, int64_t min, int64_t max) {
   default_random_engine gen;
-  uniform_int_distribution<int64_t> dist(INT64_MIN, INT64_MAX);
+  uniform_int_distribution<int64_t> dist(min, max);
   int64_t* p = (int64_t*)buf;
   size_t hash = 0;
   for (size_t i = 0; i < num_elems; i++) {
@@ -76,6 +76,10 @@ size_t random_fill_int64(int8_t* buf, size_t num_elems) {
     boost::hash_combine(hash, p[i]);
   }
   return hash;
+}
+
+size_t random_fill_int64(int8_t* buf, size_t num_elems) {
+  return random_fill_int64(buf, num_elems, INT64_MIN, INT64_MAX);
 }
 
 size_t random_fill_float(int8_t* buf, size_t num_elems) {
@@ -208,11 +212,16 @@ size_t random_fill(const ColumnDescriptor* cd,
       data_volumn += num_elems * sizeof(int32_t);
       break;
     case kBIGINT:
-    case kNUMERIC:
-    case kDECIMAL:
-      hash = random_fill_int64(p.numbersPtr, num_elems);
+      hash = random_fill_int64(p.numbersPtr, num_elems, INT64_MIN, INT64_MAX);
       data_volumn += num_elems * sizeof(int64_t);
       break;
+    case kNUMERIC:
+    case kDECIMAL: {
+      int64_t max = std::pow((double)10, cd->columnType.get_precision());
+      int64_t min = -max;
+      hash = random_fill_int64(p.numbersPtr, num_elems, min, max);
+      data_volumn += num_elems * sizeof(int64_t);
+    } break;
     case kFLOAT:
       hash = random_fill_float(p.numbersPtr, num_elems);
       data_volumn += num_elems * sizeof(float);

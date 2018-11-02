@@ -23,6 +23,7 @@
 
 #include "Catalog/Catalog.h"
 #include "DataMgr/DataMgr.h"
+#include "DataMgr/Encoder.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/thread_count.h"
@@ -173,6 +174,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                      : catalog->getMetadataForColumn(
                            catalog->getLogicalTableId(td->tableId), cd->columnId);
       CHECK(cdl);
+      DecimalOverflowValidator decimalOverflowValidator(lctype);
       StringDictionary* stringDict{nullptr};
       if (lctype.is_string()) {
         CHECK(kENCODING_DICT == lctype.get_compression());
@@ -225,6 +227,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                     throw std::runtime_error("UPDATE does not support cast to string.");
                   }
 #endif
+            decimalOverflowValidator.validate<int64_t>(v);
             put_scalar<int64_t>(dptr, lctype, v, cd->columnName, &rhsType);
             if (lctype.is_decimal()) {
               int64_t decimal;

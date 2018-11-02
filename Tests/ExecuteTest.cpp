@@ -4825,6 +4825,44 @@ TEST(Select, DecimalCompression) {
   }
 }
 
+TEST(Update, DecimalOverflow) {
+  auto test = [this](int precision, int scale) -> void {
+    run_ddl_statement("DROP TABLE IF EXISTS decimal_overflow_test;");
+    run_ddl_statement("CREATE TABLE decimal_overflow_test (d DECIMAL(" +
+                      std::to_string(precision) + ", " + std::to_string(scale) + "));");
+    run_multiple_agg("INSERT INTO decimal_overflow_test VALUES(null);",
+                     ExecutorDeviceType::CPU);
+    int64_t val = (int64_t)std::pow((double)10, precision - scale);
+    run_multiple_agg(
+        "INSERT INTO decimal_overflow_test VALUES(" + std::to_string(val - 1) + ");",
+        ExecutorDeviceType::CPU);
+    EXPECT_THROW(run_multiple_agg("INSERT INTO decimal_overflow_test VALUES(" +
+                                      std::to_string(val) + ");",
+                                  ExecutorDeviceType::CPU),
+                 std::runtime_error);
+    run_multiple_agg("UPDATE decimal_overflow_test set d=d-1 WHERE d IS NOT NULL;",
+                     ExecutorDeviceType::CPU);
+    run_multiple_agg("UPDATE decimal_overflow_test set d=d+1 WHERE d IS NOT NULL;",
+                     ExecutorDeviceType::CPU);
+    EXPECT_THROW(
+        run_multiple_agg("UPDATE decimal_overflow_test set d=d+1 WHERE d IS NOT NULL;",
+                         ExecutorDeviceType::CPU),
+        std::runtime_error);
+  };
+
+  test(1, 0);
+  test(3, 2);
+  test(4, 2);
+  test(7, 2);
+  test(7, 6);
+  test(14, 2);
+  test(17, 2);
+  test(18, 9);
+  EXPECT_THROW(test(18, 20), std::runtime_error);
+  EXPECT_THROW(test(18, 18), std::runtime_error);
+  EXPECT_THROW(test(19, 0), std::runtime_error);
+}
+
 TEST(Drop, AfterDrop) {
   run_ddl_statement("create table droptest (i1 integer);");
   run_multiple_agg("insert into droptest values(1);", ExecutorDeviceType::CPU);

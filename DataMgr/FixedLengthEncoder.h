@@ -41,6 +41,7 @@ class FixedLengthEncoder : public Encoder {
       size_t ri = replicating ? 0 : i;
       encodedData.get()[i] = static_cast<V>(unencodedData[ri]);
       if (unencodedData[ri] != encodedData.get()[i]) {
+        decimal_overflow_validator_.validate(unencodedData[ri]);
         LOG(ERROR) << "Fixed encoding failed, Unencoded: " +
                           std::to_string(unencodedData[ri]) +
                           " encoded: " + std::to_string(encodedData.get()[i]);
@@ -49,6 +50,7 @@ class FixedLengthEncoder : public Encoder {
         if (data == std::numeric_limits<V>::min())
           has_nulls = true;
         else {
+          decimal_overflow_validator_.validate(data);
           dataMin = std::min(dataMin, data);
           dataMax = std::max(dataMax, data);
         }

@@ -2646,7 +2646,7 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
     td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix,
                                                chunkVec,
                                                dataMgr_.get(),
-                                               this,
+                                               const_cast<Catalog*>(this),
                                                td->tableId,
                                                td->shard,
                                                td->maxFragRows,

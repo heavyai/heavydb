@@ -21,6 +21,7 @@
 #include "../Shared/types.h"
 #include "ChunkMetadata.h"
 
+#include <cmath>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -33,11 +34,55 @@ class AbstractBuffer;
 // default max input buffer size to 1MB
 #define MAX_INPUT_BUF_SIZE 1048576
 
+class DecimalOverflowValidator {
+ public:
+  DecimalOverflowValidator(SQLTypeInfo type) {
+    if (type.is_array()) {
+      type = type.get_elem_type();
+    }
+
+    do_check_ = type.is_decimal();
+    int precision = type.get_precision();
+    int scale = type.get_scale();
+    max_ = (int64_t)std::pow((double)10.0, precision);
+    min_ = -max_;
+    pow10_ = precision - scale;
+  }
+
+  template <typename T>
+  void validate(T value) {
+    if (std::is_integral<T>::value) {
+      do_validate(static_cast<int64_t>(value));
+    }
+  }
+
+  void do_validate(int64_t value) {
+    if (!do_check_)
+      return;
+
+    if (value >= max_) {
+      throw std::runtime_error("decimal overflow: value is greater then 10^" +
+                               std::to_string(pow10_));
+    }
+
+    if (value <= min_) {
+      throw std::runtime_error("decimal overflow: value is less then -10^" +
+                               std::to_string(pow10_));
+    }
+  }
+
+ private:
+  bool do_check_;
+  int64_t max_;
+  int64_t min_;
+  int pow10_;
+};
+
 class Encoder {
  public:
   static Encoder* Create(Data_Namespace::AbstractBuffer* buffer,
                          const SQLTypeInfo sqlType);
-  Encoder(Data_Namespace::AbstractBuffer* buffer) : num_elems_(0), buffer_(buffer) {}
+  Encoder(Data_Namespace::AbstractBuffer* buffer);
   virtual ~Encoder() {}
 
   virtual ChunkMetadata appendData(int8_t*& srcData,
@@ -60,6 +105,8 @@ class Encoder {
 
   Data_Namespace::AbstractBuffer* buffer_;
   // ChunkMetadata metadataTemplate_;
+
+  DecimalOverflowValidator decimal_overflow_validator_;
 };
 
 #endif  // Encoder_h

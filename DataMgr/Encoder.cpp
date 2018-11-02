@@ -188,6 +188,11 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
   return 0;
 }
 
+Encoder::Encoder(Data_Namespace::AbstractBuffer* buffer)
+    : num_elems_(0)
+    , buffer_(buffer)
+    , decimal_overflow_validator_(buffer ? buffer->sqlType : SQLTypeInfo()){};
+
 void Encoder::getMetadata(ChunkMetadata& chunkMetadata) {
   // chunkMetadata = metadataTemplate_; // invoke copy constructor
   chunkMetadata.sqlType = buffer_->sqlType;

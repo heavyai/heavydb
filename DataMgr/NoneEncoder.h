@@ -50,6 +50,7 @@ class NoneEncoder : public Encoder {
       if (data == none_encoded_null_value<T>())
         has_nulls = true;
       else {
+        decimal_overflow_validator_.validate(data);
         dataMin = std::min(dataMin, data);
         dataMax = std::max(dataMax, data);
       }

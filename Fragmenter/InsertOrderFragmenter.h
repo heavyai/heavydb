@@ -57,7 +57,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
       const std::vector<int> chunkKeyPrefix,
       std::vector<Chunk_NS::Chunk>& chunkVec,
       Data_Namespace::DataMgr* dataMgr,
-      const Catalog_Namespace::Catalog* catalog,
+      Catalog_Namespace::Catalog* catalog,
       const int physicalTableId,
       const int shard,
       const size_t maxFragmentRows = DEFAULT_FRAGMENT_ROWS,
@@ -153,7 +153,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
       fragmentInfoVec_; /**< data about each fragment stored - id and number of rows */
   // int currentInsertBufferFragmentId_;
   Data_Namespace::DataMgr* dataMgr_;
-  const Catalog_Namespace::Catalog* catalog_;
+  Catalog_Namespace::Catalog* catalog_;
   const int physicalTableId_;
   const int shard_;
   size_t maxFragmentRows_;

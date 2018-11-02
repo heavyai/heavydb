@@ -173,7 +173,7 @@ const char* create_table_trips =
     "            pickup_longitude        DECIMAL(14,7),"
     "            pickup_latitude         DECIMAL(14,7),"
     "            dropoff_longitude       DOUBLE,"
-    "            dropoff_latitude        DECIMAL(19,5),"
+    "            dropoff_latitude        DECIMAL(18,5),"
     "            deleted                 BOOLEAN"
     "            ) WITH (FRAGMENT_SIZE=50);";  // so 2 fragments here
 

@@ -44,7 +44,7 @@ InsertOrderFragmenter::InsertOrderFragmenter(
     const vector<int> chunkKeyPrefix,
     vector<Chunk>& chunkVec,
     Data_Namespace::DataMgr* dataMgr,
-    const Catalog_Namespace::Catalog* catalog,
+    Catalog_Namespace::Catalog* catalog,
     const int physicalTableId,
     const int shard,
     const size_t maxFragmentRows,
@@ -229,15 +229,29 @@ void InsertOrderFragmenter::deleteFragments(const vector<int>& dropFragIds) {
 
 void InsertOrderFragmenter::insertData(InsertData& insertDataStruct) {
   // TODO: this local lock will need to be centralized when ALTER COLUMN is added, bc
-  mapd_unique_lock<mapd_shared_mutex> insertLock(
-      insertMutex_);  // prevent two threads from trying to insert into the same table
-                      // simultaneously
-  insertDataImpl(insertDataStruct);
-  if (defaultInsertLevel_ ==
-      Data_Namespace::DISK_LEVEL) {  // only checkpoint if data is resident on disk
-    dataMgr_->checkpoint(
-        chunkKeyPrefix_[0],
-        chunkKeyPrefix_[1]);  // need to checkpoint here to remove window for corruption
+  try {
+    mapd_unique_lock<mapd_shared_mutex> insertLock(
+        insertMutex_);  // prevent two threads from trying to insert into the same table
+                        // simultaneously
+
+    insertDataImpl(insertDataStruct);
+
+    if (defaultInsertLevel_ ==
+        Data_Namespace::DISK_LEVEL) {  // only checkpoint if data is resident on disk
+      dataMgr_->checkpoint(
+          chunkKeyPrefix_[0],
+          chunkKeyPrefix_[1]);  // need to checkpoint here to remove window for corruption
+    }
+  } catch (...) {
+    int32_t tableEpoch =
+        catalog_->getTableEpoch(insertDataStruct.databaseId, insertDataStruct.tableId);
+
+    // the statement below deletes *this* object!
+    // relying on exception propagation at this stage
+    // until we can sort this out in a cleaner fashion
+    catalog_->setTableEpoch(
+        insertDataStruct.databaseId, insertDataStruct.tableId, tableEpoch);
+    throw;
   }
 }
 
