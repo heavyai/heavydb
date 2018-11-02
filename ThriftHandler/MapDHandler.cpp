@@ -291,7 +291,7 @@ void MapDHandler::internal_connect(TSessionId& session,
                            " is not allowed to access database " + dbname + ".");
     }
   }
-  connectImpl(session, user, std::string(""), dbname, user_meta, cat);
+  connect_impl(session, user, std::string(""), dbname, user_meta, cat);
 }
 
 void MapDHandler::connect(TSessionId& session,
@@ -321,15 +321,15 @@ void MapDHandler::connect(TSessionId& session,
                            " is not allowed to access database " + dbname + ".");
     }
   }
-  connectImpl(session, user, passwd, dbname, user_meta, cat);
+  connect_impl(session, user, passwd, dbname, user_meta, cat);
 }
 
-void MapDHandler::connectImpl(TSessionId& session,
-                              const std::string& user,
-                              const std::string& passwd,
-                              const std::string& dbname,
-                              Catalog_Namespace::UserMetadata& user_meta,
-                              std::shared_ptr<Catalog> cat) {
+void MapDHandler::connect_impl(TSessionId& session,
+                               const std::string& user,
+                               const std::string& passwd,
+                               const std::string& dbname,
+                               Catalog_Namespace::UserMetadata& user_meta,
+                               std::shared_ptr<Catalog> cat) {
   session = INVALID_SESSION_ID;
   while (true) {
     session = generate_random_string(32);
@@ -354,16 +354,23 @@ void MapDHandler::connectImpl(TSessionId& session,
 
 void MapDHandler::disconnect(const TSessionId& session) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
-  if (leaf_aggregator_.leafCount() > 0) {
-    leaf_aggregator_.disconnect(session);
-  }
-  if (render_handler_) {
-    render_handler_->disconnect(session);
-  }
   auto session_it = MapDHandler::get_session_it(session);
   const auto dbname = session_it->second->get_catalog().get_currentDB().dbName;
   LOG(INFO) << "User " << session_it->second->get_currentUser().userName
             << " disconnected from database " << dbname << std::endl;
+  disconnect_impl(session_it);
+}
+
+void MapDHandler::disconnect_impl(const SessionMap::iterator& session_it) {
+  // session_it existence should already have been checked (i.e. called via
+  // get_session_it(...))
+  const auto session_id = session_it->second->get_session_id();
+  if (leaf_aggregator_.leafCount() > 0) {
+    leaf_aggregator_.disconnect(session_id);
+  }
+  if (render_handler_) {
+    render_handler_->disconnect(session_id);
+  }
   sessions_.erase(session_it);
 }
 
@@ -3778,10 +3785,10 @@ void MapDHandler::check_session_exp(const SessionMap::iterator& session_it) {
   time_t last_used_time = session_it->second->get_last_used_time();
   time_t creation_time = session_it->second->get_creation_time();
   if ((time(0) - last_used_time) > idle_session_duration_) {
-    sessions_.erase(session_it);  // Already checked session existance in get_session_it
+    disconnect_impl(session_it);  // Already checked session existance in get_session_it
     THROW_MAPD_EXCEPTION("Idle Session Timeout. User should re-authenticate.")
   } else if ((time(0) - creation_time) > max_session_duration_) {
-    sessions_.erase(session_it);  // Already checked session existance in get_session_it
+    disconnect_impl(session_it);  // Already checked session existance in get_session_it
     THROW_MAPD_EXCEPTION("Maximum active Session Timeout. User should re-authenticate.")
   }
 }
