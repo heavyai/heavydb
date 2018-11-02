@@ -350,15 +350,6 @@ class Executor {
       RenderInfo* render_query_data,
       const std::string& poly_table_name);
 
-  std::shared_ptr<ResultSet> renderPolygonsInSitu(
-      const std::string& queryStr,
-      const ExecutionResult& results,
-      const Catalog_Namespace::SessionInfo& session,
-      const int render_widget_id,
-      const rapidjson::Value& data_desc,
-      RenderInfo* render_query_data,
-      const std::string& poly_table_name);
-
   std::shared_ptr<ResultSet> renderLinesNonInSitu(
       const std::string& queryStr,
       const ExecutionResult& results,
@@ -366,6 +357,20 @@ class Executor {
       const int render_widget_id,
       const rapidjson::Value& data_desc,
       RenderInfo* render_query_data);
+
+#if HAVE_CUDA
+  enum class InSituGeoRenderType { kPOLYGONS, kLINES };
+
+  std::shared_ptr<ResultSet> renderGeoInSitu(
+      const InSituGeoRenderType in_situ_geo_render_type,
+      const std::string& queryStr,
+      const ExecutionResult& results,
+      const Catalog_Namespace::SessionInfo& session,
+      const int render_widget_id,
+      const rapidjson::Value& data_desc,
+      RenderInfo* render_query_data,
+      const std::string& line_table_name);
+#endif
 
   std::vector<int32_t> getStringIds(
       const std::string& col_name,
