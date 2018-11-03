@@ -2,6 +2,7 @@
 #define CONFIGRESOLVE_H
 
 #include <type_traits>
+#include "funcannotations.h"
 
 struct PreprocessorTrue {};
 struct PreprocessorFalse {};
@@ -29,6 +30,14 @@ using CudaBuildSelector = PreprocessorTrue;
 #else
 using CudaBuildSelector = PreprocessorFalse;
 #endif
+
+inline DEVICE constexpr bool isCudaCC() {
+#ifdef __CUDACC__
+  return true;
+#else
+  return false;
+#endif
+}
 
 // There is probably a better place to put this.  Catalog.h, perhaps?  Reviewers, please
 // comment.

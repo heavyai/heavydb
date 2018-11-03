@@ -24,7 +24,7 @@
 #ifndef SQLTYPES_H
 #define SQLTYPES_H
 
-#include "funcannotations.h"
+#include "ConfigResolve.h"
 
 #include <stdint.h>
 #include <cassert>
@@ -79,21 +79,24 @@ struct VarlenDatum {
       : length(l), pointer(p), is_null(n) {}
 };
 
-// ArrayDatum is idential to VarlenDatum except that it takes ownership of
-// the memory holding array data.
-struct ArrayDatum : public VarlenDatum {
-#ifndef __CUDACC__
-  std::shared_ptr<int8_t> data_ptr;
-#endif
+struct HostArrayDatum : public VarlenDatum {
+  struct Deleter {
+    auto operator()(int8_t* p) { free(p); }
+  };
+  using ManagedPtr = std::shared_ptr<int8_t>;
 
-  DEVICE ArrayDatum() : VarlenDatum() {}
-#ifndef __CUDACC__
-  ArrayDatum(const size_t l, int8_t* p, const bool n)
-      : VarlenDatum(l, p, n), data_ptr(p, [](int8_t* p) { free(p); }) {}
-#else
-  ArrayDatum(const size_t l, int8_t* p, const bool n) : VarlenDatum(l, p, n) {}
-#endif
+  HostArrayDatum() = default;
+  HostArrayDatum(size_t const l, int8_t* p, bool const n)
+      : VarlenDatum(l, p, n), data_ptr(p, Deleter()){};
+
+  ManagedPtr data_ptr;
 };
+
+struct DeviceArrayDatum : public VarlenDatum {
+  DEVICE DeviceArrayDatum() : VarlenDatum() {}
+};
+
+using ArrayDatum = std::conditional_t<isCudaCC(), DeviceArrayDatum, HostArrayDatum>;
 
 typedef union {
   bool boolval;
