@@ -39,10 +39,4 @@ inline DEVICE constexpr bool isCudaCC() {
 #endif
 }
 
-// There is probably a better place to put this.  Catalog.h, perhaps?  Reviewers, please
-// comment.
-inline constexpr char const* getDeletedColumnLabel() {
-  return "$delete$";
-}
-
 #endif
