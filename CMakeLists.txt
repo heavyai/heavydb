@@ -361,7 +361,7 @@ if(ENABLE_COMPACTION)
 endif()
 
 option(DISABLE_HIGH_PRECISION_TIMESTAMP "Disable parser support for creating milli, micro, and nanosecond timestamp columns" ON)
-if(DISABLE_HIGH_PRECISION_TIMESTAMP) 
+if(DISABLE_HIGH_PRECISION_TIMESTAMP)
   add_definitions("-DDISABLE_HIGH_PRECISION_TIMESTAMP")
 endif()
 
@@ -612,17 +612,10 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     install(FILES systemd/mapd_sd_server.service.in systemd/mapd_sd_server@.service.in DESTINATION systemd)
     install(FILES systemd/mapd-sds.conf.in DESTINATION systemd)
   endif()
+  install(FILES systemd/mapd_server.service.in systemd/mapd_server@.service.in DESTINATION systemd)
   install(FILES systemd/mapd_web_server.service.in systemd/mapd_web_server@.service.in DESTINATION systemd)
   install(FILES systemd/mapd.conf.in DESTINATION systemd)
   install(PROGRAMS systemd/install_mapd_systemd.sh DESTINATION systemd)
-
-  if(NOT ENABLE_RENDERING OR "${RENDERER_CONTEXT_TYPE}" STREQUAL "EGL")
-    install(FILES systemd/mapd_server.service.in systemd/mapd_server@.service.in DESTINATION systemd)
-  else()
-    install(FILES systemd/mapd_server_render.service.in RENAME mapd_server.service.in DESTINATION systemd)
-    install(FILES systemd/mapd_server_render@.service.in RENAME mapd_server@.service.in DESTINATION systemd)
-    install(FILES systemd/mapd_xorg.service DESTINATION systemd)
-  endif()
 endif()
 
 add_custom_target(clean-all

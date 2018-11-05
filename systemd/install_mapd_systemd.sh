@@ -55,9 +55,6 @@ for f in mapd_server mapd_server@ mapd_sd_server mapd_sd_server@ mapd_web_server
     sudo cp $MAPD_TMP/$f.service /lib/systemd/system/
   fi
 done
-if [ -f mapd_xorg.service ]; then
-	sudo cp mapd_xorg.service /lib/systemd/system/
-fi
 
 sed -e "s#@MAPD_PATH@#${vars['MAPD_PATH']}#g" \
     -e "s#@MAPD_STORAGE@#${vars['MAPD_STORAGE']}#g" \
