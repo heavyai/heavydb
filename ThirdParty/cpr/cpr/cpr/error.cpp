@@ -38,8 +38,10 @@ ErrorCode Error::getErrorCodeForCurlError(std::int32_t curl_code) {
             return ErrorCode::SSL_LOCAL_CERTIFICATE_ERROR;
         case CURLE_SSL_CIPHER:
             return ErrorCode::GENERIC_SSL_ERROR;
+#if CURLE_SSL_CACERT != CURLE_PEER_FAILED_VERIFICATION
         case CURLE_SSL_CACERT:
             return ErrorCode::SSL_CACERT_ERROR;
+#endif
         case CURLE_USE_SSL_FAILED:
             return ErrorCode::GENERIC_SSL_ERROR;
         case CURLE_SSL_ENGINE_INITFAILED:
