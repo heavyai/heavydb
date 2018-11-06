@@ -2,6 +2,7 @@ package com.mapd.jdbc;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.sql.*;
@@ -14,9 +15,8 @@ import static java.lang.Math.ulp;
 import static org.junit.Assert.*;
 
 public class MapDStatementTest {
-  static Properties PROPERTIES = new Property_loader();
-  static final String url = PROPERTIES.getProperty("base_connection_url") + ":"
-          + PROPERTIES.getProperty("default_db") + ":https";
+  static Properties PROPERTIES = new Property_loader("connection.properties");
+  static final String url = PROPERTIES.getProperty("default_db_connection_url");
   static final String user = PROPERTIES.getProperty("default_super_user");
   static final String password = PROPERTIES.getProperty("default_user_password");
 
@@ -27,11 +27,6 @@ public class MapDStatementTest {
     Properties pt = new Properties();
     pt.setProperty("user", user);
     pt.setProperty("password", password);
-    // pt.setProperty("protocol", "http");
-    pt.setProperty("protocol", "https");
-    // pt.setProperty("key_store", "/home/jack/certs/server.jks");
-    // pt.setProperty("key_store", "/home/jack/java_key/t1.jks");
-    // pt.setProperty("key_store_pwd", "XXXXXX");
     m_conn = DriverManager.getConnection(url, pt);
   }
 
@@ -65,7 +60,7 @@ public class MapDStatementTest {
           "insert into test_jdbc_tm_tble values ('2970-01-01 00:00:10', '2970-01-01 00:00:10.001', '2970-01-01 00:00:10.000001', '2262-04-11 23:47:16.850000001')";
   static String sql_select_tm = "select * from test_jdbc_tm_tble";
 
-  @Test
+  @Ignore
   public void insert_times() throws Exception {
     Statement statement = m_conn.createStatement();
     statement.executeUpdate(sql_drop_tbl_tm);
@@ -111,7 +106,7 @@ public class MapDStatementTest {
     statement.executeUpdate(sql_drop_tbl_tm);
   }
 
-  @Test
+  @Ignore
   public void create_times() throws Exception {
     Statement statement = m_conn.createStatement();
     statement.executeUpdate(sql_drop_tbl_tm);

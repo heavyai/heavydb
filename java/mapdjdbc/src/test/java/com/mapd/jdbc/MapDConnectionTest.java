@@ -1,4 +1,5 @@
 package com.mapd.jdbc;
+import java.net.URL;
 import java.sql.*;
 import org.junit.Test;
 
@@ -9,72 +10,88 @@ import static org.junit.Assert.*;
 
 public class MapDConnectionTest {
   // Property_loader loads the values from 'connection.properties in resources
-  static Properties PROPERTIES = new Property_loader();
-  static final String url = PROPERTIES.getProperty("base_connection_url") + ":"
-          + PROPERTIES.getProperty("default_db") + ":http";
+  static Properties PROPERTIES = new Property_loader("connection_test.properties");
   static final String user = PROPERTIES.getProperty("default_super_user");
   static final String password = PROPERTIES.getProperty("default_user_password");
 
   /* Test the basic connection and methods functionality */
   @Test
-  public void tst1_getConnection() {
-    Connection conn = null;
-
+  public void tst1_binary_unencrypted() {
+    try {
+      String url = PROPERTIES.getProperty("binary_connection_url") + ":"
+              + PROPERTIES.getProperty("default_db");
+      Connection conn = DriverManager.getConnection(url, user, password);
+      assertNotEquals(null, conn);
+      conn.close();
+      boolean closed = conn.isClosed();
+      assertEquals(true, closed);
+    } catch (SQLException sq) {
+      String err = "Connection test failed " + sq.toString();
+      fail(err);
+    }
+  }
+  @Test
+  public void tst2_http_unencrypted() {
+    try {
+      String url = PROPERTIES.getProperty("http_connection_url") + ":"
+              + PROPERTIES.getProperty("default_db") + ":http";
+      Connection conn = DriverManager.getConnection(url, user, password);
+      assertNotEquals(null, conn);
+      conn.close();
+      boolean closed = conn.isClosed();
+      assertEquals(true, closed);
+    } catch (SQLException sq) {
+      String err = "Connection test failed " + sq.toString();
+      fail(err);
+    }
+  }
+  @Test
+  public void tst3_https_encrypted() {
     try {
       Properties pt = new Properties();
       pt.setProperty("user", user);
       pt.setProperty("password", password);
-      pt.setProperty("protocol", "binary");
-      // pt.setProperty("protocol", "https");
-      pt.setProperty("key_store", "/home/jack/certs/server.jks");
-      pt.setProperty("key_store_pwd", "XXXXXX");
-      // conn = DriverManager.getConnection(url, user, password);
-      conn = DriverManager.getConnection(url, pt);
-
+      pt.setProperty("protocol", "https");
+      String url = PROPERTIES.getProperty("https_connection_url") + ":"
+              + PROPERTIES.getProperty("default_db");
+      Connection conn = DriverManager.getConnection(url, pt);
       assertNotEquals(null, conn);
-      Statement st = conn.createStatement();
-      assertNotEquals(null, st);
-      st.close();
-      // Connection x_conn = st.getConnection();  not supported
-      st = conn.createStatement(1, 2);
-      assertNotEquals(null, st);
-      st.close();
-
-      try {
-        st = conn.createStatement(1, 2, 3);
-        fail("createStatement should have thrown an exception");
-      } catch (UnsupportedOperationException ex) {
-      }
-
-      assertNotEquals(null, conn.getMetaData());
-
-      st = conn.prepareStatement("update employee set salary = ? wgere id = ?");
-      assertNotEquals(null, st);
-
-      // Not supported
-      // assertEquals(false,st.isClosed());
-
-      st = conn.prepareStatement("update employee set salary = ? wgere id = ?",
-              ResultSet.TYPE_FORWARD_ONLY,
-              ResultSet.CONCUR_READ_ONLY);
-
-      assertNotEquals(null, st);
-
-      // Not supported
-      // st = conn.prepareCall("update employee set salary = ? wgere id = ?");
-      // st = conn.prepareCall("update employee set salary = ? wgere id = ?",
-      // ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
-
-      st.close();
-
-      assertEquals(null, conn.getWarnings());
-
       conn.close();
       boolean closed = conn.isClosed();
       assertEquals(true, closed);
-
     } catch (SQLException sq) {
-      fail("Connection test failed exception thrown");
+      String err = "Connection test failed " + sq.toString();
+      fail(err);
+    }
+  }
+  @Test
+  public void tst4_https_encrypted_with_server_validation() {
+    try {
+      String key_store = PROPERTIES.getProperty("server_key_store");
+      ClassLoader cl = getClass().getClassLoader();
+      key_store = cl.getResource(key_store).getPath();
+
+      Properties pt = new Properties();
+      pt.setProperty("user", user);
+      pt.setProperty("password", password);
+      pt.setProperty("protocol", "https");
+      pt.setProperty("key_store", key_store);
+      pt.setProperty(
+              "key_store_pwd", PROPERTIES.getProperty("server_key_store_password"));
+
+      String url = PROPERTIES.getProperty("https_connection_url") + ":"
+              + PROPERTIES.getProperty("default_db");
+
+      Connection conn = DriverManager.getConnection(url, pt);
+      conn.close();
+      assertNotEquals(null, conn);
+      boolean closed = conn.isClosed();
+      assertEquals(true, closed);
+
+      assertNotEquals(null, conn);
+    } catch (SQLException sq) {
+      String err = "Connection test failed " + sq.toString();
+      fail(err);
     }
   }
 }

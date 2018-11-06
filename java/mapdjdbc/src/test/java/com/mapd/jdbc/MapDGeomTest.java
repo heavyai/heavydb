@@ -8,9 +8,8 @@ import java.util.Properties;
 import static org.junit.Assert.*;
 
 public class MapDGeomTest {
-  static Properties PROPERTIES = new Property_loader();
-  static final String url = PROPERTIES.getProperty("base_connection_url") + ":"
-          + PROPERTIES.getProperty("default_db");
+  static Properties PROPERTIES = new Property_loader("connection.properties");
+  static final String url = PROPERTIES.getProperty("default_db_connection_url");
   static final String user = PROPERTIES.getProperty("default_super_user");
   static final String password = PROPERTIES.getProperty("default_user_password");
 
