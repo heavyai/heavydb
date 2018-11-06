@@ -21,6 +21,7 @@
 #include "CardinalityEstimator.h"
 #include "EquiJoinCondition.h"
 #include "ExpressionRewrite.h"
+#include "FromTableReordering.h"
 #include "InputMetadata.h"
 #include "JoinFilterPushDown.h"
 #include "QueryPhysicalInputsCollector.h"
@@ -2049,8 +2050,11 @@ std::unique_ptr<const RexOperator> get_bitwise_equals(const RexScalar* scalar) {
   }
   std::vector<std::unique_ptr<const RexScalar>> eq_operands;
   if (*eq_lhs == *is_null_lhs && *eq_rhs == *is_null_rhs) {
-    eq_operands.emplace_back(equi_join_condition->getOperandAndRelease(0));
-    eq_operands.emplace_back(equi_join_condition->getOperandAndRelease(1));
+    RexDeepCopyVisitor deep_copy_visitor;
+    auto lhs_op_copy = deep_copy_visitor.visit(equi_join_condition->getOperand(0));
+    auto rhs_op_copy = deep_copy_visitor.visit(equi_join_condition->getOperand(1));
+    eq_operands.emplace_back(lhs_op_copy.release());
+    eq_operands.emplace_back(rhs_op_copy.release());
     return boost::make_unique<const RexOperator>(
         kBW_EQ, eq_operands, equi_join_condition->getType());
   }
@@ -2078,19 +2082,6 @@ std::unique_ptr<const RexOperator> get_bitwise_equals_conjunction(
   return get_bitwise_equals(scalar);
 }
 
-std::vector<size_t> get_node_input_permutation(
-    const std::vector<InputTableInfo>& table_infos) {
-  std::vector<size_t> input_permutation(table_infos.size());
-  std::iota(input_permutation.begin(), input_permutation.end(), 0);
-  std::sort(input_permutation.begin(),
-            input_permutation.end(),
-            [&table_infos](const size_t lhs_index, const size_t rhs_index) {
-              return table_infos[lhs_index].info.getNumTuples() >
-                     table_infos[rhs_index].info.getNumTuples();
-            });
-  return input_permutation;
-}
-
 std::vector<JoinType> left_deep_join_types(const RelLeftDeepInnerJoin* left_deep_join) {
   CHECK_GE(left_deep_join->inputCount(), size_t(2));
   std::vector<JoinType> join_types(left_deep_join->inputCount() - 1, JoinType::INNER);
@@ -2104,13 +2095,15 @@ std::vector<JoinType> left_deep_join_types(const RelLeftDeepInnerJoin* left_deep
 }
 
 template <class RA>
-void do_table_reordering_maybe(
+std::vector<size_t> do_table_reordering(
     std::vector<InputDescriptor>& input_descs,
     std::list<std::shared_ptr<const InputColDescriptor>>& input_col_descs,
+    const JoinQualsPerNestingLevel& left_deep_join_quals,
     std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
     const RA* node,
     const std::vector<InputTableInfo>& query_infos,
-    const Catalog_Namespace::Catalog& cat) {
+    const Executor* executor) {
+  const auto& cat = *executor->getCatalog();
   for (const auto& table_info : query_infos) {
     if (table_info.table_id < 0) {
       continue;
@@ -2118,14 +2111,15 @@ void do_table_reordering_maybe(
     const auto td = cat.getMetadataForTable(table_info.table_id);
     CHECK(td);
     if (table_is_replicated(td)) {
-      return;
+      return {};
     }
   }
-  const auto input_permutation = get_node_input_permutation(query_infos);
+  const auto input_permutation =
+      get_node_input_permutation(left_deep_join_quals, query_infos, executor);
   input_to_nest_level = get_input_nest_levels(node, input_permutation);
   std::tie(input_descs, input_col_descs, std::ignore) =
       get_input_desc(node, input_to_nest_level, input_permutation, cat);
-  return;
+  return input_permutation;
 }
 
 std::vector<size_t> get_left_deep_join_input_sizes(
@@ -2167,12 +2161,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
   const auto join_types = left_deep_join ? left_deep_join_types(left_deep_join)
                                          : std::vector<JoinType>{get_join_type(compound)};
   if (left_deep_join) {
-    if (g_from_table_reordering &&
-        std::find(join_types.begin(), join_types.end(), JoinType::LEFT) ==
-            join_types.end()) {
-      do_table_reordering_maybe(
-          input_descs, input_col_descs, input_to_nest_level, compound, query_infos, cat_);
-    }
     left_deep_join_quals = translateLeftDeepJoinFilter(
         left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
@@ -2265,18 +2253,24 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
   std::vector<size_t> left_deep_join_input_sizes;
   if (left_deep_join) {
     left_deep_join_input_sizes = get_left_deep_join_input_sizes(left_deep_join);
+    left_deep_join_quals = translateLeftDeepJoinFilter(
+        left_deep_join, input_descs, input_to_nest_level, just_explain);
     if (g_from_table_reordering &&
         std::find(join_types.begin(), join_types.end(), JoinType::LEFT) ==
             join_types.end()) {
-      do_table_reordering_maybe(
-          input_descs, input_col_descs, input_to_nest_level, compound, query_infos, cat_);
-      input_permutation = get_node_input_permutation(query_infos);
+      input_permutation = do_table_reordering(input_descs,
+                                              input_col_descs,
+                                              left_deep_join_quals,
+                                              input_to_nest_level,
+                                              compound,
+                                              query_infos,
+                                              executor_);
       input_to_nest_level = get_input_nest_levels(compound, input_permutation);
       std::tie(input_descs, input_col_descs, std::ignore) =
           get_input_desc(compound, input_to_nest_level, input_permutation, cat_);
+      left_deep_join_quals = translateLeftDeepJoinFilter(
+          left_deep_join, input_descs, input_to_nest_level, just_explain);
     }
-    left_deep_join_quals = translateLeftDeepJoinFilter(
-        left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
   QueryFeatureDescriptor query_features;
   RelAlgTranslator translator(cat_,
@@ -2572,13 +2566,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
   const auto join_types = left_deep_join ? left_deep_join_types(left_deep_join)
                                          : std::vector<JoinType>{get_join_type(project)};
   if (left_deep_join) {
-    const auto query_infos = get_table_infos(input_descs, executor_);
-    if (g_from_table_reordering &&
-        std::find(join_types.begin(), join_types.end(), JoinType::LEFT) ==
-            join_types.end()) {
-      do_table_reordering_maybe(
-          input_descs, input_col_descs, input_to_nest_level, project, query_infos, cat_);
-    }
     left_deep_join_quals = translateLeftDeepJoinFilter(
         left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
@@ -2654,18 +2641,22 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
   if (left_deep_join) {
     left_deep_join_input_sizes = get_left_deep_join_input_sizes(left_deep_join);
     const auto query_infos = get_table_infos(input_descs, executor_);
-    if (g_from_table_reordering &&
-        std::find(join_types.begin(), join_types.end(), JoinType::LEFT) ==
-            join_types.end()) {
-      do_table_reordering_maybe(
-          input_descs, input_col_descs, input_to_nest_level, project, query_infos, cat_);
-      input_permutation = get_node_input_permutation(query_infos);
+    left_deep_join_quals = translateLeftDeepJoinFilter(
+        left_deep_join, input_descs, input_to_nest_level, just_explain);
+    if (g_from_table_reordering) {
+      input_permutation = do_table_reordering(input_descs,
+                                              input_col_descs,
+                                              left_deep_join_quals,
+                                              input_to_nest_level,
+                                              project,
+                                              query_infos,
+                                              executor_);
       input_to_nest_level = get_input_nest_levels(project, input_permutation);
       std::tie(input_descs, input_col_descs, std::ignore) =
           get_input_desc(project, input_to_nest_level, input_permutation, cat_);
+      left_deep_join_quals = translateLeftDeepJoinFilter(
+          left_deep_join, input_descs, input_to_nest_level, just_explain);
     }
-    left_deep_join_quals = translateLeftDeepJoinFilter(
-        left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
 
   QueryFeatureDescriptor query_features;
