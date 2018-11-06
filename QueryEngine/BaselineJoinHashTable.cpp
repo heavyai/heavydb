@@ -89,6 +89,7 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     , query_infos_(query_infos)
     , memory_level_(memory_level)
     , entry_count_(entry_count)
+    , emitted_keys_count_(0)
     , executor_(executor)
     , ra_exe_unit_(ra_exe_unit)
     , column_cache_(column_cache)
