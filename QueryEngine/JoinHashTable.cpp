@@ -46,9 +46,9 @@ InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
 
   const auto lhs_cast = dynamic_cast<const Analyzer::UOper*>(lhs);
   const auto rhs_cast = dynamic_cast<const Analyzer::UOper*>(rhs);
-  if (static_cast<bool>(lhs_cast) != static_cast<bool>(rhs_cast) ||
-      (lhs_cast && lhs_cast->get_optype() != kCAST) ||
-      (rhs_cast && rhs_cast->get_optype() != kCAST)) {
+  if (lhs_ti.is_string() && (static_cast<bool>(lhs_cast) != static_cast<bool>(rhs_cast) ||
+                             (lhs_cast && lhs_cast->get_optype() != kCAST) ||
+                             (rhs_cast && rhs_cast->get_optype() != kCAST))) {
     throw HashJoinFail("Cannot use hash join for given expression");
   }
   const auto lhs_col =

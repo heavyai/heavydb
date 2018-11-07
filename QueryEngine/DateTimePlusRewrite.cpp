@@ -15,6 +15,7 @@
  */
 
 #include "DateTimePlusRewrite.h"
+#include "Execute.h"
 
 #include "../Analyzer/Analyzer.h"
 #include "../Parser/ParserNode.h"
@@ -22,18 +23,6 @@
 #include <glog/logging.h>
 
 namespace {
-
-const Analyzer::Expr* remove_cast_to_int(const Analyzer::Expr* expr) {
-  const auto uoper = dynamic_cast<const Analyzer::UOper*>(expr);
-  if (!uoper || uoper->get_optype() != kCAST) {
-    return nullptr;
-  }
-  const auto& target_ti = uoper->get_type_info();
-  if (!target_ti.is_integer()) {
-    return nullptr;
-  }
-  return uoper->get_operand();
-}
 
 const Analyzer::Expr* remove_truncate_int(const Analyzer::Expr* expr) {
   if (!expr) {

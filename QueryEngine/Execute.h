@@ -676,8 +676,8 @@ class Executor {
                              const bool fetch_column,
                              const bool hoist_literals);
   llvm::Value* posArg(const Analyzer::Expr*) const;
-  const Analyzer::ColumnVar* hashJoinLhs(const Analyzer::ColumnVar* rhs) const;
-  const Analyzer::ColumnVar* hashJoinLhsTuple(
+  std::shared_ptr<const Analyzer::Expr> hashJoinLhs(const Analyzer::ColumnVar* rhs) const;
+  std::shared_ptr<const Analyzer::ColumnVar> hashJoinLhsTuple(
       const Analyzer::ColumnVar* rhs,
       const Analyzer::BinOper* tautological_eq) const;
   llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
@@ -1683,5 +1683,7 @@ size_t get_context_count(const ExecutorDeviceType device_type,
                          const size_t gpu_count);
 
 extern "C" void register_buffer_with_executor_rsm(int64_t exec, int8_t* buffer);
+
+const Analyzer::Expr* remove_cast_to_int(const Analyzer::Expr* expr);
 
 #endif  // QUERYENGINE_EXECUTE_H

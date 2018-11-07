@@ -5233,6 +5233,16 @@ TEST(Select, Joins_ImplicitJoins) {
   }
 }
 
+TEST(Select, Joins_DifferentIntegerTypes) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.xx;", dt);
+    c("SELECT test_inner.xx, COUNT(*) AS n FROM test, test_inner WHERE test.x = "
+      "test_inner.xx GROUP BY test_inner.xx ORDER BY n;",
+      dt);
+  }
+}
+
 TEST(Select, Joins_FilterPushDown) {
   auto default_flag = g_enable_filter_push_down;
   auto default_lower_frac = g_filter_push_down_low_frac;
@@ -11402,7 +11412,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
     const std::string drop_old_test{"DROP TABLE IF EXISTS test_inner;"};
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
-    std::string columns_definition{"x int not null, y int, str text encoding dict"};
+    std::string columns_definition{
+        "x int not null, y int, xx smallint, str text encoding dict"};
     const auto create_test_inner =
         build_create_table_statement(columns_definition,
                                      "test_inner",
@@ -11413,18 +11424,18 @@ int create_and_populate_tables(bool with_delete_support = true) {
                                      g_aggregator);
     run_ddl_statement(create_test_inner);
     g_sqlite_comparator.query(
-        "CREATE TABLE test_inner(x int not null, y int, str text);");
+        "CREATE TABLE test_inner(x int not null, y int, xx smallint, str text);");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test_inner'";
     return -EEXIST;
   }
   {
-    const std::string insert_query{"INSERT INTO test_inner VALUES(7, 43, 'foo');"};
+    const std::string insert_query{"INSERT INTO test_inner VALUES(7, 43, 7, 'foo');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   {
-    const std::string insert_query{"INSERT INTO test_inner VALUES(-9, 72, 'bars');"};
+    const std::string insert_query{"INSERT INTO test_inner VALUES(-9, 72, -9, 'bars');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
