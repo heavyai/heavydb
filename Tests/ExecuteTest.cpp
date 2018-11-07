@@ -4840,14 +4840,16 @@ TEST(Update, DecimalOverflow) {
                                       std::to_string(val) + ");",
                                   ExecutorDeviceType::CPU),
                  std::runtime_error);
-    run_multiple_agg("UPDATE decimal_overflow_test set d=d-1 WHERE d IS NOT NULL;",
-                     ExecutorDeviceType::CPU);
-    run_multiple_agg("UPDATE decimal_overflow_test set d=d+1 WHERE d IS NOT NULL;",
-                     ExecutorDeviceType::CPU);
-    EXPECT_THROW(
+    SKIP_ON_AGGREGATOR(
+        run_multiple_agg("UPDATE decimal_overflow_test set d=d-1 WHERE d IS NOT NULL;",
+                         ExecutorDeviceType::CPU));
+    SKIP_ON_AGGREGATOR(
+        run_multiple_agg("UPDATE decimal_overflow_test set d=d+1 WHERE d IS NOT NULL;",
+                         ExecutorDeviceType::CPU));
+    SKIP_ON_AGGREGATOR(EXPECT_THROW(
         run_multiple_agg("UPDATE decimal_overflow_test set d=d+1 WHERE d IS NOT NULL;",
                          ExecutorDeviceType::CPU),
-        std::runtime_error);
+        std::runtime_error));
   };
 
   test(1, 0);
