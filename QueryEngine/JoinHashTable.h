@@ -94,7 +94,7 @@ class JoinHashTable : public JoinHashTableInterface {
       const std::vector<llvm::Value*>& hash_join_idx_args_in,
       const size_t inner_rte_idx,
       const bool is_sharded,
-      const bool col_range_has_nulls,
+      const bool col_is_nullable,
       const bool is_bw_eq,
       const int64_t sub_buff_size,
       Executor* executor);
@@ -102,7 +102,7 @@ class JoinHashTable : public JoinHashTableInterface {
   static HashJoinMatchingSet codegenMatchingSet(
       const std::vector<llvm::Value*>& hash_join_idx_args_in,
       const bool is_sharded,
-      const bool col_range_has_nulls,
+      const bool col_is_nullable,
       const bool is_bw_eq,
       const int64_t sub_buff_size,
       Executor* executor);

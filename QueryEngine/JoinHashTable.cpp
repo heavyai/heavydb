@@ -1194,8 +1194,8 @@ std::vector<llvm::Value*> JoinHashTable::getHashJoinArgs(llvm::Value* hash_ptr,
     hash_join_idx_args.push_back(executor_->ll_int<uint32_t>(shard_count));
     hash_join_idx_args.push_back(executor_->ll_int<uint32_t>(device_count_));
   }
-  if (col_range_.hasNulls() || isBitwiseEq()) {
-    auto key_col_logical_ti = get_logical_type_info(key_col->get_type_info());
+  auto key_col_logical_ti = get_logical_type_info(key_col->get_type_info());
+  if (!key_col_logical_ti.get_notnull() || isBitwiseEq()) {
     hash_join_idx_args.push_back(
         executor_->ll_int(inline_fixed_encoding_null_val(key_col_logical_ti)));
   }
@@ -1221,10 +1221,11 @@ llvm::Value* JoinHashTable::codegenOneToManyHashJoin(const CompilationOptions& c
   const int shard_count = shardCount();
   auto hash_join_idx_args = getHashJoinArgs(pos_ptr, key_col, shard_count, co);
   const int64_t sub_buff_size = hash_entry_count_ * sizeof(int32_t);
+  const auto& key_col_ti = key_col->get_type_info();
   return codegenOneToManyHashJoin(hash_join_idx_args,
                                   val_col->get_rte_idx(),
                                   shard_count,
-                                  col_range_.hasNulls(),
+                                  !key_col_ti.get_notnull(),
                                   isBitwiseEq(),
                                   sub_buff_size,
                                   executor_);
@@ -1243,9 +1244,10 @@ HashJoinMatchingSet JoinHashTable::codegenMatchingSet(const CompilationOptions& 
   const int shard_count = shardCount();
   auto hash_join_idx_args = getHashJoinArgs(pos_ptr, key_col, shard_count, co);
   const int64_t sub_buff_size = hash_entry_count_ * sizeof(int32_t);
+  const auto& key_col_ti = key_col->get_type_info();
   return codegenMatchingSet(hash_join_idx_args,
                             shard_count,
-                            col_range_.hasNulls(),
+                            !key_col_ti.get_notnull(),
                             isBitwiseEq(),
                             sub_buff_size,
                             executor_);
@@ -1255,13 +1257,13 @@ llvm::Value* JoinHashTable::codegenOneToManyHashJoin(
     const std::vector<llvm::Value*>& hash_join_idx_args_in,
     const size_t inner_rte_idx,
     const bool is_sharded,
-    const bool col_range_has_nulls,
+    const bool col_is_nullable,
     const bool is_bw_eq,
     const int64_t sub_buff_size,
     Executor* executor) {
   const auto matching_set = codegenMatchingSet(hash_join_idx_args_in,
                                                is_sharded,
-                                               col_range_has_nulls,
+                                               col_is_nullable,
                                                is_bw_eq,
                                                sub_buff_size,
                                                executor);
@@ -1315,7 +1317,7 @@ llvm::Value* JoinHashTable::codegenOneToManyHashJoin(
 HashJoinMatchingSet JoinHashTable::codegenMatchingSet(
     const std::vector<llvm::Value*>& hash_join_idx_args_in,
     const bool is_sharded,
-    const bool col_range_has_nulls,
+    const bool col_is_nullable,
     const bool is_bw_eq,
     const int64_t sub_buff_size,
     Executor* executor) {
@@ -1326,7 +1328,7 @@ HashJoinMatchingSet JoinHashTable::codegenMatchingSet(
   if (is_sharded) {
     fname += "_sharded";
   }
-  if (!is_bw_eq && col_range_has_nulls) {
+  if (!is_bw_eq && col_is_nullable) {
     fname += "_nullable";
   }
   const auto slot_lv = executor->cgen_state_->emitCall(fname, hash_join_idx_args_in);
@@ -1377,7 +1379,8 @@ llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co,
   if (shard_count) {
     fname += "_sharded";
   }
-  if (!isBitwiseEq() && col_range_.hasNulls()) {
+  const auto& key_col_ti = key_col->get_type_info();
+  if (!isBitwiseEq() && !key_col_ti.get_notnull()) {
     fname += "_nullable";
   }
   return executor_->cgen_state_->emitCall(fname, hash_join_idx_args);
