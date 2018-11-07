@@ -4493,20 +4493,20 @@ std::string MapDHandler::parse_to_ra(
   return "";
 }
 
-void MapDHandler::execute_first_step(TStepResult& _return,
-                                     const TPendingQuery& pending_query) {
+void MapDHandler::check_table_consistency(TTableMeta& _return,
+                                          const TSessionId& session,
+                                          const int32_t table_id) {
   if (!leaf_handler_) {
     THROW_MAPD_EXCEPTION("Distributed support is disabled.");
   }
-  LOG(INFO) << "execute_first_step :  id:" << pending_query.id;
   auto time_ms = measure<>::execution([&]() {
     try {
-      leaf_handler_->execute_first_step(_return, pending_query);
+      leaf_handler_->check_table_consistency(_return, session, table_id);
     } catch (std::exception& e) {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
   });
-  LOG(INFO) << "execute_first_step-COMPLETED " << time_ms << "ms";
+  LOG(INFO) << "Table consistency check COMPLETED in " << time_ms << " ms ";
 }
 
 void MapDHandler::start_query(TPendingQuery& _return,
@@ -4527,6 +4527,22 @@ void MapDHandler::start_query(TPendingQuery& _return,
   });
   LOG(INFO) << "start_query-COMPLETED " << time_ms << "ms "
             << "id is " << _return.id;
+}
+
+void MapDHandler::execute_first_step(TStepResult& _return,
+                                     const TPendingQuery& pending_query) {
+  if (!leaf_handler_) {
+    THROW_MAPD_EXCEPTION("Distributed support is disabled.");
+  }
+  LOG(INFO) << "execute_first_step :  id:" << pending_query.id;
+  auto time_ms = measure<>::execution([&]() {
+    try {
+      leaf_handler_->execute_first_step(_return, pending_query);
+    } catch (std::exception& e) {
+      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    }
+  });
+  LOG(INFO) << "execute_first_step-COMPLETED " << time_ms << "ms";
 }
 
 void MapDHandler::broadcast_serialized_rows(const std::string& serialized_rows,

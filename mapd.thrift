@@ -547,6 +547,7 @@ service MapD {
   string get_first_geo_file_in_archive(1: TSessionId session, 2: string archive_path, 3: TCopyParams copy_params) throws (1: TMapDException e)
   list<string> get_all_files_in_archive(1: TSessionId session, 2: string archive_path, 3: TCopyParams copy_params) throws (1: TMapDException e)
   # distributed
+  TTableMeta check_table_consistency(1: TSessionId session, 2: i32 table_id) throws (1: TMapDException e)
   TPendingQuery start_query(1: TSessionId session, 2: string query_ra, 3: bool just_explain) throws (1: TMapDException e)
   TStepResult execute_first_step(1: TPendingQuery pending_query) throws (1: TMapDException e)
   void broadcast_serialized_rows(1: string serialized_rows, 2: TRowDescriptor row_desc, 3: TQueryId query_id) throws (1: TMapDException e)

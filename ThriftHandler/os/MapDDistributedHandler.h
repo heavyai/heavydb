@@ -52,6 +52,12 @@ class MapDLeafHandler {
  private:
   MapDLeafHandler(MapDHandler* mapd_handler) { CHECK(false); }
 
+  void check_table_consistency(TTableMeta& _return,
+                               const TSessionId& session,
+                               const int32_t table_id) {
+    CHECK(false);
+  };
+
   void start_query(TPendingQuery& _return,
                    const TSessionId& session,
                    const std::string& query_ra,

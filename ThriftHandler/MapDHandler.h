@@ -332,6 +332,9 @@ class MapDHandler : public MapDIf {
                                 const std::string& archive_path,
                                 const TCopyParams& copy_params);
   // distributed
+  void check_table_consistency(TTableMeta& _return,
+                               const TSessionId& session,
+                               const int32_t table_id);
   void start_query(TPendingQuery& _return,
                    const TSessionId& session,
                    const std::string& query_ra,
