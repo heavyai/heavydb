@@ -635,12 +635,10 @@ if("${MAPD_VERSION_EXTRA}" STREQUAL "dev")
   set (MAPD_JAR_RELEASE_VERSION "${MAPD_JAR_RELEASE_VERSION}-SNAPSHOT")
 endif()
 
-set (MAPD_COMMON_JAR "mapdcommon-${MAPD_JAR_RELEASE_VERSION}.jar")
 set (MAPD_JDBC_JAR "mapdjdbc-${MAPD_JAR_RELEASE_VERSION}.jar")
 
 add_custom_command(
   OUTPUT
-    ${CMAKE_BINARY_DIR}/bin/${MAPD_COMMON_JAR}
     ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
     ${CMAKE_BINARY_DIR}/bin/${MAPD_JDBC_JAR}
     ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar
@@ -658,7 +656,6 @@ add_custom_command(
     ${JAVA_SOURCES}
   )
 add_custom_target(mapd_java_components ALL DEPENDS
-  ${CMAKE_BINARY_DIR}/bin/${MAPD_COMMON_JAR}
   ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
   ${CMAKE_BINARY_DIR}/bin/${MAPD_JDBC_JAR}
   ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar)
