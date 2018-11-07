@@ -102,10 +102,6 @@ InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
       !(dynamic_cast<const Analyzer::FunctionOper*>(lhs)) && outer_col
           ? outer_col->get_type_info()
           : outer_ti;
-  if (!is_overlaps_join &&
-      outer_col_ti.get_notnull() != inner_col_real_ti.get_notnull()) {
-    throw HashJoinFail("For hash join, both sides must have the same nullability");
-  }
   if (is_overlaps_join) {
     if (!inner_col_real_ti.is_array()) {
       throw HashJoinFail(
