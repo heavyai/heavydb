@@ -7,6 +7,7 @@
 
 #include <boost/variant.hpp>
 #include "Shared/ConfigResolve.h"
+#include "Shared/ExperimentalTypeUtilities.h"
 #include "Shared/UpdelRoll.h"
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"
@@ -122,6 +123,18 @@ class StorageIOFacility {
   using UpdateTargetColumnNameType = typename UpdateTargetColumnNamesList::value_type;
   using ColumnValidationFunction = typename IOFacility::ColumnValidationFunction;
 
+  using StringSelector = Experimental::MetaTypeClass<Experimental::String>;
+  using NonStringSelector = Experimental::UncapturedMetaTypeClass;
+
+  struct MethodSelector {
+    static constexpr auto getEntryAt(StringSelector) {
+      return &FragmentUpdaterType::getTranslatedEntryAt;
+    }
+    static constexpr auto getEntryAt(NonStringSelector) {
+      return &FragmentUpdaterType::getEntryAt;
+    }
+  };
+
   class TransactionParameters {
    public:
     typename IOFacility::TransactionLog& getTransactionTracker() {
@@ -218,37 +231,17 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
       usable_threads = 1;
     }
 
-    auto string_process_rows =
-        [&update_log, &update_parameters, &column_offsets, &scalar_target_values](
-            uint64_t column_index, uint64_t row_start, uint64_t row_count) -> uint64_t {
-      uint64_t rows_processed = 0;
-      for (uint64_t row_index = row_start; row_index < (row_start + row_count);
-           row_index++, rows_processed++) {
-        auto const row(update_log.getTranslatedEntryAt(row_index));
-
-        CHECK(!row.empty());
-        CHECK(row.size() == update_parameters.getUpdateColumnCount() + 1);
-
-        auto terminal_column_iter = std::prev(row.end());
-        const auto frag_offset_scalar_tv =
-            boost::get<ScalarTargetValue>(&*terminal_column_iter);
-        CHECK(frag_offset_scalar_tv);
-
-        column_offsets[row_index] =
-            static_cast<uint64_t>(*(boost::get<int64_t>(frag_offset_scalar_tv)));
-        scalar_target_values[row_index] =
-            boost::get<ScalarTargetValue>(row[column_index]);
-      }
-      return rows_processed;
-    };
-
     auto process_rows =
         [&update_log, &update_parameters, &column_offsets, &scalar_target_values](
-            uint64_t column_index, uint64_t row_start, uint64_t row_count) -> uint64_t {
+            auto type_tag,
+            uint64_t column_index,
+            uint64_t row_start,
+            uint64_t row_count) -> uint64_t {
       uint64_t rows_processed = 0;
       for (uint64_t row_index = row_start; row_index < (row_start + row_count);
            row_index++, rows_processed++) {
-        auto const row(update_log.getEntryAt(row_index));
+        constexpr auto get_entry_method_sel(MethodSelector::getEntryAt(type_tag));
+        auto const row((update_log.*get_entry_method_sel)(row_index));
 
         CHECK(!row.empty());
         CHECK(row.size() == update_parameters.getUpdateColumnCount() + 1);
@@ -269,6 +262,7 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
     auto get_row_index = [complete_row_block_size](uint64_t thread_index) -> uint64_t {
       return (thread_index * complete_row_block_size);
     };
+
     // Iterate over each column
     for (decltype(update_parameters.getUpdateColumnCount()) column_index = 0;
          column_index < update_parameters.getUpdateColumnCount();
@@ -276,12 +270,12 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
       RowProcessingFuturesVector row_processing_futures;
       row_processing_futures.reserve(usable_threads);
 
-      if (!update_log.getColumnType(column_index)
-               .is_string()) {  // Process non-string columns
+      auto thread_launcher = [&](auto const& type_tag) {
         for (unsigned i = 0; i < static_cast<unsigned>(usable_threads); i++)
           row_processing_futures.emplace_back(
               std::async(std::launch::async,
                          std::forward<decltype(process_rows)>(process_rows),
+                         type_tag,
                          column_index,
                          get_row_index(i),
                          complete_row_block_size));
@@ -289,26 +283,17 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
           row_processing_futures.emplace_back(
               std::async(std::launch::async,
                          std::forward<decltype(process_rows)>(process_rows),
+                         type_tag,
                          column_index,
                          get_row_index(usable_threads),
                          partial_row_block_size));
         }
-      } else {  // Process string columns
-        for (unsigned i = 0; i < (unsigned)usable_threads; i++)
-          row_processing_futures.emplace_back(
-              std::async(std::launch::async,
-                         std::forward<decltype(string_process_rows)>(string_process_rows),
-                         column_index,
-                         get_row_index(i),
-                         complete_row_block_size));
-        if (partial_row_block_size) {
-          row_processing_futures.emplace_back(
-              std::async(std::launch::async,
-                         std::forward<decltype(string_process_rows)>(string_process_rows),
-                         column_index,
-                         get_row_index(usable_threads),
-                         partial_row_block_size));
-        }
+      };
+
+      if (!update_log.getColumnType(column_index).is_string()) {
+        thread_launcher(NonStringSelector());
+      } else {
+        thread_launcher(StringSelector());
       }
 
       uint64_t rows_processed(0);

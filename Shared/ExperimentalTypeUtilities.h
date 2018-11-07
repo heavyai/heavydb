@@ -31,7 +31,7 @@ namespace Experimental {
 struct UncapturedMetaType {};
 struct UncapturedMetaTypeClass {};
 
-enum MetaTypeClassifications { Geometry, Array };
+enum MetaTypeClassifications { Geometry, Array, String };
 
 template <typename T>
 struct MetaSwitchTraits {
@@ -51,6 +51,14 @@ struct MetaTypeClassDeterminant<Geometry> {
   template <typename SQL_TYPE_INFO>
   static auto isTargetClass(SQL_TYPE_INFO const& s) {
     return s.is_geometry();
+  }
+};
+
+template <>
+struct MetaTypeClassDeterminant<String> {
+  template <typename SQL_TYPE_INFO>
+  static auto isTargetClass(SQL_TYPE_INFO const& s) {
+    return s.is_string();
   }
 };
 
@@ -338,7 +346,8 @@ using FullMetaTypeFactory = MetaTypeFactory<SQLTypes,
                                             kGEOGRAPHY>;
 
 using GeoMetaTypeClassFactory = MetaTypeClassFactory<Geometry>;
-using FullMetaTypeClassFactory = MetaTypeClassFactory<Geometry, Array>;
+using StringMetaTypeClassFactory = MetaTypeClassFactory<String>;
+using FullMetaTypeClassFactory = MetaTypeClassFactory<Geometry, Array, String>;
 
 template <template <class> class SPECIALIZED_HANDLER>
 using GeoMetaTypeHandler = MetaTypeHandler<SPECIALIZED_HANDLER,
