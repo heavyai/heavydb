@@ -313,10 +313,14 @@ std::string DataMgr::dumpLevel(const MemoryLevel memLevel) {
 void DataMgr::clearMemory(const MemoryLevel memLevel) {
   // if gpu we need to iterate through all the buffermanagers for each card
   if (memLevel == MemoryLevel::GPU_LEVEL) {
-    int numGpus = cudaMgr_->getDeviceCount();
-    for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
-      LOG(INFO) << "clear slabs on gpu " << gpuNum;
-      bufferMgrs_[memLevel][gpuNum]->clearSlabs();
+    if (cudaMgr_) {
+      int numGpus = cudaMgr_->getDeviceCount();
+      for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
+        LOG(INFO) << "clear slabs on gpu " << gpuNum;
+        bufferMgrs_[memLevel][gpuNum]->clearSlabs();
+      }
+    } else {
+      throw std::runtime_error("Unable to clear GPU memory: No GPUs detected");
     }
   } else {
     bufferMgrs_[memLevel][0]->clearSlabs();

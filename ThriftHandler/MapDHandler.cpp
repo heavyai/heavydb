@@ -1836,7 +1836,11 @@ void MapDHandler::get_version(std::string& version) {
 
 void MapDHandler::clear_gpu_memory(const TSessionId& session) {
   const auto session_info = get_session(session);
-  SysCatalog::instance().get_dataMgr().clearMemory(MemoryLevel::GPU_LEVEL);
+  try {
+    SysCatalog::instance().get_dataMgr().clearMemory(MemoryLevel::GPU_LEVEL);
+  } catch (const std::exception& e) {
+    THROW_MAPD_EXCEPTION(e.what());
+  }
   if (render_handler_) {
     render_handler_->clear_gpu_memory();
   }
