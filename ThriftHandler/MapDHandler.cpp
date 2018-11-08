@@ -3473,7 +3473,8 @@ void MapDHandler::import_geo_table(const TSessionId& session,
       TColumnType cd_col_type = populateThriftColumnType(&cat, cd);
       if (rd[rd_index].col_name != cd->columnName ||
           rd[rd_index].col_type != cd_col_type.col_type) {
-        if (cd->columnName == "mapd_geo" && rd[rd_index].col_name == OMNISCI_GEO_PREFIX) {
+        if (cd->columnName == LEGACY_GEO_PREFIX &&
+            rd[rd_index].col_name == OMNISCI_GEO_PREFIX) {
           // Support legacy geo column names
           rd[rd_index].col_name = cd->columnName;
         } else {
@@ -3512,7 +3513,7 @@ void MapDHandler::import_geo_table(const TSessionId& session,
       // TODO(team): allow user to override the geo column name
       if (r.col_name == OMNISCI_GEO_PREFIX) {
         have_geo_column_with_correct_name = true;
-      } else if (r.col_name == "mapd_geo") {
+      } else if (r.col_name == LEGACY_GEO_PREFIX) {
         CHECK(colname_to_src.find(r.col_name) != colname_to_src.end());
         // Normalize column names for geo append with legacy column naming scheme
         colname_to_src[r.col_name] = r.col_name;

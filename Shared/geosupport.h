@@ -21,6 +21,7 @@
 #include <string>
 
 const std::string OMNISCI_GEO_PREFIX{"omnisci_geo"};
+const std::string LEGACY_GEO_PREFIX{"mapd_geo"};
 
 inline std::pair<double, double> geotransform_4326_to_900913(const double lon,
                                                              const double lat) {
