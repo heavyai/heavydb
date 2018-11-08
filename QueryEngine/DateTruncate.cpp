@@ -349,14 +349,6 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncateHighPrecision(DatetruncField 
   return DateTruncate(field, stimeval) * scale;
 }
 
-extern "C" NEVER_INLINE DEVICE time_t
-DateTruncateHighPrecisionToDate(DatetruncField field,
-                                time_t timeval,
-                                const int32_t dimen) {
-  return DateTruncateHighPrecision(field, timeval, dimen) /
-         get_timestamp_precision_scale(dimen);
-}
-
 extern "C" DEVICE time_t DateTruncateNullable(DatetruncField field,
                                               time_t timeval,
                                               const int64_t null_val) {
@@ -376,47 +368,38 @@ extern "C" DEVICE int64_t DateTruncateHighPrecisionNullable(DatetruncField field
   return DateTruncateHighPrecision(field, timeval, scale);
 }
 
+extern "C" DEVICE time_t DateTruncateHighPrecisionToDateNullable(time_t timeval,
+                                                                 const int64_t scale,
+                                                                 const int64_t null_val) {
+  if (timeval == null_val) {
+    return null_val;
+  }
+  return DateTruncateHighPrecisionToDate(timeval, scale);
+}
+
 extern "C" DEVICE int64_t
-DateTruncateAlterPrecisionScaleUpNullable(DatetruncField field,
-                                          int64_t timeval,
+DateTruncateAlterPrecisionScaleUpNullable(const time_t timeval,
                                           const int64_t scale,
                                           const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }
-  return DateTruncateAlterPrecisionScaleUp(field, timeval, scale);
+  return DateTruncateAlterPrecisionScaleUp(timeval, scale);
 }
 
 extern "C" DEVICE int64_t
-DateTruncateAlterPrecisionScaleDownNullable(DatetruncField field,
-                                            int64_t timeval,
+DateTruncateAlterPrecisionScaleDownNullable(const time_t timeval,
                                             const int64_t scale,
                                             const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }
-  return DateTruncateAlterPrecisionScaleDown(field, timeval, scale);
-}
-
-extern "C" DEVICE time_t DateTruncateHighPrecisionToDateNullable(DatetruncField field,
-                                                                 time_t timeval,
-                                                                 const int32_t dimen,
-                                                                 const int64_t null_val) {
-  if (timeval == null_val) {
-    return null_val;
-  }
-  return DateTruncateHighPrecisionToDate(field, timeval, dimen);
+  return DateTruncateAlterPrecisionScaleDown(timeval, scale);
 }
 
 extern "C" DEVICE int64_t DateDiff(const DatetruncField datepart,
-<<<<<<< HEAD
-                                   int64_t startdate,
-                                   int64_t enddate) {
-=======
                                    time_t startdate,
-<<<<<<< HEAD
                                    time_t enddate) {
->>>>>>> Override Calcite to increase TIMSTAMP precision; Optimize legacy code
   int64_t res = enddate - startdate;
   switch (datepart) {
     case dtNANOSECOND:
@@ -425,47 +408,6 @@ extern "C" DEVICE int64_t DateDiff(const DatetruncField datepart,
       return res * MICROSECSPERSEC;
     case dtMILLISECOND:
       return res * MILLISECSPERSEC;
-=======
-                                   time_t enddate,
-                                   const int32_t stdimen,
-                                   const int32_t endimen) {
-  int64_t res = 0;
-  const int32_t prec = endimen - stdimen;
-  const int32_t resdimen = endimen > stdimen ? endimen : stdimen;
-  if (prec == 0) {
-    res = enddate - startdate;
-  } else if (prec == 3 || prec == -3) {
-    res = (prec > 0) ? (enddate - (startdate * MILLISECSPERSEC))
-                     : ((enddate * MILLISECSPERSEC) - startdate);
-  } else if (prec == 6 || prec == -6) {
-    res = (prec > 0) ? (enddate - (startdate * MICROSECSPERSEC))
-                     : ((enddate * MICROSECSPERSEC) - startdate);
-  } else if (prec == 9 || prec == -9) {
-    res = (prec > 0) ? (enddate - (startdate * NANOSECSPERSEC))
-                     : ((enddate * NANOSECSPERSEC) - startdate);
-  }
-  const int64_t scale = get_timestamp_precision_scale(resdimen);
-  switch (datepart) {
-    case dtNANOSECOND:
-      // limit of current granularity
-      return res;
-    case dtMICROSECOND: {
-      if (resdimen == 9) {
-        return res / MILLISECSPERSEC;
-      } else {
-        return res;
-      }
-    }
-    case dtMILLISECOND: {
-      if (resdimen == 9) {
-        return res / MICROSECSPERSEC;
-      } else if (resdimen == 6) {
-        return res / MILLISECSPERSEC;
-      } else {
-        return res;
-      }
-    }
->>>>>>> Optimize legacy code; Add more tests
     case dtSECOND:
       return res;
     case dtMINUTE:
@@ -482,14 +424,6 @@ extern "C" DEVICE int64_t DateDiff(const DatetruncField datepart,
       break;
   }
 
-<<<<<<< HEAD
-=======
-  const time_t stdate =
-      static_cast<int64_t>(startdate) / get_timestamp_precision_scale(stdimen);
-  ;
-  const time_t endate =
-      static_cast<int64_t>(enddate) / get_timestamp_precision_scale(endimen);
->>>>>>> Optimize legacy code; Add more tests
   auto future_date = (res > 0);
   auto end = future_date ? enddate : startdate;
   auto start = future_date ? startdate : enddate;

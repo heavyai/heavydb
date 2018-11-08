@@ -1077,6 +1077,7 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
     }
     type_info = new_type_info;
   } else if (new_type_info.get_type() == kDATE && type_info.get_type() == kTIMESTAMP) {
+<<<<<<< HEAD
     type_info = new_type_info;
     constval.bigintval =
         type_info.is_high_precision_timestamp()
@@ -1085,6 +1086,13 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
                   constval.bigintval,
                   get_timestamp_precision_scale(type_info.get_dimension()))
             : DateTruncate(dtDAY, constval.bigintval);
+=======
+    constval.timeval = type_info.is_high_precision_timestamp()
+                           ? DateTruncateHighPrecisionToDate(
+                                 constval.timeval,
+                                 get_timestamp_precision_scale(type_info.get_dimension()))
+                           : DateTruncate(dtDAY, constval.timeval);
+>>>>>>> Shield Timestamp(6|9) literals from calcite; Direct TIMESTAMPADD/DIFF calls to DATEADD/DATEDIFF
     if (new_type_info.is_date_in_days()) {
       constval.bigintval =
           DateConverters::get_epoch_days_from_seconds(constval.bigintval);
@@ -1094,6 +1102,7 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
              new_type_info.get_type() == kTIMESTAMP) {
     if (type_info.get_dimension() != new_type_info.get_dimension()) {
       auto dimen = (type_info.get_type() == kDATE) ? 0 : type_info.get_dimension();
+<<<<<<< HEAD
       const auto result_unit =
           timestamp_precisions_lookup_.find(new_type_info.get_dimension());
       constval.bigintval =
@@ -1108,6 +1117,16 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
                     constval.bigintval,
                     get_timestamp_precision_scale(type_info.get_dimension() -
                                                   new_type_info.get_dimension()));
+=======
+      constval.timeval =
+          dimen < new_type_info.get_dimension()
+              ? DateTruncateAlterPrecisionScaleUp(
+                    constval.timeval,
+                    get_timestamp_precision_scale(new_type_info.get_dimension() - dimen))
+              : DateTruncateAlterPrecisionScaleDown(
+                    constval.timeval,
+                    get_timestamp_precision_scale(dimen - new_type_info.get_dimension()));
+>>>>>>> Shield Timestamp(6|9) literals from calcite; Direct TIMESTAMPADD/DIFF calls to DATEADD/DATEDIFF
     }
     type_info = new_type_info;
   } else if (new_type_info.is_array() && type_info.is_array()) {

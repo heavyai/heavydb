@@ -93,12 +93,18 @@ llvm::Value* Executor::codegenCastTimestampToDate(llvm::Value* ts_lv,
                                                   const int dimen,
                                                   const bool nullable) {
   CHECK(ts_lv->getType()->isIntegerTy(64));
-  std::vector<llvm::Value*> datetrunc_args{ll_int(static_cast<int32_t>(dtDAY)), ts_lv};
+  std::vector<llvm::Value*> datetrunc_args{ts_lv};
   if (dimen > 0) {
-    datetrunc_args.push_back(ll_int(static_cast<int32_t>(dimen)));
+    static const std::string datetrunc_hp_fname =
+        "DateTruncateHighPrecisionToDateNullable";
+    datetrunc_args.push_back(ll_int(get_timestamp_precision_scale(dimen)));
+    datetrunc_args.push_back(inlineIntNull(
+        SQLTypeInfo(ts_lv->getType()->isIntegerTy(64) ? kBIGINT : kINT, false)));
+    return cgen_state_->emitExternalCall(
+        datetrunc_hp_fname, get_int_type(64, cgen_state_->context_), datetrunc_args);
   }
   std::string datetrunc_fname{"DateTruncate"};
-  datetrunc_fname += (dimen > 0) ? "HighPrecisionToDate" : "";
+  datetrunc_args.insert(datetrunc_args.begin(), ll_int(static_cast<int32_t>(dtDAY)));
   if (nullable) {
     datetrunc_args.push_back(inlineIntNull(
         SQLTypeInfo(ts_lv->getType()->isIntegerTy(64) ? kBIGINT : kINT, false)));
@@ -116,22 +122,19 @@ llvm::Value* Executor::codegenCastBetweenTimestamps(llvm::Value* ts_lv,
     return ts_lv;
   }
   CHECK(ts_lv->getType()->isIntegerTy(64));
-  std::string fname{"DateTruncateAlterPrecision"};
-  const auto result = timestamp_precisions_lookup_.find(target_dimen);
-  CHECK(result != timestamp_precisions_lookup_.end());
+  static const std::string sup_fname{"DateTruncateAlterPrecisionScaleUpNullable"};
+  static const std::string sdn_fname{"DateTruncateAlterPrecisionScaleDownNullable"};
   std::vector<llvm::Value*> f_args{
-      ll_int(static_cast<int32_t>(result->second)),
       ts_lv,
       ll_int(static_cast<int64_t>(
           get_timestamp_precision_scale(abs(operand_dimen - target_dimen))))};
-  fname += operand_dimen < target_dimen ? "ScaleUp" : "ScaleDown";
-  if (nullable) {
-    fname += "Nullable";
-    f_args.push_back(inlineIntNull(
-        SQLTypeInfo(ts_lv->getType()->isIntegerTy(64) ? kBIGINT : kINT, false)));
-  }
-  return cgen_state_->emitExternalCall(
-      fname, get_int_type(64, cgen_state_->context_), f_args);
+  f_args.push_back(inlineIntNull(
+      SQLTypeInfo(ts_lv->getType()->isIntegerTy(64) ? kBIGINT : kINT, false)));
+  return operand_dimen < target_dimen
+             ? cgen_state_->emitExternalCall(
+                   sup_fname, get_int_type(64, cgen_state_->context_), f_args)
+             : cgen_state_->emitExternalCall(
+                   sdn_fname, get_int_type(64, cgen_state_->context_), f_args);
 }
 
 llvm::Value* Executor::codegenCastFromString(llvm::Value* operand_lv,

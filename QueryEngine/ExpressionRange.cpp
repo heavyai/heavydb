@@ -168,18 +168,14 @@ ExpressionRange apply_simple_quals(
           qual_col_ti.get_dimension() != qual_const_ti.get_dimension()) {
         // For high precision timestamps, account for scale difference before applying
         // qual
-        const auto result =
-            timestamp_precisions_lookup_.find(qual_col_ti.get_dimension());
-        const_d.bigintval =
+        const_d.timeval =
             qual_const_ti.get_dimension() < qual_col_ti.get_dimension()
                 ? DateTruncateAlterPrecisionScaleUp(
-                      result->second,
-                      const_d.bigintval,
+                      const_d.timeval,
                       get_timestamp_precision_scale(qual_col_ti.get_dimension() -
                                                     qual_const_ti.get_dimension()))
                 : DateTruncateAlterPrecisionScaleDown(
-                      result->second,
-                      const_d.bigintval,
+                      const_d.timeval,
                       get_timestamp_precision_scale(qual_const_ti.get_dimension() -
                                                     qual_col_ti.get_dimension()));
       }

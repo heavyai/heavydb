@@ -969,11 +969,6 @@ std::shared_ptr<Analyzer::Constant> makeNumericConstant(const SQLTypeInfo& ti,
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
     const RexFunctionOperator* rex_function) const {
-  /* TODO(Wamsi) : Calcite doesn’t understand us and ns on
-        TIMESTAMPADD/INTERVAL operations and translates internally whatever
-        units it understands. As it is a native calcite function we do not have much
-        control over it. Therefore have to find suitable work around
-        for this. Core Issue: #2638 */
   if (rex_function->getName() == std::string("DATETIME_PLUS")) {
     const auto datetime = translateScalarRex(rex_function->getOperand(0));
     const auto unfolded_number = translateScalarRex(rex_function->getOperand(1));
@@ -1058,17 +1053,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateminus(
   const auto rhs = translateScalarRex(rex_operator->getOperand(1));
   const auto rhs_ti = rhs->get_type_info();
   if (rhs_ti.get_type() == kTIMESTAMP || rhs_ti.get_type() == kDATE) {
-<<<<<<< HEAD
     if (datetime_ti.is_high_precision_timestamp() ||
         rhs_ti.is_high_precision_timestamp()) {
       throw std::runtime_error(
           "High Precision timestamps are not supported for TIMESTAMPDIFF operation. Use "
           "DATEDIFF.");
-=======
-    if (datetime_ti.get_dimension() > 0 || rhs_ti.get_dimension() > 0) {
-      throw std::runtime_error(
-          "Only timestamp(0) is supported for TIMESTAMPDIFF operation.");
->>>>>>> Optimize legacy code; Add more tests
     }
     auto bigint_ti = SQLTypeInfo(kBIGINT, false);
     const auto& rex_operator_ti = rex_operator->getType();
@@ -1359,6 +1348,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   if (rex_function->getName() == std::string("DATETIME")) {
     return translateDatetime(rex_function);
   }
+  if (rex_function->getName() == std::string("usTIMESTAMP") ||
+      rex_function->getName() == std::string("nsTIMESTAMP")) {
+    return translateHPTLiteral(rex_function);
+  }
   if (rex_function->getName() == std::string("ABS")) {
     return translateAbs(rex_function);
   }
@@ -1604,4 +1597,24 @@ std::vector<std::shared_ptr<Analyzer::Expr>> qual_to_disjunctive_form(
     return quals;
   }
   return {qual_expr};
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateHPTLiteral(
+    const RexFunctionOperator* rex_function) const {
+  // since calcite uses Aviatica package called DateTimeUtils to parse timestamp strings.
+  // Therefore any string having fractional seconds more 3 places after the decimal
+  // (milliseconds) will get truncated to 3 decimal places, therefore losing precision.
+  // Issue: #2461
+  // Here we are hijacking literal cast to Timestamp(6|9) from calcite and
+  // translating them to generate our own casts.
+  CHECK_EQ(size_t(1), rex_function->size());
+  const auto operand = translateScalarRex(rex_function->getOperand(0));
+  const auto& operand_ti = operand->get_type_info();
+  const auto& target_ti = rex_function->getType();
+  if (!operand_ti.is_string() || !target_ti.is_high_precision_timestamp() ||
+      (target_ti.get_dimension() != 6 && target_ti.get_dimension() != 9)) {
+    UNREACHABLE();
+    return nullptr;
+  }
+  return operand->add_cast(target_ti);
 }

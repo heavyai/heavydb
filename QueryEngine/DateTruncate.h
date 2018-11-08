@@ -65,23 +65,20 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncateHighPrecision(DatetruncField 
                                                                  int64_t timeval,
                                                                  const int64_t scale);
 
+extern "C" ALWAYS_INLINE inline DEVICE time_t
+DateTruncateHighPrecisionToDate(time_t timeval, const int64_t scale) {
+  const int64_t retval = (timeval / (scale * SECSPERDAY)) * SECSPERDAY;
+  return retval < 0 ? retval - SECSPERDAY : retval;
+}
+
 extern "C" ALWAYS_INLINE inline DEVICE int64_t
-DateTruncateAlterPrecisionScaleUp(DatetruncField field,
-                                  int64_t timeval,
-                                  const int64_t scale) {
+DateTruncateAlterPrecisionScaleUp(const time_t timeval, const int64_t scale) {
   return timeval * scale;
 }
 
 extern "C" ALWAYS_INLINE inline DEVICE int64_t
-DateTruncateAlterPrecisionScaleDown(DatetruncField field,
-                                    int64_t timeval,
-                                    const int64_t scale) {
+DateTruncateAlterPrecisionScaleDown(const time_t timeval, const int64_t scale) {
   return timeval / scale;
 }
-
-extern "C" NEVER_INLINE DEVICE time_t
-DateTruncateHighPrecisionToDate(DatetruncField field,
-                                time_t timeval,
-                                const int32_t dimen);
 
 #endif  // QUERYENGINE_DATETRUNCATE_H

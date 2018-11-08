@@ -27,12 +27,6 @@
 #include "../Shared/sqldefs.h"
 #include "../Shared/unreachable.h"
 
-static const std::map<int, DatetruncField> timestamp_precisions_lookup_{
-    {0, DatetruncField::dtSECOND},
-    {3, DatetruncField::dtMILLISECOND},
-    {6, DatetruncField::dtMICROSECOND},
-    {9, DatetruncField::dtNANOSECOND}};
-
 inline int64_t get_timestamp_precision_scale(const int32_t dimen) {
   switch (dimen) {
     case 0:

@@ -109,6 +109,8 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateDatetime(const RexFunctionOperator*) const;
 
+  std::shared_ptr<Analyzer::Expr> translateHPTLiteral(const RexFunctionOperator*) const;
+
   std::shared_ptr<Analyzer::Expr> translateAbs(const RexFunctionOperator*) const;
 
   std::shared_ptr<Analyzer::Expr> translateSign(const RexFunctionOperator*) const;

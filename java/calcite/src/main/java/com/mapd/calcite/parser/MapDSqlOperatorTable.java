@@ -189,6 +189,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new convert_meters_to_pixel_height());
     opTab.addOperator(new is_point_in_view());
     opTab.addOperator(new is_point_size_in_view());
+    opTab.addOperator(new usTimestamp());
+    opTab.addOperator(new nsTimestamp());
     if (extSigs == null) {
       return;
     }
@@ -1546,6 +1548,42 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       assert opBinding.getOperandCount() == 6;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+    }
+  }
+
+  public static class usTimestamp extends SqlFunction {
+    public usTimestamp() {
+      super("usTIMESTAMP",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.STRING,
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.TIMESTAMP, 6);
+    }
+  }
+
+  public static class nsTimestamp extends SqlFunction {
+    public nsTimestamp() {
+      super("nsTIMESTAMP",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.STRING,
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.TIMESTAMP, 9);
     }
   }
 }

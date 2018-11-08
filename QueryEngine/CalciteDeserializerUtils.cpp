@@ -89,33 +89,37 @@ ExtractField to_datepart_field(const std::string& field) {
 DateaddField to_dateadd_field(const std::string& field) {
   DateaddField fieldno;
   if (boost::iequals(field, "year") || boost::iequals(field, "yy") ||
-      boost::iequals(field, "yyyy")) {
+      boost::iequals(field, "yyyy") || boost::iequals(field, "sql_tsi_year")) {
     fieldno = daYEAR;
   } else if (boost::iequals(field, "quarter") || boost::iequals(field, "qq") ||
-             boost::iequals(field, "q")) {
+             boost::iequals(field, "q") || boost::iequals(field, "sql_tsi_quarter")) {
     fieldno = daQUARTER;
   } else if (boost::iequals(field, "month") || boost::iequals(field, "mm") ||
-             boost::iequals(field, "m")) {
+             boost::iequals(field, "m") || boost::iequals(field, "sql_tsi_month")) {
     fieldno = daMONTH;
   } else if (boost::iequals(field, "day") || boost::iequals(field, "dd") ||
-             boost::iequals(field, "d")) {
+             boost::iequals(field, "d") || boost::iequals(field, "sql_tsi_day")) {
     fieldno = daDAY;
   } else if (boost::iequals(field, "week") || boost::iequals(field, "ww") ||
-             boost::iequals(field, "w")) {
+             boost::iequals(field, "w") || boost::iequals(field, "sql_tsi_week")) {
     fieldno = daWEEK;
-  } else if (boost::iequals(field, "hour") || boost::iequals(field, "hh")) {
+  } else if (boost::iequals(field, "hour") || boost::iequals(field, "hh") ||
+             boost::iequals(field, "sql_tsi_hour")) {
     fieldno = daHOUR;
   } else if (boost::iequals(field, "minute") || boost::iequals(field, "mi") ||
-             boost::iequals(field, "n")) {
+             boost::iequals(field, "n") || boost::iequals(field, "sql_tsi_minute")) {
     fieldno = daMINUTE;
   } else if (boost::iequals(field, "second") || boost::iequals(field, "ss") ||
-             boost::iequals(field, "s")) {
+             boost::iequals(field, "s") || boost::iequals(field, "sql_tsi_second")) {
     fieldno = daSECOND;
-  } else if (boost::iequals(field, "millisecond") || boost::iequals(field, "ms")) {
+  } else if (boost::iequals(field, "millisecond") || boost::iequals(field, "ms") ||
+             boost::iequals(field, "sql_tsi_millisecond")) {
     fieldno = daMILLISECOND;
-  } else if (boost::iequals(field, "microsecond") || boost::iequals(field, "us")) {
+  } else if (boost::iequals(field, "microsecond") || boost::iequals(field, "us") ||
+             boost::iequals(field, "sql_tsi_microsecond")) {
     fieldno = daMICROSECOND;
-  } else if (boost::iequals(field, "nanosecond") || boost::iequals(field, "ns")) {
+  } else if (boost::iequals(field, "nanosecond") || boost::iequals(field, "ns") ||
+             boost::iequals(field, "sql_tsi_nanosecond")) {
     fieldno = daNANOSECOND;
   } else if (boost::iequals(field, "weekday") || boost::iequals(field, "dw")) {
     fieldno = daWEEKDAY;
@@ -138,6 +142,9 @@ DatetruncField to_datediff_field(const std::string& field) {
   } else if (boost::iequals(field, "month") || boost::iequals(field, "mm") ||
              boost::iequals(field, "m")) {
     fieldno = dtMONTH;
+  } else if (boost::iequals(field, "week") || boost::iequals(field, "ww") ||
+             boost::iequals(field, "w")) {
+    fieldno = dtWEEK;
   } else if (boost::iequals(field, "day") || boost::iequals(field, "dd") ||
              boost::iequals(field, "d")) {
     fieldno = dtDAY;

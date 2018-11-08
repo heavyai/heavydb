@@ -1388,6 +1388,36 @@ std::string pg_shim_impl(const std::string& query) {
         });
   }
   {
+    boost::regex timestampadd_expr{R"(TIMESTAMPADD\s*\(\s*(\w+)\s*,)",
+                                   boost::regex::extended | boost::regex::icase};
+    apply_shim(
+        result, timestampadd_expr, [](std::string& result, const boost::smatch& what) {
+          result.replace(what.position(), what.length(), "DATEADD('" + what[1] + "',");
+        });
+  }
+  {
+    boost::regex us_timestamp_cast_expr{
+        R"(CAST\s*\(\s*('[^']+')\s*AS\s*TIMESTAMP\(6\)\s*\))",
+        boost::regex::extended | boost::regex::icase};
+    apply_shim(result,
+               us_timestamp_cast_expr,
+               [](std::string& result, const boost::smatch& what) {
+                 result.replace(
+                     what.position(), what.length(), "usTIMESTAMP(" + what[1] + ")");
+               });
+  }
+  {
+    boost::regex ns_timestamp_cast_expr{
+        R"(CAST\s*\(\s*('[^']+')\s*AS\s*TIMESTAMP\(9\)\s*\))",
+        boost::regex::extended | boost::regex::icase};
+    apply_shim(result,
+               ns_timestamp_cast_expr,
+               [](std::string& result, const boost::smatch& what) {
+                 result.replace(
+                     what.position(), what.length(), "nsTIMESTAMP(" + what[1] + ")");
+               });
+  }
+  {
     boost::regex corr_expr{R"((\s+|,|\()(corr)\s*\()",
                            boost::regex::extended | boost::regex::icase};
     apply_shim(result, corr_expr, [](std::string& result, const boost::smatch& what) {
