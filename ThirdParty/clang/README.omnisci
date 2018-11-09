@@ -1,0 +1,5 @@
+Original source: https://github.com/llvm-mirror/clang-tools-extra/blob/93a546b52fbebbeffd91dcb44f577a7324bc3e10/clang-tidy/tool/run-clang-tidy.py
+
+This is the run-clang-tidy.py helper distributed with clang/clang-tidy.
+
+It has been modified to minimize non-error, non-warning output.

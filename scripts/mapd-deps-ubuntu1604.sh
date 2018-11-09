@@ -58,6 +58,8 @@ sudo apt install -y \
     automake \
     bison \
     flex-old \
+    jq \
+    python-yaml \
     libxmlsec1-dev
 
 # Install gcc6

@@ -21,6 +21,7 @@ brew install folly
 brew install gflags
 brew install glog
 brew install wget
+brew install jq
 
 #brew install thrift
 # custom thrift formula pinned to specific supported version

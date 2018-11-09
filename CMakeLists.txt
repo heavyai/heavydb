@@ -517,6 +517,20 @@ macro(set_dpkg_arch arch_in arch_out)
   endif()
 endmacro()
 
+# clang-tidy
+find_program(JQ_EXECUTABLE NAMES jq)
+if (NOT ${JQ_EXECUTABLE} STREQUAL "JQ_EXECUTABLE-NOTFOUND")
+  file(WRITE ${CMAKE_BINARY_DIR}/jq.filter "map(select(.file | test(\".*/(build|ThirdParty)/.*\") | not))")
+  add_custom_target(clang-tidy
+    COMMAND mkdir -p clang-tidy
+    COMMAND ${JQ_EXECUTABLE} -f jq.filter ${CMAKE_BINARY_DIR}/compile_commands.json > clang-tidy/compile_commands.json
+    COMMAND cd clang-tidy && ${CMAKE_SOURCE_DIR}/ThirdParty/clang/run-clang-tidy.py -quiet -format -fix 2> /dev/null
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  )
+else()
+  message(STATUS "jq not found, disabling clang-tidy target")
+endif()
+
 # doxygen
 find_package(Doxygen)
 if(DOXYGEN_FOUND)

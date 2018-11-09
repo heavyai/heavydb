@@ -65,6 +65,8 @@ sudo apt install -y \
     libpng-dev \
     rsync \
     unzip \
+    jq \
+    python-yaml \
     libxerces-c-dev \
     libxmlsec1-dev
 
