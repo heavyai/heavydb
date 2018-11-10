@@ -21,25 +21,53 @@
 
 #include <numeric>
 #include <queue>
+#include <regex>
 
 namespace {
 
 using cost_t = unsigned;
 using node_t = size_t;
 
-// Returns a cost for the given qualifier. Must be strictly greater than 0.
-cost_t get_join_qual_cost(const Analyzer::Expr* qual, const Executor* executor) {
+static std::unordered_map<SQLTypes, cost_t> GEO_TYPE_COSTS{{kPOINT, 60},
+                                                           {kLINESTRING, 70},
+                                                           {kPOLYGON, 80},
+                                                           {kMULTIPOLYGON, 90}};
+
+// Returns a lhs/rhs cost for the given qualifier. Must be strictly greater than 0.
+std::pair<cost_t, cost_t> get_join_qual_cost(const Analyzer::Expr* qual,
+                                             const Executor* executor) {
+  const auto func_oper = dynamic_cast<const Analyzer::FunctionOper*>(qual);
+  if (func_oper) {
+    std::vector<SQLTypes> geo_types_for_func;
+    for (size_t i = 0; i < func_oper->getArity(); i++) {
+      const auto arg_expr = func_oper->getArg(i);
+      const auto& ti = arg_expr->get_type_info();
+      if (ti.is_geometry()) {
+        geo_types_for_func.push_back(ti.get_type());
+      }
+    }
+    std::regex geo_func_regex("ST_[\\w]*");
+    std::smatch geo_func_match;
+    const auto& func_name = func_oper->getName();
+    if (geo_types_for_func.size() == 2 &&
+        std::regex_match(func_name, geo_func_match, geo_func_regex)) {
+      const auto rhs_cost = GEO_TYPE_COSTS[geo_types_for_func[0]];
+      const auto lhs_cost = GEO_TYPE_COSTS[geo_types_for_func[1]];
+      return {lhs_cost, rhs_cost};
+    }
+    return {200, 200};
+  }
   const auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(qual);
   if (!bin_oper || !IS_EQUIVALENCE(bin_oper->get_optype())) {
-    return 200;
+    return {200, 200};
   }
   try {
     normalize_column_pairs(
         bin_oper, *executor->getCatalog(), executor->getTemporaryTables());
   } catch (...) {
-    return 200;
+    return {200, 200};
   }
-  return 100;
+  return {100, 100};
 }
 
 // Builds a graph with nesting levels as nodes and join condition costs as edges.
@@ -63,11 +91,14 @@ std::vector<std::map<node_t, cost_t>> build_join_cost_graph(
       qual_nest_levels.erase(qual_nest_levels.begin());
       int rhs_nest_level = *qual_nest_levels.begin();
       CHECK_GE(rhs_nest_level, 0);
-      cost_t cost = get_join_qual_cost(qual.get(), executor);
+
+      // Get the {lhs, rhs} cost for the qual
+      const auto cost_pair = get_join_qual_cost(qual.get(), executor);
       const auto edge_it = join_cost_graph[lhs_nest_level].find(rhs_nest_level);
-      if (edge_it == join_cost_graph[lhs_nest_level].end() || edge_it->second > cost) {
-        join_cost_graph[lhs_nest_level][rhs_nest_level] =
-            join_cost_graph[rhs_nest_level][lhs_nest_level] = cost;
+      if (edge_it == join_cost_graph[lhs_nest_level].end() ||
+          edge_it->second > cost_pair.second) {
+        join_cost_graph[lhs_nest_level][rhs_nest_level] = cost_pair.second;
+        join_cost_graph[rhs_nest_level][lhs_nest_level] = cost_pair.first;
       }
     }
   }
