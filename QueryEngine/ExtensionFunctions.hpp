@@ -855,3 +855,5 @@ EXTENSION_NOINLINE bool is_point_size_in_merc_view(const double lon,
 }
 
 #include "ExtensionFunctionsGeo.hpp"
+
+#include "ExtensionFunctionsPython.hpp"

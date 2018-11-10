@@ -182,6 +182,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new convert_meters_to_pixel_height());
     opTab.addOperator(new is_point_in_view());
     opTab.addOperator(new is_point_size_in_view());
+    opTab.addOperator(new foo());
     if (extSigs == null) {
       return;
     }
@@ -266,6 +267,26 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     }
   }
 
+  public static class foo extends SqlFunction {
+    
+    foo() {
+      super("FOO",
+	     SqlKind.OTHER_FUNCTION,
+             null,
+             null,
+             OperandTypes.family(SqlTypeFamily.NUMERIC),
+             SqlFunctionCategory.SYSTEM);
+   }
+ 
+   @Override
+   public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory
+             = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.DOUBLE);
+    }
+  }
+    
   /* Postgres-style UNNEST */
   public static class PgUnnest extends SqlFunction {
     public PgUnnest() {

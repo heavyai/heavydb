@@ -910,6 +910,17 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(
                              from_expr, *timeunit_lit->get_constval().stringval);
 }
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFoo(
+    const RexFunctionOperator* rex_function) const {
+  CHECK(rex_function->size() == 1);
+
+  std::vector<std::shared_ptr<Analyzer::Expr>> args;
+  const auto arg = translateScalarRex(rex_function->getOperand(0));
+  args.push_back(arg);
+  return makeExpr<Analyzer::FunctionOper>(
+      rex_function->getType(), rex_function->getName(), args);
+}
+
 namespace {
 
 std::shared_ptr<Analyzer::Constant> makeNumericConstant(const SQLTypeInfo& ti,
@@ -1239,6 +1250,9 @@ Analyzer::ExpressionPtr RelAlgTranslator::translateArrayFunction(
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     const RexFunctionOperator* rex_function) const {
+  if (rex_function->getName() == std::string("FOO")) {
+    return translateFoo(rex_function);
+  }
   if (rex_function->getName() == std::string("LIKE") ||
       rex_function->getName() == std::string("PG_ILIKE")) {
     return translateLike(rex_function);
