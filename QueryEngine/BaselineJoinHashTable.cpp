@@ -580,6 +580,11 @@ int BaselineJoinHashTable::initHashTableOnCpu(
   const size_t hash_table_size =
       entry_size * entry_count_ + one_to_many_hash_entries * sizeof(int32_t);
 
+  // We can't allocate more than 2GB contiguous memory on GPU and each entry is 4 bytes.
+  if (hash_table_size > std::numeric_limits<int32_t>::max()) {
+    throw TooManyHashEntries();
+  }
+
   VLOG(1) << "Initializing CPU Join Hash Table with " << entry_count_
           << " hash entries and " << one_to_many_hash_entries
           << " entries in the one to many buffer";
@@ -908,6 +913,12 @@ int BaselineJoinHashTable::initHashTableForDevice(
             : 0;
     const size_t hash_table_size =
         entry_size * entry_count_ + one_to_many_hash_entries * sizeof(int32_t);
+
+    // We can't allocate more than 2GB contiguous memory on GPU and each entry is 4 bytes.
+    if (hash_table_size > std::numeric_limits<int32_t>::max()) {
+      throw TooManyHashEntries();
+    }
+
     VLOG(1) << "Initializing GPU Hash Table for device " << device_id << " with "
             << entry_count_ << " hash entries and " << one_to_many_hash_entries
             << " entries in the one to many buffer";
