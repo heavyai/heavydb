@@ -4218,7 +4218,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;
   int num_parse_errors = 0;
-  Planner::RootPlan* root_plan{nullptr};
+  std::unique_ptr<Planner::RootPlan> root_plan;
 
   /*
      Use this seq to simplify locking:
@@ -4344,141 +4344,184 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
   if (num_parse_errors > 0) {
     THROW_MAPD_EXCEPTION("Syntax error at: " + last_parsed);
   }
+
+  auto get_legacy_plan =
+      [&cat](const Parser::DMLStmt* dml,
+             const bool is_explain) -> std::unique_ptr<Planner::RootPlan> {
+    Analyzer::Query query;
+    dml->analyze(cat, query);
+    Planner::Optimizer optimizer(query, cat);
+    auto root_plan_ptr = std::unique_ptr<Planner::RootPlan>(optimizer.optimize());
+    CHECK(root_plan_ptr);
+    if (is_explain) {
+      root_plan_ptr->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
+    }
+    return std::move(root_plan_ptr);
+  };
+
+  auto handle_ddl = [&cat,
+                     &root_plan,
+                     &get_legacy_plan,
+                     &session_info,
+                     &_return,
+                     &chkptlLock,
+                     &upddelLock,
+                     &upddelLocks,
+                     this](Parser::DDLStmt* ddl) -> bool {
+    if (!ddl) {
+      return false;
+    }
+    const auto explain_stmt = dynamic_cast<Parser::ExplainStmt*>(ddl);
+    if (explain_stmt) {
+      root_plan = get_legacy_plan(explain_stmt->get_stmt(), true);
+      return false;
+    }
+
+    const auto show_create_stmt = dynamic_cast<Parser::ShowCreateTableStmt*>(ddl);
+    if (show_create_stmt) {
+      // ParserNode ShowCreateTableStmt is currently unimplemented
+      throw std::runtime_error(
+          "SHOW CREATE TABLE is currently unsupported. Use `\\d` from mapdql for table "
+          "DDL.");
+    }
+
+    const auto import_stmt = dynamic_cast<Parser::CopyTableStmt*>(ddl);
+    if (import_stmt) {
+      // get the lock if the table exists
+      // thus allowing COPY FROM to execute to create a table
+      // is it safe to do this check without a lock?
+      // if the table doesn't exist, the getTableLock will throw an exception anyway
+      const TableDescriptor* td =
+          session_info.get_catalog().getMetadataForTable(import_stmt->get_table());
+      if (td) {
+        // COPY_FROM: CheckpointLock [ >> write UpdateDeleteLocks ]
+        chkptlLock =
+            getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_info.get_catalog(),
+                                                              import_stmt->get_table(),
+                                                              LockType::CheckpointLock);
+        // [ write UpdateDeleteLocks ] lock is deferred in
+        // InsertOrderFragmenter::deleteFragments
+      }
+
+      if (g_cluster && !leaf_aggregator_.leafCount()) {
+        // Sharded table rows need to be routed to the leaf by an aggregator.
+        check_table_not_sharded(cat, import_stmt->get_table());
+      } else if (leaf_aggregator_.leafCount() > 0) {
+        _return.execution_time_ms += measure<>::execution(
+            [&]() { execute_distributed_copy_statement(import_stmt, session_info); });
+      } else {
+        _return.execution_time_ms +=
+            measure<>::execution([&]() { ddl->execute(session_info); });
+      }
+
+      // Read response message
+      convert_result(_return, ResultSet(*import_stmt->return_message.get()), true);
+
+      // get geo_copy_from info
+      _was_geo_copy_from = import_stmt->was_geo_copy_from();
+      import_stmt->get_geo_copy_from_payload(
+          _geo_copy_from_table, _geo_copy_from_file_name, _geo_copy_from_copy_params);
+      return true;
+    }
+
+    // Check for DDL statements requiring locking and get locks
+    auto export_stmt = dynamic_cast<Parser::ExportQueryStmt*>(ddl);
+    if (export_stmt) {
+      std::map<std::string, bool> tableNames;
+      const auto query_string = export_stmt->get_select_stmt();
+      const auto query_ra = parse_to_ra(query_string, {}, session_info, &tableNames);
+      getTableLocks<mapd_shared_mutex>(session_info.get_catalog(),
+                                       tableNames,
+                                       upddelLocks,
+                                       LockType::UpdateDeleteLock);
+    }
+    auto truncate_stmt = dynamic_cast<Parser::TruncateTableStmt*>(ddl);
+    if (truncate_stmt) {
+      chkptlLock =
+          getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_info.get_catalog(),
+                                                            *truncate_stmt->get_table(),
+                                                            LockType::CheckpointLock);
+      upddelLock =
+          getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_info.get_catalog(),
+                                                            *truncate_stmt->get_table(),
+                                                            LockType::UpdateDeleteLock);
+    }
+    auto add_col_stmt = dynamic_cast<Parser::AddColumnStmt*>(ddl);
+    if (add_col_stmt) {
+      chkptlLock =
+          getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_info.get_catalog(),
+                                                            *add_col_stmt->get_table(),
+                                                            LockType::CheckpointLock);
+      upddelLock =
+          getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_info.get_catalog(),
+                                                            *add_col_stmt->get_table(),
+                                                            LockType::UpdateDeleteLock);
+    }
+
+    _return.execution_time_ms +=
+        measure<>::execution([&]() { ddl->execute(session_info); });
+    return true;
+  };
+
   for (const auto& stmt : parse_trees) {
     try {
       auto select_stmt = dynamic_cast<Parser::SelectStmt*>(stmt.get());
       if (!select_stmt) {
         check_read_only("Non-SELECT statements");
       }
-      Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
-      Parser::ExplainStmt* explain_stmt = nullptr;
-      if (ddl != nullptr) {
-        explain_stmt = dynamic_cast<Parser::ExplainStmt*>(ddl);
-      }
-      if (ddl != nullptr && explain_stmt == nullptr) {
-        const auto copy_stmt = dynamic_cast<Parser::CopyTableStmt*>(ddl);
-        if (auto stmtp = dynamic_cast<Parser::ExportQueryStmt*>(stmt.get())) {
-          std::map<std::string, bool> tableNames;
-          const auto query_string = stmtp->get_select_stmt();
-          const auto query_ra = parse_to_ra(query_string, {}, session_info, &tableNames);
-          getTableLocks<mapd_shared_mutex>(session_info.get_catalog(),
-                                           tableNames,
-                                           upddelLocks,
-                                           LockType::UpdateDeleteLock);
-        } else if (auto stmtp = dynamic_cast<Parser::CopyTableStmt*>(stmt.get())) {
-          // get the lock if the table exists
-          // thus allowing COPY FROM to execute to create a table
-          // is it safe to do this check without a lock?
-          // if the table doesn't exist, the getTableLock will throw an exception anyway
-          const TableDescriptor* td =
-              session_info.get_catalog().getMetadataForTable(stmtp->get_table());
-          if (td) {
-            // COPY_FROM: CheckpointLock [ >> write UpdateDeleteLocks ]
-            chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-                session_info.get_catalog(), stmtp->get_table(), LockType::CheckpointLock);
-            // [ write UpdateDeleteLocks ] lock is deferred in
-            // InsertOrderFragmenter::deleteFragments
-          }
-        } else if (auto stmtp = dynamic_cast<Parser::TruncateTableStmt*>(stmt.get())) {
-          chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-              session_info.get_catalog(), *stmtp->get_table(), LockType::CheckpointLock);
-          upddelLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-              session_info.get_catalog(),
-              *stmtp->get_table(),
-              LockType::UpdateDeleteLock);
-        } else if (auto stmtp = dynamic_cast<Parser::AddColumnStmt*>(stmt.get())) {
-          chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-              session_info.get_catalog(), *stmtp->get_table(), LockType::CheckpointLock);
-          upddelLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-              session_info.get_catalog(),
-              *stmtp->get_table(),
-              LockType::UpdateDeleteLock);
-        }
-        if (g_cluster && copy_stmt && !leaf_aggregator_.leafCount()) {
-          // Sharded table rows need to be routed to the leaf by an aggregator.
-          check_table_not_sharded(cat, copy_stmt->get_table());
-        }
-        if (copy_stmt && leaf_aggregator_.leafCount() > 0) {
-          _return.execution_time_ms += measure<>::execution(
-              [&]() { execute_distributed_copy_statement(copy_stmt, session_info); });
-        } else {
-          _return.execution_time_ms +=
-              measure<>::execution([&]() { ddl->execute(session_info); });
-        }
-        // if it was a copy statement...
-        if (copy_stmt) {
-          // get response message
-          // @TODO simon.eves do we have any more useful info at this level... no!
-          convert_result(_return, ResultSet(*copy_stmt->return_message.get()), true);
-
-          // get geo_copy_from info
-          _was_geo_copy_from = copy_stmt->was_geo_copy_from();
-          copy_stmt->get_geo_copy_from_payload(
-              _geo_copy_from_table, _geo_copy_from_file_name, _geo_copy_from_copy_params);
-
-          // @TODO Get and store replicated (create_params)
-        }
-
+      auto ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
+      if (handle_ddl(ddl)) {
         if (render_handler_) {
           render_handler_->handle_ddl(ddl);
         }
-      } else {
-        const Parser::DMLStmt* dml;
-        if (explain_stmt != nullptr) {
-          dml = explain_stmt->get_stmt();
-        } else {
-          dml = dynamic_cast<Parser::DMLStmt*>(stmt.get());
-        }
-        Analyzer::Query query;
-        dml->analyze(cat, query);
-        Planner::Optimizer optimizer(query, cat);
-        root_plan = optimizer.optimize();
-        CHECK(root_plan);
-        std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
-
-        if (auto stmtp = dynamic_cast<Parser::InsertQueryStmt*>(stmt.get())) {
-          // INSERT_SELECT: CheckpointLock >> read UpdateDeleteLocks [ >> write
-          // UpdateDeleteLocks ]
-          chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-              session_info.get_catalog(), *stmtp->get_table(), LockType::CheckpointLock);
-          // >> read UpdateDeleteLock locks
-          std::map<std::string, bool> tableNames;
-          const auto query_string = stmtp->get_query()->to_string();
-          const auto query_ra = parse_to_ra(query_str, {}, session_info, &tableNames);
-          getTableLocks<mapd_shared_mutex>(session_info.get_catalog(),
-                                           tableNames,
-                                           upddelLocks,
-                                           LockType::UpdateDeleteLock);
-          // [ write UpdateDeleteLocks ] lock is deferred in
-          // InsertOrderFragmenter::deleteFragments
-          // TODO: this statement is not supported. once supported, it must not go thru
-          // InsertOrderFragmenter::insertData, or deadlock will occur w/o moving the
-          // following lock back to here!!!
-        } else if (auto stmtp = dynamic_cast<Parser::InsertValuesStmt*>(stmt.get())) {
-          // INSERT_VALUES: CheckpointLock >> write ExecutorOuterLock [ >> write
-          // UpdateDeleteLocks ]
-          chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-              session_info.get_catalog(), *stmtp->get_table(), LockType::CheckpointLock);
-          executeWriteLock = mapd_unique_lock<mapd_shared_mutex>(
-              *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
-          // [ write UpdateDeleteLocks ] lock is deferred in
-          // InsertOrderFragmenter::deleteFragments
-        }
-
-        if (g_cluster && plan_ptr->get_stmt_type() == kINSERT) {
-          check_table_not_sharded(session_info.get_catalog(),
-                                  plan_ptr->get_result_table_id());
-        }
-        if (explain_stmt != nullptr) {
-          root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
-        }
-        execute_root_plan(_return,
-                          root_plan,
-                          column_format,
-                          session_info,
-                          executor_device_type,
-                          first_n);
+        continue;
       }
+      if (!root_plan) {
+        // assume DML / non-explain plan (an insert or copy statement)
+        const auto dml = dynamic_cast<Parser::DMLStmt*>(stmt.get());
+        CHECK(dml);
+        root_plan = get_legacy_plan(dml, false);
+        CHECK(root_plan);
+      }
+      if (auto stmtp = dynamic_cast<Parser::InsertQueryStmt*>(stmt.get())) {
+        // INSERT_SELECT: CheckpointLock >> read UpdateDeleteLocks [ >> write
+        // UpdateDeleteLocks ]
+        chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+            session_info.get_catalog(), *stmtp->get_table(), LockType::CheckpointLock);
+        // >> read UpdateDeleteLock locks
+        std::map<std::string, bool> tableNames;
+        const auto query_string = stmtp->get_query()->to_string();
+        const auto query_ra = parse_to_ra(query_str, {}, session_info, &tableNames);
+        getTableLocks<mapd_shared_mutex>(session_info.get_catalog(),
+                                         tableNames,
+                                         upddelLocks,
+                                         LockType::UpdateDeleteLock);
+        // [ write UpdateDeleteLocks ] lock is deferred in
+        // InsertOrderFragmenter::deleteFragments
+        // TODO: this statement is not supported. once supported, it must not go thru
+        // InsertOrderFragmenter::insertData, or deadlock will occur w/o moving the
+        // following lock back to here!!!
+      } else if (auto stmtp = dynamic_cast<Parser::InsertValuesStmt*>(stmt.get())) {
+        // INSERT_VALUES: CheckpointLock >> write ExecutorOuterLock [ >> write
+        // UpdateDeleteLocks ]
+        chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+            session_info.get_catalog(), *stmtp->get_table(), LockType::CheckpointLock);
+        executeWriteLock = mapd_unique_lock<mapd_shared_mutex>(
+            *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
+        // [ write UpdateDeleteLocks ] lock is deferred in
+        // InsertOrderFragmenter::deleteFragments
+      }
+
+      if (g_cluster && root_plan->get_stmt_type() == kINSERT) {
+        check_table_not_sharded(session_info.get_catalog(),
+                                root_plan->get_result_table_id());
+      }
+      execute_root_plan(_return,
+                        root_plan.get(),
+                        column_format,
+                        session_info,
+                        executor_device_type,
+                        first_n);
     } catch (std::exception& e) {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
