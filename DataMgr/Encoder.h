@@ -61,12 +61,12 @@ class DecimalOverflowValidator {
       return;
 
     if (value >= max_) {
-      throw std::runtime_error("decimal overflow: value is greater then 10^" +
+      throw std::runtime_error("Decimal overflow: value is greater than 10^" +
                                std::to_string(pow10_));
     }
 
     if (value <= min_) {
-      throw std::runtime_error("decimal overflow: value is less then -10^" +
+      throw std::runtime_error("Decimal overflow: value is less than -10^" +
                                std::to_string(pow10_));
     }
   }
