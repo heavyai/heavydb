@@ -3002,8 +3002,8 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         if (isnull) {
           if (cd->columnType.is_geometry() ||
               (column_constraint && column_constraint->get_notnull())) {
-            throw std::runtime_error("Default value required for column" +
-                                     cd->columnName + "(NULL not supported)");
+            throw std::runtime_error("Default value required for column " +
+                                     cd->columnName + " (NULL value not supported)");
           }
         }
 
@@ -4260,7 +4260,7 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       }
     } else {
       throw std::runtime_error("Invalid ALTER USER option " + *p->get_name() +
-                               ".  Should be PASSWORD, INSERTACCESS or IS_SUPER.");
+                               ". Should be PASSWORD, INSERTACCESS or IS_SUPER.");
     }
   }
 
