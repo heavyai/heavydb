@@ -102,7 +102,7 @@ class ContextOperations {
     context.dash_names.clear();
     thrift_op<kGET_DASHBOARDS>(context, [](ContextType& lambda_context) {
       if (lambda_context.dash_names.size() == 0) {
-        std::cout << "User does not have level of access to dashboards." << std::endl;
+        std::cout << "No dashboards to display." << std::endl;
       } else {
         std::cout << "Dashboard ID | Dashboard Name | Owner" << std::endl;
         for (auto p : lambda_context.dash_names) {
