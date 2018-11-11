@@ -2250,6 +2250,9 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         }
         td.fragPageSize = page_size;
       } else if (boost::iequals(*p->get_name(), "max_rows")) {
+        if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
+          throw std::runtime_error("MAX_ROWS must be an integer literal.");
+        }
         auto max_rows = static_cast<const IntLiteral*>(p->get_value())->get_intval();
         if (max_rows <= 0) {
           throw std::runtime_error("MAX_ROWS must be a positive number.");
