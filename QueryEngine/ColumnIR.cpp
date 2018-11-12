@@ -493,6 +493,11 @@ std::shared_ptr<const Analyzer::Expr> Executor::hashJoinLhs(
         if (!eq_left_op) {
           eq_left_op = tautological_eq->get_left_operand();
         }
+        if (eq_left_op->get_type_info().is_geometry()) {
+          // skip cast for a geospatial lhs, since the rhs is likely to be a geospatial
+          // physical col without geospatial type info
+          return nullptr;
+        }
         const auto eq_left_op_col = dynamic_cast<const Analyzer::ColumnVar*>(eq_left_op);
         CHECK(eq_left_op_col);
         if (eq_left_op_col->get_rte_idx() != 0) {

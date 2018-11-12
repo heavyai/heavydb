@@ -11005,9 +11005,9 @@ TEST(Select, GeoSpatial_Projection) {
 }
 
 TEST(Select, GeoSpatial_GeoJoin) {
-  if (!g_enable_overlaps_hashjoin) {
-    return;
-  }
+  const auto g_enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
+  g_enable_overlaps_hashjoin = true;
+
   SKIP_ALL_ON_AGGREGATOR();  // TODO(adb): if we replicate the poly table during table
                              // creation we should be able to lift this constraint
 
@@ -11049,6 +11049,8 @@ TEST(Select, GeoSpatial_GeoJoin) {
                                   "a.gp4326) WHERE b.id = 4;",
                                   dt)));
   }
+
+  g_enable_overlaps_hashjoin = g_enable_overlaps_hashjoin_state;
 }
 
 TEST(Rounding, ROUND) {
@@ -12204,12 +12206,6 @@ int main(int argc, char** argv) {
                          ->default_value(g_enable_columnar_output)
                          ->implicit_value(true),
                      "Enable/disable using columnar output format.");
-  desc.add_options()("enable-overlaps-hashjoin",
-                     po::value<bool>(&g_enable_overlaps_hashjoin)
-                         ->default_value(g_enable_overlaps_hashjoin)
-                         ->implicit_value(true),
-                     "Enable the overlaps hash join framework allowing for range "
-                     "join (e.g. spatial overlaps) computation using a hash table");
   desc.add_options()("keep-data", "Don't drop tables at the end of the tests");
   desc.add_options()(
       "use-existing-data",
