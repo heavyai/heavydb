@@ -37,6 +37,7 @@
 #include "../Catalog/Catalog.h"
 #include "../Catalog/SharedDictionaryValidator.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
+#include "../Fragmenter/TargetValueConvertersFactories.h"
 #include "../Import/Importer.h"
 #include "../Planner/Planner.h"
 #include "../QueryEngine/CalciteAdapter.h"
@@ -49,7 +50,6 @@
 #include "../Shared/measure.h"
 #include "DataMgr/LockMgr.h"
 #include "ReservedKeywords.h"
-#include "TargetValueConvertersFactories.h"
 #include "gen-cpp/CalciteServer.h"
 #include "parser.h"
 
@@ -2509,6 +2509,9 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
   TargetValueConverterFactory factory;
 
+  // TODO this needs revision, let the result set handle translations?
+  constexpr bool result_set_translates_strings = true;
+
   for (const auto& cd : column_descriptors) {
     const ColumnDescriptor* sourceDescriptor = &cd;
     const ColumnDescriptor* targetDescriptor =
@@ -2519,7 +2522,8 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
                                    sourceDescriptor,
                                    targetDescriptor,
                                    targetDescriptor->columnType,
-                                   !targetDescriptor->columnType.get_notnull()};
+                                   !targetDescriptor->columnType.get_notnull(),
+                                   result_set_translates_strings};
     auto converter = factory.create(param);
     value_converters.push_back(std::move(converter));
   }
@@ -2538,26 +2542,28 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
          i < num_worker_threads && start_entry < entryCount;
          ++i, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, entryCount);
-      worker_threads.push_back(
-          std::async(std::launch::async,
-                     [&result_rows, &value_converters, &num_cols, &row_idx](
-                         const size_t start, const size_t end) {
-                       size_t row_count{0};
-                       for (size_t i = start; i < end; ++i) {
-                         const auto result_row = result_rows->getRowAtNoTranslations(i);
-                         if (!result_row.empty()) {
-                           size_t target_row = row_idx.fetch_add(1);
-                           for (unsigned int col = 0; col < num_cols; col++) {
-                             const auto& mapd_variant = result_row[col];
-                             value_converters[col]->convertToColumnarFormat(
-                                 target_row, &mapd_variant);
-                           }
-                         }
-                       }
-                       return row_count;
-                     },
-                     start_entry,
-                     end_entry));
+      worker_threads.push_back(std::async(
+          std::launch::async,
+          [&result_rows, &value_converters, &num_cols, &row_idx](const size_t start,
+                                                                 const size_t end) {
+            size_t row_count{0};
+            for (size_t i = start; i < end; ++i) {
+              const auto result_row = result_set_translates_strings
+                                          ? result_rows->getRowAt(i)
+                                          : result_rows->getRowAtNoTranslations(i);
+              if (!result_row.empty()) {
+                size_t target_row = row_idx.fetch_add(1);
+                for (unsigned int col = 0; col < num_cols; col++) {
+                  const auto& mapd_variant = result_row[col];
+                  value_converters[col]->convertToColumnarFormat(target_row,
+                                                                 &mapd_variant);
+                }
+              }
+            }
+            return row_count;
+          },
+          start_entry,
+          end_entry));
     }
 
     for (auto& child : worker_threads) {
@@ -2566,7 +2572,8 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
   } else {
     for (size_t row = 0; row < num_rows; row++) {
-      const auto result_row = result_rows->getNextRow(false, false);
+      const auto result_row =
+          result_rows->getNextRow(result_set_translates_strings, false);
       for (unsigned int col = 0; col < num_cols; col++) {
         const auto& mapd_variant = result_row[col];
         value_converters[col]->convertToColumnarFormat(row, &mapd_variant);

@@ -14,62 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef TARGET_VALUE_CONVERTERS_H_
-#define TARGET_VALUE_CONVERTERS_H_
+#ifndef TARGET_VALUE_CONVERTERS_IMPL_H_
+#define TARGET_VALUE_CONVERTERS_IMPL_H_
 
-#include "../Catalog/Catalog.h"
-#include "../Import/Importer.h"
-#include "../QueryEngine/ExtractFromTime.h"
-#include "../Shared/sqldefs.h"
-#include "../Shared/sqltypes.h"
+#include "TargetValueConverters.h"
 
 namespace Importer_NS {
 std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeInfo& ti);
 }  // namespace Importer_NS
-
-template <typename RETURN_TYPE>
-class boost_variant_accessor : public boost::static_visitor<const RETURN_TYPE*> {
- public:
-  const RETURN_TYPE* operator()(RETURN_TYPE const& operand) const { return &operand; }
-
-  const RETURN_TYPE* operator()(void* operand) const { return nullptr; }
-
-  template <typename T>
-  const RETURN_TYPE* operator()(T const& operand) const {
-    throw std::runtime_error("Unexpected data type");
-  }
-};
-
-template <typename RETURN_TYPE, typename SOURCE_TYPE>
-const RETURN_TYPE* checked_get(size_t row,
-                               const SOURCE_TYPE* boost_variant,
-                               boost_variant_accessor<RETURN_TYPE>& accessor) {
-  return boost::apply_visitor(accessor, *boost_variant);
-}
-
-template <typename TARGET_TYPE>
-struct CheckedMallocDeleter {
-  void operator()(TARGET_TYPE* p) { free(p); }
-};
-
-struct TargetValueConverter {
- public:
-  const ColumnDescriptor* column_descriptor_;
-
-  boost_variant_accessor<ScalarTargetValue> SCALAR_TARGET_VALUE_ACCESSOR;
-  boost_variant_accessor<GeoTargetValue> GEO_TARGET_VALUE_ACCESSOR;
-
-  TargetValueConverter(const ColumnDescriptor* cd) : column_descriptor_(cd){};
-
-  virtual ~TargetValueConverter() {}
-
-  virtual void allocateColumnarData(size_t num_rows) = 0;
-
-  virtual void convertToColumnarFormat(size_t row, const TargetValue* value) = 0;
-
-  virtual void addDataBlocksToInsertData(
-      Fragmenter_Namespace::InsertData& insertData) = 0;
-};
 
 template <typename SOURCE_TYPE, typename TARGET_TYPE>
 struct NumericValueConverter : public TargetValueConverter {
@@ -126,7 +78,6 @@ struct NumericValueConverter : public TargetValueConverter {
   virtual void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) {
     DataBlockPtr dataBlock;
     dataBlock.numbersPtr = reinterpret_cast<int8_t*>(column_data_.get());
-    ;
     insertData.data.push_back(dataBlock);
     insertData.columnIds.push_back(column_descriptor_->columnId);
   }
@@ -134,54 +85,86 @@ struct NumericValueConverter : public TargetValueConverter {
 
 template <typename TARGET_TYPE>
 struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_TYPE> {
-  const DictDescriptor* source_Dict_;
-  const DictDescriptor* target_dict_;
+  const DictDescriptor* source_dict_desc_;
+  const DictDescriptor* target_dict_desc_;
 
-  DictionaryValueConverter(Catalog_Namespace::Catalog& cat,
+  const StringDictionary* source_dict_;
+
+  DictionaryValueConverter(const Catalog_Namespace::Catalog& cat,
                            const ColumnDescriptor* sourceDescriptor,
                            const ColumnDescriptor* targetDescriptor,
                            size_t num_rows,
                            TARGET_TYPE nullValue,
                            int64_t nullCheckValue,
-                           bool doNullCheck)
+                           bool doNullCheck,
+                           bool expect_always_strings)
       : NumericValueConverter<int64_t, TARGET_TYPE>(targetDescriptor,
                                                     num_rows,
                                                     nullValue,
                                                     nullCheckValue,
                                                     doNullCheck) {
-    source_Dict_ =
+    source_dict_desc_ =
         cat.getMetadataForDict(sourceDescriptor->columnType.get_comp_param(), true);
-    target_dict_ =
+    target_dict_desc_ =
         cat.getMetadataForDict(targetDescriptor->columnType.get_comp_param(), true);
+
+    source_dict_ = nullptr;
+
+    if (!expect_always_strings) {
+      if (source_dict_desc_) {
+        source_dict_ = source_dict_desc_->stringDict.get();
+      }
+    }
   }
 
   virtual ~DictionaryValueConverter() {}
 
-  void convertToColumnarFormat(size_t row, const ScalarTargetValue* scalarValue) {
+  void convertToColumnarFormatFromDict(size_t row, const ScalarTargetValue* scalarValue) {
     auto mapd_p = checked_get<int64_t>(row, scalarValue, this->SOURCE_TYPE_ACCESSOR);
     auto val = *mapd_p;
 
     if (this->do_null_check_ && this->null_check_value_ == val) {
       this->column_data_.get()[row] = this->null_value_;
     } else {
-      std::string strVal = source_Dict_->stringDict->getString(val);
-      auto newVal = target_dict_->stringDict->getOrAdd(strVal);
+      std::string strVal = source_dict_->getString(val);
+      auto newVal = target_dict_desc_->stringDict->getOrAdd(strVal);
       this->column_data_.get()[row] = (TARGET_TYPE)newVal;
+    }
+  }
+
+  virtual void convertToColumnarFormatFromString(size_t row,
+                                                 const ScalarTargetValue* scalarValue) {
+    auto mapd_p =
+        checked_get<NullableString>(row, scalarValue, this->NULLABLE_STRING_ACCESSOR);
+
+    const auto mapd_str_p = checked_get<std::string>(row, mapd_p, this->STRING_ACCESSOR);
+
+    if (this->do_null_check_ && (nullptr == mapd_str_p || *mapd_str_p == "")) {
+      this->column_data_.get()[row] = this->null_value_;
+    } else {
+      auto newVal = target_dict_desc_->stringDict->getOrAdd(*mapd_str_p);
+      this->column_data_.get()[row] = (TARGET_TYPE)newVal;
+    }
+  }
+
+  void convertToColumnarFormat(size_t row, const ScalarTargetValue* scalarValue) {
+    if (source_dict_) {
+      convertToColumnarFormatFromDict(row, scalarValue);
+    } else {
+      convertToColumnarFormatFromString(row, scalarValue);
     }
   }
 
   virtual void convertToColumnarFormat(size_t row, const TargetValue* value) {
     auto scalarValue =
         checked_get<ScalarTargetValue>(row, value, this->SCALAR_TARGET_VALUE_ACCESSOR);
+
     convertToColumnarFormat(row, scalarValue);
   }
 };
 
 struct StringValueConverter : public TargetValueConverter {
   std::unique_ptr<std::vector<std::string>> column_data_;
-
-  boost_variant_accessor<NullableString> NULLABLE_STRING_ACCESSOR;
-  boost_variant_accessor<std::string> STRING_ACCESSOR;
 
   StringValueConverter(const ColumnDescriptor* cd, size_t num_rows)
       : TargetValueConverter(cd) {

@@ -25,6 +25,7 @@
 #include <boost/variant.hpp>
 #include <string>
 #include <vector>
+#include "../QueryEngine/TargetValue.h"
 #include "../Shared/UpdelRoll.h"
 #include "../Shared/sqltypes.h"
 #include "../StringDictionary/StringDictionary.h"
@@ -53,8 +54,17 @@ struct TableDescriptor;
 struct ColumnDescriptor;
 
 namespace Fragmenter_Namespace {
-using NullableString = boost::variant<std::string, void*>;
-using ScalarTargetValue = boost::variant<int64_t, double, float, NullableString>;
+
+/**
+ *  slim interface to wrap the result set into
+ */
+class RowDataProvider {
+ public:
+  virtual size_t count() const = 0;
+  virtual std::vector<TargetValue> getEntryAt(const size_t index) const = 0;
+  virtual std::vector<TargetValue> getTranslatedEntryAt(const size_t index) const = 0;
+};
+
 /*
  * @type AbstractFragmenter
  * @brief abstract base class for all table partitioners
@@ -128,6 +138,15 @@ class AbstractFragmenter {
                             const SQLTypeInfo& rhs_type,
                             const Data_Namespace::MemoryLevel memory_level,
                             UpdelRoll& updel_roll) = 0;
+
+  virtual void updateColumns(const Catalog_Namespace::Catalog* catalog,
+                             const TableDescriptor* td,
+                             const int fragmentId,
+                             const std::vector<const ColumnDescriptor*> columnDescriptors,
+                             const RowDataProvider& sourceDataProvider,
+                             const size_t indexOffFragmentOffsetColumn,
+                             const Data_Namespace::MemoryLevel memoryLevel,
+                             UpdelRoll& updelRoll) = 0;
 
   virtual void updateColumn(const Catalog_Namespace::Catalog* catalog,
                             const TableDescriptor* td,

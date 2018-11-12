@@ -8212,6 +8212,7 @@ TEST(Update, Text) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists text_default;");
     run_ddl_statement("create table text_default (t text) with (vacuum='delayed');");
 
     run_multiple_agg("insert into text_default values ('do');", dt);
@@ -8225,8 +8226,6 @@ TEST(Update, Text) {
     ASSERT_EQ(int64_t(4),
               v<int64_t>(run_simple_agg(
                   "select count(t) from text_default where t='pizza';", dt)));
-
-    run_ddl_statement("drop table text_default;");
   }
 
   g_enable_watchdog = save_watchdog;
@@ -8244,6 +8243,7 @@ TEST(Update, TextINVariant) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists text_default;");
     run_ddl_statement("create table text_default (t text) with (vacuum='delayed');");
 
     run_multiple_agg("insert into text_default values ('do');", dt);
@@ -8258,8 +8258,6 @@ TEST(Update, TextINVariant) {
     ASSERT_EQ(int64_t(4),
               v<int64_t>(run_simple_agg(
                   "select count(t) from text_default where t='pizza';", dt)));
-
-    run_ddl_statement("drop table text_default;");
   }
 
   g_enable_watchdog = save_watchdog;
@@ -8277,6 +8275,7 @@ TEST(Update, TextEncodingDict16) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists textenc16_default;");
     run_ddl_statement(
         "create table textenc16_default (t text encoding dict(16)) with "
         "(vacuum='delayed');");
@@ -8312,6 +8311,7 @@ TEST(Update, TextEncodingDict8) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists textenc8_default;");
     run_ddl_statement(
         "create table textenc8_default (t text encoding dict(8)) with "
         "(vacuum='delayed');");
@@ -8815,6 +8815,7 @@ TEST(Update, ImplicitCastToEncodedString) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists textenc;");
     run_ddl_statement(
         "create table textenc ( s1 text encoding dict(32), s2 text encoding dict(16), s3 "
         "text encoding dict(8) ) with "

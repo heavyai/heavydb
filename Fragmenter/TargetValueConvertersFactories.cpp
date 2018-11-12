@@ -14,19 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef TARGET_VALUE_CONVERTERS_FACTORIES_H_
-#define TARGET_VALUE_CONVERTERS_FACTORIES_H_
-
-#include "TargetValueConverters.h"
-
-struct ConverterCreateParameter {
-  size_t num_rows;
-  Catalog_Namespace::Catalog& cat;
-  const ColumnDescriptor* source;
-  const ColumnDescriptor* target;
-  const SQLTypeInfo& type;
-  bool can_be_null;
-};
+#include "TargetValueConvertersFactories.h"
+#include "TargetValueConvertersImpl.h"
 
 template <typename SOURCE_TYPE, typename TARGET_TYPE>
 struct NumericConverterFactory {
@@ -106,13 +95,15 @@ struct DictionaryConverterFactory {
         CHECK(false);
     }
 
-    return std::make_unique<DictionaryValueConverter<TARGET_TYPE>>(param.cat,
-                                                                   param.source,
-                                                                   param.target,
-                                                                   param.num_rows,
-                                                                   target_null_value,
-                                                                   NULL_INT,
-                                                                   param.can_be_null);
+    return std::make_unique<DictionaryValueConverter<TARGET_TYPE>>(
+        param.cat,
+        param.source,
+        param.target,
+        param.num_rows,
+        target_null_value,
+        NULL_INT,
+        param.can_be_null,
+        param.always_expect_strings);
   }
 
   std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {
@@ -172,8 +163,13 @@ struct ArrayConverterFactory {
   std::unique_ptr<ArrayValueConverter<typename ELEMENT_FACTORY::ConverterType>> create(
       ConverterCreateParameter param) {
     auto elem_type = param.target->columnType.get_elem_type();
-    ConverterCreateParameter elementConverterFactoryParam{
-        0, param.cat, param.source, param.target, elem_type, false};
+    ConverterCreateParameter elementConverterFactoryParam{0,
+                                                          param.cat,
+                                                          param.source,
+                                                          param.target,
+                                                          elem_type,
+                                                          false,
+                                                          param.always_expect_strings};
 
     auto elementConverter = element_factory_.create(elementConverterFactoryParam);
     return std::make_unique<ArrayValueConverter<typename ELEMENT_FACTORY::ConverterType>>(
@@ -241,41 +237,38 @@ struct GeoConverterFactory {
   }
 };
 
-struct TargetValueConverterFactory {
-  std::unique_ptr<TargetValueConverter> create(ConverterCreateParameter param) {
-    static const std::map<SQLTypes,
-                          std::function<std::unique_ptr<TargetValueConverter>(
-                              ConverterCreateParameter param)>>
-        factories{{kBIGINT, NumericConverterFactory<int64_t, int64_t>()},
-                  {kINT, NumericConverterFactory<int64_t, int32_t>()},
-                  {kSMALLINT, NumericConverterFactory<int64_t, int16_t>()},
-                  {kTINYINT, NumericConverterFactory<int64_t, int8_t>()},
-                  {kDECIMAL, NumericConverterFactory<int64_t, int64_t>()},
-                  {kNUMERIC, NumericConverterFactory<int64_t, int64_t>()},
-                  {kTIMESTAMP, NumericConverterFactory<int64_t, int64_t>()},
-                  {kDATE, DateConverterFactory()},
-                  {kTIME, NumericConverterFactory<int64_t, int64_t>()},
-                  {kBOOLEAN, NumericConverterFactory<int64_t, int8_t>()},
-                  {kDOUBLE, NumericConverterFactory<double, double>()},
-                  {kFLOAT, NumericConverterFactory<float, float>()},
-                  {kTEXT, TextConverterFactory()},
-                  {kCHAR, TextConverterFactory()},
-                  {kVARCHAR, TextConverterFactory()},
-                  {kARRAY, ArraysConverterFactory()},
-                  {kPOINT, GeoConverterFactory<GeoPointValueConverter>()},
-                  {kLINESTRING, GeoConverterFactory<GeoLinestringValueConverter>()},
-                  {kPOLYGON, GeoConverterFactory<GeoPolygonValueConverter>()},
-                  {kMULTIPOLYGON, GeoConverterFactory<GeoMultiPolygonValueConverter>()}};
+std::unique_ptr<TargetValueConverter> TargetValueConverterFactory::create(
+    ConverterCreateParameter param) {
+  static const std::map<SQLTypes,
+                        std::function<std::unique_ptr<TargetValueConverter>(
+                            ConverterCreateParameter param)>>
+      factories{{kBIGINT, NumericConverterFactory<int64_t, int64_t>()},
+                {kINT, NumericConverterFactory<int64_t, int32_t>()},
+                {kSMALLINT, NumericConverterFactory<int64_t, int16_t>()},
+                {kTINYINT, NumericConverterFactory<int64_t, int8_t>()},
+                {kDECIMAL, NumericConverterFactory<int64_t, int64_t>()},
+                {kNUMERIC, NumericConverterFactory<int64_t, int64_t>()},
+                {kTIMESTAMP, NumericConverterFactory<int64_t, int64_t>()},
+                {kDATE, DateConverterFactory()},
+                {kTIME, NumericConverterFactory<int64_t, int64_t>()},
+                {kBOOLEAN, NumericConverterFactory<int64_t, int8_t>()},
+                {kDOUBLE, NumericConverterFactory<double, double>()},
+                {kFLOAT, NumericConverterFactory<float, float>()},
+                {kTEXT, TextConverterFactory()},
+                {kCHAR, TextConverterFactory()},
+                {kVARCHAR, TextConverterFactory()},
+                {kARRAY, ArraysConverterFactory()},
+                {kPOINT, GeoConverterFactory<GeoPointValueConverter>()},
+                {kLINESTRING, GeoConverterFactory<GeoLinestringValueConverter>()},
+                {kPOLYGON, GeoConverterFactory<GeoPolygonValueConverter>()},
+                {kMULTIPOLYGON, GeoConverterFactory<GeoMultiPolygonValueConverter>()}};
 
-    auto factory = factories.find(param.target->columnType.get_type());
+  auto factory = factories.find(param.target->columnType.get_type());
 
-    if (factory != factories.end()) {
-      return factory->second(param);
-    } else {
-      throw std::runtime_error("Unsupported column type: " +
-                               param.target->columnType.get_type_name());
-    }
+  if (factory != factories.end()) {
+    return factory->second(param);
+  } else {
+    throw std::runtime_error("Unsupported column type: " +
+                             param.target->columnType.get_type_name());
   }
-};
-
-#endif
+}

@@ -28,6 +28,9 @@
 #include "QueryEngine/TargetValue.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/thread_count.h"
+#include "TargetValueConvertersFactories.h"
+
+bool g_varlenupdate{false};
 
 namespace Fragmenter_Namespace {
 
@@ -95,6 +98,388 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                rhs_type,
                memory_level,
                updel_roll);
+}
+
+static int get_chunks(const Catalog_Namespace::Catalog* catalog,
+                      const TableDescriptor* td,
+                      const FragmentInfo& fragment,
+                      const Data_Namespace::MemoryLevel memory_level,
+                      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
+  for (int cid = 1, nc = 0; nc < td->nColumns; ++cid) {
+    if (const auto cd = catalog->getMetadataForColumn(td->tableId, cid)) {
+      ++nc;
+      if (!cd->isVirtualCol) {
+        auto chunk_meta_it = fragment.getChunkMetadataMapPhysical().find(cid);
+        CHECK(chunk_meta_it != fragment.getChunkMetadataMapPhysical().end());
+        ChunkKey chunk_key{
+            catalog->get_currentDB().dbId, td->tableId, cid, fragment.fragmentId};
+        auto chunk = Chunk_NS::Chunk::getChunk(cd,
+                                               &catalog->get_dataMgr(),
+                                               chunk_key,
+                                               memory_level,
+                                               0,
+                                               chunk_meta_it->second.numBytes,
+                                               chunk_meta_it->second.numElements);
+        chunks.push_back(chunk);
+      }
+    }
+  }
+  return chunks.size();
+}
+
+struct ChunkToInsertDataConverter {
+ public:
+  virtual void convertToColumnarFormat(size_t row, size_t indexInFragment) = 0;
+
+  virtual void addDataBlocksToInsertData(
+      Fragmenter_Namespace::InsertData& insertData) = 0;
+};
+
+template <typename BUFFER_DATA_TYPE, typename INSERT_DATA_TYPE>
+struct ScalarChunkConverter : public ChunkToInsertDataConverter {
+  using ColumnDataPtr =
+      std::unique_ptr<INSERT_DATA_TYPE, CheckedMallocDeleter<INSERT_DATA_TYPE>>;
+
+  const Chunk_NS::Chunk* chunk_;
+  ColumnDataPtr column_data_;
+  const ColumnDescriptor* column_descriptor_;
+  const BUFFER_DATA_TYPE* data_buffer_addr_;
+
+  ScalarChunkConverter(const size_t num_rows, const Chunk_NS::Chunk* chunk)
+      : chunk_(chunk), column_descriptor_(chunk->get_column_desc()) {
+    column_data_ = ColumnDataPtr(reinterpret_cast<INSERT_DATA_TYPE*>(
+        checked_malloc(num_rows * sizeof(INSERT_DATA_TYPE))));
+    data_buffer_addr_ = (BUFFER_DATA_TYPE*)chunk->get_buffer()->getMemoryPtr();
+  }
+
+  virtual void convertToColumnarFormat(size_t row, size_t indexInFragment) {
+    auto buffer_value = data_buffer_addr_[indexInFragment];
+    auto insert_value = static_cast<INSERT_DATA_TYPE>(buffer_value);
+    column_data_.get()[row] = insert_value;
+  }
+
+  virtual void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) {
+    DataBlockPtr dataBlock;
+    dataBlock.numbersPtr = reinterpret_cast<int8_t*>(column_data_.get());
+    insertData.data.push_back(dataBlock);
+    insertData.columnIds.push_back(column_descriptor_->columnId);
+  }
+};
+
+struct FixedLenArrayChunkConverter : public ChunkToInsertDataConverter {
+  const Chunk_NS::Chunk* chunk_;
+  const ColumnDescriptor* column_descriptor_;
+
+  std::unique_ptr<std::vector<ArrayDatum>> column_data_;
+  int8_t* data_buffer_addr_;
+  size_t fixed_array_length_;
+
+  FixedLenArrayChunkConverter(const size_t num_rows, const Chunk_NS::Chunk* chunk)
+      : chunk_(chunk), column_descriptor_(chunk->get_column_desc()) {
+    column_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
+    data_buffer_addr_ = chunk->get_buffer()->getMemoryPtr();
+    fixed_array_length_ = chunk->get_column_desc()->columnType.get_size();
+  }
+
+  virtual void convertToColumnarFormat(size_t row, size_t indexInFragment) {
+    auto src_value_ptr = data_buffer_addr_ + (indexInFragment * fixed_array_length_);
+    (*column_data_)[row] =
+        ArrayDatum(fixed_array_length_, (int8_t*)src_value_ptr, DoNothingDeleter());
+  }
+
+  virtual void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) {
+    DataBlockPtr dataBlock;
+    dataBlock.arraysPtr = column_data_.get();
+    insertData.data.push_back(dataBlock);
+    insertData.columnIds.push_back(column_descriptor_->columnId);
+  }
+};
+
+struct ArrayChunkConverter : public FixedLenArrayChunkConverter {
+  StringOffsetT* index_buffer_addr_;
+
+  ArrayChunkConverter(const size_t num_rows, const Chunk_NS::Chunk* chunk)
+      : FixedLenArrayChunkConverter(num_rows, chunk) {
+    index_buffer_addr_ =
+        (StringOffsetT*)(chunk->get_index_buf() ? chunk->get_index_buf()->getMemoryPtr()
+                                                : nullptr);
+  }
+
+  virtual void convertToColumnarFormat(size_t row, size_t indexInFragment) {
+    size_t src_value_size =
+        index_buffer_addr_[indexInFragment + 1] - index_buffer_addr_[indexInFragment];
+    auto src_value_ptr = data_buffer_addr_ + index_buffer_addr_[indexInFragment];
+    (*column_data_)[row] =
+        ArrayDatum(src_value_size, (int8_t*)src_value_ptr, DoNothingDeleter());
+  }
+};
+
+struct StringChunkConverter : public ChunkToInsertDataConverter {
+  const Chunk_NS::Chunk* chunk_;
+  const ColumnDescriptor* column_descriptor_;
+
+  std::unique_ptr<std::vector<std::string>> column_data_;
+  const int8_t* data_buffer_addr_;
+  const StringOffsetT* index_buffer_addr_;
+
+  StringChunkConverter(size_t num_rows, const Chunk_NS::Chunk* chunk)
+      : chunk_(chunk), column_descriptor_(chunk->get_column_desc()) {
+    column_data_ = std::make_unique<std::vector<std::string>>(num_rows);
+    data_buffer_addr_ = chunk->get_buffer()->getMemoryPtr();
+    index_buffer_addr_ =
+        (StringOffsetT*)(chunk->get_index_buf() ? chunk->get_index_buf()->getMemoryPtr()
+                                                : nullptr);
+  }
+
+  virtual void convertToColumnarFormat(size_t row, size_t indexInFragment) {
+    size_t src_value_size =
+        index_buffer_addr_[indexInFragment + 1] - index_buffer_addr_[indexInFragment];
+    auto src_value_ptr = data_buffer_addr_ + index_buffer_addr_[indexInFragment];
+    (*column_data_)[row] = std::string((const char*)src_value_ptr, src_value_size);
+  }
+
+  virtual void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) {
+    DataBlockPtr dataBlock;
+    dataBlock.stringsPtr = column_data_.get();
+    insertData.data.push_back(dataBlock);
+    insertData.columnIds.push_back(column_descriptor_->columnId);
+  }
+};
+
+void InsertOrderFragmenter::updateColumns(
+    const Catalog_Namespace::Catalog* catalog,
+    const TableDescriptor* td,
+    const int fragmentId,
+    const std::vector<const ColumnDescriptor*> columnDescriptors,
+    const RowDataProvider& sourceDataProvider,
+    const size_t indexOffFragmentOffsetColumn,
+    const Data_Namespace::MemoryLevel memoryLevel,
+    UpdelRoll& updelRoll) {
+  if (!g_varlenupdate) {
+    throw std::runtime_error("varlen UPDATE path not enabled.");
+  }
+
+  updelRoll.catalog = catalog;
+  updelRoll.logicalTableId = catalog->getLogicalTableId(td->tableId);
+  updelRoll.memoryLevel = memoryLevel;
+
+  size_t num_rows = sourceDataProvider.count();
+
+  TargetValueConverterFactory factory;
+
+  auto& fragment = getFragmentInfoFromId(fragmentId);
+  std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks;
+  get_chunks(catalog, td, fragment, memoryLevel, chunks);
+  std::vector<std::unique_ptr<TargetValueConverter>> sourceDataConverters(
+      columnDescriptors.size());
+  std::vector<std::unique_ptr<ChunkToInsertDataConverter>> chunkConverters;
+
+  std::shared_ptr<Chunk_NS::Chunk> deletedChunk;
+  for (size_t indexOfChunk = 0; indexOfChunk < chunks.size(); indexOfChunk++) {
+    auto chunk = chunks[indexOfChunk];
+    const auto chunk_cd = chunk->get_column_desc();
+
+    if (chunk_cd->isDeletedCol) {
+      deletedChunk = chunk;
+      continue;
+    }
+
+    auto targetColumnIt = std::find_if(columnDescriptors.begin(),
+                                       columnDescriptors.end(),
+                                       [=](const ColumnDescriptor* cd) -> bool {
+                                         return cd->columnId == chunk_cd->columnId;
+                                       });
+
+    if (targetColumnIt != columnDescriptors.end()) {
+      auto indexOfTargetColumn = std::distance(columnDescriptors.begin(), targetColumnIt);
+
+      auto sourceDescriptor = columnDescriptors[indexOfTargetColumn];
+      auto targetDescriptor = columnDescriptors[indexOfTargetColumn];
+
+      ConverterCreateParameter param{num_rows,
+                                     *catalog,
+                                     sourceDescriptor,
+                                     targetDescriptor,
+                                     targetDescriptor->columnType,
+                                     !targetDescriptor->columnType.get_notnull(),
+                                     true};
+      auto converter = factory.create(param);
+      sourceDataConverters[indexOfTargetColumn] = std::move(converter);
+
+      if (targetDescriptor->columnType.is_geometry()) {
+        // geometry columns are composites
+        // need to skip chunks, depending on geo type
+        switch (targetDescriptor->columnType.get_type()) {
+          case kMULTIPOLYGON:
+            indexOfChunk += 5;
+            break;
+          case kPOLYGON:
+            indexOfChunk += 4;
+            break;
+          case kLINESTRING:
+            indexOfChunk += 2;
+            break;
+          case kPOINT:
+            indexOfChunk += 1;
+            break;
+          default:
+            CHECK(false);  // not supported
+        }
+      }
+    } else {
+      if (chunk_cd->columnType.is_varlen() || chunk_cd->columnType.is_fixlen_array()) {
+        std::unique_ptr<ChunkToInsertDataConverter> converter;
+
+        if (chunk_cd->columnType.is_fixlen_array()) {
+          converter =
+              std::make_unique<FixedLenArrayChunkConverter>(num_rows, chunk.get());
+        } else if (chunk_cd->columnType.is_string()) {
+          converter = std::make_unique<StringChunkConverter>(num_rows, chunk.get());
+        } else {
+          converter = std::make_unique<ArrayChunkConverter>(num_rows, chunk.get());
+        }
+
+        chunkConverters.push_back(std::move(converter));
+
+      } else {
+        std::unique_ptr<ChunkToInsertDataConverter> converter;
+        SQLTypeInfo logical_type = get_logical_type_info(chunk_cd->columnType);
+        int logical_size = logical_type.get_size();
+        int physical_size = chunk_cd->columnType.get_size();
+
+        if (logical_type.is_date_in_days()) {
+          // get_logical_type_info does not know about date compression yet
+          logical_size = 4;
+        }
+
+        if (logical_type.is_string()) {
+          // for dicts -> logical = physical
+          logical_size = physical_size;
+        }
+
+        if (8 == physical_size) {
+          converter = std::make_unique<ScalarChunkConverter<int64_t, int64_t>>(
+              num_rows, chunk.get());
+        } else if (4 == physical_size) {
+          if (8 == logical_size) {
+            converter = std::make_unique<ScalarChunkConverter<int32_t, int64_t>>(
+                num_rows, chunk.get());
+          } else {
+            converter = std::make_unique<ScalarChunkConverter<int32_t, int32_t>>(
+                num_rows, chunk.get());
+          }
+        } else if (2 == chunk_cd->columnType.get_size()) {
+          if (8 == logical_size) {
+            converter = std::make_unique<ScalarChunkConverter<int16_t, int64_t>>(
+                num_rows, chunk.get());
+          } else if (4 == logical_size) {
+            converter = std::make_unique<ScalarChunkConverter<int16_t, int32_t>>(
+                num_rows, chunk.get());
+          } else {
+            converter = std::make_unique<ScalarChunkConverter<int16_t, int16_t>>(
+                num_rows, chunk.get());
+          }
+        } else if (1 == chunk_cd->columnType.get_size()) {
+          if (8 == logical_size) {
+            converter = std::make_unique<ScalarChunkConverter<int8_t, int64_t>>(
+                num_rows, chunk.get());
+          } else if (4 == logical_size) {
+            converter = std::make_unique<ScalarChunkConverter<int8_t, int32_t>>(
+                num_rows, chunk.get());
+          } else if (2 == logical_size) {
+            converter = std::make_unique<ScalarChunkConverter<int8_t, int16_t>>(
+                num_rows, chunk.get());
+          } else {
+            converter = std::make_unique<ScalarChunkConverter<int8_t, int8_t>>(
+                num_rows, chunk.get());
+          }
+        } else {
+          CHECK(false);  // unknown
+        }
+
+        chunkConverters.push_back(std::move(converter));
+      }
+    }
+  }
+
+  boost_variant_accessor<ScalarTargetValue> SCALAR_TARGET_VALUE_ACCESSOR;
+  boost_variant_accessor<int64_t> OFFSET_VALUE__ACCESSOR;
+
+  updelRoll.dirtyChunks[deletedChunk.get()] = deletedChunk;
+  ChunkKey chunkey{updelRoll.catalog->get_currentDB().dbId,
+                   deletedChunk->get_column_desc()->tableId,
+                   deletedChunk->get_column_desc()->columnId,
+                   fragment.fragmentId};
+  updelRoll.dirtyChunkeys.insert(chunkey);
+  bool* deletedChunkBuffer =
+      reinterpret_cast<bool*>(deletedChunk->get_buffer()->getMemoryPtr());
+
+  for (size_t indexOfRow = 0; indexOfRow < num_rows; indexOfRow++) {
+    // convert the source data
+    const auto row = sourceDataProvider.getTranslatedEntryAt(indexOfRow);
+
+    for (size_t col = 0; col < sourceDataConverters.size(); col++) {
+      if (sourceDataConverters[col]) {
+        const auto& mapd_variant = row[col];
+        sourceDataConverters[col]->convertToColumnarFormat(indexOfRow, &mapd_variant);
+      }
+    }
+
+    auto scalar = checked_get(
+        indexOfRow, &row[indexOffFragmentOffsetColumn], SCALAR_TARGET_VALUE_ACCESSOR);
+    auto indexInChunkBuffer = *checked_get(indexOfRow, scalar, OFFSET_VALUE__ACCESSOR);
+
+    // convert the remaining chunks
+    for (size_t idx = 0; idx < chunkConverters.size(); idx++) {
+      chunkConverters[idx]->convertToColumnarFormat(indexOfRow, indexInChunkBuffer);
+    }
+
+    // now mark the row as deleted
+    deletedChunkBuffer[indexInChunkBuffer] = true;
+  }
+
+  // update metdata
+  updelRoll.dirtyChunks[deletedChunk.get()] = deletedChunk;
+  //  deletedChunk->get_buffer()->setUpdated();
+  if (!deletedChunk->get_buffer()->hasEncoder) {
+    deletedChunk->init_encoder();
+  }
+
+  deletedChunk->get_buffer()->encoder->updateStats(static_cast<int64_t>(true), false);
+  columnMap_[deletedChunk->get_column_desc()->columnId].get_buffer()->write(
+      (int8_t*)deletedChunkBuffer,
+      deletedChunk->get_buffer()->encoder->getNumElems(),
+      0,
+      deletedChunk->get_buffer()->getType(),
+      deletedChunk->get_buffer()->getDeviceId());
+
+  columnMap_[deletedChunk->get_column_desc()->columnId].get_buffer()->syncEncoder(
+      deletedChunk->get_buffer());
+
+  auto& shadowDeletedChunkMeta =
+      fragment.shadowChunkMetadataMap[deletedChunk->get_column_desc()->columnId];
+  deletedChunk->get_buffer()->encoder->getMetadata(shadowDeletedChunkMeta);
+  fragment.setChunkMetadata(deletedChunk->get_column_desc()->columnId,
+                            shadowDeletedChunkMeta);
+
+  Fragmenter_Namespace::InsertData insert_data;
+  insert_data.databaseId = catalog->get_currentDB().dbId;
+  insert_data.tableId = td->tableId;
+
+  for (size_t i = 0; i < chunkConverters.size(); i++) {
+    chunkConverters[i]->addDataBlocksToInsertData(insert_data);
+    continue;
+  }
+
+  for (size_t i = 0; i < sourceDataConverters.size(); i++) {
+    if (sourceDataConverters[i]) {
+      sourceDataConverters[i]->addDataBlocksToInsertData(insert_data);
+    }
+    continue;
+  }
+
+  insert_data.numRows = num_rows;
+  insertDataNoCheckpoint(insert_data);
 }
 
 void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catalog,

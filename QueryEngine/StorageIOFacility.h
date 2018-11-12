@@ -14,6 +14,8 @@
 
 #include <future>
 
+extern bool g_varlenupdate;
+
 template <typename FRAGMENTER_TYPE = Fragmenter_Namespace::InsertOrderFragmenter>
 class DefaultIOFacet {
  public:
@@ -215,6 +217,43 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
 
   auto callback = [this,
                    &update_parameters](FragmentUpdaterType const& update_log) -> void {
+    if (g_varlenupdate) {
+      std::vector<const ColumnDescriptor*> columnDescriptors;
+
+      for (size_t idx = 0; idx < update_parameters.getUpdateColumnNames().size(); idx++) {
+        auto& column_name = update_parameters.getUpdateColumnNames()[idx];
+        auto target_column =
+            catalog_.getMetadataForColumn(update_log.getPhysicalTableId(), column_name);
+        columnDescriptors.push_back(target_column);
+      }
+
+      auto td = catalog_.getMetadataForTable(update_log.getPhysicalTableId());
+      auto* fragmenter = td->fragmenter;
+      CHECK(fragmenter);
+
+      fragmenter->updateColumns(
+          &catalog_,
+          td,
+          update_log.getFragmentId(),
+          columnDescriptors,
+          update_log,
+          update_parameters.getUpdateColumnCount(),  // last column of result set
+          Data_Namespace::MemoryLevel::CPU_LEVEL,
+          update_parameters.getTransactionTracker());
+
+      return;
+    } else {
+      // some sanity checks
+      for (size_t idx = 0; idx < update_parameters.getUpdateColumnNames().size(); idx++) {
+        auto& column_name = update_parameters.getUpdateColumnNames()[idx];
+        auto target_column =
+            catalog_.getMetadataForColumn(update_log.getPhysicalTableId(), column_name);
+        if (target_column->columnType.is_varlen()) {
+          throw std::runtime_error("update of varlen columns not enabled");
+        }
+      }
+    }
+
     auto rows_per_column = update_log.getEntryCount();
     if (rows_per_column == 0)
       return;

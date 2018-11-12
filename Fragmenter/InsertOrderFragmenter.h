@@ -23,6 +23,7 @@
 
 #include "../Chunk/Chunk.h"
 #include "../DataMgr/MemoryLevel.h"
+#include "../QueryEngine/TargetValue.h"
 #include "../Shared/mapd_shared_mutex.h"
 #include "../Shared/types.h"
 #include "AbstractFragmenter.h"
@@ -42,6 +43,7 @@ class DataMgr;
 #define DEFAULT_MAX_CHUNK_SIZE 1073741824  // in bytes
 
 namespace Fragmenter_Namespace {
+
 /**
  * @type InsertOrderFragmenter
  * @brief	The InsertOrderFragmenter is a child class of
@@ -119,6 +121,15 @@ class InsertOrderFragmenter : public AbstractFragmenter {
                             const SQLTypeInfo& rhs_type,
                             const Data_Namespace::MemoryLevel memory_level,
                             UpdelRoll& updel_roll);
+
+  virtual void updateColumns(const Catalog_Namespace::Catalog* catalog,
+                             const TableDescriptor* td,
+                             const int fragmentId,
+                             const std::vector<const ColumnDescriptor*> columnDescriptors,
+                             const RowDataProvider& sourceDataProvider,
+                             const size_t indexOffFragmentOffsetColumn,
+                             const Data_Namespace::MemoryLevel memoryLevel,
+                             UpdelRoll& updelRoll);
 
   virtual void updateColumn(const Catalog_Namespace::Catalog* catalog,
                             const TableDescriptor* td,

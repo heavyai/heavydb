@@ -20,7 +20,9 @@
 UpdateLogForFragment::UpdateLogForFragment(FragmentInfoType const& fragment_info,
                                            size_t const fragment_index,
                                            const std::shared_ptr<ResultSet>& rs)
-    : fragment_info_(fragment_info), fragment_index_(fragment_index), rs_(rs) {}
+    : fragment_info_(fragment_info), fragment_index_(fragment_index), rs_(rs) {
+  rs->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
+}
 
 std::vector<TargetValue> UpdateLogForFragment::getEntryAt(const size_t index) const {
   return rs_->getRowAtNoTranslations(index);
@@ -29,6 +31,10 @@ std::vector<TargetValue> UpdateLogForFragment::getEntryAt(const size_t index) co
 std::vector<TargetValue> UpdateLogForFragment::getTranslatedEntryAt(
     const size_t index) const {
   return rs_->getRowAt(index);
+}
+
+size_t UpdateLogForFragment::count() const {
+  return getEntryCount();
 }
 
 UpdateLogForFragment::FragmentInfoType const& UpdateLogForFragment::getFragmentInfo()

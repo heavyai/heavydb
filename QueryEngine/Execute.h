@@ -38,6 +38,7 @@
 
 #include "../Analyzer/Analyzer.h"
 #include "../Chunk/Chunk.h"
+#include "../Fragmenter/InsertOrderFragmenter.h"
 #include "../Planner/Planner.h"
 #include "../Shared/MapDParameters.h"
 #include "../Shared/measure.h"
@@ -257,7 +258,9 @@ struct hash<std::pair<int, int>> {
 
 }  // namespace std
 
-class UpdateLogForFragment {
+using RowDataProvider = Fragmenter_Namespace::RowDataProvider;
+
+class UpdateLogForFragment : public RowDataProvider {
  public:
   using FragmentInfoType = Fragmenter_Namespace::FragmentInfo;
 
@@ -265,8 +268,10 @@ class UpdateLogForFragment {
                        size_t const,
                        const std::shared_ptr<ResultSet>& rs);
 
-  std::vector<TargetValue> getEntryAt(const size_t index) const;
-  std::vector<TargetValue> getTranslatedEntryAt(const size_t index) const;
+  virtual std::vector<TargetValue> getEntryAt(const size_t index) const;
+  virtual std::vector<TargetValue> getTranslatedEntryAt(const size_t index) const;
+
+  virtual size_t count() const;
 
   size_t const getEntryCount() const;
   size_t const getFragmentIndex() const;
