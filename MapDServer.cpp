@@ -44,6 +44,10 @@
 #include <thread>
 #include <vector>
 
+#ifdef HAVE_PYTHON
+#include <Python.h>
+#endif
+
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::concurrency;
 using namespace ::apache::thrift::protocol;
@@ -716,6 +720,18 @@ int main(int argc, char** argv) {
   boost::algorithm::trim_if(mapd_parameters.ssl_key_file, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(mapd_parameters.ssl_trust_store, boost::is_any_of("\"'"));
 
+#ifdef HAVE_PYTHON
+  wchar_t *py_program = Py_DecodeLocale(argv[0], NULL);
+  if (py_program == NULL) {
+    LOG(ERROR) << "Embedded Python fatal error: cannot decode argv[0]";
+    return 120;
+  }
+  Py_SetProgramName(py_program);  /* optional but recommended */
+  Py_Initialize();
+  PyRun_SimpleString("import sys\n"
+		     "print('Embedded Python', sys.version)\n");
+#endif
+
   // rudimetary signal handling to try to guarantee the logging gets flushed to files
   // on shutdown
   register_signal_handler();
@@ -792,5 +808,13 @@ int main(int argc, char** argv) {
   } else {  // running ha server
     LOG(FATAL) << "No High Availability module available, please contact MapD support";
   }
+
+#ifdef HAVE_PYTHON
+  if (Py_FinalizeEx() < 0) {
+        exit(121);
+  }
+  PyMem_RawFree(py_program);
+#endif
+  
   return 0;
 }

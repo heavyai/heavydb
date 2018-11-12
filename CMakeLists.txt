@@ -295,6 +295,19 @@ endif()
 include_directories(ThirdParty/bcrypt)
 add_subdirectory(ThirdParty/bcrypt)
 
+# Python, required for Python based UDF support
+option(ENABLE_EMBED_PYTHON "Enable embedding Python" OFF)
+if(ENABLE_EMBED_PYTHON)
+  find_package(Python REQUIRED COMPONENTS Development Interpreter)
+  if (Python_FOUND)
+    message(STATUS "  Python_EXECUTABLE=${Python_EXECUTABLE}")
+    message(STATUS "  Python_INCLUDE_DIRS=${Python_INCLUDE_DIRS}")
+    message(STATUS "  Python_LIBRARIES=${Python_LIBRARIES}")
+    include_directories(${Python_INCLUDE_DIRS})
+    add_definitions("-DHAVE_PYTHON")
+  endif()
+endif()
+
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
     OUTPUT
@@ -484,7 +497,7 @@ add_custom_target(rerun_cmake ALL
   )
 add_dependencies(mapd_server rerun_cmake)
 
-target_link_libraries(mapd_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
+target_link_libraries(mapd_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES} ${Python_LIBRARIES})
 
 target_link_libraries(initdb mapd_thrift DataMgr ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
 
