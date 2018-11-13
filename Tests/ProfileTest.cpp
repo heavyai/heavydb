@@ -50,7 +50,7 @@ void check_error(CUresult status) {
   if (status != CUDA_SUCCESS) {
     const char* errorString{nullptr};
     cuGetErrorString(status, &errorString);
-    throw std::runtime_error(errorString ? errorString : "Unkown error");
+    throw std::runtime_error(errorString ? errorString : "Unknown error");
   }
 }
 #endif

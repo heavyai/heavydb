@@ -212,7 +212,7 @@ bool shard_count_less_or_equal_device_count(const int inner_table_id,
                                             const Executor* executor) {
   const auto inner_table_info = executor->getTableInfo(inner_table_id);
   std::unordered_set<int> device_holding_fragments;
-  auto cuda_mgr = executor->getCatalog()->get_dataMgr().cudaMgr_;
+  auto cuda_mgr = executor->getCatalog()->get_dataMgr().getCudaMgr();
   const int device_count = cuda_mgr ? cuda_mgr->getDeviceCount() : 1;
   for (const auto& fragment : inner_table_info.fragments) {
     if (fragment.shard != -1) {
@@ -1049,7 +1049,7 @@ void JoinHashTable::initOneToManyHashTable(
   } else {
 #ifdef HAVE_CUDA
     CHECK_EQ(Data_Namespace::GPU_LEVEL, effective_memory_level);
-    data_mgr.cudaMgr_->setContext(device_id);
+    data_mgr.getCudaMgr()->setContext(device_id);
     init_hash_join_buff_on_device(
         reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
         hash_entry_count,

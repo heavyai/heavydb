@@ -502,6 +502,8 @@ class Executor {
       const std::vector<llvm::Value*>& literal_loads);
 
   int deviceCount(const ExecutorDeviceType) const;
+  int deviceCountForMemoryLevel(const Data_Namespace::MemoryLevel memory_level) const;
+
   std::vector<llvm::Value*> codegen(const Analyzer::CaseExpr*, const CompilationOptions&);
   llvm::Value* codegenCase(const Analyzer::CaseExpr*,
                            llvm::Type* case_llvm_type,
@@ -692,7 +694,7 @@ class Executor {
 
   bool isArchPascalOrLater(const ExecutorDeviceType dt) const {
     return dt == ExecutorDeviceType::GPU &&
-           catalog_->get_dataMgr().cudaMgr_->isArchPascalOrLater();
+           catalog_->get_dataMgr().getCudaMgr()->isArchPascalOrLater();
   }
 
   enum class JoinImplType { Invalid, Loop, HashOneToOne, HashOneToMany };

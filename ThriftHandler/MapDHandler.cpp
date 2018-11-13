@@ -448,7 +448,7 @@ void MapDHandler::get_status(std::vector<TServerStatus>& _return,
 void MapDHandler::get_hardware_info(TClusterHardwareInfo& _return,
                                     const TSessionId& session) {
   THardwareInfo ret;
-  CudaMgr_Namespace::CudaMgr* cuda_mgr = data_mgr_->cudaMgr_;
+  const auto cuda_mgr = data_mgr_->getCudaMgr();
   if (cuda_mgr) {
     ret.num_gpu_hw = cuda_mgr->getDeviceCount();
     ret.start_gpu = cuda_mgr->getStartGpu();
@@ -803,7 +803,7 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
     if (!data_mgr_->gpusPresent()) {
       THROW_MAPD_EXCEPTION(std::string("Exception: no GPU is available in this server"));
     }
-    if (device_id < 0 || device_id >= data_mgr_->cudaMgr_->getDeviceCount()) {
+    if (device_id < 0 || device_id >= data_mgr_->getCudaMgr()->getDeviceCount()) {
       THROW_MAPD_EXCEPTION(
           std::string("Exception: invalid device_id or unavailable GPU with this ID"));
     }

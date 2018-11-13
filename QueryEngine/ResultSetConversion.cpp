@@ -691,12 +691,14 @@ ArrowResult ResultSet::getArrowCopyOnGpu(Data_Namespace::DataMgr* data_mgr,
 #ifdef HAVE_CUDA
   const auto& serialized_records = serialized_arrow_output.records;
   if (serialized_records->size()) {
-    CHECK(data_mgr && data_mgr->cudaMgr_);
+    CHECK(data_mgr);
+    const auto cuda_mgr = data_mgr->getCudaMgr();
+    CHECK(cuda_mgr);
     auto dev_ptr = reinterpret_cast<CUdeviceptr>(
-        data_mgr->cudaMgr_->allocateDeviceMem(serialized_records->size(), device_id));
+        cuda_mgr->allocateDeviceMem(serialized_records->size(), device_id));
     CUipcMemHandle record_handle;
     cuIpcGetMemHandle(&record_handle, dev_ptr);
-    data_mgr->cudaMgr_->copyHostToDevice(
+    cuda_mgr->copyHostToDevice(
         reinterpret_cast<int8_t*>(dev_ptr),
         reinterpret_cast<const int8_t*>(serialized_records->data()),
         serialized_records->size(),
@@ -767,5 +769,5 @@ void deallocate_arrow_result(const ArrowResult& result,
     throw std::runtime_error("null pointer to data frame on device");
   }
 
-  data_mgr->cudaMgr_->freeDeviceMem(result.df_dev_ptr);
+  data_mgr->getCudaMgr()->freeDeviceMem(result.df_dev_ptr);
 }

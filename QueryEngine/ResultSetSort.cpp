@@ -41,7 +41,7 @@ namespace {
 
 void set_cuda_context(Data_Namespace::DataMgr* data_mgr, const int device_id) {
   if (data_mgr) {
-    data_mgr->cudaMgr_->setContext(device_id);
+    data_mgr->getCudaMgr()->setContext(device_id);
     return;
   }
   // for unit tests only
@@ -187,6 +187,6 @@ int ResultSet::getGpuCount() const {
   if (!data_mgr) {
     return g_cuda_mgr ? g_cuda_mgr->getDeviceCount() : 0;
   }
-  return data_mgr->gpusPresent() ? data_mgr->cudaMgr_->getDeviceCount() : 0;
+  return data_mgr->gpusPresent() ? data_mgr->getCudaMgr()->getDeviceCount() : 0;
 }
 #endif  // HAVE_CUDA

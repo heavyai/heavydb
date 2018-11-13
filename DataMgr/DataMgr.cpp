@@ -53,16 +53,14 @@ DataMgr::DataMgr(const string& dataDir,
     : dataDir_(dataDir) {
   if (useGpus) {
     try {
-      cudaMgr_ = new CudaMgr_Namespace::CudaMgr(numGpus, startGpu);
+      cudaMgr_ = std::make_unique<CudaMgr_Namespace::CudaMgr>(numGpus, startGpu);
       reservedGpuMem_ = reservedGpuMem;
       hasGpus_ = true;
     } catch (std::runtime_error& error) {
       hasGpus_ = false;
-      cudaMgr_ = 0;
     }
   } else {
     hasGpus_ = false;
-    cudaMgr_ = 0;
   }
 
   populateMgrs(mapd_parameters, numReaderThreads);
@@ -75,9 +73,6 @@ DataMgr::~DataMgr() {
     for (size_t device = 0; device < bufferMgrs_[level].size(); device++) {
       delete bufferMgrs_[level][device];
     }
-  }
-  if (hasGpus_) {
-    delete cudaMgr_;
   }
 }
 
@@ -119,7 +114,7 @@ void DataMgr::populateMgrs(const MapDParameters& mapd_parameters,
               << "M includes render buffer allocation";
     bufferMgrs_.resize(3);
     bufferMgrs_[1].push_back(new CpuBufferMgr(
-        0, cpuBufferSize, cudaMgr_, cpuSlabSize, 512, bufferMgrs_[0][0]));
+        0, cpuBufferSize, cudaMgr_.get(), cpuSlabSize, 512, bufferMgrs_[0][0]));
     levelSizes_.push_back(1);
     int numGpus = cudaMgr_->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
@@ -131,12 +126,12 @@ void DataMgr::populateMgrs(const MapDParameters& mapd_parameters,
       gpuSlabSize -= gpuSlabSize % 512 == 0 ? 0 : 512 - (gpuSlabSize % 512);
       LOG(INFO) << "gpuSlabSize is " << (float)gpuSlabSize / (1024 * 1024) << "M";
       bufferMgrs_[2].push_back(new GpuCudaBufferMgr(
-          gpuNum, gpuMaxMemSize, cudaMgr_, gpuSlabSize, 512, bufferMgrs_[1][0]));
+          gpuNum, gpuMaxMemSize, cudaMgr_.get(), gpuSlabSize, 512, bufferMgrs_[1][0]));
     }
     levelSizes_.push_back(numGpus);
   } else {
     bufferMgrs_[1].push_back(new CpuBufferMgr(
-        0, cpuBufferSize, cudaMgr_, cpuSlabSize, 512, bufferMgrs_[0][0]));
+        0, cpuBufferSize, cudaMgr_.get(), cpuSlabSize, 512, bufferMgrs_[0][0]));
     levelSizes_.push_back(1);
   }
 }

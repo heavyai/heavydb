@@ -62,11 +62,12 @@ void copy_to_gpu(Data_Namespace::DataMgr* data_mgr,
     return;
   }
 #endif  // HAVE_CUDA
-  CHECK(data_mgr->cudaMgr_);
-  data_mgr->cudaMgr_->copyHostToDevice(reinterpret_cast<int8_t*>(dst),
-                                       static_cast<const int8_t*>(src),
-                                       num_bytes,
-                                       device_id);
+  const auto cuda_mgr = data_mgr->getCudaMgr();
+  CHECK(cuda_mgr);
+  cuda_mgr->copyHostToDevice(reinterpret_cast<int8_t*>(dst),
+                             static_cast<const int8_t*>(src),
+                             num_bytes,
+                             device_id);
 }
 
 namespace {
@@ -167,11 +168,12 @@ void copy_from_gpu(Data_Namespace::DataMgr* data_mgr,
                    const CUdeviceptr src,
                    const size_t num_bytes,
                    const int device_id) {
-  CHECK(data_mgr->cudaMgr_);
-  data_mgr->cudaMgr_->copyDeviceToHost(static_cast<int8_t*>(dst),
-                                       reinterpret_cast<const int8_t*>(src),
-                                       num_bytes,
-                                       device_id);
+  const auto cuda_mgr = data_mgr->getCudaMgr();
+  CHECK(cuda_mgr);
+  cuda_mgr->copyDeviceToHost(static_cast<int8_t*>(dst),
+                             reinterpret_cast<const int8_t*>(src),
+                             num_bytes,
+                             device_id);
 }
 
 void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,

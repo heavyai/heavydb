@@ -1360,9 +1360,9 @@ Executor::CompilationResult Executor::compileWorkUnit(
     const auto grid_size = query_mem_desc.blocksShareMemory() ? 1 : gridSize();
     const size_t required_memory{
         (grid_size * query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU))};
-    CHECK(catalog_->get_dataMgr().cudaMgr_);
-    const size_t max_memory{
-        catalog_->get_dataMgr().cudaMgr_->deviceProperties[0].globalMem / 5};
+    const auto cuda_mgr = catalog_->get_dataMgr().getCudaMgr();
+    CHECK(cuda_mgr);
+    const size_t max_memory{cuda_mgr->deviceProperties[0].globalMem / 5};
     if (required_memory > max_memory) {
       throw QueryMustRunOnCpu();
     }

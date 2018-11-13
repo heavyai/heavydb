@@ -285,8 +285,8 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
 
       size_t gpu_smem_max_threshold{0};
       if (group_by_and_agg->device_type_ == ExecutorDeviceType::GPU) {
-        const auto cuda_manager = executor_->getCatalog()->get_dataMgr().cudaMgr_;
-        CHECK(cuda_manager);
+        const auto cuda_mgr = executor_->getCatalog()->get_dataMgr().getCudaMgr();
+        CHECK(cuda_mgr);
         /*
          *  We only use shared memory strategy if GPU hardware provides native shared
          *memory atomics support. From CUDA Toolkit documentation:
@@ -296,12 +296,12 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
          *(CAS)."
          *
          **/
-        if (cuda_manager->isArchMaxwellOrLaterForAll()) {
+        if (cuda_mgr->isArchMaxwellOrLaterForAll()) {
           // TODO(Saman): threshold should be eventually set as an optimized policy per
           // architecture.
           gpu_smem_max_threshold =
-              std::min((cuda_manager->isArchVoltaForAll()) ? 4095LU : 2047LU,
-                       (cuda_manager->maxSharedMemoryForAll / sizeof(int64_t) - 1));
+              std::min((cuda_mgr->isArchVoltaForAll()) ? 4095LU : 2047LU,
+                       (cuda_mgr->maxSharedMemoryForAll / sizeof(int64_t) - 1));
         }
       }
 
@@ -1017,7 +1017,7 @@ size_t QueryMemoryDescriptor::sharedMemBytes(const ExecutorDeviceType device_typ
     size_t shared_mem_size =
         (/*bin_count=*/entry_count_ + 1) * sizeof(int64_t);  // one extra for NULL values
     CHECK(shared_mem_size <=
-          executor_->getCatalog()->get_dataMgr().cudaMgr_->maxSharedMemoryForAll);
+          executor_->getCatalog()->get_dataMgr().getCudaMgr()->maxSharedMemoryForAll);
     return shared_mem_size;
   }
   const size_t shared_mem_threshold{0};
@@ -1033,9 +1033,9 @@ bool QueryMemoryDescriptor::isWarpSyncRequired(
   if (device_type != ExecutorDeviceType::GPU) {
     return false;
   } else {
-    auto cuda_manager = executor_->getCatalog()->get_dataMgr().cudaMgr_;
-    CHECK(cuda_manager);
-    return cuda_manager->isArchVoltaForAll();
+    auto cuda_mgr = executor_->getCatalog()->get_dataMgr().getCudaMgr();
+    CHECK(cuda_mgr);
+    return cuda_mgr->isArchVoltaForAll();
   }
 }
 

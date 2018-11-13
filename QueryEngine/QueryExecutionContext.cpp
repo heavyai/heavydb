@@ -245,9 +245,10 @@ void QueryExecutionContext::allocateCountDistinctGpuMem() {
       total_bytes_per_entry * query_mem_desc_.getEntryCount();
   count_distinct_bitmap_mem_ =
       alloc_gpu_mem(data_mgr, count_distinct_bitmap_mem_bytes_, device_id_, nullptr);
-  data_mgr->cudaMgr_->zeroDeviceMem(reinterpret_cast<int8_t*>(count_distinct_bitmap_mem_),
-                                    count_distinct_bitmap_mem_bytes_,
-                                    device_id_);
+  data_mgr->getCudaMgr()->zeroDeviceMem(
+      reinterpret_cast<int8_t*>(count_distinct_bitmap_mem_),
+      count_distinct_bitmap_mem_bytes_,
+      device_id_);
   OOM_TRACE_PUSH(+": count_distinct_bitmap_mem_bytes_ " +
                  std::to_string(count_distinct_bitmap_mem_bytes_));
   count_distinct_bitmap_crt_ptr_ = count_distinct_bitmap_host_mem_ =

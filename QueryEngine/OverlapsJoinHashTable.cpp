@@ -239,7 +239,7 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
           ThrustAllocator allocator(&data_mgr, device_id);
           auto device_hll_buffer =
               allocator.allocateScopedBuffer(count_distinct_desc.bitmapPaddedSizeBytes());
-          data_mgr.cudaMgr_->zeroDeviceMem(
+          data_mgr.getCudaMgr()->zeroDeviceMem(
               device_hll_buffer, count_distinct_desc.bitmapPaddedSizeBytes(), device_id);
           const auto& columns_for_device = columns_per_device[device_id];
           auto join_columns_gpu =
@@ -258,7 +258,7 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
           const size_t row_counts_buffer_sz =
               columns_per_device.front().join_columns[0].num_elems * sizeof(int32_t);
           auto row_counts_buffer = allocator.allocateScopedBuffer(row_counts_buffer_sz);
-          data_mgr.cudaMgr_->zeroDeviceMem(
+          data_mgr.getCudaMgr()->zeroDeviceMem(
               row_counts_buffer, row_counts_buffer_sz, device_id);
           const auto key_handler =
               OverlapsKeyHandler(bucket_sizes_for_dimension.size(),

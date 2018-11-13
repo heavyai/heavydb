@@ -313,7 +313,7 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
           ThrustAllocator allocator(&data_mgr, device_id);
           auto device_hll_buffer =
               allocator.allocateScopedBuffer(count_distinct_desc.bitmapPaddedSizeBytes());
-          data_mgr.cudaMgr_->zeroDeviceMem(
+          data_mgr.getCudaMgr()->zeroDeviceMem(
               device_hll_buffer, count_distinct_desc.bitmapPaddedSizeBytes(), device_id);
           const auto& columns_for_device = columns_per_device[device_id];
           auto join_columns_gpu =

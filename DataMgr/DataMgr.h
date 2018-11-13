@@ -113,7 +113,7 @@ class DataMgr {
   void setTableEpoch(const int db_id, const int tb_id, const int start_epoch);
   size_t getTableEpoch(const int db_id, const int tb_id);
 
-  CudaMgr_Namespace::CudaMgr* cudaMgr_;
+  CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cudaMgr_.get(); }
 
   // database_id, table_id, column_id, fragment_id
   std::vector<int> levelSizes_;
@@ -125,7 +125,9 @@ class DataMgr {
   void convertDB(const std::string basePath);
   void checkpoint();  // checkpoint for whole DB, called from convertDB proc only
   void createTopLevelMetadata() const;
+
   std::vector<std::vector<AbstractBufferMgr*>> bufferMgrs_;
+  std::unique_ptr<CudaMgr_Namespace::CudaMgr> cudaMgr_;
   std::string dataDir_;
   bool hasGpus_;
   size_t reservedGpuMem_;

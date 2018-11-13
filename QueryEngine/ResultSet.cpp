@@ -161,7 +161,7 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
   if (device_type == ExecutorDeviceType::GPU) {
     estimator_buffer_ = reinterpret_cast<int8_t*>(
         alloc_gpu_mem(data_mgr_, estimator_->getBufferSize(), device_id_, nullptr));
-    data_mgr->cudaMgr_->zeroDeviceMem(
+    data_mgr->getCudaMgr()->zeroDeviceMem(
         estimator_buffer_, estimator_->getBufferSize(), device_id_);
   } else {
     OOM_TRACE_PUSH(+": host_estimator_buffer_ " +

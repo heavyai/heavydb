@@ -161,7 +161,7 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(
 
 bool Executor::isCPUOnly() const {
   CHECK(catalog_);
-  return !catalog_->get_dataMgr().cudaMgr_;
+  return !catalog_->get_dataMgr().getCudaMgr();
 }
 
 const ColumnDescriptor* Executor::getColumnDescriptor(
@@ -460,9 +460,19 @@ std::vector<int8_t> Executor::serializeLiterals(
 }
 
 int Executor::deviceCount(const ExecutorDeviceType device_type) const {
-  return device_type == ExecutorDeviceType::GPU
-             ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount()
-             : 1;
+  if (device_type == ExecutorDeviceType::GPU) {
+    const auto cuda_mgr = catalog_->get_dataMgr().getCudaMgr();
+    CHECK(cuda_mgr);
+    return cuda_mgr->getDeviceCount();
+  } else {
+    return 1;
+  }
+}
+
+int Executor::deviceCountForMemoryLevel(
+    const Data_Namespace::MemoryLevel memory_level) const {
+  return memory_level == GPU_LEVEL ? deviceCount(ExecutorDeviceType::GPU)
+                                   : deviceCount(ExecutorDeviceType::CPU);
 }
 
 llvm::ConstantInt* Executor::inlineIntNull(const SQLTypeInfo& type_info) {
@@ -882,7 +892,7 @@ ResultSetPtr Executor::reduceSpeculativeTopN(
 std::unordered_set<int> get_available_gpus(const Catalog_Namespace::Catalog& cat) {
   std::unordered_set<int> available_gpus;
   if (cat.get_dataMgr().gpusPresent()) {
-    int gpu_count = cat.get_dataMgr().cudaMgr_->getDeviceCount();
+    int gpu_count = cat.get_dataMgr().getCudaMgr()->getDeviceCount();
     CHECK_GT(gpu_count, 0);
     for (int gpu_id = 0; gpu_id < gpu_count; ++gpu_id) {
       available_gpus.insert(gpu_id);
@@ -1395,9 +1405,7 @@ void Executor::dispatchFragments(
   const bool use_multifrag_kernel =
       (device_type == ExecutorDeviceType::GPU) && allow_multifrag && is_agg;
 
-  const auto device_count = device_type == ExecutorDeviceType::CPU
-                                ? 1
-                                : catalog_->get_dataMgr().cudaMgr_->getDeviceCount();
+  const auto device_count = deviceCount(device_type);
   CHECK_GT(device_count, 0);
 
   fragment_descriptor.buildFragmentKernelMap(ra_exe_unit,
@@ -2555,9 +2563,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const MemoryLevel memory_level,
     ColumnCacheMap& column_cache) {
   std::shared_ptr<JoinHashTableInterface> join_hash_table;
-  const int device_count = memory_level == MemoryLevel::GPU_LEVEL
-                               ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount()
-                               : 1;
+  const int device_count = deviceCountForMemoryLevel(memory_level);
   CHECK_GT(device_count, 0);
   if (!g_enable_overlaps_hashjoin && qual_bin_oper->is_overlaps_oper()) {
     return {nullptr, "Overlaps hash join disabled, attempting to fall back to loop join"};
@@ -2618,30 +2624,34 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
 
 int8_t Executor::warpSize() const {
   CHECK(catalog_);
-  CHECK(catalog_->get_dataMgr().cudaMgr_);
-  const auto& dev_props = catalog_->get_dataMgr().cudaMgr_->deviceProperties;
+  const auto cuda_mgr = catalog_->get_dataMgr().getCudaMgr();
+  CHECK(cuda_mgr);
+  const auto& dev_props = cuda_mgr->deviceProperties;
   CHECK(!dev_props.empty());
   return dev_props.front().warpSize;
 }
 
 unsigned Executor::gridSize() const {
   CHECK(catalog_);
-  CHECK(catalog_->get_dataMgr().cudaMgr_);
-  const auto& dev_props = catalog_->get_dataMgr().cudaMgr_->deviceProperties;
+  const auto cuda_mgr = catalog_->get_dataMgr().getCudaMgr();
+  CHECK(cuda_mgr);
+  const auto& dev_props = cuda_mgr->deviceProperties;
   return grid_size_x_ ? grid_size_x_ : 2 * dev_props.front().numMPs;
 }
 
 unsigned Executor::blockSize() const {
   CHECK(catalog_);
-  CHECK(catalog_->get_dataMgr().cudaMgr_);
-  const auto& dev_props = catalog_->get_dataMgr().cudaMgr_->deviceProperties;
+  const auto cuda_mgr = catalog_->get_dataMgr().getCudaMgr();
+  CHECK(cuda_mgr);
+  const auto& dev_props = cuda_mgr->deviceProperties;
   return block_size_x_ ? block_size_x_ : dev_props.front().maxThreadsPerBlock;
 }
 
 int64_t Executor::deviceCycles(int milliseconds) const {
   CHECK(catalog_);
-  CHECK(catalog_->get_dataMgr().cudaMgr_);
-  const auto& dev_props = catalog_->get_dataMgr().cudaMgr_->deviceProperties;
+  const auto cuda_mgr = catalog_->get_dataMgr().getCudaMgr();
+  CHECK(cuda_mgr);
+  const auto& dev_props = cuda_mgr->deviceProperties;
   return static_cast<int64_t>(dev_props.front().clockKhz) * milliseconds;
 }
 

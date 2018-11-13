@@ -312,7 +312,7 @@ void CudaMgr::checkError(CUresult status) {
     const char* errorString{nullptr};
     cuGetErrorString(status, &errorString);
     // should clean up here - delete any contexts, etc.
-    throw std::runtime_error(errorString ? errorString : "Unkown error");
+    throw std::runtime_error(errorString ? errorString : "Unknown error");
   }
 #endif
 }

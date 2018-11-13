@@ -61,7 +61,7 @@ bool g_keep_test_data{false};
 
 size_t choose_shard_count() {
   CHECK(g_session);
-  const auto cuda_mgr = g_session->get_catalog().get_dataMgr().cudaMgr_;
+  const auto cuda_mgr = g_session->get_catalog().get_dataMgr().getCudaMgr();
   const int device_count = cuda_mgr ? cuda_mgr->getDeviceCount() : 0;
   return g_num_leafs * (device_count > 1 ? device_count : 0);
 }
