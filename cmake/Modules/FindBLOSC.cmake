@@ -46,9 +46,24 @@ find_path(BLOSC_INCLUDE_DIR
   /usr/local/homebrew/include
   /opt/local/include
 )
+find_path(BLOSC_INCLUDE_DIR blosc.h)
 
-set(BLOSC_INCLUDE_DIRS ${BLOSC_INCLUDE_DIR})
+find_library(BLOSC_LIBRARY
+  NAMES blosc
+  HINTS
+  ENV LD_LIBRARY_PATH
+  ENV DYLD_LIBRARY_PATH
+  PATHS
+  /usr/lib
+  /usr/local/lib
+  /usr/local/mapd-deps/lib
+  /usr/local/homebrew/lib
+  /opt/local/lib)
+
+get_filename_component(BLOSC_LIBRARY_DIR ${BLOSC_LIBRARY} DIRECTORY)
+
 set(BLOSC_LIBRARIES ${BLOSC_LIBRARY})
+set(BLOSC_INCLUDE_DIR ${BLOSC_LIBRARY_DIR}/../include)
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(BLOSC REQUIRED_VARS BLOSC_INCLUDE_DIR BLOSC_LIBRARY)

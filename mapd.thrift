@@ -127,12 +127,13 @@ enum TMergeType {
 }
 
 struct TStepResult {
-  1: string serialized_rows
-  2: bool execution_finished
-  3: TMergeType merge_type
-  4: bool sharded
-  5: TRowDescriptor row_desc
-  6: i32 node_id
+  1: binary serialized_rows
+  2: i64 uncompressed_size
+  3: bool execution_finished
+  4: TMergeType merge_type
+  5: bool sharded
+  6: TRowDescriptor row_desc
+  7: i32 node_id
 }
 
 struct TRowSet {
@@ -551,7 +552,7 @@ service MapD {
   TTableMeta check_table_consistency(1: TSessionId session, 2: i32 table_id) throws (1: TMapDException e)
   TPendingQuery start_query(1: TSessionId session, 2: string query_ra, 3: bool just_explain) throws (1: TMapDException e)
   TStepResult execute_first_step(1: TPendingQuery pending_query) throws (1: TMapDException e)
-  void broadcast_serialized_rows(1: string serialized_rows, 2: TRowDescriptor row_desc, 3: TQueryId query_id) throws (1: TMapDException e)
+  void broadcast_serialized_rows(1: string serialized_rows, 2: TRowDescriptor row_desc, 3: i64 uncompressed_size, 4: TQueryId query_id) throws (1: TMapDException e)
   TPendingRenderQuery start_render_query(1: TSessionId session, 2: i64 widget_id, 3: i16 node_idx, 4: string vega_json) throws (1: TMapDException e)
   TRenderStepResult execute_next_render_step(1: TPendingRenderQuery pending_render, 2: TRenderAggDataMap merged_data) throws (1: TMapDException e)
   void insert_data(1: TSessionId session, 2: TInsertData insert_data) throws (1: TMapDException e)

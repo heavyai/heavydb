@@ -342,6 +342,7 @@ class MapDHandler : public MapDIf {
   void execute_first_step(TStepResult& _return, const TPendingQuery& pending_query);
   void broadcast_serialized_rows(const std::string& serialized_rows,
                                  const TRowDescriptor& row_desc,
+                                 const int64_t result_size,
                                  const TQueryId query_id);
 
   void start_render_query(TPendingRenderQuery& _return,
