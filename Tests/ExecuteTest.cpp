@@ -4794,6 +4794,7 @@ TEST(Select, DecimalCompression) {
         "SELECT 1.0*AVG(big_dec), 1.0*AVG(med_dec), 1.0*AVG(small_dec) FROM "
         "decimal_compression_test;";
     c(mapd_sql, sqlite_sql, dt);
+    c(sqlite_sql, sqlite_sql, dt);
 
     mapd_sql =
         "SELECT SUM(big_dec), SUM(med_dec), SUM(small_dec) FROM "
@@ -4802,6 +4803,7 @@ TEST(Select, DecimalCompression) {
         "SELECT 1.0*SUM(big_dec), 1.0*SUM(med_dec), 1.0*SUM(small_dec) FROM "
         "decimal_compression_test;";
     c(mapd_sql, sqlite_sql, dt);
+    c(sqlite_sql, sqlite_sql, dt);
 
     mapd_sql =
         "SELECT MIN(big_dec), MIN(med_dec), MIN(small_dec) FROM "
@@ -4810,6 +4812,7 @@ TEST(Select, DecimalCompression) {
         "SELECT 1.0*MIN(big_dec), 1.0*MIN(med_dec), 1.0*MIN(small_dec) FROM "
         "decimal_compression_test;";
     c(mapd_sql, sqlite_sql, dt);
+    c(sqlite_sql, sqlite_sql, dt);
 
     mapd_sql =
         "SELECT MAX(big_dec), MAX(med_dec), MAX(small_dec) FROM "
@@ -4818,6 +4821,7 @@ TEST(Select, DecimalCompression) {
         "SELECT 1.0*MAX(big_dec), 1.0*MAX(med_dec), 1.0*MAX(small_dec) FROM "
         "decimal_compression_test;";
     c(mapd_sql, sqlite_sql, dt);
+    c(sqlite_sql, sqlite_sql, dt);
 
     mapd_sql =
         "SELECT big_dec, COUNT(*) as n, AVG(med_dec) as med_dec_avg, SUM(small_dec) as "
@@ -4828,6 +4832,7 @@ TEST(Select, DecimalCompression) {
         "1.0*SUM(small_dec) as small_dec_sum FROM decimal_compression_test GROUP BY "
         "big_dec ORDER BY small_dec_sum;";
     c(mapd_sql, sqlite_sql, dt);
+    c(sqlite_sql, sqlite_sql, dt);
   }
 }
 
