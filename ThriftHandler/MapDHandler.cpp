@@ -115,6 +115,19 @@ using namespace Lock_Namespace;
 
 std::string generate_random_string(const size_t len);
 
+namespace {
+
+SessionMap::iterator get_session_from_map(const TSessionId& session,
+                                          SessionMap& session_map) {
+  auto session_it = session_map.find(session);
+  if (session_it == session_map.end()) {
+    THROW_MAPD_EXCEPTION("Session not valid.");
+  }
+  return session_it;
+}
+
+}  // namespace
+
 MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const std::vector<LeafHostInfo>& string_leaves,
                          const std::string& base_data_path,
@@ -3799,10 +3812,8 @@ SessionMap::iterator MapDHandler::get_session_it(const TSessionId& session) {
   if (prefix_length) {
     if (0 == session.compare(0, prefix_length, calcite_session_prefix)) {
       // call coming from calcite, elevate user to be superuser
-      auto session_it = sessions_.find(session.substr(prefix_length + 1));
-      if (session_it == sessions_.end()) {
-        THROW_MAPD_EXCEPTION("Session not valid.");
-      }
+      auto session_it =
+          get_session_from_map(session.substr(prefix_length + 1), sessions_);
       check_session_exp(session_it);
       session_it->second->make_superuser();
       session_it->second->update_last_used_time();
@@ -3810,10 +3821,7 @@ SessionMap::iterator MapDHandler::get_session_it(const TSessionId& session) {
     }
   }
 
-  auto session_it = sessions_.find(session);
-  if (session_it == sessions_.end()) {
-    THROW_MAPD_EXCEPTION("Session not valid.");
-  }
+  auto session_it = get_session_from_map(session, sessions_);
   check_session_exp(session_it);
   session_it->second->reset_superuser();
   session_it->second->update_last_used_time();

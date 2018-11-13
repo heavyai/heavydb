@@ -100,8 +100,8 @@ class MapDLeafHandler;
 
 enum GetTablesType { GET_PHYSICAL_TABLES_AND_VIEWS, GET_PHYSICAL_TABLES, GET_VIEWS };
 
-typedef std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> SessionMap;
-typedef bool (*permissionFuncPtr)(const AccessPrivileges&, const TDBObjectPermissions&);
+using SessionMap = std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>>;
+using permissionFuncPtr = bool (*)(const AccessPrivileges&, const TDBObjectPermissions&);
 
 class MapDHandler : public MapDIf {
  public:
