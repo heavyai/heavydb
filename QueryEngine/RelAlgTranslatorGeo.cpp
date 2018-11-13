@@ -108,6 +108,9 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiter
     SQLTypeInfo& ti,
     bool with_bounds) const {
   CHECK(rex_literal);
+  if (rex_literal->getType() != kTEXT) {
+    throw std::runtime_error("Geo literals must be strings");
+  }
   const auto e = translateLiteral(rex_literal);
   auto wkt = std::dynamic_pointer_cast<Analyzer::Constant>(e);
   CHECK(wkt);
