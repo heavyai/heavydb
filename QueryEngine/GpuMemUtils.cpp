@@ -243,6 +243,59 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                  prepend_index_buffer);
 }
 
+/**
+ * Returns back total number of allocated rows per device (i.e., number of matched
+ * elements in projections).
+ *
+ * TODO(Saman): revisit this for bump allocators
+ */
+size_t get_num_allocated_rows_from_gpu(Data_Namespace::DataMgr* data_mgr,
+                                       CUdeviceptr projection_size_gpu,
+                                       const int device_id) {
+  int32_t num_rows{0};
+  copy_from_gpu(data_mgr, &num_rows, projection_size_gpu, sizeof(num_rows), device_id);
+  CHECK(num_rows >= 0);
+  return static_cast<size_t>(num_rows);
+}
+/**
+ * For projection queries we only copy back as many elements as necessary, not the whole
+ * output buffer. The goal is to be able to build a compact ResultSet, particularly useful
+ * for columnar outputs.
+ *
+ * NOTE: Saman: we should revisit this function when we have a bump allocator
+ */
+void copy_projection_buffer_from_gpu_columnar(Data_Namespace::DataMgr* data_mgr,
+                                              const GpuQueryMemory& gpu_query_mem,
+                                              const QueryMemoryDescriptor& query_mem_desc,
+                                              int8_t* projection_buffer,
+                                              const size_t projection_count,
+                                              const int device_id) {
+  CHECK(query_mem_desc.didOutputColumnar());
+  CHECK(query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection);
+  constexpr size_t row_index_width = sizeof(int64_t);
+  // copy all the row indices back to the host
+  copy_from_gpu(data_mgr,
+                reinterpret_cast<int64_t*>(projection_buffer),
+                gpu_query_mem.group_by_buffers.second,
+                projection_count * row_index_width,
+                device_id);
+  size_t buffer_offset_cpu{projection_count * row_index_width};
+  // other columns are actual non-lazy columns for the projection:
+  for (size_t i = 0; i < query_mem_desc.getColCount(); i++) {
+    if (query_mem_desc.getPaddedColumnWidthBytes(i) > 0) {
+      const auto column_proj_size =
+          projection_count * query_mem_desc.getPaddedColumnWidthBytes(i);
+      copy_from_gpu(
+          data_mgr,
+          projection_buffer + buffer_offset_cpu,
+          gpu_query_mem.group_by_buffers.second + query_mem_desc.getColOffInBytes(0, i),
+          column_proj_size,
+          device_id);
+      buffer_offset_cpu += align_to_int64(column_proj_size);
+    }
+  }
+}
+
 // TODO(alex): remove
 bool buffer_not_null(const QueryMemoryDescriptor& query_mem_desc,
                      const unsigned block_size_x,

@@ -257,15 +257,26 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                          data_mgr,
                                          device_id);
         }
-        copy_group_by_buffers_from_gpu(
-            data_mgr,
-            this,
-            gpu_query_mem,
-            ra_exe_unit,
-            block_size_x,
-            grid_size_x,
-            device_id,
-            can_sort_on_gpu && query_mem_desc_.hasKeylessHash());
+        if (query_mem_desc_.didOutputColumnar() &&
+            query_mem_desc_.getQueryDescriptionType() ==
+                QueryDescriptionType::Projection) {
+          getMemoryEfficientProjectionResultGpu(
+              data_mgr,
+              gpu_query_mem,
+              get_num_allocated_rows_from_gpu(
+                  data_mgr, kernel_params[TOTAL_MATCHED], device_id),
+              device_id);
+        } else {
+          copy_group_by_buffers_from_gpu(
+              data_mgr,
+              this,
+              gpu_query_mem,
+              ra_exe_unit,
+              block_size_x,
+              grid_size_x,
+              device_id,
+              can_sort_on_gpu && query_mem_desc_.hasKeylessHash());
+        }
       }
     }
   } else {
@@ -592,7 +603,81 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
     memcpy(group_by_buffers_[0], &rows_copy[0], rows_copy.size());
   }
 
+  if (query_mem_desc_.didOutputColumnar() &&
+      query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection) {
+    getMemoryEfficientProjectionResultCpu(total_matched_init);
+  }
+
   return out_vec;
+}
+
+namespace {
+// in-place compaction of output buffer
+void compact_projection_buffer_for_cpu_columnar(
+    const QueryMemoryDescriptor& query_mem_desc,
+    int8_t* projection_buffer,
+    const size_t projection_count) {
+  // the first column (row indices) remains unchanged.
+  CHECK(projection_count <= query_mem_desc.getEntryCount());
+  constexpr size_t row_index_width = sizeof(int64_t);
+  size_t buffer_offset1{projection_count * row_index_width};
+  // other columns are actual non-lazy columns for the projection:
+  for (size_t i = 0; i < query_mem_desc.getColCount(); i++) {
+    if (query_mem_desc.getPaddedColumnWidthBytes(i) > 0) {
+      auto column_proj_size =
+          projection_count * query_mem_desc.getPaddedColumnWidthBytes(i);
+      auto buffer_offset2 = query_mem_desc.getColOffInBytes(0, i);
+      if (buffer_offset1 + column_proj_size >= buffer_offset2) {
+        // overlapping
+        std::memmove(projection_buffer + buffer_offset1,
+                     projection_buffer + buffer_offset2,
+                     column_proj_size);
+      } else {
+        std::memcpy(projection_buffer + buffer_offset1,
+                    projection_buffer + buffer_offset2,
+                    column_proj_size);
+      }
+      buffer_offset1 += align_to_int64(column_proj_size);
+    }
+  }
+}
+}  // namespace
+
+void QueryExecutionContext::getMemoryEfficientProjectionResultCpu(
+    const size_t projection_count) {
+  // store total number of allocated rows:
+
+  num_allocated_rows_ = std::min(projection_count, query_mem_desc_.getEntryCount());
+
+  // copy the results from the main buffer into projection_buffer
+  compact_projection_buffer_for_cpu_columnar(
+      query_mem_desc_,
+      reinterpret_cast<int8_t*>(group_by_buffers_[0]),
+      num_allocated_rows_);
+
+  // update the entry count for the result set, and its underlying storage
+  result_sets_.front()->updateStorageEntryCount(num_allocated_rows_);
+}
+
+void QueryExecutionContext::getMemoryEfficientProjectionResultGpu(
+    Data_Namespace::DataMgr* data_mgr,
+    const GpuQueryMemory& gpu_query_mem,
+    const size_t projection_count,
+    const int device_id) {
+  // store total number of allocated rows:
+  num_allocated_rows_ = std::min(projection_count, query_mem_desc_.getEntryCount());
+
+  // copy the results from the main buffer into projection_buffer
+  copy_projection_buffer_from_gpu_columnar(
+      data_mgr,
+      gpu_query_mem,
+      query_mem_desc_,
+      reinterpret_cast<int8_t*>(group_by_buffers_[0]),
+      num_allocated_rows_,
+      device_id);
+
+  // update the entry count for the result set, and its underlying storage
+  result_sets_.front()->updateStorageEntryCount(num_allocated_rows_);
 }
 
 namespace {

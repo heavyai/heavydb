@@ -203,9 +203,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
       ra_exe_unit, query_infos, crt_min_byte_width);
 
   for (auto wid : get_col_byte_widths(ra_exe_unit.target_exprs, {})) {
-    agg_col_widths_.push_back(
-        {wid, static_cast<int8_t>(compact_byte_width(wid, min_byte_width))});
-    padded_agg_col_widths_.push_back(agg_col_widths_.back().compact);
+    addAggColWidth({wid, static_cast<int8_t>(compact_byte_width(wid, min_byte_width))});
   }
 }
 
@@ -256,9 +254,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
       ra_exe_unit, query_infos, crt_min_byte_width);
 
   for (auto wid : get_col_byte_widths(ra_exe_unit.target_exprs, {})) {
-    agg_col_widths_.push_back(
-        {wid, static_cast<int8_t>(compact_byte_width(wid, min_byte_width))});
-    padded_agg_col_widths_.push_back(agg_col_widths_.back().compact);
+    addAggColWidth({wid, static_cast<int8_t>(compact_byte_width(wid, min_byte_width))});
   }
 
   switch (query_desc_type_) {
@@ -312,12 +308,10 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
       if (must_use_baseline_sort) {
         target_groupby_indices_ = target_expr_group_by_indices(ra_exe_unit.groupby_exprs,
                                                                ra_exe_unit.target_exprs);
-        agg_col_widths_.clear();
-        padded_agg_col_widths_.clear();
+        clearAggColWidths();
         for (auto wid :
              get_col_byte_widths(ra_exe_unit.target_exprs, target_groupby_indices_)) {
-          agg_col_widths_.push_back({wid, static_cast<int8_t>(wid ? 8 : 0)});
-          padded_agg_col_widths_.push_back(agg_col_widths_.back().compact);
+          addAggColWidth({wid, static_cast<int8_t>(wid ? 8 : 0)});
         }
       }
       const auto group_expr = ra_exe_unit.groupby_exprs.front().get();
@@ -373,15 +367,13 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
           output_columnar_ ? 8
                            : pick_baseline_key_width(ra_exe_unit, query_infos, executor);
 
-      agg_col_widths_.clear();
-      padded_agg_col_widths_.clear();
+      clearAggColWidths();
       for (auto wid :
            get_col_byte_widths(ra_exe_unit.target_exprs, target_groupby_indices_)) {
         // Baseline layout goes through new result set and
         // ResultSetStorage::initializeRowWise assumes everything is padded to 8 bytes,
         // make it so.
-        agg_col_widths_.push_back({wid, static_cast<int8_t>(wid ? 8 : 0)});
-        padded_agg_col_widths_.push_back(agg_col_widths_.back().compact);
+        addAggColWidth({wid, static_cast<int8_t>(wid ? 8 : 0)});
       }
 
       min_val_ = 0;
@@ -412,15 +404,13 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
       target_groupby_indices_ = executor_->plan_state_->allow_lazy_fetch_
                                     ? target_expr_proj_indices(ra_exe_unit, *catalog)
                                     : std::vector<ssize_t>{};
-      agg_col_widths_.clear();
-      padded_agg_col_widths_.clear();
+      clearAggColWidths();
       for (auto wid :
            get_col_byte_widths(ra_exe_unit.target_exprs, target_groupby_indices_)) {
         // Baseline layout goes through new result set and
         // ResultSetStorage::initializeRowWise assumes everything is padded to 8 bytes,
         // make it so.
-        agg_col_widths_.push_back({wid, static_cast<int8_t>(wid ? 8 : 0)});
-        padded_agg_col_widths_.push_back(agg_col_widths_.back().compact);
+        addAggColWidth({wid, static_cast<int8_t>(wid ? 8 : 0)});
       }
 
       bucket_ = 0;
@@ -755,7 +745,7 @@ int8_t QueryMemoryDescriptor::pick_target_compact_width(
 size_t QueryMemoryDescriptor::getColsSize() const {
   size_t total_bytes{0};
   for (size_t col_idx = 0; col_idx < agg_col_widths_.size(); ++col_idx) {
-    auto chosen_bytes = agg_col_widths_[col_idx].compact;
+    auto chosen_bytes = getPaddedColumnWidthBytes(col_idx);
     if (chosen_bytes == sizeof(int64_t)) {
       total_bytes = align_to_int64(total_bytes);
     }
@@ -805,14 +795,51 @@ size_t QueryMemoryDescriptor::getCompactByteWidth() const {
   return compact_width;
 }
 
+/**
+ * Returns the maximum total number of bytes (including required paddings) to store all
+ * non-lazy columns' results for columnar cases.
+ *
+ */
 size_t QueryMemoryDescriptor::getTotalBytesOfColumnarBuffers(
     const std::vector<ColWidths>& col_widths) const {
   CHECK(output_columnar_);
   size_t total_bytes{0};
   for (size_t col_idx = 0; col_idx < col_widths.size(); ++col_idx) {
-    total_bytes += align_to_int64(col_widths[col_idx].compact * entry_count_);
+    total_bytes += align_to_int64(getPaddedColumnWidthBytes(col_idx) * entry_count_);
   }
   return align_to_int64(total_bytes);
+}
+
+/**
+ * This is a helper function that returns the total number of bytes (including required
+ * paddings) to store all non-lazy columns' results for columnar cases.
+ */
+size_t QueryMemoryDescriptor::getTotalBytesOfColumnarBuffers(
+    const std::vector<ColWidths>& col_widths,
+    const size_t num_entries_per_column) const {
+  CHECK(output_columnar_);
+  size_t total_bytes{0};
+  for (size_t col_idx = 0; col_idx < col_widths.size(); ++col_idx) {
+    total_bytes +=
+        align_to_int64(getPaddedColumnWidthBytes(col_idx) * num_entries_per_column);
+  }
+  return align_to_int64(total_bytes);
+}
+
+/**
+ * Returns the effective total number of bytes from columnar projections, which includes
+ * 1) total number of bytes used to store all non-lazy columns
+ * 2) total number of bytes used to store row indices (for lazy fetches, etc.)
+ *
+ * NOTE: this function does not represent the buffer sizes dedicated for the results, but
+ * the required memory to fill all valid results into a compact new buffer (with no holes
+ * in it)
+ */
+size_t QueryMemoryDescriptor::getTotalBytesOfColumnarProjections(
+    const size_t projection_count) const {
+  constexpr size_t row_index_width = sizeof(int64_t);
+  return getTotalBytesOfColumnarBuffers(agg_col_widths_, projection_count) +
+         row_index_width * projection_count;
 }
 
 size_t QueryMemoryDescriptor::getKeyOffInBytes(const size_t bin,
@@ -957,6 +984,17 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(
   return getBufferSizeBytes(device_type);
 }
 
+/**
+ * Returns total amount of output buffer memory for each device (CPU/GPU)
+ *
+ * Columnar:
+ *  if projection: it returns index buffer + columnar buffer (all non-lazy columns)
+ *  if group by: it returns the amount required for each group column (assumes 64-bit per
+ * group) + columnar buffer (all involved agg columns)
+ *
+ * Row-wise:
+ *  returns required memory per row multiplied by number of entries
+ */
 size_t QueryMemoryDescriptor::getBufferSizeBytes(
     const ExecutorDeviceType device_type) const {
   if (keyless_hash_) {
@@ -967,9 +1005,12 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(
            total_bytes;
   }
 
+  constexpr size_t row_index_width = sizeof(int64_t);
   size_t total_bytes{0};
   if (output_columnar_) {
-    total_bytes = sizeof(int64_t) * group_col_widths_.size() * entry_count_ +
+    total_bytes = (query_desc_type_ == QueryDescriptionType::Projection
+                       ? row_index_width * entry_count_
+                       : sizeof(int64_t) * group_col_widths_.size() * entry_count_) +
                   getTotalBytesOfColumnarBuffers(agg_col_widths_);
   } else {
     total_bytes = getRowSize() * entry_count_;

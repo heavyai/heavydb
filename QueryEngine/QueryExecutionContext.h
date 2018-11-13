@@ -89,6 +89,12 @@ class QueryExecutionContext : boost::noncopyable {
 
   bool hasNoFragments() const { return consistent_frag_sizes_.empty(); }
 
+  void getMemoryEfficientProjectionResultCpu(const size_t projection_count);
+  void getMemoryEfficientProjectionResultGpu(Data_Namespace::DataMgr* data_mgr,
+                                             const GpuQueryMemory& gpu_query_mem,
+                                             const size_t projection_count,
+                                             const int device_id);
+
  private:
   const std::vector<const int8_t*>& getColumnFrag(const size_t table_idx,
                                                   int64_t& global_idx) const;
@@ -199,6 +205,7 @@ class QueryExecutionContext : boost::noncopyable {
 
   std::vector<int64_t*> group_by_buffers_;
   std::vector<int64_t*> small_group_by_buffers_;
+  size_t num_allocated_rows_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   const bool output_columnar_;
   const bool sort_on_gpu_;

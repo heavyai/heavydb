@@ -111,6 +111,8 @@ ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
   for (auto& col_widths : deinterleaved_query_mem_desc.agg_col_widths_) {
     col_widths.actual = col_widths.compact = 8;
   }
+  deinterleaved_query_mem_desc.recomputePaddedColumnWidthBytes();
+
   auto deinterleaved_result_set =
       std::make_shared<ResultSet>(result_set->getTargetInfos(),
                                   std::vector<ColumnLazyFetchInfo>{},

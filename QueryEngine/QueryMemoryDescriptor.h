@@ -274,10 +274,16 @@ class QueryMemoryDescriptor {
     }
     return ret;
   }
+
   void addAggColWidth(const ColWidths& col_width) {
     agg_col_widths_.push_back(col_width);
+    padded_agg_col_widths_.push_back(col_width.compact);
   }
-  void clearAggColWidths() { agg_col_widths_.clear(); }
+
+  void clearAggColWidths() {
+    agg_col_widths_.clear();
+    padded_agg_col_widths_.clear();
+  }
 
   ssize_t getTargetGroupbyIndex(const size_t target_idx) const {
     CHECK_LT(target_idx, target_groupby_indices_.size());
@@ -431,6 +437,9 @@ class QueryMemoryDescriptor {
   bool force_4byte_float_;
 
   size_t getTotalBytesOfColumnarBuffers(const std::vector<ColWidths>& col_widths) const;
+  size_t getTotalBytesOfColumnarBuffers(const std::vector<ColWidths>& col_widths,
+                                        const size_t num_entries_per_column) const;
+  size_t getTotalBytesOfColumnarProjections(const size_t projection_count) const;
 
   friend class ResultSet;
   friend class QueryExecutionContext;

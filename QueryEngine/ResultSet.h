@@ -96,6 +96,10 @@ class ResultSetStorage {
   template <class KeyType>
   void moveEntriesToBuffer(int8_t* new_buff, const size_t new_entry_count) const;
 
+  void updateEntryCount(const size_t new_entry_count) {
+    query_mem_desc_.setEntryCount(new_entry_count);
+  }
+
  private:
   void reduceEntriesNoCollisionsColWise(
       int8_t* this_buff,
@@ -176,7 +180,7 @@ class ResultSetStorage {
   int64_t mappedPtr(const int64_t) const;
 
   const std::vector<TargetInfo> targets_;
-  const QueryMemoryDescriptor query_mem_desc_;
+  QueryMemoryDescriptor query_mem_desc_;
   int8_t* buff_;
   const bool buff_is_provided_;
   std::vector<int64_t> target_init_vals_;
@@ -342,6 +346,15 @@ class ResultSet {
   const ResultSetStorage* allocateStorage(int8_t*, const std::vector<int64_t>&) const;
 
   const ResultSetStorage* allocateStorage(const std::vector<int64_t>&) const;
+
+  void updateStorageEntryCount(const size_t new_entry_count) {
+    // currently, should only be used for columnar projections
+    CHECK(query_mem_desc_.didOutputColumnar());
+    CHECK(query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection);
+    query_mem_desc_.setEntryCount(new_entry_count);
+    CHECK(storage_);
+    storage_->updateEntryCount(new_entry_count);
+  }
 
   std::vector<TargetValue> getNextRow(const bool translate_strings,
                                       const bool decimal_to_double) const;

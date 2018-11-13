@@ -98,6 +98,7 @@ QueryExecutionContext::QueryExecutionContext(
                        : executor->blockSize() * (query_mem_desc_.blocksShareMemory()
                                                       ? 1
                                                       : executor->gridSize())}
+    , num_allocated_rows_(0)
     , row_set_mem_owner_(row_set_mem_owner)
     , output_columnar_(output_columnar)
     , sort_on_gpu_(sort_on_gpu)
@@ -417,9 +418,9 @@ void QueryExecutionContext::initColumnarGroups(int64_t* groups_buffer,
   // initializing all aggregate columns:
   int32_t init_val_idx = 0;
   for (int32_t i = 0; i < agg_col_count; ++i) {
-    if (query_mem_desc_.getColumnWidth(i).compact > 0) {
+    if (query_mem_desc_.getPaddedColumnWidthBytes(i) > 0) {
       CHECK_LT(init_val_idx, init_vals.size());
-      switch (query_mem_desc_.getColumnWidth(i).compact) {
+      switch (query_mem_desc_.getPaddedColumnWidthBytes(i)) {
         case 1:
           buffer_ptr = initColumnarBuffer<int8_t>(
               buffer_ptr, init_vals[init_val_idx++], groups_buffer_entry_count);
@@ -865,7 +866,7 @@ GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(
     if (output_columnar_) {
       std::vector<int8_t> compact_col_widths(col_count);
       for (size_t idx = 0; idx < col_count; ++idx) {
-        compact_col_widths[idx] = query_mem_desc_.getColumnWidth(idx).compact;
+        compact_col_widths[idx] = query_mem_desc_.getPaddedColumnWidthBytes(idx);
       }
       col_widths_dev_ptr =
           cuda_allocator.alloc(col_count * sizeof(int8_t), device_id, nullptr);
