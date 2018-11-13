@@ -186,7 +186,7 @@ inline const ColumnarResults* rows_to_columnar_results(
     const int number) {
   std::vector<SQLTypeInfo> col_types;
   for (size_t i = 0; i < result->colCount(); ++i) {
-    col_types.push_back(result->getColType(i));
+    col_types.push_back(get_logical_type_info(result->getColType(i)));
   }
   return new ColumnarResults(row_set_mem_owner, *result, number, col_types);
 }
