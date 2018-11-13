@@ -21,6 +21,7 @@ linenoise | [BSD](<https://github.com/antirez/linenoise/blob/master/LICENSE>) | 
 LLVM | [LLVM](<http://llvm.org/releases/3.9.1/LICENSE.TXT>) | JIT |
 muparserx | [BSD](<https://github.com/beltoforion/muparserx/blob/master/License.txt>) | Expression string parsing |
 ncurses | [X11](<http://invisible-island.net/ncurses/ncurses.faq.html#who_owns_it>) | CLI/password entry |
+PicoSHA2 | [MIT](<https://github.com/okdshin/PicoSHA2/blob/master/LICENSE>) | SHA256 Library |
 rapidjson | [MIT](<https://github.com/miloyip/rapidjson/blob/master/license.txt>) | JSON parsing |
 SQLite | [Public Domain](<https://www.sqlite.org/copyright.html>) | Catalog management |
 Xorg | [MIT](<https://www.x.org/releases/X11R7.7/doc/xorg-docs/License.html>) | OpenGL rendering |
