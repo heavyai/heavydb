@@ -2916,12 +2916,16 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
   cd.isVirtualCol = false;
 }
 
-void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
   if (nullptr == td) {
     throw std::runtime_error("Table " + *table + " does not exist.");
-  }
+  } else {
+    if (td->isView) {
+      throw std::runtime_error("Expecting a table , found view " + *table);
+    }
+  };
 
   check_alter_table_privilege(session, td);
 
@@ -2940,6 +2944,12 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                                new_column_name + "'");
     }
   }
+}
+
+void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.get_catalog();
+  const TableDescriptor* td = catalog.getMetadataForTable(*table);
+  check_executable(session);
 
   catalog.getSqliteConnector().query("BEGIN TRANSACTION");
   try {

@@ -4448,6 +4448,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     }
     auto add_col_stmt = dynamic_cast<Parser::AddColumnStmt*>(ddl);
     if (add_col_stmt) {
+      add_col_stmt->check_executable(session_info);
       chkptlLock =
           getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_info.get_catalog(),
                                                             *add_col_stmt->get_table(),

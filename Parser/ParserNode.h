@@ -1089,6 +1089,7 @@ class AddColumnStmt : public DDLStmt {
     delete coldefs;
   }
   virtual void execute(const Catalog_Namespace::SessionInfo& session);
+  void check_executable(const Catalog_Namespace::SessionInfo& session);
   const std::string* get_table() const { return table.get(); }
 
  private:
