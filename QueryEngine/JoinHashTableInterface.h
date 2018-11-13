@@ -26,6 +26,13 @@ class TooManyHashEntries : public std::runtime_error {
       : std::runtime_error("Hash tables with more than 2B entries not supported yet") {}
 };
 
+class TableMustBeReplicated : public std::runtime_error {
+ public:
+  TableMustBeReplicated(const std::string& table_name)
+      : std::runtime_error("Hash join failed: Table '" + table_name +
+                           "' must be replicated.") {}
+};
+
 class HashJoinFail : public std::runtime_error {
  public:
   HashJoinFail(const std::string& reason) : std::runtime_error(reason) {}

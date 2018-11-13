@@ -325,10 +325,18 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
                                                                           device_count));
   try {
     join_hash_table->reify(device_count);
-  } catch (const std::exception& e) {
+  } catch (const TableMustBeReplicated& e) {
+    // Throw a runtime error to abort the query
+    throw std::runtime_error(e.what());
+  } catch (const HashJoinFail& e) {
+    // HashJoinFail exceptions log an error and trigger a retry with a join loop (if
+    // possible)
     throw HashJoinFail(std::string("Could not build a 1-to-1 correspondence for columns "
                                    "involved in equijoin | ") +
                        e.what());
+  } catch (const std::exception& e) {
+    LOG(FATAL) << "Fatal error while attempting to build hash tables for join: "
+               << e.what();
   }
   return join_hash_table;
 }
@@ -684,8 +692,7 @@ void JoinHashTable::checkHashJoinReplicationConstraint(const int table_id) const
     size_t shard_count{0};
     shard_count = get_shard_count(qual_bin_oper_.get(), ra_exe_unit_, executor_);
     if (!shard_count && !table_is_replicated(inner_td)) {
-      throw std::runtime_error("Join table " + inner_td->tableName +
-                               " must be replicated");
+      throw TableMustBeReplicated(inner_td->tableName);
     }
   }
 }

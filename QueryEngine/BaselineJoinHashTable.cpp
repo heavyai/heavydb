@@ -66,7 +66,12 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
       getInnerTableId(condition.get(), executor));
   try {
     join_hash_table->reify(device_count);
+  } catch (const TableMustBeReplicated& e) {
+    // Throw a runtime error to abort the query
+    throw std::runtime_error(e.what());
   } catch (const HashJoinFail& e) {
+    // HashJoinFail exceptions log an error and trigger a retry with a join loop (if
+    // possible)
     throw HashJoinFail(std::string("Could not build a 1-to-1 correspondence for columns "
                                    "involved in equijoin | ") +
                        e.what());
@@ -1108,8 +1113,7 @@ void BaselineJoinHashTable::checkHashJoinReplicationConstraint(const int table_i
     CHECK(inner_td);
     const auto shard_count = shardCount();
     if (!shard_count && !table_is_replicated(inner_td)) {
-      throw std::runtime_error("Join table " + inner_td->tableName +
-                               " must be replicated");
+      throw TableMustBeReplicated(inner_td->tableName);
     }
   }
 }
