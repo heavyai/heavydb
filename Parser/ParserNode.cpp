@@ -2434,7 +2434,8 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   }
 
   // get read UpdateDeleteLock on tables involved in SELECT subquery
-  const auto query_ra = parse_to_ra(catalog, select_query_, session);
+  std::string pg_shimmed_select_query = pg_shim(select_query_);
+  const auto query_ra = parse_to_ra(catalog, pg_shimmed_select_query, session);
   std::vector<std::shared_ptr<VLock>> readUpdateDeleteLocks;
   Lock_Namespace::getTableLocks<mapd_shared_mutex>(
       session.get_catalog(),
