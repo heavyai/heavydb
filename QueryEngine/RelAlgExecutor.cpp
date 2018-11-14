@@ -2631,6 +2631,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
   auto input_to_nest_level = get_input_nest_levels(project, {});
   std::tie(input_descs, input_col_descs, std::ignore) =
       get_input_desc(project, input_to_nest_level, {}, cat_);
+  const auto query_infos = get_table_infos(input_descs, executor_);
+
   const auto left_deep_join =
       dynamic_cast<const RelLeftDeepInnerJoin*>(project->getInput(0));
   JoinQualsPerNestingLevel left_deep_join_quals;
@@ -2671,22 +2673,25 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
-  const auto targets_meta = get_targets_meta(project, target_exprs);
+  const RelAlgExecutionUnit exe_unit = {input_descs,
+                                        input_col_descs,
+                                        {},
+                                        {},
+                                        left_deep_join_quals,
+                                        {nullptr},
+                                        target_exprs,
+                                        nullptr,
+                                        sort_info,
+                                        0,
+                                        query_features};
+  auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
+  const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
+  const auto targets_meta = get_targets_meta(project, rewritten_exe_unit.target_exprs);
   project->setOutputMetainfo(targets_meta);
-  return {{input_descs,
-           input_col_descs,
-           {},
-           {},
-           left_deep_join_quals,
-           {nullptr},
-           target_exprs,
-           nullptr,
-           sort_info,
-           0,
-           query_features},
+  return {rewritten_exe_unit,
           project,
           max_groups_buffer_entry_default_guess,
-          nullptr,
+          std::move(query_rewriter),
           input_permutation,
           left_deep_join_input_sizes};
 }
