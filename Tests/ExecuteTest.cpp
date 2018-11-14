@@ -11042,6 +11042,12 @@ TEST(Select, GeoSpatial_GeoJoin) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    // Test query rewrite for simple project
+    ASSERT_NO_THROW(run_simple_agg(
+        "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
+        "b ON ST_Contains(b.poly, a.p);",
+        dt));
+
     ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
