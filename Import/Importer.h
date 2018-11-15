@@ -627,6 +627,8 @@ class Loader {
                           const size_t shard_count);
 
  private:
+  std::vector<DataBlockPtr> get_data_block_pointers(
+      const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers);
   bool loadToShard(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
                    size_t row_count,
                    const TableDescriptor* shard_table,

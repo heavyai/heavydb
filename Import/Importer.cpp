@@ -2293,6 +2293,67 @@ bool Loader::loadImpl(
   return loadToShard(import_buffers, row_count, table_desc, checkpoint);
 }
 
+std::vector<DataBlockPtr> Loader::get_data_block_pointers(
+    const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers) {
+  std::vector<DataBlockPtr> result(import_buffers.size());
+  std::vector<std::pair<const size_t, std::future<int8_t*>>>
+      encoded_data_block_ptrs_futures;
+  // make all async calls to string dictionary here and then continue execution
+  for (size_t buf_idx = 0; buf_idx < import_buffers.size(); buf_idx++) {
+    if (import_buffers[buf_idx]->getTypeInfo().is_string() &&
+        import_buffers[buf_idx]->getTypeInfo().get_compression() != kENCODING_NONE) {
+      auto string_payload_ptr = import_buffers[buf_idx]->getStringBuffer();
+      CHECK_EQ(kENCODING_DICT, import_buffers[buf_idx]->getTypeInfo().get_compression());
+
+      encoded_data_block_ptrs_futures.emplace_back(std::make_pair(
+          buf_idx,
+          std::async(std::launch::async, [buf_idx, &import_buffers, string_payload_ptr] {
+            import_buffers[buf_idx]->addDictEncodedString(*string_payload_ptr);
+            return import_buffers[buf_idx]->getStringDictBuffer();
+          })));
+    }
+  }
+
+  for (size_t buf_idx = 0; buf_idx < import_buffers.size(); buf_idx++) {
+    DataBlockPtr p;
+    if (import_buffers[buf_idx]->getTypeInfo().is_number() ||
+        import_buffers[buf_idx]->getTypeInfo().is_time() ||
+        import_buffers[buf_idx]->getTypeInfo().get_type() == kBOOLEAN) {
+      p.numbersPtr = import_buffers[buf_idx]->getAsBytes();
+    } else if (import_buffers[buf_idx]->getTypeInfo().is_string()) {
+      auto string_payload_ptr = import_buffers[buf_idx]->getStringBuffer();
+      if (import_buffers[buf_idx]->getTypeInfo().get_compression() == kENCODING_NONE) {
+        p.stringsPtr = string_payload_ptr;
+      } else {
+        // This condition means we have column which is ENCODED string. We already made
+        // Async request to gain the encoded integer values above so we should skip this
+        // iteration and continue.
+        continue;
+      }
+    } else if (import_buffers[buf_idx]->getTypeInfo().is_geometry()) {
+      auto geo_payload_ptr = import_buffers[buf_idx]->getGeoStringBuffer();
+      p.stringsPtr = geo_payload_ptr;
+    } else {
+      CHECK(import_buffers[buf_idx]->getTypeInfo().get_type() == kARRAY);
+      if (IS_STRING(import_buffers[buf_idx]->getTypeInfo().get_subtype())) {
+        CHECK(import_buffers[buf_idx]->getTypeInfo().get_compression() == kENCODING_DICT);
+        import_buffers[buf_idx]->addDictEncodedStringArray(
+            *import_buffers[buf_idx]->getStringArrayBuffer());
+        p.arraysPtr = import_buffers[buf_idx]->getStringArrayDictBuffer();
+      } else {
+        p.arraysPtr = import_buffers[buf_idx]->getArrayBuffer();
+      }
+    }
+    result[buf_idx] = p;
+  }
+
+  // wait for the async requests we made for string dictionary
+  for (auto& encoded_ptr_future : encoded_data_block_ptrs_futures) {
+    result[encoded_ptr_future.first].numbersPtr = encoded_ptr_future.second.get();
+  }
+  return result;
+}
+
 bool Loader::loadToShard(
     const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
     size_t row_count,
@@ -2311,35 +2372,11 @@ bool Loader::loadToShard(
   Fragmenter_Namespace::InsertData ins_data(insert_data);
   ins_data.numRows = row_count;
   bool success = true;
-  for (const auto& import_buff : import_buffers) {
-    DataBlockPtr p;
-    if (import_buff->getTypeInfo().is_number() || import_buff->getTypeInfo().is_time() ||
-        import_buff->getTypeInfo().get_type() == kBOOLEAN) {
-      p.numbersPtr = import_buff->getAsBytes();
-    } else if (import_buff->getTypeInfo().is_string()) {
-      auto string_payload_ptr = import_buff->getStringBuffer();
-      if (import_buff->getTypeInfo().get_compression() == kENCODING_NONE) {
-        p.stringsPtr = string_payload_ptr;
-      } else {
-        CHECK_EQ(kENCODING_DICT, import_buff->getTypeInfo().get_compression());
-        import_buff->addDictEncodedString(*string_payload_ptr);
-        p.numbersPtr = import_buff->getStringDictBuffer();
-      }
-    } else if (import_buff->getTypeInfo().is_geometry()) {
-      auto geo_payload_ptr = import_buff->getGeoStringBuffer();
-      p.stringsPtr = geo_payload_ptr;
-    } else {
-      CHECK(import_buff->getTypeInfo().get_type() == kARRAY);
-      if (IS_STRING(import_buff->getTypeInfo().get_subtype())) {
-        CHECK(import_buff->getTypeInfo().get_compression() == kENCODING_DICT);
-        import_buff->addDictEncodedStringArray(*import_buff->getStringArrayBuffer());
-        p.arraysPtr = import_buff->getStringArrayDictBuffer();
-      } else {
-        p.arraysPtr = import_buff->getArrayBuffer();
-      }
-    }
-    ins_data.data.push_back(p);
-    ins_data.bypass.push_back(0 == import_buff->get_replicate_count());
+
+  ins_data.data = get_data_block_pointers(import_buffers);
+
+  for (const auto& import_buffer : import_buffers) {
+    ins_data.bypass.push_back(0 == import_buffer->get_replicate_count());
   }
   {
     try {
