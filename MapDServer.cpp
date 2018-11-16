@@ -231,10 +231,11 @@ int main(int argc, char** argv) {
                                    // no conversion is requested
   std::string db_query_file("");   // path to file containing warmup queries list
   bool enable_access_priv_check = true;  // enable DB objects access privileges checking
-  int idle_session_duration = 60;        // Inactive session tolerance in mins (60 mins)
+  int idle_session_duration =
+      MINSPERHOUR;  // Inactive session tolerance in mins (60 mins)
   int max_session_duration =
-      43200;  // maximum session life in mins (30 Days)
-              // (https://pages.nist.gov/800-63-3/sp800-63b.html#aal3reauth)
+      MINSPERMONTH;  // maximum session life in days (30 Days)
+                     // (https://pages.nist.gov/800-63-3/sp800-63b.html#aal3reauth)
 
   namespace po = boost::program_options;
 

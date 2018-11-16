@@ -32,6 +32,7 @@
  */
 
 #include "TimeGM.h"
+#include <boost/algorithm/string.hpp>
 #include <cmath>
 #include <ctime>
 
@@ -64,6 +65,33 @@ time_t TimeGM::parse_fractional_seconds(uint64_t sfrac,
   return sfrac;
 }
 
+time_t TimeGM::parse_meridians(const time_t& timeval,
+                               const char* p,
+                               const uint32_t& hour,
+                               const SQLTypeInfo& ti) {
+  char meridies[20];
+  if (sscanf(p, "%*d %s", meridies) != 1) {
+    if (sscanf(p, "%s", meridies) != 1) {
+      return timeval;
+    };
+  }
+  if (boost::iequals(std::string(meridies), "pm") ||
+      boost::iequals(std::string(meridies), "p.m.") ||
+      boost::iequals(std::string(meridies), "p.m")) {
+    return hour == 12 ? timeval
+                      : timeval + SECSPERHALFDAY *
+                                      static_cast<int64_t>(pow(10, ti.get_dimension()));
+  } else if (boost::iequals(std::string(meridies), "am") ||
+             boost::iequals(std::string(meridies), "a.m.") ||
+             boost::iequals(std::string(meridies), "a.m")) {
+    return hour == 12 ? timeval - SECSPERHALFDAY *
+                                      static_cast<int64_t>(pow(10, ti.get_dimension()))
+                      : timeval;
+  } else {
+    return timeval;
+  }
+}
+
 /*
  * Code adapted from Python 2.4.1 sources (Lib/calendar.py).
  */
@@ -92,7 +120,7 @@ time_t TimeGM::my_timegm(const struct tm* tm) {
   return seconds;
 }
 
-time_t TimeGM::my_timegm(const struct tm* tm, const time_t& fsc, SQLTypeInfo& ti) {
+time_t TimeGM::my_timegm(const struct tm* tm, const time_t& fsc, const SQLTypeInfo& ti) {
   time_t sec;
 
   sec = my_timegm(tm) * static_cast<int64_t>(pow(10, ti.get_dimension()));

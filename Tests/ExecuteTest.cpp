@@ -6306,6 +6306,164 @@ TEST(Select, WatchdogTest) {
   }
 }
 
+TEST(Select, TimestampMeridiesEncoding) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP TABLE IF EXISTS ts_meridies;");
+    EXPECT_NO_THROW(run_ddl_statement("CREATE TABLE ts_meridies (ts TIMESTAMP(0));"));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO ts_meridies VALUES('2012-01-01 12:00:00 AM');", dt));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO ts_meridies VALUES('2012-01-01 12:00:00 a.m.');", dt));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO ts_meridies VALUES('2012-01-01 12:00:00 PM');", dt));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO ts_meridies VALUES('2012-01-01 12:00:00 p.m.');", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO ts_meridies VALUES('2012-01-01 3:00:00 AM');", dt));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO ts_meridies VALUES('2012-01-01 3:00:00 a.m.');", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO ts_meridies VALUES('2012-01-01 3:00:00 PM');", dt));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO ts_meridies VALUES('2012-01-01 3:00:00 p.m.');", dt));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO ts_meridies VALUES('2012-01-01 7:00:00.3456 AM');", dt));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO ts_meridies VALUES('2012-01-01 7:00:00.3456 p.m.');", dt));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM ts_meridies where extract(epoch from ts) = 1325376000;",
+            dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM ts_meridies where extract(epoch from ts) = 1325419200;",
+            dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM ts_meridies where extract(epoch from ts) = 1325386800;",
+            dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM ts_meridies where extract(epoch from ts) = 1325430000;",
+            dt)));
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM ts_meridies where extract(epoch from ts) = 1325401200;",
+            dt)));
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM ts_meridies where extract(epoch from ts) = 1325444400;",
+            dt)));
+  }
+}
+
+#ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
+TEST(Select, TimestampPrecisionMeridiesEncoding) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP TABLE IF EXISTS ts_meridies_precisions;");
+    EXPECT_NO_THROW(
+        run_ddl_statement("CREATE TABLE ts_meridies_precisions (ts3 TIMESTAMP(3), ts6 "
+                          "TIMESTAMP(6), ts9 TIMESTAMP(9));"));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO ts_meridies_precisions VALUES('2012-01-01 12:00:00.123 AM', "
+        "'2012-01-01 12:00:00.123456 AM', '2012-01-01 12:00:00.123456789 AM');",
+        dt));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO ts_meridies_precisions VALUES('2012-01-01 12:00:00.123 a.m.', "
+        "'2012-01-01 12:00:00.123456 a.m.', '2012-01-01 12:00:00.123456789 a.m.');",
+        dt));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO ts_meridies_precisions VALUES('2012-01-01 12:00:00.123 PM', "
+        "'2012-01-01 12:00:00.123456 PM', '2012-01-01 12:00:00.123456789 PM');",
+        dt));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO ts_meridies_precisions VALUES('2012-01-01 12:00:00.123 p.m.', "
+        "'2012-01-01 12:00:00.123456 p.m.', '2012-01-01 12:00:00.123456789 p.m.');",
+        dt));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO ts_meridies_precisions VALUES('2012-01-01 3:00:00.123 AM', "
+        "'2012-01-01 3:00:00.123456 AM', '2012-01-01 3:00:00.123456789 AM');",
+        dt));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO ts_meridies_precisions VALUES('2012-01-01 3:00:00.123 a.m.', "
+        "'2012-01-01 3:00:00.123456 a.m.', '2012-01-01 3:00:00.123456789 a.m.');",
+        dt));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO ts_meridies_precisions VALUES('2012-01-01 3:00:00.123 PM', "
+        "'2012-01-01 3:00:00.123456 PM', '2012-01-01 3:00:00.123456789 PM');",
+        dt));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO ts_meridies_precisions VALUES('2012-01-01 3:00:00.123 p.m.', "
+        "'2012-01-01 3:00:00.123456 p.m.', '2012-01-01 3:00:00.123456789 p.m.');",
+        dt));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions "
+                                        "where extract(epoch from ts3) = 1325376000123;",
+                                        dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions where "
+                                  "extract(epoch from ts6) = 1325376000123456;",
+                                  dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions where "
+                                  "extract(epoch from ts9) = 1325376000123456789;",
+                                  dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions "
+                                        "where extract(epoch from ts3) = 1325419200123;",
+                                        dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions where "
+                                  "extract(epoch from ts6) = 1325419200123456;",
+                                  dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions where "
+                                  "extract(epoch from ts9) = 1325419200123456789;",
+                                  dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions "
+                                        "where extract(epoch from ts3) = 1325386800123;",
+                                        dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions where "
+                                  "extract(epoch from ts6) = 1325386800123456;",
+                                  dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions where "
+                                  "extract(epoch from ts9) = 1325386800123456789;",
+                                  dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions "
+                                        "where extract(epoch from ts3) = 1325430000123;",
+                                        dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions where "
+                                  "extract(epoch from ts6) = 1325430000123456;",
+                                  dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions where "
+                                  "extract(epoch from ts9) = 1325430000123456789;",
+                                  dt)));
+  }
+}
+#endif
+
 #ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
 TEST(Select, TimestampPrecision) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {

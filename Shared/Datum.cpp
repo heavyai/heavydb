@@ -213,8 +213,7 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       }
       tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = 0;
       // handle fractional seconds
-      int dimen = ti.get_dimension();
-      if (dimen > 0) {  // check for precision
+      if (ti.get_dimension() > 0) {  // check for precision
         time_t fsc;
         if (*p == '.') {
           p++;
@@ -231,6 +230,15 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
         d.timeval = TimeGM::instance().my_timegm(&tm_struct, fsc, ti);
       } else {  // default timestamp(0) precision
         d.timeval = TimeGM::instance().my_timegm(&tm_struct);
+        if (*p == '.') {
+          p++;
+        }
+      }
+      if (*p != '\0') {
+        uint32_t hour = 0;
+        sscanf(tp, "%u", &hour);
+        d.timeval = TimeGM::instance().parse_meridians(d.timeval, p, hour, ti);
+        break;
       }
       break;
     }
