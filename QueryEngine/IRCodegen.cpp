@@ -441,7 +441,8 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
             compileBody(ra_exe_unit, group_by_and_aggregate, co);
         if (can_return_error || cgen_state_->needs_error_check_ ||
             eo.with_dynamic_watchdog) {
-          createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog);
+          createErrorCheckControlFlow(
+              query_func, eo.with_dynamic_watchdog, co.device_type_);
         }
         return loop_body_bb;
       },

@@ -153,9 +153,11 @@ extern "C" __device__ void agg_from_smem_to_gmem_count_binId(int64_t* gmem_dest,
 
 // Dynamic watchdog: monitoring up to 64 SMs. E.g. GP100 config may have 60:
 // 6 Graphics Processing Clusters (GPCs) * 10 Streaming Multiprocessors
-__device__ int64_t dw_sm_cycle_start[64];  // Set from host before launching the kernel
-__device__ int64_t dw_cycle_budget = 0;    // Set from host before launching the kernel
-__device__ int32_t dw_abort = 0;           // TBD: set from host (async)
+// TODO(Saman): move these into a kernel parameter, allocated and initialized through CUDA
+__device__ int64_t dw_sm_cycle_start[128];  // Set from host before launching the kernel
+// TODO(Saman): make this cycle budget something constant in codegen level
+__device__ int64_t dw_cycle_budget = 0;  // Set from host before launching the kernel
+__device__ int32_t dw_abort = 0;         // TBD: set from host (async)
 
 __inline__ __device__ uint32_t get_smid(void) {
   uint32_t ret;
@@ -163,18 +165,41 @@ __inline__ __device__ uint32_t get_smid(void) {
   return ret;
 }
 
+/*
+ * The main objective of this funciton is to return true, if any of the following two
+ * scnearios happen:
+ * 1. receives a host request for aborting the kernel execution
+ * 2. kernel execution takes longer clock cycles than it was initially allowed
+ * The assumption is that all (or none) threads within a block return true for the
+ * watchdog, and the first thread within each block compares the recorded clock cycles for
+ * its occupying SM with the allowed budget. It also assumess that all threads entering
+ * this function are active (no critical edge exposure)
+ * NOTE: dw_cycle_budget, dw_abort, and dw_sm_cycle_start[] are all variables in global
+ * memory scope.
+ */
 extern "C" __device__ bool dynamic_watchdog() {
-  if (dw_cycle_budget == 0LL)
+  // check for dynamic watchdog, if triggered all threads return true
+  if (dw_cycle_budget == 0LL) {
     return false;  // Uninitialized watchdog can't check time
-  if (dw_abort == 1)
+  }
+  if (dw_abort == 1) {
     return true;  // Received host request to abort
+  }
   uint32_t smid = get_smid();
-  if (smid >= 64)
+  if (smid >= 128) {
     return false;
-  __shared__ int64_t dw_block_cycle_start;  // Thread block shared cycle start
-  int64_t cycle_count = static_cast<int64_t>(clock64());
+  }
+  __shared__ volatile int64_t dw_block_cycle_start;  // Thread block shared cycle start
+  __shared__ volatile bool
+      dw_should_terminate;  // all threads within a block should return together if
+                            // watchdog criteria is met
+
+  // thread 0 either initializes or read the initial clock cycle, the result is stored
+  // into shared memory. Since all threads wihtin a block shares the same SM, there's no
+  // point in using more threads here.
   if (threadIdx.x == 0) {
     dw_block_cycle_start = 0LL;
+    int64_t cycle_count = static_cast<int64_t>(clock64());
     // Make sure the block hasn't switched SMs
     if (smid == get_smid()) {
       dw_block_cycle_start = static_cast<int64_t>(
@@ -182,16 +207,18 @@ extern "C" __device__ bool dynamic_watchdog() {
                     0ULL,
                     static_cast<unsigned long long>(cycle_count)));
     }
-  }
-  __syncthreads();
-  if (dw_block_cycle_start > 0LL) {
-    if (smid == get_smid()) {
+
+    int64_t cycles = cycle_count - dw_block_cycle_start;
+    if ((smid == get_smid()) && (dw_block_cycle_start > 0LL) &&
+        (cycles > dw_cycle_budget)) {
       // Check if we're out of time on this particular SM
-      int64_t cycles = cycle_count - dw_block_cycle_start;
-      return (cycles > dw_cycle_budget);
+      dw_should_terminate = true;
+    } else {
+      dw_should_terminate = false;
     }
   }
-  return false;
+  __syncthreads();
+  return dw_should_terminate;
 }
 
 template <typename T = unsigned long long>
