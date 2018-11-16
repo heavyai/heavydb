@@ -1098,7 +1098,8 @@ class Executor {
                    const CompilationOptions& co);
 
   void createErrorCheckControlFlow(llvm::Function* query_func,
-                                   bool run_with_dynamic_watchdog);
+                                   bool run_with_dynamic_watchdog,
+                                   ExecutorDeviceType device_type);
 
   void preloadFragOffsets(const std::vector<InputDescriptor>& input_descs,
                           const std::vector<InputTableInfo>& query_infos);

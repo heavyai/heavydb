@@ -1023,10 +1023,48 @@ std::unordered_set<llvm::Function*> Executor::markDeadRuntimeFuncs(
   return live_funcs;
 }
 
+namespace {
+// searches for a particular variable within a specific basic block (or all if bb_name is
+// empty)
+template <typename InstType>
+llvm::Value* find_variable_in_basic_block(llvm::Function* func,
+                                          std::string bb_name,
+                                          std::string variable_name) {
+  llvm::Value* result = nullptr;
+  if (func == nullptr || variable_name.empty()) {
+    return result;
+  }
+  bool is_found = false;
+  for (auto bb_it = func->begin(); bb_it != func->end() && !is_found; ++bb_it) {
+    if (!bb_name.empty() && bb_it->getName() != bb_name) {
+      continue;
+    }
+    for (auto inst_it = bb_it->begin(); inst_it != bb_it->end(); inst_it++) {
+      if (llvm::isa<InstType>(*inst_it)) {
+        if (inst_it->getName() == variable_name) {
+          result = &*inst_it;
+          is_found = true;
+          break;
+        }
+      }
+    }
+  }
+  return result;
+}
+};  // namespace
+
 void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
-                                           bool run_with_dynamic_watchdog) {
+                                           bool run_with_dynamic_watchdog,
+                                           ExecutorDeviceType device_type) {
   // check whether the row processing was successful; currently, it can
   // fail by running out of group by buffer slots
+
+  llvm::Value* row_count = nullptr;
+  if (run_with_dynamic_watchdog && device_type == ExecutorDeviceType::GPU) {
+    row_count =
+        find_variable_in_basic_block<llvm::LoadInst>(query_func, ".entry", "row_count");
+  }
+
   bool done_splitting = false;
   for (auto bb_it = query_func->begin(); bb_it != query_func->end() && !done_splitting;
        ++bb_it) {
@@ -1052,11 +1090,32 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
         llvm::Value* err_lv = &*inst_it;
         if (run_with_dynamic_watchdog) {
           CHECK(pos);
-          // run watchdog after every 64 rows
-          auto and_lv = ir_builder.CreateAnd(pos, uint64_t(0x3f));
-          auto call_watchdog_lv = ir_builder.CreateICmp(
-              llvm::ICmpInst::ICMP_EQ, and_lv, ll_int(int64_t(0LL)));
+          llvm::Value* call_watchdog_lv = nullptr;
+          if (device_type == ExecutorDeviceType::GPU) {
+            // In order to make sure all threads wihtin a block see the same barrier,
+            // only those blocks whose none of their threads have experienced the critical
+            // edge will go through the dynamic watchdog computation
+            CHECK(row_count);
+            auto crit_edge_rem =
+                (blockSize() & (blockSize() - 1))
+                    ? ir_builder.CreateSRem(row_count,
+                                            ll_int(static_cast<int64_t>(blockSize())))
+                    : ir_builder.CreateAnd(row_count,
+                                           ll_int(static_cast<int64_t>(blockSize() - 1)));
+            auto crit_edge_threshold = ir_builder.CreateSub(row_count, crit_edge_rem);
+            crit_edge_threshold->setName("crit_edge_threshold");
 
+            // only those threads where pos < crit_edge_threshold go through dynamic
+            // watchdog call
+            call_watchdog_lv =
+                ir_builder.CreateICmp(llvm::ICmpInst::ICMP_SLT, pos, crit_edge_threshold);
+          } else {
+            // CPU path: run watchdog for every 64th row
+            auto dw_predicate = ir_builder.CreateAnd(pos, uint64_t(0x3f));
+            call_watchdog_lv = ir_builder.CreateICmp(
+                llvm::ICmpInst::ICMP_EQ, dw_predicate, ll_int(int64_t(0LL)));
+          }
+          CHECK(call_watchdog_lv);
           auto error_check_bb = bb_it->splitBasicBlock(
               llvm::BasicBlock::iterator(br_instr), ".error_check");
           auto& watchdog_br_instr = bb_it->back();
@@ -1085,8 +1144,16 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
         err_lv =
             ir_builder.CreateCall(cgen_state_->module_->getFunction("record_error_code"),
                                   std::vector<llvm::Value*>{err_lv, error_code_arg});
-        err_lv =
-            ir_builder.CreateICmp(llvm::ICmpInst::ICMP_NE, err_lv, ll_int(int32_t(0)));
+        if (device_type == ExecutorDeviceType::GPU) {
+          // let kernel execution finish as expected, regardless of the observed error,
+          // unless it is from the dynamic watchdog where all threads within that block
+          // return together.
+          err_lv = ir_builder.CreateICmp(
+              llvm::ICmpInst::ICMP_EQ, err_lv, ll_int(Executor::ERR_OUT_OF_TIME));
+        } else {
+          err_lv = ir_builder.CreateICmp(
+              llvm::ICmpInst::ICMP_NE, err_lv, ll_int(static_cast<int32_t>(0)));
+        }
         auto error_bb = llvm::BasicBlock::Create(
             cgen_state_->context_, ".error_exit", query_func, new_bb);
         llvm::ReturnInst::Create(cgen_state_->context_, error_bb);
@@ -1375,7 +1442,7 @@ Executor::CompilationResult Executor::compileWorkUnit(
     const bool can_return_error = compileBody(ra_exe_unit, group_by_and_aggregate, co);
 
     if (can_return_error || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog) {
-      createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog);
+      createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog, co.device_type_);
     }
   }
 

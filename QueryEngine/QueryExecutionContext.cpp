@@ -587,8 +587,8 @@ void QueryExecutionContext::initializeDynamicWatchdog(void* native_module,
   size_t dw_sm_cycle_start_size;
   checkCudaErrors(cuModuleGetGlobal(
       &dw_sm_cycle_start, &dw_sm_cycle_start_size, cu_module, "dw_sm_cycle_start"));
-  CHECK_EQ(dw_sm_cycle_start_size, 64 * sizeof(uint64_t));
-  checkCudaErrors(cuMemsetD32(dw_sm_cycle_start, 0, 64 * 2));
+  CHECK_EQ(dw_sm_cycle_start_size, 128 * sizeof(uint64_t));
+  checkCudaErrors(cuMemsetD32(dw_sm_cycle_start, 0, 128 * 2));
 
   if (!executor_->interrupted_) {
     // Executor is not marked as interrupted, make sure dynamic watchdog doesn't block
