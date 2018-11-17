@@ -163,7 +163,7 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::deep_copy() const {
 }
 
 std::shared_ptr<Analyzer::Expr> ExtractExpr::deep_copy() const {
-  return makeExpr<ExtractExpr>(type_info, contains_agg, field, from_expr->deep_copy());
+  return makeExpr<ExtractExpr>(type_info, contains_agg, field_, from_expr_->deep_copy());
 }
 
 std::shared_ptr<Analyzer::Expr> DateaddExpr::deep_copy() const {
@@ -177,7 +177,8 @@ std::shared_ptr<Analyzer::Expr> DatediffExpr::deep_copy() const {
 }
 
 std::shared_ptr<Analyzer::Expr> DatetruncExpr::deep_copy() const {
-  return makeExpr<DatetruncExpr>(type_info, contains_agg, field, from_expr->deep_copy());
+  return makeExpr<DatetruncExpr>(
+      type_info, contains_agg, field_, from_expr_->deep_copy());
 }
 
 std::shared_ptr<Analyzer::Expr> OffsetInFragment::deep_copy() const {
@@ -1553,7 +1554,7 @@ void ExtractExpr::group_predicates(std::list<const Expr*>& scan_predicates,
                                    std::list<const Expr*>& join_predicates,
                                    std::list<const Expr*>& const_predicates) const {
   std::set<int> rte_idx_set;
-  from_expr->collect_rte_idx(rte_idx_set);
+  from_expr_->collect_rte_idx(rte_idx_set);
   if (rte_idx_set.size() > 1) {
     join_predicates.push_back(this);
   } else if (rte_idx_set.size() == 1) {
@@ -1597,7 +1598,7 @@ void DatetruncExpr::group_predicates(std::list<const Expr*>& scan_predicates,
                                      std::list<const Expr*>& join_predicates,
                                      std::list<const Expr*>& const_predicates) const {
   std::set<int> rte_idx_set;
-  from_expr->collect_rte_idx(rte_idx_set);
+  from_expr_->collect_rte_idx(rte_idx_set);
   if (rte_idx_set.size() > 1) {
     join_predicates.push_back(this);
   } else if (rte_idx_set.size() == 1) {
@@ -1771,7 +1772,7 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_with_targetlist(
 std::shared_ptr<Analyzer::Expr> ExtractExpr::rewrite_with_targetlist(
     const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
   return makeExpr<ExtractExpr>(
-      type_info, contains_agg, field, from_expr->rewrite_with_targetlist(tlist));
+      type_info, contains_agg, field_, from_expr_->rewrite_with_targetlist(tlist));
 }
 
 std::shared_ptr<Analyzer::Expr> DateaddExpr::rewrite_with_targetlist(
@@ -1793,7 +1794,7 @@ std::shared_ptr<Analyzer::Expr> DatediffExpr::rewrite_with_targetlist(
 std::shared_ptr<Analyzer::Expr> DatetruncExpr::rewrite_with_targetlist(
     const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
   return makeExpr<DatetruncExpr>(
-      type_info, contains_agg, field, from_expr->rewrite_with_targetlist(tlist));
+      type_info, contains_agg, field_, from_expr_->rewrite_with_targetlist(tlist));
 }
 
 std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_with_child_targetlist(
@@ -1814,7 +1815,7 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_with_child_targetlist(
 std::shared_ptr<Analyzer::Expr> ExtractExpr::rewrite_with_child_targetlist(
     const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
   return makeExpr<ExtractExpr>(
-      type_info, contains_agg, field, from_expr->rewrite_with_child_targetlist(tlist));
+      type_info, contains_agg, field_, from_expr_->rewrite_with_child_targetlist(tlist));
 }
 
 std::shared_ptr<Analyzer::Expr> DateaddExpr::rewrite_with_child_targetlist(
@@ -1836,7 +1837,7 @@ std::shared_ptr<Analyzer::Expr> DatediffExpr::rewrite_with_child_targetlist(
 std::shared_ptr<Analyzer::Expr> DatetruncExpr::rewrite_with_child_targetlist(
     const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
   return makeExpr<DatetruncExpr>(
-      type_info, contains_agg, field, from_expr->rewrite_with_child_targetlist(tlist));
+      type_info, contains_agg, field_, from_expr_->rewrite_with_child_targetlist(tlist));
 }
 
 std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_agg_to_var(
@@ -1856,7 +1857,7 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_agg_to_var(
 std::shared_ptr<Analyzer::Expr> ExtractExpr::rewrite_agg_to_var(
     const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
   return makeExpr<ExtractExpr>(
-      type_info, contains_agg, field, from_expr->rewrite_agg_to_var(tlist));
+      type_info, contains_agg, field_, from_expr_->rewrite_agg_to_var(tlist));
 }
 
 std::shared_ptr<Analyzer::Expr> DateaddExpr::rewrite_agg_to_var(
@@ -1878,7 +1879,7 @@ std::shared_ptr<Analyzer::Expr> DatediffExpr::rewrite_agg_to_var(
 std::shared_ptr<Analyzer::Expr> DatetruncExpr::rewrite_agg_to_var(
     const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
   return makeExpr<DatetruncExpr>(
-      type_info, contains_agg, field, from_expr->rewrite_agg_to_var(tlist));
+      type_info, contains_agg, field_, from_expr_->rewrite_agg_to_var(tlist));
 }
 
 bool ColumnVar::operator==(const Expr& rhs) const {
@@ -2123,7 +2124,7 @@ bool ExtractExpr::operator==(const Expr& rhs) const {
     return false;
   }
   const ExtractExpr& rhs_ee = dynamic_cast<const ExtractExpr&>(rhs);
-  return field == rhs_ee.get_field() && *from_expr == *rhs_ee.get_from_expr();
+  return field_ == rhs_ee.get_field() && *from_expr_ == *rhs_ee.get_from_expr();
 }
 
 bool DateaddExpr::operator==(const Expr& rhs) const {
@@ -2149,7 +2150,7 @@ bool DatetruncExpr::operator==(const Expr& rhs) const {
     return false;
   }
   const DatetruncExpr& rhs_ee = dynamic_cast<const DatetruncExpr&>(rhs);
-  return field == rhs_ee.get_field() && *from_expr == *rhs_ee.get_from_expr();
+  return field_ == rhs_ee.get_field() && *from_expr_ == *rhs_ee.get_from_expr();
 }
 
 bool OffsetInFragment::operator==(const Expr& rhs) const {
@@ -2171,35 +2172,40 @@ bool ArrayExpr::operator==(Expr const& rhs) const {
   return true;
 }
 
-void ColumnVar::print() const {
-  std::cout << "(ColumnVar table: " << table_id << " column: " << column_id
-            << " rte: " << rte_idx << ") ";
+std::string ColumnVar::toString() const {
+  return "(ColumnVar table: " + std::to_string(table_id) +
+         " column: " + std::to_string(column_id) + " rte: " + std::to_string(rte_idx) +
+         ") ";
 }
 
-void ExpressionTuple::print() const {
-  std::cout << "< ";
+std::string ExpressionTuple::toString() const {
+  std::string str{"< "};
   for (const auto& column : tuple_) {
-    column->print();
+    str += column->toString();
   }
-  std::cout << "> ";
+  str += "> ";
+  return str;
 }
 
-void Var::print() const {
-  std::cout << "(Var table: " << table_id << " column: " << column_id
-            << " rte: " << rte_idx << " which_row: " << which_row << " varno: " << varno
-            << ") ";
+std::string Var::toString() const {
+  return "(Var table: " + std::to_string(table_id) +
+         " column: " + std::to_string(column_id) + " rte: " + std::to_string(rte_idx) +
+         " which_row: " + std::to_string(which_row) + " varno: " + std::to_string(varno) +
+         ") ";
 }
 
-void Constant::print() const {
-  std::cout << "(Const ";
+std::string Constant::toString() const {
+  std::string str{"(Const "};
   if (is_null) {
-    std::cout << "NULL) ";
+    str += "NULL";
   } else {
-    std::cout << DatumToString(constval, type_info) << ") ";
+    str += DatumToString(constval, type_info);
   }
+  str += ") ";
+  return str;
 }
 
-void UOper::print() const {
+std::string UOper::toString() const {
   std::string op;
   switch (optype) {
     case kNOT:
@@ -2227,12 +2233,10 @@ void UOper::print() const {
     default:
       break;
   }
-  std::cout << "(" << op;
-  operand->print();
-  std::cout << ") ";
+  return "(" + op + operand->toString() + ") ";
 }
 
-void BinOper::print() const {
+std::string BinOper::toString() const {
   std::string op;
   switch (optype) {
     case kEQ:
@@ -2280,29 +2284,32 @@ void BinOper::print() const {
     default:
       break;
   }
-  std::cout << "(" << op;
+  std::string str{"("};
+  str += op;
   if (qualifier == kANY) {
-    std::cout << "ANY ";
+    str += "ANY ";
   } else if (qualifier == kALL) {
-    std::cout << "ALL ";
+    str += "ALL ";
   }
-  left_operand->print();
-  right_operand->print();
-  std::cout << ") ";
+  str += left_operand->toString();
+  str += right_operand->toString();
+  str += ") ";
+  return str;
 }
 
-void Subquery::print() const {
-  std::cout << "(Subquery ) ";
+std::string Subquery::toString() const {
+  return "(Subquery ) ";
 }
 
-void InValues::print() const {
-  std::cout << "(IN ";
-  arg->print();
-  std::cout << "(";
+std::string InValues::toString() const {
+  std::string str{"(IN "};
+  str += arg->toString();
+  str += "(";
   for (auto e : value_list) {
-    e->print();
+    str += e->toString();
   }
-  std::cout << ") ";
+  str += ") ";
+  return str;
 }
 
 std::shared_ptr<Analyzer::Expr> InIntegerSet::deep_copy() const {
@@ -2317,53 +2324,58 @@ bool InIntegerSet::operator==(const Expr& rhs) const {
   return *arg == *rhs_in_integer_set.arg && value_list == rhs_in_integer_set.value_list;
 }
 
-void InIntegerSet::print() const {
-  std::cout << "(IN_INTEGER_SET ";
-  arg->print();
-  std::cout << "( ";
+std::string InIntegerSet::toString() const {
+  std::string str{"(IN_INTEGER_SET "};
+  str += arg->toString();
+  str += "( ";
   for (const auto e : value_list) {
-    std::cout << e << " ";
+    str += std::to_string(e) + " ";
   }
-  std::cout << ") ";
+  str += ") ";
+  return str;
 }
 
-void CharLengthExpr::print() const {
+std::string CharLengthExpr::toString() const {
+  std::string str;
   if (calc_encoded_length) {
-    std::cout << "CHAR_LENGTH(";
+    str += "CHAR_LENGTH(";
   } else {
-    std::cout << "LENGTH(";
+    str += "LENGTH(";
   }
-  arg->print();
-  std::cout << ") ";
+  str += arg->toString();
+  str += ") ";
+  return str;
 }
 
-void LikeExpr::print() const {
-  std::cout << "(LIKE ";
-  arg->print();
-  like_expr->print();
-  if (escape_expr != nullptr) {
-    escape_expr->print();
+std::string LikeExpr::toString() const {
+  std::string str{"(LIKE "};
+  str += arg->toString();
+  str += like_expr->toString();
+  if (escape_expr) {
+    str += escape_expr->toString();
   }
-  std::cout << ") ";
+  str += ") ";
+  return str;
 }
 
-void RegexpExpr::print() const {
-  std::cout << "(REGEXP ";
-  arg->print();
-  pattern_expr->print();
-  if (escape_expr != nullptr) {
-    escape_expr->print();
+std::string RegexpExpr::toString() const {
+  std::string str{"(REGEXP "};
+  str += arg->toString();
+  str += pattern_expr->toString();
+  if (escape_expr) {
+    str += escape_expr->toString();
   }
-  std::cout << ") ";
+  str += ") ";
+  return str;
 }
 
-void LikelihoodExpr::print() const {
-  std::cout << "(LIKELIHOOD ";
-  arg->print();
-  std::cout << " " << likelihood << ") ";
+std::string LikelihoodExpr::toString() const {
+  std::string str{"(LIKELIHOOD "};
+  str += arg->toString();
+  return str + " " + std::to_string(likelihood) + ") ";
 }
 
-void AggExpr::print() const {
+std::string AggExpr::toString() const {
   std::string agg;
   switch (aggtype) {
     case kAVG:
@@ -2388,105 +2400,92 @@ void AggExpr::print() const {
       agg = "SAMPLE";
       break;
   }
-  std::cout << "(" << agg;
+  std::string str{"(" + agg};
   if (is_distinct) {
-    std::cout << "DISTINCT ";
+    str += "DISTINCT ";
   }
-  if (arg == nullptr) {
-    std::cout << "*";
+  if (arg) {
+    str += arg->toString();
   } else {
-    arg->print();
+    str += "*";
   }
-  std::cout << ") ";
+  return str + ") ";
 }
 
-void CaseExpr::print() const {
-  std::cout << "CASE ";
+std::string CaseExpr::toString() const {
+  std::string str{"CASE "};
   for (auto p : expr_pair_list) {
-    std::cout << "(", p.first->print();
-    std::cout << ", ";
-    p.second->print();
-    std::cout << ") ";
+    str += "(";
+    str += p.first->toString();
+    str += ", ";
+    str += p.second->toString();
+    str += ") ";
   }
-  if (else_expr != nullptr) {
-    std::cout << "ELSE ";
-    else_expr->print();
+  if (else_expr) {
+    str += "ELSE ";
+    str += else_expr->toString();
   }
-  std::cout << " END ";
+  str += " END ";
+  return str;
 }
 
-void ExtractExpr::print() const {
-  std::cout << "EXTRACT(";
-  std::cout << field;
-  std::cout << " FROM ";
-  from_expr->print();
-  std::cout << ") ";
+std::string ExtractExpr::toString() const {
+  return "EXTRACT(" + std::to_string(field_) + " FROM " + from_expr_->toString() + ") ";
 }
 
-void DateaddExpr::print() const {
-  std::cout << "DATEADD(";
-  std::cout << field_;
-  std::cout << " NUMBER ";
-  number_->print();
-  std::cout << " DATETIME ";
-  datetime_->print();
-  std::cout << ") ";
+std::string DateaddExpr::toString() const {
+  return "DATEADD(" + std::to_string(field_) + " NUMBER " + number_->toString() +
+         " DATETIME " + datetime_->toString() + ") ";
 }
 
-void DatediffExpr::print() const {
-  std::cout << "DATEDIFF(";
-  std::cout << field_;
-  std::cout << " START ";
-  start_->print();
-  std::cout << " END ";
-  end_->print();
-  std::cout << ") ";
+std::string DatediffExpr::toString() const {
+  return "DATEDIFF(" + std::to_string(field_) + " START " + start_->toString() + " END " +
+         end_->toString() + ") ";
 }
 
-void DatetruncExpr::print() const {
-  std::cout << "DATE_TRUNC(";
-  std::cout << field;
-  std::cout << " , ";
-  from_expr->print();
-  std::cout << ") ";
+std::string DatetruncExpr::toString() const {
+  return "DATE_TRUNC(" + std::to_string(field_) + " , " + from_expr_->toString() + ") ";
 }
 
-void OffsetInFragment::print() const {
-  std::cout << "(OffsetInFragment) ";
+std::string OffsetInFragment::toString() const {
+  return "(OffsetInFragment) ";
 }
 
-void ArrayExpr::print() const {
-  std::cout << "ARRAY[";
+std::string ArrayExpr::toString() const {
+  std::string str{"ARRAY["};
 
   auto iter(contained_expressions_.begin());
   while (iter != contained_expressions_.end()) {
-    (*iter)->print();
+    str += (*iter)->toString();
     if (iter + 1 != contained_expressions_.end()) {
-      std::cout << ", ";
+      str += ", ";
     }
     iter++;
   }
-  std::cout << "]";
+  str += "]";
+  return str;
 }
 
-void TargetEntry::print() const {
-  std::cout << "(" << resname << " ";
-  expr->print();
+std::string TargetEntry::toString() const {
+  std::string str{"(" + resname + " "};
+  str += expr->toString();
   if (unnest) {
-    std::cout << " UNNEST";
+    str += " UNNEST";
   }
-  std::cout << ") ";
+  str += ") ";
+  return str;
 }
 
-void OrderEntry::print() const {
-  std::cout << tle_no;
+std::string OrderEntry::toString() const {
+  std::string str{std::to_string(tle_no)};
   if (is_desc) {
-    std::cout << " desc";
+    str += " desc";
   }
   if (nulls_first) {
-    std::cout << " nulls first";
+    str += " nulls first";
   }
-  std::cout << " ";
+  str += " ";
+  return str;
 }
 
 void Expr::add_unique(std::list<const Expr*>& expr_list) const {
@@ -2603,7 +2602,7 @@ void ExtractExpr::find_expr(bool (*f)(const Expr*),
     add_unique(expr_list);
     return;
   }
-  from_expr->find_expr(f, expr_list);
+  from_expr_->find_expr(f, expr_list);
 }
 
 void DateaddExpr::find_expr(bool (*f)(const Expr*),
@@ -2632,7 +2631,7 @@ void DatetruncExpr::find_expr(bool (*f)(const Expr*),
     add_unique(expr_list);
     return;
   }
-  from_expr->find_expr(f, expr_list);
+  from_expr_->find_expr(f, expr_list);
 }
 
 void CaseExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {
@@ -2646,7 +2645,7 @@ void CaseExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {
 }
 
 void ExtractExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {
-  from_expr->collect_rte_idx(rte_idx_set);
+  from_expr_->collect_rte_idx(rte_idx_set);
 }
 
 void DateaddExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {
@@ -2660,7 +2659,7 @@ void DatediffExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {
 }
 
 void DatetruncExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {
-  from_expr->collect_rte_idx(rte_idx_set);
+  from_expr_->collect_rte_idx(rte_idx_set);
 }
 
 void CaseExpr::collect_column_var(
@@ -2678,7 +2677,7 @@ void CaseExpr::collect_column_var(
 void ExtractExpr::collect_column_var(
     std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
     bool include_agg) const {
-  from_expr->collect_column_var(colvar_set, include_agg);
+  from_expr_->collect_column_var(colvar_set, include_agg);
 }
 
 void DateaddExpr::collect_column_var(
@@ -2698,7 +2697,7 @@ void DatediffExpr::collect_column_var(
 void DatetruncExpr::collect_column_var(
     std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
     bool include_agg) const {
-  from_expr->collect_column_var(colvar_set, include_agg);
+  from_expr_->collect_column_var(colvar_set, include_agg);
 }
 
 void CaseExpr::check_group_by(
@@ -2714,7 +2713,7 @@ void CaseExpr::check_group_by(
 
 void ExtractExpr::check_group_by(
     const std::list<std::shared_ptr<Analyzer::Expr>>& groupby) const {
-  from_expr->check_group_by(groupby);
+  from_expr_->check_group_by(groupby);
 }
 
 void DateaddExpr::check_group_by(
@@ -2731,7 +2730,7 @@ void DatediffExpr::check_group_by(
 
 void DatetruncExpr::check_group_by(
     const std::list<std::shared_ptr<Analyzer::Expr>>& groupby) const {
-  from_expr->check_group_by(groupby);
+  from_expr_->check_group_by(groupby);
 }
 
 void CaseExpr::get_domain(DomainSet& domain_set) const {
@@ -2823,12 +2822,13 @@ bool FunctionOper::operator==(const Expr& rhs) const {
   return true;
 }
 
-void FunctionOper::print() const {
-  std::cout << "(" << name_ << " ";
+std::string FunctionOper::toString() const {
+  std::string str{"(" + name_ + " "};
   for (const auto arg : args_) {
-    arg->print();
+    str += arg->toString();
   }
-  std::cout << ")";
+  str += ")";
+  return str;
 }
 
 std::shared_ptr<Analyzer::Expr> FunctionOperWithCustomTypeHandling::deep_copy() const {
