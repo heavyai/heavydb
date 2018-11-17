@@ -419,7 +419,6 @@ std::deque<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
 }
 
 bool JoinHashTable::needOneToManyHash(const std::vector<int>& errors) const {
-#ifdef ENABLE_ONE_TO_MANY_HASH_JOIN
   std::unordered_set<int> error_set(errors.begin(), errors.end());
   if (error_set.size() == 1) {
     return *error_set.begin() == ERR_COLUMN_NOT_UNIQUE;
@@ -430,7 +429,6 @@ bool JoinHashTable::needOneToManyHash(const std::vector<int>& errors) const {
     return ((first_error == 0 && second_error == ERR_COLUMN_NOT_UNIQUE) ||
             (first_error == ERR_COLUMN_NOT_UNIQUE && second_error == 0));
   }
-#endif
   return false;
 }
 

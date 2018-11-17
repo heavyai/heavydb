@@ -59,8 +59,6 @@ The following `cmake`/`ccmake` options can enable/disable different features:
 - `-DENABLE_FOLLY=on` - Use Folly. Default is `on`.
 - `-DENABLE_IWYU=off` - Enable include-what-you-use. Default is `off`.
 - `-DENABLE_JIT_DEBUG=off` - Enable debugging symbols for the JIT. Default is `off`.
-- `-DENABLE_JOIN_EXEC=on` - Enable RA vm to execute join node. Default is `on`.
-- `-DENABLE_ONE_TO_MANY_HASH_JOIN=on` - Enable hash join on a column w/ duplicate values. Default is `on`.
 - `-DENABLE_PROFILER=off` - Enable google perftools. Default is `off`.
 - `-DENABLE_STANDALONE_CALCITE=off` - Require standalone Calcite server. Default is `off`.
 - `-DENABLE_TESTS=on` - Build unit tests. Default is `on`.
