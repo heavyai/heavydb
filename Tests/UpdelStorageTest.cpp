@@ -38,7 +38,6 @@
 
 #define CALCITEPORT 9093
 
-using namespace std;
 using namespace Catalog_Namespace;
 
 namespace {
@@ -73,7 +72,7 @@ void register_signal_handler() {
   std::signal(SIGABRT, mapd_signal_handler);
 }
 
-inline void run_ddl_statement(const string& input_str) {
+inline void run_ddl_statement(const std::string& input_str) {
   QueryRunner::run_ddl_statement(input_str, gsession);
 }
 
@@ -86,13 +85,13 @@ T v(const TargetValue& r) {
   return *p;
 }
 
-std::shared_ptr<ResultSet> run_query(const string& query_str) {
+std::shared_ptr<ResultSet> run_query(const std::string& query_str) {
   return QueryRunner::run_multiple_agg(
       query_str, gsession, ExecutorDeviceType::CPU, g_hoist_literals, true);
 }
 
-bool compare_agg(const string& table,
-                 const string& column,
+bool compare_agg(const std::string& table,
+                 const std::string& column,
                  const int64_t cnt,
                  const double avg) {
   std::string query_str = "SELECT COUNT(*), AVG(" + column + ") FROM " + table + ";";
@@ -118,8 +117,8 @@ void update_prepare_offsets_values(const int64_t cnt,
 }
 
 template <typename T>
-void update_common(const string& table,
-                   const string& column,
+void update_common(const std::string& table,
+                   const std::string& column,
                    const int64_t cnt,
                    const int step,
                    const T& val,
@@ -144,8 +143,8 @@ void update_common(const string& table,
   }
 }
 
-bool update_a_numeric_column(const string& table,
-                             const string& column,
+bool update_a_numeric_column(const std::string& table,
+                             const std::string& column,
                              const int64_t cnt,
                              const int step,
                              const double val,
@@ -162,8 +161,8 @@ bool update_a_numeric_column(const string& table,
 }
 
 template <typename T>
-bool nullize_a_fixed_encoded_column(const string& table,
-                                    const string& column,
+bool nullize_a_fixed_encoded_column(const std::string& table,
+                                    const std::string& column,
                                     const int64_t cnt) {
   update_common<int64_t>(
       table, column, cnt, 1, inline_int_null_value<T>(), SQLTypeInfo());
@@ -176,11 +175,11 @@ bool nullize_a_fixed_encoded_column(const string& table,
   return r_cnt == cnt;
 }
 
-bool update_a_encoded_string_column(const string& table,
-                                    const string& column,
+bool update_a_encoded_string_column(const std::string& table,
+                                    const std::string& column,
                                     const int64_t cnt,
                                     const int step,
-                                    const string& val,
+                                    const std::string& val,
                                     const bool commit = true) {
   update_common<const std::string>(table, column, cnt, step, val, SQLTypeInfo(), commit);
   // count updated string
@@ -195,8 +194,8 @@ bool update_a_encoded_string_column(const string& table,
 
 #define update_a_datetime_column update_a_encoded_string_column
 
-bool update_a_boolean_column(const string& table,
-                             const string& column,
+bool update_a_boolean_column(const std::string& table,
+                             const std::string& column,
                              const int64_t cnt,
                              const int step,
                              const bool val,
@@ -214,8 +213,8 @@ bool update_a_boolean_column(const string& table,
 }
 
 template <typename T>
-bool update_column_from_decimal(const string& table,
-                                const string& column,
+bool update_column_from_decimal(const std::string& table,
+                                const std::string& column,
                                 const int64_t cnt,
                                 const int64_t rhsDecimal,
                                 const SQLTypeInfo& rhsType,
@@ -244,9 +243,10 @@ bool update_column_from_decimal(const string& table,
   return r_loss <= max_loss;
 }
 
-void import_table_file(const string& table, const string& file) {
-  std::string query_str = string("COPY trips FROM '") + "../../Tests/Import/datafiles/" +
-                          file + "' WITH (header='true');";
+void import_table_file(const std::string& table, const std::string& file) {
+  std::string query_str = std::string("COPY trips FROM '") +
+                          "../../Tests/Import/datafiles/" + file +
+                          "' WITH (header='true');";
 
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
@@ -333,9 +333,9 @@ const char* create_table_trips =
     "			deleted                 BOOLEAN"
     "			) WITH (FRAGMENT_SIZE=75000000);";
 
-void init_table_data(const string& table = "trips",
-                     const string& create_table_cmd = create_table_trips,
-                     const string& file = "trip_data_b.txt") {
+void init_table_data(const std::string& table = "trips",
+                     const std::string& create_table_cmd = create_table_trips,
+                     const std::string& file = "trip_data_b.txt") {
   run_ddl_statement("drop table if exists " + table + ";");
   run_ddl_statement(create_table_cmd);
   if (file.size()) {

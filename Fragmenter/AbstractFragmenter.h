@@ -118,22 +118,22 @@ class AbstractFragmenter {
   virtual void updateColumn(const Catalog_Namespace::Catalog* catalog,
                             const TableDescriptor* td,
                             const ColumnDescriptor* cd,
-                            const int fragmentId,
-                            const std::vector<uint64_t>& fragOffsets,
-                            const std::vector<ScalarTargetValue>& rhsValues,
-                            const SQLTypeInfo& rhsType,
-                            const Data_Namespace::MemoryLevel memoryLevel,
-                            UpdelRoll& updelRoll) = 0;
+                            const int fragment_id,
+                            const std::vector<uint64_t>& frag_offsets,
+                            const std::vector<ScalarTargetValue>& rhs_values,
+                            const SQLTypeInfo& rhs_type,
+                            const Data_Namespace::MemoryLevel memory_level,
+                            UpdelRoll& updel_roll) = 0;
 
   virtual void updateColumn(const Catalog_Namespace::Catalog* catalog,
                             const TableDescriptor* td,
                             const ColumnDescriptor* cd,
-                            const int fragmentId,
-                            const std::vector<uint64_t>& fragOffsets,
-                            const ScalarTargetValue& rhsValue,
-                            const SQLTypeInfo& rhsType,
-                            const Data_Namespace::MemoryLevel memoryLevel,
-                            UpdelRoll& updelRoll) = 0;
+                            const int fragment_id,
+                            const std::vector<uint64_t>& frag_offsets,
+                            const ScalarTargetValue& rhs_value,
+                            const SQLTypeInfo& rhs_type,
+                            const Data_Namespace::MemoryLevel memory_level,
+                            UpdelRoll& updel_roll) = 0;
 
   virtual void updateColumnMetadata(const ColumnDescriptor* cd,
                                     FragmentInfo& fragment,
@@ -143,12 +143,12 @@ class AbstractFragmenter {
                                     const double dmin,
                                     const int64_t lmax,
                                     const int64_t lmin,
-                                    const SQLTypeInfo& rhsType,
-                                    UpdelRoll& updelRoll) = 0;
+                                    const SQLTypeInfo& rhs_type,
+                                    UpdelRoll& updel_roll) = 0;
 
   virtual void updateMetadata(const Catalog_Namespace::Catalog* catalog,
                               const MetaDataKey& key,
-                              UpdelRoll& updelRoll) = 0;
+                              UpdelRoll& updel_roll) = 0;
 };
 
 }  // namespace Fragmenter_Namespace
