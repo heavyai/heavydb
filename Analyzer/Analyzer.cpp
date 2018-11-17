@@ -29,6 +29,7 @@
 #include <iostream>
 #include <stdexcept>
 #include "../Catalog/Catalog.h"
+#include "../Shared/sql_type_to_string.h"
 #include "../Shared/sqltypes.h"
 #include "../Shared/unreachable.h"
 
@@ -2198,6 +2199,10 @@ std::string Constant::toString() const {
   std::string str{"(Const "};
   if (is_null) {
     str += "NULL";
+  } else if (type_info.is_array()) {
+    const auto& elem_ti = type_info.get_elem_type();
+    str += sql_type_to_str(type_info.get_type()) + ": " +
+           sql_type_to_str(elem_ti.get_type());
   } else {
     str += DatumToString(constval, type_info);
   }
