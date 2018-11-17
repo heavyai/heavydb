@@ -673,6 +673,20 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
       auto lhs = func_oper->getOwnArg(2);
       auto rewritten_lhs = deep_copy_visitor.visit(lhs.get());
       CHECK(rewritten_lhs);
+      const auto& lhs_ti = rewritten_lhs->get_type_info();
+      if (!lhs_ti.is_geometry()) {
+        // TODO(adb): If ST_Contains is passed geospatial literals instead of columns, the
+        // function will be expanded during translation rather than during code
+        // generation. While this scenario does not make sense for the overlaps join, we
+        // need to detect and abort the overlaps rewrite. Adding a GeospatialConstant
+        // dervied class to the Analyzer may prove to be a better way to handle geo
+        // literals, but for now we ensure the LHS type is a geospatial type, which would
+        // mean the function has not been expanded to the physical types, yet.
+        LOG(WARNING) << "Failed to rewrite " << func_oper->getName()
+                     << " to overlaps conjunction. LHS input type is not a geospatial "
+                        "type. Are both inputs geospatial columns?";
+        return boost::none;
+      }
 
       // Read the bounds arg from the ST_Contains FuncOper (second argument)instead of the
       // poly column (first argument)
