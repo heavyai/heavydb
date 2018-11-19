@@ -35,13 +35,8 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     const RelAlgExecutionUnit& ra_exe_unit,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_count,
-    const std::unordered_set<int>& skip_tables,
     ColumnCacheMap& column_cache,
     Executor* executor) {
-  // Already handled the table
-  if (skip_tables.count(getInnerTableId(condition.get(), executor))) {
-    throw HashJoinFail("A hash table is already built for the table of this column");
-  }
   const auto& query_info =
       get_inner_query_info(getInnerTableId(condition.get(), executor), query_infos).info;
   const auto total_entries = 2 * query_info.getNumTuplesUpperBound();

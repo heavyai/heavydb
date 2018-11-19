@@ -269,7 +269,6 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const RelAlgExecutionUnit& ra_exe_unit,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_count,
-    const std::unordered_set<int>& skip_tables,
     ColumnCacheMap& column_cache,
     Executor* executor) {
   CHECK(IS_EQUIVALENCE(qual_bin_oper->get_optype()));
@@ -277,10 +276,6 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
       get_cols(qual_bin_oper.get(), *executor->getCatalog(), executor->temporary_tables_);
   const auto inner_col = cols.first;
   CHECK(inner_col);
-  // Already handled the table
-  if (skip_tables.count(inner_col->get_table_id())) {
-    throw HashJoinFail("A hash table is already built for the table of this column");
-  }
   const auto& ti = inner_col->get_type_info();
   auto col_range =
       getExpressionRange(ti.is_string() ? cols.second : inner_col, query_infos, executor);

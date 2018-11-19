@@ -44,7 +44,6 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
       const RelAlgExecutionUnit& ra_exe_unit,
       const Data_Namespace::MemoryLevel memory_level,
       const int device_count,
-      const std::unordered_set<int>& skip_tables,
       ColumnCacheMap& column_map,
       Executor* executor);
 

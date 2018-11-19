@@ -1114,7 +1114,6 @@ class Executor {
       const std::vector<InputTableInfo>& query_infos,
       const RelAlgExecutionUnit& ra_exe_unit,
       const MemoryLevel memory_level,
-      const std::unordered_set<int>& visited_tables,
       ColumnCacheMap& column_cache);
   void nukeOldState(const bool allow_lazy_fetch,
                     const JoinInfo& join_info,

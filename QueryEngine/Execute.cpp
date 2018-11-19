@@ -2554,7 +2554,6 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const std::vector<InputTableInfo>& query_infos,
     const RelAlgExecutionUnit& ra_exe_unit,
     const MemoryLevel memory_level,
-    const std::unordered_set<int>& visited_tables,
     ColumnCacheMap& column_cache) {
   std::shared_ptr<JoinHashTableInterface> join_hash_table;
   const int device_count = memory_level == MemoryLevel::GPU_LEVEL
@@ -2572,7 +2571,6 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                            ra_exe_unit,
                                                            memory_level,
                                                            device_count,
-                                                           visited_tables,
                                                            column_cache,
                                                            this);
     } else if (dynamic_cast<const Analyzer::ExpressionTuple*>(
@@ -2583,7 +2581,6 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                            ra_exe_unit,
                                                            memory_level,
                                                            device_count,
-                                                           visited_tables,
                                                            column_cache,
                                                            this);
     } else {
@@ -2594,7 +2591,6 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                      ra_exe_unit,
                                                      memory_level,
                                                      device_count,
-                                                     visited_tables,
                                                      column_cache,
                                                      this);
       } catch (TooManyHashEntries&) {
@@ -2608,7 +2604,6 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                              ra_exe_unit,
                                                              memory_level,
                                                              device_count,
-                                                             visited_tables,
                                                              column_cache,
                                                              this);
       }
