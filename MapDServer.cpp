@@ -728,8 +728,17 @@ int main(int argc, char** argv) {
   }
   Py_SetProgramName(py_program);  /* optional but recommended */
   Py_Initialize();
+  // TODO: the following should be run in a separate thread:
   PyRun_SimpleString("import sys\n"
-		     "print('Embedded Python', sys.version)\n");
+                     "print('Embedded Python', sys.version)\n"
+		     "try:\n"
+		     "    from mapd_server import *\n"
+		     "except ImportError as msg:\n"
+                     "    print('Failed to import mapd_server module:', msg)\n"
+                     "    print('sys.path=', sys.path)\n"
+		     "    print('Use PYTHONPATH=/path/to/mapd_server.py/directory/')\n"
+                     "    storage = {}\n"
+		     );
 #endif
 
   // rudimetary signal handling to try to guarantee the logging gets flushed to files

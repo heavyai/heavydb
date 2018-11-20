@@ -29,6 +29,7 @@ set(query_engine_source_files
     ExecutionDispatch.cpp
     ExpressionRange.cpp
     ExpressionRewrite.cpp
+    ExtensionFunctionsPython.cpp
     ExtensionFunctionsBinding.cpp
     ExtensionFunctionsWhitelist.cpp
     ExtensionFunctions.ast
@@ -148,21 +149,27 @@ else()
   set(RT_OPT_FLAGS -O3)
 endif()
 
+if(Python_FOUND)
+  set(CLANGPP_DEFS -DHAVE_PYTHON -I${Python_INCLUDE_DIRS})
+else()
+  set(CLANGPP_DEFS)
+endif()
+
 add_custom_command(
     DEPENDS RuntimeFunctions.cpp RuntimeFunctions.h ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
     COMMAND ${llvm_clangpp_cmd}
-    ARGS -std=c++14 ${RT_OPT_FLAGS} -c -emit-llvm
+    ARGS -std=c++14 ${RT_OPT_FLAGS} -c -emit-llvm ${CLANGPP_DEFS}
     ${CLANG_SDK_INC}
     ${CLANG_CRT_INC}
     ${MAPD_DEFINITIONS}
     ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
 
 add_custom_command(
-    DEPENDS ExtensionFunctions.hpp ExtensionFunctionsGeo.hpp
+    DEPENDS ExtensionFunctions.hpp ExtensionFunctionsGeo.hpp ExtensionFunctionsPython.hpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
     COMMAND ${llvm_clangpp_cmd}
-    ARGS -std=c++14 -fsyntax-only -Xclang -ast-dump -fno-diagnostics-color
+    ARGS -std=c++14 -fsyntax-only -Xclang -ast-dump -fno-diagnostics-color ${CLANGPP_DEFS}
     ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp | grep FunctionDecl | grep ExtensionFunctions |
     sed -E "s/\\-FunctionDecl.*line:[0-9]+:[0-9]+//g" > ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast)
 
@@ -200,7 +207,7 @@ add_custom_command(
     )
 
 add_custom_command(
-    DEPENDS cuda_mapd_rt.cu GpuInitGroups.cu GroupByRuntime.cpp TopKRuntime.cpp DateTruncate.cpp DateAdd.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp RegexpFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_SOURCE_DIR}/Utils/Regexp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsGeo.hpp
+    DEPENDS cuda_mapd_rt.cu GpuInitGroups.cu GroupByRuntime.cpp TopKRuntime.cpp DateTruncate.cpp DateAdd.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp RegexpFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_SOURCE_DIR}/Utils/Regexp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsGeo.hpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsPython.hpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsPython.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
     COMMAND nvcc
     ARGS
