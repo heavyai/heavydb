@@ -92,7 +92,8 @@ make -j $(nproc)
 make install
 popd
 
-VERS=1.14.3
+# c-blosc
+VERS=1.14.4
 wget --continue https://github.com/Blosc/c-blosc/archive/v$VERS.tar.gz
 tar xvf v$VERS.tar.gz
 BDIR="c-blosc-$VERS/build"
