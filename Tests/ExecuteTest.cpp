@@ -43,7 +43,6 @@ using namespace std;
 using namespace TestHelpers;
 
 extern bool g_aggregator;
-extern bool g_multi_subquery_exc;
 
 extern int g_test_against_columnId_gap;
 extern bool g_enable_smem_group_by;

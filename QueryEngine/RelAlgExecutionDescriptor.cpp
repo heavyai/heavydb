@@ -18,8 +18,6 @@
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/topological_sort.hpp>
 
-extern bool g_multi_subquery_exc;
-
 namespace {
 
 typedef boost::
@@ -114,7 +112,7 @@ DAG build_dag(const RelAlgNode* sink) {
       const auto input = node->getInput(i);
       const auto rel_join = dynamic_cast<const RelJoin*>(node);
       const auto rel_left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(node);
-      if ((rel_join || rel_left_deep_join) && g_multi_subquery_exc) {
+      if ((rel_join || rel_left_deep_join)) {
         // If the input to the join node is something other than RelJoin or RelScan we
         // don't schedule it to run now as we form a subquery out of the sequence and
         // schedule it separately. See create_implicit_subquery_node of

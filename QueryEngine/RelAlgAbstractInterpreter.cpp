@@ -29,8 +29,6 @@
 #include <string>
 #include <unordered_set>
 
-extern bool g_multi_subquery_exc;
-
 namespace {
 
 const unsigned FIRST_RA_NODE_ID = 1;
@@ -1130,9 +1128,8 @@ class RelAlgAbstractInterpreter {
     coalesce_nodes(nodes_, left_deep_joins);
     CHECK(nodes_.back().unique());
     create_left_deep_join(nodes_);
-    if (g_multi_subquery_exc) {
-      create_implicit_subquery_node(nodes_, ra_executor_);
-    }
+    create_implicit_subquery_node(nodes_, ra_executor_);
+
     return nodes_.back();
   }
 

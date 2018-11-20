@@ -51,7 +51,6 @@ using namespace ::apache::thrift::server;
 using namespace ::apache::thrift::transport;
 
 extern bool g_aggregator;
-extern bool g_multi_subquery_exc;
 extern size_t g_leaf_count;
 
 TableGenerations table_generations_from_thrift(
