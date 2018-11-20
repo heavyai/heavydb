@@ -1925,56 +1925,54 @@ TEST(Select, SharedDictionary) {
 }
 
 TEST(Select, StringCompare) {
-  if (g_fast_strcmp) {
-    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-      SKIP_NO_GPU();
-      c("SELECT COUNT(*) FROM test WHERE str = 'ba';", dt);
-      c("SELECT COUNT(*) FROM test WHERE str <> 'ba';", dt);
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test WHERE str = 'ba';", dt);
+    c("SELECT COUNT(*) FROM test WHERE str <> 'ba';", dt);
 
-      c("SELECT COUNT(*) FROM test WHERE shared_dict < 'ba';", dt);
-      c("SELECT COUNT(*) FROM test WHERE shared_dict < 'bar';", dt);
-      c("SELECT COUNT(*) FROM test WHERE shared_dict < 'baf';", dt);
-      c("SELECT COUNT(*) FROM test WHERE shared_dict < 'baz';", dt);
-      c("SELECT COUNT(*) FROM test WHERE shared_dict < 'bbz';", dt);
-      c("SELECT COUNT(*) FROM test WHERE shared_dict < 'foo';", dt);
-      c("SELECT COUNT(*) FROM test WHERE shared_dict < 'foon';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict < 'ba';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict < 'bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict < 'baf';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict < 'baz';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict < 'bbz';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict < 'foo';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict < 'foon';", dt);
 
-      c("SELECT COUNT(*) FROM test WHERE shared_dict > 'ba';", dt);
-      c("SELECT COUNT(*) FROM test WHERE shared_dict > 'bar';", dt);
-      c("SELECT COUNT(*) FROM test WHERE shared_dict > 'baf';", dt);
-      c("SELECT COUNT(*) FROM test WHERE shared_dict > 'baz';", dt);
-      c("SELECT COUNT(*) FROM test WHERE shared_dict > 'bbz';", dt);
-      c("SELECT COUNT(*) FROM test WHERE shared_dict > 'foo';", dt);
-      c("SELECT COUNT(*) FROM test WHERE shared_dict > 'foon';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict > 'ba';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict > 'bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict > 'baf';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict > 'baz';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict > 'bbz';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict > 'foo';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict > 'foon';", dt);
 
-      c("SELECT COUNT(*) FROM test WHERE real_str <= 'ba';", dt);
-      c("SELECT COUNT(*) FROM test WHERE real_str <= 'bar';", dt);
-      c("SELECT COUNT(*) FROM test WHERE real_str <= 'baf';", dt);
-      c("SELECT COUNT(*) FROM test WHERE real_str <= 'baz';", dt);
-      c("SELECT COUNT(*) FROM test WHERE real_str <= 'bbz';", dt);
-      c("SELECT COUNT(*) FROM test WHERE real_str <= 'foo';", dt);
-      c("SELECT COUNT(*) FROM test WHERE real_str <= 'foon';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str <= 'ba';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str <= 'bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str <= 'baf';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str <= 'baz';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str <= 'bbz';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str <= 'foo';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str <= 'foon';", dt);
 
-      c("SELECT COUNT(*) FROM test WHERE real_str >= 'ba';", dt);
-      c("SELECT COUNT(*) FROM test WHERE real_str >= 'bar';", dt);
-      c("SELECT COUNT(*) FROM test WHERE real_str >= 'baf';", dt);
-      c("SELECT COUNT(*) FROM test WHERE real_str >= 'baz';", dt);
-      c("SELECT COUNT(*) FROM test WHERE real_str >= 'bbz';", dt);
-      c("SELECT COUNT(*) FROM test WHERE real_str >= 'foo';", dt);
-      c("SELECT COUNT(*) FROM test WHERE real_str >= 'foon';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str >= 'ba';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str >= 'bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str >= 'baf';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str >= 'baz';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str >= 'bbz';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str >= 'foo';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str >= 'foon';", dt);
 
-      c("SELECT COUNT(*) FROM test WHERE real_str <= 'äâ';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str <= 'äâ';", dt);
 
-      c("SELECT COUNT(*) FROM test WHERE 'ba' < shared_dict;", dt);
-      c("SELECT COUNT(*) FROM test WHERE 'bar' < shared_dict;", dt);
-      c("SELECT COUNT(*) FROM test WHERE 'ba' > shared_dict;", dt);
-      c("SELECT COUNT(*) FROM test WHERE 'bar' > shared_dict;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'ba' < shared_dict;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'bar' < shared_dict;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'ba' > shared_dict;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'bar' > shared_dict;", dt);
 
-      EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test, test_inner WHERE "
-                                    "test.shared_dict < test_inner.str",
-                                    dt),
-                   std::runtime_error);
-    }
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test, test_inner WHERE "
+                                  "test.shared_dict < test_inner.str",
+                                  dt),
+                 std::runtime_error);
   }
 }
 
@@ -12578,11 +12576,6 @@ int main(int argc, char** argv) {
                      po::value<std::string>(),
                      "Dump IR for all executed queries to file. Currently only supports "
                      "single node tests.");
-  desc.add_options()("disable-fast-strcmp",
-                     po::value<bool>(&g_fast_strcmp)
-                         ->default_value(g_fast_strcmp)
-                         ->implicit_value(false),
-                     "Disable fast string comparison");
   desc.add_options()(
       "test-help",
       "Print all ExecuteTest specific options (for gtest options use `--help`).");

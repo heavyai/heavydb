@@ -54,7 +54,6 @@
 #include "parser.h"
 
 size_t g_leaf_count{0};
-bool g_fast_strcmp{true};
 
 using namespace Lock_Namespace;
 using Catalog_Namespace::SysCatalog;
@@ -280,8 +279,7 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
       right_expr = right_expr->add_cast(new_right_type.get_array_type());
     }
   }
-  auto check_compression =
-      (g_fast_strcmp) ? IS_COMPARISON(optype) : IS_EQUIVALENCE(optype) || optype == kNE;
+  auto check_compression = IS_COMPARISON(optype);
   if (check_compression) {
     if (new_left_type.get_compression() == kENCODING_DICT &&
         new_right_type.get_compression() == kENCODING_DICT &&
