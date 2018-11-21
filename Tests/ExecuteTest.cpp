@@ -57,6 +57,7 @@ bool g_hoist_literals{true};
 size_t g_shard_count{0};
 bool g_use_row_iterator{true};
 size_t g_num_leafs{1};
+bool g_keep_test_data{false};
 
 size_t choose_shard_count() {
   CHECK(g_session);
@@ -6173,6 +6174,89 @@ TEST(Select, Joins_OneOuterExpression) {
       "SELECT COUNT(*) FROM test b, test a WHERE a.o = b.o;",
       dt);
   }
+}
+
+class JoinTest : public ::testing::Test {
+ protected:
+  virtual ~JoinTest() {}
+
+  virtual void SetUp() override {
+    auto create_test_table = [](const std::string& table_name,
+                                const size_t num_records,
+                                const size_t start_index = 0) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name);
+
+      const std::string columns_definition{
+          "x int not null, y int, str text encoding dict"};
+      const auto table_create = build_create_table_statement(
+          columns_definition, table_name, {"", 0}, {}, 50, true, false);
+      run_ddl_statement(table_create);
+
+      ValuesGenerator gen(table_name);
+      const std::unordered_map<int, std::string> str_map{
+          {0, "'foo'"}, {1, "'bar'"}, {2, "'hello'"}, {3, "'world'"}};
+      for (size_t i = start_index; i < start_index + num_records; i++) {
+        const auto insert_query = gen(i, i, str_map.at(i % 4));
+        run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      }
+    };
+
+    create_test_table("jointest_a", 20, 0);
+    create_test_table("jointest_b", 0, 0);
+    create_test_table("jointest_c", 20, 10);
+  }
+
+  virtual void TearDown() override {
+    if (!g_keep_test_data) {
+      auto execute_drop_table = [](const std::string& table_name) {
+        const std::string ddl = "DROP TABLE " + table_name;
+        run_ddl_statement(ddl);
+      };
+
+      execute_drop_table("jointest_a");
+      execute_drop_table("jointest_b");
+      execute_drop_table("jointest_c");
+    }
+  }
+};
+
+TEST_F(JoinTest, EmptyJoinTables) {
+  const auto table_reordering_state = g_from_table_reordering;
+  g_from_table_reordering = false;  // disable from table reordering
+
+  SKIP_ALL_ON_AGGREGATOR();  // relevant for single node only
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM jointest_a a INNER JOIN "
+                                        "jointest_b b ON a.x = b.x;",
+                                        dt)));
+
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM jointest_b b INNER JOIN "
+                                        "jointest_a a ON a.x = b.x;",
+                                        dt)));
+
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM jointest_c c INNER JOIN "
+                                        "(SELECT a.x FROM jointest_a a INNER JOIN "
+                                        "jointest_b b ON a.x = b.x) as j ON j.x = c.x;",
+                                        dt)));
+
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM jointest_a a INNER JOIN "
+                                        "jointest_b b ON a.str = b.str;",
+                                        dt)));
+
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM jointest_b b INNER JOIN "
+                                        "jointest_a a ON a.str = b.str;",
+                                        dt)));
+  }
+
+  g_from_table_reordering = table_reordering_state;
 }
 
 TEST(Select, Joins_MultipleOuterExpressions) {
@@ -12605,6 +12689,10 @@ int main(int argc, char** argv) {
     g_ir_output_file = std::make_unique<QueryRunner::IROutputFile>(filename);
   }
 
+  if (vm.count("keep-data")) {
+    g_keep_test_data = true;
+  }
+
   // insert artificial gap of columnId so as to test against the gap w/o
   // need of ALTER ADD/DROP COLUMN before doing query test.
   // Note: Temporarily disabling for distributed tests.
@@ -12637,7 +12725,7 @@ int main(int argc, char** argv) {
   }
 
   Executor::nukeCacheOfExecutors();
-  if (!use_existing_data && !vm.count("keep-data")) {
+  if (!use_existing_data && !g_keep_test_data) {
     drop_tables();
     drop_views();
   }

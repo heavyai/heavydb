@@ -290,11 +290,18 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
       throw HashJoinFail(
           "Could not compute range for the expressions involved in the equijoin");
     }
-    col_range = ExpressionRange::makeIntRange(
-        std::min(source_col_range.getIntMin(), col_range.getIntMin()),
-        std::max(source_col_range.getIntMax(), col_range.getIntMax()),
-        0,
-        source_col_range.hasNulls());
+    if (source_col_range.getIntMin() > source_col_range.getIntMax()) {
+      // If the inner column expression range is empty, use the inner col range
+      CHECK_EQ(source_col_range.getIntMin(), int64_t(0));
+      CHECK_EQ(source_col_range.getIntMax(), int64_t(-1));
+      col_range = source_col_range;
+    } else {
+      col_range = ExpressionRange::makeIntRange(
+          std::min(source_col_range.getIntMin(), col_range.getIntMin()),
+          std::max(source_col_range.getIntMax(), col_range.getIntMax()),
+          0,
+          source_col_range.hasNulls());
+    }
   }
   // We can't allocate more than 2GB contiguous memory on GPU and each entry is 4 bytes.
   const auto max_hash_entry_count =
