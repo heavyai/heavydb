@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2018 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -753,7 +753,7 @@ int main(int argc, char** argv) {
               << mapd_parameters.ssl_cert_file << "], key file ["
               << mapd_parameters.ssl_key_file << "]";
   } else {
-    LOG(INFO) << " MapD server using plain text";
+    LOG(INFO) << " MapD server using unencrypted connection";
     serverSocket = mapd::shared_ptr<TServerSocket>(
         new TServerSocket(mapd_parameters.mapd_server_port));
   }
