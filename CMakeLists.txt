@@ -295,6 +295,9 @@ endif()
 include_directories(ThirdParty/bcrypt)
 add_subdirectory(ThirdParty/bcrypt)
 
+# PicoSHA2
+include_directories(ThirdParty/PicoSHA2)
+
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
     OUTPUT

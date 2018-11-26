@@ -71,6 +71,7 @@
 
 #include <fcntl.h>
 #include <glog/logging.h>
+#include <picosha2.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -2626,8 +2627,8 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
 
   if (path_is_relative(file_name)) {
     // assume relative paths are relative to data_path / mapd_import / <session>
-    auto file_path =
-        import_path_ / session / boost::filesystem::path(file_name).filename();
+    auto file_path = import_path_ / picosha2::hash256_hex_string(session) /
+                     boost::filesystem::path(file_name).filename();
     file_name = file_path.string();
   }
 
@@ -2660,7 +2661,8 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
   // can be a s3 url
   if (!boost::istarts_with(file_name, "s3://")) {
     if (!boost::filesystem::path(file_name).is_absolute()) {
-      file_path = import_path_ / session / boost::filesystem::path(file_name).filename();
+      file_path = import_path_ / picosha2::hash256_hex_string(session) /
+                  boost::filesystem::path(file_name).filename();
       file_name = file_path.string();
     }
 
@@ -3357,7 +3359,8 @@ void MapDHandler::import_table(const TSessionId& session,
   Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
   if (!boost::istarts_with(file_name, "s3://")) {
     if (!boost::filesystem::path(file_name).is_absolute()) {
-      file_path = import_path_ / session / boost::filesystem::path(file_name).filename();
+      file_path = import_path_ / picosha2::hash256_hex_string(session) /
+                  boost::filesystem::path(file_name).filename();
       file_name = file_path.string();
     }
     if (!boost::filesystem::exists(file_path)) {
@@ -3452,8 +3455,8 @@ void MapDHandler::import_geo_table(const TSessionId& session,
 
   if (path_is_relative(file_name)) {
     // assume relative paths are relative to data_path / mapd_import / <session>
-    auto file_path =
-        import_path_ / session / boost::filesystem::path(file_name).filename();
+    auto file_path = import_path_ / picosha2::hash256_hex_string(session) /
+                     boost::filesystem::path(file_name).filename();
     file_name = file_path.string();
   }
 
@@ -3699,8 +3702,8 @@ void MapDHandler::get_first_geo_file_in_archive(std::string& _return,
 
   if (path_is_relative(archive_path)) {
     // assume relative paths are relative to data_path / mapd_import / <session>
-    auto file_path =
-        import_path_ / session / boost::filesystem::path(archive_path).filename();
+    auto file_path = import_path_ / picosha2::hash256_hex_string(session) /
+                     boost::filesystem::path(archive_path).filename();
     archive_path = file_path.string();
   }
 
@@ -3738,8 +3741,8 @@ void MapDHandler::get_all_files_in_archive(std::vector<std::string>& _return,
 
   if (path_is_relative(archive_path)) {
     // assume relative paths are relative to data_path / mapd_import / <session>
-    auto file_path =
-        import_path_ / session / boost::filesystem::path(archive_path).filename();
+    auto file_path = import_path_ / picosha2::hash256_hex_string(session) /
+                     boost::filesystem::path(archive_path).filename();
     archive_path = file_path.string();
   }
 

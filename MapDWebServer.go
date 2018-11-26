@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -306,7 +308,8 @@ func uploadHandler(rw http.ResponseWriter, r *http.Request) {
 	if len(r.FormValue("sessionid")) > 0 {
 		sid = r.FormValue("sessionid")
 	}
-	sessionId := filepath.Base(filepath.Clean(sid))
+	sessionId_ := sha256.Sum256([]byte(filepath.Base(filepath.Clean(sid))))
+	sessionId := hex.EncodeToString(sessionId_[:])
 	uploadDir = dataDir + "/mapd_import/" + sessionId + "/"
 
 	for _, fhs := range r.MultipartForm.File {
