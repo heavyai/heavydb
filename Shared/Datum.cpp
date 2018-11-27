@@ -260,7 +260,7 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       }
       if (!tp) {
         try {
-          d.timeval = ti.is_date_in_days() ? std::stoi(s) : std::stoll(s);
+          d.timeval = ti.is_date_in_days() ? std::stoi(s) / SECSPERDAY : std::stoll(s);
           break;
         } catch (const std::invalid_argument& ia) {
           throw std::runtime_error("Invalid date string " + s);
