@@ -250,10 +250,18 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                       std::to_string(lhs_type.get_scale()) + ")");
                 }
               } else if (is_integral(lhs_type)) {
-                set_minmax<int64_t>(
-                    min_int64t_per_thread[c],
-                    max_int64t_per_thread[c],
-                    rhs_type.is_decimal() ? round(decimal_to_double(rhs_type, v)) : v);
+                if (lhs_type.is_date_in_days()) {
+                  // Store meta values in seconds
+                  int64_t seconds;
+                  get_scalar<int64_t>(data_ptr, lhs_type, seconds);
+                  set_minmax<int64_t>(
+                      min_int64t_per_thread[c], max_int64t_per_thread[c], seconds);
+                } else {
+                  set_minmax<int64_t>(
+                      min_int64t_per_thread[c],
+                      max_int64t_per_thread[c],
+                      rhs_type.is_decimal() ? round(decimal_to_double(rhs_type, v)) : v);
+                }
               } else {
                 set_minmax<double>(
                     min_double_per_thread[c],

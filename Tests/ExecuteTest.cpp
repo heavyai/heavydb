@@ -9482,6 +9482,54 @@ TEST(Update, ShardedTableShardKeyTest) {
   }
 }
 
+TEST(Update, UsingDateColumns) {
+  SKIP_ALL_ON_AGGREGATOR();
+
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
+    return;
+  }
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("drop table if exists chelsea_updates;");
+    run_ddl_statement(
+        "create table chelsea_updates (col_src date, col_dst_16 date encoding fixed(16), "
+        "col_dst date, col_dst_ts timestamp(0), col_dst_ts_32 timestamp encoding "
+        "fixed(32)) with ( vacuum='delayed' );");
+    run_multiple_agg(
+        "insert into chelsea_updates values('1911-01-01', null, null, null, null);", dt);
+    run_multiple_agg(
+        "insert into chelsea_updates values('1911-01-01', null, null, null, null);", dt);
+    run_multiple_agg(
+        "insert into chelsea_updates values('1911-01-01', null, null, null, null);", dt);
+    run_multiple_agg(
+        "insert into chelsea_updates values('1911-01-01', null, null, null, null);", dt);
+
+    run_multiple_agg("update chelsea_updates set col_dst = col_src;", dt);
+    EXPECT_EQ(
+        int64_t(4),
+        v<int64_t>(run_simple_agg(
+            "select count(col_dst) from chelsea_updates where col_dst='1911-01-01';",
+            dt)));
+    run_multiple_agg("update chelsea_updates set col_dst_16 = col_src;", dt);
+    EXPECT_EQ(
+        int64_t(4),
+        v<int64_t>(run_simple_agg(
+            "select count(col_dst_16) from chelsea_updates where col_dst='1911-01-01';",
+            dt)));
+    run_multiple_agg("update chelsea_updates set col_dst_ts_32 = col_src;", dt);
+    EXPECT_EQ(int64_t(4),
+              v<int64_t>(run_simple_agg("select count(col_dst) from chelsea_updates "
+                                        "where col_dst='1911-01-01 00.00.00';",
+                                        dt)));
+    run_multiple_agg("update chelsea_updates set col_dst_ts = col_src;", dt);
+    EXPECT_EQ(int64_t(4),
+              v<int64_t>(run_simple_agg("select count(col_dst_16) from chelsea_updates "
+                                        "where col_dst='1911-01-01 00.00.00';",
+                                        dt)));
+  }
+}
+
 TEST(Delete, ShardedTableDeleteTest) {
   SKIP_ALL_ON_AGGREGATOR();
 

@@ -179,6 +179,10 @@ inline double decimal_to_double(const SQLTypeInfo& otype, int64_t oval) {
   return oval / pow(10, otype.get_scale());
 }
 
+inline int64_t scale_date_in_days(int64_t oval) {
+  return oval / SECSPERDAY;
+}
+
 template <typename T>
 inline void put_scalar(void* ndptr,
                        const SQLTypeInfo& ntype,
@@ -213,6 +217,23 @@ inline void put_scalar(void* ndptr,
                       esize,
                       isnull ? inline_int_null_value<int64_t>()
                              : oval * pow(10, etype.get_scale()));
+      break;
+    case kDATE:
+    // For small dates, we store in days but decode in seconds
+    // therefore we have to scale the decoded value in order to 
+    // make value storable.
+    // Should be removed when we refactor code to use DateConverterFactory
+    // from TargetValueConverterFactories so that we would
+    // have everything in one place.
+      if (etype.is_date_in_days()) {
+        put_scalar<T>(ndptr,
+                            etype,
+                            get_element_size(etype),
+                            isnull ? inline_int_null_value<int64_t>()
+                                   : scale_date_in_days(oval));
+      } else {
+        put_scalar<T>(ndptr, etype, get_element_size(etype), oval);
+      }
       break;
     default:
       if (otype && otype->is_decimal())
