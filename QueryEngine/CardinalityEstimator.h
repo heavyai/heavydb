@@ -71,7 +71,10 @@ class Estimator : public Analyzer::Expr {
     return false;
   }
 
-  std::string toString() const override { CHECK(false); }
+  std::string toString() const override {
+    CHECK(false);
+    return "";
+  }
 };
 
 /*
