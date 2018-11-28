@@ -188,6 +188,10 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   bool isBitwiseEq() const;
 
+  void freeHashBufferMemory();
+  void freeHashBufferGpuMemory();
+  void freeHashBufferCpuMemory();
+
   const std::shared_ptr<Analyzer::BinOper> condition_;
   const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;

@@ -231,7 +231,9 @@ class JoinHashTable : public JoinHashTableInterface {
 
   bool isBitwiseEq() const;
 
-  void freeGpuMemory();
+  void freeHashBufferMemory();
+  void freeHashBufferGpuMemory();
+  void freeHashBufferCpuMemory();
 
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   std::shared_ptr<Analyzer::ColumnVar> col_var_;

@@ -329,10 +329,12 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     join_hash_table->reify(device_count);
   } catch (const TableMustBeReplicated& e) {
     // Throw a runtime error to abort the query
+    join_hash_table->freeHashBufferMemory();
     throw std::runtime_error(e.what());
   } catch (const HashJoinFail& e) {
     // HashJoinFail exceptions log an error and trigger a retry with a join loop (if
     // possible)
+    join_hash_table->freeHashBufferMemory();
     throw HashJoinFail(std::string("Could not build a 1-to-1 correspondence for columns "
                                    "involved in equijoin | ") +
                        e.what());
@@ -481,7 +483,7 @@ void JoinHashTable::reify(const int device_count) {
 
   } catch (const NeedsOneToManyHash& e) {
     hash_type_ = JoinHashTableInterface::HashType::OneToMany;
-    cpu_hash_table_buff_.reset();
+    freeHashBufferMemory();
     init_threads.clear();
     for (int device_id = 0; device_id < device_count; ++device_id) {
       const auto fragments =
@@ -613,19 +615,12 @@ void JoinHashTable::reifyOneToOneForDevice(
                                                   chunks_owner,
                                                   dev_buff_owner);
 
-  try {
-    initHashTableForDevice(genHashTableKey(fragments, cols.second, inner_col),
-                           col_buff,
-                           elem_count,
-                           cols,
-                           effective_memory_level,
-                           device_id);
-  } catch (const NeedsOneToManyHash& e) {
-#ifdef HAVE_CUDA
-    freeGpuMemory();
-#endif
-    throw e;
-  }
+  initHashTableForDevice(genHashTableKey(fragments, cols.second, inner_col),
+                         col_buff,
+                         elem_count,
+                         cols,
+                         effective_memory_level,
+                         device_id);
 }
 
 void JoinHashTable::reifyOneToManyForDevice(
@@ -1425,7 +1420,14 @@ bool JoinHashTable::isBitwiseEq() const {
   return qual_bin_oper_->get_optype() == kBW_EQ;
 }
 
-void JoinHashTable::freeGpuMemory() {
+void JoinHashTable::freeHashBufferMemory() {
+#ifdef HAVE_CUDA
+  freeHashBufferGpuMemory();
+#endif
+  freeHashBufferCpuMemory();
+}
+
+void JoinHashTable::freeHashBufferGpuMemory() {
 #ifdef HAVE_CUDA
   const auto& catalog = *executor_->getCatalog();
   auto& data_mgr = catalog.get_dataMgr();
@@ -1444,4 +1446,8 @@ void JoinHashTable::freeGpuMemory() {
 #else
   CHECK(false);
 #endif  // HAVE_CUDA
+}
+
+void JoinHashTable::freeHashBufferCpuMemory() {
+  cpu_hash_table_buff_.reset();
 }

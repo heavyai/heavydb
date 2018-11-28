@@ -63,10 +63,12 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     join_hash_table->reify(device_count);
   } catch (const TableMustBeReplicated& e) {
     // Throw a runtime error to abort the query
+    join_hash_table->freeHashBufferMemory();
     throw std::runtime_error(e.what());
   } catch (const HashJoinFail& e) {
     // HashJoinFail exceptions log an error and trigger a retry with a join loop (if
     // possible)
+    join_hash_table->freeHashBufferMemory();
     throw HashJoinFail(std::string("Could not build a 1-to-1 correspondence for columns "
                                    "involved in equijoin | ") +
                        e.what());
@@ -188,16 +190,7 @@ void BaselineJoinHashTable::reify(const int device_count) {
     reifyWithLayout(device_count, layout);
   } catch (const std::exception& e) {
     VLOG(1) << "Caught exception while building baseline hash table: " << e.what();
-#ifdef HAVE_CUDA
-    if (memory_level_ == Data_Namespace::GPU_LEVEL) {
-      auto& data_mgr = executor_->getCatalog()->get_dataMgr();
-      for (const auto device_buffer : gpu_hash_table_buff_) {
-        if (device_buffer) {
-          free_gpu_abstract_buffer(&data_mgr, device_buffer);
-        }
-      }
-    }
-#endif  // HAVE_CUDA
+    freeHashBufferMemory();
     HashTypeCache::set(composite_key_info.cache_key_chunks,
                        JoinHashTableInterface::HashType::OneToMany);
     reifyWithLayout(device_count, JoinHashTableInterface::HashType::OneToMany);
@@ -1152,6 +1145,32 @@ std::pair<ssize_t, size_t> BaselineJoinHashTable::getApproximateTupleCountFromCa
 
 bool BaselineJoinHashTable::isBitwiseEq() const {
   return condition_->get_optype() == kBW_EQ;
+}
+
+void BaselineJoinHashTable::freeHashBufferMemory() {
+#ifdef HAVE_CUDA
+  freeHashBufferGpuMemory();
+#endif
+  freeHashBufferCpuMemory();
+}
+
+void BaselineJoinHashTable::freeHashBufferGpuMemory() {
+#ifdef HAVE_CUDA
+  const auto& catalog = *executor_->getCatalog();
+  auto& data_mgr = catalog.get_dataMgr();
+  for (auto& buf : gpu_hash_table_buff_) {
+    if (buf) {
+      free_gpu_abstract_buffer(&data_mgr, buf);
+      buf = nullptr;
+    }
+  }
+#else
+  CHECK(false);
+#endif  // HAVE_CUDA
+}
+
+void BaselineJoinHashTable::freeHashBufferCpuMemory() {
+  cpu_hash_table_buff_.reset();
 }
 
 std::map<std::vector<ChunkKey>, JoinHashTableInterface::HashType>
