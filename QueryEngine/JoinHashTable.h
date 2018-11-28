@@ -65,9 +65,14 @@ class JoinHashTable : public JoinHashTableInterface {
     }
 #ifdef HAVE_CUDA
     CHECK_LT(static_cast<size_t>(device_id), gpu_hash_table_buff_.size());
-    return device_type == ExecutorDeviceType::CPU
-               ? reinterpret_cast<int64_t>(&(*cpu_hash_table_buff_)[0])
-               : gpu_hash_table_buff_[device_id];
+    if (device_type == ExecutorDeviceType::CPU) {
+      return reinterpret_cast<int64_t>(&(*cpu_hash_table_buff_)[0]);
+    } else {
+      return gpu_hash_table_buff_[device_id]
+                 ? reinterpret_cast<CUdeviceptr>(
+                       gpu_hash_table_buff_[device_id]->getMemoryPtr())
+                 : reinterpret_cast<CUdeviceptr>(nullptr);
+    }
 #else
     CHECK(device_type == ExecutorDeviceType::CPU);
     return reinterpret_cast<int64_t>(&(*cpu_hash_table_buff_)[0]);
@@ -172,8 +177,6 @@ class JoinHashTable : public JoinHashTableInterface {
       const size_t num_elements,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
       const Data_Namespace::MemoryLevel effective_memory_level,
-      std::pair<Data_Namespace::AbstractBuffer*, Data_Namespace::AbstractBuffer*>&
-          buff_and_err,
       const int device_id);
   void initOneToManyHashTable(
       const ChunkKey& chunk_key,
@@ -228,6 +231,8 @@ class JoinHashTable : public JoinHashTableInterface {
 
   bool isBitwiseEq() const;
 
+  void freeGpuMemory();
+
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   std::shared_ptr<Analyzer::ColumnVar> col_var_;
   const std::vector<InputTableInfo>& query_infos_;
@@ -237,7 +242,8 @@ class JoinHashTable : public JoinHashTableInterface {
   std::shared_ptr<std::vector<int32_t>> cpu_hash_table_buff_;
   std::mutex cpu_hash_table_buff_mutex_;
 #ifdef HAVE_CUDA
-  std::vector<CUdeviceptr> gpu_hash_table_buff_;
+  std::vector<Data_Namespace::AbstractBuffer*> gpu_hash_table_buff_;
+  std::vector<Data_Namespace::AbstractBuffer*> gpu_hash_table_err_buff_;
 #endif
   ExpressionRange col_range_;
   Executor* executor_;

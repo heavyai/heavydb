@@ -455,6 +455,7 @@ void JoinHashTable::reify(const int device_count) {
   }
 #ifdef HAVE_CUDA
   gpu_hash_table_buff_.resize(device_count);
+  gpu_hash_table_err_buff_.resize(device_count);
 #endif  // HAVE_CUDA
   std::vector<std::future<void>> init_threads;
   const int shard_count = shardCount();
@@ -575,8 +576,6 @@ ChunkKey JoinHashTable::genHashTableKey(
 void JoinHashTable::reifyOneToOneForDevice(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id) {
-  std::pair<Data_Namespace::AbstractBuffer*, Data_Namespace::AbstractBuffer*>
-      buff_and_err;
   const auto& catalog = *executor_->getCatalog();
   auto& data_mgr = catalog.get_dataMgr();
   const auto cols = get_cols(qual_bin_oper_.get(), catalog, executor_->temporary_tables_);
@@ -599,7 +598,7 @@ void JoinHashTable::reifyOneToOneForDevice(
     // properly.
     ChunkKey empty_chunk;
     initHashTableForDevice(
-        empty_chunk, nullptr, 0, cols, effective_memory_level, buff_and_err, device_id);
+        empty_chunk, nullptr, 0, cols, effective_memory_level, device_id);
   }
 
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
@@ -620,17 +619,11 @@ void JoinHashTable::reifyOneToOneForDevice(
                            elem_count,
                            cols,
                            effective_memory_level,
-                           buff_and_err,
                            device_id);
   } catch (const NeedsOneToManyHash& e) {
-    if (buff_and_err.first) {
-      if (buff_and_err.first) {
-        free_gpu_abstract_buffer(&data_mgr, buff_and_err.first);
-      }
-      if (buff_and_err.second) {
-        free_gpu_abstract_buffer(&data_mgr, buff_and_err.second);
-      }
-    }
+#ifdef HAVE_CUDA
+    freeGpuMemory();
+#endif
     throw e;
   }
 }
@@ -852,8 +845,6 @@ void JoinHashTable::initHashTableForDevice(
     const size_t num_elements,
     const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
     const Data_Namespace::MemoryLevel effective_memory_level,
-    std::pair<Data_Namespace::AbstractBuffer*, Data_Namespace::AbstractBuffer*>&
-        buff_and_err,
     const int device_id) {
   auto hash_entry_count = get_hash_entry_count(col_range_, isBitwiseEq());
   if (!hash_entry_count) {
@@ -873,10 +864,8 @@ void JoinHashTable::initHashTableForDevice(
       CHECK_GT(shards_per_device, 0);
       hash_entry_count = entries_per_shard * shards_per_device;
     }
-    buff_and_err.first = alloc_gpu_abstract_buffer(
+    gpu_hash_table_buff_[device_id] = alloc_gpu_abstract_buffer(
         &data_mgr, hash_entry_count * sizeof(int32_t), device_id);
-    gpu_hash_table_buff_[device_id] =
-        reinterpret_cast<CUdeviceptr>(buff_and_err.first->getMemoryPtr());
   }
 #else
   CHECK_EQ(Data_Namespace::CPU_LEVEL, effective_memory_level);
@@ -912,11 +901,12 @@ void JoinHashTable::initHashTableForDevice(
 #ifdef HAVE_CUDA
       CHECK(ti.is_string());
       auto& data_mgr = catalog->get_dataMgr();
-      copy_to_gpu(&data_mgr,
-                  gpu_hash_table_buff_[device_id],
-                  &(*cpu_hash_table_buff_)[0],
-                  cpu_hash_table_buff_->size() * sizeof((*cpu_hash_table_buff_)[0]),
-                  device_id);
+      copy_to_gpu(
+          &data_mgr,
+          reinterpret_cast<CUdeviceptr>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
+          &(*cpu_hash_table_buff_)[0],
+          cpu_hash_table_buff_->size() * sizeof((*cpu_hash_table_buff_)[0]),
+          device_id);
 #else
       CHECK(false);
 #endif
@@ -925,12 +915,13 @@ void JoinHashTable::initHashTableForDevice(
 #ifdef HAVE_CUDA
     CHECK_EQ(Data_Namespace::GPU_LEVEL, effective_memory_level);
     auto& data_mgr = catalog->get_dataMgr();
-    buff_and_err.second = alloc_gpu_abstract_buffer(&data_mgr, sizeof(int), device_id);
-    auto dev_err_buff =
-        reinterpret_cast<CUdeviceptr>(buff_and_err.second->getMemoryPtr());
+    gpu_hash_table_err_buff_[device_id] =
+        alloc_gpu_abstract_buffer(&data_mgr, sizeof(int), device_id);
+    auto dev_err_buff = reinterpret_cast<CUdeviceptr>(
+        gpu_hash_table_err_buff_[device_id]->getMemoryPtr());
     copy_to_gpu(&data_mgr, dev_err_buff, &err, sizeof(err), device_id);
     init_hash_join_buff_on_device(
-        reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]),
+        reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
         hash_entry_count,
         hash_join_invalid_val,
         executor_->blockSize(),
@@ -950,7 +941,7 @@ void JoinHashTable::initHashTableForDevice(
       for (size_t shard = device_id; shard < shard_count; shard += device_count_) {
         ShardInfo shard_info{shard, entries_per_shard, shard_count, device_count_};
         fill_hash_join_buff_on_device_sharded(
-            reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]),
+            reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
             hash_join_invalid_val,
             reinterpret_cast<int*>(dev_err_buff),
             join_column,
@@ -961,7 +952,7 @@ void JoinHashTable::initHashTableForDevice(
       }
     } else {
       fill_hash_join_buff_on_device(
-          reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]),
+          reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
           hash_join_invalid_val,
           reinterpret_cast<int*>(dev_err_buff),
           join_column,
@@ -1027,7 +1018,7 @@ void JoinHashTable::initOneToManyHashTable(
     const size_t total_count = 2 * hash_entry_count + num_elements;
     OOM_TRACE_PUSH(+": total_count " + std::to_string(total_count));
     gpu_hash_table_buff_[device_id] =
-        alloc_gpu_mem(&data_mgr, total_count * sizeof(int32_t), device_id, nullptr);
+        alloc_gpu_abstract_buffer(&data_mgr, total_count * sizeof(int32_t), device_id);
   }
 #endif
   const int32_t hash_join_invalid_val{-1};
@@ -1047,11 +1038,12 @@ void JoinHashTable::initOneToManyHashTable(
     if (memory_level_ == Data_Namespace::GPU_LEVEL) {
 #ifdef HAVE_CUDA
       CHECK(ti.is_string());
-      copy_to_gpu(&data_mgr,
-                  gpu_hash_table_buff_[device_id],
-                  &(*cpu_hash_table_buff_)[0],
-                  cpu_hash_table_buff_->size() * sizeof((*cpu_hash_table_buff_)[0]),
-                  device_id);
+      copy_to_gpu(
+          &data_mgr,
+          reinterpret_cast<CUdeviceptr>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
+          &(*cpu_hash_table_buff_)[0],
+          cpu_hash_table_buff_->size() * sizeof((*cpu_hash_table_buff_)[0]),
+          device_id);
 #else
       CHECK(false);
 #endif
@@ -1061,7 +1053,7 @@ void JoinHashTable::initOneToManyHashTable(
     CHECK_EQ(Data_Namespace::GPU_LEVEL, effective_memory_level);
     data_mgr.cudaMgr_->setContext(device_id);
     init_hash_join_buff_on_device(
-        reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]),
+        reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
         hash_entry_count,
         hash_join_invalid_val,
         executor_->blockSize(),
@@ -1078,7 +1070,7 @@ void JoinHashTable::initOneToManyHashTable(
       for (size_t shard = device_id; shard < shard_count; shard += device_count_) {
         ShardInfo shard_info{shard, entries_per_shard, shard_count, device_count_};
         fill_one_to_many_hash_table_on_device_sharded(
-            reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]),
+            reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
             hash_entry_count,
             hash_join_invalid_val,
             join_column,
@@ -1089,7 +1081,7 @@ void JoinHashTable::initOneToManyHashTable(
       }
     } else {
       fill_one_to_many_hash_table_on_device(
-          reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]),
+          reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
           hash_entry_count,
           hash_join_invalid_val,
           join_column,
@@ -1431,4 +1423,25 @@ size_t JoinHashTable::shardCount() const {
 
 bool JoinHashTable::isBitwiseEq() const {
   return qual_bin_oper_->get_optype() == kBW_EQ;
+}
+
+void JoinHashTable::freeGpuMemory() {
+#ifdef HAVE_CUDA
+  const auto& catalog = *executor_->getCatalog();
+  auto& data_mgr = catalog.get_dataMgr();
+  for (auto& buf : gpu_hash_table_buff_) {
+    if (buf) {
+      free_gpu_abstract_buffer(&data_mgr, buf);
+      buf = nullptr;
+    }
+  }
+  for (auto& buf : gpu_hash_table_err_buff_) {
+    if (buf) {
+      free_gpu_abstract_buffer(&data_mgr, buf);
+      buf = nullptr;
+    }
+  }
+#else
+  CHECK(false);
+#endif  // HAVE_CUDA
 }
