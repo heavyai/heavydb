@@ -193,6 +193,32 @@ class ArrayContextTypeSizer {
   }
 };
 
+template <typename CORE_TYPE>
+class DateTimeFacilities {
+ public:
+  inline auto is_date_in_days() const {
+    CORE_TYPE const* derived(static_cast<CORE_TYPE const*>(this));
+    if (is_member_of_typeset<kDATE>(*derived)) {
+      auto comp_type(derived->get_compression());
+      if (comp_type == kENCODING_DATE_IN_DAYS) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  inline auto is_high_precision_timestamp() const {
+    CORE_TYPE const* derived(static_cast<CORE_TYPE const*>(this));
+    if (is_member_of_typeset<kTIMESTAMP>(*derived)) {
+      auto dimension(derived->get_dimension());
+      if (dimension > 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+};
+
 // @type SQLTypeInfo
 // @brief a structure to capture all type information including
 // length, precision, scale, etc.
@@ -393,12 +419,6 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
            IS_GEO(type);
   }
   inline bool is_timestamp() const { return type == kTIMESTAMP; }
-  inline bool is_high_precision_timestamp() const {
-    return type == kTIMESTAMP && dimension > 0;
-  }
-  inline bool is_date_in_days() const {
-    return type == kDATE && compression == kENCODING_DATE_IN_DAYS;
-  }
 
   HOST DEVICE inline bool operator!=(const SQLTypeInfoCore& rhs) const {
     return type != rhs.get_type() || subtype != rhs.get_subtype() ||
@@ -713,7 +733,8 @@ std::string SQLTypeInfoCore<TYPE_FACET_PACK...>::comp_name[kENCODING_LAST] =
     {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED"};
 #endif
 
-using SQLTypeInfo = SQLTypeInfoCore<ArrayContextTypeSizer, ExecutorTypePackaging>;
+using SQLTypeInfo =
+    SQLTypeInfoCore<ArrayContextTypeSizer, ExecutorTypePackaging, DateTimeFacilities>;
 
 SQLTypes decimal_to_int_type(const SQLTypeInfo&);
 
