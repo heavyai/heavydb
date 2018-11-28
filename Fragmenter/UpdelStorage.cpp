@@ -324,6 +324,10 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                   set_minmax<double>(
                       min_double_per_thread[c], max_double_per_thread[c], dval);
                 } else {
+                  if (lhs_type.is_date_in_days()) {
+                    // Store meta in seconds
+                    dval *= SECSPERDAY;
+                  }
                   put_scalar<int64_t>(data_ptr, lhs_type, dval, cd->columnName);
                   set_minmax<int64_t>(
                       min_int64t_per_thread[c], max_int64t_per_thread[c], dval);
