@@ -8979,6 +8979,8 @@ TEST(Update, ImplicitCastToEncodedString) {
   }
 }
 
+extern bool g_varlenupdate;
+
 TEST(Update, ImplicitCastToNoneEncodedString) {
   SKIP_ALL_ON_AGGREGATOR();
 
@@ -8986,50 +8988,46 @@ TEST(Update, ImplicitCastToNoneEncodedString) {
     return;
   }
 
+  g_varlenupdate = true;
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+
+    auto execute_and_expect_string = [&dt](auto& query_to_execute,
+                                           NullableString expected) {
+      run_multiple_agg(query_to_execute, dt);
+      EXPECT_EQ(
+          v<NullableString>(run_simple_agg("select str from none_str limit 1;", dt)),
+          expected);
+    };
 
     run_ddl_statement(
         "create table none_str ( str text encoding none ) with (vacuum='delayed');");
 
     run_multiple_agg("insert into none_str values ('kanye');", dt);
-    EXPECT_THROW(run_multiple_agg("update none_str set str='yeezy';", dt),
-                 std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update none_str set str='yeezy' where str='kanye';", dt),
-        std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg(
-            "update none_str set str=cast('1977-06-08 00:00:00' as timestamp);", dt),
-        std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update none_str set str=cast('12:34:56' as time);", dt),
-        std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update none_str set str=cast('1977-06-08' as date);", dt),
-        std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update none_str set str=cast( 1234.00 as float );", dt),
-        std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update none_str set str=cast( 12345.00 as double );", dt),
-        std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update none_str set str=cast( 1234 as integer );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update none_str set str=cast( 12 as smallint );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update none_str set str=cast( 123412341234 as bigint );", dt),
-        std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update none_str set str=cast( 'True' as boolean );", dt),
-        std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update none_str set str=cast( 1234.56 as decimal );", dt),
-        std::runtime_error);
-
+    execute_and_expect_string("update none_str set str='yeezy';", "yeezy");
+    execute_and_expect_string("update none_str set str='kanye' where str='yeezy';",
+                              "kanye");
+    execute_and_expect_string(
+        "update none_str set str=cast('1977-06-08 00:00:00' as timestamp);",
+        "1977-06-08 00:00:00");
+    execute_and_expect_string("update none_str set str=cast('12:34:56' as time);",
+                              "12:34:56");
+    execute_and_expect_string("update none_str set str=cast('1977-06-08' as date);",
+                              "1977-06-08");
+    execute_and_expect_string("update none_str set str=cast(1234.00 as float);",
+                              "1234.000000");
+    execute_and_expect_string("update none_str set str=cast(12345.00 as double );",
+                              "12345.000000");
+    execute_and_expect_string("update none_str set str=cast(1234 as integer );", "1234");
+    execute_and_expect_string("update none_str set str=cast( 12 as smallint );", "12");
+    execute_and_expect_string("update none_str set str=cast( 123412341234 as bigint );",
+                              "123412341234");
+    execute_and_expect_string("update none_str set str=cast( 'True' as boolean );", "t");
+    execute_and_expect_string("update none_str set str=cast( 1234.56 as decimal );",
+                              "               1235");
     run_ddl_statement("drop table none_str;");
   }
+  g_varlenupdate = false;
 }
 
 TEST(Update, ImplicitCastToNumericTypes) {

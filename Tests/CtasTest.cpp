@@ -692,7 +692,7 @@ TEST_P(DataIngestion, UpdateColumnByColumn) {
     create_sql += ", col_src_" + std::to_string(col) + " " + tcd->get_column_definition();
     create_sql += ", col_dst_" + std::to_string(col) + " " + tcd->get_column_definition();
   }
-  create_sql += ");";
+  create_sql += ") WITH (fragment_size=3);";
 
   LOG(INFO) << create_sql;
 
@@ -783,7 +783,7 @@ TEST_P(DataIngestion, UpdateColumnByLiteral) {
 
     create_sql += ", col_dst_" + std::to_string(col) + " " + tcd->get_column_definition();
   }
-  create_sql += ");";
+  create_sql += ") WITH (fragment_size=3);";
 
   LOG(INFO) << create_sql;
 

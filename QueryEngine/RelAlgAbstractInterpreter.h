@@ -1198,9 +1198,8 @@ class RelModify : public RelAlgNode {
         }
 
         // Check for valid types
-        if (column_desc->columnType.is_varlen()) {
-          throw std::runtime_error(
-              "UPDATE of a none-encoded string, geo, or array column is unsupported.");
+        if (column_desc->columnType.is_geometry()) {
+          throw std::runtime_error("UPDATE of a geo column is unsupported.");
         }
 
         // Type needs to be scrubbed because otherwise NULL values could get cut off or

@@ -94,16 +94,8 @@ class DefaultIOFacet {
   static std::function<bool(std::string const&)> yieldColumnValidator(
       CATALOG_TYPE const& cat,
       TABLE_DESCRIPTOR_TYPE const* table_descriptor) {
-    return [&cat, table_descriptor](std::string const& column_name) -> bool {
-      auto const* target_column =
-          cat.getMetadataForColumn(table_descriptor->tableId, column_name);
-
-      // The default IO facet currently only rejects none-encoded string columns
-      auto column_type(target_column->columnType);
-      if (column_type.is_string() && column_type.get_compression() == kENCODING_NONE)
-        return false;
-      return true;
-    };
+    return
+        [&cat, table_descriptor](std::string const& column_name) -> bool { return true; };
   };
 };
 
@@ -215,9 +207,9 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
   using ScalarTargetValueVector = std::vector<ScalarTargetValue>;
   using RowProcessingFuturesVector = std::vector<std::future<uint64_t>>;
 
-  auto callback = [this,
-                   &update_parameters](FragmentUpdaterType const& update_log) -> void {
-    if (g_varlenupdate) {
+  if (g_varlenupdate) {
+    auto callback = [this,
+                     &update_parameters](FragmentUpdaterType const& update_log) -> void {
       std::vector<const ColumnDescriptor*> columnDescriptors;
 
       for (size_t idx = 0; idx < update_parameters.getUpdateColumnNames().size(); idx++) {
@@ -240,119 +232,111 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
           update_parameters.getUpdateColumnCount(),  // last column of result set
           Data_Namespace::MemoryLevel::CPU_LEVEL,
           update_parameters.getTransactionTracker());
-
-      return;
-    } else {
-      // some sanity checks
-      for (size_t idx = 0; idx < update_parameters.getUpdateColumnNames().size(); idx++) {
-        auto& column_name = update_parameters.getUpdateColumnNames()[idx];
-        auto target_column =
-            catalog_.getMetadataForColumn(update_log.getPhysicalTableId(), column_name);
-        if (target_column->columnType.is_varlen()) {
-          throw std::runtime_error("update of varlen columns not enabled");
-        }
-      }
-    }
-
-    auto rows_per_column = update_log.getEntryCount();
-    if (rows_per_column == 0)
-      return;
-
-    OffsetVector column_offsets(rows_per_column);
-    ScalarTargetValueVector scalar_target_values(rows_per_column);
-
-    auto complete_row_block_size = rows_per_column / normalized_cpu_threads();
-    auto partial_row_block_size = rows_per_column % normalized_cpu_threads();
-    auto usable_threads = normalized_cpu_threads();
-    if (UNLIKELY(rows_per_column < (unsigned)normalized_cpu_threads())) {
-      complete_row_block_size = rows_per_column;
-      partial_row_block_size = 0;
-      usable_threads = 1;
-    }
-
-    auto process_rows =
-        [&update_log, &update_parameters, &column_offsets, &scalar_target_values](
-            auto type_tag,
-            uint64_t column_index,
-            uint64_t row_start,
-            uint64_t row_count) -> uint64_t {
-      uint64_t rows_processed = 0;
-      for (uint64_t row_index = row_start; row_index < (row_start + row_count);
-           row_index++, rows_processed++) {
-        constexpr auto get_entry_method_sel(MethodSelector::getEntryAt(type_tag));
-        auto const row((update_log.*get_entry_method_sel)(row_index));
-
-        CHECK(!row.empty());
-        CHECK(row.size() == update_parameters.getUpdateColumnCount() + 1);
-
-        auto terminal_column_iter = std::prev(row.end());
-        const auto frag_offset_scalar_tv =
-            boost::get<ScalarTargetValue>(&*terminal_column_iter);
-        CHECK(frag_offset_scalar_tv);
-
-        column_offsets[row_index] =
-            static_cast<uint64_t>(*(boost::get<int64_t>(frag_offset_scalar_tv)));
-        scalar_target_values[row_index] =
-            boost::get<ScalarTargetValue>(row[column_index]);
-      }
-      return rows_processed;
     };
+    return callback;
 
-    auto get_row_index = [complete_row_block_size](uint64_t thread_index) -> uint64_t {
-      return (thread_index * complete_row_block_size);
-    };
+  } else {
+    auto callback = [this,
+                     &update_parameters](FragmentUpdaterType const& update_log) -> void {
+      auto rows_per_column = update_log.getEntryCount();
+      if (rows_per_column == 0)
+        return;
 
-    // Iterate over each column
-    for (decltype(update_parameters.getUpdateColumnCount()) column_index = 0;
-         column_index < update_parameters.getUpdateColumnCount();
-         column_index++) {
-      RowProcessingFuturesVector row_processing_futures;
-      row_processing_futures.reserve(usable_threads);
+      OffsetVector column_offsets(rows_per_column);
+      ScalarTargetValueVector scalar_target_values(rows_per_column);
 
-      auto thread_launcher = [&](auto const& type_tag) {
-        for (unsigned i = 0; i < static_cast<unsigned>(usable_threads); i++)
-          row_processing_futures.emplace_back(
-              std::async(std::launch::async,
-                         std::forward<decltype(process_rows)>(process_rows),
-                         type_tag,
-                         column_index,
-                         get_row_index(i),
-                         complete_row_block_size));
-        if (partial_row_block_size) {
-          row_processing_futures.emplace_back(
-              std::async(std::launch::async,
-                         std::forward<decltype(process_rows)>(process_rows),
-                         type_tag,
-                         column_index,
-                         get_row_index(usable_threads),
-                         partial_row_block_size));
+      auto complete_row_block_size = rows_per_column / normalized_cpu_threads();
+      auto partial_row_block_size = rows_per_column % normalized_cpu_threads();
+      auto usable_threads = normalized_cpu_threads();
+      if (UNLIKELY(rows_per_column < (unsigned)normalized_cpu_threads())) {
+        complete_row_block_size = rows_per_column;
+        partial_row_block_size = 0;
+        usable_threads = 1;
+      }
+
+      auto process_rows =
+          [&update_log, &update_parameters, &column_offsets, &scalar_target_values](
+              auto type_tag,
+              uint64_t column_index,
+              uint64_t row_start,
+              uint64_t row_count) -> uint64_t {
+        uint64_t rows_processed = 0;
+        for (uint64_t row_index = row_start; row_index < (row_start + row_count);
+             row_index++, rows_processed++) {
+          constexpr auto get_entry_method_sel(MethodSelector::getEntryAt(type_tag));
+          auto const row((update_log.*get_entry_method_sel)(row_index));
+
+          CHECK(!row.empty());
+          CHECK(row.size() == update_parameters.getUpdateColumnCount() + 1);
+
+          auto terminal_column_iter = std::prev(row.end());
+          const auto frag_offset_scalar_tv =
+              boost::get<ScalarTargetValue>(&*terminal_column_iter);
+          CHECK(frag_offset_scalar_tv);
+
+          column_offsets[row_index] =
+              static_cast<uint64_t>(*(boost::get<int64_t>(frag_offset_scalar_tv)));
+          scalar_target_values[row_index] =
+              boost::get<ScalarTargetValue>(row[column_index]);
         }
+        return rows_processed;
       };
 
-      if (!update_log.getColumnType(column_index).is_string()) {
-        thread_launcher(NonStringSelector());
-      } else {
-        thread_launcher(StringSelector());
+      auto get_row_index = [complete_row_block_size](uint64_t thread_index) -> uint64_t {
+        return (thread_index * complete_row_block_size);
+      };
+
+      // Iterate over each column
+      for (decltype(update_parameters.getUpdateColumnCount()) column_index = 0;
+           column_index < update_parameters.getUpdateColumnCount();
+           column_index++) {
+        RowProcessingFuturesVector row_processing_futures;
+        row_processing_futures.reserve(usable_threads);
+
+        auto thread_launcher = [&](auto const& type_tag) {
+          for (unsigned i = 0; i < static_cast<unsigned>(usable_threads); i++)
+            row_processing_futures.emplace_back(
+                std::async(std::launch::async,
+                           std::forward<decltype(process_rows)>(process_rows),
+                           type_tag,
+                           column_index,
+                           get_row_index(i),
+                           complete_row_block_size));
+          if (partial_row_block_size) {
+            row_processing_futures.emplace_back(
+                std::async(std::launch::async,
+                           std::forward<decltype(process_rows)>(process_rows),
+                           type_tag,
+                           column_index,
+                           get_row_index(usable_threads),
+                           partial_row_block_size));
+          }
+        };
+
+        if (!update_log.getColumnType(column_index).is_string()) {
+          thread_launcher(NonStringSelector());
+        } else {
+          thread_launcher(StringSelector());
+        }
+
+        uint64_t rows_processed(0);
+        for (auto& t : row_processing_futures) {
+          t.wait();
+          rows_processed += t.get();
+        }
+
+        IOFacility::updateColumn(catalog_,
+                                 update_log.getPhysicalTableId(),
+                                 update_parameters.getUpdateColumnNames()[column_index],
+                                 update_log.getFragmentId(),
+                                 column_offsets,
+                                 scalar_target_values,
+                                 update_log.getColumnType(column_index),
+                                 update_parameters.getTransactionTracker());
       }
-
-      uint64_t rows_processed(0);
-      for (auto& t : row_processing_futures) {
-        t.wait();
-        rows_processed += t.get();
-      }
-
-      IOFacility::updateColumn(catalog_,
-                               update_log.getPhysicalTableId(),
-                               update_parameters.getUpdateColumnNames()[column_index],
-                               update_log.getFragmentId(),
-                               column_offsets,
-                               scalar_target_values,
-                               update_log.getColumnType(column_index),
-                               update_parameters.getTransactionTracker());
-    }
-  };
-
-  return callback;
+    };
+    return callback;
+  }
 }
 
 template <typename EXECUTOR_TRAITS, typename IO_FACET, typename FRAGMENT_UPDATER>

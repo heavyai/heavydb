@@ -265,6 +265,11 @@ void InsertOrderFragmenter::updateColumns(
 
   size_t num_rows = sourceDataProvider.count();
 
+  if (0 == num_rows) {
+    // bail out early
+    return;
+  }
+
   TargetValueConverterFactory factory;
 
   auto& fragment = getFragmentInfoFromId(fragmentId);
@@ -402,8 +407,8 @@ void InsertOrderFragmenter::updateColumns(
     }
   }
 
-  boost_variant_accessor<ScalarTargetValue> SCALAR_TARGET_VALUE_ACCESSOR;
-  boost_variant_accessor<int64_t> OFFSET_VALUE__ACCESSOR;
+  static boost_variant_accessor<ScalarTargetValue> SCALAR_TARGET_VALUE_ACCESSOR;
+  static boost_variant_accessor<int64_t> OFFSET_VALUE__ACCESSOR;
 
   updelRoll.dirtyChunks[deletedChunk.get()] = deletedChunk;
   ChunkKey chunkey{updelRoll.catalog->get_currentDB().dbId,
@@ -414,7 +419,12 @@ void InsertOrderFragmenter::updateColumns(
   bool* deletedChunkBuffer =
       reinterpret_cast<bool*>(deletedChunk->get_buffer()->getMemoryPtr());
 
-  for (size_t indexOfRow = 0; indexOfRow < num_rows; indexOfRow++) {
+  auto row_converter = [this,
+                        &sourceDataProvider,
+                        &sourceDataConverters,
+                        &indexOffFragmentOffsetColumn,
+                        &chunkConverters,
+                        &deletedChunkBuffer](size_t indexOfRow) -> void {
     // convert the source data
     const auto row = sourceDataProvider.getTranslatedEntryAt(indexOfRow);
 
@@ -436,31 +446,40 @@ void InsertOrderFragmenter::updateColumns(
 
     // now mark the row as deleted
     deletedChunkBuffer[indexInChunkBuffer] = true;
+  };
+
+  bool can_go_parallel = num_rows > 20000;
+
+  if (can_go_parallel) {
+    const size_t num_worker_threads = cpu_threads();
+    std::atomic<size_t> row_idx{0};
+    std::vector<std::future<void>> worker_threads;
+    for (size_t i = 0,
+                start_entry = 0,
+                stride = (num_rows + num_worker_threads - 1) / num_worker_threads;
+         i < num_worker_threads && start_entry < num_rows;
+         ++i, start_entry += stride) {
+      const auto end_entry = std::min(start_entry + stride, num_rows);
+      worker_threads.push_back(
+          std::async(std::launch::async,
+                     [&row_converter](const size_t start, const size_t end) {
+                       for (size_t indexOfRow = start; indexOfRow < end; ++indexOfRow) {
+                         row_converter(indexOfRow);
+                       }
+                     },
+                     start_entry,
+                     end_entry));
+    }
+
+    for (auto& child : worker_threads) {
+      child.wait();
+    }
+
+  } else {
+    for (size_t indexOfRow = 0; indexOfRow < num_rows; indexOfRow++) {
+      row_converter(indexOfRow);
+    }
   }
-
-  // update metdata
-  updelRoll.dirtyChunks[deletedChunk.get()] = deletedChunk;
-  //  deletedChunk->get_buffer()->setUpdated();
-  if (!deletedChunk->get_buffer()->hasEncoder) {
-    deletedChunk->init_encoder();
-  }
-
-  deletedChunk->get_buffer()->encoder->updateStats(static_cast<int64_t>(true), false);
-  columnMap_[deletedChunk->get_column_desc()->columnId].get_buffer()->write(
-      (int8_t*)deletedChunkBuffer,
-      deletedChunk->get_buffer()->encoder->getNumElems(),
-      0,
-      deletedChunk->get_buffer()->getType(),
-      deletedChunk->get_buffer()->getDeviceId());
-
-  columnMap_[deletedChunk->get_column_desc()->columnId].get_buffer()->syncEncoder(
-      deletedChunk->get_buffer());
-
-  auto& shadowDeletedChunkMeta =
-      fragment.shadowChunkMetadataMap[deletedChunk->get_column_desc()->columnId];
-  deletedChunk->get_buffer()->encoder->getMetadata(shadowDeletedChunkMeta);
-  fragment.setChunkMetadata(deletedChunk->get_column_desc()->columnId,
-                            shadowDeletedChunkMeta);
 
   Fragmenter_Namespace::InsertData insert_data;
   insert_data.databaseId = catalog->get_currentDB().dbId;
@@ -480,6 +499,22 @@ void InsertOrderFragmenter::updateColumns(
 
   insert_data.numRows = num_rows;
   insertDataNoCheckpoint(insert_data);
+
+  // update metdata
+  if (!deletedChunk->get_buffer()->hasEncoder) {
+    deletedChunk->init_encoder();
+  }
+  deletedChunk->get_buffer()->encoder->updateStats(static_cast<int64_t>(true), false);
+
+  auto& shadowDeletedChunkMeta =
+      fragment.shadowChunkMetadataMap[deletedChunk->get_column_desc()->columnId];
+  if (shadowDeletedChunkMeta.numElements >
+      deletedChunk->get_buffer()->encoder->getNumElems()) {
+    // the append will have populated shadow meta data, otherwise use existing num
+    // elements
+    deletedChunk->get_buffer()->encoder->setNumElems(shadowDeletedChunkMeta.numElements);
+  }
+  deletedChunk->get_buffer()->setUpdated();
 }
 
 void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catalog,

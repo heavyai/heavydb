@@ -71,7 +71,9 @@ class FixedLengthArrayNoneEncoder : public Encoder {
 
     for (size_t i = start_idx; i < start_idx + numAppendElems; i++) {
       size_t len = (*srcData)[replicating ? 0 : i].length;
-      CHECK(len == array_size);
+      if (len != array_size) {
+        throw std::runtime_error("Input length doesn't match fixed-length array length");
+      }
       buffer_->append((*srcData)[replicating ? 0 : i].pointer, len);
 
       // keep Chunk statistics with array elements

@@ -734,9 +734,13 @@ AbstractBuffer* FileMgr::putBuffer(const ChunkKey& key,
   // size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
   size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
   if (chunk->isDirty()) {
-    LOG(FATAL)
-        << "Aborting attempt to write a chunk marked dirty. Chunk inconsistency for key: "
-        << showChunk(key);
+    // multiple appends are allowed,
+    // but only single update is allowed
+    if (srcBuffer->isUpdated() && chunk->isUpdated()) {
+      LOG(FATAL) << "Aborting attempt to write a chunk marked dirty. Chunk inconsistency "
+                    "for key: "
+                 << showChunk(key);
+    }
   }
   if (srcBuffer->isUpdated()) {
     //@todo use dirty flags to only flush pages of chunk that need to
