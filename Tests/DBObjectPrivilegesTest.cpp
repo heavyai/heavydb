@@ -360,6 +360,7 @@ TEST(UserRoles, ValidNames) {
       run_ddl_statement("CREATE USER vasya.vasya@vasya.com (password = 'password');"));
   EXPECT_NO_THROW(run_ddl_statement(
       "CREATE USER \"vasya ivanov\"@vasya.ivanov.com (password = 'password');"));
+  EXPECT_NO_THROW(run_ddl_statement("CREATE USER vasya-vasya (password = 'password');"));
   EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE developer;"));
   EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE developer-backend;"));
   EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE developer-backend-rendering;"));
@@ -367,9 +368,11 @@ TEST(UserRoles, ValidNames) {
   EXPECT_NO_THROW(
       run_ddl_statement("GRANT developer-backend TO \"vasya ivanov\"@vasya.ivanov.com;"));
   EXPECT_NO_THROW(run_ddl_statement("GRANT developer TO vasya.vasya@vasya.com;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT developer-backend-rendering TO vasya-vasya;"));
   EXPECT_NO_THROW(run_ddl_statement("DROP USER vasya;"));
   EXPECT_NO_THROW(run_ddl_statement("DROP USER vasya.vasya@vasya.com;"));
   EXPECT_NO_THROW(run_ddl_statement("DROP USER \"vasya ivanov\"@vasya.ivanov.com;"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP USER vasya-vasya;"));
   EXPECT_NO_THROW(run_ddl_statement("DROP ROLE developer;"));
   EXPECT_NO_THROW(run_ddl_statement("DROP ROLE developer-backend;"));
   EXPECT_NO_THROW(run_ddl_statement("DROP ROLE developer-backend-rendering;"));

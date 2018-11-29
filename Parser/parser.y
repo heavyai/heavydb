@@ -1069,7 +1069,7 @@ table:
 	;
 
 username:
-        NAME | EMAIL
+        NAME | EMAIL | DASHEDNAME
     ;
 
 rolenames:
