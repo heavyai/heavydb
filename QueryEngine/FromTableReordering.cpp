@@ -182,7 +182,7 @@ std::vector<node_t> traverse_join_cost_graph(
                  schedulable_node);
     CHECK(!remaining_nest_levels.empty());
     // Start with the table with most tuples.
-    const auto max_it = std::min_element(
+    const auto max_it = std::max_element(
         remaining_nest_levels.begin(), remaining_nest_levels.end(), compare_node);
     CHECK(max_it != remaining_nest_levels.end());
     std::priority_queue<TraversalEdge, std::vector<TraversalEdge>, decltype(compare_edge)>
@@ -222,7 +222,7 @@ std::vector<node_t> get_node_input_permutation(
   // Use the number of tuples in each table to break ties in BFS.
   const auto compare_node = [&table_infos](const node_t lhs_nest_level,
                                            const node_t rhs_nest_level) {
-    return table_infos[lhs_nest_level].info.getNumTuplesUpperBound() >
+    return table_infos[lhs_nest_level].info.getNumTuplesUpperBound() <
            table_infos[rhs_nest_level].info.getNumTuplesUpperBound();
   };
   const auto compare_edge = [&compare_node](const TraversalEdge& lhs_edge,
