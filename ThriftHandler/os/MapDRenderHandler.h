@@ -42,7 +42,7 @@ class MapDRenderHandler {
   void disconnect(const TSessionId& session) {}
 
   void render_vega(TRenderResult& _return,
-                   const Catalog_Namespace::SessionInfo& session_info,
+                   const std::shared_ptr<Catalog_Namespace::SessionInfo> session_info,
                    const int64_t widget_id,
                    const std::string& vega_json,
                    const int32_t compression_level,
@@ -66,7 +66,7 @@ class MapDRenderHandler {
 
   void get_result_row_for_pixel(
       TPixelTableRowResult& _return,
-      const Catalog_Namespace::SessionInfo& session_info,
+      const std::shared_ptr<Catalog_Namespace::SessionInfo> session_info,
       const int64_t widget_id,
       const TPixel& pixel,
       const std::map<std::string, std::vector<std::string>>& table_col_names,

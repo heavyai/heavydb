@@ -17,14 +17,18 @@
 #ifndef QUERYENGINE_RENDERINFO_H
 #define QUERYENGINE_RENDERINFO_H
 
+#include <Catalog/Catalog.h>
 #include "../ResultRows.h"
 #include "RenderAllocator.h"
+
+namespace QueryRenderer {
+struct RenderSession;
+}  // namespace QueryRenderer
 
 class RenderInfo {
  public:
   std::unique_ptr<RenderAllocatorMap> render_allocator_map_ptr;
-  const std::string session_id;
-  const int render_widget_id;
+  const std::shared_ptr<const ::QueryRenderer::RenderSession> render_session;
   const size_t render_small_groups_buffer_entry_count{2 * 1024 * 1024};
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner;
   std::vector<std::shared_ptr<Analyzer::TargetEntry>>
@@ -37,11 +41,12 @@ class RenderInfo {
                     // first item in this list
   bool disallow_in_situ_only_if_final_ED_is_aggregate;
 
-  RenderInfo(const std::string& session_id,
-             const int render_widget_id,
-             const std::string& render_vega = "",
-             const bool force_non_in_situ_data = false);
+  RenderInfo(
+      const std::shared_ptr<const ::QueryRenderer::RenderSession> in_render_session,
+      const std::string& render_vega = "",
+      const bool force_non_in_situ_data = false);
 
+  const Catalog_Namespace::SessionInfo& getSessionInfo() const;
   void setForceNonInSituData();
   bool queryRanWithInSituData() const;
   bool hasInSituData() const;

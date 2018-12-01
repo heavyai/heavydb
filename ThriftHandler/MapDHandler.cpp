@@ -1483,7 +1483,7 @@ void MapDHandler::get_result_row_for_pixel(
   auto time_ms = measure<>::execution([&]() {
     try {
       render_handler_->get_result_row_for_pixel(_return,
-                                                *session_it->second,
+                                                session_it->second,
                                                 widget_id,
                                                 pixel,
                                                 table_col_names,
@@ -2811,7 +2811,7 @@ void MapDHandler::render_vega(TRenderResult& _return,
   _return.total_time_ms = measure<>::execution([&]() {
     try {
       render_handler_->render_vega(
-          _return, *session_it->second, widget_id, vega_json, compression_level, nonce);
+          _return, session_it->second, widget_id, vega_json, compression_level, nonce);
     } catch (std::exception& e) {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }

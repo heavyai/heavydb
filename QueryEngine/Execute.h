@@ -324,12 +324,6 @@ class Executor {
                                      const bool allow_loop_joins,
                                      RenderInfo* render_query_data = nullptr);
 
-  int64_t getRowidForPixel(const int64_t x,
-                           const int64_t y,
-                           const std::string& session_id,
-                           const int render_widget_id,
-                           const int pixelRadius = 0);
-
   std::shared_ptr<ResultSet> renderPointsNonInSitu(
       const std::string& queryStr,
       const ExecutionResult& results,

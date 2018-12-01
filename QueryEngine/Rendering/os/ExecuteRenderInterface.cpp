@@ -17,15 +17,6 @@
 #include "../../Execute.h"
 #include "../../RelAlgExecutionDescriptor.h"
 
-int64_t Executor::getRowidForPixel(const int64_t x,
-                                   const int64_t y,
-                                   const std::string& session_id,
-                                   const int render_widget_id,
-                                   const int pixelRadius) {
-  CHECK(false);
-  return 0;
-}
-
 std::shared_ptr<ResultSet> Executor::renderLinesNonInSitu(
     const std::string& queryStr,
     const ExecutionResult& results,
