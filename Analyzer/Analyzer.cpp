@@ -31,6 +31,7 @@
 #include "../Catalog/Catalog.h"
 #include "../Shared/DateConverters.h"
 #include "../Shared/sql_type_to_string.h"
+#include "../Shared/sql_window_function_to_string.h"
 #include "../Shared/sqltypes.h"
 #include "../Shared/unreachable.h"
 
@@ -185,6 +186,10 @@ std::shared_ptr<Analyzer::Expr> DatetruncExpr::deep_copy() const {
 
 std::shared_ptr<Analyzer::Expr> OffsetInFragment::deep_copy() const {
   return makeExpr<OffsetInFragment>();
+}
+
+std::shared_ptr<Analyzer::Expr> WindowFunction::deep_copy() const {
+  return makeExpr<WindowFunction>(type_info, kind_, args_, partition_keys_, order_keys_);
 }
 
 ExpressionPtr ArrayExpr::deep_copy() const {
@@ -1918,21 +1923,32 @@ bool ColumnVar::operator==(const Expr& rhs) const {
          (v->get_varno() == rv->get_varno());
 }
 
+namespace {
+
+// Returns true iff the two expression lists are equal (same size and each element are
+// equal).
+bool expr_list_match(const std::vector<std::shared_ptr<Analyzer::Expr>>& lhs,
+                     const std::vector<std::shared_ptr<Analyzer::Expr>>& rhs) {
+  if (lhs.size() != rhs.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < lhs.size(); ++i) {
+    if (!(*lhs[i] == *rhs[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+}  // namespace
+
 bool ExpressionTuple::operator==(const Expr& rhs) const {
   const auto rhs_tuple = dynamic_cast<const ExpressionTuple*>(&rhs);
   if (!rhs_tuple) {
     return false;
   }
   const auto& rhs_tuple_cols = rhs_tuple->getTuple();
-  if (rhs_tuple_cols.size() != tuple_.size()) {
-    return false;
-  }
-  for (size_t i = 0; i < tuple_.size(); ++i) {
-    if (!(*tuple_[i] == *rhs_tuple_cols[i])) {
-      return false;
-    }
-  }
-  return true;
+  return expr_list_match(tuple_, rhs_tuple_cols);
 }
 
 bool Datum_equal(const SQLTypeInfo& ti, Datum val1, Datum val2) {
@@ -2170,6 +2186,21 @@ bool DatetruncExpr::operator==(const Expr& rhs) const {
 
 bool OffsetInFragment::operator==(const Expr& rhs) const {
   return typeid(rhs) == typeid(OffsetInFragment);
+}
+
+bool WindowFunction::operator==(const Expr& rhs) const {
+  const auto rhs_window = dynamic_cast<const WindowFunction*>(&rhs);
+  if (!rhs_window) {
+    return false;
+  }
+  if (kind_ != rhs_window->kind_ || args_.size() != rhs_window->args_.size() ||
+      partition_keys_.size() != rhs_window->partition_keys_.size() ||
+      order_keys_.size() != rhs_window->order_keys_.size()) {
+    return false;
+  }
+  return expr_list_match(args_, rhs_window->args_) &&
+         expr_list_match(partition_keys_, rhs_window->partition_keys_) &&
+         expr_list_match(order_keys_, rhs_window->order_keys_);
 }
 
 bool ArrayExpr::operator==(Expr const& rhs) const {
@@ -2468,6 +2499,14 @@ std::string DatetruncExpr::toString() const {
 
 std::string OffsetInFragment::toString() const {
   return "(OffsetInFragment) ";
+}
+
+std::string WindowFunction::toString() const {
+  std::string result = "WindowFunction(" + sql_window_function_to_str(kind_);
+  for (const auto& arg : args_) {
+    result += " " + arg->toString();
+  }
+  return result + ") ";
 }
 
 std::string ArrayExpr::toString() const {

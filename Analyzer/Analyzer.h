@@ -1207,6 +1207,35 @@ class OffsetInFragment : public Expr {
 };
 
 /*
+ * @type WindowFunction
+ * @brief A window function.
+ */
+class WindowFunction : public Expr {
+ public:
+  WindowFunction(const SQLTypeInfo& ti,
+                 const SqlWindowFunctionKind kind,
+                 const std::vector<std::shared_ptr<Analyzer::Expr>>& args,
+                 const std::vector<std::shared_ptr<Analyzer::Expr>>& partition_keys,
+                 const std::vector<std::shared_ptr<Analyzer::Expr>>& order_keys)
+      : Expr(ti)
+      , kind_(kind)
+      , args_(args)
+      , partition_keys_(partition_keys)
+      , order_keys_(order_keys){};
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  bool operator==(const Expr& rhs) const override;
+  virtual std::string toString() const override;
+
+ private:
+  const SqlWindowFunctionKind kind_;
+  const std::vector<std::shared_ptr<Analyzer::Expr>> args_;
+  const std::vector<std::shared_ptr<Analyzer::Expr>> partition_keys_;
+  const std::vector<std::shared_ptr<Analyzer::Expr>> order_keys_;
+};
+
+/*
  * @type ArrayExpr
  * @brief Corresponds to ARRAY[] statements in SQL
  */
