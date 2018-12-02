@@ -36,10 +36,13 @@ import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexCorrelVariable;
 import org.apache.calcite.rex.RexFieldAccess;
+import org.apache.calcite.rex.RexFieldCollation;
 import org.apache.calcite.rex.RexInputRef;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.rex.RexOver;
 import org.apache.calcite.rex.RexSubQuery;
+import org.apache.calcite.rex.RexWindow;
 import org.apache.calcite.sql.SemiJoinType;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlFunction;
@@ -348,6 +351,19 @@ public class MapDRelJson {
             final MapDRelJsonWriter subqueryWriter = new MapDRelJsonWriter();
             ((RexSubQuery) node).rel.explain(subqueryWriter);
             map.put("subquery", subqueryWriter.asJsonMap());
+          }
+          if (node instanceof RexOver) {
+            final RexWindow window = ((RexOver) node).getWindow();
+            final List<Object> partitionKeyList = jsonBuilder.list();
+            for (final RexNode partitionKey : window.partitionKeys) {
+              partitionKeyList.add(toJson(partitionKey));
+            }
+            map.put("partition_keys", partitionKeyList);
+            final List<Object> orderKeyList = jsonBuilder.list();
+            for (final RexFieldCollation orderKey : window.orderKeys) {
+              orderKeyList.add(toJson(orderKey.left));
+            }
+            map.put("order_keys", orderKeyList);
           }
           if (call.getOperator() instanceof SqlFunction) {
             switch (((SqlFunction) call.getOperator()).getFunctionType()) {
