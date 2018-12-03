@@ -19,6 +19,7 @@
 
 #include "../Catalog/Catalog.h"
 #include "../Shared/ConfigResolve.h"
+#include "../Shared/sql_window_function_to_string.h"
 
 #include "TargetMetaInfo.h"
 #include "TypePunning.h"
@@ -415,6 +416,56 @@ class RexFunctionOperator : public RexOperator {
 
  private:
   const std::string name_;
+};
+
+class RexWindowFunctionOperator : public RexFunctionOperator {
+ public:
+  RexWindowFunctionOperator(const SqlWindowFunctionKind kind,
+                            ConstRexScalarPtrVector& operands,
+                            ConstRexScalarPtrVector& partition_keys,
+                            ConstRexScalarPtrVector& order_keys,
+                            const SQLTypeInfo& ti)
+      : RexFunctionOperator(sql_window_function_to_str(kind), operands, ti)
+      , kind_(kind)
+      , partition_keys_(std::move(partition_keys))
+      , order_keys_(std::move(order_keys)) {}
+
+  SqlWindowFunctionKind getKind() const { return kind_; }
+
+  const ConstRexScalarPtrVector& getPartitionKeys() const { return partition_keys_; }
+
+  const ConstRexScalarPtrVector& getOrderKeys() const { return order_keys_; }
+
+  std::unique_ptr<const RexOperator> getDisambiguated(
+      ConstRexScalarPtrVector& operands,
+      ConstRexScalarPtrVector& partition_keys,
+      ConstRexScalarPtrVector& order_keys) const {
+    return std::unique_ptr<const RexOperator>(new RexWindowFunctionOperator(
+        kind_, operands, partition_keys, order_keys, getType()));
+  }
+
+  std::string toString() const override {
+    auto result = "(RexWindowFunctionOperator " + getName();
+    for (const auto& operand : operands_) {
+      result += (" " + operand->toString());
+    }
+    result += " partition[";
+    for (const auto& partition_key : partition_keys_) {
+      result += (" " + partition_key->toString());
+    }
+    result += "]";
+    result += " order[";
+    for (const auto& order_key : order_keys_) {
+      result += (" " + order_key->toString());
+    }
+    result += "]";
+    return result + ")";
+  }
+
+ private:
+  const SqlWindowFunctionKind kind_;
+  mutable ConstRexScalarPtrVector partition_keys_;
+  mutable ConstRexScalarPtrVector order_keys_;
 };
 
 // Not a real node created by Calcite. Created by us because targets of a query
