@@ -124,6 +124,28 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
         type_info, args_copy, array_expr->getExprIndex());
   }
 
+  RetType visitWindowFunction(
+      const Analyzer::WindowFunction* window_func) const override {
+    std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
+    for (const auto& arg : window_func->getArgs()) {
+      args_copy.push_back(visit(arg.get()));
+    }
+    std::vector<std::shared_ptr<Analyzer::Expr>> partition_keys_copy;
+    for (const auto& partition_key : window_func->getPartitionKeys()) {
+      partition_keys_copy.push_back(visit(partition_key.get()));
+    }
+    std::vector<std::shared_ptr<Analyzer::Expr>> order_keys_copy;
+    for (const auto& order_key : window_func->getOrderKeys()) {
+      order_keys_copy.push_back(visit(order_key.get()));
+    }
+    const auto& type_info = window_func->get_type_info();
+    return makeExpr<Analyzer::WindowFunction>(type_info,
+                                              window_func->getKind(),
+                                              args_copy,
+                                              partition_keys_copy,
+                                              order_keys_copy);
+  }
+
   RetType visitFunctionOper(const Analyzer::FunctionOper* func_oper) const override {
     std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
     for (size_t i = 0; i < func_oper->getArity(); ++i) {

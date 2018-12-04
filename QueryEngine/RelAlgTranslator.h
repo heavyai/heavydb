@@ -118,6 +118,9 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateFunction(const RexFunctionOperator*) const;
 
+  std::shared_ptr<Analyzer::Expr> translateWindowFunction(
+      const RexWindowFunctionOperator*) const;
+
   Analyzer::ExpressionPtrVector translateFunctionArgs(const RexFunctionOperator*) const;
 
   std::shared_ptr<Analyzer::Expr> translateUnaryGeoFunction(

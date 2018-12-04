@@ -15,6 +15,7 @@
  */
 
 #include "RelAlgAbstractInterpreter.h"
+#include "../Shared/sqldefs.h"
 #include "CalciteDeserializerUtils.h"
 #include "JsonAccessors.h"
 #include "RelAlgExecutor.h"
@@ -526,6 +527,24 @@ SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
   return ti;
 }
 
+std::vector<std::unique_ptr<const RexScalar>> parse_expr_array(
+    const rapidjson::Value& arr,
+    const Catalog_Namespace::Catalog& cat,
+    RelAlgExecutor* ra_executor) {
+  std::vector<std::unique_ptr<const RexScalar>> exprs;
+  for (auto it = arr.Begin(); it != arr.End(); ++it) {
+    exprs.emplace_back(parse_scalar_expr(*it, cat, ra_executor));
+  }
+  return exprs;
+}
+
+SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
+  if (name == "ROW_NUMBER") {
+    return SqlWindowFunctionKind::ROW_NUMBER;
+  }
+  throw std::runtime_error("Unsupported window function: " + name);
+}
+
 std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr,
                                             const Catalog_Namespace::Catalog& cat,
                                             RelAlgExecutor* ra_executor) {
@@ -535,18 +554,22 @@ std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr,
   const auto op = is_quantifier ? kFUNCTION : to_sql_op(op_name);
   const auto& operators_json_arr = field(expr, "operands");
   CHECK(operators_json_arr.IsArray());
-  std::vector<std::unique_ptr<const RexScalar>> operands;
-  for (auto operators_json_arr_it = operators_json_arr.Begin();
-       operators_json_arr_it != operators_json_arr.End();
-       ++operators_json_arr_it) {
-    operands.emplace_back(parse_scalar_expr(*operators_json_arr_it, cat, ra_executor));
-  }
+  auto operands = parse_expr_array(operators_json_arr, cat, ra_executor);
   const auto type_it = expr.FindMember("type");
   CHECK(type_it != expr.MemberEnd());
   const auto ti = parse_type(type_it->value);
   if (op == kIN && expr.HasMember("subquery")) {
     auto subquery = parse_subquery(expr, cat, ra_executor);
     operands.emplace_back(std::move(subquery));
+  }
+  if (expr.FindMember("partition_keys") != expr.MemberEnd()) {
+    const auto& partition_keys_arr = field(expr, "partition_keys");
+    auto partition_keys = parse_expr_array(partition_keys_arr, cat, ra_executor);
+    const auto& order_keys_arr = field(expr, "order_keys");
+    auto order_keys = parse_expr_array(order_keys_arr, cat, ra_executor);
+    const auto kind = parse_window_function_kind(op_name);
+    return std::make_unique<RexWindowFunctionOperator>(
+        kind, operands, partition_keys, order_keys, ti);
   }
   return std::unique_ptr<RexOperator>(op == kFUNCTION
                                           ? new RexFunctionOperator(op_name, operands, ti)
@@ -665,6 +688,23 @@ std::unique_ptr<const RexOperator> disambiguate_operator(
     } else {
       disambiguated_operands.emplace_back(disambiguate_rex(operand, ra_output));
     }
+  }
+  const auto rex_window_function_operator =
+      dynamic_cast<const RexWindowFunctionOperator*>(rex_operator);
+  if (rex_window_function_operator) {
+    const auto& partition_keys = rex_window_function_operator->getPartitionKeys();
+    std::vector<std::unique_ptr<const RexScalar>> disambiguated_partition_keys;
+    for (const auto& partition_key : partition_keys) {
+      disambiguated_partition_keys.emplace_back(
+          disambiguate_rex(partition_key.get(), ra_output));
+    }
+    std::vector<std::unique_ptr<const RexScalar>> disambiguated_order_keys;
+    const auto& order_keys = rex_window_function_operator->getOrderKeys();
+    for (const auto& order_key : order_keys) {
+      disambiguated_order_keys.emplace_back(disambiguate_rex(order_key.get(), ra_output));
+    }
+    return rex_window_function_operator->getDisambiguated(
+        disambiguated_operands, disambiguated_partition_keys, disambiguated_order_keys);
   }
   return rex_operator->getDisambiguated(disambiguated_operands);
 }

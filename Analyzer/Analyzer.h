@@ -1228,6 +1228,18 @@ class WindowFunction : public Expr {
   bool operator==(const Expr& rhs) const override;
   virtual std::string toString() const override;
 
+  SqlWindowFunctionKind getKind() const { return kind_; }
+
+  const std::vector<std::shared_ptr<Analyzer::Expr>>& getArgs() const { return args_; }
+
+  const std::vector<std::shared_ptr<Analyzer::Expr>>& getPartitionKeys() const {
+    return partition_keys_;
+  }
+
+  const std::vector<std::shared_ptr<Analyzer::Expr>>& getOrderKeys() const {
+    return order_keys_;
+  }
+
  private:
   const SqlWindowFunctionKind kind_;
   const std::vector<std::shared_ptr<Analyzer::Expr>> args_;

@@ -80,6 +80,10 @@ class ScalarExprVisitor {
     if (extract) {
       return visitExtractExpr(extract);
     }
+    const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(expr);
+    if (window_func) {
+      return visitWindowFunction(window_func);
+    }
     const auto func_with_custom_type_handling =
         dynamic_cast<const Analyzer::FunctionOperWithCustomTypeHandling*>(expr);
     if (func_with_custom_type_handling) {
@@ -219,6 +223,20 @@ class ScalarExprVisitor {
     T result = defaultResult();
     for (size_t i = 0; i < func_oper->getArity(); ++i) {
       result = aggregateResult(result, visit(func_oper->getArg(i)));
+    }
+    return result;
+  }
+
+  virtual T visitWindowFunction(const Analyzer::WindowFunction* window_func) const {
+    T result = defaultResult();
+    for (const auto& arg : window_func->getArgs()) {
+      result = aggregateResult(result, visit(arg.get()));
+    }
+    for (const auto& partition_key : window_func->getPartitionKeys()) {
+      result = aggregateResult(result, visit(partition_key.get()));
+    }
+    for (const auto& order_key : window_func->getOrderKeys()) {
+      result = aggregateResult(result, visit(order_key.get()));
     }
     return result;
   }

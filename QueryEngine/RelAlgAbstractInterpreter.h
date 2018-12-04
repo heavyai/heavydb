@@ -434,6 +434,14 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
 
   const ConstRexScalarPtrVector& getPartitionKeys() const { return partition_keys_; }
 
+  ConstRexScalarPtrVector getPartitionKeysAndRelease() const {
+    return std::move(partition_keys_);
+  }
+
+  ConstRexScalarPtrVector getOrderKeysAndRelease() const {
+    return std::move(order_keys_);
+  }
+
   const ConstRexScalarPtrVector& getOrderKeys() const { return order_keys_; }
 
   std::unique_ptr<const RexOperator> getDisambiguated(

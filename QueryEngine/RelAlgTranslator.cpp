@@ -168,6 +168,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarRex(
   if (rex_literal) {
     return translateLiteral(rex_literal);
   }
+  const auto rex_window_function = dynamic_cast<const RexWindowFunctionOperator*>(rex);
+  if (rex_window_function) {
+    return translateWindowFunction(rex_window_function);
+  }
   const auto rex_function = dynamic_cast<const RexFunctionOperator*>(rex);
   if (rex_function) {
     return translateFunction(rex_function);
@@ -1422,6 +1426,27 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   return makeExpr<Analyzer::FunctionOper>(rex_function->getType(),
                                           rex_function->getName(),
                                           translateFunctionArgs(rex_function));
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
+    const RexWindowFunctionOperator* rex_window_function) const {
+  std::vector<std::shared_ptr<Analyzer::Expr>> args;
+  for (size_t i = 0; i < rex_window_function->size(); ++i) {
+    args.push_back(translateScalarRex(rex_window_function->getOperand(i)));
+  }
+  std::vector<std::shared_ptr<Analyzer::Expr>> partition_keys;
+  for (const auto& partition_key : rex_window_function->getPartitionKeys()) {
+    partition_keys.push_back(translateScalarRex(partition_key.get()));
+  }
+  std::vector<std::shared_ptr<Analyzer::Expr>> order_keys;
+  for (const auto& order_key : rex_window_function->getOrderKeys()) {
+    order_keys.push_back(translateScalarRex(order_key.get()));
+  }
+  return makeExpr<Analyzer::WindowFunction>(rex_window_function->getType(),
+                                            rex_window_function->getKind(),
+                                            args,
+                                            partition_keys,
+                                            order_keys);
 }
 
 Analyzer::ExpressionPtrVector RelAlgTranslator::translateFunctionArgs(

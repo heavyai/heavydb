@@ -112,6 +112,10 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (dynamic_cast<const Analyzer::OffsetInFragment*>(expr)) {
     return {posArg(nullptr)};
   }
+  auto window_function = dynamic_cast<const Analyzer::WindowFunction*>(expr);
+  if (window_function) {
+    throw std::runtime_error("Window functions not supported yet");
+  }
   abort();
 }
 
