@@ -96,7 +96,7 @@ std::string BloscCompressor::compress(const std::string& buffer) {
       compressed_buffer.resize(compressed_len);
       return {compressed_buffer.begin(), compressed_buffer.end()};
     }
-  } catch (CompressionFailedError e) {
+  } catch (const CompressionFailedError& e) {
   }
 
   return buffer;
@@ -138,7 +138,7 @@ std::string BloscCompressor::decompress(const std::string& buffer,
     decompress(
         (uint8_t*)&buffer[0], (uint8_t*)&decompressed_buffer[0], decompressed_size);
     return {decompressed_buffer.begin(), decompressed_buffer.end()};
-  } catch (CompressionFailedError e) {
+  } catch (const CompressionFailedError& e) {
   }
   return buffer;
 }
@@ -152,7 +152,7 @@ size_t BloscCompressor::compressOrMemcpy(const uint8_t* input_buffer,
     if (compressed_size > 0) {
       return compressed_size;
     }
-  } catch (CompressionFailedError& e) {
+  } catch (const CompressionFailedError& e) {
     // catch exceptions from blosc
     // we copy regardless what happens in compressor
   }
@@ -167,7 +167,7 @@ bool BloscCompressor::decompressOrMemcpy(const uint8_t* compressed_buffer,
   try {
     decompress(compressed_buffer, decompressed_buffer, decompressed_size);
     return true;
-  } catch (CompressionFailedError e) {
+  } catch (const CompressionFailedError& e) {
   }
   // we will also memcpy if we find that the buffer is not a compressed buffer
 
