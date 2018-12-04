@@ -165,15 +165,23 @@ ExpressionRange apply_simple_quals(
       const auto qual_const_ti = qual_const->get_type_info();
       auto const_d = qual_const->get_constval();
       if (qual_col_ti.is_timestamp() && qual_const_ti.is_timestamp() &&
-          qual_col_ti != qual_const_ti) {
+          qual_col_ti.get_dimension() != qual_const_ti.get_dimension()) {
         // For high precision timestamps, account for scale difference before applying
         // qual
         const auto result =
             timestamp_precisions_lookup_.find(qual_col_ti.get_dimension());
-        const_d.timeval = DateTruncateAlterPrecision(result->second,
-                                                     const_d.timeval,
-                                                     qual_const_ti.get_dimension(),
-                                                     qual_col_ti.get_dimension());
+        const_d.timeval =
+            qual_const_ti.get_dimension() < qual_col_ti.get_dimension()
+                ? DateTruncateAlterPrecisionScaleUp(
+                      result->second,
+                      const_d.timeval,
+                      get_timestamp_precision_scale(qual_col_ti.get_dimension() -
+                                                    qual_const_ti.get_dimension()))
+                : DateTruncateAlterPrecisionScaleDown(
+                      result->second,
+                      const_d.timeval,
+                      get_timestamp_precision_scale(qual_const_ti.get_dimension() -
+                                                    qual_col_ti.get_dimension()));
       }
       apply_int_qual(
           const_d, qual_const_ti.get_type(), qual_bin_oper->get_optype(), qual_range);
@@ -783,13 +791,20 @@ ExpressionRange getExpressionRange(
         return ExpressionRange::makeInvalidRange();
       }
       CHECK(arg_range.getType() == ExpressionRangeType::Integer);
-      const int32_t dimen = extract_expr_ti.get_dimension();
       const int64_t year_range_min =
-          (dimen > 0) ? ExtractFromTimeHighPrecision(kYEAR, arg_range.getIntMin(), dimen)
-                      : ExtractFromTime(kYEAR, arg_range.getIntMin());
+          extract_expr_ti.is_high_precision_timestamp()
+              ? ExtractFromTimeHighPrecision(
+                    kYEAR,
+                    arg_range.getIntMin(),
+                    get_timestamp_precision_scale(extract_expr_ti.get_dimension()))
+              : ExtractFromTime(kYEAR, arg_range.getIntMin());
       const int64_t year_range_max =
-          (dimen > 0) ? ExtractFromTimeHighPrecision(kYEAR, arg_range.getIntMax(), dimen)
-                      : ExtractFromTime(kYEAR, arg_range.getIntMax());
+          extract_expr_ti.is_high_precision_timestamp()
+              ? ExtractFromTimeHighPrecision(
+                    kYEAR,
+                    arg_range.getIntMax(),
+                    get_timestamp_precision_scale(extract_expr_ti.get_dimension()))
+              : ExtractFromTime(kYEAR, arg_range.getIntMax());
       return ExpressionRange::makeIntRange(
           year_range_min, year_range_max, 0, arg_range.hasNulls());
     }
@@ -839,19 +854,24 @@ ExpressionRange getExpressionRange(
     return ExpressionRange::makeInvalidRange();
   }
   const auto& datetrunc_expr_ti = datetrunc_expr->get_from_expr()->get_type_info();
-  const int32_t dimen = datetrunc_expr_ti.get_dimension();
   const int64_t min_ts =
-      (dimen > 0) ? DateTruncateHighPrecision(
-                        datetrunc_expr->get_field(), arg_range.getIntMin(), dimen)
-                  : DateTruncate(datetrunc_expr->get_field(), arg_range.getIntMin());
+      datetrunc_expr_ti.is_high_precision_timestamp()
+          ? DateTruncateHighPrecision(
+                datetrunc_expr->get_field(),
+                arg_range.getIntMin(),
+                get_timestamp_precision_scale(datetrunc_expr_ti.get_dimension()))
+          : DateTruncate(datetrunc_expr->get_field(), arg_range.getIntMin());
   const int64_t max_ts =
-      (dimen > 0) ? DateTruncateHighPrecision(
-                        datetrunc_expr->get_field(), arg_range.getIntMax(), dimen)
-                  : DateTruncate(datetrunc_expr->get_field(), arg_range.getIntMax());
+      datetrunc_expr_ti.is_high_precision_timestamp()
+          ? DateTruncateHighPrecision(
+                datetrunc_expr->get_field(),
+                arg_range.getIntMax(),
+                get_timestamp_precision_scale(datetrunc_expr_ti.get_dimension()))
+          : DateTruncate(datetrunc_expr->get_field(), arg_range.getIntMax());
   const int64_t bucket =
-      datetrunc_expr_ti.get_type() == kTIMESTAMP && dimen > 0
+      datetrunc_expr_ti.is_high_precision_timestamp()
           ? get_conservative_datetrunc_bucket(datetrunc_expr->get_field()) *
-                static_cast<int64_t>(pow(10, dimen))
+                get_timestamp_precision_scale(datetrunc_expr_ti.get_dimension())
           : get_conservative_datetrunc_bucket(datetrunc_expr->get_field());
   return ExpressionRange::makeIntRange(min_ts, max_ts, bucket, arg_range.hasNulls());
 }

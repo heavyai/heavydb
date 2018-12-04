@@ -70,8 +70,12 @@ llvm::Value* Executor::codegenCast(llvm::Value* operand_lv,
     }
     if ((operand_ti.get_type() == kTIMESTAMP || operand_ti.get_type() == kDATE) &&
         ti.get_type() == kTIMESTAMP) {
-      return codegenCastBetweenTimestamps(
-          operand_lv, operand_ti.get_dimension(), ti.get_dimension(), !ti.get_notnull());
+      const auto operand_dimen =
+          (operand_ti.is_timestamp()) ? operand_ti.get_dimension() : 0;
+      if (operand_dimen != ti.get_dimension()) {
+        return codegenCastBetweenTimestamps(
+            operand_lv, operand_dimen, ti.get_dimension(), !ti.get_notnull());
+      }
     }
     if (ti.is_integer() || ti.is_decimal() || ti.is_time()) {
       return codegenCastBetweenIntTypes(operand_lv, operand_ti, ti);
@@ -114,6 +118,9 @@ llvm::Value* Executor::codegenCastBetweenTimestamps(llvm::Value* ts_lv,
                                                     const int operand_dimen,
                                                     const int target_dimen,
                                                     const bool nullable) {
+  if (operand_dimen == target_dimen) {
+    return ts_lv;
+  }
   static_assert(sizeof(time_t) == 4 || sizeof(time_t) == 8, "Unsupported time_t size");
   CHECK(ts_lv->getType()->isIntegerTy(32) || ts_lv->getType()->isIntegerTy(64));
   if (sizeof(time_t) == 4 && ts_lv->getType()->isIntegerTy(64)) {
@@ -121,19 +128,19 @@ llvm::Value* Executor::codegenCastBetweenTimestamps(llvm::Value* ts_lv,
                                                 ts_lv,
                                                 get_int_type(32, cgen_state_->context_));
   }
-  static const std::string fname{"DateTruncateAlterPrecision"};
-  static const std::string fname_nullable{"DateTruncateAlterPrecisionNullable"};
+  std::string fname{"DateTruncateAlterPrecision"};
   const auto result = timestamp_precisions_lookup_.find(target_dimen);
   CHECK(result != timestamp_precisions_lookup_.end());
-  std::vector<llvm::Value*> f_args{ll_int(static_cast<int32_t>(result->second)),
-                                   ts_lv,
-                                   ll_int(static_cast<int32_t>(operand_dimen)),
-                                   ll_int(static_cast<int32_t>(target_dimen))};
+  std::vector<llvm::Value*> f_args{
+      ll_int(static_cast<int32_t>(result->second)),
+      ts_lv,
+      ll_int(static_cast<int64_t>(
+          get_timestamp_precision_scale(abs(operand_dimen - target_dimen))))};
+  fname += operand_dimen < target_dimen ? "ScaleUp" : "ScaleDown";
   if (nullable) {
+    fname += "Nullable";
     f_args.push_back(inlineIntNull(
         SQLTypeInfo(ts_lv->getType()->isIntegerTy(64) ? kBIGINT : kINT, false)));
-    return cgen_state_->emitExternalCall(
-        fname_nullable, get_int_type(64, cgen_state_->context_), f_args);
   }
   return cgen_state_->emitExternalCall(
       fname, get_int_type(64, cgen_state_->context_), f_args);
@@ -325,6 +332,7 @@ llvm::Value* Executor::codegenCastFromFp(llvm::Value* operand_lv,
                              ti.get_type_name() + " not supported");
   }
   if (operand_ti.get_type() == ti.get_type()) {
+    // Should not have been called when both dimensions are same.
     return operand_lv;
   }
   CHECK(operand_lv->getType()->isFloatTy() || operand_lv->getType()->isDoubleTy());

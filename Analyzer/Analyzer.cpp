@@ -1062,15 +1062,33 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
     type_info = new_type_info;
   } else if (new_type_info.get_type() == kDATE && type_info.get_type() == kTIMESTAMP) {
     type_info = new_type_info;
-    auto dimen = type_info.get_dimension();
-    constval.timeval = (dimen > 0)
-                           ? DateTruncateHighPrecision(dtDAY, constval.timeval, dimen)
+    constval.timeval = type_info.is_high_precision_timestamp()
+                           ? ExtractFromTimeHighPrecision(
+                                 kEPOCH,
+                                 constval.timeval,
+                                 get_timestamp_precision_scale(type_info.get_dimension()))
                            : DateTruncate(dtDAY, constval.timeval);
     if (new_type_info.is_date_in_days()) {
       constval.timeval /= SECSPERDAY;
     }
   } else if (type_info.get_type() == kTIMESTAMP &&
              new_type_info.get_type() == kTIMESTAMP) {
+    if (type_info.get_dimension() != new_type_info.get_dimension()) {
+      const auto result_unit =
+          timestamp_precisions_lookup_.find(new_type_info.get_dimension());
+      constval.timeval =
+          type_info.get_dimension() < new_type_info.get_dimension()
+              ? DateTruncateAlterPrecisionScaleUp(
+                    result_unit->second,
+                    constval.timeval,
+                    get_timestamp_precision_scale(new_type_info.get_dimension() -
+                                                  type_info.get_dimension()))
+              : DateTruncateAlterPrecisionScaleDown(
+                    result_unit->second,
+                    constval.timeval,
+                    get_timestamp_precision_scale(type_info.get_dimension() -
+                                                  new_type_info.get_dimension()));
+    }
     type_info = new_type_info;
   } else if (new_type_info.is_array() && type_info.is_array()) {
     auto new_sub_ti = new_type_info.get_elem_type();

@@ -217,6 +217,14 @@ class DateTimeFacilities {
     }
     return false;
   }
+
+  inline auto is_timestamp() const {
+    CORE_TYPE const* derived(static_cast<CORE_TYPE const*>(this));
+    if (is_member_of_typeset<kTIMESTAMP>(*derived)) {
+      return true;
+    }
+    return false;
+  }
 };
 
 // @type SQLTypeInfo
@@ -418,7 +426,6 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
     return (IS_STRING(type) && compression != kENCODING_DICT) || type == kARRAY ||
            IS_GEO(type);
   }
-  inline bool is_timestamp() const { return type == kTIMESTAMP; }
 
   HOST DEVICE inline bool operator!=(const SQLTypeInfoCore& rhs) const {
     return type != rhs.get_type() || subtype != rhs.get_subtype() ||

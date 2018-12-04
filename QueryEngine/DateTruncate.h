@@ -18,7 +18,6 @@
 #define QUERYENGINE_DATETRUNCATE_H
 
 #include <stdint.h>
-#include <map>
 
 #include "../Shared/funcannotations.h"
 #include "ExtractFromTime.h"
@@ -59,20 +58,24 @@ enum DatetruncField {
   dtINVALID
 };
 
-static const std::map<int, DatetruncField> timestamp_precisions_lookup_{
-    {0, DatetruncField::dtSECOND},
-    {3, DatetruncField::dtMILLISECOND},
-    {6, DatetruncField::dtMICROSECOND},
-    {9, DatetruncField::dtNANOSECOND}};
-
 extern "C" NEVER_INLINE DEVICE time_t DateTruncate(DatetruncField field, time_t timeval);
 
 extern "C" NEVER_INLINE DEVICE time_t DateTruncateHighPrecision(DatetruncField field,
                                                                 time_t timeval,
-                                                                const int32_t dimen);
-extern "C" NEVER_INLINE DEVICE int64_t DateTruncateAlterPrecision(DatetruncField field,
-                                                                  time_t timeval,
-                                                                  const int32_t st_dimen,
-                                                                  const int32_t en_dimen);
+                                                                const int64_t scale);
+
+extern "C" ALWAYS_INLINE inline DEVICE int64_t
+DateTruncateAlterPrecisionScaleUp(DatetruncField field,
+                                  time_t timeval,
+                                  const int64_t scale) {
+  return timeval * scale;
+}
+
+extern "C" ALWAYS_INLINE inline DEVICE int64_t
+DateTruncateAlterPrecisionScaleDown(DatetruncField field,
+                                    time_t timeval,
+                                    const int64_t scale) {
+  return timeval / scale;
+}
 
 #endif  // QUERYENGINE_DATETRUNCATE_H

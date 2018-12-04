@@ -34,6 +34,7 @@
 #include <utility>
 #include <vector>
 #include "../Catalog/TableDescriptor.h"
+#include "../QueryEngine/DateTimeUtils.h"
 #include "../Shared/sqldefs.h"
 #include "../Shared/sqltypes.h"
 

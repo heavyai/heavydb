@@ -1019,15 +1019,18 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::get(
     default:
       break;
   }
-  auto dimen = from_expr->get_type_info().get_dimension();
   SQLTypeInfo ti(kBIGINT, 0, 0, from_expr->get_type_info().get_notnull());
   auto c = std::dynamic_pointer_cast<Analyzer::Constant>(from_expr);
   if (c != nullptr) {
     c->set_type_info(ti);
     Datum d;
-    d.bigintval = (dimen > 0) ? ExtractFromTimeHighPrecision(
-                                    fieldno, c->get_constval().timeval, dimen)
-                              : ExtractFromTime(fieldno, c->get_constval().timeval);
+    d.bigintval = from_expr->get_type_info().is_high_precision_timestamp()
+                      ? ExtractFromTimeHighPrecision(
+                            fieldno,
+                            c->get_constval().timeval,
+                            get_timestamp_precision_scale(
+                                from_expr->get_type_info().get_dimension()))
+                      : ExtractFromTime(fieldno, c->get_constval().timeval);
     c->set_constval(d);
     return c;
   }
@@ -1173,13 +1176,16 @@ std::shared_ptr<Analyzer::Expr> DatetruncExpr::get(
                  0,
                  from_expr->get_type_info().get_notnull());
   auto c = std::dynamic_pointer_cast<Analyzer::Constant>(from_expr);
-  auto dimen = from_expr->get_type_info().get_dimension();
+  const auto date_trunc_ti = from_expr->get_type_info();
   if (c != nullptr) {
     c->set_type_info(ti);
     Datum d;
-    d.bigintval =
-        (dimen > 0) ? DateTruncateHighPrecision(fieldno, c->get_constval().timeval, dimen)
-                    : DateTruncate(fieldno, c->get_constval().timeval);
+    d.bigintval = date_trunc_ti.is_high_precision_timestamp()
+                      ? DateTruncateHighPrecision(
+                            fieldno,
+                            c->get_constval().timeval,
+                            get_timestamp_precision_scale(date_trunc_ti.get_dimension()))
+                      : DateTruncate(fieldno, c->get_constval().timeval);
     c->set_constval(d);
     return c;
   }

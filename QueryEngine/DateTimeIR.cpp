@@ -42,11 +42,12 @@ llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr,
   }
   std::vector<llvm::Value*> extract_args{
       ll_int(static_cast<int32_t>(extract_expr->get_field())), from_expr};
-  if (extract_expr_ti.get_dimension() > 0) {
-    extract_args.push_back(ll_int(static_cast<int32_t>(extract_expr_ti.get_dimension())));
-  }
   std::string extract_fname{"ExtractFromTime"};
-  extract_fname += (extract_expr_ti.get_dimension() > 0) ? "HighPrecision" : "";
+  if (extract_expr_ti.get_dimension() > 0) {
+    extract_fname += "HighPrecision";
+    extract_args.push_back(ll_int(static_cast<int64_t>(
+        get_timestamp_precision_scale(extract_expr_ti.get_dimension()))));
+  }
   if (!extract_expr_ti.get_notnull()) {
     extract_args.push_back(inlineIntNull(extract_expr_ti));
     extract_fname += "Nullable";
@@ -72,11 +73,13 @@ llvm::Value* Executor::codegen(const Analyzer::DateaddExpr* dateadd_expr,
 
   const auto& datetime_ti = dateadd_expr->get_datetime_expr()->get_type_info();
   std::vector<llvm::Value*> dateadd_args{
-      ll_int(static_cast<int32_t>(dateadd_expr->get_field())),
-      number,
-      datetime,
-      ll_int(static_cast<int32_t>(dateadd_expr_ti.get_dimension()))};
+      ll_int(static_cast<int32_t>(dateadd_expr->get_field())), number, datetime};
   std::string dateadd_fname{"DateAdd"};
+  if (dateadd_expr_ti.is_high_precision_timestamp()) {
+    dateadd_fname += "HighPrecision";
+    dateadd_args.push_back(ll_int(static_cast<int64_t>(
+        get_timestamp_precision_scale(dateadd_expr_ti.get_dimension()))));
+  }
   if (!datetime_ti.get_notnull()) {
     dateadd_args.push_back(inlineIntNull(datetime_ti));
     dateadd_fname += "Nullable";
@@ -104,12 +107,19 @@ llvm::Value* Executor::codegen(const Analyzer::DatediffExpr* datediff_expr,
   const auto& start_ti = datediff_expr->get_start_expr()->get_type_info();
   const auto& end_ti = datediff_expr->get_end_expr()->get_type_info();
   std::vector<llvm::Value*> datediff_args{
-      ll_int(static_cast<int32_t>(datediff_expr->get_field())),
-      start,
-      end,
-      ll_int(static_cast<int32_t>(start_ti.get_dimension())),
-      ll_int(static_cast<int32_t>(end_ti.get_dimension()))};
+      ll_int(static_cast<int32_t>(datediff_expr->get_field())), start, end};
   std::string datediff_fname{"DateDiff"};
+  if (start_ti.is_high_precision_timestamp() || end_ti.is_high_precision_timestamp()) {
+    const auto adj_dimen = end_ti.get_dimension() - start_ti.get_dimension();
+    datediff_fname += "HighPrecision";
+    datediff_args.push_back(ll_int(static_cast<int32_t>(adj_dimen)));
+    datediff_args.push_back(
+        ll_int(static_cast<int64_t>(get_timestamp_precision_scale(abs(adj_dimen)))));
+    datediff_args.push_back(ll_int(static_cast<int64_t>(get_timestamp_precision_scale(
+        adj_dimen < 0 ? end_ti.get_dimension() : start_ti.get_dimension()))));
+    datediff_args.push_back(ll_int(static_cast<int64_t>(get_timestamp_precision_scale(
+        adj_dimen > 0 ? end_ti.get_dimension() : start_ti.get_dimension()))));
+  }
   const auto& ret_ti = datediff_expr->get_type_info();
   if (!start_ti.get_notnull() || !end_ti.get_notnull()) {
     datediff_args.push_back(inlineIntNull(ret_ti));
@@ -133,12 +143,12 @@ llvm::Value* Executor::codegen(const Analyzer::DatetruncExpr* datetrunc_expr,
   }
   std::vector<llvm::Value*> datetrunc_args{
       ll_int(static_cast<int32_t>(datetrunc_expr->get_field())), from_expr};
-  if (datetrunc_expr_ti.get_dimension() > 0) {
-    datetrunc_args.push_back(
-        ll_int(static_cast<int32_t>(datetrunc_expr_ti.get_dimension())));
-  }
   std::string datetrunc_fname{"DateTruncate"};
-  datetrunc_fname += (datetrunc_expr_ti.get_dimension() > 0) ? "HighPrecision" : "";
+  if (datetrunc_expr_ti.get_dimension() > 0) {
+    datetrunc_args.push_back(ll_int(static_cast<int64_t>(
+        get_timestamp_precision_scale(datetrunc_expr_ti.get_dimension()))));
+    datetrunc_fname += "HighPrecision";
+  }
   if (!datetrunc_expr_ti.get_notnull()) {
     datetrunc_args.push_back(inlineIntNull(datetrunc_expr_ti));
     datetrunc_fname += "Nullable";

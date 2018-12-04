@@ -993,9 +993,36 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
   }
 
   const auto number_units = translateScalarRex(rex_function->getOperand(1));
-  const auto cast_number_units = number_units->add_cast(SQLTypeInfo(kBIGINT, false));
+  auto cast_number_units = number_units->add_cast(SQLTypeInfo(kBIGINT, false));
   const auto datetime = translateScalarRex(rex_function->getOperand(2));
   const auto& datetime_ti = datetime->get_type_info();
+  const auto& field = to_dateadd_field(*timeunit_lit->get_constval().stringval);
+  if (!datetime_ti.is_high_precision_timestamp() && is_subsecond_dateadd_field(field)) {
+    // Scale the number to get value in seconds
+    const auto bigint_ti = SQLTypeInfo(kBIGINT, false);
+    cast_number_units = makeExpr<Analyzer::BinOper>(
+        bigint_ti.get_type(),
+        kDIVIDE,
+        kONE,
+        cast_number_units,
+        makeNumericConstant(bigint_ti, get_dateadd_timestamp_precision_scale(field)));
+    cast_number_units = fold_expr(cast_number_units.get());
+  }
+  if (datetime_ti.is_high_precision_timestamp() && is_subsecond_dateadd_field(field)) {
+    const auto oper_scale =
+        get_dateadd_high_precision_adjusted_scale(field, datetime_ti.get_dimension());
+    if (oper_scale.first) {
+      // scale number to desired precision
+      const auto bigint_ti = SQLTypeInfo(kBIGINT, false);
+      cast_number_units =
+          makeExpr<Analyzer::BinOper>(bigint_ti.get_type(),
+                                      oper_scale.first,
+                                      kONE,
+                                      cast_number_units,
+                                      makeNumericConstant(bigint_ti, oper_scale.second));
+      cast_number_units = fold_expr(cast_number_units.get());
+    }
+  }
   return makeExpr<Analyzer::DateaddExpr>(
       SQLTypeInfo(kTIMESTAMP, datetime_ti.get_dimension(), 0, false),
       to_dateadd_field(*timeunit_lit->get_constval().stringval),
@@ -1016,14 +1043,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateminus(
   const auto rhs = translateScalarRex(rex_operator->getOperand(1));
   const auto rhs_ti = rhs->get_type_info();
   if (rhs_ti.get_type() == kTIMESTAMP || rhs_ti.get_type() == kDATE) {
-    if (datetime_ti.get_dimension() > 0 || rhs_ti.get_dimension() > 0) {
+    if (datetime_ti.is_high_precision_timestamp() ||
+        rhs_ti.is_high_precision_timestamp()) {
       throw std::runtime_error(
-          "Only timestamp(0) is supported for TIMESTAMPDIFF operation.");
+          "High Precision timestamps are not supported for TIMESTAMPDIFF operation. Use "
+          "DATEDIFF.");
     }
     auto bigint_ti = SQLTypeInfo(kBIGINT, false);
     const auto& rex_operator_ti = rex_operator->getType();
     const auto datediff_field =
-        (rex_operator_ti.get_type() == kINTERVAL_DAY_TIME) ? dtNANOSECOND : dtMONTH;
+        (rex_operator_ti.get_type() == kINTERVAL_DAY_TIME) ? dtSECOND : dtMONTH;
     auto result =
         makeExpr<Analyzer::DatediffExpr>(bigint_ti, datediff_field, rhs, datetime);
     // multiply 1000 to result since expected result should be in millisecond precision.
@@ -1077,11 +1106,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatediff(
   }
   const auto start = translateScalarRex(rex_function->getOperand(1));
   const auto end = translateScalarRex(rex_function->getOperand(2));
-  return makeExpr<Analyzer::DatediffExpr>(
-      SQLTypeInfo(kBIGINT, false),
-      to_datediff_field(*timeunit_lit->get_constval().stringval),
-      start,
-      end);
+  const auto field = to_datediff_field(*timeunit_lit->get_constval().stringval);
+  return makeExpr<Analyzer::DatediffExpr>(SQLTypeInfo(kBIGINT, false), field, start, end);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatepart(

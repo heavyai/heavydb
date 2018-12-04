@@ -20,6 +20,7 @@
 #include "AggregatedColRange.h"
 #include "BufferCompaction.h"
 #include "CartesianProduct.h"
+#include "DateTimeUtils.h"
 #include "GroupByAndAggregate.h"
 #include "IRCodegenUtils.h"
 #include "InValuesBitmap.h"
@@ -59,6 +60,7 @@
 #include <algorithm>
 #include <condition_variable>
 #include <cstddef>
+#include <cstdlib>
 #include <deque>
 #include <functional>
 #include <limits>

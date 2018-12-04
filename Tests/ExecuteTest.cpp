@@ -2667,6 +2667,34 @@ TEST(Select, Time) {
               v<int64_t>(run_simple_agg("SELECT count(*) from test where DATEDIFF('day', "
                                         "CAST (m AS DATE), o) < -5570;",
                                         dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('second', m, TIMESTAMP(0) "
+                                        "'2014-12-13 22:23:16') FROM test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1000,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('millisecond', m, TIMESTAMP(0) "
+                                        "'2014-12-13 22:23:16') FROM test limit 1;",
+                                        dt)));
+    ASSERT_EQ(44000000,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('microsecond', m, TIMESTAMP(0) "
+                                        "'2014-12-13 22:23:59') FROM test limit 1;",
+                                        dt)));
+    ASSERT_EQ(34000000000,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('nanosecond', m, TIMESTAMP(0) "
+                                        "'2014-12-13 22:23:49') FROM test limit 1;",
+                                        dt)));
+    ASSERT_EQ(-1000,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('millisecond', TIMESTAMP(0) "
+                                        "'2014-12-13 22:23:16', m) FROM test limit 1;",
+                                        dt)));
+    ASSERT_EQ(-44000000,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('microsecond', TIMESTAMP(0) "
+                                        "'2014-12-13 22:23:59', m) FROM test limit 1;",
+                                        dt)));
+    ASSERT_EQ(-34000000000,
+              v<int64_t>(run_simple_agg("SELECT DATEDIFF('nanosecond', TIMESTAMP(0) "
+                                        "'2014-12-13 22:23:49', m) FROM test limit 1;",
+                                        dt)));
     // DATEADD tests
     ASSERT_EQ(
         1,
@@ -2858,6 +2886,37 @@ TEST(Select, Time) {
               v<int64_t>(run_simple_agg("SELECT DATEADD('day', -3, o) = TIMESTAMP "
                                         "'1999-09-06 0:00:00' from test limit 1;",
                                         dt)));
+    /* DATE ADD subseconds to default timestamp(0) */
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg("SELECT DATEADD('millisecond', 1000, m) = TIMESTAMP "
+                                  "'2014-12-13 22:23:16' from test limit 1;",
+                                  dt)));
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg("SELECT DATEADD('microsecond', 1000000, m) = TIMESTAMP "
+                                  "'2014-12-13 22:23:16' from test limit 1;",
+                                  dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEADD('nanosecond', 1000000000, m) = TIMESTAMP "
+                  "'2014-12-13 22:23:16' from test limit 1;",
+                  dt)));
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg("SELECT DATEADD('millisecond', 5123, m) = TIMESTAMP "
+                                  "'2014-12-13 22:23:20' from test limit 1;",
+                                  dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEADD('microsecond', 86400000000, m) = TIMESTAMP "
+                  "'2014-12-14 22:23:15' from test limit 1;",
+                  dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEADD('nanosecond', 86400000000123, m) = TIMESTAMP "
+                  "'2014-12-14 22:23:15' from test limit 1;",
+                  dt)));
 
     ASSERT_EQ(
         1,
@@ -7284,6 +7343,36 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(1418509395323L,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('nanosecond', 875, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509395323L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEADD('nanosecond', 145000, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509395553L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEADD('microsecond', 230000, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418509396553L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEADD('millisecond', 1230, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(931701774885533L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEADD('millisecond', 1011 , m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931701774874678L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEADD('microsecond', 1000145, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(
+        931701774874533L,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEADD('nanosecond', 1000000875, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146023345932435125L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEADD('millisecond', 1325 , m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146023345607960125L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEADD('microsecond', 1000525, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(
+        1146023345607436000L,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEADD('nanosecond', 1000000875, m_9) FROM test limit 1;", dt)));
+
     /* ---DATE DIFF --- */
     ASSERT_EQ(1146023344607435125L - 931701773874533000L,
               v<int64_t>(run_simple_agg(
@@ -7339,22 +7428,22 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ((1418509395000000000L - 1146023344607435125L) / (1000L * 1000L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('millisecond', m_9, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((1146023344607435125L - 931701773874533000L) / (1000L * 1000L * 1000L),
+    ASSERT_EQ(((1146023344607435125L / 1000000000) - (931701773874533L / 1000000)),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_6, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533000L - 1146023344607435125L) / (1000L * 1000L * 1000L),
+    ASSERT_EQ(((931701773874533L / 1000000) - (1146023344607435125L / 1000000000)),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_9, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1146023344607435125L - 1418509395323000000L) / (1000L * 1000L * 1000L),
+    ASSERT_EQ(((1146023344607435125L / 1000000000) - (1418509395323L / 1000)),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_3, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323000000L - 1146023344607435125L) / (1000L * 1000L * 1000L),
+    ASSERT_EQ(((1418509395323L / 1000) - (1146023344607435125L / 1000000000)),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_9, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((1146023344607435125L - 1418509395000000000L) / (1000L * 1000L * 1000L),
+    ASSERT_EQ(((1146023344607435125L / 1000000000) - 1418509395L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000000000L - 1146023344607435125L) / (1000L * 1000L * 1000L),
+    ASSERT_EQ((1418509395L - (1146023344607435125L / 1000000000)),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_9, m) FROM test limit 1;", dt)));
     ASSERT_EQ((3572026L),
@@ -7483,52 +7572,52 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ((1418509395000000L - 931701773874533L) / (1000L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('millisecond', m_6, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L - 1418509395323000L) / (1000L * 1000L),
+    ASSERT_EQ((931701773874533L / 1000000 - 1418509395323L / 1000),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_3, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323000L - 931701773874533L) / (1000L * 1000L),
+    ASSERT_EQ((1418509395323L / 1000 - 931701773874533L / 1000000),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_6, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L - 1418509395000000L) / (1000L * 1000L),
+    ASSERT_EQ((931701773874533L / 1000000 - 1418509395L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000000L - 931701773874533L) / (1000L * 1000L),
+    ASSERT_EQ((1418509395L - 931701773874533L / 1000000),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_6, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L - 1418509395323000L) / (1000L * 1000L * 60L),
+    ASSERT_EQ((931701773874533L / 1000000 - 1418509395323 / 1000L) / (60),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('minute', m_3, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323000L - 931701773874533L) / (1000L * 1000L * 60L),
+    ASSERT_EQ((1418509395323L / 1000 - 931701773874533L / 1000000) / (60L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('minute', m_6, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L - 1418509395000000L) / (1000L * 1000L * 60L),
+    ASSERT_EQ((931701773874533L / 1000000 - 1418509395L) / (60),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('minute', m, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000000L - 931701773874533L) / (1000L * 1000L * 60L),
+    ASSERT_EQ((1418509395L - 931701773874533L / 1000000) / (60),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('minute', m_6, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L - 1418509395323000L) / (1000L * 1000L * 60L * 60L),
+    ASSERT_EQ((931701773874533L / 1000000 - 1418509395323L / 1000) / (60L * 60L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('hour', m_3, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323000L - 931701773874533L) / (1000L * 1000L * 60L * 60L),
+    ASSERT_EQ((1418509395323L / 1000 - 931701773874533L / 1000000) / (60L * 60L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('hour', m_6, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L - 1418509395000000L) / (1000L * 1000L * 60L * 60L),
+    ASSERT_EQ((931701773874533L / 1000000 - 1418509395L) / (60L * 60L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('hour', m, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000000L - 931701773874533L) / (1000L * 1000L * 60L * 60L),
+    ASSERT_EQ((1418509395L - 931701773874533L / 1000000) / (60L * 60L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('hour', m_6, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L - 1418509395323000L) / (1000L * 1000L * 60L * 60L * 24L),
+    ASSERT_EQ((931701773874533L / 1000000 - 1418509395323L / 1000) / (60L * 60L * 24L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('day', m_3, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323000L - 931701773874533L) / (1000L * 1000L * 60L * 60L * 24L),
+    ASSERT_EQ((1418509395323L / 1000 - 931701773874533L / 1000000) / (60L * 60L * 24L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('day', m_6, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L - 1418509395000000L) / (1000L * 1000L * 60L * 60L * 24L),
+    ASSERT_EQ((931701773874533L / 1000000 - 1418509395L) / (60L * 60L * 24L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('day', m, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000000L - 931701773874533L) / (1000L * 1000L * 60L * 60L * 24L),
+    ASSERT_EQ((1418509395L - 931701773874533L / 1000000) / (60L * 60L * 24L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('day', m_6, m) FROM test limit 1;", dt)));
     ASSERT_EQ(185,
@@ -7573,28 +7662,28 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ((1418509395323L - 1418509395000L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('millisecond', m, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000L - 1418509395323L) / (1000L),
+    ASSERT_EQ((1418509395L - 1418509395323L / 1000),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_3, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323L - 1418509395000L) / (1000L),
+    ASSERT_EQ((1418509395323L / 1000 - 1418509395L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000L - 1418509395323L) / (1000L * 60L),
+    ASSERT_EQ((1418509395L - 1418509395323L / 1000) / (60L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('minute', m_3, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323L - 1418509395000L) / (1000L * 60L),
+    ASSERT_EQ((1418509395323L / 1000 - 1418509395L) / (60L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('minute', m, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000L - 1418509395323L) / (1000L * 1000L * 60L * 60L),
+    ASSERT_EQ((1418509395L - 1418509395323L / 1000) / (60L * 60L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('hour', m_3, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323L - 1418509395000L) / (1000L * 1000L * 60L * 60L),
+    ASSERT_EQ((1418509395323L / 1000 - 1418509395L) / (60L * 60L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('hour', m, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000L - 1418509395323L) / (1000L * 1000L * 60L * 60L * 24L),
+    ASSERT_EQ((1418509395L - 1418509395323L / 1000) / (60L * 60L * 24L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('day', m_3, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323L - 1418509395000L) / (1000L * 1000L * 60L * 60L * 24L),
+    ASSERT_EQ((1418509395323L / 1000 - 1418509395L) / (60L * 60L * 24L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('day', m, m_3) FROM test limit 1;", dt)));
     ASSERT_EQ(0,

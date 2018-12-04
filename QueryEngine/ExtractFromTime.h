@@ -110,6 +110,6 @@ extern "C" __attribute__((noinline))
 __device__
 #endif
     int64_t
-    ExtractFromTimeHighPrecision(ExtractField field, time_t timeval, const int32_t dimen);
+    ExtractFromTimeHighPrecision(ExtractField field, time_t timeval, const int64_t scale);
 
 #endif  // QUERYENGINE_EXTRACTFROMTIME_H
