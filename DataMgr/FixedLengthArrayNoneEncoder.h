@@ -133,6 +133,10 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     initialized = array_encoder->initialized;
   }
 
+  void updateMetadata(int8_t* array) {
+    update_elem_stats(ArrayDatum(array_size, array, DoNothingDeleter()));
+  }
+
   Datum elem_min;
   Datum elem_max;
   bool has_nulls;

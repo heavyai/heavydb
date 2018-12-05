@@ -33,6 +33,10 @@
 // Should the ColumnInfo and FragmentInfo structs be in
 // AbstractFragmenter?
 
+namespace Chunk_NS {
+class Chunk;
+};
+
 namespace Data_Namespace {
 class AbstractBuffer;
 class AbstractDataMgr;
@@ -149,6 +153,17 @@ class AbstractFragmenter {
   virtual void updateMetadata(const Catalog_Namespace::Catalog* catalog,
                               const MetaDataKey& key,
                               UpdelRoll& updel_roll) = 0;
+
+  virtual void compactRows(const Catalog_Namespace::Catalog* catalog,
+                           const TableDescriptor* td,
+                           const int fragmentId,
+                           const std::vector<uint64_t>& fragOffsets,
+                           const Data_Namespace::MemoryLevel memoryLevel,
+                           UpdelRoll& updelRoll) = 0;
+
+  virtual const std::vector<uint64_t> getVacuumOffsets(
+      const std::shared_ptr<Chunk_NS::Chunk>& chunk,
+      const std::vector<uint64_t>& frag_offsets) = 0;
 };
 
 }  // namespace Fragmenter_Namespace

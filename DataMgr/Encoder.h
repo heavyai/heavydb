@@ -99,6 +99,7 @@ class Encoder {
   virtual void readMetadata(FILE* f /*, const size_t offset*/) = 0;
 
   size_t getNumElems() const { return num_elems_; }
+  void setNumElems(const size_t num_elems) { num_elems_ = num_elems; }
 
  protected:
   size_t num_elems_;

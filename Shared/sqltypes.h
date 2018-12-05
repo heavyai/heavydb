@@ -79,15 +79,26 @@ struct VarlenDatum {
       : length(l), pointer(p), is_null(n) {}
 };
 
+struct DoNothingDeleter {
+  void operator()(int8_t*) {}
+};
+struct FreeDeleter {
+  void operator()(int8_t* p) { free(p); }
+};
+
 struct HostArrayDatum : public VarlenDatum {
-  struct Deleter {
-    auto operator()(int8_t* p) { free(p); }
-  };
   using ManagedPtr = std::shared_ptr<int8_t>;
 
   HostArrayDatum() = default;
+
   HostArrayDatum(size_t const l, int8_t* p, bool const n)
-      : VarlenDatum(l, p, n), data_ptr(p, Deleter()){};
+      : VarlenDatum(l, p, n), data_ptr(p, FreeDeleter()){};
+
+  template <typename CUSTOM_DELETER,
+            typename = std::enable_if_t<
+                std::is_void<std::result_of_t<CUSTOM_DELETER(int8_t*)> >::value> >
+  HostArrayDatum(size_t const l, int8_t* p, CUSTOM_DELETER custom_deleter)
+      : VarlenDatum(l, p, 0 == l), data_ptr(p, custom_deleter) {}
 
   ManagedPtr data_ptr;
 };
@@ -251,6 +262,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
       , compression(kENCODING_NONE)
       , comp_param(0)
       , size(get_storage_size()) {}
+  SQLTypeInfoCore(SQLTypes t, int d, int s) : SQLTypeInfoCore(t, d, s, false) {}
   SQLTypeInfoCore(SQLTypes t, bool n)
       : type(t)
       , subtype(kNULLT)
@@ -260,6 +272,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
       , compression(kENCODING_NONE)
       , comp_param(0)
       , size(get_storage_size()) {}
+  SQLTypeInfoCore(SQLTypes t) : SQLTypeInfoCore(t, false) {}
   SQLTypeInfoCore(SQLTypes t, bool n, EncodingType c)
       : type(t)
       , subtype(kNULLT)
@@ -425,6 +438,13 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
   inline bool is_varlen() const {  // TODO: logically this should ignore fixlen arrays
     return (IS_STRING(type) && compression != kENCODING_DICT) || type == kARRAY ||
            IS_GEO(type);
+  }
+
+  // need this here till is_varlen can be fixed w/o negative impact to existing code
+  inline bool is_varlen_indeed() const {
+    // SQLTypeInfo.is_varlen() is broken with fixedlen array now
+    // and seems left broken for some concern, so fix it locally
+    return is_varlen() && !is_fixlen_array();
   }
 
   HOST DEVICE inline bool operator!=(const SQLTypeInfoCore& rhs) const {

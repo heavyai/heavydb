@@ -145,6 +145,21 @@ class InsertOrderFragmenter : public AbstractFragmenter {
                               const MetaDataKey& key,
                               UpdelRoll& updel_roll);
 
+  virtual void compactRows(const Catalog_Namespace::Catalog* catalog,
+                           const TableDescriptor* td,
+                           const int fragment_id,
+                           const std::vector<uint64_t>& frag_offsets,
+                           const Data_Namespace::MemoryLevel memory_level,
+                           UpdelRoll& updel_roll);
+
+  virtual const std::vector<uint64_t> getVacuumOffsets(
+      const std::shared_ptr<Chunk_NS::Chunk>& chunk,
+      const std::vector<uint64_t>& frag_offsets);
+
+  auto getChunksForAllColumns(const TableDescriptor* td,
+                              const FragmentInfo& fragment,
+                              const Data_Namespace::MemoryLevel memory_level);
+
  private:
   std::vector<int> chunkKeyPrefix_;
   std::map<int, Chunk_NS::Chunk>
@@ -197,6 +212,15 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   InsertOrderFragmenter& operator=(const InsertOrderFragmenter&);
   // FIX-ME:  Temporary lock; needs removing.
   mutable std::mutex temp_mutex_;
+
+  FragmentInfo& getFragmentInfoFromId(const int fragment_id);
+
+  auto vacuum_fixlen_rows(const FragmentInfo& fragment,
+                          const std::shared_ptr<Chunk_NS::Chunk>& chunk,
+                          const std::vector<uint64_t>& frag_offsets);
+  auto vacuum_varlen_rows(const FragmentInfo& fragment,
+                          const std::shared_ptr<Chunk_NS::Chunk>& chunk,
+                          const std::vector<uint64_t>& frag_offsets);
 };
 
 }  // namespace Fragmenter_Namespace
