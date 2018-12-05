@@ -1512,7 +1512,11 @@ bool GroupByAndAggregate::codegenAggCalls(
       }
     }
     const auto agg_fn_names = agg_fn_base_names(agg_info);
-    auto target_lvs = codegenAggArg(target_expr, co);
+    const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
+    auto target_lvs = window_func
+                          ? std::vector<llvm::Value*>{executor_->codegenWindowFunction(
+                                window_func, target_idx, co)}
+                          : codegenAggArg(target_expr, co);
     if ((executor_->plan_state_->isLazyFetchColumn(target_expr) || !is_group_by) &&
         static_cast<size_t>(query_mem_desc.getColumnWidth(agg_out_off).compact) <
             sizeof(int64_t)) {

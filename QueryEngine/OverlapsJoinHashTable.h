@@ -47,6 +47,16 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
       ColumnCacheMap& column_map,
       Executor* executor);
 
+  size_t countBufferOff() const noexcept override {
+    LOG(FATAL) << "Not supported for this layout";
+    return 0;
+  }
+
+  size_t payloadBufferOff() const noexcept override {
+    LOG(FATAL) << "Not supported for this layout";
+    return 0;
+  }
+
  protected:
   void reifyWithLayout(const int device_count,
                        const JoinHashTableInterface::HashType layout) override;

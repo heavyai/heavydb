@@ -1065,6 +1065,11 @@ extern "C" ALWAYS_INLINE DEVICE int32_t char_length_nullable(const char* str,
   return str_len;
 }
 
+extern "C" ALWAYS_INLINE int64_t row_number_window_func(const int64_t output_buff,
+                                                        const int64_t pos) {
+  return reinterpret_cast<const int64_t*>(output_buff)[pos];
+}
+
 extern "C" NEVER_INLINE void linear_probabilistic_count(uint8_t* bitmap,
                                                         const uint32_t bitmap_bytes,
                                                         const uint8_t* key_bytes,

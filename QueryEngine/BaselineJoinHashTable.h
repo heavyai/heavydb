@@ -69,6 +69,12 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   JoinHashTableInterface::HashType getHashType() const noexcept override;
 
+  size_t offsetBufferOff() const noexcept override;
+
+  size_t countBufferOff() const noexcept override;
+
+  size_t payloadBufferOff() const noexcept override;
+
   static auto yieldCacheInvalidator() -> std::function<void()> {
     return []() -> void {
       std::lock_guard<std::mutex> guard(hash_table_cache_mutex_);
@@ -77,6 +83,9 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   }
 
   virtual ~BaselineJoinHashTable() {}
+
+ private:
+  size_t getComponentBufferSize() const noexcept;
 
  protected:
   BaselineJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,

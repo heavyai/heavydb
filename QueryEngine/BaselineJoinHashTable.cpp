@@ -1006,8 +1006,7 @@ HashJoinMatchingSet BaselineJoinHashTable::codegenMatchingSet(
   } else {
     CHECK(one_to_many_ptr->getType()->isIntegerTy(64));
   }
-  const auto composite_key_dict_size =
-      entry_count_ * key_component_count * key_component_width;
+  const auto composite_key_dict_size = offsetBufferOff();
   one_to_many_ptr =
       LL_BUILDER.CreateAdd(one_to_many_ptr, LL_INT(composite_key_dict_size));
   return JoinHashTable::codegenMatchingSet(
@@ -1015,8 +1014,30 @@ HashJoinMatchingSet BaselineJoinHashTable::codegenMatchingSet(
       false,
       false,
       false,
-      entry_count_ * sizeof(int32_t),
+      getComponentBufferSize(),
       executor_);
+}
+
+size_t BaselineJoinHashTable::offsetBufferOff() const noexcept {
+  CHECK(layout_ == JoinHashTableInterface::HashType::OneToMany);
+  const auto key_component_width = getKeyComponentWidth();
+  CHECK(key_component_width == 4 || key_component_width == 8);
+  const auto key_component_count = getKeyComponentCount();
+  return entry_count_ * key_component_count * key_component_width;
+}
+
+size_t BaselineJoinHashTable::countBufferOff() const noexcept {
+  CHECK(layout_ == JoinHashTableInterface::HashType::OneToMany);
+  return offsetBufferOff() + getComponentBufferSize();
+}
+
+size_t BaselineJoinHashTable::payloadBufferOff() const noexcept {
+  CHECK(layout_ == JoinHashTableInterface::HashType::OneToMany);
+  return countBufferOff() + getComponentBufferSize();
+}
+
+size_t BaselineJoinHashTable::getComponentBufferSize() const noexcept {
+  return entry_count_ * sizeof(int32_t);
 }
 
 llvm::Value* BaselineJoinHashTable::codegenKey(const CompilationOptions& co) {

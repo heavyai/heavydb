@@ -678,6 +678,10 @@ class Executor {
   llvm::Value* codegenFunctionOper(const Analyzer::FunctionOper*,
                                    const CompilationOptions&);
 
+  llvm::Value* codegenWindowFunction(const Analyzer::WindowFunction* window_func,
+                                     const size_t target_index,
+                                     const CompilationOptions& co);
+
   struct ArgNullcheckBBs {
     llvm::BasicBlock* args_null_bb;
     llvm::BasicBlock* args_notnull_bb;

@@ -18,6 +18,7 @@
 #include "ExtensionFunctions.hpp"
 #include "ExtensionFunctionsBinding.h"
 #include "ExtensionFunctionsWhitelist.h"
+#include "WindowContext.h"
 
 namespace {
 
@@ -117,6 +118,23 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
       function_oper, &ext_func_sig, orig_arg_lvs, const_arr_size, co);
   auto ext_call = cgen_state_->emitExternalCall(ext_func_sig.getName(), ret_ty, args);
   return endArgsNullcheck(bbs, ext_call, function_oper);
+}
+
+llvm::Value* Executor::codegenWindowFunction(const Analyzer::WindowFunction* window_func,
+                                             const size_t target_index,
+                                             const CompilationOptions& co) {
+  const auto window_func_context =
+      WindowProjectNodeContext::get()->getWindowFunctionContext(target_index);
+  switch (window_func->getKind()) {
+    case SqlWindowFunctionKind::ROW_NUMBER: {
+      return cgen_state_->emitCall(
+          "row_number_window_func",
+          {ll_int(reinterpret_cast<const int64_t>(window_func_context->output())),
+           posArg(nullptr)});
+    }
+    default: { LOG(FATAL) << "Invalid window function kind"; }
+  }
+  return nullptr;
 }
 
 // Start the control flow needed for a call site check of NULL arguments.

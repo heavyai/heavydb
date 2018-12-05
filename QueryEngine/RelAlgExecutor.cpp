@@ -27,6 +27,7 @@
 #include "QueryPhysicalInputsCollector.h"
 #include "RangeTableIndexVisitor.h"
 #include "RexVisitor.h"
+#include "WindowContext.h"
 
 #include "../Parser/ParserNode.h"
 #include "../Shared/measure.h"
@@ -1239,6 +1240,18 @@ ExecutionResult RelAlgExecutor::executeAggregate(const RelAggregate* aggregate,
                          queue_time_ms);
 }
 
+namespace {
+
+bool is_window_query(const RelAlgExecutionUnit& ra_exe_unit) {
+  return std::any_of(ra_exe_unit.target_exprs.begin(),
+                     ra_exe_unit.target_exprs.end(),
+                     [](const Analyzer::Expr* expr) {
+                       return dynamic_cast<const Analyzer::WindowFunction*>(expr);
+                     });
+}
+
+}  // namespace
+
 ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
                                                const CompilationOptions& co,
                                                const ExecutionOptions& eo,
@@ -1249,6 +1262,10 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
   CompilationOptions co_project = co;
   if (work_unit.exe_unit.query_features.isCPUOnlyExecutionRequired()) {
     co_project.device_type_ = ExecutorDeviceType::CPU;
+  }
+
+  if (is_window_query(work_unit.exe_unit)) {
+    computeWindow(work_unit.exe_unit, co, eo, queue_time_ms);
   }
 
   if (project->isSimple()) {
@@ -1270,6 +1287,104 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
                          eo,
                          render_info,
                          queue_time_ms);
+}
+
+namespace {
+
+std::shared_ptr<Analyzer::Expr> transform_to_inner(const Analyzer::Expr* expr) {
+  const auto tuple = dynamic_cast<const Analyzer::ExpressionTuple*>(expr);
+  if (tuple) {
+    std::vector<std::shared_ptr<Analyzer::Expr>> transformed_tuple;
+    for (const auto& element : tuple->getTuple()) {
+      transformed_tuple.push_back(transform_to_inner(element.get()));
+    }
+    return makeExpr<Analyzer::ExpressionTuple>(transformed_tuple);
+  }
+  const auto col = dynamic_cast<const Analyzer::ColumnVar*>(expr);
+  if (!col) {
+    throw std::runtime_error("Only columns supported in the window partition for now");
+  }
+  return makeExpr<Analyzer::ColumnVar>(
+      col->get_type_info(), col->get_table_id(), col->get_column_id(), 1);
+}
+
+}  // namespace
+
+void RelAlgExecutor::computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
+                                   const CompilationOptions& co,
+                                   const ExecutionOptions& eo,
+                                   const int64_t queue_time_ms) {
+  auto query_infos = get_table_infos(ra_exe_unit.input_descs, executor_);
+  CHECK_EQ(query_infos.size(), size_t(1));
+  if (query_infos.front().info.fragments.size() != 1) {
+    throw std::runtime_error(
+        "Only single fragment tables supported for window functions for now");
+  }
+  query_infos.push_back(query_infos.front());
+  const auto memory_level = co.device_type_ == ExecutorDeviceType::GPU
+                                ? MemoryLevel::GPU_LEVEL
+                                : MemoryLevel::CPU_LEVEL;
+  auto window_project_node_context = WindowProjectNodeContext::reset();
+  for (size_t target_index = 0; target_index < ra_exe_unit.target_exprs.size();
+       ++target_index) {
+    const auto& target_expr = ra_exe_unit.target_exprs[target_index];
+    const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
+    if (!window_func) {
+      continue;
+    }
+    const auto& partition_keys = window_func->getPartitionKeys();
+    std::shared_ptr<Analyzer::Expr> partition_key_tuple;
+    if (partition_keys.size() > 1) {
+      partition_key_tuple = makeExpr<Analyzer::ExpressionTuple>(partition_keys);
+    } else {
+      CHECK_EQ(partition_keys.size(), size_t(1));
+      partition_key_tuple = partition_keys.front();
+    }
+    const auto partition_key_cond =
+        makeExpr<Analyzer::BinOper>(kBOOLEAN,
+                                    kEQ,
+                                    kONE,
+                                    partition_key_tuple,
+                                    transform_to_inner(partition_key_tuple.get()));
+    ColumnCacheMap column_cache_map;
+    const auto join_table_or_err = executor_->buildHashTableForQualifier(
+        partition_key_cond, query_infos, ra_exe_unit, memory_level, column_cache_map);
+    if (!join_table_or_err.fail_reason.empty()) {
+      throw std::runtime_error(join_table_or_err.fail_reason);
+    }
+    if (join_table_or_err.hash_table->getHashType() !=
+        JoinHashTableInterface::HashType::OneToMany) {
+      throw std::runtime_error("One row partitions only not supported");
+    }
+    const auto& order_keys = window_func->getOrderKeys();
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
+    const size_t elem_count = query_infos.front().info.fragments.front().getNumTuples();
+    auto context = std::make_unique<WindowFunctionContext>(
+        window_func, join_table_or_err.hash_table, elem_count, co.device_type_);
+    for (const auto& order_key : order_keys) {
+      const auto order_col =
+          std::dynamic_pointer_cast<const Analyzer::ColumnVar>(order_key);
+      if (!order_col) {
+        throw std::runtime_error("Only order by columns supported for now");
+      }
+      const int8_t* column;
+      size_t join_col_elem_count;
+      std::tie(column, join_col_elem_count) =
+          Executor::ExecutionDispatch::getColumnFragment(
+              executor_,
+              *order_col,
+              query_infos.front().info.fragments.front(),
+              memory_level,
+              0,
+              chunks_owner,
+              column_cache_map);
+      CHECK_EQ(join_col_elem_count, elem_count);
+      context->addOrderColumn(column, order_col.get());
+    }
+    context->compute();
+    window_project_node_context->addWindowFunctionContext(std::move(context),
+                                                          target_index);
+  }
 }
 
 ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,

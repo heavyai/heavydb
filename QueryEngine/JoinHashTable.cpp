@@ -1194,7 +1194,7 @@ HashJoinMatchingSet JoinHashTable::codegenMatchingSet(const CompilationOptions& 
   CHECK(pos_ptr);
   const int shard_count = shardCount();
   auto hash_join_idx_args = getHashJoinArgs(pos_ptr, key_col, shard_count, co);
-  const int64_t sub_buff_size = hash_entry_count_ * sizeof(int32_t);
+  const int64_t sub_buff_size = getComponentBufferSize();
   const auto& key_col_ti = key_col->get_type_info();
   return codegenMatchingSet(hash_join_idx_args,
                             shard_count,
@@ -1245,6 +1245,25 @@ HashJoinMatchingSet JoinHashTable::codegenMatchingSet(
   auto rowid_ptr_i32 =
       executor->cgen_state_->ir_builder_.CreateGEP(rowid_base_i32, slot_lv);
   return {rowid_ptr_i32, row_count_lv, slot_lv};
+}
+
+size_t JoinHashTable::offsetBufferOff() const noexcept {
+  CHECK(hash_type_ == JoinHashTableInterface::HashType::OneToMany);
+  return 0;
+}
+
+size_t JoinHashTable::countBufferOff() const noexcept {
+  CHECK(hash_type_ == JoinHashTableInterface::HashType::OneToMany);
+  return getComponentBufferSize();
+}
+
+size_t JoinHashTable::payloadBufferOff() const noexcept {
+  CHECK(hash_type_ == JoinHashTableInterface::HashType::OneToMany);
+  return 2 * getComponentBufferSize();
+}
+
+size_t JoinHashTable::getComponentBufferSize() const noexcept {
+  return hash_entry_count_ * sizeof(int32_t);
 }
 
 llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co,

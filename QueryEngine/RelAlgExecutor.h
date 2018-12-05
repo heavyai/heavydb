@@ -168,6 +168,11 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                  RenderInfo*,
                                  const int64_t queue_time_ms);
 
+  void computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
+                     const CompilationOptions& co,
+                     const ExecutionOptions& eo,
+                     const int64_t queue_time_ms);
+
   ExecutionResult executeFilter(const RelFilter*,
                                 const CompilationOptions&,
                                 const ExecutionOptions&,

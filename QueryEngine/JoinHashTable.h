@@ -94,6 +94,12 @@ class JoinHashTable : public JoinHashTableInterface {
 
   HashType getHashType() const noexcept override { return hash_type_; }
 
+  size_t offsetBufferOff() const noexcept override;
+
+  size_t countBufferOff() const noexcept override;
+
+  size_t payloadBufferOff() const noexcept override;
+
   static HashJoinMatchingSet codegenMatchingSet(
       const std::vector<llvm::Value*>& hash_join_idx_args_in,
       const bool is_sharded,
@@ -221,6 +227,8 @@ class JoinHashTable : public JoinHashTableInterface {
   void freeHashBufferMemory();
   void freeHashBufferGpuMemory();
   void freeHashBufferCpuMemory();
+
+  size_t getComponentBufferSize() const noexcept;
 
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   std::shared_ptr<Analyzer::ColumnVar> col_var_;

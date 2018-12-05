@@ -74,6 +74,12 @@ class JoinHashTableInterface {
   enum class HashType { OneToOne, OneToMany };
 
   virtual HashType getHashType() const noexcept = 0;
+
+  virtual size_t offsetBufferOff() const noexcept = 0;
+
+  virtual size_t countBufferOff() const noexcept = 0;
+
+  virtual size_t payloadBufferOff() const noexcept = 0;
 };
 
 #endif  // QUERYENGINE_JOINHASHTABLEINTERFACE_H
