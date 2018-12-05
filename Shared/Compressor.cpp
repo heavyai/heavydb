@@ -189,6 +189,9 @@ void BloscCompressor::getBloscBufferSizes(const uint8_t* data_ptr,
 BloscCompressor* BloscCompressor::instance = NULL;
 
 BloscCompressor* BloscCompressor::getCompressor() {
+  static std::mutex compressor_singleton_lock;
+  std::lock_guard<std::mutex> singleton_lock(compressor_singleton_lock);
+
   if (instance == NULL) {
     instance = new BloscCompressor();
   }
