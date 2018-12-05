@@ -779,7 +779,8 @@ int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
 
 inline SQLTypeInfo get_logical_type_info(const SQLTypeInfo& type_info) {
   EncodingType encoding = type_info.get_compression();
-  if (encoding == kENCODING_FIXED && (type_info.get_type() != kARRAY)) {
+  if (encoding == kENCODING_DATE_IN_DAYS ||
+      (encoding == kENCODING_FIXED && type_info.get_type() != kARRAY)) {
     encoding = kENCODING_NONE;
   }
   return SQLTypeInfo(type_info.get_type(),

@@ -3451,6 +3451,24 @@ TEST(Select, Time) {
         v<int64_t>(run_simple_agg(
             "SELECT DATEPART('second', CAST ('2617-12-23' as DATE)) from test limit 1;",
             dt)));
+    /* Compressed Date ColumnarResults fetch tests*/
+    ASSERT_EQ(1999,
+              v<int64_t>(run_simple_agg("select yr from (SELECT EXTRACT(year from o) as "
+                                        "yr, o from test order by x) limit 1;",
+                                        dt)));
+    ASSERT_EQ(936835200,
+              v<int64_t>(run_simple_agg("select dy from (SELECT DATE_TRUNC(day, o) as "
+                                        "dy, o from test order by x) limit 1;",
+                                        dt)));
+    ASSERT_EQ(936921600,
+              v<int64_t>(run_simple_agg("select dy from (SELECT DATEADD('day', 1, o) as "
+                                        "dy, o from test order by x) limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "select dy from (SELECT DATEDIFF('day', o, DATE '1999-09-10') as dy, o "
+                  "from test order by x) limit 1;",
+                  dt)));
   }
 }
 
