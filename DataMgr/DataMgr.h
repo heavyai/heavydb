@@ -70,7 +70,6 @@ class DataMgr {
           const MapDParameters& mapd_parameters,
           const bool useGpus,
           const int numGpus,
-          const std::string& dbConvertDir = "",
           const int startGpu = 0,
           const size_t reservedGpuMem = (1 << 27),
           const size_t numReaderThreads =
@@ -130,7 +129,6 @@ class DataMgr {
   std::string dataDir_;
   bool hasGpus_;
   size_t reservedGpuMem_;
-  std::string dbConvertDir_;
   std::map<ChunkKey, std::shared_ptr<mapd_shared_mutex>> chunkMutexMap_;
   mapd_shared_mutex chunkMutexMapMutex_;
 };

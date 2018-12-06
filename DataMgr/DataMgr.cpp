@@ -47,11 +47,10 @@ DataMgr::DataMgr(const string& dataDir,
                  const MapDParameters& mapd_parameters,
                  const bool useGpus,
                  const int numGpus,
-                 const string& dbConvertDir,
                  const int startGpu,
                  const size_t reservedGpuMem,
                  const size_t numReaderThreads)
-    : dataDir_(dataDir), dbConvertDir_(dbConvertDir) {
+    : dataDir_(dataDir) {
   if (useGpus) {
     try {
       cudaMgr_ = new CudaMgr_Namespace::CudaMgr(numGpus, startGpu);
@@ -68,13 +67,6 @@ DataMgr::DataMgr(const string& dataDir,
 
   populateMgrs(mapd_parameters, numReaderThreads);
   createTopLevelMetadata();
-
-  if (dbConvertDir_.size() > 0) {  // i.e. "--db_convert" option was used
-    dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->setDBConvert(true);
-    convertDB(
-        dbConvertDir_);  // dbConvertDir_ is path to DB directory with old data structure
-    dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->setDBConvert(false);
-  }
 }
 
 DataMgr::~DataMgr() {

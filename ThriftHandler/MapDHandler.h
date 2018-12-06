@@ -121,7 +121,6 @@ class MapDHandler : public MapDIf {
               const size_t num_reader_threads,
               const AuthMetadata authMetadata,
               const MapDParameters& mapd_parameters,
-              const std::string& db_convert_dir,
               const bool legacy_syntax,
               const bool access_priv_check,
               const int idle_session_duration,

@@ -225,10 +225,8 @@ int main(int argc, char** argv) {
   int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1
                       // means do not override
   int start_gpu = 0;
-  size_t num_reader_threads = 0;   // number of threads used when loading data
-  std::string db_convert_dir("");  // path to mapd DB to convert from; if path is empty,
-                                   // no conversion is requested
-  std::string db_query_file("");   // path to file containing warmup queries list
+  size_t num_reader_threads = 0;         // number of threads used when loading data
+  std::string db_query_file("");         // path to file containing warmup queries list
   bool enable_access_priv_check = true;  // enable DB objects access privileges checking
   int idle_session_duration =
       MINSPERHOUR;  // Inactive session tolerance in mins (60 mins)
@@ -383,10 +381,6 @@ int main(int argc, char** argv) {
                          po::value<size_t>(&mapd_parameters.calcite_max_mem)
                              ->default_value(mapd_parameters.calcite_max_mem),
                          "Max memory available to calcite JVM");
-  desc_adv.add_options()("db-convert",
-                         po::value<std::string>(&db_convert_dir),
-                         "Directory path to mapd DB to convert from");
-
   desc_adv.add_options()("enable-columnar-output",
                          po::value<bool>(&g_enable_columnar_output)
                              ->default_value(g_enable_columnar_output)
@@ -617,12 +611,6 @@ int main(int argc, char** argv) {
     LOG(ERROR) << "File containing DB queries " << db_query_file << " does not exist.";
     return 1;
   }
-  boost::algorithm::trim_if(db_convert_dir, boost::is_any_of("\"'"));
-  if (db_convert_dir.length() > 0 && !boost::filesystem::exists(db_convert_dir)) {
-    LOG(ERROR) << "Data conversion source directory " << db_convert_dir
-               << " does not exist.";
-    return 1;
-  }
   const auto system_db_file =
       boost::filesystem::path(base_path) / "mapd_catalogs" / "mapd";
   if (!boost::filesystem::exists(system_db_file)) {
@@ -732,7 +720,6 @@ int main(int argc, char** argv) {
                                                   num_reader_threads,
                                                   authMetadata,
                                                   mapd_parameters,
-                                                  db_convert_dir,
                                                   enable_legacy_syntax,
                                                   enable_access_priv_check,
                                                   idle_session_duration,
