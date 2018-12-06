@@ -3949,13 +3949,6 @@ void Catalog::createShardedTable(
     TableDescriptor& td,
     const list<ColumnDescriptor>& cols,
     const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs) {
-  if (td.nShards > 0 && (td.shardedColumnId <= 0 ||
-                         static_cast<size_t>(td.shardedColumnId) > cols.size())) {
-    std::string error_message{"Invalid sharding column for table " + td.tableName +
-                              " of database " + currentDB_.dbName};
-    throw runtime_error(error_message);
-  }
-
   cat_write_lock write_lock(this);
 
   /* create logical table */
@@ -4452,6 +4445,22 @@ std::string Catalog::createLink(LinkDescriptor& ld, size_t min_length) {
   sqliteConnector_.query("END TRANSACTION");
   addLinkToMap(ld);
   return ld.link;
+}
+
+const ColumnDescriptor* Catalog::getShardColumnMetadataForTable(
+    const TableDescriptor* td) const {
+  const auto column_descriptors =
+      getAllColumnMetadataForTable(td->tableId, false, true, true);
+
+  const ColumnDescriptor* shard_cd{nullptr};
+  int i = 1;
+  for (auto cd_itr = column_descriptors.begin(); cd_itr != column_descriptors.end();
+       ++cd_itr, ++i) {
+    if (i == td->shardedColumnId) {
+      shard_cd = *cd_itr;
+    }
+  }
+  return shard_cd;
 }
 
 std::vector<const TableDescriptor*> Catalog::getPhysicalTablesDescriptors(

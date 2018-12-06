@@ -11922,6 +11922,50 @@ TEST(Select, Sample) {
   }
 }
 
+void shard_key_test_runner(const std::string& shard_key_col,
+                           const ExecutorDeviceType dt) {
+  run_ddl_statement("drop table if exists shard_key_ddl_test;");
+  run_ddl_statement(
+      "CREATE TABLE shard_key_ddl_test (x INTEGER, y TEXT ENCODING DICT(32), pt "
+      "POINT, z DOUBLE, a BIGINT NOT NULL, poly POLYGON, b SMALLINT, SHARD KEY(" +
+      shard_key_col + ")) WITH (shard_count = 4)");
+
+  run_multiple_agg(
+      "INSERT INTO shard_key_ddl_test VALUES (1, 'foo', 'POINT(1 1)', 1.0, 1, "
+      "'POLYGON((0 0, 1 1, 2 2, 3 3))', 1)",
+      dt);
+  run_multiple_agg(
+      "INSERT INTO shard_key_ddl_test VALUES (2, 'bar', 'POINT(2 2)', 2.0, 2, "
+      "'POLYGON((0 0, 1 1, 20 20, 3 3))', 2)",
+      dt);
+  run_multiple_agg(
+      "INSERT INTO shard_key_ddl_test VALUES (3, 'hello', 'POINT(3 3)', 3.0, 3, "
+      "'POLYGON((0 0, 1 1, 2 2, 30 30))', 3)",
+      dt);
+}
+
+TEST(Select, ShardKeyDDL) {
+  SKIP_ALL_ON_AGGREGATOR();
+
+  for (auto dt : {ExecutorDeviceType::CPU}) {
+    // Table creation / single row inserts
+    EXPECT_NO_THROW(shard_key_test_runner("x", dt));
+    EXPECT_NO_THROW(shard_key_test_runner("y", dt));
+    EXPECT_NO_THROW(shard_key_test_runner("a", dt));
+    EXPECT_NO_THROW(shard_key_test_runner("b", dt));
+
+    // Unsupported DDL
+    EXPECT_THROW(shard_key_test_runner("z", dt), std::runtime_error);
+    EXPECT_THROW(shard_key_test_runner("pt", dt), std::runtime_error);
+    EXPECT_THROW(shard_key_test_runner("poly", dt), std::runtime_error);
+
+    // Unsupported update
+    EXPECT_NO_THROW(shard_key_test_runner("a", dt));
+    EXPECT_THROW(run_multiple_agg("UPDATE shard_key_ddl_test SET a = 2;", dt),
+                 std::runtime_error);
+  }
+}
+
 namespace {
 
 int create_sharded_join_table(const std::string& table_name,

@@ -2078,32 +2078,31 @@ void SQLType::check_type() {
 
 namespace {
 
-size_t shard_column_index(const std::string& name,
-                          const std::list<ColumnDescriptor>& columns) {
-  size_t index = 1;
-  for (const auto& cd : columns) {
-    if (cd.columnName == name) {
-      return index;
-    }
-    ++index;
-  }
-  // Not found, return 0
-  return 0;
-}
-
-void validate_shard_column_type(const size_t shard_column_id,
-                                const std::list<ColumnDescriptor>& columns) {
-  CHECK_NE(size_t(0), shard_column_id);
-  CHECK_LE(shard_column_id, columns.size());
-  auto column_it = columns.begin();
-  std::advance(column_it, shard_column_id - 1);
-  const auto& col_ti = column_it->columnType;
+void validate_shard_column_type(const ColumnDescriptor& cd) {
+  const auto& col_ti = cd.columnType;
   if (col_ti.is_integer() ||
       (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT)) {
     return;
   }
   throw std::runtime_error("Cannot shard on type " + col_ti.get_type_name() +
                            ", encoding " + col_ti.get_compression_name());
+}
+
+size_t shard_column_index(const std::string& name,
+                          const std::list<ColumnDescriptor>& columns) {
+  size_t index = 1;
+  for (const auto& cd : columns) {
+    if (cd.columnName == name) {
+      validate_shard_column_type(cd);
+      return index;
+    }
+    ++index;
+    if (cd.columnType.is_geometry()) {
+      index += cd.columnType.get_physical_cols();
+    }
+  }
+  // Not found, return 0
+  return 0;
 }
 
 void set_string_field(rapidjson::Value& obj,
@@ -2222,7 +2221,6 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       throw std::runtime_error("Specified shard column " + shard_key_def->get_column() +
                                " doesn't exist");
     }
-    validate_shard_column_type(td.shardedColumnId, columns);
   }
   if (is_temporary_) {
     td.persistenceLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;

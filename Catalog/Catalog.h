@@ -211,7 +211,6 @@ class Catalog {
    * for each and every column in the table
    *
    */
-
   std::list<const ColumnDescriptor*> getAllColumnMetadataForTable(
       const int tableId,
       const bool fetchSystemColumns,
@@ -229,6 +228,8 @@ class Catalog {
   const DictDescriptor* getMetadataForDict(int dict_ref, bool loadDict = true) const;
 
   const std::vector<LeafHostInfo>& getStringDictionaryHosts() const;
+
+  const ColumnDescriptor* getShardColumnMetadataForTable(const TableDescriptor* td) const;
 
   std::vector<const TableDescriptor*> getPhysicalTablesDescriptors(
       const TableDescriptor* logicalTableDesc) const;
