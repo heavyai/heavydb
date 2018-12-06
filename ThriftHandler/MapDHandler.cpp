@@ -3074,6 +3074,9 @@ void MapDHandler::share_dashboard(const TSessionId& session,
     object.setPrivileges(privs);
   }
   SysCatalog::instance().grantDBObjectPrivilegesBatch(valid_groups, {object}, cat);
+  // grant system_role to grantees for underlying objects
+  auto dash = cat.getMetadataForDashboard(dashboard_id);
+  SysCatalog::instance().grantRoleBatch({dash->viewSystemRoleName}, valid_groups);
 }
 
 void MapDHandler::unshare_dashboard(const TSessionId& session,
@@ -3115,6 +3118,9 @@ void MapDHandler::unshare_dashboard(const TSessionId& session,
     object.setPrivileges(privs);
   }
   SysCatalog::instance().revokeDBObjectPrivilegesBatch(valid_groups, {object}, cat);
+  // revoke system_role from grantees for underlying objects
+  auto dash = cat.getMetadataForDashboard(dashboard_id);
+  SysCatalog::instance().revokeRoleBatch({dash->viewSystemRoleName}, valid_groups);
 }
 
 void MapDHandler::get_dashboard_grantees(

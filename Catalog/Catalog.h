@@ -295,6 +295,7 @@ class Catalog {
   void updateDeletedColumnIndicator();
   void updateFrontendViewsToDashboards();
   void recordOwnershipOfObjectsInObjectPermissions();
+  void createDashboardSystemRoles();
   void buildMaps();
   void addTableToMap(TableDescriptor& td,
                      const std::list<ColumnDescriptor>& columns,
@@ -327,6 +328,11 @@ class Catalog {
   std::string calculateSHA1(const std::string& data);
   std::string generatePhysicalTableName(const std::string& logicalTableName,
                                         const int32_t& shardNumber);
+  std::vector<DBObject> parseDashboardObjects(const std::string& view_meta,
+                                              const int& user_id);
+  void createOrUpdateDashboardSystemRole(const std::string& view_meta,
+                                         const int32_t& user_id,
+                                         const std::string& dash_role_name);
 
   std::string basePath_;
   TableDescriptorMap tableDescriptorMap_;
@@ -543,6 +549,7 @@ class SysCatalog {
   void revokeAllOnDatabase_unsafe(const std::string& roleName,
                                   int32_t dbId,
                                   Grantee* grantee);
+  bool isDashboardSystemRole(const std::string& roleName);
 
   template <typename F, typename... Args>
   void execInTransaction(F&& f, Args&&... args) {

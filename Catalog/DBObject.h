@@ -63,6 +63,11 @@ struct DBObjectKey {
     return memcmp(ids_a, ids_b, N_COLUMNS * sizeof(int32_t)) < 0;
   }
 
+  bool operator==(const DBObjectKey& key) const {
+    return permissionType == key.permissionType && dbId == key.dbId &&
+           objectId == key.objectId;
+  }
+
   static DBObjectKey fromString(const std::vector<std::string>& key,
                                 const DBObjectType& type);
 };

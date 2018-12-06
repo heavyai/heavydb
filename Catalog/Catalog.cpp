@@ -34,7 +34,9 @@
 #include "DataMgr/LockMgr.h"
 #include "SharedDictionaryValidator.h"
 
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/range/adaptor/map.hpp>
 #include <boost/version.hpp>
 #if BOOST_VERSION >= 106600
 #include <boost/uuid/detail/sha1.hpp>
@@ -685,7 +687,6 @@ void Catalog::updateFrontendViewsToDashboards() {
         "SELECT viewid , name , userid, view_state, image_hash, update_time, "
         "view_metadata "
         "from mapd_frontend_views");
-
   } catch (const std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
@@ -1686,6 +1687,10 @@ bool SysCatalog::isRoleGrantedToGrantee(const std::string& granteeName,
   return rc;
 }
 
+bool SysCatalog::isDashboardSystemRole(const std::string& roleName) {
+  return boost::algorithm::ends_with(roleName, SYSTEM_ROLE_TAG);
+}
+
 std::vector<std::string> SysCatalog::getRoles(const std::string& userName,
                                               const int32_t dbId) {
   sys_sqlite_lock sqlite_lock(this);
@@ -1698,7 +1703,8 @@ std::vector<std::string> SysCatalog::getRoles(const std::string& userName,
   std::vector<std::string> roles(0);
   for (int r = 0; r < numRows; ++r) {
     auto roleName = sqliteConnector_->getData<string>(r, 0);
-    if (isRoleGrantedToGrantee(userName, roleName, false)) {
+    if (isRoleGrantedToGrantee(userName, roleName, false) &&
+        !isDashboardSystemRole(roleName)) {
       roles.push_back(roleName);
     }
   }
@@ -1715,6 +1721,9 @@ std::vector<std::string> SysCatalog::getRoles(bool userPrivateRole,
       continue;
     }
     if (!isSuper && !isRoleGrantedToGrantee(userName, grantee.second->getName(), false)) {
+      continue;
+    }
+    if (isDashboardSystemRole(grantee.second->getName())) {
       continue;
     }
     roles.push_back(grantee.second->getName());
@@ -1745,6 +1754,11 @@ Catalog::Catalog(const string& basePath,
     CheckAndExecuteMigrations();
   }
   buildMaps();
+  if (!is_new_db) {
+    //  we need to buildMaps first in order to create and grant roles for
+    // dashboard systemroles.
+    createDashboardSystemRoles();
+  }
 }
 
 Catalog::~Catalog() {
@@ -2207,6 +2221,82 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
   }
 }
 
+void Catalog::createDashboardSystemRoles() {
+  if (!SysCatalog::instance().arePrivilegesOn()) {
+    return;
+  }
+  cat_sqlite_lock sqlite_lock(this);
+  std::unordered_map<std::string, std::pair<int, std::string>> dashboards;
+  std::unordered_map<std::string, std::vector<std::string>> active_users;
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query("select migration_history from mapd_version_history");
+    if (sqliteConnector_.getNumRows() != 0) {
+      for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
+        const auto mig = sqliteConnector_.getData<std::string>(i, 0);
+        if (mig == "dashboard_system_role_creation") {
+          // no need for further execution
+          sqliteConnector_.query("END TRANSACTION");
+          return;
+        }
+      }
+    }
+    // record migration
+    sqliteConnector_.query_with_text_params(
+        "INSERT INTO mapd_version_history(version, migration_history) values(?,?)",
+        std::vector<std::string>{std::to_string(MAPD_VERSION),
+                                 "dashboard_system_role_creation"});
+
+    sqliteConnector_.query("select id, userid, metadata from mapd_dashboards");
+    for (size_t i = 0; i < sqliteConnector_.getNumRows(); ++i) {
+      dashboards[sqliteConnector_.getData<string>(i, 0)] = std::make_pair(
+          sqliteConnector_.getData<int>(i, 1), sqliteConnector_.getData<string>(i, 2));
+    }
+    // All current users with shared dashboards.
+    for (auto dash : dashboards) {
+      std::vector<std::string> users = {};
+      sqliteConnector_.query_with_text_params(
+          "SELECT roleName FROM mapd_object_permissions WHERE objectPermissions NOT IN "
+          "(0,1) AND objectPermissionsType = ? AND objectId = ?",
+          std::vector<std::string>{
+              std::to_string(static_cast<int32_t>(DashboardDBObjectType)), dash.first});
+      int num_rows = sqliteConnector_.getNumRows();
+      if (num_rows == 0) {
+        // no users to grant role
+        continue;
+      } else {
+        for (size_t i = 0; i < sqliteConnector_.getNumRows(); ++i) {
+          users.push_back(sqliteConnector_.getData<string>(i, 0));
+        }
+        active_users[dash.first] = users;
+      }
+    }
+  } catch (const std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+
+  try {
+    // NOTE(wamsi): Transactionally unsafe
+    for (auto dash : dashboards) {
+      createOrUpdateDashboardSystemRole(dash.second.second,
+                                        dash.second.first,
+                                        generate_dash_system_rolename(dash.first));
+      auto result = active_users.find(dash.first);
+      if (result != active_users.end()) {
+        SysCatalog::instance().grantRoleBatch({generate_dash_system_rolename(dash.first)},
+                                              result->second);
+      }
+    }
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Failed to create dashboard system roles during migration: "
+               << e.what();
+    throw;
+  }
+  LOG(INFO) << "Successfully created dashboard system roles during migration.";
+}
+
 void Catalog::CheckAndExecuteMigrations() {
   updateTableDescriptorSchema();
   updateFrontendViewAndLinkUsers();
@@ -2516,6 +2606,8 @@ void Catalog::buildMaps() {
     vd->userId = sqliteConnector_.getData<int>(r, 5);
     vd->viewMetadata = sqliteConnector_.getData<string>(r, 6);
     vd->user = getUserFromId(vd->userId);
+    vd->viewSystemRoleName =
+        generate_dash_system_rolename(sqliteConnector_.getData<string>(r, 0));
     dashboardDescriptorMap_[std::to_string(vd->userId) + ":" + vd->viewName] = vd;
   }
 
@@ -2689,6 +2781,75 @@ void Catalog::addFrontendViewToMapNoLock(FrontendViewDescriptor& vd) {
   cat_write_lock write_lock(this);
   dashboardDescriptorMap_[std::to_string(vd.userId) + ":" + vd.viewName] =
       std::make_shared<FrontendViewDescriptor>(vd);
+}
+
+std::vector<DBObject> Catalog::parseDashboardObjects(const std::string& view_meta,
+                                                     const int& user_id) {
+  std::vector<DBObject> objects;
+  DBObjectKey key;
+  key.dbId = currentDB_.dbId;
+  auto _key_place = [&key](auto type, auto id) {
+    key.permissionType = type;
+    key.objectId = id;
+    return key;
+  };
+  for (auto object_name : parse_underlying_dash_objects(view_meta)) {
+    auto td = getMetadataForTable(object_name);
+    if (!td) {
+      // Parsed object name is not present
+      throw runtime_error("Invalid(table/view) dashboard source: " + object_name);
+    }
+    // Dashboard source can be Table or View
+    const auto object_type = td->isView ? ViewDBObjectType : TableDBObjectType;
+    const auto priv = td->isView ? AccessPrivileges::SELECT_FROM_VIEW
+                                 : AccessPrivileges::SELECT_FROM_TABLE;
+    objects.emplace_back(_key_place(object_type, td->tableId), priv, user_id);
+    objects.back().setObjectType(td->isView ? ViewDBObjectType : TableDBObjectType);
+    objects.back().setName(td->tableName);
+  }
+  return objects;
+}
+
+void Catalog::createOrUpdateDashboardSystemRole(const std::string& view_meta,
+                                                const int32_t& user_id,
+                                                const std::string& dash_role_name) {
+  cat_write_lock write_lock(this);
+  auto objects = parseDashboardObjects(view_meta, user_id);
+  Role* rl = SysCatalog::instance().getRoleGrantee(dash_role_name);
+  if (!rl) {
+    // Dashboard role does not exist
+    // create role and grant privileges
+    // NOTE(wamsi): Transactionally unsafe
+    SysCatalog::instance().createRole(dash_role_name, false);
+    SysCatalog::instance().grantDBObjectPrivilegesBatch({dash_role_name}, objects, *this);
+  } else {
+    // Dashboard system role already exists
+    // Add/remove privileges on objects
+    auto ex_objects = rl->getDbObjects(true);
+    for (auto key : *ex_objects | boost::adaptors::map_keys) {
+      if (key.permissionType != TableDBObjectType &&
+          key.permissionType != ViewDBObjectType) {
+        continue;
+      }
+      bool found = false;
+      for (auto obj : objects) {
+        found = key == obj.getObjectKey() ? true : false;
+        if (found) {
+          break;
+        }
+      }
+      if (!found) {
+        // revoke privs on object since the object is no
+        // longer used by the dashboard as source
+        // NOTE(wamsi): Transactionally unsafe
+        SysCatalog::instance().revokeDBObjectPrivileges(
+            dash_role_name, *rl->findDbObject(key, true), *this);
+      }
+    }
+    // Update privileges on remaining objects
+    // NOTE(wamsi): Transactionally unsafe
+    SysCatalog::instance().grantDBObjectPrivilegesBatch({dash_role_name}, objects, *this);
+  }
 }
 
 void Catalog::addLinkToMap(LinkDescriptor& ld) {
@@ -4161,7 +4322,12 @@ int32_t Catalog::createFrontendView(FrontendViewDescriptor& vd) {
   } catch (std::exception& e) {
     throw;
   }
+  vd.viewSystemRoleName = generate_dash_system_rolename(std::to_string(vd.viewId));
   addFrontendViewToMap(vd);
+  if (SysCatalog::instance().arePrivilegesOn()) {
+    // NOTE(wamsi): Transactionally unsafe
+    createOrUpdateDashboardSystemRole(vd.viewMetadata, vd.userId, vd.viewSystemRoleName);
+  }
   return vd.viewId;
 }
 
@@ -4224,11 +4390,17 @@ void Catalog::replaceDashboard(FrontendViewDescriptor& vd) {
 
   // now reload the object
   sqliteConnector_.query_with_text_params(
-      "SELECT id, strftime('%Y-%m-%dT%H:%M:%SZ', update_time)  FROM mapd_dashboards "
+      "SELECT id, strftime('%Y-%m-%dT%H:%M:%SZ', update_time)  FROM "
+      "mapd_dashboards "
       "WHERE id = ?",
       std::vector<std::string>{std::to_string(vd.viewId)});
   vd.updateTime = sqliteConnector_.getData<string>(0, 1);
+  vd.viewSystemRoleName = generate_dash_system_rolename(std::to_string(vd.viewId));
   addFrontendViewToMapNoLock(vd);
+  if (SysCatalog::instance().arePrivilegesOn()) {
+    // NOTE(wamsi): Transactionally unsafe
+    createOrUpdateDashboardSystemRole(vd.viewMetadata, vd.userId, vd.viewSystemRoleName);
+  }
 }
 
 std::string Catalog::calculateSHA1(const std::string& data) {
