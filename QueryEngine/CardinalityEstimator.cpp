@@ -15,6 +15,7 @@
  */
 
 #include "CardinalityEstimator.h"
+#include "ExpressionRewrite.h"
 #include "RelAlgExecutor.h"
 
 size_t ResultSet::getNDVEstimator() const {
@@ -85,7 +86,7 @@ RelAlgExecutionUnit create_count_all_execution_unit(
   return {ra_exe_unit.input_descs,
           ra_exe_unit.input_col_descs,
           ra_exe_unit.simple_quals,
-          ra_exe_unit.quals,
+          strip_join_covered_filter_quals(ra_exe_unit.quals, ra_exe_unit.join_quals),
           ra_exe_unit.join_quals,
           {},
           {replacement_target.get()},

@@ -703,6 +703,68 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
   return boost::none;
 }
 
+/**
+ * JoinCoveredQualVisitor returns true if the visited qual is true if and only if a
+ * corresponding equijoin qual is true. During the pre-filtered count we can elide the
+ * visited qual decreasing query run time while upper bounding the number of rows passing
+ * the filter. Currently only used for expressions of the form `a OVERLAPS b AND Expr<a,
+ * b>`. Strips `Expr<a,b>` if the expression has been pre-determined to be expensive to
+ * compute twice.
+ */
+class JoinCoveredQualVisitor : public ScalarExprVisitor<bool> {
+ public:
+  JoinCoveredQualVisitor(const JoinQualsPerNestingLevel& join_quals) {
+    for (const auto& join_condition : join_quals) {
+      for (const auto& qual : join_condition.quals) {
+        auto qual_bin_oper = dynamic_cast<Analyzer::BinOper*>(qual.get());
+        if (qual_bin_oper) {
+          join_qual_pairs.emplace_back(qual_bin_oper->get_left_operand(),
+                                       qual_bin_oper->get_right_operand());
+        }
+      }
+    }
+  }
+
+  bool visitFunctionOper(const Analyzer::FunctionOper* func_oper) const override {
+    if (overlaps_supported_functions.find(func_oper->getName()) !=
+        overlaps_supported_functions.end()) {
+      const auto lhs = func_oper->getArg(2);
+      const auto rhs = func_oper->getArg(1);
+      for (const auto qual_pair : join_qual_pairs) {
+        if (*lhs == *qual_pair.first && *rhs == *qual_pair.second) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  bool defaultResult() const override { return false; }
+
+ private:
+  std::vector<std::pair<const Analyzer::Expr*, const Analyzer::Expr*>> join_qual_pairs;
+};
+
+std::list<std::shared_ptr<Analyzer::Expr>> strip_join_covered_filter_quals(
+    const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
+    const JoinQualsPerNestingLevel& join_quals) {
+  if (join_quals.empty()) {
+    return quals;
+  }
+
+  std::list<std::shared_ptr<Analyzer::Expr>> quals_to_return;
+
+  JoinCoveredQualVisitor visitor(join_quals);
+  for (const auto& qual : quals) {
+    if (!visitor.visit(qual.get())) {
+      // Not a covered qual, don't elide it from the filtered count
+      quals_to_return.push_back(qual);
+    }
+  }
+
+  return quals_to_return;
+}
+
 std::shared_ptr<Analyzer::Expr> fold_expr(const Analyzer::Expr* expr) {
   if (!expr) {
     return nullptr;
