@@ -126,6 +126,9 @@ class RelAlgTranslator {
   std::shared_ptr<Analyzer::Expr> translateBinaryGeoFunction(
       const RexFunctionOperator*) const;
 
+  std::shared_ptr<Analyzer::Expr> translateTernaryGeoFunction(
+      const RexFunctionOperator*) const;
+
   std::shared_ptr<Analyzer::Expr> translateFunctionWithGeoArg(
       const RexFunctionOperator*) const;
 

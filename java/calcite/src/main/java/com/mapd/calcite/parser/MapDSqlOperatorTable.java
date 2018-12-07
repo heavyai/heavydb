@@ -149,7 +149,10 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new Truncate());
     opTab.addOperator(new ST_Contains());
     opTab.addOperator(new ST_Intersects());
+    opTab.addOperator(new ST_Disjoint());
     opTab.addOperator(new ST_Within());
+    opTab.addOperator(new ST_DWithin());
+    opTab.addOperator(new ST_DFullyWithin());
     opTab.addOperator(new ST_Distance());
     opTab.addOperator(new ST_MaxDistance());
     opTab.addOperator(new ST_GeogFromText());
@@ -691,6 +694,32 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     }
   }
 
+  static class ST_Disjoint extends SqlFunction {
+    ST_Disjoint() {
+      super("ST_Disjoint",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 2;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> st_disjoint_sig =
+              new java.util.ArrayList<SqlTypeFamily>();
+      st_disjoint_sig.add(SqlTypeFamily.ANY);
+      st_disjoint_sig.add(SqlTypeFamily.ANY);
+      return st_disjoint_sig;
+    }
+  }
+
   static class ST_Within extends SqlFunction {
     ST_Within() {
       super("ST_Within",
@@ -714,6 +743,60 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       st_within_sig.add(SqlTypeFamily.ANY);
       st_within_sig.add(SqlTypeFamily.ANY);
       return st_within_sig;
+    }
+  }
+
+  static class ST_DWithin extends SqlFunction {
+    ST_DWithin() {
+      super("ST_DWithin",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 3;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> st_dwithin_sig =
+              new java.util.ArrayList<SqlTypeFamily>();
+      st_dwithin_sig.add(SqlTypeFamily.ANY);
+      st_dwithin_sig.add(SqlTypeFamily.ANY);
+      st_dwithin_sig.add(SqlTypeFamily.NUMERIC);
+      return st_dwithin_sig;
+    }
+  }
+
+  static class ST_DFullyWithin extends SqlFunction {
+    ST_DFullyWithin() {
+      super("ST_DFullyWithin",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 3;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> st_dwithin_sig =
+              new java.util.ArrayList<SqlTypeFamily>();
+      st_dwithin_sig.add(SqlTypeFamily.ANY);
+      st_dwithin_sig.add(SqlTypeFamily.ANY);
+      st_dwithin_sig.add(SqlTypeFamily.NUMERIC);
+      return st_dwithin_sig;
     }
   }
 

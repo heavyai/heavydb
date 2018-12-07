@@ -1398,10 +1398,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   if (rex_function->getName() == std::string("ST_Distance") ||
       rex_function->getName() == std::string("ST_MaxDistance") ||
       rex_function->getName() == std::string("ST_Intersects") ||
+      rex_function->getName() == std::string("ST_Disjoint") ||
       rex_function->getName() == std::string("ST_Contains") ||
       rex_function->getName() == std::string("ST_Within")) {
     CHECK_EQ(rex_function->size(), size_t(2));
     return translateBinaryGeoFunction(rex_function);
+  }
+  if (rex_function->getName() == std::string("ST_DWithin") ||
+      rex_function->getName() == std::string("ST_DFullyWithin")) {
+    CHECK_EQ(rex_function->size(), size_t(3));
+    return translateTernaryGeoFunction(rex_function);
   }
   if (rex_function->getName() == std::string("OFFSET_IN_FRAGMENT")) {
     CHECK_EQ(size_t(0), rex_function->size());

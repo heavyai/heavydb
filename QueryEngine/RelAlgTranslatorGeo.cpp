@@ -692,25 +692,39 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
     const RexFunctionOperator* rex_function) const {
-  CHECK_EQ(size_t(2), rex_function->size());
+  auto function_name = rex_function->getName();
+  auto return_type = rex_function->getType();
+  bool swap_args = false;
+  bool with_bounds = false;
+  bool negate_result = false;
+  if (function_name == "ST_DWithin") {
+    CHECK_EQ(size_t(3), rex_function->size());
+    function_name = "ST_Distance";
+    return_type = SQLTypeInfo(kDOUBLE, false);
+  } else if (function_name == "ST_DFullyWithin") {
+    CHECK_EQ(size_t(3), rex_function->size());
+    function_name = "ST_MaxDistance";
+    return_type = SQLTypeInfo(kDOUBLE, false);
+  } else {
+    CHECK_EQ(size_t(2), rex_function->size());
+  }
+  if (function_name == std::string("ST_Within")) {
+    function_name = "ST_Contains";
+    swap_args = true;
+  } else if (function_name == std::string("ST_Disjoint")) {
+    function_name = "ST_Intersects";
+    negate_result = true;
+  }
+  if (function_name == std::string("ST_Contains") ||
+      function_name == std::string("ST_Intersects")) {
+    with_bounds = true;
+  }
 
   std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
   SQLTypeInfo arg0_ti;
   SQLTypeInfo arg1_ti;
   int32_t lindex0 = 0;
   int32_t lindex1 = 0;
-  auto function_name = rex_function->getName();
-  bool swap_args = false;
-  bool with_bounds = false;
-
-  if (function_name == std::string("ST_Within")) {
-    function_name = "ST_Contains";
-    swap_args = true;
-  }
-  if (function_name == std::string("ST_Contains") ||
-      function_name == std::string("ST_Intersects")) {
-    with_bounds = true;
-  }
 
   auto geoargs0 = translateGeoFunctionArg(rex_function->getOperand(swap_args ? 1 : 0),
                                           arg0_ti,
@@ -799,8 +813,29 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   output_srid.intval = arg0_ti.get_output_srid();
   geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, output_srid));
 
-  return makeExpr<Analyzer::FunctionOper>(
-      rex_function->getType(), specialized_geofunc, geoargs);
+  auto result =
+      makeExpr<Analyzer::FunctionOper>(return_type, specialized_geofunc, geoargs);
+  if (negate_result) {
+    return makeExpr<Analyzer::UOper>(kBOOLEAN, kNOT, result);
+  }
+  return result;
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateTernaryGeoFunction(
+    const RexFunctionOperator* rex_function) const {
+  CHECK_EQ(size_t(3), rex_function->size());
+
+  auto distance_expr = translateScalarRex(rex_function->getOperand(2));
+  const auto& distance_ti = SQLTypeInfo(kDOUBLE, false);
+  if (distance_expr->get_type_info().get_type() != kDOUBLE) {
+    distance_expr = makeExpr<Analyzer::UOper>(distance_ti, false, kCAST, distance_expr);
+  }
+
+  // Translate the geo distance function call portion
+  const auto geo_distance_expr = translateBinaryGeoFunction(rex_function);
+
+  return makeExpr<Analyzer::BinOper>(
+      kBOOLEAN, kLE, kONE, geo_distance_expr, distance_expr);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunctionWithGeoArg(

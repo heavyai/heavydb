@@ -11187,7 +11187,67 @@ TEST(Select, GeoSpatial_Projection) {
                   "0.5, 10 10)))'));",
                   dt)));
 
-    // ST_Contains
+    // ST_Disjoint
+    ASSERT_EQ(
+        static_cast<int64_t>(0),
+        v<int64_t>(run_simple_agg(
+            "SELECT ST_Disjoint("
+            "ST_GeomFromText('POLYGON((2 2, 0 1, -2 2, -2 0, 2 0, 2 2))'), "
+            "ST_GeomFromText('LINESTRING(3 3, 3 2, 2 2)')) FROM geospatial_test limit 1;",
+            dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg("SELECT ST_Disjoint("
+                                  "ST_GeomFromText('LINESTRING(3 3, 3 2, 2.1 2.1)'), "
+                                  "ST_GeomFromText('MULTIPOLYGON(((5 5, 6 6, 5 6)), ((2 "
+                                  "2, 0 1, -2 2, -2 0, 2 0, 2 2)))')) "
+                                  " FROM geospatial_test limit 1;",
+                                  dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg("SELECT ST_Disjoint("
+                                  "ST_GeomFromText('POLYGON((3 3, 3 2, 2.1 2.1))'), "
+                                  "ST_GeomFromText('MULTIPOLYGON(((5 5, 6 6, 5 6)), ((2 "
+                                  "2, 0 1, -2 2, -2 0, 2 0, 2 2)))')) "
+                                  " FROM geospatial_test limit 1;",
+                                  dt)));
+    ASSERT_EQ(static_cast<int64_t>(0),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM geospatial_test WHERE ST_Disjoint(p,p);", dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows - 1),
+        v<int64_t>(run_simple_agg("SELECT count(*) FROM geospatial_test "
+                                  "WHERE ST_Disjoint(p, ST_GeomFromText('POINT(0 0)'));",
+                                  dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows - 6),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM geospatial_test "
+                  "WHERE ST_Disjoint(p, ST_GeomFromText('LINESTRING(0 0, 5 5)'));",
+                  dt)));
+    ASSERT_EQ(static_cast<int64_t>(0),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM geospatial_test "
+                  "WHERE ST_Disjoint(p, ST_GeomFromText('LINESTRING(0 0, 15 15)'));",
+                  dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows - 6),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM geospatial_test "
+            "WHERE ST_Disjoint(l, ST_GeomFromText('LINESTRING(0.5 0.5, 6.5 0.5)'));",
+            dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows - 6),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM geospatial_test "
+                  "WHERE ST_Disjoint(poly, ST_GeomFromText('LINESTRING(0 4.5, 7 0.5)'));",
+                  dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows - 6),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM geospatial_test "
+            "WHERE ST_Disjoint(mpoly, ST_GeomFromText('LINESTRING(0 4.5, 7 0.5)'));",
+            dt)));
+
+    // ST_Contains, ST_Within
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(p,p);", dt)));
@@ -11342,6 +11402,43 @@ TEST(Select, GeoSpatial_Projection) {
             "ST_GeomFromText('LINESTRING(1 -1.0000000001, 3 -1.0000000001)'), "
             "ST_GeomFromText('POINT(0.999999999 -1)')) FROM geospatial_test limit 1;",
             dt)));
+
+    // ST_DWithin, ST_DFullyWithin
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg("SELECT ST_DWithin("
+                                        "'POLYGON((4 2, 5 3, 4 3))', "
+                                        "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), "
+                                        "((1 1, -1 1, -1 -1, 1 -1, 1 1)))', "
+                                        "3.0) from geospatial_test limit 1;",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg("SELECT ST_DFullyWithin("
+                                        "'POINT(1 1)', 'LINESTRING (9 0,18 18,19 19)', "
+                                        "26.0) AND NOT ST_DFullyWithin("
+                                        "'LINESTRING (9 0,18 18,19 19)', 'POINT(1 1)', "
+                                        "25.0)  from geospatial_test limit 1;",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(7),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
+                                        "ST_DWithin(l, 'POINT(-1 -1)', 8.0);",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(3),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
+                                        "ST_DFullyWithin(l, 'POINT(-1 -1)', 8.0);",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(5),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
+                                        "ST_DWithin(poly, 'POINT(5 5)', 3.0);",
+                                        dt)));
+    // Check if Paris and LA are within a 10000km geodesic distance
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_DWithin(ST_GeogFromText('POINT(-118.4079 33.9434)', 4326), "
+                  "ST_GeogFromText('POINT(2.5559 49.0083)', 4326), 10000000.0) "
+                  "from geospatial_test limit 1;",
+                  dt)));
+    // TODO: ST_DWithin support for geographic paths, needs geodesic
+    // ST_Distance(linestring)
 
     // Coord accessors
     ASSERT_NEAR(static_cast<double>(-118.4079),
