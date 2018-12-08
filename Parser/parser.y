@@ -112,7 +112,7 @@ using namespace Parser;
 %token CURSOR DATABASE DATE DATETIME DATE_TRUNC DECIMAL DECLARE DEFAULT DELETE DESC DICTIONARY DISTINCT DOUBLE DROP
 %token ELSE END EXISTS EXPLAIN EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM
 %token GEOGRAPHY GEOMETRY GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
-%token IS LANGUAGE LAST LENGTH LIKE LIMIT LINESTRING MOD MULTIPOLYGON NOW NULLX NUMERIC OF OFFSET ON OPEN OPTION
+%token IS LANGUAGE LAST LENGTH LIKE LIMIT LINESTRING MOD MULTIPOLYGON NOW NULLX NUMERIC OF OFFSET ON OPEN OPTIMIZE OPTION
 %token ORDER PARAMETER POINT POLYGON PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token SMALLINT SOME TABLE TEMPORARY TEXT THEN TIME TIMESTAMP TINYINT TO TRUNCATE UNION
 %token PUBLIC REAL REFERENCES RENAME REVOKE ROLE ROLLBACK SCHEMA SELECT SET SHARD SHARED SHOW
@@ -154,6 +154,7 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| grant_privileges_statement { $<nodeval>$ = $<nodeval>1; }
 	| revoke_privileges_statement { $<nodeval>$ = $<nodeval>1; }
 	| grant_role_statement { $<nodeval>$ = $<nodeval>1; }
+	| optimize_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| revoke_role_statement { $<nodeval>$ = $<nodeval>1; }
 	;
 
@@ -354,6 +355,13 @@ revoke_role_statement:
 		REVOKE rolenames FROM grantees
 		{
 		    $<nodeval>$ = new RevokeRoleStmt($<slistval>2, $<slistval>4);
+		}
+		;
+
+optimize_table_statement:
+		OPTIMIZE TABLE opt_table WITH NAME
+		{
+			$<nodeval>$ = new OptimizeTableStmt($<stringval>3, $<stringval>5);
 		}
 		;
 
@@ -1068,6 +1076,10 @@ table:
 	/* |	NAME '.' NAME { $$ = new TableRef($<stringval>1, $<stringval>3); } */
 	;
 
+opt_table:
+		{ $<nodeval>$ = nullptr; }
+	|	table
+	;
 username:
         NAME | EMAIL | DASHEDNAME
     ;

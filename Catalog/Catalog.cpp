@@ -4686,6 +4686,43 @@ SessionInfo::operator std::string() const {
   return get_currentUser().userName + "_" + session_id.substr(0, 3);
 }
 
+void Catalog::optimizeTable(const TableDescriptor* td) {
+  cat_read_lock read_lock(this);
+  // "if not a table that supports delete return nullptr,  nothing more to do"
+  const ColumnDescriptor* cd = getDeletedColumn(td);
+  if (nullptr == cd) {
+    return;
+  }
+  // vacuum chunks which show sign of deleted rows in metadata
+  ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId, cd->columnId};
+  std::vector<std::pair<ChunkKey, ChunkMetadata>> chunkMetadataVec;
+  dataMgr_->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, chunkKeyPrefix);
+  for (auto cm : chunkMetadataVec) {
+    // "delete has occured"
+    if (cm.second.chunkStats.max.tinyintval == 1) {
+      UpdelRoll updel_roll;
+      updel_roll.catalog = this;
+      updel_roll.logicalTableId = getLogicalTableId(td->tableId);
+      updel_roll.memoryLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
+      const auto cd = getMetadataForColumn(td->tableId, cm.first[2]);
+      const auto chunk = Chunk_NS::Chunk::getChunk(cd,
+                                                   &get_dataMgr(),
+                                                   cm.first,
+                                                   updel_roll.memoryLevel,
+                                                   0,
+                                                   cm.second.numBytes,
+                                                   cm.second.numElements);
+      td->fragmenter->compactRows(this,
+                                  td,
+                                  cm.first[3],
+                                  td->fragmenter->getVacuumOffsets(chunk),
+                                  updel_roll.memoryLevel,
+                                  updel_roll);
+      updel_roll.commitUpdate();
+    }
+  }
+}
+
 }  // namespace Catalog_Namespace
 
 std::ostream& operator<<(std::ostream& os,

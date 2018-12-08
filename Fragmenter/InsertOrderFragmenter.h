@@ -153,8 +153,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
                            UpdelRoll& updel_roll);
 
   virtual const std::vector<uint64_t> getVacuumOffsets(
-      const std::shared_ptr<Chunk_NS::Chunk>& chunk,
-      const std::vector<uint64_t>& frag_offsets);
+      const std::shared_ptr<Chunk_NS::Chunk>& chunk);
 
   auto getChunksForAllColumns(const TableDescriptor* td,
                               const FragmentInfo& fragment,

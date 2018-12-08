@@ -139,7 +139,6 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
 
   // parallel update elements
   std::vector<std::future<void>> threads;
-  std::exception_ptr failed_any_chunk;
   std::mutex mtx;
 
   const auto segsz = (nrow + ncore - 1) / ncore;
@@ -349,7 +348,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
   // for unit test
   if (Fragmenter_Namespace::FragmentInfo::unconditionalVacuum_) {
     if (cd->isDeletedCol) {
-      const auto deleted_offsets = getVacuumOffsets(chunk, frag_offsets);
+      const auto deleted_offsets = getVacuumOffsets(chunk);
       if (deleted_offsets.size() > 0) {
         compactRows(catalog, td, fragment_id, deleted_offsets, memory_level, updel_roll);
         return;
@@ -483,21 +482,37 @@ auto InsertOrderFragmenter::getChunksForAllColumns(
   return chunks;
 }
 
-// check criteria for either vacuum on the fly or at night time
+// get a sorted vector of offsets of rows to vacuum
 const std::vector<uint64_t> InsertOrderFragmenter::getVacuumOffsets(
-    const std::shared_ptr<Chunk_NS::Chunk>& chunk,
-    const std::vector<uint64_t>& frag_offsets) {
-  auto data_buffer = chunk->get_buffer();
-  auto data_addr = data_buffer->getMemoryPtr();
-  const auto nrows_in_chunk = data_buffer->size();
-  std::vector<uint64_t> deleted_offsets;
-  deleted_offsets.reserve(nrows_in_chunk);
-  for (size_t r = 0; r < nrows_in_chunk; ++r) {
-    if (data_addr[r]) {
-      deleted_offsets.push_back(r);
-    }
+    const std::shared_ptr<Chunk_NS::Chunk>& chunk) {
+  const auto data_buffer = chunk->get_buffer();
+  const auto data_addr = data_buffer->getMemoryPtr();
+  const size_t nrows_in_chunk = data_buffer->size();
+  const size_t ncore = cpu_threads();
+  const size_t segsz = (nrows_in_chunk + ncore - 1) / ncore;
+  std::vector<std::vector<uint64_t>> deleted_offsets;
+  deleted_offsets.resize(ncore);
+  std::vector<std::future<void>> threads;
+  for (size_t rbegin = 0; rbegin < nrows_in_chunk; rbegin += segsz) {
+    threads.emplace_back(std::async(std::launch::async, [=, &deleted_offsets] {
+      const auto rend = std::min<size_t>(rbegin + segsz, nrows_in_chunk);
+      const auto ithread = rbegin / segsz;
+      CHECK(ithread < deleted_offsets.size());
+      deleted_offsets[ithread].reserve(segsz);
+      for (size_t r = rbegin; r < rend; ++r) {
+        if (data_addr[r]) {
+          deleted_offsets[ithread].push_back(r);
+        }
+      }
+    }));
   }
-  return deleted_offsets;
+  wait_cleanup_threads(threads);
+  std::vector<uint64_t> all_deleted_offsets;
+  for (size_t i = 0; i < ncore; ++i) {
+    all_deleted_offsets.insert(
+        all_deleted_offsets.end(), deleted_offsets[i].begin(), deleted_offsets[i].end());
+  }
+  return all_deleted_offsets;
 }
 
 template <typename T>

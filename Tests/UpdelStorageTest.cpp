@@ -55,11 +55,14 @@ struct UpdelTestConfig {
   static std::string sequence;
 };
 
+constexpr static int varNumRowsByDefault = 8;
+constexpr static int fixNumRowsByDefault = 100;
+
 bool UpdelTestConfig::showMeasuredTime = false;
 bool UpdelTestConfig::enableVarUpdelPerfTest = false;
 bool UpdelTestConfig::enableFixUpdelPerfTest = false;
-int64_t UpdelTestConfig::fixNumRows = 100;
-int64_t UpdelTestConfig::varNumRows = 8;
+int64_t UpdelTestConfig::fixNumRows = fixNumRowsByDefault;
+int64_t UpdelTestConfig::varNumRows = varNumRowsByDefault;
 std::string UpdelTestConfig::fixFile = "trip_data_b.txt";
 std::string UpdelTestConfig::varFile = "varlen.txt";
 std::string UpdelTestConfig::sequence = "rate_code_id";
@@ -498,43 +501,39 @@ bool delete_and_immediately_vacuum_rows(const std::string& table,
       table, column, cnt, ((0 + nall - 1) * nall / 2. - sum) / (cnt ? cnt : 1));
 }
 
-bool delete_and_immediately_vacuum_varlen_rows(const std::string& table,
-                                               const int nall,
-                                               const int ndel,
-                                               const int start,
-                                               const int step) {
+bool delete_and_vacuum_varlen_rows(const std::string& table,
+                                   const int nall,
+                                   const int ndel,
+                                   const int start,
+                                   const int step,
+                                   const bool manual_vacuum) {
   const auto old_rows = get_some_rows(table, nall);
 
-  UpdelRoll updelRoll;
   std::vector<uint64_t> fragOffsets;
-  std::vector<ScalarTargetValue> rhsValues;
-  rhsValues.emplace_back(int64_t{1});
   for (int d = 0, i = start; d < ndel && i < nall; ++d, i += step) {
     fragOffsets.push_back(i);
   }
 
-  // delete and vacuum rows supposedly immediately
-  auto cat = &gsession->get_catalog();
-  auto td = cat->getMetadataForTable(table);
-  auto cd = cat->getMetadataForColumn(td->tableId, "$deleted$");
+  // delete and vacuum rows
+  auto cond = std::string("rowid >= ") + std::to_string(start) + " and mod(rowid-" +
+              std::to_string(start) + "," + std::to_string(step) + ")=0 and rowid < " +
+              std::to_string(start) + "+" + std::to_string(step) + "*" +
+              std::to_string(ndel);
   auto ms = measure<>::execution([&]() {
-    td->fragmenter->updateColumn(cat,
-                                 td,
-                                 cd,
-                                 0,
-                                 fragOffsets,
-                                 rhsValues,
-                                 SQLTypeInfo(kBOOLEAN, false),
-                                 Data_Namespace::MemoryLevel::CPU_LEVEL,
-                                 updelRoll);
+    ASSERT_NO_THROW(run_query("delete from " + table + " where " + cond + ";"););
   });
   if (UpdelTestConfig::showMeasuredTime) {
-    VLOG(2) << "time on delete & vacuum " << fragOffsets.size() << " rows:" << ms
-            << " ms";
+    VLOG(2) << "time on delete " << (manual_vacuum ? "" : "& vacuum ")
+            << fragOffsets.size() << " rows:" << ms << " ms";
   }
-  ms = measure<>::execution([&]() { updelRoll.commitUpdate(); });
-  if (UpdelTestConfig::showMeasuredTime) {
-    VLOG(2) << "time on commit:" << ms << " ms";
+
+  if (manual_vacuum) {
+    ms = measure<>::execution([&]() {
+      ASSERT_NO_THROW(run_ddl_statement("optimize table " + table + " with vacuum;"););
+    });
+    if (UpdelTestConfig::showMeasuredTime) {
+      VLOG(2) << "time on vacuum:" << ms << " ms";
+    }
   }
 
   const auto new_rows = get_some_rows(table, nall);
@@ -637,7 +636,7 @@ const std::string create_varlen_table3 =
     "adc decimal(5,2)[],"
     "atx text[],"
     "ats timestamp[]"
-    ") WITH (vacuum='delayed');";
+    ")";
 
 const std::string create_table_trips =
     "	CREATE TABLE trips ("
@@ -656,13 +655,13 @@ const std::string create_table_trips =
     "			dropoff_longitude       DOUBLE,"
     "			dropoff_latitude        DECIMAL(18,5),"
     "			deleted                 BOOLEAN"
-    "			) WITH (FRAGMENT_SIZE=75000000);";
+    "			)";
 
 void init_table_data(const std::string& table = "trips",
                      const std::string& create_table_cmd = create_table_trips,
                      const std::string& file = UpdelTestConfig::fixFile) {
   run_ddl_statement("drop table if exists " + table + ";");
-  run_ddl_statement(create_table_cmd);
+  run_ddl_statement(create_table_cmd + ";");
   if (file.size()) {
     auto ms = measure<>::execution([&]() { import_table_file(table, file); });
     if (UpdelTestConfig::showMeasuredTime) {
@@ -671,16 +670,21 @@ void init_table_data(const std::string& table = "trips",
   }
 }
 
-class RowVacuumTestWithVarlenAndArrays : public ::testing::Test {
+template <int N = 0>
+class RowVacuumTestWithVarlenAndArraysN : public ::testing::Test {
  protected:
   virtual void SetUp() {
     auto create_varlen_table =
         create_varlen_table1 +
         (UpdelTestConfig::enableVarUpdelPerfTest ? "" : create_varlen_table2) +
         create_varlen_table3;
+    // test >1 fragments?
+    create_varlen_table +=
+        "WITH (FRAGMENT_SIZE = " + std::to_string(N ? N : 32'000'000) + ")";
     ASSERT_NO_THROW(
         init_table_data("varlen", create_varlen_table, UpdelTestConfig::varFile););
-    Fragmenter_Namespace::FragmentInfo::setUnconditionalVacuum(true);
+    // immediate vacuum?
+    Fragmenter_Namespace::FragmentInfo::setUnconditionalVacuum(N == 0);
   }
 
   virtual void TearDown() {
@@ -689,24 +693,74 @@ class RowVacuumTestWithVarlenAndArrays : public ::testing::Test {
   }
 };
 
+using ManualRowVacuumTestWithVarlenAndArrays =
+    RowVacuumTestWithVarlenAndArraysN<varNumRowsByDefault / 2>;
+TEST_F(ManualRowVacuumTestWithVarlenAndArrays, Vacuum_Half_First) {
+  EXPECT_TRUE(delete_and_vacuum_varlen_rows("varlen",
+                                            UpdelTestConfig::varNumRows,
+                                            UpdelTestConfig::varNumRows / 2,
+                                            0,
+                                            1,
+                                            true));
+}
+TEST_F(ManualRowVacuumTestWithVarlenAndArrays, Vacuum_Half_Second) {
+  EXPECT_TRUE(delete_and_vacuum_varlen_rows("varlen",
+                                            UpdelTestConfig::varNumRows,
+                                            UpdelTestConfig::varNumRows / 2,
+                                            UpdelTestConfig::varNumRows / 2,
+                                            1,
+                                            true));
+}
+TEST_F(ManualRowVacuumTestWithVarlenAndArrays, Vacuum_Interleaved_2) {
+  EXPECT_TRUE(delete_and_vacuum_varlen_rows("varlen",
+                                            UpdelTestConfig::varNumRows,
+                                            UpdelTestConfig::varNumRows / 2,
+                                            0,
+                                            2,
+                                            true));
+}
+TEST_F(ManualRowVacuumTestWithVarlenAndArrays, Vacuum_Interleaved_3) {
+  EXPECT_TRUE(delete_and_vacuum_varlen_rows("varlen",
+                                            UpdelTestConfig::varNumRows,
+                                            UpdelTestConfig::varNumRows / 3,
+                                            0,
+                                            3,
+                                            true));
+}
+
+// make class backward compatible
+using RowVacuumTestWithVarlenAndArrays = RowVacuumTestWithVarlenAndArraysN<0>;
 TEST_F(RowVacuumTestWithVarlenAndArrays, Vacuum_Half_First) {
-  EXPECT_TRUE(delete_and_immediately_vacuum_varlen_rows(
-      "varlen", UpdelTestConfig::varNumRows, UpdelTestConfig::varNumRows / 2, 0, 1));
+  EXPECT_TRUE(delete_and_vacuum_varlen_rows("varlen",
+                                            UpdelTestConfig::varNumRows,
+                                            UpdelTestConfig::varNumRows / 2,
+                                            0,
+                                            1,
+                                            false));
 }
 TEST_F(RowVacuumTestWithVarlenAndArrays, Vacuum_Half_Second) {
-  EXPECT_TRUE(delete_and_immediately_vacuum_varlen_rows("varlen",
-                                                        UpdelTestConfig::varNumRows,
-                                                        UpdelTestConfig::varNumRows / 2,
-                                                        UpdelTestConfig::varNumRows / 2,
-                                                        1));
+  EXPECT_TRUE(delete_and_vacuum_varlen_rows("varlen",
+                                            UpdelTestConfig::varNumRows,
+                                            UpdelTestConfig::varNumRows / 2,
+                                            UpdelTestConfig::varNumRows / 2,
+                                            1,
+                                            false));
 }
 TEST_F(RowVacuumTestWithVarlenAndArrays, Vacuum_Interleaved_2) {
-  EXPECT_TRUE(delete_and_immediately_vacuum_varlen_rows(
-      "varlen", UpdelTestConfig::varNumRows, UpdelTestConfig::varNumRows / 2, 0, 2));
+  EXPECT_TRUE(delete_and_vacuum_varlen_rows("varlen",
+                                            UpdelTestConfig::varNumRows,
+                                            UpdelTestConfig::varNumRows / 2,
+                                            0,
+                                            2,
+                                            false));
 }
 TEST_F(RowVacuumTestWithVarlenAndArrays, Vacuum_Interleaved_3) {
-  EXPECT_TRUE(delete_and_immediately_vacuum_varlen_rows(
-      "varlen", UpdelTestConfig::varNumRows, UpdelTestConfig::varNumRows / 3, 0, 3));
+  EXPECT_TRUE(delete_and_vacuum_varlen_rows("varlen",
+                                            UpdelTestConfig::varNumRows,
+                                            UpdelTestConfig::varNumRows / 3,
+                                            0,
+                                            3,
+                                            false));
 }
 
 class RowVacuumTest : public ::testing::Test {

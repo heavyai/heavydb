@@ -1054,6 +1054,18 @@ class TruncateTableStmt : public DDLStmt {
   std::unique_ptr<std::string> table;
 };
 
+class OptimizeTableStmt : public DDLStmt {
+ public:
+  OptimizeTableStmt(std::string* tab, std::string* with) : table(tab), with(with) {}
+  const std::string* get_table() const { return table.get(); }
+  const std::string* get_with() const { return with.get(); }
+  virtual void execute(const Catalog_Namespace::SessionInfo& session);
+
+ private:
+  std::unique_ptr<std::string> table;
+  std::unique_ptr<std::string> with;
+};
+
 class RenameTableStmt : public DDLStmt {
  public:
   RenameTableStmt(std::string* tab, std::string* new_tab_name)

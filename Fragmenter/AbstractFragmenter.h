@@ -162,8 +162,7 @@ class AbstractFragmenter {
                            UpdelRoll& updelRoll) = 0;
 
   virtual const std::vector<uint64_t> getVacuumOffsets(
-      const std::shared_ptr<Chunk_NS::Chunk>& chunk,
-      const std::vector<uint64_t>& frag_offsets) = 0;
+      const std::shared_ptr<Chunk_NS::Chunk>& chunk) = 0;
 };
 
 }  // namespace Fragmenter_Namespace
