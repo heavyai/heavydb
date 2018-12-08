@@ -491,62 +491,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const QueryDescriptionType query_de
     , must_use_baseline_sort_(false)
     , force_4byte_float_(false) {}
 
-QueryMemoryDescriptor::QueryMemoryDescriptor(
-    const Executor* executor,
-    const bool allow_multifrag,
-    const QueryDescriptionType query_desc_type,
-    const bool keyless_hash,
-    const bool interleaved_bins_on_gpu,
-    const int32_t idx_target_as_key,
-    const int64_t init_val,
-    const std::vector<int8_t>& group_col_widths,
-    const int8_t group_col_compact_width,
-    const std::vector<ColWidths>& agg_col_widths,
-    const std::vector<ssize_t>& target_groupby_indices,
-    const size_t entry_count,
-    const int64_t min_val,
-    const int64_t max_val,
-    const int64_t bucket,
-    const bool has_nulls,
-    const GroupByMemSharing sharing,
-    const CountDistinctDescriptors count_distinct_descriptors,
-    const bool sort_on_gpu,
-    const bool output_columnar,
-    const bool render_output,
-    const std::vector<int8_t>& key_column_pad_bytes,
-    const std::vector<int8_t>& target_column_pad_bytes,
-    const bool must_use_baseline_sort)
-    : agg_col_widths_(agg_col_widths)
-    , executor_(executor)
-    , allow_multifrag_(allow_multifrag)
-    , query_desc_type_(query_desc_type)
-    , keyless_hash_(keyless_hash)
-    , interleaved_bins_on_gpu_(interleaved_bins_on_gpu)
-    , idx_target_as_key_(idx_target_as_key)
-    , init_val_(init_val)
-    , group_col_widths_(group_col_widths)
-    , group_col_compact_width_(group_col_compact_width)
-    , target_groupby_indices_(target_groupby_indices)
-    , entry_count_(entry_count)
-    , min_val_(min_val)
-    , max_val_(max_val)
-    , bucket_(bucket)
-    , has_nulls_(has_nulls)
-    , sharing_(sharing)
-    , count_distinct_descriptors_(count_distinct_descriptors)
-    , sort_on_gpu_(sort_on_gpu)
-    , output_columnar_(output_columnar)
-    , render_output_(render_output)
-    , key_column_pad_bytes_(key_column_pad_bytes)
-    , target_column_pad_bytes_(target_column_pad_bytes)
-    , must_use_baseline_sort_(must_use_baseline_sort)
-    , force_4byte_float_(false) {
-  padded_agg_col_widths_.reserve(agg_col_widths_.size());
-  for (auto& col_width : agg_col_widths_) {
-    padded_agg_col_widths_.push_back(col_width.compact);
-  }
-}
-
 bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const {
   // Note that this method does not check ptr reference members (e.g. executor_) or
   // entry_count_

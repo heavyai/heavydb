@@ -116,31 +116,6 @@ class QueryMemoryDescriptor {
                         const bool has_nulls,
                         const std::vector<int8_t>& group_col_widths);
 
-  QueryMemoryDescriptor(const Executor* executor,
-                        const bool allow_multifrag,
-                        const QueryDescriptionType query_desc_type,
-                        const bool keyless_hash,
-                        const bool interleaved_bins_on_gpu,
-                        const int32_t idx_target_as_key,
-                        const int64_t init_val,
-                        const std::vector<int8_t>& group_col_widths,
-                        const int8_t group_col_compact_width,
-                        const std::vector<ColWidths>& agg_col_widths,
-                        const std::vector<ssize_t>& target_groupby_indices,
-                        const size_t entry_count,
-                        const int64_t min_val,
-                        const int64_t max_val,
-                        const int64_t bucket,
-                        const bool hash_nulls,
-                        const GroupByMemSharing sharing,
-                        const CountDistinctDescriptors count_distinct_descriptors,
-                        const bool sort_on_gpu,
-                        const bool output_columnar,
-                        const bool render_output,
-                        const std::vector<int8_t>& key_column_pad_bytes,
-                        const std::vector<int8_t>& target_column_pad_bytes,
-                        const bool must_use_baseline_sort);
-
   // Serialization
   QueryMemoryDescriptor(const TResultSetBufferDescriptor& thrift_query_memory_descriptor);
   static TResultSetBufferDescriptor toThrift(const QueryMemoryDescriptor&);
