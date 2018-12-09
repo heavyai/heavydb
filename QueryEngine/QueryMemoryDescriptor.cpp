@@ -1044,3 +1044,54 @@ bool QueryMemoryDescriptor::canOutputColumnar() const {
          !interleavedBins(ExecutorDeviceType::GPU) &&
          countDescriptorsLogicallyEmpty(count_distinct_descriptors_);
 }
+
+namespace {
+
+inline std::string boolToString(const bool val) {
+  return val ? "True" : "False";
+}
+
+inline std::string queryDescTypeToString(const QueryDescriptionType val) {
+  switch (val) {
+    case QueryDescriptionType::GroupByPerfectHash:
+      return "Perfect Hash";
+    case QueryDescriptionType::GroupByBaselineHash:
+      return "Baseline Hash";
+    case QueryDescriptionType::Projection:
+      return "Projection";
+    case QueryDescriptionType::NonGroupedAggregate:
+      return "Non-grouped Aggregate";
+    case QueryDescriptionType::Estimator:
+      return "Estimator";
+    default:
+      UNREACHABLE();
+  }
+  return "";
+}
+
+}  // namespace
+
+std::string QueryMemoryDescriptor::toString() const {
+  std::string str;
+  str += "Query Memory Descriptor State\n";
+  str += "\tQuery Type: " + queryDescTypeToString(query_desc_type_) + "\n";
+  str += "\tAllow Multifrag: " + boolToString(allow_multifrag_) + "\n";
+  str += "\tKeyless Hash: " + boolToString(keyless_hash_) + "\n";
+  str += "\tInterleaved Bins on GPU: " + boolToString(interleaved_bins_on_gpu_) + "\n";
+  str += "\tBlocks Share Memory: " + boolToString(blocksShareMemory()) + "\n";
+  str += "\tThreads Share Memory: " + boolToString(threadsShareMemory()) + "\n";
+  str += "\tUses Cached Context: " + boolToString(usesCachedContext()) + "\n";
+  str += "\tUses Fast Group Values: " + boolToString(usesGetGroupValueFast()) + "\n";
+  str +=
+      "Lazy Init Groups (GPU): " + boolToString(lazyInitGroups(ExecutorDeviceType::GPU)) +
+      "\n";
+  str += "\tEntry Count: " + std::to_string(entry_count_) + "\n";
+  str += "\tMin Val (perfect hash only): " + std::to_string(min_val_) + "\n";
+  str += "\tMax Val (perfect hash only): " + std::to_string(max_val_) + "\n";
+  str += "\tBucket Val (perfect hash only): " + std::to_string(bucket_) + "\n";
+  str += "\tSort on GPU: " + boolToString(sort_on_gpu_) + "\n";
+  str += "\tOutput Columnar: " + boolToString(output_columnar_) + "\n";
+  str += "\tRender Output: " + boolToString(render_output_) + "\n";
+  str += "\tUse Baseline Sort: " + boolToString(must_use_baseline_sort_) + "\n";
+  return str;
+}

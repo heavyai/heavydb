@@ -1384,11 +1384,11 @@ void Executor::dispatchFragments(
   const auto device_type = execution_dispatch.getDeviceType();
 
   const auto& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
+  VLOG(1) << query_mem_desc.toString();
 
   const bool allow_multifrag =
       eo.allow_multifrag &&
       (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext() ||
-
        query_mem_desc.getQueryDescriptionType() ==
            QueryDescriptionType::GroupByBaselineHash ||
        query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection);

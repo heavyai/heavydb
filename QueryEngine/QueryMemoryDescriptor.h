@@ -374,6 +374,8 @@ class QueryMemoryDescriptor {
 
   bool isWarpSyncRequired(const ExecutorDeviceType) const;
 
+  std::string toString() const;
+
  protected:
   void resetGroupColWidths(const std::vector<int8_t>& new_group_col_widths) {
     group_col_widths_ = new_group_col_widths;
