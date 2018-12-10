@@ -54,6 +54,7 @@
 #include "parser.h"
 
 size_t g_leaf_count{0};
+extern bool g_aggregator;
 
 using namespace Lock_Namespace;
 using Catalog_Namespace::SysCatalog;
@@ -3893,7 +3894,8 @@ void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 using dbl = std::numeric_limits<double>;
 
 void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  if (g_cluster) {
+  if (g_aggregator) {
+    // allow copy to statement for stand alone leafs
     throw std::runtime_error("Distributed export not supported yet");
   }
   auto& catalog = session.get_catalog();
