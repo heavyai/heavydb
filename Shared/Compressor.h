@@ -27,6 +27,9 @@
 #include <string>
 #include <vector>
 
+#ifndef COMPRESSOR_H
+#define COMPRESSOR_H
+
 class CompressionFailedError : public std::runtime_error {
  public:
   CompressionFailedError() : std::runtime_error("Compression Failed") {}
@@ -44,10 +47,12 @@ class BloscCompressor {
   inline size_t getScratchSpaceSize(const size_t len) const { return len * 1.1; }
 
   // requires a compressed buffer at least as large as uncompressed buffer.
+  // use 0 to always force compression for min_compressor_bytes.
   int64_t compress(const uint8_t* buffer,
                    const size_t buffer_size,
                    uint8_t* compressed_buffer,
-                   const size_t compressed_buffer_size);
+                   const size_t compressed_buffer_size,
+                   const size_t min_compressor_bytes);
   std::string compress(const std::string& buffer);
 
   size_t decompress(const uint8_t* compressed_buffer,
@@ -57,7 +62,8 @@ class BloscCompressor {
 
   size_t compressOrMemcpy(const uint8_t* input_buffer,
                           uint8_t* output_buffer,
-                          const size_t uncompressed_size);
+                          const size_t uncompressed_size,
+                          const size_t min_compressor_bytes);
 
   bool decompressOrMemcpy(const uint8_t* compressed_buffer,
                           const size_t compressed_buffer_size,
@@ -72,6 +78,7 @@ class BloscCompressor {
   int setThreads(size_t num_threads);
 
   int setCompressor(std::string& compressor);
+
   ~BloscCompressor();
 
  private:
@@ -79,3 +86,5 @@ class BloscCompressor {
   std::mutex compressor_lock;
   static BloscCompressor* instance;
 };
+
+#endif

@@ -50,24 +50,27 @@ BloscCompressor::~BloscCompressor() {
   blosc_destroy();
 }
 
-int64_t BloscCompressor::compress(const uint8_t* buffer,
-                                  const size_t buffer_size,
-                                  uint8_t* compressed_buffer,
-                                  const size_t compressed_buffer_size) {
-  int64_t compressed_len = 0;
-
-  if (buffer_size > g_compression_limit_bytes) {
-    std::lock_guard<std::mutex> compressor_lock_(compressor_lock);
-    compressed_len = blosc_compress(5,
-                                    1,
-                                    sizeof(unsigned char),
-                                    buffer_size,
-                                    buffer,
-                                    &compressed_buffer[0],
-                                    compressed_buffer_size);
+int64_t BloscCompressor::compress(
+    const uint8_t* buffer,
+    const size_t buffer_size,
+    uint8_t* compressed_buffer,
+    const size_t compressed_buffer_size,
+    const size_t min_compressor_bytes = g_compression_limit_bytes) {
+  if (buffer_size < min_compressor_bytes && min_compressor_bytes != 0) {
+    return 0;
   }
+  std::lock_guard<std::mutex> compressor_lock_(compressor_lock);
+  const auto compressed_len = blosc_compress(5,
+                                             1,
+                                             sizeof(unsigned char),
+                                             buffer_size,
+                                             buffer,
+                                             &compressed_buffer[0],
+                                             compressed_buffer_size);
+
   if (compressed_len <= 0) {
-    // something went wrong
+    // something went wrong. blosc retrun codes simply don't provide enough information
+    // for us to decide what.
 
     throw CompressionFailedError(std::string("failed to compress result set of length ") +
                                  std::to_string(buffer_size));
@@ -82,13 +85,12 @@ int64_t BloscCompressor::compress(const uint8_t* buffer,
 std::string BloscCompressor::compress(const std::string& buffer) {
   const auto buffer_size = buffer.size();
   std::vector<uint8_t> compressed_buffer(getScratchSpaceSize(buffer_size));
-  size_t compressed_len = 0;
   try {
-    compressed_len = compress((uint8_t*)buffer.c_str(),
-                              buffer_size,
-                              &compressed_buffer[0],
-                              getScratchSpaceSize(buffer_size));
-    if (compressed_len < buffer_size) {
+    const size_t compressed_len = compress((uint8_t*)buffer.c_str(),
+                                           buffer_size,
+                                           &compressed_buffer[0],
+                                           getScratchSpaceSize(buffer_size));
+    if (compressed_len > 0 && compressed_len < buffer_size) {
       // we need to tell the other endpoint the size of the acctual data so it can
       // decide whether it should decompress data or not. So we pass the original
       // data length. and only send the compressed result if the output of the
@@ -145,16 +147,23 @@ std::string BloscCompressor::decompress(const std::string& buffer,
 
 size_t BloscCompressor::compressOrMemcpy(const uint8_t* input_buffer,
                                          uint8_t* output_buffer,
-                                         size_t uncompressed_size) {
+                                         size_t uncompressed_size,
+                                         const size_t min_compressor_bytes) {
   try {
-    const auto compressed_size =
-        compress(input_buffer, uncompressed_size, output_buffer, uncompressed_size);
+    const auto compressed_size = compress(input_buffer,
+                                          uncompressed_size,
+                                          output_buffer,
+                                          uncompressed_size,
+                                          min_compressor_bytes);
     if (compressed_size > 0) {
       return compressed_size;
     }
   } catch (const CompressionFailedError& e) {
     // catch exceptions from blosc
     // we copy regardless what happens in compressor
+    if (uncompressed_size > min_compressor_bytes) {
+      LOG(WARNING) << "Compressor failed for byte size of " << uncompressed_size;
+    }
   }
   memcpy(output_buffer, input_buffer, uncompressed_size);
   return uncompressed_size;
@@ -168,12 +177,12 @@ bool BloscCompressor::decompressOrMemcpy(const uint8_t* compressed_buffer,
     decompress(compressed_buffer, decompressed_buffer, decompressed_size);
     return true;
   } catch (const CompressionFailedError& e) {
-  }
-  // we will also memcpy if we find that the buffer is not a compressed buffer
+    // we will memcpy if we find that the buffer is not compressed
 
-  if (compressed_size > decompressed_size) {
-    throw std::runtime_error(
-        "compressed buffer size is greater than decompressed buffer size.");
+    if (compressed_size > decompressed_size) {
+      throw std::runtime_error(
+          "compressed buffer size is greater than decompressed buffer size.");
+    }
   }
   memcpy(decompressed_buffer, compressed_buffer, decompressed_size);
   return false;
@@ -207,6 +216,7 @@ int BloscCompressor::setThreads(size_t num_threads) {
 int BloscCompressor::setCompressor(std::string& compressor_name) {
   std::lock_guard<std::mutex> compressor_lock_(compressor_lock);
   // Blosc is resilent enough to detect that the comprressor that was provided to it was
-  // supported or not. So the checks here seems a bit redundant
+  // supported or not. If the compressor is invalid or not supported it will simply keep
+  // current compressor.
   return blosc_set_compressor(compressor_name.c_str());
 }
