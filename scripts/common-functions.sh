@@ -1,5 +1,7 @@
 #!/bin/bash
 
+HTTP_DEPS="https://dependencies.mapd.com/thirdparty"
+
 function download() {
     wget --continue "$1"
 }

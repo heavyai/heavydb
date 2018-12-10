@@ -33,6 +33,7 @@ brew install apache-arrow
 brew install golang
 brew install libpng
 brew install libarchive
+brew install opensaml
 
 brew cask install java
 brew install gdal

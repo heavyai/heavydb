@@ -59,7 +59,12 @@ sudo apt install -y \
     autoconf-archive \
     automake \
     bison \
-    flex-old
+    flex-old \
+    libxerces-c-dev \
+    libxmlsec1-dev
+
+# Needed to find xmltooling and xml_security_c
+export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG_PATH
 
 VERS=1_67_0
 # http://downloads.sourceforge.net/project/boost/boost/${VERS//_/.}/boost_$VERS.tar.bz2
@@ -154,6 +159,11 @@ make -j $(nproc)
 make install
 popd
 
+# OpenSAML
+download_make_install ${HTTP_DEPS}/xml-security-c-2.0.0.tar.gz "" "--without-xalan"
+download_make_install ${HTTP_DEPS}/xmltooling-3.0.2-nolog4shib.tar.gz
+download_make_install ${HTTP_DEPS}/opensaml-3.0.0-nolog4shib.tar.gz
+
 cat > $PREFIX/mapd-deps.sh <<EOF
 PREFIX=$PREFIX
 
@@ -164,7 +174,9 @@ LD_LIBRARY_PATH=\$PREFIX/lib64:\$LD_LIBRARY_PATH
 PATH=/usr/local/cuda/bin:\$PATH
 PATH=\$PREFIX/bin:\$PATH
 
-export LD_LIBRARY_PATH PATH
+CMAKE_PREFIX_PATH=\$PREFIX:\$CMAKE_PREFIX_PATH
+
+export LD_LIBRARY_PATH PATH CMAKE_PREFIX_PATH
 EOF
 
 echo
