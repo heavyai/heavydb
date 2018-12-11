@@ -3805,7 +3805,13 @@ TEST(Select, ColumnWidths) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT DISTINCT x FROM test_inner ORDER BY x;", dt);
+    c("SELECT DISTINCT y FROM test_inner ORDER BY y;", dt);
+    c("SELECT DISTINCT xx FROM test_inner ORDER BY xx;", dt);
+    c("SELECT x, xx, y FROM test_inner GROUP BY x, xx, y ORDER BY x, xx, y;", dt);
+    c("SELECT x, xx, y FROM test_inner GROUP BY x, xx, y ORDER BY x, xx, y;", dt);
     c("SELECT DISTINCT str from test_inner ORDER BY str;", dt);
+    c("SELECT DISTINCT t FROM test ORDER BY t;", dt);
+    c("SELECT DISTINCT t, z FROM test GROUP BY t, z ORDER BY t, z;", dt);
     c("SELECT fn from test where fn < -100.7 ORDER BY fn;", dt);
     c("SELECT fixed_str, SUM(f)/SUM(t)  FROM test WHERE fixed_str IN ('foo','bar') GROUP "
       "BY fixed_str ORDER BY "

@@ -1510,15 +1510,6 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
                                        const bool translate_strings,
                                        const bool decimal_to_double,
                                        const size_t entry_buff_idx) const {
-  // The logic to get the actual size of the buffer value
-  // Here we have to consider every major type and process it accordingly
-
-  // For All sizes of ints it is a simple matter of getting the corresponding
-  // width of column. For floats we simply check the case when floats were NOT
-  // expanded to a 64 bit float i.e. double during query execution. All timestamps
-  // data types are basically interpreted as corresponding int type.
-
-  // For double we simply pick sizeof(double)
   auto actual_compact_sz = compact_sz;
   if (target_info.sql_type.get_type() == kFLOAT &&
       !query_mem_desc_.forceFourByteFloat()) {
@@ -1533,21 +1524,17 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
     if (target_info.is_agg &&
         (target_info.agg_kind == kAVG || target_info.agg_kind == kSUM ||
          target_info.agg_kind == kMIN || target_info.agg_kind == kMAX)) {
+      // The above listed aggregates use two floats in a single 8-byte slot. Set the
+      // padded size to 4 bytes to properly read each value.
       actual_compact_sz = sizeof(float);
     }
   }
-  // For Date encoding in days, pick 8 bytes
   if (get_compact_type(target_info).is_date_in_days()) {
+    // Dates encoded in days are converted to 8 byte values on read.
     actual_compact_sz = sizeof(int64_t);
   }
 
-  // All the IDs of strings in encoded string dictionary are stored as 32 bit wide
-  // ints. Hence we interpret ID of that column as 32 bit int. We need to do it
-  // becase NULL for encoded dict is INT_MIN. For temp dictionaries check if
-  // target_info's comp_param is 0. If it is a temp dictionary interpret it using
-  // the size of the current target value.
-
-  // Check Target is Encoded string and not a temp String Dictionary
+  // String dictionary keys are read as 32-bit values regardless of encoding
   if (target_info.sql_type.is_string() &&
       target_info.sql_type.get_compression() == kENCODING_DICT &&
       target_info.sql_type.get_comp_param()) {
@@ -1560,6 +1547,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
     CHECK_LT(target_logical_idx, lazy_fetch_info_.size());
     const auto& col_lazy_fetch = lazy_fetch_info_[target_logical_idx];
     if (col_lazy_fetch.is_lazily_fetched) {
+      CHECK_GE(ival, 0);
       const auto storage_idx = getStorageIndex(entry_buff_idx);
       CHECK_LT(static_cast<size_t>(storage_idx.first), col_buffers_.size());
       auto& frag_col_buffers = getColumnFrag(storage_idx.first, target_logical_idx, ival);
@@ -1754,22 +1742,19 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
   }
 
   auto ptr1 = rowwise_target_ptr;
-
-  // logic for deciding width of column
-  int8_t compact_sz1 = 0;
-  if (target_info.is_agg) {
-    compact_sz1 = std::max(
-        target_info.sql_type.get_size(),
-        (target_info.agg_arg_type.is_array()) ? -1 : target_info.agg_arg_type.get_size());
-  } else {
-    compact_sz1 = target_info.sql_type.get_size();
+  int8_t compact_sz1 = query_mem_desc_.getColumnWidth(slot_idx).compact;
+  if (query_mem_desc_.isSingleColumnGroupByWithPerfectHash()) {
+    // Single column perfect hash group by can utilize one slot for both the key and the
+    // target value if both values fit in 8 bytes. Use the target value actual size for
+    // this case. If they don't, the target value should be 8 bytes, so we can still use
+    // the actual size rather than the compact size.
+    compact_sz1 = query_mem_desc_.getColumnWidth(slot_idx).actual;
   }
 
   // logic for deciding width of column
   if (target_info.agg_kind == kAVG || is_real_str_or_array(target_info)) {
     const auto ptr2 =
         rowwise_target_ptr + query_mem_desc_.getColumnWidth(slot_idx).compact;
-    compact_sz1 = query_mem_desc_.getColumnWidth(slot_idx).compact;
     int8_t compact_sz2 = 0;
     // Skip reading the second slot if we have a none encoded string and are using
     // the none encoded strings buffer attached to ResultSetStorage
