@@ -70,7 +70,7 @@ enum SQLQualifier { kONE, kANY, kALL };
 
 enum SQLAgg { kAVG, kMIN, kMAX, kSUM, kCOUNT, kAPPROX_COUNT_DISTINCT, kSAMPLE };
 
-enum class SqlWindowFunctionKind { ROW_NUMBER };
+enum class SqlWindowFunctionKind { ROW_NUMBER, RANK, LAG, FIRST_VALUE, LAST_VALUE };
 
 enum SQLStmtType { kSELECT, kUPDATE, kINSERT, kDELETE, kCREATE_TABLE };
 
