@@ -617,7 +617,7 @@ class SessionInfo {
       , executor_device_type_(t)
       , session_id(sid)
       , last_used_time(time(0))
-      , creation_time(time(0)) {}
+      , start_time(time(0)) {}
   SessionInfo(std::shared_ptr<Catalog> cat,
               const UserMetadata& user,
               const ExecutorDeviceType t,
@@ -645,7 +645,7 @@ class SessionInfo {
   bool checkDBAccessPrivileges(const DBObjectType& permissionType,
                                const AccessPrivileges& privs,
                                const std::string& objectName = "") const;
-  time_t get_creation_time() const { return creation_time; }
+  time_t get_start_time() const { return start_time; }
 
   operator std::string() const;
 
@@ -656,7 +656,7 @@ class SessionInfo {
   std::atomic<ExecutorDeviceType> executor_device_type_;
   const std::string session_id;
   std::atomic<time_t> last_used_time;  // for cleaning up SessionInfo after client dies
-  std::atomic<time_t> creation_time;   // for invalidating session after tolerance period
+  std::atomic<time_t> start_time;      // for invalidating session after tolerance period
 };
 
 }  // namespace Catalog_Namespace

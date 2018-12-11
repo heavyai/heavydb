@@ -23,6 +23,9 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
       case kCONNECT:
         context.client.connect(
             context.session, context.user_name, context.passwd, context.db_name);
+        context.client.get_session_info(context.session_info, context.session);
+        context.user_name = context.session_info.user;
+        context.db_name = context.session_info.database;
         break;
       case kDISCONNECT:
         context.client.disconnect(context.session);

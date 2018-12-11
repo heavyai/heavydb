@@ -180,6 +180,7 @@ class MapDHandler : public MapDIf {
                           const int32_t table_id);
   int32_t get_table_epoch_by_name(const TSessionId& session,
                                   const std::string& table_name);
+  void get_session_info(TSessionInfo& _return, const TSessionId& session);
   // query, render
   void sql_execute(TQueryResult& _return,
                    const TSessionId& session,

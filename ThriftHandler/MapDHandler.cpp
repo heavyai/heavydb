@@ -485,6 +485,13 @@ void MapDHandler::get_hardware_info(TClusterHardwareInfo& _return,
   }
 }
 
+void MapDHandler::get_session_info(TSessionInfo& _return, const TSessionId& session) {
+  auto session_info = get_session(session);
+  _return.user = session_info.get_currentUser().userName;
+  _return.database = session_info.get_catalog().get_currentDB().dbName;
+  _return.start_time = session_info.get_start_time();
+}
+
 void MapDHandler::value_to_thrift_column(const TargetValue& tv,
                                          const SQLTypeInfo& ti,
                                          TColumn& column) {
@@ -3808,11 +3815,11 @@ void MapDHandler::get_heap_profile(std::string& profile, const TSessionId& sessi
 
 void MapDHandler::check_session_exp(const SessionMap::iterator& session_it) {
   time_t last_used_time = session_it->second->get_last_used_time();
-  time_t creation_time = session_it->second->get_creation_time();
+  time_t start_time = session_it->second->get_start_time();
   if ((time(0) - last_used_time) > idle_session_duration_) {
     disconnect_impl(session_it);  // Already checked session existance in get_session_it
     THROW_MAPD_EXCEPTION("Idle Session Timeout. User should re-authenticate.")
-  } else if ((time(0) - creation_time) > max_session_duration_) {
+  } else if ((time(0) - start_time) > max_session_duration_) {
     disconnect_impl(session_it);  // Already checked session existance in get_session_it
     THROW_MAPD_EXCEPTION("Maximum active Session Timeout. User should re-authenticate.")
   }

@@ -57,6 +57,7 @@ class CoreMockClient {
   MockMethod(get_license_claims)
   MockMethod(get_completion_hints)
   MockMethod(get_dashboards)
+  MockMethod(get_session_info)
 };
 // clang-format on
 
