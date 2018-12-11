@@ -2463,9 +2463,13 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   std::vector<std::unique_ptr<TargetValueConverter>> value_converters;
   const auto num_rows = result_rows->rowCount();
 
+  int rowid_suffix = 0;
   for (const auto& target_metainfo : target_metainfos) {
     ColumnDescriptor cd;
     cd.columnName = target_metainfo.get_resname();
+    if (cd.columnName == "rowid") {
+      cd.columnName += std::to_string(rowid_suffix++);
+    }
     cd.columnType = target_metainfo.get_physical_type_info();
 
     ColumnDescriptor cd_for_create = cd;
