@@ -373,7 +373,9 @@ class ResultSet {
   // one element. Only used by RelAlgTranslator::getInIntegerSetExpr currently.
   OneIntegerColumnRow getOneColRow(const size_t index) const;
 
-  std::vector<TargetValue> getRowAtNoTranslations(const size_t index) const;
+  std::vector<TargetValue> getRowAtNoTranslations(
+      const size_t index,
+      const bool skip_non_lazy_columns = false) const;
 
   bool isRowAtEmpty(const size_t index) const;
 
@@ -454,6 +456,7 @@ class ResultSet {
   }
 
   const std::vector<uint32_t>& getPermutationBuffer() const;
+  const bool isPermutationBufferEmpty() const { return permutation_.empty(); };
 
   std::string serialize() const;
 
@@ -480,6 +483,27 @@ class ResultSet {
   GeoReturnType getGeoReturnType() const { return geo_return_type_; }
   void setGeoReturnType(const GeoReturnType val) { geo_return_type_ = val; }
 
+  void copyColumnIntoBuffer(const size_t column_idx,
+                            int8_t* output_buffer,
+                            const size_t output_buffer_size) const;
+
+  /*
+   * Determines if it is possible to directly form a ColumnarResults class from this
+   * result set, bypassing the default row-wise columnarization. It is currently only
+   * possible for columnar projections.
+   *
+   * NOTE: If there exists a permutation vector (i.e., ORDER BY), it becomes equivalent to
+   * the row-wise columnarization.
+   */
+  bool isFastColumnarConversionPossible() const {
+    return query_mem_desc_.didOutputColumnar() && permutation_.empty() &&
+           query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection;
+  }
+
+  const std::vector<ColumnLazyFetchInfo>& getLazyFetchInfo() const {
+    return lazy_fetch_info_;
+  }
+
  private:
   void advanceCursorToNextEntry(ResultSetRowIterator& iter) const;
 
@@ -492,7 +516,8 @@ class ResultSet {
   std::vector<TargetValue> getRowAt(const size_t index,
                                     const bool translate_strings,
                                     const bool decimal_to_double,
-                                    const bool fixup_count_distinct_pointers) const;
+                                    const bool fixup_count_distinct_pointers,
+                                    const bool skip_non_lazy_columns = false) const;
 
   size_t parallelRowCount() const;
 

@@ -5367,6 +5367,22 @@ TEST(Select, Subqueries) {
                 v<double>(run_simple_agg(
                     "SELECT AVG(dd) / (SELECT STDDEV(dd) FROM test) FROM test;", dt)),
                 static_cast<double>(0.10));
+    c("SELECT R.x, R.f, count(*) FROM (SELECT x,y,z,t,f,d FROM test WHERE x >= 7 AND z < "
+      "0 AND t > 1001 AND d < 3) AS R WHERE R.y > 0 AND z < 0 AND t > 1001 AND d "
+      "< 3 GROUP BY R.x, R.f ORDER BY R.x;",
+      dt);
+    c("SELECT R.y, R.d, count(*) FROM (SELECT x,y,z,t,f,d FROM test WHERE y > 42 AND f > "
+      "1.0) AS R WHERE R.x > 0 AND t > 1001 AND f > 1.0 GROUP BY "
+      "R.y, R.d ORDER BY R.d;",
+      dt);
+    c("SELECT R.x, R.f, count(*) FROM (SELECT x,y,z,t,f,d FROM test WHERE x >= 7 AND z < "
+      "0 AND t > 1001 AND d < 3 LIMIT 3) AS R WHERE R.y > 0 AND z < 0 AND t > 1001 AND d "
+      "< 3 GROUP BY R.x, R.f ORDER BY R.f;",
+      dt);
+    c("SELECT R.y, R.d, count(*) FROM (SELECT x,y,z,t,f,d FROM test WHERE y > 42 AND f > "
+      "1.0 ORDER BY x DESC LIMIT 2) AS R WHERE R.x > 0 AND t > 1001 AND f > 1.0 GROUP BY "
+      "R.y, R.d ORDER BY R.y;",
+      dt);
   }
 }
 

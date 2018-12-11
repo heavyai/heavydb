@@ -186,6 +186,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
     const ExecutionOptions& eo,
     const std::vector<InputTableInfo>& query_infos,
     ColumnCacheMap& column_cache) {
+  INJECT_TIMER(buildJoinLoops);
   std::vector<JoinLoop> join_loops;
   for (size_t level_idx = 0, current_hash_table_idx = 0;
        level_idx < ra_exe_unit.join_quals.size();

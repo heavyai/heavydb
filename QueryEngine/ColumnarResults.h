@@ -60,6 +60,16 @@ class ColumnarResults {
  private:
   ColumnarResults(const size_t num_rows, const std::vector<SQLTypeInfo>& target_types)
       : num_rows_(num_rows), target_types_(target_types) {}
+  inline void writeBackCell(const TargetValue& col_val,
+                            const size_t row_idx,
+                            const size_t column_idx);
+  void materializeAllColumns(const ResultSet& rows, const size_t num_columns);
+  void copyAllNonLazyColumns(const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
+                             const ResultSet& rows,
+                             const size_t num_columns);
+  void materializeAllLazyColumns(const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
+                                 const ResultSet& rows,
+                                 const size_t num_columns);
 
   std::vector<const int8_t*> column_buffers_;
   size_t num_rows_;

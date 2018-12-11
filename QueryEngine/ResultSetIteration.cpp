@@ -118,7 +118,8 @@ std::vector<TargetValue> ResultSet::getRowAt(
     const size_t global_entry_idx,
     const bool translate_strings,
     const bool decimal_to_double,
-    const bool fixup_count_distinct_pointers) const {
+    const bool fixup_count_distinct_pointers,
+    const bool skip_non_lazy_columns /* = false*/) const {
   const auto storage_lookup_result =
       fixup_count_distinct_pointers
           ? StorageLookupResult{storage_.get(), global_entry_idx, 0}
@@ -148,16 +149,32 @@ std::vector<TargetValue> ResultSet::getRowAt(
   for (size_t target_idx = 0; target_idx < storage_->targets_.size(); ++target_idx) {
     const auto& agg_info = storage_->targets_[target_idx];
     if (query_mem_desc_.didOutputColumnar()) {
-      row.push_back(getTargetValueFromBufferColwise(crt_col_ptr,
-                                                    keys_ptr,
-                                                    storage->query_mem_desc_,
-                                                    local_entry_idx,
-                                                    global_entry_idx,
-                                                    agg_info,
-                                                    target_idx,
-                                                    agg_col_idx,
-                                                    translate_strings,
-                                                    decimal_to_double));
+      if (skip_non_lazy_columns) {
+        row.push_back(!lazy_fetch_info_.empty() &&
+                              lazy_fetch_info_[target_idx].is_lazily_fetched
+                          ? getTargetValueFromBufferColwise(crt_col_ptr,
+                                                            keys_ptr,
+                                                            storage->query_mem_desc_,
+                                                            local_entry_idx,
+                                                            global_entry_idx,
+                                                            agg_info,
+                                                            target_idx,
+                                                            agg_col_idx,
+                                                            translate_strings,
+                                                            decimal_to_double)
+                          : nullptr);
+      } else {
+        row.push_back(getTargetValueFromBufferColwise(crt_col_ptr,
+                                                      keys_ptr,
+                                                      storage->query_mem_desc_,
+                                                      local_entry_idx,
+                                                      global_entry_idx,
+                                                      agg_info,
+                                                      target_idx,
+                                                      agg_col_idx,
+                                                      translate_strings,
+                                                      decimal_to_double));
+      }
       crt_col_ptr = advance_target_ptr_col_wise(crt_col_ptr,
                                                 agg_info,
                                                 agg_col_idx,
@@ -240,13 +257,14 @@ std::vector<TargetValue> ResultSet::getRowAt(const size_t logical_index) const {
 }
 
 std::vector<TargetValue> ResultSet::getRowAtNoTranslations(
-    const size_t logical_index) const {
+    const size_t logical_index,
+    const bool skip_non_lazy_columns /* = false*/) const {
   if (logical_index >= entryCount()) {
     return {};
   }
   const auto entry_idx =
       permutation_.empty() ? logical_index : permutation_[logical_index];
-  return getRowAt(entry_idx, false, false, false);
+  return getRowAt(entry_idx, false, false, false, skip_non_lazy_columns);
 }
 
 bool ResultSet::isRowAtEmpty(const size_t logical_index) const {
@@ -967,9 +985,9 @@ struct GeoQueryOutputFetchHandler {
                            T&&... vals) {
     auto ad_arr_generator = [&](auto datum_fetcher) {
       constexpr int num_vals = sizeof...(vals);
-      static_assert(num_vals % 2 == 0,
-                    "Must have consistent pointer/size pairs for lazy fetch of geo "
-                    "target values.");
+      static_assert(
+          num_vals % 2 == 0,
+          "Must have consistent pointer/size pairs for lazy fetch of geo target values.");
       const auto vals_vector = std::vector<int64_t>{vals...};
 
       std::array<VarlenDatumPtr, num_vals / 2> ad_arr;
@@ -1046,6 +1064,47 @@ const std::vector<const int8_t*>& ResultSet::getColumnFrag(const size_t storage_
   } else {
     CHECK_EQ(size_t(1), col_buffers_[storage_idx].size());
     return col_buffers_[storage_idx][0];
+  }
+}
+
+/**
+ * For each specified column, this function goes through all available storages and copy
+ * its content into a contiguous output_buffer
+ */
+void ResultSet::copyColumnIntoBuffer(const size_t column_idx,
+                                     int8_t* output_buffer,
+                                     const size_t output_buffer_size) const {
+  CHECK(isFastColumnarConversionPossible());
+  CHECK_LT(column_idx, query_mem_desc_.getColCount());
+  CHECK(output_buffer_size > 0);
+  CHECK(output_buffer);
+  const auto column_width_size = query_mem_desc_.getPaddedColumnWidthBytes(column_idx);
+  size_t out_buff_offset = 0;
+
+  // the main storage:
+  const size_t crt_storage_row_count = storage_->query_mem_desc_.getEntryCount();
+  const size_t crt_buffer_size = crt_storage_row_count * column_width_size;
+  const size_t column_offset = storage_->query_mem_desc_.getColOffInBytes(0, column_idx);
+  const int8_t* storage_buffer = storage_->getUnderlyingBuffer() + column_offset;
+  CHECK(crt_buffer_size <= output_buffer_size);
+  std::memcpy(output_buffer, storage_buffer, crt_buffer_size);
+
+  out_buff_offset += crt_buffer_size;
+
+  // the appended storages:
+  for (size_t i = 0; i < appended_storage_.size(); i++) {
+    CHECK_LT(out_buff_offset, output_buffer_size);
+    const size_t crt_storage_row_count =
+        appended_storage_[i]->query_mem_desc_.getEntryCount();
+    const size_t crt_buffer_size = crt_storage_row_count * column_width_size;
+    const size_t column_offset =
+        appended_storage_[i]->query_mem_desc_.getColOffInBytes(0, column_idx);
+    const int8_t* storage_buffer =
+        appended_storage_[i]->getUnderlyingBuffer() + column_offset;
+    CHECK(out_buff_offset + crt_buffer_size <= output_buffer_size);
+    std::memcpy(output_buffer + out_buff_offset, storage_buffer, crt_buffer_size);
+
+    out_buff_offset += crt_buffer_size;
   }
 }
 
