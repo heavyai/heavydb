@@ -2794,10 +2794,12 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
       // default to GEOINT 32-bits
       cd.columnType.set_compression(kENCODING_GEOINT);
       cd.columnType.set_comp_param(32);
-    } else {
+    } else if (type == kDATE) {
       // Days encoding for DATE
-      (type == kDATE) ? cd.columnType.set_compression(kENCODING_DATE_IN_DAYS)
-                      : cd.columnType.set_compression(kENCODING_NONE);
+      cd.columnType.set_compression(kENCODING_DATE_IN_DAYS);
+      cd.columnType.set_comp_param(0);
+    } else {
+      cd.columnType.set_compression(kENCODING_NONE);
       cd.columnType.set_comp_param(0);
     }
   } else {
@@ -2844,16 +2846,16 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
           if (compression->get_encoding_param() != 32) {
             throw std::runtime_error(cd.columnName +
                                      ": Compression parameter for Fixed encoding on "
-                                     "TIME, DATE or TIMESTAMP must 32.");
+                                     "TIME or TIMESTAMP must be 32.");
           }
           break;
         case kDECIMAL:
         case kNUMERIC:
           if (compression->get_encoding_param() != 32 &&
               compression->get_encoding_param() != 16) {
-            throw std::runtime_error(
-                cd.columnName +
-                ": Compression parameter for Fixed encoding on DECIMAL must 16 or 32.");
+            throw std::runtime_error(cd.columnName +
+                                     ": Compression parameter for Fixed encoding on "
+                                     "DECIMAL must be 16 or 32.");
           }
 
           if (compression->get_encoding_param() == 32 &&
@@ -2869,19 +2871,24 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
           }
           break;
         case kDATE:
-          if (compression->get_encoding_param() != 16) {
+          if (compression->get_encoding_param() != 32 &&
+              compression->get_encoding_param() != 16) {
             throw std::runtime_error(cd.columnName +
                                      ": Compression parameter for Fixed encoding on "
-                                     "DATE must 16.");
+                                     "DATE must be 16 or 32.");
           }
           break;
         default:
           throw std::runtime_error(cd.columnName + ": Cannot apply FIXED encoding to " +
                                    t->to_string());
       }
-      (type == kDATE) ? cd.columnType.set_compression(kENCODING_DATE_IN_DAYS)
-                      : cd.columnType.set_compression(kENCODING_FIXED);
-      cd.columnType.set_comp_param(compression->get_encoding_param());
+      if (type == kDATE) {
+        cd.columnType.set_compression(kENCODING_DATE_IN_DAYS);
+        cd.columnType.set_comp_param((compression->get_encoding_param() == 16) ? 16 : 0);
+      } else {
+        cd.columnType.set_compression(kENCODING_FIXED);
+        cd.columnType.set_comp_param(compression->get_encoding_param());
+      }
     } else if (boost::iequals(comp, "rl")) {
       // run length encoding
       cd.columnType.set_compression(kENCODING_RL);

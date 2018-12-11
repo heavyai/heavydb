@@ -639,6 +639,12 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE o1 = '1999-09-08';", dt);
     c("SELECT COUNT(*) FROM test WHERE o1 <> '1999-09-08';", dt);
     c("SELECT COUNT(*) FROM test WHERE o >= CAST('1999-09-09' AS DATE);", dt);
+    c("SELECT COUNT(*) FROM test WHERE o2 > '1999-09-08';", dt);
+    c("SELECT COUNT(*) FROM test WHERE o2 <= '1999-09-08';", dt);
+    c("SELECT COUNT(*) FROM test WHERE o2 = '1999-09-08';", dt);
+    c("SELECT COUNT(*) FROM test WHERE o2 <> '1999-09-08';", dt);
+    c("SELECT COUNT(*) FROM test WHERE o1 = o2;", dt);
+    c("SELECT COUNT(*) FROM test WHERE o1 <> o2;", dt);
     ASSERT_EQ(19,
               v<int64_t>(run_simple_agg("SELECT rowid FROM test WHERE rowid = 19;", dt)));
     ASSERT_EQ(
@@ -12323,8 +12329,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "fixed_null_str text encoding "
         "dict(16), real_str text encoding none, shared_dict text, m timestamp(0), m_3 "
         "timestamp(3), m_6 timestamp(6), "
-        "m_9 timestamp(9), n time(0), o date, o1 date encoding "
-        "fixed(16), fx int "
+        "m_9 timestamp(9), n time(0), o date, o1 date encoding fixed(16), o2 date "
+        "encoding fixed(32), fx int "
         "encoding fixed(16), dd decimal(10, 2), dd_notnull decimal(10, 2) not null, ss "
         "text encoding dict, u int, ofd "
         "int, ufd int not null, ofq bigint, ufq bigint not null"};
@@ -12335,8 +12341,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "varchar(10), null_str text encoding dict, fixed_str text encoding dict(16), "
         "fixed_null_str text encoding "
         "dict(16), real_str text encoding none, shared_dict text, m timestamp(0), "
-        "n time(0), o date, o1 date encoding "
-        "fixed(16), fx int "
+        "n time(0), o date, o1 date encoding fixed(16), o2 date "
+        "encoding fixed(32), fx int "
         "encoding fixed(16), dd decimal(10, 2), dd_notnull decimal(10, 2) not null, ss "
         "text encoding dict, u int, ofd "
         "int, ufd int not null, ofq bigint, ufq bigint not null"};
@@ -12357,7 +12363,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "fixed_null_str text, real_str text, "
         "shared_dict "
         "text, m timestamp(0), m_3 timestamp(3), m_6 timestamp(6), m_9 timestamp(9), n "
-        "time(0), o date, o1 date, "
+        "time(0), o date, o1 date, o2 date, "
         "fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not "
         "null, ss "
         "text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null);");
@@ -12369,7 +12375,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "fixed_null_str text, real_str text, "
         "shared_dict "
         "text, m timestamp(0), n "
-        "time(0), o date, o1 date, "
+        "time(0), o date, o1 date, o2 date, "
         "fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not "
         "null, ss "
         "text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null);");
@@ -12388,7 +12394,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "'2014-12-13 22:23:15', '2014-12-13 22:23:15.323', '1999-07-11 14:02:53.874533', "
         "'2006-04-26 "
         "03:49:04.607435125', "
-        "'15:13:14', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, 'fish', null, "
+        "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, 'fish', "
+        "null, "
         "2147483647, -2147483648, null, -1);"};
 #else
     const std::string insert_query{
@@ -12396,7 +12403,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "'foo', null, 'foo', null, "
         "'real_foo', 'foo',"
         "'2014-12-13 22:23:15', "
-        "'15:13:14', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, 'fish', null, "
+        "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, 'fish', "
+        "null, "
         "2147483647, -2147483648, null, -1);"};
 #endif
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
@@ -12409,7 +12417,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "-2002.4, 'bar', null, 'bar', null, "
         "'real_bar', NULL, '2014-12-13 22:23:15', '2014-12-13 22:23:15.323', '2014-12-13 "
         "22:23:15.874533', "
-        "'2014-12-13 22:23:15.607435763', '15:13:14', NULL, NULL, NULL, 222.2, 222.2, "
+        "'2014-12-13 22:23:15.607435763', '15:13:14', NULL, NULL, NULL, NULL, 222.2, "
+        "222.2, "
         "null, null, null, "
         "-2147483647, "
         "9223372036854775807, -9223372036854775808);"};
@@ -12418,7 +12427,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "INSERT INTO test VALUES(8, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, 2.4, "
         "-2002.4, 'bar', null, 'bar', null, "
         "'real_bar', NULL, '2014-12-13 22:23:15', "
-        "'15:13:14', NULL, NULL, NULL, 222.2, 222.2, "
+        "'15:13:14', NULL, NULL, NULL, NULL, 222.2, 222.2, "
         "null, null, null, "
         "-2147483647, "
         "9223372036854775807, -9223372036854775808);"};
@@ -12433,7 +12442,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "-220.6, 'baz', null, null, null, "
         "'real_baz', 'baz', '2014-12-14 22:23:15', '2014-12-14 22:23:15.750', "
         "'2014-12-14 22:23:15.437321', "
-        "'2014-12-14 22:23:15.934567401', '15:13:14', '1999-09-09', '1999-09-09', 11, "
+        "'2014-12-14 22:23:15.934567401', '15:13:14', '1999-09-09', '1999-09-09', "
+        "'1999-09-09', 11, "
         "333.3, 333.3, "
         "'boat', null, 1, "
         "-1, 1, -9223372036854775808);"};
@@ -12442,7 +12452,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 1000.3, -1000.3, 2.6, "
         "-220.6, 'baz', null, null, null, "
         "'real_baz', 'baz', '2014-12-14 22:23:15', "
-        "'15:13:14', '1999-09-09', '1999-09-09', 11, "
+        "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 11, "
         "333.3, 333.3, "
         "'boat', null, 1, "
         "-1, 1, -9223372036854775808);"};
@@ -12459,8 +12469,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "float, d double, dn double, str "
         "text, null_str text encoding dict, fixed_str text encoding dict(16), real_str "
         "text encoding none, m "
-        "timestamp(0), n time(0), o date, o1 date encoding fixed(16), fx int encoding "
-        "fixed(16), dd decimal(10, 2), "
+        "timestamp(0), n time(0), o date, o1 date encoding fixed(16), "
+        "o2 date encoding fixed(32), fx int encoding fixed(16), dd decimal(10, 2), "
         "dd_notnull decimal(10, 2) not null, ss text encoding dict, u int, ofd int, ufd "
         "int not null, ofq bigint, ufq "
         "bigint not null"};
@@ -12477,8 +12487,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "float, ff float, fn float, d "
         "double, dn double, str "
         "text, null_str text,"
-        "fixed_str text, real_str text, m timestamp(0), n time(0), o date, o1 date, fx "
-        "int, dd decimal(10, 2), "
+        "fixed_str text, real_str text, m timestamp(0), n time(0), o date, o1 date, "
+        "o2 date, fx int, dd decimal(10, 2), "
         "dd_notnull decimal(10, 2) not null, ss text, u int, ofd int, ufd int not null, "
         "ofq bigint, ufq bigint not "
         "null);");
@@ -12493,7 +12503,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "'foo', null, 'foo', 'real_foo', "
         "'2014-12-13 "
         "22:23:15', "
-        "'15:13:14', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, 'fish', null, "
+        "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, 'fish', "
+        "null, "
         "2147483647, -2147483648, null, -1);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
@@ -12505,7 +12516,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "'real_bar', "
         "'2014-12-13 "
         "22:23:15', "
-        "'15:13:14', NULL, NULL, NULL, 222.2, 222.2, null, null, null, -2147483647, "
+        "'15:13:14', NULL, NULL, NULL, NULL, 222.2, 222.2, null, null, null, "
+        "-2147483647, "
         "9223372036854775807, "
         "-9223372036854775808);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
@@ -12518,7 +12530,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "'real_baz', "
         "'2014-12-13 "
         "22:23:15', "
-        "'15:13:14', '1999-09-09', '1999-09-09', 11, 333.3, 333.3, 'boat', null, 1, -1, "
+        "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 11, 333.3, 333.3, 'boat', "
+        "null, 1, -1, "
         "1, -9223372036854775808);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
