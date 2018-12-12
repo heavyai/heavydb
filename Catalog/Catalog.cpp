@@ -2979,8 +2979,8 @@ const ColumnDescriptor* Catalog::getMetadataForColumn(int tableId, int columnId)
   return colDescIt->second;
 }
 
-const int Catalog::getColumnIdBySpi(const int tableId, const size_t spi) const {
-  const auto tabDescIt = tableDescriptorMapById_.find(tableId);
+const int Catalog::getColumnIdBySpiUnlocked(const int table_id, const size_t spi) const {
+  const auto tabDescIt = tableDescriptorMapById_.find(table_id);
   CHECK(tableDescriptorMapById_.end() != tabDescIt);
   const auto& columnIdBySpi = tabDescIt->second->columnIdBySpi_;
 
@@ -2996,9 +2996,16 @@ const int Catalog::getColumnIdBySpi(const int tableId, const size_t spi) const {
   return columnIdBySpi[spx - 1] + phi;
 }
 
+const int Catalog::getColumnIdBySpi(const int table_id, const size_t spi) const {
+  cat_read_lock read_lock(this);
+  return getColumnIdBySpiUnlocked(table_id, spi);
+}
+
 const ColumnDescriptor* Catalog::getMetadataForColumnBySpi(const int tableId,
                                                            const size_t spi) const {
-  const auto columnId = getColumnIdBySpi(tableId, spi);
+  cat_read_lock read_lock(this);
+
+  const auto columnId = getColumnIdBySpiUnlocked(tableId, spi);
   ColumnIdKey columnIdKey(tableId, columnId);
   const auto colDescIt = columnDescriptorMapById_.find(columnIdKey);
   return columnDescriptorMapById_.end() == colDescIt ? nullptr : colDescIt->second;

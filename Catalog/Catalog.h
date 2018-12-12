@@ -336,6 +336,8 @@ class Catalog {
                                          const int32_t& user_id,
                                          const std::string& dash_role_name);
 
+  const int getColumnIdBySpiUnlocked(const int table_id, const size_t spi) const;
+
   std::string basePath_;
   TableDescriptorMap tableDescriptorMap_;
   TableDescriptorMapById tableDescriptorMapById_;
