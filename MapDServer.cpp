@@ -260,6 +260,13 @@ int main(int argc, char** argv) {
                      po::value<int>(&mapd_parameters.calcite_port)
                          ->default_value(mapd_parameters.calcite_port),
                      "Calcite port number");
+  desc.add_options()("num-gpus",
+                     po::value<int>(&num_gpus)->default_value(num_gpus),
+                     "Number of gpus to use");
+  desc.add_options()("start-gpu",
+                     po::value<int>(&start_gpu)->default_value(start_gpu),
+                     "First gpu to use");
+  desc.add_options()("version,v", "Print Release Version Number");
   desc.add_options()(
       "flush-log",
       po::value<bool>(&flush_log)->default_value(flush_log)->implicit_value(true),
@@ -273,34 +280,141 @@ int main(int argc, char** argv) {
                      po::value<size_t>(&mapd_parameters.gpu_buffer_mem_bytes)
                          ->default_value(mapd_parameters.gpu_buffer_mem_bytes),
                      "Size of memory reserved for GPU buffers [bytes] (per GPU)");
-
-  desc.add_options()("num-gpus",
-                     po::value<int>(&num_gpus)->default_value(num_gpus),
-                     "Number of gpus to use");
-  desc.add_options()("start-gpu",
-                     po::value<int>(&start_gpu)->default_value(start_gpu),
-                     "First gpu to use");
-  desc.add_options()("version,v", "Print Release Version Number");
-  desc.add_options()("null-div-by-zero",
-                     po::value<bool>(&g_null_div_by_zero)
-                         ->default_value(g_null_div_by_zero)
-                         ->implicit_value(true),
-                     "Return null on division by zero instead of throwing an exception");
-  desc.add_options()("from-table-reordering",
-                     po::value<bool>(&g_from_table_reordering)
-                         ->default_value(g_from_table_reordering)
-                         ->implicit_value(true),
-                     "Enable automatic table reordering in FROM clause");
+  desc.add_options()("calcite-max-mem",
+                     po::value<size_t>(&mapd_parameters.calcite_max_mem)
+                         ->default_value(mapd_parameters.calcite_max_mem),
+                     "Max memory available to calcite JVM");
+  desc.add_options()(
+      "res-gpu-mem",
+      po::value<size_t>(&reserved_gpu_mem)->default_value(reserved_gpu_mem),
+      "Reserved memory for GPU, not use mapd allocator");
+  desc.add_options()("cuda-block-size",
+                     po::value<size_t>(&mapd_parameters.cuda_block_size)
+                         ->default_value(mapd_parameters.cuda_block_size),
+                     "Size of block to use on GPU");
+  desc.add_options()("cuda-grid-size",
+                     po::value<size_t>(&mapd_parameters.cuda_grid_size)
+                         ->default_value(mapd_parameters.cuda_grid_size),
+                     "Size of grid to use on GPU");
+  desc.add_options()(
+      "num-reader-threads",
+      po::value<size_t>(&num_reader_threads)->default_value(num_reader_threads),
+      "Number of reader threads to use");
+  desc.add_options()(
+      "idle-session-duration",
+      po::value<int>(&idle_session_duration)->default_value(idle_session_duration),
+      "Maximum duration of idle session.");
+  desc.add_options()(
+      "max-session-duration",
+      po::value<int>(&max_session_duration)->default_value(max_session_duration),
+      "Maximum duration of active session.");
+  desc.add_options()(
+      "hll-precision-bits",
+      po::value<int>(&g_hll_precision_bits)
+          ->default_value(g_hll_precision_bits)
+          ->implicit_value(g_hll_precision_bits),
+      "Number of bits used from the hash value used to specify the bucket number.");
   desc.add_options()("enable-watchdog",
                      po::value<bool>(&enable_watchdog)
                          ->default_value(enable_watchdog)
                          ->implicit_value(true),
                      "Enable watchdog");
-  desc.add_options()("help-advanced",
-                     "Print advanced and experimental options. These options should not "
-                     "normally be used in production.");
+  desc.add_options()("enable-dynamic-watchdog",
+                     po::value<bool>(&enable_dynamic_watchdog)
+                         ->default_value(enable_dynamic_watchdog)
+                         ->implicit_value(true),
+                     "Enable dynamic watchdog");
+  desc.add_options()("dynamic-watchdog-time-limit",
+                     po::value<unsigned>(&dynamic_watchdog_time_limit)
+                         ->default_value(dynamic_watchdog_time_limit)
+                         ->implicit_value(10000),
+                     "Dynamic watchdog time limit, in milliseconds");
+  desc.add_options()("enable-debug-timer",
+                     po::value<bool>(&g_enable_debug_timer)
+                         ->default_value(g_enable_debug_timer)
+                         ->implicit_value(true),
+                     "Enable debug timer logging");
+  desc.add_options()("null-div-by-zero",
+                     po::value<bool>(&g_null_div_by_zero)
+                         ->default_value(g_null_div_by_zero)
+                         ->implicit_value(true),
+                     "Return null on division by zero instead of throwing an exception");
+  desc.add_options()("bigint-count",
+                     po::value<bool>(&g_bigint_count)
+                         ->default_value(g_bigint_count)
+                         ->implicit_value(false),
+                     "Use 64-bit count");
+  desc.add_options()("allow-cpu-retry",
+                     po::value<bool>(&g_allow_cpu_retry)
+                         ->default_value(g_allow_cpu_retry)
+                         ->implicit_value(true),
+                     "Allow the queries which failed on GPU to retry on CPU, even "
+                     "when watchdog is enabled");
+  desc.add_options()("enable-access-priv-check",
+                     po::value<bool>(&enable_access_priv_check)
+                         ->default_value(enable_access_priv_check)
+                         ->implicit_value(true),
+                     "Check user access privileges to database objects");
+  desc.add_options()("from-table-reordering",
+                     po::value<bool>(&g_from_table_reordering)
+                         ->default_value(g_from_table_reordering)
+                         ->implicit_value(true),
+                     "Enable automatic table reordering in FROM clause");
+  desc.add_options()("allow-loop-joins",
+                     po::value<bool>(&allow_loop_joins)
+                         ->default_value(allow_loop_joins)
+                         ->implicit_value(true),
+                     "Enable loop joins");
+  desc.add_options()("trivial-loop-join-threshold",
+                     po::value<unsigned>(&g_trivial_loop_join_threshold)
+                         ->default_value(g_trivial_loop_join_threshold)
+                         ->implicit_value(1000),
+                     "The maximum number of rows in the inner table of a loop join "
+                     "considered to be trivially small");
+  desc.add_options()("inner-join-fragment-skipping",
+                     po::value<bool>(&g_inner_join_fragment_skipping)
+                         ->default_value(g_inner_join_fragment_skipping)
+                         ->implicit_value(true),
+                     "Enable/disable inner join fragment skipping.");
+  desc.add_options()("enable-filter-push-down",
+                     po::value<bool>(&g_enable_filter_push_down)
+                         ->default_value(g_enable_filter_push_down)
+                         ->implicit_value(true),
+                     "Enable filter push down through joins");
+  desc.add_options()("filter-push-down-low-frac",
+                     po::value<float>(&g_filter_push_down_low_frac)
+                         ->default_value(g_filter_push_down_low_frac)
+                         ->implicit_value(g_filter_push_down_low_frac),
+                     "Lower threshold for selectivity of filters that are pushed down.");
+  desc.add_options()("filter-push-down-high-frac",
+                     po::value<float>(&g_filter_push_down_high_frac)
+                         ->default_value(g_filter_push_down_high_frac)
+                         ->implicit_value(g_filter_push_down_high_frac),
+                     "Higher threshold for selectivity of filters that are pushed down.");
+  desc.add_options()("filter-push-down-passing-row-ubound",
+                     po::value<size_t>(&g_filter_push_down_passing_row_ubound)
+                         ->default_value(g_filter_push_down_passing_row_ubound)
+                         ->implicit_value(g_filter_push_down_passing_row_ubound),
+                     "Upperbound on the number of rows that should pass the filter "
+                     "if the selectivity is less than "
+                     "the high fraction threshold.");
+  desc.add_options()("enable-overlaps-hashjoin",
+                     po::value<bool>(&g_enable_overlaps_hashjoin)
+                         ->default_value(g_enable_overlaps_hashjoin)
+                         ->implicit_value(true),
+                     "Enable the overlaps hash join framework allowing for range "
+                     "join (e.g. spatial overlaps) computation using a hash table");
+  desc.add_options()("overlaps-bucket-threshold",
+                     po::value<double>(&g_overlaps_hashjoin_bucket_threshold)
+                         ->default_value(g_overlaps_hashjoin_bucket_threshold),
+                     "The minimum size of a bucket corresponding to a given inner table "
+                     "range for the overlaps hash join");
+  desc.add_options()("db-query-list",
+                     po::value<std::string>(&db_query_file),
+                     "Path to file containing mapd queries");
 
-  po::options_description desc_adv("Advanced options");
+  po::options_description desc_adv("Developer options");
+  desc_adv.add_options()("dev-options", "Print internal developer options");
   desc_adv.add_options()("ssl-cert",
                          po::value<std::string>(&mapd_parameters.ssl_cert_file)
                              ->default_value(std::string("")),
@@ -320,150 +434,31 @@ int main(int argc, char** argv) {
                              ->default_value(std::string("")),
                          "SSL java trust store password");
   desc_adv.add_options()(
-      "jit-debug",
+      "jit-debug-ir",
       po::value<bool>(&jit_debug)->default_value(jit_debug)->implicit_value(true),
-      "Enable debugger support for the JIT. The generated code can be found at "
-      "/tmp/mapdquery");
+      "Enable debugger support for the JIT. Note that this flag is incompatible with the "
+      "`ENABLE_JIT_DEBUG` build flag. The generated code can be found at "
+      "`/tmp/mapdquery`");
   desc_adv.add_options()(
       "disable-multifrag",
       po::value<bool>(&allow_multifrag)
           ->default_value(allow_multifrag)
           ->implicit_value(false),
       "Disable execution over multiple fragments in a single round-trip to GPU");
-  desc_adv.add_options()("allow-loop-joins",
-                         po::value<bool>(&allow_loop_joins)
-                             ->default_value(allow_loop_joins)
-                             ->implicit_value(true),
-                         "Enable loop joins");
-  desc_adv.add_options()(
-      "res-gpu-mem",
-      po::value<size_t>(&reserved_gpu_mem)->default_value(reserved_gpu_mem),
-      "Reserved memory for GPU, not use mapd allocator");
   desc_adv.add_options()("disable-legacy-syntax",
                          po::value<bool>(&enable_legacy_syntax)
                              ->default_value(enable_legacy_syntax)
                              ->implicit_value(false),
                          "Enable legacy syntax");
-  desc_adv.add_options()(
-      "num-reader-threads",
-      po::value<size_t>(&num_reader_threads)->default_value(num_reader_threads),
-      "Number of reader threads to use");
-  desc_adv.add_options()("enable-dynamic-watchdog",
-                         po::value<bool>(&enable_dynamic_watchdog)
-                             ->default_value(enable_dynamic_watchdog)
-                             ->implicit_value(true),
-                         "Enable dynamic watchdog");
-  desc_adv.add_options()("dynamic-watchdog-time-limit",
-                         po::value<unsigned>(&dynamic_watchdog_time_limit)
-                             ->default_value(dynamic_watchdog_time_limit)
-                             ->implicit_value(10000),
-                         "Dynamic watchdog time limit, in milliseconds");
-  desc_adv.add_options()("enable-debug-timer",
-                         po::value<bool>(&g_enable_debug_timer)
-                             ->default_value(g_enable_debug_timer)
-                             ->implicit_value(true),
-                         "Enable debug timer logging");
-  desc_adv.add_options()("trivial-loop-join-threshold",
-                         po::value<unsigned>(&g_trivial_loop_join_threshold)
-                             ->default_value(g_trivial_loop_join_threshold)
-                             ->implicit_value(1000),
-                         "The maximum number of rows in the inner table of a loop join "
-                         "considered to be trivially small");
-  desc_adv.add_options()("cuda-block-size",
-                         po::value<size_t>(&mapd_parameters.cuda_block_size)
-                             ->default_value(mapd_parameters.cuda_block_size),
-                         "Size of block to use on GPU");
-  desc_adv.add_options()("cuda-grid-size",
-                         po::value<size_t>(&mapd_parameters.cuda_grid_size)
-                             ->default_value(mapd_parameters.cuda_grid_size),
-                         "Size of grid to use on GPU");
-  desc_adv.add_options()("calcite-max-mem",
-                         po::value<size_t>(&mapd_parameters.calcite_max_mem)
-                             ->default_value(mapd_parameters.calcite_max_mem),
-                         "Max memory available to calcite JVM");
   desc_adv.add_options()("enable-columnar-output",
                          po::value<bool>(&g_enable_columnar_output)
                              ->default_value(g_enable_columnar_output)
                              ->implicit_value(true));
-  desc_adv.add_options()("bigint-count",
-                         po::value<bool>(&g_bigint_count)
-                             ->default_value(g_bigint_count)
-                             ->implicit_value(false),
-                         "Use 64-bit count");
-  desc_adv.add_options()("allow-cpu-retry",
-                         po::value<bool>(&g_allow_cpu_retry)
-                             ->default_value(g_allow_cpu_retry)
-                             ->implicit_value(true),
-                         "Allow the queries which failed on GPU to retry on CPU, even "
-                         "when watchdog is enabled");
-  desc_adv.add_options()("db-query-list",
-                         po::value<std::string>(&db_query_file),
-                         "Path to file containing mapd queries");
-  desc_adv.add_options()("enable-access-priv-check",
-                         po::value<bool>(&enable_access_priv_check)
-                             ->default_value(enable_access_priv_check)
-                             ->implicit_value(true),
-                         "Check user access privileges to database objects");
-  desc_adv.add_options()(
-      "hll-precision-bits",
-      po::value<int>(&g_hll_precision_bits)
-          ->default_value(g_hll_precision_bits)
-          ->implicit_value(g_hll_precision_bits),
-      "Number of bits used from the hash value used to specify the bucket number.");
-  desc_adv.add_options()("inner-join-fragment-skipping",
-                         po::value<bool>(&g_inner_join_fragment_skipping)
-                             ->default_value(g_inner_join_fragment_skipping)
-                             ->implicit_value(true),
-                         "Enable/disable inner join fragment skipping.");
   desc_adv.add_options()("disable-shared-mem-group-by",
                          po::value<bool>(&g_enable_smem_group_by)
                              ->default_value(g_enable_smem_group_by)
                              ->implicit_value(false),
                          "Enable/disable using GPU shared memory for GROUP BY.");
-  desc_adv.add_options()(
-      "idle-session-duration",
-      po::value<int>(&idle_session_duration)->default_value(idle_session_duration),
-      "Maximum duration of idle session.");
-  desc_adv.add_options()(
-      "max-session-duration",
-      po::value<int>(&max_session_duration)->default_value(max_session_duration),
-      "Maximum duration of active session.");
-  desc_adv.add_options()("enable-filter-push-down",
-                         po::value<bool>(&g_enable_filter_push_down)
-                             ->default_value(g_enable_filter_push_down)
-                             ->implicit_value(true),
-                         "Enable filter push down through joins");
-  desc_adv.add_options()(
-      "filter-push-down-low-frac",
-      po::value<float>(&g_filter_push_down_low_frac)
-          ->default_value(g_filter_push_down_low_frac)
-          ->implicit_value(g_filter_push_down_low_frac),
-      "Lower threshold for selectivity of filters that are pushed down.");
-  desc_adv.add_options()(
-      "filter-push-down-high-frac",
-      po::value<float>(&g_filter_push_down_high_frac)
-          ->default_value(g_filter_push_down_high_frac)
-          ->implicit_value(g_filter_push_down_high_frac),
-      "Higher threshold for selectivity of filters that are pushed down.");
-  desc_adv.add_options()("filter-push-down-passing-row-ubound",
-                         po::value<size_t>(&g_filter_push_down_passing_row_ubound)
-                             ->default_value(g_filter_push_down_passing_row_ubound)
-                             ->implicit_value(g_filter_push_down_passing_row_ubound),
-                         "Upperbound on the number of rows that should pass the filter "
-                         "if the selectivity is less than "
-                         "the high fraction threshold.");
-  desc_adv.add_options()("enable-overlaps-hashjoin",
-                         po::value<bool>(&g_enable_overlaps_hashjoin)
-                             ->default_value(g_enable_overlaps_hashjoin)
-                             ->implicit_value(true),
-                         "Enable the overlaps hash join framework allowing for range "
-                         "join (e.g. spatial overlaps) computation using a hash table");
-  desc_adv.add_options()(
-      "overlaps-bucket-threshold",
-      po::value<double>(&g_overlaps_hashjoin_bucket_threshold)
-          ->default_value(g_overlaps_hashjoin_bucket_threshold),
-      "The minimum size of a bucket corresponding to a given inner table "
-      "range for the overlaps hash join");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
@@ -516,7 +511,7 @@ int main(int argc, char** argv) {
       std::cout << desc << std::endl;
       return 0;
     }
-    if (vm.count("help-advanced")) {
+    if (vm.count("dev-options")) {
       std::cout
           << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu] [-p "
              "<port "
