@@ -695,19 +695,25 @@ namespace {
 std::string hide_sensitive_data(const std::string& query_str) {
   auto result = query_str;
   static const std::vector<std::string> patterns{
-      R"(^(CREATE|ALTER)\s+?USER.+password\s*?=\s*?'(?<pwd>.+?)'.+)",
-      R"(^COPY.+FROM.+WITH.+s3_access_key\s*?=\s*?'(?<pwd>.+?)'.+)",
-      R"(^COPY.+FROM.+WITH.+s3_secret_key\s*?=\s*?'(?<pwd>.+?)'.+)",
+      R"(^(?:CREATE|ALTER)\s+?USER.+password\s*?=\s*?'(.+?)'.+)",
+      R"(^COPY.+FROM.+WITH.+s3_access_key\s*?=\s*?'(.+?)'.+)",
+      R"(^COPY.+FROM.+WITH.+s3_secret_key\s*?=\s*?'(.+?)'.+)",
   };
-  for (const auto& pattern : patterns) {
-    boost::regex passwd{pattern, boost::regex_constants::perl | boost::regex::icase};
-    boost::smatch matches;
-    if (boost::regex_search(result, matches, passwd)) {
-      result.replace(
-          matches["pwd"].first - result.begin(), matches["pwd"].length(), "XXXXXXXX");
+  try {
+    for (const auto& pattern : patterns) {
+      std::regex passwd{pattern, std::regex::ECMAScript | std::regex::icase};
+      std::smatch matches;
+      if (std::regex_search(result, matches, passwd)) {
+        result.replace(
+            matches[1].first - result.begin(), matches[1].length(), "XXXXXXXX");
+      }
     }
+    return result;
+  } catch (const std::exception& e) {
+    THROW_MAPD_EXCEPTION(std::string("Error masking sensitive data: ") + e.what());
   }
-  return result;
+  UNREACHABLE();
+  return "";
 }
 
 }  // namespace
