@@ -349,8 +349,6 @@ class Catalog {
   DBMetadata currentDB_;
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
 
-  std::unique_ptr<LdapServer> ldap_server_;
-  std::unique_ptr<RestServer> rest_server_;
   const std::vector<LeafHostInfo> string_dict_hosts_;
   std::shared_ptr<Calcite> calciteMgr_;
 
@@ -402,7 +400,7 @@ class SysCatalog {
    * throws a std::exception in all error cases! (including wrong password)
    */
   std::shared_ptr<Catalog> login(const std::string& db,
-                                 const std::string& username,
+                                 std::string& username,
                                  const std::string& password,
                                  UserMetadata& user_meta,
                                  bool check_password = true);
@@ -415,7 +413,9 @@ class SysCatalog {
   void dropDatabase(const DBMetadata& db);
   bool getMetadataForUser(const std::string& name, UserMetadata& user);
   bool getMetadataForUserById(const int32_t idIn, UserMetadata& user);
-  bool checkPasswordForUser(const std::string& passwd, UserMetadata& user);
+  bool checkPasswordForUser(const std::string& passwd,
+                            std::string& name,
+                            UserMetadata& user);
   bool getMetadataForDB(const std::string& name, DBMetadata& db);
   const DBMetadata& get_currentDB() const { return currentDB_; }
   Data_Namespace::DataMgr& get_dataMgr() const { return *dataMgr_; }
@@ -491,6 +491,9 @@ class SysCatalog {
   std::string name() const { return MAPD_SYSTEM_DB; }
   void renameObjectsInDescriptorMap(DBObject& object,
                                     const Catalog_Namespace::Catalog& cat);
+  void syncUserWithRemoteProvider(const std::string& user_name,
+                                  const std::vector<std::string>& roles,
+                                  bool* issuper);
 
  private:
   typedef std::map<std::string, Grantee*> GranteeMap;

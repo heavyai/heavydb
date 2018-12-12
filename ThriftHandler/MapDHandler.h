@@ -428,7 +428,6 @@ class MapDHandler : public MapDIf {
 
  private:
   void connect_impl(TSessionId& session,
-                    const std::string& user,
                     const std::string& passwd,
                     const std::string& dbname,
                     Catalog_Namespace::UserMetadata& user_meta,

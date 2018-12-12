@@ -298,6 +298,19 @@ add_subdirectory(ThirdParty/bcrypt)
 # PicoSHA2
 include_directories(ThirdParty/PicoSHA2)
 
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+# opensaml
+  option(ENABLE_SAML "Enable SAML support" OFF)
+  if(ENABLE_SAML)
+    find_package(OpenSaml)
+    if(NOT OpenSaml_FOUND)
+      set(ENABLE_SAML OFF CACHE BOOL "Enable SAML support" FORCE)
+    else()
+      add_definitions("-DHAVE_SAML")
+    endif()
+  endif()
+endif()
+
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
     OUTPUT

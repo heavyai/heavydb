@@ -29,6 +29,7 @@
 #include <list>
 #include <memory>
 #include <random>
+#include <sstream>
 
 #include "Catalog/AuthMetadata.h"
 #include "DataMgr/LockMgr.h"
@@ -712,25 +713,29 @@ void SysCatalog::migratePrivileged_old() {
 }
 
 std::shared_ptr<Catalog> SysCatalog::login(const std::string& dbname,
-                                           const std::string& username,
+                                           std::string& username,
                                            const std::string& password,
                                            UserMetadata& user_meta,
                                            bool check_password) {
+  sys_write_lock write_lock(this);
+
   Catalog_Namespace::DBMetadata db_meta;
   if (!getMetadataForDB(dbname, db_meta)) {
     throw std::runtime_error("Database " + dbname + " does not exist.");
   }
-
-  sys_write_lock write_lock(this);
+  // NOTE(max): register database in Catalog that early to allow ldap
+  // and saml create default user and role privileges on databases
+  auto cat =
+      Catalog::get(basePath_, db_meta, dataMgr_, *string_dict_hosts_, calciteMgr_, false);
 
   {
-    bool userPresent = getMetadataForUser(username, user_meta);
-
-    if (!userPresent) {
-      throw std::runtime_error("Invalid credentials.");
-    }
     if (check_password) {
-      if (!checkPasswordForUser(password, user_meta)) {
+      if (!checkPasswordForUser(password, username, user_meta)) {
+        throw std::runtime_error("Invalid credentials.");
+      }
+    } else {
+      bool userPresent = getMetadataForUser(username, user_meta);
+      if (!userPresent) {
         throw std::runtime_error("Invalid credentials.");
       }
     }
@@ -748,8 +753,7 @@ std::shared_ptr<Catalog> SysCatalog::login(const std::string& dbname,
     }
   }
 
-  return Catalog::get(
-      basePath_, db_meta, dataMgr_, *string_dict_hosts_, calciteMgr_, false);
+  return cat;
 }
 
 void SysCatalog::createUser(const string& name, const string& passwd, bool issuper) {
@@ -1033,8 +1037,13 @@ void SysCatalog::dropDatabase(const DBMetadata& db) {
   sqliteConnector_->query("END TRANSACTION");
 }
 
-bool SysCatalog::checkPasswordForUser(const std::string& passwd, UserMetadata& user) {
+bool SysCatalog::checkPasswordForUser(const std::string& passwd,
+                                      std::string& name,
+                                      UserMetadata& user) {
   {
+    if (!getMetadataForUser(name, user)) {
+      return false;
+    }
     int pwd_check_result = bcrypt_checkpw(passwd.c_str(), user.passwd_hash.c_str());
     // if the check fails there is a good chance that data on disc is broken
     CHECK(pwd_check_result >= 0);
@@ -1749,7 +1758,6 @@ Catalog::Catalog(const string& basePath,
     , sharedMutex_()
     , thread_holding_sqlite_lock()
     , thread_holding_write_lock() {
-  ldap_server_.reset(new LdapServer());
   if (!is_new_db) {
     CheckAndExecuteMigrations();
   }
@@ -4721,6 +4729,44 @@ void Catalog::optimizeTable(const TableDescriptor* td) {
       updel_roll.commitUpdate();
     }
   }
+}
+
+void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,
+                                            const std::vector<std::string>& roles,
+                                            bool* is_super) {
+  UserMetadata user_meta;
+  if (!getMetadataForUser(user_name, user_meta)) {
+    createUser(user_name, "", is_super ? *is_super : false);
+  } else if (is_super && *is_super != user_meta.isSuper) {
+    alterUser(user_meta.userId, nullptr, is_super);
+  }
+  std::vector<std::string> current_roles = {};
+  auto* user_rl = getUserGrantee(user_name);
+  if (user_rl) {
+    current_roles = user_rl->getRoles();
+  }
+  // first remove obsolete ones
+  for (auto& current_role_name : current_roles) {
+    if (current_role_name != user_name) {
+      if (std::find(roles.begin(), roles.end(), current_role_name) == roles.end()) {
+        revokeRole(current_role_name, user_name);
+      }
+    }
+  }
+  // now re-add them
+  std::stringstream ss;
+  ss << "Roles synchronized for user " << user_name << ": ";
+  for (auto& role_name : roles) {
+    auto* rl = getRoleGrantee(role_name);
+    if (rl) {
+      grantRole(role_name, user_name);
+      ss << role_name << " ";
+    } else {
+      LOG(WARNING) << "Error synchronizing roles for user " << user_name << ": role "
+                   << role_name << " does not exist.";
+    }
+  }
+  LOG(INFO) << ss.str();
 }
 
 }  // namespace Catalog_Namespace
