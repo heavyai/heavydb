@@ -2238,25 +2238,14 @@ void Catalog::createDashboardSystemRoles() {
   std::unordered_map<std::string, std::vector<std::string>> active_users;
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_.query("select migration_history from mapd_version_history");
-    if (sqliteConnector_.getNumRows() != 0) {
-      for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
-        const auto mig = sqliteConnector_.getData<std::string>(i, 0);
-        if (mig == "dashboard_system_role_creation") {
-          // no need for further execution
-          sqliteConnector_.query("END TRANSACTION");
-          return;
-        }
-      }
-    }
-    // record migration
-    sqliteConnector_.query_with_text_params(
-        "INSERT INTO mapd_version_history(version, migration_history) values(?,?)",
-        std::vector<std::string>{std::to_string(MAPD_VERSION),
-                                 "dashboard_system_role_creation"});
-
     sqliteConnector_.query("select id, userid, metadata from mapd_dashboards");
     for (size_t i = 0; i < sqliteConnector_.getNumRows(); ++i) {
+      if (SysCatalog::instance().getRoleGrantee(
+              generate_dash_system_rolename(sqliteConnector_.getData<string>(i, 0)))) {
+        // no need for further execution, dashboard roles already exist
+        sqliteConnector_.query("END TRANSACTION");
+        return;
+      }
       dashboards[sqliteConnector_.getData<string>(i, 0)] = std::make_pair(
           sqliteConnector_.getData<int>(i, 1), sqliteConnector_.getData<string>(i, 2));
     }
