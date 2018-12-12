@@ -306,7 +306,7 @@ include_directories(ThirdParty/PicoSHA2)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
 # opensaml
-  option(ENABLE_SAML "Enable SAML support" OFF)
+  option(ENABLE_SAML "Enable SAML support" ON)
   if(ENABLE_SAML)
     find_package(OpenSaml)
     if(NOT OpenSaml_FOUND)
