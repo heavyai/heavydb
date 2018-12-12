@@ -560,6 +560,7 @@ std::string BufferMgr::printMap() {
   tss << std::endl
       << "Map Contents: "
       << " " << getStringMgrType() << ":" << deviceId_ << std::endl;
+  std::lock_guard<std::mutex> chunkIndexLock(chunkIndexMutex_);
   for (auto segIt = chunkIndex_.begin(); segIt != chunkIndex_.end(); ++segIt, ++segNum) {
     //    tss << "Map Entry " << segNum << ": ";
     //    for (auto vecIt = segIt->first.begin(); vecIt != segIt->first.end(); ++vecIt) {
@@ -680,6 +681,7 @@ void BufferMgr::removeSegment(BufferList::iterator& segIt) {
 
 void BufferMgr::checkpoint() {
   std::lock_guard<std::mutex> lock(globalMutex_);  // granular lock
+  std::lock_guard<std::mutex> chunkIndexLock(chunkIndexMutex_);
 
   for (auto bufferIt = chunkIndex_.begin(); bufferIt != chunkIndex_.end(); ++bufferIt) {
     if (bufferIt->second->chunkKey[0] != -1 &&
@@ -694,6 +696,8 @@ void BufferMgr::checkpoint() {
 
 void BufferMgr::checkpoint(const int db_id, const int tb_id) {
   std::lock_guard<std::mutex> lock(globalMutex_);  // granular lock
+  std::lock_guard<std::mutex> chunkIndexLock(chunkIndexMutex_);
+
   ChunkKey keyPrefix;
   keyPrefix.push_back(db_id);
   keyPrefix.push_back(tb_id);
