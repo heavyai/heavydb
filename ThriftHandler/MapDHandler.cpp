@@ -2060,6 +2060,8 @@ void MapDHandler::load_table_binary(const TSessionId& session,
                  << " data :" << row;
     }
   }
+  auto checkpoint_lock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+      session_info.get_catalog(), table_name, LockType::CheckpointLock);
   loader->load(import_buffers, rows.size());
 }
 
@@ -2132,6 +2134,8 @@ void MapDHandler::load_table_binary_columnar(const TSessionId& session,
         << ". Issue at column : " << (col_idx + 1) << ". Import aborted";
     THROW_MAPD_EXCEPTION(oss.str());
   }
+  auto checkpoint_lock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+      session_info.get_catalog(), table_name, LockType::CheckpointLock);
   loader->load(import_buffers, numRows);
 }
 
@@ -2217,6 +2221,8 @@ void MapDHandler::load_table_binary_arrow(const TSessionId& session,
     // other import paths
     THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
+  auto checkpoint_lock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+      session_info.get_catalog(), table_name, LockType::CheckpointLock);
   loader->load(import_buffers, numRows);
 }
 
@@ -2323,6 +2329,8 @@ void MapDHandler::load_table(const TSessionId& session,
                  << " data :" << row;
     }
   }
+  auto checkpoint_lock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+      session_info.get_catalog(), table_name, LockType::CheckpointLock);
   loader->load(import_buffers, rows_completed);
 }
 
