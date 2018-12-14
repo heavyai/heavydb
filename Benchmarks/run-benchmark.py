@@ -435,9 +435,7 @@ for query in query_list:
             query_error_info = ""  # TODO - interpret query error info
             # Assign first query iteration times
             if iteration == 0:
-                first_execution_time = round(
-                    query_result["execution_time"], 1
-                )
+                first_execution_time = round(query_result["execution_time"], 1)
                 first_connect_time = round(query_result["connect_time"], 1)
                 first_results_iter_time = round(
                     query_result["results_iter_time"], 1
@@ -576,8 +574,32 @@ if "mapd_db" in destinations:
     if not dest_con:
         exit(1)  # Exit if cannot connect to destination db
     # Load results into db, creating table if it does not exist
+    tables = dest_con.get_tables()
+    if dest_table not in tables:
+        logging.info("Destination table does not exist. Creating.")
+        dest_con.create_table(dest_table, results_df)
+        # Following steps are a hack around pymapd not supporting DICT enc
+        dest_table_details = dest_con._client.get_table_details(
+            dest_con._session, dest_table
+        )
+        logging.debug("Updating STR datatypes to add DICT encoding")
+        for row in dest_table_details.row_desc:
+            if row.col_type.type == pymapd.MapD.TDatumType.STR:
+                row.col_type.encoding = pymapd.MapD.TEncodingType.DICT
+                row.col_type.comp_param = 32
+        logging.debug("Dropping empty dest table without DICT encoding")
+        dest_con.execute("drop table " + dest_table)
+        logging.debug("Creating new table with DICT encoding")
+        dest_con._client.create_table(
+            dest_con._session,
+            dest_table,
+            dest_table_details.row_desc,
+            pymapd.MapD.TTableType.DELIMITED,
+        )
     logging.info("Loading results into destination db")
-    dest_con.load_table(dest_table, results_df, create="infer")
+    dest_con.load_table(
+        dest_table, results_df, method="columnar", create=False
+    )
     dest_con.close()
 if "file_json" in destinations:
     # Write to json file
