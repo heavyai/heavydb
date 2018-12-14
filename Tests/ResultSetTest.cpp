@@ -260,9 +260,6 @@ int8_t* advance_to_next_columnar_key_buff(int8_t* key_ptr,
   CHECK_LT(key_idx, query_mem_desc.groupColWidthsSize());
   auto new_key_ptr =
       key_ptr + query_mem_desc.getEntryCount() * query_mem_desc.groupColWidth(key_idx);
-  if (query_mem_desc.getKeyColumnPadBytesSize() > 0) {
-    new_key_ptr += query_mem_desc.getKeyColumnPadBytes(key_idx);
-  }
   return new_key_ptr;
 }
 

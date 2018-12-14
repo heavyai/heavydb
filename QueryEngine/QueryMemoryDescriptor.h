@@ -299,18 +299,6 @@ class QueryMemoryDescriptor {
     recomputePaddedColumnWidthBytes();
   }
 
-  int8_t getKeyColumnPadBytes(const size_t idx) const {
-    CHECK_LT(idx, key_column_pad_bytes_.size());
-    return key_column_pad_bytes_[idx];
-  }
-  size_t getKeyColumnPadBytesSize() const { return key_column_pad_bytes_.size(); }
-
-  int8_t getTargetColumnPadBytes(const size_t idx) const {
-    CHECK_LT(idx, target_column_pad_bytes_.size());
-    return target_column_pad_bytes_[idx];
-  }
-  size_t getTargetColumnPadBytesSize() const { return target_column_pad_bytes_.size(); }
-
   bool mustUseBaselineSort() const { return must_use_baseline_sort_; }
 
   // TODO(adb): remove and store this info more naturally in another
@@ -407,8 +395,6 @@ class QueryMemoryDescriptor {
   bool sort_on_gpu_;
   bool output_columnar_;
   bool render_output_;
-  std::vector<int8_t> key_column_pad_bytes_;
-  std::vector<int8_t> target_column_pad_bytes_;
   bool must_use_baseline_sort_;
 
   bool force_4byte_float_;

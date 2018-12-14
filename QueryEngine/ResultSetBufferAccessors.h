@@ -117,9 +117,6 @@ inline T advance_to_next_columnar_target_buff(T target_ptr,
                            query_mem_desc.getPaddedColumnWidthBytes(target_slot_idx);
   new_target_ptr += align_to_int64(column_size);
 
-  if (query_mem_desc.getTargetColumnPadBytesSize() > 0) {
-    new_target_ptr += query_mem_desc.getTargetColumnPadBytes(target_slot_idx);
-  }
   return new_target_ptr;
 }
 
@@ -127,22 +124,9 @@ template <class T>
 inline T get_cols_ptr(T buff, const QueryMemoryDescriptor& query_mem_desc) {
   CHECK(query_mem_desc.didOutputColumnar());
   auto cols_ptr = buff;
-  if (query_mem_desc.hasKeylessHash()) {
-    CHECK_EQ(size_t(0), query_mem_desc.getKeyColumnPadBytesSize());
-  } else {
-    CHECK_EQ(query_mem_desc.getKeyColumnPadBytesSize() > 0,
-             query_mem_desc.getTargetColumnPadBytesSize() > 0);
-  }
-  const bool has_key_col_padding = query_mem_desc.getKeyColumnPadBytesSize() > 0;
   const auto key_count = query_mem_desc.getKeyCount();
-  if (has_key_col_padding) {
-    CHECK_EQ(key_count, query_mem_desc.getKeyColumnPadBytesSize());
-  }
   for (size_t key_idx = 0; key_idx < key_count; ++key_idx) {
     cols_ptr += query_mem_desc.groupColWidth(key_idx) * query_mem_desc.getEntryCount();
-    if (has_key_col_padding) {
-      cols_ptr += query_mem_desc.getKeyColumnPadBytes(key_idx);
-    }
   }
   return cols_ptr;
 }

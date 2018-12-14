@@ -561,12 +561,6 @@ bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const
   if (output_columnar_ != other.output_columnar_) {
     return false;
   }
-  if (key_column_pad_bytes_ != other.key_column_pad_bytes_) {
-    return false;
-  }
-  if (target_column_pad_bytes_ != other.target_column_pad_bytes_) {
-    return false;
-  }
   return true;
 }
 
