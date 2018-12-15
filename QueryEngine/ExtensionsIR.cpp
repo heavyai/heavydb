@@ -132,7 +132,8 @@ llvm::Value* Executor::codegenWindowFunction(const Analyzer::WindowFunction* win
           {ll_int(reinterpret_cast<const int64_t>(window_func_context->output())),
            posArg(nullptr)});
     }
-    case SqlWindowFunctionKind::LAG: {
+    case SqlWindowFunctionKind::LAG:
+    case SqlWindowFunctionKind::LEAD: {
       CHECK(WindowProjectNodeContext::get());
       const auto& args = window_func->getArgs();
       CHECK(!args.empty());

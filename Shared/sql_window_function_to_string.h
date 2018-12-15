@@ -29,6 +29,9 @@ inline std::string sql_window_function_to_str(const SqlWindowFunctionKind kind) 
     case SqlWindowFunctionKind::LAG: {
       return "LAG";
     }
+    case SqlWindowFunctionKind::LEAD: {
+      return "LEAD";
+    }
     default: {
       LOG(FATAL) << "Invalid window function kind";
       return "";

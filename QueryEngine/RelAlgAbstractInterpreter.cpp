@@ -545,6 +545,9 @@ SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
   if (name == "LAG") {
     return SqlWindowFunctionKind::LAG;
   }
+  if (name == "LEAD") {
+    return SqlWindowFunctionKind::LEAD;
+  }
   throw std::runtime_error("Unsupported window function: " + name);
 }
 

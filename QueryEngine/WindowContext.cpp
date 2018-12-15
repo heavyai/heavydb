@@ -88,14 +88,17 @@ std::vector<int64_t> index_to_rank(const int64_t* index, const size_t index_size
 size_t window_function_buffer_element_size(const SqlWindowFunctionKind kind) {
   switch (kind) {
     case SqlWindowFunctionKind::ROW_NUMBER:
-    case SqlWindowFunctionKind::LAG: {
+    case SqlWindowFunctionKind::LAG:
+    case SqlWindowFunctionKind::LEAD: {
       return 8;
     }
     default: { LOG(FATAL) << "Invalid window function kind"; }
   }
 }
 
-size_t get_lag_argument(const Analyzer::WindowFunction* window_func) {
+size_t get_lag_or_lead_argument(const Analyzer::WindowFunction* window_func) {
+  CHECK(window_func->getKind() == SqlWindowFunctionKind::LAG ||
+        window_func->getKind() == SqlWindowFunctionKind::LEAD);
   const auto& args = window_func->getArgs();
   if (args.size() == 3) {
     throw std::runtime_error("LAG with default not supported yet");
@@ -123,18 +126,36 @@ size_t get_lag_argument(const Analyzer::WindowFunction* window_func) {
   return 1;
 }
 
-void apply_lag_to_partition(const size_t lag,
-                            int64_t* output_for_partition_buff,
-                            const size_t partition_size,
-                            const size_t off) {
+void apply_offset_to_partition(int64_t* output_for_partition_buff,
+                               const size_t partition_size,
+                               const size_t off) {
   CHECK(partition_size);
   for (size_t k = 0; k < partition_size; ++k) {
     output_for_partition_buff[k] += off;
   }
+}
+
+void apply_lag_to_partition(const size_t lag,
+                            int64_t* output_for_partition_buff,
+                            const size_t partition_size) {
+  CHECK(partition_size);
   for (size_t k = partition_size - 1; k >= lag; --k) {
     output_for_partition_buff[k] = output_for_partition_buff[k - lag];
   }
   for (size_t k = 0; k < std::min(lag, static_cast<size_t>(partition_size)); ++k) {
+    output_for_partition_buff[k] = -1;
+  }
+}
+
+void apply_lead_to_partition(const size_t lead,
+                             int64_t* output_for_partition_buff,
+                             const size_t partition_size) {
+  const auto valid_element_count =
+      static_cast<ssize_t>(partition_size) - static_cast<ssize_t>(lead);
+  for (ssize_t k = 0; k < valid_element_count; ++k) {
+    output_for_partition_buff[k] = output_for_partition_buff[k + lead];
+  }
+  for (size_t k = std::max(valid_element_count, ssize_t(0)); k < partition_size; ++k) {
     output_for_partition_buff[k] = -1;
   }
 }
@@ -147,7 +168,8 @@ void WindowFunctionContext::compute() {
       elem_count_ * window_function_buffer_element_size(window_func_->getKind())));
   switch (window_func_->getKind()) {
     case SqlWindowFunctionKind::ROW_NUMBER:
-    case SqlWindowFunctionKind::LAG: {
+    case SqlWindowFunctionKind::LAG:
+    case SqlWindowFunctionKind::LEAD: {
       std::unique_ptr<int64_t[]> scratchpad(new int64_t[elem_count_]);
       const auto partition_count = counts() - offsets();
       CHECK_GE(partition_count, 0);
@@ -179,11 +201,28 @@ void WindowFunctionContext::compute() {
             auto rank = index_to_rank(output_for_partition_buff, partition_size);
             std::copy(rank.begin(), rank.end(), output_for_partition_buff);
           } else {
-            auto lag = get_lag_argument(window_func_);
-            apply_lag_to_partition(lag, output_for_partition_buff, partition_size, off);
+            auto lag_or_lead = get_lag_or_lead_argument(window_func_);
+            apply_offset_to_partition(output_for_partition_buff, partition_size, off);
+            switch (window_func_->getKind()) {
+              case SqlWindowFunctionKind::LAG: {
+                apply_lag_to_partition(
+                    lag_or_lead, output_for_partition_buff, partition_size);
+                break;
+              }
+              case SqlWindowFunctionKind::LEAD: {
+                apply_lead_to_partition(
+                    lag_or_lead, output_for_partition_buff, partition_size);
+                break;
+              }
+              default: {
+                LOG(FATAL) << "Unexpected window function kind: "
+                           << window_func_->toString();
+              }
+            }
           }
         }
-        if (window_func_->getKind() == SqlWindowFunctionKind::LAG) {
+        if (window_func_->getKind() == SqlWindowFunctionKind::LAG ||
+            window_func_->getKind() == SqlWindowFunctionKind::LEAD) {
           off += partition_size;
         }
       }
