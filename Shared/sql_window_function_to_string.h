@@ -32,6 +32,12 @@ inline std::string sql_window_function_to_str(const SqlWindowFunctionKind kind) 
     case SqlWindowFunctionKind::LEAD: {
       return "LEAD";
     }
+    case SqlWindowFunctionKind::FIRST_VALUE: {
+      return "FIRST_VALUE";
+    }
+    case SqlWindowFunctionKind::LAST_VALUE: {
+      return "LAST_VALUE";
+    }
     default: {
       LOG(FATAL) << "Invalid window function kind";
       return "";

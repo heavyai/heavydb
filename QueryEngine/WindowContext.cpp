@@ -89,7 +89,9 @@ size_t window_function_buffer_element_size(const SqlWindowFunctionKind kind) {
   switch (kind) {
     case SqlWindowFunctionKind::ROW_NUMBER:
     case SqlWindowFunctionKind::LAG:
-    case SqlWindowFunctionKind::LEAD: {
+    case SqlWindowFunctionKind::LEAD:
+    case SqlWindowFunctionKind::FIRST_VALUE:
+    case SqlWindowFunctionKind::LAST_VALUE: {
       return 8;
     }
     default: { LOG(FATAL) << "Invalid window function kind"; }
@@ -160,6 +162,21 @@ void apply_lead_to_partition(const size_t lead,
   }
 }
 
+void apply_first_value_to_partition(int64_t* output_for_partition_buff,
+                                    const size_t partition_size) {
+  for (size_t k = 1; k < partition_size; ++k) {
+    output_for_partition_buff[k] = output_for_partition_buff[0];
+  }
+}
+
+void apply_last_value_to_partition(int64_t* output_for_partition_buff,
+                                   const size_t partition_size) {
+  CHECK(partition_size);
+  for (size_t k = 0; k < partition_size - 1; ++k) {
+    output_for_partition_buff[k] = output_for_partition_buff[partition_size - 1];
+  }
+}
+
 }  // namespace
 
 void WindowFunctionContext::compute() {
@@ -169,7 +186,9 @@ void WindowFunctionContext::compute() {
   switch (window_func_->getKind()) {
     case SqlWindowFunctionKind::ROW_NUMBER:
     case SqlWindowFunctionKind::LAG:
-    case SqlWindowFunctionKind::LEAD: {
+    case SqlWindowFunctionKind::LEAD:
+    case SqlWindowFunctionKind::FIRST_VALUE:
+    case SqlWindowFunctionKind::LAST_VALUE: {
       std::unique_ptr<int64_t[]> scratchpad(new int64_t[elem_count_]);
       const auto partition_count = counts() - offsets();
       CHECK_GE(partition_count, 0);
@@ -200,6 +219,12 @@ void WindowFunctionContext::compute() {
           if (window_func_->getKind() == SqlWindowFunctionKind::ROW_NUMBER) {
             auto rank = index_to_rank(output_for_partition_buff, partition_size);
             std::copy(rank.begin(), rank.end(), output_for_partition_buff);
+          } else if (window_func_->getKind() == SqlWindowFunctionKind::FIRST_VALUE) {
+            apply_offset_to_partition(output_for_partition_buff, partition_size, off);
+            apply_first_value_to_partition(output_for_partition_buff, partition_size);
+          } else if (window_func_->getKind() == SqlWindowFunctionKind::LAST_VALUE) {
+            apply_offset_to_partition(output_for_partition_buff, partition_size, off);
+            apply_last_value_to_partition(output_for_partition_buff, partition_size);
           } else {
             auto lag_or_lead = get_lag_or_lead_argument(window_func_);
             apply_offset_to_partition(output_for_partition_buff, partition_size, off);
@@ -222,7 +247,9 @@ void WindowFunctionContext::compute() {
           }
         }
         if (window_func_->getKind() == SqlWindowFunctionKind::LAG ||
-            window_func_->getKind() == SqlWindowFunctionKind::LEAD) {
+            window_func_->getKind() == SqlWindowFunctionKind::LEAD ||
+            window_func_->getKind() == SqlWindowFunctionKind::FIRST_VALUE ||
+            window_func_->getKind() == SqlWindowFunctionKind::LAST_VALUE) {
           off += partition_size;
         }
       }

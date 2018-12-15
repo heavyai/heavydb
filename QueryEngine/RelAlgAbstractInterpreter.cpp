@@ -548,6 +548,12 @@ SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
   if (name == "LEAD") {
     return SqlWindowFunctionKind::LEAD;
   }
+  if (name == "FIRST_VALUE") {
+    return SqlWindowFunctionKind::FIRST_VALUE;
+  }
+  if (name == "LAST_VALUE") {
+    return SqlWindowFunctionKind::LAST_VALUE;
+  }
   throw std::runtime_error("Unsupported window function: " + name);
 }
 
