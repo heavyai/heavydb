@@ -85,20 +85,78 @@ std::vector<int64_t> index_to_rank(const int64_t* index, const size_t index_size
   return rank;
 }
 
+size_t window_function_buffer_element_size(const SqlWindowFunctionKind kind) {
+  switch (kind) {
+    case SqlWindowFunctionKind::ROW_NUMBER:
+    case SqlWindowFunctionKind::LAG: {
+      return 8;
+    }
+    default: { LOG(FATAL) << "Invalid window function kind"; }
+  }
+}
+
+size_t get_lag_argument(const Analyzer::WindowFunction* window_func) {
+  const auto& args = window_func->getArgs();
+  if (args.size() == 3) {
+    throw std::runtime_error("LAG with default not supported yet");
+  }
+  if (args.size() == 2) {
+    const auto lag_constant = dynamic_cast<const Analyzer::Constant*>(args[1].get());
+    if (!lag_constant) {
+      throw std::runtime_error("LAG with non-constant lag argument not supported yet");
+    }
+    const auto& lag_ti = lag_constant->get_type_info();
+    switch (lag_ti.get_type()) {
+      case kSMALLINT: {
+        return lag_constant->get_constval().smallintval;
+      }
+      case kINT: {
+        return lag_constant->get_constval().intval;
+      }
+      case kBIGINT: {
+        return lag_constant->get_constval().bigintval;
+      }
+      default: { LOG(FATAL) << "Invalid type for the lag argument"; }
+    }
+  }
+  CHECK_EQ(args.size(), size_t(1));
+  return 1;
+}
+
+void apply_lag_to_partition(const size_t lag,
+                            int64_t* output_for_partition_buff,
+                            const size_t partition_size,
+                            const size_t off) {
+  CHECK(partition_size);
+  for (size_t k = 0; k < partition_size; ++k) {
+    output_for_partition_buff[k] += off;
+  }
+  for (size_t k = partition_size - 1; k >= lag; --k) {
+    output_for_partition_buff[k] = output_for_partition_buff[k - lag];
+  }
+  for (size_t k = 0; k < std::min(lag, static_cast<size_t>(partition_size)); ++k) {
+    output_for_partition_buff[k] = -1;
+  }
+}
+
 }  // namespace
 
 void WindowFunctionContext::compute() {
   CHECK(!output_);
-  const auto& ti = window_func_->get_type_info();
-  output_ = static_cast<int8_t*>(checked_malloc(elem_count_ * ti.get_logical_size()));
+  output_ = static_cast<int8_t*>(checked_malloc(
+      elem_count_ * window_function_buffer_element_size(window_func_->getKind())));
   switch (window_func_->getKind()) {
-    case SqlWindowFunctionKind::ROW_NUMBER: {
+    case SqlWindowFunctionKind::ROW_NUMBER:
+    case SqlWindowFunctionKind::LAG: {
       std::unique_ptr<int64_t[]> scratchpad(new int64_t[elem_count_]);
-      CHECK_EQ(ti.get_size(), size_t(8));
       const auto partition_count = counts() - offsets();
       CHECK_GE(partition_count, 0);
+      int64_t off = 0;
       for (size_t i = 0; i < static_cast<size_t>(partition_count); ++i) {
         auto partition_size = counts()[i];
+        if (partition_size == 0) {
+          continue;
+        }
         auto output_for_partition_buff = scratchpad.get() + offsets()[i];
         std::iota(output_for_partition_buff,
                   output_for_partition_buff + partition_size,
@@ -117,8 +175,16 @@ void WindowFunctionContext::compute() {
           std::stable_sort(output_for_partition_buff,
                            output_for_partition_buff + partition_size,
                            makeComparator(order_col, order_column_partition));
-          const auto rank = index_to_rank(output_for_partition_buff, partition_size);
-          std::copy(rank.begin(), rank.end(), output_for_partition_buff);
+          if (window_func_->getKind() == SqlWindowFunctionKind::ROW_NUMBER) {
+            auto rank = index_to_rank(output_for_partition_buff, partition_size);
+            std::copy(rank.begin(), rank.end(), output_for_partition_buff);
+          } else {
+            auto lag = get_lag_argument(window_func_);
+            apply_lag_to_partition(lag, output_for_partition_buff, partition_size, off);
+          }
+        }
+        if (window_func_->getKind() == SqlWindowFunctionKind::LAG) {
+          off += partition_size;
         }
       }
       auto output_i64 = reinterpret_cast<int64_t*>(output_);
@@ -217,14 +283,23 @@ void WindowProjectNodeContext::addWindowFunctionContext(
   CHECK(it_ok.second);
 }
 
-const WindowFunctionContext* WindowProjectNodeContext::getWindowFunctionContext(
+const WindowFunctionContext* WindowProjectNodeContext::activateWindowFunctionContext(
     const size_t target_index) const {
   const auto it = window_contexts_.find(target_index);
   CHECK(it != window_contexts_.end());
-  return it->second.get();
+  s_active_window_function_ = it->second.get();
+  return s_active_window_function_;
 }
 
-WindowProjectNodeContext* WindowProjectNodeContext::reset() {
+void WindowProjectNodeContext::resetWindowFunctionContext() {
+  s_active_window_function_ = nullptr;
+}
+
+WindowFunctionContext* WindowProjectNodeContext::getActiveWindowFunctionContext() {
+  return s_active_window_function_;
+}
+
+WindowProjectNodeContext* WindowProjectNodeContext::create() {
   s_instance_ = std::make_unique<WindowProjectNodeContext>();
   return s_instance_.get();
 }
@@ -233,4 +308,10 @@ const WindowProjectNodeContext* WindowProjectNodeContext::get() {
   return s_instance_.get();
 }
 
+void WindowProjectNodeContext::reset() {
+  s_instance_ = nullptr;
+  s_active_window_function_ = nullptr;
+}
+
 std::unique_ptr<WindowProjectNodeContext> WindowProjectNodeContext::s_instance_;
+WindowFunctionContext* WindowProjectNodeContext::s_active_window_function_{nullptr};

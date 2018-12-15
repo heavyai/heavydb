@@ -16,6 +16,7 @@
 
 #include "Codec.h"
 #include "Execute.h"
+#include "WindowContext.h"
 
 // Code generation routines and helpers for working with column expressions.
 
@@ -151,9 +152,13 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
   const int local_col_id = getLocalColumnId(col_var, fetch_column);
   // only generate the decoding code once; if a column has been previously
   // fetched in the generated IR, we'll reuse it
-  auto it = cgen_state_->fetch_cache_.find(local_col_id);
-  if (it != cgen_state_->fetch_cache_.end()) {
-    return {it->second};
+  const auto window_func_context =
+      WindowProjectNodeContext::getActiveWindowFunctionContext();
+  if (!window_func_context) {
+    auto it = cgen_state_->fetch_cache_.find(local_col_id);
+    if (it != cgen_state_->fetch_cache_.end()) {
+      return {it->second};
+    }
   }
   const auto hash_join_lhs = hashJoinLhs(col_var);
   // Use the already fetched left-hand side of an equi-join if the types are identical.
@@ -166,6 +171,12 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
     return codegen(hash_join_lhs.get(), fetch_column, co);
   }
   auto pos_arg = posArg(col_var);
+  if (window_func_context) {
+    pos_arg = cgen_state_->emitCall(
+        "row_number_window_func",
+        {ll_int(reinterpret_cast<const int64_t>(window_func_context->output())),
+         pos_arg});
+  }
   auto col_byte_stream = colByteStream(col_var, fetch_column, hoist_literals);
   if (plan_state_->isLazyFetchColumn(col_var)) {
     if (update_query_plan) {
@@ -186,16 +197,44 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
   if (col_ti.is_string() && col_ti.get_compression() == kENCODING_NONE) {
     const auto varlen_str_column_lvs =
         codegenVariableLengthStringColVar(col_byte_stream, pos_arg);
-    auto it_ok = cgen_state_->fetch_cache_.insert(
-        std::make_pair(local_col_id, varlen_str_column_lvs));
-    CHECK(it_ok.second);
+    if (!window_func_context) {
+      auto it_ok = cgen_state_->fetch_cache_.insert(
+          std::make_pair(local_col_id, varlen_str_column_lvs));
+      CHECK(it_ok.second);
+    }
     return varlen_str_column_lvs;
   }
   if (col_ti.is_array()) {
     return {col_byte_stream};
   }
+  llvm::BasicBlock* pos_valid_bb{nullptr};
+  llvm::BasicBlock* pos_notvalid_bb{nullptr};
+  llvm::BasicBlock* orig_bb = cgen_state_->ir_builder_.GetInsertBlock();
+  if (window_func_context) {
+    const auto pos_is_valid =
+        cgen_state_->ir_builder_.CreateICmpSGE(pos_arg, ll_int(int64_t(0)));
+    pos_valid_bb = llvm::BasicBlock::Create(
+        cgen_state_->context_, "window.pos_valid", cgen_state_->row_func_);
+    pos_notvalid_bb = llvm::BasicBlock::Create(
+        cgen_state_->context_, "window.pos_notvalid", cgen_state_->row_func_);
+    cgen_state_->ir_builder_.CreateCondBr(pos_is_valid, pos_valid_bb, pos_notvalid_bb);
+    cgen_state_->ir_builder_.SetInsertPoint(pos_valid_bb);
+  }
   const auto fixed_length_column_lv =
       codegenFixedLengthColVar(col_var, col_byte_stream, pos_arg);
+  if (window_func_context) {
+    cgen_state_->ir_builder_.CreateBr(pos_notvalid_bb);
+    cgen_state_->ir_builder_.SetInsertPoint(pos_notvalid_bb);
+    auto window_func_call_phi =
+        cgen_state_->ir_builder_.CreatePHI(fixed_length_column_lv->getType(), 2);
+    window_func_call_phi->addIncoming(fixed_length_column_lv, pos_valid_bb);
+    const auto& col_ti = col_var->get_type_info();
+    const auto null_lv = col_ti.is_fp()
+                             ? static_cast<llvm::Value*>(inlineFpNull(col_ti))
+                             : static_cast<llvm::Value*>(inlineIntNull(col_ti));
+    window_func_call_phi->addIncoming(null_lv, orig_bb);
+    return {window_func_call_phi};
+  }
   auto it_ok = cgen_state_->fetch_cache_.insert(
       std::make_pair(local_col_id, std::vector<llvm::Value*>{fixed_length_column_lv}));
   CHECK(it_ok.second);

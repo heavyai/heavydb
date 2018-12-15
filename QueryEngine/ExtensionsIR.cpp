@@ -124,13 +124,21 @@ llvm::Value* Executor::codegenWindowFunction(const Analyzer::WindowFunction* win
                                              const size_t target_index,
                                              const CompilationOptions& co) {
   const auto window_func_context =
-      WindowProjectNodeContext::get()->getWindowFunctionContext(target_index);
+      WindowProjectNodeContext::get()->activateWindowFunctionContext(target_index);
   switch (window_func->getKind()) {
     case SqlWindowFunctionKind::ROW_NUMBER: {
       return cgen_state_->emitCall(
           "row_number_window_func",
           {ll_int(reinterpret_cast<const int64_t>(window_func_context->output())),
            posArg(nullptr)});
+    }
+    case SqlWindowFunctionKind::LAG: {
+      CHECK(WindowProjectNodeContext::get());
+      const auto& args = window_func->getArgs();
+      CHECK(!args.empty());
+      const auto lag_lvs = codegen(args.front().get(), true, co);
+      CHECK_EQ(lag_lvs.size(), size_t(1));
+      return lag_lvs.front();
     }
     default: { LOG(FATAL) << "Invalid window function kind"; }
   }

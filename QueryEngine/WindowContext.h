@@ -82,11 +82,28 @@ class WindowProjectNodeContext {
       std::unique_ptr<WindowFunctionContext> window_function_context,
       const size_t target_index);
 
-  const WindowFunctionContext* getWindowFunctionContext(const size_t target_index) const;
+  // Marks the window function at the given target index as active. This simplifies the
+  // code generation since it's now context sensitive. Each value window function can have
+  // its own iteration order, therefore fetching a column at a given position changes
+  // depending on which window function is active.
+  const WindowFunctionContext* activateWindowFunctionContext(
+      const size_t target_index) const;
 
-  static WindowProjectNodeContext* reset();
+  // Resets the active window function, which restores the regular (non-window) codegen
+  // behavior.
+  static void resetWindowFunctionContext();
 
+  // Gets the current active window function.
+  static WindowFunctionContext* getActiveWindowFunctionContext();
+
+  // Creates the context for a window function execution unit.
+  static WindowProjectNodeContext* create();
+
+  // Retrieves the context for the active window function execution unit.
   static const WindowProjectNodeContext* get();
+
+  // Resets the active context.
+  static void reset();
 
  private:
   // A map from target index to the context associated with the window function at that
@@ -95,4 +112,6 @@ class WindowProjectNodeContext {
   // Singleton instance used for an execution unit which is a project with window
   // functions.
   static std::unique_ptr<WindowProjectNodeContext> s_instance_;
+  // The active window function. Method comments in this class describe how it's used.
+  static WindowFunctionContext* s_active_window_function_;
 };

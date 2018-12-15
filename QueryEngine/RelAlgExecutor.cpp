@@ -398,6 +398,7 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
                                        RenderInfo* render_info,
                                        const int64_t queue_time_ms) {
   INJECT_TIMER(executeRelAlgStep);
+  WindowProjectNodeContext::reset();
   auto& exec_desc = exec_descs[i];
   const auto body = exec_desc.getBody();
   if (body->isNop()) {
@@ -1324,7 +1325,7 @@ void RelAlgExecutor::computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
   const auto memory_level = co.device_type_ == ExecutorDeviceType::GPU
                                 ? MemoryLevel::GPU_LEVEL
                                 : MemoryLevel::CPU_LEVEL;
-  auto window_project_node_context = WindowProjectNodeContext::reset();
+  auto window_project_node_context = WindowProjectNodeContext::create();
   for (size_t target_index = 0; target_index < ra_exe_unit.target_exprs.size();
        ++target_index) {
     const auto& target_expr = ra_exe_unit.target_exprs[target_index];

@@ -38,6 +38,7 @@
 #include "RuntimeFunctions.h"
 #include "StreamingTopN.h"
 #include "TopKSort.h"
+#include "WindowContext.h"
 
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
@@ -1513,6 +1514,7 @@ bool GroupByAndAggregate::codegenAggCalls(
     }
     const auto agg_fn_names = agg_fn_base_names(agg_info);
     const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
+    WindowProjectNodeContext::resetWindowFunctionContext();
     auto target_lvs = window_func
                           ? std::vector<llvm::Value*>{executor_->codegenWindowFunction(
                                 window_func, target_idx, co)}
