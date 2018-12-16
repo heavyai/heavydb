@@ -57,6 +57,11 @@ class WindowFunctionContext {
                                   const int32_t* positions,
                                   const size_t elem_count);
 
+  static void computePartition(int64_t* output_for_partition_buff,
+                               const size_t partition_size,
+                               const size_t off,
+                               const Analyzer::WindowFunction* window_func);
+
   const int32_t* payload() const;
 
   const int32_t* offsets() const;

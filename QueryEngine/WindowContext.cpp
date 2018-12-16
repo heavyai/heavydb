@@ -216,36 +216,8 @@ void WindowFunctionContext::compute() {
           std::stable_sort(output_for_partition_buff,
                            output_for_partition_buff + partition_size,
                            makeComparator(order_col, order_column_partition));
-          if (window_func_->getKind() == SqlWindowFunctionKind::ROW_NUMBER) {
-            auto rank = index_to_rank(output_for_partition_buff, partition_size);
-            std::copy(rank.begin(), rank.end(), output_for_partition_buff);
-          } else if (window_func_->getKind() == SqlWindowFunctionKind::FIRST_VALUE) {
-            apply_offset_to_partition(output_for_partition_buff, partition_size, off);
-            apply_first_value_to_partition(output_for_partition_buff, partition_size);
-          } else if (window_func_->getKind() == SqlWindowFunctionKind::LAST_VALUE) {
-            apply_offset_to_partition(output_for_partition_buff, partition_size, off);
-            apply_last_value_to_partition(output_for_partition_buff, partition_size);
-          } else {
-            auto lag_or_lead = get_lag_or_lead_argument(window_func_);
-            apply_offset_to_partition(output_for_partition_buff, partition_size, off);
-            switch (window_func_->getKind()) {
-              case SqlWindowFunctionKind::LAG: {
-                apply_lag_to_partition(
-                    lag_or_lead, output_for_partition_buff, partition_size);
-                break;
-              }
-              case SqlWindowFunctionKind::LEAD: {
-                apply_lead_to_partition(
-                    lag_or_lead, output_for_partition_buff, partition_size);
-                break;
-              }
-              default: {
-                LOG(FATAL) << "Unexpected window function kind: "
-                           << window_func_->toString();
-              }
-            }
-          }
         }
+        computePartition(output_for_partition_buff, partition_size, off, window_func_);
         if (window_func_->getKind() == SqlWindowFunctionKind::LAG ||
             window_func_->getKind() == SqlWindowFunctionKind::LEAD ||
             window_func_->getKind() == SqlWindowFunctionKind::FIRST_VALUE ||
@@ -323,6 +295,39 @@ void WindowFunctionContext::scatterToPartitions(T* dest,
                                                 const size_t elem_count) {
   for (size_t i = 0; i < elem_count; ++i) {
     dest[i] = source[positions[i]];
+  }
+}
+
+void WindowFunctionContext::computePartition(
+    int64_t* output_for_partition_buff,
+    const size_t partition_size,
+    const size_t off,
+    const Analyzer::WindowFunction* window_func) {
+  if (window_func->getKind() == SqlWindowFunctionKind::ROW_NUMBER) {
+    auto rank = index_to_rank(output_for_partition_buff, partition_size);
+    std::copy(rank.begin(), rank.end(), output_for_partition_buff);
+  } else if (window_func->getKind() == SqlWindowFunctionKind::FIRST_VALUE) {
+    apply_offset_to_partition(output_for_partition_buff, partition_size, off);
+    apply_first_value_to_partition(output_for_partition_buff, partition_size);
+  } else if (window_func->getKind() == SqlWindowFunctionKind::LAST_VALUE) {
+    apply_offset_to_partition(output_for_partition_buff, partition_size, off);
+    apply_last_value_to_partition(output_for_partition_buff, partition_size);
+  } else {
+    auto lag_or_lead = get_lag_or_lead_argument(window_func);
+    apply_offset_to_partition(output_for_partition_buff, partition_size, off);
+    switch (window_func->getKind()) {
+      case SqlWindowFunctionKind::LAG: {
+        apply_lag_to_partition(lag_or_lead, output_for_partition_buff, partition_size);
+        break;
+      }
+      case SqlWindowFunctionKind::LEAD: {
+        apply_lead_to_partition(lag_or_lead, output_for_partition_buff, partition_size);
+        break;
+      }
+      default: {
+        LOG(FATAL) << "Unexpected window function kind: " << window_func->toString();
+      }
+    }
   }
 }
 
