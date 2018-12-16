@@ -551,6 +551,9 @@ SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
   if (name == "PERCENT_RANK") {
     return SqlWindowFunctionKind::PERCENT_RANK;
   }
+  if (name == "CUME_DIST") {
+    return SqlWindowFunctionKind::CUME_DIST;
+  }
   if (name == "NTILE") {
     return SqlWindowFunctionKind::NTILE;
   }

@@ -35,6 +35,9 @@ inline std::string sql_window_function_to_str(const SqlWindowFunctionKind kind) 
     case SqlWindowFunctionKind::PERCENT_RANK: {
       return "PERCENT_RANK";
     }
+    case SqlWindowFunctionKind::CUME_DIST: {
+      return "CUME_DIST";
+    }
     case SqlWindowFunctionKind::NTILE: {
       return "NTILE";
     }

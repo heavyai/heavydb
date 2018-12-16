@@ -147,6 +147,26 @@ std::vector<double> index_to_percent_rank(
   return percent_rank;
 }
 
+std::vector<double> index_to_cume_dist(
+    const int64_t* index,
+    const size_t index_size,
+    const std::vector<WindowFunctionContext::Comparator>& comparators) {
+  std::vector<double> cume_dist(index_size);
+  size_t start_peer_group = 0;
+  while (start_peer_group < index_size) {
+    size_t end_peer_group = start_peer_group + 1;
+    while (end_peer_group < index_size &&
+           !advance_current_rank(comparators, index, end_peer_group)) {
+      ++end_peer_group;
+    }
+    for (size_t i = start_peer_group; i < end_peer_group; ++i) {
+      cume_dist[index[i]] = static_cast<double>(end_peer_group) / index_size;
+    }
+    start_peer_group = end_peer_group;
+  }
+  return cume_dist;
+}
+
 std::vector<int64_t> index_to_ntile(const int64_t* index,
                                     const size_t index_size,
                                     const size_t n) {
@@ -170,6 +190,7 @@ size_t window_function_buffer_element_size(const SqlWindowFunctionKind kind) {
     case SqlWindowFunctionKind::RANK:
     case SqlWindowFunctionKind::DENSE_RANK:
     case SqlWindowFunctionKind::PERCENT_RANK:
+    case SqlWindowFunctionKind::CUME_DIST:
     case SqlWindowFunctionKind::NTILE:
     case SqlWindowFunctionKind::LAG:
     case SqlWindowFunctionKind::LEAD:
@@ -276,6 +297,7 @@ void WindowFunctionContext::compute() {
     case SqlWindowFunctionKind::RANK:
     case SqlWindowFunctionKind::DENSE_RANK:
     case SqlWindowFunctionKind::PERCENT_RANK:
+    case SqlWindowFunctionKind::CUME_DIST:
     case SqlWindowFunctionKind::NTILE:
     case SqlWindowFunctionKind::LAG:
     case SqlWindowFunctionKind::LEAD:
@@ -415,6 +437,12 @@ void WindowFunctionContext::computePartition(int64_t* output_for_partition_buff,
         index_to_percent_rank(output_for_partition_buff, partition_size, comparators);
     std::copy(percent_rank.begin(),
               percent_rank.end(),
+              reinterpret_cast<double*>(may_alias_ptr(output_for_partition_buff)));
+  } else if (window_func->getKind() == SqlWindowFunctionKind::CUME_DIST) {
+    const auto cume_dist =
+        index_to_cume_dist(output_for_partition_buff, partition_size, comparators);
+    std::copy(cume_dist.begin(),
+              cume_dist.end(),
               reinterpret_cast<double*>(may_alias_ptr(output_for_partition_buff)));
   } else if (window_func->getKind() == SqlWindowFunctionKind::NTILE) {
     const auto& args = window_func->getArgs();
