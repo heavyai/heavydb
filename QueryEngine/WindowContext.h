@@ -46,10 +46,11 @@ class WindowFunctionContext {
 
   const int8_t* output() const;
 
+  using Comparator = std::function<bool(const int64_t lhs, const int64_t rhs)>;
+
  private:
-  static std::function<bool(const int64_t lhs, const int64_t rhs)> makeComparator(
-      const Analyzer::ColumnVar* col_var,
-      const int8_t* partition_values);
+  static Comparator makeComparator(const Analyzer::ColumnVar* col_var,
+                                   const int8_t* partition_values);
 
   template <class T>
   static void scatterToPartitions(T* dest,
@@ -60,7 +61,8 @@ class WindowFunctionContext {
   static void computePartition(int64_t* output_for_partition_buff,
                                const size_t partition_size,
                                const size_t off,
-                               const Analyzer::WindowFunction* window_func);
+                               const Analyzer::WindowFunction* window_func,
+                               const std::vector<Comparator>& comparators);
 
   const int32_t* payload() const;
 

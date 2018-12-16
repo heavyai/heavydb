@@ -542,6 +542,9 @@ SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
   if (name == "ROW_NUMBER") {
     return SqlWindowFunctionKind::ROW_NUMBER;
   }
+  if (name == "RANK") {
+    return SqlWindowFunctionKind::RANK;
+  }
   if (name == "LAG") {
     return SqlWindowFunctionKind::LAG;
   }
