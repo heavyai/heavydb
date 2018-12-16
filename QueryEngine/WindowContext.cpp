@@ -130,11 +130,29 @@ std::vector<int64_t> index_to_dense_rank(
   return dense_rank;
 }
 
+std::vector<int64_t> index_to_ntile(const int64_t* index,
+                                    const size_t index_size,
+                                    const size_t n) {
+  std::vector<int64_t> row_numbers(index_size);
+  if (!n) {
+    throw std::runtime_error("NTILE argument cannot be zero");
+  }
+  const auto tile_size = index_size / n;
+  for (size_t i = 0; i < n * tile_size; ++i) {
+    row_numbers[index[i]] = i / tile_size + 1;
+  }
+  for (size_t i = n * tile_size; i < index_size; ++i) {
+    row_numbers[index[i]] = n;
+  }
+  return row_numbers;
+}
+
 size_t window_function_buffer_element_size(const SqlWindowFunctionKind kind) {
   switch (kind) {
     case SqlWindowFunctionKind::ROW_NUMBER:
     case SqlWindowFunctionKind::RANK:
     case SqlWindowFunctionKind::DENSE_RANK:
+    case SqlWindowFunctionKind::NTILE:
     case SqlWindowFunctionKind::LAG:
     case SqlWindowFunctionKind::LEAD:
     case SqlWindowFunctionKind::FIRST_VALUE:
@@ -145,6 +163,27 @@ size_t window_function_buffer_element_size(const SqlWindowFunctionKind kind) {
   }
 }
 
+size_t get_int_constant_from_expr(const Analyzer::Expr* expr) {
+  const auto lag_constant = dynamic_cast<const Analyzer::Constant*>(expr);
+  if (!lag_constant) {
+    throw std::runtime_error("LAG with non-constant lag argument not supported yet");
+  }
+  const auto& lag_ti = lag_constant->get_type_info();
+  switch (lag_ti.get_type()) {
+    case kSMALLINT: {
+      return lag_constant->get_constval().smallintval;
+    }
+    case kINT: {
+      return lag_constant->get_constval().intval;
+    }
+    case kBIGINT: {
+      return lag_constant->get_constval().bigintval;
+    }
+    default: { LOG(FATAL) << "Invalid type for the lag argument"; }
+  }
+  return 0;
+}
+
 size_t get_lag_or_lead_argument(const Analyzer::WindowFunction* window_func) {
   CHECK(window_func->getKind() == SqlWindowFunctionKind::LAG ||
         window_func->getKind() == SqlWindowFunctionKind::LEAD);
@@ -153,23 +192,7 @@ size_t get_lag_or_lead_argument(const Analyzer::WindowFunction* window_func) {
     throw std::runtime_error("LAG with default not supported yet");
   }
   if (args.size() == 2) {
-    const auto lag_constant = dynamic_cast<const Analyzer::Constant*>(args[1].get());
-    if (!lag_constant) {
-      throw std::runtime_error("LAG with non-constant lag argument not supported yet");
-    }
-    const auto& lag_ti = lag_constant->get_type_info();
-    switch (lag_ti.get_type()) {
-      case kSMALLINT: {
-        return lag_constant->get_constval().smallintval;
-      }
-      case kINT: {
-        return lag_constant->get_constval().intval;
-      }
-      case kBIGINT: {
-        return lag_constant->get_constval().bigintval;
-      }
-      default: { LOG(FATAL) << "Invalid type for the lag argument"; }
-    }
+    return get_int_constant_from_expr(args[1].get());
   }
   CHECK_EQ(args.size(), size_t(1));
   return 1;
@@ -234,6 +257,7 @@ void WindowFunctionContext::compute() {
     case SqlWindowFunctionKind::ROW_NUMBER:
     case SqlWindowFunctionKind::RANK:
     case SqlWindowFunctionKind::DENSE_RANK:
+    case SqlWindowFunctionKind::NTILE:
     case SqlWindowFunctionKind::LAG:
     case SqlWindowFunctionKind::LEAD:
     case SqlWindowFunctionKind::FIRST_VALUE:
@@ -367,6 +391,12 @@ void WindowFunctionContext::computePartition(int64_t* output_for_partition_buff,
     const auto dense_rank =
         index_to_dense_rank(output_for_partition_buff, partition_size, comparators);
     std::copy(dense_rank.begin(), dense_rank.end(), output_for_partition_buff);
+  } else if (window_func->getKind() == SqlWindowFunctionKind::NTILE) {
+    const auto& args = window_func->getArgs();
+    CHECK_EQ(args.size(), size_t(1));
+    const auto n = get_int_constant_from_expr(args.front().get());
+    const auto ntile = index_to_ntile(output_for_partition_buff, partition_size, n);
+    std::copy(ntile.begin(), ntile.end(), output_for_partition_buff);
   } else if (window_func->getKind() == SqlWindowFunctionKind::FIRST_VALUE) {
     apply_offset_to_partition(output_for_partition_buff, partition_size, off);
     apply_first_value_to_partition(output_for_partition_buff, partition_size);

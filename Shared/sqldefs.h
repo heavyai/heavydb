@@ -74,6 +74,7 @@ enum class SqlWindowFunctionKind {
   ROW_NUMBER,
   RANK,
   DENSE_RANK,
+  NTILE,
   LAG,
   LEAD,
   FIRST_VALUE,

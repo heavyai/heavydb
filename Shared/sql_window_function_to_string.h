@@ -32,6 +32,9 @@ inline std::string sql_window_function_to_str(const SqlWindowFunctionKind kind) 
     case SqlWindowFunctionKind::DENSE_RANK: {
       return "DENSE_RANK";
     }
+    case SqlWindowFunctionKind::NTILE: {
+      return "NTILE";
+    }
     case SqlWindowFunctionKind::LAG: {
       return "LAG";
     }

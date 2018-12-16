@@ -128,7 +128,8 @@ llvm::Value* Executor::codegenWindowFunction(const Analyzer::WindowFunction* win
   switch (window_func->getKind()) {
     case SqlWindowFunctionKind::ROW_NUMBER:
     case SqlWindowFunctionKind::RANK:
-    case SqlWindowFunctionKind::DENSE_RANK: {
+    case SqlWindowFunctionKind::DENSE_RANK:
+    case SqlWindowFunctionKind::NTILE: {
       return cgen_state_->emitCall(
           "row_number_window_func",
           {ll_int(reinterpret_cast<const int64_t>(window_func_context->output())),
