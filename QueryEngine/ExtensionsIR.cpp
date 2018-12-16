@@ -135,6 +135,12 @@ llvm::Value* Executor::codegenWindowFunction(const Analyzer::WindowFunction* win
           {ll_int(reinterpret_cast<const int64_t>(window_func_context->output())),
            posArg(nullptr)});
     }
+    case SqlWindowFunctionKind::PERCENT_RANK: {
+      return cgen_state_->emitCall(
+          "percent_window_func",
+          {ll_int(reinterpret_cast<const int64_t>(window_func_context->output())),
+           posArg(nullptr)});
+    }
     case SqlWindowFunctionKind::LAG:
     case SqlWindowFunctionKind::LEAD:
     case SqlWindowFunctionKind::FIRST_VALUE:

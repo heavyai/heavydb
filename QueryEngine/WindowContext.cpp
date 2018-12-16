@@ -17,6 +17,7 @@
 #include "WindowContext.h"
 #include <numeric>
 #include "../Shared/checked_alloc.h"
+#include "TypePunning.h"
 
 WindowFunctionContext::WindowFunctionContext(
     const Analyzer::WindowFunction* window_func,
@@ -130,6 +131,22 @@ std::vector<int64_t> index_to_dense_rank(
   return dense_rank;
 }
 
+std::vector<double> index_to_percent_rank(
+    const int64_t* index,
+    const size_t index_size,
+    const std::vector<WindowFunctionContext::Comparator>& comparators) {
+  std::vector<double> percent_rank(index_size);
+  size_t crt_rank = 1;
+  for (size_t i = 0; i < index_size; ++i) {
+    if (advance_current_rank(comparators, index, i)) {
+      crt_rank = i + 1;
+    }
+    percent_rank[index[i]] =
+        index_size == 1 ? 1 : static_cast<double>(crt_rank - 1) / (index_size - 1);
+  }
+  return percent_rank;
+}
+
 std::vector<int64_t> index_to_ntile(const int64_t* index,
                                     const size_t index_size,
                                     const size_t n) {
@@ -152,6 +169,7 @@ size_t window_function_buffer_element_size(const SqlWindowFunctionKind kind) {
     case SqlWindowFunctionKind::ROW_NUMBER:
     case SqlWindowFunctionKind::RANK:
     case SqlWindowFunctionKind::DENSE_RANK:
+    case SqlWindowFunctionKind::PERCENT_RANK:
     case SqlWindowFunctionKind::NTILE:
     case SqlWindowFunctionKind::LAG:
     case SqlWindowFunctionKind::LEAD:
@@ -257,6 +275,7 @@ void WindowFunctionContext::compute() {
     case SqlWindowFunctionKind::ROW_NUMBER:
     case SqlWindowFunctionKind::RANK:
     case SqlWindowFunctionKind::DENSE_RANK:
+    case SqlWindowFunctionKind::PERCENT_RANK:
     case SqlWindowFunctionKind::NTILE:
     case SqlWindowFunctionKind::LAG:
     case SqlWindowFunctionKind::LEAD:
@@ -391,6 +410,12 @@ void WindowFunctionContext::computePartition(int64_t* output_for_partition_buff,
     const auto dense_rank =
         index_to_dense_rank(output_for_partition_buff, partition_size, comparators);
     std::copy(dense_rank.begin(), dense_rank.end(), output_for_partition_buff);
+  } else if (window_func->getKind() == SqlWindowFunctionKind::PERCENT_RANK) {
+    const auto percent_rank =
+        index_to_percent_rank(output_for_partition_buff, partition_size, comparators);
+    std::copy(percent_rank.begin(),
+              percent_rank.end(),
+              reinterpret_cast<double*>(may_alias_ptr(output_for_partition_buff)));
   } else if (window_func->getKind() == SqlWindowFunctionKind::NTILE) {
     const auto& args = window_func->getArgs();
     CHECK_EQ(args.size(), size_t(1));
