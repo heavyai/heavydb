@@ -115,10 +115,26 @@ std::vector<int64_t> index_to_rank(
   return rank;
 }
 
+std::vector<int64_t> index_to_dense_rank(
+    const int64_t* index,
+    const size_t index_size,
+    const std::vector<WindowFunctionContext::Comparator>& comparators) {
+  std::vector<int64_t> dense_rank(index_size);
+  size_t crt_rank = 1;
+  for (size_t i = 0; i < index_size; ++i) {
+    if (advance_current_rank(comparators, index, i)) {
+      ++crt_rank;
+    }
+    dense_rank[index[i]] = crt_rank;
+  }
+  return dense_rank;
+}
+
 size_t window_function_buffer_element_size(const SqlWindowFunctionKind kind) {
   switch (kind) {
     case SqlWindowFunctionKind::ROW_NUMBER:
     case SqlWindowFunctionKind::RANK:
+    case SqlWindowFunctionKind::DENSE_RANK:
     case SqlWindowFunctionKind::LAG:
     case SqlWindowFunctionKind::LEAD:
     case SqlWindowFunctionKind::FIRST_VALUE:
@@ -217,6 +233,7 @@ void WindowFunctionContext::compute() {
   switch (window_func_->getKind()) {
     case SqlWindowFunctionKind::ROW_NUMBER:
     case SqlWindowFunctionKind::RANK:
+    case SqlWindowFunctionKind::DENSE_RANK:
     case SqlWindowFunctionKind::LAG:
     case SqlWindowFunctionKind::LEAD:
     case SqlWindowFunctionKind::FIRST_VALUE:
@@ -339,11 +356,17 @@ void WindowFunctionContext::computePartition(int64_t* output_for_partition_buff,
                                              const Analyzer::WindowFunction* window_func,
                                              const std::vector<Comparator>& comparators) {
   if (window_func->getKind() == SqlWindowFunctionKind::ROW_NUMBER) {
-    auto row_numbers = index_to_row_number(output_for_partition_buff, partition_size);
+    const auto row_numbers =
+        index_to_row_number(output_for_partition_buff, partition_size);
     std::copy(row_numbers.begin(), row_numbers.end(), output_for_partition_buff);
   } else if (window_func->getKind() == SqlWindowFunctionKind::RANK) {
-    auto rank = index_to_rank(output_for_partition_buff, partition_size, comparators);
+    const auto rank =
+        index_to_rank(output_for_partition_buff, partition_size, comparators);
     std::copy(rank.begin(), rank.end(), output_for_partition_buff);
+  } else if (window_func->getKind() == SqlWindowFunctionKind::DENSE_RANK) {
+    const auto dense_rank =
+        index_to_dense_rank(output_for_partition_buff, partition_size, comparators);
+    std::copy(dense_rank.begin(), dense_rank.end(), output_for_partition_buff);
   } else if (window_func->getKind() == SqlWindowFunctionKind::FIRST_VALUE) {
     apply_offset_to_partition(output_for_partition_buff, partition_size, off);
     apply_first_value_to_partition(output_for_partition_buff, partition_size);
@@ -351,7 +374,7 @@ void WindowFunctionContext::computePartition(int64_t* output_for_partition_buff,
     apply_offset_to_partition(output_for_partition_buff, partition_size, off);
     apply_last_value_to_partition(output_for_partition_buff, partition_size);
   } else {
-    auto lag_or_lead = get_lag_or_lead_argument(window_func);
+    const auto lag_or_lead = get_lag_or_lead_argument(window_func);
     apply_offset_to_partition(output_for_partition_buff, partition_size, off);
     switch (window_func->getKind()) {
       case SqlWindowFunctionKind::LAG: {
