@@ -417,7 +417,7 @@ std::string Calcite::getExtensionFunctionWhitelist() {
         clientP = get_client(remote_calcite_port_);
     clientP.first->getExtensionFunctionWhitelist(whitelist);
     clientP.second->close();
-    LOG(INFO) << whitelist;
+    VLOG(1) << whitelist;
     return whitelist;
   } else {
     LOG(INFO) << "Not routing to Calcite, server is not up";
