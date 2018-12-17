@@ -1291,6 +1291,8 @@ TEST(Select, ApproxCountDistinct) {
       "SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, COUNT(distinct x + 1) FROM "
       "test GROUP BY y ORDER BY n;",
       dt);
+    EXPECT_NO_THROW(run_multiple_agg(
+        "SELECT APPROX_COUNT_DISTINCT(x), SAMPLE(real_str) FROM test GROUP BY x;", dt));
     EXPECT_THROW(
         run_multiple_agg("SELECT APPROX_COUNT_DISTINCT(real_str) FROM test;", dt),
         std::runtime_error);

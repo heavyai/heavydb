@@ -59,6 +59,7 @@ namespace {
 template <typename T>
 void unpack_geo_vector(std::vector<T>& output, const int8_t* input_ptr, const size_t sz) {
   auto elems = reinterpret_cast<const T*>(input_ptr);
+  CHECK(elems);
   CHECK_EQ(size_t(0), sz % sizeof(T));
   const size_t num_elems = sz / sizeof(T);
   output.resize(num_elems);
