@@ -24,6 +24,7 @@
 #include <glog/logging.h>
 #include <unistd.h>
 #include <cstdio>
+#include <cstring>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -43,7 +44,9 @@ FILE* create(const std::string& basePath,
   }
   FILE* f = fopen(path.c_str(), "w+b");
   if (f == nullptr) {
-    LOG(FATAL) << "Error trying to create file '" << path << "', the errno is " << errno;
+    LOG(FATAL) << "Error trying to create file '" << path
+               << "', the error was: " << std::strerror(errno);
+    ;
   }
   fseek(f, (pageSize * numPages) - 1, SEEK_SET);
   fputc(EOF, f);
@@ -60,8 +63,9 @@ FILE* create(const std::string& basePath,
 FILE* create(const std::string& fullPath, const size_t requestedFileSize) {
   FILE* f = fopen(fullPath.c_str(), "w+b");
   if (f == nullptr) {
-    LOG(FATAL) << "Error trying to create file '" << fullPath << "', the errno is "
-               << errno;
+    LOG(FATAL) << "Error trying to create file '" << fullPath
+               << "', the error was:  " << std::strerror(errno);
+    ;
   }
   fseek(f, requestedFileSize - 1, SEEK_SET);
   fputc(EOF, f);
@@ -78,7 +82,8 @@ FILE* open(int fileId) {
   std::string s(std::to_string(fileId) + std::string(MAPD_FILE_EXT));
   FILE* f = fopen(s.c_str(), "r+b");  // opens existing file for updates
   if (f == nullptr) {
-    LOG(FATAL) << "Error trying to open file '" << s << "', the errno is " << errno;
+    LOG(FATAL) << "Error trying to open file '" << s
+               << "', the error was: " << std::strerror(errno);
   }
   return f;
 }
@@ -86,7 +91,8 @@ FILE* open(int fileId) {
 FILE* open(const std::string& path) {
   FILE* f = fopen(path.c_str(), "r+b");  // opens existing file for updates
   if (f == nullptr) {
-    LOG(FATAL) << "Error trying to open file '" << path << "', the errno is " << errno;
+    LOG(FATAL) << "Error trying to open file '" << path
+               << "', the errno was: " << std::strerror(errno);
   }
   return f;
 }
@@ -104,7 +110,7 @@ bool removeFile(const std::string basePath, const std::string filename) {
 
 size_t read(FILE* f, const size_t offset, const size_t size, int8_t* buf) {
   // read "size" bytes from the offset location in the file into the buffer
-  fseek(f, offset, SEEK_SET);
+  CHECK_EQ(fseek(f, offset, SEEK_SET), 0);
   size_t bytesRead = fread(buf, sizeof(int8_t), size, f);
   CHECK_EQ(bytesRead, sizeof(int8_t) * size);
   return bytesRead;
@@ -112,10 +118,16 @@ size_t read(FILE* f, const size_t offset, const size_t size, int8_t* buf) {
 
 size_t write(FILE* f, const size_t offset, const size_t size, int8_t* buf) {
   // write size bytes from the buffer to the offset location in the file
-  fseek(f, offset, SEEK_SET);
+  if (fseek(f, offset, SEEK_SET) != 0) {
+    LOG(FATAL)
+        << "Error trying to write to file (during positioning seek) the error was: "
+        << std::strerror(errno);
+  }
   size_t bytesWritten = fwrite(buf, sizeof(int8_t), size, f);
-  CHECK_EQ(bytesWritten, sizeof(int8_t) * size);
-  fflush(f);  // needed?
+  if (bytesWritten != sizeof(int8_t) * size) {
+    LOG(FATAL) << "Error trying to write to file (during fwrite) the error was: "
+               << std::strerror(errno);
+  }
   return bytesWritten;
 }
 

@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <cstdio>
+#include <cstring>
 #include <mutex>
 #include <set>
 #include <vector>
@@ -88,7 +89,10 @@ struct FileInfo {
   inline size_t size() { return pageSize * numPages; }
 
   inline int syncToDisk() {
-    fflush(f);
+    if (fflush(f) != 0) {
+      LOG(FATAL) << "Error trying to flush changes to disk, the error was: "
+                 << std::strerror(errno);
+    }
 #ifdef __APPLE__
     return fcntl(fileno(f), 51);
 #else
