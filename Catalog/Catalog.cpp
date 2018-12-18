@@ -1042,6 +1042,12 @@ bool SysCatalog::checkPasswordForUser(const std::string& passwd,
                                       UserMetadata& user) {
   {
     if (!getMetadataForUser(name, user)) {
+      // Check password against some fake hash just to waste time so that response times
+      // for invalid password and invalid user are similar and a caller can't say the
+      // difference
+      char fake_hash[BCRYPT_HASHSIZE];
+      CHECK(bcrypt_gensalt(-1, fake_hash) == 0);
+      bcrypt_checkpw(passwd.c_str(), fake_hash);
       return false;
     }
     int pwd_check_result = bcrypt_checkpw(passwd.c_str(), user.passwd_hash.c_str());

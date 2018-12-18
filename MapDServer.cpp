@@ -202,7 +202,6 @@ void run_warmup_queries(mapd::shared_ptr<MapDHandler> handler,
   }
 }
 
-
 namespace po = boost::program_options;
 
 MapDProgramOptions::MapDProgramOptions() {
