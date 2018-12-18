@@ -1726,8 +1726,9 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
           // need to create a zero filled buffer for this remote_ptr
           const auto& count_distinct_desc =
               query_mem_desc_.count_distinct_descriptors_[target_logical_idx];
-          const auto bitmap_byte_sz = count_distinct_desc.bitmapSizeBytes();
-
+          const auto bitmap_byte_sz = count_distinct_desc.sub_bitmap_count == 1
+                                          ? count_distinct_desc.bitmapSizeBytes()
+                                          : count_distinct_desc.bitmapPaddedSizeBytes();
           auto count_distinct_buffer =
               static_cast<int8_t*>(checked_malloc(bitmap_byte_sz));
           memset(count_distinct_buffer, 0, bitmap_byte_sz);

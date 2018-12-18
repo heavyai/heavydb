@@ -1212,6 +1212,12 @@ TEST(Select, ApproxCountDistinct) {
     c("SELECT APPROX_COUNT_DISTINCT(x) FROM test;",
       "SELECT COUNT(distinct x) FROM test;",
       dt);
+    c("SELECT APPROX_COUNT_DISTINCT(x) FROM test_empty;",
+      "SELECT COUNT(distinct x) FROM test_empty;",
+      dt);
+    c("SELECT APPROX_COUNT_DISTINCT(x) FROM test_one_row;",
+      "SELECT COUNT(distinct x) FROM test_one_row;",
+      dt);
     c("SELECT APPROX_COUNT_DISTINCT(b) FROM test;",
       "SELECT COUNT(distinct b) FROM test;",
       dt);
@@ -12463,6 +12469,97 @@ int create_and_populate_tables(bool with_delete_support = true) {
     g_sqlite_comparator.query(insert_query);
   }
   try {
+    const std::string drop_old_test{"DROP TABLE IF EXISTS test_empty;"};
+    run_ddl_statement(drop_old_test);
+    g_sqlite_comparator.query(drop_old_test);
+    std::string columns_definition{
+        "x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn "
+        "float, d double, dn double, str "
+        "varchar(10), null_str text encoding dict, fixed_str text encoding dict(16), "
+        "fixed_null_str text encoding "
+        "dict(16), real_str text encoding none, shared_dict text, m timestamp(0), "
+        "n time(0), o date, o1 date encoding fixed(16), o2 date "
+        "encoding fixed(32), fx int "
+        "encoding fixed(16), dd decimal(10, 2), dd_notnull decimal(10, 2) not null, ss "
+        "text encoding dict, u int, ofd "
+        "int, ufd int not null, ofq bigint, ufq bigint not null"};
+    const std::string create_test = build_create_table_statement(
+        columns_definition,
+        "test_empty",
+        {g_shard_count ? "str" : "", g_shard_count},
+        {{"str", "test_inner", "str"}, {"shared_dict", "test", "str"}},
+        2,
+        with_delete_support);
+    run_ddl_statement(create_test);
+    g_sqlite_comparator.query(
+        "CREATE TABLE test_empty(x int not null, y int, z smallint, t bigint, b boolean, "
+        "f "
+        "float, ff float, fn float, d "
+        "double, dn double, str varchar(10), null_str text, fixed_str text, "
+        "fixed_null_str text, real_str text, "
+        "shared_dict "
+        "text, m timestamp(0), n "
+        "time(0), o date, o1 date, o2 date, "
+        "fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not "
+        "null, ss "
+        "text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null);");
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_empty'";
+    return -EEXIST;
+  }
+  try {
+    const std::string drop_old_test{"DROP TABLE IF EXISTS test_one_row;"};
+    run_ddl_statement(drop_old_test);
+    g_sqlite_comparator.query(drop_old_test);
+    std::string columns_definition{
+        "x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn "
+        "float, d double, dn double, str "
+        "varchar(10), null_str text encoding dict, fixed_str text encoding dict(16), "
+        "fixed_null_str text encoding "
+        "dict(16), real_str text encoding none, shared_dict text, m timestamp(0), "
+        "n time(0), o date, o1 date encoding fixed(16), o2 date "
+        "encoding fixed(32), fx int "
+        "encoding fixed(16), dd decimal(10, 2), dd_notnull decimal(10, 2) not null, ss "
+        "text encoding dict, u int, ofd "
+        "int, ufd int not null, ofq bigint, ufq bigint not null"};
+    const std::string create_test = build_create_table_statement(
+        columns_definition,
+        "test_one_row",
+        {g_shard_count ? "str" : "", g_shard_count},
+        {{"str", "test_inner", "str"}, {"shared_dict", "test", "str"}},
+        2,
+        with_delete_support);
+    run_ddl_statement(create_test);
+    g_sqlite_comparator.query(
+        "CREATE TABLE test_one_row(x int not null, y int, z smallint, t bigint, b "
+        "boolean, "
+        "f "
+        "float, ff float, fn float, d "
+        "double, dn double, str varchar(10), null_str text, fixed_str text, "
+        "fixed_null_str text, real_str text, "
+        "shared_dict "
+        "text, m timestamp(0), n "
+        "time(0), o date, o1 date, o2 date, "
+        "fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not "
+        "null, ss "
+        "text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null);");
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_one_row'";
+    return -EEXIST;
+  }
+  {
+    const std::string insert_query{
+        "INSERT INTO test_one_row VALUES(8, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, 2.4, "
+        "-2002.4, 'bar', null, 'bar', null, "
+        "'real_bar', NULL, '2014-12-13 22:23:15', "
+        "'15:13:14', NULL, NULL, NULL, NULL, 222.2, 222.2, "
+        "null, null, null, "
+        "-2147483647, "
+        "9223372036854775807, -9223372036854775808);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  try {
     const std::string drop_old_test{"DROP TABLE IF EXISTS test_x;"};
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
@@ -12839,6 +12936,12 @@ void drop_tables() {
   const std::string drop_test{"DROP TABLE test;"};
   run_ddl_statement(drop_test);
   g_sqlite_comparator.query(drop_test);
+  const std::string drop_test_empty{"DROP TABLE test_empty;"};
+  run_ddl_statement(drop_test_empty);
+  g_sqlite_comparator.query(drop_test_empty);
+  const std::string test_one_row{"DROP TABLE test_one_row;"};
+  run_ddl_statement(test_one_row);
+  g_sqlite_comparator.query(test_one_row);
   const std::string drop_test_inner_x{"DROP TABLE test_inner_x;"};
   run_ddl_statement(drop_test_inner_x);
   g_sqlite_comparator.query(drop_test_inner_x);
