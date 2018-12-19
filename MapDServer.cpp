@@ -31,6 +31,7 @@
 #include "MapDRelease.h"
 
 #include "Shared/MapDParameters.h"
+#include "Shared/MapDProgramOptions.h"
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
@@ -201,42 +202,15 @@ void run_warmup_queries(mapd::shared_ptr<MapDHandler> handler,
   }
 }
 
-int main(int argc, char** argv) {
-  int http_port = 9090;
-  size_t reserved_gpu_mem = 1 << 27;
-  std::string base_path;
-  std::string device("gpu");
-  std::string config_file("mapd.conf");
-  std::string cluster_file("cluster.conf");
-  bool flush_log = true;
-  bool jit_debug = false;
-  bool allow_multifrag = true;
-  bool read_only = false;
-  bool allow_loop_joins = false;
-  bool enable_legacy_syntax = true;
-  AuthMetadata authMetadata;
-  MapDParameters mapd_parameters;
-  bool enable_rendering = false;
-  bool enable_watchdog = true;
-  bool enable_dynamic_watchdog = false;
-  unsigned dynamic_watchdog_time_limit = 10000;
 
-  size_t render_mem_bytes = 500000000;
-  int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1
-                      // means do not override
-  int start_gpu = 0;
-  size_t num_reader_threads = 0;         // number of threads used when loading data
-  std::string db_query_file("");         // path to file containing warmup queries list
-  bool enable_access_priv_check = true;  // enable DB objects access privileges checking
-  int idle_session_duration =
-      MINSPERHOUR;  // Inactive session tolerance in mins (60 mins)
-  int max_session_duration =
-      MINSPERMONTH;  // maximum session life in days (30 Days)
-                     // (https://pages.nist.gov/800-63-3/sp800-63b.html#aal3reauth)
+namespace po = boost::program_options;
 
-  namespace po = boost::program_options;
+MapDProgramOptions::MapDProgramOptions() {
+  fillOptions(*this);
+  fillAdvancedOptions(*this);
+};
 
-  po::options_description desc("Options");
+void MapDProgramOptions::fillOptions(po::options_description& desc) {
   desc.add_options()("help,h", "Print help messages");
   desc.add_options()("config", po::value<std::string>(&config_file), "Path to mapd.conf");
   desc.add_options()(
@@ -412,8 +386,9 @@ int main(int argc, char** argv) {
   desc.add_options()("db-query-list",
                      po::value<std::string>(&db_query_file),
                      "Path to file containing mapd queries");
+}
 
-  po::options_description desc_adv("Developer options");
+void MapDProgramOptions::fillAdvancedOptions(po::options_description& desc_adv) {
   desc_adv.add_options()("dev-options", "Print internal developer options");
   desc_adv.add_options()("ssl-cert",
                          po::value<std::string>(&mapd_parameters.ssl_cert_file)
@@ -436,7 +411,8 @@ int main(int argc, char** argv) {
   desc_adv.add_options()(
       "jit-debug-ir",
       po::value<bool>(&jit_debug)->default_value(jit_debug)->implicit_value(true),
-      "Enable debugger support for the JIT. Note that this flag is incompatible with the "
+      "Enable debugger support for the JIT. Note that this flag is incompatible with "
+      "the "
       "`ENABLE_JIT_DEBUG` build flag. The generated code can be found at "
       "`/tmp/mapdquery`");
   desc_adv.add_options()(
@@ -459,21 +435,17 @@ int main(int argc, char** argv) {
                              ->default_value(g_enable_smem_group_by)
                              ->implicit_value(false),
                          "Enable/disable using GPU shared memory for GROUP BY.");
+};
+
+bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_code) {
+  return_code = 0;
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
 
-  po::options_description desc_all("All options");
-  desc_all.add(desc).add(desc_adv);
-
-  po::variables_map vm;
-
-  std::vector<LeafHostInfo> db_leaves;
-  std::vector<LeafHostInfo> string_leaves;
-
   try {
     po::store(po::command_line_parser(argc, argv)
-                  .options(desc_all)
+                  .options(*this)
                   .positional(positionalOptions)
                   .run(),
               vm);
@@ -481,7 +453,7 @@ int main(int argc, char** argv) {
 
     if (vm.count("config")) {
       std::ifstream settings_file(config_file);
-      po::store(po::parse_config_file(settings_file, desc_all, true), vm);
+      po::store(po::parse_config_file(settings_file, *this, true), vm);
       po::notify(vm);
       settings_file.close();
     }
@@ -508,8 +480,9 @@ int main(int argc, char** argv) {
              "number>] [--http-port <http port number>] [--flush-log] [--version|-v]"
           << std::endl
           << std::endl;
-      std::cout << desc << std::endl;
-      return 0;
+      std::cout << *this << std::endl;
+      return_code = 0;
+      return false;
     }
     if (vm.count("dev-options")) {
       std::cout
@@ -518,8 +491,9 @@ int main(int argc, char** argv) {
              "number>] [--http-port <http port number>] [--flush-log] [--version|-v]"
           << std::endl
           << std::endl;
-      std::cout << desc_all << std::endl;
-      return 0;
+      std::cout << *this << std::endl;
+      return_code = 0;
+      return false;
     }
     if (vm.count("version")) {
       std::cout << "MapD Version: " << MAPD_RELEASE << std::endl;
@@ -544,12 +518,14 @@ int main(int argc, char** argv) {
     g_dynamic_watchdog_time_limit = dynamic_watchdog_time_limit;
   } catch (boost::program_options::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
-    return 1;
+    return_code = 1;
+    return false;
   }
 
   if (g_hll_precision_bits < 1 || g_hll_precision_bits > 16) {
     std::cerr << "hll-precision-bits must be between 1 and 16." << std::endl;
-    return 1;
+    return_code = 1;
+    return false;
   }
 
   boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
@@ -557,7 +533,8 @@ int main(int argc, char** argv) {
   if (!boost::filesystem::exists(data_path)) {
     std::cerr << "MapD data directory does not exist at '" << base_path
               << "'. Run initdb " << base_path << std::endl;
-    return 1;
+    return_code = 1;
+    return false;
   }
 
   const auto lock_file = boost::filesystem::path(base_path) / "mapd_server_pid.lck";
@@ -567,14 +544,16 @@ int main(int argc, char** argv) {
     auto err = std::string("Failed to open PID file ") + std::string(lock_file.c_str()) +
                std::string(". ") + strerror(errno) + ".";
     std::cerr << err << std::endl;
-    return 1;
+    return_code = 1;
+    return false;
   }
   if (lockf(pid_fd, F_TLOCK, 0) == -1) {
     auto err = std::string("Another MapD Server is using data directory ") + base_path +
                std::string(".");
     std::cerr << err << std::endl;
     close(pid_fd);
-    return 1;
+    return_code = 1;
+    return false;
   }
   if (ftruncate(pid_fd, 0) == -1) {
     auto err = std::string("Failed to truncate PID file ") +
@@ -582,14 +561,16 @@ int main(int argc, char** argv) {
                std::string(".");
     std::cerr << err << std::endl;
     close(pid_fd);
-    return 1;
+    return_code = 1;
+    return false;
   }
   if (write(pid_fd, pid.c_str(), pid.length()) == -1) {
     auto err = std::string("Failed to write PID file ") + std::string(lock_file.c_str()) +
                ". " + strerror(errno) + ".";
     std::cerr << err << std::endl;
     close(pid_fd);
-    return 1;
+    return_code = 1;
+    return false;
   }
 
   const auto log_path = boost::filesystem::path(base_path) / "mapd_log";
@@ -604,19 +585,22 @@ int main(int argc, char** argv) {
   boost::algorithm::trim_if(db_query_file, boost::is_any_of("\"'"));
   if (db_query_file.length() > 0 && !boost::filesystem::exists(db_query_file)) {
     LOG(ERROR) << "File containing DB queries " << db_query_file << " does not exist.";
-    return 1;
+    return_code = 1;
+    return false;
   }
   const auto system_db_file =
       boost::filesystem::path(base_path) / "mapd_catalogs" / "mapd";
   if (!boost::filesystem::exists(system_db_file)) {
     LOG(ERROR) << "MapD system catalogs does not exist at " << system_db_file;
-    return 1;
+    return_code = 1;
+    return false;
   }
   const auto db_file =
       boost::filesystem::path(base_path) / "mapd_catalogs" / MAPD_SYSTEM_DB;
   if (!boost::filesystem::exists(db_file)) {
     LOG(ERROR) << "MapD database " << MAPD_SYSTEM_DB << " does not exist.";
-    return 1;
+    return_code = 1;
+    return false;
   }
 
   // add all parameters to be displayed on startup
@@ -660,19 +644,22 @@ int main(int argc, char** argv) {
     LOG(INFO) << " HA group id " << mapd_parameters.ha_group_id;
     if (mapd_parameters.ha_unique_server_id.empty()) {
       LOG(ERROR) << "Starting server in HA mode --ha-unique-server-id must be set ";
-      return 5;
+      return_code = 5;
+      return false;
     } else {
       LOG(INFO) << " HA unique server id " << mapd_parameters.ha_unique_server_id;
     }
     if (mapd_parameters.ha_brokers.empty()) {
       LOG(ERROR) << "Starting server in HA mode --ha-brokers must be set ";
-      return 6;
+      return_code = 6;
+      return false;
     } else {
       LOG(INFO) << " HA brokers " << mapd_parameters.ha_brokers;
     }
     if (mapd_parameters.ha_shared_data.empty()) {
       LOG(ERROR) << "Starting server in HA mode --ha-shared-data must be set ";
-      return 7;
+      return_code = 7;
+      return false;
     } else {
       LOG(INFO) << " HA shared data is " << mapd_parameters.ha_shared_data;
     }
@@ -694,53 +681,64 @@ int main(int argc, char** argv) {
   boost::algorithm::trim_if(mapd_parameters.ssl_key_file, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(mapd_parameters.ssl_trust_store, boost::is_any_of("\"'"));
 
-  // rudimetary signal handling to try to guarantee the logging gets flushed to files
-  // on shutdown
+  return true;
+}
+
+int main(int argc, char** argv) {
+  MapDProgramOptions desc_all;
+  int return_code = 0;
+
+  if (!desc_all.parse_command_line(argc, argv, return_code)) {
+    return return_code;
+  };
+  // rudimetary signal handling to try to guarantee the logging gets flushed to
+  // files on shutdown
   register_signal_handler();
   google::InstallFailureFunction(&shutdown_handler);
 
-  g_mapd_handler = mapd::make_shared<MapDHandler>(db_leaves,
-                                                  string_leaves,
-                                                  base_path,
-                                                  device,
-                                                  allow_multifrag,
-                                                  jit_debug,
-                                                  read_only,
-                                                  allow_loop_joins,
-                                                  enable_rendering,
-                                                  render_mem_bytes,
-                                                  num_gpus,
-                                                  start_gpu,
-                                                  reserved_gpu_mem,
-                                                  num_reader_threads,
-                                                  authMetadata,
-                                                  mapd_parameters,
-                                                  enable_legacy_syntax,
-                                                  enable_access_priv_check,
-                                                  idle_session_duration,
-                                                  max_session_duration);
+  g_mapd_handler = mapd::make_shared<MapDHandler>(desc_all.db_leaves,
+                                                  desc_all.string_leaves,
+                                                  desc_all.base_path,
+                                                  desc_all.device,
+                                                  desc_all.allow_multifrag,
+                                                  desc_all.jit_debug,
+                                                  desc_all.read_only,
+                                                  desc_all.allow_loop_joins,
+                                                  desc_all.enable_rendering,
+                                                  desc_all.render_mem_bytes,
+                                                  desc_all.num_gpus,
+                                                  desc_all.start_gpu,
+                                                  desc_all.reserved_gpu_mem,
+                                                  desc_all.num_reader_threads,
+                                                  desc_all.authMetadata,
+                                                  desc_all.mapd_parameters,
+                                                  desc_all.enable_legacy_syntax,
+                                                  desc_all.enable_access_priv_check,
+                                                  desc_all.idle_session_duration,
+                                                  desc_all.max_session_duration);
 
   mapd::shared_ptr<TServerSocket> serverSocket;
-  if (!mapd_parameters.ssl_cert_file.empty() && !mapd_parameters.ssl_key_file.empty()) {
+  if (!desc_all.mapd_parameters.ssl_cert_file.empty() &&
+      !desc_all.mapd_parameters.ssl_key_file.empty()) {
     mapd::shared_ptr<TSSLSocketFactory> sslSocketFactory;
     sslSocketFactory =
         mapd::shared_ptr<TSSLSocketFactory>(new TSSLSocketFactory(SSLProtocol::SSLTLS));
-    sslSocketFactory->loadCertificate(mapd_parameters.ssl_cert_file.c_str());
-    sslSocketFactory->loadPrivateKey(mapd_parameters.ssl_key_file.c_str());
+    sslSocketFactory->loadCertificate(desc_all.mapd_parameters.ssl_cert_file.c_str());
+    sslSocketFactory->loadPrivateKey(desc_all.mapd_parameters.ssl_key_file.c_str());
     sslSocketFactory->authenticate(false);
     sslSocketFactory->ciphers("ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH");
-    serverSocket = mapd::shared_ptr<TServerSocket>(
-        new TSSLServerSocket(mapd_parameters.mapd_server_port, sslSocketFactory));
+    serverSocket = mapd::shared_ptr<TServerSocket>(new TSSLServerSocket(
+        desc_all.mapd_parameters.mapd_server_port, sslSocketFactory));
     LOG(INFO) << " MapD server using encrypted connection. Cert file ["
-              << mapd_parameters.ssl_cert_file << "], key file ["
-              << mapd_parameters.ssl_key_file << "]";
+              << desc_all.mapd_parameters.ssl_cert_file << "], key file ["
+              << desc_all.mapd_parameters.ssl_key_file << "]";
   } else {
     LOG(INFO) << " MapD server using unencrypted connection";
     serverSocket = mapd::shared_ptr<TServerSocket>(
-        new TServerSocket(mapd_parameters.mapd_server_port));
+        new TServerSocket(desc_all.mapd_parameters.mapd_server_port));
   }
 
-  if (mapd_parameters.ha_group_id.empty()) {
+  if (desc_all.mapd_parameters.ha_group_id.empty()) {
     mapd::shared_ptr<TProcessor> processor(new MapDProcessor(g_mapd_handler));
 
     mapd::shared_ptr<TTransportFactory> bufTransportFactory(
@@ -751,7 +749,8 @@ int main(int argc, char** argv) {
     TThreadedServer bufServer(
         processor, bufServerTransport, bufTransportFactory, bufProtocolFactory);
 
-    mapd::shared_ptr<TServerTransport> httpServerTransport(new TServerSocket(http_port));
+    mapd::shared_ptr<TServerTransport> httpServerTransport(
+        new TServerSocket(desc_all.http_port));
     mapd::shared_ptr<TTransportFactory> httpTransportFactory(
         new THttpServerTransportFactory());
     mapd::shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());
@@ -762,7 +761,7 @@ int main(int argc, char** argv) {
     std::thread httpThread(start_server, std::ref(httpServer));
 
     // run warm up queries if any exists
-    run_warmup_queries(g_mapd_handler, base_path, db_query_file);
+    run_warmup_queries(g_mapd_handler, desc_all.base_path, desc_all.db_query_file);
 
     bufThread.join();
     httpThread.join();
@@ -770,4 +769,4 @@ int main(int argc, char** argv) {
     LOG(FATAL) << "No High Availability module available, please contact MapD support";
   }
   return 0;
-}
+};
