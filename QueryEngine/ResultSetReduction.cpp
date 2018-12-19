@@ -141,6 +141,11 @@ void ResultSetStorage::reduce(
   CHECK(that_buff);
   if (query_mem_desc_.getQueryDescriptionType() ==
       QueryDescriptionType::GroupByBaselineHash) {
+    if (!serialized_varlen_buffer.empty()) {
+      throw std::runtime_error(
+          "Projection of variable length targets with baseline hash group by is not yet "
+          "supported in Distributed mode");
+    }
     if (use_multithreaded_reduction(that.query_mem_desc_.getEntryCount())) {
       const size_t thread_count = cpu_threads();
       std::vector<std::future<void>> reduction_threads;
