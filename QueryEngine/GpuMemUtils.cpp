@@ -290,7 +290,7 @@ void copy_projection_buffer_from_gpu_columnar(Data_Namespace::DataMgr* data_mgr,
       copy_from_gpu(
           data_mgr,
           projection_buffer + buffer_offset_cpu,
-          gpu_query_mem.group_by_buffers.second + query_mem_desc.getColOffInBytes(0, i),
+          gpu_query_mem.group_by_buffers.second + query_mem_desc.getColOffInBytes(i),
           column_proj_size,
           device_id);
       buffer_offset_cpu += align_to_int64(column_proj_size);

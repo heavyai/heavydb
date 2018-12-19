@@ -813,7 +813,7 @@ void ResultSet::radixSortOnCpu(
   for (const auto& order_entry : order_entries) {
     const auto target_idx = order_entry.tle_no - 1;
     const auto sortkey_val_buff = reinterpret_cast<int64_t*>(
-        buffer_ptr + query_mem_desc_.getColOffInBytes(0, target_idx));
+        buffer_ptr + query_mem_desc_.getColOffInBytes(target_idx));
     const auto chosen_bytes = query_mem_desc_.getColumnWidth(target_idx).compact;
     sort_groups_cpu(sortkey_val_buff,
                     &idx_buff[0],
@@ -832,7 +832,7 @@ void ResultSet::radixSortOnCpu(
       }
       const auto chosen_bytes = query_mem_desc_.getColumnWidth(target_idx).compact;
       const auto satellite_val_buff = reinterpret_cast<int64_t*>(
-          buffer_ptr + query_mem_desc_.getColOffInBytes(0, target_idx));
+          buffer_ptr + query_mem_desc_.getColOffInBytes(target_idx));
       apply_permutation_cpu(satellite_val_buff,
                             &idx_buff[0],
                             query_mem_desc_.getEntryCount(),

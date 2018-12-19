@@ -626,7 +626,7 @@ void compact_projection_buffer_for_cpu_columnar(
     if (query_mem_desc.getPaddedColumnWidthBytes(i) > 0) {
       auto column_proj_size =
           projection_count * query_mem_desc.getPaddedColumnWidthBytes(i);
-      auto buffer_offset2 = query_mem_desc.getColOffInBytes(0, i);
+      auto buffer_offset2 = query_mem_desc.getColOffInBytes(i);
       if (buffer_offset1 + column_proj_size >= buffer_offset2) {
         // overlapping
         std::memmove(projection_buffer + buffer_offset1,
@@ -1737,7 +1737,7 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(llvm::Value* groups_buffer,
         {groups_buffer,
          LL_INT(n),
          LL_INT(row_size_quad),
-         LL_INT(static_cast<uint32_t>(query_mem_desc_.getColOffInBytes(0, target_idx))),
+         LL_INT(static_cast<uint32_t>(query_mem_desc_.getColOffInBytes(target_idx))),
          LL_BOOL(only_order_entry.is_desc),
          LL_BOOL(!order_entry_expr->get_type_info().get_notnull()),
          LL_BOOL(only_order_entry.nulls_first),
@@ -2279,7 +2279,7 @@ bool GroupByAndAggregate::codegenAggCalls(
       llvm::Value* agg_col_ptr{nullptr};
       if (is_group_by) {
         if (outputColumnar()) {
-          col_off = query_mem_desc_.getColOffInBytes(0, agg_out_off);
+          col_off = query_mem_desc_.getColOffInBytes(agg_out_off);
           CHECK_EQ(size_t(0), col_off % chosen_bytes);
           col_off /= chosen_bytes;
           CHECK(std::get<1>(agg_out_ptr_w_idx));
@@ -2524,7 +2524,7 @@ llvm::Value* GroupByAndAggregate::codegenAggColumnPtr(
             chosen_bytes == 8);
       CHECK(output_buffer_byte_stream);
       CHECK(out_row_idx);
-      uint32_t col_off = query_mem_desc_.getColOffInBytes(0, agg_out_off);
+      uint32_t col_off = query_mem_desc_.getColOffInBytes(agg_out_off);
       // multiplying by chosen_bytes, i.e., << log2(chosen_bytes)
       auto out_per_col_byte_idx =
           LL_BUILDER.CreateShl(out_row_idx, __builtin_ffs(chosen_bytes) - 1);
@@ -2537,7 +2537,7 @@ llvm::Value* GroupByAndAggregate::codegenAggColumnPtr(
           llvm::PointerType::get(get_int_type((chosen_bytes << 3), LL_CONTEXT), 0));
       agg_col_ptr->setName("out_ptr_target_" + std::to_string(target_idx));
     } else {
-      uint32_t col_off = query_mem_desc_.getColOffInBytes(0, agg_out_off);
+      uint32_t col_off = query_mem_desc_.getColOffInBytes(agg_out_off);
       CHECK_EQ(size_t(0), col_off % chosen_bytes);
       col_off /= chosen_bytes;
       CHECK(std::get<1>(agg_out_ptr_w_idx));

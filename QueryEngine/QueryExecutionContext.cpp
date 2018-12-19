@@ -349,7 +349,7 @@ void QueryExecutionContext::initGroups(int64_t* groups_buffer,
                                        const size_t warp_size) {
   const size_t key_count{query_mem_desc_.groupColWidthsSize()};
   const size_t row_size{query_mem_desc_.getRowSize()};
-  const size_t col_base_off{query_mem_desc_.getColOffInBytes(0, 0)};
+  const size_t col_base_off{query_mem_desc_.getColOffInBytes(0)};
 
   auto agg_bitmap_size = allocateCountDistinctBuffers(true);
   auto buffer_ptr = reinterpret_cast<int8_t*>(groups_buffer);

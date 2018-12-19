@@ -37,7 +37,7 @@ void ResultRows::inplaceSortGpuImpl(const std::list<Analyzer::OrderEntry>& order
   for (const auto& order_entry : order_entries) {
     const auto target_idx = order_entry.tle_no - 1;
     const auto val_buff =
-        group_by_buffers.second + query_mem_desc.getColOffInBytes(0, target_idx);
+        group_by_buffers.second + query_mem_desc.getColOffInBytes(target_idx);
     const auto chosen_bytes = query_mem_desc.getColumnWidth(target_idx).compact;
     sort_groups_gpu(reinterpret_cast<int64_t*>(val_buff),
                     reinterpret_cast<int32_t*>(idx_buff),
@@ -58,7 +58,7 @@ void ResultRows::inplaceSortGpuImpl(const std::list<Analyzer::OrderEntry>& order
       }
       const auto chosen_bytes = query_mem_desc.getColumnWidth(target_idx).compact;
       const auto val_buff =
-          group_by_buffers.second + query_mem_desc.getColOffInBytes(0, target_idx);
+          group_by_buffers.second + query_mem_desc.getColOffInBytes(target_idx);
       apply_permutation_gpu(reinterpret_cast<int64_t*>(val_buff),
                             reinterpret_cast<int32_t*>(idx_buff),
                             query_mem_desc.getEntryCount(),
@@ -131,7 +131,7 @@ ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
   const auto rows_ptr = result_set->getStorage()->getUnderlyingBuffer();
   size_t deinterleaved_buffer_idx = 0;
   const size_t agg_col_count{query_mem_desc_.getColCount()};
-  for (size_t bin_base_off = query_mem_desc_.getColOffInBytes(0, 0), bin_idx = 0;
+  for (size_t bin_base_off = query_mem_desc_.getColOffInBytes(0), bin_idx = 0;
        bin_idx < result_set->entryCount();
        ++bin_idx, bin_base_off += query_mem_desc_.getColOffInBytesInNextBin(0)) {
     std::vector<int64_t> agg_vals(agg_col_count, 0);

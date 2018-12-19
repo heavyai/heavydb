@@ -1084,7 +1084,7 @@ void ResultSet::copyColumnIntoBuffer(const size_t column_idx,
   // the main storage:
   const size_t crt_storage_row_count = storage_->query_mem_desc_.getEntryCount();
   const size_t crt_buffer_size = crt_storage_row_count * column_width_size;
-  const size_t column_offset = storage_->query_mem_desc_.getColOffInBytes(0, column_idx);
+  const size_t column_offset = storage_->query_mem_desc_.getColOffInBytes(column_idx);
   const int8_t* storage_buffer = storage_->getUnderlyingBuffer() + column_offset;
   CHECK(crt_buffer_size <= output_buffer_size);
   std::memcpy(output_buffer, storage_buffer, crt_buffer_size);
@@ -1098,7 +1098,7 @@ void ResultSet::copyColumnIntoBuffer(const size_t column_idx,
         appended_storage_[i]->query_mem_desc_.getEntryCount();
     const size_t crt_buffer_size = crt_storage_row_count * column_width_size;
     const size_t column_offset =
-        appended_storage_[i]->query_mem_desc_.getColOffInBytes(0, column_idx);
+        appended_storage_[i]->query_mem_desc_.getColOffInBytes(column_idx);
     const int8_t* storage_buffer =
         appended_storage_[i]->getUnderlyingBuffer() + column_offset;
     CHECK(out_buff_offset + crt_buffer_size <= output_buffer_size);

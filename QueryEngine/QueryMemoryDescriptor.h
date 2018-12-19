@@ -342,7 +342,7 @@ class QueryMemoryDescriptor {
 
   size_t getKeyOffInBytes(const size_t bin, const size_t key_idx = 0) const;
   size_t getNextKeyOffInBytes(const size_t key_idx) const;
-  size_t getColOffInBytes(const size_t bin, const size_t col_idx) const;
+  size_t getColOffInBytes(const size_t col_idx) const;
   size_t getColOffInBytesInNextBin(const size_t col_idx) const;
   size_t getNextColOffInBytes(const int8_t* col_ptr,
                               const size_t bin,

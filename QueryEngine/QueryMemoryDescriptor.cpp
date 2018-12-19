@@ -822,12 +822,10 @@ size_t QueryMemoryDescriptor::getColOnlyOffInBytes(const size_t col_idx) const {
   return offset;
 }
 
-size_t QueryMemoryDescriptor::getColOffInBytes(const size_t bin,
-                                               const size_t col_idx) const {
+size_t QueryMemoryDescriptor::getColOffInBytes(const size_t col_idx) const {
   CHECK_LT(col_idx, agg_col_widths_.size());
   const auto warp_count = getWarpCount();
   if (output_columnar_) {
-    CHECK((bin < entry_count_) || (bin == 0 && entry_count_ == 0));
     CHECK_EQ(size_t(1), warp_count);
     size_t offset{0};
     if (!keyless_hash_) {
@@ -836,11 +834,10 @@ size_t QueryMemoryDescriptor::getColOffInBytes(const size_t bin,
     for (size_t index = 0; index < col_idx; ++index) {
       offset += align_to_int64(getPaddedColumnWidthBytes(index) * entry_count_);
     }
-    offset += align_to_int64(bin * getPaddedColumnWidthBytes(col_idx));
     return offset;
   }
 
-  auto offset = bin * warp_count * getRowSize();
+  size_t offset{0};
   if (keyless_hash_) {
     CHECK_EQ(size_t(1), group_col_widths_.size());
   } else {
