@@ -338,6 +338,9 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     throw HashJoinFail(std::string("Could not build a 1-to-1 correspondence for columns "
                                    "involved in equijoin | ") +
                        e.what());
+  } catch (const ColumnarConversionNotSupported& e) {
+    throw HashJoinFail(std::string("Could not build hash tables for equijoin | ") +
+                       e.what());
   } catch (const std::exception& e) {
     LOG(FATAL) << "Fatal error while attempting to build hash tables for join: "
                << e.what();
