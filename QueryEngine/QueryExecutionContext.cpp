@@ -93,11 +93,7 @@ QueryExecutionContext::QueryExecutionContext(
     , iter_buffers_(iter_buffers)
     , frag_offsets_(frag_offsets)
     , consistent_frag_sizes_(get_consistent_frags_sizes(frag_offsets))
-    , num_buffers_{device_type == ExecutorDeviceType::CPU
-                       ? 1
-                       : executor->blockSize() * (query_mem_desc_.blocksShareMemory()
-                                                      ? 1
-                                                      : executor->gridSize())}
+    , num_buffers_{device_type == ExecutorDeviceType::CPU ? 1 : executor->blockSize()}
     , num_allocated_rows_(0)
     , row_set_mem_owner_(row_set_mem_owner)
     , output_columnar_(output_columnar)

@@ -102,10 +102,7 @@ GpuGroupByBuffers create_dev_group_by_buffers(
   CHECK_GT(groups_buffer_size, size_t(0));
 
   const size_t mem_size{
-      coalesced_size(query_mem_desc,
-                     groups_buffer_size,
-                     block_size_x,
-                     query_mem_desc.blocksShareMemory() ? 1 : grid_size_x)};
+      coalesced_size(query_mem_desc, groups_buffer_size, block_size_x, 1)};
 
   CHECK_LE(query_mem_desc.getEntryCount(), std::numeric_limits<uint32_t>::max());
   const size_t prepended_buff_size{
@@ -148,9 +145,6 @@ GpuGroupByBuffers create_dev_group_by_buffers(
     for (size_t j = 0; j < step; ++j) {
       group_by_dev_buffers[i + j] = group_by_dev_buffer;
     }
-    if (!query_mem_desc.blocksShareMemory()) {
-      group_by_dev_buffer += groups_buffer_size;
-    }
   }
 
   auto group_by_dev_ptr =
@@ -188,7 +182,7 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
   if (group_by_buffers.empty()) {
     return;
   }
-  const unsigned block_buffer_count{query_mem_desc.blocksShareMemory() ? 1 : grid_size_x};
+  const unsigned block_buffer_count{1};
   if (block_buffer_count == 1 && !prepend_index_buffer) {
     CHECK_EQ(block_size_x, group_by_buffers.size());
     CHECK_EQ(coalesced_size(

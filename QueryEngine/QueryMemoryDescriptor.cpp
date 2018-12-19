@@ -969,24 +969,6 @@ bool QueryMemoryDescriptor::threadsShareMemory() const {
   return query_desc_type_ != QueryDescriptionType::NonGroupedAggregate;
 }
 
-bool QueryMemoryDescriptor::blocksShareMemory() const {
-  if (g_cluster) {
-    return true;
-  }
-  if (!countDescriptorsLogicallyEmpty(count_distinct_descriptors_)) {
-    return true;
-  }
-  if (executor_->isCPUOnly() || render_output_ ||
-      query_desc_type_ == QueryDescriptionType::GroupByBaselineHash ||
-      query_desc_type_ == QueryDescriptionType::Projection ||
-      (query_desc_type_ == QueryDescriptionType::GroupByPerfectHash &&
-       getGroupbyColCount() > 1)) {
-    return true;
-  }
-  return usesCachedContext() && !sharedMemBytes(ExecutorDeviceType::GPU) &&
-         many_entries(max_val_, min_val_, bucket_);
-}
-
 bool QueryMemoryDescriptor::lazyInitGroups(const ExecutorDeviceType device_type) const {
   return device_type == ExecutorDeviceType::GPU && !render_output_ &&
          countDescriptorsLogicallyEmpty(count_distinct_descriptors_);
@@ -1032,7 +1014,7 @@ bool QueryMemoryDescriptor::isWarpSyncRequired(
 }
 
 bool QueryMemoryDescriptor::canOutputColumnar() const {
-  return usesGetGroupValueFast() && threadsShareMemory() && blocksShareMemory() &&
+  return usesGetGroupValueFast() && threadsShareMemory() &&
          !interleavedBins(ExecutorDeviceType::GPU) &&
          countDescriptorsLogicallyEmpty(count_distinct_descriptors_);
 }
@@ -1070,13 +1052,11 @@ std::string QueryMemoryDescriptor::toString() const {
   str += "\tAllow Multifrag: " + boolToString(allow_multifrag_) + "\n";
   str += "\tKeyless Hash: " + boolToString(keyless_hash_) + "\n";
   str += "\tInterleaved Bins on GPU: " + boolToString(interleaved_bins_on_gpu_) + "\n";
-  str += "\tBlocks Share Memory: " + boolToString(blocksShareMemory()) + "\n";
   str += "\tThreads Share Memory: " + boolToString(threadsShareMemory()) + "\n";
   str += "\tUses Cached Context: " + boolToString(usesCachedContext()) + "\n";
   str += "\tUses Fast Group Values: " + boolToString(usesGetGroupValueFast()) + "\n";
-  str +=
-      "Lazy Init Groups (GPU): " + boolToString(lazyInitGroups(ExecutorDeviceType::GPU)) +
-      "\n";
+  str += "\tLazy Init Groups (GPU): " +
+         boolToString(lazyInitGroups(ExecutorDeviceType::GPU)) + "\n";
   str += "\tEntry Count: " + std::to_string(entry_count_) + "\n";
   str += "\tMin Val (perfect hash only): " + std::to_string(min_val_) + "\n";
   str += "\tMax Val (perfect hash only): " + std::to_string(max_val_) + "\n";
