@@ -99,8 +99,7 @@ std::string build_create_table_statement(
 
   std::ostringstream with_statement_assembly;
   if (!shard_info.shard_col.empty()) {
-    with_statement_assembly << "shard_count=" << shard_info.shard_count * g_num_leafs
-                            << ", ";
+    with_statement_assembly << "shard_count=" << shard_info.shard_count << ", ";
   }
   with_statement_assembly << "fragment_size=" << fragment_size;
 
@@ -1176,14 +1175,14 @@ TEST(Select, Having) {
 }
 
 TEST(Select, CountDistinct) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(distinct x) FROM test;", dt);
     c("SELECT COUNT(distinct b) FROM test;", dt);
-    c("SELECT COUNT(distinct f) FROM test;", dt);
-    c("SELECT COUNT(distinct d) FROM test;", dt);
+    SKIP_ON_AGGREGATOR(c("SELECT COUNT(distinct f) FROM test;",
+                         dt));  // Exception: Cannot use a fast path for COUNT distinct
+    SKIP_ON_AGGREGATOR(c("SELECT COUNT(distinct d) FROM test;",
+                         dt));  // Exception: Cannot use a fast path for COUNT distinct
     c("SELECT COUNT(distinct str) FROM test;", dt);
     c("SELECT COUNT(distinct ss) FROM test;", dt);
     c("SELECT COUNT(distinct x + 1) FROM test;", dt);
@@ -1198,11 +1197,13 @@ TEST(Select, CountDistinct) {
       "str;",
       dt);
     c("SELECT AVG(z), COUNT(distinct x) AS dx FROM test GROUP BY y HAVING dx > 1;", dt);
-    c("SELECT z, str, COUNT(distinct f) FROM test GROUP BY z, str ORDER BY str DESC;",
-      dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT z, str, COUNT(distinct f) FROM test GROUP BY z, str ORDER BY str DESC;",
+          dt));  // Exception: Cannot use a fast path for COUNT distinct
     c("SELECT COUNT(distinct x * (50000 - 1)) FROM test;", dt);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(distinct real_str) FROM test;", dt),
-                 std::runtime_error);
+                 std::runtime_error);  // Exception: Strings must be dictionary-encoded
+                                       // for COUNT(DISTINCT).
   }
 }
 
@@ -1308,8 +1309,6 @@ TEST(Select, ApproxCountDistinct) {
 }
 
 TEST(Select, ScanNoAggregation) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT * FROM test ORDER BY x ASC, y ASC;", dt);
@@ -5127,7 +5126,7 @@ TEST(Select, DecimalCompression) {
 }
 
 TEST(Update, DecimalOverflow) {
-  auto test = [this](int precision, int scale) -> void {
+  auto test = [](int precision, int scale) -> void {
     run_ddl_statement("DROP TABLE IF EXISTS decimal_overflow_test;");
     run_ddl_statement("CREATE TABLE decimal_overflow_test (d DECIMAL(" +
                       std::to_string(precision) + ", " + std::to_string(scale) + "));");
@@ -5271,10 +5270,9 @@ TEST(Select, Subqueries) {
       "GROUP BY str ORDER BY str ASC;",
       dt);
     // Throws join table must be replicated in distributed
-    SKIP_ON_AGGREGATOR(
-        c("SELECT COUNT(*) FROM test, (SELECT x FROM test_inner) AS inner_x WHERE test.x "
-          "= inner_x.x;",
-          dt));
+    c("SELECT COUNT(*) FROM test, (SELECT x FROM test_inner) AS inner_x WHERE test.x "
+      "= inner_x.x;",
+      dt);
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test WHERE y > 42);", dt);
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test GROUP BY x ORDER BY "
       "COUNT(*) DESC LIMIT 1);",
@@ -5453,8 +5451,6 @@ TEST(Select, Joins_Arrays) {
 }
 
 TEST(Select, Joins_EmptyTable) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT test.x, emptytab.x FROM test, emptytab WHERE test.x = emptytab.x;", dt);
@@ -5502,16 +5498,16 @@ TEST(Select, Joins_ImplicitJoins) {
     c("SELECT a.x, b.str FROM test a, join_test b WHERE a.str = b.str ORDER BY a.x, "
       "b.str;",
       dt);
-    SKIP_ON_AGGREGATOR(c(
-        "SELECT COUNT(1) FROM test a, join_test b, test_inner c WHERE a.str = b.str AND "
-        "b.x = c.x",
-        dt));
-    SKIP_ON_AGGREGATOR(
-        c("SELECT COUNT(*) FROM test a, join_test b, test_inner c WHERE a.x = b.x AND "
-          "a.y = "
-          "b.x AND a.x = c.x AND c.str = "
-          "'foo';",
-          dt));
+    c("SELECT COUNT(1) FROM test a, join_test b, test_inner c WHERE a.str = b.str AND "
+      "b.x = c.x",
+      dt);
+
+    c("SELECT COUNT(*) FROM test a, join_test b, test_inner c WHERE a.x = b.x AND "
+      "a.y = "
+      "b.x AND a.x = c.x AND c.str = "
+      "'foo';",
+      dt);
+
     SKIP_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.y = b.y;", dt));
     SKIP_ON_AGGREGATOR(
@@ -5526,21 +5522,21 @@ TEST(Select, Joins_ImplicitJoins) {
       "test_inner.x;",
       dt);
     SKIP_ON_AGGREGATOR(c("SELECT bar.str FROM test, bar WHERE test.str = bar.str;", dt));
-    SKIP_ON_AGGREGATOR(ASSERT_EQ(
-        int64_t(3),
-        v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM test, join_test WHERE test.rowid = join_test.rowid;",
-            dt))));
+
+    ASSERT_EQ(int64_t(3),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, join_test "
+                                        "WHERE test.rowid = join_test.rowid;",
+                                        dt)));
     SKIP_ON_AGGREGATOR(
         ASSERT_EQ(7,
                   v<int64_t>(run_simple_agg("SELECT test.x FROM test, test_inner WHERE "
                                             "test.x = test_inner.x AND test.rowid = 9;",
                                             dt))));
-    SKIP_ON_AGGREGATOR(
-        ASSERT_EQ(0,
-                  v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, test_inner WHERE "
-                                            "test.x = test_inner.x AND test.rowid = 20;",
-                                            dt))));
+
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, test_inner WHERE "
+                                        "test.x = test_inner.x AND test.rowid = 20;",
+                                        dt)));
   }
 }
 
@@ -13119,7 +13115,6 @@ int main(int argc, char** argv) {
   if (vm.count("with-sharding")) {
     g_shard_count = choose_shard_count();
   }
-
   if (vm.count("dump-ir")) {
     const auto filename = vm["dump-ir"].as<std::string>();
     g_ir_output_file = std::make_unique<QueryRunner::IROutputFile>(filename);

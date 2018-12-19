@@ -139,7 +139,6 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
 
   // parallel update elements
   std::vector<std::future<void>> threads;
-  std::mutex mtx;
 
   const auto segsz = (nrow + ncore - 1) / ncore;
   auto dbuf = chunk->get_buffer();
@@ -720,15 +719,7 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
       }
     };
 
-    auto varlen_vacuum = [=,
-                          &has_null_per_thread,
-                          &max_double_per_thread,
-                          &min_double_per_thread,
-                          &min_int64t_per_thread,
-                          &max_int64t_per_thread,
-                          &updel_roll,
-                          &frag_offsets,
-                          &fragment] {
+    auto varlen_vacuum = [=, &updel_roll, &frag_offsets, &fragment] {
       size_t nbytes_var_data_to_keep;
       nbytes_var_data_to_keep = vacuum_varlen_rows(fragment, chunk, frag_offsets);
 

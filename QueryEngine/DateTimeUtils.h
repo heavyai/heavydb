@@ -46,6 +46,7 @@ inline int64_t get_timestamp_precision_scale(const int32_t dimen) {
     default:
       UNREACHABLE();
   }
+  return -1;
 }
 
 inline int64_t get_dateadd_timestamp_precision_scale(const DateaddField field) {
@@ -59,6 +60,7 @@ inline int64_t get_dateadd_timestamp_precision_scale(const DateaddField field) {
     default:
       UNREACHABLE();
   }
+  return -1;
 }
 
 inline bool is_subsecond_dateadd_field(const DateaddField field) {
@@ -109,6 +111,7 @@ inline std::pair<SQLOps, int64_t> get_dateadd_high_precision_adjusted_scale(
     default:
       UNREACHABLE();
   }
+  return {};
 }
 
 #endif  // QUERYENGINE_DATETIMEUTILS_H

@@ -4411,7 +4411,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     if (is_explain) {
       root_plan_ptr->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
     }
-    return std::move(root_plan_ptr);
+    return root_plan_ptr;
   };
 
   auto handle_ddl = [&cat,

@@ -304,6 +304,7 @@ llvm::Value* Executor::codegenOverlaps(const SQLOps optype,
   }
 
   CHECK(false) << "Unsupported type for overlaps operator: " << lhs_ti.get_type_name();
+  return nullptr;
 }
 
 llvm::Value* Executor::codegenStrCmp(const SQLOps optype,
