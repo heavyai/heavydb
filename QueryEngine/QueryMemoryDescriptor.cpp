@@ -965,10 +965,6 @@ bool QueryMemoryDescriptor::usesCachedContext() const {
           query_desc_type_ == QueryDescriptionType::GroupByPerfectHash);
 }
 
-bool QueryMemoryDescriptor::threadsShareMemory() const {
-  return query_desc_type_ != QueryDescriptionType::NonGroupedAggregate;
-}
-
 bool QueryMemoryDescriptor::lazyInitGroups(const ExecutorDeviceType device_type) const {
   return device_type == ExecutorDeviceType::GPU && !render_output_ &&
          countDescriptorsLogicallyEmpty(count_distinct_descriptors_);
@@ -1014,8 +1010,7 @@ bool QueryMemoryDescriptor::isWarpSyncRequired(
 }
 
 bool QueryMemoryDescriptor::canOutputColumnar() const {
-  return usesGetGroupValueFast() && threadsShareMemory() &&
-         !interleavedBins(ExecutorDeviceType::GPU) &&
+  return usesGetGroupValueFast() && !interleavedBins(ExecutorDeviceType::GPU) &&
          countDescriptorsLogicallyEmpty(count_distinct_descriptors_);
 }
 
@@ -1052,7 +1047,6 @@ std::string QueryMemoryDescriptor::toString() const {
   str += "\tAllow Multifrag: " + boolToString(allow_multifrag_) + "\n";
   str += "\tKeyless Hash: " + boolToString(keyless_hash_) + "\n";
   str += "\tInterleaved Bins on GPU: " + boolToString(interleaved_bins_on_gpu_) + "\n";
-  str += "\tThreads Share Memory: " + boolToString(threadsShareMemory()) + "\n";
   str += "\tUses Cached Context: " + boolToString(usesCachedContext()) + "\n";
   str += "\tUses Fast Group Values: " + boolToString(usesGetGroupValueFast()) + "\n";
   str += "\tLazy Init Groups (GPU): " +

@@ -76,9 +76,8 @@ size_t coalesced_size(const QueryMemoryDescriptor& query_mem_desc,
                       const size_t group_by_one_buffer_size,
                       const unsigned block_size_x,
                       const unsigned grid_size_x) {
-  const size_t num_buffers{block_size_x * grid_size_x};
-  return (query_mem_desc.threadsShareMemory() ? grid_size_x : num_buffers) *
-         group_by_one_buffer_size;
+  // TODO(Saman): remove
+  return grid_size_x * group_by_one_buffer_size;
 }
 
 }  // namespace
@@ -120,7 +119,7 @@ GpuGroupByBuffers create_dev_group_by_buffers(
     CHECK_EQ(uint64_t(0),
              static_cast<int64_t>(group_by_dev_buffers_mem) % sizeof(int64_t));
   }
-  const size_t step{query_mem_desc.threadsShareMemory() ? block_size_x : 1};
+  const size_t step{block_size_x};
 
   if (!render_allocator && (always_init_group_by_on_host ||
                             !query_mem_desc.lazyInitGroups(ExecutorDeviceType::GPU))) {
@@ -300,7 +299,7 @@ bool buffer_not_null(const QueryMemoryDescriptor& query_mem_desc,
   if (device_type == ExecutorDeviceType::CPU) {
     return true;
   }
-  return (!query_mem_desc.threadsShareMemory() || (i % block_size_x == 0));
+  return (i % block_size_x == 0);
 }
 
 int8_t* ThrustAllocator::allocate(std::ptrdiff_t num_bytes) {

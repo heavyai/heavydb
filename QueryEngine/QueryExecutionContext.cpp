@@ -169,9 +169,7 @@ QueryExecutionContext::QueryExecutionContext(
 
   std::unique_ptr<int64_t, CheckedAllocDeleter> group_by_small_buffer_template;
 
-  const auto step = device_type_ == ExecutorDeviceType::GPU &&
-                            query_mem_desc_.threadsShareMemory() &&
-                            query_mem_desc_.isGroupBy()
+  const auto step = device_type_ == ExecutorDeviceType::GPU && query_mem_desc_.isGroupBy()
                         ? executor_->blockSize()
                         : size_t(1);
   const auto index_buffer_qw = device_type_ == ExecutorDeviceType::GPU && sort_on_gpu_ &&
@@ -523,7 +521,7 @@ ResultSetPtr QueryExecutionContext::getRowSet(
     CHECK_EQ(size_t(1), num_buffers_);
     return groupBufferToResults(0, ra_exe_unit.target_exprs);
   }
-  size_t step{query_mem_desc_.threadsShareMemory() ? executor_->blockSize() : 1};
+  size_t step{executor_->blockSize()};
   for (size_t i = 0; i < group_by_buffers_.size(); i += step) {
     results_per_sm.emplace_back(groupBufferToResults(i, ra_exe_unit.target_exprs),
                                 std::vector<size_t>{});
@@ -854,7 +852,7 @@ GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(
   }
   if (query_mem_desc_.lazyInitGroups(ExecutorDeviceType::GPU)) {
     CHECK(!render_allocator);
-    const size_t step{query_mem_desc_.threadsShareMemory() ? block_size_x : 1};
+    const size_t step{block_size_x};
     size_t groups_buffer_size{
         query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU)};
     auto group_by_dev_buffer = dev_group_by_buffers.second;

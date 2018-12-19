@@ -331,8 +331,6 @@ class QueryMemoryDescriptor {
   // TODO(alex): remove
   bool usesCachedContext() const;
 
-  bool threadsShareMemory() const;
-
   bool lazyInitGroups(const ExecutorDeviceType) const;
 
   bool interleavedBins(const ExecutorDeviceType) const;
