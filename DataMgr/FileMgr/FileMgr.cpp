@@ -623,7 +623,7 @@ void FileMgr::deleteBuffer(const ChunkKey& key, const bool purge) {
   auto chunkIt = chunkIndex_.find(key);
   // ensure the Chunk exists
   if (chunkIt == chunkIndex_.end()) {
-    LOG(FATAL) << "Chunk does not exist for key: " << showChunk;
+    LOG(FATAL) << "Chunk does not exist for key: " << showChunk(key);
   }
   chunkIndexWriteLock.unlock();
   // chunkIt->second->writeMetadata(-1); // writes -1 as epoch - signifies deleted
