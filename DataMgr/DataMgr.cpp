@@ -121,7 +121,7 @@ void DataMgr::populateMgrs(const MapDParameters& mapd_parameters,
       size_t gpuMaxMemSize =
           mapd_parameters.gpu_buffer_mem_bytes != 0
               ? mapd_parameters.gpu_buffer_mem_bytes
-              : (cudaMgr_->deviceProperties[gpuNum].globalMem) - (reservedGpuMem_);
+              : (cudaMgr_->getDeviceProperties(gpuNum)->globalMem) - (reservedGpuMem_);
       size_t gpuSlabSize = std::min(static_cast<size_t>(1L << 31), gpuMaxMemSize);
       gpuSlabSize -= gpuSlabSize % 512 == 0 ? 0 : 512 - (gpuSlabSize % 512);
       LOG(INFO) << "gpuSlabSize is " << (float)gpuSlabSize / (1024 * 1024) << "M";

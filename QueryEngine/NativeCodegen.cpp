@@ -1362,7 +1362,7 @@ Executor::CompilationResult Executor::compileWorkUnit(
         (grid_size * query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU))};
     const auto cuda_mgr = catalog_->get_dataMgr().getCudaMgr();
     CHECK(cuda_mgr);
-    const size_t max_memory{cuda_mgr->deviceProperties[0].globalMem / 5};
+    const size_t max_memory{cuda_mgr->getDeviceProperties(0)->globalMem / 5};
     if (required_memory > max_memory) {
       throw QueryMustRunOnCpu();
     }

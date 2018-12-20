@@ -2626,7 +2626,7 @@ int8_t Executor::warpSize() const {
   CHECK(catalog_);
   const auto cuda_mgr = catalog_->get_dataMgr().getCudaMgr();
   CHECK(cuda_mgr);
-  const auto& dev_props = cuda_mgr->deviceProperties;
+  const auto& dev_props = cuda_mgr->getAllDeviceProperties();
   CHECK(!dev_props.empty());
   return dev_props.front().warpSize;
 }
@@ -2635,7 +2635,7 @@ unsigned Executor::gridSize() const {
   CHECK(catalog_);
   const auto cuda_mgr = catalog_->get_dataMgr().getCudaMgr();
   CHECK(cuda_mgr);
-  const auto& dev_props = cuda_mgr->deviceProperties;
+  const auto& dev_props = cuda_mgr->getAllDeviceProperties();
   return grid_size_x_ ? grid_size_x_ : 2 * dev_props.front().numMPs;
 }
 
@@ -2643,7 +2643,7 @@ unsigned Executor::blockSize() const {
   CHECK(catalog_);
   const auto cuda_mgr = catalog_->get_dataMgr().getCudaMgr();
   CHECK(cuda_mgr);
-  const auto& dev_props = cuda_mgr->deviceProperties;
+  const auto& dev_props = cuda_mgr->getAllDeviceProperties();
   return block_size_x_ ? block_size_x_ : dev_props.front().maxThreadsPerBlock;
 }
 
@@ -2651,7 +2651,7 @@ int64_t Executor::deviceCycles(int milliseconds) const {
   CHECK(catalog_);
   const auto cuda_mgr = catalog_->get_dataMgr().getCudaMgr();
   CHECK(cuda_mgr);
-  const auto& dev_props = cuda_mgr->deviceProperties;
+  const auto& dev_props = cuda_mgr->getAllDeviceProperties();
   return static_cast<int64_t>(dev_props.front().clockKhz) * milliseconds;
 }
 

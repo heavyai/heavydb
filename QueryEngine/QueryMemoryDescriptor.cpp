@@ -301,7 +301,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
           // architecture.
           gpu_smem_max_threshold =
               std::min((cuda_mgr->isArchVoltaForAll()) ? 4095LU : 2047LU,
-                       (cuda_mgr->maxSharedMemoryForAll / sizeof(int64_t) - 1));
+                       (cuda_mgr->getMaxSharedMemoryForAll() / sizeof(int64_t) - 1));
         }
       }
 
@@ -1016,8 +1016,9 @@ size_t QueryMemoryDescriptor::sharedMemBytes(const ExecutorDeviceType device_typ
              sizeof(int64_t));  // Currently just designed for this scenario
     size_t shared_mem_size =
         (/*bin_count=*/entry_count_ + 1) * sizeof(int64_t);  // one extra for NULL values
-    CHECK(shared_mem_size <=
-          executor_->getCatalog()->get_dataMgr().getCudaMgr()->maxSharedMemoryForAll);
+    CHECK(
+        shared_mem_size <=
+        executor_->getCatalog()->get_dataMgr().getCudaMgr()->getMaxSharedMemoryForAll());
     return shared_mem_size;
   }
   const size_t shared_mem_threshold{0};
