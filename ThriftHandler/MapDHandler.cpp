@@ -1872,7 +1872,7 @@ void MapDHandler::get_version(std::string& version) {
 void MapDHandler::clear_gpu_memory(const TSessionId& session) {
   const auto session_info = get_session(session);
   try {
-    SysCatalog::instance().get_dataMgr().clearMemory(MemoryLevel::GPU_LEVEL);
+    SysCatalog::instance().getDataMgr().clearMemory(MemoryLevel::GPU_LEVEL);
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }
@@ -1887,7 +1887,7 @@ void MapDHandler::clear_gpu_memory(const TSessionId& session) {
 
 void MapDHandler::clear_cpu_memory(const TSessionId& session) {
   const auto session_info = get_session(session);
-  SysCatalog::instance().get_dataMgr().clearMemory(MemoryLevel::CPU_LEVEL);
+  SysCatalog::instance().getDataMgr().clearMemory(MemoryLevel::CPU_LEVEL);
   if (render_handler_) {
     render_handler_->clear_cpu_memory();
   }
@@ -1910,11 +1910,11 @@ void MapDHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
   if (!memory_level.compare("gpu")) {
     mem_level = Data_Namespace::MemoryLevel::GPU_LEVEL;
     internal_memory =
-        SysCatalog::instance().get_dataMgr().getMemoryInfo(MemoryLevel::GPU_LEVEL);
+        SysCatalog::instance().getDataMgr().getMemoryInfo(MemoryLevel::GPU_LEVEL);
   } else {
     mem_level = Data_Namespace::MemoryLevel::CPU_LEVEL;
     internal_memory =
-        SysCatalog::instance().get_dataMgr().getMemoryInfo(MemoryLevel::CPU_LEVEL);
+        SysCatalog::instance().getDataMgr().getMemoryInfo(MemoryLevel::CPU_LEVEL);
   }
 
   for (auto memInfo : internal_memory) {
@@ -4908,7 +4908,7 @@ void MapDHandler::checkpoint(const TSessionId& session,
                              const int32_t table_id) {
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
-  cat.get_dataMgr().checkpoint(db_id, table_id);
+  cat.getDataMgr().checkpoint(db_id, table_id);
 }
 
 // check and reset epoch if a request has been made

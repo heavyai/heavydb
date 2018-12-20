@@ -1359,7 +1359,7 @@ Executor::CompilationResult Executor::compileWorkUnit(
       query_mem_desc.getGroupbyColCount() > 1) {
     const size_t required_memory{
         query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU)};
-    const auto cuda_mgr = catalog_->get_dataMgr().getCudaMgr();
+    const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
     CHECK(cuda_mgr);
     const size_t max_memory{cuda_mgr->getDeviceProperties(0)->globalMem / 5};
     if (required_memory > max_memory) {

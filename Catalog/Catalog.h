@@ -221,7 +221,7 @@ class Catalog {
   std::list<const FrontendViewDescriptor*> getAllFrontendViewMetadata() const;
   const DBMetadata& get_currentDB() const { return currentDB_; }
   void set_currentDB(const DBMetadata& db) { currentDB_ = db; }
-  Data_Namespace::DataMgr& get_dataMgr() const { return *dataMgr_; }
+  Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
   Calcite& get_calciteMgr() const { return *calciteMgr_; }
   const std::string& get_basePath() const { return basePath_; }
 
@@ -420,7 +420,7 @@ class SysCatalog {
                             UserMetadata& user);
   bool getMetadataForDB(const std::string& name, DBMetadata& db);
   const DBMetadata& get_currentDB() const { return currentDB_; }
-  Data_Namespace::DataMgr& get_dataMgr() const { return *dataMgr_; }
+  Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
   Calcite& get_calciteMgr() const { return *calciteMgr_; }
   const std::string& get_basePath() const { return basePath_; }
   SqliteConnector* getSqliteConnector() { return sqliteConnector_.get(); }

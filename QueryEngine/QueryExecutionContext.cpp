@@ -213,7 +213,7 @@ void QueryExecutionContext::allocateCountDistinctGpuMem() {
     return;
   }
   CHECK(executor_);
-  auto data_mgr = &executor_->catalog_->get_dataMgr();
+  auto data_mgr = &executor_->catalog_->getDataMgr();
   size_t total_bytes_per_entry{0};
   const size_t num_count_distinct_descs =
       query_mem_desc_.getCountDistinctDescriptorsSize();

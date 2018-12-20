@@ -145,7 +145,7 @@ vector<size_t> scan_table_return_hash(const string& table_name, const Catalog& c
       auto ms = measure<>::execution([&]() {
         std::shared_ptr<Chunk> chunkp =
             Chunk::getChunk(cd,
-                            &cat.get_dataMgr(),
+                            &cat.getDataMgr(),
                             chunk_key,
                             CPU_LEVEL,
                             frag.deviceIds[static_cast<int>(CPU_LEVEL)],
@@ -183,7 +183,7 @@ vector<size_t> scan_table_return_hash_non_iter(const string& table_name,
       auto ms = measure<>::execution([&]() {
         std::shared_ptr<Chunk> chunkp =
             Chunk::getChunk(cd,
-                            &cat.get_dataMgr(),
+                            &cat.getDataMgr(),
                             chunk_key,
                             CPU_LEVEL,
                             frag.deviceIds[static_cast<int>(CPU_LEVEL)],

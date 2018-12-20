@@ -161,7 +161,7 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(
 
 bool Executor::isCPUOnly() const {
   CHECK(catalog_);
-  return !catalog_->get_dataMgr().getCudaMgr();
+  return !catalog_->getDataMgr().getCudaMgr();
 }
 
 const ColumnDescriptor* Executor::getColumnDescriptor(
@@ -461,7 +461,7 @@ std::vector<int8_t> Executor::serializeLiterals(
 
 int Executor::deviceCount(const ExecutorDeviceType device_type) const {
   if (device_type == ExecutorDeviceType::GPU) {
-    const auto cuda_mgr = catalog_->get_dataMgr().getCudaMgr();
+    const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
     CHECK(cuda_mgr);
     return cuda_mgr->getDeviceCount();
   } else {
@@ -891,8 +891,8 @@ ResultSetPtr Executor::reduceSpeculativeTopN(
 
 std::unordered_set<int> get_available_gpus(const Catalog_Namespace::Catalog& cat) {
   std::unordered_set<int> available_gpus;
-  if (cat.get_dataMgr().gpusPresent()) {
-    int gpu_count = cat.get_dataMgr().getCudaMgr()->getDeviceCount();
+  if (cat.getDataMgr().gpusPresent()) {
+    int gpu_count = cat.getDataMgr().getCudaMgr()->getDeviceCount();
     CHECK_GT(gpu_count, 0);
     for (int gpu_id = 0; gpu_id < gpu_count; ++gpu_id) {
       available_gpus.insert(gpu_id);
@@ -1089,7 +1089,7 @@ ResultSetPtr Executor::executeWorkUnit(
     if (options.with_dynamic_watchdog && interrupted_ && *error_code == ERR_OUT_OF_TIME) {
       *error_code = ERR_INTERRUPTED;
     }
-    cat.get_dataMgr().freeAllBuffers();
+    cat.getDataMgr().freeAllBuffers();
     if (*error_code == ERR_OVERFLOW_OR_UNDERFLOW) {
       crt_min_byte_width <<= 1;
       continue;
@@ -2624,7 +2624,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
 
 int8_t Executor::warpSize() const {
   CHECK(catalog_);
-  const auto cuda_mgr = catalog_->get_dataMgr().getCudaMgr();
+  const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
   CHECK(cuda_mgr);
   const auto& dev_props = cuda_mgr->getAllDeviceProperties();
   CHECK(!dev_props.empty());
@@ -2633,7 +2633,7 @@ int8_t Executor::warpSize() const {
 
 unsigned Executor::gridSize() const {
   CHECK(catalog_);
-  const auto cuda_mgr = catalog_->get_dataMgr().getCudaMgr();
+  const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
   CHECK(cuda_mgr);
   const auto& dev_props = cuda_mgr->getAllDeviceProperties();
   return grid_size_x_ ? grid_size_x_ : 2 * dev_props.front().numMPs;
@@ -2641,7 +2641,7 @@ unsigned Executor::gridSize() const {
 
 unsigned Executor::blockSize() const {
   CHECK(catalog_);
-  const auto cuda_mgr = catalog_->get_dataMgr().getCudaMgr();
+  const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
   CHECK(cuda_mgr);
   const auto& dev_props = cuda_mgr->getAllDeviceProperties();
   return block_size_x_ ? block_size_x_ : dev_props.front().maxThreadsPerBlock;
@@ -2649,7 +2649,7 @@ unsigned Executor::blockSize() const {
 
 int64_t Executor::deviceCycles(int milliseconds) const {
   CHECK(catalog_);
-  const auto cuda_mgr = catalog_->get_dataMgr().getCudaMgr();
+  const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
   CHECK(cuda_mgr);
   const auto& dev_props = cuda_mgr->getAllDeviceProperties();
   return static_cast<int64_t>(dev_props.front().clockKhz) * milliseconds;

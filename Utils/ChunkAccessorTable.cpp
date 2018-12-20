@@ -60,7 +60,7 @@ ChunkAccessorTable getChunkAccessorTable(const Catalog_Namespace::Catalog& cat,
       // get the chunk
       std::shared_ptr<Chunk_NS::Chunk> chunk =
           Chunk_NS::Chunk::getChunk(cd,
-                                    &cat.get_dataMgr(),
+                                    &cat.getDataMgr(),
                                     chunkKey,
                                     Data_Namespace::CPU_LEVEL,
                                     0,

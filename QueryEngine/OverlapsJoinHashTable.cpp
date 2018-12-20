@@ -219,7 +219,7 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
   }
 #ifdef HAVE_CUDA
   const int device_count = columns_per_device.size();
-  auto& data_mgr = executor_->getCatalog()->get_dataMgr();
+  auto& data_mgr = executor_->getCatalog()->getDataMgr();
   std::vector<std::vector<uint8_t>> host_hll_buffers(device_count);
   for (auto& host_hll_buffer : host_hll_buffers) {
     host_hll_buffer.resize(count_distinct_desc.bitmapPaddedSizeBytes());
@@ -518,7 +518,7 @@ int OverlapsJoinHashTable::initHashTableOnGpu(
   CHECK_EQ(key_component_width, size_t(8));
 #ifdef HAVE_CUDA
   const auto catalog = executor_->getCatalog();
-  auto& data_mgr = catalog->get_dataMgr();
+  auto& data_mgr = catalog->getDataMgr();
   ThrustAllocator allocator(&data_mgr, device_id);
   auto dev_err_buff =
       reinterpret_cast<CUdeviceptr>(allocator.allocateScopedBuffer(sizeof(int)));
@@ -732,7 +732,7 @@ void OverlapsJoinHashTable::computeBucketSizes(
   else {
     // Note that we compute the bucket sizes using only a single GPU
     const int device_id = 0;
-    auto& data_mgr = executor_->getCatalog()->get_dataMgr();
+    auto& data_mgr = executor_->getCatalog()->getDataMgr();
     ThrustAllocator allocator(&data_mgr, device_id);
     auto device_bucket_sizes_gpu =
         transfer_pod_vector_to_gpu(local_bucket_sizes, allocator);

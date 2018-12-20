@@ -622,7 +622,7 @@ InternalTargetValue ResultSet::getVarlenOrderEntry(const int64_t str_ptr,
     cpu_buffer.resize(str_len);
     const auto executor = query_mem_desc_.getExecutor();
     CHECK(executor);
-    auto& data_mgr = executor->catalog_->get_dataMgr();
+    auto& data_mgr = executor->catalog_->getDataMgr();
     copy_from_gpu(&data_mgr,
                   &cpu_buffer[0],
                   static_cast<CUdeviceptr>(str_ptr),
@@ -1208,7 +1208,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
     cpu_buffer.resize(length);
     const auto executor = query_mem_desc_.getExecutor();
     CHECK(executor);
-    auto& data_mgr = executor->catalog_->get_dataMgr();
+    auto& data_mgr = executor->catalog_->getDataMgr();
     copy_from_gpu(&data_mgr,
                   &cpu_buffer[0],
                   static_cast<CUdeviceptr>(varlen_ptr),
@@ -1303,7 +1303,7 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
   auto getDataMgr = [&]() {
     auto executor = query_mem_desc_.getExecutor();
     CHECK(executor);
-    auto& data_mgr = executor->catalog_->get_dataMgr();
+    auto& data_mgr = executor->catalog_->getDataMgr();
     return &data_mgr;
   };
 

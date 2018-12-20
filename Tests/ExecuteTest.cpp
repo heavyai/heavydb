@@ -61,7 +61,7 @@ bool g_keep_test_data{false};
 
 size_t choose_shard_count() {
   CHECK(g_session);
-  const auto cuda_mgr = g_session->get_catalog().get_dataMgr().getCudaMgr();
+  const auto cuda_mgr = g_session->get_catalog().getDataMgr().getCudaMgr();
   const int device_count = cuda_mgr ? cuda_mgr->getDeviceCount() : 0;
   return g_num_leafs * (device_count > 1 ? device_count : 0);
 }
@@ -167,7 +167,7 @@ inline void run_ddl_statement(const std::string& create_table_stmt) {
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
   return device_type == ExecutorDeviceType::GPU &&
-         !g_session->get_catalog().get_dataMgr().gpusPresent();
+         !g_session->get_catalog().getDataMgr().gpusPresent();
 #else
   return device_type == ExecutorDeviceType::GPU;
 #endif

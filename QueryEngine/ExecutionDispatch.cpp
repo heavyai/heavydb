@@ -128,7 +128,7 @@ const int8_t* Executor::ExecutionDispatch::getColumn(
     result = columnarized_table_cache_[table_id][frag_id].get();
   }
   CHECK_GE(col_id, 0);
-  return getColumn(result, col_id, &cat_.get_dataMgr(), memory_level, device_id);
+  return getColumn(result, col_id, &cat_.getDataMgr(), memory_level, device_id);
 }
 
 namespace {
@@ -296,7 +296,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                                fetch_result.num_rows,
                                                fetch_result.frag_offsets,
                                                getFragmentStride(frag_list),
-                                               &cat_.get_dataMgr(),
+                                               &cat_.getDataMgr(),
                                                chosen_device_id,
                                                start_rowid,
                                                ra_exe_unit_.input_descs.size(),
@@ -314,7 +314,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                             fetch_result.num_rows,
                                             fetch_result.frag_offsets,
                                             getFragmentStride(frag_list),
-                                            &cat_.get_dataMgr(),
+                                            &cat_.getDataMgr(),
                                             chosen_device_id,
                                             ra_exe_unit_.scan_limit,
                                             start_rowid,
@@ -386,7 +386,7 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
           ra_exe_unit_,
           co_cpu,
           options,
-          cat_.get_dataMgr().getCudaMgr(),
+          cat_.getDataMgr().getCudaMgr(),
           render_info_ && render_info_->isPotentialInSituRender() ? false : true,
           row_set_mem_owner_,
           max_groups_buffer_entry_guess,
@@ -406,7 +406,7 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      ra_exe_unit_,
                                      co_cpu,
                                      options,
-                                     cat_.get_dataMgr().getCudaMgr(),
+                                     cat_.getDataMgr().getCudaMgr(),
                                      false,
                                      row_set_mem_owner_,
                                      max_groups_buffer_entry_guess,
@@ -438,7 +438,7 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
           ra_exe_unit_,
           co_gpu,
           options,
-          cat_.get_dataMgr().getCudaMgr(),
+          cat_.getDataMgr().getCudaMgr(),
           render_info_ && render_info_->isPotentialInSituRender() ? false : true,
           row_set_mem_owner_,
           max_groups_buffer_entry_guess,
@@ -458,7 +458,7 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      ra_exe_unit_,
                                      co_gpu,
                                      options,
-                                     cat_.get_dataMgr().getCudaMgr(),
+                                     cat_.getDataMgr().getCudaMgr(),
                                      false,
                                      row_set_mem_owner_,
                                      max_groups_buffer_entry_guess,
@@ -560,7 +560,7 @@ const int8_t* Executor::ExecutionDispatch::getScanColumn(
     OOM_TRACE_PUSH(+": chunk key [" + showChunk(chunk_key) + "]");
     chunk = Chunk_NS::Chunk::getChunk(
         cd,
-        &cat_.get_dataMgr(),
+        &cat_.getDataMgr(),
         chunk_key,
         memory_level,
         memory_level == Data_Namespace::CPU_LEVEL ? 0 : device_id,
@@ -578,7 +578,7 @@ const int8_t* Executor::ExecutionDispatch::getScanColumn(
       return reinterpret_cast<int8_t*>(&chunk_iter);
     } else {
       CHECK_EQ(Data_Namespace::GPU_LEVEL, memory_level);
-      auto& data_mgr = cat_.get_dataMgr();
+      auto& data_mgr = cat_.getDataMgr();
       auto chunk_iter_gpu =
           alloc_gpu_mem(&data_mgr, sizeof(ChunkIter), device_id, nullptr);
       copy_to_gpu(&data_mgr, chunk_iter_gpu, &chunk_iter, sizeof(ChunkIter), device_id);
@@ -640,7 +640,7 @@ const int8_t* Executor::ExecutionDispatch::getAllScanColumnFrags(
       table_column = column_it->second.get();
     }
   }
-  return getColumn(table_column, 0, &cat_.get_dataMgr(), memory_level, device_id);
+  return getColumn(table_column, 0, &cat_.getDataMgr(), memory_level, device_id);
 }
 
 const int8_t* Executor::ExecutionDispatch::getColumn(
@@ -761,7 +761,7 @@ std::pair<const int8_t*, size_t> Executor::ExecutionDispatch::getColumnFragment(
     OOM_TRACE_PUSH(+": chunk key [" + showChunk(chunk_key) + "]");
     const auto chunk = Chunk_NS::Chunk::getChunk(
         cd,
-        &catalog.get_dataMgr(),
+        &catalog.getDataMgr(),
         chunk_key,
         effective_mem_lvl,
         effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id,
@@ -795,7 +795,7 @@ std::pair<const int8_t*, size_t> Executor::ExecutionDispatch::getColumnFragment(
     }
     col_buff = getColumn(col_frag,
                          hash_col.get_column_id(),
-                         &catalog.get_dataMgr(),
+                         &catalog.getDataMgr(),
                          effective_mem_lvl,
                          effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id);
   }

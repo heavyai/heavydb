@@ -295,7 +295,7 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
   }
 #ifdef HAVE_CUDA
   const int device_count = columns_per_device.size();
-  auto& data_mgr = executor_->getCatalog()->get_dataMgr();
+  auto& data_mgr = executor_->getCatalog()->getDataMgr();
   std::vector<std::vector<uint8_t>> host_hll_buffers(device_count);
   for (auto& host_hll_buffer : host_hll_buffers) {
     host_hll_buffer.resize(count_distinct_desc.bitmapPaddedSizeBytes());
@@ -377,7 +377,7 @@ JoinColumn BaselineJoinHashTable::fetchColumn(
   size_t elem_count = 0;
   const size_t elem_width = inner_col->get_type_info().get_size();
   const auto& catalog = *executor_->getCatalog();
-  auto& data_mgr = catalog.get_dataMgr();
+  auto& data_mgr = catalog.getDataMgr();
   ThrustAllocator dev_buff_owner(&data_mgr, device_id);
   if (has_multi_frag) {
     try {
@@ -754,7 +754,7 @@ int BaselineJoinHashTable::initHashTableOnGpu(
   int err = 0;
 #ifdef HAVE_CUDA
   const auto catalog = executor_->getCatalog();
-  auto& data_mgr = catalog->get_dataMgr();
+  auto& data_mgr = catalog->getDataMgr();
   ThrustAllocator allocator(&data_mgr, device_id);
   auto dev_err_buff =
       reinterpret_cast<CUdeviceptr>(allocator.allocateScopedBuffer(sizeof(int)));
@@ -896,7 +896,7 @@ int BaselineJoinHashTable::initHashTableForDevice(
   int err = 0;
 #ifdef HAVE_CUDA
   const auto catalog = executor_->getCatalog();
-  auto& data_mgr = catalog->get_dataMgr();
+  auto& data_mgr = catalog->getDataMgr();
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
     const auto entry_size =
         (key_component_count +
@@ -1160,7 +1160,7 @@ void BaselineJoinHashTable::freeHashBufferMemory() {
 void BaselineJoinHashTable::freeHashBufferGpuMemory() {
 #ifdef HAVE_CUDA
   const auto& catalog = *executor_->getCatalog();
-  auto& data_mgr = catalog.get_dataMgr();
+  auto& data_mgr = catalog.getDataMgr();
   for (auto& buf : gpu_hash_table_buff_) {
     if (buf) {
       free_gpu_abstract_buffer(&data_mgr, buf);

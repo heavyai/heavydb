@@ -2720,7 +2720,7 @@ void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session_in
     auto upddelLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
         catalog, td->tableName, LockType::UpdateDeleteLock);
     catalog.optimizeTable(td);
-    catalog.get_dataMgr().checkpoint(catalog.get_currentDB().dbId, td->tableId);
+    catalog.getDataMgr().checkpoint(catalog.get_currentDB().dbId, td->tableId);
   }
 }
 

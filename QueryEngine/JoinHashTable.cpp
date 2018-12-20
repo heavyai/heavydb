@@ -212,7 +212,7 @@ bool shard_count_less_or_equal_device_count(const int inner_table_id,
                                             const Executor* executor) {
   const auto inner_table_info = executor->getTableInfo(inner_table_id);
   std::unordered_set<int> device_holding_fragments;
-  auto cuda_mgr = executor->getCatalog()->get_dataMgr().getCudaMgr();
+  auto cuda_mgr = executor->getCatalog()->getDataMgr().getCudaMgr();
   const int device_count = cuda_mgr ? cuda_mgr->getDeviceCount() : 1;
   for (const auto& fragment : inner_table_info.fragments) {
     if (fragment.shard != -1) {
@@ -519,7 +519,7 @@ std::pair<const int8_t*, size_t> JoinHashTable::fetchFragments(
   static std::mutex fragment_fetch_mutex;
   const bool has_multi_frag = fragment_info.size() > 1;
   const auto& catalog = *executor_->getCatalog();
-  auto& data_mgr = catalog.get_dataMgr();
+  auto& data_mgr = catalog.getDataMgr();
   const auto& first_frag = fragment_info.front();
   const int8_t* col_buff = nullptr;
   size_t elem_count = 0;
@@ -582,7 +582,7 @@ void JoinHashTable::reifyOneToOneForDevice(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id) {
   const auto& catalog = *executor_->getCatalog();
-  auto& data_mgr = catalog.get_dataMgr();
+  auto& data_mgr = catalog.getDataMgr();
   const auto cols = get_cols(qual_bin_oper_.get(), catalog, executor_->temporary_tables_);
   const auto inner_col = cols.first;
   CHECK(inner_col);
@@ -630,7 +630,7 @@ void JoinHashTable::reifyOneToManyForDevice(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id) {
   const auto& catalog = *executor_->getCatalog();
-  auto& data_mgr = catalog.get_dataMgr();
+  auto& data_mgr = catalog.getDataMgr();
   const auto cols = get_cols(qual_bin_oper_.get(), catalog, executor_->temporary_tables_);
   const auto inner_col = cols.first;
   CHECK(inner_col);
@@ -856,7 +856,7 @@ void JoinHashTable::initHashTableForDevice(
   // needed once the join hash table has been built on the CPU.
   const auto catalog = executor_->getCatalog();
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
-    auto& data_mgr = catalog->get_dataMgr();
+    auto& data_mgr = catalog->getDataMgr();
     if (shard_count) {
       const auto shards_per_device = (shard_count + device_count_ - 1) / device_count_;
       CHECK_GT(shards_per_device, 0);
@@ -898,7 +898,7 @@ void JoinHashTable::initHashTableForDevice(
     if (memory_level_ == Data_Namespace::GPU_LEVEL && !err) {
 #ifdef HAVE_CUDA
       CHECK(ti.is_string());
-      auto& data_mgr = catalog->get_dataMgr();
+      auto& data_mgr = catalog->getDataMgr();
       copy_to_gpu(
           &data_mgr,
           reinterpret_cast<CUdeviceptr>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
@@ -912,7 +912,7 @@ void JoinHashTable::initHashTableForDevice(
   } else {
 #ifdef HAVE_CUDA
     CHECK_EQ(Data_Namespace::GPU_LEVEL, effective_memory_level);
-    auto& data_mgr = catalog->get_dataMgr();
+    auto& data_mgr = catalog->getDataMgr();
     gpu_hash_table_err_buff_[device_id] =
         alloc_gpu_abstract_buffer(&data_mgr, sizeof(int), device_id);
     auto dev_err_buff = reinterpret_cast<CUdeviceptr>(
@@ -1011,7 +1011,7 @@ void JoinHashTable::initOneToManyHashTable(
   CHECK(inner_col);
 #ifdef HAVE_CUDA
   const auto& ti = inner_col->get_type_info();
-  auto& data_mgr = executor_->getCatalog()->get_dataMgr();
+  auto& data_mgr = executor_->getCatalog()->getDataMgr();
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
     const size_t total_count = 2 * hash_entry_count + num_elements;
     OOM_TRACE_PUSH(+": total_count " + std::to_string(total_count));
@@ -1433,7 +1433,7 @@ void JoinHashTable::freeHashBufferMemory() {
 void JoinHashTable::freeHashBufferGpuMemory() {
 #ifdef HAVE_CUDA
   const auto& catalog = *executor_->getCatalog();
-  auto& data_mgr = catalog.get_dataMgr();
+  auto& data_mgr = catalog.getDataMgr();
   for (auto& buf : gpu_hash_table_buff_) {
     if (buf) {
       free_gpu_abstract_buffer(&data_mgr, buf);

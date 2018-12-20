@@ -114,7 +114,7 @@ static int get_chunks(const Catalog_Namespace::Catalog* catalog,
         ChunkKey chunk_key{
             catalog->get_currentDB().dbId, td->tableId, cid, fragment.fragmentId};
         auto chunk = Chunk_NS::Chunk::getChunk(cd,
-                                               &catalog->get_dataMgr(),
+                                               &catalog->getDataMgr(),
                                                chunk_key,
                                                memory_level,
                                                0,
@@ -544,7 +544,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
   ChunkKey chunk_key{
       catalog->get_currentDB().dbId, td->tableId, cd->columnId, fragment.fragmentId};
   auto chunk = Chunk_NS::Chunk::getChunk(cd,
-                                         &catalog->get_dataMgr(),
+                                         &catalog->getDataMgr(),
                                          chunk_key,
                                          Data_Namespace::CPU_LEVEL,
                                          0,
@@ -888,7 +888,7 @@ auto InsertOrderFragmenter::getChunksForAllColumns(
         ChunkKey chunk_key{
             catalog_->get_currentDB().dbId, td->tableId, col_id, fragment.fragmentId};
         auto chunk = Chunk_NS::Chunk::getChunk(cd,
-                                               &catalog_->get_dataMgr(),
+                                               &catalog_->getDataMgr(),
                                                chunk_key,
                                                memory_level,
                                                0,
@@ -1207,7 +1207,7 @@ void UpdelRoll::commitUpdate() {
   // flush gpu dirty chunks if update was not on gpu
   if (memoryLevel != Data_Namespace::MemoryLevel::GPU_LEVEL) {
     for (const auto& chunkey : dirtyChunkeys) {
-      catalog->get_dataMgr().deleteChunksWithPrefix(
+      catalog->getDataMgr().deleteChunksWithPrefix(
           chunkey, Data_Namespace::MemoryLevel::GPU_LEVEL);
     }
   }
@@ -1221,7 +1221,7 @@ void UpdelRoll::cancelUpdate() {
   CHECK(td);
   if (td->persistenceLevel != memoryLevel) {
     for (auto dit : dirtyChunks) {
-      catalog->get_dataMgr().free(dit.first->get_buffer());
+      catalog->getDataMgr().free(dit.first->get_buffer());
       dit.first->set_buffer(nullptr);
     }
   }

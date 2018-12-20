@@ -772,7 +772,7 @@ void ResultSet::sortPermutation(
 
 void ResultSet::radixSortOnGpu(
     const std::list<Analyzer::OrderEntry>& order_entries) const {
-  auto data_mgr = &executor_->catalog_->get_dataMgr();
+  auto data_mgr = &executor_->catalog_->getDataMgr();
   const int device_id{0};
   CudaAllocator cuda_allocator(data_mgr, device_id);
   std::vector<int64_t*> group_by_buffers(1);

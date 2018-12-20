@@ -177,7 +177,7 @@ bool ResultSet::canUseFastBaselineSort(
 Data_Namespace::DataMgr* ResultSet::getDataManager() const {
   if (executor_) {
     CHECK(executor_->catalog_);
-    return &executor_->catalog_->get_dataMgr();
+    return &executor_->catalog_->getDataMgr();
   }
   return nullptr;
 }

@@ -4509,7 +4509,7 @@ void Catalog::checkpoint(const int logicalTableId) const {
   const auto td = getMetadataForTable(logicalTableId);
   const auto shards = getPhysicalTablesDescriptors(td);
   for (const auto shard : shards) {
-    get_dataMgr().checkpoint(get_currentDB().dbId, shard->tableId);
+    getDataMgr().checkpoint(get_currentDB().dbId, shard->tableId);
   }
 }
 
@@ -4716,7 +4716,7 @@ void Catalog::optimizeTable(const TableDescriptor* td) {
       updel_roll.memoryLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
       const auto cd = getMetadataForColumn(td->tableId, cm.first[2]);
       const auto chunk = Chunk_NS::Chunk::getChunk(cd,
-                                                   &get_dataMgr(),
+                                                   &getDataMgr(),
                                                    cm.first,
                                                    updel_roll.memoryLevel,
                                                    0,

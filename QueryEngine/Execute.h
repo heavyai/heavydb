@@ -699,7 +699,7 @@ class Executor {
 
   bool isArchPascalOrLater(const ExecutorDeviceType dt) const {
     return dt == ExecutorDeviceType::GPU &&
-           catalog_->get_dataMgr().getCudaMgr()->isArchPascalOrLater();
+           catalog_->getDataMgr().getCudaMgr()->isArchPascalOrLater();
   }
 
   enum class JoinImplType { Invalid, Loop, HashOneToOne, HashOneToMany };
