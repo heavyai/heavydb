@@ -775,7 +775,7 @@ void ResultSet::radixSortOnGpu(
   auto data_mgr = &executor_->catalog_->get_dataMgr();
   const int device_id{0};
   CudaAllocator cuda_allocator(data_mgr, device_id);
-  std::vector<int64_t*> group_by_buffers(executor_->blockSize());
+  std::vector<int64_t*> group_by_buffers(1);
   group_by_buffers[0] = reinterpret_cast<int64_t*>(storage_->getUnderlyingBuffer());
   auto dev_group_by_buffers = create_dev_group_by_buffers(cuda_allocator,
                                                           group_by_buffers,
