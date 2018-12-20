@@ -181,7 +181,7 @@ download_make_install ${HTTP_DEPS}/xml-security-c-2.0.0.tar.gz "" "--without-xal
 #xmltooling and opensaml needs --with-boost
 VERS=3.0.2-nolog4shib
 wget --continue ${HTTP_DEPS}/xmltooling-$VERS.tar.gz
-tar xvf xmltooling-$VERS
+tar xvf xmltooling-$VERS.tar.gz
 pushd xmltooling-$VERS
 ./configure --prefix=$PREFIX --with-boost=$PREFIX
 make -j $(nproc)
