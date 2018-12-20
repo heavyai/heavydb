@@ -60,12 +60,12 @@ sudo apt install -y \
     flex-old \
     libxmlsec1-dev
 
-# Install gcc7
+# Install gcc6
 add-apt-repository ppa:ubuntu-toolchain-r/test -y
 apt update && apt upgrade -y
-apt install g++-7 -y
-update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 60 \
-                    --slave /usr/bin/g++ g++ /usr/bin/g++-7
+apt install g++-6 -y
+update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-6 60 \
+                    --slave /usr/bin/g++ g++ /usr/bin/g++-6
 update-alternatives --config gcc
 
 # Needed to find xmltooling and xml_security_c
