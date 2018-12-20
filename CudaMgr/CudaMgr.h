@@ -18,15 +18,35 @@
 #define CUDAMGR_H
 
 #include <cstdlib>
+#include <mutex>
 #include <string>
 #include <vector>
 #ifdef HAVE_CUDA
 #include <cuda.h>
+#include <cuda_runtime.h>
 #else
 #include "../Shared/nocuda.h"
 #endif  // HAVE_CUDA
 
 namespace CudaMgr_Namespace {
+
+#ifdef HAVE_CUDA
+class CudaErrorException : public std::runtime_error {
+ public:
+  CudaErrorException(CUresult status)
+      : std::runtime_error(processStatus(status)), status_(status) {}
+
+  CUresult getStatus() const { return status_; }
+
+ private:
+  CUresult status_;
+  std::string processStatus(CUresult status) {
+    const char* errorString{nullptr};
+    cuGetErrorString(status, &errorString);
+    return errorString ? std::string(errorString) : "Unknown error";
+  }
+};
+#endif
 
 struct DeviceProperties {
   CUdevice device;
@@ -113,15 +133,26 @@ class CudaMgr {
 
   const int getGpuDriverVersion() { return gpu_driver_version; }
 
-  void synchronizeDevices();
+  void synchronizeDevices() const;
+
+#ifdef HAVE_CUDA
+  void loadGpuModuleData(CUmodule* module,
+                         const void* image,
+                         unsigned int num_options,
+                         CUjit_option* options,
+                         void** option_values,
+                         const int device_id) const;
+  void unloadGpuModuleData(CUmodule* module, const int device_id) const;
+#endif
 
  private:
   void fillDeviceProperties();
   void createDeviceContexts();
-  void checkError(CUresult cuResult);
+  void checkError(CUresult cuResult) const;
 
   int deviceCount_;
   int gpu_driver_version;
+  mutable std::mutex device_cleanup_mutex_;
 
 #ifdef HAVE_CUDA
   int startGpu_;

@@ -51,17 +51,27 @@ CudaMgr::CudaMgr(const int, const int) {
 CudaMgr::~CudaMgr() {
 #ifdef HAVE_CUDA
   try {
+    // We don't want to remove the cudaMgr before all other processes have cleaned up.
+    // This should be enforced by the lifetime policies, but take this lock to be safe.
+    std::lock_guard<std::mutex> gpuLock(device_cleanup_mutex_);
+
     synchronizeDevices();
     for (int d = 0; d < deviceCount_; ++d) {
       checkError(cuCtxDestroy(deviceContexts[d]));
     }
+  } catch (const CudaErrorException& e) {
+    if (e.getStatus() == CUDA_ERROR_DEINITIALIZED) {
+      // TODO(adb / asuhan): Verify cuModuleUnload removes the context
+      return;
+    }
+    LOG(ERROR) << "CUDA Error: " << e.what();
   } catch (const std::runtime_error& e) {
     LOG(ERROR) << "CUDA Error: " << e.what();
   }
 #endif
 }
 
-void CudaMgr::synchronizeDevices() {
+void CudaMgr::synchronizeDevices() const {
 #ifdef HAVE_CUDA
   for (int d = 0; d < deviceCount_; ++d) {
     setContext(d);
@@ -69,6 +79,30 @@ void CudaMgr::synchronizeDevices() {
   }
 #endif
 }
+
+#ifdef HAVE_CUDA
+void CudaMgr::loadGpuModuleData(CUmodule* module,
+                                const void* image,
+                                unsigned int num_options,
+                                CUjit_option* options,
+                                void** option_vals,
+                                const int device_id) const {
+  setContext(device_id);
+  checkError(cuModuleLoadDataEx(module, image, num_options, options, option_vals));
+}
+
+void CudaMgr::unloadGpuModuleData(CUmodule* module, const int device_id) const {
+  std::lock_guard<std::mutex> gpuLock(device_cleanup_mutex_);
+  CHECK(module);
+
+  setContext(device_id);
+  try {
+    checkError(cuModuleUnload(*module));
+  } catch (const std::runtime_error& e) {
+    LOG(ERROR) << "CUDA Error: " << e.what();
+  }
+}
+#endif
 
 void CudaMgr::fillDeviceProperties() {
 #ifdef HAVE_CUDA
@@ -242,6 +276,8 @@ void CudaMgr::freePinnedHostMem(int8_t* hostPtr) {
 
 void CudaMgr::freeDeviceMem(int8_t* devicePtr) {
 #ifdef HAVE_CUDA
+  std::lock_guard<std::mutex> gpuLock(device_cleanup_mutex_);
+
   checkError(cuMemFree(reinterpret_cast<CUdeviceptr>(devicePtr)));
 #endif
 }
@@ -306,13 +342,10 @@ void CudaMgr::setDeviceMem(int8_t* devicePtr,
 #endif
 }
 
-void CudaMgr::checkError(CUresult status) {
+void CudaMgr::checkError(CUresult status) const {
 #ifdef HAVE_CUDA
   if (status != CUDA_SUCCESS) {
-    const char* errorString{nullptr};
-    cuGetErrorString(status, &errorString);
-    // should clean up here - delete any contexts, etc.
-    throw std::runtime_error(errorString ? errorString : "Unknown error");
+    throw CudaErrorException(status);
   }
 #endif
 }

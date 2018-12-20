@@ -35,6 +35,13 @@ GpuCudaBufferMgr::~GpuCudaBufferMgr() {
   try {
     cudaMgr_->synchronizeDevices();
     freeAllMem();
+#ifdef HAVE_CUDA
+  } catch (const CudaMgr_Namespace::CudaErrorException& e) {
+    if (e.getStatus() == CUDA_ERROR_DEINITIALIZED) {
+      // TODO(adb / asuhan): Verify cuModuleUnload removes the context
+      return;
+    }
+#endif
   } catch (const std::runtime_error& e) {
     LOG(ERROR) << "CUDA Error: " << e.what();
   }
