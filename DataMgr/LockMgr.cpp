@@ -78,7 +78,7 @@ ChunkKey getTableChunkKey(const Catalog_Namespace::Catalog& cat,
 std::string parse_to_ra(const Catalog_Namespace::Catalog& cat,
                         const std::string& query_str,
                         const Catalog_Namespace::SessionInfo& session_info) {
-  return cat.get_calciteMgr()
+  return cat.getCalciteMgr()
       .process(session_info, query_str, {}, false, false)
       .plan_result;
 }

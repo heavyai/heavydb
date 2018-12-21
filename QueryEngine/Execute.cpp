@@ -2322,7 +2322,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   }
   size_t col_idx = 0;
   Fragmenter_Namespace::InsertData insert_data;
-  insert_data.databaseId = cat.get_currentDB().dbId;
+  insert_data.databaseId = cat.getCurrentDB().dbId;
   insert_data.tableId = table_id;
   int64_t int_col_val{0};
   for (auto target_entry : targets) {

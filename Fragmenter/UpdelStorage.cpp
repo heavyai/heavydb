@@ -112,7 +112,7 @@ static int get_chunks(const Catalog_Namespace::Catalog* catalog,
         auto chunk_meta_it = fragment.getChunkMetadataMapPhysical().find(cid);
         CHECK(chunk_meta_it != fragment.getChunkMetadataMapPhysical().end());
         ChunkKey chunk_key{
-            catalog->get_currentDB().dbId, td->tableId, cid, fragment.fragmentId};
+            catalog->getCurrentDB().dbId, td->tableId, cid, fragment.fragmentId};
         auto chunk = Chunk_NS::Chunk::getChunk(cd,
                                                &catalog->getDataMgr(),
                                                chunk_key,
@@ -411,7 +411,7 @@ void InsertOrderFragmenter::updateColumns(
   static boost_variant_accessor<int64_t> OFFSET_VALUE__ACCESSOR;
 
   updelRoll.dirtyChunks[deletedChunk.get()] = deletedChunk;
-  ChunkKey chunkey{updelRoll.catalog->get_currentDB().dbId,
+  ChunkKey chunkey{updelRoll.catalog->getCurrentDB().dbId,
                    deletedChunk->get_column_desc()->tableId,
                    deletedChunk->get_column_desc()->columnId,
                    fragment.fragmentId};
@@ -482,7 +482,7 @@ void InsertOrderFragmenter::updateColumns(
   }
 
   Fragmenter_Namespace::InsertData insert_data;
-  insert_data.databaseId = catalog->get_currentDB().dbId;
+  insert_data.databaseId = catalog->getCurrentDB().dbId;
   insert_data.tableId = td->tableId;
 
   for (size_t i = 0; i < chunkConverters.size(); i++) {
@@ -542,7 +542,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
   auto chunk_meta_it = fragment.getChunkMetadataMapPhysical().find(cd->columnId);
   CHECK(chunk_meta_it != fragment.getChunkMetadataMapPhysical().end());
   ChunkKey chunk_key{
-      catalog->get_currentDB().dbId, td->tableId, cd->columnId, fragment.fragmentId};
+      catalog->getCurrentDB().dbId, td->tableId, cd->columnId, fragment.fragmentId};
   auto chunk = Chunk_NS::Chunk::getChunk(cd,
                                          &catalog->getDataMgr(),
                                          chunk_key,
@@ -570,7 +570,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
       updel_roll.dirtyChunks.emplace(chunk.get(), chunk);
     }
 
-    ChunkKey chunkey{updel_roll.catalog->get_currentDB().dbId,
+    ChunkKey chunkey{updel_roll.catalog->getCurrentDB().dbId,
                      cd->tableId,
                      cd->columnId,
                      fragment.fragmentId};
@@ -886,7 +886,7 @@ auto InsertOrderFragmenter::getChunksForAllColumns(
         auto chunk_meta_it = fragment.getChunkMetadataMapPhysical().find(col_id);
         CHECK(chunk_meta_it != fragment.getChunkMetadataMapPhysical().end());
         ChunkKey chunk_key{
-            catalog_->get_currentDB().dbId, td->tableId, col_id, fragment.fragmentId};
+            catalog_->getCurrentDB().dbId, td->tableId, col_id, fragment.fragmentId};
         auto chunk = Chunk_NS::Chunk::getChunk(cd,
                                                &catalog_->getDataMgr(),
                                                chunk_key,

@@ -142,7 +142,7 @@ BaselineJoinHashTable::CompositeKeyInfo BaselineJoinHashTable::getCompositeKeyIn
     const auto outer_col = inner_outer_pair.second;
     const auto& inner_ti = inner_col->get_type_info();
     const auto& outer_ti = outer_col->get_type_info();
-    ChunkKey cache_key_chunks_for_column{executor_->getCatalog()->get_currentDB().dbId,
+    ChunkKey cache_key_chunks_for_column{executor_->getCatalog()->getCurrentDB().dbId,
                                          inner_col->get_table_id(),
                                          inner_col->get_column_id()};
     if (inner_ti.is_string()) {

@@ -268,7 +268,7 @@ void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info
     }
 
     DBObjectKey key;
-    key.dbId = catalog.get_currentDB().dbId;
+    key.dbId = catalog.getCurrentDB().dbId;
     key.permissionType = tableMeta->isView ? DBObjectType::ViewDBObjectType
                                            : DBObjectType::TableDBObjectType;
     key.objectId = tableMeta->tableId;
@@ -332,7 +332,7 @@ std::vector<TCompletionHint> Calcite::getCompletionHints(
   auto& cat = session_info.getCatalog();
   const auto user = session_info.get_currentUser().userName;
   const auto session = session_info.get_session_id();
-  const auto catalog = cat.get_currentDB().dbName;
+  const auto catalog = cat.getCurrentDB().dbName;
   auto client = get_client(remote_calcite_port_);
   client.first->getCompletionHints(
       hints, user, session, catalog, visible_tables, sql_string, cursor);
@@ -371,7 +371,7 @@ TPlanResult Calcite::processImpl(
     // preprend session prefix, if present
     session = session_prefix_ + "/" + session;
   }
-  std::string catalog = cat.get_currentDB().dbName;
+  std::string catalog = cat.getCurrentDB().dbName;
 
   LOG(INFO) << "User " << user << " catalog " << catalog << " sql '" << sql_string << "'";
   if (server_available_) {

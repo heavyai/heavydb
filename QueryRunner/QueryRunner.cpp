@@ -70,7 +70,7 @@ Planner::RootPlan* parse_plan_calcite(
   }
 
   const auto& cat = session->getCatalog();
-  auto& calcite_mgr = cat.get_calciteMgr();
+  auto& calcite_mgr = cat.getCalciteMgr();
   const Catalog_Namespace::SessionInfo* sess = session.get();
   const auto query_ra =
       calcite_mgr.process(*sess,
@@ -180,7 +180,7 @@ Catalog_Namespace::SessionInfo* get_session(
 
   auto cat = std::make_shared<Catalog_Namespace::Catalog>(
       base_path.string(), db, dataMgr, string_servers, g_calcite, create_db);
-  Catalog_Namespace::Catalog::set(cat->get_currentDB().dbName, cat);
+  Catalog_Namespace::Catalog::set(cat->getCurrentDB().dbName, cat);
   Catalog_Namespace::SessionInfo* session =
       new Catalog_Namespace::SessionInfo(cat, user, ExecutorDeviceType::GPU, "");
 
@@ -232,7 +232,7 @@ ExecutionResult run_select_query(
   }
 
   const auto& cat = session->getCatalog();
-  auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
+  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
   ExecutionOptions eo = {g_enable_columnar_output,
@@ -246,7 +246,7 @@ ExecutionResult run_select_query(
                          10000,
                          false,
                          false};
-  auto& calcite_mgr = cat.get_calciteMgr();
+  auto& calcite_mgr = cat.getCalciteMgr();
   const auto query_ra =
       calcite_mgr.process(*session, pg_shim(query_str), {}, true, false).plan_result;
   RelAlgExecutor ra_executor(executor.get(), cat);
@@ -262,7 +262,7 @@ ExecutionResult run_select_query_with_filter_push_down(
     const bool just_explain,
     const bool with_filter_push_down) {
   const auto& cat = session->getCatalog();
-  auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
+  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
   ExecutionOptions eo = {g_enable_columnar_output,
@@ -276,7 +276,7 @@ ExecutionResult run_select_query_with_filter_push_down(
                          10000,
                          with_filter_push_down,
                          false};
-  auto& calcite_mgr = cat.get_calciteMgr();
+  auto& calcite_mgr = cat.getCalciteMgr();
   const auto query_ra =
       calcite_mgr.process(*session, pg_shim(query_str), {}, true, false).plan_result;
   RelAlgExecutor ra_executor(executor.get(), cat);
@@ -371,7 +371,7 @@ std::shared_ptr<ResultSet> run_multiple_agg(
   }
 
   const auto& cat = session->getCatalog();
-  auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
+  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
 
   auto plan = std::unique_ptr<Planner::RootPlan>(parse_plan(query_str, session));
 

@@ -2336,14 +2336,14 @@ std::shared_ptr<ResultSet> getResultRows(const Catalog_Namespace::SessionInfo& s
                                          std::vector<TargetMetaInfo>& targets) {
   auto& catalog = session.getCatalog();
 
-  auto executor = Executor::getExecutor(catalog.get_currentDB().dbId);
+  auto executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
 
 #ifdef HAVE_CUDA
   const auto device_type = session.get_executor_device_type();
 #else
   const auto device_type = ExecutorDeviceType::CPU;
 #endif  // HAVE_CUDA
-  auto& calcite_mgr = catalog.get_calciteMgr();
+  auto& calcite_mgr = catalog.getCalciteMgr();
 
   const auto query_ra =
       calcite_mgr.process(session, pg_shim(select_stmt), {}, true, false).plan_result;
@@ -2583,7 +2583,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
   try {
     Fragmenter_Namespace::InsertData insert_data;
-    insert_data.databaseId = catalog.get_currentDB().dbId;
+    insert_data.databaseId = catalog.getCurrentDB().dbId;
     CHECK(created_td);
     insert_data.tableId = created_td->tableId;
 
@@ -2594,7 +2594,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
     }
     // get CheckpointLock+UpdateDeleteLock locks on the table before trying to create its
     // 1st fragment
-    ChunkKey chunkKey = {catalog.get_currentDB().dbId, created_td->tableId};
+    ChunkKey chunkKey = {catalog.getCurrentDB().dbId, created_td->tableId};
     mapd_unique_lock<mapd_shared_mutex> chkptlLock(
         *Lock_Namespace::LockMgr<mapd_shared_mutex, ChunkKey>::getMutex(
             Lock_Namespace::LockType::CheckpointLock, chunkKey));
@@ -2720,7 +2720,7 @@ void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session_in
     auto upddelLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
         catalog, td->tableName, LockType::UpdateDeleteLock);
     catalog.optimizeTable(td);
-    catalog.getDataMgr().checkpoint(catalog.get_currentDB().dbId, td->tableId);
+    catalog.getDataMgr().checkpoint(catalog.getCurrentDB().dbId, td->tableId);
   }
 }
 
@@ -4022,8 +4022,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     } else {
       file_name = boost::filesystem::path(*file_path).filename().string();
     }
-    *file_path =
-        catalog.get_basePath() + "/mapd_export/" + session.get_session_id() + "/";
+    *file_path = catalog.getBasePath() + "/mapd_export/" + session.get_session_id() + "/";
     if (!boost::filesystem::exists(*file_path)) {
       if (!boost::filesystem::create_directories(*file_path)) {
         throw std::runtime_error("Directory " + *file_path + " cannot be created.");
@@ -4199,7 +4198,7 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   const auto query_after_shim = pg_shim(select_query_);
 
   // this now also ensures that access permissions are checked
-  catalog.get_calciteMgr().process(session, query_after_shim, {}, true, false);
+  catalog.getCalciteMgr().process(session, query_after_shim, {}, true, false);
   TableDescriptor td;
   td.tableName = view_name_;
   td.userId = session.get_currentUser().userId;

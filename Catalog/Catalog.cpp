@@ -1155,8 +1155,8 @@ bool SysCatalog::getMetadataForDB(const string& name, DBMetadata& db) {
 // Note (max): I wonder why this one is necessary
 void SysCatalog::grantDefaultPrivilegesToRole_unsafe(const std::string& name,
                                                      bool issuper) {
-  DBObject dbObject(get_currentDB().dbName, DatabaseDBObjectType);
-  auto* catalog = Catalog::get(get_currentDB().dbName).get();
+  DBObject dbObject(getCurrentDB().dbName, DatabaseDBObjectType);
+  auto* catalog = Catalog::get(getCurrentDB().dbName).get();
   CHECK(catalog);
   dbObject.loadKey(*catalog);
 
@@ -1414,7 +1414,7 @@ void SysCatalog::createRole_unsafe(const std::string& roleName,
 
   // NOTE (max): Why create an empty privileges record for a role?
   /* grant none privileges to this role and add it to sqlite DB */
-  DBObject dbObject(get_currentDB().dbName, DatabaseDBObjectType);
+  DBObject dbObject(getCurrentDB().dbName, DatabaseDBObjectType);
   DBObjectKey objKey;
   // 0 is an id that does not exist
   objKey.dbId = 0;
@@ -1514,7 +1514,7 @@ void SysCatalog::updateObjectDescriptorMap(const std::string& roleName,
   auto privs = object.getPrivileges();
   sys_write_lock write_lock(this);
   auto range = objectDescriptorMap_.equal_range(
-      std::to_string(cat.get_currentDB().dbId) + ":" +
+      std::to_string(cat.getCurrentDB().dbId) + ":" +
       std::to_string(object.getObjectKey().permissionType) + ":" +
       std::to_string(object.getObjectKey().objectId));
   for (auto d = range.first; d != range.second; ++d) {
@@ -1547,7 +1547,7 @@ void SysCatalog::renameObjectsInDescriptorMap(DBObject& object,
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   auto range = objectDescriptorMap_.equal_range(
-      std::to_string(cat.get_currentDB().dbId) + ":" +
+      std::to_string(cat.getCurrentDB().dbId) + ":" +
       std::to_string(object.getObjectKey().permissionType) + ":" +
       std::to_string(object.getObjectKey().objectId));
   for (auto d = range.first; d != range.second; ++d) {
@@ -1561,7 +1561,7 @@ void SysCatalog::renameObjectsInDescriptorMap(DBObject& object,
         "UPDATE mapd_object_permissions SET objectName = ?1 WHERE "
         "dbId = ?2 AND objectId = ?3",
         std::vector<std::string>{object.getName(),
-                                 std::to_string(cat.get_currentDB().dbId),
+                                 std::to_string(cat.getCurrentDB().dbId),
                                  std::to_string(object.getObjectKey().objectId)});
   } catch (const std::exception& e) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
@@ -1590,7 +1590,7 @@ void SysCatalog::deleteObjectDescriptorMap(const std::string& roleName,
                                            const Catalog_Namespace::Catalog& cat) {
   sys_write_lock write_lock(this);
   auto range = objectDescriptorMap_.equal_range(
-      std::to_string(cat.get_currentDB().dbId) + ":" +
+      std::to_string(cat.getCurrentDB().dbId) + ":" +
       std::to_string(object.getObjectKey().permissionType) + ":" +
       std::to_string(object.getObjectKey().objectId));
   for (auto d = range.first; d != range.second;) {
@@ -4509,7 +4509,7 @@ void Catalog::checkpoint(const int logicalTableId) const {
   const auto td = getMetadataForTable(logicalTableId);
   const auto shards = getPhysicalTablesDescriptors(td);
   for (const auto shard : shards) {
-    getDataMgr().checkpoint(get_currentDB().dbId, shard->tableId);
+    getDataMgr().checkpoint(getCurrentDB().dbId, shard->tableId);
   }
 }
 
@@ -4566,14 +4566,14 @@ bool SessionInfo::checkDBAccessPrivileges(const DBObjectType& permissionType,
     }
     wants_privs.select_ = false;
     wants_privs.insert_ = true;
-    auto currentDB = static_cast<Catalog_Namespace::DBMetadata>(cat.get_currentDB());
+    auto currentDB = static_cast<Catalog_Namespace::DBMetadata>(cat.getCurrentDB());
     auto currentUser = static_cast<Catalog_Namespace::UserMetadata>(get_currentUser());
     return SysCatalog::instance().checkPrivileges(currentUser, currentDB, wants_privs);
   } else {
     // run flow with DB object level access permission checks
     DBObject object(objectName, permissionType);
     if (permissionType == DBObjectType::DatabaseDBObjectType) {
-      object.setName(cat.get_currentDB().dbName);
+      object.setName(cat.getCurrentDB().dbName);
     }
 
     object.loadKey(cat);

@@ -365,7 +365,7 @@ void MapDHandler::connect_impl(TSessionId& session,
 void MapDHandler::disconnect(const TSessionId& session) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   auto session_it = MapDHandler::get_session_it(session);
-  const auto dbname = session_it->second->getCatalog().get_currentDB().dbName;
+  const auto dbname = session_it->second->getCatalog().getCurrentDB().dbName;
   LOG(INFO) << "User " << session_it->second->get_currentUser().userName
             << " disconnected from database " << dbname << std::endl;
   disconnect_impl(session_it);
@@ -392,10 +392,10 @@ void MapDHandler::interrupt(const TSessionId& session) {
       leaf_aggregator_.interrupt(session);
     }
     auto session_it = get_session_it(session);
-    const auto dbname = session_it->second->getCatalog().get_currentDB().dbName;
+    const auto dbname = session_it->second->getCatalog().getCurrentDB().dbName;
     auto session_info_ptr = session_it->second.get();
     auto& cat = session_info_ptr->getCatalog();
-    auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
+    auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                           jit_debug_ ? "/tmp" : "",
                                           jit_debug_ ? "mapdquery" : "",
                                           mapd_parameters_,
@@ -486,7 +486,7 @@ void MapDHandler::get_hardware_info(TClusterHardwareInfo& _return,
 void MapDHandler::get_session_info(TSessionInfo& _return, const TSessionId& session) {
   auto session_info = get_session(session);
   _return.user = session_info.get_currentUser().userName;
-  _return.database = session_info.getCatalog().get_currentDB().dbName;
+  _return.database = session_info.getCatalog().getCurrentDB().dbName;
   _return.start_time = session_info.get_start_time();
 }
 
@@ -1132,7 +1132,7 @@ void MapDHandler::get_roles(std::vector<std::string>& roles, const TSessionId& s
   if (!session_info.get_currentUser().isSuper) {
     roles =
         SysCatalog::instance().getRoles(session_info.get_currentUser().userName,
-                                        session_info.getCatalog().get_currentDB().dbId);
+                                        session_info.getCatalog().getCurrentDB().dbId);
   } else {
     roles = SysCatalog::instance().getRoles(
         false, true, session_info.get_currentUser().userName);
@@ -1332,7 +1332,7 @@ void MapDHandler::get_db_objects_for_grantee(std::vector<TDBObject>& TDBObjectsF
   }
   auto* rl = SysCatalog::instance().getGrantee(roleName);
   if (rl) {
-    auto dbId = session.getCatalog().get_currentDB().dbId;
+    auto dbId = session.getCatalog().getCurrentDB().dbId;
     for (auto& dbObject : *rl->getDbObjects(true)) {
       if (dbObject.first.dbId != dbId) {
         // TODO (max): it doesn't scale well in case we have many DBs (not a typical
@@ -1688,7 +1688,7 @@ void MapDHandler::get_link_view(TFrontendView& _return,
                                 const std::string& link) {
   const auto session_info = get_session(session);
   auto& cat = session_info.getCatalog();
-  auto ld = cat.getMetadataForLink(std::to_string(cat.get_currentDB().dbId) + link);
+  auto ld = cat.getMetadataForLink(std::to_string(cat.getCurrentDB().dbId) + link);
   if (!ld) {
     THROW_MAPD_EXCEPTION("Link " + link + " is not valid.");
   }
@@ -1856,7 +1856,7 @@ void MapDHandler::get_users(std::vector<std::string>& user_names,
   if (SysCatalog::instance().arePrivilegesOn() &&
       !session_info.get_currentUser().isSuper) {
     user_list = SysCatalog::instance().getAllUserMetadata(
-        session_info.getCatalog().get_currentDB().dbId);
+        session_info.getCatalog().getCurrentDB().dbId);
   } else {
     user_list = SysCatalog::instance().getAllUserMetadata();
   }
@@ -2872,7 +2872,7 @@ void MapDHandler::get_dashboard(TDashboard& dashboard,
   user_meta.userName = "";
   SysCatalog::instance().getMetadataForUserById(dash->userId, user_meta);
   auto objects_list = SysCatalog::instance().getMetadataForObject(
-      cat.get_currentDB().dbId,
+      cat.getCurrentDB().dbId,
       static_cast<int>(DBObjectType::DashboardDBObjectType),
       dashboard_id);
   dashboard.dashboard_name = dash->viewName;
@@ -2902,7 +2902,7 @@ void MapDHandler::get_dashboards(std::vector<TDashboard>& dashboards,
     if (is_allowed_on_dashboard(
             session_info, d->viewId, AccessPrivileges::VIEW_DASHBOARD)) {
       auto objects_list = SysCatalog::instance().getMetadataForObject(
-          cat.get_currentDB().dbId,
+          cat.getCurrentDB().dbId,
           static_cast<int>(DBObjectType::DashboardDBObjectType),
           d->viewId);
       TDashboard dash;
@@ -3158,7 +3158,7 @@ void MapDHandler::get_dashboard_grantees(
   }
   std::vector<ObjectRoleDescriptor*> objectsList;
   objectsList = SysCatalog::instance().getMetadataForObject(
-      cat.get_currentDB().dbId,
+      cat.getCurrentDB().dbId,
       static_cast<int>(DBObjectType::DashboardDBObjectType),
       dashboard_id);  // By default objecttypecan be only dashabaords
   user_meta.userId = -1;
@@ -3936,7 +3936,7 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                          g_dynamic_watchdog_time_limit,
                          find_push_down_candidates,
                          just_calcite_explain};
-  auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
+  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
                                         mapd_parameters_,
@@ -3990,7 +3990,7 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                          g_enable_dynamic_watchdog,
                          g_dynamic_watchdog_time_limit,
                          false};
-  auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
+  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
                                         mapd_parameters_,
@@ -4021,7 +4021,7 @@ void MapDHandler::execute_root_plan(TQueryResult& _return,
                                     const ExecutorDeviceType executor_device_type,
                                     const int32_t first_n) const {
   auto executor = Executor::getExecutor(
-      root_plan->getCatalog().get_currentDB().dbId,
+      root_plan->getCatalog().getCurrentDB().dbId,
       jit_debug_ ? "/tmp" : "",
       jit_debug_ ? "mapdquery" : "",
       mapd_parameters_,
@@ -4936,7 +4936,7 @@ void MapDHandler::set_table_epoch_by_name(const TSessionId& session,
   auto td = cat.getMetadataForTable(
       table_name,
       false);  // don't populate fragmenter on this call since we only want metadata
-  int32_t db_id = cat.get_currentDB().dbId;
+  int32_t db_id = cat.getCurrentDB().dbId;
   if (leaf_aggregator_.leafCount() > 0) {
     return leaf_aggregator_.set_table_epochLeaf(
         session_info, db_id, td->tableId, new_epoch);
@@ -4963,7 +4963,7 @@ int32_t MapDHandler::get_table_epoch_by_name(const TSessionId& session,
   auto td = cat.getMetadataForTable(
       table_name,
       false);  // don't populate fragmenter on this call since we only want metadata
-  int32_t db_id = cat.get_currentDB().dbId;
+  int32_t db_id = cat.getCurrentDB().dbId;
   if (leaf_aggregator_.leafCount() > 0) {
     return leaf_aggregator_.get_table_epochLeaf(session_info, db_id, td->tableId);
   }

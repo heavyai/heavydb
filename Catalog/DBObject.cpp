@@ -182,7 +182,7 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
     case TableDBObjectType: {
       // permissions on tables
 
-      objectKey_.dbId = catalog.get_currentDB().dbId;
+      objectKey_.dbId = catalog.getCurrentDB().dbId;
 
       if (!getName().empty()) {
         auto table =
@@ -195,14 +195,14 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
         ownerId_ = table->userId;
       } else {
         // table permission at db level
-        ownerId_ = catalog.get_currentDB().dbOwner;
+        ownerId_ = catalog.getCurrentDB().dbOwner;
       }
 
       break;
     }
     case DashboardDBObjectType: {
       // permissions on dashboards
-      objectKey_.dbId = catalog.get_currentDB().dbId;
+      objectKey_.dbId = catalog.getCurrentDB().dbId;
 
       if (objectKey_.objectId > 0) {
         auto dashboard = catalog.getMetadataForDashboard(objectKey_.objectId);
@@ -215,7 +215,7 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
         ownerId_ = dashboard->userId;
       } else {
         // dashboard permission at DB level
-        ownerId_ = catalog.get_currentDB().dbOwner;
+        ownerId_ = catalog.getCurrentDB().dbOwner;
       }
 
       break;

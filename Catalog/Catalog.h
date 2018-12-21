@@ -219,11 +219,10 @@ class Catalog {
 
   std::list<const TableDescriptor*> getAllTableMetadata() const;
   std::list<const FrontendViewDescriptor*> getAllFrontendViewMetadata() const;
-  const DBMetadata& get_currentDB() const { return currentDB_; }
-  void set_currentDB(const DBMetadata& db) { currentDB_ = db; }
+  const DBMetadata& getCurrentDB() const { return currentDB_; }
   Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
-  Calcite& get_calciteMgr() const { return *calciteMgr_; }
-  const std::string& get_basePath() const { return basePath_; }
+  Calcite& getCalciteMgr() const { return *calciteMgr_; }
+  const std::string& getBasePath() const { return basePath_; }
 
   const DictDescriptor* getMetadataForDict(int dict_ref, bool loadDict = true) const;
 
@@ -263,7 +262,7 @@ class Catalog {
   void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);
   int getLogicalTableId(const int physicalTableId) const;
   void checkpoint(const int logicalTableId) const;
-  std::string name() const { return get_currentDB().dbName; }
+  std::string name() const { return getCurrentDB().dbName; }
   void eraseDBData();
   void eraseTablePhysicalData(const TableDescriptor* td);
   void optimizeTable(const TableDescriptor* td);
@@ -419,10 +418,10 @@ class SysCatalog {
                             std::string& name,
                             UserMetadata& user);
   bool getMetadataForDB(const std::string& name, DBMetadata& db);
-  const DBMetadata& get_currentDB() const { return currentDB_; }
+  const DBMetadata& getCurrentDB() const { return currentDB_; }
   Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
-  Calcite& get_calciteMgr() const { return *calciteMgr_; }
-  const std::string& get_basePath() const { return basePath_; }
+  Calcite& getCalciteMgr() const { return *calciteMgr_; }
+  const std::string& getBasePath() const { return basePath_; }
   SqliteConnector* getSqliteConnector() { return sqliteConnector_.get(); }
   std::list<DBMetadata> getAllDBMetadata();
   std::list<UserMetadata> getAllUserMetadata();

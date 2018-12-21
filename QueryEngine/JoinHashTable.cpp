@@ -557,7 +557,7 @@ ChunkKey JoinHashTable::genHashTableKey(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const Analyzer::Expr* outer_col_expr,
     const Analyzer::ColumnVar* inner_col) const {
-  ChunkKey hash_table_key{executor_->getCatalog()->get_currentDB().dbId,
+  ChunkKey hash_table_key{executor_->getCatalog()->getCurrentDB().dbId,
                           inner_col->get_table_id(),
                           inner_col->get_column_id()};
   const auto& ti = inner_col->get_type_info();

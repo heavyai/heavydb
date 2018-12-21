@@ -1179,7 +1179,7 @@ TEST_F(DashboardObject, AccessAfterRevokesTest) {
 TEST_F(DashboardObject, GranteesDefaultListTest) {
   auto& g_cat = g_session->getCatalog();
   auto perms_list =
-      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int size = static_cast<int>(perms_list.size());
@@ -1189,7 +1189,7 @@ TEST_F(DashboardObject, GranteesDefaultListTest) {
 TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
   auto& g_cat = g_session->getCatalog();
   auto perms_list =
-      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs1 = static_cast<int>(perms_list.size());
@@ -1204,7 +1204,7 @@ TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
   ASSERT_NO_THROW(
       sys_cat.grantDBObjectPrivilegesBatch({"OldLady", "Bayern"}, {dash_object}, g_cat));
   perms_list =
-      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs2 = static_cast<int>(perms_list.size());
@@ -1218,7 +1218,7 @@ TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", dash_object, g_cat));
   perms_list =
-      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs3 = static_cast<int>(perms_list.size());
@@ -1231,7 +1231,7 @@ TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
 TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   auto& g_cat = g_session->getCatalog();
   auto perms_list =
-      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs1 = static_cast<int>(perms_list.size());
@@ -1247,7 +1247,7 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   ASSERT_NO_THROW(
       sys_cat.grantDBObjectPrivilegesBatch({"Gunners", "Chelsea"}, {dash_object}, g_cat));
   perms_list =
-      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs2 = static_cast<int>(perms_list.size());
@@ -1262,7 +1262,7 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Gunners", dash_object, g_cat));
   perms_list =
-      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs3 = static_cast<int>(perms_list.size());
@@ -1276,7 +1276,7 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Gunners", dash_object, g_cat));
   perms_list =
-      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs4 = static_cast<int>(perms_list.size());
@@ -1288,7 +1288,7 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Chelsea", dash_object, g_cat));
   perms_list =
-      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs5 = static_cast<int>(perms_list.size());

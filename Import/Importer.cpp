@@ -2435,7 +2435,7 @@ bool Loader::loadToShard(
 }
 
 void Loader::init() {
-  insert_data.databaseId = catalog.get_currentDB().dbId;
+  insert_data.databaseId = catalog.getCurrentDB().dbId;
   insert_data.tableId = table_desc->tableId;
   for (auto cd : column_descs) {
     insert_data.columnIds.push_back(cd->columnId);
@@ -3214,7 +3214,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
     }
   }
 
-  ChunkKey chunkKey = {loader->getCatalog().get_currentDB().dbId,
+  ChunkKey chunkKey = {loader->getCatalog().getCurrentDB().dbId,
                        loader->get_table_desc()->tableId};
   {
     std::list<std::future<ImportStatus>> threads;
@@ -3396,13 +3396,13 @@ void Loader::checkpoint() {
 }
 
 int32_t Loader::getTableEpoch() {
-  return getCatalog().getTableEpoch(getCatalog().get_currentDB().dbId,
-                                     get_table_desc()->tableId);
+  return getCatalog().getTableEpoch(getCatalog().getCurrentDB().dbId,
+                                    get_table_desc()->tableId);
 }
 
 void Loader::setTableEpoch(int32_t start_epoch) {
   getCatalog().setTableEpoch(
-      getCatalog().get_currentDB().dbId, get_table_desc()->tableId, start_epoch);
+      getCatalog().getCurrentDB().dbId, get_table_desc()->tableId, start_epoch);
 }
 
 void GDALErrorHandler(CPLErr eErrClass, int err_no, const char* msg) {

@@ -552,7 +552,7 @@ const int8_t* Executor::ExecutionDispatch::getScanColumn(
       col_type.is_array();  // TODO: should it be col_type.is_varlen_array() ?
   {
     ChunkKey chunk_key{
-        cat_.get_currentDB().dbId, fragment.physicalTableId, col_id, fragment.fragmentId};
+        cat_.getCurrentDB().dbId, fragment.physicalTableId, col_id, fragment.fragmentId};
     std::unique_ptr<std::lock_guard<std::mutex>> varlen_chunk_lock;
     if (is_varlen) {
       varlen_chunk_lock.reset(new std::lock_guard<std::mutex>(varlen_chunk_mutex));
@@ -754,7 +754,7 @@ std::pair<const int8_t*, size_t> Executor::ExecutionDispatch::getColumnFragment(
   CHECK(!cd || !(cd->isVirtualCol));
   const int8_t* col_buff = nullptr;
   if (cd) {
-    ChunkKey chunk_key{catalog.get_currentDB().dbId,
+    ChunkKey chunk_key{catalog.getCurrentDB().dbId,
                        fragment.physicalTableId,
                        hash_col.get_column_id(),
                        fragment.fragmentId};
