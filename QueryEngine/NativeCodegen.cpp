@@ -1353,21 +1353,6 @@ Executor::CompilationResult Executor::compileWorkUnit(
     }
   }
 
-  if (co.device_type_ == ExecutorDeviceType::GPU &&
-      query_mem_desc.getQueryDescriptionType() ==
-          QueryDescriptionType::GroupByPerfectHash &&
-      query_mem_desc.getGroupbyColCount() > 1) {
-    const auto grid_size = query_mem_desc.blocksShareMemory() ? 1 : gridSize();
-    const size_t required_memory{
-        (grid_size * query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU))};
-    const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
-    CHECK(cuda_mgr);
-    const size_t max_memory{cuda_mgr->getDeviceProperties(0)->globalMem / 5};
-    if (required_memory > max_memory) {
-      throw QueryMustRunOnCpu();
-    }
-  }
-
   // Read the module template and target either CPU or GPU
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
