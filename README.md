@@ -17,12 +17,12 @@ MapD Core is an in-memory, column store, SQL relational database that was design
 
 # Links
 
-- [Documentation](https://www.mapd.com/docs/)
-- [Release Notes](https://www.mapd.com/docs/latest/release-notes/platform/)
-- [Community Forum](https://community.mapd.com)
-- [MapD Homepage](https://www.mapd.com)
-- [MapD Blog](https://www.mapd.com/blog/)
-- [MapD Downloads](https://www.mapd.com/platform/downloads/)
+- [Documentation](https://www.omnisci.com/docs/latest/)
+- [Release Notes](https://www.omnisci.com/docs/latest/7_0_release.html)
+- [Community Forum](https://community.omnisci.com)
+- [MapD Homepage](https://www.omnisci.com)
+- [MapD Blog](https://www.omnisci.com/blog/)
+- [MapD Downloads](https://www.omnisci.com/platform/downloads/)
 
 # License
 
@@ -32,7 +32,7 @@ The repository includes a number of third party packages provided under separate
 
 # Contributing
 
-In order to clarify the intellectual property license granted with Contributions from any person or entity, MapD must have a Contributor License Agreement ("CLA") on file that has been signed by each Contributor, indicating agreement to the [Contributor License Agreement](CLA.txt). After making a pull request, a bot will notify you if a signed CLA is required and provide instructions for how to sign it. Please read the agreement carefully before signing and keep a copy for your records.
+In order to clarify the intellectual property license granted with Contributions from any person or entity, OmniSci must have a Contributor License Agreement ("CLA") on file that has been signed by each Contributor, indicating agreement to the [Contributor License Agreement](CLA.txt). After making a pull request, a bot will notify you if a signed CLA is required and provide instructions for how to sign it. Please read the agreement carefully before signing and keep a copy for your records.
 
 # Building
 
@@ -166,7 +166,7 @@ You can also interact with the database using the web-based MapD Immerse fronten
 
 [http://localhost:9092](http://localhost:9092)
 
-Note: usage of MapD Immerse is governed by a separate license agreement, provided under `EULA-CE.txt`. The version bundled with this project may only be used for non-commercial purposes.
+Note: usage of OmniSci Immerse is governed by a separate license agreement, provided under `EULA-CE.txt`. The version bundled with this project may only be used for non-commercial purposes.
 
 # Code Style
 
