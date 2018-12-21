@@ -290,7 +290,7 @@ class RootPlan {
   SQLStmtType get_stmt_type() const { return stmt_type; }
   int get_result_table_id() const { return result_table_id; }
   const std::list<int>& get_result_col_list() const { return result_col_list; }
-  const Catalog_Namespace::Catalog& get_catalog() const { return catalog; }
+  const Catalog_Namespace::Catalog& getCatalog() const { return catalog; }
   virtual void print() const;
   int64_t get_limit() const { return limit; }
   int64_t get_offset() const { return offset; }

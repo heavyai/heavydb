@@ -38,7 +38,7 @@ std::shared_ptr<ResultSet> Executor::execute(
     const bool allow_multifrag,
     const bool allow_loop_joins,
     RenderInfo* render_info) {
-  catalog_ = &root_plan->get_catalog();
+  catalog_ = &root_plan->getCatalog();
   const auto stmt_type = root_plan->get_stmt_type();
   // capture the lock acquistion time
   auto clock_begin = timer_start();
@@ -59,7 +59,7 @@ std::shared_ptr<ResultSet> Executor::execute(
         explanation_rs->setQueueTime(queue_time_ms);
         return explanation_rs;
       }
-      auto& cat = session.get_catalog();
+      auto& cat = session.getCatalog();
       auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
       auto user_metadata = session.get_currentUser();
       const int table_id = root_plan->get_result_table_id();

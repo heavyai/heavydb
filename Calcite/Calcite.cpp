@@ -257,7 +257,7 @@ void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info
                               std::vector<std::string> tableOrViewNames,
                               AccessPrivileges tablePrivs,
                               AccessPrivileges viewPrivs) {
-  Catalog_Namespace::Catalog& catalog = session_info.get_catalog();
+  Catalog_Namespace::Catalog& catalog = session_info.getCatalog();
 
   for (auto tableOrViewName : tableOrViewNames) {
     const TableDescriptor* tableMeta =
@@ -329,7 +329,7 @@ std::vector<TCompletionHint> Calcite::getCompletionHints(
     const std::string sql_string,
     const int cursor) {
   std::vector<TCompletionHint> hints;
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   const auto user = session_info.get_currentUser().userName;
   const auto session = session_info.get_session_id();
   const auto catalog = cat.get_currentDB().dbName;
@@ -364,7 +364,7 @@ TPlanResult Calcite::processImpl(
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
     const bool legacy_syntax,
     const bool is_explain) {
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   std::string user = session_info.get_currentUser().userName;
   std::string session = session_info.get_session_id();
   if (!session_prefix_.empty()) {

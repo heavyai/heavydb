@@ -606,7 +606,7 @@ TEST_P(DataIngestion, CreateTableAsSelect) {
   QueryRunner::run_ddl_statement(create_ctas_sql, g_session);
 
   // check tables
-  Catalog_Namespace::Catalog& cat = g_session->get_catalog();
+  Catalog_Namespace::Catalog& cat = g_session->getCatalog();
   const TableDescriptor* td_source = cat.getMetadataForTable("CTAS_SOURCE");
   const TableDescriptor* td_target = cat.getMetadataForTable("CTAS_TARGET");
 

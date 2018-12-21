@@ -1804,7 +1804,7 @@ static ImportStatus import_thread_delimited(
                 }
               }
 
-              Importer::set_geo_physical_import_buffer(importer->get_catalog(),
+              Importer::set_geo_physical_import_buffer(importer->getCatalog(),
                                                        cd,
                                                        import_buffers,
                                                        col_idx,
@@ -3203,7 +3203,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
 
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-  auto columnDescriptors = loader->get_catalog().getAllColumnMetadataForTable(
+  auto columnDescriptors = loader->getCatalog().getAllColumnMetadataForTable(
       loader->get_table_desc()->tableId, false, false, false);
   for (auto cd : columnDescriptors) {
     SQLTypes ct = cd->columnType.get_type();
@@ -3214,7 +3214,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
     }
   }
 
-  ChunkKey chunkKey = {loader->get_catalog().get_currentDB().dbId,
+  ChunkKey chunkKey = {loader->getCatalog().get_currentDB().dbId,
                        loader->get_table_desc()->tableId};
   {
     std::list<std::future<ImportStatus>> threads;
@@ -3391,18 +3391,18 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
 void Loader::checkpoint() {
   if (get_table_desc()->persistenceLevel ==
       Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
-    get_catalog().checkpoint(get_table_desc()->tableId);
+    getCatalog().checkpoint(get_table_desc()->tableId);
   }
 }
 
 int32_t Loader::getTableEpoch() {
-  return get_catalog().getTableEpoch(get_catalog().get_currentDB().dbId,
+  return getCatalog().getTableEpoch(getCatalog().get_currentDB().dbId,
                                      get_table_desc()->tableId);
 }
 
 void Loader::setTableEpoch(int32_t start_epoch) {
-  get_catalog().setTableEpoch(
-      get_catalog().get_currentDB().dbId, get_table_desc()->tableId, start_epoch);
+  getCatalog().setTableEpoch(
+      getCatalog().get_currentDB().dbId, get_table_desc()->tableId, start_epoch);
 }
 
 void GDALErrorHandler(CPLErr eErrClass, int err_no, const char* msg) {
@@ -3946,7 +3946,7 @@ ImportStatus Importer::importGDAL(
 
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-  auto columnDescriptors = loader->get_catalog().getAllColumnMetadataForTable(
+  auto columnDescriptors = loader->getCatalog().getAllColumnMetadataForTable(
       loader->get_table_desc()->tableId, false, false, false);
   for (auto cd : columnDescriptors) {
     SQLTypes ct = cd->columnType.get_type();
@@ -4141,7 +4141,7 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(
   auto seedTimer = timer_start();
 
   // get the table descriptor
-  const auto& cat = loader->get_catalog();
+  const auto& cat = loader->getCatalog();
   const std::string& tableName = loader->get_table_desc()->tableName;
   const auto td = cat.getMetadataForTable(tableName);
   CHECK(td);
@@ -4330,7 +4330,7 @@ void ImportDriver::import_geo_table(const std::string& file_path,
     cd.columnName = col_name_sanitized;
   }
 
-  auto& cat = session_->get_catalog();
+  auto& cat = session_->getCatalog();
 
   if (create_table) {
     const auto td = cat.getMetadataForTable(table_name);

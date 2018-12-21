@@ -43,7 +43,7 @@ namespace {
 Planner::RootPlan* parse_plan_legacy(
     const std::string& query_str,
     const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
-  const auto& cat = session->get_catalog();
+  const auto& cat = session->getCatalog();
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;
@@ -69,7 +69,7 @@ Planner::RootPlan* parse_plan_calcite(
     return parse_plan_legacy(query_str, session);
   }
 
-  const auto& cat = session->get_catalog();
+  const auto& cat = session->getCatalog();
   auto& calcite_mgr = cat.get_calciteMgr();
   const Catalog_Namespace::SessionInfo* sess = session.get();
   const auto query_ra =
@@ -231,7 +231,7 @@ ExecutionResult run_select_query(
                                                   g_enable_filter_push_down);
   }
 
-  const auto& cat = session->get_catalog();
+  const auto& cat = session->getCatalog();
   auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
@@ -261,7 +261,7 @@ ExecutionResult run_select_query_with_filter_push_down(
     const bool allow_loop_joins,
     const bool just_explain,
     const bool with_filter_push_down) {
-  const auto& cat = session->get_catalog();
+  const auto& cat = session->getCatalog();
   auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
@@ -370,7 +370,7 @@ std::shared_ptr<ResultSet> run_multiple_agg(
     return execution_result.getRows();
   }
 
-  const auto& cat = session->get_catalog();
+  const auto& cat = session->getCatalog();
   auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
 
   auto plan = std::unique_ptr<Planner::RootPlan>(parse_plan(query_str, session));

@@ -253,7 +253,7 @@ struct DashboardObject : testing::Test {
 
   FrontendViewDescriptor vd1;
   void setup_dashboards() {
-    auto& gcat = g_session->get_catalog();
+    auto& gcat = g_session->getCatalog();
     vd1.viewName = dname1;
     vd1.viewState = dstate;
     vd1.imageHash = dhash;
@@ -269,7 +269,7 @@ struct DashboardObject : testing::Test {
   }
 
   void drop_dashboards() {
-    auto& gcat = g_session->get_catalog();
+    auto& gcat = g_session->getCatalog();
     if (gcat.getMetadataForDashboard(id)) {
       gcat.deleteMetadataForDashboard(id);
     }
@@ -282,7 +282,7 @@ struct DashboardObject : testing::Test {
 };
 
 TEST_F(GrantSyntax, MultiPrivilegeGrantRevoke) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   DBObject tbl_object("tbl", DBObjectType::TableDBObjectType);
   tbl_object.loadKey(g_cat);
   tbl_object.resetPrivileges();
@@ -404,7 +404,7 @@ TEST(UserRoles, RoleHierarchies) {
   EXPECT_NO_THROW(run_ddl_statement("GRANT UPDATE ON TABLE hr_tbl1 TO hr_r4;"));
 
   // check that we see privileges gratnted via roles' hierarchy
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   AccessPrivileges tbl_privs;
   ASSERT_NO_THROW(tbl_privs.add(AccessPrivileges::SELECT_FROM_TABLE));
   ASSERT_NO_THROW(tbl_privs.add(AccessPrivileges::INSERT_INTO_TABLE));
@@ -475,7 +475,7 @@ TEST_F(DatabaseObject, SqlEditorAccessTest) {
                                          user_meta,
                                          ExecutorDeviceType::GPU,
                                          ""));
-  auto& cat_mapd = session_juve->get_catalog();
+  auto& cat_mapd = session_juve->getCatalog();
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
@@ -530,7 +530,7 @@ TEST_F(DatabaseObject, DBLoginAccessTest) {
                                          user_meta,
                                          ExecutorDeviceType::GPU,
                                          ""));
-  auto& cat_mapd = session_juve->get_catalog();
+  auto& cat_mapd = session_juve->getCatalog();
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
@@ -584,7 +584,7 @@ TEST_F(DatabaseObject, TableAccessTest) {
                                          user_meta,
                                          ExecutorDeviceType::GPU,
                                          ""));
-  auto& cat_mapd = session_ars->get_catalog();
+  auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   AccessPrivileges bayern_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::CREATE_TABLE));
@@ -648,7 +648,7 @@ TEST_F(DatabaseObject, ViewAccessTest) {
                                          user_meta,
                                          ExecutorDeviceType::GPU,
                                          ""));
-  auto& cat_mapd = session_ars->get_catalog();
+  auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_VIEW));
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
@@ -703,7 +703,7 @@ TEST_F(DatabaseObject, DashboardAccessTest) {
                                          user_meta,
                                          ExecutorDeviceType::GPU,
                                          ""));
-  auto& cat_mapd = session_ars->get_catalog();
+  auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DASHBOARD));
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
@@ -757,7 +757,7 @@ TEST_F(DatabaseObject, DatabaseAllTest) {
                                          user_meta,
                                          ExecutorDeviceType::GPU,
                                          ""));
-  auto& cat_mapd = session_ars->get_catalog();
+  auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DATABASE));
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
@@ -839,7 +839,7 @@ TEST_F(DatabaseObject, DatabaseAllTest) {
 }
 
 TEST_F(TableObject, AccessDefaultsTest) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("Sudens", "Bayern"));
   ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
   AccessPrivileges epl_privs;
@@ -868,7 +868,7 @@ TEST_F(TableObject, AccessDefaultsTest) {
   EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
 }
 TEST_F(TableObject, AccessAfterGrantsTest) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("Sudens", "Bayern"));
   ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
   AccessPrivileges epl_privs;
@@ -911,7 +911,7 @@ TEST_F(TableObject, AccessAfterGrantsTest) {
 }
 
 TEST_F(TableObject, AccessAfterRevokesTest) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
   ASSERT_NO_THROW(sys_cat.grantRole("Gunners", "Arsenal"));
   AccessPrivileges epl_privs;
@@ -1003,7 +1003,7 @@ TEST_F(TableObject, AccessAfterRevokesTest) {
 
 void testViewPermissions(std::string user, std::string roleToGrant) {
   DBObject bill_view("bill_view", DBObjectType::ViewDBObjectType);
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
   bill_view.loadKey(cat);
   std::vector<DBObject> privs;
 
@@ -1105,7 +1105,7 @@ TEST_F(ViewObject, CalciteViewResolution) {
 }
 
 TEST_F(DashboardObject, AccessDefaultsTest) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("Gunners", "Bayern"));
   ASSERT_NO_THROW(sys_cat.grantRole("Sudens", "Arsenal"));
   AccessPrivileges dash_priv;
@@ -1123,7 +1123,7 @@ TEST_F(DashboardObject, AccessDefaultsTest) {
 }
 
 TEST_F(DashboardObject, AccessAfterGrantsTest) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("Gunners", "Arsenal"));
   AccessPrivileges dash_priv;
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::VIEW_DASHBOARD));
@@ -1144,7 +1144,7 @@ TEST_F(DashboardObject, AccessAfterGrantsTest) {
 }
 
 TEST_F(DashboardObject, AccessAfterRevokesTest) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
   ASSERT_NO_THROW(sys_cat.grantRole("Sudens", "Bayern"));
   AccessPrivileges dash_priv;
@@ -1177,7 +1177,7 @@ TEST_F(DashboardObject, AccessAfterRevokesTest) {
 }
 
 TEST_F(DashboardObject, GranteesDefaultListTest) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   auto perms_list =
       sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
@@ -1187,7 +1187,7 @@ TEST_F(DashboardObject, GranteesDefaultListTest) {
 }
 
 TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   auto perms_list =
       sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
@@ -1229,7 +1229,7 @@ TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
 }
 
 TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   auto perms_list =
       sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
@@ -1297,7 +1297,7 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
 }
 
 void create_tables(std::string prefix, int max) {
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
   for (int i = 0; i < max; i++) {
     std::string name = prefix + std::to_string(i);
     run_ddl_statement("CREATE TABLE " + name + " (id integer);");
@@ -1309,7 +1309,7 @@ void create_tables(std::string prefix, int max) {
 }
 
 void create_views(std::string prefix, int max) {
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
   for (int i = 0; i < max; i++) {
     std::string name = "view_" + prefix + std::to_string(i);
     run_ddl_statement("CREATE VIEW " + name + " AS SELECT * FROM " + prefix +
@@ -1322,7 +1322,7 @@ void create_views(std::string prefix, int max) {
 }
 
 void create_dashboards(std::string prefix, int max) {
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
   for (int i = 0; i < max; i++) {
     std::string name = "dash_" + prefix + std::to_string(i);
     FrontendViewDescriptor vd;
@@ -1343,7 +1343,7 @@ void create_dashboards(std::string prefix, int max) {
 }
 
 void assert_grants(std::string prefix, int i, bool expected) {
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
 
   DBObject tablePermission(prefix + std::to_string(i), DBObjectType::TableDBObjectType);
   try {
@@ -1378,7 +1378,7 @@ void assert_grants(std::string prefix, int i, bool expected) {
 }
 
 void check_grant_access(std::string prefix, int max) {
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
 
   for (int i = 0; i < max; i++) {
     assert_grants(prefix, i, false);
@@ -1404,7 +1404,7 @@ void check_grant_access(std::string prefix, int max) {
 }
 
 void drop_dashboards(std::string prefix, int max) {
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
 
   for (int i = 0; i < max; i++) {
     std::string name = "dash_" + prefix + std::to_string(i);
@@ -1418,7 +1418,7 @@ void drop_dashboards(std::string prefix, int max) {
 }
 
 void drop_views(std::string prefix, int max) {
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
 
   for (int i = 0; i < max; i++) {
     std::string name = "view_" + prefix + std::to_string(i);
@@ -1429,7 +1429,7 @@ void drop_views(std::string prefix, int max) {
 }
 
 void drop_tables(std::string prefix, int max) {
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
 
   for (int i = 0; i < max; i++) {
     std::string name = prefix + std::to_string(i);

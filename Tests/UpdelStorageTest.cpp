@@ -172,7 +172,7 @@ void update_common(const std::string& table,
   std::vector<ScalarTargetValue> rhsValues;
   update_prepare_offsets_values<T>(cnt, step, val, fragOffsets, rhsValues);
   Fragmenter_Namespace::InsertOrderFragmenter::updateColumn(
-      &gsession->get_catalog(),
+      &gsession->getCatalog(),
       table,
       column,
       0,  // 1st frag since we have only 100 rows
@@ -286,7 +286,7 @@ bool compare_row(const std::string& table,
                  const ResultRow& newr,
                  const TargetValue& val,
                  const bool commit) {
-  const auto cat = &gsession->get_catalog();
+  const auto cat = &gsession->getCatalog();
   const auto td = cat->getMetadataForTable(table);
   const auto cdl = cat->getAllColumnMetadataForTable(td->tableId, false, false, false);
   const auto cds = std::vector<const ColumnDescriptor*>(cdl.begin(), cdl.end());
@@ -406,7 +406,7 @@ bool prepare_table_for_delete(const std::string& table = "trips",
   }
   auto ms = measure<>::execution([&]() {
     Fragmenter_Namespace::InsertOrderFragmenter::updateColumn(
-        &gsession->get_catalog(),
+        &gsession->getCatalog(),
         table,
         column,
         0,  // 1st frag since we have only 100 rows
@@ -468,7 +468,7 @@ bool delete_and_immediately_vacuum_rows(const std::string& table,
   }
 
   // delete and vacuum rows supposedly immediately
-  auto cat = &gsession->get_catalog();
+  auto cat = &gsession->getCatalog();
   auto td = cat->getMetadataForTable(table);
   auto cd = cat->getMetadataForColumn(td->tableId, deleted_column);
   const_cast<ColumnDescriptor*>(cd)->isDeletedCol = true;

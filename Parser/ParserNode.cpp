@@ -2152,7 +2152,7 @@ std::string serialize_key_metainfo(
 }  // namespace
 
 void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
+  auto& catalog = session.getCatalog();
   // check access privileges
   if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
                                        AccessPrivileges::CREATE_TABLE)) {
@@ -2334,7 +2334,7 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 std::shared_ptr<ResultSet> getResultRows(const Catalog_Namespace::SessionInfo& session,
                                          const std::string select_stmt,
                                          std::vector<TargetMetaInfo>& targets) {
-  auto& catalog = session.get_catalog();
+  auto& catalog = session.getCatalog();
 
   auto executor = Executor::getExecutor(catalog.get_currentDB().dbId);
 
@@ -2429,7 +2429,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   if (g_cluster) {
     throw std::runtime_error("Distributed CTAS not supported yet");
   }
-  auto& catalog = session.get_catalog();
+  auto& catalog = session.getCatalog();
 
   // check access privileges
   if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
@@ -2447,7 +2447,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   const auto query_ra = parse_to_ra(catalog, pg_shimmed_select_query, session);
   std::vector<std::shared_ptr<VLock>> readUpdateDeleteLocks;
   Lock_Namespace::getTableLocks<mapd_shared_mutex>(
-      session.get_catalog(),
+      session.getCatalog(),
       query_ra,
       readUpdateDeleteLocks,
       Lock_Namespace::LockType::UpdateDeleteLock);
@@ -2617,7 +2617,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 }
 
 void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
+  auto& catalog = session.getCatalog();
 
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
   if (td == nullptr) {
@@ -2646,7 +2646,7 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
+  auto& catalog = session.getCatalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
   if (td == nullptr) {
     throw std::runtime_error("Table " + *table + " does not exist.");
@@ -2678,7 +2678,7 @@ void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session_in
     throw std::runtime_error("Invalid WITH option '" + *with + "'");
   }
 
-  auto& catalog = session_info.get_catalog();
+  auto& catalog = session_info.getCatalog();
   std::vector<const TableDescriptor*> tds;
   if (table) {
     const auto td = catalog.getMetadataForTable(*table);
@@ -2735,7 +2735,7 @@ void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session,
   }
   std::vector<DBObject> privObjects;
   DBObject dbObject(td->tableName, TableDBObjectType);
-  dbObject.loadKey(session.get_catalog());
+  dbObject.loadKey(session.getCatalog());
   dbObject.setPrivileges(AccessPrivileges::ALTER_TABLE);
   privObjects.push_back(dbObject);
   if (!SysCatalog::instance().checkPrivileges(session.get_currentUser(), privObjects)) {
@@ -2745,7 +2745,7 @@ void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session,
 }
 
 void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
+  auto& catalog = session.getCatalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
   if (td == nullptr) {
     throw std::runtime_error("Table " + *table + " does not exist.");
@@ -3005,7 +3005,7 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
 }
 
 void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
+  auto& catalog = session.getCatalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
   if (nullptr == td) {
     throw std::runtime_error("Table " + *table + " does not exist.");
@@ -3035,7 +3035,7 @@ void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& sessi
 }
 
 void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
+  auto& catalog = session.getCatalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
   check_executable(session);
 
@@ -3165,7 +3165,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
+  auto& catalog = session.getCatalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
   if (td == nullptr) {
     throw std::runtime_error("Table " + *table + " does not exist.");
@@ -3207,7 +3207,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   size_t total_time = 0;
   bool load_truncated = false;
 
-  auto& catalog = session.get_catalog();
+  auto& catalog = session.getCatalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
 
   // if the table already exists, it's locked, so check access privileges
@@ -3712,7 +3712,7 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
         "GRANT failed. This command may be executed only when DB object "
         "level access privileges check turned on.");
   }
-  auto& catalog = session.get_catalog();
+  auto& catalog = session.getCatalog();
   const auto& currentUser = session.get_currentUser();
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
   const auto objectName =
@@ -3744,7 +3744,7 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
         "REVOKE failed. This command may be executed only when DB object "
         "level access privileges check turned on.");
   }
-  auto& catalog = session.get_catalog();
+  auto& catalog = session.getCatalog();
   const auto& currentUser = session.get_currentUser();
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
   const auto objectName =
@@ -3777,7 +3777,7 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) 
                              " failed. This command may be executed only when DB object "
                              "level access privileges check turned on.");
   }
-  auto& catalog = session.get_catalog();
+  auto& catalog = session.getCatalog();
   const auto& currentUser = session.get_currentUser();
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
   const auto objectName =
@@ -3916,7 +3916,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     // allow copy to statement for stand alone leafs
     throw std::runtime_error("Distributed export not supported yet");
   }
-  auto& catalog = session.get_catalog();
+  auto& catalog = session.getCatalog();
   Importer_NS::CopyParams copy_params;
   if (!options.empty()) {
     for (auto& p : options) {
@@ -4180,7 +4180,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
+  auto& catalog = session.getCatalog();
 
   if (catalog.getMetadataForTable(view_name_) != nullptr) {
     if (if_not_exists_) {
@@ -4225,7 +4225,7 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
+  auto& catalog = session.getCatalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*view_name);
   if (td == nullptr) {
     if (if_exists) {

@@ -4555,7 +4555,7 @@ std::string Catalog::generatePhysicalTableName(const std::string& logicalTableNa
 bool SessionInfo::checkDBAccessPrivileges(const DBObjectType& permissionType,
                                           const AccessPrivileges& privs,
                                           const std::string& objectName) const {
-  auto& cat = get_catalog();
+  auto& cat = getCatalog();
   if (!SysCatalog::instance().arePrivilegesOn()) {
     // run flow without DB object level access permission checks
     Privileges wants_privs;

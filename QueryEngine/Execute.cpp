@@ -2275,7 +2275,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   std::unordered_map<int, std::unique_ptr<uint8_t[]>> col_buffers;
   std::unordered_map<int, std::vector<std::string>> str_col_buffers;
   std::unordered_map<int, std::vector<ArrayDatum>> arr_col_buffers;
-  auto& cat = root_plan->get_catalog();
+  auto& cat = root_plan->getCatalog();
   const auto table_descriptor = cat.getMetadataForTable(table_id);
   const auto shard_tables = cat.getPhysicalTablesDescriptors(table_descriptor);
   const TableDescriptor* shard{nullptr};

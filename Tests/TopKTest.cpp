@@ -68,7 +68,7 @@ T v(const TargetValue& r) {
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
   return device_type == ExecutorDeviceType::GPU &&
-         !g_session->get_catalog().getDataMgr().gpusPresent();
+         !g_session->getCatalog().getDataMgr().gpusPresent();
 #else
   return device_type == ExecutorDeviceType::GPU;
 #endif

@@ -582,7 +582,7 @@ class Loader {
       , column_descs(c.getAllColumnMetadataForTable(t->tableId, false, false, true)) {
     init();
   };
-  Catalog_Namespace::Catalog& get_catalog() { return catalog; }
+  Catalog_Namespace::Catalog& getCatalog() { return catalog; }
   const TableDescriptor* get_table_desc() const { return table_desc; }
   const std::list<const ColumnDescriptor*>& get_column_descs() const {
     return column_descs;
@@ -832,7 +832,7 @@ class Importer : public DataStreamSink {
       const std::string& archive_path,
       const CopyParams& copy_params);
   static bool gdalSupportsNetworkFileAccess();
-  Catalog_Namespace::Catalog& get_catalog() { return loader->get_catalog(); }
+  Catalog_Namespace::Catalog& getCatalog() { return loader->getCatalog(); }
   static void set_geo_physical_import_buffer(
       const Catalog_Namespace::Catalog& catalog,
       const ColumnDescriptor* cd,

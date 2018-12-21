@@ -136,16 +136,16 @@ class SQLTestEnv : public ::testing::Environment {
 
 bool storage_test(const string& table_name, size_t num_rows) {
   vector<size_t> insert_col_hashs =
-      populate_table_random(table_name, num_rows, gsession->get_catalog());
+      populate_table_random(table_name, num_rows, gsession->getCatalog());
   vector<size_t> scan_col_hashs =
-      scan_table_return_hash(table_name, gsession->get_catalog());
+      scan_table_return_hash(table_name, gsession->getCatalog());
   vector<size_t> scan_col_hashs2 =
-      scan_table_return_hash_non_iter(table_name, gsession->get_catalog());
+      scan_table_return_hash_non_iter(table_name, gsession->getCatalog());
   return insert_col_hashs == scan_col_hashs && insert_col_hashs == scan_col_hashs2;
 }
 
 void simple_thread_wrapper(const string& table_name, size_t num_rows, size_t thread_id) {
-  populate_table_random(table_name, num_rows, gsession->get_catalog());
+  populate_table_random(table_name, num_rows, gsession->getCatalog());
 }
 
 bool storage_test_parallel(const string& table_name,
@@ -160,9 +160,9 @@ bool storage_test_parallel(const string& table_name,
     t.join();
   }
   vector<size_t> scan_col_hashs =
-      scan_table_return_hash(table_name, gsession->get_catalog());
+      scan_table_return_hash(table_name, gsession->getCatalog());
   vector<size_t> scan_col_hashs2 =
-      scan_table_return_hash_non_iter(table_name, gsession->get_catalog());
+      scan_table_return_hash_non_iter(table_name, gsession->getCatalog());
   return scan_col_hashs == scan_col_hashs2;
 }
 }  // namespace

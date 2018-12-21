@@ -635,7 +635,7 @@ class SessionInfo {
       , executor_device_type_(static_cast<ExecutorDeviceType>(s.executor_device_type_))
       , session_id(s.session_id) {}
   MapDHandler* get_mapdHandler() const { return mapdHandler_.get(); };
-  Catalog& get_catalog() const { return *catalog_; }
+  Catalog& getCatalog() const { return *catalog_; }
   std::shared_ptr<Catalog> get_catalog_ptr() const { return catalog_; }
   const UserMetadata& get_currentUser() const { return currentUser_; }
   const ExecutorDeviceType get_executor_device_type() const {

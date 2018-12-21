@@ -137,7 +137,7 @@ class SQLTestEnv : public ::testing::Environment {
 
 bool load_data_test(string table_name, size_t num_rows) {
   vector<size_t> insert_col_hashs =
-      populate_table_random(table_name, num_rows, gsession->get_catalog());
+      populate_table_random(table_name, num_rows, gsession->getCatalog());
   return true;
 }
 
@@ -152,15 +152,15 @@ static size_t load_data_for_thread_test_2(int num_rows, string table_name) {
   if (num_rows <
       initial_num_rows) {  // to handle special case when only few rows should be added
     insert_col_hashs =
-        populate_table_random(table_name, num_rows, gsession->get_catalog());
+        populate_table_random(table_name, num_rows, gsession->getCatalog());
   } else {
     for (int cur_num_rows = initial_num_rows; cur_num_rows <= num_rows;
          cur_num_rows += num_rows_step) {
       if (cur_num_rows == num_rows) {
         insert_col_hashs =
-            populate_table_random(table_name, num_rows_step, gsession->get_catalog());
+            populate_table_random(table_name, num_rows_step, gsession->getCatalog());
       } else {
-        populate_table_random(table_name, num_rows_step, gsession->get_catalog());
+        populate_table_random(table_name, num_rows_step, gsession->getCatalog());
       }
     }
   }

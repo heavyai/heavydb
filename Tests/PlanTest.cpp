@@ -140,8 +140,8 @@ RootPlan* plan_dml(const string& input_str) {
   Parser::DMLStmt* dml = dynamic_cast<Parser::DMLStmt*>(stmt.get());
   CHECK(dml != nullptr);
   Query query;
-  dml->analyze(gsession->get_catalog(), query);
-  Optimizer optimizer(query, gsession->get_catalog());
+  dml->analyze(gsession->getCatalog(), query);
+  Optimizer optimizer(query, gsession->getCatalog());
   RootPlan* plan = optimizer.optimize();
   return plan;
 }
@@ -155,26 +155,26 @@ TEST(ParseAnalyzePlan, Create) {
                                     "h real, i float, j double, k bigint encoding diff, "
                                     "l text not null encoding dict, m "
                                     "timestamp(0), n time(0), o date);"););
-  ASSERT_TRUE(gsession->get_catalog().getMetadataForTable("fat") != nullptr);
+  ASSERT_TRUE(gsession->getCatalog().getMetadataForTable("fat") != nullptr);
   ASSERT_NO_THROW(
       run_ddl_statement(
           "create table if not exists skinny (a smallint, b int, c bigint);"););
-  ASSERT_TRUE(gsession->get_catalog().getMetadataForTable("skinny") != nullptr);
+  ASSERT_TRUE(gsession->getCatalog().getMetadataForTable("skinny") != nullptr);
   ASSERT_NO_THROW(
       run_ddl_statement(
           "create table if not exists smallfrag (a int, b text, c bigint) with "
           "(fragment_size = 1000, page_size = 512);"););
-  const TableDescriptor* td = gsession->get_catalog().getMetadataForTable("smallfrag");
+  const TableDescriptor* td = gsession->getCatalog().getMetadataForTable("smallfrag");
   EXPECT_TRUE(td->maxFragRows == 1000 && td->fragPageSize == 512);
   ASSERT_NO_THROW(
       run_ddl_statement(
           "create table if not exists testdict (a varchar(100) encoding dict(8), c "
           "text encoding dict);"););
-  td = gsession->get_catalog().getMetadataForTable("testdict");
+  td = gsession->getCatalog().getMetadataForTable("testdict");
   const ColumnDescriptor* cd =
-      gsession->get_catalog().getMetadataForColumn(td->tableId, "a");
+      gsession->getCatalog().getMetadataForColumn(td->tableId, "a");
   const DictDescriptor* dd =
-      gsession->get_catalog().getMetadataForDict(cd->columnType.get_comp_param());
+      gsession->getCatalog().getMetadataForDict(cd->columnType.get_comp_param());
   ASSERT_TRUE(dd != nullptr);
   EXPECT_EQ(dd->dictNBits, 8);
 }

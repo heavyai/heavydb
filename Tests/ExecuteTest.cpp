@@ -61,7 +61,7 @@ bool g_keep_test_data{false};
 
 size_t choose_shard_count() {
   CHECK(g_session);
-  const auto cuda_mgr = g_session->get_catalog().getDataMgr().getCudaMgr();
+  const auto cuda_mgr = g_session->getCatalog().getDataMgr().getCudaMgr();
   const int device_count = cuda_mgr ? cuda_mgr->getDeviceCount() : 0;
   return g_num_leafs * (device_count > 1 ? device_count : 0);
 }
@@ -167,7 +167,7 @@ inline void run_ddl_statement(const std::string& create_table_stmt) {
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
   return device_type == ExecutorDeviceType::GPU &&
-         !g_session->get_catalog().getDataMgr().gpusPresent();
+         !g_session->getCatalog().getDataMgr().gpusPresent();
 #else
   return device_type == ExecutorDeviceType::GPU;
 #endif
@@ -4101,14 +4101,14 @@ namespace {
 const size_t g_array_test_row_count{20};
 
 std::unique_ptr<Importer_NS::Loader> get_loader(const TableDescriptor* td) {
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
   auto loader = std::make_unique<Importer_NS::Loader>(cat, td);
   return loader;
 }
 
 void import_array_test(const std::string& table_name) {
   CHECK_EQ(size_t(0), g_array_test_row_count % 4);
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
   const auto td = cat.getMetadataForTable(table_name);
   CHECK(td);
   auto loader = get_loader(td);
@@ -12258,7 +12258,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
     const auto create_test_inner_deleted =
         build_create_table_statement(columns_definition, "test_inner_deleted", {"", 0}, {}, 2, with_delete_support );
     run_ddl_statement(create_test_inner_deleted);
-    auto& cat = g_session->get_catalog();
+    auto& cat = g_session->getCatalog();
     const auto td = cat.getMetadataForTable("test_inner_deleted");
     CHECK(td);
     const auto cd = cat.getMetadataForColumn(td->tableId, "deleted");

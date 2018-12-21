@@ -365,7 +365,7 @@ void MapDHandler::connect_impl(TSessionId& session,
 void MapDHandler::disconnect(const TSessionId& session) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   auto session_it = MapDHandler::get_session_it(session);
-  const auto dbname = session_it->second->get_catalog().get_currentDB().dbName;
+  const auto dbname = session_it->second->getCatalog().get_currentDB().dbName;
   LOG(INFO) << "User " << session_it->second->get_currentUser().userName
             << " disconnected from database " << dbname << std::endl;
   disconnect_impl(session_it);
@@ -392,9 +392,9 @@ void MapDHandler::interrupt(const TSessionId& session) {
       leaf_aggregator_.interrupt(session);
     }
     auto session_it = get_session_it(session);
-    const auto dbname = session_it->second->get_catalog().get_currentDB().dbName;
+    const auto dbname = session_it->second->getCatalog().get_currentDB().dbName;
     auto session_info_ptr = session_it->second.get();
-    auto& cat = session_info_ptr->get_catalog();
+    auto& cat = session_info_ptr->getCatalog();
     auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
                                           jit_debug_ ? "/tmp" : "",
                                           jit_debug_ ? "mapdquery" : "",
@@ -486,7 +486,7 @@ void MapDHandler::get_hardware_info(TClusterHardwareInfo& _return,
 void MapDHandler::get_session_info(TSessionInfo& _return, const TSessionId& session) {
   auto session_info = get_session(session);
   _return.user = session_info.get_currentUser().userName;
-  _return.database = session_info.get_catalog().get_currentDB().dbName;
+  _return.database = session_info.getCatalog().get_currentDB().dbName;
   _return.start_time = session_info.get_start_time();
 }
 
@@ -825,7 +825,7 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
         mapd_shared_lock<mapd_shared_mutex> executeReadLock(
             *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
         std::vector<std::shared_ptr<VLock>> upddelLocks;
-        getTableLocks<mapd_shared_mutex>(session_info.get_catalog(),
+        getTableLocks<mapd_shared_mutex>(session_info.getCatalog(),
                                          tableNames,
                                          upddelLocks,
                                          LockType::UpdateDeleteLock);
@@ -1110,7 +1110,7 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
                                  false,
                                  false);
     const auto& row_desc =
-        fixup_row_descriptor(result.row_set.row_desc, session_info.get_catalog());
+        fixup_row_descriptor(result.row_set.row_desc, session_info.getCatalog());
     for (const auto& col_desc : row_desc) {
       const auto it_ok = _return.insert(std::make_pair(col_desc.col_name, col_desc));
       CHECK(it_ok.second);
@@ -1132,7 +1132,7 @@ void MapDHandler::get_roles(std::vector<std::string>& roles, const TSessionId& s
   if (!session_info.get_currentUser().isSuper) {
     roles =
         SysCatalog::instance().getRoles(session_info.get_currentUser().userName,
-                                        session_info.get_catalog().get_currentDB().dbId);
+                                        session_info.getCatalog().get_currentDB().dbId);
   } else {
     roles = SysCatalog::instance().getRoles(
         false, true, session_info.get_currentUser().userName);
@@ -1267,7 +1267,7 @@ bool MapDHandler::has_object_privilege(const TSessionId& sessionId,
                                        const TDBObjectPermissions& permissions) {
   check_privileges_on("has_object_privilege");
   auto session = get_session(sessionId);
-  auto& cat = session.get_catalog();
+  auto& cat = session.getCatalog();
   auto current_user = session.get_currentUser();
   if (!current_user.isSuper && !current_user.isReallySuper &&
       !SysCatalog::instance().isRoleGrantedToGrantee(
@@ -1332,7 +1332,7 @@ void MapDHandler::get_db_objects_for_grantee(std::vector<TDBObject>& TDBObjectsF
   }
   auto* rl = SysCatalog::instance().getGrantee(roleName);
   if (rl) {
-    auto dbId = session.get_catalog().get_currentDB().dbId;
+    auto dbId = session.getCatalog().get_currentDB().dbId;
     for (auto& dbObject : *rl->getDbObjects(true)) {
       if (dbObject.first.dbId != dbId) {
         // TODO (max): it doesn't scale well in case we have many DBs (not a typical
@@ -1383,21 +1383,21 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
     } else if ((object_type == TableDBObjectType || object_type == ViewDBObjectType) &&
                !objectName.empty()) {
       // special handling for view / table
-      auto& cat = session.get_catalog();
+      auto& cat = session.getCatalog();
       auto td = cat.getMetadataForTable(objectName, false);
       if (td) {
         object_type = td->isView ? ViewDBObjectType : TableDBObjectType;
         object_to_find = DBObject(objectName, object_type);
       }
     }
-    object_to_find.loadKey(session.get_catalog());
+    object_to_find.loadKey(session.getCatalog());
   } catch (const std::exception&) {
     THROW_MAPD_EXCEPTION("Object with name " + objectName + " does not exist.");
   }
 
   // object type on database level
   DBObject object_to_find_dblevel("", object_type);
-  object_to_find_dblevel.loadKey(session.get_catalog());
+  object_to_find_dblevel.loadKey(session.getCatalog());
   // if user is superuser respond with a full priv
   if (session.get_currentUser().isSuper) {
     // using ALL_TABLE here to set max permissions
@@ -1589,7 +1589,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
                                          const bool get_system,
                                          const bool get_physical) {
   auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   auto td = cat.getMetadataForTable(
       table_name,
       false);  // don't populate fragmenter on this call since we only want metadata
@@ -1670,7 +1670,7 @@ void MapDHandler::get_frontend_view(TFrontendView& _return,
                                     const TSessionId& session,
                                     const std::string& view_name) {
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   auto vd = cat.getMetadataForFrontendView(
       std::to_string(session_info.get_currentUser().userId), view_name);
   if (!vd) {
@@ -1687,7 +1687,7 @@ void MapDHandler::get_link_view(TFrontendView& _return,
                                 const TSessionId& session,
                                 const std::string& link) {
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   auto ld = cat.getMetadataForLink(std::to_string(cat.get_currentDB().dbId) + link);
   if (!ld) {
     THROW_MAPD_EXCEPTION("Link " + link + " is not valid.");
@@ -1701,7 +1701,7 @@ void MapDHandler::get_link_view(TFrontendView& _return,
 bool MapDHandler::hasTableAccessPrivileges(const TableDescriptor* td,
                                            const TSessionId& session) {
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   auto user_metadata = session_info.get_currentUser();
 
   if (user_metadata.isSuper) {
@@ -1719,7 +1719,7 @@ void MapDHandler::get_tables_impl(std::vector<std::string>& table_names,
                                   const TSessionId& session,
                                   const GetTablesType get_tables_type) {
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   const auto tables = cat.getAllTableMetadata();
   for (const auto td : tables) {
     if (td->shard >= 0) {
@@ -1767,7 +1767,7 @@ void MapDHandler::get_views(std::vector<std::string>& table_names,
 void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
                                   const TSessionId& session) {
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   const auto tables = cat.getAllTableMetadata();
   _return.reserve(tables.size());
 
@@ -1856,7 +1856,7 @@ void MapDHandler::get_users(std::vector<std::string>& user_names,
   if (SysCatalog::instance().arePrivilegesOn() &&
       !session_info.get_currentUser().isSuper) {
     user_list = SysCatalog::instance().getAllUserMetadata(
-        session_info.get_catalog().get_currentDB().dbId);
+        session_info.getCatalog().get_currentDB().dbId);
   } else {
     user_list = SysCatalog::instance().getAllUserMetadata();
   }
@@ -1972,7 +1972,7 @@ void MapDHandler::get_databases(std::vector<TDBInfo>& dbinfos,
 void MapDHandler::get_frontend_views(std::vector<TFrontendView>& view_names,
                                      const TSessionId& session) {
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   const auto views = cat.getAllFrontendViewMetadata();
   for (const auto vd : views) {
     if (vd->userId == session_info.get_currentUser().userId) {
@@ -2018,7 +2018,7 @@ void MapDHandler::load_table_binary(const TSessionId& session,
                                     const std::vector<TRow>& rows) {
   check_read_only("load_table_binary");
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   if (g_cluster && !leaf_aggregator_.leafCount()) {
     // Sharded table rows need to be routed to the leaf by an aggregator.
     check_table_not_sharded(cat, table_name);
@@ -2067,7 +2067,7 @@ void MapDHandler::load_table_binary(const TSessionId& session,
     }
   }
   auto checkpoint_lock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-      session_info.get_catalog(), table_name, LockType::CheckpointLock);
+      session_info.getCatalog(), table_name, LockType::CheckpointLock);
   loader->load(import_buffers, rows.size());
 }
 
@@ -2077,7 +2077,7 @@ void MapDHandler::prepare_columnar_loader(
     size_t num_cols,
     std::unique_ptr<Importer_NS::Loader>* loader,
     std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>* import_buffers) {
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   if (g_cluster && !leaf_aggregator_.leafCount()) {
     // Sharded table rows need to be routed to the leaf by an aggregator.
     check_table_not_sharded(cat, table_name);
@@ -2141,7 +2141,7 @@ void MapDHandler::load_table_binary_columnar(const TSessionId& session,
     THROW_MAPD_EXCEPTION(oss.str());
   }
   auto checkpoint_lock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-      session_info.get_catalog(), table_name, LockType::CheckpointLock);
+      session_info.getCatalog(), table_name, LockType::CheckpointLock);
   loader->load(import_buffers, numRows);
 }
 
@@ -2228,7 +2228,7 @@ void MapDHandler::load_table_binary_arrow(const TSessionId& session,
     THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
   auto checkpoint_lock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-      session_info.get_catalog(), table_name, LockType::CheckpointLock);
+      session_info.getCatalog(), table_name, LockType::CheckpointLock);
   loader->load(import_buffers, numRows);
 }
 
@@ -2237,7 +2237,7 @@ void MapDHandler::load_table(const TSessionId& session,
                              const std::vector<TStringRow>& rows) {
   check_read_only("load_table");
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   if (g_cluster && !leaf_aggregator_.leafCount()) {
     // Sharded table rows need to be routed to the leaf by an aggregator.
     check_table_not_sharded(cat, table_name);
@@ -2336,7 +2336,7 @@ void MapDHandler::load_table(const TSessionId& session,
     }
   }
   auto checkpoint_lock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-      session_info.get_catalog(), table_name, LockType::CheckpointLock);
+      session_info.getCatalog(), table_name, LockType::CheckpointLock);
   loader->load(import_buffers, rows_completed);
 }
 
@@ -2781,7 +2781,7 @@ Planner::RootPlan* MapDHandler::parse_to_plan_legacy(
     const std::string& query_str,
     const Catalog_Namespace::SessionInfo& session_info,
     const std::string& action /* render or validate */) {
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   LOG(INFO) << action << ": " << hide_sensitive_data(query_str);
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
@@ -2843,7 +2843,7 @@ static bool is_allowed_on_dashboard(const Catalog_Namespace::SessionInfo& sessio
                                     int32_t dashboard_id,
                                     AccessPrivileges requestedPermissions) {
   DBObject object(dashboard_id, DashboardDBObjectType);
-  auto& catalog = session_info.get_catalog();
+  auto& catalog = session_info.getCatalog();
   auto& user = session_info.get_currentUser();
   object.loadKey(catalog);
   object.setPrivileges(requestedPermissions);
@@ -2857,7 +2857,7 @@ void MapDHandler::get_dashboard(TDashboard& dashboard,
                                 const TSessionId& session,
                                 const int32_t dashboard_id) {
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   Catalog_Namespace::UserMetadata user_meta;
   auto dash = cat.getMetadataForDashboard(dashboard_id);
   if (!dash) {
@@ -2893,7 +2893,7 @@ void MapDHandler::get_dashboard(TDashboard& dashboard,
 void MapDHandler::get_dashboards(std::vector<TDashboard>& dashboards,
                                  const TSessionId& session) {
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   Catalog_Namespace::UserMetadata user_meta;
   const auto dashes = cat.getAllFrontendViewMetadata();
   user_meta.userName = "";
@@ -2931,7 +2931,7 @@ int32_t MapDHandler::create_dashboard(const TSessionId& session,
                                       const std::string& dashboard_metadata) {
   check_read_only("create_dashboard");
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
 
   if (SysCatalog::instance().arePrivilegesOn() &&
       !session_info.checkDBAccessPrivileges(DBObjectType::DashboardDBObjectType,
@@ -2973,7 +2973,7 @@ void MapDHandler::replace_dashboard(const TSessionId& session,
                                     const std::string& dashboard_metadata) {
   check_read_only("replace_dashboard");
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
 
   if (!is_allowed_on_dashboard(
           session_info, dashboard_id, AccessPrivileges::EDIT_DASHBOARD)) {
@@ -3005,7 +3005,7 @@ void MapDHandler::delete_dashboard(const TSessionId& session,
                                    const int32_t dashboard_id) {
   check_read_only("delete_dashboard");
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   auto dash = cat.getMetadataForDashboard(dashboard_id);
   if (!dash) {
     THROW_MAPD_EXCEPTION("Dashboard with id" + std::to_string(dashboard_id) +
@@ -3028,7 +3028,7 @@ std::vector<std::string> MapDHandler::get_valid_groups(const TSessionId& session
                                                        int32_t dashboard_id,
                                                        std::vector<std::string> groups) {
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   auto dash = cat.getMetadataForDashboard(dashboard_id);
   if (!dash) {
     THROW_MAPD_EXCEPTION("Exception: Dashboard id " + std::to_string(dashboard_id) +
@@ -3061,7 +3061,7 @@ void MapDHandler::share_dashboard(const TSessionId& session,
   std::vector<std::string> valid_groups;
   valid_groups = get_valid_groups(session, dashboard_id, groups);
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   // By default object type can only be dashboard
   DBObjectType object_type = DBObjectType::DashboardDBObjectType;
   DBObject object(dashboard_id, object_type);
@@ -3105,7 +3105,7 @@ void MapDHandler::unshare_dashboard(const TSessionId& session,
   std::vector<std::string> valid_groups;
   valid_groups = get_valid_groups(session, dashboard_id, groups);
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   // By default object type can only be dashboard
   DBObjectType object_type = DBObjectType::DashboardDBObjectType;
   DBObject object(dashboard_id, object_type);
@@ -3145,7 +3145,7 @@ void MapDHandler::get_dashboard_grantees(
     const TSessionId& session,
     int32_t dashboard_id) {
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   Catalog_Namespace::UserMetadata user_meta;
   auto dash = cat.getMetadataForDashboard(dashboard_id);
   if (!dash) {
@@ -3189,7 +3189,7 @@ void MapDHandler::create_frontend_view(const TSessionId& session,
                                        const std::string& view_metadata) {
   check_read_only("create_frontend_view");
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   FrontendViewDescriptor vd;
   vd.viewName = view_name;
   vd.viewState = view_state;
@@ -3214,7 +3214,7 @@ void MapDHandler::delete_frontend_view(const TSessionId& session,
                                        const std::string& view_name) {
   check_read_only("delete_frontend_view");
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   auto vd = cat.getMetadataForFrontendView(
       std::to_string(session_info.get_currentUser().userId), view_name);
   if (!vd) {
@@ -3234,7 +3234,7 @@ void MapDHandler::create_link(std::string& _return,
                               const std::string& view_metadata) {
   // check_read_only("create_link");
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
 
   LinkDescriptor ld;
   ld.userId = session_info.get_currentUser().userId;
@@ -3369,7 +3369,7 @@ void MapDHandler::import_table(const TSessionId& session,
   check_read_only("import_table");
   LOG(INFO) << "import_table " << table_name << " from " << file_name_in;
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
 
   const TableDescriptor* td = cat.getMetadataForTable(table_name);
   if (td == nullptr) {
@@ -3470,7 +3470,7 @@ void MapDHandler::import_geo_table(const TSessionId& session,
                                    const TRowDescriptor& row_desc) {
   check_read_only("import_table");
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
 
   Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
 
@@ -3868,7 +3868,7 @@ void MapDHandler::check_table_load_privileges(
     const Catalog_Namespace::SessionInfo& session_info,
     const std::string& table_name) {
   auto user_metadata = session_info.get_currentUser();
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   if (SysCatalog::instance().arePrivilegesOn()) {
     DBObject dbObject(table_name, TableDBObjectType);
     dbObject.loadKey(cat);
@@ -3922,7 +3922,7 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
     const bool find_push_down_candidates,
     const bool just_calcite_explain) const {
   INJECT_TIMER(execute_rel_alg);
-  const auto& cat = session_info.get_catalog();
+  const auto& cat = session_info.getCatalog();
   CompilationOptions co = {
       executor_device_type, true, ExecutorOptLevel::Default, g_enable_dynamic_watchdog};
   ExecutionOptions eo = {g_enable_columnar_output,
@@ -3975,7 +3975,7 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                                      const ExecutorDeviceType device_type,
                                      const size_t device_id,
                                      const int32_t first_n) const {
-  const auto& cat = session_info.get_catalog();
+  const auto& cat = session_info.getCatalog();
   CHECK(device_type == ExecutorDeviceType::CPU ||
         session_info.get_executor_device_type() == ExecutorDeviceType::GPU);
   CompilationOptions co = {
@@ -4021,7 +4021,7 @@ void MapDHandler::execute_root_plan(TQueryResult& _return,
                                     const ExecutorDeviceType executor_device_type,
                                     const int32_t first_n) const {
   auto executor = Executor::getExecutor(
-      root_plan->get_catalog().get_currentDB().dbId,
+      root_plan->getCatalog().get_currentDB().dbId,
       jit_debug_ ? "/tmp" : "",
       jit_debug_ ? "mapdquery" : "",
       mapd_parameters_,
@@ -4267,7 +4267,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
 
   _return.nonce = nonce;
   _return.execution_time_ms = 0;
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
 
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
@@ -4315,16 +4315,14 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       for (const auto& table : tableNames) {
         if (table.second) {
           chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-              session_info.get_catalog(), table.first, LockType::CheckpointLock);
+              session_info.getCatalog(), table.first, LockType::CheckpointLock);
         }
       }
       // COPY_TO/SELECT: read ExecutorOuterLock >> read UpdateDeleteLock locks
       executeReadLock = mapd_shared_lock<mapd_shared_mutex>(
           *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
-      getTableLocks<mapd_shared_mutex>(session_info.get_catalog(),
-                                       tableNames,
-                                       upddelLocks,
-                                       LockType::UpdateDeleteLock);
+      getTableLocks<mapd_shared_mutex>(
+          session_info.getCatalog(), tableNames, upddelLocks, LockType::UpdateDeleteLock);
       const auto filter_push_down_requests = execute_rel_alg(
           _return,
           pw.is_select_calcite_explain ? query_ra_calcite_explain : query_ra,
@@ -4447,11 +4445,11 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       // is it safe to do this check without a lock?
       // if the table doesn't exist, the getTableLock will throw an exception anyway
       const TableDescriptor* td =
-          session_info.get_catalog().getMetadataForTable(import_stmt->get_table());
+          session_info.getCatalog().getMetadataForTable(import_stmt->get_table());
       if (td) {
         // COPY_FROM: CheckpointLock [ >> write UpdateDeleteLocks ]
         chkptlLock =
-            getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_info.get_catalog(),
+            getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_info.getCatalog(),
                                                               import_stmt->get_table(),
                                                               LockType::CheckpointLock);
         // [ write UpdateDeleteLocks ] lock is deferred in
@@ -4485,19 +4483,17 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       std::map<std::string, bool> tableNames;
       const auto query_string = export_stmt->get_select_stmt();
       const auto query_ra = parse_to_ra(query_string, {}, session_info, &tableNames);
-      getTableLocks<mapd_shared_mutex>(session_info.get_catalog(),
-                                       tableNames,
-                                       upddelLocks,
-                                       LockType::UpdateDeleteLock);
+      getTableLocks<mapd_shared_mutex>(
+          session_info.getCatalog(), tableNames, upddelLocks, LockType::UpdateDeleteLock);
     }
     auto truncate_stmt = dynamic_cast<Parser::TruncateTableStmt*>(ddl);
     if (truncate_stmt) {
       chkptlLock =
-          getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_info.get_catalog(),
+          getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_info.getCatalog(),
                                                             *truncate_stmt->get_table(),
                                                             LockType::CheckpointLock);
       upddelLock =
-          getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_info.get_catalog(),
+          getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_info.getCatalog(),
                                                             *truncate_stmt->get_table(),
                                                             LockType::UpdateDeleteLock);
     }
@@ -4505,11 +4501,11 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     if (add_col_stmt) {
       add_col_stmt->check_executable(session_info);
       chkptlLock =
-          getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_info.get_catalog(),
+          getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_info.getCatalog(),
                                                             *add_col_stmt->get_table(),
                                                             LockType::CheckpointLock);
       upddelLock =
-          getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_info.get_catalog(),
+          getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_info.getCatalog(),
                                                             *add_col_stmt->get_table(),
                                                             LockType::UpdateDeleteLock);
     }
@@ -4543,12 +4539,12 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         // INSERT_SELECT: CheckpointLock >> read UpdateDeleteLocks [ >> write
         // UpdateDeleteLocks ]
         chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-            session_info.get_catalog(), *stmtp->get_table(), LockType::CheckpointLock);
+            session_info.getCatalog(), *stmtp->get_table(), LockType::CheckpointLock);
         // >> read UpdateDeleteLock locks
         std::map<std::string, bool> tableNames;
         const auto query_string = stmtp->get_query()->to_string();
         const auto query_ra = parse_to_ra(query_str, {}, session_info, &tableNames);
-        getTableLocks<mapd_shared_mutex>(session_info.get_catalog(),
+        getTableLocks<mapd_shared_mutex>(session_info.getCatalog(),
                                          tableNames,
                                          upddelLocks,
                                          LockType::UpdateDeleteLock);
@@ -4561,7 +4557,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         // INSERT_VALUES: CheckpointLock >> write ExecutorOuterLock [ >> write
         // UpdateDeleteLocks ]
         chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-            session_info.get_catalog(), *stmtp->get_table(), LockType::CheckpointLock);
+            session_info.getCatalog(), *stmtp->get_table(), LockType::CheckpointLock);
         executeWriteLock = mapd_unique_lock<mapd_shared_mutex>(
             *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
         // [ write UpdateDeleteLocks ] lock is deferred in
@@ -4569,7 +4565,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       }
 
       if (g_cluster && root_plan->get_stmt_type() == kINSERT) {
-        check_table_not_sharded(session_info.get_catalog(),
+        check_table_not_sharded(session_info.getCatalog(),
                                 root_plan->get_result_table_id());
       }
       execute_root_plan(_return,
@@ -4648,7 +4644,7 @@ void MapDHandler::execute_distributed_copy_statement(
 Planner::RootPlan* MapDHandler::parse_to_plan(
     const std::string& query_str,
     const Catalog_Namespace::SessionInfo& session_info) {
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   ParserWrapper pw{query_str};
   // if this is a calcite select or explain select run in calcite
   if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
@@ -4782,7 +4778,7 @@ void MapDHandler::insert_data(const TSessionId& session,
                               const TInsertData& thrift_insert_data) {
   CHECK_EQ(thrift_insert_data.column_ids.size(), thrift_insert_data.data.size());
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   Fragmenter_Namespace::InsertData insert_data;
   insert_data.databaseId = thrift_insert_data.db_id;
   insert_data.tableId = thrift_insert_data.table_id;
@@ -4907,7 +4903,7 @@ void MapDHandler::checkpoint(const TSessionId& session,
                              const int32_t db_id,
                              const int32_t table_id) {
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   cat.getDataMgr().checkpoint(db_id, table_id);
 }
 
@@ -4920,7 +4916,7 @@ void MapDHandler::set_table_epoch(const TSessionId& session,
   if (!session_info.get_currentUser().isSuper) {
     throw std::runtime_error("Only superuser can set_table_epoch");
   }
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
 
   if (leaf_aggregator_.leafCount() > 0) {
     return leaf_aggregator_.set_table_epochLeaf(session_info, db_id, table_id, new_epoch);
@@ -4936,7 +4932,7 @@ void MapDHandler::set_table_epoch_by_name(const TSessionId& session,
   if (!session_info.get_currentUser().isSuper) {
     throw std::runtime_error("Only superuser can set_table_epoch");
   }
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   auto td = cat.getMetadataForTable(
       table_name,
       false);  // don't populate fragmenter on this call since we only want metadata
@@ -4952,7 +4948,7 @@ int32_t MapDHandler::get_table_epoch(const TSessionId& session,
                                      const int32_t db_id,
                                      const int32_t table_id) {
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
 
   if (leaf_aggregator_.leafCount() > 0) {
     return leaf_aggregator_.get_table_epochLeaf(session_info, db_id, table_id);
@@ -4963,7 +4959,7 @@ int32_t MapDHandler::get_table_epoch(const TSessionId& session,
 int32_t MapDHandler::get_table_epoch_by_name(const TSessionId& session,
                                              const std::string& table_name) {
   const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
+  auto& cat = session_info.getCatalog();
   auto td = cat.getMetadataForTable(
       table_name,
       false);  // don't populate fragmenter on this call since we only want metadata
