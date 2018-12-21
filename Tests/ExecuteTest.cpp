@@ -5269,7 +5269,6 @@ TEST(Select, Subqueries) {
     c("SELECT str, SUM(y) AS n FROM test WHERE x > (SELECT COUNT(*) FROM test) - 14 "
       "GROUP BY str ORDER BY str ASC;",
       dt);
-    // Throws join table must be replicated in distributed
     c("SELECT COUNT(*) FROM test, (SELECT x FROM test_inner) AS inner_x WHERE test.x "
       "= inner_x.x;",
       dt);
