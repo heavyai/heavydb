@@ -1357,8 +1357,9 @@ Executor::CompilationResult Executor::compileWorkUnit(
       query_mem_desc.getQueryDescriptionType() ==
           QueryDescriptionType::GroupByPerfectHash &&
       query_mem_desc.getGroupbyColCount() > 1) {
+    const auto grid_size = query_mem_desc.blocksShareMemory() ? 1 : gridSize();
     const size_t required_memory{
-        query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU)};
+        (grid_size * query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU))};
     const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
     CHECK(cuda_mgr);
     const size_t max_memory{cuda_mgr->getDeviceProperties(0)->globalMem / 5};

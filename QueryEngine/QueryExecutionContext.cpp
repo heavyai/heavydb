@@ -93,7 +93,11 @@ QueryExecutionContext::QueryExecutionContext(
     , iter_buffers_(iter_buffers)
     , frag_offsets_(frag_offsets)
     , consistent_frag_sizes_(get_consistent_frags_sizes(frag_offsets))
-    , num_buffers_(1)
+    , num_buffers_{device_type == ExecutorDeviceType::CPU
+                       ? 1
+                       : executor->blockSize() * (query_mem_desc_.blocksShareMemory()
+                                                      ? 1
+                                                      : executor->gridSize())}
     , num_allocated_rows_(0)
     , row_set_mem_owner_(row_set_mem_owner)
     , output_columnar_(output_columnar)
@@ -169,13 +173,19 @@ QueryExecutionContext::QueryExecutionContext(
 
   std::unique_ptr<int64_t, CheckedAllocDeleter> group_by_small_buffer_template;
 
+  const auto step = device_type_ == ExecutorDeviceType::GPU &&
+                            query_mem_desc_.threadsShareMemory() &&
+                            query_mem_desc_.isGroupBy()
+                        ? executor_->blockSize()
+                        : size_t(1);
   const auto index_buffer_qw = device_type_ == ExecutorDeviceType::GPU && sort_on_gpu_ &&
                                        query_mem_desc_.hasKeylessHash()
                                    ? query_mem_desc_.getEntryCount()
                                    : size_t(0);
   const auto actual_group_buffer_size =
       group_buffer_size + index_buffer_qw * sizeof(int64_t);
-  {
+  const auto group_buffers_count = !query_mem_desc_.isGroupBy() ? 1 : num_buffers_;
+  for (size_t i = 0; i < group_buffers_count; i += step) {
     OOM_TRACE_PUSH(+": group_by_buffer " + std::to_string(actual_group_buffer_size));
     auto group_by_buffer =
         alloc_group_by_buffer(actual_group_buffer_size, render_allocator_map);
@@ -188,6 +198,9 @@ QueryExecutionContext::QueryExecutionContext(
       row_set_mem_owner_->addGroupByBuffer(group_by_buffer);
     }
     group_by_buffers_.push_back(group_by_buffer);
+    for (size_t j = 1; j < step; ++j) {
+      group_by_buffers_.push_back(nullptr);
+    }
     const auto column_frag_offsets =
         get_col_frag_offsets(ra_exe_unit.target_exprs, frag_offsets);
     const auto column_frag_sizes =
@@ -205,6 +218,9 @@ QueryExecutionContext::QueryExecutionContext(
                       executor));
     result_sets_.back()->allocateStorage(reinterpret_cast<int8_t*>(group_by_buffer),
                                          executor_->plan_state_->init_agg_vals_);
+    for (size_t j = 1; j < step; ++j) {
+      result_sets_.emplace_back(nullptr);
+    }
   }
 }
 
@@ -511,7 +527,7 @@ ResultSetPtr QueryExecutionContext::getRowSet(
     CHECK_EQ(size_t(1), num_buffers_);
     return groupBufferToResults(0, ra_exe_unit.target_exprs);
   }
-  size_t step{executor_->blockSize()};
+  size_t step{query_mem_desc_.threadsShareMemory() ? executor_->blockSize() : 1};
   for (size_t i = 0; i < group_by_buffers_.size(); i += step) {
     results_per_sm.emplace_back(groupBufferToResults(i, ra_exe_unit.target_exprs),
                                 std::vector<size_t>{});
@@ -819,7 +835,6 @@ GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(
     const unsigned block_size_x,
     const unsigned grid_size_x,
     const bool can_sort_on_gpu) const {
-  CHECK_EQ(group_by_buffers_.size(), size_t(1));
   if (use_streaming_top_n(ra_exe_unit, query_mem_desc_)) {
     if (render_allocator) {
       throw StreamingTopNNotSupportedInRenderQuery();
@@ -843,7 +858,10 @@ GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(
   }
   if (query_mem_desc_.lazyInitGroups(ExecutorDeviceType::GPU)) {
     CHECK(!render_allocator);
-    const auto group_by_dev_buffer = dev_group_by_buffers.second;
+    const size_t step{query_mem_desc_.threadsShareMemory() ? block_size_x : 1};
+    size_t groups_buffer_size{
+        query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU)};
+    auto group_by_dev_buffer = dev_group_by_buffers.second;
     const size_t col_count = query_mem_desc_.getColCount();
     CUdeviceptr col_widths_dev_ptr{0};
     if (output_columnar_) {
@@ -862,30 +880,33 @@ GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(
                                   ? executor_->warpSize()
                                   : 1;
     OOM_TRACE_PUSH();
-    if (output_columnar_) {
-      init_columnar_group_by_buffer_on_device(
-          reinterpret_cast<int64_t*>(group_by_dev_buffer),
-          reinterpret_cast<const int64_t*>(init_agg_vals_dev_ptr),
-          query_mem_desc_.getEntryCount(),
-          query_mem_desc_.groupColWidthsSize(),
-          col_count,
-          reinterpret_cast<int8_t*>(col_widths_dev_ptr),
-          /*need_padding = */ true,
-          query_mem_desc_.hasKeylessHash(),
-          sizeof(int64_t),
-          block_size_x,
-          grid_size_x);
-    } else {
-      init_group_by_buffer_on_device(reinterpret_cast<int64_t*>(group_by_dev_buffer),
-                                     reinterpret_cast<int64_t*>(init_agg_vals_dev_ptr),
-                                     query_mem_desc_.getEntryCount(),
-                                     query_mem_desc_.groupColWidthsSize(),
-                                     query_mem_desc_.getEffectiveKeyWidth(),
-                                     query_mem_desc_.getRowSize() / sizeof(int64_t),
-                                     query_mem_desc_.hasKeylessHash(),
-                                     warp_count,
-                                     block_size_x,
-                                     grid_size_x);
+    for (size_t i = 0; i < group_by_buffers_.size(); i += step) {
+      if (output_columnar_) {
+        init_columnar_group_by_buffer_on_device(
+            reinterpret_cast<int64_t*>(group_by_dev_buffer),
+            reinterpret_cast<const int64_t*>(init_agg_vals_dev_ptr),
+            query_mem_desc_.getEntryCount(),
+            query_mem_desc_.groupColWidthsSize(),
+            col_count,
+            reinterpret_cast<int8_t*>(col_widths_dev_ptr),
+            /*need_padding = */ true,
+            query_mem_desc_.hasKeylessHash(),
+            sizeof(int64_t),
+            block_size_x,
+            grid_size_x);
+      } else {
+        init_group_by_buffer_on_device(reinterpret_cast<int64_t*>(group_by_dev_buffer),
+                                       reinterpret_cast<int64_t*>(init_agg_vals_dev_ptr),
+                                       query_mem_desc_.getEntryCount(),
+                                       query_mem_desc_.groupColWidthsSize(),
+                                       query_mem_desc_.getEffectiveKeyWidth(),
+                                       query_mem_desc_.getRowSize() / sizeof(int64_t),
+                                       query_mem_desc_.hasKeylessHash(),
+                                       warp_count,
+                                       block_size_x,
+                                       grid_size_x);
+      }
+      group_by_dev_buffer += groups_buffer_size;
     }
   }
   return GpuQueryMemory{dev_group_by_buffers};

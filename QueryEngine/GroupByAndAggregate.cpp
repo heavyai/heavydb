@@ -1830,14 +1830,15 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
                    : col_range_info.has_nulls)
             : false;
 
-    const auto group_expr_lvs = executor_->groupByColumnCodegen(group_expr.get(),
-                                                                col_width_size,
-                                                                co,
-                                                                col_has_nulls,
-                                                                translated_null_value,
-                                                                diamond_codegen,
-                                                                array_loops,
-                                                                true);
+    const auto group_expr_lvs =
+        executor_->groupByColumnCodegen(group_expr.get(),
+                                        col_width_size,
+                                        co,
+                                        col_has_nulls,
+                                        translated_null_value,
+                                        diamond_codegen,
+                                        array_loops,
+                                        query_mem_desc_.threadsShareMemory());
     const auto group_expr_lv = group_expr_lvs.translated_value;
     if (query_mem_desc_.isSingleColumnGroupByWithPerfectHash()) {
       CHECK_EQ(size_t(1), ra_exe_unit_.groupby_exprs.size());
@@ -2271,9 +2272,8 @@ bool GroupByAndAggregate::codegenAggCalls(
     const bool is_simple_count =
         agg_info.is_agg && agg_info.agg_kind == kCOUNT && !agg_info.is_distinct;
     if (co.device_type_ == ExecutorDeviceType::GPU &&
-        query_mem_desc_.getQueryDescriptionType() !=
-            QueryDescriptionType::NonGroupedAggregate &&
-        is_simple_count && (!arg_expr || arg_expr->get_type_info().get_notnull())) {
+        query_mem_desc_.threadsShareMemory() && is_simple_count &&
+        (!arg_expr || arg_expr->get_type_info().get_notnull())) {
       CHECK_EQ(size_t(1), agg_fn_names.size());
       const auto chosen_bytes = query_mem_desc_.getColumnWidth(agg_out_off).compact;
       llvm::Value* agg_col_ptr{nullptr};
@@ -2470,8 +2470,7 @@ bool GroupByAndAggregate::codegenAggCalls(
         }
         if (!agg_info.is_distinct) {
           if (co.device_type_ == ExecutorDeviceType::GPU &&
-              query_mem_desc_.getQueryDescriptionType() !=
-                  QueryDescriptionType::NonGroupedAggregate) {
+              query_mem_desc_.threadsShareMemory()) {
             agg_fname += "_shared";
             if (needs_unnest_double_patch) {
               agg_fname = patch_agg_fname(agg_fname);

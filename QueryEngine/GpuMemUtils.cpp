@@ -70,6 +70,19 @@ void copy_to_gpu(Data_Namespace::DataMgr* data_mgr,
                              device_id);
 }
 
+namespace {
+
+size_t coalesced_size(const QueryMemoryDescriptor& query_mem_desc,
+                      const size_t group_by_one_buffer_size,
+                      const unsigned block_size_x,
+                      const unsigned grid_size_x) {
+  const size_t num_buffers{block_size_x * grid_size_x};
+  return (query_mem_desc.threadsShareMemory() ? grid_size_x : num_buffers) *
+         group_by_one_buffer_size;
+}
+
+}  // namespace
+
 GpuGroupByBuffers create_dev_group_by_buffers(
     const CudaAllocator& cuda_allocator,
     const std::vector<int64_t*>& group_by_buffers,
@@ -83,12 +96,16 @@ GpuGroupByBuffers create_dev_group_by_buffers(
   if (group_by_buffers.empty() && !render_allocator) {
     return std::make_pair(0, 0);
   }
-  CHECK_EQ(size_t(1), group_by_buffers.size());
+
   size_t groups_buffer_size{query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU)};
 
   CHECK_GT(groups_buffer_size, size_t(0));
 
-  const size_t mem_size{groups_buffer_size};
+  const size_t mem_size{
+      coalesced_size(query_mem_desc,
+                     groups_buffer_size,
+                     block_size_x,
+                     query_mem_desc.blocksShareMemory() ? 1 : grid_size_x)};
 
   CHECK_LE(query_mem_desc.getEntryCount(), std::numeric_limits<uint32_t>::max());
   const size_t prepended_buff_size{
@@ -106,24 +123,38 @@ GpuGroupByBuffers create_dev_group_by_buffers(
     CHECK_EQ(uint64_t(0),
              static_cast<int64_t>(group_by_dev_buffers_mem) % sizeof(int64_t));
   }
+  const size_t step{query_mem_desc.threadsShareMemory() ? block_size_x : 1};
 
   if (!render_allocator && (always_init_group_by_on_host ||
                             !query_mem_desc.lazyInitGroups(ExecutorDeviceType::GPU))) {
+    std::vector<int8_t> buff_to_gpu(mem_size);
+    auto buff_to_gpu_ptr = &buff_to_gpu[0];
+
+    for (size_t i = 0; i < group_by_buffers.size(); i += step) {
+      memcpy(buff_to_gpu_ptr, group_by_buffers[i], groups_buffer_size);
+      buff_to_gpu_ptr += groups_buffer_size;
+    }
     cuda_allocator.copyToDevice(
-        group_by_dev_buffers_mem, group_by_buffers[0], mem_size, device_id);
+        group_by_dev_buffers_mem, &buff_to_gpu[0], buff_to_gpu.size(), device_id);
   }
+
+  auto group_by_dev_buffer = group_by_dev_buffers_mem;
 
   const size_t num_ptrs{block_size_x * grid_size_x};
 
   std::vector<CUdeviceptr> group_by_dev_buffers(num_ptrs);
 
-  for (size_t i = 0; i < num_ptrs; i++) {
-    group_by_dev_buffers[i] = group_by_dev_buffers_mem;
+  for (size_t i = 0; i < num_ptrs; i += step) {
+    for (size_t j = 0; j < step; ++j) {
+      group_by_dev_buffers[i + j] = group_by_dev_buffer;
+    }
+    if (!query_mem_desc.blocksShareMemory()) {
+      group_by_dev_buffer += groups_buffer_size;
+    }
   }
 
   auto group_by_dev_ptr =
       cuda_allocator.alloc(num_ptrs * sizeof(CUdeviceptr), device_id, nullptr);
-
   cuda_allocator.copyToDevice(group_by_dev_ptr,
                               &group_by_dev_buffers[0],
                               num_ptrs * sizeof(CUdeviceptr),
@@ -157,9 +188,12 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
   if (group_by_buffers.empty()) {
     return;
   }
-  CHECK_EQ(size_t(1), group_by_buffers.size());
-  // if there's no index buffer existing at the beginning:
-  if (!prepend_index_buffer) {
+  const unsigned block_buffer_count{query_mem_desc.blocksShareMemory() ? 1 : grid_size_x};
+  if (block_buffer_count == 1 && !prepend_index_buffer) {
+    CHECK_EQ(block_size_x, group_by_buffers.size());
+    CHECK_EQ(coalesced_size(
+                 query_mem_desc, groups_buffer_size, block_size_x, block_buffer_count),
+             groups_buffer_size);
     copy_from_gpu(data_mgr,
                   group_by_buffers[0],
                   group_by_dev_buffers_mem,
@@ -167,17 +201,26 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                   device_id);
     return;
   }
-
-  // If there's an index buffer at the beginning (e.g., in columnar projections)
+  const size_t num_buffers{block_size_x * block_buffer_count};
   const size_t index_buffer_sz{
       prepend_index_buffer ? query_mem_desc.getEntryCount() * sizeof(int64_t) : 0};
-
-  const size_t buffer_size = groups_buffer_size + index_buffer_sz;
+  std::vector<int8_t> buff_from_gpu(
+      coalesced_size(
+          query_mem_desc, groups_buffer_size, block_size_x, block_buffer_count) +
+      index_buffer_sz);
   copy_from_gpu(data_mgr,
-                group_by_buffers[0],
+                &buff_from_gpu[0],
                 group_by_dev_buffers_mem - index_buffer_sz,
-                buffer_size,
+                buff_from_gpu.size(),
                 device_id);
+  auto buff_from_gpu_ptr = &buff_from_gpu[0];
+  for (size_t i = 0; i < num_buffers; ++i) {
+    if (buffer_not_null(query_mem_desc, block_size_x, ExecutorDeviceType::GPU, i)) {
+      memcpy(
+          group_by_buffers[i], buff_from_gpu_ptr, groups_buffer_size + index_buffer_sz);
+      buff_from_gpu_ptr += groups_buffer_size;
+    }
+  }
 }
 
 void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
@@ -253,6 +296,17 @@ void copy_projection_buffer_from_gpu_columnar(Data_Namespace::DataMgr* data_mgr,
       buffer_offset_cpu += align_to_int64(column_proj_size);
     }
   }
+}
+
+// TODO(alex): remove
+bool buffer_not_null(const QueryMemoryDescriptor& query_mem_desc,
+                     const unsigned block_size_x,
+                     const ExecutorDeviceType device_type,
+                     size_t i) {
+  if (device_type == ExecutorDeviceType::CPU) {
+    return true;
+  }
+  return (!query_mem_desc.threadsShareMemory() || (i % block_size_x == 0));
 }
 
 int8_t* ThrustAllocator::allocate(std::ptrdiff_t num_bytes) {

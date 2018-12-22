@@ -31,9 +31,7 @@ bool GroupByAndAggregate::needsUnnestDoublePatch(llvm::Value* val_ptr,
                                                  const std::string& agg_base_name,
                                                  const CompilationOptions& co) const {
   return (executor_->isArchMaxwell(co.device_type_) &&
-          query_mem_desc_.getQueryDescriptionType() !=
-              QueryDescriptionType::NonGroupedAggregate &&
-          llvm::isa<llvm::AllocaInst>(val_ptr) &&
+          query_mem_desc_.threadsShareMemory() && llvm::isa<llvm::AllocaInst>(val_ptr) &&
           val_ptr->getType() ==
               llvm::Type::getDoublePtrTy(executor_->cgen_state_->context_) &&
           "agg_id" == agg_base_name);
