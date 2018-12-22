@@ -1768,11 +1768,14 @@ Catalog::Catalog(const string& basePath,
     CheckAndExecuteMigrations();
   }
   buildMaps();
-  if (!is_new_db) {
-    //  we need to buildMaps first in order to create and grant roles for
-    // dashboard systemroles.
-    createDashboardSystemRoles();
-  }
+  /*
+  TODO(wamsi): Enable creation of dashboard roles
+  */
+  // if (!is_new_db) {
+  //   //  we need to buildMaps first in order to create and grant roles for
+  //   // dashboard systemroles.
+  //   createDashboardSystemRoles();
+  // }
 }
 
 Catalog::~Catalog() {
@@ -4327,10 +4330,14 @@ int32_t Catalog::createFrontendView(FrontendViewDescriptor& vd) {
   }
   vd.viewSystemRoleName = generate_dash_system_rolename(std::to_string(vd.viewId));
   addFrontendViewToMap(vd);
-  if (SysCatalog::instance().arePrivilegesOn()) {
-    // NOTE(wamsi): Transactionally unsafe
-    createOrUpdateDashboardSystemRole(vd.viewMetadata, vd.userId, vd.viewSystemRoleName);
-  }
+  /*
+  TODO(wamsi): Enable creation of dashboard roles
+  */
+  // if (SysCatalog::instance().arePrivilegesOn()) {
+  //   // NOTE(wamsi): Transactionally unsafe
+  //   createOrUpdateDashboardSystemRole(vd.viewMetadata, vd.userId,
+  //   vd.viewSystemRoleName);
+  // }
   return vd.viewId;
 }
 
@@ -4400,10 +4407,14 @@ void Catalog::replaceDashboard(FrontendViewDescriptor& vd) {
   vd.updateTime = sqliteConnector_.getData<string>(0, 1);
   vd.viewSystemRoleName = generate_dash_system_rolename(std::to_string(vd.viewId));
   addFrontendViewToMapNoLock(vd);
-  if (SysCatalog::instance().arePrivilegesOn()) {
-    // NOTE(wamsi): Transactionally unsafe
-    createOrUpdateDashboardSystemRole(vd.viewMetadata, vd.userId, vd.viewSystemRoleName);
-  }
+  /*
+  TODO(wamsi): Enable creation of dashboard roles
+  */
+  // if (SysCatalog::instance().arePrivilegesOn()) {
+  //   // NOTE(wamsi): Transactionally unsafe
+  //   createOrUpdateDashboardSystemRole(vd.viewMetadata, vd.userId,
+  //   vd.viewSystemRoleName);
+  // }
 }
 
 std::string Catalog::calculateSHA1(const std::string& data) {
