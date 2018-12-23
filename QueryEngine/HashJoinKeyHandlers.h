@@ -18,6 +18,7 @@
 #define QUERYENGINE_HASHJOINKEYHANDLERS_H
 
 #include "HashJoinRuntime.h"
+#include "SqlTypesLayout.h"
 
 #ifdef __CUDACC__
 #include "DecodersImpl.h"
@@ -41,7 +42,7 @@ DEVICE inline int64_t get_join_column_element_value(const JoinColumnTypeInfo& ty
           join_column.col_buff,
           type_info.elem_sz,
           type_info.elem_sz == 4 ? NULL_INT : NULL_SMALLINT,
-          NULL_BIGINT,
+          type_info.elem_sz == 4 ? NULL_INT : NULL_SMALLINT,
           i);
     case Signed:
       return SUFFIX(fixed_width_int_decode_noinline)(
@@ -50,6 +51,11 @@ DEVICE inline int64_t get_join_column_element_value(const JoinColumnTypeInfo& ty
       return SUFFIX(fixed_width_unsigned_decode_noinline)(
           join_column.col_buff, type_info.elem_sz, i);
     default:
+#ifndef __CUDACC__
+      CHECK(false);
+#else
+      assert(false);
+#endif
       return 0;
   }
 }
