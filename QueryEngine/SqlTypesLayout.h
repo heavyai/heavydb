@@ -120,9 +120,24 @@ inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
 }
 
 inline int64_t inline_fixed_encoding_null_val(const SQLTypeInfo& ti) {
-  if (ti.get_compression() == kENCODING_NONE ||
-      ti.get_compression() == kENCODING_DATE_IN_DAYS) {
+  if (ti.get_compression() == kENCODING_NONE) {
     return inline_int_null_val(ti);
+  }
+  if (ti.get_compression() == kENCODING_DATE_IN_DAYS) {
+    switch (ti.get_comp_param()) {
+      case 0:
+      case 32:
+        return inline_int_null_value<int32_t>();
+      case 16:
+        return inline_int_null_value<int16_t>();
+      default:
+#ifndef __CUDACC__
+        CHECK(false) << "Unknown encoding width for date in days: "
+                     << ti.get_comp_param();
+#else
+        CHECK(false);
+#endif
+    }
   }
   if (ti.get_compression() == kENCODING_DICT) {
     CHECK(ti.is_string());
@@ -134,7 +149,11 @@ inline int64_t inline_fixed_encoding_null_val(const SQLTypeInfo& ti) {
       case 4:
         return inline_int_null_value<int32_t>();
       default:
+#ifndef __CUDACC__
+        CHECK(false) << "Unknown size for dictionary encoded type: " << ti.get_size();
+#else
         CHECK(false);
+#endif
     }
   }
   CHECK_EQ(kENCODING_FIXED, ti.get_compression());

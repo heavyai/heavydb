@@ -194,9 +194,13 @@ class TypedImportBuffer : boost::noncopyable {
           }
         }
         break;
+      case kDATE:
+        if (col_desc->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
+          date_i32_buffer_ = new std::vector<int32_t>();
+          break;
+        }
       case kTIME:
       case kTIMESTAMP:
-      case kDATE:
         time_buffer_ = new std::vector<time_t>();
         break;
       case kARRAY:
@@ -261,9 +265,13 @@ class TypedImportBuffer : boost::noncopyable {
           }
         }
         break;
+      case kDATE:
+        if (column_desc_->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
+          delete date_i32_buffer_;
+          break;
+        }
       case kTIME:
       case kTIMESTAMP:
-      case kDATE:
         delete time_buffer_;
         break;
       case kARRAY:
@@ -312,6 +320,8 @@ class TypedImportBuffer : boost::noncopyable {
   void addStringArray(const std::vector<std::string>& arr) {
     string_array_buffer_->push_back(arr);
   }
+
+  void addDate32(const time_t v) { date_i32_buffer_->push_back(v); }
 
   void addTime(const time_t v) { time_buffer_->push_back(v); }
 
@@ -381,9 +391,12 @@ class TypedImportBuffer : boost::noncopyable {
         return reinterpret_cast<int8_t*>(&((*float_buffer_)[0]));
       case kDOUBLE:
         return reinterpret_cast<int8_t*>(&((*double_buffer_)[0]));
+      case kDATE:
+        if (column_desc_->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
+          return reinterpret_cast<int8_t*>(&((*date_i32_buffer_)[0]));
+        }
       case kTIME:
       case kTIMESTAMP:
-      case kDATE:
         return reinterpret_cast<int8_t*>(&((*time_buffer_)[0]));
       default:
         abort();
@@ -408,9 +421,12 @@ class TypedImportBuffer : boost::noncopyable {
         return sizeof((*float_buffer_)[0]);
       case kDOUBLE:
         return sizeof((*double_buffer_)[0]);
+      case kDATE:
+        if (column_desc_->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
+          return sizeof((*date_i32_buffer_)[0]);
+        }
       case kTIME:
       case kTIMESTAMP:
-      case kDATE:
         return sizeof((*time_buffer_)[0]);
       default:
         abort();
@@ -503,11 +519,15 @@ class TypedImportBuffer : boost::noncopyable {
         }
         break;
       }
-      case kTIME:
-      case kTIMESTAMP:
       case kDATE: {
-        time_buffer_->clear();
-        break;
+        if (column_desc_->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
+          date_i32_buffer_->clear();
+          break;
+        }
+        case kTIME:
+        case kTIMESTAMP:
+          time_buffer_->clear();
+          break;
       }
       case kARRAY: {
         if (IS_STRING(column_desc_->columnType.get_subtype())) {
@@ -557,6 +577,7 @@ class TypedImportBuffer : boost::noncopyable {
     std::vector<int64_t>* bigint_buffer_;
     std::vector<float>* float_buffer_;
     std::vector<double>* double_buffer_;
+    std::vector<int32_t>* date_i32_buffer_;
     std::vector<time_t>* time_buffer_;
     std::vector<std::string>* string_buffer_;
     std::vector<std::string>* geo_string_buffer_;
