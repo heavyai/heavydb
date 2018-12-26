@@ -54,6 +54,7 @@
 #include "parser.h"
 
 size_t g_leaf_count{0};
+bool g_use_date_in_days_default_encoding{true};
 extern bool g_aggregator;
 
 using namespace Lock_Namespace;
@@ -2801,7 +2802,7 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
       // default to GEOINT 32-bits
       cd.columnType.set_compression(kENCODING_GEOINT);
       cd.columnType.set_comp_param(32);
-    } else if (type == kDATE) {
+    } else if (type == kDATE && g_use_date_in_days_default_encoding) {
       // Days encoding for DATE
       cd.columnType.set_compression(kENCODING_DATE_IN_DAYS);
       cd.columnType.set_comp_param(0);

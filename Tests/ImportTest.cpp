@@ -43,6 +43,8 @@
 using namespace std;
 using namespace TestHelpers;
 
+extern bool g_use_date_in_days_default_encoding;
+
 namespace {
 
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
@@ -314,7 +316,7 @@ std::string convert_date_to_string(time_t date) {
   return std::string(buf);
 }
 
-TEST_F(ImportTestDate, ImportMixedDates) {
+inline void run_mixed_dates_test() {
   EXPECT_NO_THROW(run_ddl_statement(
       "COPY import_test_date FROM '../../Tests/Import/datafiles/mixed_dates.txt';"));
 
@@ -343,6 +345,28 @@ TEST_F(ImportTestDate, ImportMixedDates) {
     const auto date_null = v<int64_t>(crt_row[j]);
     ASSERT_EQ(date_null, std::numeric_limits<int64_t>::min());
   }
+}
+
+TEST_F(ImportTestDate, ImportMixedDates) {
+  run_mixed_dates_test();
+}
+
+class ImportTestLegacyDate : public ::testing::Test {
+ protected:
+  virtual void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_date;"));
+    g_use_date_in_days_default_encoding = false;
+    ASSERT_NO_THROW(run_ddl_statement(create_table_date));
+  }
+
+  virtual void TearDown() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_date;"));
+    g_use_date_in_days_default_encoding = true;
+  }
+};
+
+TEST_F(ImportTestLegacyDate, ImportMixedDates) {
+  run_mixed_dates_test();
 }
 
 const char* create_table_date_arr = R"(
