@@ -698,8 +698,13 @@ class Executor {
   };
 
   bool isArchPascalOrLater(const ExecutorDeviceType dt) const {
-    return dt == ExecutorDeviceType::GPU &&
-           catalog_->getDataMgr().getCudaMgr()->isArchPascalOrLater();
+    if (dt == ExecutorDeviceType::GPU) {
+      const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
+      LOG_IF(FATAL, cuda_mgr == nullptr)
+          << "No CudaMgr instantiated, unable to check device architecture";
+      return cuda_mgr->isArchPascalOrLater();
+    }
+    return false;
   }
 
   enum class JoinImplType { Invalid, Loop, HashOneToOne, HashOneToMany };
