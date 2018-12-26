@@ -1,8 +1,9 @@
 #include "../Shared/ConstExprLib.h"
 #include "../Shared/ExperimentalTypeUtilities.h"
 
+#include <glog/logging.h>
+#include <gtest/gtest.h>
 #include <exception>
-#include "gtest/gtest.h"
 
 using namespace Experimental;
 
@@ -54,6 +55,14 @@ TEST(ExperimentalTest, ConstExprLib_Pair) {
 }
 
 int main(int argc, char* argv[]) {
+  google::InitGoogleLogging(argv[0]);
   ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+
+  int err{0};
+  try {
+    err = RUN_ALL_TESTS();
+  } catch (const std::exception& e) {
+    LOG(ERROR) << e.what();
+  }
+  return err;
 }

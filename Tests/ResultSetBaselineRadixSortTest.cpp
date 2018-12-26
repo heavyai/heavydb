@@ -258,7 +258,9 @@ TEST(SortBaseline, Floats) {
 }
 
 int main(int argc, char** argv) {
+  google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
+
 #ifdef HAVE_CUDA
   try {
     g_cuda_mgr.reset(new CudaMgr_Namespace::CudaMgr(0));
@@ -266,9 +268,17 @@ int main(int argc, char** argv) {
     LOG(WARNING) << "Could not instantiate CudaMgr, will run on CPU";
   }
 #endif  // HAVE_CUDA
-  auto err = RUN_ALL_TESTS();
+
+  int err{0};
+  try {
+    err = RUN_ALL_TESTS();
+  } catch (const std::exception& e) {
+    LOG(ERROR) << e.what();
+  }
+
 #ifdef HAVE_CUDA
   g_cuda_mgr.reset(nullptr);
 #endif  // HAVE_CUDA
+
   return err;
 }

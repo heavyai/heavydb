@@ -718,7 +718,6 @@ TEST(Select, DISABLED_TopK_LIMIT_OFFSET_DifferentOrders) {
 
 int main(int argc, char* argv[]) {
   google::InitGoogleLogging(argv[0]);
-  LOG(INFO) << " after initialization";
   ::testing::InitGoogleTest(&argc, argv);
 
   g_session.reset(QueryRunner::get_session(BASE_PATH));

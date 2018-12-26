@@ -418,7 +418,6 @@ void drop_views_and_tables() {
   EXPECT_NO_THROW(run_ddl_statement("drop table if exists skinny;"));
   EXPECT_NO_THROW(run_ddl_statement("drop table if exists smallfrag;"));
   EXPECT_NO_THROW(run_ddl_statement("drop table if exists testdict;"));
-  // non-existent table shouldn't throw either (for PR# 1030 to fix issue #1029)
   EXPECT_NO_THROW(run_ddl_statement("drop table if exists foxoxoxo;"));
 }
 
@@ -426,7 +425,15 @@ int main(int argc, char* argv[]) {
   google::InitGoogleLogging(argv[0]);
   ::testing::InitGoogleTest(&argc, argv);
   ::testing::AddGlobalTestEnvironment(new SQLTestEnv);
-  int err = RUN_ALL_TESTS();
+
+  int err{0};
+  try {
+    err = RUN_ALL_TESTS();
+  } catch (const std::exception& e) {
+    LOG(ERROR) << e.what();
+  }
+
   drop_views_and_tables();
+
   return err;
 }

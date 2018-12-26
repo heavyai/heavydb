@@ -26,6 +26,7 @@
 #include <gtest/gtest.h>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/program_options.hpp>
 #include "../Catalog/Catalog.h"
 #include "../Parser/parser.h"
 #include "../QueryEngine/ResultSet.h"
@@ -834,6 +835,27 @@ int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
   ::testing::AddGlobalTestEnvironment(new SQLTestEnv);
+  namespace po = boost::program_options;
+
+  po::options_description desc("Options");
+
+  // these two are here to allow passing correctly google testing parameters
+  desc.add_options()("gtest_list_tests", "list all tests");
+  desc.add_options()("gtest_filter", "filters tests, use --help for details");
+
+  desc.add_options()(
+      "test-help",
+      "Print all ExecuteTest specific options (for gtest options use `--help`).");
+
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+  po::notify(vm);
+
+  if (vm.count("test-help")) {
+    std::cout << "Usage: ExecuteTest" << std::endl << std::endl;
+    std::cout << desc << std::endl;
+    return 0;
+  }
 
   int err{0};
   try {

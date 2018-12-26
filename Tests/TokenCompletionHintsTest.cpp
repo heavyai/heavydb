@@ -16,6 +16,7 @@
 
 #include "../ThriftHandler/TokenCompletionHints.h"
 
+#include <glog/logging.h>
 #include <gtest/gtest.h>
 
 TEST(FindLastWord, SimpleId) {
@@ -182,6 +183,14 @@ TEST(Completion, ShouldSuggestColumnHints) {
 }
 
 int main(int argc, char** argv) {
+  google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+
+  int err{0};
+  try {
+    err = RUN_ALL_TESTS();
+  } catch (const std::exception& e) {
+    LOG(ERROR) << e.what();
+  }
+  return err;
 }
