@@ -910,6 +910,42 @@ void append_arrow_date(const ColumnDescriptor* cd,
   }
 }
 
+void append_arrow_date_i32(const ColumnDescriptor* cd,
+                           const Array& values,
+                           std::vector<int32_t>* buffer) {
+  const time_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
+  if (values.type_id() == Type::DATE32) {
+    const auto& typed_values = static_cast<const Date32Array&>(values);
+
+    buffer->reserve(typed_values.length());
+    const int32_t* raw_values = typed_values.raw_values();
+
+    for (int64_t i = 0; i < typed_values.length(); i++) {
+      if (typed_values.IsNull(i)) {
+        buffer->push_back(null_sentinel);
+      } else {
+        buffer->push_back(static_cast<int32_t>(raw_values[i]));
+      }
+    }
+  } else if (values.type_id() == Type::DATE64) {
+    const auto& typed_values = static_cast<const Date64Array&>(values);
+
+    buffer->reserve(typed_values.length());
+    const int64_t* raw_values = typed_values.raw_values();
+
+    // Convert from milliseconds since UNIX epoch into days since UNIX epoch
+    for (int64_t i = 0; i < typed_values.length(); i++) {
+      if (typed_values.IsNull(i)) {
+        buffer->push_back(null_sentinel);
+      } else {
+        buffer->push_back(static_cast<int32_t>((raw_values[i] / 1000) / kSecondsInDay));
+      }
+    }
+  } else {
+    ARROW_THROW_IF(true, "Column was not date32 or date64");
+  }
+}
+
 void append_arrow_binary(const ColumnDescriptor* cd,
                          const Array& values,
                          std::vector<std::string>* buffer) {
@@ -984,15 +1020,7 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
       break;
     case kDATE:
       if (cd->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
-        if (cd->columnType.get_comp_param() == 16) {
-          // append_arrow_date_i16(cd, col, date_i16_buffer_);
-          throw std::runtime_error("Column " + cd->columnName +
-                                   " requires arrow support for i16 dates");
-        } else {
-          // append_arrow_date_i32(cd, col, date_i32_buffer_);
-          throw std::runtime_error("Column " + cd->columnName +
-                                   " requires arrow support for i32 dates");
-        }
+        append_arrow_date_i32(cd, col, date_i32_buffer_);
         break;
       }
       append_arrow_date(cd, col, time_buffer_);
@@ -1120,15 +1148,18 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
     case kTIMESTAMP:
     case kDATE: {
       dataSize = col.data.int_col.size();
-      time_buffer_->reserve(dataSize);
-      for (size_t i = 0; i < dataSize; i++) {
-        if (cd->columnType.is_date_in_days()) {
+      if (cd->columnType.is_date_in_days()) {
+        date_i32_buffer_->reserve(dataSize);
+        for (size_t i = 0; i < dataSize; i++) {
           if (col.nulls[i]) {
             date_i32_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
           } else {
             date_i32_buffer_->push_back((int32_t)col.data.int_col[i]);
           }
-        } else {
+        }
+      } else {
+        time_buffer_->reserve(dataSize);
+        for (size_t i = 0; i < dataSize; i++) {
           if (col.nulls[i]) {
             time_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
           } else {
