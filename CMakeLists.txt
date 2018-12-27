@@ -109,6 +109,8 @@ else()
   set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-cpu")
 endif()
 
+option(ENABLE_CUDA_KERNEL_DEBUG "Enable debugging symbols for CUDA device Kernels" OFF)
+
 option(ENABLE_JIT_DEBUG "Enable debugging symbols for the JIT" OFF)
 if (ENABLE_JIT_DEBUG)
   add_definitions("-DWITH_JIT_DEBUG")
