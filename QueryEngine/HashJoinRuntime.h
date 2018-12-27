@@ -83,16 +83,16 @@ enum ColumnType { SmallDate = 0, Signed = 1, Unsigned = 2 };
 
 struct JoinColumn {
   const int8_t* col_buff;
-  size_t num_elems;
+  const size_t num_elems;
 };
 
 struct JoinColumnTypeInfo {
-  size_t elem_sz;
-  int64_t min_val;
-  int64_t null_val;
-  bool uses_bw_eq;
-  int64_t translated_null_val;
-  ColumnType column_type;
+  const size_t elem_sz;
+  const int64_t min_val;
+  const int64_t null_val;
+  const bool uses_bw_eq;
+  const int64_t translated_null_val;
+  const ColumnType column_type;
 };
 
 inline ColumnType get_join_column_type_kind(const SQLTypeInfo& ti) {

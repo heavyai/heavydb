@@ -54,7 +54,7 @@ DEVICE inline int64_t get_join_column_element_value(const JoinColumnTypeInfo& ty
 #ifndef __CUDACC__
       CHECK(false);
 #else
-      assert(false);
+      assert(0);
 #endif
       return 0;
   }
