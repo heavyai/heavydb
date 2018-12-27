@@ -6292,9 +6292,32 @@ TEST(Select, Joins_TimeAndDate) {
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+
+    // Inner joins
     c("SELECT COUNT(*) FROM test a, test b WHERE a.m = b.m;", dt);
     c("SELECT COUNT(*) FROM test a, test b WHERE a.n = b.n;", dt);
     c("SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o;", dt);
+    // TODO(adb): The following tests use too much memory for TSAN. Commenting out for
+    // now, will re-enable once we have bucketed perfect hash or overlaps hash for date
+#if 0
+    c("SELECT COUNT(*) FROM test a, test_inner b WHERE a.m = b.ts;", dt);
+    c("SELECT COUNT(*) FROM test a, test_inner b WHERE a.o = b.dt;", dt);
+    c("SELECT COUNT(*) FROM test a, test_inner b WHERE a.o = b.dt32;", dt);
+    c("SELECT COUNT(*) FROM test a, test_inner b WHERE a.o = b.dt16;", dt);
+
+    // Inner joins across types
+    c("SELECT COUNT(*) FROM test_inner a, test_inner b WHERE a.dt = b.dt;", dt);
+    c("SELECT COUNT(*) FROM test_inner a, test_inner b WHERE a.dt32 = b.dt;", dt);
+    c("SELECT COUNT(*) FROM test_inner a, test_inner b WHERE a.dt16 = b.dt;", dt);
+    c("SELECT COUNT(*) FROM test_inner a, test_inner b WHERE a.dt = b.dt32;", dt);
+    c("SELECT COUNT(*) FROM test_inner a, test_inner b WHERE a.dt32 = b.dt32;", dt);
+    c("SELECT COUNT(*) FROM test_inner a, test_inner b WHERE a.dt = b.dt16;", dt);
+    c("SELECT COUNT(*) FROM test_inner a, test_inner b WHERE a.dt32 = b.dt16;", dt);
+    c("SELECT COUNT(*) FROM test_inner a, test_inner b WHERE a.dt16 = b.dt16;", dt);
+#endif
+
+    // Outer joins
+    c("SELECT a.x, a.o, b.dt FROM test a JOIN test_inner b ON a.o = b.dt;", dt);
   }
 }
 
@@ -12221,7 +12244,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{
-        "x int not null, y int, xx smallint, str text encoding dict"};
+        "x int not null, y int, xx smallint, str text encoding dict, dt DATE, dt32 DATE "
+        "ENCODING FIXED(32), dt16 DATE ENCODING FIXED(16), ts TIMESTAMP"};
     const auto create_test_inner =
         build_create_table_statement(columns_definition,
                                      "test_inner",
@@ -12232,18 +12256,23 @@ int create_and_populate_tables(bool with_delete_support = true) {
                                      g_aggregator);
     run_ddl_statement(create_test_inner);
     g_sqlite_comparator.query(
-        "CREATE TABLE test_inner(x int not null, y int, xx smallint, str text);");
+        "CREATE TABLE test_inner(x int not null, y int, xx smallint, str text, dt DATE, "
+        "dt32 DATE, dt16 DATE, ts DATETIME);");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test_inner'";
     return -EEXIST;
   }
   {
-    const std::string insert_query{"INSERT INTO test_inner VALUES(7, 43, 7, 'foo');"};
+    const std::string insert_query{
+        "INSERT INTO test_inner VALUES(7, 43, 7, 'foo', '1999-09-09', '1999-09-09', "
+        "'1999-09-09', '2014-12-13 22:23:15');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   {
-    const std::string insert_query{"INSERT INTO test_inner VALUES(-9, 72, -9, 'bars');"};
+    const std::string insert_query{
+        "INSERT INTO test_inner VALUES(-9, 72, -9, 'bars', '2014-12-13', '2014-12-13', "
+        "'2014-12-13', '1999-09-09 14:15:16');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
