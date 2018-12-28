@@ -1136,6 +1136,19 @@ TEST(Select, FilterAndGroupByMultipleAgg) {
   }
 }
 
+TEST(Select, GroupByKeylessAndNotKeyless) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT fixed_str FROM test WHERE fixed_str = 'fish' GROUP BY fixed_str;", dt);
+    c("SELECT AVG(x), fixed_str FROM test WHERE fixed_str = 'fish' GROUP BY fixed_str;",
+      dt);
+    c("SELECT AVG(smallint_nulls), fixed_str FROM test WHERE fixed_str = 'foo' GROUP BY "
+      "fixed_str;",
+      dt);
+    c("SELECT null_str, AVG(smallint_nulls) FROM test GROUP BY null_str;", dt);
+  }
+}
+
 TEST(Select, Having) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -12335,7 +12348,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "encoding fixed(32), fx int "
         "encoding fixed(16), dd decimal(10, 2), dd_notnull decimal(10, 2) not null, ss "
         "text encoding dict, u int, ofd "
-        "int, ufd int not null, ofq bigint, ufq bigint not null"};
+        "int, ufd int not null, ofq bigint, ufq bigint not null, smallint_nulls "
+        "smallint"};
 #else
     std::string columns_definition{
         "x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn "
@@ -12347,7 +12361,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "encoding fixed(32), fx int "
         "encoding fixed(16), dd decimal(10, 2), dd_notnull decimal(10, 2) not null, ss "
         "text encoding dict, u int, ofd "
-        "int, ufd int not null, ofq bigint, ufq bigint not null"};
+        "int, ufd int not null, ofq bigint, ufq bigint not null, smallint_nulls "
+        "smallint"};
 #endif
     const std::string create_test = build_create_table_statement(
         columns_definition,
@@ -12368,7 +12383,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "time(0), o date, o1 date, o2 date, "
         "fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not "
         "null, ss "
-        "text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null);");
+        "text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null, "
+        "smallint_nulls smallint);");
 #else
     g_sqlite_comparator.query(
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f "
@@ -12380,7 +12396,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "time(0), o date, o1 date, o2 date, "
         "fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not "
         "null, ss "
-        "text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null);");
+        "text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null, "
+        "smallint_nulls smallint);");
 #endif
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test'";
@@ -12398,7 +12415,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "03:49:04.607435125', "
         "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, 'fish', "
         "null, "
-        "2147483647, -2147483648, null, -1);"};
+        "2147483647, -2147483648, null, -1, 32767);"};
 #else
     const std::string insert_query{
         "INSERT INTO test VALUES(7, 42, 101, 1001, 't', 1.1, 1.1, null, 2.2, null, "
@@ -12407,7 +12424,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "'2014-12-13 22:23:15', "
         "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, 'fish', "
         "null, "
-        "2147483647, -2147483648, null, -1);"};
+        "2147483647, -2147483648, null, -1, 32767);"};
 #endif
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
@@ -12423,7 +12440,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "222.2, "
         "null, null, null, "
         "-2147483647, "
-        "9223372036854775807, -9223372036854775808);"};
+        "9223372036854775807, -9223372036854775808, null);"};
 #else
     const std::string insert_query{
         "INSERT INTO test VALUES(8, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, 2.4, "
@@ -12432,7 +12449,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "'15:13:14', NULL, NULL, NULL, NULL, 222.2, 222.2, "
         "null, null, null, "
         "-2147483647, "
-        "9223372036854775807, -9223372036854775808);"};
+        "9223372036854775807, -9223372036854775808, null);"};
 #endif
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
@@ -12448,7 +12465,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "'1999-09-09', 11, "
         "333.3, 333.3, "
         "'boat', null, 1, "
-        "-1, 1, -9223372036854775808);"};
+        "-1, 1, -9223372036854775808, 1);"};
 #else
     const std::string insert_query{
         "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 1000.3, -1000.3, 2.6, "
@@ -12457,7 +12474,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 11, "
         "333.3, 333.3, "
         "'boat', null, 1, "
-        "-1, 1, -9223372036854775808);"};
+        "-1, 1, -9223372036854775808, 1);"};
 #endif
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);

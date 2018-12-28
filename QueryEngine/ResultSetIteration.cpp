@@ -1747,7 +1747,8 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
 
   auto ptr1 = rowwise_target_ptr;
   int8_t compact_sz1 = query_mem_desc_.getColumnWidth(slot_idx).compact;
-  if (query_mem_desc_.isSingleColumnGroupByWithPerfectHash()) {
+  if (query_mem_desc_.isSingleColumnGroupByWithPerfectHash() &&
+      !query_mem_desc_.hasKeylessHash() && !target_info.is_agg) {
     // Single column perfect hash group by can utilize one slot for both the key and the
     // target value if both values fit in 8 bytes. Use the target value actual size for
     // this case. If they don't, the target value should be 8 bytes, so we can still use
