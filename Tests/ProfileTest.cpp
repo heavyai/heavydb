@@ -384,7 +384,7 @@ inline bool is_empty_slot(const KeyT k) {
 template <typename KeyT = int64_t, typename ValT = int64_t>
 class AggregateEmulator {
  public:
-  typedef std::unordered_map<std::vector<KeyT>, std::vector<ValT>> ResultType;
+  using ResultType = std::unordered_map<std::vector<KeyT>, std::vector<ValT>>;
 
   explicit AggregateEmulator(const std::vector<OP_KIND>& ops) : agg_ops_(ops) {}
 

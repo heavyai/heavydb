@@ -491,7 +491,7 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
 
 namespace {
 
-typedef std::pair<int64_t*, bool> GroupValueInfo;
+using GroupValueInfo = std::pair<int64_t*, bool>;
 
 GroupValueInfo get_matching_group_value_columnar_reduction(int64_t* groups_buffer,
                                                            const uint32_t h,

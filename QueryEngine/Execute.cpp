@@ -773,7 +773,7 @@ ResultSetPtr Executor::resultsUnion(ExecutionDispatch& execution_dispatch) {
     return std::make_shared<ResultSet>(
         targets, ExecutorDeviceType::CPU, QueryMemoryDescriptor(), nullptr, nullptr);
   }
-  typedef std::pair<ResultSetPtr, std::vector<size_t>> IndexedResultRows;
+  using IndexedResultRows = std::pair<ResultSetPtr, std::vector<size_t>>;
   std::sort(results_per_device.begin(),
             results_per_device.end(),
             [](const IndexedResultRows& lhs, const IndexedResultRows& rhs) {

@@ -37,15 +37,14 @@
 #endif  // HAVE_CUDA
 #include <future>
 
-typedef boost::variant<std::vector<bool>,
-                       std::vector<int8_t>,
-                       std::vector<int16_t>,
-                       std::vector<int32_t>,
-                       std::vector<int64_t>,
-                       std::vector<float>,
-                       std::vector<double>,
-                       std::vector<std::string>>
-    ValueArray;
+using ValueArray = boost::variant<std::vector<bool>,
+                                  std::vector<int8_t>,
+                                  std::vector<int16_t>,
+                                  std::vector<int32_t>,
+                                  std::vector<int64_t>,
+                                  std::vector<float>,
+                                  std::vector<double>,
+                                  std::vector<std::string>>;
 
 #ifdef HAVE_ARROW_STATIC_RECORDBATCH_CTOR
 #define ARROW_RECORDBATCH_MAKE arrow::RecordBatch::Make

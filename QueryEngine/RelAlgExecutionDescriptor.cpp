@@ -20,9 +20,8 @@
 
 namespace {
 
-typedef boost::
-    adjacency_list<boost::setS, boost::vecS, boost::bidirectionalS, const RelAlgNode*>
-        DAG;
+using DAG = boost::
+    adjacency_list<boost::setS, boost::vecS, boost::bidirectionalS, const RelAlgNode*>;
 using Vertex = DAG::vertex_descriptor;
 
 std::vector<Vertex> merge_sort_with_input(const std::vector<Vertex>& vertices,
