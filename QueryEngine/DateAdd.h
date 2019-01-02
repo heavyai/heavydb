@@ -55,6 +55,8 @@ enum DateaddField {
   daNANOSECOND,
   daWEEK,
   daQUARTERDAY,
+  daWEEKDAY,
+  daDAYOFYEAR,
   daINVALID
 };
 

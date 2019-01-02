@@ -104,6 +104,8 @@ extern "C" NEVER_INLINE DEVICE time_t DateAdd(DateaddField field,
       return timeval + number * SECSPERMIN;
     case daHOUR:
       return timeval + number * SECSPERHOUR;
+    case daWEEKDAY:
+    case daDAYOFYEAR:
     case daDAY:
       return timeval + number * SECSPERDAY;
     case daWEEK:

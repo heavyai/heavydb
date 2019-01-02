@@ -2943,6 +2943,18 @@ TEST(Select, Time) {
                   "SELECT DATEADD('nanosecond', 86400000000123, m) = TIMESTAMP "
                   "'2014-12-14 22:23:15' from test limit 1;",
                   dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('weekday', -3, o) = TIMESTAMP "
+                                        "'1999-09-06 00:00:00' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('decade', 3, o) = TIMESTAMP "
+                                        "'2029-09-09 00:00:00' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('week', 1, o) = TIMESTAMP "
+                                        "'1999-09-16 00:00:00' from test limit 1;",
+                                        dt)));
 
     ASSERT_EQ(
         1,
@@ -3391,6 +3403,15 @@ TEST(Select, Time) {
         v<int64_t>(run_simple_agg(
             "SELECT DATEPART('second', CAST ('2617-12-23' as DATE)) from test limit 1;",
             dt)));
+    ASSERT_EQ(
+        6,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEPART('weekday', CAST ('2011-12-31' as DATE)) from test limit 1;",
+            dt)));
+    ASSERT_EQ(365,
+              v<int64_t>(run_simple_agg("SELECT DATEPART('dayofyear', CAST ('2011-12-31' "
+                                        "as DATE)) from test limit 1;",
+                                        dt)));
     // Compressed DATE - limits test
     ASSERT_EQ(4708022400L,
               v<int64_t>(run_simple_agg(
