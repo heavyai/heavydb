@@ -24,8 +24,6 @@ sudo apt install -y \
     llvm \
     llvm-dev \
     clang-format \
-    gcc-5 \
-    g++-5 \
     libgoogle-glog-dev \
     golang \
     libssl-dev \
@@ -60,8 +58,15 @@ sudo apt install -y \
     automake \
     bison \
     flex-old \
-    libxerces-c-dev \
     libxmlsec1-dev
+
+# Install gcc6
+add-apt-repository ppa:ubuntu-toolchain-r/test -y
+apt update && apt upgrade -y
+apt install g++-6 -y
+update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-6 60 \
+                    --slave /usr/bin/g++ g++ /usr/bin/g++-6
+update-alternatives --config gcc
 
 # Needed to find xmltooling and xml_security_c
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG_PATH
@@ -160,9 +165,37 @@ make install
 popd
 
 # OpenSAML
+
+#xml-security requires xerces >= 3.2
+VERS=3.2.2
+wget https://www-us.apache.org/dist//xerces/c/3/sources/xerces-c-$VERS.tar.gz
+tar xzvf xerces-c-$VERS.tar.gz
+pushd xerces-c-$VERS
+./configure --prefix=$PREFIX
+make -j $(nproc)
+make install
+popd
+
 download_make_install ${HTTP_DEPS}/xml-security-c-2.0.0.tar.gz "" "--without-xalan"
-download_make_install ${HTTP_DEPS}/xmltooling-3.0.2-nolog4shib.tar.gz
-download_make_install ${HTTP_DEPS}/opensaml-3.0.0-nolog4shib.tar.gz
+
+#xmltooling and opensaml needs --with-boost
+VERS=3.0.2-nolog4shib
+wget --continue ${HTTP_DEPS}/xmltooling-$VERS.tar.gz
+tar xvf xmltooling-$VERS.tar.gz
+pushd xmltooling-$VERS
+./configure --prefix=$PREFIX --with-boost=$PREFIX
+make -j $(nproc)
+make install
+popd
+
+VERS=3.0.0-nolog4shib
+wget --continue ${HTTP_DEPS}/opensaml-$VERS.tar.gz
+tar xvf opensaml-$VERS.tar.gz
+pushd opensaml-$VERS
+./configure --prefix=$PREFIX --with-boost=$PREFIX
+make -j $(nproc)
+make install
+popd
 
 cat > $PREFIX/mapd-deps.sh <<EOF
 PREFIX=$PREFIX

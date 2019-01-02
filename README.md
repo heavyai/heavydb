@@ -186,7 +186,7 @@ MapD has the following dependencies:
 | ------- | ----------- | -------- |
 | [CMake](https://cmake.org/) | 3.3 | yes |
 | [LLVM](http://llvm.org/) | 3.8-4.0, 6.0 | yes |
-| [GCC](http://gcc.gnu.org/) | 5.1 | no, if building with clang |
+| [GCC](http://gcc.gnu.org/) | 6.0 | no, if building with clang |
 | [Go](https://golang.org/) | 1.6 | yes |
 | [Boost](http://www.boost.org/) | 1.65.0 | yes |
 | [OpenJDK](http://openjdk.java.net/) | 1.7 | yes |
