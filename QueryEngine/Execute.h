@@ -214,7 +214,8 @@ inline const ColumnarResults* columnarize_result(
 
 class CompilationRetryNoLazyFetch : public std::runtime_error {
  public:
-  CompilationRetryNoLazyFetch() : std::runtime_error("CompilationRetryNoLazyFetch") {}
+  CompilationRetryNoLazyFetch()
+      : std::runtime_error("Retry query compilation with no GPU lazy fetch.") {}
 };
 
 class TooManyLiterals : public std::runtime_error {
@@ -224,12 +225,13 @@ class TooManyLiterals : public std::runtime_error {
 
 class CompilationRetryNoCompaction : public std::runtime_error {
  public:
-  CompilationRetryNoCompaction() : std::runtime_error("CompilationRetryNoCompaction") {}
+  CompilationRetryNoCompaction()
+      : std::runtime_error("Retry query compilation with no compaction.") {}
 };
 
 class QueryMustRunOnCpu : public std::runtime_error {
  public:
-  QueryMustRunOnCpu() : std::runtime_error("QueryMustRunOnCpu") {}
+  QueryMustRunOnCpu() : std::runtime_error("Query must run in cpu mode.") {}
 };
 
 class SringConstInResultSet : public std::runtime_error {
@@ -415,20 +417,21 @@ class Executor {
 
   ExpressionRange getColRange(const PhysicalInput&) const;
 
-  typedef boost::variant<int8_t,
-                         int16_t,
-                         int32_t,
-                         int64_t,
-                         float,
-                         double,
-                         std::pair<std::string, int>,
-                         std::string,
-                         std::vector<double>,
-                         std::vector<int32_t>,
-                         std::vector<int8_t>,
-                         std::pair<std::vector<int8_t>, int>>
-      LiteralValue;
-  typedef std::vector<LiteralValue> LiteralValues;
+  size_t getNumBytesForFetchedRow() const;
+
+  using LiteralValue = boost::variant<int8_t,
+                                      int16_t,
+                                      int32_t,
+                                      int64_t,
+                                      float,
+                                      double,
+                                      std::pair<std::string, int>,
+                                      std::string,
+                                      std::vector<double>,
+                                      std::vector<int32_t>,
+                                      std::vector<int8_t>,
+                                      std::pair<std::vector<int8_t>, int>>;
+  using LiteralValues = std::vector<LiteralValue>;
 
   void registerActiveModule(void* module, const int device_id) const;
   void unregisterActiveModule(void* module, const int device_id) const;
@@ -1504,16 +1507,6 @@ class Executor {
     std::unordered_map<int, std::vector<llvm::Value*>> saved_fetch_cache;
   };
 
-  // TODO(alex): remove, only useful for the legacy path
-  class ResetIsNested {
-   public:
-    ResetIsNested(Executor* executor) : executor_(executor) {}
-    ~ResetIsNested() { executor_->is_nested_ = false; }
-
-   private:
-    Executor* executor_;
-  };
-
   struct PlanState {
     PlanState(const bool allow_lazy_fetch,
               const JoinInfo& join_info,
@@ -1522,12 +1515,15 @@ class Executor {
         , join_info_(join_info)
         , executor_(executor) {}
 
+    using TableId = int;
+    using ColumnId = int;
+
     std::vector<int64_t> init_agg_vals_;
     std::vector<Analyzer::Expr*> target_exprs_;
-    std::unordered_map<InputColDescriptor, int> global_to_local_col_ids_;
-    std::vector<int> local_to_global_col_ids_;
-    std::set<std::pair<int, int>> columns_to_fetch_;
-    std::set<std::pair<int, int>> columns_to_not_fetch_;
+    std::unordered_map<InputColDescriptor, size_t> global_to_local_col_ids_;
+    std::vector<ColumnId> local_to_global_col_ids_;
+    std::set<std::pair<TableId, ColumnId>> columns_to_fetch_;
+    std::set<std::pair<TableId, ColumnId>> columns_to_not_fetch_;
     bool allow_lazy_fetch_;
     JoinInfo join_info_;
     const Executor* executor_;

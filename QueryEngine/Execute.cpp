@@ -194,6 +194,32 @@ ExpressionRange Executor::getColRange(const PhysicalInput& phys_input) const {
   return agg_col_range_cache_.getColRange(phys_input);
 }
 
+size_t Executor::getNumBytesForFetchedRow() const {
+  size_t num_bytes = 0;
+  if (!plan_state_) {
+    return 0;
+  }
+  for (const auto& fetched_col_pair : plan_state_->columns_to_fetch_) {
+    if (fetched_col_pair.first < 0) {
+      num_bytes += 8;
+    } else {
+      const auto cd =
+          catalog_->getMetadataForColumn(fetched_col_pair.first, fetched_col_pair.second);
+      const auto& ti = cd->columnType;
+      const auto sz = ti.get_type() == kTEXT && ti.get_compression() == kENCODING_DICT
+                          ? 4
+                          : ti.get_size();
+      if (sz < 0) {
+        // for varlen types, only account for the pointer/size for each row, for now
+        num_bytes += 16;
+      } else {
+        num_bytes += sz;
+      }
+    }
+  }
+  return num_bytes;
+}
+
 void Executor::clearMetaInfoCache() {
   input_table_info_cache_.clear();
   agg_col_range_cache_.clear();
@@ -1072,7 +1098,12 @@ ResultSetPtr Executor::executeWorkUnit(
                              rowid_lookup_key);
     };
 
-    QueryFragmentDescriptor fragment_descriptor(ra_exe_unit, query_infos);
+    QueryFragmentDescriptor fragment_descriptor(
+        ra_exe_unit,
+        query_infos,
+        execution_dispatch.getDeviceType() == ExecutorDeviceType::GPU
+            ? cat.getDataMgr().getMemoryInfo(Data_Namespace::MemoryLevel::GPU_LEVEL)
+            : std::vector<Data_Namespace::MemoryInfo>{});
 
     const QueryMemoryDescriptor& query_mem_desc =
         execution_dispatch.getQueryMemoryDescriptor();
