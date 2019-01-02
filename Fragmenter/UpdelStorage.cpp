@@ -129,6 +129,8 @@ static int get_chunks(const Catalog_Namespace::Catalog* catalog,
 
 struct ChunkToInsertDataConverter {
  public:
+  virtual ~ChunkToInsertDataConverter() {}
+
   virtual void convertToColumnarFormat(size_t row, size_t indexInFragment) = 0;
 
   virtual void addDataBlocksToInsertData(
@@ -151,6 +153,8 @@ struct ScalarChunkConverter : public ChunkToInsertDataConverter {
         checked_malloc(num_rows * sizeof(INSERT_DATA_TYPE))));
     data_buffer_addr_ = (BUFFER_DATA_TYPE*)chunk->get_buffer()->getMemoryPtr();
   }
+
+  virtual ~ScalarChunkConverter() {}
 
   virtual void convertToColumnarFormat(size_t row, size_t indexInFragment) {
     auto buffer_value = data_buffer_addr_[indexInFragment];
@@ -181,6 +185,8 @@ struct FixedLenArrayChunkConverter : public ChunkToInsertDataConverter {
     fixed_array_length_ = chunk->get_column_desc()->columnType.get_size();
   }
 
+  virtual ~FixedLenArrayChunkConverter() {}
+
   virtual void convertToColumnarFormat(size_t row, size_t indexInFragment) {
     auto src_value_ptr = data_buffer_addr_ + (indexInFragment * fixed_array_length_);
     (*column_data_)[row] =
@@ -204,6 +210,8 @@ struct ArrayChunkConverter : public FixedLenArrayChunkConverter {
         (StringOffsetT*)(chunk->get_index_buf() ? chunk->get_index_buf()->getMemoryPtr()
                                                 : nullptr);
   }
+
+  virtual ~ArrayChunkConverter() {}
 
   virtual void convertToColumnarFormat(size_t row, size_t indexInFragment) {
     size_t src_value_size =
@@ -230,6 +238,8 @@ struct StringChunkConverter : public ChunkToInsertDataConverter {
         (StringOffsetT*)(chunk->get_index_buf() ? chunk->get_index_buf()->getMemoryPtr()
                                                 : nullptr);
   }
+
+  virtual ~StringChunkConverter() {}
 
   virtual void convertToColumnarFormat(size_t row, size_t indexInFragment) {
     size_t src_value_size =
@@ -340,6 +350,9 @@ void InsertOrderFragmenter::updateColumns(
               std::make_unique<FixedLenArrayChunkConverter>(num_rows, chunk.get());
         } else if (chunk_cd->columnType.is_string()) {
           converter = std::make_unique<StringChunkConverter>(num_rows, chunk.get());
+        } else if (chunk_cd->columnType.is_geometry()) {
+          // the logical geo column is a string column
+          converter = std::make_unique<StringChunkConverter>(num_rows, chunk.get());
         } else {
           converter = std::make_unique<ArrayChunkConverter>(num_rows, chunk.get());
         }
@@ -352,7 +365,7 @@ void InsertOrderFragmenter::updateColumns(
         int logical_size = logical_type.get_size();
         int physical_size = chunk_cd->columnType.get_size();
 
-        if (logical_type.is_date_in_days()) {
+        if (chunk_cd->columnType.is_date_in_days()) {
           // get_logical_type_info does not know about date compression yet
           logical_size = 4;
         }
