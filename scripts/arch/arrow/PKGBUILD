@@ -1,0 +1,57 @@
+# Maintainer: Guillaume Horel <guillaume.horel@gmail.com>
+
+pkgname='arrow'
+pkgver=0.13.0
+pkgrel=10
+pkgdesc="A columnar in-memory analytics layer for big data."
+arch=('x86_64')
+url="https://arrow.apache.org"
+license=('Apache')
+depends=('boost-libs' 'protobuf' 'rapidjson' 'google-glog' 'double-conversion')
+checkdepends=('gflags')
+optdepends=()
+provides=('parquet-cpp')
+conflicts=('parquet-cpp')
+makedepends=('cmake' 'boost')
+source=("https://github.com/apache/arrow/archive/apache-arrow-$pkgver.tar.gz")
+sha256sums=('380fcc51f0bf98e13148300c87833e734cbcd7b74dddc4bce93829e7f7e4208b')
+
+prepare(){
+  cd "${srcdir}/$pkgname-apache-$pkgname-$pkgver"
+}
+
+build(){
+  cd "$srcdir"
+  mkdir -p build
+  cd "$srcdir/build"
+  ARROW_BUILD_TOOLCHAIN=/usr LZ4_HOME= ZSTD_HOME= BROTLI_HOME= DOUBLE_CONVERSION_HOME= SNAPPY_HOME= ZLIB_HOME= GFLAGS_HOME= GLOG_HOME=/usr FLATBUFFERS_HOME= cmake \
+    ../$pkgname-apache-$pkgname-$pkgver/cpp -DARROW_PARQUET=ON \
+                                      -DARROW_PYTHON=ON \
+                                      -DCMAKE_BUILD_TYPE=Release \
+                                      -DARROW_BUILD_TESTS=OFF \
+                                      -DARROW_ALTIVEC=OFF \
+                                      -DCMAKE_INSTALL_PREFIX="/usr" \
+                                      -DCMAKE_INSTALL_LIBDIR="lib" \
+                                      -DARROW_JEMALLOC=ON \
+                                      -DARROW_ORC=OFF \
+                                      -DARROW_PLASMA=ON \
+                                      -DARROW_TENSORFLOW=OFF \
+                                      -DARROW_USE_SIMD=ON \
+                                      -DARROW_FLIGHT=OFF \
+                                      -DARROW_GANDIVA=OFF \
+                                      -DARROW_PROTOBUF_USE_SHARED=OFF \
+                                      -DARROW_NO_DEPRECATED_API=ON \
+                                      -DARROW_USE_GLOG=OFF
+  make
+}
+
+package(){
+  cd "$srcdir/build"
+  make DESTDIR="${pkgdir}" install
+}
+
+#check(){
+#  cd "$srcdir/build"
+#  make test
+#}
+# vim:ts=2:sw=2:et:

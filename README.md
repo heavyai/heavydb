@@ -333,35 +333,19 @@ The [scripts/mapd-deps-ubuntu.sh](scripts/mapd-deps-ubuntu.sh) and [scripts/mapd
 
 ## Arch
 
-The following uses [yaourt](https://wiki.archlinux.org/index.php/Yaourt) to install packages from the [Arch User Repository](https://wiki.archlinux.org/index.php/Arch_User_Repository).
+[scripts/mapd-deps-arch.sh](scripts/mapd-deps-arch.sh) is provided that will use [yay](https://aur.archlinux.org/packages/yay/) to install packages from the [Arch User Repository](https://wiki.archlinux.org/index.php/Arch_User_Repository) and a custom PKGBUILD script for Apache Arrow. If you don't have yay yet, install it first: https://github.com/Jguer/yay#installation
 
-    yaourt -S \
-        git \
-        cmake \
-        boost \
-        google-glog \
-        extra/jdk8-openjdk \
-        clang \
-        llvm \
-        thrift \
-        go \
-        gdal \
-        maven
+Note: Apache Arrow, while available in the AUR, requires a few custom build flags in order to be used with Core. A custom PKGBUILD for it is included.
 
-    VERS=1.21-45
-    wget --continue https://github.com/jarro2783/bisonpp/archive/$VERS.tar.gz
-    tar xvf $VERS.tar.gz
-    pushd bisonpp-$VERS
-    ./configure
-    make -j $(nproc)
-    sudo make install
-    popd
+Note: packages aws-sdk-cpp and folly, while available in the AUR, are not supported while for building Core on Arch. If these packages are installed, support for them should be disabled when building Core. To do so, use the following options when running CMake:
+
+    cmake -DENABLE_FOLLY=off -DENABLE_AWS_S3=off ..
 
 ### CUDA
 
 CUDA and the NVIDIA drivers may be installed using the following.
 
-    yaourt -S \
+    yay -S \
         linux-headers \
         cuda \
         nvidia
@@ -370,7 +354,7 @@ Be sure to reboot after installing in order to activate the NVIDIA drivers.
 
 ### Environment Variables
 
-The CUDA `bin` directories need to be added to `PATH`. The easiest way to do so is by creating a new file named `/etc/profile.d/mapd-deps.sh` containing the following:
+The `cuda` package should set up the environment variables required to use CUDA. If you receive errors saying `nvcc` is not found, then CUDA `bin` directories need to be added to `PATH`: the easiest way to do so is by creating a new file named `/etc/profile.d/mapd-deps.sh` containing the following:
 
     PATH=/opt/cuda/bin:$PATH
     export PATH
