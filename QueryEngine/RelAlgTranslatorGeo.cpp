@@ -570,7 +570,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
   }
 
   // Accessors for poly bounds and render group for in-situ poly render queries
-  if (rex_function->getName() == std::string("MapD_GeoPolyBoundsPtr")) {
+  if (rex_function->getName() == std::string("MapD_GeoPolyBoundsPtr") ||  // deprecated
+      rex_function->getName() == std::string("OmniSci_Geo_PolyBoundsPtr")) {
     SQLTypeInfo arg_ti;
     // get geo column plus bounds only (not expanded)
     auto geoargs = translateGeoFunctionArg(
@@ -585,7 +586,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     // done
     return makeExpr<Analyzer::FunctionOper>(
         rex_function->getType(), specialized_geofunc, geoargs);
-  } else if (rex_function->getName() == std::string("MapD_GeoPolyRenderGroup")) {
+  } else if (rex_function->getName() ==
+                 std::string("MapD_GeoPolyRenderGroup") ||  // deprecated
+             rex_function->getName() == std::string("OmniSci_Geo_PolyRenderGroup")) {
     SQLTypeInfo arg_ti;
     // get geo column plus render_group only (not expanded)
     auto geoargs = translateGeoFunctionArg(

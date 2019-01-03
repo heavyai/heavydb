@@ -1380,8 +1380,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
       rex_function->getName() == std::string("ST_Perimeter") ||
       rex_function->getName() == std::string("ST_Area") ||
       rex_function->getName() == std::string("ST_SRID") ||
-      rex_function->getName() == std::string("MapD_GeoPolyBoundsPtr") ||
-      rex_function->getName() == std::string("MapD_GeoPolyRenderGroup")) {
+      rex_function->getName() == std::string("MapD_GeoPolyBoundsPtr") ||    // deprecated
+      rex_function->getName() == std::string("MapD_GeoPolyRenderGroup") ||  // deprecated
+      rex_function->getName() == std::string("OmniSci_Geo_PolyBoundsPtr") ||
+      rex_function->getName() == std::string("OmniSci_Geo_PolyRenderGroup")) {
     CHECK_EQ(rex_function->size(), size_t(1));
     return translateUnaryGeoFunction(rex_function);
   }

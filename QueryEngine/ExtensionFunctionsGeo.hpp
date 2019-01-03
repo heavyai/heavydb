@@ -3052,15 +3052,29 @@ bool ST_Intersects_MultiPolygon_MultiPolygon(int8_t* mpoly1_coords,
 //
 // Accessors for poly bounds and render group for in-situ poly render queries
 //
+// The MapD_* varieties are deprecated and renamed to "OmniSci_Geo*"
+// There may be some clients out there who are playing with the MapD_* so leaving
+// them for backwards compatibility.
+//
 
 EXTENSION_INLINE
-int64_t MapD_GeoPolyBoundsPtr(double* bounds, int64_t size) {
+int64_t OmniSci_Geo_PolyBoundsPtr(double* bounds, int64_t size) {
   return reinterpret_cast<int64_t>(bounds);
 }
 
 EXTENSION_INLINE
-int32_t MapD_GeoPolyRenderGroup(int32_t render_group) {
+int32_t OmniSci_Geo_PolyRenderGroup(int32_t render_group) {
   return render_group;
+}
+
+EXTENSION_INLINE
+int64_t MapD_GeoPolyBoundsPtr(double* bounds, int64_t size) {
+  return OmniSci_Geo_PolyBoundsPtr(bounds, size);
+}
+
+EXTENSION_INLINE
+int32_t MapD_GeoPolyRenderGroup(int32_t render_group) {
+  return OmniSci_Geo_PolyRenderGroup(render_group);
 }
 
 EXTENSION_NOINLINE
