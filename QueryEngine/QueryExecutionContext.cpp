@@ -404,7 +404,6 @@ void QueryExecutionContext::initColumnarGroups(int64_t* groups_buffer,
     const auto agg_info = target_info(target_expr);
     CHECK(!is_distinct_target(agg_info));
   }
-
   const int32_t agg_col_count = query_mem_desc_.getColCount();
   auto buffer_ptr = reinterpret_cast<int8_t*>(groups_buffer);
 

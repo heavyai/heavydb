@@ -915,6 +915,10 @@ GroupByAndAggregate::GroupByAndAggregate(
     output_columnar_ =
         (output_columnar_hint &&
          (query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection ||
+          (query_mem_desc_.getQueryDescriptionType() ==
+               QueryDescriptionType::GroupByPerfectHash &&
+           (query_mem_desc_.getGroupbyColCount() > 1) &&
+           !has_count_distinct(ra_exe_unit)) ||
           query_mem_desc_.getQueryDescriptionType() ==
               QueryDescriptionType::GroupByBaselineHash)) ||
         query_mem_desc_.sortOnGpu();
@@ -1919,13 +1923,31 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenMultiColumnPe
     llvm::Value* group_key,
     llvm::Value* key_size_lv,
     const int32_t row_size_quad) {
+  CHECK(query_mem_desc_.getQueryDescriptionType() ==
+        QueryDescriptionType::GroupByPerfectHash);
+  // compute the index (perfect hash)
   auto perfect_hash_func = codegenPerfectHashFunction();
   auto hash_lv =
       LL_BUILDER.CreateCall(perfect_hash_func, std::vector<llvm::Value*>{group_key});
-  return std::make_tuple(
-      emitCall("get_matching_group_value_perfect_hash",
-               {groups_buffer, hash_lv, group_key, key_size_lv, LL_INT(row_size_quad)}),
-      nullptr);
+
+  if (query_mem_desc_.didOutputColumnar()) {
+    const std::string set_matching_func_name{
+        "set_matching_group_value_perfect_hash_columnar"};
+    const std::vector<llvm::Value*> set_matching_func_arg{
+        groups_buffer,
+        hash_lv,
+        group_key,
+        key_size_lv,
+        llvm::ConstantInt::get(get_int_type(32, LL_CONTEXT),
+                               query_mem_desc_.getEntryCount())};
+    emitCall(set_matching_func_name, set_matching_func_arg);
+    return std::make_tuple(groups_buffer, hash_lv);
+  } else {
+    return std::make_tuple(
+        emitCall("get_matching_group_value_perfect_hash",
+                 {groups_buffer, hash_lv, group_key, key_size_lv, LL_INT(row_size_quad)}),
+        nullptr);
+  }
 }
 
 std::tuple<llvm::Value*, llvm::Value*>

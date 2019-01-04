@@ -273,9 +273,7 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
   auto this_crt_col_ptr = get_cols_ptr(this_buff, query_mem_desc_);
   auto that_crt_col_ptr = get_cols_ptr(that_buff, query_mem_desc_);
   size_t agg_col_idx = 0;
-  const auto buffer_col_count = query_mem_desc_.getBufferColSlotCount();
   for (size_t target_idx = 0; target_idx < targets_.size(); ++target_idx) {
-    CHECK_LT(agg_col_idx, buffer_col_count);
     const auto& agg_info = targets_[target_idx];
     const auto this_next_col_ptr = advance_to_next_columnar_target_buff(
         this_crt_col_ptr, query_mem_desc_, agg_col_idx);
@@ -283,32 +281,28 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
         that_crt_col_ptr, query_mem_desc_, agg_col_idx);
     for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
       check_watchdog(entry_idx);
-      if (__builtin_expect(query_mem_desc_.hasKeylessHash(), 0)) {
-        if (isEmptyEntry(entry_idx, that_buff)) {
-          continue;
-        }
-      } else {
-        // We should probably optimize the layout of ResultSetStorage::isEmptyEntry so
-        // that we can use it here and avoid this intrusive micro-optimization.
-        if (reinterpret_cast<const int64_t*>(that_buff)[entry_idx] == EMPTY_KEY_64) {
-          continue;
-        }
+      if (isEmptyEntryColumnar(entry_idx, that_buff)) {
+        continue;
+      }
+      if (LIKELY(!query_mem_desc_.hasKeylessHash())) {
         // copy the key from right hand side
         copyKeyColWise(entry_idx, this_buff, that_buff);
       }
       auto this_ptr1 = this_crt_col_ptr +
-                       entry_idx * query_mem_desc_.getColumnWidth(agg_col_idx).compact;
+                       entry_idx * query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx);
       auto that_ptr1 = that_crt_col_ptr +
-                       entry_idx * query_mem_desc_.getColumnWidth(agg_col_idx).compact;
+                       entry_idx * query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx);
       int8_t* this_ptr2{nullptr};
       const int8_t* that_ptr2{nullptr};
       if (agg_info.is_agg &&
           (agg_info.agg_kind == kAVG ||
            (agg_info.agg_kind == kSAMPLE && agg_info.sql_type.is_varlen()))) {
-        this_ptr2 = this_next_col_ptr +
-                    entry_idx * query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact;
-        that_ptr2 = that_next_col_ptr +
-                    entry_idx * query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact;
+        this_ptr2 =
+            this_next_col_ptr +
+            entry_idx * query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx + 1);
+        that_ptr2 =
+            that_next_col_ptr +
+            entry_idx * query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx + 1);
       }
       reduceOneSlot(this_ptr1,
                     this_ptr2,
@@ -334,17 +328,42 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
   }
 }
 
+/*
+ * copy all keys from the columnar prepended group buffer of "that_buff" into
+ * "this_buff"
+ */
 void ResultSetStorage::copyKeyColWise(const size_t entry_idx,
                                       int8_t* this_buff,
                                       const int8_t* that_buff) const {
-  const auto key_count = query_mem_desc_.getGroupbyColCount();
-  // TODO(alex): we might want to support keys smaller than 64 bits at some point
-  auto lhs_key_buff = reinterpret_cast<int64_t*>(this_buff) + entry_idx;
-  auto rhs_key_buff = reinterpret_cast<const int64_t*>(that_buff) + entry_idx;
-  for (size_t key_comp_idx = 0; key_comp_idx < key_count; ++key_comp_idx) {
-    *lhs_key_buff = *rhs_key_buff;
-    lhs_key_buff += query_mem_desc_.getEntryCount();
-    rhs_key_buff += query_mem_desc_.getEntryCount();
+  CHECK(query_mem_desc_.didOutputColumnar());
+  for (size_t group_idx = 0; group_idx < query_mem_desc_.getGroupbyColCount();
+       group_idx++) {
+    // if the column corresponds to a group key
+    const auto column_offset_bytes =
+        query_mem_desc_.getPrependedGroupColOffInBytes(group_idx);
+    auto lhs_key_ptr = this_buff + column_offset_bytes;
+    auto rhs_key_ptr = that_buff + column_offset_bytes;
+    switch (query_mem_desc_.groupColWidth(group_idx)) {
+      case 8:
+        *(reinterpret_cast<int64_t*>(lhs_key_ptr) + entry_idx) =
+            *(reinterpret_cast<const int64_t*>(rhs_key_ptr) + entry_idx);
+        break;
+      case 4:
+        *(reinterpret_cast<int32_t*>(lhs_key_ptr) + entry_idx) =
+            *(reinterpret_cast<const int32_t*>(rhs_key_ptr) + entry_idx);
+        break;
+      case 2:
+        *(reinterpret_cast<int16_t*>(lhs_key_ptr) + entry_idx) =
+            *(reinterpret_cast<const int16_t*>(rhs_key_ptr) + entry_idx);
+        break;
+      case 1:
+        *(reinterpret_cast<int8_t*>(lhs_key_ptr) + entry_idx) =
+            *(reinterpret_cast<const int8_t*>(rhs_key_ptr) + entry_idx);
+        break;
+      default:
+        CHECK(false);
+        break;
+    }
   }
 }
 

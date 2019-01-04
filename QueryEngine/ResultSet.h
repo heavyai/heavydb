@@ -122,6 +122,7 @@ class ResultSetStorage {
 
   bool isEmptyEntry(const size_t entry_idx, const int8_t* buff) const;
   bool isEmptyEntry(const size_t entry_idx) const;
+  bool isEmptyEntryColumnar(const size_t entry_idx, const int8_t* buff) const;
 
   void reduceOneEntryBaseline(int8_t* this_buff,
                               const int8_t* that_buff,

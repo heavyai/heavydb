@@ -822,6 +822,15 @@ size_t QueryMemoryDescriptor::getColOnlyOffInBytes(const size_t col_idx) const {
   return offset;
 }
 
+/*
+ * Returns the memory offset in bytes for a specific agg column in the output
+ * memory buffer. Depending on the query type, there may be some extra portion
+ * of memory prepended at the beginning of the buffer. A brief description of
+ * the memory layout is as follows:
+ * 1. projections: index column (64bit) + all target columns
+ * 2. group by: all group columns (64-bit each) + all agg columns
+ * 2a. if keyless, there is no prepending group column stored at the beginning
+ */
 size_t QueryMemoryDescriptor::getColOffInBytes(const size_t col_idx) const {
   CHECK_LT(col_idx, agg_col_widths_.size());
   const auto warp_count = getWarpCount();
@@ -829,7 +838,7 @@ size_t QueryMemoryDescriptor::getColOffInBytes(const size_t col_idx) const {
     CHECK_EQ(size_t(1), warp_count);
     size_t offset{0};
     if (!keyless_hash_) {
-      offset = align_to_int64(group_col_widths_.size() * sizeof(int64_t) * entry_count_);
+      offset += getPrependedGroupBufferSizeInBytes();
     }
     for (size_t index = 0; index < col_idx; ++index) {
       offset += align_to_int64(getPaddedColumnWidthBytes(index) * entry_count_);
@@ -846,6 +855,38 @@ size_t QueryMemoryDescriptor::getColOffInBytes(const size_t col_idx) const {
   }
   offset += getColOnlyOffInBytes(col_idx);
   return offset;
+}
+
+/*
+ * Returns the memory offset for a particular group column in the prepended group columns
+ * portion of the memory.
+ */
+size_t QueryMemoryDescriptor::getPrependedGroupColOffInBytes(
+    const size_t group_idx) const {
+  CHECK(output_columnar_);
+  CHECK(group_idx < getGroupbyColCount());
+  size_t offset{0};
+  for (size_t col_idx = 0; col_idx < group_idx; col_idx++) {
+    // TODO(Saman): relax that int64_bit part immediately
+    offset += align_to_int64(
+        std::max(groupColWidth(col_idx), static_cast<int8_t>(sizeof(int64_t))) *
+        getEntryCount());
+  }
+  return offset;
+}
+
+/*
+ * Returns total amount of memory prepended at the beginning of the output memory buffer.
+ */
+size_t QueryMemoryDescriptor::getPrependedGroupBufferSizeInBytes() const {
+  CHECK(output_columnar_);
+  size_t buffer_size{0};
+  for (size_t group_idx = 0; group_idx < getGroupbyColCount(); group_idx++) {
+    buffer_size += align_to_int64(
+        std::max(groupColWidth(group_idx), static_cast<int8_t>(sizeof(int64_t))) *
+        getEntryCount());
+  }
+  return buffer_size;
 }
 
 size_t QueryMemoryDescriptor::getConsistColOffInBytes(const size_t bin,

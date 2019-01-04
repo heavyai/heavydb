@@ -123,12 +123,7 @@ inline T advance_to_next_columnar_target_buff(T target_ptr,
 template <class T>
 inline T get_cols_ptr(T buff, const QueryMemoryDescriptor& query_mem_desc) {
   CHECK(query_mem_desc.didOutputColumnar());
-  auto cols_ptr = buff;
-  const auto key_count = query_mem_desc.getKeyCount();
-  for (size_t key_idx = 0; key_idx < key_count; ++key_idx) {
-    cols_ptr += query_mem_desc.groupColWidth(key_idx) * query_mem_desc.getEntryCount();
-  }
-  return cols_ptr;
+  return buff + query_mem_desc.getColOffInBytes(0);
 }
 
 inline size_t get_key_bytes_rowwise(const QueryMemoryDescriptor& query_mem_desc) {

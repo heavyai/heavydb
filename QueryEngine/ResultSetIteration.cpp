@@ -1811,23 +1811,15 @@ bool ResultSetStorage::isEmptyEntry(const size_t entry_idx, const int8_t* buff) 
       query_mem_desc_.getQueryDescriptionType()) {
     return false;
   }
+  if (query_mem_desc_.didOutputColumnar()) {
+    return isEmptyEntryColumnar(entry_idx, buff);
+  }
   if (query_mem_desc_.hasKeylessHash()) {
     CHECK(query_mem_desc_.getQueryDescriptionType() ==
           QueryDescriptionType::GroupByPerfectHash);
     CHECK_GE(query_mem_desc_.getTargetIdxForKey(), 0);
     CHECK_LT(static_cast<size_t>(query_mem_desc_.getTargetIdxForKey()),
              target_init_vals_.size());
-    if (query_mem_desc_.didOutputColumnar()) {
-      const auto col_buff = advance_col_buff_to_slot(
-          buff, query_mem_desc_, targets_, query_mem_desc_.getTargetIdxForKey(), false);
-      const auto entry_buff =
-          col_buff + entry_idx * query_mem_desc_.getPaddedColumnWidthBytes(
-                                     query_mem_desc_.getTargetIdxForKey());
-      return read_int_from_buff(entry_buff,
-                                query_mem_desc_.getPaddedColumnWidthBytes(
-                                    query_mem_desc_.getTargetIdxForKey())) ==
-             target_init_vals_[query_mem_desc_.getTargetIdxForKey()];
-    }
     const auto key_bytes_with_padding =
         align_to_int64(get_key_bytes_rowwise(query_mem_desc_));
     const auto rowwise_target_ptr =
@@ -1838,23 +1830,71 @@ bool ResultSetStorage::isEmptyEntry(const size_t entry_idx, const int8_t* buff) 
                rowwise_target_ptr + target_slot_off,
                query_mem_desc_.getColumnWidth(query_mem_desc_.getTargetIdxForKey())
                    .compact) == target_init_vals_[query_mem_desc_.getTargetIdxForKey()];
+  } else {
+    const auto keys_ptr = row_ptr_rowwise(buff, query_mem_desc_, entry_idx);
+    switch (query_mem_desc_.getEffectiveKeyWidth()) {
+      case 4:
+        CHECK(QueryDescriptionType::GroupByBaselineHash ==
+              query_mem_desc_.getQueryDescriptionType());
+        return *reinterpret_cast<const int32_t*>(keys_ptr) == EMPTY_KEY_32;
+      case 8:
+        return *reinterpret_cast<const int64_t*>(keys_ptr) == EMPTY_KEY_64;
+      default:
+        CHECK(false);
+        return true;
+    }
   }
-  // TODO(alex): Don't assume 64-bit keys, we could compact them as well.
-  if (query_mem_desc_.didOutputColumnar()) {
-    return reinterpret_cast<const int64_t*>(buff)[entry_idx] == EMPTY_KEY_64;
+}
+
+/*
+ * Returns true if the entry contain empty keys
+ * This function should only be used with columanr format.
+ */
+bool ResultSetStorage::isEmptyEntryColumnar(const size_t entry_idx,
+                                            const int8_t* buff) const {
+  CHECK(query_mem_desc_.didOutputColumnar());
+  if (query_mem_desc_.getQueryDescriptionType() ==
+      QueryDescriptionType::NonGroupedAggregate) {
+    return false;
   }
-  const auto keys_ptr = row_ptr_rowwise(buff, query_mem_desc_, entry_idx);
-  switch (query_mem_desc_.getEffectiveKeyWidth()) {
-    case 4:
-      CHECK(QueryDescriptionType::GroupByBaselineHash ==
-            query_mem_desc_.getQueryDescriptionType());
-      return *reinterpret_cast<const int32_t*>(keys_ptr) == EMPTY_KEY_32;
-    case 8:
-      return *reinterpret_cast<const int64_t*>(keys_ptr) == EMPTY_KEY_64;
-    default:
-      CHECK(false);
-      return true;
+  if (query_mem_desc_.hasKeylessHash()) {
+    CHECK(query_mem_desc_.getQueryDescriptionType() ==
+          QueryDescriptionType::GroupByPerfectHash);
+    CHECK_GE(query_mem_desc_.getTargetIdxForKey(), 0);
+    CHECK_LT(static_cast<size_t>(query_mem_desc_.getTargetIdxForKey()),
+             target_init_vals_.size());
+    const auto col_buff = advance_col_buff_to_slot(
+        buff, query_mem_desc_, targets_, query_mem_desc_.getTargetIdxForKey(), false);
+    const auto entry_buff =
+        col_buff + entry_idx * query_mem_desc_.getPaddedColumnWidthBytes(
+                                   query_mem_desc_.getTargetIdxForKey());
+    return read_int_from_buff(entry_buff,
+                              query_mem_desc_.getPaddedColumnWidthBytes(
+                                  query_mem_desc_.getTargetIdxForKey())) ==
+           target_init_vals_[query_mem_desc_.getTargetIdxForKey()];
+  } else {
+    // it's enough to find the first group key which is empty
+    if (query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection) {
+      return reinterpret_cast<const int64_t*>(buff)[entry_idx] == EMPTY_KEY_64;
+    } else {
+      CHECK(query_mem_desc_.groupColWidthsSize() > 0);
+      const auto target_buff = buff + query_mem_desc_.getPrependedGroupColOffInBytes(0);
+      switch (query_mem_desc_.groupColWidth(0)) {
+        case 8:
+          return reinterpret_cast<const int64_t*>(target_buff)[entry_idx] == EMPTY_KEY_64;
+        case 4:
+          return reinterpret_cast<const int32_t*>(target_buff)[entry_idx] == EMPTY_KEY_32;
+        case 2:
+          return reinterpret_cast<const int16_t*>(target_buff)[entry_idx] == EMPTY_KEY_16;
+        case 1:
+          return reinterpret_cast<const int8_t*>(target_buff)[entry_idx] == EMPTY_KEY_8;
+        default:
+          CHECK(false);
+      }
+    }
+    return false;
   }
+  return false;
 }
 
 bool ResultSetStorage::isEmptyEntry(const size_t entry_idx) const {

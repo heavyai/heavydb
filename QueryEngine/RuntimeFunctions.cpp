@@ -933,19 +933,47 @@ extern "C" ALWAYS_INLINE int64_t* get_matching_group_value_columnar(
   return &groups_buffer[off];
 }
 
+/*
+ * For a particular hashed_index, returns the row-wise offset
+ * to the first matching agg column in memory.
+ * It also checks the corresponding group column, and initialize all
+ * available keys if they are not empty (it is assumed all group columns are
+ * 64-bit wide).
+ *
+ * Memory layout:
+ *
+ * | prepended group columns (64-bit each) | agg columns |
+ */
 extern "C" ALWAYS_INLINE int64_t* get_matching_group_value_perfect_hash(
     int64_t* groups_buffer,
-    const uint32_t h,
+    const uint32_t hashed_index,
     const int64_t* key,
-    const uint32_t key_qw_count,
+    const uint32_t key_count,
     const uint32_t row_size_quad) {
-  uint32_t off = h * row_size_quad;
+  uint32_t off = hashed_index * row_size_quad;
   if (groups_buffer[off] == EMPTY_KEY_64) {
-    for (uint32_t i = 0; i < key_qw_count; ++i) {
+    for (uint32_t i = 0; i < key_count; ++i) {
       groups_buffer[off + i] = key[i];
     }
   }
-  return groups_buffer + off + key_qw_count;
+  return groups_buffer + off + key_count;
+}
+
+/*
+ * For a particular hashed_index, find and initialize (if necessary) all the group
+ * columns corresponding to a key. It is assumed that all group columns are 64-bit wide.
+ */
+extern "C" ALWAYS_INLINE void set_matching_group_value_perfect_hash_columnar(
+    int64_t* groups_buffer,
+    const uint32_t hashed_index,
+    const int64_t* key,
+    const uint32_t key_count,
+    const uint32_t entry_count) {
+  if (groups_buffer[hashed_index] == EMPTY_KEY_64) {
+    for (uint32_t i = 0; i < key_count; i++) {
+      groups_buffer[i * entry_count + hashed_index] = key[i];
+    }
+  }
 }
 
 #include "GroupByRuntime.cpp"

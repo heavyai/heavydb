@@ -185,6 +185,9 @@ class QueryMemoryDescriptor {
     CHECK_LT(key_idx, group_col_widths_.size());
     return group_col_widths_[key_idx];
   }
+  size_t getPrependedGroupColOffInBytes(const size_t group_idx) const;
+  size_t getPrependedGroupBufferSizeInBytes() const;
+
   const auto groupColWidthsBegin() const { return group_col_widths_.begin(); }
   const auto groupColWidthsEnd() const { return group_col_widths_.end(); }
   void clearGroupColWidths() { group_col_widths_.clear(); }
