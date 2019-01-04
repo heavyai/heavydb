@@ -24,6 +24,8 @@
 #include "../Parser/parser.h"
 #include "../QueryEngine/ArrowResultSet.h"
 #include "../QueryEngine/Execute.h"
+
+#define ENABLE_VARLEN_UPDATE
 #include "../Shared/ConfigResolve.h"
 
 #ifndef BASE_PATH
