@@ -2072,15 +2072,10 @@ void SQLType::check_type() {
     case kTIMESTAMP:
       if (param1 == -1) {
         param1 = 0;  // set default to 0
-#ifdef DISABLE_HIGH_PRECISION_TIMESTAMP
-      } else if (param1 != 0) {  // temporarily disable all but seconds
-        throw std::runtime_error("Only TIMESTAMP(0) is supported now.");
-#else
       } else if (param1 != 0 && param1 != 3 && param1 != 6 &&
-                 param1 != 9) {  // support milli/micro/nanosec precision
+                 param1 != 9) {  // support ms, us, ns
         throw std::runtime_error(
             "Only TIMESTAMP(n) where n = (0,3,6,9) are supported now.");
-#endif
       }
       break;
     case kTIME:

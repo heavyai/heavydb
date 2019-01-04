@@ -420,11 +420,6 @@ if(ENABLE_COMPACTION)
   add_definitions("-DENABLE_COMPACTION")
 endif()
 
-option(DISABLE_HIGH_PRECISION_TIMESTAMP "Disable parser support for creating milli, micro, and nanosecond timestamp columns" OFF)
-if(DISABLE_HIGH_PRECISION_TIMESTAMP) 
-  add_definitions("-DDISABLE_HIGH_PRECISION_TIMESTAMP")
-endif()
-
 option(ENABLE_PROFILER "Enable google perftools" OFF)
 if(ENABLE_PROFILER)
   find_package(Gperftools REQUIRED COMPONENTS TCMALLOC PROFILER)

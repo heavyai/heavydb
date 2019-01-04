@@ -112,14 +112,14 @@ DateaddField to_dateadd_field(const std::string& field) {
   } else if (boost::iequals(field, "second") || boost::iequals(field, "ss") ||
              boost::iequals(field, "s") || boost::iequals(field, "sql_tsi_second")) {
     fieldno = daSECOND;
-  } else if (boost::iequals(field, "millisecond") || boost::iequals(field, "ms") ||
-             boost::iequals(field, "sql_tsi_millisecond")) {
+  } else if (boost::iequals(field, "millisecond") || boost::iequals(field, "ms")) {
     fieldno = daMILLISECOND;
   } else if (boost::iequals(field, "microsecond") || boost::iequals(field, "us") ||
-             boost::iequals(field, "sql_tsi_microsecond")) {
+             boost::iequals(field, "sql_tsi_microsecond") ||
+             boost::iequals(field, "frac_second")) {
     fieldno = daMICROSECOND;
   } else if (boost::iequals(field, "nanosecond") || boost::iequals(field, "ns") ||
-             boost::iequals(field, "sql_tsi_nanosecond")) {
+             boost::iequals(field, "sql_tsi_frac_second")) {
     fieldno = daNANOSECOND;
   } else if (boost::iequals(field, "weekday") || boost::iequals(field, "dw")) {
     fieldno = daWEEKDAY;

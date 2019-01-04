@@ -1613,6 +1613,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateHPTLiteral(
   const auto& target_ti = rex_function->getType();
   if (!operand_ti.is_string() || !target_ti.is_high_precision_timestamp() ||
       (target_ti.get_dimension() != 6 && target_ti.get_dimension() != 9)) {
+    LOG_IF(FATAL, !operand_ti.is_string())
+        << "High Precision Timestamp cast argument must be string.";
+    LOG_IF(FATAL,
+           !target_ti.is_high_precision_timestamp() ||
+               (target_ti.get_dimension() != 6 && target_ti.get_dimension() != 9))
+        << "High Precision Timestamp cast target type should be Timestamp(6|9).";
     UNREACHABLE();
     return nullptr;
   }
