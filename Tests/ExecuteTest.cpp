@@ -9019,8 +9019,10 @@ TEST(Update, ImplicitCastToNoneEncodedString) {
     return;
   }
 
-  if (!is_feature_enabled<VarlenUpdates>())
+  if (!is_feature_enabled<VarlenUpdates>()) {
     return;
+  }
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
