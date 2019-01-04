@@ -31,6 +31,17 @@ using CudaBuildSelector = PreprocessorTrue;
 using CudaBuildSelector = PreprocessorFalse;
 #endif
 
+#ifdef ENABLE_VARLEN_UPDATE
+using VarlenUpdates = PreprocessorTrue;
+#else
+using VarlenUpdates = PreprocessorFalse;
+#endif
+
+template <typename T>
+inline constexpr bool is_feature_enabled() {
+  return std::is_same<T, PreprocessorTrue>::value;
+}
+
 inline DEVICE constexpr bool isCudaCC() {
 #ifdef __CUDACC__
   return true;

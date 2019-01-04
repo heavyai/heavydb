@@ -14,8 +14,6 @@
 
 #include <future>
 
-extern bool g_varlenupdate;
-
 template <typename FRAGMENTER_TYPE = Fragmenter_Namespace::InsertOrderFragmenter>
 class DefaultIOFacet {
  public:
@@ -207,7 +205,7 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
   using ScalarTargetValueVector = std::vector<ScalarTargetValue>;
   using RowProcessingFuturesVector = std::vector<std::future<uint64_t>>;
 
-  if (g_varlenupdate) {
+  if (is_feature_enabled<VarlenUpdates>()) {
     auto callback = [this,
                      &update_parameters](FragmentUpdaterType const& update_log) -> void {
       std::vector<const ColumnDescriptor*> columnDescriptors;

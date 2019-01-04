@@ -9012,8 +9012,6 @@ TEST(Update, ImplicitCastToEncodedString) {
   }
 }
 
-extern bool g_varlenupdate;
-
 TEST(Update, ImplicitCastToNoneEncodedString) {
   SKIP_ALL_ON_AGGREGATOR();
 
@@ -9021,7 +9019,8 @@ TEST(Update, ImplicitCastToNoneEncodedString) {
     return;
   }
 
-  g_varlenupdate = true;
+  if (!is_feature_enabled<VarlenUpdates>())
+    return;
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -9060,7 +9059,6 @@ TEST(Update, ImplicitCastToNoneEncodedString) {
                               "               1235");
     run_ddl_statement("drop table none_str;");
   }
-  g_varlenupdate = false;
 }
 
 TEST(Update, ImplicitCastToNumericTypes) {

@@ -24,12 +24,11 @@
 #include "../Parser/parser.h"
 #include "../QueryEngine/ArrowResultSet.h"
 #include "../QueryEngine/Execute.h"
+#include "../Shared/ConfigResolve.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
 #endif
-
-extern bool g_varlenupdate;
 
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
 
@@ -718,8 +717,8 @@ TEST_P(Ctas, CreateTableAsSelect) {
 
 TEST_P(Update, UpdateColumnByColumn) {
   // disable if varlen update is not enabled
-  if (!g_varlenupdate) {
-    LOG(ERROR) << "skipping...";
+  if (!is_feature_enabled<VarlenUpdates>()) {
+    LOG(WARNING) << "skipping...";
     return;
   }
 
@@ -811,8 +810,8 @@ TEST_P(Update, UpdateColumnByColumn) {
 
 TEST_P(Update, UpdateColumnByLiteral) {
   // disable if varlen update is not enabled
-  if (!g_varlenupdate) {
-    LOG(ERROR) << "skipping...";
+  if (!is_feature_enabled<VarlenUpdates>()) {
+    LOG(WARNING) << "skipping...";
     return;
   }
 
@@ -897,7 +896,7 @@ TEST_P(Update, UpdateColumnByLiteral) {
 
 TEST_P(Update, UpdateFirstColumnByLiteral) {
   // disable if varlen update is not enabled
-  if (!g_varlenupdate) {
+  if (!is_feature_enabled<VarlenUpdates>()) {
     LOG(ERROR) << "skipping...";
     return;
   }
@@ -1176,9 +1175,6 @@ INSTANTIATE_TEST_CASE_P(
     }));
 
 int main(int argc, char* argv[]) {
-  // ensure update tests are run
-  g_varlenupdate = true;
-
   int err = 0;
 
   try {

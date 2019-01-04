@@ -78,6 +78,11 @@ if(ENABLE_JAVA_REMOTE_DEBUG)
   add_definitions("-DENABLE_JAVA_REMOTE_DEBUG")
 endif()
 
+option(ENABLE_VARLEN_UPDATE "Enable varlen updates" OFF )
+if( ENABLE_VARLEN_UPDATE )
+  add_definitions("-DENABLE_VARLEN_UPDATE")
+endif()
+
 option(ENABLE_CALCITE_UPDATE_PATH "Enable Calcite Update Path" ON)
 if( ENABLE_CALCITE_UPDATE_PATH )
   add_definitions("-DCALCITE_UPDATE_ENABLED")

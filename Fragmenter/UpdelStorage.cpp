@@ -26,11 +26,10 @@
 #include "DataMgr/FixedLengthArrayNoneEncoder.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "QueryEngine/TargetValue.h"
+#include "Shared/ConfigResolve.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/thread_count.h"
 #include "TargetValueConvertersFactories.h"
-
-bool g_varlenupdate{false};
 
 namespace Fragmenter_Namespace {
 
@@ -265,7 +264,7 @@ void InsertOrderFragmenter::updateColumns(
     const size_t indexOffFragmentOffsetColumn,
     const Data_Namespace::MemoryLevel memoryLevel,
     UpdelRoll& updelRoll) {
-  if (!g_varlenupdate) {
+  if (!is_feature_enabled<VarlenUpdates>()) {
     throw std::runtime_error("varlen UPDATE path not enabled.");
   }
 
