@@ -1028,7 +1028,6 @@ select_entry_commalist:
 atom:
 		literal { $<nodeval>$ = $<nodeval>1; }
 	|	USER { $<nodeval>$ = new UserLiteral(); }
-	| NULLX { $<nodeval>$ = new NullLiteral(); }
 	/* |	parameter_ref { $<nodeval>$ = $<nodeval>1; } */
 	;
 
@@ -1058,6 +1057,7 @@ literal:
 	|	data_type STRING { $<nodeval>$ = new CastExpr(new StringLiteral($<stringval>2), dynamic_cast<SQLType*>($<nodeval>1)); }
 	|	'{' literal_commalist '}' { $<nodeval>$ = new ArrayLiteral(reinterpret_cast<std::list<Expr*>*>($<listval>2)); }
 	|	ARRAY '[' literal_commalist ']' { $<nodeval>$ = new ArrayLiteral(reinterpret_cast<std::list<Expr*>*>($<listval>3)); }
+	|	NULLX { $<nodeval>$ = new NullLiteral(); }
 	;
 
 literal_commalist:

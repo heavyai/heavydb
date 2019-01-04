@@ -499,6 +499,52 @@ TEST(Create, PageSize) {
 //  (page_size=2147483648);"), std::runtime_error);
 //}
 
+TEST(Insert, ArrayNulls) {
+  const char* create_table_array_with_nulls =
+      R"(create table table_array_with_nulls (i smallint, sia smallint[], fa2 float[2]);)";
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP TABLE IF EXISTS table_array_with_nulls;");
+    EXPECT_NO_THROW(run_ddl_statement(create_table_array_with_nulls));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO table_array_with_nulls "
+                         "VALUES(1, {1,1}, ARRAY[1.0,1.0]);",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO table_array_with_nulls "
+                         "VALUES(2, {NULL,2}, {NULL,2.0});",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO table_array_with_nulls "
+                         "VALUES(3, {3,NULL}, {3.0, NULL});",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO table_array_with_nulls "
+                         "VALUES(4, {NULL,NULL}, {NULL,NULL});",
+                         dt));
+    ASSERT_EQ(1,
+              v<int64_t>(
+                  run_simple_agg("SELECT MIN(sia[1]) FROM table_array_with_nulls;", dt)));
+    ASSERT_EQ(3,
+              v<int64_t>(
+                  run_simple_agg("SELECT MAX(sia[1]) FROM table_array_with_nulls;", dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM table_array_with_nulls WHERE sia[2] IS NULL;", dt)));
+    ASSERT_EQ(
+        3.0,
+        v<float>(run_simple_agg("SELECT MAX(fa2[1]) FROM table_array_with_nulls;", dt)));
+    ASSERT_EQ(
+        2.0,
+        v<float>(run_simple_agg("SELECT MAX(fa2[2]) FROM table_array_with_nulls;", dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM table_array_with_nulls WHERE fa2[1] IS NOT NULL;",
+                  dt)));
+  }
+}
+
 TEST(Select, FilterAndSimpleAggregation) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

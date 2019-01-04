@@ -183,12 +183,14 @@ std::shared_ptr<Analyzer::Expr> ArrayLiteral::analyze(
     auto e = p->analyze(catalog, query, allow_tlist_ref);
     CHECK(e);
     auto subtype = e->get_type_info().get_type();
-    if (set_subtype) {
+    if (subtype == kNULLT) {
+      // NULL element
+    } else if (set_subtype) {
       ti.set_subtype(subtype);
       set_subtype = false;
     } else {
       if (ti.get_subtype() != subtype) {
-        throw std::runtime_error("ARRAY literals should be of the same type.");
+        throw std::runtime_error("ARRAY element literals should be of the same type.");
       }
     }
     value_exprs.push_back(e);
