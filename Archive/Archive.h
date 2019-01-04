@@ -113,6 +113,8 @@ class Archive {
     throw std::runtime_error(archive_error(rc));
   }
 
+  virtual int64_t get_position_compressed() const { return archive_filter_bytes(ar, -1); }
+
   /*  !!!
       7z files can't work with streaming model. Only local 7z files work.
       That is, use archive_read_open_filename for 7z and any posix file.

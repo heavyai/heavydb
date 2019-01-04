@@ -115,6 +115,7 @@ void S3Archive::init_for_read() {
         for (auto const& obj : object_list) {
           std::string objkey = obj.GetKey().c_str();
           LOG(INFO) << "\t" << objkey << " (size = " << obj.GetSize() << " bytes)";
+          total_file_size += obj.GetSize();
           // skip _SUCCESS and keys with trailing / or basename with heading '.'
           boost::filesystem::path path{objkey};
           if (0 == obj.GetSize()) {

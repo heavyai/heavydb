@@ -102,6 +102,7 @@ class S3Archive : public Archive {
     throw std::runtime_error("AWS S3 support not available");
   }
 #endif  // HAVE_AWS_S3
+  size_t get_total_file_size() const { return total_file_size; }
 
  private:
 #ifdef HAVE_AWS_S3
@@ -121,6 +122,7 @@ class S3Archive : public Archive {
   std::string prefix_name;
   std::vector<std::string> objkeys;
   std::map<const std::string, const std::string> file_paths;
+  size_t total_file_size{0};
 };
 
 class S3ParquetArchive : public S3Archive {

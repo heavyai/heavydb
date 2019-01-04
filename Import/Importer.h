@@ -705,6 +705,9 @@ class DataStreamSink {
   FILE* p_file = nullptr;
   ImportStatus import_status;
   bool load_failed = false;
+  size_t total_file_size{0};
+  std::vector<size_t> file_offsets;
+  std::mutex file_offsets_mutex;
 };
 
 class Detector : public DataStreamSink {

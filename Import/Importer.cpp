@@ -2907,6 +2907,17 @@ ImportStatus DataStreamSink::archivePlumber() {
     file_paths.push_back(file_path);
   }
 
+  // sum up sizes of all local files -- only for local files. if
+  // file_path is a s3 url, sizes will be obtained via S3Archive.
+  for (const auto& file_path : file_paths) {
+    boost::filesystem::path boost_file_path{file_path};
+    boost::system::error_code ec;
+    const auto filesize = boost::filesystem::file_size(boost_file_path, ec);
+    if (!ec) {
+      total_file_size += filesize;
+    }
+  }
+
   // s3 parquet goes different route because the files do not use libarchive
   // but parquet api, and they need to landed like .7z files.
   //
@@ -3043,6 +3054,7 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
                                       copy_params.s3_region,
                                       copy_params.plain_text));
           us3arch->init_for_read();
+          total_file_size += us3arch->get_total_file_size();
           // not land all files here but one by one in following iterations
           for (const auto& objkey : us3arch->get_objkeys()) {
             file_paths.emplace_back(std::string(S3_objkey_url_scheme) + "://" + objkey);
@@ -3082,15 +3094,26 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
         // and uncompressed by libarchive into a byte stream (in csv) for the pipe
         const void* buf;
         size_t size;
-        int64_t offset;
         bool just_saw_archive_header;
         bool is_detecting = nullptr != dynamic_cast<Detector*>(this);
         bool first_text_header_skipped = false;
         // start reading uncompressed bytes of this archive from libarchive
         // note! this archive may contain more than one files!
+        file_offsets.push_back(0);
         while (!stop && !!(just_saw_archive_header = arch.read_next_header())) {
           bool insert_line_delim_after_this_file = false;
-          while (!stop && arch.read_data_block(&buf, &size, &offset)) {
+          while (!stop) {
+            int64_t offset{-1};
+            auto ok = arch.read_data_block(&buf, &size, &offset);
+            // can't use (uncompressed) size, so track (max) file offset.
+            // also we want to capture offset even on e.o.f.
+            if (offset > 0) {
+              std::unique_lock<std::mutex> lock(file_offsets_mutex);
+              file_offsets.back() = offset;
+            }
+            if (!ok) {
+              break;
+            }
             // one subtle point here is now we concatenate all files
             // to a single FILE stream with which we call importDelimited
             // only once. this would make it misunderstand that only one
@@ -3366,15 +3389,28 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
           if (p.wait_for(span) == std::future_status::ready) {
             auto ret_import_status = p.get();
             import_status += ret_import_status;
-            import_status.rows_estimated =
-                ((float)file_size / current_pos) * import_status.rows_completed;
+            // sum up current total file offsets
+            size_t total_file_offset{0};
+            if (decompressed) {
+              std::unique_lock<std::mutex> lock(file_offsets_mutex);
+              for (const auto file_offset : file_offsets) {
+                total_file_offset += file_offset;
+              }
+            }
+            // estimate number of rows per current total file offset
+            if (decompressed ? total_file_offset : current_pos) {
+              import_status.rows_estimated =
+                  (decompressed ? (float)total_file_size / total_file_offset
+                                : (float)file_size / current_pos) *
+                  import_status.rows_completed;
+            }
+            VLOG(3) << "rows_completed " << import_status.rows_completed
+                    << ", rows_estimated " << import_status.rows_estimated
+                    << ", total_file_size " << total_file_size << ", total_file_offset "
+                    << total_file_offset;
             set_import_status(import_id, import_status);
-
             // recall thread_id for reuse
             stack_thread_ids.push(ret_import_status.thread_id);
-            // LOG(INFO) << " stack_thread_ids.push " << ret_import_status.thread_id <<
-            // std::endl;
-
             threads.erase(it++);
             ++nready;
           } else {

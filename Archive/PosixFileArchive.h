@@ -78,8 +78,12 @@ class PosixFileArchive : public Archive {
       *size = nread;
       *offset = ftell(fp);
       return true;
-    } else
-      return Archive::read_data_block(buff, size, offset);
+    } else {
+      // need original (compressed) offset for row estimation of compressed files
+      auto ret = Archive::read_data_block(buff, size, offset);
+      *offset = Archive::get_position_compressed();
+      return ret;
+    }
   }
 
  private:
