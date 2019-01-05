@@ -340,6 +340,51 @@ int8_t* appendDatum(int8_t* buf, Datum d, const SQLTypeInfo& ti) {
   return NULL;
 }
 
+Datum NullDatum(SQLTypeInfo& ti) {
+  Datum d;
+  const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+  switch (type) {
+    case kBOOLEAN:
+      d.boolval = inline_fixed_encoding_null_val(ti);
+      break;
+    case kBIGINT:
+      d.bigintval = inline_fixed_encoding_null_val(ti);
+      break;
+    case kINT:
+      d.intval = inline_fixed_encoding_null_val(ti);
+      break;
+    case kSMALLINT:
+      d.smallintval = inline_fixed_encoding_null_val(ti);
+      break;
+    case kTINYINT:
+      d.tinyintval = inline_fixed_encoding_null_val(ti);
+      break;
+    case kFLOAT:
+      d.floatval = NULL_FLOAT;
+      break;
+    case kDOUBLE:
+      d.doubleval = NULL_DOUBLE;
+      break;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      if (ti.is_date_in_days()) {
+        d.timeval = ti.get_comp_param() == 16 ? NULL_SMALLINT : NULL_INT;
+      } else {
+        d.timeval = inline_fixed_encoding_null_val(ti);
+      }
+      break;
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+    case kMULTIPOLYGON:
+      throw std::runtime_error("Internal error: geometry type in NullDatum.");
+    default:
+      throw std::runtime_error("Internal error: invalid type in NullDatum.");
+  }
+  return d;
+}
+
 ArrayDatum StringToArray(const std::string& s,
                          const SQLTypeInfo& ti,
                          const CopyParams& copy_params) {
@@ -355,15 +400,25 @@ ArrayDatum StringToArray(const std::string& s,
     elem_strs.push_back(s.substr(last, i - last));
     last = i + 1;
   }
-  if (last + 1 < s.size()) {
+  if (last + 1 <= s.size()) {
     elem_strs.push_back(s.substr(last, s.size() - 1 - last));
   }
   if (!elem_ti.is_string()) {
     size_t len = elem_strs.size() * elem_ti.get_size();
     int8_t* buf = (int8_t*)checked_malloc(len);
     int8_t* p = buf;
-    for (auto& e : elem_strs) {
-      Datum d = StringToDatum(e, elem_ti);
+    for (auto& es : elem_strs) {
+      auto e = trim_space(es.c_str(), es.length());
+      bool is_null = (e == copy_params.null_str);
+      if (!elem_ti.is_string() && e == "") {
+        is_null = true;
+      }
+      if (elem_ti.is_number() || elem_ti.is_time()) {
+        if (!isdigit(e[0]) && e[0] != '-') {
+          is_null = true;
+        }
+      }
+      Datum d = is_null ? NullDatum(elem_ti) : StringToDatum(e, elem_ti);
       p = appendDatum(p, d, elem_ti);
     }
     return ArrayDatum(len, buf, len == 0);

@@ -308,7 +308,11 @@ class ImportTestDate : public ::testing::Test {
   }
 };
 
-std::string convert_date_to_string(time_t date) {
+std::string convert_date_to_string(int64_t d) {
+  if (d == std::numeric_limits<int64_t>::min()) {
+    return std::string("NULL");
+  }
+  const auto date = static_cast<time_t>(d);
   std::tm tm_struct;
   gmtime_r(&date, &tm_struct);
   char buf[11];
@@ -330,7 +334,7 @@ inline void run_mixed_dates_test() {
     CHECK(date_truth_str);
     for (size_t j = 1; j < crt_row.size(); j++) {
       const auto date = v<int64_t>(crt_row[j]);
-      const auto date_str = convert_date_to_string(static_cast<time_t>(date));
+      const auto date_str = convert_date_to_string(static_cast<int64_t>(date));
       ASSERT_EQ(*date_truth_str, date_str);
     }
   }
@@ -408,8 +412,8 @@ TEST_F(ImportTestDateArray, ImportMixedDateArrays) {
                         "'../../Tests/Import/datafiles/mixed_date_arrays.txt';"));
 
   auto rows = run_query("SELECT * FROM import_test_date_arr;");
-  ASSERT_EQ(size_t(3), rows->entryCount());
-  for (size_t i = 0; i < rows->entryCount(); i++) {
+  ASSERT_EQ(size_t(6), rows->entryCount());
+  for (size_t i = 0; i < 3; i++) {
     const auto crt_row = rows->getNextRow(true, true);
     ASSERT_EQ(size_t(4), crt_row.size());
     std::vector<std::string> truth_arr;
@@ -419,7 +423,22 @@ TEST_F(ImportTestDateArray, ImportMixedDateArrays) {
       CHECK(date_arr);
       for (size_t k = 0; k < date_arr->size(); k++) {
         const auto date = v<int64_t>((*date_arr)[k]);
-        const auto date_str = convert_date_to_string(static_cast<time_t>(date));
+        const auto date_str = convert_date_to_string(static_cast<int64_t>(date));
+        ASSERT_EQ(truth_arr[k], date_str);
+      }
+    }
+  }
+  for (size_t i = 3; i < rows->entryCount(); i++) {
+    const auto crt_row = rows->getNextRow(true, true);
+    ASSERT_EQ(size_t(4), crt_row.size());
+    std::vector<std::string> truth_arr;
+    decode_str_array(crt_row[0], truth_arr);
+    for (size_t j = 1; j < crt_row.size() - 1; j++) {
+      const auto date_arr = boost::get<std::vector<ScalarTargetValue>>(&crt_row[j]);
+      CHECK(date_arr);
+      for (size_t k = 0; k < date_arr->size(); k++) {
+        const auto date = v<int64_t>((*date_arr)[k]);
+        const auto date_str = convert_date_to_string(static_cast<int64_t>(date));
         ASSERT_EQ(truth_arr[k], date_str);
       }
     }
