@@ -431,8 +431,7 @@ void InsertOrderFragmenter::updateColumns(
   bool* deletedChunkBuffer =
       reinterpret_cast<bool*>(deletedChunk->get_buffer()->getMemoryPtr());
 
-  auto row_converter = [this,
-                        &sourceDataProvider,
+  auto row_converter = [&sourceDataProvider,
                         &sourceDataConverters,
                         &indexOffFragmentOffsetColumn,
                         &chunkConverters,

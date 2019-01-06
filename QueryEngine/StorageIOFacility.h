@@ -92,8 +92,7 @@ class DefaultIOFacet {
   static std::function<bool(std::string const&)> yieldColumnValidator(
       CATALOG_TYPE const& cat,
       TABLE_DESCRIPTOR_TYPE const* table_descriptor) {
-    return
-        [&cat, table_descriptor](std::string const& column_name) -> bool { return true; };
+    return [](std::string const& column_name) -> bool { return true; };
   };
 };
 
