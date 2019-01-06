@@ -104,6 +104,8 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
       }
       elem = outer_id;
     }
+    CHECK_GE(elem, type_info.min_val)
+        << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
     int32_t* entry_ptr = SUFFIX(get_hash_slot)(buff, elem, type_info.min_val);
     if (mapd_cas(entry_ptr, invalid_slot_val, i) != invalid_slot_val) {
@@ -157,6 +159,8 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
       }
       elem = outer_id;
     }
+    CHECK_GE(elem, type_info.min_val)
+        << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
     int32_t* entry_ptr = SUFFIX(get_hash_slot_sharded)(buff,
                                                        elem,
@@ -412,6 +416,8 @@ GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
       }
       elem = outer_id;
     }
+    CHECK_GE(elem, type_info.min_val)
+        << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
     int32_t* entry_ptr = SUFFIX(get_hash_slot)(count_buff, elem, type_info.min_val);
     mapd_add(entry_ptr, int32_t(1));
@@ -462,6 +468,8 @@ GLOBAL void SUFFIX(count_matches_sharded)(int32_t* count_buff,
       }
       elem = outer_id;
     }
+    CHECK_GE(elem, type_info.min_val)
+        << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
     int32_t* entry_ptr = SUFFIX(get_hash_slot_sharded)(count_buff,
                                                        elem,
@@ -589,6 +597,8 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
       }
       elem = outer_id;
     }
+    CHECK_GE(elem, type_info.min_val)
+        << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
     int32_t* pos_ptr = SUFFIX(get_hash_slot)(pos_buff, elem, type_info.min_val);
 #ifndef __CUDACC__
@@ -649,6 +659,8 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
       }
       elem = outer_id;
     }
+    CHECK_GE(elem, type_info.min_val)
+        << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
     int32_t* pos_ptr = SUFFIX(get_hash_slot_sharded)(pos_buff,
                                                      elem,
