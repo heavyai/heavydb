@@ -98,16 +98,14 @@ llvm::Value* Executor::codegenCastTimestampToDate(llvm::Value* ts_lv,
     static const std::string datetrunc_hp_fname =
         "DateTruncateHighPrecisionToDateNullable";
     datetrunc_args.push_back(ll_int(get_timestamp_precision_scale(dimen)));
-    datetrunc_args.push_back(inlineIntNull(
-        SQLTypeInfo(ts_lv->getType()->isIntegerTy(64) ? kBIGINT : kINT, false)));
+    datetrunc_args.push_back(inlineIntNull(SQLTypeInfo(kBIGINT, false)));
     return cgen_state_->emitExternalCall(
         datetrunc_hp_fname, get_int_type(64, cgen_state_->context_), datetrunc_args);
   }
   std::string datetrunc_fname{"DateTruncate"};
   datetrunc_args.insert(datetrunc_args.begin(), ll_int(static_cast<int32_t>(dtDAY)));
   if (nullable) {
-    datetrunc_args.push_back(inlineIntNull(
-        SQLTypeInfo(ts_lv->getType()->isIntegerTy(64) ? kBIGINT : kINT, false)));
+    datetrunc_args.push_back(inlineIntNull(SQLTypeInfo(kBIGINT, false)));
     datetrunc_fname += "Nullable";
   }
   return cgen_state_->emitExternalCall(
@@ -128,8 +126,7 @@ llvm::Value* Executor::codegenCastBetweenTimestamps(llvm::Value* ts_lv,
       ts_lv,
       ll_int(static_cast<int64_t>(
           get_timestamp_precision_scale(abs(operand_dimen - target_dimen))))};
-  f_args.push_back(inlineIntNull(
-      SQLTypeInfo(ts_lv->getType()->isIntegerTy(64) ? kBIGINT : kINT, false)));
+  f_args.push_back(inlineIntNull(SQLTypeInfo(kBIGINT, false)));
   return operand_dimen < target_dimen
              ? cgen_state_->emitExternalCall(
                    sup_fname, get_int_type(64, cgen_state_->context_), f_args)

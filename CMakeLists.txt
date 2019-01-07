@@ -415,11 +415,6 @@ if(TIME_LIMITED_BUILD)
   set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-${TIME_LIMITED_NUMBER_OF_DAYS}d")
 endif()
 
-option(ENABLE_COMPACTION "Enable Compaction and Overflow/Underflow Detection" OFF)
-if(ENABLE_COMPACTION)
-  add_definitions("-DENABLE_COMPACTION")
-endif()
-
 option(ENABLE_PROFILER "Enable google perftools" OFF)
 if(ENABLE_PROFILER)
   find_package(Gperftools REQUIRED COMPONENTS TCMALLOC PROFILER)

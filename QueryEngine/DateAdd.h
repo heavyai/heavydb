@@ -66,7 +66,7 @@ extern "C" NEVER_INLINE DEVICE int64_t DateAdd(DateaddField field,
 
 extern "C" NEVER_INLINE DEVICE int64_t DateAddHighPrecision(DateaddField field,
                                                             const int64_t number,
-                                                            int64_t timeval,
+                                                            const int64_t timeval,
                                                             const int64_t scale);
 
 #endif  // QUERYENGINE_DATEADD_H

@@ -104,8 +104,8 @@ DEVICE int32_t extract_month_fast(const int64_t* tim_p) {
                                                                            26438400,
                                                                            29116800};
   const int64_t lcltime = *tim_p;
-  uint32_t seconds_march_1900 = static_cast<int64_t>(lcltime) + EPOCH_OFFSET_YEAR_1900 -
-                                SECONDS_FROM_JAN_1900_TO_MARCH_1900;
+  uint32_t seconds_march_1900 =
+      lcltime + EPOCH_OFFSET_YEAR_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900;
   uint32_t seconds_past_4year_period = seconds_march_1900 % SECONDS_PER_4_YEAR_CYCLE;
   uint32_t year_seconds_past_4year_period =
       (seconds_past_4year_period / SECONDS_PER_NON_LEAP_YEAR) * SECONDS_PER_NON_LEAP_YEAR;
@@ -173,8 +173,8 @@ DEVICE tm* gmtime_r_newlib(const int64_t* tim_p, tm* res) {
   int32_t yearleap;
   const int32_t* ip;
 
-  days = static_cast<int64_t>(lcltime / SECSPERDAY) - EPOCH_ADJUSTMENT_DAYS;
-  rem = static_cast<int64_t>(lcltime % SECSPERDAY);
+  days = lcltime / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
+  rem = lcltime % SECSPERDAY;
   if (rem < 0) {
     rem += SECSPERDAY;
     --days;
@@ -261,7 +261,7 @@ DEVICE tm* gmtime_r_newlib(const int64_t* tim_p, tm* res) {
  * @brief support the SQL EXTRACT function
  */
 extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field,
-                                                       int64_t timeval) {
+                                                       const int64_t timeval) {
   // We have fast paths for the 5 fields below - do not need to do full gmtime
   switch (field) {
     case kEPOCH:
@@ -345,52 +345,22 @@ extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field,
 }
 
 extern "C" DEVICE int64_t ExtractFromTimeHighPrecision(ExtractField field,
-                                                       int64_t timeval,
-                                                       int64_t scale) {
+                                                       const int64_t timeval,
+                                                       const int64_t scale) {
   switch (field) {
     case kMILLISECOND: {
-<<<<<<< HEAD
-<<<<<<< HEAD
       int64_t mtime = timeval;
-=======
-<<<<<<< HEAD
-=======
->>>>>>> Shield Timestamp(6|9) literals from calcite; Direct TIMESTAMPADD/DIFF calls to DATEADD/DATEDIFF
-      time_t mtime = timeval;
->>>>>>> Override Calcite to increase TIMSTAMP precision; Optimize legacy code
       if (scale == MICROSECSPERSEC) {
-        mtime = static_cast<int64_t>(timeval / MILLISECSPERSEC);
+        mtime /= MILLISECSPERSEC;
       } else if (scale == NANOSECSPERSEC) {
-<<<<<<< HEAD
-        mtime = static_cast<int64_t>(timeval / MICROSECSPERSEC);
-=======
-        mtime = static_cast<int64_t>(timeval) / MICROSECSPERSEC;
-<<<<<<< HEAD
-=======
-      int64_t ntimeval = timeval;
-      if (dimen == 6) {
-        ntimeval = static_cast<int64_t>(timeval) / MILLISECSPERSEC;
-      } else if (dimen == 9) {
-        ntimeval = static_cast<int64_t>(timeval) / MICROSECSPERSEC;
->>>>>>> Optimize legacy code; Add more tests
->>>>>>> Override Calcite to increase TIMSTAMP precision; Optimize legacy code
-=======
->>>>>>> Shield Timestamp(6|9) literals from calcite; Direct TIMESTAMPADD/DIFF calls to DATEADD/DATEDIFF
+        mtime /= MICROSECSPERSEC;
       }
       return extract_millisecond(&mtime);
     }
     case kMICROSECOND: {
-<<<<<<< HEAD
-<<<<<<< HEAD
       int64_t mtime = timeval;
-=======
-<<<<<<< HEAD
-=======
->>>>>>> Shield Timestamp(6|9) literals from calcite; Direct TIMESTAMPADD/DIFF calls to DATEADD/DATEDIFF
-      time_t mtime = timeval;
->>>>>>> Override Calcite to increase TIMSTAMP precision; Optimize legacy code
       if (scale == NANOSECSPERSEC) {
-        mtime = static_cast<int64_t>(timeval / MILLISECSPERSEC);
+        mtime /= MILLISECSPERSEC;
       } else if (scale == MILLISECSPERSEC) {
         return 0;
       }
@@ -406,26 +376,11 @@ extern "C" DEVICE int64_t ExtractFromTimeHighPrecision(ExtractField field,
     default:
       break;
   }
-<<<<<<< HEAD
-<<<<<<< HEAD
-  const int64_t stimeval = static_cast<int64_t>(timeval) / scale;
-=======
-<<<<<<< HEAD
-  const time_t stimeval = static_cast<int64_t>(timeval) / scale;
-=======
-  const time_t stimeval =
-      static_cast<int64_t>(timeval) / get_timestamp_precision_scale(dimen);
-  ;
->>>>>>> Optimize legacy code; Add more tests
->>>>>>> Override Calcite to increase TIMSTAMP precision; Optimize legacy code
-=======
-  const time_t stimeval = static_cast<int64_t>(timeval) / scale;
->>>>>>> Shield Timestamp(6|9) literals from calcite; Direct TIMESTAMPADD/DIFF calls to DATEADD/DATEDIFF
-  return ExtractFromTime(field, stimeval);
+  return ExtractFromTime(field, timeval / scale);
 }
 
 extern "C" DEVICE int64_t ExtractFromTimeNullable(ExtractField field,
-                                                  int64_t timeval,
+                                                  const int64_t timeval,
                                                   const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
@@ -434,8 +389,8 @@ extern "C" DEVICE int64_t ExtractFromTimeNullable(ExtractField field,
 }
 
 extern "C" DEVICE int64_t ExtractFromTimeHighPrecisionNullable(ExtractField field,
-                                                               int64_t timeval,
-                                                               int64_t scale,
+                                                               const int64_t timeval,
+                                                               const int64_t scale,
                                                                const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;

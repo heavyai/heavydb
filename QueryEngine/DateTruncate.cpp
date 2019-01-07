@@ -69,7 +69,7 @@ extern "C" NEVER_INLINE DEVICE int64_t create_epoch(int64_t year) {
  * @brief support the SQL DATE_TRUNC function
  */
 extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
-                                                    int64_t timeval) {
+                                                    const int64_t timeval) {
   STATIC_QUAL const int32_t month_lengths[2][MONSPERYEAR] = {
       {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
       {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
@@ -157,9 +157,8 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
     }
     case dtMONTH: {
       if (timeval >= 0L && timeval <= UINT32_MAX - (EPOCH_OFFSET_YEAR_1900)) {
-        uint32_t seconds_march_1900 = static_cast<int64_t>(timeval) +
-                                      EPOCH_OFFSET_YEAR_1900 -
-                                      SECONDS_FROM_JAN_1900_TO_MARCH_1900;
+        uint32_t seconds_march_1900 =
+            timeval + EPOCH_OFFSET_YEAR_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900;
         uint32_t seconds_past_4year_period =
             seconds_march_1900 % SECONDS_PER_4_YEAR_CYCLE;
         uint32_t four_year_period_seconds =
@@ -188,7 +187,7 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
     }
     case dtQUARTER: {
       if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
-        uint32_t seconds_1900 = static_cast<int64_t>(timeval) + EPOCH_OFFSET_YEAR_1900;
+        uint32_t seconds_1900 = timeval + EPOCH_OFFSET_YEAR_1900;
         uint32_t leap_years = (seconds_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900) /
                               SECONDS_PER_4_YEAR_CYCLE;
         uint32_t year =
@@ -235,7 +234,7 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
   switch (field) {
     case dtMONTH: {
       // clear the time
-      int64_t day = static_cast<int64_t>(timeval / SECSPERDAY) * SECSPERDAY;
+      int64_t day = (timeval / SECSPERDAY) * SECSPERDAY;
       if (day < 0) {
         {
           day -= SECSPERDAY;
@@ -247,7 +246,7 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
     }
     case dtQUARTER: {
       // clear the time
-      int64_t day = (static_cast<int64_t>(timeval) / SECSPERDAY) * SECSPERDAY;
+      int64_t day = (timeval / SECSPERDAY) * SECSPERDAY;
       if (day < 0) {
         {
           day -= SECSPERDAY;
@@ -278,7 +277,7 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
     }
     case dtYEAR: {
       // clear the time
-      int64_t day = (static_cast<int64_t>(timeval) / SECSPERDAY) * SECSPERDAY;
+      int64_t day = (timeval / SECSPERDAY) * SECSPERDAY;
       if (day < 0) {
         {
           day -= SECSPERDAY;
@@ -313,7 +312,7 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
 }
 
 extern "C" NEVER_INLINE DEVICE int64_t DateTruncateHighPrecision(DatetruncField field,
-                                                                 int64_t timeval,
+                                                                 const int64_t timeval,
                                                                  const int64_t scale) {
   switch (field) {
     case dtNANOSECOND:
@@ -325,7 +324,7 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncateHighPrecision(DatetruncField 
       if (scale == MILLISECSPERSEC || scale == MICROSECSPERSEC) {
         return timeval;
       } else if (scale == NANOSECSPERSEC) {
-        return (static_cast<int64_t>(timeval) / MILLISECSPERSEC) * MILLISECSPERSEC;
+        return (timeval / MILLISECSPERSEC) * MILLISECSPERSEC;
       } else {
         return timeval;
       }
@@ -335,9 +334,9 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncateHighPrecision(DatetruncField 
       if (scale == MILLISECSPERSEC) {
         return timeval;
       } else if (scale == MICROSECSPERSEC) {
-        return (static_cast<int64_t>(timeval) / MILLISECSPERSEC) * MILLISECSPERSEC;
+        return (timeval / MILLISECSPERSEC) * MILLISECSPERSEC;
       } else if (scale == NANOSECSPERSEC) {
-        return (static_cast<int64_t>(timeval) / MICROSECSPERSEC) * MICROSECSPERSEC;
+        return (timeval / MICROSECSPERSEC) * MICROSECSPERSEC;
       } else {
         return timeval;
       }
@@ -345,13 +344,12 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncateHighPrecision(DatetruncField 
     default:
       break;
   }
-  const int64_t stimeval = static_cast<int64_t>(timeval) / scale;
-  return DateTruncate(field, stimeval) * scale;
+  return DateTruncate(field, timeval / scale) * scale;
 }
 
-extern "C" DEVICE time_t DateTruncateNullable(DatetruncField field,
-                                              time_t timeval,
-                                              const int64_t null_val) {
+extern "C" DEVICE int64_t DateTruncateNullable(DatetruncField field,
+                                               const int64_t timeval,
+                                               const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }
@@ -359,7 +357,7 @@ extern "C" DEVICE time_t DateTruncateNullable(DatetruncField field,
 }
 
 extern "C" DEVICE int64_t DateTruncateHighPrecisionNullable(DatetruncField field,
-                                                            int64_t timeval,
+                                                            const int64_t timeval,
                                                             const int64_t scale,
                                                             const int64_t null_val) {
   if (timeval == null_val) {
@@ -368,9 +366,10 @@ extern "C" DEVICE int64_t DateTruncateHighPrecisionNullable(DatetruncField field
   return DateTruncateHighPrecision(field, timeval, scale);
 }
 
-extern "C" DEVICE time_t DateTruncateHighPrecisionToDateNullable(time_t timeval,
-                                                                 const int64_t scale,
-                                                                 const int64_t null_val) {
+extern "C" DEVICE int64_t
+DateTruncateHighPrecisionToDateNullable(const int64_t timeval,
+                                        const int64_t scale,
+                                        const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }
@@ -378,7 +377,7 @@ extern "C" DEVICE time_t DateTruncateHighPrecisionToDateNullable(time_t timeval,
 }
 
 extern "C" DEVICE int64_t
-DateTruncateAlterPrecisionScaleUpNullable(const time_t timeval,
+DateTruncateAlterPrecisionScaleUpNullable(const int64_t timeval,
                                           const int64_t scale,
                                           const int64_t null_val) {
   if (timeval == null_val) {
@@ -388,7 +387,7 @@ DateTruncateAlterPrecisionScaleUpNullable(const time_t timeval,
 }
 
 extern "C" DEVICE int64_t
-DateTruncateAlterPrecisionScaleDownNullable(const time_t timeval,
+DateTruncateAlterPrecisionScaleDownNullable(const int64_t timeval,
                                             const int64_t scale,
                                             const int64_t null_val) {
   if (timeval == null_val) {
@@ -398,8 +397,8 @@ DateTruncateAlterPrecisionScaleDownNullable(const time_t timeval,
 }
 
 extern "C" DEVICE int64_t DateDiff(const DatetruncField datepart,
-                                   time_t startdate,
-                                   time_t enddate) {
+                                   const int64_t startdate,
+                                   const int64_t enddate) {
   int64_t res = enddate - startdate;
   switch (datepart) {
     case dtNANOSECOND:
@@ -441,8 +440,8 @@ extern "C" DEVICE int64_t DateDiff(const DatetruncField datepart,
 }
 
 extern "C" DEVICE int64_t DateDiffHighPrecision(const DatetruncField datepart,
-                                                int64_t startdate,
-                                                int64_t enddate,
+                                                const int64_t startdate,
+                                                const int64_t enddate,
                                                 const int32_t adj_dimen,
                                                 const int64_t adj_scale,
                                                 const int64_t sml_scale,
@@ -475,14 +474,14 @@ extern "C" DEVICE int64_t DateDiffHighPrecision(const DatetruncField datepart,
     default:
       break;
   }
-  startdate /= adj_dimen > 0 ? sml_scale : scale;
-  enddate /= adj_dimen < 0 ? sml_scale : scale;
-  return DateDiff(datepart, startdate, enddate);
+  const int64_t nstartdate = adj_dimen > 0 ? startdate / sml_scale : startdate / scale;
+  const int64_t nenddate = adj_dimen < 0 ? enddate / sml_scale : enddate / scale;
+  return DateDiff(datepart, nstartdate, nenddate);
 }
 
 extern "C" DEVICE int64_t DateDiffNullable(const DatetruncField datepart,
-                                           int64_t startdate,
-                                           int64_t enddate,
+                                           const int64_t startdate,
+                                           const int64_t enddate,
                                            const int64_t null_val) {
   if (startdate == null_val || enddate == null_val) {
     return null_val;
@@ -491,8 +490,8 @@ extern "C" DEVICE int64_t DateDiffNullable(const DatetruncField datepart,
 }
 
 extern "C" DEVICE int64_t DateDiffHighPrecisionNullable(const DatetruncField datepart,
-                                                        int64_t startdate,
-                                                        int64_t enddate,
+                                                        const int64_t startdate,
+                                                        const int64_t enddate,
                                                         const int32_t adj_dimen,
                                                         const int64_t adj_scale,
                                                         const int64_t sml_scale,

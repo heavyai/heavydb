@@ -506,6 +506,115 @@ TEST_F(ImportTestDateArray, ImportMixedDateArrays) {
   }
 }
 
+const char* create_table_timestamps = R"(
+    CREATE TABLE import_test_timestamps(
+      ts0_text TEXT ENCODING DICT(32),
+      ts3_text TEXT ENCODING DICT(32),
+      ts6_text TEXT ENCODING DICT(32),
+      ts9_text TEXT ENCODING DICT(32),
+      ts_0 TIMESTAMP(0),
+      ts_0_i32 TIMESTAMP ENCODING FIXED(32),
+      ts_0_not_null TIMESTAMP NOT NULL,
+      ts_3 TIMESTAMP(3),
+      ts_3_not_null TIMESTAMP(3) NOT NULL,
+      ts_6 TIMESTAMP(6),
+      ts_6_not_null TIMESTAMP(6) NOT NULL,
+      ts_9 TIMESTAMP(9),
+      ts_9_not_null TIMESTAMP(9) NOT NULL
+    );
+)";
+
+class ImportTestTimestamps : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_timestamps;"));
+    ASSERT_NO_THROW(run_ddl_statement(create_table_timestamps));
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_date;"));
+  }
+};
+
+std::string convert_timestamp_to_string(const time_t timeval, const int dimen) {
+  std::tm tm_struct;
+  if (dimen > 0) {
+    auto scale = static_cast<int64_t>(std::pow(10, dimen));
+    auto dv = std::div(static_cast<int64_t>(timeval), scale);
+    auto modulus = (dv.rem + scale) % scale;
+    time_t sec = dv.quot - (dv.quot < 0 && modulus > 0);
+    gmtime_r(&sec, &tm_struct);
+    char buf[21];
+    strftime(buf, 21, "%F %T.", &tm_struct);
+    auto subsecond = std::to_string(modulus);
+    return std::string(buf) + std::string(dimen - subsecond.length(), '0') + subsecond;
+  } else {
+    time_t sec = timeval;
+    gmtime_r(&sec, &tm_struct);
+    char buf[20];
+    strftime(buf, 20, "%F %T", &tm_struct);
+    return std::string(buf);
+  }
+}
+
+inline void run_mixed_timestamps_test() {
+  EXPECT_NO_THROW(
+      run_ddl_statement("COPY import_test_timestamps FROM "
+                        "'../../Tests/Import/datafiles/mixed_timestamps.txt';"));
+
+  auto rows = run_query("SELECT * FROM import_test_timestamps");
+  ASSERT_EQ(size_t(11), rows->entryCount());
+  for (size_t i = 0; i < rows->entryCount() - 1; i++) {
+    const auto crt_row = rows->getNextRow(true, true);
+    ASSERT_EQ(size_t(13), crt_row.size());
+    const auto ts0_str_nullable = v<NullableString>(crt_row[0]);
+    const auto ts0_str = boost::get<std::string>(&ts0_str_nullable);
+    const auto ts3_str_nullable = v<NullableString>(crt_row[1]);
+    const auto ts3_str = boost::get<std::string>(&ts3_str_nullable);
+    const auto ts6_str_nullable = v<NullableString>(crt_row[2]);
+    const auto ts6_str = boost::get<std::string>(&ts6_str_nullable);
+    const auto ts9_str_nullable = v<NullableString>(crt_row[3]);
+    const auto ts9_str = boost::get<std::string>(&ts9_str_nullable);
+    CHECK(ts0_str && ts3_str && ts6_str && ts9_str);
+    for (size_t j = 4; j < crt_row.size(); j++) {
+      const auto timeval = v<int64_t>(crt_row[j]);
+      const auto ti = rows->getColType(j);
+      CHECK(ti.is_timestamp());
+      const auto ts_str = convert_timestamp_to_string(timeval, ti.get_dimension());
+      switch (ti.get_dimension()) {
+        case 0:
+          ASSERT_EQ(*ts0_str, ts_str);
+          break;
+        case 3:
+          ASSERT_EQ(*ts3_str, ts_str);
+          break;
+        case 6:
+          ASSERT_EQ(*ts6_str, ts_str);
+          break;
+        case 9:
+          ASSERT_EQ(*ts9_str, ts_str);
+          break;
+        default:
+          CHECK(false);
+      }
+    }
+  }
+
+  const auto crt_row = rows->getNextRow(true, true);
+  ASSERT_EQ(size_t(13), crt_row.size());
+  for (size_t j = 4; j < crt_row.size(); j++) {
+    if (j == 6 || j == 8 || j == 10 || j == 12) {
+      continue;
+    }
+    const auto ts_null = v<int64_t>(crt_row[j]);
+    ASSERT_EQ(ts_null, std::numeric_limits<int64_t>::min());
+  }
+}
+
+TEST_F(ImportTestTimestamps, ImportMixedTimestamps) {
+  run_mixed_timestamps_test();
+}
+
 const char* create_table_trips = R"(
     CREATE TABLE trips (
       medallion               TEXT ENCODING DICT,

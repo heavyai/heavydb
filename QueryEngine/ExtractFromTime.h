@@ -87,22 +87,15 @@ enum ExtractField {
 };
 
 // Shared by DateTruncate
-#ifdef __CUDACC__
-__device__
-#endif
-    int32_t
-    extract_dow(const time_t* tim_p);
-#ifdef __CUDACC__
-__device__
-#endif
-    tm*
-    gmtime_r_newlib(const time_t* tim_p, tm* res);
+DEVICE int32_t extract_dow(const int64_t* tim_p);
+
+DEVICE tm* gmtime_r_newlib(const int64_t* tim_p, tm* res);
 
 extern "C" DEVICE NEVER_INLINE int64_t ExtractFromTime(ExtractField field,
-                                                       int64_t timeval);
+                                                       const int64_t timeval);
 
 extern "C" DEVICE NEVER_INLINE int64_t ExtractFromTimeHighPrecision(ExtractField field,
-                                                                    int64_t timeval,
+                                                                    const int64_t timeval,
                                                                     const int64_t scale);
 
 #endif  // QUERYENGINE_EXTRACTFROMTIME_H

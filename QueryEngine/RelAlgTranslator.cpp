@@ -263,18 +263,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
     case kTIME:
     case kTIMESTAMP: {
       Datum d;
-<<<<<<< HEAD
-      d.bigintval = rex_literal->getVal<int64_t>() / 1000;
-      return makeExpr<Analyzer::Constant>(rex_literal->getType(), false, d);
-=======
-      d.timeval = rex_literal->getType() == kTIMESTAMP && rex_literal->getPrecision() > 0
-                      ? rex_literal->getVal<int64_t>()
-                      : rex_literal->getVal<int64_t>() / 1000;
+      d.bigintval =
+          rex_literal->getType() == kTIMESTAMP && rex_literal->getPrecision() > 0
+              ? rex_literal->getVal<int64_t>()
+              : rex_literal->getVal<int64_t>() / 1000;
       return makeExpr<Analyzer::Constant>(
           SQLTypeInfo(rex_literal->getType(), rex_literal->getPrecision(), 0, false),
           false,
           d);
->>>>>>> Override Calcite to increase TIMSTAMP precision; Optimize legacy code
     }
     case kDATE: {
       Datum d;
@@ -1601,26 +1597,29 @@ std::vector<std::shared_ptr<Analyzer::Expr>> qual_to_disjunctive_form(
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateHPTLiteral(
     const RexFunctionOperator* rex_function) const {
-  // since calcite uses Aviatica package called DateTimeUtils to parse timestamp strings.
-  // Therefore any string having fractional seconds more 3 places after the decimal
-  // (milliseconds) will get truncated to 3 decimal places, therefore losing precision.
-  // Issue: #2461
-  // Here we are hijacking literal cast to Timestamp(6|9) from calcite and
-  // translating them to generate our own casts.
+  /* since calcite uses Aviatica package called DateTimeUtils to parse timestamp strings.
+     Therefore any string having fractional seconds more 3 places after the decimal
+     (milliseconds) will get truncated to 3 decimal places, therefore we lose precision
+     (us|ns). Issue: [BE-2461] Here we are hijacking literal cast to Timestamp(6|9) from
+     calcite and translating them to generate our own casts.
+  */
   CHECK_EQ(size_t(1), rex_function->size());
   const auto operand = translateScalarRex(rex_function->getOperand(0));
   const auto& operand_ti = operand->get_type_info();
   const auto& target_ti = rex_function->getType();
-  if (!operand_ti.is_string() || !target_ti.is_high_precision_timestamp() ||
-      (target_ti.get_dimension() != 6 && target_ti.get_dimension() != 9)) {
-    LOG_IF(FATAL, !operand_ti.is_string())
-        << "High Precision Timestamp cast argument must be string.";
-    LOG_IF(FATAL,
-           !target_ti.is_high_precision_timestamp() ||
-               (target_ti.get_dimension() != 6 && target_ti.get_dimension() != 9))
-        << "High Precision Timestamp cast target type should be Timestamp(6|9).";
-    UNREACHABLE();
-    return nullptr;
+  if (!operand_ti.is_string()) {
+    throw std::runtime_error(
+        "High precision timestamp cast argument must be a string. Input type is: " +
+        operand_ti.get_type());
+  } else if (!target_ti.is_high_precision_timestamp()) {
+    throw std::runtime_error(
+        "Cast target type should be high precision timestamp. Input type is: " +
+        target_ti.get_type());
+  } else if (target_ti.get_dimension() != 6 && target_ti.get_dimension() != 9) {
+    throw std::runtime_error(
+        "Cast target type should be TIMESTAMP(6|9). Input type is: TIMESTAMP(" +
+        std::to_string(target_ti.get_dimension()) + ")");
+  } else {
+    return operand->add_cast(target_ti);
   }
-  return operand->add_cast(target_ti);
 }

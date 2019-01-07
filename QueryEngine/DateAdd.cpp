@@ -35,7 +35,7 @@ int64_t skip_months(int64_t timeval, int64_t months_to_go) {
       {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
   tm tm_struct;
   gmtime_r_newlib(&timeval, &tm_struct);
-  auto tod = (timeval % SECSPERDAY);
+  auto tod = timeval % SECSPERDAY;
   auto day = (timeval / SECSPERDAY) * SECSPERDAY;
   // calculate the day of month offset
   int32_t dom = tm_struct.tm_mday;
@@ -91,8 +91,8 @@ int64_t skip_months(int64_t timeval, int64_t months_to_go) {
 }
 
 extern "C" NEVER_INLINE DEVICE int64_t DateAdd(DateaddField field,
-                                               int64_t number,
-                                               int64_t timeval) {
+                                               const int64_t number,
+                                               const int64_t timeval) {
   switch (field) {
     case daNANOSECOND:
     case daMICROSECOND:
@@ -147,7 +147,7 @@ extern "C" NEVER_INLINE DEVICE int64_t DateAdd(DateaddField field,
 
 extern "C" NEVER_INLINE DEVICE int64_t DateAddHighPrecision(DateaddField field,
                                                             const int64_t number,
-                                                            int64_t timeval,
+                                                            const int64_t timeval,
                                                             const int64_t scale) {
   switch (field) {
     case daNANOSECOND:
@@ -160,14 +160,12 @@ extern "C" NEVER_INLINE DEVICE int64_t DateAddHighPrecision(DateaddField field,
     default:
       break;
   }
-  const int64_t stimeval = static_cast<int64_t>(timeval) / scale;
-  const int64_t nfrac = static_cast<int64_t>(timeval) % scale;
-  return (DateAdd(field, number, stimeval) * scale) + nfrac;
+  return (DateAdd(field, number, timeval / scale) * scale) + (timeval % scale);
 }
 
 extern "C" DEVICE int64_t DateAddNullable(const DateaddField field,
                                           const int64_t number,
-                                          int64_t timeval,
+                                          const int64_t timeval,
                                           const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
@@ -177,7 +175,7 @@ extern "C" DEVICE int64_t DateAddNullable(const DateaddField field,
 
 extern "C" DEVICE int64_t DateAddHighPrecisionNullable(const DateaddField field,
                                                        const int64_t number,
-                                                       int64_t timeval,
+                                                       const int64_t timeval,
                                                        const int64_t scale,
                                                        const int64_t null_val) {
   if (timeval == null_val) {
