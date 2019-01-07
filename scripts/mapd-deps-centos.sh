@@ -103,8 +103,7 @@ popd
 # https://cmake.org/files/v3.12/cmake-3.12.2.tar.gz
 download_make_install ${HTTP_DEPS}/cmake-3.12.2.tar.gz
 
-# folly
-VERS=3.0.0
+VERS=3.1.0
 download https://github.com/google/double-conversion/archive/v$VERS.tar.gz
 extract v$VERS.tar.gz
 mkdir -p double-conversion-$VERS/build
@@ -127,6 +126,7 @@ popd
 VERS=0.3.5
 CXXFLAGS="-fPIC" download_make_install https://github.com/google/glog/archive/v$VERS.tar.gz glog-$VERS "--enable-shared=no" # --build=powerpc64le-unknown-linux-gnu"
 
+# folly
 VERS=2.1.8
 download_make_install https://github.com/libevent/libevent/releases/download/release-$VERS-stable/libevent-$VERS-stable.tar.gz
 
@@ -231,6 +231,8 @@ cmake \
 makej
 make install
 popd
+
+install_snappy
 
 # c-blosc
 VERS=1.14.4

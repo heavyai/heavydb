@@ -91,7 +91,7 @@ VERS=0.11.0
 wget --continue http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
 tar xvf thrift-$VERS.tar.gz
 pushd thrift-$VERS
-JAVA_PREFIX=$PREFIX/lib ./configure \
+CFLAGS="-fPIC" CXXFLAGS="-fPIC" JAVA_PREFIX=$PREFIX/lib ./configure \
     --with-lua=no \
     --with-python=no \
     --with-php=no \

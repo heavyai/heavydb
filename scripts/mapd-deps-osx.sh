@@ -22,6 +22,7 @@ brew install gflags
 brew install glog
 brew install wget
 brew install jq
+brew install c-blosc
 
 #brew install thrift
 # custom thrift formula pinned to specific supported version
@@ -30,7 +31,12 @@ brew switch thrift 0.11.0
 
 brew install cryptopp
 brew install llvm@6
-brew install apache-arrow
+
+#install_arrow
+brew install snappy
+brew install -s ../ThirdParty/Arrow/apache-arrow.rb
+brew switch apache-arrow 0.11.1
+
 brew install golang
 brew install libpng
 brew install libarchive
