@@ -411,7 +411,8 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
       eo.with_dynamic_watchdog,
       eo.dynamic_watchdog_time_limit,
       eo.find_push_down_candidates,
-      eo.just_calcite_explain};
+      eo.just_calcite_explain,
+      eo.gpu_input_mem_limit_percent};
 
   if (render_info && !render_info->table_names.size() && leaf_results_.size()) {
     // Save the table names for render queries for distributed aggregation queries.
@@ -1838,7 +1839,9 @@ ExecutionResult RelAlgExecutor::handleRetry(
                                    false,
                                    eo.with_dynamic_watchdog,
                                    eo.dynamic_watchdog_time_limit,
-                                   false};
+                                   false,
+                                   false,
+                                   eo.gpu_input_mem_limit_percent};
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      co.device_type_,
                                                      QueryMemoryDescriptor(),

@@ -261,6 +261,11 @@ void MapDProgramOptions::fillOptions(po::options_description& desc) {
       "res-gpu-mem",
       po::value<size_t>(&reserved_gpu_mem)->default_value(reserved_gpu_mem),
       "Reserved memory for GPU, not use mapd allocator");
+  desc.add_options()("gpu-input-mem-limit",
+                     po::value<double>(&mapd_parameters.gpu_input_mem_limit)
+                         ->default_value(mapd_parameters.gpu_input_mem_limit),
+                     "Force query to CPU when input data memory usage exceeds this "
+                     "percentage of available GPU memory");
   desc.add_options()("cuda-block-size",
                      po::value<size_t>(&mapd_parameters.cuda_block_size)
                          ->default_value(mapd_parameters.cuda_block_size),

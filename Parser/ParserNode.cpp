@@ -2352,8 +2352,10 @@ std::shared_ptr<ResultSet> getResultRows(const Catalog_Namespace::SessionInfo& s
       calcite_mgr.process(session, pg_shim(select_stmt), {}, true, false).plan_result;
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
+  // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
+  // struct
   ExecutionOptions eo = {
-      false, true, false, true, false, false, false, false, 10000, false};
+      false, true, false, true, false, false, false, false, 10000, false, false, 0.9};
   RelAlgExecutor ra_executor(executor.get(), catalog);
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,

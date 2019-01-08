@@ -22,7 +22,9 @@
 QueryFragmentDescriptor::QueryFragmentDescriptor(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos,
-    const std::vector<Data_Namespace::MemoryInfo>& gpu_mem_infos) {
+    const std::vector<Data_Namespace::MemoryInfo>& gpu_mem_infos,
+    const double gpu_input_mem_limit_percent)
+    : gpu_input_mem_limit_percent_(gpu_input_mem_limit_percent) {
   const size_t input_desc_count{ra_exe_unit.input_descs.size()};
   CHECK_EQ(query_infos.size(), input_desc_count);
   for (size_t table_idx = 0; table_idx < input_desc_count; ++table_idx) {
@@ -253,8 +255,13 @@ void QueryFragmentDescriptor::checkDeviceMemoryUsage(
     const size_t num_bytes_for_row) {
   CHECK_GE(device_id, 0);
   tuple_count_per_device_[device_id] += fragment.getNumTuples();
-  if (tuple_count_per_device_[device_id] * num_bytes_for_row >
-      available_gpu_mem_bytes_[device_id]) {
+  const size_t gpu_bytes_limit =
+      available_gpu_mem_bytes_[device_id] * gpu_input_mem_limit_percent_;
+  if (tuple_count_per_device_[device_id] * num_bytes_for_row > gpu_bytes_limit) {
+    LOG(WARNING) << "Not enough memory on device " << device_id
+                 << " for input chunks totaling "
+                 << tuple_count_per_device_[device_id] * num_bytes_for_row
+                 << " bytes (available device memory: " << gpu_bytes_limit << " bytes)";
     throw QueryMustRunOnCpu();
   }
 }

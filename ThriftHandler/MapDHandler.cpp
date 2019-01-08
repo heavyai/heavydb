@@ -3941,7 +3941,8 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                          g_enable_dynamic_watchdog,
                          g_dynamic_watchdog_time_limit,
                          find_push_down_candidates,
-                         just_calcite_explain};
+                         just_calcite_explain,
+                         mapd_parameters_.gpu_input_mem_limit};
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
@@ -3995,7 +3996,9 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                          false,
                          g_enable_dynamic_watchdog,
                          g_dynamic_watchdog_time_limit,
-                         false};
+                         false,
+                         false,
+                         mapd_parameters_.gpu_input_mem_limit};
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",

@@ -38,6 +38,8 @@
 
 extern bool g_aggregator;
 extern bool g_enable_filter_push_down;
+
+double g_gpu_mem_limit_percent{0.9};
 namespace {
 
 Planner::RootPlan* parse_plan_legacy(
@@ -245,7 +247,8 @@ ExecutionResult run_select_query(
                          false,
                          10000,
                          false,
-                         false};
+                         false,
+                         g_gpu_mem_limit_percent};
   auto& calcite_mgr = cat.getCalciteMgr();
   const auto query_ra =
       calcite_mgr.process(*session, pg_shim(query_str), {}, true, false).plan_result;
@@ -275,7 +278,8 @@ ExecutionResult run_select_query_with_filter_push_down(
                          false,
                          10000,
                          with_filter_push_down,
-                         false};
+                         false,
+                         g_gpu_mem_limit_percent};
   auto& calcite_mgr = cat.getCalciteMgr();
   const auto query_ra =
       calcite_mgr.process(*session, pg_shim(query_str), {}, true, false).plan_result;
@@ -306,7 +310,8 @@ ExecutionResult run_select_query_with_filter_push_down(
                                        eo.with_dynamic_watchdog,
                                        eo.dynamic_watchdog_time_limit,
                                        /*find_push_down_candidates=*/false,
-                                       /*just_calcite_explain=*/false};
+                                       /*just_calcite_explain=*/false,
+                                       eo.gpu_input_mem_limit_percent};
     return ra_executor.executeRelAlgQuery(new_query_ra, co, eo_modified, nullptr);
   } else {
     return result;

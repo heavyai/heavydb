@@ -1103,7 +1103,8 @@ ResultSetPtr Executor::executeWorkUnit(
         query_infos,
         execution_dispatch.getDeviceType() == ExecutorDeviceType::GPU
             ? cat.getDataMgr().getMemoryInfo(Data_Namespace::MemoryLevel::GPU_LEVEL)
-            : std::vector<Data_Namespace::MemoryInfo>{});
+            : std::vector<Data_Namespace::MemoryInfo>{},
+        options.gpu_input_mem_limit_percent);
 
     const QueryMemoryDescriptor& query_mem_desc =
         execution_dispatch.getQueryMemoryDescriptor();
