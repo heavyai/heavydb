@@ -176,11 +176,28 @@ DEF_ARITH_NULLABLE_RHS(int64_t, int64_t, mod, %)
 #undef DEF_ARITH_NULLABLE_LHS
 #undef DEF_ARITH_NULLABLE
 
-extern "C" ALWAYS_INLINE int64_t scale_decimal(const int64_t operand,
-                                               const uint64_t scale,
-                                               const int64_t operand_null_val,
-                                               const int64_t result_null_val) {
+extern "C" ALWAYS_INLINE int64_t scale_decimal_up(const int64_t operand,
+                                                  const uint64_t scale,
+                                                  const int64_t operand_null_val,
+                                                  const int64_t result_null_val) {
   return operand != operand_null_val ? operand * scale : result_null_val;
+}
+
+extern "C" ALWAYS_INLINE int64_t scale_decimal_down(const int64_t operand,
+                                                    const int64_t scale,
+                                                    const int64_t scale_half,
+                                                    const bool do_null_check,
+                                                    const int64_t operand_null_val,
+                                                    const int64_t result_null_val) {
+  // rounded scale down of a decimal
+  if (do_null_check) {
+    if (operand == operand_null_val) {
+      return result_null_val;
+    }
+  }
+  int64_t temp = operand;
+  temp = temp >= 0 ? temp + scale_half : temp - scale_half;
+  return temp / scale;
 }
 
 #define DEF_UMINUS_NULLABLE(type, null_type)                                         \

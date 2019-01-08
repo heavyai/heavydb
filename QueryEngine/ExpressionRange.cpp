@@ -745,11 +745,12 @@ ExpressionRange getExpressionRange(
       if (arg_ti.is_decimal()) {
         CHECK_EQ(int64_t(0), arg_range.getBucket());
         const int64_t scale = exp_to_scale(arg_ti.get_scale());
+        const int64_t scale_half = scale / 2;
         if (ti.is_fp()) {
           return fpRangeFromDecimal(arg_range, scale, ti);
         }
-        return ExpressionRange::makeIntRange(arg_range.getIntMin() / scale,
-                                             arg_range.getIntMax() / scale,
+        return ExpressionRange::makeIntRange((arg_range.getIntMin() - scale_half) / scale,
+                                             (arg_range.getIntMax() + scale_half) / scale,
                                              0,
                                              arg_range.hasNulls());
       }

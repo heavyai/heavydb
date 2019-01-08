@@ -3809,8 +3809,6 @@ TEST(Select, UnsupportedCast) {
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT CAST(f AS DECIMAL) FROM test;", dt),
                  std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT CAST(dd AS DECIMAL) FROM test;", dt),
-                 std::runtime_error);
   }
 }
 
@@ -3845,6 +3843,91 @@ TEST(Select, CastFromNull) {
     c("SELECT CAST(NULL AS DOUBLE) FROM test;", dt);
     c("SELECT CAST(NULL AS DECIMAL) FROM test;", dt);
     c("SELECT CAST(NULL AS NUMERIC) FROM test;", dt);
+  }
+}
+
+TEST(Select, CastDecimalToDecimal) {
+  run_ddl_statement("DROP TABLE IF EXISTS decimal_to_decimal_test;");
+  run_ddl_statement("create table decimal_to_decimal_test (id INT, val DECIMAL(10,5));");
+  run_multiple_agg("insert into decimal_to_decimal_test VALUES (1, 456.78956)",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("insert into decimal_to_decimal_test VALUES (2, 456.12345)",
+                   ExecutorDeviceType::CPU);
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    ASSERT_TRUE(
+        approx_eq(456.78956,
+                  v<double>(run_simple_agg(
+                      "SELECT val FROM decimal_to_decimal_test WHERE id = 1;", dt))));
+    ASSERT_TRUE(
+        approx_eq(456.12345,
+                  v<double>(run_simple_agg(
+                      "SELECT val FROM decimal_to_decimal_test WHERE id = 2;", dt))));
+
+    ASSERT_TRUE(
+        approx_eq(456.7896,
+                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,4)) FROM "
+                                           "decimal_to_decimal_test WHERE id = 1;",
+                                           dt))));
+    ASSERT_TRUE(
+        approx_eq(456.123,
+                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,4)) FROM "
+                                           "decimal_to_decimal_test WHERE id = 2;",
+                                           dt))));
+
+    ASSERT_TRUE(
+        approx_eq(456.790,
+                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,3)) FROM "
+                                           "decimal_to_decimal_test WHERE id = 1;",
+                                           dt))));
+    ASSERT_TRUE(
+        approx_eq(456.1234,
+                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,3)) FROM "
+                                           "decimal_to_decimal_test WHERE id = 2;",
+                                           dt))));
+
+    ASSERT_TRUE(
+        approx_eq(456.79,
+                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,2)) FROM "
+                                           "decimal_to_decimal_test WHERE id = 1;",
+                                           dt))));
+    ASSERT_TRUE(
+        approx_eq(456.12,
+                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,2)) FROM "
+                                           "decimal_to_decimal_test WHERE id = 2;",
+                                           dt))));
+
+    ASSERT_TRUE(
+        approx_eq(456.8,
+                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,1)) FROM "
+                                           "decimal_to_decimal_test WHERE id = 1;",
+                                           dt))));
+    ASSERT_TRUE(
+        approx_eq(456.1,
+                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,1)) FROM "
+                                           "decimal_to_decimal_test WHERE id = 2;",
+                                           dt))));
+    ASSERT_TRUE(
+        approx_eq(457,
+                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,0)) FROM "
+                                           "decimal_to_decimal_test WHERE id = 1;",
+                                           dt))));
+    ASSERT_TRUE(
+        approx_eq(456,
+                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,0)) FROM "
+                                           "decimal_to_decimal_test WHERE id = 2;",
+                                           dt))));
+
+    ASSERT_EQ(457,
+              v<int64_t>(run_simple_agg(
+                  "SELECT CAST(val AS BIGINT) FROM decimal_to_decimal_test WHERE id = 1;",
+                  dt)));
+    ASSERT_EQ(456,
+              v<int64_t>(run_simple_agg(
+                  "SELECT CAST(val AS BIGINT) FROM decimal_to_decimal_test WHERE id = 2;",
+                  dt)));
   }
 }
 

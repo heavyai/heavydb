@@ -70,7 +70,7 @@ class NumberColumnDescriptor : public TestColumnDescriptor {
 
   virtual bool skip_test(std::string name) {
     if (kDECIMAL == rs_type) {
-      return "UpdateColumnByLiteral" == name || "Array.UpdateColumnByLiteral" == name;
+      return "Array.UpdateColumnByLiteral" == name;
     }
     if (kDOUBLE == rs_type || kFLOAT == rs_type) {
       return "Array.UpdateColumnByLiteral" == name;

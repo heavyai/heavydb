@@ -214,9 +214,9 @@ llvm::Value* Executor::codegenCastBetweenIntTypes(llvm::Value* operand_lv,
                                                   const SQLTypeInfo& operand_ti,
                                                   const SQLTypeInfo& ti,
                                                   bool upscale) {
-  if (ti.is_decimal()) {
+  if (ti.is_decimal() &&
+      (!operand_ti.is_decimal() || operand_ti.get_scale() <= ti.get_scale())) {
     if (upscale) {
-      CHECK(!operand_ti.is_decimal() || operand_ti.get_scale() <= ti.get_scale());
       if (operand_ti.get_scale() < ti.get_scale()) {  // scale only if needed
         auto scale = exp_to_scale(ti.get_scale() - operand_ti.get_scale());
         const auto scale_lv =
@@ -260,7 +260,7 @@ llvm::Value* Executor::codegenCastBetweenIntTypes(llvm::Value* operand_lv,
           operand_lv = cgen_state_->ir_builder_.CreateMul(operand_lv, scale_lv);
         } else {
           operand_lv =
-              cgen_state_->emitCall("scale_decimal",
+              cgen_state_->emitCall("scale_decimal_up",
                                     {operand_lv,
                                      scale_lv,
                                      ll_int(inline_int_null_val(operand_ti)),
@@ -269,13 +269,27 @@ llvm::Value* Executor::codegenCastBetweenIntTypes(llvm::Value* operand_lv,
       }
     }
   } else if (operand_ti.is_decimal()) {
+    // rounded scale down
+    auto scale = exp_to_scale(operand_ti.get_scale() - ti.get_scale());
+    auto scale_half = scale / 2;
     const auto scale_lv =
-        llvm::ConstantInt::get(static_cast<llvm::IntegerType*>(operand_lv->getType()),
-                               exp_to_scale(operand_ti.get_scale()));
-    operand_lv = cgen_state_->emitCall(
-        "div_" + numeric_type_name(operand_ti) + "_nullable_lhs",
-        {operand_lv, scale_lv, ll_int(inline_int_null_val(operand_ti))});
+        llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_), scale);
+    const auto scale_half_lv =
+        llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_), scale_half);
+
+    const auto operand_width =
+        static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
+
+    CHECK(operand_width == 64);
+    operand_lv = cgen_state_->emitCall("scale_decimal_down",
+                                       {operand_lv,
+                                        scale_lv,
+                                        scale_half_lv,
+                                        ll_bool(!operand_ti.get_notnull()),
+                                        ll_int(inline_int_null_val(operand_ti)),
+                                        inlineIntNull(SQLTypeInfo(kBIGINT, false))});
   }
+
   const auto operand_width =
       static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
   const auto target_width = get_bit_width(ti);

@@ -356,10 +356,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(
       if (operand_ti.is_string() && target_ti.is_string()) {
         return operand_expr;
       }
-      if (operand_ti.is_decimal() && target_ti.is_decimal() &&
-          operand_ti.get_scale() != target_ti.get_scale()) {
-        throw std::runtime_error("Cast between different DECIMAL scales not supported");
-      }
       if (target_ti.is_time() ||
           operand_ti
               .is_string()) {  // TODO(alex): check and unify with the rest of the cases
