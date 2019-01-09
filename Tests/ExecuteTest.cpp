@@ -8309,35 +8309,140 @@ TEST(Truncate, Count) {
   run_ddl_statement("drop table trunc_test;");
 }
 
-// Can uncomment once Michael fixes a thing in Catalog.cpp
-// TEST(Update, NoneEncodedText) {
-//  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
-//    return;
-//  auto save_watchdog = g_enable_watchdog;
-//  g_enable_watchdog = false;
-//
-//  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-//    SKIP_NO_GPU();
-//
-//    run_ddl_statement("create table textencnone_default (t text encoding none) with
-//    (vacuum='delayed');");
-//
-//    run_multiple_agg("insert into textencnone_default values ('do');",dt);
-//    run_multiple_agg("insert into textencnone_default values ('you');",dt);
-//    run_multiple_agg("insert into textencnone_default values ('know');",dt);
-//    run_multiple_agg("insert into textencnone_default values ('the');",dt);
-//    run_multiple_agg("insert into textencnone_default values ('muffin');",dt);
-//    run_multiple_agg("insert into textencnone_default values ('man');",dt);
-//
-//    EXPECT_THROW( run_multiple_agg( "update textencnone_default set t='pizza' where
-//    char_length(t) <= 3;", dt ),
-//      std::runtime_error
-//    );
-//    run_ddl_statement("drop table textencnone_default;");
-//  }
-//
-//  g_enable_watchdog = save_watchdog;
-//}
+TEST(Update, VarlenSmartSwitch) {
+  if (!is_feature_enabled<VarlenUpdates>()) {
+    return;
+  }
+  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
+    return;
+  }
+
+  auto save_watchdog = g_enable_watchdog;
+  g_enable_watchdog = false;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("drop table if exists smartswitch;");
+    run_ddl_statement("create table smartswitch (x int, y int[], z text );");
+
+    run_multiple_agg("insert into smartswitch values (0, ARRAY[1,2,3,4], 'Flake');", dt);
+    run_multiple_agg("insert into smartswitch values (1, ARRAY[5,6,7,8], 'Goofy');", dt);
+    run_multiple_agg(
+        "insert into smartswitch values (2, ARRAY[9,10,11,12,13], 'Lightweight');", dt);
+
+    // In-place updates have no shift in rowid
+    auto x_pre_rowid_0 =
+        v<int64_t>(run_simple_agg("select rowid from smartswitch where x=0;", dt));
+    auto x_pre_rowid_1 =
+        v<int64_t>(run_simple_agg("select rowid from smartswitch where x=1;", dt));
+    auto x_pre_rowid_2 =
+        v<int64_t>(run_simple_agg("Select rowid from smartswitch where x=2;", dt));
+
+    // Test RelProject-driven update
+    run_multiple_agg("update smartswitch set x = x+1;", dt);
+    ASSERT_EQ(int64_t(6),
+              v<int64_t>(run_simple_agg("select sum(x) from smartswitch;", dt)));
+
+    // Get post-update rowid
+    auto x_post_rowid_1 =
+        v<int64_t>(run_simple_agg("select rowid from smartswitch where x=1;", dt));
+    auto x_post_rowid_2 =
+        v<int64_t>(run_simple_agg("select rowid from smartswitch where x=2;", dt));
+    auto x_post_rowid_3 =
+        v<int64_t>(run_simple_agg("Select rowid from smartswitch where x=3;", dt));
+
+    // Make sure the pre and post rowids are equal
+    ASSERT_EQ(x_pre_rowid_0, x_post_rowid_1);
+    ASSERT_EQ(x_pre_rowid_1, x_post_rowid_2);
+    ASSERT_EQ(x_pre_rowid_2, x_post_rowid_3);
+
+    // In-place updates have no shift in rowid
+    x_pre_rowid_1 =
+        v<int64_t>(run_simple_agg("select rowid from smartswitch where x=1;", dt));
+    ;
+    x_pre_rowid_2 =
+        v<int64_t>(run_simple_agg("select rowid from smartswitch where x=2;", dt));
+    ;
+    auto x_pre_rowid_3 =
+        v<int64_t>(run_simple_agg("select rowid from smartswitch where x=3;", dt));
+    ;
+
+    // Test RelCompound-driven update
+    run_multiple_agg("update smartswitch set x=x+1 where x < 10;", dt);
+    ASSERT_EQ(int64_t(9),
+              v<int64_t>(run_simple_agg("select sum(x) from smartswitch;", dt)));
+
+    x_post_rowid_2 =
+        v<int64_t>(run_simple_agg("select rowid from smartswitch where x=2;", dt));
+    ;
+    x_post_rowid_3 =
+        v<int64_t>(run_simple_agg("select rowid from smartswitch where x=3;", dt));
+    ;
+    auto x_post_rowid_4 =
+        v<int64_t>(run_simple_agg("select rowid from smartswitch where x=4;", dt));
+    ;
+
+    // Make sure the pre and post rowids are equal
+    // Completion of these assertions proves that in-place update was selected for this
+    ASSERT_EQ(x_pre_rowid_1, x_post_rowid_2);
+    ASSERT_EQ(x_pre_rowid_2, x_post_rowid_3);
+    ASSERT_EQ(x_pre_rowid_3, x_post_rowid_4);
+
+    // Test RelCompound-driven update
+
+    auto y_pre_rowid_1 =
+        v<int64_t>(run_simple_agg("select rowid from smartswitch where y[1]=1;", dt));
+    run_multiple_agg("update smartswitch set y=ARRAY[9,10,11,12] where y[1]=1;", dt);
+    auto y_post_rowid_1 =
+        v<int64_t>(run_simple_agg("select rowid from smartswitch where y[1]=9 and "
+                                  "y[2]=10 and y[3]=11 and y[4]=12 and z='Flake';",
+                                  dt));
+
+    // Internal insert-delete cycle should create a new rowid
+    // This test validates that the CTAS varlen update path was used; the rowid change is
+    // evidence
+    ASSERT_NE(y_pre_rowid_1, y_post_rowid_1);
+
+    ASSERT_EQ(int64_t(2),
+              v<int64_t>(run_simple_agg("select count(y) from smartswitch where y[1]=9 "
+                                        "and y[2]=10 and y[3]=11 and y[4]=12;",
+                                        dt)));
+    ASSERT_EQ(int64_t(9),
+              v<int64_t>(run_simple_agg("select sum(x) from smartswitch;", dt)));
+    ASSERT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg(
+                  "select count(z) from smartswitch where z='Flake';", dt)));
+    ASSERT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg(
+                  "select count(z) from smartswitch where z='Goofy';", dt)));
+    ASSERT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg(
+                  "select count(z) from smartswitch where z='Lightweight';", dt)));
+
+    // Test RelProject-driven update
+    run_multiple_agg("update smartswitch set y=ARRAY[2,3,5,7,11];", dt);
+    ASSERT_EQ(int64_t(3),
+              v<int64_t>(run_simple_agg("select count(y) from smartswitch where y[1]=2 "
+                                        "and y[2]=3 and y[3]=5 and y[4]=7 and y[5]=11;",
+                                        dt)));
+    ASSERT_EQ(int64_t(9),
+              v<int64_t>(run_simple_agg("select sum(x) from smartswitch;", dt)));
+    ASSERT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg(
+                  "select count(z) from smartswitch where z='Flake';", dt)));
+    ASSERT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg(
+                  "select count(z) from smartswitch where z='Goofy';", dt)));
+    ASSERT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg(
+                  "select count(z) from smartswitch where z='Lightweight';", dt)));
+
+    run_ddl_statement("drop table smartswitch;");
+  }
+
+  g_enable_watchdog = save_watchdog;
+}
 
 TEST(Update, Text) {
   SKIP_ALL_ON_AGGREGATOR();

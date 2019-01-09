@@ -589,21 +589,29 @@ class ModifyManipulationTarget {
  public:
   ModifyManipulationTarget(bool const update_via_select = false,
                            bool const delete_via_select = false,
+                           bool const varlen_update_required = false,
                            TableDescriptor const* table_descriptor = nullptr,
                            ColumnNameList target_columns = ColumnNameList())
       : is_update_via_select_(update_via_select)
       , is_delete_via_select_(delete_via_select)
+      , varlen_update_required_(varlen_update_required)
       , table_descriptor_(table_descriptor)
       , target_columns_(target_columns) {}
 
   void setUpdateViaSelectFlag() const { is_update_via_select_ = true; }
   void setDeleteViaSelectFlag() const { is_delete_via_select_ = true; }
-  bool const isUpdateViaSelect() const { return is_update_via_select_; }
-  bool const isDeleteViaSelect() const { return is_delete_via_select_; }
+  void setVarlenUpdateRequired(bool required) const {
+    varlen_update_required_ = required;
+  }
+
   TableDescriptor const* getModifiedTableDescriptor() const { return table_descriptor_; }
   void setModifiedTableDescriptor(TableDescriptor const* td) const {
     table_descriptor_ = td;
   }
+
+  auto const isUpdateViaSelect() const { return is_update_via_select_; }
+  auto const isDeleteViaSelect() const { return is_delete_via_select_; }
+  auto const isVarlenUpdateRequired() const { return varlen_update_required_; }
 
   int getTargetColumnCount() const { return target_columns_.size(); }
   void setTargetColumns(ColumnNameList const& target_columns) const {
@@ -622,6 +630,7 @@ class ModifyManipulationTarget {
  private:
   mutable bool is_update_via_select_ = false;
   mutable bool is_delete_via_select_ = false;
+  mutable bool varlen_update_required_ = false;
   mutable TableDescriptor const* table_descriptor_ = nullptr;
   mutable ColumnNameList target_columns_;
 };
@@ -636,7 +645,7 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   RelProject(std::vector<std::unique_ptr<const RexScalar>>& scalar_exprs,
              const std::vector<std::string>& fields,
              std::shared_ptr<const RelAlgNode> input)
-      : ModifyManipulationTarget(false, false, nullptr)
+      : ModifyManipulationTarget(false, false, false, nullptr)
       , scalar_exprs_(std::move(scalar_exprs))
       , fields_(fields) {
     inputs_.push_back(input);
@@ -902,10 +911,12 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
               const bool is_agg,
               bool update_disguised_as_select = false,
               bool delete_disguised_as_select = false,
+              bool varlen_update_required = false,
               TableDescriptor const* manipulation_target_table = nullptr,
               ColumnNameList target_columns = ColumnNameList())
       : ModifyManipulationTarget(update_disguised_as_select,
                                  delete_disguised_as_select,
+                                 varlen_update_required,
                                  manipulation_target_table,
                                  target_columns)
       , filter_expr_(std::move(filter_expr))
@@ -1177,11 +1188,15 @@ class RelModify : public RelAlgNode {
     CHECK(target_update_column_expr_end >= 0);
 
     RelProject::ConstRexScalarPtrVector transform_stash;
-    auto capped_cast_visitor = [this,
-                                &transform_stash,
-                                target_update_column_expr_start,
-                                target_update_column_expr_end](
-                                   int index, RelProject::ConstRexScalarPtr& expr_ptr) {
+    bool varlen_update_required = false;
+
+    auto cast_and_varlen_scan_visitor = [this,
+                                         &varlen_update_required,
+                                         &transform_stash,
+                                         target_update_column_expr_start,
+                                         target_update_column_expr_end](
+                                            int index,
+                                            RelProject::ConstRexScalarPtr& expr_ptr) {
       if (index >= target_update_column_expr_start &&
           index <= target_update_column_expr_end) {
         auto target_index = index - target_update_column_expr_start;
@@ -1201,6 +1216,10 @@ class RelModify : public RelAlgNode {
 
         // Check for valid types
         if (is_feature_enabled<VarlenUpdates>()) {
+          if (column_desc->columnType.is_varlen()) {
+            varlen_update_required = true;
+          }
+
           if (column_desc->columnType.is_geometry()) {
             throw std::runtime_error("UPDATE of a geo column is unsupported.");
           }
@@ -1229,8 +1248,9 @@ class RelModify : public RelAlgNode {
       }
     };
 
-    previous_project_node->visitAndStealScalarExprs(capped_cast_visitor);
+    previous_project_node->visitAndStealScalarExprs(cast_and_varlen_scan_visitor);
     previous_project_node->setExpressions(transform_stash);
+    previous_project_node->setVarlenUpdateRequired(varlen_update_required);
   }
 
   void applyDeleteModificationsToInputNode() {

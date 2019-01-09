@@ -151,22 +151,19 @@ class StorageIOFacility {
    public:
     UpdateTransactionParameters(TableDescriptorType const* table_desc,
                                 UpdateTargetColumnNamesList const& update_column_names,
-                                UpdateTargetTypeList const& target_types)
+                                UpdateTargetTypeList const& target_types,
+                                bool varlen_update_required)
         : table_descriptor_(table_desc)
         , update_column_names_(update_column_names)
-        , targets_meta_(target_types){};
+        , targets_meta_(target_types)
+        , varlen_update_required_(varlen_update_required){};
 
-    typename UpdateTargetColumnNamesList::size_type getUpdateColumnCount() const {
-      return update_column_names_.size();
-    }
-    TableDescriptorType const* getTableDescriptor() const { return table_descriptor_; }
-    UpdateTargetTypeList const& getTargetsMetaInfo() const { return targets_meta_; }
-    typename UpdateTargetTypeList::size_type getTargetsMetaInfoSize() const {
-      return targets_meta_.size();
-    }
-    UpdateTargetColumnNamesList const& getUpdateColumnNames() const {
-      return update_column_names_;
-    }
+    auto getUpdateColumnCount() const { return update_column_names_.size(); }
+    auto const* getTableDescriptor() const { return table_descriptor_; }
+    auto const& getTargetsMetaInfo() const { return targets_meta_; }
+    auto getTargetsMetaInfoSize() const { return targets_meta_.size(); }
+    auto const& getUpdateColumnNames() const { return update_column_names_; }
+    auto isVarlenUpdateRequired() const { return varlen_update_required_; }
 
    private:
     UpdateTransactionParameters(UpdateTransactionParameters const& other) = delete;
@@ -176,6 +173,7 @@ class StorageIOFacility {
     TableDescriptorType const* table_descriptor_;
     UpdateTargetColumnNamesList update_column_names_;
     UpdateTargetTypeList const& targets_meta_;
+    bool varlen_update_required_ = false;
   };
 
   StorageIOFacility(ExecutorType* executor, CatalogType const& catalog)
@@ -204,7 +202,7 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
   using ScalarTargetValueVector = std::vector<ScalarTargetValue>;
   using RowProcessingFuturesVector = std::vector<std::future<uint64_t>>;
 
-  if (is_feature_enabled<VarlenUpdates>()) {
+  if (update_parameters.isVarlenUpdateRequired()) {
     auto callback = [this,
                      &update_parameters](FragmentUpdaterType const& update_log) -> void {
       std::vector<const ColumnDescriptor*> columnDescriptors;

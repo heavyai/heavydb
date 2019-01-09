@@ -862,6 +862,7 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
                                     is_agg,
                                     manipulation_target->isUpdateViaSelect(),
                                     manipulation_target->isDeleteViaSelect(),
+                                    manipulation_target->isVarlenUpdateRequired(),
                                     manipulation_target->getModifiedTableDescriptor(),
                                     manipulation_target->getTargetColumns());
   auto old_node = nodes[pattern.back()];

@@ -1045,7 +1045,8 @@ void RelAlgExecutor::executeUpdateViaCompound(const RelCompound* compound,
 
     UpdateTransactionParameters update_params(compound->getModifiedTableDescriptor(),
                                               compound->getTargetColumns(),
-                                              compound->getOutputMetainfo());
+                                              compound->getOutputMetainfo(),
+                                              compound->isVarlenUpdateRequired());
     auto update_callback = yieldUpdateCallback(update_params);
     executor_->executeUpdate(work_unit.exe_unit,
                              table_infos.front(),
@@ -1095,7 +1096,8 @@ void RelAlgExecutor::executeUpdateViaProject(const RelProject* project,
 
     UpdateTransactionParameters update_params(project->getModifiedTableDescriptor(),
                                               project->getTargetColumns(),
-                                              project->getOutputMetainfo());
+                                              project->getOutputMetainfo(),
+                                              project->isVarlenUpdateRequired());
     auto update_callback = yieldUpdateCallback(update_params);
     executor_->executeUpdate(work_unit.exe_unit,
                              table_infos.front(),

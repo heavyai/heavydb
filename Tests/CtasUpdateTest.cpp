@@ -25,7 +25,10 @@
 #include "../QueryEngine/ArrowResultSet.h"
 #include "../QueryEngine/Execute.h"
 
+#ifndef ENABLE_VARLEN_UPDATE
 #define ENABLE_VARLEN_UPDATE
+#endif
+
 #include "../Shared/ConfigResolve.h"
 
 #ifndef BASE_PATH
