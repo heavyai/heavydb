@@ -24,6 +24,7 @@
 #include "../QueryRunner/QueryRunner.h"
 #include "../Shared/ConfigResolve.h"
 #include "../Shared/TimeGM.h"
+#include "../Shared/scope.h"
 #include "../SqliteConnector/SqliteConnector.h"
 #include "DistributedLoader.h"
 
@@ -46,8 +47,11 @@ extern bool g_aggregator;
 
 extern int g_test_against_columnId_gap;
 extern bool g_enable_smem_group_by;
+extern bool g_allow_cpu_retry;
+extern bool g_enable_watchdog;
 
 extern bool g_enable_overlaps_hashjoin;
+extern double g_gpu_mem_limit_percent;
 
 namespace {
 
@@ -6851,6 +6855,31 @@ TEST(Select, WatchdogTest) {
       "'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz';",
       dt);
   }
+}
+
+TEST(Select, PuntToCPU) {
+  SKIP_ALL_ON_AGGREGATOR();
+
+  const auto cpu_retry_state = g_allow_cpu_retry;
+  const auto watchdog_state = g_enable_watchdog;
+  g_allow_cpu_retry = false;
+  g_enable_watchdog = true;
+  ScopeGuard reset_global_flag_state = [&cpu_retry_state, &watchdog_state] {
+    g_allow_cpu_retry = cpu_retry_state;
+    g_enable_watchdog = watchdog_state;
+    g_gpu_mem_limit_percent = 0.9;  // Reset to 90%
+  };
+
+  const auto dt = ExecutorDeviceType::GPU;
+  if (skip_tests(dt)) {
+    return;
+  }
+
+  g_gpu_mem_limit_percent = 1e-9;
+  EXPECT_THROW(run_multiple_agg("SELECT x, COUNT(*) FROM test GROUP BY x;", dt),
+               std::runtime_error);
+  EXPECT_THROW(run_multiple_agg("SELECT str, COUNT(*) FROM test GROUP BY str;", dt),
+               std::runtime_error);
 }
 
 TEST(Select, TimestampMeridiesEncoding) {
