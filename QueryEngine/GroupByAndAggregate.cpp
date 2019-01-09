@@ -912,18 +912,8 @@ GroupByAndAggregate::GroupByAndAggregate(
                                  query_mem_desc_.canOutputColumnar() &&
                                  !query_mem_desc_.hasKeylessHash());
 
-    output_columnar_ =
-        (output_columnar_hint &&
-         (query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection ||
-          (query_mem_desc_.getQueryDescriptionType() ==
-               QueryDescriptionType::GroupByPerfectHash &&
-           (query_mem_desc_.getGroupbyColCount() > 1) &&
-           !has_count_distinct(ra_exe_unit)) ||
-          query_mem_desc_.getQueryDescriptionType() ==
-              QueryDescriptionType::GroupByBaselineHash)) ||
-        query_mem_desc_.sortOnGpu();
-
-    query_mem_desc_.setOutputColumnar(output_columnar_);
+    output_columnar_ = query_mem_desc_.shouldOutputColumnar(
+        output_columnar_hint, has_count_distinct(ra_exe_unit));
 
     if (query_mem_desc_.sortOnGpu() &&
         (query_mem_desc_.getBufferSizeBytes(device_type_) +

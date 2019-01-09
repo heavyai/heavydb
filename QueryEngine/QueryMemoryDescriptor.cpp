@@ -1077,6 +1077,34 @@ bool QueryMemoryDescriptor::canOutputColumnar() const {
          countDescriptorsLogicallyEmpty(count_distinct_descriptors_);
 }
 
+bool QueryMemoryDescriptor::shouldOutputColumnar(const bool output_columnar_hint,
+                                                 const bool has_count_distinct_target) {
+  if (sortOnGpu()) {
+    output_columnar_ = true;
+  } else {
+    switch (query_desc_type_) {
+      case QueryDescriptionType::Projection:
+        output_columnar_ = output_columnar_hint;
+        break;
+      case QueryDescriptionType::GroupByPerfectHash:
+        output_columnar_ = output_columnar_hint && getGroupbyColCount() > 1 &&
+                           !has_count_distinct_target;
+        break;
+      case QueryDescriptionType::GroupByBaselineHash:
+        output_columnar_ = output_columnar_hint;
+        break;
+      default:
+        output_columnar_ = false;
+        break;
+    }
+  }
+  if (output_columnar_) {
+    // padded column widths are used for all columnar formats
+    recomputePaddedColumnWidthBytes();
+  }
+  return output_columnar_;
+}
+
 namespace {
 
 inline std::string boolToString(const bool val) {

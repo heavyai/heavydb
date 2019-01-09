@@ -301,6 +301,8 @@ class QueryMemoryDescriptor {
     // padded column widths are used for all columnar formats
     recomputePaddedColumnWidthBytes();
   }
+  bool shouldOutputColumnar(const bool output_columnar_hint,
+                            const bool has_count_distinct_target);
 
   bool mustUseBaselineSort() const { return must_use_baseline_sort_; }
 
