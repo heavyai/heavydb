@@ -41,7 +41,7 @@ public class MapDGeomTest {
       Object m_point = rs.getObject("m_point");
       Object m_linestring = rs.getObject("m_linestring");
       Object m_polygon = rs.getObject("m_polygon");
-      Object m_multi_polygon = rs.getObject("m_multi_polygon");
+      Object m_multi_polygon = rs.getString("m_multi_polygon");
       assertEquals("POLYGON ((0 0,4 0,4 4,0 0))", m_polygon);
       assertEquals("LINESTRING (0 1,2 2)", m_linestring);
       assertEquals("POINT (0 0)", m_point);
@@ -69,10 +69,11 @@ public class MapDGeomTest {
 
     ResultSet rs = statement.executeQuery(sql_select_geom);
     while (rs.next()) {
+      // Test getString and getObject return on geo type
       Object m_point = rs.getObject("m_point");
-      Object m_linestring = rs.getObject("m_linestring");
+      Object m_linestring = rs.getString("m_linestring");
       Object m_polygon = rs.getObject("m_polygon");
-      Object m_multi_polygon = rs.getObject("m_multi_polygon");
+      String m_multi_polygon = rs.getString("m_multi_polygon");
       assertEquals("POLYGON ((0 0,4 0,4 4,0 0))", m_polygon);
       assertEquals("LINESTRING (0 1,2 2)", m_linestring);
       assertEquals("POINT (0 0)", m_point);

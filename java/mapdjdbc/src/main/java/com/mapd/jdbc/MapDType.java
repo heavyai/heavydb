@@ -101,6 +101,11 @@ class MapDType {
         return java.sql.Types.DATE;
       case BOOL:
         return java.sql.Types.BOOLEAN;
+      case POINT:
+      case POLYGON:
+      case MULTIPOLYGON:
+      case LINESTRING:
+        return java.sql.Types.OTHER;
       default:
         throw new AssertionError(type.name());
     }

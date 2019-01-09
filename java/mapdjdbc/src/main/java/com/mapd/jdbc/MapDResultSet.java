@@ -174,6 +174,11 @@ class MapDResultSet implements java.sql.ResultSet {
         return getDate(columnIndex).toString();
       case BOOL:
         return getBoolean(columnIndex) ? "1" : "0";
+      case POINT:
+      case LINESTRING:
+      case POLYGON:
+      case MULTIPOLYGON:
+        return (String) getObject(columnIndex);
       default:
         throw new AssertionError(type.name());
     }
