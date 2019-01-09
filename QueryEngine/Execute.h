@@ -337,7 +337,7 @@ class Executor {
       const ExecutionResult& results,
       const Catalog_Namespace::SessionInfo& session,
       const int render_widget_id,
-      const rapidjson::Value& data_desc,
+      const ::QueryRenderer::JSONLocation* data_loc,
       RenderInfo* render_query_data);
 
   std::shared_ptr<ResultSet> renderPointsInSitu(RenderInfo* render_query_data);
@@ -347,7 +347,7 @@ class Executor {
       const ExecutionResult& results,
       const Catalog_Namespace::SessionInfo& session,
       const int render_widget_id,
-      const rapidjson::Value& data_desc,
+      const ::QueryRenderer::JSONLocation* data_loc,
       RenderInfo* render_query_data,
       const std::string& poly_table_name);
 
@@ -356,7 +356,7 @@ class Executor {
       const ExecutionResult& results,
       const Catalog_Namespace::SessionInfo& session,
       const int render_widget_id,
-      const rapidjson::Value& data_desc,
+      const ::QueryRenderer::JSONLocation* data_loc,
       RenderInfo* render_query_data);
 
 #if HAVE_CUDA
@@ -368,7 +368,7 @@ class Executor {
       const ExecutionResult& results,
       const Catalog_Namespace::SessionInfo& session,
       const int render_widget_id,
-      const rapidjson::Value& data_desc,
+      const ::QueryRenderer::JSONLocation* data_loc,
       RenderInfo* render_query_data,
       const std::string& line_table_name);
 #endif

@@ -22,7 +22,7 @@ std::shared_ptr<ResultSet> Executor::renderLinesNonInSitu(
     const ExecutionResult& results,
     const Catalog_Namespace::SessionInfo& session,
     const int render_widget_id,
-    const rapidjson::Value& data_desc,
+    const ::QueryRenderer::JSONLocation* data_loc,
     RenderInfo* render_query_data) {
   CHECK(false);
   return nullptr;
@@ -33,7 +33,7 @@ std::shared_ptr<ResultSet> renderPolygonsNonInSitu(
     const ExecutionResult& results,
     const Catalog_Namespace::SessionInfo& session,
     const int render_widget_id,
-    const rapidjson::Value& data_desc,
+    const ::QueryRenderer::JSONLocation* data_loc,
     RenderInfo* render_query_data,
     const std::string& poly_table_name) {
   CHECK(false);
@@ -45,7 +45,7 @@ std::shared_ptr<ResultSet> renderPolygonsInSitu(
     const ExecutionResult& results,
     const Catalog_Namespace::SessionInfo& session,
     const int render_widget_id,
-    const rapidjson::Value& data_desc,
+    const ::QueryRenderer::JSONLocation* data_loc,
     RenderInfo* render_query_data,
     const std::string& poly_table_name) {
   CHECK(false);
@@ -57,7 +57,7 @@ std::shared_ptr<ResultSet> renderLinesNonInSitu(
     const ExecutionResult& results,
     const Catalog_Namespace::SessionInfo& session,
     const int render_widget_id,
-    const rapidjson::Value& data_desc,
+    const ::QueryRenderer::JSONLocation* data_loc,
     RenderInfo* render_query_data) {
   CHECK(false);
   return nullptr;
