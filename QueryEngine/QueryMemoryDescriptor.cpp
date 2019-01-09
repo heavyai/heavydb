@@ -1114,9 +1114,8 @@ std::string QueryMemoryDescriptor::toString() const {
   str += "\tThreads Share Memory: " + boolToString(threadsShareMemory()) + "\n";
   str += "\tUses Cached Context: " + boolToString(usesCachedContext()) + "\n";
   str += "\tUses Fast Group Values: " + boolToString(usesGetGroupValueFast()) + "\n";
-  str +=
-      "Lazy Init Groups (GPU): " + boolToString(lazyInitGroups(ExecutorDeviceType::GPU)) +
-      "\n";
+  str += "\tLazy Init Groups (GPU): " +
+         boolToString(lazyInitGroups(ExecutorDeviceType::GPU)) + "\n";
   str += "\tEntry Count: " + std::to_string(entry_count_) + "\n";
   str += "\tMin Val (perfect hash only): " + std::to_string(min_val_) + "\n";
   str += "\tMax Val (perfect hash only): " + std::to_string(max_val_) + "\n";
