@@ -129,6 +129,9 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
                             co.hoist_literals_,
                             co.opt_level_,
                             co.with_dynamic_watchdog_};
+  if (render_info) {
+    render_info->setForceNonInSituData();
+  }
   return executeRelAlgQueryNoRetry(query_ra, co_cpu, eo, render_info);
 }
 
