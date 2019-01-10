@@ -53,7 +53,6 @@ The following `cmake`/`ccmake` options can enable/disable different features:
 - `-DENABLE_AWS_S3=on` - Enable AWS S3 support, if available. Default is `on`.
 - `-DENABLE_CALCITE_DELETE_PATH=on` - Enable Calcite Delete Path. Default is `on`.
 - `-DENABLE_CALCITE_UPDATE_PATH=on` - Enable Calcite Update Path. Default is `on`.
-- `-DENABLE_COMPACTION=off` - Enable Compaction and Overflow/Underflow Detection. Default is `off`.
 - `-DENABLE_CUDA=off` - Disable CUDA. Default is `on`.
 - `-DENABLE_CUDA_KERNEL_DEBUG=off` - Enable debugging symbols for CUDA kernels. Will dramatically reduce kernel performance. Default is `off`. 
 - `-DENABLE_DECODERS_BOUNDS_CHECKING=off` - Enable bounds checking for column decoding. Default is `off`.

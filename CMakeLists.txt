@@ -379,11 +379,6 @@ else()
   set(ENABLE_RENDERING OFF CACHE BOOL "Build backend renderer" FORCE)
 endif()
 
-option(ENABLE_COMPACTION "Enable Compaction and Overflow/Underflow Detection" OFF)
-if(ENABLE_COMPACTION)
-  add_definitions("-DENABLE_COMPACTION")
-endif()
-
 option(DISABLE_HIGH_PRECISION_TIMESTAMP "Disable parser support for creating milli, micro, and nanosecond timestamp columns" ON)
 if(DISABLE_HIGH_PRECISION_TIMESTAMP)
   add_definitions("-DDISABLE_HIGH_PRECISION_TIMESTAMP")

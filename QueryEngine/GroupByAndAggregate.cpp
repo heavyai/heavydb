@@ -41,9 +41,6 @@
 #include "TopKSort.h"
 
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
-#ifdef ENABLE_COMPACTION
-#include <llvm/IR/MDBuilder.h>
-#endif
 
 #include <numeric>
 #include <thread>
@@ -2110,70 +2107,6 @@ llvm::Value* GroupByAndAggregate::convertNullIfAny(const SQLTypeInfo& arg_type,
   }
 }
 
-#ifdef ENABLE_COMPACTION
-bool GroupByAndAggregate::detectOverflowAndUnderflow(llvm::Value* agg_col_val,
-                                                     llvm::Value* val,
-                                                     const TargetInfo& agg_info,
-                                                     const size_t chosen_bytes,
-                                                     const bool need_skip_null,
-                                                     const std::string& agg_base_name) {
-  const auto& chosen_type = get_compact_type(agg_info);
-  if (!agg_info.is_agg || (agg_base_name != "agg_sum" && agg_base_name != "agg_count") ||
-      is_distinct_target(agg_info) || !chosen_type.is_integer()) {
-    return false;
-  }
-  auto bb_no_null = LL_BUILDER.GetInsertBlock();
-  auto bb_pass = llvm::BasicBlock::Create(LL_CONTEXT, ".bb_pass", ROW_FUNC, 0);
-  bb_pass->moveAfter(bb_no_null);
-  if (need_skip_null) {
-    auto agg_null = executor_->castToTypeIn(executor_->inlineIntNull(chosen_type),
-                                            (chosen_bytes << 3));
-    auto null_check = LL_BUILDER.CreateICmpEQ(agg_col_val, agg_null);
-    if (agg_base_name != "agg_count") {
-      null_check =
-          LL_BUILDER.CreateOr(null_check, LL_BUILDER.CreateICmpEQ(val, agg_null));
-    }
-
-    bb_no_null = llvm::BasicBlock::Create(LL_CONTEXT, ".no_null", ROW_FUNC, bb_pass);
-    LL_BUILDER.CreateCondBr(null_check, bb_pass, bb_no_null);
-    LL_BUILDER.SetInsertPoint(bb_no_null);
-  }
-
-  llvm::Value* chosen_max{nullptr};
-  llvm::Value* chosen_min{nullptr};
-  std::tie(chosen_max, chosen_min) =
-      executor_->inlineIntMaxMin(chosen_bytes, agg_base_name != "agg_count");
-
-  llvm::Value* detected{nullptr};
-  if (agg_base_name == "agg_count") {
-    auto const_one =
-        llvm::ConstantInt::get(get_int_type(chosen_bytes << 3, LL_CONTEXT), 1);
-    detected = LL_BUILDER.CreateICmpUGT(agg_col_val,
-                                        LL_BUILDER.CreateSub(chosen_max, const_one));
-  } else {
-    auto const_zero =
-        llvm::ConstantInt::get(get_int_type(chosen_bytes << 3, LL_CONTEXT), 0);
-    auto overflow = LL_BUILDER.CreateAnd(
-        LL_BUILDER.CreateICmpSGT(val, const_zero),
-        LL_BUILDER.CreateICmpSGT(agg_col_val, LL_BUILDER.CreateSub(chosen_max, val)));
-    auto underflow = LL_BUILDER.CreateAnd(
-        LL_BUILDER.CreateICmpSLT(val, const_zero),
-        LL_BUILDER.CreateICmpSLT(agg_col_val, LL_BUILDER.CreateSub(chosen_min, val)));
-    detected = LL_BUILDER.CreateOr(overflow, underflow);
-  }
-  auto bb_fail = llvm::BasicBlock::Create(LL_CONTEXT, ".bb_fail", ROW_FUNC, bb_pass);
-  LL_BUILDER.CreateCondBr(detected,
-                          bb_fail,
-                          bb_pass,
-                          llvm::MDBuilder(LL_CONTEXT).createBranchWeights(1, 100));
-  LL_BUILDER.SetInsertPoint(bb_fail);
-  LL_BUILDER.CreateRet(LL_INT(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
-
-  LL_BUILDER.SetInsertPoint(bb_pass);
-  return true;
-}
-#endif  // ENABLE_COMPACTION
-
 bool GroupByAndAggregate::codegenAggCalls(
     const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
     const std::vector<llvm::Value*>& agg_out_vec,
@@ -2488,20 +2421,7 @@ bool GroupByAndAggregate::codegenAggCalls(
               agg_fname = patch_agg_fname(agg_fname);
             }
           }
-
-          auto old_val = emitCall(agg_fname, agg_args);
-
-#ifdef ENABLE_COMPACTION
-          CHECK_LE(size_t(2), agg_args.size());
-          can_return_error = detectOverflowAndUnderflow(old_val,
-                                                        agg_args[1],
-                                                        agg_info,
-                                                        agg_chosen_bytes,
-                                                        need_skip_null,
-                                                        agg_base_name);
-#else
-          static_cast<void>(old_val);
-#endif
+          emitCall(agg_fname, agg_args);
         }
       }
       ++agg_out_off;

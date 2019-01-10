@@ -1116,13 +1116,6 @@ extern "C" void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
                                 join_hash_tables,
                                 total_matched,
                                 error_code);
-#ifdef ENABLE_COMPACTION
-    // TODO(miyu): add detection w/ range info to enable this conditionally,
-    //             check if return when *error_code < 0.
-    if (*error_code > 0) {
-      return;
-    }
-#endif
   }
 }
 
@@ -1166,12 +1159,5 @@ extern "C" void multifrag_query(const int8_t*** col_buffers,
                join_hash_tables,
                total_matched,
                error_code);
-#ifdef ENABLE_COMPACTION
-    // TODO(miyu): add detection w/ range info to enable this conditionally,
-    //             check if return when *error_code < 0.
-    if (*error_code > 0) {
-      return;
-    }
-#endif
   }
 }

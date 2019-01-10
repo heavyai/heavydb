@@ -58,7 +58,7 @@ inline bool detect_overflow_and_underflow(const T a,
                                           const T b,
                                           const bool nullable,
                                           const T null_val) {
-#ifdef ENABLE_COMPACTION
+#ifdef ENABLE_OVERFLOW_UNDERFLOW_DETECTION
   if (nullable) {
     if (a == null_val || b == null_val) {
       return false;
@@ -79,7 +79,7 @@ inline bool detect_overflow_and_underflow(const T a,
                                           const bool nullable,
                                           const T null_val,
                                           const SQLTypeInfo& ti) {
-#ifdef ENABLE_COMPACTION
+#ifdef ENABLE_OVERFLOW_UNDERFLOW_DETECTION
   if (!ti.is_integer()) {
     return false;
   }

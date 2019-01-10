@@ -241,14 +241,6 @@ class GroupByAndAggregate {
                                 const SQLTypeInfo& agg_type,
                                 const size_t chosen_bytes,
                                 llvm::Value* target);
-#ifdef ENABLE_COMPACTION
-  bool detectOverflowAndUnderflow(llvm::Value* agg_addr,
-                                  llvm::Value* val,
-                                  const TargetInfo& agg_info,
-                                  const size_t chosen_bytes,
-                                  const bool need_skip_null,
-                                  const std::string& agg_base_name);
-#endif
   bool codegenAggCalls(const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
                        const std::vector<llvm::Value*>& agg_out_vec,
                        const CompilationOptions&);
@@ -410,11 +402,7 @@ inline std::vector<int8_t> get_col_byte_widths(
 }
 
 inline int8_t get_min_byte_width() {
-#ifdef ENABLE_COMPACTION
-  return 4;
-#else
   return MAX_BYTE_WIDTH_SUPPORTED;
-#endif
 }
 
 struct RelAlgExecutionUnit;
