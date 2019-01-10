@@ -50,6 +50,7 @@ extern bool g_enable_smem_group_by;
 extern bool g_allow_cpu_retry;
 extern bool g_enable_watchdog;
 
+extern unsigned g_trivial_loop_join_threshold;
 extern bool g_enable_overlaps_hashjoin;
 extern double g_gpu_mem_limit_percent;
 
@@ -142,8 +143,9 @@ std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
 
 TargetValue run_simple_agg(const string& query_str,
                            const ExecutorDeviceType device_type,
-                           const bool geo_return_geo_tv = true) {
-  auto rows = run_multiple_agg(query_str, device_type);
+                           const bool geo_return_geo_tv = true,
+                           const bool allow_loop_joins = true) {
+  auto rows = run_multiple_agg(query_str, device_type, allow_loop_joins);
   if (geo_return_geo_tv) {
     rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
   }
@@ -12047,11 +12049,49 @@ TEST(Select, GeoSpatial_Projection) {
 }
 
 TEST(Select, GeoSpatial_GeoJoin) {
-  const auto g_enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
-  g_enable_overlaps_hashjoin = true;
-
   SKIP_ALL_ON_AGGREGATOR();  // TODO(adb): if we replicate the poly table during table
                              // creation we should be able to lift this constraint
+
+  // Test loop joins
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    ASSERT_NO_THROW(run_simple_agg(
+        "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
+        "b ON ST_Contains(b.poly, a.p);",
+        dt,
+        true,
+        false));
+
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
+            "b ON ST_Contains(b.poly, a.p) WHERE b.id = 2;",
+            dt,
+            true,
+            false)));
+
+    const auto trivial_loop_join_state = g_trivial_loop_join_threshold;
+    g_trivial_loop_join_threshold = 1;
+    ScopeGuard reset_loop_join_state = [&trivial_loop_join_state] {
+      g_trivial_loop_join_threshold = trivial_loop_join_state;
+    };
+
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
+            "b ON ST_Contains(b.poly, a.p);",
+            dt,
+            false),
+        std::runtime_error);
+  }
+
+  const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
+  g_enable_overlaps_hashjoin = true;
+  ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state] {
+    g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
+  };
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -12097,8 +12137,6 @@ TEST(Select, GeoSpatial_GeoJoin) {
                                   "a.gp4326) WHERE b.id = 4;",
                                   dt)));
   }
-
-  g_enable_overlaps_hashjoin = g_enable_overlaps_hashjoin_state;
 }
 
 TEST(Rounding, ROUND) {

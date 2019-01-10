@@ -1035,12 +1035,6 @@ ResultSetPtr Executor::executeWorkUnit(
   auto join_info = JoinInfo(
       JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}, "");
 
-  if (join_info.join_impl_type_ == JoinImplType::Loop &&
-      !(options.allow_loop_joins || is_trivial_loop_join(query_infos, ra_exe_unit))) {
-    throw std::runtime_error("Hash join failed, reason: " +
-                             join_info.hash_join_fail_reason_);
-  }
-
   int8_t crt_min_byte_width{get_min_byte_width()};
   do {
     *error_code = 0;

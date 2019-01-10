@@ -172,9 +172,15 @@ void check_if_loop_join_is_allowed(RelAlgExecutionUnit& ra_exe_unit,
   if (eo.allow_loop_joins) {
     return;
   }
-  if (level_idx + 1 != ra_exe_unit.join_quals.size() ||
-      !is_trivial_loop_join(query_infos, ra_exe_unit)) {
-    throw std::runtime_error("Hash join failed, reason(s): " + fail_reason);
+  if (level_idx + 1 != ra_exe_unit.join_quals.size()) {
+    throw std::runtime_error(
+        "Hash join failed, reason(s): " + fail_reason +
+        " | Cannot fall back to loop join for intermediate join quals");
+  }
+  if (!is_trivial_loop_join(query_infos, ra_exe_unit)) {
+    throw std::runtime_error(
+        "Hash join failed, reason(s): " + fail_reason +
+        " | Cannot fall back to loop join for non-trivial inner table size");
   }
 }
 
