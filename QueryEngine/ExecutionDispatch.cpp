@@ -206,7 +206,8 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
     }
   } catch (const OutOfMemory&) {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
-    *error_code_ = ERR_OUT_OF_GPU_MEM;
+    *error_code_ = memory_level == Data_Namespace::GPU_LEVEL ? ERR_OUT_OF_GPU_MEM
+                                                             : ERR_OUT_OF_CPU_MEM;
     return;
   }
   const CompilationResult& compilation_result =
