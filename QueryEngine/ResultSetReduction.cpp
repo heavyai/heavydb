@@ -1078,14 +1078,6 @@ void ResultSetStorage::initializeBaselineValueSlots(int64_t* entry_slots) const 
   }
 }
 
-namespace {
-
-const bool min_check_flag = false;
-const bool max_check_flag = false;
-const bool sum_check_flag = true;
-
-}  // namespace
-
 #define AGGREGATE_ONE_VALUE(                                                      \
     agg_kind__, val_ptr__, other_ptr__, chosen_bytes__, agg_info__)               \
   do {                                                                            \

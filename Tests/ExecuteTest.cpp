@@ -13116,10 +13116,10 @@ int create_and_populate_tables(bool with_delete_support = true) {
     import_coalesce_cols_join_test(1, with_delete_support);
     import_coalesce_cols_join_test(2, with_delete_support);
   } catch (...) {
-    CHECK(false);
     LOG(ERROR) << "Failed to (re-)create table for coalesce col join test "
                   "('coalesce_cols_join_0', "
                   "'coalesce_cols_join_1', 'coalesce_cols_join_2')";
+    return -EEXIST;
   }
   try {
     import_emp_table();

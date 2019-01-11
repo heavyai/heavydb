@@ -276,9 +276,9 @@ std::vector<ColumnLazyFetchInfo> QueryExecutionContext::getColLazyFetchInfo(
       if (cd && IS_GEO(cd->columnType.get_type())) {
         // Geo coords cols will be processed in sequence. So we only need to track the
         // first coords col in lazy fetch info.
-        for (auto i = 0; i < cd->columnType.get_physical_coord_cols(); i++) {
+        {
           auto cd0 = get_column_descriptor(
-              col_id + i + 1, col_var->get_table_id(), *executor_->catalog_);
+              col_id + 1, col_var->get_table_id(), *executor_->catalog_);
           auto col0_ti = cd0->columnType;
           CHECK(!cd0->isVirtualCol);
           auto col0_var = makeExpr<Analyzer::ColumnVar>(
@@ -286,7 +286,6 @@ std::vector<ColumnLazyFetchInfo> QueryExecutionContext::getColLazyFetchInfo(
           auto local_col0_id = executor_->getLocalColumnId(col0_var.get(), false);
           col_lazy_fetch_info.emplace_back(
               ColumnLazyFetchInfo{true, local_col0_id, col0_ti});
-          break;
         }
       } else {
         auto local_col_id = executor_->getLocalColumnId(col_var, false);

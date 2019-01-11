@@ -463,7 +463,6 @@ void InsertOrderFragmenter::updateColumns(
 
   if (can_go_parallel) {
     const size_t num_worker_threads = cpu_threads();
-    std::atomic<size_t> row_idx{0};
     std::vector<std::future<void>> worker_threads;
     for (size_t i = 0,
                 start_entry = 0,
