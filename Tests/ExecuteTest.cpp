@@ -3805,22 +3805,6 @@ TEST(Select, OverflowAndUnderFlow) {
         v<int64_t>(run_simple_agg("SELECT COUNT(CAST(EXTRACT(QUARTER FROM CAST(NULL AS "
                                   "TIMESTAMP)) AS BIGINT) - 1) FROM test;",
                                   dt)));
-#ifdef ENABLE_OVERFLOW_UNDERFLOW_DETECTION
-    c("SELECT SUM(ofd) FROM test GROUP BY x;", dt);
-    c("SELECT SUM(ufd) FROM test GROUP BY x;", dt);
-    EXPECT_THROW(run_multiple_agg("SELECT SUM(ofq) FROM test;", dt), std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT SUM(ufq) FROM test;", dt), std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT SUM(ofq) FROM test GROUP BY x;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT SUM(ufq) FROM test GROUP BY x;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT AVG(ofq) FROM test;", dt), std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT AVG(ufq) FROM test;", dt), std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT AVG(ofq) FROM test GROUP BY y;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT AVG(ufq) FROM test GROUP BY y;", dt),
-                 std::runtime_error);
-#endif  // ENABLE_OVERFLOW_UNDERFLOW_DETECTION
   }
 }
 

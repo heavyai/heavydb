@@ -589,7 +589,6 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
                                                     const size_t out_vec_sz,
                                                     const bool is_group_by,
                                                     const bool float_argument_input) {
-  const auto error_no = ERR_OVERFLOW_OR_UNDERFLOW;
   switch (agg) {
     case kAVG:
     case kSUM:
@@ -597,10 +596,6 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
         if (ti.is_integer() || ti.is_decimal() || ti.is_time() || ti.is_boolean()) {
           int64_t agg_result = agg_init_val;
           for (size_t i = 0; i < out_vec_sz; ++i) {
-            if (detect_overflow_and_underflow(
-                    agg_result, out_vec[i], true, agg_init_val, ti)) {
-              return {0, error_no};
-            }
             agg_sum_skip_val(&agg_result, out_vec[i], agg_init_val);
           }
           return {agg_result, 0};
@@ -639,10 +634,6 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
       if (ti.is_integer() || ti.is_decimal() || ti.is_time()) {
         int64_t agg_result = 0;
         for (size_t i = 0; i < out_vec_sz; ++i) {
-          if (detect_overflow_and_underflow(
-                  agg_result, out_vec[i], false, int64_t(0), ti)) {
-            return {0, error_no};
-          }
           agg_result += out_vec[i];
         }
         return {agg_result, 0};
@@ -675,9 +666,6 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
       uint64_t agg_result = 0;
       for (size_t i = 0; i < out_vec_sz; ++i) {
         const uint64_t out = static_cast<uint64_t>(out_vec[i]);
-        if (detect_overflow_and_underflow(agg_result, out, false, uint64_t(0), ti)) {
-          return {0, error_no};
-        }
         agg_result += out;
       }
       return {static_cast<int64_t>(agg_result), 0};

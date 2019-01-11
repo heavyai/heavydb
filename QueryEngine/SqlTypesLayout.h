@@ -53,40 +53,6 @@ inline const SQLTypeInfo& get_compact_type(const TargetInfo& target) {
                                                                     : target.sql_type;
 }
 
-template <typename T>
-inline bool detect_overflow_and_underflow(const T a,
-                                          const T b,
-                                          const bool nullable,
-                                          const T null_val) {
-#ifdef ENABLE_OVERFLOW_UNDERFLOW_DETECTION
-  if (nullable) {
-    if (a == null_val || b == null_val) {
-      return false;
-    }
-  }
-  const auto max_intx = std::numeric_limits<T>::max();
-  const auto min_intx = std::numeric_limits<T>::min();
-  if ((b > 0 && a > (max_intx - b)) || (b < 0 && a < (min_intx - b))) {
-    return true;
-  }
-#endif
-  return false;
-}
-
-template <typename T>
-inline bool detect_overflow_and_underflow(const T a,
-                                          const T b,
-                                          const bool nullable,
-                                          const T null_val,
-                                          const SQLTypeInfo& ti) {
-#ifdef ENABLE_OVERFLOW_UNDERFLOW_DETECTION
-  if (!ti.is_integer()) {
-    return false;
-  }
-#endif
-  return detect_overflow_and_underflow(a, b, nullable, null_val);
-}
-
 inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
   auto type = ti.get_type();
   if (ti.is_string()) {
