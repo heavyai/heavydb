@@ -1032,9 +1032,6 @@ ResultSetPtr Executor::executeWorkUnit(
   }
 
   ColumnCacheMap column_cache;
-  auto join_info = JoinInfo(
-      JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}, "");
-
   int8_t crt_min_byte_width{get_min_byte_width()};
   do {
     *error_code = 0;
@@ -1060,8 +1057,7 @@ ResultSetPtr Executor::executeWorkUnit(
         render_info);
     try {
       INJECT_TIMER(execution_dispatch_comp);
-      crt_min_byte_width = execution_dispatch.compile(join_info,
-                                                      max_groups_buffer_entry_guess,
+      crt_min_byte_width = execution_dispatch.compile(max_groups_buffer_entry_guess,
                                                       crt_min_byte_width,
                                                       options,
                                                       has_cardinality_estimation);
@@ -2548,7 +2544,6 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
 }
 
 void Executor::nukeOldState(const bool allow_lazy_fetch,
-                            const JoinInfo& join_info,
                             const std::vector<InputTableInfo>& query_infos,
                             const RelAlgExecutionUnit& ra_exe_unit) {
   const bool contains_left_deep_outer_join =
@@ -2559,7 +2554,7 @@ void Executor::nukeOldState(const bool allow_lazy_fetch,
                    }) != ra_exe_unit.join_quals.end();
   cgen_state_.reset(new CgenState(query_infos, contains_left_deep_outer_join));
   plan_state_.reset(
-      new PlanState(allow_lazy_fetch && !contains_left_deep_outer_join, join_info, this));
+      new PlanState(allow_lazy_fetch && !contains_left_deep_outer_join, this));
 }
 
 void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_descs,

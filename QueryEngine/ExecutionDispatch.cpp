@@ -368,8 +368,7 @@ Executor::ExecutionDispatch::ExecutionDispatch(
   all_fragment_results_.reserve(query_infos_.front().info.fragments.size());
 }
 
-int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
-                                            const size_t max_groups_buffer_entry_guess,
+int8_t Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry_guess,
                                             const int8_t crt_min_byte_width,
                                             const ExecutionOptions& options,
                                             const bool has_cardinality_estimation) {
@@ -393,7 +392,6 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
           max_groups_buffer_entry_guess,
           executor_->small_groups_buffer_entry_count_,
           crt_min_byte_width,
-          join_info,
           has_cardinality_estimation,
           columnarized_table_cache_,
           render_info_);
@@ -413,7 +411,6 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      max_groups_buffer_entry_guess,
                                      executor_->small_groups_buffer_entry_count_,
                                      crt_min_byte_width,
-                                     join_info,
                                      has_cardinality_estimation,
                                      columnarized_table_cache_,
                                      render_info_);
@@ -445,7 +442,6 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
           max_groups_buffer_entry_guess,
           executor_->small_groups_buffer_entry_count_,
           crt_min_byte_width,
-          join_info,
           has_cardinality_estimation,
           columnarized_table_cache_,
           render_info_);
@@ -465,7 +461,6 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      max_groups_buffer_entry_guess,
                                      executor_->small_groups_buffer_entry_count_,
                                      crt_min_byte_width,
-                                     join_info,
                                      has_cardinality_estimation,
                                      columnarized_table_cache_,
                                      render_info_);

@@ -1310,11 +1310,10 @@ Executor::CompilationResult Executor::compileWorkUnit(
     const size_t max_groups_buffer_entry_guess,
     const size_t small_groups_buffer_entry_count,
     const int8_t crt_min_byte_width,
-    const JoinInfo& join_info,
     const bool has_cardinality_estimation,
     ColumnCacheMap& column_cache,
     RenderInfo* render_info) {
-  nukeOldState(allow_lazy_fetch, join_info, query_infos, ra_exe_unit);
+  nukeOldState(allow_lazy_fetch, query_infos, ra_exe_unit);
   OOM_TRACE_PUSH(+": " + (co.device_type_ == ExecutorDeviceType::GPU ? "gpu" : "cpu"));
 
   GroupByAndAggregate group_by_and_aggregate(this,

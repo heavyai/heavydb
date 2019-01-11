@@ -715,12 +715,10 @@ class Executor {
   struct JoinInfo {
     JoinInfo(const JoinImplType join_impl_type,
              const std::vector<std::shared_ptr<Analyzer::BinOper>>& equi_join_tautologies,
-             const std::vector<std::shared_ptr<JoinHashTableInterface>>& join_hash_tables,
-             const std::string& hash_join_fail_reason)
+             const std::vector<std::shared_ptr<JoinHashTableInterface>>& join_hash_tables)
         : join_impl_type_(join_impl_type)
         , equi_join_tautologies_(equi_join_tautologies)
-        , join_hash_tables_(join_hash_tables)
-        , hash_join_fail_reason_(hash_join_fail_reason) {}
+        , join_hash_tables_(join_hash_tables) {}
 
     JoinImplType join_impl_type_;
     std::vector<std::shared_ptr<Analyzer::BinOper>>
@@ -728,7 +726,6 @@ class Executor {
                                  // definition when using a hash join; we'll
                                  // fold them to true during code generation
     std::vector<std::shared_ptr<JoinHashTableInterface>> join_hash_tables_;
-    std::string hash_join_fail_reason_;
     std::unordered_set<size_t> sharded_range_table_indices_;
   };
 
@@ -814,8 +811,7 @@ class Executor {
 
     ExecutionDispatch& operator=(ExecutionDispatch&&) = delete;
 
-    int8_t compile(const JoinInfo& join_info,
-                   const size_t max_groups_buffer_entry_guess,
+    int8_t compile(const size_t max_groups_buffer_entry_guess,
                    const int8_t crt_min_byte_width,
                    const ExecutionOptions& options,
                    const bool has_cardinality_estimation);
@@ -1067,7 +1063,6 @@ class Executor {
                                     const size_t max_groups_buffer_entry_count,
                                     const size_t small_groups_buffer_entry_count,
                                     const int8_t crt_min_byte_width,
-                                    const JoinInfo& join_info,
                                     const bool has_cardinality_estimation,
                                     ColumnCacheMap& column_cache,
                                     RenderInfo* render_info = nullptr);
@@ -1127,7 +1122,6 @@ class Executor {
       const MemoryLevel memory_level,
       ColumnCacheMap& column_cache);
   void nukeOldState(const bool allow_lazy_fetch,
-                    const JoinInfo& join_info,
                     const std::vector<InputTableInfo>& query_infos,
                     const RelAlgExecutionUnit& ra_exe_unit);
 
@@ -1508,11 +1502,11 @@ class Executor {
   };
 
   struct PlanState {
-    PlanState(const bool allow_lazy_fetch,
-              const JoinInfo& join_info,
-              const Executor* executor)
+    PlanState(const bool allow_lazy_fetch, const Executor* executor)
         : allow_lazy_fetch_(allow_lazy_fetch)
-        , join_info_(join_info)
+        , join_info_({JoinImplType::Invalid,
+                      std::vector<std::shared_ptr<Analyzer::BinOper>>{},
+                      {}})
         , executor_(executor) {}
 
     using TableId = int;
