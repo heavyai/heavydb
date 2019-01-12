@@ -130,17 +130,9 @@ inline size_t get_key_bytes_rowwise(const QueryMemoryDescriptor& query_mem_desc)
   if (query_mem_desc.hasKeylessHash()) {
     return 0;
   }
-  size_t result = 0;
-  if (auto consist_key_width = query_mem_desc.getEffectiveKeyWidth()) {
-    result += consist_key_width * query_mem_desc.groupColWidthsSize();
-  } else {
-    for (auto group_itr = query_mem_desc.groupColWidthsBegin();
-         group_itr != query_mem_desc.groupColWidthsEnd();
-         ++group_itr) {
-      result += *group_itr;
-    }
-  }
-  return result;
+  auto consist_key_width = query_mem_desc.getEffectiveKeyWidth();
+  CHECK(consist_key_width);
+  return consist_key_width * query_mem_desc.groupColWidthsSize();
 }
 
 inline size_t get_row_bytes(const QueryMemoryDescriptor& query_mem_desc) {
