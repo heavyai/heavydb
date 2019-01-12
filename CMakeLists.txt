@@ -221,6 +221,19 @@ if(ENABLE_ASAN OR ENABLE_TSAN)
   set(ENABLE_STANDALONE_CALCITE ON)
 endif()
 
+# Code coverage
+option(ENABLE_CODE_COVERAGE "Enable compile time code coverage" OFF)
+if(ENABLE_CODE_COVERAGE)
+  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    set(COVERAGE_FLAGS "-fprofile-instr-generate -fcoverage-mapping")
+  else()
+    message(FATAL_ERROR "Code coverage currently only supported with Clang compiler")
+  endif()
+  set(CMAKE_CXX_OUTPUT_EXTENSION_REPLACE ON)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COVERAGE_FLAGS}")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COVERAGE_FLAGS}")
+endif()
+
 option(ENABLE_DECODERS_BOUNDS_CHECKING "Enable bounds checking for column decoding" OFF)
 
 if(ENABLE_STANDALONE_CALCITE)
