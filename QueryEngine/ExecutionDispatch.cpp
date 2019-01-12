@@ -701,12 +701,6 @@ const QueryMemoryDescriptor& Executor::ExecutionDispatch::getQueryMemoryDescript
              : compilation_result_cpu_.query_mem_desc;
 }
 
-const bool Executor::ExecutionDispatch::outputColumnar() const {
-  return compilation_result_cpu_.native_functions.empty()
-             ? compilation_result_gpu_.output_columnar
-             : false;
-}
-
 const std::vector<uint64_t>& Executor::ExecutionDispatch::getFragOffsets() const {
   std::lock_guard<std::mutex> lock(all_frag_row_offsets_mutex_);
   if (all_frag_row_offsets_.empty()) {

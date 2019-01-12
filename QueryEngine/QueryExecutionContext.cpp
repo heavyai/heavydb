@@ -535,28 +535,6 @@ ResultSetPtr QueryExecutionContext::getRowSet(
       ra_exe_unit, results_per_sm, row_set_mem_owner_, query_mem_desc);
 }
 
-bool QueryExecutionContext::isEmptyBin(const int64_t* group_by_buffer,
-                                       const size_t bin,
-                                       const size_t key_idx) const {
-  auto key_ptr = reinterpret_cast<const int8_t*>(group_by_buffer) +
-                 query_mem_desc_.getKeyOffInBytes(bin, key_idx);
-  switch (query_mem_desc_.getEffectiveKeyWidth()) {
-    case 4:
-      if (*reinterpret_cast<const int32_t*>(key_ptr) == EMPTY_KEY_32) {
-        return true;
-      }
-      break;
-    case 8:
-      if (*reinterpret_cast<const int64_t*>(key_ptr) == EMPTY_KEY_64) {
-        return true;
-      }
-      break;
-    default:
-      CHECK(false);
-  }
-  return false;
-}
-
 #ifdef HAVE_CUDA
 void QueryExecutionContext::initializeDynamicWatchdog(void* native_module,
                                                       const int device_id) const {

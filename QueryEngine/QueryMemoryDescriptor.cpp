@@ -780,30 +780,6 @@ size_t QueryMemoryDescriptor::getTotalBytesOfColumnarProjections(
          row_index_width * projection_count;
 }
 
-size_t QueryMemoryDescriptor::getKeyOffInBytes(const size_t bin,
-                                               const size_t key_idx) const {
-  CHECK(!keyless_hash_);
-  if (output_columnar_) {
-    CHECK_EQ(size_t(0), key_idx);
-    return bin * sizeof(int64_t);
-  }
-
-  CHECK_LT(key_idx, group_col_widths_.size());
-  auto offset = bin * getRowSize();
-  CHECK_EQ(size_t(0), offset % sizeof(int64_t));
-  offset += key_idx * getEffectiveKeyWidth();
-  return offset;
-}
-
-size_t QueryMemoryDescriptor::getNextKeyOffInBytes(const size_t crt_idx) const {
-  CHECK(!keyless_hash_);
-  CHECK_LT(crt_idx, group_col_widths_.size());
-  if (output_columnar_) {
-    CHECK_EQ(size_t(0), crt_idx);
-  }
-  return getEffectiveKeyWidth();
-}
-
 size_t QueryMemoryDescriptor::getColOnlyOffInBytes(const size_t col_idx) const {
   CHECK_LT(col_idx, agg_col_widths_.size());
   size_t offset{0};
@@ -889,13 +865,6 @@ size_t QueryMemoryDescriptor::getPrependedGroupBufferSizeInBytes() const {
   return buffer_size;
 }
 
-size_t QueryMemoryDescriptor::getConsistColOffInBytes(const size_t bin,
-                                                      const size_t col_idx) const {
-  CHECK(output_columnar_ && !agg_col_widths_.empty());
-  return (keyless_hash_ ? 0 : sizeof(int64_t) * entry_count_) +
-         (col_idx * entry_count_ + bin) * agg_col_widths_[0].compact;
-}
-
 size_t QueryMemoryDescriptor::getColOffInBytesInNextBin(const size_t col_idx) const {
   CHECK_LT(col_idx, agg_col_widths_.size());
   auto warp_count = getWarpCount();
@@ -940,13 +909,6 @@ size_t QueryMemoryDescriptor::getNextColOffInBytes(const int8_t* col_ptr,
   } else {
     return chosen_bytes;
   }
-}
-
-size_t QueryMemoryDescriptor::getBufferSizeQuad(
-    const ExecutorDeviceType device_type) const {
-  const auto size_bytes = getBufferSizeBytes(device_type);
-  CHECK_EQ(size_t(0), size_bytes % sizeof(int64_t));
-  return getBufferSizeBytes(device_type) / sizeof(int64_t);
 }
 
 size_t QueryMemoryDescriptor::getBufferSizeBytes(

@@ -861,8 +861,6 @@ class Executor {
 
     const QueryMemoryDescriptor& getQueryMemoryDescriptor() const;
 
-    const bool outputColumnar() const;
-
     const std::vector<uint64_t>& getFragOffsets() const;
 
     const std::vector<std::unique_ptr<QueryExecutionContext>>& getQueryContexts() const;

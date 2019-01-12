@@ -98,9 +98,6 @@ class QueryExecutionContext : boost::noncopyable {
  private:
   const std::vector<const int8_t*>& getColumnFrag(const size_t table_idx,
                                                   int64_t& global_idx) const;
-  bool isEmptyBin(const int64_t* group_by_buffer,
-                  const size_t bin,
-                  const size_t key_idx) const;
 
   void initColumnPerRow(const QueryMemoryDescriptor& query_mem_desc,
                         int8_t* row_ptr,

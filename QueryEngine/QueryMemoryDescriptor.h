@@ -278,10 +278,7 @@ class QueryMemoryDescriptor {
   int64_t getBucket() const { return bucket_; }
 
   bool hasNulls() const { return has_nulls_; }
-  void setHasNulls(const bool val) { has_nulls_ = val; }
-
   GroupByMemSharing getGpuMemSharing() const { return sharing_; }
-  void setGpuMemSharing(const GroupByMemSharing val) { sharing_ = val; }
 
   const CountDistinctDescriptor getCountDistinctDescriptor(const size_t idx) const {
     CHECK_LT(idx, count_distinct_descriptors_.size());
@@ -312,8 +309,6 @@ class QueryMemoryDescriptor {
   void setForceFourByteFloat(const bool val) { force_4byte_float_ = val; }
 
   // Getters derived from state
-  size_t getBufferSizeQuad(const ExecutorDeviceType device_type) const;
-
   size_t getGroupbyColCount() const { return group_col_widths_.size(); }
   size_t getKeyCount() const { return keyless_hash_ ? 0 : getGroupbyColCount(); }
   size_t getBufferColSlotCount() const {
@@ -345,8 +340,6 @@ class QueryMemoryDescriptor {
 
   size_t sharedMemBytes(const ExecutorDeviceType) const;
 
-  size_t getKeyOffInBytes(const size_t bin, const size_t key_idx = 0) const;
-  size_t getNextKeyOffInBytes(const size_t key_idx) const;
   size_t getColOffInBytes(const size_t col_idx) const;
   size_t getColOffInBytesInNextBin(const size_t col_idx) const;
   size_t getNextColOffInBytes(const int8_t* col_ptr,
@@ -358,8 +351,6 @@ class QueryMemoryDescriptor {
   size_t getWarpCount() const;
 
   size_t getCompactByteWidth() const;
-
-  size_t getConsistColOffInBytes(const size_t bin, const size_t col_idx) const;
 
   inline size_t getEffectiveKeyWidth() const {
     return group_col_compact_width_ ? group_col_compact_width_ : sizeof(int64_t);
