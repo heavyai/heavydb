@@ -130,8 +130,6 @@ class GroupByAndAggregate {
 
   bool outputColumnar() const;
 
-  void patchGroupbyCall(llvm::CallInst* call_site);
-
   // returns true iff checking the error code after every row
   // is required -- slow path group by queries for now
   bool codegen(llvm::Value* filter_result,
@@ -287,22 +285,6 @@ class GroupByAndAggregate {
   friend class Executor;
   friend class QueryMemoryDescriptor;
 };
-
-inline std::vector<Analyzer::Expr*> get_agg_target_exprs(
-    const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& target_list) {
-  std::vector<Analyzer::Expr*> result;
-  for (auto target : target_list) {
-    auto target_expr = target->get_expr();
-    CHECK(target_expr);
-    result.push_back(target_expr);
-  }
-  return result;
-}
-
-inline std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::Plan* plan) {
-  const auto& target_list = plan->get_targetlist();
-  return get_agg_target_exprs(target_list);
-}
 
 inline int64_t extract_from_datum(const Datum datum, const SQLTypeInfo& ti) {
   const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();

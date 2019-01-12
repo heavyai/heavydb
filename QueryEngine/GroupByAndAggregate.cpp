@@ -1528,34 +1528,6 @@ GroupByAndAggregate::DiamondCodegen::~DiamondCodegen() {
   }
 }
 
-void GroupByAndAggregate::patchGroupbyCall(llvm::CallInst* call_site) {
-  CHECK(call_site);
-  const auto func = call_site->getCalledFunction();
-  const auto func_name = func->getName();
-  if (func_name == "get_columnar_group_bin_offset") {
-    return;
-  }
-
-  const auto arg_count = call_site->getNumArgOperands();
-  const int32_t new_size_quad =
-      static_cast<int32_t>(query_mem_desc_.getRowSize() / sizeof(int64_t));
-  std::vector<llvm::Value*> args;
-  size_t arg_idx{0};
-  bool found{false};
-  for (const auto& arg : func->args()) {
-    if (arg.getName() == "row_size_quad") {
-      args.push_back(LL_INT(new_size_quad));
-      found = true;
-    } else {
-      args.push_back(call_site->getArgOperand(arg_idx));
-    }
-    ++arg_idx;
-  }
-  CHECK_EQ(true, found);
-  CHECK_EQ(arg_count, arg_idx);
-  llvm::ReplaceInstWithInst(call_site, llvm::CallInst::Create(func, args));
-}
-
 bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
                                   llvm::BasicBlock* sc_false,
                                   const CompilationOptions& co) {
@@ -1566,14 +1538,13 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
 
   {
     const bool is_group_by = !ra_exe_unit_.groupby_exprs.empty();
-    const auto query_mem_desc = getQueryMemoryDescriptor();
 
     if (executor_->isArchMaxwell(co.device_type_)) {
       prependForceSync();
     }
     DiamondCodegen filter_cfg(filter_result,
                               executor_,
-                              !is_group_by || query_mem_desc.usesGetGroupValueFast(),
+                              !is_group_by || query_mem_desc_.usesGetGroupValueFast(),
                               "filter",
                               nullptr,
                               false);
@@ -1603,8 +1574,8 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
       }
 
       auto agg_out_ptr_w_idx = codegenGroupBy(co, filter_cfg);
-      if (query_mem_desc.usesGetGroupValueFast() ||
-          query_mem_desc.getQueryDescriptionType() ==
+      if (query_mem_desc_.usesGetGroupValueFast() ||
+          query_mem_desc_.getQueryDescriptionType() ==
               QueryDescriptionType::GroupByPerfectHash) {
         if (query_mem_desc_.getGroupbyColCount() > 1) {
           filter_cfg.setChainToNext();
@@ -1615,7 +1586,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
       } else {
         {
           llvm::Value* nullcheck_cond{nullptr};
-          if (query_mem_desc.didOutputColumnar()) {
+          if (query_mem_desc_.didOutputColumnar()) {
             nullcheck_cond = LL_BUILDER.CreateICmpSGE(std::get<1>(agg_out_ptr_w_idx),
                                                       LL_INT(int32_t(0)));
           } else {
@@ -1641,12 +1612,6 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
               get_int_type(32, LL_CONTEXT))));
         }
       }
-
-      if (!outputColumnar() &&
-          query_mem_desc.getRowSize() != query_mem_desc_.getRowSize()) {
-        patchGroupbyCall(static_cast<llvm::CallInst*>(std::get<0>(agg_out_ptr_w_idx)));
-      }
-
     } else {
       if (ra_exe_unit_.estimator) {
         std::stack<llvm::BasicBlock*> array_loops;

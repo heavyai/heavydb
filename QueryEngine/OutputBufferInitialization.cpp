@@ -248,16 +248,6 @@ int64_t get_agg_initial_val(const SQLAgg agg,
   }
 }
 
-int64_t get_initial_val(const TargetInfo& target_info,
-                        const size_t min_byte_width_to_compact) {
-  if (!target_info.is_agg) {
-    return 0;
-  }
-  const auto chosen_type = get_compact_type(target_info);
-  return get_agg_initial_val(
-      target_info.agg_kind, chosen_type, !chosen_type.is_fp(), min_byte_width_to_compact);
-}
-
 std::vector<int64_t> init_agg_val_vec(
     const std::vector<Analyzer::Expr*>& targets,
     const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
