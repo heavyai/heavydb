@@ -78,6 +78,30 @@ class DecimalOverflowValidator {
   int pow10_;
 };
 
+template <typename INNER_VALIDATOR>
+class NullAwareValidator {
+ public:
+  NullAwareValidator(SQLTypeInfo type, INNER_VALIDATOR* inner_validator) {
+    if (type.is_array()) {
+      type = type.get_elem_type();
+    }
+
+    skip_null_check_ = type.get_notnull();
+    inner_validator_ = inner_validator;
+  }
+
+  template <typename T>
+  void validate(T value) {
+    if (skip_null_check_ || value != inline_int_null_value<T>()) {
+      inner_validator_->template validate<T>(value);
+    }
+  }
+
+ private:
+  bool skip_null_check_;
+  INNER_VALIDATOR* inner_validator_;
+};
+
 class Encoder {
  public:
   static Encoder* Create(Data_Namespace::AbstractBuffer* buffer,

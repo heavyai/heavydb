@@ -610,6 +610,9 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                                catalog->getLogicalTableId(td->tableId), cd->columnId);
           CHECK(cdl);
           DecimalOverflowValidator decimalOverflowValidator(lhs_type);
+          NullAwareValidator<DecimalOverflowValidator> nullAwareDecimalOverflowValidator(
+              lhs_type, &decimalOverflowValidator);
+
           StringDictionary* stringDict{nullptr};
           if (lhs_type.is_string()) {
             CHECK(kENCODING_DICT == lhs_type.get_compression());
@@ -664,10 +667,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
               }
               put_scalar<int64_t>(data_ptr, lhs_type, v, cd->columnName, &rhs_type);
               if (lhs_type.is_decimal()) {
-                if (lhs_type.get_notnull() || v != inline_int_null_value<int64_t>()) {
-                  // do not validate null-value
-                  decimalOverflowValidator.validate<int64_t>(v);
-                }
+                nullAwareDecimalOverflowValidator.validate<int64_t>(v);
                 int64_t decimal;
                 get_scalar<int64_t>(data_ptr, lhs_type, decimal);
                 set_minmax<int64_t>(

@@ -917,8 +917,9 @@ TEST_P(Update, UpdateFirstColumnByLiteral) {
 }
 
 const std::shared_ptr<TestColumnDescriptor> STRING_NONE_BASE =
-    std::shared_ptr<TestColumnDescriptor>(
-        new StringColumnDescriptor("TEXT ENCODING NONE", kTEXT, "STRING_NONE_BASE"));
+    std::make_shared<StringColumnDescriptor>("TEXT ENCODING NONE",
+                                             kTEXT,
+                                             "STRING_NONE_BASE");
 
 #define INSTANTIATE_DATA_INGESTION_TEST(CDT)                                           \
   INSTANTIATE_TEST_CASE_P(                                                             \
@@ -940,38 +941,33 @@ const std::shared_ptr<TestColumnDescriptor> STRING_NONE_BASE =
       testing::Values(                                                                 \
           std::vector<std::shared_ptr<TestColumnDescriptor>>{CDT, STRING_NONE_BASE}))
 
-#define BOOLEAN_COLUMN_TEST(name, c_type, definition, sql_type, null) \
-  const std::shared_ptr<TestColumnDescriptor> name =                  \
-      std::shared_ptr<TestColumnDescriptor>(                          \
-          new BooleanColumnDescriptor(definition, sql_type));         \
+#define BOOLEAN_COLUMN_TEST(name, c_type, definition, sql_type, null)  \
+  const std::shared_ptr<TestColumnDescriptor> name =                   \
+      std::make_shared<BooleanColumnDescriptor>(definition, sql_type); \
   INSTANTIATE_DATA_INGESTION_TEST(name)
 
-#define NUMBER_COLUMN_TEST(name, c_type, definition, sql_type, null)       \
-  const std::shared_ptr<TestColumnDescriptor> name =                       \
-      std::shared_ptr<TestColumnDescriptor>(                               \
-          new NumberColumnDescriptor<c_type>(definition, sql_type, null)); \
+#define NUMBER_COLUMN_TEST(name, c_type, definition, sql_type, null)                \
+  const std::shared_ptr<TestColumnDescriptor> name =                                \
+      std::make_shared<NumberColumnDescriptor<c_type>>(definition, sql_type, null); \
   INSTANTIATE_DATA_INGESTION_TEST(name)
 
-#define STRING_COLUMN_TEST(name, definition, sql_type)              \
-  const std::shared_ptr<TestColumnDescriptor> name =                \
-      std::shared_ptr<TestColumnDescriptor>(                        \
-          new StringColumnDescriptor(definition, sql_type, #name)); \
+#define STRING_COLUMN_TEST(name, definition, sql_type)                       \
+  const std::shared_ptr<TestColumnDescriptor> name =                         \
+      std::make_shared<StringColumnDescriptor>(definition, sql_type, #name); \
   INSTANTIATE_DATA_INGESTION_TEST(name)
 
-#define TIME_COLUMN_TEST(name, definition, sql_type, format, offset, scale)           \
-  const std::shared_ptr<TestColumnDescriptor> name =                                  \
-      std::shared_ptr<TestColumnDescriptor>(                                          \
-          new DateTimeColumnDescriptor(definition, sql_type, format, offset, scale)); \
+#define TIME_COLUMN_TEST(name, definition, sql_type, format, offset, scale) \
+  const std::shared_ptr<TestColumnDescriptor> name =                        \
+      std::make_shared<DateTimeColumnDescriptor>(                           \
+          definition, sql_type, format, offset, scale);                     \
   INSTANTIATE_DATA_INGESTION_TEST(name)
 
 #define ARRAY_COLUMN_TEST(name, definition)                            \
   const std::shared_ptr<TestColumnDescriptor> name##_ARRAY =           \
-      std::shared_ptr<TestColumnDescriptor>(                           \
-          new ArrayColumnDescriptor(definition, name, 0));             \
+      std::make_shared<ArrayColumnDescriptor>(definition, name, 0);    \
   INSTANTIATE_DATA_INGESTION_TEST(name##_ARRAY);                       \
   const std::shared_ptr<TestColumnDescriptor> name##_FIXED_LEN_ARRAY = \
-      std::shared_ptr<TestColumnDescriptor>(                           \
-          new ArrayColumnDescriptor(definition, name, 3));             \
+      std::make_shared<ArrayColumnDescriptor>(definition, name, 3);    \
   INSTANTIATE_DATA_INGESTION_TEST(name##_FIXED_LEN_ARRAY)
 
 BOOLEAN_COLUMN_TEST(BOOLEAN, int64_t, "BOOLEAN", kBOOLEAN, NULL_TINYINT);
