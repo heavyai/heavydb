@@ -46,9 +46,20 @@ class WindowFunctionContext {
 
   const int8_t* output() const;
 
+  const int64_t* aggregateState() const;
+
+  const int8_t* partitionStart() const;
+
+  size_t elementCount() const;
+
   using Comparator = std::function<bool(const int64_t lhs, const int64_t rhs)>;
 
  private:
+  struct AggregateState {
+    int64_t val;
+    int64_t count;
+  };
+
   static Comparator makeComparator(const Analyzer::ColumnVar* col_var,
                                    const int8_t* partition_values);
 
@@ -64,11 +75,15 @@ class WindowFunctionContext {
                                const Analyzer::WindowFunction* window_func,
                                const std::vector<Comparator>& comparators);
 
+  void fillPartitionStart();
+
   const int32_t* payload() const;
 
   const int32_t* offsets() const;
 
   const int32_t* counts() const;
+
+  size_t partitionCount() const;
 
   const Analyzer::WindowFunction* window_func_;
   // The order column buffers partitioned as specified by partitions_.
@@ -79,6 +94,11 @@ class WindowFunctionContext {
   size_t elem_count_;
   // The output of the window function.
   int8_t* output_;
+  // Markers for partition start used to reinitialize state for aggregate window
+  // functions.
+  int8_t* partition_start_;
+  // State for aggregate function over a window.
+  AggregateState aggregate_state_;
   const ExecutorDeviceType device_type_;
 };
 

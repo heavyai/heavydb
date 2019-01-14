@@ -50,6 +50,44 @@ llvm::Value* Executor::codegenWindowFunction(const Analyzer::WindowFunction* win
       CHECK_EQ(lag_lvs.size(), size_t(1));
       return lag_lvs.front();
     }
+    case SqlWindowFunctionKind::MIN: {
+      const auto bitset =
+          ll_int(reinterpret_cast<const int64_t>(window_func_context->partitionStart()));
+      const auto min_val = ll_int(int64_t(0));
+      const auto max_val = ll_int(window_func_context->elementCount() - 1);
+      const auto null_val = ll_int(inline_int_null_value<int64_t>());
+      const auto null_bool_val = ll_int<int8_t>(inline_int_null_value<int8_t>());
+      const auto pi64_type =
+          llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0);
+      const auto aggregate_state_i64 =
+          ll_int(reinterpret_cast<const int64_t>(window_func_context->aggregateState()));
+      const auto aggregate_state =
+          cgen_state_->ir_builder_.CreateIntToPtr(aggregate_state_i64, pi64_type);
+      const auto window_func_null_val =
+          castToTypeIn(inlineIntNull(window_func->get_type_info()), 64);
+      const auto reset_state = toBool(cgen_state_->emitCall(
+          "bit_is_set",
+          {bitset, posArg(nullptr), min_val, max_val, null_val, null_bool_val}));
+      const auto reset_state_true_bb = llvm::BasicBlock::Create(
+          cgen_state_->context_, "reset_state.true", cgen_state_->row_func_);
+      const auto reset_state_false_bb = llvm::BasicBlock::Create(
+          cgen_state_->context_, "reset_state.false", cgen_state_->row_func_);
+      cgen_state_->ir_builder_.CreateCondBr(
+          reset_state, reset_state_true_bb, reset_state_false_bb);
+      cgen_state_->ir_builder_.SetInsertPoint(reset_state_true_bb);
+      cgen_state_->emitCall("agg_id", {aggregate_state, window_func_null_val});
+      cgen_state_->ir_builder_.CreateBr(reset_state_false_bb);
+      cgen_state_->ir_builder_.SetInsertPoint(reset_state_false_bb);
+      CHECK(WindowProjectNodeContext::get());
+      const auto& args = window_func->getArgs();
+      CHECK(!args.empty());
+      const auto lag_lvs = codegen(args.front().get(), true, co);
+      CHECK_EQ(lag_lvs.size(), size_t(1));
+      const auto crt_val = castToTypeIn(lag_lvs.front(), 64);
+      cgen_state_->emitCall("agg_min_skip_val",
+                            {aggregate_state, crt_val, window_func_null_val});
+      return cgen_state_->ir_builder_.CreateLoad(aggregate_state);
+    }
     default: { LOG(FATAL) << "Invalid window function kind"; }
   }
   return nullptr;
