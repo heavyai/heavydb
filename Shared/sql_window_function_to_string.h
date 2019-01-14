@@ -53,6 +53,21 @@ inline std::string sql_window_function_to_str(const SqlWindowFunctionKind kind) 
     case SqlWindowFunctionKind::LAST_VALUE: {
       return "LAST_VALUE";
     }
+    case SqlWindowFunctionKind::AVG: {
+      return "AVG";
+    }
+    case SqlWindowFunctionKind::MIN: {
+      return "MIN";
+    }
+    case SqlWindowFunctionKind::MAX: {
+      return "MAX";
+    }
+    case SqlWindowFunctionKind::SUM: {
+      return "SUM";
+    }
+    case SqlWindowFunctionKind::COUNT: {
+      return "COUNT";
+    }
     default: {
       LOG(FATAL) << "Invalid window function kind";
       return "";

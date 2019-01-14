@@ -17,6 +17,7 @@
 #include "WindowContext.h"
 #include <numeric>
 #include "../Shared/checked_alloc.h"
+#include "../Shared/sql_window_function_to_string.h"
 #include "TypePunning.h"
 
 WindowFunctionContext::WindowFunctionContext(
@@ -456,7 +457,10 @@ void WindowFunctionContext::computePartition(int64_t* output_for_partition_buff,
       apply_last_value_to_partition(output_for_partition_buff, partition_size);
       break;
     }
-    default: { LOG(FATAL) << "Invalid window function kind"; }
+    default: {
+      throw std::runtime_error("Window function not supported yet: " +
+                               sql_window_function_to_str(window_func->getKind()));
+    }
   }
 }
 

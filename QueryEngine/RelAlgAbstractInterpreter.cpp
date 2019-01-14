@@ -569,6 +569,21 @@ SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
   if (name == "LAST_VALUE") {
     return SqlWindowFunctionKind::LAST_VALUE;
   }
+  if (name == "AVG") {
+    return SqlWindowFunctionKind::AVG;
+  }
+  if (name == "MIN") {
+    return SqlWindowFunctionKind::MIN;
+  }
+  if (name == "MAX") {
+    return SqlWindowFunctionKind::MAX;
+  }
+  if (name == "SUM") {
+    return SqlWindowFunctionKind::SUM;
+  }
+  if (name == "COUNT") {
+    return SqlWindowFunctionKind::COUNT;
+  }
   throw std::runtime_error("Unsupported window function: " + name);
 }
 

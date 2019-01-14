@@ -80,7 +80,12 @@ enum class SqlWindowFunctionKind {
   LAG,
   LEAD,
   FIRST_VALUE,
-  LAST_VALUE
+  LAST_VALUE,
+  AVG,
+  MIN,
+  MAX,
+  SUM,
+  COUNT
 };
 
 enum SQLStmtType { kSELECT, kUPDATE, kINSERT, kDELETE, kCREATE_TABLE };
