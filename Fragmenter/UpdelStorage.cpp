@@ -268,6 +268,7 @@ void InsertOrderFragmenter::updateColumns(
     throw std::runtime_error("varlen UPDATE path not enabled.");
   }
 
+  updelRoll.is_varlen_update = true;
   updelRoll.catalog = catalog;
   updelRoll.logicalTableId = catalog->getLogicalTableId(td->tableId);
   updelRoll.memoryLevel = memoryLevel;
@@ -661,9 +662,12 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                 throw std::runtime_error("UPDATE does not support cast to string.");
 #endif
               }
-              decimalOverflowValidator.validate<int64_t>(v);
               put_scalar<int64_t>(data_ptr, lhs_type, v, cd->columnName, &rhs_type);
               if (lhs_type.is_decimal()) {
+                if (lhs_type.get_notnull() || v != inline_int_null_value<int64_t>()) {
+                  // do not validate null-value
+                  decimalOverflowValidator.validate<int64_t>(v);
+                }
                 int64_t decimal;
                 get_scalar<int64_t>(data_ptr, lhs_type, decimal);
                 set_minmax<int64_t>(
@@ -1227,12 +1231,22 @@ void UpdelRoll::cancelUpdate() {
   if (nullptr == catalog) {
     return;
   }
-  const auto td = catalog->getMetadataForTable(logicalTableId);
-  CHECK(td);
-  if (td->persistenceLevel != memoryLevel) {
-    for (auto dit : dirtyChunks) {
-      catalog->getDataMgr().free(dit.first->get_buffer());
-      dit.first->set_buffer(nullptr);
+
+  if (is_varlen_update) {
+    int databaseId = catalog->getCurrentDB().dbId;
+    int32_t tableEpoch = catalog->getTableEpoch(databaseId, logicalTableId);
+
+    dirtyChunks.clear();
+    const_cast<Catalog_Namespace::Catalog*>(catalog)->setTableEpoch(
+        databaseId, logicalTableId, tableEpoch);
+  } else {
+    const auto td = catalog->getMetadataForTable(logicalTableId);
+    CHECK(td);
+    if (td->persistenceLevel != memoryLevel) {
+      for (auto dit : dirtyChunks) {
+        catalog->getDataMgr().free(dit.first->get_buffer());
+        dit.first->set_buffer(nullptr);
+      }
     }
   }
 }

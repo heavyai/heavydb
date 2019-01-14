@@ -813,7 +813,9 @@ TEST_P(Update, UpdateColumnByColumn) {
   }
 }
 
-TEST_P(Update, UpdateColumnByLiteral) {
+void updateColumnByLiteralTest(
+    std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDescriptors,
+    size_t numColsToUpdate) {
   // disable if varlen update is not enabled
   if (!is_feature_enabled<VarlenUpdates>()) {
     LOG(WARNING) << "skipping...";
@@ -826,11 +828,12 @@ TEST_P(Update, UpdateColumnByLiteral) {
   for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
     auto tcd = columnDescriptors[col];
 
-    if (tcd->skip_test("UpdateColumnByLiteral")) {
-      LOG(ERROR) << "not supported... skipping";
-      return;
+    if (col < numColsToUpdate) {
+      if (tcd->skip_test("UpdateColumnByLiteral")) {
+        LOG(ERROR) << "not supported... skipping";
+        return;
+      }
     }
-
     create_sql += ", col_dst_" + std::to_string(col) + " " + tcd->get_column_definition();
   }
   create_sql += ") WITH (fragment_size=3);";
@@ -844,9 +847,13 @@ TEST_P(Update, UpdateColumnByLiteral) {
   // fill source table
   for (unsigned int row = 0; row < num_rows; row++) {
     std::string insert_sql = "INSERT INTO update_test VALUES (" + std::to_string(row);
-    for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
+    for (unsigned int col = 0; col < numColsToUpdate; col++) {
       auto tcd = columnDescriptors[col];
       insert_sql += ", " + tcd->get_column_value(row + 1);
+    }
+    for (unsigned int col = numColsToUpdate; col < columnDescriptors.size(); col++) {
+      auto tcd = columnDescriptors[col];
+      insert_sql += ", " + tcd->get_column_value(row);
     }
     insert_sql += ");";
 
@@ -859,11 +866,11 @@ TEST_P(Update, UpdateColumnByLiteral) {
   // execute Updates
   for (unsigned int row = 0; row < num_rows; row++) {
     std::string update_sql = "UPDATE update_test set ";
-    for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
+    for (unsigned int col = 0; col < numColsToUpdate; col++) {
       auto tcd = columnDescriptors[col];
       update_sql +=
           " col_dst_" + std::to_string(col) + "=" + tcd->get_update_column_value(row);
-      if (col + 1 < columnDescriptors.size()) {
+      if (col + 1 < numColsToUpdate) {
         update_sql += ",";
       }
     }
@@ -899,107 +906,39 @@ TEST_P(Update, UpdateColumnByLiteral) {
   }
 }
 
+TEST_P(Update, UpdateColumnByLiteral) {
+  updateColumnByLiteralTest(columnDescriptors, columnDescriptors.size());
+}
+
 TEST_P(Update, UpdateFirstColumnByLiteral) {
-  // disable if varlen update is not enabled
-  if (!is_feature_enabled<VarlenUpdates>()) {
-    LOG(ERROR) << "skipping...";
-    return;
-  }
-
-  // disable if varlen update is not enabled
-  if (columnDescriptors.size() == 1) {
-    LOG(WARNING) << "skipping .... only one column specified...";
-    return;
-  }
-
-  if (columnDescriptors[0]->skip_test("UpdateFirstColumnByLiteral")) {
-    LOG(ERROR) << "not supported... skipping";
-    return;
-  }
-
-  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS update_test;", g_session);
-
-  std::string create_sql = "CREATE TABLE update_test(id int";
-  for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
-    auto tcd = columnDescriptors[col];
-    create_sql += ", col_dst_" + std::to_string(col) + " " + tcd->get_column_definition();
-  }
-  create_sql += ") WITH (fragment_size=3);";
-
-  LOG(INFO) << create_sql;
-
-  QueryRunner::run_ddl_statement(create_sql, g_session);
-
-  size_t num_rows = 10;
-
-  // fill source table
-  for (unsigned int row = 0; row < num_rows; row++) {
-    std::string insert_sql = "INSERT INTO update_test VALUES (" + std::to_string(row);
-    for (unsigned int col = 0; col < 1; col++) {
-      auto tcd = columnDescriptors[col];
-      insert_sql += ", " + tcd->get_column_value(row + 1);
-    }
-    for (unsigned int col = 1; col < columnDescriptors.size(); col++) {
-      auto tcd = columnDescriptors[col];
-      insert_sql += ", " + tcd->get_column_value(row);
-    }
-    insert_sql += ");";
-
-    //    LOG(INFO) << "insert_sql: " << insert_sql;
-
-    QueryRunner::run_multiple_agg(
-        insert_sql, g_session, ExecutorDeviceType::CPU, true, true, nullptr);
-  }
-
-  // execute Updates
-  for (unsigned int row = 0; row < num_rows; row++) {
-    std::string update_sql = "UPDATE update_test set ";
-    for (unsigned int col = 0; col < 1; col++) {
-      auto tcd = columnDescriptors[col];
-      update_sql +=
-          " col_dst_" + std::to_string(col) + "=" + tcd->get_update_column_value(row);
-    }
-    update_sql += " WHERE id=" + std::to_string(row) + ";";
-    LOG(INFO) << update_sql;
-    QueryRunner::run_multiple_agg(
-        update_sql, g_session, ExecutorDeviceType::CPU, true, true, nullptr);
-  }
-
-  // compare source against CTAS
-  std::string select_sql = "SELECT id";
-  for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
-    select_sql += ", col_dst_" + std::to_string(col);
-  }
-  select_sql += " FROM update_test ORDER BY id;";
-
-  LOG(INFO) << select_sql;
-  auto select_result = QueryRunner::run_multiple_agg(
-      select_sql, g_session, ExecutorDeviceType::CPU, true, true, nullptr);
-
-  for (unsigned int row = 0; row < num_rows; row++) {
-    const auto select_crt_row = select_result->getNextRow(true, false);
-
-    for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
-      auto tcd = columnDescriptors[col];
-
-      {
-        const auto mapd_variant = select_crt_row[(1 * col) + 1];
-        auto mapd_ti = select_result->getColType((1 * col) + 1);
-        ASSERT_EQ(true, tcd->check_column_value(row, mapd_ti, &mapd_variant));
-      }
-    }
+  if (columnDescriptors.size() > 1) {
+    updateColumnByLiteralTest(columnDescriptors, 1);
   }
 }
 
-#define INSTANTIATE_DATA_INGESTION_TEST(CDT)                                     \
-  INSTANTIATE_TEST_CASE_P(                                                       \
-      CDT,                                                                       \
-      Ctas,                                                                      \
-      testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{CDT})); \
-  INSTANTIATE_TEST_CASE_P(                                                       \
-      CDT,                                                                       \
-      Update,                                                                    \
-      testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{CDT}))
+const std::shared_ptr<TestColumnDescriptor> STRING_NONE_BASE =
+    std::shared_ptr<TestColumnDescriptor>(
+        new StringColumnDescriptor("TEXT ENCODING NONE", kTEXT, "STRING_NONE_BASE"));
+
+#define INSTANTIATE_DATA_INGESTION_TEST(CDT)                                           \
+  INSTANTIATE_TEST_CASE_P(                                                             \
+      CDT,                                                                             \
+      Ctas,                                                                            \
+      testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{CDT}));       \
+  INSTANTIATE_TEST_CASE_P(                                                             \
+      CDT,                                                                             \
+      Update,                                                                          \
+      testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{CDT}));       \
+  INSTANTIATE_TEST_CASE_P(                                                             \
+      VARLEN_TEXT_AND_##CDT,                                                           \
+      Update,                                                                          \
+      testing::Values(                                                                 \
+          std::vector<std::shared_ptr<TestColumnDescriptor>>{STRING_NONE_BASE, CDT})); \
+  INSTANTIATE_TEST_CASE_P(                                                             \
+      CDT##_AND_VARLEN_TEXT,                                                           \
+      Update,                                                                          \
+      testing::Values(                                                                 \
+          std::vector<std::shared_ptr<TestColumnDescriptor>>{CDT, STRING_NONE_BASE}))
 
 #define BOOLEAN_COLUMN_TEST(name, c_type, definition, sql_type, null) \
   const std::shared_ptr<TestColumnDescriptor> name =                  \
