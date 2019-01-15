@@ -566,7 +566,6 @@ bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const
 
 std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionContext(
     const RelAlgExecutionUnit& ra_exe_unit,
-    const std::vector<int64_t>& init_agg_vals,
     const Executor* executor,
     const ExecutorDeviceType device_type,
     const int device_id,
@@ -580,7 +579,6 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
   return std::unique_ptr<QueryExecutionContext>(
       new QueryExecutionContext(ra_exe_unit,
                                 *this,
-                                init_agg_vals,
                                 executor,
                                 device_type,
                                 device_id,

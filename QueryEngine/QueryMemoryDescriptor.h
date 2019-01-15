@@ -124,7 +124,6 @@ class QueryMemoryDescriptor {
 
   std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
       const RelAlgExecutionUnit&,
-      const std::vector<int64_t>& init_agg_vals,
       const Executor* executor,
       const ExecutorDeviceType device_type,
       const int device_id,

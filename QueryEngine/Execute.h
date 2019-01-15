@@ -1635,6 +1635,7 @@ class Executor {
   friend class OverlapsJoinHashTable;
   friend class GroupByAndAggregate;
   friend class QueryMemoryDescriptor;
+  friend class QueryMemoryInitializer;
   friend class QueryFragmentDescriptor;
   friend class QueryExecutionContext;
   friend class ResultSet;

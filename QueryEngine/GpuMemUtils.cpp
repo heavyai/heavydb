@@ -218,28 +218,6 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
   }
 }
 
-void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
-                                    const QueryExecutionContext* query_exe_context,
-                                    const GpuQueryMemory& gpu_query_mem,
-                                    const RelAlgExecutionUnit& ra_exe_unit,
-                                    const unsigned block_size_x,
-                                    const unsigned grid_size_x,
-                                    const int device_id,
-                                    const bool prepend_index_buffer) {
-  const auto thread_count = block_size_x * grid_size_x;
-  const auto total_buff_size = query_exe_context->query_mem_desc_.getBufferSizeBytes(
-      ra_exe_unit, thread_count, ExecutorDeviceType::GPU);
-  copy_group_by_buffers_from_gpu(data_mgr,
-                                 query_exe_context->group_by_buffers_,
-                                 total_buff_size,
-                                 gpu_query_mem.group_by_buffers.second,
-                                 query_exe_context->query_mem_desc_,
-                                 block_size_x,
-                                 grid_size_x,
-                                 device_id,
-                                 prepend_index_buffer);
-}
-
 /**
  * Returns back total number of allocated rows per device (i.e., number of matched
  * elements in projections).
@@ -254,6 +232,7 @@ size_t get_num_allocated_rows_from_gpu(Data_Namespace::DataMgr* data_mgr,
   CHECK(num_rows >= 0);
   return static_cast<size_t>(num_rows);
 }
+
 /**
  * For projection queries we only copy back as many elements as necessary, not the whole
  * output buffer. The goal is to be able to build a compact ResultSet, particularly useful

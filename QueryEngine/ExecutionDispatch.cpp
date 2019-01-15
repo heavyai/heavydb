@@ -210,6 +210,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                                              : ERR_OUT_OF_CPU_MEM;
     return;
   }
+
   const CompilationResult& compilation_result =
       chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu_
                                                     : compilation_result_cpu_;
@@ -217,6 +218,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
         !ra_exe_unit_.scan_limit);
   std::unique_ptr<QueryExecutionContext> query_exe_context_owned;
   const bool do_render = render_info_ && render_info_->isPotentialInSituRender();
+
   try {
     OOM_TRACE_PUSH();
     query_exe_context_owned =
@@ -224,7 +226,6 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
             ? nullptr
             : compilation_result.query_mem_desc.getQueryExecutionContext(
                   ra_exe_unit_,
-                  executor_->plan_state_->init_agg_vals_,
                   executor_,
                   chosen_device_type,
                   chosen_device_id,
@@ -252,7 +253,6 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
         query_contexts_[ctx_idx] =
             compilation_result.query_mem_desc.getQueryExecutionContext(
                 ra_exe_unit_,
-                executor_->plan_state_->init_agg_vals_,
                 executor_,
                 chosen_device_type,
                 chosen_device_id,

@@ -1869,7 +1869,7 @@ class AggregateReductionEgress {
       std::tie(val1, error_code) =
           Executor::reduceResults(agg_info.agg_kind,
                                   agg_info.sql_type,
-                                  query_exe_context->init_agg_vals_[out_vec_idx],
+                                  query_exe_context->getAggInitValForIndex(out_vec_idx),
                                   float_argument_input ? sizeof(int32_t) : chosen_bytes,
                                   out_vec[out_vec_idx],
                                   entry_count,
@@ -1886,15 +1886,15 @@ class AggregateReductionEgress {
       const auto chosen_bytes = static_cast<size_t>(
           query_exe_context->query_mem_desc_.getColumnWidth(out_vec_idx + 1).compact);
       int64_t val2;
-      std::tie(val2, error_code) =
-          Executor::reduceResults(agg_info.agg_kind == kAVG ? kCOUNT : agg_info.agg_kind,
-                                  agg_info.sql_type,
-                                  query_exe_context->init_agg_vals_[out_vec_idx + 1],
-                                  float_argument_input ? sizeof(int32_t) : chosen_bytes,
-                                  out_vec[out_vec_idx + 1],
-                                  entry_count,
-                                  false,
-                                  false);
+      std::tie(val2, error_code) = Executor::reduceResults(
+          agg_info.agg_kind == kAVG ? kCOUNT : agg_info.agg_kind,
+          agg_info.sql_type,
+          query_exe_context->getAggInitValForIndex(out_vec_idx + 1),
+          float_argument_input ? sizeof(int32_t) : chosen_bytes,
+          out_vec[out_vec_idx + 1],
+          entry_count,
+          false,
+          false);
       if (error_code) {
         return;
       }
@@ -1925,7 +1925,7 @@ class AggregateReductionEgress<Experimental::MetaTypeClass<Experimental::Geometr
       std::tie(val1, error_code) =
           Executor::reduceResults(agg_info.agg_kind,
                                   agg_info.sql_type,
-                                  query_exe_context->init_agg_vals_[out_vec_idx],
+                                  query_exe_context->getAggInitValForIndex(out_vec_idx),
                                   chosen_bytes,
                                   out_vec[out_vec_idx],
                                   entry_count,
@@ -1992,7 +1992,6 @@ int32_t Executor::executePlanWithoutGroupBy(
                                                frag_offsets,
                                                frag_stride,
                                                0,
-                                               query_exe_context->init_agg_vals_,
                                                &error_code,
                                                num_tables,
                                                join_hash_table_ptrs);
@@ -2009,7 +2008,6 @@ int32_t Executor::executePlanWithoutGroupBy(
                                                  frag_offsets,
                                                  frag_stride,
                                                  0,
-                                                 query_exe_context->init_agg_vals_,
                                                  data_mgr,
                                                  blockSize(),
                                                  gridSize(),
@@ -2073,9 +2071,9 @@ int32_t Executor::executePlanWithoutGroupBy(
     }
   }
 
-  CHECK_EQ(size_t(1), query_exe_context->result_sets_.size());
-  auto rows_ptr =
-      std::shared_ptr<ResultSet>(query_exe_context->result_sets_[0].release());
+  CHECK_EQ(size_t(1), query_exe_context->query_buffers_->result_sets_.size());
+  auto rows_ptr = std::shared_ptr<ResultSet>(
+      query_exe_context->query_buffers_->result_sets_[0].release());
   rows_ptr->fillOneEntry(reduced_outs);
   results = std::move(rows_ptr);
   return error_code;
@@ -2140,7 +2138,6 @@ int32_t Executor::executePlanWithGroupBy(
                                      frag_offsets,
                                      frag_stride,
                                      scan_limit,
-                                     query_exe_context->init_agg_vals_,
                                      &error_code,
                                      num_tables,
                                      join_hash_table_ptrs);
@@ -2155,7 +2152,6 @@ int32_t Executor::executePlanWithGroupBy(
                                        frag_offsets,
                                        frag_stride,
                                        scan_limit,
-                                       query_exe_context->init_agg_vals_,
                                        data_mgr,
                                        blockSize(),
                                        gridSize(),
