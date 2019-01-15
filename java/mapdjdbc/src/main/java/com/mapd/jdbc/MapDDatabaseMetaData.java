@@ -1252,15 +1252,14 @@ each row is a column description Throws: SQLException - if a database access err
 
       // check if the table matches the input pattern
       for (TDBObject db_object : db_objects) {
-        // A bunch of db objects come back.  Any with out a name throw away
         //  If the user is a super user then the  objectName will be super
-        //  and needs to be changed to something sensible.
-        if (db_object.objectName.equals("")) {
-          continue;
-        }
-
-        if (db_object.objectName.toLowerCase().equals("super")) {
+        //  and needs to be changed to the table name.
+        if (db_object.objectName.equalsIgnoreCase("super")) {
           db_object.objectName = table;
+        }
+        // A bunch of db objects come back.  Any with a different name throw away
+        if (!db_object.objectName.equalsIgnoreCase(table)) {
+          continue;
         }
 
         // Create  set of table permissions based ont he db_object.  This seems to
