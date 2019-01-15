@@ -868,6 +868,17 @@ class Importer : public DataStreamSink {
       std::vector<int>& poly_rings,
       int render_group,
       const int64_t replicate_count = 0);
+  static void set_geo_physical_import_buffer_columnar(
+      const Catalog_Namespace::Catalog& catalog,
+      const ColumnDescriptor* cd,
+      std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+      size_t& col_idx,
+      std::vector<std::vector<double>>& coords_column,
+      std::vector<std::vector<double>>& bounds_column,
+      std::vector<std::vector<int>>& ring_sizes_column,
+      std::vector<std::vector<int>>& poly_rings_column,
+      int render_group,
+      const int64_t replicate_count = 0);
 
  private:
   static void initGDAL();

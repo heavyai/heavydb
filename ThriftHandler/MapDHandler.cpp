@@ -2092,13 +2092,16 @@ void MapDHandler::prepare_columnar_loader(
   } else {
     loader->reset(new Importer_NS::Loader(cat, td));
   }
+  auto col_descs = (*loader)->get_column_descs();
+  auto geo_physical_cols = std::count_if(
+      col_descs.begin(), col_descs.end(), [](auto cd) { return cd->isGeoPhyCol; });
   // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
   //               Subtracting 1 (rowid) until TableDescriptor is updated.
-  if (num_cols != static_cast<size_t>(td->nColumns) - (td->hasDeletedCol ? 2 : 1) ||
+  if (num_cols != static_cast<size_t>(td->nColumns) - geo_physical_cols -
+                      (td->hasDeletedCol ? 2 : 1) ||
       num_cols < 1) {
     THROW_MAPD_EXCEPTION("Wrong number of columns to load into Table " + table_name);
   }
-  auto col_descs = (*loader)->get_column_descs();
   for (auto cd : col_descs) {
     import_buffers->push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
         new Importer_NS::TypedImportBuffer(cd, (*loader)->get_string_dict(cd))));
@@ -2113,26 +2116,71 @@ void MapDHandler::load_table_binary_columnar(const TSessionId& session,
   std::unique_ptr<Importer_NS::Loader> loader;
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
   const auto session_info = get_session(session);
+  auto& cat = session_info.getCatalog();
   prepare_columnar_loader(
       session_info, table_name, cols.size(), &loader, &import_buffers);
 
   size_t numRows = 0;
-  size_t col_idx = 0;
+  size_t import_idx = 0;  // index into the TColumn vector being loaded
+  size_t col_idx = 0;     // index into column description vector
   try {
+    size_t skip_physical_cols = 0;
     for (auto cd : loader->get_column_descs()) {
-      size_t colRows = import_buffers[col_idx]->add_values(cd, cols[col_idx]);
+      if (skip_physical_cols > 0) {
+        if (!cd->isGeoPhyCol) {
+          throw std::runtime_error("Unexpected physical column");
+        }
+        skip_physical_cols--;
+        continue;
+      }
+      size_t colRows = import_buffers[col_idx]->add_values(cd, cols[import_idx]);
       if (col_idx == 0) {
         numRows = colRows;
-      } else {
-        if (colRows != numRows) {
+      } else if (colRows != numRows) {
+        std::ostringstream oss;
+        oss << "load_table_binary_columnar: Inconsistent number of rows in column "
+            << cd->columnName << " ,  expecting " << numRows << " rows, column "
+            << col_idx << " has " << colRows << " rows";
+        THROW_MAPD_EXCEPTION(oss.str());
+      }
+      // Advance to the next column in the table
+      col_idx++;
+
+      // For geometry columns: process WKT strings and fill physical columns
+      if (cd->columnType.is_geometry()) {
+        auto geo_col_idx = col_idx - 1;
+        const auto wkt_column = import_buffers[geo_col_idx]->getGeoStringBuffer();
+        std::vector<std::vector<double>> coords_column, bounds_column;
+        std::vector<std::vector<int>> ring_sizes_column, poly_rings_column;
+        int render_group = 0;
+        SQLTypeInfo ti = cd->columnType;
+        if (numRows != wkt_column->size() ||
+            !Geo_namespace::GeoTypesFactory::getGeoColumns(wkt_column,
+                                                           ti,
+                                                           coords_column,
+                                                           bounds_column,
+                                                           ring_sizes_column,
+                                                           poly_rings_column,
+                                                           false)) {
           std::ostringstream oss;
-          oss << "load_table_binary_columnar: Inconsistent number of rows in request,  "
-                 "expecting "
-              << numRows << " row, column " << col_idx << " has " << colRows << " rows";
+          oss << "load_table_binary_columnar: Invalid geometry in column "
+              << cd->columnName;
           THROW_MAPD_EXCEPTION(oss.str());
         }
+        // Populate physical columns, advance col_idx
+        Importer_NS::Importer::set_geo_physical_import_buffer_columnar(cat,
+                                                                       cd,
+                                                                       import_buffers,
+                                                                       col_idx,
+                                                                       coords_column,
+                                                                       bounds_column,
+                                                                       ring_sizes_column,
+                                                                       poly_rings_column,
+                                                                       render_group);
+        skip_physical_cols = cd->columnType.get_physical_cols();
       }
-      col_idx++;
+      // Advance to the next column of values being loaded
+      import_idx++;
     }
   } catch (const std::exception& e) {
     std::ostringstream oss;

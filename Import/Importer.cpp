@@ -1224,6 +1224,22 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
       }
       break;
     }
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+    case kMULTIPOLYGON: {
+      dataSize = col.data.str_col.size();
+      geo_string_buffer_->reserve(dataSize);
+      for (size_t i = 0; i < dataSize; i++) {
+        if (col.nulls[i]) {
+          // TODO: add support for NULL geo
+          geo_string_buffer_->push_back(std::string());
+        } else {
+          geo_string_buffer_->push_back(col.data.str_col[i]);
+        }
+      }
+      break;
+    }
     case kARRAY: {
       // TODO: add support for nulls inside array
       dataSize = col.data.arr_col.size();
@@ -1727,6 +1743,116 @@ void Importer::set_geo_physical_import_buffer(
     td_render_group.is_null = false;
     import_buffers[col_idx++]->add_value(
         cd_render_group, td_render_group, false, replicate_count);
+  }
+}
+
+void Importer::set_geo_physical_import_buffer_columnar(
+    const Catalog_Namespace::Catalog& catalog,
+    const ColumnDescriptor* cd,
+    std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+    size_t& col_idx,
+    std::vector<std::vector<double>>& coords_column,
+    std::vector<std::vector<double>>& bounds_column,
+    std::vector<std::vector<int>>& ring_sizes_column,
+    std::vector<std::vector<int>>& poly_rings_column,
+    int render_group,
+    const int64_t replicate_count) {
+  const auto col_ti = cd->columnType;
+  const auto col_type = col_ti.get_type();
+  auto columnId = cd->columnId;
+
+  auto coords_row_count = coords_column.size();
+  auto cd_coords = catalog.getMetadataForColumn(cd->tableId, ++columnId);
+  for (auto coords : coords_column) {
+    std::vector<TDatum> td_coords_data;
+    std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
+    for (auto cc : compressed_coords) {
+      TDatum td_byte;
+      td_byte.val.int_val = cc;
+      td_coords_data.push_back(td_byte);
+    }
+    TDatum tdd_coords;
+    tdd_coords.val.arr_val = td_coords_data;
+    tdd_coords.is_null = false;
+    import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false, replicate_count);
+  }
+  col_idx++;
+
+  if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+    if (ring_sizes_column.size() != coords_row_count) {
+      CHECK(false) << "Geometry import columnar: ring sizes column size mismatch";
+    }
+    // Create ring_sizes array value and add it to the physical column
+    for (auto ring_sizes : ring_sizes_column) {
+      auto cd_ring_sizes = catalog.getMetadataForColumn(cd->tableId, ++columnId);
+      std::vector<TDatum> td_ring_sizes;
+      for (auto ring_size : ring_sizes) {
+        TDatum td_ring_size;
+        td_ring_size.val.int_val = ring_size;
+        td_ring_sizes.push_back(td_ring_size);
+      }
+      TDatum tdd_ring_sizes;
+      tdd_ring_sizes.val.arr_val = td_ring_sizes;
+      tdd_ring_sizes.is_null = false;
+      import_buffers[col_idx]->add_value(
+          cd_ring_sizes, tdd_ring_sizes, false, replicate_count);
+    }
+    col_idx++;
+  }
+
+  if (col_type == kMULTIPOLYGON) {
+    if (poly_rings_column.size() != coords_row_count) {
+      CHECK(false) << "Geometry import columnar: poly rings column size mismatch";
+    }
+    // Create poly_rings array value and add it to the physical column
+    for (auto poly_rings : poly_rings_column) {
+      auto cd_poly_rings = catalog.getMetadataForColumn(cd->tableId, ++columnId);
+      std::vector<TDatum> td_poly_rings;
+      for (auto num_rings : poly_rings) {
+        TDatum td_num_rings;
+        td_num_rings.val.int_val = num_rings;
+        td_poly_rings.push_back(td_num_rings);
+      }
+      TDatum tdd_poly_rings;
+      tdd_poly_rings.val.arr_val = td_poly_rings;
+      tdd_poly_rings.is_null = false;
+      import_buffers[col_idx]->add_value(
+          cd_poly_rings, tdd_poly_rings, false, replicate_count);
+    }
+    col_idx++;
+  }
+
+  if (col_type == kLINESTRING || col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+    if (bounds_column.size() != coords_row_count) {
+      CHECK(false) << "Geometry import columnar: bounds column size mismatch";
+    }
+    for (auto bounds : bounds_column) {
+      auto cd_bounds = catalog.getMetadataForColumn(cd->tableId, ++columnId);
+      std::vector<TDatum> td_bounds_data;
+      for (auto b : bounds) {
+        TDatum td_double;
+        td_double.val.real_val = b;
+        td_bounds_data.push_back(td_double);
+      }
+      TDatum tdd_bounds;
+      tdd_bounds.val.arr_val = td_bounds_data;
+      tdd_bounds.is_null = false;
+      import_buffers[col_idx]->add_value(cd_bounds, tdd_bounds, false, replicate_count);
+    }
+    col_idx++;
+  }
+
+  if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+    // Create render_group value and add it to the physical column
+    auto cd_render_group = catalog.getMetadataForColumn(cd->tableId, ++columnId);
+    TDatum td_render_group;
+    td_render_group.val.int_val = render_group;
+    td_render_group.is_null = false;
+    for (auto i = 0; i < coords_row_count; i++) {
+      import_buffers[col_idx]->add_value(
+          cd_render_group, td_render_group, false, replicate_count);
+    }
+    col_idx++;
   }
 }
 
