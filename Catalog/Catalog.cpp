@@ -64,8 +64,6 @@ using std::runtime_error;
 using std::string;
 using std::vector;
 
-bool g_aggregator{false};
-
 int g_test_against_columnId_gap = 0;
 
 namespace {
@@ -223,7 +221,8 @@ void SysCatalog::init(const std::string& basePath,
                       std::shared_ptr<Calcite> calcite,
                       bool is_new_db,
                       bool check_privileges,
-                      const std::vector<LeafHostInfo>* string_dict_hosts) {
+                      bool aggregator,
+                      const std::vector<LeafHostInfo>& string_dict_hosts) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
 
@@ -234,6 +233,7 @@ void SysCatalog::init(const std::string& basePath,
   calciteMgr_ = calcite;
   check_privileges_ = check_privileges;
   string_dict_hosts_ = string_dict_hosts;
+  aggregator_ = aggregator;
   sqliteConnector_.reset(
       new SqliteConnector(MAPD_SYSTEM_DB, basePath + "/mapd_catalogs/"));
   if (is_new_db) {
@@ -255,12 +255,7 @@ void SysCatalog::init(const std::string& basePath,
     Catalog_Namespace::DBMetadata db_meta;
     CHECK(getMetadataForDB(MAPD_SYSTEM_DB, db_meta));
     auto mapd_cat = std::make_shared<Catalog>(
-        basePath_,
-        db_meta,
-        dataMgr_,
-        string_dict_hosts ? *string_dict_hosts_ : std::vector<LeafHostInfo>{},
-        calciteMgr_,
-        is_new_db);
+        basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, is_new_db);
     Catalog::set(MAPD_SYSTEM_DB, mapd_cat);
   }
 }
@@ -723,10 +718,11 @@ std::shared_ptr<Catalog> SysCatalog::login(const std::string& dbname,
   if (!getMetadataForDB(dbname, db_meta)) {
     throw std::runtime_error("Database " + dbname + " does not exist.");
   }
+
   // NOTE(max): register database in Catalog that early to allow ldap
   // and saml create default user and role privileges on databases
   auto cat =
-      Catalog::get(basePath_, db_meta, dataMgr_, *string_dict_hosts_, calciteMgr_, false);
+      Catalog::get(basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
 
   {
     if (check_password) {
@@ -969,13 +965,8 @@ void SysCatalog::createDatabase(const string& name, int owner) {
             ")",
         name);
     CHECK(getMetadataForDB(name, db));
-    auto cat = Catalog::get(
-        basePath_,
-        db,
-        dataMgr_,
-        string_dict_hosts_ ? *string_dict_hosts_ : std::vector<LeafHostInfo>{},
-        calciteMgr_,
-        true);
+    auto cat =
+        Catalog::get(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, true);
     if (owner != MAPD_ROOT_USER_ID && arePrivilegesOn()) {
       DBObject object(name, DBObjectType::DatabaseDBObjectType);
       object.loadKey(*cat);
@@ -995,12 +986,7 @@ void SysCatalog::dropDatabase(const DBMetadata& db) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   auto cat =
-      Catalog::get(basePath_,
-                   db,
-                   dataMgr_,
-                   string_dict_hosts_ ? *string_dict_hosts_ : std::vector<LeafHostInfo>{},
-                   calciteMgr_,
-                   false);
+      Catalog::get(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, false);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     if (arePrivilegesOn()) {
@@ -2732,7 +2718,7 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
   delete td;
 
   std::unique_ptr<StringDictionaryClient> client;
-  if (g_aggregator) {
+  if (SysCatalog::instance().isAggregator()) {
     CHECK(!string_dict_hosts_.empty());
     DictRef dict_ref(currentDB_.dbId, -1);
     client.reset(new StringDictionaryClient(string_dict_hosts_.front(), dict_ref, true));
@@ -4029,7 +4015,7 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
   dataMgr_->removeTableRelatedDS(currentDB_.dbId, tableId);
 
   std::unique_ptr<StringDictionaryClient> client;
-  if (g_aggregator) {
+  if (SysCatalog::instance().isAggregator()) {
     CHECK(!string_dict_hosts_.empty());
     DictRef dict_ref(currentDB_.dbId, -1);
     client.reset(new StringDictionaryClient(string_dict_hosts_.front(), dict_ref, true));
@@ -4614,6 +4600,7 @@ std::shared_ptr<Catalog> Catalog::get(const string& basePath,
                                       std::shared_ptr<Calcite> calcite,
                                       bool is_new_db) {
   auto cat = Catalog::get(curDB.dbName);
+
   if (cat) {
     return cat;
   } else {

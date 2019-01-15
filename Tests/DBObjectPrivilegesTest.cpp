@@ -72,7 +72,14 @@ class DBObjectPermissionsEnv : public ::testing::Environment {
       auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
           data_dir.string(), mapd_parms, false, 0);
       CHECK(boost::filesystem::exists(system_db_file));
-      sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, false, true);
+      sys_cat.init(base_path.string(),
+                   dataMgr,
+                   {},
+                   g_calcite,
+                   false,
+                   true,
+                   mapd_parms.aggregator,
+                   {});
       CHECK(sys_cat.getMetadataForDB(db_name, db));
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
     }

@@ -36,7 +36,6 @@
 
 #define CALCITEPORT 39093
 
-extern bool g_aggregator;
 extern bool g_enable_filter_push_down;
 
 double g_gpu_mem_limit_percent{0.9};
@@ -157,11 +156,22 @@ Catalog_Namespace::SessionInfo* get_session(
     uses_gpus = false;
   }
   MapDParameters mapd_parms;
+  mapd_parms.aggregator = !leaf_servers.empty();
+
   auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
       data_dir.string(), mapd_parms, uses_gpus, -1);
 
   auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
-  sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, false, false);
+
+  sys_cat.init(base_path.string(),
+               dataMgr,
+               {},
+               g_calcite,
+               false,
+               false,
+               mapd_parms.aggregator,
+               string_servers);
+
   if (create_user) {
     if (!sys_cat.getMetadataForUser(user_name, user)) {
       sys_cat.createUser(user_name, passwd, false);
@@ -177,9 +187,6 @@ Catalog_Namespace::SessionInfo* get_session(
   }
   CHECK(sys_cat.getMetadataForDB(db_name, db));
   CHECK(user.isSuper || (user.userId == db.dbOwner));
-
-  g_aggregator = !leaf_servers.empty();
-
   auto cat = std::make_shared<Catalog_Namespace::Catalog>(
       base_path.string(), db, dataMgr, string_servers, g_calcite, create_db);
   Catalog_Namespace::Catalog::set(cat->getCurrentDB().dbName, cat);
@@ -221,8 +228,7 @@ ExecutionResult run_select_query(
     const bool hoist_literals,
     const bool allow_loop_joins,
     const bool just_explain) {
-  CHECK(!g_aggregator);
-
+  CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   if (g_enable_filter_push_down) {
     return run_select_query_with_filter_push_down(query_str,
                                                   session,
@@ -345,7 +351,7 @@ std::shared_ptr<ResultSet> run_multiple_agg(
     const bool hoist_literals,
     const bool allow_loop_joins,
     const std::unique_ptr<IROutputFile>& ir_output_file) {
-  if (g_aggregator) {
+  if (Catalog_Namespace::SysCatalog::instance().isAggregator()) {
     return run_sql_distributed(query_str, session, device_type, allow_loop_joins);
   }
 
@@ -401,7 +407,7 @@ std::shared_ptr<ResultSet> run_multiple_agg(
 
 void run_ddl_statement(const std::string& create_table_stmt,
                        const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
-  if (g_aggregator) {
+  if (Catalog_Namespace::SysCatalog::instance().isAggregator()) {
     run_sql_distributed(create_table_stmt, session, ExecutorDeviceType::CPU, false);
     return;
   }

@@ -55,7 +55,6 @@
 
 size_t g_leaf_count{0};
 bool g_use_date_in_days_default_encoding{true};
-extern bool g_aggregator;
 
 using namespace Lock_Namespace;
 using Catalog_Namespace::SysCatalog;
@@ -3917,7 +3916,7 @@ void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 using dbl = std::numeric_limits<double>;
 
 void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  if (g_aggregator) {
+  if (SysCatalog::instance().isAggregator()) {
     // allow copy to statement for stand alone leafs
     throw std::runtime_error("Distributed export not supported yet");
   }

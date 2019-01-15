@@ -221,7 +221,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                               calcite_,
                               false,
                               access_priv_check,
-                              &string_leaves_);
+                              !db_leaves.empty(),
+                              string_leaves_);
   import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   start_time_ = std::time(nullptr);
 

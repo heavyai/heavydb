@@ -51,7 +51,6 @@ using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::server;
 using namespace ::apache::thrift::transport;
 
-extern bool g_aggregator;
 extern size_t g_leaf_count;
 
 TableGenerations table_generations_from_thrift(
@@ -469,7 +468,7 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
       db_leaves = only_db_leaves(all_nodes);
       g_leaf_count = db_leaves.size();
       if (vm.count("cluster")) {
-        g_aggregator = true;
+        mapd_parameters.aggregator = true;
       } else {
         db_leaves.clear();
       }

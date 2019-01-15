@@ -393,7 +393,8 @@ class SysCatalog {
             std::shared_ptr<Calcite> calcite,
             bool is_new_db,
             bool check_privileges,
-            const std::vector<LeafHostInfo>* string_dict_hosts = nullptr);
+            bool aggregator,
+            const std::vector<LeafHostInfo>& string_dict_hosts);
 
   /**
    * logins (connects) a user against a database.
@@ -482,7 +483,7 @@ class SysCatalog {
                                     const std::string& userName);
   std::vector<std::string> getRoles(const std::string& userName, const int32_t dbId);
   bool arePrivilegesOn() const { return check_privileges_; }
-
+  bool isAggregator() const { return aggregator_; }
   static SysCatalog& instance() {
     static SysCatalog sys_cat{};
     return sys_cat;
@@ -501,7 +502,8 @@ class SysCatalog {
   typedef std::multimap<std::string, ObjectRoleDescriptor*> ObjectRoleDescriptorMap;
 
   SysCatalog()
-      : sqliteMutex_()
+      : aggregator_(false)
+      , sqliteMutex_()
       , sharedMutex_()
       , thread_holding_sqlite_lock(std::thread::id())
       , thread_holding_write_lock(std::thread::id()) {}
@@ -580,7 +582,8 @@ class SysCatalog {
   std::unique_ptr<LdapServer> ldap_server_;
   std::unique_ptr<RestServer> rest_server_;
   std::shared_ptr<Calcite> calciteMgr_;
-  const std::vector<LeafHostInfo>* string_dict_hosts_;
+  std::vector<LeafHostInfo> string_dict_hosts_;
+  bool aggregator_;
 
  public:
   mutable std::mutex sqliteMutex_;
@@ -588,8 +591,6 @@ class SysCatalog {
   mutable std::atomic<std::thread::id> thread_holding_sqlite_lock;
   mutable std::atomic<std::thread::id> thread_holding_write_lock;
   static thread_local bool thread_holds_read_lock;
-
-  friend LdapServer;
 };
 
 // this class is defined to accommodate both Thrift and non-Thrift builds.
