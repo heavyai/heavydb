@@ -440,6 +440,12 @@ void MapDProgramOptions::fillAdvancedOptions(po::options_description& desc_adv) 
                              ->default_value(g_enable_smem_group_by)
                              ->implicit_value(false),
                          "Enable/disable using GPU shared memory for GROUP BY.");
+  desc_adv.add_options()("strip-join-covered-quals",
+                         po::value<bool>(&g_strip_join_covered_quals)
+                             ->default_value(g_strip_join_covered_quals)
+                             ->implicit_value(true),
+                         "Remove quals from the filtered count if they are covered by a "
+                         "join condition (currently only ST_Contains)");
 };
 
 bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_code) {

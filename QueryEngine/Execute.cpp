@@ -77,6 +77,7 @@ size_t g_filter_push_down_passing_row_ubound{0};
 bool g_enable_columnar_output{false};
 bool g_enable_overlaps_hashjoin{false};
 double g_overlaps_hashjoin_bucket_threshold{0.1};
+bool g_strip_join_covered_quals{false};
 
 Executor::Executor(const int db_id,
                    const size_t block_size_x,
