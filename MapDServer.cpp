@@ -215,8 +215,10 @@ void MapDProgramOptions::fillOptions(po::options_description& desc) {
       "data",
       po::value<std::string>(&base_path)->required()->default_value("data"),
       "Directory path to MapD catalogs");
-  desc.add_options()("cpu", "Run on CPU only");
-  desc.add_options()("gpu", "Run on GPUs (Default)");
+  desc.add_options()(
+      "cpu-only",
+      po::value<bool>(&cpu_only)->default_value(cpu_only)->implicit_value(true),
+      "Run on CPU only");
   desc.add_options()(
       "read-only",
       po::value<bool>(&read_only)->default_value(read_only)->implicit_value(true),
@@ -478,7 +480,7 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
 
     if (vm.count("help")) {
       std::cout
-          << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu] [-p "
+          << "Usage: mapd_server <catalog path> [<database name>] [-p "
              "<port "
              "number>] [--http-port <http port number>] [--flush-log] [--version|-v]"
           << std::endl
@@ -489,7 +491,7 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
     }
     if (vm.count("dev-options")) {
       std::cout
-          << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu] [-p "
+          << "Usage: mapd_server <catalog path> [<database name>] [-p "
              "<port "
              "number>] [--http-port <http port number>] [--flush-log] [--version|-v]"
           << std::endl
@@ -501,19 +503,6 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
     if (vm.count("version")) {
       std::cout << "MapD Version: " << MAPD_RELEASE << std::endl;
       return 0;
-    }
-    if (vm.count("cpu")) {
-      device = "cpu";
-    }
-    if (vm.count("gpu")) {
-      device = "gpu";
-    }
-    if (num_gpus == 0) {
-      device = "cpu";
-    }
-
-    if (device == "cpu") {
-      enable_rendering = false;
     }
 
     g_enable_watchdog = enable_watchdog;
@@ -702,7 +691,7 @@ int main(int argc, char** argv) {
   g_mapd_handler = mapd::make_shared<MapDHandler>(desc_all.db_leaves,
                                                   desc_all.string_leaves,
                                                   desc_all.base_path,
-                                                  desc_all.device,
+                                                  desc_all.cpu_only,
                                                   desc_all.allow_multifrag,
                                                   desc_all.jit_debug,
                                                   desc_all.read_only,

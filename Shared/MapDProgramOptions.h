@@ -34,9 +34,9 @@ class MapDProgramOptions : public boost::program_options::options_description {
   int http_port = 9090;
   size_t reserved_gpu_mem = 1 << 27;
   std::string base_path;
-  std::string device = {"gpu"};
   std::string config_file = {"mapd.conf"};
   std::string cluster_file = {"cluster.conf"};
+  bool cpu_only = false;
   bool flush_log = true;
   bool jit_debug = false;
   bool allow_multifrag = true;

@@ -108,7 +108,7 @@ class MapDHandler : public MapDIf {
   MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
               const std::vector<LeafHostInfo>& string_leaves,
               const std::string& base_data_path,
-              const std::string& executor_device,
+              const bool cpu_only,
               const bool allow_multifrag,
               const bool jit_debug,
               const bool read_only,

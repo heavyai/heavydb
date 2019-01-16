@@ -132,7 +132,7 @@ SessionMap::iterator get_session_from_map(const TSessionId& session,
 MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const std::vector<LeafHostInfo>& string_leaves,
                          const std::string& base_data_path,
-                         const std::string& executor_device,
+                         const bool cpu_only,
                          const bool allow_multifrag,
                          const bool jit_debug,
                          const bool read_only,
@@ -166,7 +166,12 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     , max_session_duration_(max_session_duration * 60)
     , _was_geo_copy_from(false) {
   LOG(INFO) << "MapD Server " << MAPD_RELEASE;
-  if (executor_device == "gpu") {
+  bool is_rendering_enabled = enable_rendering;
+  if (cpu_only) {
+    is_rendering_enabled = false;
+    executor_device_type_ = ExecutorDeviceType::CPU;
+    cpu_mode_only_ = true;
+  } else {
 #ifdef HAVE_CUDA
     executor_device_type_ = ExecutorDeviceType::GPU;
     cpu_mode_only_ = false;
@@ -174,16 +179,15 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     executor_device_type_ = ExecutorDeviceType::CPU;
     LOG(ERROR) << "This build isn't CUDA enabled, will run on CPU";
     cpu_mode_only_ = true;
-#endif  // HAVE_CUDA
-  } else {
-    executor_device_type_ = ExecutorDeviceType::CPU;
-    cpu_mode_only_ = true;
+    is_rendering_enabled = false;
+#endif
   }
+
   const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
   // calculate the total amount of memory we need to reserve from each gpu that the Buffer
   // manage cannot ask for
   size_t total_reserved = reserved_gpu_mem;
-  if (enable_rendering) {
+  if (is_rendering_enabled) {
     total_reserved += render_mem_bytes;
   }
   data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(),
@@ -201,7 +205,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
 
   ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
 
-  if (!data_mgr_->gpusPresent()) {
+  if (!data_mgr_->gpusPresent() && !cpu_mode_only_) {
     executor_device_type_ = ExecutorDeviceType::CPU;
     LOG(ERROR) << "No GPUs detected, falling back to CPU mode";
     cpu_mode_only_ = true;
@@ -226,7 +230,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
   import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   start_time_ = std::time(nullptr);
 
-  if (enable_rendering) {
+  if (is_rendering_enabled) {
     try {
       render_handler_.reset(
           new MapDRenderHandler(this, render_mem_bytes, num_gpus, start_gpu));
