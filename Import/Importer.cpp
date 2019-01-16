@@ -1848,7 +1848,7 @@ void Importer::set_geo_physical_import_buffer_columnar(
     TDatum td_render_group;
     td_render_group.val.int_val = render_group;
     td_render_group.is_null = false;
-    for (auto i = 0; i < coords_row_count; i++) {
+    for (decltype(coords_row_count) i = 0; i < coords_row_count; i++) {
       import_buffers[col_idx]->add_value(
           cd_render_group, td_render_group, false, replicate_count);
     }
