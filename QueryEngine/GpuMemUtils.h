@@ -106,10 +106,5 @@ void copy_projection_buffer_from_gpu_columnar(Data_Namespace::DataMgr* data_mgr,
                                               int8_t* projection_buffer,
                                               const size_t projection_count,
                                               const int device_id);
-// TODO(alex): remove
-bool buffer_not_null(const QueryMemoryDescriptor& query_mem_desc,
-                     const unsigned block_size_x,
-                     const ExecutorDeviceType device_type,
-                     size_t i);
 
 #endif  // QUERYENGINE_GPUMEMUTILS_H
