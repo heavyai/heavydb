@@ -38,6 +38,7 @@ class MapDProgramOptions : public boost::program_options::options_description {
   std::string cluster_file = {"cluster.conf"};
   bool cpu_only = false;
   bool flush_log = true;
+  bool verbose_logging = false;
   bool jit_debug = false;
   bool allow_multifrag = true;
   bool read_only = false;

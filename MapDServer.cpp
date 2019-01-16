@@ -246,6 +246,11 @@ void MapDProgramOptions::fillOptions(po::options_description& desc) {
       po::value<bool>(&flush_log)->default_value(flush_log)->implicit_value(true),
       "Immediately flush logs to disk. Set to false if this is a performance "
       "bottleneck.");
+  desc.add_options()("verbose",
+                     po::value<bool>(&verbose_logging)
+                         ->default_value(verbose_logging)
+                         ->implicit_value(true),
+                     "Write all log messages to server logs.");
   desc.add_options()("cpu-buffer-mem-bytes",
                      po::value<size_t>(&mapd_parameters.cpu_buffer_mem_bytes)
                          ->default_value(mapd_parameters.cpu_buffer_mem_bytes),
@@ -596,6 +601,9 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
   FLAGS_log_dir = log_path.c_str();
   if (flush_log) {
     FLAGS_logbuflevel = -1;
+  }
+  if (verbose_logging) {
+    FLAGS_v = 1;
   }
   // Initialize Google's logging library.
   google::InitGoogleLogging(argv[0]);
