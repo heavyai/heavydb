@@ -6,13 +6,16 @@ Python script that leverages [pymapd](https://github.com/omnisci/pymapd) to quer
 
 Script is intended for use on Python3
 
-Running the python script relies on a few python packages, which can generally be installed using [conda](https://conda.io/) or [pip](https://pypi.org/project/pip/).
+All required python packages can be installed with `pip` using the `requirements.txt` file:
+```
+pip install -r requirements.txt
+```
 
-The following python packages are required:
+The required packages can otherwise be installed individually using [conda](https://conda.io/) or [pip](https://pypi.org/project/pip/). List of required packages:
 
 1) [pymapd](https://github.com/omnisci/pymapd) - Provides a python DB API 2.0-compliant OmniSci interface (formerly MapD)
 
-   Install with conda: `conda install -c conda-forge pymapd`
+   Install with conda: `conda install -c conda-forge pymapd` or with pip: `pip install pymapd`
 
 2) [pandas](https://pandas.pydata.org/) - Provides high-performance, easy-to-use data structures and data analysis tools
 
