@@ -448,6 +448,23 @@ void MapDProgramOptions::fillAdvancedOptions(po::options_description& desc_adv) 
                          "join condition (currently only ST_Contains)");
 };
 
+namespace {
+
+std::stringstream sanitize_config_file(std::ifstream& in) {
+  // Strip the web section out of the config file so boost can validate program options
+  std::stringstream ss;
+  std::string line;
+  while (std::getline(in, line)) {
+    ss << line << "\n";
+    if (line == "[web]") {
+      break;
+    }
+  }
+  return ss;
+}
+
+}  // namespace
+
 bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_code) {
   return_code = 0;
 
@@ -464,7 +481,10 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
 
     if (vm.count("config")) {
       std::ifstream settings_file(config_file);
-      po::store(po::parse_config_file(settings_file, *this, true), vm);
+
+      auto sanitized_settings = sanitize_config_file(settings_file);
+
+      po::store(po::parse_config_file(sanitized_settings, *this, false), vm);
       po::notify(vm);
       settings_file.close();
     }
