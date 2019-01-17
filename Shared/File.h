@@ -143,6 +143,12 @@ size_t appendPage(FILE* f, const size_t pageSize, int8_t* buf);
  */
 size_t fileSize(FILE* f);
 
+/**
+ * @brief Renames a directory to DELETE_ME_<EPOCH>_<oldname>.
+ * @param directoryName name of directory
+ */
+void renameForDelete(const std::string directoryName);
+
 }  // namespace File_Namespace
 
 #endif  // DATAMGR_FILE_FILE_H

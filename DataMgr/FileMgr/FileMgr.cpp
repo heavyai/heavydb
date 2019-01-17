@@ -25,9 +25,9 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/system/error_code.hpp>
 #include <string>
-#include "../Shared/measure.h"
-#include "File.h"
 #include "GlobalFileMgr.h"
+#include "Shared/File.h"
+#include "Shared/measure.h"
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -103,10 +103,9 @@ void FileMgr::init(const size_t num_reader_threads) {
   // if epoch = -1 this means open from epoch file
   const std::string fileMgrDirPrefix("table");
   const std::string FileMgrDirDelim("_");
-  fileMgrBasePath_ =
-      (gfm_->getBasePath() + fileMgrDirPrefix + FileMgrDirDelim +
-       std::to_string(fileMgrKey_.first) +                           // db_id
-       FileMgrDirDelim + std::to_string(fileMgrKey_.second) + "/");  // tb_id
+  fileMgrBasePath_ = (gfm_->getBasePath() + fileMgrDirPrefix + FileMgrDirDelim +
+                      std::to_string(fileMgrKey_.first) +                     // db_id
+                      FileMgrDirDelim + std::to_string(fileMgrKey_.second));  // tb_id
   boost::filesystem::path path(fileMgrBasePath_);
   if (boost::filesystem::exists(path)) {
     if (!boost::filesystem::is_directory(path)) {
@@ -437,14 +436,8 @@ void FileMgr::closeRemovePhysical() {
     epochFile_ = nullptr;
   }
 
-  /* remove directory containing table related data */
-  boost::system::error_code ec;
-  boost::filesystem::path pathToTableDS(getFileMgrBasePath());
-  boost::filesystem::remove_all(pathToTableDS, ec);
-
-  if (ec.value() != boost::system::errc::success) {
-    LOG(FATAL) << "Failed to remove file " << getFileMgrBasePath() << ". Error: " << ec;
-  }
+  /* rename for later deletion the directory containing table related data */
+  File_Namespace::renameForDelete(getFileMgrBasePath());
 }
 
 void FileMgr::copyPage(Page& srcPage,
@@ -470,7 +463,7 @@ void FileMgr::copyPage(Page& srcPage,
 }
 
 void FileMgr::createEpochFile(const std::string& epochFileName) {
-  std::string epochFilePath(fileMgrBasePath_ + epochFileName);
+  std::string epochFilePath(fileMgrBasePath_ + "/" + epochFileName);
   if (boost::filesystem::exists(epochFilePath)) {
     LOG(FATAL) << "Epoch file `" << epochFilePath << "` already exists";
   }
@@ -519,7 +512,7 @@ void FileMgr::writeAndSyncEpochToDisk() {
 }
 
 void FileMgr::createDBMetaFile(const std::string& DBMetaFileName) {
-  std::string DBMetaFilePath(fileMgrBasePath_ + DBMetaFileName);
+  std::string DBMetaFilePath(fileMgrBasePath_ + "/" + DBMetaFileName);
   if (boost::filesystem::exists(DBMetaFilePath)) {
     LOG(FATAL) << "DB metadata file `" << DBMetaFilePath << "` already exists.";
   }
@@ -530,7 +523,7 @@ void FileMgr::createDBMetaFile(const std::string& DBMetaFileName) {
 }
 
 bool FileMgr::openDBMetaFile(const std::string& DBMetaFileName) {
-  std::string DBMetaFilePath(fileMgrBasePath_ + DBMetaFileName);
+  std::string DBMetaFilePath(fileMgrBasePath_ + "/" + DBMetaFileName);
 
   if (!boost::filesystem::exists(DBMetaFilePath)) {
     // LOG(INFO) << "DB metadata file does not exist, one will be created.";

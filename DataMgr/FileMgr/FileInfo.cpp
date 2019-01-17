@@ -17,7 +17,7 @@
 #include "FileInfo.h"
 #include <glog/logging.h>
 #include <iostream>
-#include "File.h"
+#include "../../Shared/File.h"
 #include "FileMgr.h"
 #include "Page.h"
 

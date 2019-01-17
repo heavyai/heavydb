@@ -23,6 +23,7 @@
 #include "File.h"
 #include <glog/logging.h>
 #include <unistd.h>
+#include <boost/filesystem.hpp>
 #include <cstdio>
 #include <cstring>
 #include <iostream>
@@ -35,7 +36,8 @@ FILE* create(const std::string& basePath,
              const int fileId,
              const size_t pageSize,
              const size_t numPages) {
-  std::string path(basePath + std::to_string(fileId) + "." + std::to_string(pageSize) +
+  std::string path(basePath + "/" + std::to_string(fileId) + "." +
+                   std::to_string(pageSize) +
                    std::string(MAPD_FILE_EXT));  // MAPD_FILE_EXT has preceding "."
   if (numPages < 1 || pageSize < 1) {
     LOG(FATAL) << "Error trying to create file '" << path
@@ -171,6 +173,32 @@ size_t fileSize(FILE* f) {
   size_t size = (size_t)ftell(f);
   fseek(f, 0, SEEK_SET);
   return size;
+}
+
+// this is a helper function to rename existing directories
+// allowing for an async process to actually remove the physical directries
+// and subfolders and files later
+// it is required due to the large amount of time it can take to delete
+// physical files from large disks
+void renameForDelete(const std::string directoryName) {
+  boost::system::error_code ec;
+  boost::filesystem::path directoryPath(directoryName);
+  using namespace std::chrono;
+  milliseconds ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
+
+  if (boost::filesystem::exists(directoryPath) &&
+      boost::filesystem::is_directory(directoryPath)) {
+    boost::filesystem::path newDirectoryPath(directoryName + "_" +
+                                             std::to_string(ms.count()) + "_DELETE_ME");
+    boost::filesystem::rename(directoryPath, newDirectoryPath, ec);
+
+    if (ec.value() == boost::system::errc::success) {
+      return;
+    }
+  }
+  LOG(FATAL) << "Failed to rename file " << directoryName << " to "
+             << directoryName + "_" + std::to_string(ms.count()) + "_DELETE_ME  Error: "
+             << ec;
 }
 
 }  // namespace File_Namespace

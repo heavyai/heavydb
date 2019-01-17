@@ -48,6 +48,7 @@
 #include "../Fragmenter/Fragmenter.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "../Parser/ParserNode.h"
+#include "../Shared/File.h"
 #include "../Shared/StringTransform.h"
 #include "../Shared/measure.h"
 #include "../StringDictionary/StringDictionaryClient.h"
@@ -2742,6 +2743,7 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
       // Dummy dictionaries created for a shard of a logical table have the id set to
       // zero.
       if (cd->columnType.get_compression() == kENCODING_DICT && dictId) {
+        INJECT_TIMER(removingDicts);
         DictRef dict_ref(currentDB_.dbId, dictId);
         const auto dictIt = dictDescriptorMapByRef_.find(dict_ref);
         CHECK(dictIt != dictDescriptorMapByRef_.end());
@@ -2751,7 +2753,7 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
         if (!dd->refcount) {
           dd->stringDict.reset();
           if (!isTemp) {
-            boost::filesystem::remove_all(dd->dictFolderPath);
+            File_Namespace::renameForDelete(dd->dictFolderPath);
           }
           if (client) {
             client->drop(dict_ref);
@@ -2759,6 +2761,7 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
           dictDescriptorMapByRef_.erase(dictIt);
         }
       }
+
       delete cd;
     }
   }
@@ -3201,6 +3204,8 @@ DictRef Catalog::addDictionary(ColumnDescriptor& cd) {
   return dd.dictRef;
 }
 
+// TODO this all looks incorrect there is no reference count being checked here
+// this code needs to be fixed
 void Catalog::delDictionary(const ColumnDescriptor& cd) {
   if (!(cd.columnType.is_string() || cd.columnType.is_string_array())) {
     return;
@@ -3219,9 +3224,9 @@ void Catalog::delDictionary(const ColumnDescriptor& cd) {
       td.tableName + "_" + cd.columnName + "_dict" + std::to_string(dictId);
   sqliteConnector_.query_with_text_param("DELETE FROM mapd_dictionaries WHERE name = ?",
                                          dictName);
-  boost::filesystem::remove_all(basePath_ + "/mapd_data/DB_" +
-                                std::to_string(currentDB_.dbId) + "_DICT_" +
-                                std::to_string(dictId));
+  File_Namespace::renameForDelete(basePath_ + "/mapd_data/DB_" +
+                                  std::to_string(currentDB_.dbId) + "_DICT_" +
+                                  std::to_string(dictId));
 
   std::unique_ptr<StringDictionaryClient> client;
   if (!string_dict_hosts_.empty()) {
@@ -4008,10 +4013,9 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
   }
   ChunkKey chunkKeyPrefix = {currentDB_.dbId, tableId};
   // assuming deleteChunksWithPrefix is atomic
-  dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
-  // MAT TODO fix this
-  // NOTE This is unsafe , if there are updates occuring at same time
-  dataMgr_->checkpoint(currentDB_.dbId, tableId);
+  dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix, MemoryLevel::CPU_LEVEL);
+  dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix, MemoryLevel::GPU_LEVEL);
+
   dataMgr_->removeTableRelatedDS(currentDB_.dbId, tableId);
 
   std::unique_ptr<StringDictionaryClient> client;
@@ -4039,7 +4043,7 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
       if (dd->refcount == 1) {
         // close the dictionary
         dd->stringDict.reset();
-        boost::filesystem::remove_all(dd->dictFolderPath);
+        File_Namespace::renameForDelete(dd->dictFolderPath);
         if (client) {
           client->drop(dd->dictRef);
         }
@@ -4136,8 +4140,6 @@ void Catalog::dropTable(const TableDescriptor* td) {
 }
 
 void Catalog::doDropTable(const TableDescriptor* td, SqliteConnector* conn) {
-  bool view = td->isView;
-
   const int tableId = td->tableId;
   conn->query_with_text_param("DELETE FROM mapd_tables WHERE tableid = ?",
                               std::to_string(tableId));
@@ -4167,7 +4169,7 @@ void Catalog::doDropTable(const TableDescriptor* td, SqliteConnector* conn) {
   }
   if (SysCatalog::instance().arePrivilegesOn()) {
     SysCatalog::instance().revokeDBObjectPrivilegesFromAll_unsafe(
-        DBObject(td->tableName, view ? ViewDBObjectType : TableDBObjectType), this);
+        DBObject(td->tableName, td->isView ? ViewDBObjectType : TableDBObjectType), this);
   }
   eraseTablePhysicalData(td);
 }
@@ -4528,18 +4530,28 @@ void Catalog::eraseTablePhysicalData(const TableDescriptor* td) {
   // must destroy fragmenter before deleteChunks is called.
   if (td->fragmenter != nullptr) {
     auto tableDescIt = tableDescriptorMapById_.find(tableId);
-    delete td->fragmenter;
+    {
+      INJECT_TIMER(deleting_fragmenter);
+      delete td->fragmenter;
+    }
     tableDescIt->second->fragmenter = nullptr;  // get around const-ness
   }
   ChunkKey chunkKeyPrefix = {currentDB_.dbId, tableId};
-  // assuming deleteChunksWithPrefix is atomic
-  dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
-  // MAT TODO fix this
-  // NOTE This is unsafe , if there are updates occuring at same time
-  dataMgr_->checkpoint(currentDB_.dbId, tableId);
-  dataMgr_->removeTableRelatedDS(currentDB_.dbId, tableId);
+  {
+    INJECT_TIMER(deleteChunksWithPrefix);
+    // assuming deleteChunksWithPrefix is atomic
+    dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix, MemoryLevel::CPU_LEVEL);
+    dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix, MemoryLevel::GPU_LEVEL);
+  }
+  if (!td->isView) {
+    INJECT_TIMER(Remove_Table);
+    dataMgr_->removeTableRelatedDS(currentDB_.dbId, tableId);
+  }
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
-  removeTableFromMap(td->tableName, tableId);
+  {
+    INJECT_TIMER(removeTableFromMap_);
+    removeTableFromMap(td->tableName, tableId);
+  }
 }
 
 std::string Catalog::generatePhysicalTableName(const std::string& logicalTableName,

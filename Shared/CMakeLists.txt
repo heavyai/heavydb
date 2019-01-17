@@ -4,6 +4,7 @@ set(shared_source_files
     mapd_glob.cpp
     StringTransform.cpp
     geo_types.cpp
+    File.cpp
 )
 
 add_library(Shared ${shared_source_files})

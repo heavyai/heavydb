@@ -32,6 +32,7 @@
 
 #include "Shared/MapDParameters.h"
 #include "Shared/MapDProgramOptions.h"
+#include "Shared/file_delete.h"
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
@@ -722,6 +723,13 @@ int main(int argc, char** argv) {
   register_signal_handler();
   google::InstallFailureFunction(&shutdown_handler);
 
+  // start background thread to clean up _DELETE_ME files
+  std::atomic<bool> running{true};
+  const unsigned int wait_interval =
+      300;  // wait time in secs after looking for deleted file before looking again
+  std::thread file_delete_thread(
+      file_delete, std::ref(running), wait_interval, desc_all.base_path + "/mapd_data");
+
   g_mapd_handler = mapd::make_shared<MapDHandler>(desc_all.db_leaves,
                                                   desc_all.string_leaves,
                                                   desc_all.base_path,
@@ -794,5 +802,9 @@ int main(int argc, char** argv) {
   } else {  // running ha server
     LOG(FATAL) << "No High Availability module available, please contact MapD support";
   }
+
+  running = false;
+  file_delete_thread.join();
+
   return 0;
 };
