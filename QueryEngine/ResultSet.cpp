@@ -207,6 +207,11 @@ ResultSet::~ResultSet() {
       free(storage_->getUnderlyingBuffer());
     }
   }
+  for (auto& storage : appended_storage_) {
+    if (storage && !storage->buff_is_provided_) {
+      free(storage->getUnderlyingBuffer());
+    }
+  }
   if (host_estimator_buffer_) {
     CHECK(device_type_ == ExecutorDeviceType::CPU || estimator_buffer_);
     free(host_estimator_buffer_);
@@ -231,6 +236,7 @@ const ResultSetStorage* ResultSet::allocateStorage(
     int8_t* buff,
     const std::vector<int64_t>& target_init_vals) const {
   CHECK(buff);
+  CHECK(!storage_);
   storage_.reset(new ResultSetStorage(targets_, query_mem_desc_, buff, true));
   storage_->target_init_vals_ = target_init_vals;
   return storage_.get();
