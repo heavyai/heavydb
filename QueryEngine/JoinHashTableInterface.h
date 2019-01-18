@@ -38,11 +38,6 @@ class HashJoinFail : public std::runtime_error {
   HashJoinFail(const std::string& reason) : std::runtime_error(reason) {}
 };
 
-class NeedsOneToManyHash : public HashJoinFail {
- public:
-  NeedsOneToManyHash() : HashJoinFail("Needs one to many hash") {}
-};
-
 class FailedToFetchColumn : public HashJoinFail {
  public:
   FailedToFetchColumn()

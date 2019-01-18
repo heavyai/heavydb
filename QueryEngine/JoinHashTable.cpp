@@ -26,6 +26,15 @@
 #include <numeric>
 #include <thread>
 
+namespace {
+
+class NeedsOneToManyHash : public HashJoinFail {
+ public:
+  NeedsOneToManyHash() : HashJoinFail("Needs one to many hash") {}
+};
+
+}  // namespace
+
 InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
                                  const Analyzer::Expr* rhs,
                                  const Catalog_Namespace::Catalog& cat,
@@ -430,20 +439,6 @@ std::deque<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
   return shards_for_device;
 }
 
-bool JoinHashTable::needOneToManyHash(const std::vector<int>& errors) const {
-  std::unordered_set<int> error_set(errors.begin(), errors.end());
-  if (error_set.size() == 1) {
-    return *error_set.begin() == ERR_COLUMN_NOT_UNIQUE;
-  }
-  if (error_set.size() == 2) {
-    const int first_error = *error_set.begin();
-    const int second_error = *std::next(error_set.begin());
-    return ((first_error == 0 && second_error == ERR_COLUMN_NOT_UNIQUE) ||
-            (first_error == ERR_COLUMN_NOT_UNIQUE && second_error == 0));
-  }
-  return false;
-}
-
 void JoinHashTable::reify(const int device_count) {
   CHECK_LT(0, device_count);
   const auto& catalog = *executor_->getCatalog();
@@ -688,7 +683,7 @@ void JoinHashTable::checkHashJoinReplicationConstraint(const int table_id) const
   }
 }
 
-int JoinHashTable::initHashTableOnCpu(
+void JoinHashTable::initHashTableOnCpu(
     const int8_t* col_buff,
     const size_t num_elements,
     const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
@@ -697,7 +692,6 @@ int JoinHashTable::initHashTableOnCpu(
   const auto inner_col = cols.first;
   CHECK(inner_col);
   const auto& ti = inner_col->get_type_info();
-  int err = 0;
   if (!cpu_hash_table_buff_) {
     cpu_hash_table_buff_ = std::make_shared<std::vector<int32_t>>(hash_entry_count);
     const StringDictionaryProxy* sd_inner_proxy{nullptr};
@@ -729,6 +723,7 @@ int JoinHashTable::initHashTableOnCpu(
       t.join();
     }
     init_cpu_buff_threads.clear();
+    int err{0};
     for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
       init_cpu_buff_threads.emplace_back([this,
                                           hash_join_invalid_val,
@@ -761,9 +756,15 @@ int JoinHashTable::initHashTableOnCpu(
     }
     if (err) {
       cpu_hash_table_buff_.reset();
+      // Too many hash entries, need to retry with a 1:many table
+      throw NeedsOneToManyHash();
+    }
+  } else {
+    if (cpu_hash_table_buff_->size() > hash_entry_count) {
+      // Too many hash entries, need to retry with a 1:many table
+      throw NeedsOneToManyHash();
     }
   }
-  return err;
 }
 
 void JoinHashTable::initOneToManyHashTableOnCpu(
@@ -873,32 +874,26 @@ void JoinHashTable::initHashTableForDevice(
 #ifdef HAVE_CUDA
   const auto& ti = inner_col->get_type_info();
 #endif
-  int err = 0;
   const int32_t hash_join_invalid_val{-1};
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
     CHECK(!chunk_key.empty() && col_buff);
     initHashTableOnCpuFromCache(chunk_key, num_elements, cols);
-    if (cpu_hash_table_buff_ && cpu_hash_table_buff_->size() > hash_entry_count) {
-      throw NeedsOneToManyHash();
-    }
     {
       std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
-      err = initHashTableOnCpu(
+      initHashTableOnCpu(
           col_buff, num_elements, cols, hash_entry_count, hash_join_invalid_val);
     }
-    if (err == -1) {
-      throw NeedsOneToManyHash();
-    }
-    if (!err && inner_col->get_table_id() > 0) {
+    if (inner_col->get_table_id() > 0) {
       putHashTableOnCpuToCache(chunk_key, num_elements, cols);
     }
     // Transfer the hash table on the GPU if we've only built it on CPU
     // but the query runs on GPU (join on dictionary encoded columns).
-    // Don't transfer the buffer if there was an error since we'll bail anyway.
-    if (memory_level_ == Data_Namespace::GPU_LEVEL && !err) {
+    if (memory_level_ == Data_Namespace::GPU_LEVEL) {
 #ifdef HAVE_CUDA
       CHECK(ti.is_string());
       auto& data_mgr = catalog->getDataMgr();
+      std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
+
       copy_to_gpu(
           &data_mgr,
           reinterpret_cast<CUdeviceptr>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
@@ -911,6 +906,7 @@ void JoinHashTable::initHashTableForDevice(
     }
   } else {
 #ifdef HAVE_CUDA
+    int err{0};
     CHECK_EQ(Data_Namespace::GPU_LEVEL, effective_memory_level);
     auto& data_mgr = catalog->getDataMgr();
     gpu_hash_table_err_buff_[device_id] =
@@ -959,26 +955,13 @@ void JoinHashTable::initHashTableForDevice(
           executor_->gridSize());
     }
     copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
-    if (err == -1) {
+
+    if (err) {
       throw NeedsOneToManyHash();
     }
 #else
     CHECK(false);
 #endif
-  }
-  if (err) {
-    switch (err) {
-      case ERR_FAILED_TO_FETCH_COLUMN:
-        throw FailedToFetchColumn();
-      case ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN:
-        throw FailedToJoinOnVirtualColumn();
-      case ERR_COLUMN_NOT_UNIQUE:
-        throw NeedsOneToManyHash();
-      default:
-        throw HashJoinFail(
-            std::string("Unrecognized error when initializing hash table (") +
-            std::to_string(err) + std::string(")"));
-    }
   }
 }
 
@@ -1036,6 +1019,7 @@ void JoinHashTable::initOneToManyHashTable(
     if (memory_level_ == Data_Namespace::GPU_LEVEL) {
 #ifdef HAVE_CUDA
       CHECK(ti.is_string());
+      std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
       copy_to_gpu(
           &data_mgr,
           reinterpret_cast<CUdeviceptr>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
@@ -1107,6 +1091,7 @@ void JoinHashTable::initHashTableOnCpuFromCache(
   std::lock_guard<std::mutex> join_hash_table_cache_lock(join_hash_table_cache_mutex_);
   for (const auto& kv : join_hash_table_cache_) {
     if (kv.first == cache_key) {
+      std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
       cpu_hash_table_buff_ = kv.second;
       break;
     }

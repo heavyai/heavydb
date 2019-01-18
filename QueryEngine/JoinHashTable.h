@@ -193,7 +193,7 @@ class JoinHashTable : public JoinHashTableInterface {
       const ChunkKey& chunk_key,
       const size_t num_elements,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols);
-  int initHashTableOnCpu(
+  void initHashTableOnCpu(
       const int8_t* col_buff,
       const size_t num_elements,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
@@ -216,8 +216,6 @@ class JoinHashTable : public JoinHashTableInterface {
                                             const Analyzer::Expr* key_col,
                                             const int shard_count,
                                             const CompilationOptions& co);
-
-  bool needOneToManyHash(const std::vector<int>& errors) const;
 
   llvm::Value* codegenOneToManyHashJoin(const CompilationOptions&, const size_t);
 
@@ -275,11 +273,6 @@ class JoinHashTable : public JoinHashTableInterface {
       std::pair<JoinHashTableCacheKey, std::shared_ptr<std::vector<int32_t>>>>
       join_hash_table_cache_;
   static std::mutex join_hash_table_cache_mutex_;
-
-  static const int ERR_MULTI_FRAG{-2};
-  static const int ERR_FAILED_TO_FETCH_COLUMN{-3};
-  static const int ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN{-4};
-  static const int ERR_COLUMN_NOT_UNIQUE{-5};
 };
 
 inline std::string get_table_name_by_id(const int table_id,
