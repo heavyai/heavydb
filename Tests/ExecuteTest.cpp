@@ -6861,7 +6861,7 @@ TEST(Select, PuntToCPU) {
     return;
   }
 
-  g_gpu_mem_limit_percent = 1e-9;
+  g_gpu_mem_limit_percent = 1e-10;
   EXPECT_THROW(run_multiple_agg("SELECT x, COUNT(*) FROM test GROUP BY x;", dt),
                std::runtime_error);
   EXPECT_THROW(run_multiple_agg("SELECT str, COUNT(*) FROM test GROUP BY str;", dt),
