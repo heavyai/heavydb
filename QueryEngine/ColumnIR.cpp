@@ -138,6 +138,11 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
       }
       return cols;
     }
+  } else {
+    if (col_var->get_type_info().is_geometry()) {
+      throw std::runtime_error(
+          "Geospatial columns not supported in temporary tables yet");
+    }
   }
   const auto grouped_col_lv = resolveGroupedColumnReference(col_var);
   if (grouped_col_lv) {
