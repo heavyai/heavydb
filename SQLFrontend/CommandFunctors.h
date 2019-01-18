@@ -397,7 +397,7 @@ StandardCommand(ListColumns, {
       }
       if (table_details.partition_detail != TPartitionDetail::DEFAULT) {
         partition_detail =
-            comma_or_blank + "PARTITION = " +
+            comma_or_blank + "PARTITIONS = " +
             (table_details.partition_detail == TPartitionDetail::REPLICATED ? "REPLICATED"
                                                                             : "");
         partition_detail +=
