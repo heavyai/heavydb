@@ -186,13 +186,21 @@ void GlobalFileMgr::writeFileMgrData(
 }
 
 void GlobalFileMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
-  FileMgr* fm = findFileMgr(db_id, tb_id, true);
+  FileMgr* fm = getFileMgr(db_id, tb_id);
   if (fm == nullptr) {
     LOG(FATAL) << "Drop table failed. Table " << db_id << " " << tb_id
                << " does not exist.";
   }
   fm->closeRemovePhysical();
   /* remove table related in-memory DS only if directory was removed successfully */
+  const auto file_mgr_key = std::make_pair(db_id, tb_id);
+  {
+    mapd_lock_guard<mapd_shared_mutex> read_lock(fileMgrs_mutex_);
+    auto it = fileMgrs_.find(file_mgr_key);
+    if (it != fileMgrs_.end()) {
+      fileMgrs_.erase(it);
+    }
+  }
   delete fm;
 }
 

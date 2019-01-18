@@ -3882,6 +3882,11 @@ TEST(Select, CastFromNull) {
   }
 }
 
+TEST(Select, DropSecondaryDB) {
+  run_ddl_statement("CREATE DATABASE SECONDARY_DB;");
+  run_ddl_statement("DROP DATABASE SECONDARY_DB;");
+}
+
 TEST(Select, CastDecimalToDecimal) {
   run_ddl_statement("DROP TABLE IF EXISTS decimal_to_decimal_test;");
   run_ddl_statement("create table decimal_to_decimal_test (id INT, val DECIMAL(10,5));");
