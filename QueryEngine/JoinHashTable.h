@@ -197,13 +197,13 @@ class JoinHashTable : public JoinHashTableInterface {
       const int8_t* col_buff,
       const size_t num_elements,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
-      const int32_t hash_entry_count,
+      const size_t hash_entry_count,
       const int32_t hash_join_invalid_val);
   void initOneToManyHashTableOnCpu(
       const int8_t* col_buff,
       const size_t num_elements,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
-      const int32_t hash_entry_count,
+      const size_t hash_entry_count,
       const int32_t hash_join_invalid_val);
 
   const InputTableInfo& getInnerQueryInfo(const Analyzer::ColumnVar* inner_col) const;

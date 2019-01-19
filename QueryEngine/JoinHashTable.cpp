@@ -687,7 +687,7 @@ void JoinHashTable::initHashTableOnCpu(
     const int8_t* col_buff,
     const size_t num_elements,
     const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
-    const int32_t hash_entry_count,
+    const size_t hash_entry_count,
     const int32_t hash_join_invalid_val) {
   const auto inner_col = cols.first;
   CHECK(inner_col);
@@ -771,7 +771,7 @@ void JoinHashTable::initOneToManyHashTableOnCpu(
     const int8_t* col_buff,
     const size_t num_elements,
     const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
-    const int32_t hash_entry_count,
+    const size_t hash_entry_count,
     const int32_t hash_join_invalid_val) {
   const auto inner_col = cols.first;
   CHECK(inner_col);
