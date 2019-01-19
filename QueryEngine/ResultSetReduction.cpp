@@ -1273,9 +1273,8 @@ void ResultSetStorage::reduceOneSlot(
           if (target_info.sql_type.is_geometry()) {
             for (int j = 0; j < target_info.sql_type.get_physical_coord_cols(); j++) {
               if (j > 0) {
-                ptr1 = ptr2 + query_mem_desc_.getColumnWidth(slot_idx + 1).compact;
-                ptr2 = ptr1 + query_mem_desc_.getColumnWidth(slot_idx + 2).compact;
-                slot_idx += 2;
+                ptr1 = ptr2 + query_mem_desc_.getColumnWidth(++slot_idx).compact;
+                ptr2 = ptr1 + query_mem_desc_.getColumnWidth(++slot_idx).compact;
                 length_to_elems = 4;
               }
               CHECK_LT(rhs_proj_col, serialized_varlen_buffer.size());

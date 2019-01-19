@@ -505,6 +505,10 @@ class ResultSet {
     return lazy_fetch_info_;
   }
 
+  void setSeparateVarlenStorageValid(const bool val) {
+    separate_varlen_storage_valid_ = val;
+  }
+
  private:
   void advanceCursorToNextEntry(ResultSetRowIterator& iter) const;
 

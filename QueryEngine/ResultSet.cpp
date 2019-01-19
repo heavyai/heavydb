@@ -62,8 +62,13 @@ ResultSetStorage::ResultSetStorage(const std::vector<TargetInfo>& targets,
     } else {
       target_init_vals_.push_back(target_info.is_agg ? 0xdeadbeef : 0);
     }
-    if (target_info.agg_kind == kAVG ||
-        (target_info.agg_kind == kSAMPLE && (target_info.sql_type.is_varlen()))) {
+    if (target_info.agg_kind == kAVG) {
+      target_init_vals_.push_back(0);
+    } else if (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_geometry()) {
+      for (int i = 1; i < 2 * target_info.sql_type.get_physical_coord_cols(); i++) {
+        target_init_vals_.push_back(0);
+      }
+    } else if (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()) {
       target_init_vals_.push_back(0);
     }
   }

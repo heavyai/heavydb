@@ -528,7 +528,11 @@ QueryMemoryDescriptor perfect_hash_one_col_desc(
       query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
     }
     query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
-    if (target_info.sql_type.is_varlen()) {
+    if (target_info.sql_type.is_geometry()) {
+      for (int i = 1; i < 2 * target_info.sql_type.get_physical_coord_cols(); i++) {
+        query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
+      }
+    } else if (target_info.sql_type.is_varlen()) {
       query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
     }
   }
@@ -2328,6 +2332,7 @@ TEST(MoreReduce, OffsetRewrite) {
 
   storage1->rewriteAggregateBufferOffsets(serialized_varlen_buffer);
   storage1->reduce(*storage2, serialized_varlen_buffer);
+  rs1->setSeparateVarlenStorageValid(true);
   {
     const auto row = rs1->getNextRow(false, false);
     CHECK_EQ(size_t(2), row.size());
@@ -2345,6 +2350,209 @@ TEST(MoreReduce, OffsetRewrite) {
     CHECK_EQ(size_t(2), row.size());
     ASSERT_EQ(9, v<int64_t>(row[0]));
     ASSERT_EQ("bar", boost::get<std::string>(v<NullableString>(row[1])));
+  }
+  {
+    const auto row = rs1->getNextRow(false, false);
+    ASSERT_EQ(size_t(0), row.size());
+  }
+}
+
+namespace {
+
+template <typename T>
+std::string arr_to_byte_string(const std::vector<T>& in) {
+  auto data_ptr = reinterpret_cast<const char*>(in.data());
+  return std::string(data_ptr, data_ptr + in.size() * sizeof(T));
+}
+
+}  // namespace
+
+TEST(MoreReduce, OffsetRewriteGeo) {
+  std::vector<TargetInfo> target_infos;
+  SQLTypeInfo int_ti(kINT, false);
+  SQLTypeInfo multipoly_ti(kMULTIPOLYGON, false);
+  SQLTypeInfo null_ti(kNULLT, false);
+
+  target_infos.push_back(TargetInfo{true, kSAMPLE, multipoly_ti, null_ti, true, false});
+  target_infos.push_back(TargetInfo{true, kSUM, int_ti, int_ti, true, false});
+
+  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 7, 9);
+  query_mem_desc.setHasKeylessHash(false);
+  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
+  const auto rs1 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr);
+  const auto storage1 = rs1->allocateStorage();
+  const auto rs2 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr);
+  const auto storage2 = rs2->allocateStorage();
+  std::vector<std::string> serialized_varlen_buffer{
+      arr_to_byte_string(std::vector<double>{1, 1, 2, 2, 3, 3, 4, 4}),
+      arr_to_byte_string(std::vector<int32_t>{4}),
+      arr_to_byte_string(std::vector<int32_t>{1}),
+      arr_to_byte_string(std::vector<double>{1, 1, 2, 2, 3, 3, 4, 4, 5, 5}),
+      arr_to_byte_string(std::vector<int32_t>{5}),
+      arr_to_byte_string(std::vector<int32_t>{1})};
+
+  {
+    auto buff1 = reinterpret_cast<int64_t*>(storage1->getUnderlyingBuffer());
+    buff1[0 * 8] = 7;  // key
+    buff1[1 * 8] = 8;
+    buff1[2 * 8] = 9;
+    buff1[0 * 8 + 1] = 0;  // coords
+    buff1[1 * 8 + 1] = 3;
+    buff1[2 * 8 + 1] = 0;
+    buff1[0 * 8 + 3] = 1;  // ring sizes
+    buff1[1 * 8 + 3] = 4;
+    buff1[2 * 8 + 3] = 1;
+    buff1[0 * 8 + 5] = 2;  // poly rings
+    buff1[1 * 8 + 5] = 5;
+    buff1[2 * 8 + 5] = 2;
+    buff1[0 * 8 + 7] = 1;  // int argument to sum
+    buff1[1 * 8 + 7] = 2;
+    buff1[2 * 8 + 7] = 3;
+  }
+  {
+    auto buff2 = reinterpret_cast<int64_t*>(storage2->getUnderlyingBuffer());
+    buff2[0 * 8] = 7;  // key
+    buff2[1 * 8] = 8;
+    buff2[2 * 8] = 9;
+    buff2[0 * 8 + 1] = 0;  // coords
+    buff2[1 * 8 + 1] = 3;
+    buff2[2 * 8 + 1] = 0;
+    buff2[0 * 8 + 3] = 1;  // ring sizes
+    buff2[1 * 8 + 3] = 4;
+    buff2[2 * 8 + 3] = 1;
+    buff2[0 * 8 + 5] = 2;  // poly rings
+    buff2[1 * 8 + 5] = 3;
+    buff2[2 * 8 + 5] = 2;
+    buff2[0 * 8 + 7] = 4;  // int argument to sum
+    buff2[1 * 8 + 7] = 5;
+    buff2[2 * 8 + 7] = 6;
+  }
+
+  storage1->rewriteAggregateBufferOffsets(serialized_varlen_buffer);
+  storage1->reduce(*storage2, serialized_varlen_buffer);
+  rs1->setGeoReturnType(ResultSet::GeoReturnType::WktString);
+  rs1->setSeparateVarlenStorageValid(true);
+  {
+    const auto row = rs1->getNextRow(false, false);
+    CHECK_EQ(size_t(2), row.size());
+    ASSERT_EQ("MULTIPOLYGON (((1 1,2 2,3 3,4 4,1 1)))",
+              boost::get<std::string>(v<NullableString>(row[0])));
+    ASSERT_EQ(5, v<int64_t>(row[1]));
+  }
+  {
+    const auto row = rs1->getNextRow(false, false);
+    CHECK_EQ(size_t(2), row.size());
+    ASSERT_EQ("MULTIPOLYGON (((1 1,2 2,3 3,4 4,5 5,1 1)))",
+              boost::get<std::string>(v<NullableString>(row[0])));
+    ASSERT_EQ(7, v<int64_t>(row[1]));
+  }
+  {
+    const auto row = rs1->getNextRow(false, false);
+    CHECK_EQ(size_t(2), row.size());
+    ASSERT_EQ("MULTIPOLYGON (((1 1,2 2,3 3,4 4,1 1)))",
+              boost::get<std::string>(v<NullableString>(row[0])));
+    ASSERT_EQ(9, v<int64_t>(row[1]));
+  }
+  {
+    const auto row = rs1->getNextRow(false, false);
+    ASSERT_EQ(size_t(0), row.size());
+  }
+}
+
+TEST(MoreReduce, OffsetRewriteGeoKeyless) {
+  std::vector<TargetInfo> target_infos;
+  SQLTypeInfo int_ti(kINT, false);
+  SQLTypeInfo multipoly_ti(kMULTIPOLYGON, false);
+  SQLTypeInfo null_ti(kNULLT, false);
+
+  target_infos.push_back(TargetInfo{false, kCOUNT, int_ti, null_ti, true, false});
+  target_infos.push_back(TargetInfo{true, kSAMPLE, multipoly_ti, null_ti, true, false});
+  target_infos.push_back(TargetInfo{true, kSUM, int_ti, int_ti, true, false});
+
+  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 7, 9);
+  query_mem_desc.setHasKeylessHash(true);
+  query_mem_desc.setTargetIdxForKey(0);
+  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
+  const auto rs1 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr);
+  const auto storage1 = rs1->allocateStorage();
+  const auto rs2 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr);
+  const auto storage2 = rs2->allocateStorage();
+  std::vector<std::string> serialized_varlen_buffer{
+      arr_to_byte_string(std::vector<double>{1, 1, 2, 2, 3, 3, 4, 4}),
+      arr_to_byte_string(std::vector<int32_t>{4}),
+      arr_to_byte_string(std::vector<int32_t>{1}),
+      arr_to_byte_string(std::vector<double>{1, 1, 2, 2, 3, 3, 4, 4, 5, 5}),
+      arr_to_byte_string(std::vector<int32_t>{5}),
+      arr_to_byte_string(std::vector<int32_t>{1})};
+
+  {
+    auto buff1 = reinterpret_cast<int64_t*>(storage1->getUnderlyingBuffer());
+    buff1[0 * 8] = 7;  // key
+    buff1[1 * 8] = 8;
+    buff1[2 * 8] = 9;
+    buff1[0 * 8 + 1] = 0;  // coords
+    buff1[1 * 8 + 1] = 3;
+    buff1[2 * 8 + 1] = 0;
+    buff1[0 * 8 + 3] = 1;  // ring sizes
+    buff1[1 * 8 + 3] = 4;
+    buff1[2 * 8 + 3] = 1;
+    buff1[0 * 8 + 5] = 2;  // poly rings
+    buff1[1 * 8 + 5] = 5;
+    buff1[2 * 8 + 5] = 2;
+    buff1[0 * 8 + 7] = 1;  // int argument to sum
+    buff1[1 * 8 + 7] = 2;
+    buff1[2 * 8 + 7] = 3;
+  }
+  {
+    auto buff2 = reinterpret_cast<int64_t*>(storage2->getUnderlyingBuffer());
+    buff2[0 * 8] = 7;  // key
+    buff2[1 * 8] = 8;
+    buff2[2 * 8] = 9;
+    buff2[0 * 8 + 1] = 0;  // coords
+    buff2[1 * 8 + 1] = 3;
+    buff2[2 * 8 + 1] = 0;
+    buff2[0 * 8 + 3] = 1;  // ring sizes
+    buff2[1 * 8 + 3] = 4;
+    buff2[2 * 8 + 3] = 1;
+    buff2[0 * 8 + 5] = 2;  // poly rings
+    buff2[1 * 8 + 5] = 3;
+    buff2[2 * 8 + 5] = 2;
+    buff2[0 * 8 + 7] = 4;  // int argument to sum
+    buff2[1 * 8 + 7] = 5;
+    buff2[2 * 8 + 7] = 6;
+  }
+
+  storage1->rewriteAggregateBufferOffsets(serialized_varlen_buffer);
+  storage1->reduce(*storage2, serialized_varlen_buffer);
+  rs1->setGeoReturnType(ResultSet::GeoReturnType::WktString);
+  rs1->setSeparateVarlenStorageValid(true);
+  {
+    const auto row = rs1->getNextRow(false, false);
+    CHECK_EQ(size_t(3), row.size());
+    ASSERT_EQ(7, v<int64_t>(row[0]));
+    ASSERT_EQ("MULTIPOLYGON (((1 1,2 2,3 3,4 4,1 1)))",
+              boost::get<std::string>(v<NullableString>(row[1])));
+    ASSERT_EQ(5, v<int64_t>(row[2]));
+  }
+  {
+    const auto row = rs1->getNextRow(false, false);
+    CHECK_EQ(size_t(3), row.size());
+    ASSERT_EQ(8, v<int64_t>(row[0]));
+    ASSERT_EQ("MULTIPOLYGON (((1 1,2 2,3 3,4 4,5 5,1 1)))",
+              boost::get<std::string>(v<NullableString>(row[1])));
+    ASSERT_EQ(7, v<int64_t>(row[2]));
+  }
+  {
+    const auto row = rs1->getNextRow(false, false);
+    CHECK_EQ(size_t(3), row.size());
+    ASSERT_EQ(9, v<int64_t>(row[0]));
+    ASSERT_EQ("MULTIPOLYGON (((1 1,2 2,3 3,4 4,1 1)))",
+              boost::get<std::string>(v<NullableString>(row[1])));
+    ASSERT_EQ(9, v<int64_t>(row[2]));
   }
   {
     const auto row = rs1->getNextRow(false, false);

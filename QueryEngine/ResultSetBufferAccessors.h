@@ -160,7 +160,8 @@ inline T advance_target_ptr_row_wise(T target_ptr,
        is_real_str_or_array(target_info))) {
     return result + query_mem_desc.getColumnWidth(slot_idx + 1).compact;
   }
-  if (target_info.sql_type.is_geometry() && !separate_varlen_storage) {
+  if (target_info.sql_type.is_geometry() &&
+      (!separate_varlen_storage || target_info.is_agg)) {
     for (auto i = 1; i < 2 * target_info.sql_type.get_physical_coord_cols(); ++i) {
       result += query_mem_desc.getColumnWidth(slot_idx + i).compact;
     }
