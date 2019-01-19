@@ -68,8 +68,8 @@ class S3Archive : public Archive {
     this->s3_secret_key = s3_secret_key;
     this->s3_region = s3_region;
 
-    // this must be local (on mapd_server not mapdql)
-    // or posix dir path accessible to mapd_server
+    // this must be local (on omnisci_server not omniql)
+    // or posix dir path accessible to omnisci_server
     auto env_s3_temp_dir = getenv("TMPDIR");
     s3_temp_dir = env_s3_temp_dir ? env_s3_temp_dir : "/tmp";
   }

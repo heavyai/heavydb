@@ -1,0 +1,16 @@
+[Unit]
+Description=OmniSci database server
+After=network.target remote-fs.target
+
+[Service]
+User=@OMNISCI_USER@
+Group=@OMNISCI_GROUP@
+WorkingDirectory=@OMNISCI_PATH@
+ExecStart=@OMNISCI_PATH@/bin/omnisci_server --config @OMNISCI_STORAGE@/omnisci.conf
+KillMode=control-group
+SuccessExitStatus=143
+LimitNOFILE=65536
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

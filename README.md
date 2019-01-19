@@ -125,17 +125,17 @@ The last command generates a `.tar.gz` package. The `TGZ` can be replaced with, 
 
 # Using
 
-The [`startmapd`](startmapd) wrapper script may be used to start MapD Core in a testing environment. This script performs the following tasks:
+The [`startomnisci`](startomnisci) wrapper script may be used to start MapD Core in a testing environment. This script performs the following tasks:
 
 - initializes the `data` storage directory via `initdb`, if required
-- starts the main MapD Core server, `mapd_server`
-- starts the MapD Core web server, `mapd_web_server`, for serving MapD Immerse
+- starts the main MapD Core server, `omnisci_server`
+- starts the MapD Core web server, `omnisci_web_server`, for serving MapD Immerse
 - offers to download and import a sample dataset, using the `insert_sample_data` script
 - attempts to open MapD Immerse in your web browser
 
-Assuming you are in the `build` directory, and it is a subdirectory of the `mapd-core` repository, `startmapd` may be run by:
+Assuming you are in the `build` directory, and it is a subdirectory of the `mapd-core` repository, `startomnisci` may be run by:
 
-    ../startmapd
+    ../startomnisci
 
 ## Starting Manually
 
@@ -147,19 +147,19 @@ Initialize the `data` storage directory. This command only needs to be run once.
 
 Start the MapD Core server:
 
-    ./bin/mapd_server
+    ./bin/omnisci_server
 
 In a new terminal, start the MapD Core web server:
 
-    ./bin/mapd_web_server
+    ./bin/omnisci_web_server
 
 If desired, insert a sample dataset by running the `insert_sample_data` script in a new terminal:
 
     ../insert_sample_data
 
-You can now start using the database. The `mapdql` utility may be used to interact with the database from the command line:
+You can now start using the database. The `omniql` utility may be used to interact with the database from the command line:
 
-    ./bin/mapdql -p HyperInteractive
+    ./bin/omniql -p HyperInteractive
 
 where `HyperInteractive` is the default password. The default user `mapd` is assumed if not provided.
 
@@ -210,7 +210,7 @@ MapD has the following dependencies:
 | [gdal](http://gdal.org/) | | yes |
 | [Arrow](https://arrow.apache.org/) | 0.10.0 | yes |
 
-Dependencies for `mapd_web_server` and other Go utils are in [`ThirdParty/go`](ThirdParty/go). See [`ThirdParty/go/src/mapd/vendor/README.md`](ThirdParty/go/src/mapd/vendor/README.md) for instructions on how to add new deps.
+Dependencies for `omnisci_web_server` and other Go utils are in [`ThirdParty/go`](ThirdParty/go). See [`ThirdParty/go/src/mapd/vendor/README.md`](ThirdParty/go/src/mapd/vendor/README.md) for instructions on how to add new deps.
 
 ## CentOS 7
 

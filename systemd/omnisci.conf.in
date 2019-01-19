@@ -1,8 +1,8 @@
 port = 9091
 http-port = 9090
-data = "@MAPD_DATA@"
+data = "@OMNISCI_DATA@"
 null-div-by-zero = true
 
 [web]
 port = 9092
-frontend = "@MAPD_PATH@/frontend"
+frontend = "@OMNISCI_PATH@/frontend"

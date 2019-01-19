@@ -391,7 +391,7 @@ void RowToColumnLoader::createConnection(const ThriftClientConnection& con) {
 
 void RowToColumnLoader::closeConnection() {
   try {
-    client_->disconnect(session_);  // disconnect from mapd_server
+    client_->disconnect(session_);  // disconnect from omnisci_server
     mytransport_->close();          // close transport
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;

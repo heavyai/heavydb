@@ -24,7 +24,7 @@ if(ENABLE_IWYU)
   endif()
 endif()
 
-project(mapd)
+project(omnisci)
 
 if(NOT EXISTS "${CMAKE_SOURCE_DIR}/Rendering")
   set(MAPD_EDITION "OS")
@@ -468,10 +468,10 @@ endif()
 set(initdb_source_files initdb.cpp)
 add_executable(initdb ${initdb_source_files})
 
-set(mapd_server_source_files MapDServer.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h ${CMAKE_SOURCE_DIR}/Shared/ConfigResolve.h)
+set(omnisci_server_source_files MapDServer.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h ${CMAKE_SOURCE_DIR}/Shared/ConfigResolve.h)
 
-add_executable(mapd_server ${mapd_server_source_files})
-set_target_properties(mapd_server PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")
+add_executable(omnisci_server ${omnisci_server_source_files})
+set_target_properties(omnisci_server PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
@@ -514,9 +514,9 @@ add_custom_target(rerun_cmake ALL
   COMMAND cmake .
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   )
-add_dependencies(mapd_server rerun_cmake)
+add_dependencies(omnisci_server rerun_cmake)
 
-target_link_libraries(mapd_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
+target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
 
 target_link_libraries(initdb mapd_thrift DataMgr ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
 
@@ -620,14 +620,14 @@ if(NOT GO_EXECUTABLE)
 endif()
 file(GLOB_RECURSE GOLANG_SOURCES RELATIVE ${CMAKE_SOURCE_DIR} ThirdParty/go/src/mapd/vendor/**/*.go)
 add_custom_command(
-  OUTPUT ${CMAKE_BINARY_DIR}/bin/mapd_web_server
+  OUTPUT ${CMAKE_BINARY_DIR}/bin/omnisci_web_server
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/ThirdParty/go/src/mapd/vendor/ ${CMAKE_BINARY_DIR}/go/src/
-  COMMAND GOPATH=${CMAKE_BINARY_DIR}/go ${GO_EXECUTABLE} build -ldflags "-X main.version=${CPACK_PACKAGE_VERSION}" -o ${CMAKE_BINARY_DIR}/bin/mapd_web_server ${CMAKE_SOURCE_DIR}/MapDWebServer.go
-  DEPENDS MapDWebServer.go ${GOLANG_SOURCES}
+  COMMAND GOPATH=${CMAKE_BINARY_DIR}/go ${GO_EXECUTABLE} build -ldflags "-X main.version=${CPACK_PACKAGE_VERSION}" -o ${CMAKE_BINARY_DIR}/bin/omnisci_web_server ${CMAKE_SOURCE_DIR}/OmniSciWebServer.go
+  DEPENDS OmniSciWebServer.go ${GOLANG_SOURCES}
   )
-add_custom_target(mapd_web_server ALL DEPENDS ${CMAKE_BINARY_DIR}/bin/mapd_web_server)
-install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/mapd_web_server DESTINATION bin)
-list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/bin/mapd_web_server)
+add_custom_target(omnisci_web_server ALL DEPENDS ${CMAKE_BINARY_DIR}/bin/omnisci_web_server)
+install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/omnisci_web_server DESTINATION bin)
+list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/bin/omnisci_web_server)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/go)
 
 add_subdirectory(ThirdParty/generate_cert)
@@ -655,13 +655,13 @@ endif()
 # systemd
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-    install(FILES systemd/mapd_sd_server.service.in systemd/mapd_sd_server@.service.in DESTINATION systemd)
-    install(FILES systemd/mapd-sds.conf.in DESTINATION systemd)
+    install(FILES systemd/omnisci_sd_server.service.in systemd/omnisci_sd_server@.service.in DESTINATION systemd)
+    install(FILES systemd/omnisci-sds.conf.in DESTINATION systemd)
   endif()
-  install(FILES systemd/mapd_server.service.in systemd/mapd_server@.service.in DESTINATION systemd)
-  install(FILES systemd/mapd_web_server.service.in systemd/mapd_web_server@.service.in DESTINATION systemd)
-  install(FILES systemd/mapd.conf.in DESTINATION systemd)
-  install(PROGRAMS systemd/install_mapd_systemd.sh DESTINATION systemd)
+  install(FILES systemd/omnisci_server.service.in systemd/omnisci_server@.service.in DESTINATION systemd)
+  install(FILES systemd/omnisci_web_server.service.in systemd/omnisci_web_server@.service.in DESTINATION systemd)
+  install(FILES systemd/omnisci.conf.in DESTINATION systemd)
+  install(PROGRAMS systemd/install_omnisci_systemd.sh DESTINATION systemd)
 endif()
 
 add_custom_target(clean-all
@@ -716,7 +716,7 @@ install(FILES ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-w
 
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${ADDITIONAL_MAKE_CLEAN_FILES}")
 
-install(TARGETS initdb mapd_server DESTINATION bin)
+install(TARGETS initdb omnisci_server DESTINATION bin)
 install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION ".")
 if(ENABLE_CUDA)
   install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.a DESTINATION QueryEngine)
@@ -741,13 +741,31 @@ endif()
 set(CPACK_RESOURCE_FILE_LICENSE "${EULA_FILE}")
 install(FILES "${EULA_FILE}" DESTINATION ".")
 
-install(PROGRAMS startmapd DESTINATION ".")
+install(PROGRAMS startomnisci DESTINATION ".")
 install(PROGRAMS insert_sample_data DESTINATION ".")
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   install(DIRECTORY docker/sds DESTINATION "docker")
 endif()
 install(FILES docker/Dockerfile docker/README.md DESTINATION "docker")
+
+execute_process(
+  COMMAND ln -sf omniql mapdql
+  COMMAND ln -sf omnisci_server mapd_server
+  COMMAND ln -sf omnisci_web_server mapd_web_server
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+  )
+install(FILES
+  ${CMAKE_BINARY_DIR}/bin/mapdql
+  ${CMAKE_BINARY_DIR}/bin/mapd_server
+  ${CMAKE_BINARY_DIR}/bin/mapd_web_server
+  DESTINATION "bin"
+  )
+execute_process(
+  COMMAND ln -sf startomnisci startmapd
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  )
+install(FILES ${CMAKE_BINARY_DIR}/startmapd DESTINATION ".")
 
 exec_program(uname ARGS -m OUTPUT_VARIABLE MAPD_HOST_SYSTEM_ARCHITECTURE) # does not account for cross-compiling or Windows
 set(CPACK_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${MAPD_EDITION_LOWER}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${MAPD_HOST_SYSTEM_ARCHITECTURE}${MAPD_PACKAGE_FLAGS}")

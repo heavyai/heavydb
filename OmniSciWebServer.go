@@ -103,7 +103,7 @@ func init() {
 	var err error
 	pflag.IntP("port", "p", 9092, "frontend server port")
 	pflag.IntP("http-to-https-redirect-port", "", 9094, "frontend server port for http redirect, when https enabled")
-	pflag.StringP("backend-url", "b", "", "url to http-port on mapd_server [http://localhost:9090]")
+	pflag.StringP("backend-url", "b", "", "url to http-port on omnisci_server [http://localhost:9090]")
 	pflag.StringSliceP("reverse-proxy", "", nil, "additional endpoints to act as reverse proxies, format '/endpoint/:http://target.example.com'")
 	pflag.StringP("frontend", "f", "frontend", "path to frontend directory")
 	pflag.StringP("servers-json", "", "", "path to servers.json")
@@ -168,7 +168,7 @@ func init() {
 	viper.AddConfigPath(".")
 
 	if viper.GetBool("version") {
-		fmt.Println("mapd_web_server " + version)
+		fmt.Println("omnisci_web_server " + version)
 		os.Exit(0)
 	}
 

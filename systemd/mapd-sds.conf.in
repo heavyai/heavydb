@@ -1,2 +1,0 @@
-port = 10301
-path = "@MAPD_STORAGE@/sds"

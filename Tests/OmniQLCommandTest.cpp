@@ -61,7 +61,7 @@ class CoreMockClient {
 };
 // clang-format on
 
-TEST(MapDQLTest, CommandResolutionChain_Construction_MatchedCommand) {
+TEST(OmniQLTest, CommandResolutionChain_Construction_MatchedCommand) {
   using Params = CommandResolutionChain<>::CommandTokenList;
 
   bool lambda_called = false;
@@ -74,7 +74,7 @@ TEST(MapDQLTest, CommandResolutionChain_Construction_MatchedCommand) {
   EXPECT_TRUE(constructible.is_resolved());
 }
 
-TEST(MapDQLTest, CommandResolutionChain_Construction_MismatchedCommand) {
+TEST(OmniQLTest, CommandResolutionChain_Construction_MismatchedCommand) {
   using Params = CommandResolutionChain<>::CommandTokenList;
 
   bool lambda_not_called = true;
@@ -87,7 +87,7 @@ TEST(MapDQLTest, CommandResolutionChain_Construction_MismatchedCommand) {
   EXPECT_FALSE(constructible.is_resolved());
 }
 
-TEST(MapDQLTest, CommandResolutionChain_DefaultTokenizer) {
+TEST(OmniQLTest, CommandResolutionChain_DefaultTokenizer) {
   using Params = CommandResolutionChain<>::CommandTokenList;
 
   bool lambda_called = false;
@@ -102,7 +102,7 @@ TEST(MapDQLTest, CommandResolutionChain_DefaultTokenizer) {
   EXPECT_STREQ("token2", constructible.m_command_token_list[2].c_str());
 }
 
-TEST(MapDQLTest, CommandResolutionChain_ThreeSet_FirstHit) {
+TEST(OmniQLTest, CommandResolutionChain_ThreeSet_FirstHit) {
   using Params = CommandResolutionChain<>::CommandTokenList;
 
   bool first_hit = false;
@@ -125,7 +125,7 @@ TEST(MapDQLTest, CommandResolutionChain_ThreeSet_FirstHit) {
   EXPECT_FALSE(third_hit);
 }
 
-TEST(MapDQLTest, CommandResolutionChain_ThreeSet_SecondHit) {
+TEST(OmniQLTest, CommandResolutionChain_ThreeSet_SecondHit) {
   using Params = CommandResolutionChain<>::CommandTokenList;
 
   bool first_hit = false;
@@ -148,7 +148,7 @@ TEST(MapDQLTest, CommandResolutionChain_ThreeSet_SecondHit) {
   EXPECT_FALSE(third_hit);
 }
 
-TEST(MapDQLTest, CommandResolutionChain_ThreeSet_ThirdHit) {
+TEST(OmniQLTest, CommandResolutionChain_ThreeSet_ThirdHit) {
   using Params = CommandResolutionChain<>::CommandTokenList;
 
   bool first_hit = false;
@@ -171,7 +171,7 @@ TEST(MapDQLTest, CommandResolutionChain_ThreeSet_ThirdHit) {
   EXPECT_TRUE(third_hit);
 }
 
-TEST(MapDQLTest, CommandResolutionChain_ThreeSet_NoHits) {
+TEST(OmniQLTest, CommandResolutionChain_ThreeSet_NoHits) {
   using Params = CommandResolutionChain<>::CommandTokenList;
 
   bool first_hit = false;
@@ -220,7 +220,7 @@ class StatusCommandMockupContextOperations {
   }
 };
 
-TEST(MapDQLTest, StatusCommandTest) {
+TEST(OmniQLTest, StatusCommandTest) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestStatusCmd =
       StatusCmd<StatusCommandContextOpsPolicy, StatusCommandMockupContextOperations>;
@@ -260,7 +260,7 @@ class RoleListCommandMockupContextOperations {
   }
 };
 
-TEST(MapDQLTest, RoleListCommandTest) {
+TEST(OmniQLTest, RoleListCommandTest) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestRoleListCmd = RoleListCmd<RoleListCommandContextOpsPolicy,
                                           RoleListCommandMockupContextOperations>;
@@ -300,7 +300,7 @@ class RolesCommandMockupContextOperations {
   }
 };
 
-TEST(MapDQLTest, RolesCommandTest) {
+TEST(OmniQLTest, RolesCommandTest) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestRolesCmd =
       RolesCmd<RolesCommandContextOpsPolicy, RolesCommandMockupContextOperations>;
@@ -372,7 +372,7 @@ template <typename CONTEXT_OPS_POLICY_TYPE>
 using ListUsersCommandMockupContextOperations =
     RegexCommandsMockupContextOperations<CONTEXT_OPS_POLICY_TYPE>;
 
-TEST(MapDQLTest, ListUsersCommandTest_ListAll) {
+TEST(OmniQLTest, ListUsersCommandTest_ListAll) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestListUsersCmd = ListUsersCmd<ListUsersCommandContextOpsPolicy,
                                             ListUsersCommandMockupContextOperations,
@@ -405,7 +405,7 @@ TEST(MapDQLTest, ListUsersCommandTest_ListAll) {
   EXPECT_EQ(extractedTokens[6], "sideshowbob");
 }
 
-TEST(MapDQLTest, ListUsersCommandTest_OnlyLisa) {
+TEST(OmniQLTest, ListUsersCommandTest_OnlyLisa) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestListUsersCmd = ListUsersCmd<ListUsersCommandContextOpsPolicy,
                                             ListUsersCommandMockupContextOperations,
@@ -430,7 +430,7 @@ TEST(MapDQLTest, ListUsersCommandTest_OnlyLisa) {
   EXPECT_EQ(extractedTokens[0], "lisa");
 }
 
-TEST(MapDQLTest, ListUsersCommandTest_StartsWithLisa) {
+TEST(OmniQLTest, ListUsersCommandTest_StartsWithLisa) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestListUsersCmd = ListUsersCmd<ListUsersCommandContextOpsPolicy,
                                             ListUsersCommandMockupContextOperations,
@@ -476,7 +476,7 @@ template <typename CONTEXT_OPS_POLICY_TYPE>
 using ListTablesCommandMockupContextOperations =
     RegexCommandsMockupContextOperations<CONTEXT_OPS_POLICY_TYPE>;
 
-TEST(MapDQLTest, ListTablesCommandTest_ListAll) {
+TEST(OmniQLTest, ListTablesCommandTest_ListAll) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestListTablesCmd = ListTablesCmd<ListTablesCommandContextOpsPolicy,
                                               ListTablesCommandMockupContextOperations,
@@ -506,7 +506,7 @@ TEST(MapDQLTest, ListTablesCommandTest_ListAll) {
   EXPECT_EQ(extractedTokens[5], "test_inner");
 }
 
-TEST(MapDQLTest, ListTablesCommandTest_EndsWithNoMatch) {
+TEST(OmniQLTest, ListTablesCommandTest_EndsWithNoMatch) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestListTablesCmd = ListTablesCmd<ListTablesCommandContextOpsPolicy,
                                               ListTablesCommandMockupContextOperations,
@@ -531,7 +531,7 @@ TEST(MapDQLTest, ListTablesCommandTest_EndsWithNoMatch) {
   EXPECT_TRUE(extractedTokens.empty());
 }
 
-TEST(MapDQLTest, ListTablesCommandTest_EndsWithMatch) {
+TEST(OmniQLTest, ListTablesCommandTest_EndsWithMatch) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestListTablesCmd = ListTablesCmd<ListTablesCommandContextOpsPolicy,
                                               ListTablesCommandMockupContextOperations,
@@ -557,7 +557,7 @@ TEST(MapDQLTest, ListTablesCommandTest_EndsWithMatch) {
   EXPECT_EQ(extractedTokens[1], "test_inner_x");
 }
 
-TEST(MapDQLTest, ListTablesCommandTest_InnerNoMatch) {
+TEST(OmniQLTest, ListTablesCommandTest_InnerNoMatch) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestListTablesCmd = ListTablesCmd<ListTablesCommandContextOpsPolicy,
                                               ListTablesCommandMockupContextOperations,
@@ -581,7 +581,7 @@ TEST(MapDQLTest, ListTablesCommandTest_InnerNoMatch) {
   EXPECT_EQ(extractedTokens.size(), (TokenCount)0);
 }
 
-TEST(MapDQLTest, ListTablesCommandTest_InnerMatch) {
+TEST(OmniQLTest, ListTablesCommandTest_InnerMatch) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestListTablesCmd = ListTablesCmd<ListTablesCommandContextOpsPolicy,
                                               ListTablesCommandMockupContextOperations,
@@ -623,7 +623,7 @@ template <typename CONTEXT_OPS_POLICY_TYPE>
 using ListViewsCommandMockupContextOperations =
     RegexCommandsMockupContextOperations<CONTEXT_OPS_POLICY_TYPE>;
 
-TEST(MapDQLTest, ViewListCommandTest_ListAll) {
+TEST(OmniQLTest, ViewListCommandTest_ListAll) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestListViewsCmd = ListViewsCmd<ListViewsCommandContextOpsPolicy,
                                             ListViewsCommandMockupContextOperations,
@@ -652,7 +652,7 @@ TEST(MapDQLTest, ViewListCommandTest_ListAll) {
   EXPECT_EQ(extractedTokens[4], "marge1025");
 }
 
-TEST(MapDQLTest, ViewListCommandTest_EndsWith4Digits) {
+TEST(OmniQLTest, ViewListCommandTest_EndsWith4Digits) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestListViewsCmd = ListViewsCmd<ListViewsCommandContextOpsPolicy,
                                             ListViewsCommandMockupContextOperations,
@@ -696,7 +696,7 @@ class ImportDashboardCommandMockupContextOperations {
   using ContextType = typename CONTEXT_OP_POLICY::ContextType;
 };
 
-TEST(MapDQLTest, ImportDashboardCommandTest_SimpleDashSimpleFilename) {
+TEST(OmniQLTest, ImportDashboardCommandTest_SimpleDashSimpleFilename) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestImportDashboardCmd =
       ImportDashboardCmd<ImportDashboardCommandContextOpsPolicy,
@@ -728,7 +728,7 @@ TEST(MapDQLTest, ImportDashboardCommandTest_SimpleDashSimpleFilename) {
   EXPECT_EQ(extracted_tokens[4], "`unlikely_file_to_over_be_opened_1234.txt`");
 }
 
-TEST(MapDQLTest, ImportDashboardCommandTest_SimpleDashComplexFilename) {
+TEST(OmniQLTest, ImportDashboardCommandTest_SimpleDashComplexFilename) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestImportDashboardCmd =
       ImportDashboardCmd<ImportDashboardCommandContextOpsPolicy,
@@ -763,7 +763,7 @@ TEST(MapDQLTest, ImportDashboardCommandTest_SimpleDashComplexFilename) {
   EXPECT_EQ(extracted_tokens[6], "Terrible\\lol.txt`");
 }
 
-TEST(MapDQLTest, ImportDashboardCommandTest_ComplexDashSimpleFilename) {
+TEST(OmniQLTest, ImportDashboardCommandTest_ComplexDashSimpleFilename) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestImportDashboardCmd =
       ImportDashboardCmd<ImportDashboardCommandContextOpsPolicy,
@@ -796,7 +796,7 @@ TEST(MapDQLTest, ImportDashboardCommandTest_ComplexDashSimpleFilename) {
   EXPECT_EQ(extracted_tokens[4], "`simpledash.txt`");
 }
 
-TEST(MapDQLTest, ImportDashboardCommandTest_ComplexDashComplexFilename) {
+TEST(OmniQLTest, ImportDashboardCommandTest_ComplexDashComplexFilename) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestImportDashboardCmd =
       ImportDashboardCmd<ImportDashboardCommandContextOpsPolicy,
@@ -850,7 +850,7 @@ class ExportDashboardCommandMockupContextOperations {
   using ContextType = typename CONTEXT_OP_POLICY::ContextType;
 };
 
-TEST(MapDQLTest, ExportDashboardCommandTest_SimpleDashSimpleFilename) {
+TEST(OmniQLTest, ExportDashboardCommandTest_SimpleDashSimpleFilename) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestExportDashboardCmd =
       ExportDashboardCmd<ExportDashboardCommandContextOpsPolicy,
@@ -889,7 +889,7 @@ TEST(MapDQLTest, ExportDashboardCommandTest_SimpleDashSimpleFilename) {
   unlink(test_filename);
 }
 
-TEST(MapDQLTest, ExportDashboardCommandTest_SimpleDashComplexFilename) {
+TEST(OmniQLTest, ExportDashboardCommandTest_SimpleDashComplexFilename) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestExportDashboardCmd =
       ExportDashboardCmd<ExportDashboardCommandContextOpsPolicy,
@@ -921,7 +921,7 @@ TEST(MapDQLTest, ExportDashboardCommandTest_SimpleDashComplexFilename) {
   unlink(test_filename);
 }
 
-TEST(MapDQLTest, ExportDashboardCommandTest_ComplexDashSimpleFilename) {
+TEST(OmniQLTest, ExportDashboardCommandTest_ComplexDashSimpleFilename) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestExportDashboardCmd =
       ExportDashboardCmd<ExportDashboardCommandContextOpsPolicy,
@@ -952,7 +952,7 @@ TEST(MapDQLTest, ExportDashboardCommandTest_ComplexDashSimpleFilename) {
   unlink(test_filename);
 }
 
-TEST(MapDQLTest, ExportDashboardCommandTest_ComplexDashComplexFilename) {
+TEST(OmniQLTest, ExportDashboardCommandTest_ComplexDashComplexFilename) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestExportDashboardCmd =
       ExportDashboardCmd<ExportDashboardCommandContextOpsPolicy,
@@ -1012,7 +1012,7 @@ class DashboardsCommandMockupContextOperations {
   }
 };
 
-TEST(MapDQLTest, DashboardsCommandTest) {
+TEST(OmniQLTest, DashboardsCommandTest) {
   using Params = CommandResolutionChain<>::CommandTokenList;
   using UnitTestDashboardsCmd =
       ListDashboardsCmd<DashboardsCommandContextOpsPolicy,

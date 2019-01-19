@@ -112,7 +112,7 @@ void createConnection(ConnectionDetails con) {
   try {
     mytransport->open();  // open transport
     client->connect(
-        session, con.user_name, con.passwd, con.db_name);  // connect to mapd_server
+        session, con.user_name, con.passwd, con.db_name);  // connect to omnisci_server
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
@@ -122,7 +122,7 @@ void createConnection(ConnectionDetails con) {
 
 void closeConnection() {
   try {
-    client->disconnect(session);  // disconnect from mapd_server
+    client->disconnect(session);  // disconnect from omnisci_server
     mytransport->close();         // close transport
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;

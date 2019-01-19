@@ -113,7 +113,7 @@ void mapd_signal_handler(int signal_number) {
 
 void register_signal_handler() {
   // it appears we send both a signal SIGINT(2) and SIGTERM(15) each time we
-  // exit the startmapd script.
+  // exit the startomnisci script.
   // Only catching the SIGTERM(15) to avoid double shut down request
   // register SIGTERM and signal handler
   std::signal(SIGTERM, mapd_signal_handler);
@@ -225,8 +225,8 @@ void MapDProgramOptions::fillOptions(po::options_description& desc) {
       po::value<bool>(&read_only)->default_value(read_only)->implicit_value(true),
       "Enable read-only mode");
   desc.add_options()("port,p",
-                     po::value<int>(&mapd_parameters.mapd_server_port)
-                         ->default_value(mapd_parameters.mapd_server_port),
+                     po::value<int>(&mapd_parameters.omnisci_server_port)
+                         ->default_value(mapd_parameters.omnisci_server_port),
                      "Port number");
   desc.add_options()("http-port",
                      po::value<int>(&http_port)->default_value(http_port),
@@ -512,9 +512,8 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
 
     if (vm.count("help")) {
       std::cout
-          << "Usage: mapd_server <catalog path> [<database name>] [-p "
-             "<port "
-             "number>] [--http-port <http port number>] [--flush-log] [--version|-v]"
+          << "Usage: omnisci_server <catalog path> [<database name>] [-p <port number>] "
+             "[--http-port <http port number>] [--flush-log] [--version|-v]"
           << std::endl
           << std::endl;
       std::cout << *this << std::endl;
@@ -523,9 +522,8 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
     }
     if (vm.count("dev-options")) {
       std::cout
-          << "Usage: mapd_server <catalog path> [<database name>] [-p "
-             "<port "
-             "number>] [--http-port <http port number>] [--flush-log] [--version|-v]"
+          << "Usage: omnisci_server <catalog path> [<database name>] [-p <port number>] "
+             "[--http-port <http port number>] [--flush-log] [--version|-v]"
           << std::endl
           << std::endl;
       std::cout << *this << std::endl;
@@ -561,7 +559,7 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
     return false;
   }
 
-  const auto lock_file = boost::filesystem::path(base_path) / "mapd_server_pid.lck";
+  const auto lock_file = boost::filesystem::path(base_path) / "omnisci_server_pid.lck";
   auto pid = std::to_string(getpid());
   int pid_fd = open(lock_file.c_str(), O_RDWR | O_CREAT, 0644);
   if (pid_fd == -1) {
@@ -694,7 +692,7 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
   LOG(INFO) << " cuda block size " << mapd_parameters.cuda_block_size;
   LOG(INFO) << " cuda grid size  " << mapd_parameters.cuda_grid_size;
   LOG(INFO) << " calcite JVM max memory  " << mapd_parameters.calcite_max_mem;
-  LOG(INFO) << " MapD Server Port  " << mapd_parameters.mapd_server_port;
+  LOG(INFO) << " MapD Server Port  " << mapd_parameters.omnisci_server_port;
   LOG(INFO) << " MapD Calcite Port  " << mapd_parameters.calcite_port;
 
   boost::algorithm::trim_if(authMetadata.distinguishedName, boost::is_any_of("\"'"));
@@ -762,14 +760,14 @@ int main(int argc, char** argv) {
     sslSocketFactory->authenticate(false);
     sslSocketFactory->ciphers("ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH");
     serverSocket = mapd::shared_ptr<TServerSocket>(new TSSLServerSocket(
-        desc_all.mapd_parameters.mapd_server_port, sslSocketFactory));
+        desc_all.mapd_parameters.omnisci_server_port, sslSocketFactory));
     LOG(INFO) << " MapD server using encrypted connection. Cert file ["
               << desc_all.mapd_parameters.ssl_cert_file << "], key file ["
               << desc_all.mapd_parameters.ssl_key_file << "]";
   } else {
     LOG(INFO) << " MapD server using unencrypted connection";
     serverSocket = mapd::shared_ptr<TServerSocket>(
-        new TServerSocket(desc_all.mapd_parameters.mapd_server_port));
+        new TServerSocket(desc_all.mapd_parameters.omnisci_server_port));
   }
 
   if (desc_all.mapd_parameters.ha_group_id.empty()) {

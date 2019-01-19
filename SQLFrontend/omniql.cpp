@@ -15,7 +15,7 @@
  */
 
 /**
- * @file    mapdql.cpp
+ * @file    omniql.cpp
  * @author  Wei Hong <wei@map-d.com>
  * @brief   MapD SQL Client Tool
  *
@@ -70,7 +70,7 @@ using namespace ::apache::thrift::transport;
 
 using namespace std::string_literals;
 
-const std::string MapDQLRelease(MAPD_RELEASE);
+const std::string OmniQLRelease(MAPD_RELEASE);
 
 namespace {
 
@@ -642,7 +642,7 @@ bool backchannel(int action, ClientContext* cc, const std::string& ccn = "") {
   return false;
 }
 
-void mapdql_signal_handler(int signal_number) {
+void omniql_signal_handler(int signal_number) {
   std::cout << "\nInterrupt signal (" << signal_number << ") received.\n" << std::flush;
 
   if (backchannel(INTERRUPT, nullptr)) {
@@ -654,9 +654,9 @@ void mapdql_signal_handler(int signal_number) {
 }
 
 void register_signal_handler() {
-  signal(SIGTERM, mapdql_signal_handler);
-  signal(SIGKILL, mapdql_signal_handler);
-  signal(SIGINT, mapdql_signal_handler);
+  signal(SIGTERM, omniql_signal_handler);
+  signal(SIGKILL, omniql_signal_handler);
+  signal(SIGINT, omniql_signal_handler);
 }
 
 void print_memory_summary(ClientContext& context, std::string memory_level) {
@@ -1024,7 +1024,7 @@ int main(int argc, char** argv) {
 
   po::options_description desc("Options");
   desc.add_options()("help,h", "Print help messages ");
-  desc.add_options()("version,v", "Print mapdql version number");
+  desc.add_options()("version,v", "Print omniql version number");
   desc.add_options()("no-header,n", "Do not print query result header");
   desc.add_options()(
       "timing,t",
@@ -1071,7 +1071,7 @@ int main(int argc, char** argv) {
                   .run(),
               vm);
     if (vm.count("help")) {
-      std::cout << "Usage: mapdql [<database>] [{--user|-u} <user>] [{--passwd|-p} "
+      std::cout << "Usage: omniql [<database>] [{--user|-u} <user>] [{--passwd|-p} "
                    "<password>] [--port <port number>] "
                    "[{-s|--server} <server host>] [--http] [{--no-header|-n}] "
                    "[{--quiet|-q}] [{--delimiter|-d}]\n\n";
@@ -1079,7 +1079,7 @@ int main(int argc, char** argv) {
       return 0;
     }
     if (vm.count("version")) {
-      std::cout << "MapDQL Version: " << MapDQLRelease << std::endl;
+      std::cout << "OmniQL Version: " << OmniQLRelease << std::endl;
       return 0;
     }
     if (vm.count("quiet")) {
@@ -1132,7 +1132,7 @@ int main(int argc, char** argv) {
   try {
     transport->open();
   } catch (...) {
-    std::cout << "Failed to open transport. Is mapd_server running?" << std::endl;
+    std::cout << "Failed to open transport. Is omnisci_server running?" << std::endl;
     return 1;
   }
 
@@ -1158,12 +1158,12 @@ int main(int argc, char** argv) {
 
   /* Load history from file. The history file is just a plain text file
    * where entries are separated by newlines. */
-  linenoiseHistoryLoad("mapdql_history.txt"); /* Load the history at startup */
+  linenoiseHistoryLoad("omniql_history.txt"); /* Load the history at startup */
   /* default to multi-line mode */
   linenoiseSetMultiLine(1);
 
   std::string current_line;
-  std::string prompt("mapdql> ");
+  std::string prompt("omniql> ");
 
   /* Now this is the main loop of the typical linenoise-based application.
    * The call to linenoise() will block as long as the user types something
@@ -1203,9 +1203,9 @@ int main(int argc, char** argv) {
         std::string query(current_line);
         linenoiseHistoryAdd(hide_sensitive_data_from_query(current_line)
                                 .c_str());          /* Add to the history. */
-        linenoiseHistorySave("mapdql_history.txt"); /* Save the history on disk. */
+        linenoiseHistorySave("omniql_history.txt"); /* Save the history on disk. */
         current_line.clear();
-        prompt.assign("mapdql> ");
+        prompt.assign("omniql> ");
         (void)backchannel(TURN_ON, nullptr);
         if (thrift_with_retry(kSQL, context, query.c_str())) {
           (void)backchannel(TURN_OFF, nullptr);
@@ -1453,7 +1453,7 @@ int main(int argc, char** argv) {
     } else {
       linenoiseHistoryAdd(line);
     }
-    linenoiseHistorySave("mapdql_history.txt"); /* Save the history on disk. */
+    linenoiseHistorySave("omniql_history.txt"); /* Save the history on disk. */
   }
 
   if (context.session != INVALID_SESSION_ID) {

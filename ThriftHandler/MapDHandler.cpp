@@ -255,7 +255,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
 }
 
 MapDHandler::~MapDHandler() {
-  LOG(INFO) << "mapd_server exits." << std::endl;
+  LOG(INFO) << "omnisci_server exits." << std::endl;
 }
 
 void MapDHandler::check_read_only(const std::string& str) {
@@ -4496,7 +4496,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     if (show_create_stmt) {
       // ParserNode ShowCreateTableStmt is currently unimplemented
       throw std::runtime_error(
-          "SHOW CREATE TABLE is currently unsupported. Use `\\d` from mapdql for table "
+          "SHOW CREATE TABLE is currently unsupported. Use `\\d` from omniql for table "
           "DDL.");
     }
 

@@ -1,0 +1,14 @@
+[Unit]
+Description=OmniSci web server
+After=network.target remote-fs.target
+
+[Service]
+User=@OMNISCI_USER@
+Group=@OMNISCI_GROUP@
+WorkingDirectory=@OMNISCI_PATH@
+ExecStart=@OMNISCI_PATH@/bin/omnisci_web_server --config @OMNISCI_STORAGE@/omnisci.conf
+LimitNOFILE=65536
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

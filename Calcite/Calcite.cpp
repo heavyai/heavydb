@@ -233,7 +233,7 @@ Calcite::Calcite(const MapDParameters& mapd_parameter,
     : ssl_trust_store_(mapd_parameter.ssl_trust_store)
     , ssl_trust_password_(mapd_parameter.ssl_trust_password)
     , session_prefix_(session_prefix) {
-  init(mapd_parameter.mapd_server_port,
+  init(mapd_parameter.omnisci_server_port,
        mapd_parameter.calcite_port,
        data_dir,
        mapd_parameter.calcite_max_mem);

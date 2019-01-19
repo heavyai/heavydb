@@ -52,7 +52,7 @@ void S3Archive::init_for_read() {
     objects_request.WithPrefix(prefix_name);
     objects_request.SetMaxKeys(1 << 20);
 
-    // for a daemon like mapd_server it seems improper to set s3 credentials
+    // for a daemon like omnisci_server it seems improper to set s3 credentials
     // via AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env's because that way
     // credentials are configured *globally* while different users with private
     // s3 resources may need separate credentials to access.in that case, use
