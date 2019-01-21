@@ -1,6 +1,8 @@
 %option c++
 %option noyywrap case-insensitive yylineno
 
+%Start STATE_CREATE STATE_CREATE_AS
+
 %{
 #undef yyFlexLexer
 #include <cstdint>
@@ -29,6 +31,7 @@ ADD           TOK(ADD)
 AND           TOK(AND)
 ANY           { yylval.qualval = kANY; TOK(ANY) }
 ARRAY         TOK(ARRAY)
+<STATE_CREATE>AS    { BEGIN STATE_CREATE_AS; return SQLParser::AS; }
 AS            TOK(AS)
 ASC           TOK(ASC)
 AUTHORIZATION	TOK(AUTHORIZATION)
@@ -46,7 +49,7 @@ COLUMN        TOK(COLUMN)
 COMMIT        TOK(COMMIT)
 CONTINUE      TOK(CONTINUE)
 COPY          TOK(COPY);
-CREATE        TOK(CREATE)
+CREATE        { BEGIN STATE_CREATE; return SQLParser::CREATE; }
 CURRENT       TOK(CURRENT)
 CURSOR        TOK(CURSOR)
 DASHBOARD     TOK(DASHBOARD)
@@ -161,8 +164,9 @@ WORK          TOK(WORK)
 "<=" { yylval.opval = kLE; TOK(COMPARISON); }
 ">=" { yylval.opval = kGE; TOK(COMPARISON); }
 
-[-+*/(),.;]	{ return yytext[0]; }
+[-+*/(),.]	{ return yytext[0]; }
 
+[;] { BEGIN 0; return yytext[0]; }
 
 	/* names */
 [A-Za-z_][A-Za-z0-9\$_]*	{ yylval.stringval = new std::string(yytext); TOK(NAME) }
@@ -196,6 +200,30 @@ WORK          TOK(WORK)
 -?"."[0-9]*[eE][+-]?[0-9]+	{ yylval.doubleval = atof(yytext); TOK(DOUBLE) }
 
 	/* strings */
+<STATE_CREATE_AS>.+/([Ww][Ii][Tt][Hh]) {
+    int len = yyleng;
+    yylval.stringval = new std::string(yytext, len);
+    boost::trim(*yylval.stringval);
+    
+    BEGIN 0;
+    return SQLParser::SELECTSTRING;
+  }
+  
+<STATE_CREATE_AS>.+/[;] {
+    int len = yyleng;
+    const std::string keyword = "with";
+    std::string tmp(yytext, len);
+    if (boost::algorithm::ifind_first(tmp, keyword)) {
+      REJECT;
+    } else {
+      yylval.stringval = new std::string(yytext, len);
+      boost::trim(*yylval.stringval);
+      BEGIN 0;
+      return SQLParser::SELECTSTRING;
+    }
+  }
+
+
 #~#.*#~# {
 		int len = yyleng - 6;
 		if (len > 0) {

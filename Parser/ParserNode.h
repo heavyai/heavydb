@@ -1010,12 +1010,25 @@ class CreateTableStmt : public DDLStmt {
  */
 class CreateTableAsSelectStmt : public DDLStmt {
  public:
-  CreateTableAsSelectStmt(const std::string& table_name,
-                          const std::string& select_query,
-                          const bool is_temporary)
-      : table_name_(table_name)
-      , select_query_(select_query)
-      , is_temporary_(is_temporary) {}
+  CreateTableAsSelectStmt(const std::string* table_name,
+                          const std::string* select_query,
+                          const bool is_temporary,
+                          const bool if_not_exists,
+                          std::list<NameValueAssign*>* s)
+      : table_name_(*table_name)
+      , select_query_(*select_query)
+      , is_temporary_(is_temporary)
+      , if_not_exists_(if_not_exists) {
+    if (s) {
+      for (const auto e : *s) {
+        storage_options_.emplace_back(e);
+      }
+      delete s;
+    }
+
+    delete table_name;
+    delete select_query;
+  }
 
   virtual void execute(const Catalog_Namespace::SessionInfo& session);
 
@@ -1023,6 +1036,8 @@ class CreateTableAsSelectStmt : public DDLStmt {
   const std::string table_name_;
   const std::string select_query_;
   const bool is_temporary_;
+  const bool if_not_exists_;
+  std::list<std::unique_ptr<NameValueAssign>> storage_options_;
 };
 
 /*

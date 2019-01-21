@@ -2382,6 +2382,9 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   }
 
   if (catalog.getMetadataForTable(table_name_) != nullptr) {
+    if (if_not_exists_) {
+      return;
+    }
     throw std::runtime_error("Table " + table_name_ + " already exists.");
   }
 
@@ -2443,6 +2446,83 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   } else {
     td.persistenceLevel = Data_Namespace::MemoryLevel::DISK_LEVEL;
   }
+
+  auto shard_key_def = false;
+
+  if (!storage_options_.empty()) {
+    for (auto& p : storage_options_) {
+      if (boost::iequals(*p->get_name(), "fragment_size")) {
+        if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
+          throw std::runtime_error("FRAGMENT_SIZE must be an integer literal.");
+        }
+        int frag_size = static_cast<const IntLiteral*>(p->get_value())->get_intval();
+        if (frag_size <= 0) {
+          throw std::runtime_error("FRAGMENT_SIZE must be a positive number.");
+        }
+        td.maxFragRows = frag_size;
+      } else if (boost::iequals(*p->get_name(), "max_chunk_size")) {
+        if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
+          throw std::runtime_error("MAX_CHUNK_SIZE must be an integer literal.");
+        }
+        int64_t max_chunk_size =
+            static_cast<const IntLiteral*>(p->get_value())->get_intval();
+        if (max_chunk_size <= 0) {
+          throw std::runtime_error("MAX_CHUNK_SIZE must be a positive number.");
+        }
+        td.maxChunkSize = max_chunk_size;
+      } else if (boost::iequals(*p->get_name(), "page_size")) {
+        if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
+          throw std::runtime_error("PAGE_SIZE must be an integer literal.");
+        }
+        int page_size = static_cast<const IntLiteral*>(p->get_value())->get_intval();
+        if (page_size <= 0) {
+          throw std::runtime_error("PAGE_SIZE must be a positive number.");
+        }
+        td.fragPageSize = page_size;
+      } else if (boost::iequals(*p->get_name(), "max_rows")) {
+        if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
+          throw std::runtime_error("MAX_ROWS must be an integer literal.");
+        }
+        auto max_rows = static_cast<const IntLiteral*>(p->get_value())->get_intval();
+        if (max_rows <= 0) {
+          throw std::runtime_error("MAX_ROWS must be a positive number.");
+        }
+        td.maxRows = max_rows;
+      } else if (boost::iequals(*p->get_name(), "partitions")) {
+        const auto partitions =
+            static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+        CHECK(partitions);
+        const auto partitions_uc = boost::to_upper_copy<std::string>(*partitions);
+        if (partitions_uc != "SHARDED" && partitions_uc != "REPLICATED") {
+          throw std::runtime_error("PARTITIONS must be SHARDED or REPLICATED");
+        }
+        if (shard_key_def && partitions_uc == "REPLICATED") {
+          throw std::runtime_error(
+              "A table cannot be sharded and replicated at the same time");
+        }
+        td.partitions = partitions_uc;
+      } else if (boost::iequals(*p->get_name(), "vacuum")) {
+        const auto vacuum =
+            static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+        CHECK(vacuum);
+        const auto vacuum_uc = boost::to_upper_copy<std::string>(*vacuum);
+        if (vacuum_uc != "IMMEDIATE" && vacuum_uc != "DELAYED") {
+          throw std::runtime_error("VACUUM must be IMMEDIATE or DELAYED");
+        }
+        if (boost::iequals(vacuum_uc, "IMMEDIATE")) {
+          td.hasDeletedCol = false;
+        } else {
+          td.hasDeletedCol = true;
+        }
+      } else {
+        throw std::runtime_error(
+            "Invalid CREATE TABLE option " + *p->get_name() +
+            ".  Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_CHUNK_SIZE, MAX_ROWS, "
+            "PARTITIONS or VACUUM.");
+      }
+    }
+  }
+
   catalog.createTable(td, column_descriptors_for_create, {}, true);
   if (result_rows->definitelyHasNoRows()) {
     return;

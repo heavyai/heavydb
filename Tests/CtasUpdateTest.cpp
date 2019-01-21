@@ -610,6 +610,51 @@ struct Update
   Update() { columnDescriptors = GetParam(); }
 };
 
+TEST(Ctas, SyntaxCheck) {
+  std::string ddl = "DROP TABLE IF EXISTS CTAS_SOURCE;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+  ddl = "DROP TABLE IF EXISTS CTAS_TARGET;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+
+  QueryRunner::run_ddl_statement("CREATE TABLE CTAS_SOURCE (id int);", g_session);
+
+  ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+  ddl = "CREATE TABLE IF NOT EXISTS CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+  ddl = "DROP TABLE CTAS_TARGET;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+
+  ddl = "CREATE TEMPORARY TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+  ddl = "CREATE TEMPORARY TABLE IF NOT EXISTS CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+  ddl = "DROP TABLE CTAS_TARGET;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+
+  ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE WITH( FRAGMENT_SIZE=3 );";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+  ddl =
+      "CREATE TABLE IF NOT EXISTS CTAS_TARGET AS SELECT * FROM CTAS_SOURCE WITH( "
+      "FRAGMENT_SIZE=3 );";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+  ddl = "DROP TABLE CTAS_TARGET;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+
+  ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE WITH( MAX_CHUNK_SIZE=3 );";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+  ddl =
+      "CREATE TABLE IF NOT EXISTS CTAS_TARGET AS SELECT * FROM CTAS_SOURCE WITH( "
+      "MAX_CHUNK_SIZE=3 );";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+  ddl = "DROP TABLE CTAS_TARGET;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+}
+
 TEST_P(Ctas, CreateTableAsSelect) {
   QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS CTAS_SOURCE;", g_session);
   QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS CTAS_TARGET;", g_session);

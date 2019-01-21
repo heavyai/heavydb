@@ -18,22 +18,6 @@
       parseTrees.emplace_back(new CreateViewStmt(view_name, select_query, if_not_exists));                              \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    boost::regex create_table_as_expr{R"(CREATE\s+TABLE\s+([A-Za-z_][A-Za-z0-9\$_]*)\s+AS\s+(.*);?)",                   \
-                                      boost::regex::extended | boost::regex::icase};                                    \
-    if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, create_table_as_expr)) {                 \
-      const auto table_name = what[1].str();                                                                            \
-      const auto select_query = what[2].str();                                                                          \
-      parseTrees.emplace_back(new CreateTableAsSelectStmt(table_name, select_query, false));                            \
-      return 0;                                                                                                         \
-    }                                                                                                                   \
-    boost::regex create_temp_table_as_expr{R"(CREATE\s+TEMPORARY\s+TABLE\s+([A-Za-z_][A-Za-z0-9\$_]*)\s+AS\s+(.*);?)",  \
-                                      boost::regex::extended | boost::regex::icase};                                    \
-    if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, create_temp_table_as_expr)) {            \
-      const auto table_name = what[1].str();                                                                            \
-      const auto select_query = what[2].str();                                                                          \
-      parseTrees.emplace_back(new CreateTableAsSelectStmt(table_name, select_query, true));                             \
-      return 0;                                                                                                         \
-    }                                                                                                                   \
     std::istringstream ss(inputStr);                                                                                    \
     lexer.switch_streams(&ss,0);                                                                                        \
     yyparse(parseTrees);                                                                                                \
@@ -92,7 +76,7 @@ using namespace Parser;
 %token NAME
 %token DASHEDNAME
 %token EMAIL
-%token STRING FWDSTR
+%token STRING FWDSTR SELECTSTRING
 %token INTNUM FIXEDNUM
 
 	/* operators */
@@ -133,7 +117,8 @@ sql_list:
 
 	/* schema definition language */
 sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
-	 create_table_statement { $<nodeval>$ = $<nodeval>1; }
+  create_table_as_statement { $<nodeval>$ = $<nodeval>1; }
+	| create_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| show_table_schema { $<nodeval>$ = $<nodeval>1; }
 	/* | prvililege_def { $<nodeval>$ = $<nodeval>1; } */
 	| drop_view_statement { $<nodeval>$ = $<nodeval>1; }
@@ -174,7 +159,8 @@ schema_element_list:
 	;
 
 schema_element:
-		create_table_statement {	$$ = $1; }
+    create_table_as_statement {  $$ = $1; }
+	| create_table_statement {	$$ = $1; }
 	|	create_view_statement {	$$ = $1; }
 	|	privilege_def {	$$ = $1; }
 	;
@@ -238,6 +224,13 @@ opt_temporary:
                 TEMPORARY { $<boolval>$ = true; }
                 | /* empty */ { $<boolval>$ = false; }
                 ;
+
+create_table_as_statement:
+    CREATE opt_temporary TABLE opt_if_not_exists table AS SELECTSTRING opt_with_option_list
+    {
+      $<nodeval>$ = new CreateTableAsSelectStmt($<stringval>5, $<stringval>7, $<boolval>2, $<boolval>4, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>8));
+    }
+  ;
 
 create_table_statement:
 		CREATE opt_temporary TABLE opt_if_not_exists table '(' base_table_element_commalist ')' opt_with_option_list
