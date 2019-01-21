@@ -1510,6 +1510,13 @@ TEST(Select, OrderBy) {
   }
 }
 
+TEST(Select, TopKHeap) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT str, x FROM proj_top ORDER BY x DESC LIMIT 1;", dt);
+  }
+}
+
 TEST(Select, ComplexQueries) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -12673,6 +12680,33 @@ int create_and_populate_tables(bool with_delete_support = true) {
     g_sqlite_comparator.query(insert_query);
   }
   try {
+    const std::string drop_proj_top{"DROP TABLE IF EXISTS proj_top;"};
+    run_ddl_statement(drop_proj_top);
+    g_sqlite_comparator.query(drop_proj_top);
+    const auto create_proj_top = "CREATE TABLE proj_top(str TEXT ENCODING NONE, x INT);";
+    const auto create_proj_top_sqlite = "CREATE TABLE proj_top(str TEXT, x INT);";
+    run_ddl_statement(create_proj_top);
+    g_sqlite_comparator.query(create_proj_top_sqlite);
+    {
+      const auto insert_query = "INSERT INTO proj_top VALUES('a', 7);";
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+    {
+      const auto insert_query = "INSERT INTO proj_top VALUES('b', 6);";
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+    {
+      const auto insert_query = "INSERT INTO proj_top VALUES('c', 5);";
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'proj_top'";
+    return -EEXIST;
+  }
+  try {
     const std::string drop_old_test{"DROP TABLE IF EXISTS test;"};
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
@@ -13304,6 +13338,9 @@ void drop_tables() {
   const std::string drop_bar{"DROP TABLE bar;"};
   run_ddl_statement(drop_bar);
   g_sqlite_comparator.query(drop_bar);
+  const std::string drop_proj_top{"DROP TABLE proj_top;"};
+  run_ddl_statement(drop_proj_top);
+  g_sqlite_comparator.query(drop_proj_top);
   const std::string drop_test_x{"DROP TABLE test_x;"};
   run_ddl_statement(drop_test_x);
   g_sqlite_comparator.query(drop_test_x);

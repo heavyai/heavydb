@@ -512,10 +512,9 @@ void ResultSet::ColumnWiseTargetAccessor::initializeOffsetsForStorage() {
 
       const auto next_col_ptr = advance_to_next_columnar_target_buff(
           crt_col_ptr, crt_query_mem_desc, agg_col_idx);
-      const auto col2_ptr = ((agg_info.is_agg && agg_info.agg_kind == kAVG) ||
-                             is_real_str_or_array(agg_info))
-                                ? next_col_ptr
-                                : nullptr;
+      const bool uses_two_slots = (agg_info.is_agg && agg_info.agg_kind == kAVG) ||
+                                  is_real_str_or_array(agg_info);
+      const auto col2_ptr = uses_two_slots ? next_col_ptr : nullptr;
       const auto compact_sz2 =
           (agg_info.is_agg && agg_info.agg_kind == kAVG) || is_real_str_or_array(agg_info)
               ? crt_query_mem_desc.getPaddedColumnWidthBytes(agg_col_idx + 1)
@@ -528,7 +527,7 @@ void ResultSet::ColumnWiseTargetAccessor::initializeOffsetsForStorage() {
                         static_cast<size_t>(compact_sz2)});
 
       crt_col_ptr = next_col_ptr;
-      if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
+      if (uses_two_slots) {
         crt_col_ptr = advance_to_next_columnar_target_buff(
             crt_col_ptr, crt_query_mem_desc, agg_col_idx + 1);
       }

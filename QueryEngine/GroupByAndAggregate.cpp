@@ -1060,12 +1060,14 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(llvm::Value* groups_buffer,
       }
       fname += order_entry_lv->getType()->isDoubleTy() ? "_double" : "_float";
     }
+    const auto key_slot_idx =
+        get_heap_key_slot_index(ra_exe_unit_.target_exprs, target_idx);
     return emitCall(
         fname,
         {groups_buffer,
          LL_INT(n),
          LL_INT(row_size_quad),
-         LL_INT(static_cast<uint32_t>(query_mem_desc_.getColOffInBytes(target_idx))),
+         LL_INT(static_cast<uint32_t>(query_mem_desc_.getColOffInBytes(key_slot_idx))),
          LL_BOOL(only_order_entry.is_desc),
          LL_BOOL(!order_entry_expr->get_type_info().get_notnull()),
          LL_BOOL(only_order_entry.nulls_first),
