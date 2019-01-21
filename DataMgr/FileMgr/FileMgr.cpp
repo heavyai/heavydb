@@ -77,6 +77,26 @@ FileMgr::FileMgr(const int deviceId,
   init(num_reader_threads);
 }
 
+// used only to initialize enough to drop
+FileMgr::FileMgr(const int deviceId,
+                 GlobalFileMgr* gfm,
+                 const std::pair<const int, const int> fileMgrKey,
+                 const bool initOnly)
+    : AbstractBufferMgr(deviceId)
+    , gfm_(gfm)
+    , fileMgrKey_(fileMgrKey)
+    , defaultPageSize_(0)
+    , nextFileId_(0)
+    , epoch_(0) {
+  const std::string fileMgrDirPrefix("table");
+  const std::string FileMgrDirDelim("_");
+  fileMgrBasePath_ = (gfm_->getBasePath() + fileMgrDirPrefix + FileMgrDirDelim +
+                      std::to_string(fileMgrKey_.first) +                     // db_id
+                      FileMgrDirDelim + std::to_string(fileMgrKey_.second));  // tb_id
+  epochFile_ = nullptr;
+  files_.clear();
+}
+
 FileMgr::FileMgr(GlobalFileMgr* gfm, const size_t defaultPageSize, std::string basePath)
     : AbstractBufferMgr(0)
     , gfm_(gfm)

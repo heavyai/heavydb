@@ -2898,7 +2898,9 @@ const TableDescriptor* Catalog::getMetadataForTable(const string& tableName,
   return td;  // returns pointer to table descriptor
 }
 
-const TableDescriptor* Catalog::getMetadataForTable(int tableId) const {
+const TableDescriptor* Catalog::getMetadataForTableImpl(
+    int tableId,
+    const bool populateFragmenter) const {
   cat_read_lock read_lock(this);
   auto tableDescIt = tableDescriptorMapById_.find(tableId);
   if (tableDescIt == tableDescriptorMapById_.end()) {  // check to make sure table exists
@@ -2906,10 +2908,14 @@ const TableDescriptor* Catalog::getMetadataForTable(int tableId) const {
   }
   TableDescriptor* td = tableDescIt->second;
   std::unique_lock<std::mutex> td_lock(*td->mutex_.get());
-  if (td->fragmenter == nullptr && !td->isView) {
+  if (populateFragmenter && td->fragmenter == nullptr && !td->isView) {
     instantiateFragmenter(td);
   }
   return td;  // returns pointer to table descriptor
+}
+
+const TableDescriptor* Catalog::getMetadataForTable(int tableId) const {
+  return getMetadataForTableImpl(tableId, true);
 }
 
 const DictDescriptor* Catalog::getMetadataForDict(const int dictId,
@@ -3154,7 +3160,8 @@ list<const ColumnDescriptor*> Catalog::getAllColumnMetadataForTable(
     const bool fetchPhysicalColumns) const {
   cat_read_lock read_lock(this);
   list<const ColumnDescriptor*> columnDescriptors;
-  const TableDescriptor* td = getMetadataForTable(tableId);
+  const TableDescriptor* td =
+      getMetadataForTableImpl(tableId, false);  // dont instantiate fragmenter
   getAllColumnMetadataForTable(td,
                                columnDescriptors,
                                fetchSystemColumns,

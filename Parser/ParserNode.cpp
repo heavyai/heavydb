@@ -2562,7 +2562,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
-  const TableDescriptor* td = catalog.getMetadataForTable(*table);
+  const TableDescriptor* td = catalog.getMetadataForTable(*table, false);
   if (td == nullptr) {
     if (if_exists) {
       return;

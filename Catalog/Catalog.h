@@ -181,6 +181,8 @@ class Catalog {
 
   const TableDescriptor* getMetadataForTable(const std::string& tableName,
                                              const bool populateFragmenter = true) const;
+  const TableDescriptor* getMetadataForTableImpl(int tableId,
+                                                 const bool populateFragmenter) const;
   const TableDescriptor* getMetadataForTable(int tableId) const;
 
   const ColumnDescriptor* getMetadataForColumn(int tableId,

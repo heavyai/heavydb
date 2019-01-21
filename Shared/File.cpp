@@ -195,10 +195,11 @@ void renameForDelete(const std::string directoryName) {
     if (ec.value() == boost::system::errc::success) {
       return;
     }
+
+    LOG(FATAL) << "Failed to rename file " << directoryName << " to "
+               << directoryName + "_" + std::to_string(ms.count()) + "_DELETE_ME  Error: "
+               << ec;
   }
-  LOG(FATAL) << "Failed to rename file " << directoryName << " to "
-             << directoryName + "_" + std::to_string(ms.count()) + "_DELETE_ME  Error: "
-             << ec;
 }
 
 }  // namespace File_Namespace
