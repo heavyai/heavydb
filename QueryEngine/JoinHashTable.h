@@ -94,15 +94,6 @@ class JoinHashTable : public JoinHashTableInterface {
 
   HashType getHashType() const noexcept override { return hash_type_; }
 
-  static llvm::Value* codegenOneToManyHashJoin(
-      const std::vector<llvm::Value*>& hash_join_idx_args_in,
-      const size_t inner_rte_idx,
-      const bool is_sharded,
-      const bool col_is_nullable,
-      const bool is_bw_eq,
-      const int64_t sub_buff_size,
-      Executor* executor);
-
   static HashJoinMatchingSet codegenMatchingSet(
       const std::vector<llvm::Value*>& hash_join_idx_args_in,
       const bool is_sharded,
@@ -216,8 +207,6 @@ class JoinHashTable : public JoinHashTableInterface {
                                             const Analyzer::Expr* key_col,
                                             const int shard_count,
                                             const CompilationOptions& co);
-
-  llvm::Value* codegenOneToManyHashJoin(const CompilationOptions&, const size_t);
 
   std::pair<const int8_t*, size_t> fetchFragments(
       const Analyzer::ColumnVar* hash_col,

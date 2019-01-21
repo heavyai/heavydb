@@ -711,17 +711,12 @@ class Executor {
     return false;
   }
 
-  enum class JoinImplType { Invalid, Loop, HashOneToOne, HashOneToMany };
-
   struct JoinInfo {
-    JoinInfo(const JoinImplType join_impl_type,
-             const std::vector<std::shared_ptr<Analyzer::BinOper>>& equi_join_tautologies,
+    JoinInfo(const std::vector<std::shared_ptr<Analyzer::BinOper>>& equi_join_tautologies,
              const std::vector<std::shared_ptr<JoinHashTableInterface>>& join_hash_tables)
-        : join_impl_type_(join_impl_type)
-        , equi_join_tautologies_(equi_join_tautologies)
+        : equi_join_tautologies_(equi_join_tautologies)
         , join_hash_tables_(join_hash_tables) {}
 
-    JoinImplType join_impl_type_;
     std::vector<std::shared_ptr<Analyzer::BinOper>>
         equi_join_tautologies_;  // expressions we equi-join on are true by
                                  // definition when using a hash join; we'll
@@ -1503,9 +1498,7 @@ class Executor {
   struct PlanState {
     PlanState(const bool allow_lazy_fetch, const Executor* executor)
         : allow_lazy_fetch_(allow_lazy_fetch)
-        , join_info_({JoinImplType::Invalid,
-                      std::vector<std::shared_ptr<Analyzer::BinOper>>{},
-                      {}})
+        , join_info_({std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}})
         , executor_(executor) {}
 
     using TableId = int;

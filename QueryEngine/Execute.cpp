@@ -1539,12 +1539,6 @@ bool Executor::skipFragmentPair(
   CHECK(table_idx >= 0 &&
         static_cast<size_t>(table_idx) < ra_exe_unit.input_descs.size());
   const int inner_table_id = ra_exe_unit.input_descs[table_idx].getTableId();
-  // Don't bother with sharding for non-hash joins.
-  if (plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToOne &&
-      plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToMany &&
-      ra_exe_unit.join_quals.empty()) {
-    return false;
-  }
   // Both tables need to be sharded the same way.
   if (outer_fragment_info.shard == -1 || inner_fragment_info.shard == -1 ||
       outer_fragment_info.shard == inner_fragment_info.shard) {
@@ -1673,10 +1667,7 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
   const int nest_level = inner_col_desc.getScanDesc().getNestLevel();
   if (nest_level < 1 ||
       inner_col_desc.getScanDesc().getSourceType() != InputSourceType::TABLE ||
-      (ra_exe_unit.join_quals.empty() &&
-       plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToOne &&
-       plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToMany) ||
-      input_descs.size() < 2 ||
+      ra_exe_unit.join_quals.empty() || input_descs.size() < 2 ||
       (ra_exe_unit.join_quals.empty() &&
        plan_state_->isLazyFetchColumn(inner_col_desc))) {
     return false;
