@@ -45,6 +45,8 @@ while (( $# )); do
             ;;
         --non-interactive)
             NON_INTERACTIVE=true ;;
+        --disable-open-frontend)
+            DISABLE_OPEN_FRONTEND=true ;;
         --verbose)
             VERBOSE="--verbose" ;;
         *)
@@ -98,10 +100,15 @@ if [ -d frontend ] && [ -e ./bin/omnisci_web_server ]; then
 
     echo "- sleeping for 5s while server starts"
     sleep 5
-    if hash open 2>/dev/null; then
-        open "$MAPDFRONTEND" 2> /dev/null || true
-    elif hash xdg-open 2>/dev/null; then
-        xdg-open "$MAPDFRONTEND" 2> /dev/null || true
+
+    if [ ! "$DISABLE_OPEN_FRONTEND" = true ]; then
+        if hash open 2>/dev/null; then
+            open "$MAPDFRONTEND" 2> /dev/null || true
+        elif hash xdg-open 2>/dev/null; then
+            xdg-open "$MAPDFRONTEND" 2> /dev/null || true
+        else
+            echo "Navigate to: $MAPDFRONTEND"
+        fi
     else
         echo "Navigate to: $MAPDFRONTEND"
     fi
