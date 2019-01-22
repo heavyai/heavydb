@@ -24,7 +24,7 @@
     <dependency>
       <groupId>com.mapd</groupId>
       <artifactId>mapdcommon</artifactId>
-      <version>${mapd.release.version}</version>
+      <version>${omnisci.release.version}</version>
     </dependency>
     <dependency>
       <groupId>commons-cli</groupId>

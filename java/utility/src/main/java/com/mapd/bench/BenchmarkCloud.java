@@ -16,7 +16,7 @@
 package com.mapd.bench;
 
 // STEP 1. Import required packages
-import com.mapd.jdbc.MapDStatement;
+import com.omnisci.jdbc.OmniSciStatement;
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -38,14 +38,14 @@ public class BenchmarkCloud {
   static final String QUERY_RESULT_MACHINE = "bencher";
 
   // JDBC driver name and database URL
-  static final String DB_URL = "jdbc:mapd:localhost:6274:mapd";
-  static final String JDBC_DRIVER = "com.mapd.jdbc.MapDDriver";
+  static final String DB_URL = "jdbc:omnisci:localhost:6274:mapd";
+  static final String JDBC_DRIVER = "com.omnisci.jdbc.OmniSciDriver";
 
-  //  Database credentials
+  // Database credentials
   static final String USER = "mapd";
   static final String PASS = "";
 
-  //  Database credentials
+  // Database credentials
   static final String RESULTS_USER = "mapd";
   static final String RESULTS_PASS = "";
 
@@ -106,7 +106,8 @@ public class BenchmarkCloud {
   void doWork(String[] args, int query) {
     // Grab parameters from args
     // parm0 number of iterations per query
-    // parm1 file containing sql queries {contains quoted query, expected result count]
+    // parm1 file containing sql queries {contains quoted query, expected result
+    // count]
     // parm2 table name
     // parm3 run label
     // parm4 gpu count
@@ -174,7 +175,7 @@ public class BenchmarkCloud {
       System.exit(3);
     }
 
-    bencherCon = getConnection("jdbc:mapd:" + queryResultMachine + ":6274:mapd",
+    bencherCon = getConnection("jdbc:omnisci:" + queryResultMachine + ":6274:mapd",
             iResultsUser,
             iResultsPasswd);
 
@@ -240,9 +241,9 @@ public class BenchmarkCloud {
         long executeTime = 0;
         long jdbcTime = 0;
 
-        // gather internal execute time for MapD as we are interested in that
+        // gather internal execute time for OmniSci as we are interested in that
         if (driver.equals(JDBC_DRIVER)) {
-          executeTime = ((MapDStatement) stmt).getQueryInternalExecuteTime();
+          executeTime = ((OmniSciStatement) stmt).getQueryInternalExecuteTime();
           jdbcTime = (System.currentTimeMillis() - timer) - executeTime;
         } else {
           jdbcTime = (System.currentTimeMillis() - timer);
@@ -265,12 +266,12 @@ public class BenchmarkCloud {
         }
         long iterateTime = (System.currentTimeMillis() - timer);
 
-        //        if (resultCount != expected) {
-        //          logger.error("Expect " + expected + " actual " + resultCount + " for
-        //          query " + sql);
-        //          // don't run anymore
-        //          break;
-        //        }
+        // if (resultCount != expected) {
+        // logger.error("Expect " + expected + " actual " + resultCount + " for
+        // query " + sql);
+        // // don't run anymore
+        // break;
+        // }
         if (loop == 0) {
           firstJdbc = jdbcTime;
           firstExecute = executeTime;

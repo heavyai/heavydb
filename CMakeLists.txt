@@ -676,21 +676,21 @@ endif()
 file(GLOB_RECURSE JAVA_POM RELATIVE ${CMAKE_SOURCE_DIR} java/**/pom.xml)
 file(GLOB_RECURSE JAVA_SOURCES RELATIVE ${CMAKE_SOURCE_DIR} java/**/*.java)
 
-set(MAPD_JAR_RELEASE_VERSION "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}")
+set(OMNISCI_JAR_RELEASE_VERSION "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}")
 if("${MAPD_VERSION_EXTRA}" STREQUAL "dev")
-  set (MAPD_JAR_RELEASE_VERSION "${MAPD_JAR_RELEASE_VERSION}-SNAPSHOT")
+  set (OMNISCI_JAR_RELEASE_VERSION "${OMNISCI_JAR_RELEASE_VERSION}-SNAPSHOT")
 endif()
 
-set (MAPD_JDBC_JAR "mapdjdbc-${MAPD_JAR_RELEASE_VERSION}.jar")
+set (OMNISCI_JDBC_JAR "omnisci-jdbc-${OMNISCI_JAR_RELEASE_VERSION}.jar")
 
 add_custom_command(
   OUTPUT
     ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
-    ${CMAKE_BINARY_DIR}/bin/${MAPD_JDBC_JAR}
+    ${CMAKE_BINARY_DIR}/bin/${OMNISCI_JDBC_JAR}
     ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar
-    COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q clean install -Dthrift.version="${Thrift_VERSION}" -Dmapd.release.version="${MAPD_JAR_RELEASE_VERSION}"
+    COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q clean install -Dthrift.version="${Thrift_VERSION}" -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}"
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapdjdbc/target/${MAPD_JDBC_JAR} ${CMAKE_BINARY_DIR}/bin
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/omniscijdbc/target/${OMNISCI_JDBC_JAR} ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   DEPENDS
@@ -703,15 +703,15 @@ add_custom_command(
   )
 add_custom_target(mapd_java_components ALL DEPENDS
   ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
-  ${CMAKE_BINARY_DIR}/bin/${MAPD_JDBC_JAR}
+  ${CMAKE_BINARY_DIR}/bin/${OMNISCI_JDBC_JAR}
   ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar)
 add_custom_target(mapd_java_clean
-  COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q clean -Dmapd.release.version="${MAPD_JAR_RELEASE_VERSION}"
+  COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q clean -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}"
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   )
 add_dependencies(clean-all mapd_java_clean)
 install(FILES ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
-install(FILES ${CMAKE_SOURCE_DIR}/java/mapdjdbc/target/${MAPD_JDBC_JAR} DESTINATION bin)
+install(FILES ${CMAKE_SOURCE_DIR}/java/omniscijdbc/target/${OMNISCI_JDBC_JAR} DESTINATION bin)
 install(FILES ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
 
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${ADDITIONAL_MAKE_CLEAN_FILES}")
