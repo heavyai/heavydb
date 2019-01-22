@@ -72,9 +72,9 @@ public class EagainConcurrencyTest {
         public void run() {
           try {
             MapdTestClient dba =
-                    MapdTestClient.getClient("localhost", 9091, db, dbaUser, dbaPassword);
+                    MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
             MapdTestClient user =
-                    MapdTestClient.getClient("localhost", 9091, db, dbUser, dbPassword);
+                    MapdTestClient.getClient("localhost", 6274, db, dbUser, dbPassword);
             run_test(dba, user, prefix, runs);
           } catch (Exception e) {
             logger.error("[" + Thread.currentThread().getId() + "]"
@@ -104,7 +104,7 @@ public class EagainConcurrencyTest {
     logger.info("testCatalogConcurrency()");
 
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 9091, "mapd", "mapd", "HyperInteractive");
+            "localhost", 6274, "mapd", "mapd", "HyperInteractive");
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");
 

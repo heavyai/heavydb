@@ -34,9 +34,9 @@ public class CalciteServerWrapper implements Runnable {
   private final CalciteServerHandler handler;
   private final Processor processor;
   private TServer server;
-  private int mapDPort = 9091;
+  private int mapDPort = 6274;
   private String dataDir = ("data/");
-  private int calcitePort = 9093;
+  private int calcitePort = 6279;
   private boolean shutdown = false;
 
   public CalciteServerWrapper() {

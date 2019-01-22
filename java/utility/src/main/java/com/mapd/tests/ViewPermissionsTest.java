@@ -33,7 +33,7 @@ public class ViewPermissionsTest {
     logger.info("testCreateViewPermission()");
 
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 9091, "mapd", "mapd", "HyperInteractive");
+            "localhost", 6274, "mapd", "mapd", "HyperInteractive");
 
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");
@@ -51,11 +51,11 @@ public class ViewPermissionsTest {
     su.runSql("GRANT ACCESS on database db1 TO dba;");
 
     MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 9091, "db1", "dba", "password");
+            MapdTestClient.getClient("localhost", 6274, "db1", "dba", "password");
     MapdTestClient bill =
-            MapdTestClient.getClient("localhost", 9091, "db1", "bill", "password");
+            MapdTestClient.getClient("localhost", 6274, "db1", "bill", "password");
     MapdTestClient bob =
-            MapdTestClient.getClient("localhost", 9091, "db1", "bob", "password");
+            MapdTestClient.getClient("localhost", 6274, "db1", "bob", "password");
 
     dba.runSql("GRANT CREATE ON DATABASE db1 TO bill"); // table
     dba.runSql("GRANT DROP ON DATABASE db1 TO bill"); // table
@@ -81,7 +81,7 @@ public class ViewPermissionsTest {
     logger.info("testViewPermissions()");
 
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 9091, "mapd", "mapd", "HyperInteractive");
+            "localhost", 6274, "mapd", "mapd", "HyperInteractive");
 
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");
@@ -105,13 +105,13 @@ public class ViewPermissionsTest {
     su.runSql("GRANT ACCESS on database db2 TO dba;");
 
     MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 9091, "db1", "dba", "password");
+            MapdTestClient.getClient("localhost", 6274, "db1", "dba", "password");
     MapdTestClient bill =
-            MapdTestClient.getClient("localhost", 9091, "db1", "bill", "password");
+            MapdTestClient.getClient("localhost", 6274, "db1", "bill", "password");
     MapdTestClient bob =
-            MapdTestClient.getClient("localhost", 9091, "db1", "bob", "password");
+            MapdTestClient.getClient("localhost", 6274, "db1", "bob", "password");
     MapdTestClient foo =
-            MapdTestClient.getClient("localhost", 9091, "db1", "foo", "password");
+            MapdTestClient.getClient("localhost", 6274, "db1", "foo", "password");
 
     shouldThrowException("bill should not be able to create tables",
             () -> bill.runSql("CREATE VIEW bill_view AS SELECT id FROM bill_table"));

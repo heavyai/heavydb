@@ -34,7 +34,7 @@
 #include <csignal>
 #include <random>
 
-#define CALCITEPORT 39093
+#define CALCITEPORT 36279
 
 extern bool g_enable_filter_push_down;
 

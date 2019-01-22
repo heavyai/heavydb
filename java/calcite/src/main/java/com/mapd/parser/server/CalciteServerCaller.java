@@ -100,8 +100,8 @@ public class CalciteServerCaller {
       exit(0);
     }
 
-    int portNum = Integer.valueOf(cmd.getOptionValue("port", "9093"));
-    int mapdPortNum = Integer.valueOf(cmd.getOptionValue("mapd_port", "9091"));
+    int portNum = Integer.valueOf(cmd.getOptionValue("port", "6279"));
+    int mapdPortNum = Integer.valueOf(cmd.getOptionValue("mapd_port", "6274"));
     String dataDir = cmd.getOptionValue("data", "data");
     String extensionsDir = cmd.getOptionValue("extensions", "build/QueryEngine");
     String trust_store = cmd.getOptionValue("trust_store", "");

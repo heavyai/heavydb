@@ -2,7 +2,7 @@
 
 set -e
 
-MAPD_TCP_PORT=${MAPD_TCP_PORT:=9091}
+MAPD_TCP_PORT=${MAPD_TCP_PORT:=6274}
 
 DATA_URL=${DATA_URL:="https://data.mapd.com"}
 

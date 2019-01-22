@@ -101,9 +101,9 @@ func getLogName(lvl string) string {
 
 func init() {
 	var err error
-	pflag.IntP("port", "p", 9092, "frontend server port")
-	pflag.IntP("http-to-https-redirect-port", "", 9094, "frontend server port for http redirect, when https enabled")
-	pflag.StringP("backend-url", "b", "", "url to http-port on omnisci_server [http://localhost:9090]")
+	pflag.IntP("port", "p", 6273, "frontend server port")
+	pflag.IntP("http-to-https-redirect-port", "", 6280, "frontend server port for http redirect, when https enabled")
+	pflag.StringP("backend-url", "b", "", "url to http-port on omnisci_server [http://localhost:6278]")
 	pflag.StringSliceP("reverse-proxy", "", nil, "additional endpoints to act as reverse proxies, format '/endpoint/:http://target.example.com'")
 	pflag.StringP("frontend", "f", "frontend", "path to frontend directory")
 	pflag.StringP("servers-json", "", "", "path to servers.json")
@@ -155,7 +155,7 @@ func init() {
 	viper.BindPFlag("verbose", pflag.CommandLine.Lookup("verbose"))
 	viper.BindPFlag("version", pflag.CommandLine.Lookup("version"))
 
-	viper.SetDefault("http-port", 9090)
+	viper.SetDefault("http-port", 6278)
 
 	viper.SetEnvPrefix("MAPD")
 	r := strings.NewReplacer(".", "_")

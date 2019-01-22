@@ -21,7 +21,7 @@
  *
  * Usage: <table> <database> <user> <password> [<num rows>] [hostname[:port]]
  * The program executes the following:
- * 1. connect to omnisci_server at hostname:port (default: localhost:9091)
+ * 1. connect to omnisci_server at hostname:port (default: localhost:6274)
  *    with <database> <user> <password>
  * 2. get the table descriptor of <table>
  * 3. randomly generate tab-delimited data that can be imported to <table>
@@ -184,7 +184,7 @@ void data_gen(const TRowDescriptor& row_desc, const char* delimiter, int num_row
 
 int main(int argc, char** argv) {
   std::string server_host("localhost");  // default to localhost
-  int port = 9091;                       // default port number
+  int port = 6274;                       // default port number
   int num_rows = 1000000;                // default number of rows to generate
   const char* delimiter = "\t";          // only support tab delimiter for now
 

@@ -163,9 +163,9 @@ You can now start using the database. The `omniql` utility may be used to intera
 
 where `HyperInteractive` is the default password. The default user `mapd` is assumed if not provided.
 
-You can also interact with the database using the web-based MapD Immerse frontend by visiting the web server's default port of `9092`:
+You can also interact with the database using the web-based MapD Immerse frontend by visiting the web server's default port of `6273`:
 
-[http://localhost:9092](http://localhost:9092)
+[http://localhost:6273](http://localhost:6273)
 
 Note: usage of OmniSci Immerse is governed by a separate license agreement, provided under `EULA-CE.txt`. The version bundled with this project may only be used for non-commercial purposes.
 

@@ -36,7 +36,7 @@
 #define BASE_PATH "./tmp"
 #endif
 
-#define CALCITEPORT 9093
+#define CALCITEPORT 6279
 
 using namespace std;
 using namespace Catalog_Namespace;

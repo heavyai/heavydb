@@ -1,8 +1,9 @@
-port = 9091
-http-port = 9090
+port = 6274
+http-port = 6278
+calcite-port = 6279
 data = "@OMNISCI_DATA@"
 null-div-by-zero = true
 
 [web]
-port = 9092
+port = 6273
 frontend = "@OMNISCI_PATH@/frontend"

@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 dbname = 'mapd'
 user = 'mapd'
-host = 'localhost:9091'
+host = 'localhost:6274'
 password = 'HyperInteractive'
 
 # Connect to the db

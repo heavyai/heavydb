@@ -100,7 +100,7 @@ void stream_insert(MapDClient& client,
 
 int main(int argc, char** argv) {
   std::string server_host("localhost");  // default to localohost
-  int port = 9091;                       // default port number
+  int port = 6274;                       // default port number
   const char* delimiter = "\t";          // only support tab delimiter for now
 
   if (argc < 5) {

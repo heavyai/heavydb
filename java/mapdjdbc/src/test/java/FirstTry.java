@@ -26,7 +26,7 @@ public class FirstTry {
 
   // JDBC driver name and database URL
   static final String JDBC_DRIVER = "com.mapd.jdbc.MapDDriver";
-  static final String DB_URL = "jdbc:mapd:localhost:9092:mapd:http";
+  static final String DB_URL = "jdbc:mapd:localhost:6273:mapd:http";
 
   //  Database credentials
   static final String USER = "mapd";

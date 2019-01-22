@@ -31,7 +31,7 @@ class MapDProgramOptions : public boost::program_options::options_description {
  public:
   MapDProgramOptions();
 
-  int http_port = 9090;
+  int http_port = 6278;
   size_t reserved_gpu_mem = 1 << 27;
   std::string base_path;
   std::string config_file = {"mapd.conf"};

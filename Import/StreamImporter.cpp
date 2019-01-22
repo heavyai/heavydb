@@ -189,7 +189,7 @@ void stream_insert(
 
 int main(int argc, char** argv) {
   std::string server_host("localhost");  // default to localhost
-  int port = 9091;                       // default port number
+  int port = 6274;                       // default port number
   bool http = false;
   bool https = false;
   bool skip_host_verify = false;

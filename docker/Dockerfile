@@ -56,6 +56,6 @@ RUN mkdir -p /usr/local/share/glvnd/egl_vendor.d && \
 
 WORKDIR /omnisci
 
-EXPOSE 9091 9092
+EXPOSE 6274 6273
 
 CMD /omnisci/startomnisci --non-interactive --data /mapd-storage/data --config /mapd-storage/mapd.conf

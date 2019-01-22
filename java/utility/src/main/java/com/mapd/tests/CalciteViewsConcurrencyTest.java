@@ -35,13 +35,13 @@ public class CalciteViewsConcurrencyTest {
     logger.info("testViewsResolutionConcurrency()");
 
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 9091, "mapd", "mapd", "HyperInteractive");
+            "localhost", 6274, "mapd", "mapd", "HyperInteractive");
 
     su.runSql("CREATE DATABASE db1;");
     su.runSql("CREATE DATABASE db2;");
 
     MapdTestClient db1 = MapdTestClient.getClient(
-            "localhost", 9091, "db1", "mapd", "HyperInteractive");
+            "localhost", 6274, "db1", "mapd", "HyperInteractive");
     db1.runSql("create table table1 (id integer, description varchar(30));");
     db1.runSql("create table table2 (id integer, description varchar(30));");
     db1.runSql("insert into table1 values (1, 'hello');");
@@ -50,7 +50,7 @@ public class CalciteViewsConcurrencyTest {
             "create view v_goodview as select t1.id, t1.description, t2.description as tbl2Desc from db1.table1 t1, db1.table2 t2;");
 
     MapdTestClient db2 = MapdTestClient.getClient(
-            "localhost", 9091, "db2", "mapd", "HyperInteractive");
+            "localhost", 6274, "db2", "mapd", "HyperInteractive");
     db2.runSql("create table table1 (id integer, description varchar(30));");
     db2.runSql("create table table2 (id integer, description varchar(30));");
     db2.runSql("insert into table1 values (1, 'hello');");
@@ -64,9 +64,9 @@ public class CalciteViewsConcurrencyTest {
     for (int i = 0; i < num_threads; i++) {
       final int threadId = i;
       MapdTestClient con1 = MapdTestClient.getClient(
-              "localhost", 9091, "db1", "mapd", "HyperInteractive");
+              "localhost", 6274, "db1", "mapd", "HyperInteractive");
       MapdTestClient con2 = MapdTestClient.getClient(
-              "localhost", 9091, "db2", "mapd", "HyperInteractive");
+              "localhost", 6274, "db2", "mapd", "HyperInteractive");
       Thread t = new Thread(new Runnable() {
         @Override
         public void run() {

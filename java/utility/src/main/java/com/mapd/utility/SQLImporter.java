@@ -402,7 +402,7 @@ public class SQLImporter {
     TTransport transport;
     try {
       transport = new TSocket(cmd.getOptionValue("server", "localhost"),
-              Integer.valueOf(cmd.getOptionValue("port", "9091")));
+              Integer.valueOf(cmd.getOptionValue("port", "6274")));
 
       transport.open();
 

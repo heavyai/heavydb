@@ -1,9 +1,10 @@
-port = 9091
-http-port = 9090
+port = 6274
+http-port = 6278
+calcite-port = 6279
 data = "data"
 read-only = false
 verbose = false
 
 [web]
-port = 9092
+port = 6273
 frontend = "frontend"

@@ -93,7 +93,7 @@ public class FlavorPicker {
 
     // Set the producer configuration properties.
     Properties props = new Properties();
-    props.put("bootstrap.servers", "localhost:9097"); // 9097 to avoid Immerse:9092
+    props.put("bootstrap.servers", "localhost:9097"); // 9097 to avoid Immerse:6273
     props.put("acks", "all");
     props.put("retries", 0);
     props.put("batch.size", 100);

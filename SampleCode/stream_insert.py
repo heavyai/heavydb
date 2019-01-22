@@ -43,7 +43,7 @@ def main():
   user_name = 'mapd'
   passwd = 'HyperInteractive'
   hostname = 'localhost'
-  portno = 9091
+  portno = 6274
 
   client = get_client(hostname, portno)
   session = client.connect(user_name, passwd, db_name)

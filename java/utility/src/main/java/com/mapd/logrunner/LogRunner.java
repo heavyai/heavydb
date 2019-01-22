@@ -129,7 +129,7 @@ public class LogRunner {
   private MapD.Client getClient(String hostname, int port) throws TTransportException {
     TTransport transport = null;
 
-    // transport = new TSocket("localhost", 9091);
+    // transport = new TSocket("localhost", 6274);
     transport = new THttpClient("http://" + hostname + ":" + port);
 
     transport.open();

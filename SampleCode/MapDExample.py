@@ -32,8 +32,8 @@ Example:
 python MapDExample.py
 
 Connection samples:
-HTTP client - get_client('http://test.mapd.com:9091', portno, True)
-Binary protocol - get_client('locahost', 9091, False)
+HTTP client - get_client('http://test.mapd.com:6274', portno, True)
+Binary protocol - get_client('locahost', 6274, False)
 '''
 
 
@@ -57,7 +57,7 @@ def main():
     user_name = 'mapd'
     passwd = 'HyperInteractive'
     hostname = 'test.mapd.com'
-    portno = 9091
+    portno = 6274
 
     client = get_client(hostname, portno, False)
     session = client.connect(user_name, passwd, db_name)

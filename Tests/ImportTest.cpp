@@ -38,7 +38,7 @@
 #define BASE_PATH "./tmp"
 #endif
 
-#define CALCITEPORT 39093
+#define CALCITEPORT 36279
 
 using namespace std;
 using namespace TestHelpers;

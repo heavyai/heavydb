@@ -38,7 +38,7 @@ public class BenchmarkCloud {
   static final String QUERY_RESULT_MACHINE = "bencher";
 
   // JDBC driver name and database URL
-  static final String DB_URL = "jdbc:mapd:localhost:9091:mapd";
+  static final String DB_URL = "jdbc:mapd:localhost:6274:mapd";
   static final String JDBC_DRIVER = "com.mapd.jdbc.MapDDriver";
 
   //  Database credentials
@@ -174,7 +174,7 @@ public class BenchmarkCloud {
       System.exit(3);
     }
 
-    bencherCon = getConnection("jdbc:mapd:" + queryResultMachine + ":9091:mapd",
+    bencherCon = getConnection("jdbc:mapd:" + queryResultMachine + ":6274:mapd",
             iResultsUser,
             iResultsPasswd);
 

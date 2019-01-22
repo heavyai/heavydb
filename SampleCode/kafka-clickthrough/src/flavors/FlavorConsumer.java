@@ -56,7 +56,7 @@ public class FlavorConsumer {
       try {
         // JDBC driver name and database URL
         final String JDBC_DRIVER = "com.mapd.jdbc.MapDDriver";
-        final String DB_URL = "jdbc:mapd:localhost:9091:mapd";
+        final String DB_URL = "jdbc:mapd:localhost:6274:mapd";
 
         // Database credentials
         final String USER = "mapd";

@@ -56,7 +56,7 @@ import javax.crypto.Cipher;
 /*
  * Param_pair - Simple pair class to hold the label for a component in the url
  * and an index into the url to that component.
- * For example in the url jdbc:mapd:hostname:9090 a Param_pair for
+ * For example in the url jdbc:mapd:hostname:6278 a Param_pair for
  * hostname would have a label of "hostname" and an index of 2
 
  */

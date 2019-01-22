@@ -30,8 +30,8 @@ struct MapDParameters {
   size_t cuda_block_size = 0;       // block size for the kernel execution
   size_t cuda_grid_size = 0;        // grid size for the kernel execution
   size_t calcite_max_mem = 1024;    // max memory for calcite jvm in MB
-  int omnisci_server_port = 9091;   // default port omnisci_server runs on
-  int calcite_port = 9093;          // default port for calcite server to run on
+  int omnisci_server_port = 6274;   // default port omnisci_server runs on
+  int calcite_port = 6279;          // default port for calcite server to run on
   std::string ha_group_id;          // name of the HA group this server is in
   std::string ha_unique_server_id;  // name of the HA unique id for this server
   std::string ha_brokers;           // name of the HA broker

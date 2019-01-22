@@ -1006,7 +1006,7 @@ std::string hide_sensitive_data_from_connect(const std::string& connect_str) {
 
 int main(int argc, char** argv) {
   std::string server_host{"localhost"};
-  int port = 9091;
+  int port = 6274;
   std::string delimiter("|");
   bool print_header = true;
   bool print_connection = true;

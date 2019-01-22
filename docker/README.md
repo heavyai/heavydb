@@ -36,11 +36,11 @@ The config file lives at `/mapd-storage/mapd.conf`.
 ## Running OmniSci inside a container
 
     nvidia-docker run -d \
-      -p 9092:9092 \
+      -p 6273:6273 \
       --name omnisci \
       -v /path/to/mapd-storage:/mapd-storage \
       omnisci/omnisci:v4.5.0
 
-This starts the OmniSci Core Database inside a container named `omnisci`, and exposes the Immerse visualization client on port 9092..
+This starts the OmniSci Core Database inside a container named `omnisci`, and exposes the Immerse visualization client on port 6273..
 
 Data will be persisted to the host directory `/path/to/mapd-storage`.

@@ -15,7 +15,7 @@
 #define BASE_PATH "./tmp"
 #endif
 
-#define CALCITEPORT 39093
+#define CALCITEPORT 36279
 
 namespace {
 std::shared_ptr<Calcite> g_calcite;

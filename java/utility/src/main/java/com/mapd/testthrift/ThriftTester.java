@@ -59,8 +59,8 @@ public class ThriftTester {
 
     TTransport transport = null;
     try {
-      transport = new TSocket("localhost", 9091);
-      // transport = new THttpClient("http://localhost:9090");
+      transport = new TSocket("localhost", 6274);
+      // transport = new THttpClient("http://localhost:6278");
 
       transport.open();
 
