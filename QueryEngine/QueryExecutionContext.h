@@ -111,7 +111,6 @@ class QueryExecutionContext : boost::noncopyable {
     TOTAL_MATCHED,
     INIT_AGG_VALS,
     GROUPBY_BUF,
-    SMALL_BUF,
     ERROR_CODE,
     NUM_TABLES,
     JOIN_HASH_TABLES,

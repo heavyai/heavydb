@@ -761,8 +761,6 @@ void set_row_func_argnames(llvm::Function* row_func,
   } else {
     arg_it->setName("group_by_buff");
     ++arg_it;
-    arg_it->setName("small_group_by_buff");
-    ++arg_it;
     arg_it->setName("crt_match");
     ++arg_it;
     arg_it->setName("total_matched");
@@ -812,8 +810,6 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     }
   } else {
     // group by buffer
-    row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
-    // small group by buffer
     row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
     // current match count
     row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
@@ -1316,6 +1312,7 @@ Executor::CompilationResult Executor::compileWorkUnit(
   nukeOldState(allow_lazy_fetch, query_infos, ra_exe_unit);
   OOM_TRACE_PUSH(+": " + (co.device_type_ == ExecutorDeviceType::GPU ? "gpu" : "cpu"));
 
+  // TODO(adb): remove small groups entry count?
   GroupByAndAggregate group_by_and_aggregate(this,
                                              co.device_type_,
                                              ra_exe_unit,

@@ -1284,7 +1284,6 @@ GroupByAndAggregate::codegenMultiColumnBaselineHash(const CompilationOptions& co
                                                     const size_t key_width,
                                                     const int32_t row_size_quad) {
   auto arg_it = ROW_FUNC->arg_begin();  // groups_buffer
-  ++arg_it;                             // small group buffer
   ++arg_it;                             // current match count
   ++arg_it;                             // total match count
   ++arg_it;                             // old match count

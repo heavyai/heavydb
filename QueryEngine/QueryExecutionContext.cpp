@@ -271,7 +271,6 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
 
   CHECK_EQ(static_cast<size_t>(KERN_PARAM_COUNT), kernel_params.size());
   CHECK_EQ(CUdeviceptr(0), kernel_params[GROUPBY_BUF]);
-  CHECK_EQ(CUdeviceptr(0), kernel_params[SMALL_BUF]);
 
   const unsigned block_size_y = 1;
   const unsigned block_size_z = 1;
@@ -293,7 +292,6 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                                  can_sort_on_gpu);
 
     kernel_params[GROUPBY_BUF] = gpu_query_mem.group_by_buffers.first;
-    kernel_params[SMALL_BUF] = CUdeviceptr(0);  // TODO(adb): remove
     std::vector<void*> param_ptrs;
     for (auto& param : kernel_params) {
       param_ptrs.push_back(&param);
@@ -431,9 +429,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                 &out_vec_dev_buffers[0],
                 agg_col_count * sizeof(CUdeviceptr),
                 device_id);
-    CUdeviceptr unused_dev_ptr{0};
     kernel_params[GROUPBY_BUF] = out_vec_dev_ptr;
-    kernel_params[SMALL_BUF] = unused_dev_ptr;
     std::vector<void*> param_ptrs;
     for (auto& param : kernel_params) {
       param_ptrs.push_back(&param);
@@ -562,8 +558,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
   }
   const int8_t*** multifrag_cols_ptr{
       multifrag_col_buffers.empty() ? nullptr : &multifrag_col_buffers[0]};
-  // TODO(adb): remove
-  int64_t** small_group_by_buffers_ptr{nullptr};
   const uint32_t num_fragments = multifrag_cols_ptr
                                      ? static_cast<uint32_t>(col_buffers.size())
                                      : 0u;  // TODO(miyu): check 0
@@ -625,7 +619,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
                                int32_t*,         // total_matched
                                const int64_t*,   // init_agg_value
                                int64_t**,        // out
-                               int64_t**,        // out2
                                int32_t*,         // error_code
                                const uint32_t*,  // num_tables
                                const int64_t*);  // join_hash_tables_ptr
@@ -642,7 +635,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
           &total_matched_init,
           &cmpt_val_buff[0],
           query_buffers_->getGroupByBuffersPtr(),
-          small_group_by_buffers_ptr,
           error_code,
           &num_tables,
           join_hash_tables_ptr);
@@ -658,7 +650,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
                                                     &total_matched_init,
                                                     &init_agg_vals[0],
                                                     &out_vec[0],
-                                                    nullptr,
                                                     error_code,
                                                     &num_tables,
                                                     join_hash_tables_ptr);
@@ -673,7 +664,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
                                int32_t*,         // total_matched
                                const int64_t*,   // init_agg_value
                                int64_t**,        // out
-                               int64_t**,        // out2
                                int32_t*,         // error_code
                                const uint32_t*,  // num_tables
                                const int64_t*);  // join_hash_tables_ptr
@@ -689,7 +679,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
           &total_matched_init,
           &cmpt_val_buff[0],
           query_buffers_->getGroupByBuffersPtr(),
-          small_group_by_buffers_ptr,
           error_code,
           &num_tables,
           join_hash_tables_ptr);
@@ -704,7 +693,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
                                                     &total_matched_init,
                                                     &init_agg_vals[0],
                                                     &out_vec[0],
-                                                    nullptr,
                                                     error_code,
                                                     &num_tables,
                                                     join_hash_tables_ptr);

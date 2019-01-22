@@ -131,7 +131,6 @@ llvm::Function* row_process(llvm::Module* mod,
     }
   } else {                           // group by query
     func_args.push_back(pi64_type);  // groups buffer
-    func_args.push_back(pi64_type);  // small groups buffer
     func_args.push_back(pi32_type);  // 1 iff current row matched, else 0
     func_args.push_back(pi32_type);  // total rows matched from the caller
     func_args.push_back(pi32_type);  // total rows matched before atomic increment
@@ -219,7 +218,6 @@ llvm::Function* query_template_impl(llvm::Module* mod,
 
   query_args.push_back(pi64_type);
   query_args.push_back(ppi64_type);
-  query_args.push_back(ppi64_type);
   query_args.push_back(i32_type);
   query_args.push_back(pi64_type);
   query_args.push_back(pi32_type);
@@ -296,8 +294,6 @@ llvm::Function* query_template_impl(llvm::Module* mod,
   agg_init_val->setName("agg_init_val");
   Value* out = &*(++query_arg_it);
   out->setName("out");
-  Value* unused = &*(++query_arg_it);
-  unused->setName("unused");
   Value* frag_idx = &*(++query_arg_it);
   frag_idx->setName("frag_idx");
   Value* join_hash_tables = &*(++query_arg_it);
@@ -514,7 +510,6 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   query_args.push_back(pi64_type);
 
   query_args.push_back(ppi64_type);
-  query_args.push_back(ppi64_type);
   query_args.push_back(i32_type);
   query_args.push_back(pi64_type);
   query_args.push_back(pi32_type);
@@ -604,8 +599,6 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   agg_init_val->setName("agg_init_val");
   Value* group_by_buffers = &*(++query_arg_it);
   group_by_buffers->setName("group_by_buffers");
-  Value* small_groups_buffer = &*(++query_arg_it);
-  small_groups_buffer->setName("small_groups_buffer");
   Value* frag_idx = &*(++query_arg_it);
   frag_idx->setName("frag_idx");
   Value* join_hash_tables = &*(++query_arg_it);
@@ -702,8 +695,6 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
 
   std::vector<Value*> row_process_params;
   row_process_params.push_back(result_buffer);
-  // TODO(adb): Remove the below small buffer placeholder?
-  row_process_params.push_back(Constant::getNullValue(pi64_type));
   row_process_params.push_back(crt_matched_ptr);
   row_process_params.push_back(total_matched);
   row_process_params.push_back(old_total_matched_ptr);
@@ -805,7 +796,7 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   pos_pre->replaceAllUsesWith(pos_inc);
   delete pos_pre;
 
-  if (verifyFunction(*query_func_ptr)) {
+  if (verifyFunction(*query_func_ptr, &llvm::errs())) {
     LOG(FATAL) << "Generated invalid code. ";
   }
 
