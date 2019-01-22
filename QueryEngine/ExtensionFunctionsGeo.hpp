@@ -403,8 +403,19 @@ double distance_ring_ring(int8_t* ring1,
 }
 
 // Checks if a simple polygon (no holes) contains a point.
+//
 // Poly coords are extracted from raw data, based on compression (ic1) and input/output
 // SRIDs (isr1/osr).
+//
+// Shoot a ray from point P to the right, register intersections with any of polygon's
+// edges. Each intersection means entrance into or exit from the polygon. Odd number of
+// intersections means the polygon does contain P. Account for special cases: touch+cross,
+// touch+leave, touch+overlay+cross, touch+overlay+leave, on edge, etc.
+//
+// Secondary ray is shot from point P down for simple redundancy, to reduce main probe's
+// chance of error. No intersections means P is outside, irrespective of main probe's
+// result.
+//
 DEVICE
 bool polygon_contains_point(int8_t* poly,
                             int32_t poly_num_coords,
@@ -413,19 +424,36 @@ bool polygon_contains_point(int8_t* poly,
                             int32_t ic1,
                             int32_t isr1,
                             int32_t osr) {
-  // Shoot a line from point P to the right along x axis, register intersections with any
-  // of polygon's edges. Each intersection means we're entered/exited the polygon. Odd
-  // number of intersections means the polygon does contain P.
   bool result = false;
-  int8_t xray_touch = 0;
+  int xray_touch = 0;
+  bool horizontal_edge = false;
+  bool yray_intersects = false;
+
   double e1x = coord_x(poly, poly_num_coords - 2, ic1, isr1, osr);
   double e1y = coord_y(poly, poly_num_coords - 1, ic1, isr1, osr);
   for (int64_t i = 0; i < poly_num_coords; i += 2) {
     double e2x = coord_x(poly, i, ic1, isr1, osr);
     double e2y = coord_y(poly, i + 1, ic1, isr1, osr);
+
+    // Check if point sits on an edge.
+    if (tol_zero(distance_point_line(px, py, e1x, e1y, e2x, e2y))) {
+      return true;
+    }
+
+    // Before flipping the switch, check if xray hit a horizontal edge
+    // - If an edge lays on the xray, one of the previous edges touched it
+    //   so while moving horizontally we're in 'xray_touch' state
+    // - Last edge that touched xray at (e2x,e2y) didn't register intersection
+    // - Next edge that diverges from xray at (e1,e1y) will register intersection
+    // - Can have several horizontal edges, one after the other, keep moving though
+    //   in 'xray_touch' state without flipping the switch
+    horizontal_edge = (xray_touch != 0) && tol_eq(py, e1y) && tol_eq(py, e2y);
+
+    // Main probe: xray
     // Overshoot the xray to detect an intersection if there is one.
     double xray = fmax(e2x, e1x) + 1.0;
-    if (px <= xray &&  // Only check for intersection if the edge is on the right
+    if (px <= xray &&        // Only check for intersection if the edge is on the right
+        !horizontal_edge &&  // Keep moving through horizontal edges
         line_intersects_line(px,  // xray shooting from point p to the right
                              py,
                              xray,
@@ -434,38 +462,71 @@ bool polygon_contains_point(int8_t* poly,
                              e1y,
                              e2x,
                              e2y)) {
+      // Register intersection
       result = !result;
 
-      if (tol_zero(distance_point_line(e2x, e2y, px, py, xray + 1.0, py))) {
-        // Xray goes through the edge's second vertex, flip the result again -
-        // that vertex will be crossed again when we look at the next edge
-        result = !result;
-        // Register if the xray was touched from above (1) or from below (-1)
-        xray_touch = (e1y > py) ? 1 : -1;
-      }
-      if (xray_touch != 0) {
+      // Adjust for special cases
+      if (xray_touch == 0) {
+        if (tol_zero(distance_point_line(e2x, e2y, px, py, xray + 1.0, py))) {
+          // Xray goes through the edge's second vertex, unregister intersection -
+          // that vertex will be crossed again when we look at the following edge(s)
+          result = !result;
+          // Enter the xray-touch state:
+          // (1) - xray was touched by the edge from above, (-1) from below
+          xray_touch = (e1y > py) ? 1 : -1;
+        }
+      } else {
         // Previous edge touched the xray, intersection hasn't been registered,
         // it has to be registered now if this edge continues across the xray.
-        // TODO: what if after touch, edge(s) follow the xray horizontally?
         if (xray_touch > 0) {
           // Previous edge touched the xray from above
-          // Register intersection if current edge crosses under
-          if (e2y <= py)
+          if (e2y <= py) {
+            // Current edge crosses under xray: intersection is already registered
+          } else {
+            // Current edge just touched the xray and pulled up: unregister intersection
             result = !result;
+          }
         } else {
           // Previous edge touched the xray from below
-          // Register intersection if current edge crosses over
-          if (e2y > py)
+          if (e2y > py) {
+            // Current edge crosses over xray: intersection is already registered
+          } else {
+            // Current edge just touched the xray and pulled down: unregister intersection
             result = !result;
+          }
         }
-        // Unregister the xray touch
+        // Exit the xray-touch state
         xray_touch = 0;
       }
     }
+
+    // Redundancy: vertical yray down
+    // Main probe xray may hit multiple complex fragments which increases a chance of
+    // error. Perform a simple secondary check for edge intersections to see if point is
+    // outside.
+    if (!yray_intersects) {  // Continue checking on yray until intersection is found
+      double yray = fmin(e2y, e1y) - 1.0;
+      if (yray <= py) {  // Only check for yray intersection if point P is above the edge
+        yray_intersects = line_intersects_line(px,  // yray shooting from point P down
+                                               py,
+                                               px,
+                                               yray,
+                                               e1x,  // polygon edge
+                                               e1y,
+                                               e2x,
+                                               e2y);
+      }
+    }
+
     // Advance to the next vertex
     e1x = e2x;
     e1y = e2y;
   }
+  if (!yray_intersects) {
+    // yray has zero intersections - point is outside the polygon
+    return false;
+  }
+  // Otherwise rely on the main probe
   return result;
 }
 

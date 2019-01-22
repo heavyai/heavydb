@@ -11679,12 +11679,51 @@ TEST(Select, GeoSpatial_Projection) {
             "((2 0, 0 2, -2 0, 0 -2, 1 -2, 2 -1)))', 4326), "
             "ST_GeomFromText('POINT(0.1 0.1)', 4326)) FROM geospatial_test limit 1;",
             dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),  // point in polygon, xray touches another vertex
+
+    ASSERT_EQ(static_cast<int64_t>(1),  // point in polygon, on left edge
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_Contains("
+                  "ST_GeomFromText('POLYGON((0 -1, 2 1, 0 1))'), "
+                  "ST_GeomFromText('POINT(0 0)')) FROM geospatial_test limit 1;",
+                  dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),  // point in polygon, on right edge
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_Contains("
+                  "ST_GeomFromText('POLYGON((0 -1, 2 1, 0 1))'), "
+                  "ST_GeomFromText('POINT(1 0)')) FROM geospatial_test limit 1;",
+                  dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),  // point in polygon, touch+leave
               v<int64_t>(run_simple_agg(
                   "SELECT ST_Contains("
                   "ST_GeomFromText('POLYGON((0 -1, 2 1, 3 0, 5 2, 0 2, -1 0))'), "
                   "ST_GeomFromText('POINT(0 0)')) FROM geospatial_test limit 1;",
                   dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),  // point in polygon, touch+overlay+leave
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_Contains("
+                  "ST_GeomFromText('POLYGON((0 -1, 2 1, 3 0, 4 0, 5 2, 0 2, -1 0))'), "
+                  "ST_GeomFromText('POINT(0 0)')) FROM geospatial_test limit 1;",
+                  dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),  // point in polygon, touch+cross
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_Contains("
+                  "ST_GeomFromText('POLYGON((0 -1, 2 1, 3 0, 4 -1, 5 2, 0 2, -1 0))'), "
+                  "ST_GeomFromText('POINT(0 0)')) FROM geospatial_test limit 1;",
+                  dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(1),  // point in polygon, touch+overlay+cross
+        v<int64_t>(run_simple_agg(
+            "SELECT ST_Contains("
+            "ST_GeomFromText('POLYGON((0 -1, 2 1, 3 0, 4 0, 4.5 -1, 5 2, 0 2, -1 0))'), "
+            "ST_GeomFromText('POINT(0 0)')) FROM geospatial_test limit 1;",
+            dt)));
+    ASSERT_EQ(static_cast<int64_t>(0),  // point in polygon, check yray redundancy
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_Contains("
+                  "ST_GeomFromText('POLYGON((0 -1, 2 1, 3 0, 5 2, 0 2, -1 0))'), "
+                  "ST_GeomFromText('POINT(2 0)')) FROM geospatial_test limit 1;",
+                  dt)));
+
     ASSERT_EQ(static_cast<int64_t>(1),  // polygon containing linestring
               v<int64_t>(run_simple_agg(
                   "SELECT ST_Contains("
@@ -12063,7 +12102,7 @@ TEST(Select, GeoSpatial_GeoJoin) {
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
             "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
-            "b ON ST_Contains(b.poly, a.p) WHERE b.id = 2;",
+            "b ON ST_Contains(b.poly, a.p) WHERE b.id = 2 OFFSET 1;",
             dt,
             true,
             false)));
@@ -12102,17 +12141,17 @@ TEST(Select, GeoSpatial_GeoJoin) {
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
             "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
-            "b ON ST_Contains(b.poly, a.p) WHERE b.id = 2;",
+            "b ON ST_Contains(b.poly, a.p) WHERE b.id = 2 OFFSET 1;",
             dt)));
     ASSERT_EQ(
-        static_cast<int64_t>(2),
+        static_cast<int64_t>(3),
         v<int64_t>(run_simple_agg(
             "SELECT count(*) FROM geospatial_test a INNER JOIN "
             "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p) WHERE b.id = 4",
             dt)));
     // re-run to test hash join cache (currently CPU only)
     ASSERT_EQ(
-        static_cast<int64_t>(2),
+        static_cast<int64_t>(3),
         v<int64_t>(run_simple_agg(
             "SELECT count(*) FROM geospatial_test a INNER JOIN "
             "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p) WHERE b.id = 4",
@@ -12123,11 +12162,11 @@ TEST(Select, GeoSpatial_GeoJoin) {
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
             "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
-            "b ON ST_Contains(b.poly, a.gp4326) WHERE b.id = 2;",
+            "b ON ST_Contains(b.poly, a.gp4326) WHERE b.id = 2 OFFSET 1;",
             dt)));
 
     ASSERT_EQ(
-        static_cast<int64_t>(2),
+        static_cast<int64_t>(3),
         v<int64_t>(run_simple_agg("SELECT count(*) FROM geospatial_test a INNER JOIN "
                                   "geospatial_inner_join_test b ON ST_Contains(b.poly, "
                                   "a.gp4326) WHERE b.id = 4;",
