@@ -129,7 +129,7 @@ class QueryMemoryInitializer {
                                    const size_t projection_count);
   void compactProjectionBuffersGpu(const QueryMemoryDescriptor& query_mem_desc,
                                    Data_Namespace::DataMgr* data_mgr,
-                                   const GpuQueryMemory& gpu_query_mem,
+                                   const GpuGroupByBuffers& gpu_group_by_buffers,
                                    const size_t projection_count,
                                    const int device_id);
 
@@ -143,7 +143,7 @@ class QueryMemoryInitializer {
 
   void copyGroupByBuffersFromGpu(Data_Namespace::DataMgr* data_mgr,
                                  const QueryMemoryDescriptor& query_mem_desc,
-                                 const GpuQueryMemory& gpu_query_mem,
+                                 const GpuGroupByBuffers& gpu_group_by_buffers,
                                  const RelAlgExecutionUnit& ra_exe_unit,
                                  const unsigned block_size_x,
                                  const unsigned grid_size_x,
@@ -155,7 +155,7 @@ class QueryMemoryInitializer {
 
   void applyStreamingTopNOffsetGpu(Data_Namespace::DataMgr* data_mgr,
                                    const QueryMemoryDescriptor& query_mem_desc,
-                                   const GpuQueryMemory& gpu_query_mem,
+                                   const GpuGroupByBuffers& gpu_group_by_buffers,
                                    const RelAlgExecutionUnit& ra_exe_unit,
                                    const unsigned total_thread_count,
                                    const int device_id);

@@ -18,6 +18,7 @@
 #include "AggregateUtils.h"
 #include "Execute.h"
 #include "GpuInitGroups.h"
+#include "InPlaceSort.h"
 #include "QueryMemoryDescriptor.h"
 #include "QueryMemoryInitializer.h"
 #include "RelAlgExecutionUnit.h"
@@ -256,16 +257,16 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   if (is_group_by) {
     CHECK(!(query_buffers_->getGroupByBuffersSize() == 0) || render_allocator);
     bool can_sort_on_gpu = query_mem_desc_.sortOnGpu();
-    auto gpu_query_mem = prepareGroupByDevBuffer(cuda_allocator,
-                                                 render_allocator,
-                                                 ra_exe_unit,
-                                                 kernel_params[INIT_AGG_VALS],
-                                                 device_id,
-                                                 block_size_x,
-                                                 grid_size_x,
-                                                 can_sort_on_gpu);
+    auto gpu_group_by_buffers = prepareGroupByDevBuffer(cuda_allocator,
+                                                        render_allocator,
+                                                        ra_exe_unit,
+                                                        kernel_params[INIT_AGG_VALS],
+                                                        device_id,
+                                                        block_size_x,
+                                                        grid_size_x,
+                                                        can_sort_on_gpu);
 
-    kernel_params[GROUPBY_BUF] = gpu_query_mem.group_by_buffers.first;
+    kernel_params[GROUPBY_BUF] = gpu_group_by_buffers.first;
     std::vector<void*> param_ptrs;
     for (auto& param : kernel_params) {
       param_ptrs.push_back(&param);
@@ -338,17 +339,17 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       if (use_streaming_top_n(ra_exe_unit, query_mem_desc_)) {
         query_buffers_->applyStreamingTopNOffsetGpu(data_mgr,
                                                     query_mem_desc_,
-                                                    gpu_query_mem,
+                                                    gpu_group_by_buffers,
                                                     ra_exe_unit,
                                                     total_thread_count,
                                                     device_id);
       } else {
         if (use_speculative_top_n(ra_exe_unit, query_mem_desc_)) {
-          ResultRows::inplaceSortGpuImpl(ra_exe_unit.sort_info.order_entries,
-                                         query_mem_desc_,
-                                         gpu_query_mem,
-                                         data_mgr,
-                                         device_id);
+          inplace_sort_gpu(ra_exe_unit.sort_info.order_entries,
+                           query_mem_desc_,
+                           gpu_group_by_buffers,
+                           data_mgr,
+                           device_id);
         }
         if (query_mem_desc_.didOutputColumnar() &&
             query_mem_desc_.getQueryDescriptionType() ==
@@ -356,7 +357,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
           query_buffers_->compactProjectionBuffersGpu(
               query_mem_desc_,
               data_mgr,
-              gpu_query_mem,
+              gpu_group_by_buffers,
               get_num_allocated_rows_from_gpu(
                   data_mgr, kernel_params[TOTAL_MATCHED], device_id),
               device_id);
@@ -364,7 +365,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
           query_buffers_->copyGroupByBuffersFromGpu(
               data_mgr,
               query_mem_desc_,
-              gpu_query_mem,
+              gpu_group_by_buffers,
               ra_exe_unit,
               block_size_x,
               grid_size_x,
@@ -962,7 +963,7 @@ std::pair<CUdeviceptr, CUdeviceptr> QueryExecutionContext::prepareTopNHeapsDevBu
   return {dev_ptr, dev_buffer};
 }
 
-GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(
+GpuGroupByBuffers QueryExecutionContext::prepareGroupByDevBuffer(
     const CudaAllocator& cuda_allocator,
     RenderAllocator* render_allocator,
     const RelAlgExecutionUnit& ra_exe_unit,
@@ -977,9 +978,8 @@ GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(
       throw StreamingTopNNotSupportedInRenderQuery();
     }
     const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
-    auto heap_buffers = prepareTopNHeapsDevBuffer(
+    return prepareTopNHeapsDevBuffer(
         cuda_allocator, init_agg_vals_dev_ptr, n, device_id, block_size_x, grid_size_x);
-    return GpuQueryMemory{heap_buffers};
   }
   auto dev_group_by_buffers = query_buffers_->createGroupByBuffersOnGpu(cuda_allocator,
                                                                         render_allocator,
@@ -1044,6 +1044,6 @@ GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(
       group_by_dev_buffer += groups_buffer_size;
     }
   }
-  return GpuQueryMemory{dev_group_by_buffers};
+  return dev_group_by_buffers;
 }
 #endif

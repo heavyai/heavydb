@@ -580,7 +580,7 @@ void QueryMemoryInitializer::compactProjectionBuffersCpu(
 void QueryMemoryInitializer::compactProjectionBuffersGpu(
     const QueryMemoryDescriptor& query_mem_desc,
     Data_Namespace::DataMgr* data_mgr,
-    const GpuQueryMemory& gpu_query_mem,
+    const GpuGroupByBuffers& gpu_group_by_buffers,
     const size_t projection_count,
     const int device_id) {
   // store total number of allocated rows:
@@ -590,7 +590,7 @@ void QueryMemoryInitializer::compactProjectionBuffersGpu(
   // copy the results from the main buffer into projection_buffer
   copy_projection_buffer_from_gpu_columnar(
       data_mgr,
-      gpu_query_mem,
+      gpu_group_by_buffers,
       query_mem_desc,
       reinterpret_cast<int8_t*>(group_by_buffers_[0]),
       num_allocated_rows,
@@ -623,7 +623,7 @@ GpuGroupByBuffers QueryMemoryInitializer::createGroupByBuffersOnGpu(
 void QueryMemoryInitializer::copyGroupByBuffersFromGpu(
     Data_Namespace::DataMgr* data_mgr,
     const QueryMemoryDescriptor& query_mem_desc,
-    const GpuQueryMemory& gpu_query_mem,
+    const GpuGroupByBuffers& gpu_group_by_buffers,
     const RelAlgExecutionUnit& ra_exe_unit,
     const unsigned block_size_x,
     const unsigned grid_size_x,
@@ -635,7 +635,7 @@ void QueryMemoryInitializer::copyGroupByBuffersFromGpu(
   copy_group_by_buffers_from_gpu(data_mgr,
                                  group_by_buffers_,
                                  total_buff_size,
-                                 gpu_query_mem.group_by_buffers.second,
+                                 gpu_group_by_buffers.second,
                                  query_mem_desc,
                                  block_size_x,
                                  grid_size_x,
@@ -661,7 +661,7 @@ void QueryMemoryInitializer::applyStreamingTopNOffsetCpu(
 void QueryMemoryInitializer::applyStreamingTopNOffsetGpu(
     Data_Namespace::DataMgr* data_mgr,
     const QueryMemoryDescriptor& query_mem_desc,
-    const GpuQueryMemory& gpu_query_mem,
+    const GpuGroupByBuffers& gpu_group_by_buffers,
     const RelAlgExecutionUnit& ra_exe_unit,
     const unsigned total_thread_count,
     const int device_id) {
@@ -670,7 +670,7 @@ void QueryMemoryInitializer::applyStreamingTopNOffsetGpu(
 
   const auto rows_copy = pick_top_n_rows_from_dev_heaps(
       data_mgr,
-      reinterpret_cast<int64_t*>(gpu_query_mem.group_by_buffers.second),
+      reinterpret_cast<int64_t*>(gpu_group_by_buffers.second),
       ra_exe_unit,
       query_mem_desc,
       total_thread_count,

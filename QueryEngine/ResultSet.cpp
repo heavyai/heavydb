@@ -797,11 +797,8 @@ void ResultSet::radixSortOnGpu(
                                                           true,
                                                           true,
                                                           nullptr);
-  ResultRows::inplaceSortGpuImpl(order_entries,
-                                 query_mem_desc_,
-                                 GpuQueryMemory{dev_group_by_buffers},
-                                 data_mgr,
-                                 device_id);
+  inplace_sort_gpu(
+      order_entries, query_mem_desc_, dev_group_by_buffers, data_mgr, device_id);
   copy_group_by_buffers_from_gpu(
       data_mgr,
       group_by_buffers,

@@ -65,11 +65,6 @@ void copy_from_gpu(Data_Namespace::DataMgr* data_mgr,
                    const size_t num_bytes,
                    const int device_id);
 
-struct GpuQueryMemory {
-  std::pair<CUdeviceptr, CUdeviceptr> group_by_buffers;
-  std::pair<CUdeviceptr, CUdeviceptr> small_group_by_buffers;
-};
-
 using GpuGroupByBuffers = std::pair<CUdeviceptr, CUdeviceptr>;
 
 class QueryMemoryDescriptor;
@@ -101,7 +96,7 @@ size_t get_num_allocated_rows_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                        const int device_id);
 
 void copy_projection_buffer_from_gpu_columnar(Data_Namespace::DataMgr* data_mgr,
-                                              const GpuQueryMemory& gpu_query_mem,
+                                              const GpuGroupByBuffers& gpu_query_buffers,
                                               const QueryMemoryDescriptor& query_mem_desc,
                                               int8_t* projection_buffer,
                                               const size_t projection_count,

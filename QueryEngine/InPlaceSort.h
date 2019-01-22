@@ -24,28 +24,30 @@
 #ifndef INPLACESORT_H
 #define INPLACESORT_H
 
+#include "GpuMemUtils.h"
+
 #include <cstdint>
+#include <list>
 
-class ThrustAllocator;
+namespace Analyzer {
+struct OrderEntry;
+}
+class QueryMemoryDescriptor;
+namespace Data_Namespace {
+class DataMgr;
+}
 
-void sort_groups_gpu(int64_t* val_buff,
-                     int32_t* key_buff,
-                     const uint64_t entry_count,
-                     const bool desc,
-                     const uint32_t chosen_bytes,
-                     ThrustAllocator& alloc);
+void inplace_sort_gpu(const std::list<Analyzer::OrderEntry>&,
+                      const QueryMemoryDescriptor&,
+                      const GpuGroupByBuffers&,
+                      Data_Namespace::DataMgr*,
+                      const int);
 
 void sort_groups_cpu(int64_t* val_buff,
                      int32_t* key_buff,
                      const uint64_t entry_count,
                      const bool desc,
                      const uint32_t chosen_bytes);
-
-void apply_permutation_gpu(int64_t* val_buff,
-                           int32_t* idx_buff,
-                           const uint64_t entry_count,
-                           const uint32_t chosen_bytes,
-                           ThrustAllocator& alloc);
 
 void apply_permutation_cpu(int64_t* val_buff,
                            int32_t* idx_buff,

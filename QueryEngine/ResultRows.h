@@ -374,16 +374,8 @@ inline std::vector<TargetInfo> target_exprs_to_infos(
   return target_infos;
 }
 
-struct GpuQueryMemory;
-
 class ResultRows {
  public:
-  static void inplaceSortGpuImpl(const std::list<Analyzer::OrderEntry>&,
-                                 const QueryMemoryDescriptor&,
-                                 const GpuQueryMemory&,
-                                 Data_Namespace::DataMgr*,
-                                 const int);
-
   static bool reduceSingleRow(const int8_t* row_ptr,
                               const int8_t warp_count,
                               const bool is_columnar,

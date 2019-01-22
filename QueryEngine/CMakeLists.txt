@@ -67,7 +67,6 @@ set(query_engine_source_files
     RelAlgTranslator.cpp
     RelAlgTranslatorGeo.cpp
     RelAlgOptimizer.cpp
-    ResultRows.cpp
     ResultSet.cpp
     ResultSetIteration.cpp
     ResultSetReduction.cpp

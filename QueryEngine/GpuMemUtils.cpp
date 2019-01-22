@@ -240,19 +240,20 @@ size_t get_num_allocated_rows_from_gpu(Data_Namespace::DataMgr* data_mgr,
  *
  * NOTE: Saman: we should revisit this function when we have a bump allocator
  */
-void copy_projection_buffer_from_gpu_columnar(Data_Namespace::DataMgr* data_mgr,
-                                              const GpuQueryMemory& gpu_query_mem,
-                                              const QueryMemoryDescriptor& query_mem_desc,
-                                              int8_t* projection_buffer,
-                                              const size_t projection_count,
-                                              const int device_id) {
+void copy_projection_buffer_from_gpu_columnar(
+    Data_Namespace::DataMgr* data_mgr,
+    const GpuGroupByBuffers& gpu_group_by_buffers,
+    const QueryMemoryDescriptor& query_mem_desc,
+    int8_t* projection_buffer,
+    const size_t projection_count,
+    const int device_id) {
   CHECK(query_mem_desc.didOutputColumnar());
   CHECK(query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection);
   constexpr size_t row_index_width = sizeof(int64_t);
   // copy all the row indices back to the host
   copy_from_gpu(data_mgr,
                 reinterpret_cast<int64_t*>(projection_buffer),
-                gpu_query_mem.group_by_buffers.second,
+                gpu_group_by_buffers.second,
                 projection_count * row_index_width,
                 device_id);
   size_t buffer_offset_cpu{projection_count * row_index_width};
@@ -261,12 +262,11 @@ void copy_projection_buffer_from_gpu_columnar(Data_Namespace::DataMgr* data_mgr,
     if (query_mem_desc.getPaddedColumnWidthBytes(i) > 0) {
       const auto column_proj_size =
           projection_count * query_mem_desc.getPaddedColumnWidthBytes(i);
-      copy_from_gpu(
-          data_mgr,
-          projection_buffer + buffer_offset_cpu,
-          gpu_query_mem.group_by_buffers.second + query_mem_desc.getColOffInBytes(i),
-          column_proj_size,
-          device_id);
+      copy_from_gpu(data_mgr,
+                    projection_buffer + buffer_offset_cpu,
+                    gpu_group_by_buffers.second + query_mem_desc.getColOffInBytes(i),
+                    column_proj_size,
+                    device_id);
       buffer_offset_cpu += align_to_int64(column_proj_size);
     }
   }
