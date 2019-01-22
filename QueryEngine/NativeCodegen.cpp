@@ -1304,7 +1304,6 @@ Executor::CompilationResult Executor::compileWorkUnit(
     const bool allow_lazy_fetch,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const size_t max_groups_buffer_entry_guess,
-    const size_t small_groups_buffer_entry_count,
     const int8_t crt_min_byte_width,
     const bool has_cardinality_estimation,
     ColumnCacheMap& column_cache,
@@ -1312,7 +1311,6 @@ Executor::CompilationResult Executor::compileWorkUnit(
   nukeOldState(allow_lazy_fetch, query_infos, ra_exe_unit);
   OOM_TRACE_PUSH(+": " + (co.device_type_ == ExecutorDeviceType::GPU ? "gpu" : "cpu"));
 
-  // TODO(adb): remove small groups entry count?
   GroupByAndAggregate group_by_and_aggregate(this,
                                              co.device_type_,
                                              ra_exe_unit,
@@ -1320,7 +1318,6 @@ Executor::CompilationResult Executor::compileWorkUnit(
                                              query_infos,
                                              row_set_mem_owner,
                                              max_groups_buffer_entry_guess,
-                                             small_groups_buffer_entry_count,
                                              crt_min_byte_width,
                                              eo.allow_multifrag,
                                              eo.output_columnar_hint);

@@ -1055,7 +1055,6 @@ class Executor {
                                     const bool allow_lazy_fetch,
                                     std::shared_ptr<RowSetMemoryOwner>,
                                     const size_t max_groups_buffer_entry_count,
-                                    const size_t small_groups_buffer_entry_count,
                                     const int8_t crt_min_byte_width,
                                     const bool has_cardinality_estimation,
                                     ColumnCacheMap& column_cache,
@@ -1585,7 +1584,6 @@ class Executor {
 
   ::QueryRenderer::QueryRenderManager* render_manager_;
 
-  const size_t small_groups_buffer_entry_count_{512};
   static const size_t baseline_threshold{
       1000000};  // if a perfect hash needs more entries, use baseline
   static const size_t code_cache_size{10000};

@@ -381,7 +381,6 @@ int8_t Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry
           render_info_ && render_info_->isPotentialInSituRender() ? false : true,
           row_set_mem_owner_,
           max_groups_buffer_entry_guess,
-          executor_->small_groups_buffer_entry_count_,
           crt_min_byte_width,
           has_cardinality_estimation,
           columnarized_table_cache_,
@@ -391,20 +390,18 @@ int8_t Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry
       if (executor_->cgen_state_->module_) {
         delete executor_->cgen_state_->module_;
       }
-      compilation_result_cpu_ =
-          executor_->compileWorkUnit(query_infos_,
-                                     ra_exe_unit_,
-                                     co_cpu,
-                                     options,
-                                     cat_.getDataMgr().getCudaMgr(),
-                                     false,
-                                     row_set_mem_owner_,
-                                     max_groups_buffer_entry_guess,
-                                     executor_->small_groups_buffer_entry_count_,
-                                     crt_min_byte_width,
-                                     has_cardinality_estimation,
-                                     columnarized_table_cache_,
-                                     render_info_);
+      compilation_result_cpu_ = executor_->compileWorkUnit(query_infos_,
+                                                           ra_exe_unit_,
+                                                           co_cpu,
+                                                           options,
+                                                           cat_.getDataMgr().getCudaMgr(),
+                                                           false,
+                                                           row_set_mem_owner_,
+                                                           max_groups_buffer_entry_guess,
+                                                           crt_min_byte_width,
+                                                           has_cardinality_estimation,
+                                                           columnarized_table_cache_,
+                                                           render_info_);
     }
     actual_min_byte_width =
         compilation_result_cpu_.query_mem_desc.updateActualMinByteWidth(
@@ -431,7 +428,6 @@ int8_t Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry
           render_info_ && render_info_->isPotentialInSituRender() ? false : true,
           row_set_mem_owner_,
           max_groups_buffer_entry_guess,
-          executor_->small_groups_buffer_entry_count_,
           crt_min_byte_width,
           has_cardinality_estimation,
           columnarized_table_cache_,
@@ -441,20 +437,18 @@ int8_t Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry
       if (executor_->cgen_state_->module_) {
         delete executor_->cgen_state_->module_;
       }
-      compilation_result_gpu_ =
-          executor_->compileWorkUnit(query_infos_,
-                                     ra_exe_unit_,
-                                     co_gpu,
-                                     options,
-                                     cat_.getDataMgr().getCudaMgr(),
-                                     false,
-                                     row_set_mem_owner_,
-                                     max_groups_buffer_entry_guess,
-                                     executor_->small_groups_buffer_entry_count_,
-                                     crt_min_byte_width,
-                                     has_cardinality_estimation,
-                                     columnarized_table_cache_,
-                                     render_info_);
+      compilation_result_gpu_ = executor_->compileWorkUnit(query_infos_,
+                                                           ra_exe_unit_,
+                                                           co_gpu,
+                                                           options,
+                                                           cat_.getDataMgr().getCudaMgr(),
+                                                           false,
+                                                           row_set_mem_owner_,
+                                                           max_groups_buffer_entry_guess,
+                                                           crt_min_byte_width,
+                                                           has_cardinality_estimation,
+                                                           columnarized_table_cache_,
+                                                           render_info_);
     }
     actual_min_byte_width =
         compilation_result_gpu_.query_mem_desc.updateActualMinByteWidth(

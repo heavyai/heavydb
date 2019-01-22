@@ -225,7 +225,6 @@ GroupByAndAggregate::GroupByAndAggregate(
     const std::vector<InputTableInfo>& query_infos,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const size_t max_groups_buffer_entry_count,
-    const size_t small_groups_buffer_entry_count,
     const int8_t crt_min_byte_width,
     const bool allow_multifrag,
     const bool output_columnar_hint)
@@ -266,7 +265,6 @@ GroupByAndAggregate::GroupByAndAggregate(
   while (true) {
     initQueryMemoryDescriptor(allow_multifrag,
                               max_groups_buffer_entry_count,
-                              small_groups_buffer_entry_count,
                               crt_min_byte_width,
                               sort_on_gpu_hint,
                               render_info,
@@ -321,7 +319,6 @@ int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_i
 void GroupByAndAggregate::initQueryMemoryDescriptor(
     const bool allow_multifrag,
     const size_t max_groups_buffer_entry_count,
-    const size_t small_groups_buffer_entry_count,
     const int8_t crt_min_byte_width,
     const bool sort_on_gpu_hint,
     RenderInfo* render_info,

@@ -29,7 +29,6 @@ class RenderInfo {
  public:
   std::unique_ptr<RenderAllocatorMap> render_allocator_map_ptr;
   const std::shared_ptr<const ::QueryRenderer::RenderSession> render_session;
-  const size_t render_small_groups_buffer_entry_count{2 * 1024 * 1024};
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner;
   std::vector<std::shared_ptr<Analyzer::TargetEntry>>
       targets;  // Info for all the column targets retrieved in

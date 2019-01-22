@@ -121,7 +121,6 @@ class GroupByAndAggregate {
                       const std::vector<InputTableInfo>& query_infos,
                       std::shared_ptr<RowSetMemoryOwner>,
                       const size_t max_groups_buffer_entry_count,
-                      const size_t small_groups_buffer_entry_count,
                       const int8_t crt_min_byte_width,
                       const bool allow_multifrag,
                       const bool output_columnar_hint);
@@ -172,7 +171,6 @@ class GroupByAndAggregate {
 
   void initQueryMemoryDescriptor(const bool allow_multifrag,
                                  const size_t max_groups_buffer_entry_count,
-                                 const size_t small_groups_buffer_entry_count,
                                  const int8_t crt_min_byte_width,
                                  const bool sort_on_gpu_hint,
                                  RenderInfo* render_info,
