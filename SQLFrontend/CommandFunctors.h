@@ -396,15 +396,18 @@ StandardCommand(ListColumns, {
         comma_or_blank = ", ";
       }
       if (table_details.partition_detail != TPartitionDetail::DEFAULT) {
-        partition_detail =
-            comma_or_blank + "PARTITIONS = " +
-            (table_details.partition_detail == TPartitionDetail::REPLICATED ? "REPLICATED"
-                                                                            : "");
-        partition_detail +=
-            (table_details.partition_detail == TPartitionDetail::SHARDED ? "SHARDED"
-                                                                         : "");
-        partition_detail +=
-            (table_details.partition_detail == TPartitionDetail::OTHER ? "OTHER" : "");
+        partition_detail = comma_or_blank + "PARTITIONS = ";
+        switch (table_details.partition_detail) {
+          case TPartitionDetail::REPLICATED:
+            partition_detail += "'REPLICATED'";
+            break;
+          case TPartitionDetail::SHARDED:
+            partition_detail += "'SHARDED'";
+            break;
+          default:
+            partition_detail += "'OTHER'";
+            break;
+        }
       }
       std::string with = frag + page + row + partition_detail;
       if (with.length() > 0) {
