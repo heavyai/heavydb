@@ -1704,14 +1704,30 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
 
   result.setQueueTime(queue_time_ms);
   if (render_info) {
-    CHECK_GE(target_exprs_owned_.size(), targets_meta.size());
+    const auto& target_exprs = work_unit.exe_unit.target_exprs;
+    CHECK_EQ(target_exprs.size(), targets_meta.size());
     render_info->targets.clear();
-    const auto target_start_idx = target_exprs_owned_.size() - targets_meta.size();
     for (size_t i = 0; i < targets_meta.size(); ++i) {
-      render_info->targets.emplace_back(
-          new Analyzer::TargetEntry(targets_meta[i].get_resname(),
-                                    target_exprs_owned_[target_start_idx + i],
-                                    false));
+      // TODO(croot): find a better way to iterate through these or a better data
+      // structure for faster lookup to avoid the double for-loop. These vectors should be
+      // small tho and have no impact on overall performance.
+      size_t j{0};
+      for (j = 0; j < target_exprs_owned_.size(); ++j) {
+        if (target_exprs_owned_[j].get() == target_exprs[i]) {
+          break;
+        }
+      }
+      CHECK_LT(j, target_exprs_owned_.size());
+
+      const auto& meta_ti = targets_meta[i].get_physical_type_info();
+      const auto& expr_ti = target_exprs_owned_[j]->get_type_info();
+      CHECK(meta_ti == expr_ti) << targets_meta[i].get_resname() << " " << i << "," << j
+                                << ", targets meta: " << meta_ti.get_type_name() << "("
+                                << meta_ti.get_compression_name()
+                                << "), target_expr: " << expr_ti.get_type_name() << "("
+                                << expr_ti.get_compression_name() << ")";
+      render_info->targets.emplace_back(std::make_shared<Analyzer::TargetEntry>(
+          targets_meta[i].get_resname(), target_exprs_owned_[j], false));
     }
     if (render_info->isPotentialInSituRender()) {
       // return an empty result (with the same queue time, and zero render time)
