@@ -1703,7 +1703,6 @@ Executor::FetchResult Executor::fetchChunks(
       selected_fragments_crossjoin);
 
   std::vector<std::vector<const int8_t*>> all_frag_col_buffers;
-  std::vector<std::vector<const int8_t*>> all_frag_iter_buffers;
   std::vector<std::vector<int64_t>> all_num_rows;
   std::vector<std::vector<uint64_t>> all_frag_offsets;
 
@@ -1771,7 +1770,7 @@ Executor::FetchResult Executor::fetchChunks(
   }
   std::tie(all_num_rows, all_frag_offsets) = getRowCountAndOffsetForAllFrags(
       ra_exe_unit, frag_ids_crossjoin, ra_exe_unit.input_descs, all_tables_fragments);
-  return {all_frag_col_buffers, all_frag_iter_buffers, all_num_rows, all_frag_offsets};
+  return {all_frag_col_buffers, all_num_rows, all_frag_offsets};
 }
 
 std::vector<size_t> Executor::getFragmentCount(const FragmentsList& selected_fragments,

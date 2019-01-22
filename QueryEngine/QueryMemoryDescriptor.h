@@ -128,7 +128,6 @@ class QueryMemoryDescriptor {
       const ExecutorDeviceType device_type,
       const int device_id,
       const std::vector<std::vector<const int8_t*>>& col_buffers,
-      const std::vector<std::vector<const int8_t*>>& iter_buffers,
       const std::vector<std::vector<uint64_t>>& frag_offsets,
       std::shared_ptr<RowSetMemoryOwner>,
       const bool output_columnar,

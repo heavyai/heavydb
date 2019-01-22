@@ -41,7 +41,6 @@ class QueryExecutionContext : boost::noncopyable {
                         const ExecutorDeviceType device_type,
                         const int device_id,
                         const std::vector<std::vector<const int8_t*>>& col_buffers,
-                        const std::vector<std::vector<const int8_t*>>& iter_buffers,
                         const std::vector<std::vector<uint64_t>>& frag_offsets,
                         std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                         const bool output_columnar,
@@ -92,13 +91,6 @@ class QueryExecutionContext : boost::noncopyable {
   int64_t getAggInitValForIndex(const size_t index) const;
 
  private:
-  const std::vector<const int8_t*>& getColumnFrag(const size_t table_idx,
-                                                  int64_t& global_idx) const;
-
-  uint32_t getFragmentStride(
-      const RelAlgExecutionUnit& ra_exe_unit,
-      const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids) const;
-
 #ifdef HAVE_CUDA
   enum {
     COL_BUFFERS,
@@ -160,13 +152,11 @@ class QueryExecutionContext : boost::noncopyable {
   const ExecutorDeviceType device_type_;
   const int device_id_;
   const std::vector<std::vector<const int8_t*>>& col_buffers_;
-  const std::vector<std::vector<const int8_t*>>& iter_buffers_;
   const std::vector<std::vector<uint64_t>>& frag_offsets_;
   const std::vector<int64_t> consistent_frag_sizes_;
 
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   const bool output_columnar_;
-  const bool sort_on_gpu_;
 
   std::unique_ptr<QueryMemoryInitializer> query_buffers_;
 
@@ -177,16 +167,6 @@ class QueryExecutionContext : boost::noncopyable {
   // Temporary; Reduction egress needs to become part of executor
   template <typename META_CLASS_TYPE>
   friend class AggregateReductionEgress;
-
-  friend void copy_group_by_buffers_from_gpu(
-      Data_Namespace::DataMgr* data_mgr,
-      const QueryExecutionContext* query_exe_context,
-      const GpuQueryMemory& gpu_query_mem,
-      const RelAlgExecutionUnit& ra_exe_unit,
-      const unsigned block_size_x,
-      const unsigned grid_size_x,
-      const int device_id,
-      const bool prepend_index_buffer);
 };
 
 #endif  // QUERYENGINE_QUERYEXECUTIONCONTEXT_H

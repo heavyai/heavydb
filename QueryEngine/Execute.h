@@ -727,7 +727,6 @@ class Executor {
 
   struct FetchResult {
     std::vector<std::vector<const int8_t*>> col_buffers;
-    std::vector<std::vector<const int8_t*>> iter_buffers;
     std::vector<std::vector<int64_t>> num_rows;
     std::vector<std::vector<uint64_t>> frag_offsets;
   };

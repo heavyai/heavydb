@@ -33,7 +33,6 @@ QueryExecutionContext::QueryExecutionContext(
     const ExecutorDeviceType device_type,
     const int device_id,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
-    const std::vector<std::vector<const int8_t*>>& iter_buffers,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const bool output_columnar,
@@ -44,12 +43,10 @@ QueryExecutionContext::QueryExecutionContext(
     , device_type_(device_type)
     , device_id_(device_id)
     , col_buffers_(col_buffers)
-    , iter_buffers_(iter_buffers)
     , frag_offsets_(frag_offsets)
     , consistent_frag_sizes_(get_consistent_frags_sizes(frag_offsets))
     , row_set_mem_owner_(row_set_mem_owner)
-    , output_columnar_(output_columnar)
-    , sort_on_gpu_(sort_on_gpu) {
+    , output_columnar_(output_columnar) {
   auto render_allocator_map = render_info && render_info->isPotentialInSituRender()
                                   ? render_info->render_allocator_map_ptr.get()
                                   : nullptr;
@@ -125,29 +122,6 @@ ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
 int64_t QueryExecutionContext::getAggInitValForIndex(const size_t index) const {
   CHECK(query_buffers_);
   return query_buffers_->getAggInitValForIndex(index);
-}
-
-const std::vector<const int8_t*>& QueryExecutionContext::getColumnFrag(
-    const size_t table_idx,
-    int64_t& global_idx) const {
-  if (col_buffers_.size() > 1) {
-    int64_t frag_id = 0;
-    int64_t local_idx = global_idx;
-    if (consistent_frag_sizes_[table_idx] != -1) {
-      frag_id = global_idx / consistent_frag_sizes_[table_idx];
-      local_idx = global_idx % consistent_frag_sizes_[table_idx];
-    } else {
-      std::tie(frag_id, local_idx) =
-          get_frag_id_and_local_idx(frag_offsets_, table_idx, global_idx);
-    }
-    CHECK_GE(frag_id, int64_t(0));
-    CHECK_LT(frag_id, col_buffers_.size());
-    global_idx = local_idx;
-    return col_buffers_[frag_id];
-  } else {
-    CHECK_EQ(size_t(1), col_buffers_.size());
-    return col_buffers_.front();
-  }
 }
 
 ResultSetPtr QueryExecutionContext::getRowSet(
