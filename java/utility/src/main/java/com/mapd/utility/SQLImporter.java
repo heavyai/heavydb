@@ -85,7 +85,8 @@ public class SQLImporter {
                                  .required()
                                  .build();
 
-    Option user = Option.builder("u").hasArg().desc("MapD User").longOpt("user").build();
+    Option user =
+            Option.builder("u").hasArg().desc("OmniSci User").longOpt("user").build();
 
     Option sourceUser = Option.builder("su")
                                 .hasArg()
@@ -101,20 +102,23 @@ public class SQLImporter {
                                   .required()
                                   .build();
 
-    Option passwd =
-            Option.builder("p").hasArg().desc("MapD Password").longOpt("passwd").build();
+    Option passwd = Option.builder("p")
+                            .hasArg()
+                            .desc("OmniSci Password")
+                            .longOpt("passwd")
+                            .build();
 
     Option server =
-            Option.builder("s").hasArg().desc("MapD Server").longOpt("server").build();
+            Option.builder("s").hasArg().desc("OmniSci Server").longOpt("server").build();
 
     Option targetTable = Option.builder("t")
                                  .hasArg()
-                                 .desc("MapD Target Table")
+                                 .desc("OmniSci Target Table")
                                  .longOpt("targetTable")
                                  .required()
                                  .build();
 
-    Option port = Option.builder().hasArg().desc("MapD Port").longOpt("port").build();
+    Option port = Option.builder().hasArg().desc("OmniSci Port").longOpt("port").build();
 
     Option bufferSize = Option.builder("b")
                                 .hasArg()
@@ -130,7 +134,7 @@ public class SQLImporter {
 
     Option database = Option.builder("db")
                               .hasArg()
-                              .desc("MapD Database")
+                              .desc("OmniSci Database")
                               .longOpt("database")
                               .build();
 
@@ -213,7 +217,8 @@ public class SQLImporter {
 
       ResultSet rs = stmt.executeQuery(cmd.getOptionValue("sqlStmt"));
 
-      // check if table already exists and is compatible in MapD with the query metadata
+      // check if table already exists and is compatible in OmniSci with the query
+      // metadata
       ResultSetMetaData md = rs.getMetaData();
       checkMapDTable(md);
 
@@ -340,7 +345,7 @@ public class SQLImporter {
         List<TColumnType> columnInfo = getColumnInfo(tName);
         // table exists lets check it has same number of columns
         if (md.getColumnCount() != columnInfo.size()) {
-          LOGGER.error("Table sizes do not match - Mapd " + columnInfo.size()
+          LOGGER.error("Table sizes do not match - OmniSci " + columnInfo.size()
                   + " versus Select " + md.getColumnCount());
           exit(1);
         }
@@ -349,8 +354,8 @@ public class SQLImporter {
           if (!columnInfo.get(colNum - 1)
                           .col_name.equalsIgnoreCase(md.getColumnName(colNum))) {
             LOGGER.error(
-                    "MapD Table does not have matching column in same order for column number"
-                    + colNum + " MapD column name is "
+                    "OmniSci Table does not have matching column in same order for column number"
+                    + colNum + " OmniSci column name is "
                     + columnInfo.get(colNum - 1).col_name + " versus Select "
                     + md.getColumnName(colNum));
             exit(1);

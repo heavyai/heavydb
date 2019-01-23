@@ -46,8 +46,8 @@ int main(int argc, char* argv[]) {
   desc.add_options()("help,h", "Print help messages ")(
       "data",
       po::value<std::string>(&base_path)->required(),
-      "Directory path to MapD catalogs")("force,f",
-                                         "Force overwriting of existing MapD instance")(
+      "Directory path to OmniSci catalogs")(
+      "force,f", "Force overwriting of existing OmniSci instance")(
       "skip-geo", "Skip inserting sample geo data");
 
   po::positional_options_description positionalOptions;
@@ -86,7 +86,7 @@ int main(int argc, char* argv[]) {
     if (force) {
       boost::filesystem::remove_all(catalogs_path);
     } else {
-      std::cerr << "MapD catalogs already initialized at " + base_path +
+      std::cerr << "OmniSci catalogs already initialized at " + base_path +
                        ". Use -f to force reinitialization.\n";
       return 1;
     }
@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
     if (force) {
       boost::filesystem::remove_all(data_path);
     } else {
-      std::cerr << "MapD data directory already exists at " + base_path +
+      std::cerr << "OmniSci data directory already exists at " + base_path +
                        ". Use -f to force reinitialization.\n";
       return 1;
     }
@@ -106,7 +106,7 @@ int main(int argc, char* argv[]) {
     if (force) {
       boost::filesystem::remove_all(export_path);
     } else {
-      std::cerr << "MapD export directory already exists at " + base_path +
+      std::cerr << "OmniSci export directory already exists at " + base_path +
                        ". Use -f to force reinitialization.\n";
       return 1;
     }

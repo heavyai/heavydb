@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2019 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,8 @@
 /**
  * @file    omniql.cpp
  * @author  Wei Hong <wei@map-d.com>
- * @brief   MapD SQL Client Tool
+ * @brief   OmniSci SQL Client Tool
  *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
 #include <glog/logging.h>
@@ -675,7 +674,7 @@ void print_memory_summary(ClientContext& context, std::string memory_level) {
     sub_system = "CPU";
   }
 
-  tss << "MapD Server " << sub_system << " Memory Summary:" << std::endl;
+  tss << "OmniSci Server " << sub_system << " Memory Summary:" << std::endl;
 
   if (multiNode) {
     if (hasGPU) {
@@ -765,7 +764,7 @@ void print_memory_info(ClientContext& context, std::string memory_level) {
     multiNode = context.cpu_memory.size() > 1;
   }
 
-  tss << "MapD Server Detailed " << sub_system << " Memory Usage:" << std::endl;
+  tss << "OmniSci Server Detailed " << sub_system << " Memory Usage:" << std::endl;
   for (auto& nodeIt : memory_info) {
     if (cur_host.compare(nodeIt.host_name)) {
       mgr_num = 0;
@@ -1192,7 +1191,7 @@ int main(int argc, char** argv) {
     if (line[0] != '\0' && line[0] != '\\') {
       // printf("echo: '%s'\n", line);
       if (context.session == INVALID_SESSION_ID) {
-        std::cerr << "Not connected to any MapD databases." << std::endl;
+        std::cerr << "Not connected to any OmniSci databases." << std::endl;
         continue;
       }
       std::string trimmed_line = std::string(line);
@@ -1283,15 +1282,15 @@ int main(int argc, char** argv) {
       std::cout << "Hybrid execution mode has been deprecated." << std::endl;
     } else if (!strncmp(line, "\\version", 8)) {
       if (thrift_with_retry(kGET_VERSION, context, nullptr)) {
-        std::cout << "MapD Server Version: " << context.version << std::endl;
+        std::cout << "OmniSci Server Version: " << context.version << std::endl;
       } else {
-        std::cout << "Cannot connect to MapD Server." << std::endl;
+        std::cout << "Cannot connect to OmniSci Server." << std::endl;
       }
     } else if (!strncmp(line, "\\memory_gpu", 11)) {
       if (thrift_with_retry(kGET_MEMORY_GPU, context, nullptr)) {
         print_memory_info(context, "gpu");
       } else {
-        std::cout << "Cannot connect to MapD Server." << std::endl;
+        std::cout << "Cannot connect to OmniSci Server." << std::endl;
       }
     } else if (!strncmp(line, "\\memory_cpu", 11)) {
       if (thrift_with_retry(kGET_MEMORY_CPU, context, nullptr)) {
@@ -1299,11 +1298,11 @@ int main(int argc, char** argv) {
       }
     } else if (!strncmp(line, "\\clear_gpu", 11)) {
       if (thrift_with_retry(kCLEAR_MEMORY_GPU, context, nullptr)) {
-        std::cout << "MapD Server GPU memory Cleared " << std::endl;
+        std::cout << "OmniSci Server GPU memory Cleared " << std::endl;
       }
     } else if (!strncmp(line, "\\clear_cpu", 11)) {
       if (thrift_with_retry(kCLEAR_MEMORY_CPU, context, nullptr)) {
-        std::cout << "MapD Server CPU memory Cleared " << std::endl;
+        std::cout << "OmniSci Server CPU memory Cleared " << std::endl;
       }
     } else if (!strncmp(line, "\\memory_summary", 11)) {
       if (thrift_with_retry(kGET_MEMORY_SUMMARY, context, nullptr)) {

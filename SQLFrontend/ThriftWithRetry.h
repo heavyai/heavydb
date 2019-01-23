@@ -15,7 +15,7 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
   int max_reconnect = 4;
   int con_timeout_base = 1;
   if (try_count > max_reconnect) {
-    std::cerr << "Cannot connect to MapD Server." << std::endl;
+    std::cerr << "Cannot connect to OmniSci Server." << std::endl;
     return false;
   }
   try {

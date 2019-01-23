@@ -215,7 +215,7 @@ void MapDProgramOptions::fillOptions(po::options_description& desc) {
   desc.add_options()(
       "data",
       po::value<std::string>(&base_path)->required()->default_value("data"),
-      "Directory path to MapD catalogs");
+      "Directory path to OmniSci catalogs");
   desc.add_options()(
       "cpu-only",
       po::value<bool>(&cpu_only)->default_value(cpu_only)->implicit_value(true),
@@ -267,7 +267,7 @@ void MapDProgramOptions::fillOptions(po::options_description& desc) {
   desc.add_options()(
       "res-gpu-mem",
       po::value<size_t>(&reserved_gpu_mem)->default_value(reserved_gpu_mem),
-      "Reserved memory for GPU, not use mapd allocator");
+      "Reserved memory for GPU, not use OmniSci allocator");
   desc.add_options()("gpu-input-mem-limit",
                      po::value<double>(&mapd_parameters.gpu_input_mem_limit)
                          ->default_value(mapd_parameters.gpu_input_mem_limit),
@@ -396,7 +396,7 @@ void MapDProgramOptions::fillOptions(po::options_description& desc) {
                      "range for the overlaps hash join");
   desc.add_options()("db-query-list",
                      po::value<std::string>(&db_query_file),
-                     "Path to file containing mapd queries");
+                     "Path to file containing OmniSci queries");
 }
 
 void MapDProgramOptions::fillAdvancedOptions(po::options_description& desc_adv) {
@@ -531,7 +531,7 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
       return false;
     }
     if (vm.count("version")) {
-      std::cout << "MapD Version: " << MAPD_RELEASE << std::endl;
+      std::cout << "OmniSci Version: " << MAPD_RELEASE << std::endl;
       return 0;
     }
 
@@ -553,7 +553,7 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
   boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
   const auto data_path = boost::filesystem::path(base_path) / "mapd_data";
   if (!boost::filesystem::exists(data_path)) {
-    std::cerr << "MapD data directory does not exist at '" << base_path
+    std::cerr << "OmniSci data directory does not exist at '" << base_path
               << "'. Run initdb " << base_path << std::endl;
     return_code = 1;
     return false;
@@ -570,8 +570,8 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
     return false;
   }
   if (lockf(pid_fd, F_TLOCK, 0) == -1) {
-    auto err = std::string("Another MapD Server is using data directory ") + base_path +
-               std::string(".");
+    auto err = std::string("Another OmniSci Server is using data directory ") +
+               base_path + std::string(".");
     std::cerr << err << std::endl;
     close(pid_fd);
     return_code = 1;
@@ -616,20 +616,20 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
   const auto system_db_file =
       boost::filesystem::path(base_path) / "mapd_catalogs" / "mapd";
   if (!boost::filesystem::exists(system_db_file)) {
-    LOG(ERROR) << "MapD system catalogs does not exist at " << system_db_file;
+    LOG(ERROR) << "OmniSci system catalogs does not exist at " << system_db_file;
     return_code = 1;
     return false;
   }
   const auto db_file =
       boost::filesystem::path(base_path) / "mapd_catalogs" / MAPD_SYSTEM_DB;
   if (!boost::filesystem::exists(db_file)) {
-    LOG(ERROR) << "MapD database " << MAPD_SYSTEM_DB << " does not exist.";
+    LOG(ERROR) << "OmniSci database " << MAPD_SYSTEM_DB << " does not exist.";
     return_code = 1;
     return false;
   }
 
   // add all parameters to be displayed on startup
-  LOG(INFO) << "MapD started with data directory at '" << base_path << "'";
+  LOG(INFO) << "OmniSci started with data directory at '" << base_path << "'";
   if (vm.count("cluster")) {
     LOG(INFO) << "Cluster file specified running as aggregator with config at '"
               << cluster_file << "'";
@@ -692,8 +692,8 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
   LOG(INFO) << " cuda block size " << mapd_parameters.cuda_block_size;
   LOG(INFO) << " cuda grid size  " << mapd_parameters.cuda_grid_size;
   LOG(INFO) << " calcite JVM max memory  " << mapd_parameters.calcite_max_mem;
-  LOG(INFO) << " MapD Server Port  " << mapd_parameters.omnisci_server_port;
-  LOG(INFO) << " MapD Calcite Port  " << mapd_parameters.calcite_port;
+  LOG(INFO) << " OmniSci Server Port  " << mapd_parameters.omnisci_server_port;
+  LOG(INFO) << " OmniSci Calcite Port  " << mapd_parameters.calcite_port;
 
   boost::algorithm::trim_if(authMetadata.distinguishedName, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.uri, boost::is_any_of("\"'"));
@@ -761,11 +761,11 @@ int main(int argc, char** argv) {
     sslSocketFactory->ciphers("ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH");
     serverSocket = mapd::shared_ptr<TServerSocket>(new TSSLServerSocket(
         desc_all.mapd_parameters.omnisci_server_port, sslSocketFactory));
-    LOG(INFO) << " MapD server using encrypted connection. Cert file ["
+    LOG(INFO) << " OmniSci server using encrypted connection. Cert file ["
               << desc_all.mapd_parameters.ssl_cert_file << "], key file ["
               << desc_all.mapd_parameters.ssl_key_file << "]";
   } else {
-    LOG(INFO) << " MapD server using unencrypted connection";
+    LOG(INFO) << " OmniSci server using unencrypted connection";
     serverSocket = mapd::shared_ptr<TServerSocket>(
         new TServerSocket(desc_all.mapd_parameters.omnisci_server_port));
   }
@@ -798,7 +798,7 @@ int main(int argc, char** argv) {
     bufThread.join();
     httpThread.join();
   } else {  // running ha server
-    LOG(FATAL) << "No High Availability module available, please contact MapD support";
+    LOG(FATAL) << "No High Availability module available, please contact OmniSci support";
   }
 
   running = false;

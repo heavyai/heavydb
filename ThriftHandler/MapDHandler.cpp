@@ -165,7 +165,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     , idle_session_duration_(idle_session_duration * 60)
     , max_session_duration_(max_session_duration * 60)
     , _was_geo_copy_from(false) {
-  LOG(INFO) << "MapD Server " << MAPD_RELEASE;
+  LOG(INFO) << "OmniSci Server " << MAPD_RELEASE;
   bool is_rendering_enabled = enable_rendering;
   if (cpu_only) {
     is_rendering_enabled = false;

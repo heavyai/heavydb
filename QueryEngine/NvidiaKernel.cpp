@@ -54,7 +54,7 @@ CubinResult ptx_to_cubin(const std::string& ptx,
   gpu_rt_path /= "QueryEngine";
   gpu_rt_path /= "cuda_mapd_rt.a";
   if (!boost::filesystem::exists(gpu_rt_path)) {
-    throw std::runtime_error("MapD GPU runtime library not found at " +
+    throw std::runtime_error("OmniSci GPU runtime library not found at " +
                              gpu_rt_path.string());
   }
 

@@ -242,7 +242,7 @@ StandardCommand(Help, {
   std::cout << "\\timing Print timing information.\n";
   std::cout << "\\notiming Do not print timing information.\n";
   std::cout << "\\memory_summary Print memory usage summary.\n";
-  std::cout << "\\version Print MapD Server version.\n";
+  std::cout << "\\version Print OmniSci Server version.\n";
   std::cout << "\\copy <file path> <table> Copy data from file to table.\n";
   std::cout << "\\status Get status of the server and the leaf nodes.\n";
   std::cout << "\\export_dashboard <dashboard name> <filename> Exports a dashboard to a "

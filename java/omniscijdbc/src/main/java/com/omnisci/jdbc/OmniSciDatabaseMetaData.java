@@ -65,7 +65,7 @@ class OmniSciDatabaseMetaData implements DatabaseMetaData {
       databaseMinorVersion = Integer.parseInt(vers[1]);
     } catch (NumberFormatException ex) {
       throw new SQLException(
-              "Non-numeric version returned from MapD server: " + ex.getMessage());
+              "Non-numeric version returned from OmniSci server: " + ex.getMessage());
     }
   }
 

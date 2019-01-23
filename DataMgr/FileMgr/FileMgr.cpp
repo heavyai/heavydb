@@ -974,9 +974,8 @@ bool FileMgr::getDBConvert() const {
 void FileMgr::createTopLevelMetadata() {
   if (openDBMetaFile(DB_META_FILENAME)) {
     if (db_version_ > getDBVersion()) {
-      LOG(FATAL) << "DB forward compatibility is not supported. Version of mapd software "
-                    "used is older than the "
-                    "version of DB being read: "
+      LOG(FATAL) << "DB forward compatibility is not supported. Version of OmniSci "
+                    "software used is older than the version of DB being read: "
                  << db_version_;
     }
   } else {

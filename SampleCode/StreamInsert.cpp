@@ -346,9 +346,9 @@ int main(int argc, char** argv) {
       "passwd,p", po::value<std::string>(&passwd)->required(), "User Password");
   desc.add_options()("host",
                      po::value<std::string>(&server_host)->default_value(server_host),
-                     "MapD Server Hostname");
+                     "OmniSci Server Hostname");
   desc.add_options()(
-      "port", po::value<int>(&port)->default_value(port), "MapD Server Port Number");
+      "port", po::value<int>(&port)->default_value(port), "OmniSci Server Port Number");
   desc.add_options()("delim",
                      po::value<std::string>(&delim_str)->default_value(delim_str),
                      "Field delimiter");
