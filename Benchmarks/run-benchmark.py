@@ -21,6 +21,7 @@ def get_connection(**kwargs):
         db_user(str): DB username
         db_passwd(str): DB password
         db_server(str): DB host
+        db_port(int): DB port
         db_name(str): DB name
 
       Returns:
@@ -33,6 +34,7 @@ def get_connection(**kwargs):
             user=kwargs["db_user"],
             password=kwargs["db_passwd"],
             host=kwargs["db_server"],
+            port=kwargs["db_port"],
             dbname=kwargs["db_name"],
         )
         logging.info("Succesfully connected to mapd db")
@@ -235,6 +237,14 @@ required.add_argument(
     default="localhost",
     help="Source database server hostname",
 )
+optional.add_argument(
+    "-o",
+    "--port",
+    dest="port",
+    type=int,
+    default=6274,
+    help="Source database server port",
+)
 required.add_argument(
     "-n", "--name", dest="name", default="mapd", help="Source database name"
 )
@@ -293,6 +303,14 @@ optional.add_argument(
     + ' (required if destination = "mapd_db")',
 )
 optional.add_argument(
+    "-O",
+    "--dest-port",
+    dest="dest_port",
+    type=int,
+    default=6274,
+    help="Destination mapd_db database server port",
+)
+optional.add_argument(
     "-N",
     "--dest-name",
     dest="dest_name",
@@ -323,6 +341,7 @@ else:
 source_db_user = args.user
 source_db_passwd = args.passwd
 source_db_server = args.server
+source_db_port = args.port
 source_db_name = args.name
 source_table = args.table
 label = args.label
@@ -347,6 +366,7 @@ if "mapd_db" in destinations:
         exit(1)
     else:
         dest_db_server = args.dest_server
+    dest_db_port = args.dest_port
     dest_db_name = args.dest_name
     dest_table = args.dest_table
 if "file_json" in destinations:
@@ -371,6 +391,7 @@ con = get_connection(
     db_user=source_db_user,
     db_passwd=source_db_passwd,
     db_server=source_db_server,
+    db_port=source_db_port,
     db_name=source_db_name,
 )
 if not con:
@@ -569,6 +590,7 @@ if "mapd_db" in destinations:
         db_user=dest_db_user,
         db_passwd=dest_db_passwd,
         db_server=dest_db_server,
+        db_port=dest_db_port,
         db_name=dest_db_name,
     )
     if not dest_con:

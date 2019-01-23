@@ -43,10 +43,10 @@ Currently, usage is:
 
 ```
 usage: run-benchmark.py [-h] [-v] [-q] [-u USER] [-p PASSWD] [-s SERVER]
-                        [-n NAME] -t TABLE -l LABEL [-d QUERIES_DIR] -i
-                        ITERATIONS -g GPUS [-e DESTINATION] [-U DEST_USER]
-                        [-P DEST_PASSWD] [-S DEST_SERVER] [-N DEST_NAME]
-                        [-T DEST_TABLE] [-j OUTPUT_FILE_JSON]
+                        [-o PORT] [-n NAME] -t TABLE -l LABEL [-d QUERIES_DIR]
+                        -i ITERATIONS -g GPUS [-e DESTINATION] [-U DEST_USER]
+                        [-P DEST_PASSWD] [-S DEST_SERVER] [-O DEST_PORT]
+                        [-N DEST_NAME] [-T DEST_TABLE] [-j OUTPUT_FILE_JSON]
 
 required arguments:
   -u USER, --user USER  Source database user
@@ -63,13 +63,14 @@ required arguments:
                         Absolute path to dir with query files. [Default:
                         "queries" dir in same location as script]
   -i ITERATIONS, --iterations ITERATIONS
-                        Number of iterations per query
+                        Number of iterations per query. Must be > 1
   -g GPUS, --gpus GPUS  Number of GPUs
 
 optional arguments:
   -h, --help            show this help message and exit
   -v, --verbose         Turn on debug logging
   -q, --quiet           Suppress script outuput (except warnings and errors)
+  -o PORT, --port PORT  Source database server port
   -e DESTINATION, --destination DESTINATION
                         Destination type: [mapd_db, file_json, output]
                         Multiple values can be input seperated by commas, ex:
@@ -81,6 +82,8 @@ optional arguments:
   -S DEST_SERVER, --dest-server DEST_SERVER
                         Destination mapd_db database server hostname (required
                         if destination = "mapd_db")
+  -O DEST_PORT, --dest-port DEST_PORT
+                        Destination mapd_db database server port
   -N DEST_NAME, --dest-name DEST_NAME
                         Destination mapd_db database name
   -T DEST_TABLE, --dest-table DEST_TABLE
