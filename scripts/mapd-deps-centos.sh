@@ -34,7 +34,7 @@ download_make_install ftp://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.xz # "" "
 download_make_install ftp://ftp.gnu.org/gnu/automake/automake-1.16.1.tar.xz
 
 # gcc
-VERS=6.4.0
+VERS=7.4.0
 download ftp://ftp.gnu.org/gnu/gcc/gcc-$VERS/gcc-$VERS.tar.xz
 extract gcc-$VERS.tar.xz
 pushd gcc-$VERS
@@ -146,7 +146,7 @@ popd
 # llvm
 # http://thrysoee.dk/editline/libedit-20170329-3.1.tar.gz
 download_make_install ${HTTP_DEPS}/libedit-20170329-3.1.tar.gz
-VERS=7.0.0
+VERS=7.0.1
 # http://releases.llvm.org
 download ${HTTP_DEPS}/llvm/$VERS/llvm-$VERS.src.tar.xz
 download ${HTTP_DEPS}/llvm/$VERS/cfe-$VERS.src.tar.xz
@@ -173,6 +173,9 @@ mv libcxx-$VERS.src llvm-$VERS.src/projects/libcxx
 mv libcxxabi-$VERS.src llvm-$VERS.src/projects/libcxxabi
 mkdir -p llvm-$VERS.src/tools/clang/tools
 mv clang-tools-extra-$VERS.src llvm-$VERS.src/tools/clang/tools/extra
+pushd llvm-$VERS.src
+patch -p0 < ${SCRIPTS_DIR}/llvm-D50710.patch
+popd
 rm -rf build.llvm-$VERS
 mkdir build.llvm-$VERS
 pushd build.llvm-$VERS

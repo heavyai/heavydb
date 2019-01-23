@@ -30,7 +30,7 @@ brew install -s $SCRIPTS_DIR/../ThirdParty/Thrift/thrift.rb
 brew switch thrift 0.11.0
 
 brew install cryptopp
-brew install llvm@6
+brew install llvm@7
 
 #install_arrow
 brew install snappy
@@ -67,7 +67,7 @@ export PATH=$CUDA_ROOT/bin/:$PATH
 # Not adding full llvm/bin to PATH since brew's `clang` breaks CUDA
 mkdir -p ~/bin/
 for i in llvm-config; do
-  ln -sf "$(brew --prefix llvm@6)/bin/$i" ~/bin/$i
+  ln -sf "$(brew --prefix llvm@7)/bin/$i" ~/bin/$i
 done
 export PATH=~/bin:$PATH
 

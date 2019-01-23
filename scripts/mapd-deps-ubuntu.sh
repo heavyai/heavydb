@@ -26,8 +26,8 @@ sudo apt install -y \
     llvm \
     llvm-dev \
     clang-format \
-    gcc-5 \
-    g++-5 \
+    gcc \
+    g++ \
     libboost-all-dev \
     libgoogle-glog-dev \
     golang \
