@@ -106,8 +106,18 @@ DEVICE static void decompress(const SQLTypeInfo& ti,
           datum->timeval = (time_t) * (int32_t*)compressed;
           break;
         case kENCODING_DATE_IN_DAYS:
-          datum->timeval = (int32_t) * (int16_t*)compressed;
-          break;
+          switch (ti.get_comp_param()) {
+            case 0:
+            case 32:
+              datum->timeval = (time_t) * (int32_t*)compressed;
+              break;
+            case 16:
+              datum->timeval = (time_t) * (int16_t*)compressed;
+              break;
+            default:
+              assert(false);
+              break;
+          }
         case kENCODING_RL:
         case kENCODING_DIFF:
         case kENCODING_DICT:
@@ -118,8 +128,7 @@ DEVICE static void decompress(const SQLTypeInfo& ti,
         default:
           assert(false);
       }
-      result->length = ti.get_compression() == kENCODING_DATE_IN_DAYS ? sizeof(int32_t)
-                                                                      : sizeof(time_t);
+      result->length = sizeof(time_t);
       result->pointer = (int8_t*)&datum->timeval;
       break;
     default:

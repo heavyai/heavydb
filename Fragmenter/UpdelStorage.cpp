@@ -365,11 +365,6 @@ void InsertOrderFragmenter::updateColumns(
         int logical_size = logical_type.get_size();
         int physical_size = chunk_cd->columnType.get_size();
 
-        if (chunk_cd->columnType.is_date_in_days()) {
-          // get_logical_type_info does not know about date compression yet
-          logical_size = 4;
-        }
-
         if (logical_type.is_string()) {
           // for dicts -> logical = physical
           logical_size = physical_size;

@@ -266,11 +266,17 @@ size_t random_fill(const ColumnDescriptor* cd,
       break;
     }
     case kDATE:
-      if (sizeof(time_t) == 4 || cd->columnType.is_date_in_days()) {
+      if (sizeof(time_t) == 4) {
         hash = random_fill_int32(p.numbersPtr, num_elems);
         data_volumn += num_elems * sizeof(int32_t);
       } else {
-        hash = random_fill_int64(p.numbersPtr, num_elems);
+        if (cd->columnType.is_date_in_days()) {
+          const int64_t min = INT32_MIN;
+          const int64_t max = INT32_MAX;
+          hash = random_fill_int64(p.numbersPtr, num_elems, min, max);
+        } else {
+          hash = random_fill_int64(p.numbersPtr, num_elems);
+        }
         data_volumn += num_elems * sizeof(int64_t);
       }
       break;
@@ -309,7 +315,7 @@ vector<size_t> populate_table_random(const string& table_name,
       }
     } else {
       int8_t* col_buf =
-          static_cast<int8_t*>(malloc(num_rows * cd->columnType.get_size()));
+          static_cast<int8_t*>(malloc(num_rows * cd->columnType.get_logical_size()));
       gc_numbers.push_back(unique_ptr<int8_t>(col_buf));  // add to gc list
       p.numbersPtr = col_buf;
     }

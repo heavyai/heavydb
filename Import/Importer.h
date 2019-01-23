@@ -195,10 +195,6 @@ class TypedImportBuffer : boost::noncopyable {
         }
         break;
       case kDATE:
-        if (col_desc->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
-          date_i32_buffer_ = new std::vector<int32_t>();
-          break;
-        }
       case kTIME:
       case kTIMESTAMP:
         time_buffer_ = new std::vector<time_t>();
@@ -266,10 +262,6 @@ class TypedImportBuffer : boost::noncopyable {
         }
         break;
       case kDATE:
-        if (column_desc_->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
-          delete date_i32_buffer_;
-          break;
-        }
       case kTIME:
       case kTIMESTAMP:
         delete time_buffer_;
@@ -392,9 +384,6 @@ class TypedImportBuffer : boost::noncopyable {
       case kDOUBLE:
         return reinterpret_cast<int8_t*>(&((*double_buffer_)[0]));
       case kDATE:
-        if (column_desc_->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
-          return reinterpret_cast<int8_t*>(&((*date_i32_buffer_)[0]));
-        }
       case kTIME:
       case kTIMESTAMP:
         return reinterpret_cast<int8_t*>(&((*time_buffer_)[0]));
@@ -422,9 +411,6 @@ class TypedImportBuffer : boost::noncopyable {
       case kDOUBLE:
         return sizeof((*double_buffer_)[0]);
       case kDATE:
-        if (column_desc_->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
-          return sizeof((*date_i32_buffer_)[0]);
-        }
       case kTIME:
       case kTIMESTAMP:
         return sizeof((*time_buffer_)[0]);
@@ -519,16 +505,11 @@ class TypedImportBuffer : boost::noncopyable {
         }
         break;
       }
-      case kDATE: {
-        if (column_desc_->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
-          date_i32_buffer_->clear();
-          break;
-        }
-        case kTIME:
-        case kTIMESTAMP:
-          time_buffer_->clear();
-          break;
-      }
+      case kDATE:
+      case kTIME:
+      case kTIMESTAMP:
+        time_buffer_->clear();
+        break;
       case kARRAY: {
         if (IS_STRING(column_desc_->columnType.get_subtype())) {
           string_array_buffer_->clear();

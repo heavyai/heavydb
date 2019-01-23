@@ -327,13 +327,8 @@ int8_t* appendDatum(int8_t* buf, Datum d, const SQLTypeInfo& ti) {
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      if (ti.is_date_in_days()) {
-        *(int32_t*)buf = d.timeval;
-        return buf + sizeof(int32_t);
-      } else {
-        *(time_t*)buf = d.timeval;
-        return buf + sizeof(time_t);
-      }
+      *(time_t*)buf = d.timeval;
+      return buf + sizeof(time_t);
     default:
       return NULL;
   }
@@ -368,11 +363,7 @@ Datum NullDatum(SQLTypeInfo& ti) {
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      if (ti.is_date_in_days()) {
-        d.timeval = ti.get_comp_param() == 16 ? NULL_SMALLINT : NULL_INT;
-      } else {
-        d.timeval = inline_fixed_encoding_null_val(ti);
-      }
+      d.timeval = inline_fixed_encoding_null_val(ti);
       break;
     case kPOINT:
     case kLINESTRING:
@@ -466,13 +457,7 @@ Datum TDatumToDatum(const TDatum& datum, SQLTypeInfo& ti) {
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      if (ti.is_date_in_days()) {
-        d.timeval = datum.is_null ? ti.get_comp_param() == 16 ? NULL_SMALLINT : NULL_INT
-                                  : datum.val.int_val;
-      } else {
-        d.timeval =
-            datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
-      }
+      d.timeval = datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
       break;
     case kPOINT:
     case kLINESTRING:
@@ -649,20 +634,12 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
         SQLTypeInfo ti = cd->columnType;
         Datum d = StringToDatum(val, ti);
-        if (cd->columnType.is_date_in_days()) {
-          addDate32(static_cast<int32_t>(d.timeval));
-        } else {
-          addTime(d.timeval);
-        }
+        addTime(d.timeval);
       } else {
         if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
-        if (cd->columnType.is_date_in_days()) {
-          addDate32(static_cast<int32_t>(inline_fixed_encoding_null_val(cd->columnType)));
-        } else {
-          addTime(inline_fixed_encoding_null_val(cd->columnType));
-        }
+        addTime(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
     case kARRAY:
@@ -729,10 +706,6 @@ void TypedImportBuffer::pop_value() {
       string_buffer_->pop_back();
       break;
     case kDATE:
-      if (column_desc_->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
-        date_i32_buffer_->pop_back();
-        break;
-      }
     case kTIME:
     case kTIMESTAMP:
       time_buffer_->pop_back();
@@ -967,7 +940,7 @@ void append_arrow_date(const ColumnDescriptor* cd,
 
 void append_arrow_date_i32(const ColumnDescriptor* cd,
                            const Array& values,
-                           std::vector<int32_t>* buffer) {
+                           std::vector<time_t>* buffer) {
   const time_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
   if (values.type_id() == Type::DATE32) {
     const auto& typed_values = static_cast<const Date32Array&>(values);
@@ -979,7 +952,7 @@ void append_arrow_date_i32(const ColumnDescriptor* cd,
       if (typed_values.IsNull(i)) {
         buffer->push_back(null_sentinel);
       } else {
-        buffer->push_back(static_cast<int32_t>(raw_values[i]));
+        buffer->push_back(static_cast<time_t>(raw_values[i]));
       }
     }
   } else if (values.type_id() == Type::DATE64) {
@@ -1075,7 +1048,7 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
       break;
     case kDATE:
       if (cd->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
-        append_arrow_date_i32(cd, col, date_i32_buffer_);
+        append_arrow_date_i32(cd, col, time_buffer_);
         break;
       }
       append_arrow_date(cd, col, time_buffer_);
@@ -1203,23 +1176,12 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
     case kTIMESTAMP:
     case kDATE: {
       dataSize = col.data.int_col.size();
-      if (cd->columnType.is_date_in_days()) {
-        date_i32_buffer_->reserve(dataSize);
-        for (size_t i = 0; i < dataSize; i++) {
-          if (col.nulls[i]) {
-            date_i32_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
-          } else {
-            date_i32_buffer_->push_back((int32_t)col.data.int_col[i]);
-          }
-        }
-      } else {
-        time_buffer_->reserve(dataSize);
-        for (size_t i = 0; i < dataSize; i++) {
-          if (col.nulls[i]) {
-            time_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
-          } else {
-            time_buffer_->push_back((time_t)col.data.int_col[i]);
-          }
+      time_buffer_->reserve(dataSize);
+      for (size_t i = 0; i < dataSize; i++) {
+        if (col.nulls[i]) {
+          time_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
+        } else {
+          time_buffer_->push_back((time_t)col.data.int_col[i]);
         }
       }
       break;
@@ -1396,31 +1358,12 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
               } else {
                 size_t len = col.data.arr_col[i].data.int_col.size();
                 size_t byteWidth = sizeof(time_t);
-                if (cd->columnType.is_date_in_days()) {
-                  byteWidth = (cd->columnType.get_comp_param() == 16) ? sizeof(int16_t)
-                                                                      : sizeof(int32_t);
-                }
                 size_t byteSize = len * byteWidth;
                 int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
                 int8_t* p = buf;
-                if (cd->columnType.is_date_in_days()) {
-                  for (size_t j = 0; j < len; ++j) {
-                    if (cd->columnType.get_comp_param() == 16) {
-                      *(int16_t*)p =
-                          static_cast<int16_t>(col.data.arr_col[i].data.int_col[j]);
-                      p += sizeof(int16_t);
-                    } else {
-                      *(int32_t*)p =
-                          static_cast<int32_t>(col.data.arr_col[i].data.int_col[j]);
-                      p += sizeof(int32_t);
-                    }
-                  }
-                } else {
-                  for (size_t j = 0; j < len; ++j) {
-                    *(time_t*)p =
-                        static_cast<time_t>(col.data.arr_col[i].data.int_col[j]);
-                    p += sizeof(time_t);
-                  }
+                for (size_t j = 0; j < len; ++j) {
+                  *(time_t*)p = static_cast<time_t>(col.data.arr_col[i].data.int_col[j]);
+                  p += sizeof(time_t);
                 }
                 addArray(ArrayDatum(byteSize, buf, len == 0));
               }
@@ -1536,20 +1479,12 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     case kTIMESTAMP:
     case kDATE: {
       if (!is_null) {
-        if (cd->columnType.is_date_in_days()) {
-          addDate32(static_cast<int32_t>(datum.val.int_val));
-        } else {
-          addTime(datum.val.int_val);
-        }
+        addTime(datum.val.int_val);
       } else {
         if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
-        if (cd->columnType.is_date_in_days()) {
-          addDate32(static_cast<int32_t>(NULL_INT));
-        } else {
-          addTime(inline_fixed_encoding_null_val(cd->columnType));
-        }
+        addTime(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
     }
@@ -2515,11 +2450,7 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
         case kTIME:
         case kTIMESTAMP:
         case kDATE:
-          if (col_ti.is_date_in_days()) {
-            shard_output_buffers[col_idx]->addDate32(int_value_at(*input_buffer, i));
-          } else {
-            shard_output_buffers[col_idx]->addTime(int_value_at(*input_buffer, i));
-          }
+          shard_output_buffers[col_idx]->addTime(int_value_at(*input_buffer, i));
           break;
         case kARRAY:
           if (IS_STRING(col_ti.get_subtype())) {

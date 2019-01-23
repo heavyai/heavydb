@@ -202,18 +202,17 @@ struct StringValueConverter : public TargetValueConverter {
   }
 };
 
-template <typename TARGET_TYPE>
-struct DateValueConverter : public NumericValueConverter<int64_t, TARGET_TYPE> {
+struct DateValueConverter : public NumericValueConverter<int64_t, int64_t> {
   DateValueConverter(const ColumnDescriptor* targetDescriptor,
                      size_t num_rows,
-                     TARGET_TYPE nullValue,
+                     int64_t nullValue,
                      int64_t nullCheckValue,
                      bool doNullCheck)
-      : NumericValueConverter<int64_t, TARGET_TYPE>(targetDescriptor,
-                                                    num_rows,
-                                                    nullValue,
-                                                    nullCheckValue,
-                                                    doNullCheck) {}
+      : NumericValueConverter<int64_t, int64_t>(targetDescriptor,
+                                                num_rows,
+                                                nullValue,
+                                                nullCheckValue,
+                                                doNullCheck) {}
 
   virtual ~DateValueConverter() {}
 
@@ -224,7 +223,7 @@ struct DateValueConverter : public NumericValueConverter<int64_t, TARGET_TYPE> {
     if (this->do_null_check_ && this->null_check_value_ == val) {
       this->column_data_.get()[row] = this->null_value_;
     } else {
-      this->column_data_.get()[row] = static_cast<TARGET_TYPE>(val / SECSPERDAY);
+      this->column_data_.get()[row] = static_cast<int64_t>(val / SECSPERDAY);
     }
   }
 

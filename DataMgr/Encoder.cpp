@@ -85,10 +85,11 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
         case kDATE:
           switch (sqlType.get_comp_param()) {
             case 0:
-              return new NoneEncoder<int32_t>(buffer);
+            case 32:
+              return new FixedLengthEncoder<time_t, int32_t>(buffer);
               break;
             case 16:
-              return new FixedLengthEncoder<int32_t, int16_t>(buffer);
+              return new FixedLengthEncoder<time_t, int16_t>(buffer);
               break;
             default:
               return 0;

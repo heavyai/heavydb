@@ -534,6 +534,8 @@ const char* create_table_trips_sharded = R"(
       vendor_id               TEXT ENCODING DICT,
       rate_code_id            SMALLINT,
       store_and_fwd_flag      TEXT ENCODING DICT,
+      pickup_date             DATE,
+      drop_date               DATE ENCODING FIXED(16),
       pickup_datetime         TIMESTAMP,
       dropoff_datetime        TIMESTAMP,
       passenger_count         SMALLINT,

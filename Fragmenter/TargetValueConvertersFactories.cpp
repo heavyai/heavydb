@@ -136,17 +136,17 @@ struct TextConverterFactory {
 struct DateConverterFactory {
   std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {
     if (param.target->columnType.is_date_in_days() && param.type.get_size() == 4) {
-      return std::make_unique<DateValueConverter<int32_t>>(
+      return std::make_unique<DateValueConverter>(
           param.target,
           param.num_rows,
-          static_cast<int32_t>(inline_int_null_value<int32_t>()),
+          static_cast<int64_t>(inline_int_null_value<int32_t>()),
           NULL_BIGINT,
           param.can_be_null);
     } else if (param.target->columnType.is_date_in_days() && param.type.get_size() == 2) {
-      return std::make_unique<DateValueConverter<int32_t>>(
+      return std::make_unique<DateValueConverter>(
           param.target,
           param.num_rows,
-          static_cast<int32_t>(inline_int_null_value<int16_t>()),
+          static_cast<int64_t>(inline_int_null_value<int16_t>()),
           NULL_BIGINT,
           param.can_be_null);
     } else {

@@ -334,33 +334,17 @@ class ArrayNoneEncoder : public Encoder {
       case kTIME:
       case kTIMESTAMP:
       case kDATE: {
-        if (buffer_->sqlType.is_date_in_days()) {
-          const int32_t* tm_array = (int32_t*)array.pointer;
-          for (size_t i = 0; i < array.length / sizeof(int32_t); i++) {
-            if (tm_array[i] == NULL_INT)
-              has_nulls = true;
-            else if (initialized) {
-              elem_min.timeval = std::min(elem_min.intval, tm_array[i]);
-              elem_max.timeval = std::max(elem_max.intval, tm_array[i]);
-            } else {
-              elem_min.timeval = tm_array[i];
-              elem_max.timeval = tm_array[i];
-              initialized = true;
-            }
-          }
-        } else {
-          const time_t* tm_array = (time_t*)array.pointer;
-          for (size_t i = 0; i < array.length / sizeof(time_t); i++) {
-            if (tm_array[i] == NULL_BIGINT)
-              has_nulls = true;
-            else if (initialized) {
-              elem_min.timeval = std::min(elem_min.timeval, tm_array[i]);
-              elem_max.timeval = std::max(elem_max.timeval, tm_array[i]);
-            } else {
-              elem_min.timeval = tm_array[i];
-              elem_max.timeval = tm_array[i];
-              initialized = true;
-            }
+        const time_t* tm_array = (time_t*)array.pointer;
+        for (size_t i = 0; i < array.length / sizeof(time_t); i++) {
+          if (tm_array[i] == NULL_BIGINT)
+            has_nulls = true;
+          else if (initialized) {
+            elem_min.timeval = std::min(elem_min.timeval, tm_array[i]);
+            elem_max.timeval = std::max(elem_max.timeval, tm_array[i]);
+          } else {
+            elem_min.timeval = tm_array[i];
+            elem_max.timeval = tm_array[i];
+            initialized = true;
           }
         }
       } break;
