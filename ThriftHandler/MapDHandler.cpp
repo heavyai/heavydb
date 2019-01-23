@@ -102,6 +102,8 @@
 
 #include "QueryEngine/ArrowUtil.h"
 
+#define ENABLE_GEO_IMPORT_COLUMN_MATCHING 0
+
 using Catalog_Namespace::Catalog;
 using Catalog_Namespace::SysCatalog;
 using namespace Lock_Namespace;
@@ -3486,6 +3488,8 @@ bool TTypeInfo_IsGeo(const TDatumType::type& t) {
           t == TDatumType::LINESTRING || t == TDatumType::POINT);
 }
 
+#if ENABLE_GEO_IMPORT_COLUMN_MATCHING
+
 std::string TTypeInfo_TypeToString(const TDatumType::type& t) {
   std::stringstream ss;
   ss << t;
@@ -3513,6 +3517,8 @@ std::string TTypeInfo_EncodingToString(const TEncodingType::type& t) {
   ss << t;
   return ss.str();
 }
+
+#endif
 
 }  // namespace
 
@@ -3632,8 +3638,10 @@ void MapDHandler::import_geo_table(const TSessionId& session,
       TColumnType cd_col_type = populateThriftColumnType(&cat, cd);
       std::string gname = rd[rd_index].col_name;  // got
       std::string ename = cd->columnName;         // expecting
-      TTypeInfo gti = rd[rd_index].col_type;      // got
-      TTypeInfo eti = cd_col_type.col_type;       // expecting
+#if ENABLE_GEO_IMPORT_COLUMN_MATCHING
+      TTypeInfo gti = rd[rd_index].col_type;  // got
+#endif
+      TTypeInfo eti = cd_col_type.col_type;  // expecting
       // check for name match
       if (gname != ename) {
         if (TTypeInfo_IsGeo(eti.type) && ename == LEGACY_GEO_PREFIX &&
@@ -3642,10 +3650,13 @@ void MapDHandler::import_geo_table(const TSessionId& session,
           rd[rd_index].col_name = gname;
           LOG(INFO) << "import_geo_table: Renaming incoming geo column to match existing "
                        "legacy default geo column";
+#if ENABLE_GEO_IMPORT_COLUMN_MATCHING
         } else {
           THROW_COLUMN_ATTR_MISMATCH_EXCEPTION("name", gname, ename);
+#endif
         }
       }
+#if ENABLE_GEO_IMPORT_COLUMN_MATCHING
       // check for type attributes match
       // these attrs must always match regardless of type
       if (gti.type != eti.type) {
@@ -3704,6 +3715,7 @@ void MapDHandler::import_geo_table(const TSessionId& session,
                                                std::to_string(eti.comp_param));
         }
       }
+#endif
       rd_index++;
     }
   }
