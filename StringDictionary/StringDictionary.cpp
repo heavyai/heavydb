@@ -67,8 +67,8 @@ void checked_munmap(void* addr, size_t length) {
   CHECK_EQ(0, munmap(addr, length));
 }
 
-const uint32_t round_up_p2(const size_t num) {
-  uint32_t in = num;
+const uint64_t round_up_p2(const uint64_t num) {
+  uint64_t in = num;
   in--;
   in |= in >> 1;
   in |= in >> 2;
@@ -77,10 +77,10 @@ const uint32_t round_up_p2(const size_t num) {
   in |= in >> 16;
   in++;
   // TODO MAT deal with case where filesize has been increased but reality is
-  // we are constrained to 2^30.
+  // we are constrained to 2^31.
   // In that situation this calculation will wrap to zero
-  if (in == 0) {
-    in = 1 << 31;
+  if (in == 0 || (in > (UINT32_MAX))) {
+    in = UINT32_MAX;
   }
   return in;
 }
@@ -142,10 +142,10 @@ StringDictionary::StringDictionary(const std::string& folder,
       if (bytes % sizeof(StringIdxEntry) != 0) {
         LOG(WARNING) << "Offsets " << offsets_path_ << " file is truncated";
       }
-      const unsigned str_count = bytes / sizeof(StringIdxEntry);
+      const uint64_t str_count = bytes / sizeof(StringIdxEntry);
       // at this point we know the size of the StringDict we need to load
       // so lets reallocate the vector to the correct size
-      const uint32_t max_entries = round_up_p2(str_count * 2 + 1);
+      const uint64_t max_entries = round_up_p2(str_count * 2 + 1);
       std::vector<int32_t> new_str_ids(max_entries, INVALID_STR_ID);
       str_ids_.swap(new_str_ids);
       unsigned string_id = 0;
@@ -193,7 +193,7 @@ void StringDictionary::processDictionaryFutures(
     dictionary_future.wait();
     auto hashVec = dictionary_future.get();
     for (auto& hash : hashVec) {
-      int32_t bucket = computeUniqueBucketWithHash(hash.first, str_ids_);
+      uint32_t bucket = computeUniqueBucketWithHash(hash.first, str_ids_);
       payload_file_off_ += hash.second;
       str_ids_[bucket] = static_cast<int32_t>(str_count_);
       ++str_count_;
@@ -265,14 +265,26 @@ void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec,
       continue;
     }
     CHECK(str.size() <= MAX_STRLEN);
-    int32_t bucket;
+    uint32_t bucket;
     const size_t hash = rk_hash(str);
     bucket = computeBucket(hash, str, str_ids_, false);
     if (str_ids_[bucket] != INVALID_STR_ID) {
       encoded_vec[out_idx++] = str_ids_[bucket];
       continue;
     }
+    // need to add record to dictionary
+    // check there is room
+    if (str_count_ == static_cast<size_t>(max_valid_int_value<T>())) {
+      log_encoding_error<T>(str);
+      encoded_vec[out_idx++] = inline_int_null_value<T>();
+      continue;
+    }
     if (str_ids_[bucket] == INVALID_STR_ID) {
+      CHECK_LT(str_count_, MAX_STRCOUNT)
+          << "Maximum number (" << str_count_
+          << ") of Dictionary encoded Strings reached for this column, offset path "
+             "for column is  "
+          << offsets_path_;
       if (fillRateIsHigh()) {
         // resize when more than 50% is full
         increaseCapacity();
@@ -776,18 +788,11 @@ bool StringDictionary::fillRateIsHigh() const noexcept {
 }
 
 void StringDictionary::increaseCapacity() noexcept {
-  const size_t MAX_STRCOUNT = 1 << 30;
-  if (str_count_ >= MAX_STRCOUNT) {
-    LOG(FATAL) << "Maximum number (" << str_count_
-               << ") of Dictionary encoded Strings reached for this column, offset path "
-                  "for column is  "
-               << offsets_path_;
-  }
   std::vector<int32_t> new_str_ids(str_ids_.size() * 2, INVALID_STR_ID);
   for (size_t i = 0; i < str_count_; ++i) {
     const auto str = getStringChecked(i);
     const size_t hash = rk_hash(str);
-    int32_t bucket = computeBucket(hash, str, new_str_ids, true);
+    uint32_t bucket = computeBucket(hash, str, new_str_ids, true);
     new_str_ids[bucket] = i;
   }
   str_ids_.swap(new_str_ids);
@@ -799,7 +804,7 @@ int32_t StringDictionary::getOrAddImpl(const std::string& str) noexcept {
     return inline_int_null_value<int32_t>();
   }
   CHECK(str.size() <= MAX_STRLEN);
-  int32_t bucket;
+  uint32_t bucket;
   const size_t hash = rk_hash(str);
   {
     mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
@@ -813,6 +818,11 @@ int32_t StringDictionary::getOrAddImpl(const std::string& str) noexcept {
   // we got the lock
   bucket = computeBucket(hash, str, str_ids_, false);
   if (str_ids_[bucket] == INVALID_STR_ID) {
+    CHECK_LT(str_count_, MAX_STRCOUNT)
+        << "Maximum number (" << str_count_
+        << ") of Dictionary encoded Strings reached for this column, offset path "
+           "for column is  "
+        << offsets_path_;
     if (fillRateIsHigh()) {
       // resize when more than 50% is full
       increaseCapacity();
@@ -839,10 +849,10 @@ std::pair<char*, size_t> StringDictionary::getStringBytesChecked(
   return std::make_pair(str_canary.c_str_ptr, str_canary.size);
 }
 
-int32_t StringDictionary::computeBucket(const size_t hash,
-                                        const std::string str,
-                                        const std::vector<int32_t>& data,
-                                        const bool unique) const noexcept {
+uint32_t StringDictionary::computeBucket(const size_t hash,
+                                         const std::string str,
+                                         const std::vector<int32_t>& data,
+                                         const bool unique) const noexcept {
   auto bucket = hash & (data.size() - 1);
   while (true) {
     if (data[bucket] ==
@@ -867,7 +877,7 @@ int32_t StringDictionary::computeBucket(const size_t hash,
   return bucket;
 }
 
-int32_t StringDictionary::computeUniqueBucketWithHash(
+uint32_t StringDictionary::computeUniqueBucketWithHash(
     const size_t hash,
     const std::vector<int32_t>& data) const noexcept {
   auto bucket = hash & (data.size() - 1);

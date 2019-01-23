@@ -79,6 +79,7 @@ class StringDictionary {
 
   static const int32_t INVALID_STR_ID;
   static const size_t MAX_STRLEN = (1 << 15) - 1;
+  static const size_t MAX_STRCOUNT = (1U << 31) - 1;
 
  private:
   struct StringIdxEntry {
@@ -113,12 +114,12 @@ class StringDictionary {
   std::string getStringUnlocked(int32_t string_id) const noexcept;
   std::string getStringChecked(const int string_id) const noexcept;
   std::pair<char*, size_t> getStringBytesChecked(const int string_id) const noexcept;
-  int32_t computeBucket(const size_t hash,
-                        const std::string str,
-                        const std::vector<int32_t>& data,
-                        const bool unique) const noexcept;
-  int32_t computeUniqueBucketWithHash(const size_t hash,
-                                      const std::vector<int32_t>& data) const noexcept;
+  uint32_t computeBucket(const size_t hash,
+                         const std::string str,
+                         const std::vector<int32_t>& data,
+                         const bool unique) const noexcept;
+  uint32_t computeUniqueBucketWithHash(const size_t hash,
+                                       const std::vector<int32_t>& data) const noexcept;
   void appendToStorage(const std::string& str) noexcept;
   PayloadString getStringFromStorage(const int string_id) const noexcept;
   void addPayloadCapacity() noexcept;

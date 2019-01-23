@@ -551,6 +551,31 @@ TEST(Insert, ArrayNulls) {
   }
 }
 
+TEST(Insert, DictBoundary) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP TABLE IF EXISTS table_with_small_dict;");
+    EXPECT_NO_THROW(run_ddl_statement(
+        "CREATE TABLE table_with_small_dict (i INT, t TEXT ENCODING DICT(8));"));
+
+    for (int cVal = 0; cVal < 280; cVal++) {
+      string insString = "INSERT INTO table_with_small_dict VALUES (" +
+                         std::to_string(cVal) + ", '" + std::to_string(cVal) + "');";
+      EXPECT_NO_THROW(run_multiple_agg(insString, dt));
+    }
+
+    ASSERT_EQ(
+        280,
+        v<int64_t>(run_simple_agg("SELECT count(*) FROM table_with_small_dict;", dt)));
+    ASSERT_EQ(255,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(distinct t) FROM table_with_small_dict;", dt)));
+    ASSERT_EQ(25,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM table_with_small_dict WHERE t IS NULL;", dt)));
+  }
+}
+
 TEST(Select, FilterAndSimpleAggregation) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
