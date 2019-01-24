@@ -1,2 +1,5 @@
 # 2018-05-03: Suppress lock-order-inversion warning from internal locks in GDAL. Since the warnings only occur when `initGDAL` is called, this should be fairly safe.
 deadlock:gdal
+race:boost::*::saved_single_repeat
+race:boost::*::saved_state
+thread:libcuda.so
