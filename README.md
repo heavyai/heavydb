@@ -20,9 +20,10 @@ MapD Core is an in-memory, column store, SQL relational database that was design
 - [Documentation](https://www.omnisci.com/docs/latest/)
 - [Release Notes](https://www.omnisci.com/docs/latest/7_0_release.html)
 - [Community Forum](https://community.omnisci.com)
-- [MapD Homepage](https://www.omnisci.com)
-- [MapD Blog](https://www.omnisci.com/blog/)
-- [MapD Downloads](https://www.omnisci.com/platform/downloads/)
+- [OmniSci Homepage](https://www.omnisci.com)
+- [OmniSci Blog](https://www.omnisci.com/blog/)
+- [OmniSci Downloads](https://www.omnisci.com/platform/downloads/)
+- [Doxygen-generated documentation](http://doxygen.omnisci.com/)
 
 # License
 
@@ -54,7 +55,7 @@ The following `cmake`/`ccmake` options can enable/disable different features:
 - `-DENABLE_CALCITE_DELETE_PATH=on` - Enable Calcite Delete Path. Default is `on`.
 - `-DENABLE_CALCITE_UPDATE_PATH=on` - Enable Calcite Update Path. Default is `on`.
 - `-DENABLE_CUDA=off` - Disable CUDA. Default is `on`.
-- `-DENABLE_CUDA_KERNEL_DEBUG=off` - Enable debugging symbols for CUDA kernels. Will dramatically reduce kernel performance. Default is `off`. 
+- `-DENABLE_CUDA_KERNEL_DEBUG=off` - Enable debugging symbols for CUDA kernels. Will dramatically reduce kernel performance. Default is `off`.
 - `-DENABLE_DECODERS_BOUNDS_CHECKING=off` - Enable bounds checking for column decoding. Default is `off`.
 - `-DENABLE_FOLLY=on` - Use Folly. Default is `on`.
 - `-DENABLE_IWYU=off` - Enable include-what-you-use. Default is `off`.
@@ -298,11 +299,11 @@ Most build dependencies required by MapD Core are available via APT. Certain dep
 
 ### Ubuntu 16.04
 
-MapD Core requires a newer version of Boost than the version which is provided by Ubuntu 16.04. The [scripts/mapd-deps-ubuntu1604.sh](scripts/mapd-deps-ubuntu1604.sh) build script will compile and install a newer version of Boost into the `/usr/local/mapd-deps/` directory. 
+MapD Core requires a newer version of Boost than the version which is provided by Ubuntu 16.04. The [scripts/mapd-deps-ubuntu1604.sh](scripts/mapd-deps-ubuntu1604.sh) build script will compile and install a newer version of Boost into the `/usr/local/mapd-deps/` directory.
 
 ### Ubuntu 18.04
 
-Use the [scripts/mapd-deps-ubuntu.sh](scripts/mapd-deps-ubuntu.sh) build script to install dependencies. 
+Use the [scripts/mapd-deps-ubuntu.sh](scripts/mapd-deps-ubuntu.sh) build script to install dependencies.
 
 Some installs of Ubuntu 18.04 may fail while building with a message similar to:
 
