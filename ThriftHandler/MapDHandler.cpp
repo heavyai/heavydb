@@ -3650,10 +3650,8 @@ void MapDHandler::import_geo_table(const TSessionId& session,
           rd[rd_index].col_name = gname;
           LOG(INFO) << "import_geo_table: Renaming incoming geo column to match existing "
                        "legacy default geo column";
-#if ENABLE_GEO_IMPORT_COLUMN_MATCHING
         } else {
           THROW_COLUMN_ATTR_MISMATCH_EXCEPTION("name", gname, ename);
-#endif
         }
       }
 #if ENABLE_GEO_IMPORT_COLUMN_MATCHING
