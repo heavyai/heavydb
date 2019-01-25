@@ -124,9 +124,8 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByInImpl(
         ++it;
         continue;
       }
-      const size_t use_constraint_thresh{10};
       const size_t range_sz = expr_range.getIntMax() - expr_range.getIntMin() + 1;
-      if (range_sz <= in_vals->get_value_list().size() * use_constraint_thresh) {
+      if (range_sz <= in_vals->get_value_list().size() * g_constrained_by_in_threshold) {
         ++it;
         continue;
       }
