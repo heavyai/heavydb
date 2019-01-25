@@ -1763,6 +1763,19 @@ TEST(Select, Case) {
       "'k', 'l') THEN 'foo_in_case' ELSE test.str END AS g FROM test GROUP BY g ORDER BY "
       "g ASC;",
       dt);
+    c("SELECT CASE WHEN shared_dict is null THEN 'hello' ELSE 'world' END key0, count(*) "
+      "val FROM test GROUP BY key0 ORDER BY val;",
+      dt);
+
+    const auto constrained_by_in_threshold_state = g_constrained_by_in_threshold;
+    g_constrained_by_in_threshold = 0;
+    ScopeGuard reset_constrained_by_in_threshold = [&constrained_by_in_threshold_state] {
+      g_constrained_by_in_threshold = constrained_by_in_threshold_state;
+    };
+    c("SELECT fixed_str AS key0, str as key1, count(*) as val FROM test WHERE "
+      "((fixed_str IN (SELECT fixed_str FROM test GROUP BY fixed_str))) GROUP BY key0, "
+      "key1 ORDER BY val desc;",
+      dt);
   }
 }
 

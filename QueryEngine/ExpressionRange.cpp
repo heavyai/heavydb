@@ -643,16 +643,24 @@ ExpressionRange getExpressionRange(const Analyzer::CaseExpr* case_expr,
                                    const Executor* executor) {
   const auto& expr_pair_list = case_expr->get_expr_pair_list();
   auto expr_range = ExpressionRange::makeInvalidRange();
+  bool has_nulls = false;
   for (const auto& expr_pair : expr_pair_list) {
     CHECK_EQ(expr_pair.first->get_type_info().get_type(), kBOOLEAN);
     const auto crt_range =
         getExpressionRange(expr_pair.second.get(), query_infos, executor);
+    if (crt_range.getType() == ExpressionRangeType::Null) {
+      has_nulls = true;
+      continue;
+    }
     if (crt_range.getType() == ExpressionRangeType::Invalid) {
       return ExpressionRange::makeInvalidRange();
     }
     expr_range = (expr_range.getType() != ExpressionRangeType::Invalid)
                      ? expr_range || crt_range
                      : crt_range;
+  }
+  if (has_nulls && !(expr_range.getType() == ExpressionRangeType::Invalid)) {
+    expr_range.setHasNulls();
   }
   const auto else_expr = case_expr->get_else_expr();
   CHECK(else_expr);
@@ -703,6 +711,10 @@ ExpressionRange getExpressionRange(
     const auto const_operand =
         dynamic_cast<const Analyzer::Constant*>(u_expr->get_operand());
     CHECK(const_operand);
+
+    if (const_operand->get_is_null()) {
+      return ExpressionRange::makeNullRange();
+    }
     CHECK(const_operand->get_constval().stringval);
     const int64_t v = sdp->getIdOfString(*const_operand->get_constval().stringval);
     return ExpressionRange::makeIntRange(v, v, 0, false);

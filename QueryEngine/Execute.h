@@ -88,6 +88,7 @@ extern bool g_enable_columnar_output;
 extern bool g_enable_overlaps_hashjoin;
 extern double g_overlaps_hashjoin_bucket_threshold;
 extern bool g_strip_join_covered_quals;
+extern size_t g_constrained_by_in_threshold;
 
 class ExecutionResult;
 

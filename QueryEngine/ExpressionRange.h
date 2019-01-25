@@ -30,7 +30,7 @@ typedef boost::multiprecision::number<
                                            void>>
     checked_int64_t;
 
-enum class ExpressionRangeType { Invalid, Integer, Float, Double };
+enum class ExpressionRangeType { Invalid, Integer, Float, Double, Null };
 
 class ExpressionRange;
 
@@ -64,6 +64,10 @@ class ExpressionRange {
                                         const float fp_max,
                                         const bool has_nulls) {
     return ExpressionRange(ExpressionRangeType::Float, fp_min, fp_max, has_nulls);
+  }
+
+  static ExpressionRange makeNullRange() {
+    return ExpressionRange(ExpressionRangeType::Null);
   }
 
   static ExpressionRange makeInvalidRange() { return ExpressionRange(); }
@@ -161,6 +165,11 @@ class ExpressionRange {
 
   ExpressionRange()
       : type_(ExpressionRangeType::Invalid), has_nulls_(false), bucket_(0) {}
+
+  explicit ExpressionRange(const ExpressionRangeType type)
+      : type_(type), has_nulls_(true), bucket_(0) {
+    CHECK(type_ == ExpressionRangeType::Null);
+  }
 
   template <class T, class BinOp>
   ExpressionRange binOp(const ExpressionRange& other, const BinOp& bin_op) const {
