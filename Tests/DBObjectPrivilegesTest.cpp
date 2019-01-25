@@ -53,14 +53,14 @@ void register_signal_handler() {
 class DBObjectPermissionsEnv : public ::testing::Environment {
  public:
   void SetUp() override {
-    std::string db_name{MAPD_SYSTEM_DB};
+    std::string db_name{MAPD_DEFAULT_DB};
     std::string user_name{MAPD_ROOT_USER};
     boost::filesystem::path base_path{BASE_PATH};
     if (!boost::filesystem::exists(base_path)) {
       boost::filesystem::create_directory(base_path);
     }
     CHECK(boost::filesystem::exists(base_path));
-    auto system_db_file = base_path / "mapd_catalogs" / "mapd";
+    auto system_db_file = base_path / "mapd_catalogs" / MAPD_DEFAULT_DB;
     auto data_dir = base_path / "mapd_data";
 
     register_signal_handler();
@@ -455,8 +455,8 @@ TEST(UserRoles, RoleHierarchies) {
 }
 
 TEST_F(DatabaseObject, AccessDefaultsTest) {
-  auto cat_mapd = Catalog_Namespace::Catalog::get("mapd");
-  DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
+  auto cat_mapd = Catalog_Namespace::Catalog::get(MAPD_DEFAULT_DB);
+  DBObject mapd_object(MAPD_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(*cat_mapd);
 
@@ -470,12 +470,11 @@ TEST_F(DatabaseObject, AccessDefaultsTest) {
 TEST_F(DatabaseObject, SqlEditorAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_juve;
   boost::filesystem::path base_path{BASE_PATH};
-  auto system_db_file = base_path / "mapd_catalogs" / "mapd";
   auto data_dir = base_path / "mapd_data";
   MapDParameters mapd_parms;
   auto dataMgr =
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
-  CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
+  CHECK(sys_cat.getMetadataForDB(MAPD_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Juventus", user_meta));
   session_juve.reset(
       new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db.dbName),
@@ -483,7 +482,7 @@ TEST_F(DatabaseObject, SqlEditorAccessTest) {
                                          ExecutorDeviceType::GPU,
                                          ""));
   auto& cat_mapd = session_juve->getCatalog();
-  DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
+  DBObject mapd_object(MAPD_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
   mapd_object.setPermissionType(DatabaseDBObjectType);
@@ -525,12 +524,11 @@ TEST_F(DatabaseObject, SqlEditorAccessTest) {
 TEST_F(DatabaseObject, DBLoginAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_juve;
   boost::filesystem::path base_path{BASE_PATH};
-  auto system_db_file = base_path / "mapd_catalogs" / "mapd";
   auto data_dir = base_path / "mapd_data";
   MapDParameters mapd_parms;
   auto dataMgr =
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
-  CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
+  CHECK(sys_cat.getMetadataForDB(MAPD_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Bayern", user_meta));
   session_juve.reset(
       new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db.dbName),
@@ -538,7 +536,7 @@ TEST_F(DatabaseObject, DBLoginAccessTest) {
                                          ExecutorDeviceType::GPU,
                                          ""));
   auto& cat_mapd = session_juve->getCatalog();
-  DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
+  DBObject mapd_object(MAPD_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
   mapd_object.setPermissionType(DatabaseDBObjectType);
@@ -579,12 +577,11 @@ TEST_F(DatabaseObject, DBLoginAccessTest) {
 TEST_F(DatabaseObject, TableAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
   boost::filesystem::path base_path{BASE_PATH};
-  auto system_db_file = base_path / "mapd_catalogs" / "mapd";
   auto data_dir = base_path / "mapd_data";
   MapDParameters mapd_parms;
   auto dataMgr =
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
-  CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
+  CHECK(sys_cat.getMetadataForDB(MAPD_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
   session_ars.reset(
       new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db.dbName),
@@ -597,7 +594,7 @@ TEST_F(DatabaseObject, TableAccessTest) {
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::CREATE_TABLE));
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::DROP_TABLE));
   ASSERT_NO_THROW(bayern_privs.add(AccessPrivileges::ALTER_TABLE));
-  DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
+  DBObject mapd_object(MAPD_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
   mapd_object.setPermissionType(TableDBObjectType);
@@ -643,12 +640,11 @@ TEST_F(DatabaseObject, TableAccessTest) {
 TEST_F(DatabaseObject, ViewAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
   boost::filesystem::path base_path{BASE_PATH};
-  auto system_db_file = base_path / "mapd_catalogs" / "mapd";
   auto data_dir = base_path / "mapd_data";
   MapDParameters mapd_parms;
   auto dataMgr =
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
-  CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
+  CHECK(sys_cat.getMetadataForDB(MAPD_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
   session_ars.reset(
       new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db.dbName),
@@ -658,7 +654,7 @@ TEST_F(DatabaseObject, ViewAccessTest) {
   auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_VIEW));
-  DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
+  DBObject mapd_object(MAPD_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
   mapd_object.setPermissionType(ViewDBObjectType);
@@ -698,12 +694,11 @@ TEST_F(DatabaseObject, ViewAccessTest) {
 TEST_F(DatabaseObject, DashboardAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
   boost::filesystem::path base_path{BASE_PATH};
-  auto system_db_file = base_path / "mapd_catalogs" / "mapd";
   auto data_dir = base_path / "mapd_data";
   MapDParameters mapd_parms;
   auto dataMgr =
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
-  CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
+  CHECK(sys_cat.getMetadataForDB(MAPD_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
   session_ars.reset(
       new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db.dbName),
@@ -713,7 +708,7 @@ TEST_F(DatabaseObject, DashboardAccessTest) {
   auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DASHBOARD));
-  DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
+  DBObject mapd_object(MAPD_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
   mapd_object.setPermissionType(DashboardDBObjectType);
@@ -752,12 +747,11 @@ TEST_F(DatabaseObject, DashboardAccessTest) {
 TEST_F(DatabaseObject, DatabaseAllTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
   boost::filesystem::path base_path{BASE_PATH};
-  auto system_db_file = base_path / "mapd_catalogs" / "mapd";
   auto data_dir = base_path / "mapd_data";
   MapDParameters mapd_parms;
   auto dataMgr =
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
-  CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
+  CHECK(sys_cat.getMetadataForDB(MAPD_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
   session_ars.reset(
       new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db.dbName),
@@ -767,7 +761,7 @@ TEST_F(DatabaseObject, DatabaseAllTest) {
   auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DATABASE));
-  DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
+  DBObject mapd_object(MAPD_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
   mapd_object.resetPrivileges();
@@ -1520,7 +1514,7 @@ TEST(SysCatalog, LoginWithDefaultDatabase) {
   username2 = username;
   dbname2.clear();
   ASSERT_NO_THROW(sys_cat.login(dbname2, username2, "password", user_meta, false));
-  EXPECT_EQ(dbname2, MAPD_SYSTEM_DB);  // correctly fell back to system default database
+  EXPECT_EQ(dbname2, MAPD_DEFAULT_DB);  // correctly fell back to system default database
 
   // cleanup
   ASSERT_NO_THROW(run_ddl_statement("DROP DATABASE " + dbname + ";"));

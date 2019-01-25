@@ -116,21 +116,11 @@ class read_lock {
   }
 
  public:
-  read_lock(const T* cat) : catalog(cat), holds_lock(false) {
-    if (catalog->name() == MAPD_SYSTEM_DB) {
-      lock_catalog(&SysCatalog::instance());
-    } else {
-      lock_catalog(cat);
-    }
-  }
+  read_lock(const T* cat) : catalog(cat), holds_lock(false) { lock_catalog(cat); }
 
   ~read_lock() {
     if (holds_lock) {
-      if (catalog->name() == MAPD_SYSTEM_DB) {
-        SysCatalog::thread_holds_read_lock = false;
-      } else {
-        T::thread_holds_read_lock = false;
-      }
+      T::thread_holds_read_lock = false;
     }
   }
 };
@@ -153,22 +143,12 @@ class sqlite_lock {
   }
 
  public:
-  sqlite_lock(const T* cat) : catalog(cat), holds_lock(false) {
-    if (catalog->name() == MAPD_SYSTEM_DB) {
-      lock_catalog(&SysCatalog::instance());
-    } else {
-      lock_catalog(cat);
-    }
-  }
+  sqlite_lock(const T* cat) : catalog(cat), holds_lock(false) { lock_catalog(cat); }
 
   ~sqlite_lock() {
     if (holds_lock) {
       std::thread::id no_thread;
-      if (catalog->name() == MAPD_SYSTEM_DB) {
-        SysCatalog::instance().thread_holding_sqlite_lock = no_thread;
-      } else {
-        catalog->thread_holding_sqlite_lock = no_thread;
-      }
+      catalog->thread_holding_sqlite_lock = no_thread;
     }
   }
 };
@@ -191,22 +171,12 @@ class write_lock {
   }
 
  public:
-  write_lock(const T* cat) : catalog(cat), holds_lock(false) {
-    if (catalog->name() == MAPD_SYSTEM_DB) {
-      lock_catalog(&SysCatalog::instance());
-    } else {
-      lock_catalog(cat);
-    }
-  }
+  write_lock(const T* cat) : catalog(cat), holds_lock(false) { lock_catalog(cat); }
 
   ~write_lock() {
     if (holds_lock) {
       std::thread::id no_thread;
-      if (catalog->name() == MAPD_SYSTEM_DB) {
-        SysCatalog::instance().thread_holding_write_lock = no_thread;
-      } else {
-        catalog->thread_holding_write_lock = no_thread;
-      }
+      catalog->thread_holding_write_lock = no_thread;
     }
   }
 };
@@ -238,15 +208,17 @@ void SysCatalog::init(const std::string& basePath,
   check_privileges_ = check_privileges;
   string_dict_hosts_ = string_dict_hosts;
   aggregator_ = aggregator;
+  bool db_exists =
+      boost::filesystem::exists(basePath_ + "/mapd_catalogs/" + MAPD_SYSTEM_CATALOG);
   sqliteConnector_.reset(
-      new SqliteConnector(MAPD_SYSTEM_DB, basePath + "/mapd_catalogs/"));
+      new SqliteConnector(MAPD_SYSTEM_CATALOG, basePath_ + "/mapd_catalogs/"));
   if (is_new_db) {
     initDB();
   } else {
+    if (!db_exists) {
+      importDataFromOldMapdDB();
+    }
     checkAndExecuteMigrations();
-    Catalog_Namespace::DBMetadata db_meta;
-    CHECK(getMetadataForDB(MAPD_SYSTEM_DB, db_meta));
-    currentDB_ = db_meta;
   }
   if (check_privileges_) {
     buildRoleMap();
@@ -255,12 +227,12 @@ void SysCatalog::init(const std::string& basePath,
   }
   // check if mapd db catalog is loaded in cat_map
   // if not, load mapd-cat here
-  if (!Catalog::get(MAPD_SYSTEM_DB)) {
+  if (!Catalog::get(MAPD_DEFAULT_DB)) {
     Catalog_Namespace::DBMetadata db_meta;
-    CHECK(getMetadataForDB(MAPD_SYSTEM_DB, db_meta));
+    CHECK(getMetadataForDB(MAPD_DEFAULT_DB, db_meta));
     auto mapd_cat = std::make_shared<Catalog>(
         basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, is_new_db);
-    Catalog::set(MAPD_SYSTEM_DB, mapd_cat);
+    Catalog::set(MAPD_DEFAULT_DB, mapd_cat);
   }
 }
 
@@ -319,7 +291,7 @@ void SysCatalog::initDB() {
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
-  createDatabase("mapd", MAPD_ROOT_USER_ID);
+  createDatabase(MAPD_DEFAULT_DB, MAPD_ROOT_USER_ID);
 }
 
 void SysCatalog::checkAndExecuteMigrations() {
@@ -331,6 +303,47 @@ void SysCatalog::checkAndExecuteMigrations() {
   }
   updateUserSchema();  // must come before updatePasswordsToHashes()
   updatePasswordsToHashes();
+}
+
+void SysCatalog::importDataFromOldMapdDB() {
+  sys_sqlite_lock sqlite_lock(this);
+  std::string mapd_db_path = basePath_ + "/mapd_catalogs/" + MAPD_DEFAULT_DB;
+  sqliteConnector_->query("ATTACH DATABASE `" + mapd_db_path + "` as old_cat");
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    auto moveTableIfExists = [conn = sqliteConnector_.get()](const std::string& tableName,
+                                                             bool deleteOld = true) {
+      conn->query("SELECT sql FROM old_cat.sqlite_master WHERE type='table' AND name='" +
+                  tableName + "'");
+      if (conn->getNumRows() != 0) {
+        conn->query(conn->getData<string>(0, 0));
+        conn->query("INSERT INTO " + tableName + " SELECT * FROM old_cat." + tableName);
+        if (deleteOld) {
+          conn->query("DROP TABLE old_cat." + tableName);
+        }
+      }
+    };
+    moveTableIfExists("mapd_users");
+    moveTableIfExists("mapd_databases");
+    moveTableIfExists("mapd_roles");
+    moveTableIfExists("mapd_object_permissions");
+    moveTableIfExists("mapd_privileges");
+    moveTableIfExists("mapd_version_history", false);
+  } catch (const std::exception&) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    try {
+      sqliteConnector_->query("DETACH DATABASE old_cat");
+    } catch (const std::exception&) {
+      // nothing to do here
+    }
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+  try {
+    sqliteConnector_->query("DETACH DATABASE old_cat");
+  } catch (const std::exception&) {
+    // nothing to do here
+  }
 }
 
 void SysCatalog::createUserRoles() {
@@ -615,17 +628,14 @@ void SysCatalog::migrateDBAccessPrivileges() {
           "CREATE TABLE mapd_version_history(version integer, migration_history text "
           "unique)");
     } else {
-      sqliteConnector_->query("select migration_history from mapd_version_history");
+      sqliteConnector_->query(
+          "select * from mapd_version_history where migration_history = "
+          "'db_access_privileges'");
       if (sqliteConnector_->getNumRows() != 0) {
-        for (size_t i = 0; i < sqliteConnector_->getNumRows(); i++) {
-          const auto mig = sqliteConnector_->getData<std::string>(i, 0);
-          if (mig == "db_access_privileges") {
-            // both privileges migrated
-            // no need for further execution
-            sqliteConnector_->query("END TRANSACTION");
-            return;
-          }
-        }
+        // both privileges migrated
+        // no need for further execution
+        sqliteConnector_->query("END TRANSACTION");
+        return;
       }
     }
     // Insert check for migration
@@ -760,11 +770,11 @@ std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
       dbname = db_meta.dbName;
       // loaded the user's default database
     } else {
-      if (!getMetadataForDB(MAPD_SYSTEM_DB, db_meta)) {
-        throw std::runtime_error(std::string("Database ") + MAPD_SYSTEM_DB +
+      if (!getMetadataForDB(MAPD_DEFAULT_DB, db_meta)) {
+        throw std::runtime_error(std::string("Database ") + MAPD_DEFAULT_DB +
                                  " does not exist.");
       }
-      dbname = MAPD_SYSTEM_DB;
+      dbname = MAPD_DEFAULT_DB;
       // loaded the mapd database by default
     }
   }
@@ -993,17 +1003,12 @@ void SysCatalog::createDatabase(const string& name, int owner) {
   if (getMetadataForDB(name, db)) {
     throw runtime_error("Database " + name + " already exists.");
   }
-
-  std::unique_ptr<SqliteConnector> dbConnHolder;
-  // Use either the syscat connector here or a new one if we're not
-  // in the system database
-  SqliteConnector* dbConn;
-  if (name != MAPD_SYSTEM_DB) {
-    dbConnHolder.reset(new SqliteConnector(name, basePath_ + "/mapd_catalogs/"));
-    dbConn = dbConnHolder.get();
-  } else {
-    dbConn = sqliteConnector_.get();
+  if (to_upper(name) == to_upper(MAPD_SYSTEM_CATALOG)) {
+    throw runtime_error("Database name " + name + " is reserved.");
   }
+
+  std::unique_ptr<SqliteConnector> dbConn(
+      new SqliteConnector(name, basePath_ + "/mapd_catalogs/"));
   // NOTE(max): it's okay to run this in a separate transaction. If we fail later
   // we delete the database anyways.
   // If we run it in the same transaction as SysCatalog functions, then Catalog
@@ -1269,8 +1274,8 @@ bool SysCatalog::getMetadataForDBById(const int32_t idIn, DBMetadata& db) {
 // Note (max): I wonder why this one is necessary
 void SysCatalog::grantDefaultPrivilegesToRole_unsafe(const std::string& name,
                                                      bool issuper) {
-  DBObject dbObject(getCurrentDB().dbName, DatabaseDBObjectType);
-  auto* catalog = Catalog::get(getCurrentDB().dbName).get();
+  DBObject dbObject(MAPD_DEFAULT_DB, DatabaseDBObjectType);
+  auto* catalog = Catalog::get(MAPD_DEFAULT_DB).get();
   CHECK(catalog);
   dbObject.loadKey(*catalog);
 
@@ -1528,7 +1533,7 @@ void SysCatalog::createRole_unsafe(const std::string& roleName,
 
   // NOTE (max): Why create an empty privileges record for a role?
   /* grant none privileges to this role and add it to sqlite DB */
-  DBObject dbObject(getCurrentDB().dbName, DatabaseDBObjectType);
+  DBObject dbObject(MAPD_DEFAULT_DB, DatabaseDBObjectType);
   DBObjectKey objKey;
   // 0 is an id that does not exist
   objKey.dbId = 0;
@@ -2376,16 +2381,13 @@ void Catalog::checkDateInDaysColumnMigration() {
           "CREATE TABLE mapd_date_in_days_column_migration_tmp(table_id integer primary "
           "key)");
     } else {
-      sqliteConnector_.query("select migration_history from mapd_version_history");
+      sqliteConnector_.query(
+          "select * from mapd_version_history where migration_history = "
+          "'date_in_days_column'");
       if (sqliteConnector_.getNumRows() != 0) {
-        for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
-          const auto mig = sqliteConnector_.getData<std::string>(i, 0);
-          if (mig == "date_in_days_column") {
-            // no need for further execution
-            sqliteConnector_.query("END TRANSACTION");
-            return;
-          }
-        }
+        // no need for further execution
+        sqliteConnector_.query("END TRANSACTION");
+        return;
       }
       LOG(INFO) << "Performing Date in days columns migration.";
       sqliteConnector_.query(
@@ -2644,7 +2646,7 @@ void SysCatalog::buildUserRoleMap() {
     std::string userName = sqliteConnector_->getData<string>(r, 1);
     // required for declared nomenclature before v4.0.0
     if ((boost::equals(roleName, "mapd_default_suser_role") &&
-         boost::equals(userName, "mapd")) ||
+         boost::equals(userName, MAPD_ROOT_USER)) ||
         (boost::equals(roleName, "mapd_default_user_role") &&
          !boost::equals(userName, "mapd_default_user_role"))) {
       // grouprole already exists with roleName==userName in mapd_roles table
@@ -4366,14 +4368,8 @@ void Catalog::dropTable(const TableDescriptor* td) {
   cat_sqlite_lock sqlite_lock(this);
   const auto physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
   SqliteConnector* sys_conn = SysCatalog::instance().getSqliteConnector();
-  SqliteConnector* drop_conn = sys_conn;
   sys_conn->query("BEGIN TRANSACTION");
-  bool is_system_db =
-      currentDB_.dbName == MAPD_SYSTEM_DB;  // whether we need two connectors or not
-  if (!is_system_db) {
-    drop_conn = &sqliteConnector_;
-    drop_conn->query("BEGIN TRANSACTION");
-  }
+  sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
       // remove all corresponding physical tables if this is a logical table
@@ -4383,57 +4379,52 @@ void Catalog::dropTable(const TableDescriptor* td) {
         int32_t physical_tb_id = physicalTables[i];
         const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
         CHECK(phys_td);
-        doDropTable(phys_td, drop_conn);
+        doDropTable(phys_td);
       }
 
       // remove corresponding record from the logicalToPhysicalTableMap in sqlite database
-
-      drop_conn->query_with_text_param(
+      sqliteConnector_.query_with_text_param(
           "DELETE FROM mapd_logical_to_physical WHERE logical_table_id = ?",
           std::to_string(td->tableId));
       logicalToPhysicalTableMapById_.erase(td->tableId);
     }
-    doDropTable(td, drop_conn);
+    doDropTable(td);
   } catch (std::exception& e) {
-    if (!is_system_db) {
-      drop_conn->query("ROLLBACK TRANSACTION");
-    }
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
     sys_conn->query("ROLLBACK TRANSACTION");
     throw;
   }
-  if (!is_system_db) {
-    drop_conn->query("END TRANSACTION");
-  }
+  sqliteConnector_.query("END TRANSACTION");
   sys_conn->query("END TRANSACTION");
 }
 
-void Catalog::doDropTable(const TableDescriptor* td, SqliteConnector* conn) {
+void Catalog::doDropTable(const TableDescriptor* td) {
   const int tableId = td->tableId;
-  conn->query_with_text_param("DELETE FROM mapd_tables WHERE tableid = ?",
-                              std::to_string(tableId));
-  conn->query_with_text_params(
+  sqliteConnector_.query_with_text_param("DELETE FROM mapd_tables WHERE tableid = ?",
+                                         std::to_string(tableId));
+  sqliteConnector_.query_with_text_params(
       "select comp_param from mapd_columns where compression = ? and tableid = ?",
       std::vector<std::string>{std::to_string(kENCODING_DICT), std::to_string(tableId)});
-  int numRows = conn->getNumRows();
+  int numRows = sqliteConnector_.getNumRows();
   std::vector<int> dict_id_list;
   for (int r = 0; r < numRows; ++r) {
-    dict_id_list.push_back(conn->getData<int>(r, 0));
+    dict_id_list.push_back(sqliteConnector_.getData<int>(r, 0));
   }
   for (auto dict_id : dict_id_list) {
-    conn->query_with_text_params(
+    sqliteConnector_.query_with_text_params(
         "UPDATE mapd_dictionaries SET refcount = refcount - 1 WHERE dictid = ?",
         std::vector<std::string>{std::to_string(dict_id)});
   }
-  conn->query_with_text_params(
+  sqliteConnector_.query_with_text_params(
       "DELETE FROM mapd_dictionaries WHERE dictid in (select comp_param from "
       "mapd_columns where compression = ? "
       "and tableid = ?) and refcount = 0",
       std::vector<std::string>{std::to_string(kENCODING_DICT), std::to_string(tableId)});
-  conn->query_with_text_param("DELETE FROM mapd_columns WHERE tableid = ?",
-                              std::to_string(tableId));
+  sqliteConnector_.query_with_text_param("DELETE FROM mapd_columns WHERE tableid = ?",
+                                         std::to_string(tableId));
   if (td->isView) {
-    conn->query_with_text_param("DELETE FROM mapd_views WHERE tableid = ?",
-                                std::to_string(tableId));
+    sqliteConnector_.query_with_text_param("DELETE FROM mapd_views WHERE tableid = ?",
+                                           std::to_string(tableId));
   }
   if (SysCatalog::instance().arePrivilegesOn()) {
     SysCatalog::instance().revokeDBObjectPrivilegesFromAll_unsafe(

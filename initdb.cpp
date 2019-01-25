@@ -131,7 +131,7 @@ int main(int argc, char* argv[]) {
     if (!skip_geo) {
       // Add geo samples to the system database using the root user
       Catalog_Namespace::DBMetadata cur_db;
-      const std::string db_name(MAPD_SYSTEM_DB);
+      const std::string db_name(MAPD_DEFAULT_DB);
       CHECK(sys_cat.getMetadataForDB(db_name, cur_db));
       auto cat = Catalog_Namespace::Catalog::get(
           base_path, cur_db, dummy, std::vector<LeafHostInfo>(), calcite, false);

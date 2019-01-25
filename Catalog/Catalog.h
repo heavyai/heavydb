@@ -119,8 +119,10 @@ struct DBMetadata {
   int32_t dbOwner;
 };
 
-/* database name for the system database */
-#define MAPD_SYSTEM_DB "mapd"
+/* system database with global metadata */
+#define MAPD_SYSTEM_CATALOG "omnisci_system_catalog"
+/* database name for the default database */
+#define MAPD_DEFAULT_DB "mapd"
 /* the mapd root user */
 #define MAPD_ROOT_USER "mapd"
 
@@ -327,7 +329,7 @@ class Catalog {
   void addFrontendViewToMapNoLock(FrontendViewDescriptor& vd);
   void addLinkToMap(LinkDescriptor& ld);
   void removeTableFromMap(const std::string& tableName, int tableId);
-  void doDropTable(const TableDescriptor* td, SqliteConnector* conn);
+  void doDropTable(const TableDescriptor* td);
   void doTruncateTable(const TableDescriptor* td);
   void renamePhysicalTable(const TableDescriptor* td, const std::string& newTableName);
   void instantiateFragmenter(TableDescriptor* td) const;
@@ -436,7 +438,6 @@ class SysCatalog {
                             UserMetadata& user);
   bool getMetadataForDB(const std::string& name, DBMetadata& db);
   bool getMetadataForDBById(const int32_t idIn, DBMetadata& db);
-  const DBMetadata& getCurrentDB() const { return currentDB_; }
   Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
   Calcite& getCalciteMgr() const { return *calciteMgr_; }
   const std::string& getBasePath() const { return basePath_; }
@@ -509,7 +510,7 @@ class SysCatalog {
   }
 
   void populateRoleDbObjects(const std::vector<DBObject>& objects);
-  std::string name() const { return MAPD_SYSTEM_DB; }
+  std::string name() const { return MAPD_DEFAULT_DB; }
   void renameObjectsInDescriptorMap(DBObject& object,
                                     const Catalog_Namespace::Catalog& cat);
   void syncUserWithRemoteProvider(const std::string& user_name,
@@ -535,6 +536,7 @@ class SysCatalog {
   void buildUserRoleMap();
   void buildObjectDescriptorMap();
   void checkAndExecuteMigrations();
+  void importDataFromOldMapdDB();
   void createUserRoles();
   void migratePrivileges();
   void migratePrivileged_old();
@@ -597,7 +599,6 @@ class SysCatalog {
   std::string basePath_;
   GranteeMap granteeMap_;
   ObjectRoleDescriptorMap objectDescriptorMap_;
-  DBMetadata currentDB_;
   std::unique_ptr<SqliteConnector> sqliteConnector_;
 
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;

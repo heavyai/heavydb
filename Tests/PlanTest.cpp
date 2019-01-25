@@ -80,7 +80,7 @@ class SQLTestEnv : public ::testing::Environment {
   void SetUp() override {
     boost::filesystem::path base_path{BASE_PATH};
     CHECK(boost::filesystem::exists(base_path));
-    auto system_db_file = base_path / "mapd_catalogs" / MAPD_SYSTEM_DB;
+    auto system_db_file = base_path / "mapd_catalogs" / MAPD_DEFAULT_DB;
     auto data_dir = base_path / "mapd_data";
     UserMetadata user;
     DBMetadata db;

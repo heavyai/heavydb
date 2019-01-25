@@ -139,7 +139,7 @@ Catalog_Namespace::SessionInfo* get_session(
     const bool create_db) {
   boost::filesystem::path base_path{db_path};
   CHECK(boost::filesystem::exists(base_path));
-  auto system_db_file = base_path / "mapd_catalogs" / "mapd";
+  auto system_db_file = base_path / "mapd_catalogs" / MAPD_DEFAULT_DB;
   CHECK(boost::filesystem::exists(system_db_file));
   auto data_dir = base_path / "mapd_data";
   Catalog_Namespace::UserMetadata user;
@@ -200,8 +200,8 @@ Catalog_Namespace::SessionInfo* get_session(
     const char* db_path,
     const std::vector<LeafHostInfo>& string_servers,
     const std::vector<LeafHostInfo>& leaf_servers) {
-  std::string db_name{MAPD_SYSTEM_DB};
-  std::string user_name{"mapd"};
+  std::string db_name{MAPD_DEFAULT_DB};
+  std::string user_name{MAPD_ROOT_USER};
   std::string passwd{"HyperInteractive"};
 
   return get_session(db_path, user_name, passwd, db_name, string_servers, leaf_servers);
