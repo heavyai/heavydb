@@ -121,9 +121,32 @@ class QueryMemoryInitializer {
       const std::vector<Analyzer::Expr*>& target_exprs,
       const Executor* executor) const;
 
-  size_t getNumBuffers(const QueryMemoryDescriptor& query_mem_desc,
-                       const ExecutorDeviceType device_type,
-                       const Executor* executor) const;
+#ifdef HAVE_CUDA
+  GpuGroupByBuffers prepareTopNHeapsDevBuffer(const CudaAllocator& cuda_allocator,
+                                              const QueryMemoryDescriptor& query_mem_desc,
+                                              const CUdeviceptr init_agg_vals_dev_ptr,
+                                              const size_t n,
+                                              const int device_id,
+                                              const unsigned block_size_x,
+                                              const unsigned grid_size_x);
+
+  GpuGroupByBuffers createAndInitializeGroupByBufferGpu(
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const QueryMemoryDescriptor& query_mem_desc,
+      const CUdeviceptr init_agg_vals_dev_ptr,
+      const int device_id,
+      const unsigned block_size_x,
+      const unsigned grid_size_x,
+      const int8_t warp_size,
+      const bool can_sort_on_gpu,
+      const bool output_columnar,
+      const CudaAllocator& cuda_allocator,
+      RenderAllocator* render_allocator);
+#endif
+
+  size_t computeNumberOfBuffers(const QueryMemoryDescriptor& query_mem_desc,
+                                const ExecutorDeviceType device_type,
+                                const Executor* executor) const;
 
   void compactProjectionBuffersCpu(const QueryMemoryDescriptor& query_mem_desc,
                                    const size_t projection_count);
@@ -132,14 +155,6 @@ class QueryMemoryInitializer {
                                    const GpuGroupByBuffers& gpu_group_by_buffers,
                                    const size_t projection_count,
                                    const int device_id);
-
-  GpuGroupByBuffers createGroupByBuffersOnGpu(const CudaAllocator& cuda_allocator,
-                                              RenderAllocator* render_allocator,
-                                              const QueryMemoryDescriptor& query_mem_desc,
-                                              const int device_id,
-                                              const unsigned block_size_x,
-                                              const unsigned grid_size_x,
-                                              const bool can_sort_on_gpu);
 
   void copyGroupByBuffersFromGpu(Data_Namespace::DataMgr* data_mgr,
                                  const QueryMemoryDescriptor& query_mem_desc,

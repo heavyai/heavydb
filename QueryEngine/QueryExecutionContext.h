@@ -126,23 +126,6 @@ class QueryExecutionContext : boost::noncopyable {
       const int device_id,
       const bool hoist_literals,
       const bool is_group_by) const;
-
-  std::pair<CUdeviceptr, CUdeviceptr> prepareTopNHeapsDevBuffer(
-      const CudaAllocator& cuda_allocator,
-      const CUdeviceptr init_agg_vals_dev_ptr,
-      const size_t n,
-      const int device_id,
-      const unsigned block_size_x,
-      const unsigned grid_size_x) const;
-
-  GpuGroupByBuffers prepareGroupByDevBuffer(const CudaAllocator& cuda_allocator,
-                                            RenderAllocator* render_allocator,
-                                            const RelAlgExecutionUnit& ra_exe_unit,
-                                            const CUdeviceptr init_agg_vals_dev_ptr,
-                                            const int device_id,
-                                            const unsigned block_size_x,
-                                            const unsigned grid_size_x,
-                                            const bool can_sort_on_gpu) const;
 #endif  // HAVE_CUDA
 
   ResultSetPtr groupBufferToDeinterleavedResults(const size_t i) const;
