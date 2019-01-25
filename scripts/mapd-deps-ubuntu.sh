@@ -5,6 +5,7 @@ set -x
 
 HTTP_DEPS="https://dependencies.mapd.com/thirdparty"
 
+SUFFIX=${SUFFIX:=$(date +%Y%m%d)}
 PREFIX=/usr/local/mapd-deps
 
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -230,3 +231,7 @@ EOF
 echo
 echo "Done. Be sure to source the 'mapd-deps.sh' file to pick up the required environment variables:"
 echo "    source $PREFIX/mapd-deps.sh"
+
+if [ "$1" = "--compress" ] ; then
+    tar acf mapd-deps-ubuntu-$SUFFIX.tar.xz -C $PREFIX .
+fi

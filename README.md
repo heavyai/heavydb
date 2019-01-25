@@ -217,35 +217,9 @@ Dependencies for `omnisci_web_server` and other Go utils are in [`ThirdParty/go`
 
 MapD Core requires a number of dependencies which are not provided in the common CentOS/RHEL package repositories. A prebuilt package containing all these dependencies is provided for CentOS 7 (x86_64).
 
-First install the basic build tools:
+Use the [scripts/mapd-deps-prebuilt.sh](scripts/mapd-deps-prebuilt.sh) build script to install prebuilt dependencies.
 
-    sudo yum groupinstall -y "Development Tools"
-    sudo yum install -y \
-        zlib-devel \
-        epel-release \
-        libssh \
-        openssl-devel \
-        ncurses-devel \
-        git \
-        maven \
-        java-1.8.0-openjdk-devel \
-        java-1.8.0-openjdk-headless \
-        gperftools \
-        gperftools-devel \
-        gperftools-libs \
-        python-devel \
-        wget \
-        curl \
-        environment-modules
-    sudo yum install -y \
-        jq
-
-Next download and install the prebuilt dependencies:
-
-    curl -OJ https://dependencies.mapd.com/mapd-deps/deploy.sh
-    sudo bash deploy.sh
-
-These dependencies will be installed to a directory under `/usr/local/mapd-deps`. The `deploy.sh` script also installs [Environment Modules](http://modules.sf.net) in order to simplify managing the required environment variables. Log out and log back in after running the `deploy.sh` script in order to active Environment Modules command, `module`.
+These dependencies will be installed to a directory under `/usr/local/mapd-deps`. The `mapd-deps-prebuilt.sh` script also installs [Environment Modules](http://modules.sf.net) in order to simplify managing the required environment variables. Log out and log back in after running the `mapd-deps-prebuilt.sh` script in order to active Environment Modules command, `module`.
 
 The `mapd-deps` environment module is disabled by default. To activate for your current session, run:
 
@@ -271,7 +245,7 @@ Be sure to reboot after installing in order to activate the NVIDIA drivers.
 
 ### Environment Variables
 
-The `deploy.sh` script includes two files with the appropriate environment variables: `mapd-deps-<date>.sh` (for sourcing from your shell config) and `mapd-deps-<date>.modulefile` (for use with [Environment Modules](http://modules.sf.net), yum package `environment-modules`). These files are placed in mapd-deps install directory, usually `/usr/local/mapd-deps/<date>`. Either of these may be used to configure your environment: the `.sh` may be sourced in your shell config; the `.modulefile` needs to be moved to the modulespath.
+The `mapd-deps-prebuilt.sh` script includes two files with the appropriate environment variables: `mapd-deps-<date>.sh` (for sourcing from your shell config) and `mapd-deps-<date>.modulefile` (for use with [Environment Modules](http://modules.sf.net), yum package `environment-modules`). These files are placed in mapd-deps install directory, usually `/usr/local/mapd-deps/<date>`. Either of these may be used to configure your environment: the `.sh` may be sourced in your shell config; the `.modulefile` needs to be moved to the modulespath.
 
 ### Building Dependencies
 
@@ -295,7 +269,7 @@ The [scripts/mapd-deps-centos.sh](scripts/mapd-deps-centos.sh) script is used to
 
 ## Ubuntu
 
-Most build dependencies required by MapD Core are available via APT. Certain dependencies such as Thrift, Blosc, and Folly must be built as they either do not exist in the default repositories or have outdated versions. The provided build script will install all required dependencies (except CUDA) and build the dependencies which require it. The built dependencies will be installed to `/usr/local/mapd-deps/` by default; see the Environment Variables section below for how to add these dependencies to your environment.
+Most build dependencies required by MapD Core are available via APT. Certain dependencies such as Thrift, Blosc, and Folly must be built as they either do not exist in the default repositories or have outdated versions. A prebuilt package containing all these dependencies is provided for Ubuntu 18.04 (x86_64). The dependencies will be installed to `/usr/local/mapd-deps/` by default; see the Environment Variables section below for how to add these dependencies to your environment.
 
 ### Ubuntu 16.04
 
@@ -303,7 +277,11 @@ MapD Core requires a newer version of Boost than the version which is provided b
 
 ### Ubuntu 18.04
 
-Use the [scripts/mapd-deps-ubuntu.sh](scripts/mapd-deps-ubuntu.sh) build script to install dependencies.
+Use the [scripts/mapd-deps-prebuilt.sh](scripts/mapd-deps-prebuilt.sh) build script to install prebuilt dependencies.
+
+These dependencies will be installed to a directory under `/usr/local/mapd-deps`. The `mapd-deps-prebuilt.sh` script above will generate a script named `mapd-deps.sh` containing the environment variables which need to be set. Simply source this file in your current session (or symlink it to `/etc/profile.d/mapd-deps.sh`) in order to activate it:
+
+    source /usr/local/mapd-deps/mapd-deps.sh
 
 Some installs of Ubuntu 18.04 may fail while building with a message similar to:
 
@@ -316,7 +294,7 @@ This is a known issue in 18.04 which will be resolved in [Ubuntu 18.04.1](https:
 
 ### Environment Variables
 
-The CUDA and mapd-deps `lib` directories need to be added to `LD_LIBRARY_PATH`; the CUDA and mapd-deps `bin` directories need to be added to `PATH`. The `mapd-deps-ubuntu.sh` script above will generate a script named `mapd-deps.sh` containing the environment variables which need to be set. Simply source this file in your current session (or symlink it to `/etc/profile.d/mapd-deps.sh`) in order to activate it:
+The CUDA and mapd-deps `lib` directories need to be added to `LD_LIBRARY_PATH`; the CUDA and mapd-deps `bin` directories need to be added to `PATH`. The `mapd-deps-ubuntu.sh` and `mapd-deps-prebuilt.sh` scripts will generate a script named `mapd-deps.sh` containing the environment variables which need to be set. Simply source this file in your current session (or symlink it to `/etc/profile.d/mapd-deps.sh`) in order to activate it:
 
     source /usr/local/mapd-deps/mapd-deps.sh
 
@@ -328,6 +306,13 @@ Recent versions of Ubuntu provide the NVIDIA CUDA Toolkit and drivers in the sta
         nvidia-cuda-toolkit
 
 Be sure to reboot after installing in order to activate the NVIDIA drivers.
+
+### Building Dependencies
+
+The [scripts/mapd-deps-ubuntu.sh](scripts/mapd-deps-ubuntu.sh) and [scripts/mapd-deps-ubuntu1604.sh](scripts/mapd-deps-ubuntu1604.sh) scripts are used to build the dependencies for Ubuntu 18.04 and 16.04, respectively. The scripts will install all required dependencies (except CUDA) and build the dependencies which require it. Modify this script and run if you would like to change dependency versions or to build on alternative CPU architectures.
+
+    cd scripts
+    ./mapd-deps-ubuntu.sh --compress
 
 ## Arch
 
