@@ -1380,7 +1380,7 @@ void RelAlgExecutor::computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
               chunks_owner,
               column_cache_map);
       CHECK_EQ(join_col_elem_count, elem_count);
-      context->addOrderColumn(column, order_col.get());
+      context->addOrderColumn(column, order_col.get(), chunks_owner);
     }
     context->compute();
     window_project_node_context->addWindowFunctionContext(std::move(context),

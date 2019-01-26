@@ -38,7 +38,9 @@ class WindowFunctionContext {
 
   ~WindowFunctionContext();
 
-  void addOrderColumn(const int8_t* column, const Analyzer::ColumnVar* col_var);
+  void addOrderColumn(const int8_t* column,
+                      const Analyzer::ColumnVar* col_var,
+                      const std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner);
 
   void compute();
 
@@ -61,19 +63,14 @@ class WindowFunctionContext {
   };
 
   static Comparator makeComparator(const Analyzer::ColumnVar* col_var,
-                                   const int8_t* partition_values);
+                                   const int8_t* partition_values,
+                                   const int32_t* partition_indices);
 
-  template <class T>
-  static void scatterToPartitions(T* dest,
-                                  const T* source,
-                                  const int32_t* positions,
-                                  const size_t elem_count);
-
-  static void computePartition(int64_t* output_for_partition_buff,
-                               const size_t partition_size,
-                               const size_t off,
-                               const Analyzer::WindowFunction* window_func,
-                               const std::vector<Comparator>& comparators);
+  void computePartition(int64_t* output_for_partition_buff,
+                        const size_t partition_size,
+                        const size_t off,
+                        const Analyzer::WindowFunction* window_func,
+                        const std::vector<Comparator>& comparators);
 
   void fillPartitionStart();
 
@@ -86,8 +83,10 @@ class WindowFunctionContext {
   size_t partitionCount() const;
 
   const Analyzer::WindowFunction* window_func_;
-  // The order column buffers partitioned as specified by partitions_.
-  std::vector<int8_t*> order_columns_partitioned_;
+  // Keeps ownership of order column.
+  std::vector<std::vector<std::shared_ptr<Chunk_NS::Chunk>>> order_columns_owner_;
+  // Order column buffers.
+  std::vector<const int8_t*> order_columns_;
   // Hash table which contains the partitions specified by the window.
   std::shared_ptr<JoinHashTableInterface> partitions_;
   // The number of elements in the table.

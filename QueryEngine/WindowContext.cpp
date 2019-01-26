@@ -35,50 +35,16 @@ WindowFunctionContext::WindowFunctionContext(
     , device_type_(device_type) {}
 
 WindowFunctionContext::~WindowFunctionContext() {
-  for (auto order_column_partitioned : order_columns_partitioned_) {
-    free(order_column_partitioned);
-  }
   free(output_);
   free(partition_start_);
 }
 
-void WindowFunctionContext::addOrderColumn(const int8_t* column,
-                                           const Analyzer::ColumnVar* col_var) {
-  const auto& col_ti = col_var->get_type_info();
-  auto partitioned_dest =
-      static_cast<int8_t*>(checked_malloc(elem_count_ * col_ti.get_size()));
-  order_columns_partitioned_.push_back(partitioned_dest);
-  switch (col_ti.get_size()) {
-    case 8: {
-      scatterToPartitions(reinterpret_cast<int64_t*>(partitioned_dest),
-                          reinterpret_cast<const int64_t*>(column),
-                          payload(),
-                          elem_count_);
-      break;
-    }
-    case 4: {
-      scatterToPartitions(reinterpret_cast<int32_t*>(partitioned_dest),
-                          reinterpret_cast<const int32_t*>(column),
-                          payload(),
-                          elem_count_);
-      break;
-    }
-    case 2: {
-      scatterToPartitions(reinterpret_cast<int16_t*>(partitioned_dest),
-                          reinterpret_cast<const int16_t*>(column),
-                          payload(),
-                          elem_count_);
-      break;
-    }
-    case 1: {
-      scatterToPartitions(partitioned_dest, column, payload(), elem_count_);
-      break;
-    }
-    default: {
-      LOG(FATAL) << "Unsupported size: " << col_ti.get_size();
-      break;
-    }
-  }
+void WindowFunctionContext::addOrderColumn(
+    const int8_t* column,
+    const Analyzer::ColumnVar* col_var,
+    const std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner) {
+  order_columns_owner_.push_back(chunks_owner);
+  order_columns_.push_back(column);
 }
 
 namespace {
@@ -214,7 +180,8 @@ size_t get_int_constant_from_expr(const Analyzer::Expr* expr) {
   return 0;
 }
 
-size_t get_lag_or_lead_argument(const Analyzer::WindowFunction* window_func) {
+// Gets the lag or lead argument canonicalized as lag (lag = -lead).
+ssize_t get_lag_or_lead_argument(const Analyzer::WindowFunction* window_func) {
   CHECK(window_func->getKind() == SqlWindowFunctionKind::LAG ||
         window_func->getKind() == SqlWindowFunctionKind::LEAD);
   const auto& args = window_func->getArgs();
@@ -222,7 +189,9 @@ size_t get_lag_or_lead_argument(const Analyzer::WindowFunction* window_func) {
     throw std::runtime_error("LAG with default not supported yet");
   }
   if (args.size() == 2) {
-    return get_int_constant_from_expr(args[1].get());
+    const ssize_t lag_or_lead = get_int_constant_from_expr(args[1].get());
+    return window_func->getKind() == SqlWindowFunctionKind::LAG ? lag_or_lead
+                                                                : -lag_or_lead;
   }
   CHECK_EQ(args.size(), size_t(1));
   return 1;
@@ -240,29 +209,25 @@ void apply_permutation_to_partition(int64_t* output_for_partition_buff,
             output_for_partition_buff);
 }
 
-void apply_lag_to_partition(const size_t lag,
-                            int64_t* output_for_partition_buff,
+void apply_lag_to_partition(const ssize_t lag,
+                            const int32_t* original_indices,
+                            int64_t* sorted_indices,
                             const size_t partition_size) {
-  CHECK(partition_size);
-  for (size_t k = partition_size - 1; k >= lag; --k) {
-    output_for_partition_buff[k] = output_for_partition_buff[k - lag];
+  std::vector<int64_t> lag_sorted_indices(partition_size, -1);
+  for (ssize_t idx = 0; idx < static_cast<ssize_t>(partition_size); ++idx) {
+    ssize_t lag_idx = idx - lag;
+    if (lag_idx < 0 || lag_idx >= static_cast<ssize_t>(partition_size)) {
+      continue;
+    }
+    lag_sorted_indices[idx] = sorted_indices[lag_idx];
   }
-  for (size_t k = 0; k < std::min(lag, static_cast<size_t>(partition_size)); ++k) {
-    output_for_partition_buff[k] = -1;
+  std::vector<int64_t> lag_original_indices(partition_size);
+  for (size_t k = 0; k < partition_size; ++k) {
+    const auto lag_index = lag_sorted_indices[k];
+    lag_original_indices[sorted_indices[k]] =
+        lag_index != -1 ? original_indices[lag_index] : -1;
   }
-}
-
-void apply_lead_to_partition(const size_t lead,
-                             int64_t* output_for_partition_buff,
-                             const size_t partition_size) {
-  const auto valid_element_count =
-      static_cast<ssize_t>(partition_size) - static_cast<ssize_t>(lead);
-  for (ssize_t k = 0; k < valid_element_count; ++k) {
-    output_for_partition_buff[k] = output_for_partition_buff[k + lead];
-  }
-  for (size_t k = std::max(valid_element_count, ssize_t(0)); k < partition_size; ++k) {
-    output_for_partition_buff[k] = -1;
-  }
+  std::copy(lag_original_indices.begin(), lag_original_indices.end(), sorted_indices);
 }
 
 void apply_first_value_to_partition(int64_t* output_for_partition_buff,
@@ -314,18 +279,15 @@ void WindowFunctionContext::compute() {
               output_for_partition_buff + partition_size,
               int64_t(0));
     std::vector<Comparator> comparators;
-    for (size_t order_column_idx = 0;
-         order_column_idx < order_columns_partitioned_.size();
+    for (size_t order_column_idx = 0; order_column_idx < order_columns_.size();
          ++order_column_idx) {
-      auto order_column_partitioned = order_columns_partitioned_[order_column_idx];
+      auto order_column_buffer = order_columns_[order_column_idx];
       const auto& order_keys = window_func_->getOrderKeys();
       const auto order_col =
           dynamic_cast<const Analyzer::ColumnVar*>(order_keys[order_column_idx].get());
       CHECK(order_col);
-      const auto& order_col_ti = order_col->get_type_info();
-      auto order_column_partition =
-          order_column_partitioned + offsets()[i] * order_col_ti.get_size();
-      comparators.push_back(makeComparator(order_col, order_column_partition));
+      comparators.push_back(
+          makeComparator(order_col, order_column_buffer, payload() + offsets()[i]));
       std::stable_sort(output_for_partition_buff,
                        output_for_partition_buff + partition_size,
                        comparators.back());
@@ -373,57 +335,50 @@ size_t WindowFunctionContext::elementCount() const {
 
 std::function<bool(const int64_t lhs, const int64_t rhs)>
 WindowFunctionContext::makeComparator(const Analyzer::ColumnVar* col_var,
-                                      const int8_t* partition_values) {
+                                      const int8_t* order_column_buffer,
+                                      const int32_t* partition_indices) {
   const auto& ti = col_var->get_type_info();
   switch (ti.get_type()) {
     case kBIGINT: {
-      const auto values = reinterpret_cast<const int64_t*>(partition_values);
-      return [values](const int64_t lhs, const int64_t rhs) {
-        return values[lhs] < values[rhs];
+      const auto values = reinterpret_cast<const int64_t*>(order_column_buffer);
+      return [values, partition_indices](const int64_t lhs, const int64_t rhs) {
+        return values[partition_indices[lhs]] < values[partition_indices[rhs]];
       };
     }
     case kINT: {
-      const auto values = reinterpret_cast<const int32_t*>(partition_values);
-      return [values](const int64_t lhs, const int64_t rhs) {
-        return values[lhs] < values[rhs];
+      const auto values = reinterpret_cast<const int32_t*>(order_column_buffer);
+      return [values, partition_indices](const int64_t lhs, const int64_t rhs) {
+        return values[partition_indices[lhs]] < values[partition_indices[rhs]];
       };
     }
     case kSMALLINT: {
-      const auto values = reinterpret_cast<const int16_t*>(partition_values);
-      return [values](const int64_t lhs, const int64_t rhs) {
-        return values[lhs] < values[rhs];
+      const auto values = reinterpret_cast<const int16_t*>(order_column_buffer);
+      return [values, partition_indices](const int64_t lhs, const int64_t rhs) {
+        return values[partition_indices[lhs]] < values[partition_indices[rhs]];
       };
     }
     case kTINYINT: {
-      return [partition_values](const int64_t lhs, const int64_t rhs) {
-        return partition_values[lhs] < partition_values[rhs];
-      };
+      return
+          [order_column_buffer, partition_indices](const int64_t lhs, const int64_t rhs) {
+            return order_column_buffer[partition_indices[lhs]] <
+                   order_column_buffer[partition_indices[rhs]];
+          };
     }
     case kFLOAT: {
-      const auto values = reinterpret_cast<const float*>(partition_values);
-      return [values](const int64_t lhs, const int64_t rhs) {
-        return values[lhs] < values[rhs];
+      const auto values = reinterpret_cast<const float*>(order_column_buffer);
+      return [values, partition_indices](const int64_t lhs, const int64_t rhs) {
+        return values[partition_indices[lhs]] < values[partition_indices[rhs]];
       };
     }
     case kDOUBLE: {
-      const auto values = reinterpret_cast<const double*>(partition_values);
-      return [values](const int64_t lhs, const int64_t rhs) {
-        return values[lhs] < values[rhs];
+      const auto values = reinterpret_cast<const double*>(order_column_buffer);
+      return [values, partition_indices](const int64_t lhs, const int64_t rhs) {
+        return values[partition_indices[lhs]] < values[partition_indices[rhs]];
       };
     }
     default: { LOG(FATAL) << "Type not supported yet"; }
   }
   return nullptr;
-}
-
-template <class T>
-void WindowFunctionContext::scatterToPartitions(T* dest,
-                                                const T* source,
-                                                const int32_t* positions,
-                                                const size_t elem_count) {
-  for (size_t i = 0; i < elem_count; ++i) {
-    dest[i] = source[positions[i]];
-  }
 }
 
 void WindowFunctionContext::computePartition(int64_t* output_for_partition_buff,
@@ -474,16 +429,12 @@ void WindowFunctionContext::computePartition(int64_t* output_for_partition_buff,
       std::copy(ntile.begin(), ntile.end(), output_for_partition_buff);
       break;
     }
-    case SqlWindowFunctionKind::LAG: {
-      const auto lag = get_lag_or_lead_argument(window_func);
-      apply_offset_to_partition(output_for_partition_buff, partition_size, off);
-      apply_lag_to_partition(lag, output_for_partition_buff, partition_size);
-      break;
-    }
+    case SqlWindowFunctionKind::LAG:
     case SqlWindowFunctionKind::LEAD: {
-      const auto lead = get_lag_or_lead_argument(window_func);
-      apply_offset_to_partition(output_for_partition_buff, partition_size, off);
-      apply_lead_to_partition(lead, output_for_partition_buff, partition_size);
+      const auto lag_or_lead = get_lag_or_lead_argument(window_func);
+      const auto partition_row_offsets = payload() + off;
+      apply_lag_to_partition(
+          lag_or_lead, partition_row_offsets, output_for_partition_buff, partition_size);
       break;
     }
     case SqlWindowFunctionKind::FIRST_VALUE: {
