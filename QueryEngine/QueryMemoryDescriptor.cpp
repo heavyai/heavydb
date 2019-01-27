@@ -1045,8 +1045,8 @@ bool QueryMemoryDescriptor::shouldOutputColumnar(const bool output_columnar_hint
         output_columnar_ = output_columnar_hint;
         break;
       case QueryDescriptionType::GroupByPerfectHash:
-        output_columnar_ = output_columnar_hint && getGroupbyColCount() > 1 &&
-                           !has_count_distinct_target;
+        output_columnar_ =
+            output_columnar_hint && !hasKeylessHash() && !has_count_distinct_target;
         break;
       case QueryDescriptionType::GroupByBaselineHash:
         output_columnar_ = output_columnar_hint;

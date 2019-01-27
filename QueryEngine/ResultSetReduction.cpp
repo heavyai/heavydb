@@ -318,7 +318,9 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
 
     this_crt_col_ptr = this_next_col_ptr;
     that_crt_col_ptr = that_next_col_ptr;
-    if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
+    if (agg_info.is_agg &&
+        (agg_info.agg_kind == kAVG ||
+         (agg_info.agg_kind == kSAMPLE && agg_info.sql_type.is_varlen()))) {
       this_crt_col_ptr = advance_to_next_columnar_target_buff(
           this_crt_col_ptr, query_mem_desc_, agg_col_idx + 1);
       that_crt_col_ptr = advance_to_next_columnar_target_buff(
@@ -1187,6 +1189,23 @@ void ResultSetStorage::initializeBaselineValueSlots(int64_t* entry_slots) const 
     }                                                                        \
   }
 
+namespace {
+
+int8_t get_width_for_slot(const size_t target_slot_idx,
+                          const bool float_argument_input,
+                          const QueryMemoryDescriptor& query_mem_desc) {
+  if (float_argument_input) {
+    return sizeof(float);
+  }
+  if (query_mem_desc.didOutputColumnar()) {
+    return query_mem_desc.getPaddedColumnWidthBytes(target_slot_idx);
+  } else {
+    return query_mem_desc.getColumnWidth(target_slot_idx).compact;
+  }
+}
+
+}  // namespace
+
 void ResultSetStorage::reduceOneSlot(
     int8_t* this_ptr1,
     int8_t* this_ptr2,
@@ -1205,9 +1224,8 @@ void ResultSetStorage::reduceOneSlot(
   }
   CHECK_LT(init_agg_val_idx, target_init_vals_.size());
   const bool float_argument_input = takes_float_argument(target_info);
-  const auto chosen_bytes = float_argument_input
-                                ? static_cast<int8_t>(sizeof(float))
-                                : query_mem_desc_.getColumnWidth(target_slot_idx).compact;
+  const auto chosen_bytes =
+      get_width_for_slot(target_slot_idx, float_argument_input, query_mem_desc_);
   auto init_val = target_init_vals_[init_agg_val_idx];
   if (target_info.is_agg && target_info.agg_kind != kSAMPLE) {
     switch (target_info.agg_kind) {
