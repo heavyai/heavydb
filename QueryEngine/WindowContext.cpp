@@ -230,19 +230,24 @@ void apply_lag_to_partition(const ssize_t lag,
   std::copy(lag_original_indices.begin(), lag_original_indices.end(), sorted_indices);
 }
 
-void apply_first_value_to_partition(int64_t* output_for_partition_buff,
+void apply_first_value_to_partition(const int32_t* original_indices,
+                                    int64_t* output_for_partition_buff,
                                     const size_t partition_size) {
-  for (size_t k = 1; k < partition_size; ++k) {
-    output_for_partition_buff[k] = output_for_partition_buff[0];
-  }
+  const auto first_value_idx = original_indices[output_for_partition_buff[0]];
+  std::fill(output_for_partition_buff,
+            output_for_partition_buff + partition_size,
+            first_value_idx);
 }
 
-void apply_last_value_to_partition(int64_t* output_for_partition_buff,
+void apply_last_value_to_partition(const int32_t* original_indices,
+                                   int64_t* output_for_partition_buff,
                                    const size_t partition_size) {
   CHECK(partition_size);
-  for (size_t k = 0; k < partition_size - 1; ++k) {
-    output_for_partition_buff[k] = output_for_partition_buff[partition_size - 1];
-  }
+  const auto last_value_idx =
+      original_indices[output_for_partition_buff[partition_size - 1]];
+  std::fill(output_for_partition_buff,
+            output_for_partition_buff + partition_size,
+            last_value_idx);
 }
 
 bool window_function_is_aggregate(const SqlWindowFunctionKind kind) {
@@ -438,13 +443,15 @@ void WindowFunctionContext::computePartition(int64_t* output_for_partition_buff,
       break;
     }
     case SqlWindowFunctionKind::FIRST_VALUE: {
-      apply_offset_to_partition(output_for_partition_buff, partition_size, off);
-      apply_first_value_to_partition(output_for_partition_buff, partition_size);
+      const auto partition_row_offsets = payload() + off;
+      apply_first_value_to_partition(
+          partition_row_offsets, output_for_partition_buff, partition_size);
       break;
     }
     case SqlWindowFunctionKind::LAST_VALUE: {
-      apply_offset_to_partition(output_for_partition_buff, partition_size, off);
-      apply_last_value_to_partition(output_for_partition_buff, partition_size);
+      const auto partition_row_offsets = payload() + off;
+      apply_last_value_to_partition(
+          partition_row_offsets, output_for_partition_buff, partition_size);
       break;
     }
     case SqlWindowFunctionKind::MIN: {
