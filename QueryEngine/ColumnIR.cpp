@@ -176,6 +176,7 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
         "row_number_window_func",
         {ll_int(reinterpret_cast<const int64_t>(window_func_context->output())),
          pos_arg});
+    window_func_context->setRowNumber(pos_arg);
   }
   auto col_byte_stream = colByteStream(col_var, fetch_column, hoist_literals);
   if (plan_state_->isLazyFetchColumn(col_var)) {

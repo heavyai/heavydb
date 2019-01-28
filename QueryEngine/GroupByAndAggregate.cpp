@@ -1456,11 +1456,40 @@ llvm::Value* GroupByAndAggregate::convertNullIfAny(const SQLTypeInfo& arg_type,
   }
 }
 
+llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
+    const Analyzer::WindowFunction* window_func,
+    const QueryMemoryDescriptor& query_mem_desc) {
+  const auto window_func_context =
+      WindowProjectNodeContext::getActiveWindowFunctionContext();
+  if (window_func_context && window_function_is_aggregate(window_func->getKind())) {
+    const int32_t row_size_quad =
+        outputColumnar() ? 0 : query_mem_desc.getRowSize() / sizeof(int64_t);
+    auto arg_it = ROW_FUNC->arg_begin();
+    auto groups_buffer = arg_it++;
+    const auto pos_in_window = LL_BUILDER.CreateTrunc(window_func_context->getRowNumber(),
+                                                      get_int_type(32, LL_CONTEXT));
+    std::vector<llvm::Value*> args{
+        groups_buffer,
+        LL_INT(static_cast<int32_t>(query_mem_desc.getEntryCount())),
+        pos_in_window,
+        executor_->posArg(nullptr)};
+    if (query_mem_desc.didOutputColumnar()) {
+      const auto columnar_output_offset =
+          emitCall("get_columnar_scan_output_offset", args);
+      return columnar_output_offset;
+    }
+    args.push_back(LL_INT(row_size_quad));
+    return emitCall("get_scan_output_slot", args);
+  }
+  return nullptr;
+}
+
 bool GroupByAndAggregate::codegenAggCalls(
-    const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
+    const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx_in,
     const std::vector<llvm::Value*>& agg_out_vec,
     const QueryMemoryDescriptor& query_mem_desc,
     const CompilationOptions& co) {
+  auto agg_out_ptr_w_idx = agg_out_ptr_w_idx_in;
   // TODO(alex): unify the two cases, the output for non-group by queries
   //             should be a contiguous buffer
   const bool is_group_by{std::get<0>(agg_out_ptr_w_idx)};
@@ -1519,6 +1548,10 @@ bool GroupByAndAggregate::codegenAggCalls(
                           ? std::vector<llvm::Value*>{executor_->codegenWindowFunction(
                                 window_func, target_idx, co)}
                           : codegenAggArg(target_expr, co);
+    const auto window_row_ptr = codegenWindowRowPointer(window_func, query_mem_desc);
+    if (window_row_ptr) {
+      agg_out_ptr_w_idx = {window_row_ptr, std::get<1>(agg_out_ptr_w_idx_in)};
+    }
     if ((executor_->plan_state_->isLazyFetchColumn(target_expr) || !is_group_by) &&
         static_cast<size_t>(query_mem_desc.getColumnWidth(agg_out_off).compact) <
             sizeof(int64_t)) {

@@ -18,7 +18,7 @@
 #include <numeric>
 #include "../Shared/checked_alloc.h"
 #include "../Shared/sql_window_function_to_string.h"
-#include "CountDistinctDescriptor.h"
+#include "Descriptors/CountDistinctDescriptor.h"
 #include "RuntimeFunctions.h"
 #include "TypePunning.h"
 
@@ -202,7 +202,7 @@ void apply_permutation_to_partition(int64_t* output_for_partition_buff,
                                     const size_t partition_size) {
   std::vector<int64_t> new_output_for_partition_buff(partition_size);
   for (size_t i = 0; i < partition_size; ++i) {
-    new_output_for_partition_buff[output_for_partition_buff[i]] = original_indices[i];
+    new_output_for_partition_buff[i] = original_indices[output_for_partition_buff[i]];
   }
   std::copy(new_output_for_partition_buff.begin(),
             new_output_for_partition_buff.end(),
@@ -250,6 +250,8 @@ void apply_last_value_to_partition(const int32_t* original_indices,
             last_value_idx);
 }
 
+}  // namespace
+
 bool window_function_is_aggregate(const SqlWindowFunctionKind kind) {
   switch (kind) {
     case SqlWindowFunctionKind::AVG:
@@ -262,8 +264,6 @@ bool window_function_is_aggregate(const SqlWindowFunctionKind kind) {
     default: { return false; }
   }
 }
-
-}  // namespace
 
 void WindowFunctionContext::compute() {
   CHECK(!output_);
@@ -337,6 +337,14 @@ const int8_t* WindowFunctionContext::partitionStart() const {
 
 size_t WindowFunctionContext::elementCount() const {
   return elem_count_;
+}
+
+void WindowFunctionContext::setRowNumber(llvm::Value* row_number) {
+  aggregate_state_.row_number = row_number;
+}
+
+llvm::Value* WindowFunctionContext::getRowNumber() const {
+  return aggregate_state_.row_number;
 }
 
 std::function<bool(const int64_t lhs, const int64_t rhs)>

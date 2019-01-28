@@ -250,6 +250,9 @@ class GroupByAndAggregate {
                        const QueryMemoryDescriptor& query_mem_desc,
                        const CompilationOptions&);
 
+  llvm::Value* codegenWindowRowPointer(const Analyzer::WindowFunction* window_func,
+                                       const QueryMemoryDescriptor& query_mem_desc);
+
   llvm::Value* codegenAggColumnPtr(
       llvm::Value* output_buffer_byte_stream,
       llvm::Value* out_row_idx,

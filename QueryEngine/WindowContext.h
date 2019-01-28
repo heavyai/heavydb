@@ -54,12 +54,17 @@ class WindowFunctionContext {
 
   size_t elementCount() const;
 
+  void setRowNumber(llvm::Value* row_number);
+
+  llvm::Value* getRowNumber() const;
+
   using Comparator = std::function<bool(const int64_t lhs, const int64_t rhs)>;
 
  private:
   struct AggregateState {
     int64_t val;
     int64_t count;
+    llvm::Value* row_number = nullptr;
   };
 
   static Comparator makeComparator(const Analyzer::ColumnVar* col_var,
@@ -141,3 +146,5 @@ class WindowProjectNodeContext {
   // The active window function. Method comments in this class describe how it's used.
   static WindowFunctionContext* s_active_window_function_;
 };
+
+bool window_function_is_aggregate(const SqlWindowFunctionKind kind);
