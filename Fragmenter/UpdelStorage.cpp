@@ -683,10 +683,15 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                   set_minmax<int64_t>(
                       min_int64t_per_thread[c], max_int64t_per_thread[c], seconds);
                 } else {
+                  int64_t target_value;
+                  if (rhs_type.is_decimal()) {
+                    target_value = round(decimal_to_double(rhs_type, v));
+                  } else {
+                    target_value = v;
+                  }
+
                   set_minmax<int64_t>(
-                      min_int64t_per_thread[c],
-                      max_int64t_per_thread[c],
-                      rhs_type.is_decimal() ? round(decimal_to_double(rhs_type, v)) : v);
+                      min_int64t_per_thread[c], max_int64t_per_thread[c], target_value);
                 }
               } else {
                 set_minmax<double>(
