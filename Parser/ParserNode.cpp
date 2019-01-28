@@ -3487,6 +3487,20 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
               "900913): " +
               std::to_string(srid));
         }
+      } else if (boost::iequals(*p->get_name(), "partitions")) {
+        if (copy_params.table_type == Importer_NS::TableType::POLYGON) {
+          const auto partitions =
+              static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+          CHECK(partitions);
+          const auto partitions_uc = boost::to_upper_copy<std::string>(*partitions);
+          if (partitions_uc != "REPLICATED") {
+            throw std::runtime_error("PARTITIONS must be REPLICATED for geo COPY");
+          }
+          _geo_copy_from_partitions = partitions_uc;
+        } else {
+          throw std::runtime_error("PARTITIONS option not supported for non-geo COPY: " +
+                                   *p->get_name());
+        }
       } else {
         throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }

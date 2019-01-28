@@ -100,10 +100,12 @@ bool import_test_common_geo(const string& query_str,
   }
 
   // get the rest of the payload
-  std::string geo_copy_from_table, geo_copy_from_file_name;
+  std::string geo_copy_from_table, geo_copy_from_file_name, geo_copy_from_partitions;
   Importer_NS::CopyParams geo_copy_from_copy_params;
-  ddl->get_geo_copy_from_payload(
-      geo_copy_from_table, geo_copy_from_file_name, geo_copy_from_copy_params);
+  ddl->get_geo_copy_from_payload(geo_copy_from_table,
+                                 geo_copy_from_file_name,
+                                 geo_copy_from_copy_params,
+                                 geo_copy_from_partitions);
 
   // was it the right table?
   if (geo_copy_from_table != "geo") {

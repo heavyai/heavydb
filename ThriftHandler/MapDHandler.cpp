@@ -782,13 +782,20 @@ void MapDHandler::sql_execute(TQueryResult& _return,
     // this function any other way, such as an exception from the code above!
     _was_geo_copy_from = false;
 
+    // create table as replicated?
+    TCreateParams create_params;
+    if (_geo_copy_from_partitions == "REPLICATED") {
+      create_params.is_replicated = true;
+    }
+
     // now do (and time) the import
     _return.total_time_ms = measure<>::execution([&]() {
       import_geo_table(session,
                        _geo_copy_from_table,
                        _geo_copy_from_file_name,
                        copyparams_to_thrift(_geo_copy_from_copy_params),
-                       TRowDescriptor());
+                       TRowDescriptor(),
+                       create_params);
     });
   }
 }
@@ -3532,7 +3539,8 @@ void MapDHandler::import_geo_table(const TSessionId& session,
                                    const std::string& table_name,
                                    const std::string& file_name_in,
                                    const TCopyParams& cp,
-                                   const TRowDescriptor& row_desc) {
+                                   const TRowDescriptor& row_desc,
+                                   const TCreateParams& create_params) {
   check_read_only("import_table");
   const auto session_info = get_session(session);
   auto& cat = session_info.getCatalog();
@@ -3608,8 +3616,6 @@ void MapDHandler::import_geo_table(const TSessionId& session,
     // then, if the table does NOT already exist, create it
     const TableDescriptor* td = cat.getMetadataForTable(table_name);
     if (!td) {
-      TCreateParams create_params;
-      create_params.is_replicated = false;
       create_table(session, table_name, rd, TTableType::POLYGON, create_params);
     }
   }
@@ -4544,8 +4550,10 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
 
       // get geo_copy_from info
       _was_geo_copy_from = import_stmt->was_geo_copy_from();
-      import_stmt->get_geo_copy_from_payload(
-          _geo_copy_from_table, _geo_copy_from_file_name, _geo_copy_from_copy_params);
+      import_stmt->get_geo_copy_from_payload(_geo_copy_from_table,
+                                             _geo_copy_from_file_name,
+                                             _geo_copy_from_copy_params,
+                                             _geo_copy_from_partitions);
       return true;
     }
 

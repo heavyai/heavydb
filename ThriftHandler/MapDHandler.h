@@ -319,7 +319,8 @@ class MapDHandler : public MapDIf {
                         const std::string& table_name,
                         const std::string& file_name,
                         const TCopyParams& copy_params,
-                        const TRowDescriptor& row_desc);
+                        const TRowDescriptor& row_desc,
+                        const TCreateParams& create_params);
   void import_table_status(TImportStatus& _return,
                            const TSessionId& session,
                            const std::string& import_id);
@@ -619,6 +620,7 @@ class MapDHandler : public MapDIf {
   std::string _geo_copy_from_table;
   std::string _geo_copy_from_file_name;
   Importer_NS::CopyParams _geo_copy_from_copy_params;
+  std::string _geo_copy_from_partitions;
 
   // Only for IPC device memory deallocation
   mutable std::mutex handle_to_dev_ptr_mutex_;
