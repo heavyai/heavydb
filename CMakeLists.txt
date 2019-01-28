@@ -750,7 +750,7 @@ endif()
 install(FILES docker/Dockerfile docker/README.md DESTINATION "docker")
 
 execute_process(
-  COMMAND ln -sf omniql mapdql
+  COMMAND ln -sf omnisql mapdql
   COMMAND ln -sf omnisci_server mapd_server
   COMMAND ln -sf omnisci_web_server mapd_web_server
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin

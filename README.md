@@ -158,9 +158,9 @@ If desired, insert a sample dataset by running the `insert_sample_data` script i
 
     ../insert_sample_data
 
-You can now start using the database. The `omniql` utility may be used to interact with the database from the command line:
+You can now start using the database. The `omnisql` utility may be used to interact with the database from the command line:
 
-    ./bin/omniql -p HyperInteractive
+    ./bin/omnisql -p HyperInteractive
 
 where `HyperInteractive` is the default password. The default user `mapd` is assumed if not provided.
 

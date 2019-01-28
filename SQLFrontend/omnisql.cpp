@@ -15,7 +15,7 @@
  */
 
 /**
- * @file    omniql.cpp
+ * @file    omnisql.cpp
  * @author  Wei Hong <wei@map-d.com>
  * @brief   OmniSci SQL Client Tool
  *
@@ -69,7 +69,7 @@ using namespace ::apache::thrift::transport;
 
 using namespace std::string_literals;
 
-const std::string OmniQLRelease(MAPD_RELEASE);
+const std::string OmniSQLRelease(MAPD_RELEASE);
 
 namespace {
 
@@ -641,7 +641,7 @@ bool backchannel(int action, ClientContext* cc, const std::string& ccn = "") {
   return false;
 }
 
-void omniql_signal_handler(int signal_number) {
+void omnisql_signal_handler(int signal_number) {
   std::cout << "\nInterrupt signal (" << signal_number << ") received.\n" << std::flush;
 
   if (backchannel(INTERRUPT, nullptr)) {
@@ -653,9 +653,9 @@ void omniql_signal_handler(int signal_number) {
 }
 
 void register_signal_handler() {
-  signal(SIGTERM, omniql_signal_handler);
-  signal(SIGKILL, omniql_signal_handler);
-  signal(SIGINT, omniql_signal_handler);
+  signal(SIGTERM, omnisql_signal_handler);
+  signal(SIGKILL, omnisql_signal_handler);
+  signal(SIGINT, omnisql_signal_handler);
 }
 
 void print_memory_summary(ClientContext& context, std::string memory_level) {
@@ -1023,7 +1023,7 @@ int main(int argc, char** argv) {
 
   po::options_description desc("Options");
   desc.add_options()("help,h", "Print help messages ");
-  desc.add_options()("version,v", "Print omniql version number");
+  desc.add_options()("version,v", "Print omnisql version number");
   desc.add_options()("no-header,n", "Do not print query result header");
   desc.add_options()(
       "timing,t",
@@ -1070,7 +1070,7 @@ int main(int argc, char** argv) {
                   .run(),
               vm);
     if (vm.count("help")) {
-      std::cout << "Usage: omniql [<database>] [{--user|-u} <user>] [{--passwd|-p} "
+      std::cout << "Usage: omnisql [<database>] [{--user|-u} <user>] [{--passwd|-p} "
                    "<password>] [--port <port number>] "
                    "[{-s|--server} <server host>] [--http] [{--no-header|-n}] "
                    "[{--quiet|-q}] [{--delimiter|-d}]\n\n";
@@ -1078,7 +1078,7 @@ int main(int argc, char** argv) {
       return 0;
     }
     if (vm.count("version")) {
-      std::cout << "OmniQL Version: " << OmniQLRelease << std::endl;
+      std::cout << "OmniSQL Version: " << OmniSQLRelease << std::endl;
       return 0;
     }
     if (vm.count("quiet")) {
@@ -1157,12 +1157,12 @@ int main(int argc, char** argv) {
 
   /* Load history from file. The history file is just a plain text file
    * where entries are separated by newlines. */
-  linenoiseHistoryLoad("omniql_history.txt"); /* Load the history at startup */
+  linenoiseHistoryLoad("omnisql_history.txt"); /* Load the history at startup */
   /* default to multi-line mode */
   linenoiseSetMultiLine(1);
 
   std::string current_line;
-  std::string prompt("omniql> ");
+  std::string prompt("omnisql> ");
 
   /* Now this is the main loop of the typical linenoise-based application.
    * The call to linenoise() will block as long as the user types something
@@ -1201,10 +1201,10 @@ int main(int argc, char** argv) {
       if (current_line.back() == ';') {
         std::string query(current_line);
         linenoiseHistoryAdd(hide_sensitive_data_from_query(current_line)
-                                .c_str());          /* Add to the history. */
-        linenoiseHistorySave("omniql_history.txt"); /* Save the history on disk. */
+                                .c_str());           /* Add to the history. */
+        linenoiseHistorySave("omnisql_history.txt"); /* Save the history on disk. */
         current_line.clear();
-        prompt.assign("omniql> ");
+        prompt.assign("omnisql> ");
         (void)backchannel(TURN_ON, nullptr);
         if (thrift_with_retry(kSQL, context, query.c_str())) {
           (void)backchannel(TURN_OFF, nullptr);
@@ -1452,7 +1452,7 @@ int main(int argc, char** argv) {
     } else {
       linenoiseHistoryAdd(line);
     }
-    linenoiseHistorySave("omniql_history.txt"); /* Save the history on disk. */
+    linenoiseHistorySave("omnisql_history.txt"); /* Save the history on disk. */
   }
 
   if (context.session != INVALID_SESSION_ID) {
