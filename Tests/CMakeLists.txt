@@ -44,7 +44,7 @@ add_executable(AlterColumnTest AlterColumnTest.cpp)
 add_executable(UpdelStorageTest UpdelStorageTest.cpp)
 add_executable(TopKTest TopKTest.cpp)
 add_executable(TokenCompletionHintsTest TokenCompletionHintsTest.cpp)
-add_executable(OmniQLCommandTest OmniQLCommandTest.cpp)
+add_executable(OmniSQLCommandTest OmniSQLCommandTest.cpp)
 add_executable(DBObjectPrivilegesTest DBObjectPrivilegesTest.cpp)
 add_executable(GeoTypesTest Shared/GeoTypesTest.cpp)
 add_executable(CtasUpdateTest CtasUpdateTest.cpp)
@@ -68,7 +68,7 @@ target_link_libraries(UpdelStorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(StorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(StoragePerfTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TopKTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(OmniQLCommandTest gtest ${EXECUTE_TEST_LIBS} ${Boost_LIBRARIES})
+target_link_libraries(OmniSQLCommandTest gtest ${EXECUTE_TEST_LIBS} ${Boost_LIBRARIES})
 target_link_libraries(ExperimentalTest gtest ${EXECUTE_TEST_LIBS} ${Boost_LIBRARIES})
 target_link_libraries(DBObjectPrivilegesTest gtest ${EXECUTE_TEST_LIBS} ${Boost_LIBRARIES})
 target_link_libraries(GeoTypesTest gtest ${EXECUTE_TEST_LIBS})
@@ -89,7 +89,7 @@ add_test(StorageTest StorageTest ${TEST_ARGS})
 add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 add_test(TopKTest TopKTest ${TEST_ARGS})
 add_test(TokenCompletionHintsTest TokenCompletionHintsTest ${TEST_ARGS})
-add_test(OmniQLCommandTest OmniQLCommandTest ${TEST_ARGS})
+add_test(OmniSQLCommandTest OmniSQLCommandTest ${TEST_ARGS})
 add_test(DBObjectPrivilegesTest DBObjectPrivilegesTest ${TEST_ARGS})
 add_test(GeoTypesTest GeoTypesTest ${TEST_ARGS})
 add_test(CtasUpdateTest CtasUpdateTest ${TEST_ARGS})
@@ -117,7 +117,7 @@ set(SANITY_TESTS
   UpdelStorageTest
   TopKTest
   TokenCompletionHintsTest
-  OmniQLCommandTest
+  OmniSQLCommandTest
   DBObjectPrivilegesTest
   GeoTypesTest
   CtasUpdateTest

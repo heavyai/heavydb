@@ -4512,7 +4512,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     if (show_create_stmt) {
       // ParserNode ShowCreateTableStmt is currently unimplemented
       throw std::runtime_error(
-          "SHOW CREATE TABLE is currently unsupported. Use `\\d` from omniql for table "
+          "SHOW CREATE TABLE is currently unsupported. Use `\\d` from omnisql for table "
           "DDL.");
     }
 
