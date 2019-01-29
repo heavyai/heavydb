@@ -87,9 +87,12 @@ class AbstractFragmenter {
    * statistics on data distribution the partitioner
    * keeps. May also prune the predicate.
    */
-
   // virtual void getFragmentsForQuery(QueryInfo &queryInfo, const void *predicate = 0) =
-  // 0;
+  // 0
+
+  /**
+   * @brief Get all fragments for the current table.
+   */
   virtual TableInfo getFragmentsForQuery() = 0;
 
   /**
@@ -97,7 +100,6 @@ class AbstractFragmenter {
    * inserts it into the correct partitions
    * with locks and checkpoints
    */
-
   virtual void insertData(InsertData& insertDataStruct) = 0;
 
   /**
@@ -105,15 +107,20 @@ class AbstractFragmenter {
    * inserts it into the correct partitions
    * No locks and checkpoints taken needs to be managed externally
    */
-
   virtual void insertDataNoCheckpoint(InsertData& insertDataStruct) = 0;
 
   /**
    * @brief Will truncate table to less than maxRows by dropping
    * fragments
    */
-
   virtual void dropFragmentsToSize(const size_t maxRows) = 0;
+
+  /**
+   * @brief Update chunk stats
+   */
+  virtual void updateChunkStats(
+      const ColumnDescriptor* cd,
+      std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map) = 0;
 
   /**
    * @brief Gets the id of the partitioner
@@ -124,7 +131,6 @@ class AbstractFragmenter {
    * @brief Gets the string type of the partitioner
    * @todo have a method returning the enum type?
    */
-
   virtual std::string getFragmenterType() = 0;
 
   virtual size_t getNumRows() = 0;

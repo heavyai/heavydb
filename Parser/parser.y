@@ -352,9 +352,9 @@ revoke_role_statement:
 		;
 
 optimize_table_statement:
-		OPTIMIZE TABLE opt_table WITH NAME
+		OPTIMIZE TABLE opt_table opt_with_option_list
 		{
-			$<nodeval>$ = new OptimizeTableStmt($<stringval>3, $<stringval>5);
+			$<nodeval>$ = new OptimizeTableStmt($<stringval>3, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>4));
 		}
 		;
 

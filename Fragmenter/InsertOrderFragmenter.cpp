@@ -229,6 +229,89 @@ void InsertOrderFragmenter::deleteFragments(const vector<int>& dropFragIds) {
   }
 }
 
+void InsertOrderFragmenter::updateChunkStats(
+    const ColumnDescriptor* cd,
+    std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map) {
+  /**
+   * WARNING: This method is entirely unlocked. Higher level locks are expected to prevent
+   * any table read or write during a chunk metadata update, since we need to modify
+   * various buffers and metadata maps.
+   */
+  if (shard_ >= 0) {
+    LOG(WARNING) << "Skipping chunk stats update for logical table " << physicalTableId_;
+  }
+
+  CHECK(cd);
+  const auto column_id = cd->columnId;
+  const auto col_itr = columnMap_.find(column_id);
+  CHECK(col_itr != columnMap_.end());
+
+  for (auto& fragment : fragmentInfoVec_) {
+    auto stats_itr = stats_map.find(fragment.fragmentId);
+    if (stats_itr != stats_map.end()) {
+      auto chunk_meta_it = fragment.getChunkMetadataMapPhysical().find(column_id);
+      CHECK(chunk_meta_it != fragment.getChunkMetadataMapPhysical().end());
+      ChunkKey chunk_key{catalog_->getCurrentDB().dbId,
+                         physicalTableId_,
+                         column_id,
+                         fragment.fragmentId};
+      auto chunk = Chunk_NS::Chunk::getChunk(cd,
+                                             &catalog_->getDataMgr(),
+                                             chunk_key,
+                                             Data_Namespace::MemoryLevel::DISK_LEVEL,
+                                             0,
+                                             chunk_meta_it->second.numBytes,
+                                             chunk_meta_it->second.numElements);
+      auto buf = chunk->get_buffer();
+      CHECK(buf);
+      auto encoder = buf->encoder.get();
+      if (!encoder) {
+        throw std::runtime_error("No encoder for chunk " + showChunk(chunk_key));
+      }
+
+      auto chunk_stats = stats_itr->second;
+
+      ChunkMetadata old_chunk_metadata;
+      encoder->getMetadata(old_chunk_metadata);
+      auto& old_chunk_stats = old_chunk_metadata.chunkStats;
+
+      const bool didResetStats = encoder->resetChunkStats(chunk_stats);
+      // Use the logical type to display data, since the encoding should be ignored
+      const auto logical_ti = get_logical_type_info(cd->columnType);
+      if (!didResetStats) {
+        VLOG(3) << "Skipping chunk stats reset for " << showChunk(chunk_key);
+        VLOG(3) << "Max: " << DatumToString(old_chunk_stats.max, logical_ti) << " -> "
+                << DatumToString(chunk_stats.max, logical_ti);
+        VLOG(3) << "Min: " << DatumToString(old_chunk_stats.min, logical_ti) << " -> "
+                << DatumToString(chunk_stats.min, logical_ti);
+        VLOG(3) << "Nulls: " << (chunk_stats.has_nulls ? "True" : "False");
+        continue;  // move to next fragment
+      }
+
+      VLOG(2) << "Resetting chunk stats for " << showChunk(chunk_key);
+      VLOG(2) << "Max: " << DatumToString(old_chunk_stats.max, logical_ti) << " -> "
+              << DatumToString(chunk_stats.max, logical_ti);
+      VLOG(2) << "Min: " << DatumToString(old_chunk_stats.min, logical_ti) << " -> "
+              << DatumToString(chunk_stats.min, logical_ti);
+      VLOG(2) << "Nulls: " << (chunk_stats.has_nulls ? "True" : "False");
+
+      // Reset fragment metadata map and set buffer to dirty
+      ChunkMetadata new_metadata;
+      // Run through fillChunkStats to ensure any transformations to the raw metadata
+      // values get applied (e.g. for date in days)
+      encoder->getMetadata(new_metadata);
+      fragment.setChunkMetadata(column_id, new_metadata);
+      fragment.shadowChunkMetadataMap =
+          fragment.getChunkMetadataMap();  // TODO(adb): needed?
+      buf->setDirty();
+    } else {
+      LOG(WARNING) << "No chunk stats update found for fragment " << fragment.fragmentId
+                   << ", table " << physicalTableId_ << ", "
+                   << ", column " << column_id;
+    }
+  }
+}
+
 void InsertOrderFragmenter::insertData(InsertData& insertDataStruct) {
   // TODO: this local lock will need to be centralized when ALTER COLUMN is added, bc
   try {

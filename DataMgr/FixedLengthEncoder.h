@@ -23,6 +23,8 @@
 #include "AbstractBuffer.h"
 #include "Encoder.h"
 
+#include <Shared/DatumFetchers.h>
+
 template <typename T, typename V>
 class FixedLengthEncoder : public Encoder {
  public:
@@ -135,6 +137,21 @@ class FixedLengthEncoder : public Encoder {
     fread((int8_t*)&dataMax, 1, sizeof(T), f);
     fread((int8_t*)&has_nulls, 1, sizeof(bool), f);
   }
+
+  bool resetChunkStats(const ChunkStats& stats) override {
+    const auto new_min = DatumFetcher::getDatumVal<T>(stats.min);
+    const auto new_max = DatumFetcher::getDatumVal<T>(stats.max);
+
+    if (dataMin == new_min && dataMax == new_max && has_nulls == stats.has_nulls) {
+      return false;
+    }
+
+    dataMin = new_min;
+    dataMax = new_max;
+    has_nulls = stats.has_nulls;
+    return true;
+  }
+
   T dataMin;
   T dataMax;
   bool has_nulls;

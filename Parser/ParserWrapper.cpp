@@ -49,6 +49,7 @@ const std::vector<std::string> ParserWrapper::update_dml_cmd = {
 
 const std::string ParserWrapper::explain_str = {"explain"};
 const std::string ParserWrapper::calcite_explain_str = {"explain calcite"};
+const std::string ParserWrapper::optimize_str = {"optimize"};
 
 ParserWrapper::ParserWrapper(std::string query_string) {
   if (boost::istarts_with(query_string, calcite_explain_str)) {
@@ -73,6 +74,11 @@ ParserWrapper::ParserWrapper(std::string query_string) {
       is_select_explain = true;
       return;
     }
+  }
+
+  if (boost::istarts_with(query_string, optimize_str)) {
+    is_optimize = true;
+    return;
   }
 
   for (std::string ddl : ddl_cmd) {

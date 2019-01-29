@@ -1071,14 +1071,37 @@ class TruncateTableStmt : public DDLStmt {
 
 class OptimizeTableStmt : public DDLStmt {
  public:
-  OptimizeTableStmt(std::string* tab, std::string* with) : table(tab), with(with) {}
-  const std::string* get_table() const { return table.get(); }
-  const std::string* get_with() const { return with.get(); }
-  virtual void execute(const Catalog_Namespace::SessionInfo& session);
+  OptimizeTableStmt(std::string* table, std::list<NameValueAssign*>* o) : table_(table) {
+    if (!table_) {
+      throw std::runtime_error("Table name is required for OPTIMIZE command.");
+    }
+    if (o) {
+      for (const auto e : *o) {
+        options_.emplace_back(e);
+      }
+      delete o;
+    }
+  }
+
+  const std::string getTableName() const { return *(table_.get()); }
+
+  bool shouldVacuumDeletedRows() const {
+    for (const auto& e : options_) {
+      if (boost::iequals(*(e->get_name()), "VACUUM")) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  virtual void execute(const Catalog_Namespace::SessionInfo& session) override {
+    // Should pass optimize params to the table optimizer
+    CHECK(false);
+  }
 
  private:
-  std::unique_ptr<std::string> table;
-  std::unique_ptr<std::string> with;
+  std::unique_ptr<std::string> table_;
+  std::list<std::unique_ptr<NameValueAssign>> options_;
 };
 
 class RenameTableStmt : public DDLStmt {

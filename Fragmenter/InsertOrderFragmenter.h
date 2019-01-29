@@ -90,10 +90,14 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   virtual void insertDataNoCheckpoint(InsertData& insertDataStruct);
 
   virtual void dropFragmentsToSize(const size_t maxRows);
+
+  virtual void updateChunkStats(
+      const ColumnDescriptor* cd,
+      std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map) override;
+
   /**
    * @brief get fragmenter's id
    */
-
   inline int getFragmenterId() { return chunkKeyPrefix_.back(); }
   inline std::vector<int> getChunkKeyPrefix() const { return chunkKeyPrefix_; }
   /**

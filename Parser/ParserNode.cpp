@@ -2695,58 +2695,6 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   catalog.truncateTable(td);
 }
 
-void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session_info) {
-  // TODO: handle other WITH ...
-  if (!boost::iequals(*with, "VACUUM")) {
-    throw std::runtime_error("Invalid WITH option '" + *with + "'");
-  }
-
-  auto& catalog = session_info.getCatalog();
-  std::vector<const TableDescriptor*> tds;
-  if (table) {
-    const auto td = catalog.getMetadataForTable(*table);
-    if (td == nullptr) {
-      throw std::runtime_error("Table " + *table + " does not exist.");
-    }
-    tds.push_back(td);
-  } else {
-    for (const auto td : catalog.getAllTableMetadata()) {
-      if (!td->isView) {
-        tds.push_back(td);
-      }
-    }
-  }
-
-  for (auto td : tds) {
-    // check access privileges
-    if (SysCatalog::instance().arePrivilegesOn()) {
-      std::vector<DBObject> privObjects;
-      DBObject dbObject(td->tableName, TableDBObjectType);
-      dbObject.loadKey(catalog);
-      dbObject.setPrivileges(AccessPrivileges::DELETE_FROM_TABLE);
-      privObjects.push_back(dbObject);
-      if (!SysCatalog::instance().checkPrivileges(session_info.get_currentUser(),
-                                                  privObjects)) {
-        const auto err_msg = "Table " + td->tableName + " will not be vacuumed. User " +
-                             session_info.get_currentUser().userName +
-                             " has no proper privileges.";
-        if (table) {
-          throw std::runtime_error(err_msg);
-        } else {
-          LOG(ERROR) << err_msg;
-          continue;
-        }
-      }
-    }
-    auto chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-        catalog, td->tableName, LockType::CheckpointLock);
-    auto upddelLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-        catalog, td->tableName, LockType::UpdateDeleteLock);
-    catalog.optimizeTable(td);
-    catalog.getDataMgr().checkpoint(catalog.getCurrentDB().dbId, td->tableId);
-  }
-}
-
 void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session,
                                  const TableDescriptor* td) {
   if (!SysCatalog::instance().arePrivilegesOn()) {

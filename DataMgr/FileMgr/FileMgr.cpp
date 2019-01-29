@@ -573,7 +573,7 @@ void FileMgr::writeAndSyncDBMetaToDisk() {
 }
 
 void FileMgr::checkpoint() {
-  // std::cout << "Checkpointing " << epoch_ <<  std::endl;
+  VLOG(2) << "Checkpointing epoch: " << epoch_;
   mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
     /*

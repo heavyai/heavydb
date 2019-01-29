@@ -20,6 +20,7 @@
 #include "../QueryEngine/TargetValue.h"
 
 #include <gtest/gtest.h>
+#include <boost/algorithm/string.hpp>
 #include <boost/variant.hpp>
 
 namespace TestHelpers {
@@ -124,6 +125,35 @@ T v(const TargetValue& r) {
   CHECK(p);
   return *p;
 }
+
+template <typename T>
+inline std::string convert(const T& t) {
+  return std::to_string(t);
+}
+
+template <std::size_t N>
+inline std::string convert(const char (&t)[N]) {
+  return std::string(t);
+}
+
+template <>
+inline std::string convert(const std::string& t) {
+  return t;
+}
+
+struct ValuesGenerator {
+  ValuesGenerator(const std::string& table_name) : table_name_(table_name) {}
+
+  template <typename... COL_ARGS>
+  std::string operator()(COL_ARGS&&... args) const {
+    std::vector<std::string> vals({convert(std::forward<COL_ARGS>(args))...});
+    return std::string("INSERT INTO " + table_name_ + " VALUES(" +
+                       boost::algorithm::join(vals, ",") + ");");
+  }
+
+  const std::string table_name_;
+};
+
 }  // namespace TestHelpers
 
 #endif  // TEST_HELPERS_H_

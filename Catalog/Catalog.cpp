@@ -4817,7 +4817,7 @@ SessionInfo::operator std::string() const {
   return get_currentUser().userName + "_" + session_id.substr(0, 3);
 }
 
-void Catalog::optimizeTable(const TableDescriptor* td) {
+void Catalog::optimizeTable(const TableDescriptor* td) const {
   cat_read_lock read_lock(this);
   // "if not a table that supports delete return nullptr,  nothing more to do"
   const ColumnDescriptor* cd = getDeletedColumn(td);

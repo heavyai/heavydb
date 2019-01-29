@@ -186,12 +186,14 @@ WORK          TOK(WORK)
 -?[0-9]+"."[0-9]* |
 -?"."[0-9]*		{
 		yylval.stringval = new std::string(yytext);
-		// numeric and decimal precisions cannot exceed 19
-		if (yylval.stringval->length() < 20)
-			return SQLParser::FIXEDNUM;
-		// otherwise return as double
-		yylval.doubleval = std::stod(*yylval.stringval);
-		return SQLParser::DOUBLE;
+    // numeric and decimal precisions cannot exceed 19
+    if (yylval.stringval->length() < 20) {
+            return SQLParser::FIXEDNUM;
+    }
+    delete yylval.stringval;
+    // otherwise return as double
+    yylval.doubleval = std::stod(yytext);
+    return SQLParser::DOUBLE;
 	}
 
 	/* TODO: handle FLOAT v.s. DOUBLE */

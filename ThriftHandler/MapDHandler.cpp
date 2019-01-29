@@ -59,6 +59,7 @@
 #include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/JoinFilterPushDown.h"
 #include "QueryEngine/JsonAccessors.h"
+#include "QueryEngine/TableOptimizer.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/SQLTypeUtilities.h"
 #include "Shared/StringTransform.h"
@@ -4449,6 +4450,62 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         convert_explain(_return, ResultSet(query_ra), true);
         return;
       }
+      return;
+    } else if (pw.is_optimize) {
+      // Get the Stmt object
+      try {
+        num_parse_errors = parser.parse(query_str, parse_trees, last_parsed);
+      } catch (std::exception& e) {
+        throw std::runtime_error(e.what());
+      }
+      if (num_parse_errors > 0) {
+        throw std::runtime_error("Syntax error at: " + last_parsed);
+      }
+      CHECK_EQ(parse_trees.size(), 1);
+      const auto optimize_stmt =
+          dynamic_cast<Parser::OptimizeTableStmt*>(parse_trees.front().get());
+      CHECK(optimize_stmt);
+
+      _return.execution_time_ms += measure<>::execution([&]() {
+        const auto td = cat.getMetadataForTable(optimize_stmt->getTableName(),
+                                                /*populateFragmenter=*/true);
+
+        auto user_can_access_table = [&](const TableDescriptor* td) -> bool {
+          CHECK(td);
+          if (SysCatalog::instance().arePrivilegesOn()) {
+            std::vector<DBObject> privObjects;
+            DBObject dbObject(td->tableName, TableDBObjectType);
+            dbObject.loadKey(cat);
+            dbObject.setPrivileges(
+                AccessPrivileges::DELETE_FROM_TABLE);  // TODO(adb): right level?
+            privObjects.push_back(dbObject);
+            if (!SysCatalog::instance().checkPrivileges(session_info.get_currentUser(),
+                                                        privObjects)) {
+              return false;
+            }
+          }
+          return true;
+        };
+
+        if (!td || !user_can_access_table(td)) {
+          throw std::runtime_error("Table " + optimize_stmt->getTableName() +
+                                   " does not exist.");
+        }
+
+        auto chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+            cat, td->tableName, LockType::CheckpointLock);
+        auto upddelLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+            cat, td->tableName, LockType::UpdateDeleteLock);
+
+        auto executor = Executor::getExecutor(
+            cat.getCurrentDB().dbId, "", "", mapd_parameters_, nullptr);
+        const TableOptimizer optimizer(td, executor.get(), cat);
+        if (optimize_stmt->shouldVacuumDeletedRows()) {
+          optimizer.vacuumDeletedRows();
+        }
+        optimizer.recomputeMetadata();
+      });
+
       return;
     }
     LOG(INFO) << "passing query to legacy processor";
