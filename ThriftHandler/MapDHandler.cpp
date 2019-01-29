@@ -1566,13 +1566,11 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog* cat,
       THROW_MAPD_EXCEPTION("Dictionary doesn't exist");
     }
     col_type.col_type.comp_param = dd->dictNBits;
-  } else if (cd->columnType.is_date_in_days()) {
-    int8_t comp_param = cd->columnType.get_comp_param();
-    col_type.col_type.encoding =
-        comp_param == 16 ? TEncodingType::FIXED : TEncodingType::NONE;
-    col_type.col_type.comp_param = comp_param;
   } else {
-    col_type.col_type.comp_param = cd->columnType.get_comp_param();
+    col_type.col_type.comp_param =
+        (cd->columnType.is_date_in_days() && cd->columnType.get_comp_param() == 0)
+            ? 32
+            : cd->columnType.get_comp_param();
   }
   col_type.is_reserved_keyword = ImportHelpers::is_reserved_name(col_type.col_name);
   return col_type;
@@ -4176,16 +4174,13 @@ TColumnType MapDHandler::convert_target_metainfo(const TargetMetaInfo& target,
     proj_info.col_type.precision = target_ti.get_precision();
     proj_info.col_type.scale = target_ti.get_scale();
   }
-  if (target_ti.is_date_in_days()) {
-    int8_t comp_param = target_ti.get_comp_param();
-    proj_info.col_type.encoding =
-        comp_param == 16 ? TEncodingType::FIXED : TEncodingType::NONE;
-    proj_info.col_type.comp_param = comp_param;
-  }
   if (target_ti.get_type() == kDATE) {
     proj_info.col_type.size = target_ti.get_size();
   }
-  proj_info.col_type.comp_param = target_ti.get_comp_param();
+  proj_info.col_type.comp_param =
+      (target_ti.is_date_in_days() && target_ti.get_comp_param() == 0)
+          ? 32
+          : target_ti.get_comp_param();
   return proj_info;
 }
 

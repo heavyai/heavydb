@@ -757,7 +757,7 @@ std::string SQLTypeInfoCore<TYPE_FACET_PACK...>::type_name[kSQLTYPE_LAST] = {
 
 template <template <class> class... TYPE_FACET_PACK>
 std::string SQLTypeInfoCore<TYPE_FACET_PACK...>::comp_name[kENCODING_LAST] =
-    {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED"};
+    {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED", "DAYS"};
 #endif
 
 using SQLTypeInfo =

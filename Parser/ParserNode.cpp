@@ -3000,6 +3000,20 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
       // encoding longitude/latitude as integers
       cd.columnType.set_compression(kENCODING_GEOINT);
       cd.columnType.set_comp_param(comp_param);
+    } else if (boost::iequals(comp, "days")) {
+      // days encoding for dates
+      if (cd.columnType.get_type() != kDATE) {
+        throw std::runtime_error(cd.columnName +
+                                 ": Days encoding is only supported for DATE columns.");
+      }
+      if (compression->get_encoding_param() != 32 &&
+          compression->get_encoding_param() != 16) {
+        throw std::runtime_error(cd.columnName +
+                                 ": Compression parameter for Days encoding on "
+                                 "DATE must be 16 or 32.");
+      }
+      cd.columnType.set_compression(kENCODING_DATE_IN_DAYS);
+      cd.columnType.set_comp_param((compression->get_encoding_param() == 16) ? 16 : 0);
     } else {
       throw std::runtime_error(cd.columnName + ": Invalid column compression scheme " +
                                comp);
