@@ -51,15 +51,15 @@ namespace {
 template <typename XDEBUG_OPTION,
           typename REMOTE_DEBUG_OPTION,
           typename... REMAINING_ARGS>
-int wrapped_execl(char const* path,
-                  XDEBUG_OPTION&& x_debug,
-                  REMOTE_DEBUG_OPTION&& remote_debug,
-                  REMAINING_ARGS&&... standard_args) {
+int wrapped_execlp(char const* path,
+                   XDEBUG_OPTION&& x_debug,
+                   REMOTE_DEBUG_OPTION&& remote_debug,
+                   REMAINING_ARGS&&... standard_args) {
   if (std::is_same<JVMRemoteDebugSelector, PreprocessorTrue>::value) {
-    return execl(
+    return execlp(
         path, x_debug, remote_debug, std::forward<REMAINING_ARGS>(standard_args)...);
   }
-  return execl(path, std::forward<REMAINING_ARGS>(standard_args)...);
+  return execlp(path, std::forward<REMAINING_ARGS>(standard_args)...);
 }
 }  // namespace
 
@@ -69,8 +69,6 @@ static void start_calcite_server_as_daemon(const int mapd_port,
                                            const size_t calcite_max_mem,
                                            const std::string& ssl_trust_store,
                                            const std::string& ssl_trust_password) {
-  // todo MAT all platforms seem to respect /usr/bin/java - this could be a gotcha on some
-  // weird thing
   std::string const xDebug = "-Xdebug";
   std::string const remoteDebug =
       "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005";
@@ -92,27 +90,33 @@ static void start_calcite_server_as_daemon(const int mapd_port,
 
   int pid = fork();
   if (pid == 0) {
-    int i = wrapped_execl("/usr/bin/java",
-                          xDebug.c_str(),
-                          remoteDebug.c_str(),
-                          xmxP.c_str(),
-                          mapdLogDirectory.c_str(),
-                          jarP.c_str(),
-                          jarD.c_str(),
-                          extensionsP.c_str(),
-                          extensionsD.c_str(),
-                          dataP.c_str(),
-                          dataD.c_str(),
-                          localPortP.c_str(),
-                          localPortD.c_str(),
-                          mapdPortP.c_str(),
-                          mapdPortD.c_str(),
-                          mapdTrustStoreD.c_str(),
-                          ssl_trust_store.c_str(),
-                          mapdTrustPasswd.c_str(),
-                          ssl_trust_password.c_str(),
-                          (char*)0);
-    LOG(INFO) << " Calcite server running after exe, return " << i;
+    int i = wrapped_execlp("java",
+                           xDebug.c_str(),
+                           remoteDebug.c_str(),
+                           xmxP.c_str(),
+                           mapdLogDirectory.c_str(),
+                           jarP.c_str(),
+                           jarD.c_str(),
+                           extensionsP.c_str(),
+                           extensionsD.c_str(),
+                           dataP.c_str(),
+                           dataD.c_str(),
+                           localPortP.c_str(),
+                           localPortD.c_str(),
+                           mapdPortP.c_str(),
+                           mapdPortD.c_str(),
+                           mapdTrustStoreD.c_str(),
+                           ssl_trust_store.c_str(),
+                           mapdTrustPasswd.c_str(),
+                           ssl_trust_password.c_str(),
+                           (char*)0);
+    if (i) {
+      int errsv = errno;
+      LOG(FATAL) << "Failed to start Calcite server [errno=" << errsv
+                 << "]: " << strerror(errsv);
+    } else {
+      LOG(INFO) << "Successfully started Calcite server";
+    }
   }
 }
 
