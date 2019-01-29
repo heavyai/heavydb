@@ -1145,6 +1145,52 @@ ResultSetPtr Executor::executeWorkUnit(
                                      this);
 }
 
+void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit_in,
+                                          const InputTableInfo& table_info,
+                                          const CompilationOptions& co,
+                                          const ExecutionOptions& eo,
+                                          const Catalog_Namespace::Catalog& cat,
+                                          PerFragmentCB& cb) {
+  const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in);
+
+  int available_cpus = cpu_threads();
+  const auto context_count =
+      get_context_count(co.device_type_, available_cpus, /*gpu_count=*/0);
+
+  int error_code = 0;
+  ColumnCacheMap column_cache;
+
+  std::vector<InputTableInfo> table_infos{table_info};
+  ExecutionDispatch execution_dispatch(this,
+                                       ra_exe_unit,
+                                       table_infos,
+                                       cat,
+                                       co,
+                                       context_count,
+                                       row_set_mem_owner_,
+                                       column_cache,
+                                       &error_code,
+                                       nullptr);
+  execution_dispatch.compile(0, 8, eo, false);
+  CHECK_EQ(size_t(1), ra_exe_unit.input_descs.size());
+  const auto table_id = ra_exe_unit.input_descs[0].getTableId();
+  const auto& outer_fragments = table_info.info.fragments;
+  for (size_t fragment_index = 0; fragment_index < outer_fragments.size();
+       ++fragment_index) {
+    // We may want to consider in the future allowing this to execute on devices other
+    // than CPU
+    execution_dispatch.run(co.device_type_, 0, eo, {{table_id, {fragment_index}}}, 0, -1);
+  }
+
+  const auto& all_fragment_results = execution_dispatch.getFragmentResults();
+
+  for (size_t fragment_index = 0; fragment_index < outer_fragments.size();
+       ++fragment_index) {
+    const auto fragment_results = all_fragment_results[fragment_index];
+    cb(fragment_results.first, outer_fragments[fragment_index]);
+  }
+}
+
 ResultSetPtr Executor::executeExplain(const ExecutionDispatch& execution_dispatch) {
   std::string explained_plan;
   const auto llvm_ir_cpu = execution_dispatch.getIR(ExecutorDeviceType::CPU);

@@ -4410,41 +4410,13 @@ void import_array_test(const std::string& table_name) {
   loader->load(import_buffers, g_array_test_row_count);
 }
 
-template <typename T>
-inline std::string convert(const T& t) {
-  return std::to_string(t);
-}
-
-template <std::size_t N>
-inline std::string convert(const char (&t)[N]) {
-  return std::string(t);
-}
-
-template <>
-inline std::string convert(const std::string& t) {
-  return t;
-}
-
-struct ValuesGenerator {
-  ValuesGenerator(const std::string& table_name) : table_name_(table_name) {}
-
-  template <typename... COL_ARGS>
-  std::string operator()(COL_ARGS&&... args) const {
-    std::vector<std::string> vals({convert(std::forward<COL_ARGS>(args))...});
-    return std::string("INSERT INTO " + table_name_ + " VALUES(" +
-                       boost::algorithm::join(vals, ",") + ");");
-  }
-
-  const std::string table_name_;
-};
-
 void import_gpu_sort_test() {
   const std::string drop_old_gpu_sort_test{"DROP TABLE IF EXISTS gpu_sort_test;"};
   run_ddl_statement(drop_old_gpu_sort_test);
   g_sqlite_comparator.query(drop_old_gpu_sort_test);
   run_ddl_statement("CREATE TABLE gpu_sort_test(x int) WITH (fragment_size=2);");
   g_sqlite_comparator.query("CREATE TABLE gpu_sort_test(x int);");
-  ValuesGenerator gen("gpu_sort_test");
+  TestHelpers::ValuesGenerator gen("gpu_sort_test");
   for (size_t i = 0; i < 4; ++i) {
     const auto insert_query = gen(2);
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
@@ -4669,7 +4641,7 @@ void import_coalesce_cols_join_test(const int id, bool with_delete_support) {
   g_sqlite_comparator.query("CREATE TABLE " + table_name +
                             "(x int not null, y int, str text, dup_str text, d date, t "
                             "time, tz timestamp, dn decimal(5));");
-  ValuesGenerator gen(table_name);
+  TestHelpers::ValuesGenerator gen(table_name);
   for (size_t i = 0; i < 5; i++) {
     const auto insert_query = gen(i,
                                   20 - i,
@@ -4809,7 +4781,7 @@ void import_geospatial_test() {
       ) WITH (fragment_size=2); 
   )";
   run_ddl_statement(create_ddl);
-  ValuesGenerator gen("geospatial_test");
+  TestHelpers::ValuesGenerator gen("geospatial_test");
   for (ssize_t i = 0; i < g_num_rows; ++i) {
     const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) +
                             ")'"};
@@ -4852,7 +4824,7 @@ void import_geospatial_join_test(const bool replicate_inner_table = false) {
       ) WITH (fragment_size=20); 
   )";
   run_ddl_statement(create_ddl);
-  ValuesGenerator gen("geospatial_inner_join_test");
+  TestHelpers::ValuesGenerator gen("geospatial_inner_join_test");
   for (ssize_t i = 0; i < g_num_rows; i += 2) {
     const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) +
                             ")'"};
@@ -6526,7 +6498,7 @@ class JoinTest : public ::testing::Test {
           columns_definition, table_name, {"", 0}, {}, 50, true, false);
       run_ddl_statement(table_create);
 
-      ValuesGenerator gen(table_name);
+      TestHelpers::ValuesGenerator gen(table_name);
       const std::unordered_map<int, std::string> str_map{
           {0, "'foo'"}, {1, "'bar'"}, {2, "'hello'"}, {3, "'world'"}};
       for (size_t i = start_index; i < start_index + num_records; i++) {

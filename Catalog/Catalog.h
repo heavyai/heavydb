@@ -267,7 +267,7 @@ class Catalog {
   std::string name() const { return getCurrentDB().dbName; }
   void eraseDBData();
   void eraseTablePhysicalData(const TableDescriptor* td);
-  void optimizeTable(const TableDescriptor* td);
+  void optimizeTable(const TableDescriptor* td) const;
 
  protected:
   typedef std::map<std::string, TableDescriptor*> TableDescriptorMap;

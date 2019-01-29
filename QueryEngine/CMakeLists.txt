@@ -81,6 +81,7 @@ set(query_engine_source_files
     StreamingTopN.cpp
     StringDictionaryGenerations.cpp
     TableGenerations.cpp
+    TableOptimizer.cpp
     StringFunctions.cpp
     StringOpsIR.cpp
     RegexpFunctions.cpp

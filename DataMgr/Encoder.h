@@ -122,6 +122,14 @@ class Encoder {
   virtual void writeMetadata(FILE* f /*, const size_t offset*/) = 0;
   virtual void readMetadata(FILE* f /*, const size_t offset*/) = 0;
 
+  /**
+   * @brief: Reset chunk level stats (min, max, nulls) using new values from the argument.
+   * @return: True if an update occurred and the chunk needs to be flushed. False
+   * otherwise. Default false if metadata update is unsupported. Only reset chunk stats if
+   * the incoming stats differ from the current stats.
+   */
+  virtual bool resetChunkStats(const ChunkStats&) { return false; }
+
   size_t getNumElems() const { return num_elems_; }
   void setNumElems(const size_t num_elems) { num_elems_ = num_elems; }
 

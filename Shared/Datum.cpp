@@ -286,6 +286,43 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
   return d;
 }
 
+bool DatumEqual(const Datum a, const Datum b, const SQLTypeInfo& ti) {
+  switch (ti.get_type()) {
+    case kBOOLEAN:
+      return a.boolval == b.boolval;
+    case kBIGINT:
+    case kNUMERIC:
+    case kDECIMAL:
+      return a.bigintval == b.bigintval;
+    case kINT:
+      return a.intval == b.intval;
+    case kSMALLINT:
+      return a.smallintval == b.smallintval;
+    case kTINYINT:
+      return a.tinyintval == b.tinyintval;
+    case kFLOAT:
+      return a.floatval == b.floatval;
+    case kDOUBLE:
+      return a.doubleval == b.doubleval;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH:
+      return a.timeval == b.timeval;
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR:
+      if (ti.get_compression() == kENCODING_DICT) {
+        return a.intval == b.intval;
+      }
+      return *a.stringval == *b.stringval;
+    default:
+      return false;
+  }
+  return false;
+}
+
 /*
  * @brief convert datum to string
  */

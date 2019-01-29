@@ -581,6 +581,7 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
         if (it != fragment.getChunkMetadataMap().end()) {
           if (it->second.chunkStats.has_nulls) {
             has_nulls = true;
+            break;
           }
         }
       }

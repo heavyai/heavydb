@@ -42,6 +42,7 @@ add_executable(StoragePerfTest StoragePerfTest.cpp PopulateTableRandom.cpp ScanT
 add_executable(ImportTest ImportTest.cpp)
 add_executable(AlterColumnTest AlterColumnTest.cpp)
 add_executable(UpdelStorageTest UpdelStorageTest.cpp)
+add_executable(ComputeMetadataTest ComputeMetadataTest.cpp)
 add_executable(TopKTest TopKTest.cpp)
 add_executable(TokenCompletionHintsTest TokenCompletionHintsTest.cpp)
 add_executable(OmniSQLCommandTest OmniSQLCommandTest.cpp)
@@ -67,6 +68,7 @@ target_link_libraries(AlterColumnTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(PlanTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(UpdelStorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(StorageTest gtest ${EXECUTE_TEST_LIBS})
+target_link_libraries(ComputeMetadataTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(StoragePerfTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TopKTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(OmniSQLCommandTest gtest ${EXECUTE_TEST_LIBS} ${Boost_LIBRARIES})
@@ -88,6 +90,7 @@ add_test(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest ${TEST_AR
 add_test(RunQueryLoop RunQueryLoop ${TEST_ARGS})
 add_test(StringDictionaryTest StringDictionaryTest ${TEST_ARGS})
 add_test(StorageTest StorageTest ${TEST_ARGS})
+add_test(ComputeMetadataTest ComputeMetadataTest ${TEST_ARGS})
 add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 add_test(TopKTest TopKTest ${TEST_ARGS})
 add_test(TokenCompletionHintsTest TokenCompletionHintsTest ${TEST_ARGS})
@@ -118,6 +121,7 @@ set(SANITY_TESTS
   ImportTest
   AlterColumnTest
   UpdelStorageTest
+  ComputeMetadataTest
   TopKTest
   TokenCompletionHintsTest
   OmniSQLCommandTest

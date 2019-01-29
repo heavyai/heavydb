@@ -30,6 +30,7 @@
 #include "Import/Importer.h"
 #include "Parser/parser.h"
 #include "QueryEngine/ResultSet.h"
+#include "QueryEngine/TableOptimizer.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/UpdelRoll.h"
@@ -529,7 +530,12 @@ bool delete_and_vacuum_varlen_rows(const std::string& table,
 
   if (manual_vacuum) {
     ms = measure<>::execution([&]() {
-      ASSERT_NO_THROW(run_ddl_statement("optimize table " + table + " with vacuum;"););
+      auto cat = &gsession->getCatalog();
+      const auto td = cat->getMetadataForTable(table,
+                                               /*populateFragmenter=*/true);
+      auto executor = Executor::getExecutor(cat->getCurrentDB().dbId);
+      TableOptimizer optimizer(td, executor.get(), *cat);
+      optimizer.vacuumDeletedRows();
     });
     if (UpdelTestConfig::showMeasuredTime) {
       VLOG(2) << "time on vacuum:" << ms << " ms";

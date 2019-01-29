@@ -297,6 +297,9 @@ class UpdateLogForFragment : public RowDataProvider {
   std::shared_ptr<ResultSet> rs_;
 };
 
+using PerFragmentCB =
+    std::function<void(ResultSetPtr, const Fragmenter_Namespace::FragmentInfo&)>;
+
 using LLVMValueVector = std::vector<llvm::Value*>;
 
 class Executor {
@@ -900,6 +903,18 @@ class Executor {
                      const Catalog_Namespace::Catalog& cat,
                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                      const UpdateLogForFragment::Callback& cb) __attribute__((hot));
+
+  /**
+   * @brief Compiles and dispatches a work unit per fragment processing results with the
+   * per fragment callback.
+   * Currently used for computing metrics over fragments (metadata).
+   */
+  void executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit,
+                                  const InputTableInfo& table_info,
+                                  const CompilationOptions& co,
+                                  const ExecutionOptions& eo,
+                                  const Catalog_Namespace::Catalog& cat,
+                                  PerFragmentCB& cb);
 
   ResultSetPtr executeExplain(const ExecutionDispatch&);
 
@@ -1639,6 +1654,7 @@ class Executor {
   friend class QueryRewriter;
   friend class PendingExecutionClosure;
   friend class RelAlgExecutor;
+  friend class TableOptimizer;
 
   template <typename META_TYPE_CLASS>
   friend class AggregateReductionEgress;
