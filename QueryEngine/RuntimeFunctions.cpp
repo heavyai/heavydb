@@ -1075,6 +1075,14 @@ extern "C" ALWAYS_INLINE double percent_window_func(const int64_t output_buff,
   return reinterpret_cast<const double*>(output_buff)[pos];
 }
 
+extern "C" ALWAYS_INLINE double load_double(const int64_t* agg) {
+  return *reinterpret_cast<const double*>(may_alias_ptr(agg));
+}
+
+extern "C" ALWAYS_INLINE float load_float(const int32_t* agg) {
+  return *reinterpret_cast<const float*>(may_alias_ptr(agg));
+}
+
 extern "C" NEVER_INLINE void linear_probabilistic_count(uint8_t* bitmap,
                                                         const uint32_t bitmap_bytes,
                                                         const uint8_t* key_bytes,
