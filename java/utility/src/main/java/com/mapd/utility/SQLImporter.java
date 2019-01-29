@@ -19,6 +19,8 @@ import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TColumn;
 import com.mapd.thrift.server.TColumnData;
 import com.mapd.thrift.server.TColumnType;
+import com.mapd.thrift.server.TDatumType;
+import com.mapd.thrift.server.TEncodingType;
 import com.mapd.thrift.server.TQueryResult;
 import com.mapd.thrift.server.TTableDetails;
 import com.mapd.thrift.server.TMapDException;
@@ -31,6 +33,7 @@ import java.math.BigDecimal;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.time.*;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -51,6 +54,8 @@ public class SQLImporter {
   protected String session = null;
   protected MapD.Client client = null;
   private CommandLine cmd = null;
+  private boolean encodingDateInDays = true;
+  private LocalDate epochDate = LocalDate.ofEpochDay(0);
   final static Logger LOGGER = LoggerFactory.getLogger(SQLImporter.class);
 
   public static void main(String[] args) {
@@ -344,13 +349,26 @@ public class SQLImporter {
       } else {
         List<TColumnType> columnInfo = getColumnInfo(tName);
         // table exists lets check it has same number of columns
+
         if (md.getColumnCount() != columnInfo.size()) {
           LOGGER.error("Table sizes do not match - OmniSci " + columnInfo.size()
                   + " versus Select " + md.getColumnCount());
           exit(1);
         }
         // table exists lets check it is same layout - check names will do for now
+        // Note weird start from 1 and reduce index by one is due to sql metatdata
+        // beinging with 1 not 0
         for (int colNum = 1; colNum <= columnInfo.size(); colNum++) {
+          // check for old DATE style, if we find it we will use old style for all input
+          if (columnInfo.get(colNum - 1).col_type.getType() == TDatumType.DATE
+                  && columnInfo.get(colNum - 1).col_type.getEncoding()
+                          != TEncodingType.DATE_IN_DAYS) {
+            // use old sec from epoch encoding
+            LOGGER.error(columnInfo.get(colNum - 1).col_name
+                    + " is Date not in DATE in days "
+                    + columnInfo.get(colNum - 1).col_type.getEncoding());
+            encodingDateInDays = false;
+          }
           if (!columnInfo.get(colNum - 1)
                           .col_name.equalsIgnoreCase(md.getColumnName(colNum))) {
             LOGGER.error(
@@ -649,7 +667,13 @@ public class SQLImporter {
           col.data.int_col.add(0L);
 
         } else {
-          col.data.int_col.add(d.getTime() / 1000);
+          if (encodingDateInDays) {
+            LocalDate ldate = d.toLocalDate();
+            col.data.int_col.add(
+                    java.time.temporal.ChronoUnit.DAYS.between(epochDate, ldate));
+          } else {
+            col.data.int_col.add(d.getTime() / 1000);
+          }
           col.nulls.add(Boolean.FALSE);
         }
         break;

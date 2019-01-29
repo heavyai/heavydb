@@ -12524,6 +12524,45 @@ TEST(Select, ShardKeyDDL) {
   }
 }
 
+TEST(Create, DaysEncodingDDL) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    EXPECT_NO_THROW(run_ddl_statement("Drop table if exists chelsea;"));
+    EXPECT_NO_THROW(run_ddl_statement(
+        "create table chelsea(a date, b date encoding fixed(32), c date encoding "
+        "fixed(16), d date encoding days(32), e date encoding days(16));"));
+
+    EXPECT_NO_THROW(run_multiple_agg(
+        "insert into "
+        "chelsea "
+        "values('1548712897','1548712897','1548712897','1548712897','1548712897')",
+        dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("insert into chelsea values(null,null,null,null,null)", dt));
+    EXPECT_NO_THROW(run_multiple_agg("select a,b,c,d,e from chelsea;", dt));
+
+    ASSERT_EQ(int64_t(2),
+              v<int64_t>(run_simple_agg("SELECT count(*) from chelsea;", dt)));
+    ASSERT_EQ(
+        int64_t(1548633600),
+        v<int64_t>(run_simple_agg("SELECT d FROM chelsea where d is not null;", dt)));
+    ASSERT_EQ(int64_t(1548633600),
+              v<int64_t>(run_simple_agg(
+                  "SELECT d FROM chelsea where d = DATE '2019-01-28';", dt)));
+    ASSERT_EQ(
+        int64_t(1548633600),
+        v<int64_t>(run_simple_agg("SELECT e FROM chelsea where e is not null;", dt)));
+    ASSERT_EQ(int64_t(1548633600),
+              v<int64_t>(run_simple_agg(
+                  "SELECT e FROM chelsea where e = DATE '2019-01-28';", dt)));
+
+    EXPECT_THROW(
+        run_ddl_statement("create table chelsea1(a timestamp encoding days(16))"),
+        std::runtime_error);
+  }
+}
+
 namespace {
 
 int create_sharded_join_table(const std::string& table_name,
