@@ -65,11 +65,10 @@ class ArrayNoneEncoder : public Encoder {
 
   ChunkMetadata appendData(int8_t*& srcData,
                            const size_t numAppendElems,
+                           const SQLTypeInfo&,
                            const bool replicating = false) {
     assert(false);  // should never be called for arrays
-    ChunkMetadata chunkMetadata;
-    getMetadata(chunkMetadata);
-    return chunkMetadata;
+    return ChunkMetadata{};
   }
 
   ChunkMetadata appendData(const std::vector<ArrayDatum>* srcData,

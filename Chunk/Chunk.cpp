@@ -173,10 +173,11 @@ ChunkMetadata Chunk::appendData(DataBlockPtr& src_data,
                                 const size_t num_elems,
                                 const size_t start_idx,
                                 const bool replicating) {
-  if (column_desc->columnType.is_varlen()) {
-    switch (column_desc->columnType.get_type()) {
+  const auto& ti = column_desc->columnType;
+  if (ti.is_varlen()) {
+    switch (ti.get_type()) {
       case kARRAY: {
-        if (column_desc->columnType.get_size() > 0) {
+        if (ti.get_size() > 0) {
           FixedLengthArrayNoneEncoder* array_encoder =
               dynamic_cast<FixedLengthArrayNoneEncoder*>(buffer->encoder.get());
           return array_encoder->appendData(
@@ -190,7 +191,7 @@ ChunkMetadata Chunk::appendData(DataBlockPtr& src_data,
       case kTEXT:
       case kVARCHAR:
       case kCHAR: {
-        CHECK_EQ(kENCODING_NONE, column_desc->columnType.get_compression());
+        CHECK_EQ(kENCODING_NONE, ti.get_compression());
         StringNoneEncoder* str_encoder =
             dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
         return str_encoder->appendData(
@@ -209,7 +210,7 @@ ChunkMetadata Chunk::appendData(DataBlockPtr& src_data,
         CHECK(false);
     }
   }
-  return buffer->encoder->appendData(src_data.numbersPtr, num_elems, replicating);
+  return buffer->encoder->appendData(src_data.numbersPtr, num_elems, ti, replicating);
 }
 
 void Chunk::unpin_buffer() {

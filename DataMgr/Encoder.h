@@ -111,6 +111,7 @@ class Encoder {
 
   virtual ChunkMetadata appendData(int8_t*& srcData,
                                    const size_t numAppendElems,
+                                   const SQLTypeInfo&,
                                    const bool replicating = false) = 0;
   virtual void getMetadata(ChunkMetadata& chunkMetadata);
   // Only called from the executor for synthesized meta-information.
