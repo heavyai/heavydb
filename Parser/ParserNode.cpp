@@ -2862,7 +2862,7 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
       }
       if (type == kDATE) {
         cd.columnType.set_compression(kENCODING_DATE_IN_DAYS);
-        cd.columnType.set_comp_param((compression->get_encoding_param() == 16) ? 16 : 0);
+        cd.columnType.set_comp_param(16);
       } else {
         cd.columnType.set_compression(kENCODING_FIXED);
         cd.columnType.set_comp_param(compression->get_encoding_param());
