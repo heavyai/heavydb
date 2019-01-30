@@ -39,6 +39,7 @@ class NoneEncoder : public Encoder {
 
   ChunkMetadata appendData(int8_t*& srcData,
                            const size_t numAppendElems,
+                           const SQLTypeInfo&,
                            const bool replicating = false) {
     T* unencodedData = reinterpret_cast<T*>(srcData);
     std::unique_ptr<T> encodedData;

@@ -68,15 +68,8 @@ struct ChunkMetadata {
       case kTIME:
       case kTIMESTAMP:
       case kDATE: {
-        if (sqlType.is_date_in_days()) {
-          chunkStats.min.timeval =
-              min == std::numeric_limits<int64_t>::max() ? min : min * SECSPERDAY;
-          chunkStats.max.timeval =
-              max == std::numeric_limits<int64_t>::min() ? max : max * SECSPERDAY;
-        } else {
-          chunkStats.min.timeval = min;
-          chunkStats.max.timeval = max;
-        }
+        chunkStats.min.timeval = min;
+        chunkStats.max.timeval = max;
         break;
       }
       case kFLOAT: {
