@@ -418,17 +418,53 @@ class RexFunctionOperator : public RexOperator {
   const std::string name_;
 };
 
+enum class SortDirection { Ascending, Descending };
+
+enum class NullSortedPosition { First, Last };
+
+class SortField {
+ public:
+  SortField(const size_t field,
+            const SortDirection sort_dir,
+            const NullSortedPosition nulls_pos)
+      : field_(field), sort_dir_(sort_dir), nulls_pos_(nulls_pos) {}
+
+  bool operator==(const SortField& that) const {
+    return field_ == that.field_ && sort_dir_ == that.sort_dir_ &&
+           nulls_pos_ == that.nulls_pos_;
+  }
+
+  size_t getField() const { return field_; }
+
+  SortDirection getSortDir() const { return sort_dir_; }
+
+  NullSortedPosition getNullsPosition() const { return nulls_pos_; }
+
+  std::string toString() const {
+    return "(" + std::to_string(field_) + " " +
+           (sort_dir_ == SortDirection::Ascending ? "asc" : "desc") + " " +
+           (nulls_pos_ == NullSortedPosition::First ? "nulls_first" : "nulls_last") + ")";
+  }
+
+ private:
+  const size_t field_;
+  const SortDirection sort_dir_;
+  const NullSortedPosition nulls_pos_;
+};
+
 class RexWindowFunctionOperator : public RexFunctionOperator {
  public:
   RexWindowFunctionOperator(const SqlWindowFunctionKind kind,
                             ConstRexScalarPtrVector& operands,
                             ConstRexScalarPtrVector& partition_keys,
                             ConstRexScalarPtrVector& order_keys,
+                            const std::vector<SortField> collation,
                             const SQLTypeInfo& ti)
       : RexFunctionOperator(sql_window_function_to_str(kind), operands, ti)
       , kind_(kind)
       , partition_keys_(std::move(partition_keys))
-      , order_keys_(std::move(order_keys)) {}
+      , order_keys_(std::move(order_keys))
+      , collation_(collation) {}
 
   SqlWindowFunctionKind getKind() const { return kind_; }
 
@@ -444,12 +480,15 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
 
   const ConstRexScalarPtrVector& getOrderKeys() const { return order_keys_; }
 
+  const std::vector<SortField>& getCollation() const { return collation_; }
+
   std::unique_ptr<const RexOperator> getDisambiguated(
       ConstRexScalarPtrVector& operands,
       ConstRexScalarPtrVector& partition_keys,
-      ConstRexScalarPtrVector& order_keys) const {
+      ConstRexScalarPtrVector& order_keys,
+      const std::vector<SortField>& collation) const {
     return std::unique_ptr<const RexOperator>(new RexWindowFunctionOperator(
-        kind_, operands, partition_keys, order_keys, getType()));
+        kind_, operands, partition_keys, order_keys, collation, getType()));
   }
 
   std::string toString() const override {
@@ -474,6 +513,7 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
   const SqlWindowFunctionKind kind_;
   mutable ConstRexScalarPtrVector partition_keys_;
   mutable ConstRexScalarPtrVector order_keys_;
+  const std::vector<SortField> collation_;
 };
 
 // Not a real node created by Calcite. Created by us because targets of a query
@@ -1052,40 +1092,6 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
   std::vector<std::unique_ptr<const RexScalar>>
       scalar_sources_;  // building blocks for group_indices_ and agg_exprs_; not actually
                         // projected, just owned
-};
-
-enum class SortDirection { Ascending, Descending };
-
-enum class NullSortedPosition { First, Last };
-
-class SortField {
- public:
-  SortField(const size_t field,
-            const SortDirection sort_dir,
-            const NullSortedPosition nulls_pos)
-      : field_(field), sort_dir_(sort_dir), nulls_pos_(nulls_pos) {}
-
-  bool operator==(const SortField& that) const {
-    return field_ == that.field_ && sort_dir_ == that.sort_dir_ &&
-           nulls_pos_ == that.nulls_pos_;
-  }
-
-  size_t getField() const { return field_; }
-
-  SortDirection getSortDir() const { return sort_dir_; }
-
-  NullSortedPosition getNullsPosition() const { return nulls_pos_; }
-
-  std::string toString() const {
-    return "(" + std::to_string(field_) + " " +
-           (sort_dir_ == SortDirection::Ascending ? "asc" : "desc") + " " +
-           (nulls_pos_ == NullSortedPosition::First ? "nulls_first" : "nulls_last") + ")";
-  }
-
- private:
-  const size_t field_;
-  const SortDirection sort_dir_;
-  const NullSortedPosition nulls_pos_;
 };
 
 class RelSort : public RelAlgNode {

@@ -587,6 +587,42 @@ SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
   throw std::runtime_error("Unsupported window function: " + name);
 }
 
+std::vector<std::unique_ptr<const RexScalar>> parse_window_order_exprs(
+    const rapidjson::Value& arr,
+    const Catalog_Namespace::Catalog& cat,
+    RelAlgExecutor* ra_executor) {
+  std::vector<std::unique_ptr<const RexScalar>> exprs;
+  for (auto it = arr.Begin(); it != arr.End(); ++it) {
+    exprs.emplace_back(parse_scalar_expr(field(*it, "field"), cat, ra_executor));
+  }
+  return exprs;
+}
+
+SortDirection parse_sort_direction(const rapidjson::Value& collation) {
+  return json_str(field(collation, "direction")) == std::string("DESCENDING")
+             ? SortDirection::Descending
+             : SortDirection::Ascending;
+}
+
+NullSortedPosition parse_nulls_position(const rapidjson::Value& collation) {
+  return json_str(field(collation, "nulls")) == std::string("FIRST")
+             ? NullSortedPosition::First
+             : NullSortedPosition::Last;
+}
+
+std::vector<SortField> parse_window_order_collation(const rapidjson::Value& arr,
+                                                    const Catalog_Namespace::Catalog& cat,
+                                                    RelAlgExecutor* ra_executor) {
+  std::vector<SortField> collation;
+  size_t field_idx = 0;
+  for (auto it = arr.Begin(); it != arr.End(); ++it, ++field_idx) {
+    const auto sort_dir = parse_sort_direction(*it);
+    const auto null_pos = parse_nulls_position(*it);
+    collation.emplace_back(field_idx, sort_dir, null_pos);
+  }
+  return collation;
+}
+
 std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr,
                                             const Catalog_Namespace::Catalog& cat,
                                             RelAlgExecutor* ra_executor) {
@@ -608,10 +644,11 @@ std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr,
     const auto& partition_keys_arr = field(expr, "partition_keys");
     auto partition_keys = parse_expr_array(partition_keys_arr, cat, ra_executor);
     const auto& order_keys_arr = field(expr, "order_keys");
-    auto order_keys = parse_expr_array(order_keys_arr, cat, ra_executor);
+    auto order_keys = parse_window_order_exprs(order_keys_arr, cat, ra_executor);
+    const auto collation = parse_window_order_collation(order_keys_arr, cat, ra_executor);
     const auto kind = parse_window_function_kind(op_name);
     return std::make_unique<RexWindowFunctionOperator>(
-        kind, operands, partition_keys, order_keys, ti);
+        kind, operands, partition_keys, order_keys, collation, ti);
   }
   return std::unique_ptr<RexOperator>(op == kFUNCTION
                                           ? new RexFunctionOperator(op_name, operands, ti)
@@ -746,7 +783,10 @@ std::unique_ptr<const RexOperator> disambiguate_operator(
       disambiguated_order_keys.emplace_back(disambiguate_rex(order_key.get(), ra_output));
     }
     return rex_window_function_operator->getDisambiguated(
-        disambiguated_operands, disambiguated_partition_keys, disambiguated_order_keys);
+        disambiguated_operands,
+        disambiguated_partition_keys,
+        disambiguated_order_keys,
+        rex_window_function_operator->getCollation());
   }
   return rex_operator->getDisambiguated(disambiguated_operands);
 }
@@ -1320,14 +1360,8 @@ class RelAlgAbstractInterpreter {
          collation_arr_it != collation_arr.End();
          ++collation_arr_it) {
       const size_t field_idx = json_i64(field(*collation_arr_it, "field"));
-      const SortDirection sort_dir =
-          json_str(field(*collation_arr_it, "direction")) == std::string("DESCENDING")
-              ? SortDirection::Descending
-              : SortDirection::Ascending;
-      const NullSortedPosition null_pos =
-          json_str(field(*collation_arr_it, "nulls")) == std::string("FIRST")
-              ? NullSortedPosition::First
-              : NullSortedPosition::Last;
+      const auto sort_dir = parse_sort_direction(*collation_arr_it);
+      const auto null_pos = parse_nulls_position(*collation_arr_it);
       collation.emplace_back(field_idx, sort_dir, null_pos);
     }
     auto limit = get_int_literal_field(sort_ra, "fetch", -1);

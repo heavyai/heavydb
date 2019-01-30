@@ -165,6 +165,14 @@ public class MapDRelJson {
     return list;
   }
 
+  public Object toJson(RexFieldCollation node) {
+    final Map<String, Object> map = jsonBuilder.map();
+    map.put("field", toJson(node.left));
+    map.put("direction", node.getDirection().name());
+    map.put("nulls", node.getNullDirection().name());
+    return map;
+  }
+
   public RelCollation toCollation(List<Map<String, Object>> jsonFieldCollations) {
     final List<RelFieldCollation> fieldCollations = new ArrayList<RelFieldCollation>();
     for (Map<String, Object> map : jsonFieldCollations) {
@@ -247,6 +255,8 @@ public class MapDRelJson {
       return toJson((AggregateCall) value);
     } else if (value instanceof RelCollationImpl) {
       return toJson((RelCollationImpl) value);
+    } else if (value instanceof RexFieldCollation) {
+      return toJson((RexFieldCollation) value);
     } else if (value instanceof RelDataType) {
       return toJson((RelDataType) value);
     } else if (value instanceof RelDataTypeField) {
@@ -361,7 +371,7 @@ public class MapDRelJson {
             map.put("partition_keys", partitionKeyList);
             final List<Object> orderKeyList = jsonBuilder.list();
             for (final RexFieldCollation orderKey : window.orderKeys) {
-              orderKeyList.add(toJson(orderKey.left));
+              orderKeyList.add(toJson(orderKey));
             }
             map.put("order_keys", orderKeyList);
           }

@@ -284,15 +284,25 @@ void WindowFunctionContext::compute() {
               output_for_partition_buff + partition_size,
               int64_t(0));
     std::vector<Comparator> comparators;
+    const auto& order_keys = window_func_->getOrderKeys();
+    const auto& collation = window_func_->getCollation();
+    CHECK_EQ(order_keys.size(), collation.size());
     for (size_t order_column_idx = 0; order_column_idx < order_columns_.size();
          ++order_column_idx) {
       auto order_column_buffer = order_columns_[order_column_idx];
-      const auto& order_keys = window_func_->getOrderKeys();
       const auto order_col =
           dynamic_cast<const Analyzer::ColumnVar*>(order_keys[order_column_idx].get());
       CHECK(order_col);
-      comparators.push_back(
-          makeComparator(order_col, order_column_buffer, payload() + offsets()[i]));
+      const auto& order_col_collation = collation[order_column_idx];
+      const auto asc_comparator =
+          makeComparator(order_col, order_column_buffer, payload() + offsets()[i]);
+      auto comparator = asc_comparator;
+      if (order_col_collation.is_desc) {
+        comparator = [&asc_comparator](const int64_t lhs, const int64_t rhs) {
+          return asc_comparator(rhs, lhs);
+        };
+      }
+      comparators.push_back(comparator);
       std::stable_sort(output_for_partition_buff,
                        output_for_partition_buff + partition_size,
                        comparators.back());

@@ -1428,6 +1428,22 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                                           translateFunctionArgs(rex_function));
 }
 
+namespace {
+
+std::vector<Analyzer::OrderEntry> translate_collation(
+    const std::vector<SortField>& sort_fields) {
+  std::vector<Analyzer::OrderEntry> collation;
+  for (size_t i = 0; i < sort_fields.size(); ++i) {
+    const auto& sort_field = sort_fields[i];
+    collation.emplace_back(i,
+                           sort_field.getSortDir() == SortDirection::Descending,
+                           sort_field.getNullsPosition() == NullSortedPosition::First);
+  }
+  return collation;
+}
+
+}  // namespace
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
     const RexWindowFunctionOperator* rex_window_function) const {
   std::vector<std::shared_ptr<Analyzer::Expr>> args;
@@ -1442,11 +1458,13 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
   for (const auto& order_key : rex_window_function->getOrderKeys()) {
     order_keys.push_back(translateScalarRex(order_key.get()));
   }
-  return makeExpr<Analyzer::WindowFunction>(rex_window_function->getType(),
-                                            rex_window_function->getKind(),
-                                            args,
-                                            partition_keys,
-                                            order_keys);
+  return makeExpr<Analyzer::WindowFunction>(
+      rex_window_function->getType(),
+      rex_window_function->getKind(),
+      args,
+      partition_keys,
+      order_keys,
+      translate_collation(rex_window_function->getCollation()));
 }
 
 Analyzer::ExpressionPtrVector RelAlgTranslator::translateFunctionArgs(

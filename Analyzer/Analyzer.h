@@ -1207,6 +1207,20 @@ class OffsetInFragment : public Expr {
 };
 
 /*
+ * @type OrderEntry
+ * @brief represents an entry in ORDER BY clause.
+ */
+struct OrderEntry {
+  OrderEntry(int t, bool d, bool nf) : tle_no(t), is_desc(d), nulls_first(nf){};
+  ~OrderEntry() {}
+  std::string toString() const;
+  void print() const { std::cout << toString(); }
+  int tle_no;       /* targetlist entry number: 1-based */
+  bool is_desc;     /* true if order is DESC */
+  bool nulls_first; /* true if nulls are ordered first.  otherwise last. */
+};
+
+/*
  * @type WindowFunction
  * @brief A window function.
  */
@@ -1216,12 +1230,14 @@ class WindowFunction : public Expr {
                  const SqlWindowFunctionKind kind,
                  const std::vector<std::shared_ptr<Analyzer::Expr>>& args,
                  const std::vector<std::shared_ptr<Analyzer::Expr>>& partition_keys,
-                 const std::vector<std::shared_ptr<Analyzer::Expr>>& order_keys)
+                 const std::vector<std::shared_ptr<Analyzer::Expr>>& order_keys,
+                 const std::vector<OrderEntry>& collation)
       : Expr(ti)
       , kind_(kind)
       , args_(args)
       , partition_keys_(partition_keys)
-      , order_keys_(order_keys){};
+      , order_keys_(order_keys)
+      , collation_(collation){};
 
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;
 
@@ -1240,11 +1256,14 @@ class WindowFunction : public Expr {
     return order_keys_;
   }
 
+  const std::vector<OrderEntry>& getCollation() const { return collation_; }
+
  private:
   const SqlWindowFunctionKind kind_;
   const std::vector<std::shared_ptr<Analyzer::Expr>> args_;
   const std::vector<std::shared_ptr<Analyzer::Expr>> partition_keys_;
   const std::vector<std::shared_ptr<Analyzer::Expr>> order_keys_;
+  const std::vector<OrderEntry> collation_;
 };
 
 /*
@@ -1345,20 +1364,6 @@ class RangeTblEntry {
   std::list<const ColumnDescriptor*>
       column_descs;   // column descriptors for all columns referenced in this query
   Query* view_query;  // parse tree for the view query
-};
-
-/*
- * @type OrderEntry
- * @brief represents an entry in ORDER BY clause.
- */
-struct OrderEntry {
-  OrderEntry(int t, bool d, bool nf) : tle_no(t), is_desc(d), nulls_first(nf){};
-  ~OrderEntry() {}
-  std::string toString() const;
-  void print() const { std::cout << toString(); }
-  int tle_no;       /* targetlist entry number: 1-based */
-  bool is_desc;     /* true if order is DESC */
-  bool nulls_first; /* true if nulls are ordered first.  otherwise last. */
 };
 
 /*

@@ -189,7 +189,8 @@ std::shared_ptr<Analyzer::Expr> OffsetInFragment::deep_copy() const {
 }
 
 std::shared_ptr<Analyzer::Expr> WindowFunction::deep_copy() const {
-  return makeExpr<WindowFunction>(type_info, kind_, args_, partition_keys_, order_keys_);
+  return makeExpr<WindowFunction>(
+      type_info, kind_, args_, partition_keys_, order_keys_, collation_);
 }
 
 ExpressionPtr ArrayExpr::deep_copy() const {
