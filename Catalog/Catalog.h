@@ -286,6 +286,7 @@ class Catalog {
       DeletedColumnPerTableMap;
 
   void CheckAndExecuteMigrations();
+  void CheckAndExecuteMigrationsPostBuildMaps();
   void updateDictionaryNames();
   void updateTableDescriptorSchema();
   void updateFrontendViewSchema();
