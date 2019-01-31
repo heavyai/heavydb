@@ -29,18 +29,22 @@ which will assign the name `omnisci/omnisci` and the tag `v4.5.0` to the image.
 
 ### Image layout
 
-The data directory is at `/mapd-storage/data`.
+The data directory is at `/omnisci-storage/data`.
 
-The config file lives at `/mapd-storage/mapd.conf`.
+The config file lives at `/omnisci-storage/omnisci.conf`.
 
 ## Running OmniSci inside a container
 
     nvidia-docker run -d \
       -p 6273:6273 \
       --name omnisci \
-      -v /path/to/mapd-storage:/mapd-storage \
+      -v /path/to/omnisci-storage:/omnisci-storage \
       omnisci/omnisci:v4.5.0
 
 This starts the OmniSci Core Database inside a container named `omnisci`, and exposes the Immerse visualization client on port 6273..
 
-Data will be persisted to the host directory `/path/to/mapd-storage`.
+Data will be persisted to the host directory `/path/to/omnisci-storage`.
+
+## Compatibility with existing installations
+
+The provided `Dockerfile.mapd` provides compatibility with pre-v4.5.0 installations which used `/mapd-storage` for the storage directory and `/mapd-storage/mapd.conf` for the config file, as well as ports 9091 (Thrift TCP binary protocol) and 9092 (Thrift HTTP/JSON protocol, Immerse).

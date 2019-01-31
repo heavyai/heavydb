@@ -747,7 +747,7 @@ install(PROGRAMS insert_sample_data DESTINATION ".")
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   install(DIRECTORY docker/sds DESTINATION "docker")
 endif()
-install(FILES docker/Dockerfile docker/README.md DESTINATION "docker")
+install(FILES docker/Dockerfile docker/Dockerfile.mapd docker/README.md DESTINATION "docker")
 
 execute_process(
   COMMAND ln -sf omnisql mapdql
