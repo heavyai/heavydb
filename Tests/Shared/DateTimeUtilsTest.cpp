@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "../../Shared/dateconversions.h"
+#include "../../Shared/DateConversions.h"
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
@@ -41,7 +41,7 @@ TEST(DATE, EpochSecondsToDaysTest) {
   const auto sample = SampleDateEpochs();
   std::vector<int64_t> computed;
   for (const auto ep : sample.epoch) {
-    computed.push_back(get_epoch_days_from_seconds(ep));
+    computed.push_back(DateConverters::get_epoch_days_from_seconds(ep));
   }
   compare_epoch(computed, sample.actual_days);
 }
@@ -50,7 +50,7 @@ TEST(DATE, EpochDaysToSecondsTest) {
   const auto sample = SampleDateEpochs();
   std::vector<int64_t> computed;
   for (const auto ep : sample.actual_days) {
-    computed.push_back(get_epoch_seconds_from_days(ep));
+    computed.push_back(DateConverters::get_epoch_seconds_from_days(ep));
   }
   compare_epoch(computed, sample.expected_seconds);
 }

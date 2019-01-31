@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 OmniSci, Inc.
+ * Copyright 2019 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@
 #include <cstdint>
 #include "../QueryEngine/ExtractFromTime.h"
 
+namespace DateConverters {
+
 inline int64_t get_epoch_days_from_seconds(const int64_t seconds) {
   return (seconds < 0 && seconds % SECSPERDAY != 0) ? (seconds / SECSPERDAY) - 1
                                                     : seconds / SECSPERDAY;
@@ -28,5 +30,7 @@ inline int64_t get_epoch_days_from_seconds(const int64_t seconds) {
 inline int64_t get_epoch_seconds_from_days(const int64_t days) {
   return days * SECSPERDAY;
 }
+
+}  // namespace DateConverters
 
 #endif  // SHARED_DATECONVERSIONS_H
