@@ -2225,6 +2225,109 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
   }
 }
 
+void Catalog::checkDateInDaysColumnMigration() {
+  cat_sqlite_lock sqlite_lock(this);
+  std::vector<int> tables_migrated = {};
+  std::unordered_map<int, std::vector<std::string>> tables_to_migrate;
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query(
+        "select name from sqlite_master WHERE type='table' AND "
+        "name='mapd_version_history'");
+    if (sqliteConnector_.getNumRows() == 0) {
+      sqliteConnector_.query(
+          "CREATE TABLE mapd_version_history(version integer, migration_history text "
+          "unique)");
+      sqliteConnector_.query(
+          "CREATE TABLE mapd_date_in_days_column_migration_tmp(table_id integer primary "
+          "key)");
+    } else {
+      sqliteConnector_.query("select migration_history from mapd_version_history");
+      if (sqliteConnector_.getNumRows() != 0) {
+        for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
+          const auto mig = sqliteConnector_.getData<std::string>(i, 0);
+          if (mig == "date_in_days_column") {
+            // no need for further execution
+            sqliteConnector_.query("END TRANSACTION");
+            return;
+          }
+        }
+      }
+      LOG(INFO) << "Performing Date in days columns migration.";
+      sqliteConnector_.query(
+          "select name from sqlite_master where type='table' AND "
+          "name='mapd_date_in_days_column_migration_tmp'");
+      if (sqliteConnector_.getNumRows() != 0) {
+        sqliteConnector_.query(
+            "select table_id from mapd_date_in_days_column_migration_tmp");
+        if (sqliteConnector_.getNumRows() != 0) {
+          for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
+            tables_migrated.push_back(sqliteConnector_.getData<int>(i, 0));
+          }
+        }
+      } else {
+        sqliteConnector_.query(
+            "CREATE TABLE mapd_date_in_days_column_migration_tmp(table_id integer "
+            "primary key)");
+      }
+    }
+    sqliteConnector_.query_with_text_params(
+        "SELECT tables.tableid, tables.name, columns.name FROM mapd_tables tables, "
+        "mapd_columns columns where tables.tableid = columns.tableid AND "
+        "columns.coltype = ?1 AND columns.compression = ?2",
+        std::vector<std::string>{
+            std::to_string(static_cast<int>(SQLTypes::kDATE)),
+            std::to_string(static_cast<int>(EncodingType::kENCODING_DATE_IN_DAYS))});
+    if (sqliteConnector_.getNumRows() != 0) {
+      for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
+        tables_to_migrate[sqliteConnector_.getData<int>(i, 0)] = {
+            sqliteConnector_.getData<std::string>(i, 1),
+            sqliteConnector_.getData<std::string>(i, 2)};
+      }
+    }
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Failed to complete migraion on date in days column: " << e.what();
+    sqliteConnector_.query("ROLLBACK");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+
+  for (auto& id_names : tables_to_migrate) {
+    if (std::find(tables_migrated.begin(), tables_migrated.end(), id_names.first) ==
+        tables_migrated.end()) {
+      sqliteConnector_.query("BEGIN TRANSACTION");
+      try {
+        LOG(INFO) << "Table: " << id_names.second[0]
+                  << " may suffer from issues with DATE column: " << id_names.second[1]
+                  << ". Please export the data, recreate table by copying the create "
+                     "table DDL statement and reimport the data.";
+        sqliteConnector_.query_with_text_params(
+            "INSERT INTO mapd_date_in_days_column_migration_tmp VALUES(?)",
+            std::vector<std::string>{std::to_string(id_names.first)});
+      } catch (const std::exception& e) {
+        LOG(ERROR) << "Failed to complete migraion on date in days column: " << e.what();
+        sqliteConnector_.query("ROLLBACK");
+        throw;
+      }
+      sqliteConnector_.query("COMMIT");
+    }
+  }
+
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query("DROP TABLE mapd_date_in_days_column_migration_tmp");
+    sqliteConnector_.query_with_text_params(
+        "INSERT INTO mapd_version_history(version, migration_history) values(?,?)",
+        std::vector<std::string>{std::to_string(MAPD_VERSION), "date_in_days_column"});
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Failed to complete migraion on date in days column: " << e.what();
+    sqliteConnector_.query("ROLLBACK");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+  LOG(INFO) << "Migration successfull on Date in days columns";
+}
+
 void Catalog::createDashboardSystemRoles() {
   if (!SysCatalog::instance().arePrivilegesOn()) {
     return;
@@ -2302,6 +2405,7 @@ void Catalog::CheckAndExecuteMigrations() {
   updateDeletedColumnIndicator();
   updateFrontendViewsToDashboards();
   recordOwnershipOfObjectsInObjectPermissions();
+  checkDateInDaysColumnMigration();
 }
 
 void SysCatalog::buildRoleMap() {
