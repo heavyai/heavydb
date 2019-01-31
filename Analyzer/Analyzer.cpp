@@ -29,6 +29,7 @@
 #include <iostream>
 #include <stdexcept>
 #include "../Catalog/Catalog.h"
+#include "../Shared/dateconversions.h"
 #include "../Shared/sql_type_to_string.h"
 #include "../Shared/sqltypes.h"
 #include "../Shared/unreachable.h"
@@ -1057,7 +1058,8 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
     cast_to_string(new_type_info);
   } else if (new_type_info.get_type() == kDATE && type_info.get_type() == kDATE) {
     if (new_type_info.is_date_in_days()) {
-      constval.timeval /= SECSPERDAY;
+      const int64_t val = constval.timeval;
+      constval.timeval = get_epoch_days_from_seconds(val);
     }
     type_info = new_type_info;
   } else if (new_type_info.get_type() == kDATE && type_info.get_type() == kTIMESTAMP) {
@@ -1069,7 +1071,8 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
                                  get_timestamp_precision_scale(type_info.get_dimension()))
                            : DateTruncate(dtDAY, constval.timeval);
     if (new_type_info.is_date_in_days()) {
-      constval.timeval /= SECSPERDAY;
+      const int64_t val = constval.timeval;
+      constval.timeval = get_epoch_days_from_seconds(val);
     }
   } else if (type_info.get_type() == kTIMESTAMP &&
              new_type_info.get_type() == kTIMESTAMP) {

@@ -12563,6 +12563,51 @@ TEST(Create, DaysEncodingDDL) {
   }
 }
 
+TEST(Select, DatesDaysEncodingTest) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    EXPECT_NO_THROW(run_ddl_statement("Drop table if exists chelsea;"));
+    EXPECT_NO_THROW(run_ddl_statement(
+        "create table chelsea(a date encoding days(32), b date encoding days(16));"));
+    EXPECT_NO_THROW(
+        run_multiple_agg("insert into chelsea values('-31496400','-31496400')", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("insert into chelsea values('-31536000','-31536000')", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("insert into chelsea values('-31492800','-31492800')", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("insert into chelsea values('31579200','31579200')", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("insert into chelsea values('31536000','31536000')", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("insert into chelsea values('31575600','31575600')", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("insert into chelsea values('1969-01-01','1969-01-01')", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("insert into chelsea values('1971-01-01','1971-01-01')", dt));
+
+    ASSERT_EQ(
+        int64_t(8),
+        v<int64_t>(run_simple_agg("SELECT count(*) from chelsea where a = b;", dt)));
+    ASSERT_EQ(
+        int64_t(8),
+        v<int64_t>(run_simple_agg("SELECT count(*) from chelsea where b = a;", dt)));
+    ASSERT_EQ(int64_t(4),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) from chelsea where a = '1969-01-01';", dt)));
+    ASSERT_EQ(int64_t(4),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) from chelsea where a = '1971-01-01';", dt)));
+    ASSERT_EQ(int64_t(4),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) from chelsea where b = '1969-01-01';", dt)));
+    ASSERT_EQ(int64_t(4),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) from chelsea where b = '1971-01-01';", dt)));
+  }
+}
+
 namespace {
 
 int create_sharded_join_table(const std::string& table_name,
