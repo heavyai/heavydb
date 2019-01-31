@@ -298,6 +298,7 @@ class Catalog {
   void updateDeletedColumnIndicator();
   void updateFrontendViewsToDashboards();
   void recordOwnershipOfObjectsInObjectPermissions();
+  void checkDateInDaysColumnMigration();
   void createDashboardSystemRoles();
   void buildMaps();
   void addTableToMap(TableDescriptor& td,
