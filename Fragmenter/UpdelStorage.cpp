@@ -748,7 +748,9 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                 if (lhs_type.is_boolean()) {
                   dval = sval == "t" || sval == "true" || sval == "T" || sval == "True";
                 } else if (lhs_type.is_time()) {
-                  dval = StringToDatum(sval, lhs_type).timeval;
+                  throw std::runtime_error(
+                      "Date/Time/Timestamp update not supported through translated "
+                      "string path.");
                 }
                 if (lhs_type.is_fp() || lhs_type.is_decimal()) {
                   put_scalar<double>(data_ptr, lhs_type, dval, cd->columnName);
