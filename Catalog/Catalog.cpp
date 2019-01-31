@@ -45,6 +45,9 @@
 #include <boost/uuid/sha1.hpp>
 #endif
 
+#include "../QueryEngine/Execute.h"
+#include "../QueryEngine/TableOptimizer.h"
+
 #include "../Fragmenter/Fragmenter.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "../Parser/ParserNode.h"
@@ -1755,6 +1758,10 @@ Catalog::Catalog(const string& basePath,
     CheckAndExecuteMigrations();
   }
   buildMaps();
+  if (!is_new_db) {
+    CheckAndExecuteMigrationsPostBuildMaps();
+  }
+
   /*
   TODO(wamsi): Enable creation of dashboard roles
   */
@@ -2299,8 +2306,19 @@ void Catalog::checkDateInDaysColumnMigration() {
       try {
         LOG(INFO) << "Table: " << id_names.second[0]
                   << " may suffer from issues with DATE column: " << id_names.second[1]
-                  << ". Please export the data, recreate table by copying the create "
-                     "table DDL statement and reimport the data.";
+                  << ". Running an OPTIMIZE command to solve any issues with metadata.";
+
+        auto executor = Executor::getExecutor(getCurrentDB().dbId);
+        TableDescriptorMapById::iterator tableDescIt =
+            tableDescriptorMapById_.find(id_names.first);
+        if (tableDescIt == tableDescriptorMapById_.end()) {
+          throw runtime_error("Table descriptor does not exist for table " +
+                              id_names.second[0] + " does not exist.");
+        }
+        auto td = tableDescIt->second;
+        TableOptimizer optimizer(td, executor.get(), *this);
+        optimizer.recomputeMetadata();
+
         sqliteConnector_.query_with_text_params(
             "INSERT INTO mapd_date_in_days_column_migration_tmp VALUES(?)",
             std::vector<std::string>{std::to_string(id_names.first)});
@@ -2405,6 +2423,9 @@ void Catalog::CheckAndExecuteMigrations() {
   updateDeletedColumnIndicator();
   updateFrontendViewsToDashboards();
   recordOwnershipOfObjectsInObjectPermissions();
+}
+
+void Catalog::CheckAndExecuteMigrationsPostBuildMaps() {
   checkDateInDaysColumnMigration();
 }
 
