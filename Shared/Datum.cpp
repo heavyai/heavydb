@@ -31,8 +31,8 @@
 #include <string>
 #include "StringTransform.h"
 
+#include "DateConversions.h"
 #include "TimeGM.h"
-#include "dateconversions.h"
 #include "sqltypes.h"
 
 int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
@@ -261,8 +261,9 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       }
       if (!tp) {
         try {
-          d.timeval = ti.is_date_in_days() ? get_epoch_days_from_seconds(std::stoll(s))
-                                           : std::stoll(s);
+          d.timeval = ti.is_date_in_days()
+                          ? DateConverters::get_epoch_days_from_seconds(std::stoll(s))
+                          : std::stoll(s);
           break;
         } catch (const std::invalid_argument& ia) {
           throw std::runtime_error("Invalid date string " + s);

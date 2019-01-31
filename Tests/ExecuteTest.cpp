@@ -8771,6 +8771,7 @@ TEST(Update, DateUpdate) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists date_default;");
     run_ddl_statement("create table date_default (d date) with (vacuum='delayed');");
 
     run_multiple_agg("insert into date_default values('01/01/1901');", dt);

@@ -27,6 +27,7 @@
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "QueryEngine/TargetValue.h"
 #include "Shared/ConfigResolve.h"
+#include "Shared/DateConversions.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/thread_count.h"
 #include "TargetValueConvertersFactories.h"
@@ -678,8 +679,9 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
               } else if (is_integral(lhs_type)) {
                 if (lhs_type.is_date_in_days()) {
                   // Store meta values in seconds
-                  int64_t seconds;
-                  get_scalar<int64_t>(data_ptr, lhs_type, seconds);
+                  int64_t days;
+                  get_scalar<int64_t>(data_ptr, lhs_type, days);
+                  const auto seconds = DateConverters::get_epoch_seconds_from_days(days);
                   set_minmax<int64_t>(
                       min_int64t_per_thread[c], max_int64t_per_thread[c], seconds);
                 } else {
@@ -757,10 +759,6 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                   set_minmax<double>(
                       min_double_per_thread[c], max_double_per_thread[c], dval);
                 } else {
-                  if (lhs_type.is_date_in_days()) {
-                    // Store meta in seconds
-                    dval *= SECSPERDAY;
-                  }
                   put_scalar<int64_t>(data_ptr, lhs_type, dval, cd->columnName);
                   set_minmax<int64_t>(
                       min_int64t_per_thread[c], max_int64t_per_thread[c], dval);
