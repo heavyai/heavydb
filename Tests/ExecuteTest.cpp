@@ -313,7 +313,8 @@ class SQLiteComparator {
             } else {
               const auto ref_val = connector_.getData<float>(row_idx, col_idx);
               if (!approx_eq(ref_val, mapd_val)) {
-                CHECK(false);
+                CHECK(false) << ref_val << " not approx equal to omnisci val "
+                             << mapd_val;
               }
             }
             break;

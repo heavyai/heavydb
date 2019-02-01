@@ -90,7 +90,6 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     const Executor* executor)
     : row_set_mem_owner_(row_set_mem_owner)
     , init_agg_vals_(executor->plan_state_->init_agg_vals_)
-    , consistent_frag_sizes_(consistent_frag_sizes)
     , num_buffers_(computeNumberOfBuffers(query_mem_desc, device_type, executor))
     , count_distinct_bitmap_mem_(0)
     , count_distinct_bitmap_mem_bytes_(0)
@@ -98,7 +97,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     , count_distinct_bitmap_host_mem_(nullptr) {
   CHECK(!sort_on_gpu || output_columnar);
 
-  if (consistent_frag_sizes_.empty()) {
+  if (consistent_frag_sizes.empty()) {
     // No fragments in the input, no underlying buffers will be needed.
     return;
   }
@@ -196,7 +195,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
         get_consistent_frags_sizes(ra_exe_unit.target_exprs, consistent_frag_sizes);
     result_sets_.emplace_back(
         new ResultSet(target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc),
-                      getColLazyFetchInfo(ra_exe_unit.target_exprs, executor),
+                      executor->getColLazyFetchInfo(ra_exe_unit.target_exprs),
                       col_buffers,
                       column_frag_offsets,
                       column_frag_sizes,
@@ -475,47 +474,6 @@ int64_t QueryMemoryInitializer::allocateCountDistinctSet() {
   auto count_distinct_set = new std::set<int64_t>();
   row_set_mem_owner_->addCountDistinctSet(count_distinct_set);
   return reinterpret_cast<int64_t>(count_distinct_set);
-}
-
-std::vector<ColumnLazyFetchInfo> QueryMemoryInitializer::getColLazyFetchInfo(
-    const std::vector<Analyzer::Expr*>& target_exprs,
-    const Executor* executor) const {
-  std::vector<ColumnLazyFetchInfo> col_lazy_fetch_info;
-  for (const auto target_expr : target_exprs) {
-    if (!executor->plan_state_->isLazyFetchColumn(target_expr)) {
-      col_lazy_fetch_info.emplace_back(
-          ColumnLazyFetchInfo{false, -1, SQLTypeInfo(kNULLT, false)});
-    } else {
-      const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
-      CHECK(col_var);
-      auto col_id = col_var->get_column_id();
-      auto rte_idx = (col_var->get_rte_idx() == -1) ? 0 : col_var->get_rte_idx();
-      auto cd = (col_var->get_table_id() > 0)
-                    ? get_column_descriptor(
-                          col_id, col_var->get_table_id(), *executor->catalog_)
-                    : nullptr;
-      if (cd && IS_GEO(cd->columnType.get_type())) {
-        // Geo coords cols will be processed in sequence. So we only need to track the
-        // first coords col in lazy fetch info.
-        {
-          auto cd0 = get_column_descriptor(
-              col_id + 1, col_var->get_table_id(), *executor->catalog_);
-          auto col0_ti = cd0->columnType;
-          CHECK(!cd0->isVirtualCol);
-          auto col0_var = makeExpr<Analyzer::ColumnVar>(
-              col0_ti, col_var->get_table_id(), cd0->columnId, rte_idx);
-          auto local_col0_id = executor->getLocalColumnId(col0_var.get(), false);
-          col_lazy_fetch_info.emplace_back(
-              ColumnLazyFetchInfo{true, local_col0_id, col0_ti});
-        }
-      } else {
-        auto local_col_id = executor->getLocalColumnId(col_var, false);
-        const auto& col_ti = col_var->get_type_info();
-        col_lazy_fetch_info.emplace_back(ColumnLazyFetchInfo{true, local_col_id, col_ti});
-      }
-    }
-  }
-  return col_lazy_fetch_info;
 }
 
 #ifdef HAVE_CUDA

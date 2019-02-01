@@ -223,6 +223,47 @@ size_t Executor::getNumBytesForFetchedRow() const {
   return num_bytes;
 }
 
+std::vector<ColumnLazyFetchInfo> Executor::getColLazyFetchInfo(
+    const std::vector<Analyzer::Expr*>& target_exprs) const {
+  CHECK(plan_state_);
+  CHECK(catalog_);
+  std::vector<ColumnLazyFetchInfo> col_lazy_fetch_info;
+  for (const auto target_expr : target_exprs) {
+    if (!plan_state_->isLazyFetchColumn(target_expr)) {
+      col_lazy_fetch_info.emplace_back(
+          ColumnLazyFetchInfo{false, -1, SQLTypeInfo(kNULLT, false)});
+    } else {
+      const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
+      CHECK(col_var);
+      auto col_id = col_var->get_column_id();
+      auto rte_idx = (col_var->get_rte_idx() == -1) ? 0 : col_var->get_rte_idx();
+      auto cd = (col_var->get_table_id() > 0)
+                    ? get_column_descriptor(col_id, col_var->get_table_id(), *catalog_)
+                    : nullptr;
+      if (cd && IS_GEO(cd->columnType.get_type())) {
+        // Geo coords cols will be processed in sequence. So we only need to track the
+        // first coords col in lazy fetch info.
+        {
+          auto cd0 =
+              get_column_descriptor(col_id + 1, col_var->get_table_id(), *catalog_);
+          auto col0_ti = cd0->columnType;
+          CHECK(!cd0->isVirtualCol);
+          auto col0_var = makeExpr<Analyzer::ColumnVar>(
+              col0_ti, col_var->get_table_id(), cd0->columnId, rte_idx);
+          auto local_col0_id = getLocalColumnId(col0_var.get(), false);
+          col_lazy_fetch_info.emplace_back(
+              ColumnLazyFetchInfo{true, local_col0_id, col0_ti});
+        }
+      } else {
+        auto local_col_id = getLocalColumnId(col_var, false);
+        const auto& col_ti = col_var->get_type_info();
+        col_lazy_fetch_info.emplace_back(ColumnLazyFetchInfo{true, local_col_id, col_ti});
+      }
+    }
+  }
+  return col_lazy_fetch_info;
+}
+
 void Executor::clearMetaInfoCache() {
   input_table_info_cache_.clear();
   agg_col_range_cache_.clear();
@@ -794,9 +835,9 @@ ResultSetPtr Executor::resultsUnion(ExecutionDispatch& execution_dispatch) {
   std::sort(results_per_device.begin(),
             results_per_device.end(),
             [](const IndexedResultRows& lhs, const IndexedResultRows& rhs) {
-              CHECK_EQ(size_t(1), lhs.second.size());
-              CHECK_EQ(size_t(1), rhs.second.size());
-              return lhs.second < rhs.second;
+              CHECK_GE(lhs.second.size(), size_t(1));
+              CHECK_GE(rhs.second.size(), size_t(1));
+              return lhs.second.front() < rhs.second.front();
             });
 
   return get_merged_result(results_per_device);
@@ -1439,6 +1480,19 @@ std::unordered_map<int, const Analyzer::BinOper*> Executor::getInnerTabIdToJoinC
   return id_to_cond;
 }
 
+namespace {
+
+bool has_lazy_fetched_columns(const std::vector<ColumnLazyFetchInfo>& fetched_cols) {
+  for (const auto& col : fetched_cols) {
+    if (col.is_lazily_fetched) {
+      return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
+
 void Executor::dispatchFragments(
     const std::function<void(const ExecutorDeviceType chosen_device_type,
                              int chosen_device_id,
@@ -1470,8 +1524,11 @@ void Executor::dispatchFragments(
        query_mem_desc.getQueryDescriptionType() ==
            QueryDescriptionType::GroupByBaselineHash ||
        query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection);
-  const bool use_multifrag_kernel =
-      (device_type == ExecutorDeviceType::GPU) && allow_multifrag && is_agg;
+  const bool uses_lazy_fetch =
+      plan_state_->allow_lazy_fetch_ &&
+      has_lazy_fetched_columns(getColLazyFetchInfo(ra_exe_unit.target_exprs));
+  const bool use_multifrag_kernel = (device_type == ExecutorDeviceType::GPU) &&
+                                    allow_multifrag && (!uses_lazy_fetch || is_agg);
 
   const auto device_count = deviceCount(device_type);
   CHECK_GT(device_count, 0);
@@ -1488,6 +1545,7 @@ void Executor::dispatchFragments(
   }
 
   if (use_multifrag_kernel) {
+    VLOG(1) << "Dispatching multifrag kernels";
     // NB: We should never be on this path when the query is retried because of
     //     running out of group by slots; also, for scan only queries (!agg_plan)
     //     we want the high-granularity, fragment by fragment execution instead.
@@ -1509,6 +1567,7 @@ void Executor::dispatchFragments(
     fragment_descriptor.assignFragsToMultiDispatch(multifrag_kernel_dispatch);
 
   } else {
+    VLOG(1) << "Dispatching kernel per fragment";
     size_t frag_list_idx{0};
 
     auto fragment_per_kernel_dispatch = [&query_threads,

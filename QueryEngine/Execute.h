@@ -433,6 +433,9 @@ class Executor {
 
   size_t getNumBytesForFetchedRow() const;
 
+  std::vector<ColumnLazyFetchInfo> getColLazyFetchInfo(
+      const std::vector<Analyzer::Expr*>& target_exprs) const;
+
   using LiteralValue = boost::variant<int8_t,
                                       int16_t,
                                       int32_t,

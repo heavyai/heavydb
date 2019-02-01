@@ -117,10 +117,6 @@ class QueryMemoryInitializer {
 
   int64_t allocateCountDistinctSet();
 
-  std::vector<ColumnLazyFetchInfo> getColLazyFetchInfo(
-      const std::vector<Analyzer::Expr*>& target_exprs,
-      const Executor* executor) const;
-
 #ifdef HAVE_CUDA
   GpuGroupByBuffers prepareTopNHeapsDevBuffer(const CudaAllocator& cuda_allocator,
                                               const QueryMemoryDescriptor& query_mem_desc,
@@ -179,7 +175,6 @@ class QueryMemoryInitializer {
   std::vector<std::unique_ptr<ResultSet>> result_sets_;
 
   std::vector<int64_t> init_agg_vals_;
-  const std::vector<int64_t> consistent_frag_sizes_;
 
   const size_t num_buffers_;
   std::vector<int64_t*> group_by_buffers_;
