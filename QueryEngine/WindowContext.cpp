@@ -258,7 +258,8 @@ bool window_function_is_aggregate(const SqlWindowFunctionKind kind) {
     case SqlWindowFunctionKind::MIN:
     case SqlWindowFunctionKind::MAX:
     case SqlWindowFunctionKind::SUM:
-    case SqlWindowFunctionKind::COUNT: {
+    case SqlWindowFunctionKind::COUNT:
+    case SqlWindowFunctionKind::SUM_INTERNAL: {
       return true;
     }
     default: { return false; }

@@ -68,6 +68,9 @@ inline std::string sql_window_function_to_str(const SqlWindowFunctionKind kind) 
     case SqlWindowFunctionKind::COUNT: {
       return "COUNT";
     }
+    case SqlWindowFunctionKind::SUM_INTERNAL: {
+      return "SUM_INTERNAL";
+    }
     default: {
       LOG(FATAL) << "Invalid window function kind";
       return "";

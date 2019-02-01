@@ -578,8 +578,8 @@ SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
   if (name == "MAX") {
     return SqlWindowFunctionKind::MAX;
   }
-  if (name == "SUM") {
-    return SqlWindowFunctionKind::SUM;
+  if (name == "$SUM0") {
+    return SqlWindowFunctionKind::SUM_INTERNAL;
   }
   if (name == "COUNT") {
     return SqlWindowFunctionKind::COUNT;

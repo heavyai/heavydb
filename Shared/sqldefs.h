@@ -85,7 +85,8 @@ enum class SqlWindowFunctionKind {
   MIN,
   MAX,
   SUM,
-  COUNT
+  COUNT,
+  SUM_INTERNAL  // For deserialization from Calcite only. Gets rewritten to a regular SUM.
 };
 
 enum SQLStmtType { kSELECT, kUPDATE, kINSERT, kDELETE, kCREATE_TABLE };
