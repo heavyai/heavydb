@@ -50,6 +50,8 @@ class WindowFunctionContext {
 
   const int64_t* aggregateState() const;
 
+  const int64_t* aggregateStateCount() const;
+
   const int8_t* partitionStart() const;
 
   size_t elementCount() const;

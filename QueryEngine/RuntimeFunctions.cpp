@@ -1083,6 +1083,26 @@ extern "C" ALWAYS_INLINE float load_float(const int32_t* agg) {
   return *reinterpret_cast<const float*>(may_alias_ptr(agg));
 }
 
+extern "C" ALWAYS_INLINE double load_avg_int(const int64_t* sum,
+                                             const int64_t* count,
+                                             const double null_val) {
+  return *count != 0 ? static_cast<double>(*sum) / *count : null_val;
+}
+
+extern "C" ALWAYS_INLINE double load_avg_double(const int64_t* agg,
+                                                const int64_t* count,
+                                                const double null_val) {
+  return *count != 0 ? *reinterpret_cast<const double*>(may_alias_ptr(agg)) / *count
+                     : null_val;
+}
+
+extern "C" ALWAYS_INLINE double load_avg_float(const int32_t* agg,
+                                               const int32_t* count,
+                                               const double null_val) {
+  return *count != 0 ? *reinterpret_cast<const float*>(may_alias_ptr(agg)) / *count
+                     : null_val;
+}
+
 extern "C" NEVER_INLINE void linear_probabilistic_count(uint8_t* bitmap,
                                                         const uint32_t bitmap_bytes,
                                                         const uint8_t* key_bytes,

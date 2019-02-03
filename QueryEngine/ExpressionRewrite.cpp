@@ -796,7 +796,7 @@ std::shared_ptr<Analyzer::WindowFunction> rewrite_avg_window(const Analyzer::Exp
   if (!window_exprs_args_match(sum_window_expr.get(), count_window)) {
     return nullptr;
   }
-  return makeExpr<Analyzer::WindowFunction>(sum_window_expr->get_type_info(),
+  return makeExpr<Analyzer::WindowFunction>(SQLTypeInfo(kDOUBLE),
                                             SqlWindowFunctionKind::AVG,
                                             sum_window_expr->getArgs(),
                                             sum_window_expr->getPartitionKeys(),

@@ -50,6 +50,7 @@ llvm::Value* Executor::codegenWindowFunction(const Analyzer::WindowFunction* win
       CHECK_EQ(lag_lvs.size(), size_t(1));
       return lag_lvs.front();
     }
+    case SqlWindowFunctionKind::AVG:
     case SqlWindowFunctionKind::MIN:
     case SqlWindowFunctionKind::MAX:
     case SqlWindowFunctionKind::SUM:
@@ -89,7 +90,8 @@ llvm::Value* Executor::codegenWindowAggregate(
       cgen_state_->ir_builder_.CreateIntToPtr(aggregate_state_i64, pi64_type);
   const auto& args = window_func->getArgs();
   const auto& window_func_ti =
-      (window_func->getKind() == SqlWindowFunctionKind::COUNT && !args.empty())
+      ((window_func->getKind() == SqlWindowFunctionKind::COUNT && !args.empty()) ||
+       window_func->getKind() == SqlWindowFunctionKind::AVG)
           ? args.front()->get_type_info()
           : window_func->get_type_info();
   const auto window_func_null_val = window_func_ti.is_fp()
@@ -131,6 +133,14 @@ llvm::Value* Executor::codegenWindowAggregate(
       break;
     }
   }
+  if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
+    const auto count_zero = ll_int(int64_t(0));
+    const auto aggregate_state_count_i64 = ll_int(
+        reinterpret_cast<const int64_t>(window_func_context->aggregateStateCount()));
+    auto aggregate_state_count =
+        cgen_state_->ir_builder_.CreateIntToPtr(aggregate_state_count_i64, pi64_type);
+    cgen_state_->emitCall("agg_id", {aggregate_state_count, count_zero});
+  }
   cgen_state_->ir_builder_.CreateBr(reset_state_false_bb);
   cgen_state_->ir_builder_.SetInsertPoint(reset_state_false_bb);
   CHECK(WindowProjectNodeContext::get());
@@ -154,6 +164,7 @@ llvm::Value* Executor::codegenWindowAggregate(
       agg_name = "agg_max";
       break;
     }
+    case SqlWindowFunctionKind::AVG:
     case SqlWindowFunctionKind::SUM: {
       agg_name = "agg_sum";
       break;
@@ -180,6 +191,46 @@ llvm::Value* Executor::codegenWindowAggregate(
   } else {
     cgen_state_->emitCall(agg_name + "_skip_val",
                           {aggregate_state, crt_val, window_func_null_val});
+  }
+  if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
+    const auto aggregate_state_count_i64 = ll_int(
+        reinterpret_cast<const int64_t>(window_func_context->aggregateStateCount()));
+    const auto aggregate_state_type =
+        window_func_ti.get_type() == kFLOAT
+            ? llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0)
+            : pi64_type;
+    auto aggregate_state_count = cgen_state_->ir_builder_.CreateIntToPtr(
+        aggregate_state_count_i64, aggregate_state_type);
+    std::string agg_count_func_name = "agg_count";
+    switch (window_func_ti.get_type()) {
+      case kFLOAT: {
+        agg_count_func_name += "_float";
+        break;
+      }
+      case kDOUBLE: {
+        agg_count_func_name += "_double";
+        break;
+      }
+      default: { break; }
+    }
+    agg_count_func_name += "_skip_val";
+    cgen_state_->emitCall(agg_count_func_name,
+                          {aggregate_state_count, crt_val, window_func_null_val});
+    const auto double_null_lv = inlineFpNull(SQLTypeInfo(kDOUBLE));
+    switch (window_func_ti.get_type()) {
+      case kFLOAT: {
+        return cgen_state_->emitCall(
+            "load_avg_float", {aggregate_state, aggregate_state_count, double_null_lv});
+      }
+      case kDOUBLE: {
+        return cgen_state_->emitCall(
+            "load_avg_double", {aggregate_state, aggregate_state_count, double_null_lv});
+      }
+      default: {
+        return cgen_state_->emitCall(
+            "load_avg_int", {aggregate_state, aggregate_state_count, double_null_lv});
+      }
+    }
   }
   if (window_func->getKind() == SqlWindowFunctionKind::COUNT) {
     return cgen_state_->ir_builder_.CreateLoad(aggregate_state);

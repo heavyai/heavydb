@@ -341,6 +341,11 @@ const int64_t* WindowFunctionContext::aggregateState() const {
   return &aggregate_state_.val;
 }
 
+const int64_t* WindowFunctionContext::aggregateStateCount() const {
+  CHECK(window_function_is_aggregate(window_func_->getKind()));
+  return &aggregate_state_.count;
+}
+
 const int8_t* WindowFunctionContext::partitionStart() const {
   return partition_start_;
 }
@@ -473,6 +478,7 @@ void WindowFunctionContext::computePartition(int64_t* output_for_partition_buff,
           partition_row_offsets, output_for_partition_buff, partition_size);
       break;
     }
+    case SqlWindowFunctionKind::AVG:
     case SqlWindowFunctionKind::MIN:
     case SqlWindowFunctionKind::MAX:
     case SqlWindowFunctionKind::SUM:
