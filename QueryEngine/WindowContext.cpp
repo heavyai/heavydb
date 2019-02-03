@@ -314,8 +314,7 @@ void WindowFunctionContext::compute() {
         window_func_->getKind() == SqlWindowFunctionKind::LEAD ||
         window_func_->getKind() == SqlWindowFunctionKind::FIRST_VALUE ||
         window_func_->getKind() == SqlWindowFunctionKind::LAST_VALUE ||
-        window_func_->getKind() == SqlWindowFunctionKind::MIN ||
-        window_func_->getKind() == SqlWindowFunctionKind::MAX) {
+        window_function_is_aggregate(window_func_->getKind())) {
       off += partition_size;
     }
   }
@@ -475,7 +474,9 @@ void WindowFunctionContext::computePartition(int64_t* output_for_partition_buff,
       break;
     }
     case SqlWindowFunctionKind::MIN:
-    case SqlWindowFunctionKind::MAX: {
+    case SqlWindowFunctionKind::MAX:
+    case SqlWindowFunctionKind::SUM:
+    case SqlWindowFunctionKind::COUNT: {
       const auto partition_row_offsets = payload() + off;
       apply_permutation_to_partition(
           output_for_partition_buff, partition_row_offsets, partition_size);

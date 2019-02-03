@@ -51,7 +51,9 @@ llvm::Value* Executor::codegenWindowFunction(const Analyzer::WindowFunction* win
       return lag_lvs.front();
     }
     case SqlWindowFunctionKind::MIN:
-    case SqlWindowFunctionKind::MAX: {
+    case SqlWindowFunctionKind::MAX:
+    case SqlWindowFunctionKind::SUM:
+    case SqlWindowFunctionKind::COUNT: {
       return codegenWindowAggregate(window_func, window_func_context, co);
     }
     default: { LOG(FATAL) << "Invalid window function kind"; }
@@ -85,37 +87,63 @@ llvm::Value* Executor::codegenWindowAggregate(
       ll_int(reinterpret_cast<const int64_t>(window_func_context->aggregateState()));
   auto aggregate_state =
       cgen_state_->ir_builder_.CreateIntToPtr(aggregate_state_i64, pi64_type);
-  const auto& window_func_ti = window_func->get_type_info();
+  const auto& args = window_func->getArgs();
+  const auto& window_func_ti =
+      (window_func->getKind() == SqlWindowFunctionKind::COUNT && !args.empty())
+          ? args.front()->get_type_info()
+          : window_func->get_type_info();
   const auto window_func_null_val = window_func_ti.is_fp()
                                         ? inlineFpNull(window_func_ti)
                                         : castToTypeIn(inlineIntNull(window_func_ti), 64);
+  llvm::Value* window_func_init_val;
+  if (window_func->getKind() == SqlWindowFunctionKind::COUNT) {
+    switch (window_func_ti.get_type()) {
+      case kFLOAT: {
+        window_func_init_val = ll_fp(float(0));
+        break;
+      }
+      case kDOUBLE: {
+        window_func_init_val = ll_fp(double(0));
+        break;
+      }
+      default: {
+        window_func_init_val = ll_int(int64_t(0));
+        break;
+      }
+    }
+  } else {
+    window_func_init_val = window_func_null_val;
+  }
   switch (window_func_ti.get_type()) {
     case kDOUBLE: {
-      cgen_state_->emitCall("agg_id_double", {aggregate_state, window_func_null_val});
+      cgen_state_->emitCall("agg_id_double", {aggregate_state, window_func_init_val});
       break;
     }
     case kFLOAT: {
       aggregate_state = cgen_state_->ir_builder_.CreateBitCast(
           aggregate_state,
           llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0));
-      cgen_state_->emitCall("agg_id_float", {aggregate_state, window_func_null_val});
+      cgen_state_->emitCall("agg_id_float", {aggregate_state, window_func_init_val});
       break;
     }
     default: {
-      cgen_state_->emitCall("agg_id", {aggregate_state, window_func_null_val});
+      cgen_state_->emitCall("agg_id", {aggregate_state, window_func_init_val});
       break;
     }
   }
   cgen_state_->ir_builder_.CreateBr(reset_state_false_bb);
   cgen_state_->ir_builder_.SetInsertPoint(reset_state_false_bb);
   CHECK(WindowProjectNodeContext::get());
-  const auto& args = window_func->getArgs();
-  CHECK(!args.empty());
-  const auto lag_lvs = codegen(args.front().get(), true, co);
-  CHECK_EQ(lag_lvs.size(), size_t(1));
-  const auto crt_val = window_func_ti.get_type() == kFLOAT
-                           ? lag_lvs.front()
-                           : castToTypeIn(lag_lvs.front(), 64);
+  llvm::Value* crt_val;
+  if (args.empty()) {
+    CHECK(window_func->getKind() == SqlWindowFunctionKind::COUNT);
+    crt_val = ll_int(int64_t(1));
+  } else {
+    const auto lag_lvs = codegen(args.front().get(), true, co);
+    CHECK_EQ(lag_lvs.size(), size_t(1));
+    crt_val = window_func_ti.get_type() == kFLOAT ? lag_lvs.front()
+                                                  : castToTypeIn(lag_lvs.front(), 64);
+  }
   std::string agg_name;
   switch (window_func->getKind()) {
     case SqlWindowFunctionKind::MIN: {
@@ -124,6 +152,14 @@ llvm::Value* Executor::codegenWindowAggregate(
     }
     case SqlWindowFunctionKind::MAX: {
       agg_name = "agg_max";
+      break;
+    }
+    case SqlWindowFunctionKind::SUM: {
+      agg_name = "agg_sum";
+      break;
+    }
+    case SqlWindowFunctionKind::COUNT: {
+      agg_name = "agg_count";
       break;
     }
     default: { LOG(FATAL) << "Invalid window function kind"; }
@@ -139,8 +175,15 @@ llvm::Value* Executor::codegenWindowAggregate(
     }
     default: { break; }
   }
-  agg_name += "_skip_val";
-  cgen_state_->emitCall(agg_name, {aggregate_state, crt_val, window_func_null_val});
+  if (args.empty()) {
+    cgen_state_->emitCall(agg_name, {aggregate_state, crt_val});
+  } else {
+    cgen_state_->emitCall(agg_name + "_skip_val",
+                          {aggregate_state, crt_val, window_func_null_val});
+  }
+  if (window_func->getKind() == SqlWindowFunctionKind::COUNT) {
+    return cgen_state_->ir_builder_.CreateLoad(aggregate_state);
+  }
   switch (window_func_ti.get_type()) {
     case kFLOAT: {
       return cgen_state_->emitCall("load_float", {aggregate_state});

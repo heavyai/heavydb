@@ -248,10 +248,13 @@ class GroupByAndAggregate {
   bool codegenAggCalls(const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
                        const std::vector<llvm::Value*>& agg_out_vec,
                        const QueryMemoryDescriptor& query_mem_desc,
-                       const CompilationOptions&);
+                       const CompilationOptions& co,
+                       DiamondCodegen& diamond_codegen);
 
   llvm::Value* codegenWindowRowPointer(const Analyzer::WindowFunction* window_func,
-                                       const QueryMemoryDescriptor& query_mem_desc);
+                                       const QueryMemoryDescriptor& query_mem_desc,
+                                       const CompilationOptions& co,
+                                       DiamondCodegen& diamond_codegen);
 
   llvm::Value* codegenAggColumnPtr(
       llvm::Value* output_buffer_byte_stream,

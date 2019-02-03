@@ -949,7 +949,8 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
         }
         // Don't generate null checks if the group slot is guaranteed to be non-null,
         // as it's the case for get_group_value_fast* family.
-        can_return_error = codegenAggCalls(agg_out_ptr_w_idx, {}, query_mem_desc, co);
+        can_return_error =
+            codegenAggCalls(agg_out_ptr_w_idx, {}, query_mem_desc, co, filter_cfg);
       } else {
         {
           llvm::Value* nullcheck_cond{nullptr};
@@ -964,7 +965,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
           }
           DiamondCodegen nullcheck_cfg(
               nullcheck_cond, executor_, false, "groupby_nullcheck", &filter_cfg, false);
-          codegenAggCalls(agg_out_ptr_w_idx, {}, query_mem_desc, co);
+          codegenAggCalls(agg_out_ptr_w_idx, {}, query_mem_desc, co, filter_cfg);
         }
         can_return_error = true;
         if (query_mem_desc.getQueryDescriptionType() ==
@@ -989,8 +990,11 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
         for (int32_t i = 0; i < get_agg_count(ra_exe_unit_.target_exprs); ++i) {
           agg_out_vec.push_back(&*arg_it++);
         }
-        can_return_error = codegenAggCalls(
-            std::make_tuple(nullptr, nullptr), agg_out_vec, query_mem_desc, co);
+        can_return_error = codegenAggCalls(std::make_tuple(nullptr, nullptr),
+                                           agg_out_vec,
+                                           query_mem_desc,
+                                           co,
+                                           filter_cfg);
       }
     }
   }
@@ -1458,7 +1462,9 @@ llvm::Value* GroupByAndAggregate::convertNullIfAny(const SQLTypeInfo& arg_type,
 
 llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
     const Analyzer::WindowFunction* window_func,
-    const QueryMemoryDescriptor& query_mem_desc) {
+    const QueryMemoryDescriptor& query_mem_desc,
+    const CompilationOptions& co,
+    DiamondCodegen& diamond_codegen) {
   const auto window_func_context =
       WindowProjectNodeContext::getActiveWindowFunctionContext();
   if (window_func_context && window_function_is_aggregate(window_func->getKind())) {
@@ -1466,6 +1472,13 @@ llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
         outputColumnar() ? 0 : query_mem_desc.getRowSize() / sizeof(int64_t);
     auto arg_it = ROW_FUNC->arg_begin();
     auto groups_buffer = arg_it++;
+    if (!window_func_context->getRowNumber()) {
+      CHECK(window_func->getKind() == SqlWindowFunctionKind::COUNT);
+      window_func_context->setRowNumber(emitCall(
+          "row_number_window_func",
+          {LL_INT(reinterpret_cast<const int64_t>(window_func_context->output())),
+           executor_->posArg(nullptr)}));
+    }
     const auto pos_in_window = LL_BUILDER.CreateTrunc(window_func_context->getRowNumber(),
                                                       get_int_type(32, LL_CONTEXT));
     std::vector<llvm::Value*> args{
@@ -1481,14 +1494,17 @@ llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
     args.push_back(LL_INT(row_size_quad));
     return emitCall("get_scan_output_slot", args);
   }
-  return nullptr;
+  auto arg_it = ROW_FUNC->arg_begin();
+  auto groups_buffer = arg_it++;
+  return codegenOutputSlot(&*groups_buffer, query_mem_desc, co, diamond_codegen);
 }
 
 bool GroupByAndAggregate::codegenAggCalls(
     const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx_in,
     const std::vector<llvm::Value*>& agg_out_vec,
     const QueryMemoryDescriptor& query_mem_desc,
-    const CompilationOptions& co) {
+    const CompilationOptions& co,
+    DiamondCodegen& diamond_codegen) {
   auto agg_out_ptr_w_idx = agg_out_ptr_w_idx_in;
   // TODO(alex): unify the two cases, the output for non-group by queries
   //             should be a contiguous buffer
@@ -1548,7 +1564,10 @@ bool GroupByAndAggregate::codegenAggCalls(
                           ? std::vector<llvm::Value*>{executor_->codegenWindowFunction(
                                 window_func, target_idx, co)}
                           : codegenAggArg(target_expr, co);
-    const auto window_row_ptr = codegenWindowRowPointer(window_func, query_mem_desc);
+    const auto window_row_ptr =
+        window_func
+            ? codegenWindowRowPointer(window_func, query_mem_desc, co, diamond_codegen)
+            : nullptr;
     if (window_row_ptr) {
       agg_out_ptr_w_idx = {window_row_ptr, std::get<1>(agg_out_ptr_w_idx_in)};
     }
