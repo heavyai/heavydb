@@ -2908,8 +2908,11 @@ std::vector<DBObject> Catalog::parseDashboardObjects(const std::string& view_met
   for (auto object_name : parse_underlying_dash_objects(view_meta)) {
     auto td = getMetadataForTable(object_name);
     if (!td) {
-      // Parsed object name is not present
-      throw runtime_error("Invalid(table/view) dashboard source: " + object_name);
+      // Parsed object source is not present in current database
+      // LOG the info and ignore
+      LOG(INFO) << "Ignoring dashboard source Table/View: " << object_name
+                << " no longer exists in current DB.";
+      continue;
     }
     // Dashboard source can be Table or View
     const auto object_type = td->isView ? ViewDBObjectType : TableDBObjectType;
