@@ -42,8 +42,9 @@ struct FrontendViewDescriptor {
   std::string viewSystemRoleName; /** Stores system role name */
 };
 
-inline std::string generate_dash_system_rolename(const std::string& id) {
-  return id + SYSTEM_ROLE_TAG;
+inline std::string generate_dash_system_rolename(const std::string& db_id,
+                                                 const std::string& dash_id) {
+  return db_id + "_" + dash_id + SYSTEM_ROLE_TAG;
 }
 
 inline std::vector<std::string> parse_underlying_dash_objects(const std::string& meta) {

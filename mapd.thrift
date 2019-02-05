@@ -538,7 +538,7 @@ service MapD {
   i32 create_dashboard(1: TSessionId session, 2: string dashboard_name, 3: string dashboard_state, 4: string image_hash, 5: string dashboard_metadata) throws (1: TMapDException e)
   void replace_dashboard(1: TSessionId session, 2: i32 dashboard_id, 3: string dashboard_name, 4: string dashboard_owner, 5: string dashboard_state, 6: string image_hash, 7: string dashboard_metadata) throws (1: TMapDException e)
   void delete_dashboard(1: TSessionId session, 2: i32 dashboard_id) throws (1: TMapDException e)
-  void share_dashboard(1: TSessionId session, 2: i32 dashboard_id, 3: list<string> groups, 4: list<string> objects, 5: TDashboardPermissions permissions) throws (1: TMapDException e)
+  void share_dashboard(1: TSessionId session, 2: i32 dashboard_id, 3: list<string> groups, 4: list<string> objects, 5: TDashboardPermissions permissions, 6: bool grant_role = false) throws (1: TMapDException e)
   void unshare_dashboard(1: TSessionId session, 2: i32 dashboard_id, 3: list<string> groups, 4: list<string> objects, 5: TDashboardPermissions permissions) throws (1: TMapDException e)
   list<TDashboardGrantees> get_dashboard_grantees(1: TSessionId session, 2: i32 dashboard_id) throws (1: TMapDException e)
   #dashboard links

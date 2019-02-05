@@ -486,6 +486,8 @@ class SysCatalog {
                                     bool isSuper,
                                     const std::string& userName);
   std::vector<std::string> getRoles(const std::string& userName, const int32_t dbId);
+  void revokeDashboardSystemRole(const std::string roleName,
+                                 const std::vector<std::string> grantees);
   bool arePrivilegesOn() const { return check_privileges_; }
   bool isAggregator() const { return aggregator_; }
   static SysCatalog& instance() {
@@ -500,6 +502,8 @@ class SysCatalog {
   void syncUserWithRemoteProvider(const std::string& user_name,
                                   const std::vector<std::string>& roles,
                                   bool* issuper);
+  std::unordered_map<std::string, std::vector<std::string>> getGranteesOfSharedDashboards(
+      const std::vector<std::string>& dashboard_ids);
 
  private:
   typedef std::map<std::string, Grantee*> GranteeMap;

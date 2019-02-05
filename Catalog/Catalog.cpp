@@ -1736,6 +1736,18 @@ std::vector<std::string> SysCatalog::getRoles(bool userPrivateRole,
   return roles;
 }
 
+void SysCatalog::revokeDashboardSystemRole(const std::string roleName,
+                                           const std::vector<std::string> grantees) {
+  auto* rl = getRoleGrantee(roleName);
+  for (auto granteeName : grantees) {
+    const auto* grantee = SysCatalog::instance().getGrantee(granteeName);
+    if (rl && grantee->hasRole(rl, true)) {
+      // Grantees existence have been already validated
+      SysCatalog::instance().revokeRole(roleName, granteeName);
+    }
+  }
+}
+
 Catalog::Catalog(const string& basePath,
                  const DBMetadata& curDB,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
@@ -1759,17 +1771,10 @@ Catalog::Catalog(const string& basePath,
   }
   buildMaps();
   if (!is_new_db) {
-    CheckAndExecuteMigrationsPostBuildMaps();
+    //  we need to buildMaps first in order to create and grant roles for
+    // dashboard systemroles.
+    createDashboardSystemRoles();
   }
-
-  /*
-  TODO(wamsi): Enable creation of dashboard roles
-  */
-  // if (!is_new_db) {
-  //   //  we need to buildMaps first in order to create and grant roles for
-  //   // dashboard systemroles.
-  //   createDashboardSystemRoles();
-  // }
 }
 
 Catalog::~Catalog() {
@@ -2352,55 +2357,42 @@ void Catalog::createDashboardSystemRoles() {
   }
   cat_sqlite_lock sqlite_lock(this);
   std::unordered_map<std::string, std::pair<int, std::string>> dashboards;
-  std::unordered_map<std::string, std::vector<std::string>> active_users;
+  std::vector<std::string> dashboard_ids;
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query("select id, userid, metadata from mapd_dashboards");
     for (size_t i = 0; i < sqliteConnector_.getNumRows(); ++i) {
-      if (SysCatalog::instance().getRoleGrantee(
-              generate_dash_system_rolename(sqliteConnector_.getData<string>(i, 0)))) {
+      if (SysCatalog::instance().getRoleGrantee(generate_dash_system_rolename(
+              std::to_string(currentDB_.dbId), sqliteConnector_.getData<string>(i, 0)))) {
         // no need for further execution, dashboard roles already exist
         sqliteConnector_.query("END TRANSACTION");
         return;
       }
       dashboards[sqliteConnector_.getData<string>(i, 0)] = std::make_pair(
           sqliteConnector_.getData<int>(i, 1), sqliteConnector_.getData<string>(i, 2));
-    }
-    // All current users with shared dashboards.
-    for (auto dash : dashboards) {
-      std::vector<std::string> users = {};
-      sqliteConnector_.query_with_text_params(
-          "SELECT roleName FROM mapd_object_permissions WHERE objectPermissions NOT IN "
-          "(0,1) AND objectPermissionsType = ? AND objectId = ?",
-          std::vector<std::string>{
-              std::to_string(static_cast<int32_t>(DashboardDBObjectType)), dash.first});
-      int num_rows = sqliteConnector_.getNumRows();
-      if (num_rows == 0) {
-        // no users to grant role
-        continue;
-      } else {
-        for (size_t i = 0; i < sqliteConnector_.getNumRows(); ++i) {
-          users.push_back(sqliteConnector_.getData<string>(i, 0));
-        }
-        active_users[dash.first] = users;
-      }
+      dashboard_ids.push_back(sqliteConnector_.getData<string>(i, 0));
     }
   } catch (const std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
+  // All current grantees with shared dashboards.
+  const auto active_grantees =
+      SysCatalog::instance().getGranteesOfSharedDashboards(dashboard_ids);
 
   try {
     // NOTE(wamsi): Transactionally unsafe
     for (auto dash : dashboards) {
-      createOrUpdateDashboardSystemRole(dash.second.second,
-                                        dash.second.first,
-                                        generate_dash_system_rolename(dash.first));
-      auto result = active_users.find(dash.first);
-      if (result != active_users.end()) {
-        SysCatalog::instance().grantRoleBatch({generate_dash_system_rolename(dash.first)},
-                                              result->second);
+      createOrUpdateDashboardSystemRole(
+          dash.second.second,
+          dash.second.first,
+          generate_dash_system_rolename(std::to_string(currentDB_.dbId), dash.first));
+      auto result = active_grantees.find(dash.first);
+      if (result != active_grantees.end()) {
+        SysCatalog::instance().grantRoleBatch(
+            {generate_dash_system_rolename(std::to_string(currentDB_.dbId), dash.first)},
+            result->second);
       }
     }
   } catch (const std::exception& e) {
@@ -2724,8 +2716,8 @@ void Catalog::buildMaps() {
     vd->userId = sqliteConnector_.getData<int>(r, 5);
     vd->viewMetadata = sqliteConnector_.getData<string>(r, 6);
     vd->user = getUserFromId(vd->userId);
-    vd->viewSystemRoleName =
-        generate_dash_system_rolename(sqliteConnector_.getData<string>(r, 0));
+    vd->viewSystemRoleName = generate_dash_system_rolename(
+        std::to_string(currentDB_.dbId), sqliteConnector_.getData<string>(r, 0));
     dashboardDescriptorMap_[std::to_string(vd->userId) + ":" + vd->viewName] = vd;
   }
 
@@ -4448,16 +4440,13 @@ int32_t Catalog::createFrontendView(FrontendViewDescriptor& vd) {
   } catch (std::exception& e) {
     throw;
   }
-  vd.viewSystemRoleName = generate_dash_system_rolename(std::to_string(vd.viewId));
+  vd.viewSystemRoleName = generate_dash_system_rolename(std::to_string(currentDB_.dbId),
+                                                        std::to_string(vd.viewId));
   addFrontendViewToMap(vd);
-  /*
-  TODO(wamsi): Enable creation of dashboard roles
-  */
-  // if (SysCatalog::instance().arePrivilegesOn()) {
-  //   // NOTE(wamsi): Transactionally unsafe
-  //   createOrUpdateDashboardSystemRole(vd.viewMetadata, vd.userId,
-  //   vd.viewSystemRoleName);
-  // }
+  if (SysCatalog::instance().arePrivilegesOn()) {
+    // NOTE(wamsi): Transactionally unsafe
+    createOrUpdateDashboardSystemRole(vd.viewMetadata, vd.userId, vd.viewSystemRoleName);
+  }
   return vd.viewId;
 }
 
@@ -4525,16 +4514,13 @@ void Catalog::replaceDashboard(FrontendViewDescriptor& vd) {
       "WHERE id = ?",
       std::vector<std::string>{std::to_string(vd.viewId)});
   vd.updateTime = sqliteConnector_.getData<string>(0, 1);
-  vd.viewSystemRoleName = generate_dash_system_rolename(std::to_string(vd.viewId));
+  vd.viewSystemRoleName = generate_dash_system_rolename(std::to_string(currentDB_.dbId),
+                                                        std::to_string(vd.viewId));
   addFrontendViewToMapNoLock(vd);
-  /*
-  TODO(wamsi): Enable creation of dashboard roles
-  */
-  // if (SysCatalog::instance().arePrivilegesOn()) {
-  //   // NOTE(wamsi): Transactionally unsafe
-  //   createOrUpdateDashboardSystemRole(vd.viewMetadata, vd.userId,
-  //   vd.viewSystemRoleName);
-  // }
+  if (SysCatalog::instance().arePrivilegesOn()) {
+    // NOTE(wamsi): Transactionally unsafe
+    createOrUpdateDashboardSystemRole(vd.viewMetadata, vd.userId, vd.viewSystemRoleName);
+  }
 }
 
 std::string Catalog::calculateSHA1(const std::string& data) {
@@ -4911,6 +4897,38 @@ void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,
     }
   }
   LOG(INFO) << ss.str();
+}
+
+std::unordered_map<std::string, std::vector<std::string>>
+SysCatalog::getGranteesOfSharedDashboards(const std::vector<std::string>& dashboard_ids) {
+  sys_sqlite_lock sqlite_lock(this);
+  std::unordered_map<std::string, std::vector<std::string>> active_grantees;
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    for (auto dash : dashboard_ids) {
+      std::vector<std::string> grantees = {};
+      sqliteConnector_->query_with_text_params(
+          "SELECT roleName FROM mapd_object_permissions WHERE objectPermissions NOT IN "
+          "(0,1) AND objectPermissionsType = ? AND objectId = ?",
+          std::vector<std::string>{
+              std::to_string(static_cast<int32_t>(DashboardDBObjectType)), dash});
+      int num_rows = sqliteConnector_->getNumRows();
+      if (num_rows == 0) {
+        // no grantees
+        continue;
+      } else {
+        for (size_t i = 0; i < sqliteConnector_->getNumRows(); ++i) {
+          grantees.push_back(sqliteConnector_->getData<string>(i, 0));
+        }
+        active_grantees[dash] = grantees;
+      }
+    }
+  } catch (const std::exception& e) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+  return active_grantees;
 }
 
 }  // namespace Catalog_Namespace

@@ -3117,7 +3117,8 @@ void MapDHandler::share_dashboard(const TSessionId& session,
                                   const int32_t dashboard_id,
                                   const std::vector<std::string>& groups,
                                   const std::vector<std::string>& objects,
-                                  const TDashboardPermissions& permissions) {
+                                  const TDashboardPermissions& permissions,
+                                  const bool grant_role = false) {
   check_read_only("share_dashboard");
   std::vector<std::string> valid_groups;
   valid_groups = get_valid_groups(session, dashboard_id, groups);
@@ -3152,12 +3153,11 @@ void MapDHandler::share_dashboard(const TSessionId& session,
     object.setPrivileges(privs);
   }
   SysCatalog::instance().grantDBObjectPrivilegesBatch(valid_groups, {object}, cat);
-  /*
-  TODO(wamsi): Enable creation of dashboard roles
-  */
   // grant system_role to grantees for underlying objects
-  // auto dash = cat.getMetadataForDashboard(dashboard_id);
-  // SysCatalog::instance().grantRoleBatch({dash->viewSystemRoleName}, valid_groups);
+  if (grant_role) {
+    auto dash = cat.getMetadataForDashboard(dashboard_id);
+    SysCatalog::instance().grantRoleBatch({dash->viewSystemRoleName}, valid_groups);
+  }
 }
 
 void MapDHandler::unshare_dashboard(const TSessionId& session,
@@ -3199,12 +3199,10 @@ void MapDHandler::unshare_dashboard(const TSessionId& session,
     object.setPrivileges(privs);
   }
   SysCatalog::instance().revokeDBObjectPrivilegesBatch(valid_groups, {object}, cat);
-  /*
-  TODO(wamsi): Enable creation of dashboard roles
-  */
   // revoke system_role from grantees for underlying objects
-  // auto dash = cat.getMetadataForDashboard(dashboard_id);
-  // SysCatalog::instance().revokeRoleBatch({dash->viewSystemRoleName}, valid_groups);
+  const auto dash = cat.getMetadataForDashboard(dashboard_id);
+  SysCatalog::instance().revokeDashboardSystemRole(dash->viewSystemRoleName,
+                                                   valid_groups);
 }
 
 void MapDHandler::get_dashboard_grantees(

@@ -271,7 +271,8 @@ class MapDHandler : public MapDIf {
                        const int32_t dashboard_id,
                        const std::vector<std::string>& groups,
                        const std::vector<std::string>& objects,
-                       const TDashboardPermissions& permissions) override;
+                       const TDashboardPermissions& permissions,
+                       const bool grant_role) override;
   void unshare_dashboard(const TSessionId& session,
                          const int32_t dashboard_id,
                          const std::vector<std::string>& groups,
