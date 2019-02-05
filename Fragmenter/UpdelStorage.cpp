@@ -154,15 +154,15 @@ struct ScalarChunkConverter : public ChunkToInsertDataConverter {
     data_buffer_addr_ = (BUFFER_DATA_TYPE*)chunk->get_buffer()->getMemoryPtr();
   }
 
-  virtual ~ScalarChunkConverter() {}
+  ~ScalarChunkConverter() override {}
 
-  virtual void convertToColumnarFormat(size_t row, size_t indexInFragment) {
+  void convertToColumnarFormat(size_t row, size_t indexInFragment) override {
     auto buffer_value = data_buffer_addr_[indexInFragment];
     auto insert_value = static_cast<INSERT_DATA_TYPE>(buffer_value);
     column_data_.get()[row] = insert_value;
   }
 
-  virtual void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) {
+  void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
     DataBlockPtr dataBlock;
     dataBlock.numbersPtr = reinterpret_cast<int8_t*>(column_data_.get());
     insertData.data.push_back(dataBlock);
@@ -185,15 +185,15 @@ struct FixedLenArrayChunkConverter : public ChunkToInsertDataConverter {
     fixed_array_length_ = chunk->get_column_desc()->columnType.get_size();
   }
 
-  virtual ~FixedLenArrayChunkConverter() {}
+  ~FixedLenArrayChunkConverter() override {}
 
-  virtual void convertToColumnarFormat(size_t row, size_t indexInFragment) {
+  void convertToColumnarFormat(size_t row, size_t indexInFragment) override {
     auto src_value_ptr = data_buffer_addr_ + (indexInFragment * fixed_array_length_);
     (*column_data_)[row] =
         ArrayDatum(fixed_array_length_, (int8_t*)src_value_ptr, DoNothingDeleter());
   }
 
-  virtual void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) {
+  void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
     DataBlockPtr dataBlock;
     dataBlock.arraysPtr = column_data_.get();
     insertData.data.push_back(dataBlock);
@@ -211,9 +211,9 @@ struct ArrayChunkConverter : public FixedLenArrayChunkConverter {
                                                 : nullptr);
   }
 
-  virtual ~ArrayChunkConverter() {}
+  ~ArrayChunkConverter() override {}
 
-  virtual void convertToColumnarFormat(size_t row, size_t indexInFragment) {
+  void convertToColumnarFormat(size_t row, size_t indexInFragment) override {
     size_t src_value_size =
         index_buffer_addr_[indexInFragment + 1] - index_buffer_addr_[indexInFragment];
     auto src_value_ptr = data_buffer_addr_ + index_buffer_addr_[indexInFragment];
@@ -239,16 +239,16 @@ struct StringChunkConverter : public ChunkToInsertDataConverter {
                                                 : nullptr);
   }
 
-  virtual ~StringChunkConverter() {}
+  ~StringChunkConverter() override {}
 
-  virtual void convertToColumnarFormat(size_t row, size_t indexInFragment) {
+  void convertToColumnarFormat(size_t row, size_t indexInFragment) override {
     size_t src_value_size =
         index_buffer_addr_[indexInFragment + 1] - index_buffer_addr_[indexInFragment];
     auto src_value_ptr = data_buffer_addr_ + index_buffer_addr_[indexInFragment];
     (*column_data_)[row] = std::string((const char*)src_value_ptr, src_value_size);
   }
 
-  virtual void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) {
+  void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
     DataBlockPtr dataBlock;
     dataBlock.stringsPtr = column_data_.get();
     insertData.data.push_back(dataBlock);

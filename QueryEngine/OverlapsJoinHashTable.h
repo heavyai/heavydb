@@ -36,7 +36,7 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
                               column_map,
                               executor) {}
 
-  virtual ~OverlapsJoinHashTable() {}
+  ~OverlapsJoinHashTable() override {}
 
   static std::shared_ptr<OverlapsJoinHashTable> getInstance(
       const std::shared_ptr<Analyzer::BinOper> condition,
@@ -48,34 +48,34 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
       Executor* executor);
 
  protected:
-  virtual void reifyWithLayout(const int device_count,
-                               const JoinHashTableInterface::HashType layout) override;
+  void reifyWithLayout(const int device_count,
+                       const JoinHashTableInterface::HashType layout) override;
 
-  virtual ColumnsForDevice fetchColumnsForDevice(
+  ColumnsForDevice fetchColumnsForDevice(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
       const int device_id) override;
 
-  virtual std::pair<size_t, size_t> approximateTupleCount(
+  std::pair<size_t, size_t> approximateTupleCount(
       const std::vector<ColumnsForDevice>&) const override;
 
-  virtual size_t getKeyComponentWidth() const override;
+  size_t getKeyComponentWidth() const override;
 
-  virtual size_t getKeyComponentCount() const override;
+  size_t getKeyComponentCount() const override;
 
-  virtual int initHashTableOnCpu(const std::vector<JoinColumn>& join_columns,
-                                 const std::vector<JoinColumnTypeInfo>& join_column_types,
-                                 const std::vector<JoinBucketInfo>& join_bucket_info,
-                                 const JoinHashTableInterface::HashType layout) override;
+  int initHashTableOnCpu(const std::vector<JoinColumn>& join_columns,
+                         const std::vector<JoinColumnTypeInfo>& join_column_types,
+                         const std::vector<JoinBucketInfo>& join_bucket_info,
+                         const JoinHashTableInterface::HashType layout) override;
 
-  virtual int initHashTableOnGpu(const std::vector<JoinColumn>& join_columns,
-                                 const std::vector<JoinColumnTypeInfo>& join_column_types,
-                                 const std::vector<JoinBucketInfo>& join_bucket_info,
-                                 const JoinHashTableInterface::HashType layout,
-                                 const size_t key_component_width,
-                                 const size_t key_component_count,
-                                 const int device_id) override;
+  int initHashTableOnGpu(const std::vector<JoinColumn>& join_columns,
+                         const std::vector<JoinColumnTypeInfo>& join_column_types,
+                         const std::vector<JoinBucketInfo>& join_bucket_info,
+                         const JoinHashTableInterface::HashType layout,
+                         const size_t key_component_width,
+                         const size_t key_component_count,
+                         const int device_id) override;
 
-  virtual llvm::Value* codegenKey(const CompilationOptions&) override;
+  llvm::Value* codegenKey(const CompilationOptions&) override;
 
  private:
   void computeBucketSizes(std::vector<double>& bucket_sizes_for_dimension,

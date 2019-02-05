@@ -93,7 +93,7 @@ class Result : public Plan {
   const std::list<std::shared_ptr<Analyzer::Expr>>& get_constquals() const {
     return const_quals;
   }
-  virtual void print() const;
+  void print() const override;
 
  private:
   std::list<std::shared_ptr<Analyzer::Expr>>
@@ -124,7 +124,7 @@ class Scan : public Plan {
   void add_simple_predicate(std::shared_ptr<Analyzer::Expr> pred) {
     simple_quals.push_back(pred);
   }
-  virtual void print() const;
+  void print() const override;
 
  private:
   // simple_quals consists of predicates of the form 'ColumnVar BinOper Constant'
@@ -142,7 +142,7 @@ class Scan : public Plan {
 class ValuesScan : public Plan {
  public:
   ValuesScan(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t) : Plan(t) {}
-  virtual void print() const;
+  void print() const override;
 };
 
 /*
@@ -157,7 +157,7 @@ class Join : public Plan {
        Plan* p,
        Plan* cp2)
       : Plan(t, q, c, p), child_plan2(cp2) {}
-  virtual void print() const;
+  void print() const override;
   const Plan* get_outerplan() const { return child_plan.get(); }
   const Plan* get_innerplan() const { return child_plan2.get(); }
 
@@ -183,7 +183,7 @@ class AggPlan : public Plan {
       const std::list<std::shared_ptr<Analyzer::Expr>>& new_groupby_list) {
     groupby_list = new_groupby_list;
   }
-  virtual void print() const;
+  void print() const override;
 
  private:
   std::list<std::shared_ptr<Analyzer::Expr>>
@@ -204,7 +204,7 @@ class Append : public Plan {
          std::list<std::unique_ptr<Plan>>& pl)
       : Plan(t, q, c, p), plan_list(std::move(pl)) {}
   const std::list<std::unique_ptr<Plan>>& get_plan_list() const { return plan_list; }
-  virtual void print() const;
+  void print() const override;
 
  private:
   std::list<std::unique_ptr<Plan>> plan_list;  // list of plans to union all
@@ -230,7 +230,7 @@ class MergeAppend : public Plan {
   const std::list<Analyzer::OrderEntry>& get_order_entries() const {
     return order_entries;
   }
-  virtual void print() const;
+  void print() const override;
 
  private:
   std::list<std::unique_ptr<Plan>> mergeplan_list;  // list of plans to merge
@@ -254,7 +254,7 @@ class Sort : public Plan {
     return order_entries;
   }
   bool get_remove_duplicates() const { return remove_duplicates; }
-  virtual void print() const;
+  void print() const override;
 
  private:
   std::list<Analyzer::OrderEntry>

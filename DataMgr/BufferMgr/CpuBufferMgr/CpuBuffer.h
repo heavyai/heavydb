@@ -33,19 +33,19 @@ class CpuBuffer : public Buffer {
             const size_t pageSize = 512,
             const size_t numBytes = 0);
 
-  virtual inline Data_Namespace::MemoryLevel getType() const { return CPU_LEVEL; }
+  inline Data_Namespace::MemoryLevel getType() const override { return CPU_LEVEL; }
 
  private:
   void readData(int8_t* const dst,
                 const size_t numBytes,
                 const size_t offset = 0,
                 const MemoryLevel dstMemoryLevel = CPU_LEVEL,
-                const int dstDeviceId = -1);
+                const int dstDeviceId = -1) override;
   void writeData(int8_t* const src,
                  const size_t numBytes,
                  const size_t offset = 0,
                  const MemoryLevel srcMemoryLevel = CPU_LEVEL,
-                 const int srcDeviceId = -1);
+                 const int srcDeviceId = -1) override;
   CudaMgr_Namespace::CudaMgr* cudaMgr_;
 };
 }  // namespace Buffer_Namespace

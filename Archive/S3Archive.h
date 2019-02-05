@@ -74,7 +74,7 @@ class S3Archive : public Archive {
     s3_temp_dir = env_s3_temp_dir ? env_s3_temp_dir : "/tmp";
   }
 
-  virtual ~S3Archive() {
+  ~S3Archive() override {
 #ifdef HAVE_AWS_S3
     for (auto& thread : threads)
       if (thread.joinable())
@@ -85,7 +85,7 @@ class S3Archive : public Archive {
 #endif  // HAVE_AWS_S3
   }
 
-  virtual void init_for_read();
+  void init_for_read() override;
   const std::vector<std::string>& get_objkeys() { return objkeys; }
 #ifdef HAVE_AWS_S3
   const std::string land(const std::string& objkey,

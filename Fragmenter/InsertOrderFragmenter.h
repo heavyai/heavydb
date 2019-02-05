@@ -68,7 +68,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
       const size_t maxRows = DEFAULT_MAX_ROWS,
       const Data_Namespace::MemoryLevel defaultInsertLevel = Data_Namespace::DISK_LEVEL);
 
-  virtual ~InsertOrderFragmenter();
+  ~InsertOrderFragmenter() override;
   /**
    * @brief returns (inside QueryInfo) object all
    * ids and row sizes of fragments
@@ -76,7 +76,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
    */
 
   // virtual void getFragmentsForQuery(QueryInfo &queryInfo, const void *predicate = 0);
-  virtual TableInfo getFragmentsForQuery();
+  TableInfo getFragmentsForQuery() override;
 
   /**
    * @brief appends data onto the most recently occuring
@@ -85,26 +85,26 @@ class InsertOrderFragmenter : public AbstractFragmenter {
    * @todo be able to fill up current fragment in
    * multi-row insert before creating new fragment
    */
-  virtual void insertData(InsertData& insertDataStruct);
+  void insertData(InsertData& insertDataStruct) override;
 
-  virtual void insertDataNoCheckpoint(InsertData& insertDataStruct);
+  void insertDataNoCheckpoint(InsertData& insertDataStruct) override;
 
-  virtual void dropFragmentsToSize(const size_t maxRows);
+  void dropFragmentsToSize(const size_t maxRows) override;
 
-  virtual void updateChunkStats(
+  void updateChunkStats(
       const ColumnDescriptor* cd,
       std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map) override;
 
   /**
    * @brief get fragmenter's id
    */
-  inline int getFragmenterId() { return chunkKeyPrefix_.back(); }
+  inline int getFragmenterId() override { return chunkKeyPrefix_.back(); }
   inline std::vector<int> getChunkKeyPrefix() const { return chunkKeyPrefix_; }
   /**
    * @brief get fragmenter's type (as string
    */
-  inline std::string getFragmenterType() { return fragmenterType_; }
-  size_t getNumRows() { return numTuples_; }
+  inline std::string getFragmenterType() override { return fragmenterType_; }
+  size_t getNumRows() override { return numTuples_; }
 
   static void updateColumn(const Catalog_Namespace::Catalog* catalog,
                            const std::string& tab_name,
@@ -116,59 +116,59 @@ class InsertOrderFragmenter : public AbstractFragmenter {
                            const Data_Namespace::MemoryLevel memory_level,
                            UpdelRoll& updel_roll);
 
-  virtual void updateColumn(const Catalog_Namespace::Catalog* catalog,
-                            const TableDescriptor* td,
-                            const ColumnDescriptor* cd,
-                            const int fragment_id,
-                            const std::vector<uint64_t>& frag_offsets,
-                            const std::vector<ScalarTargetValue>& rhs_values,
+  void updateColumn(const Catalog_Namespace::Catalog* catalog,
+                    const TableDescriptor* td,
+                    const ColumnDescriptor* cd,
+                    const int fragment_id,
+                    const std::vector<uint64_t>& frag_offsets,
+                    const std::vector<ScalarTargetValue>& rhs_values,
+                    const SQLTypeInfo& rhs_type,
+                    const Data_Namespace::MemoryLevel memory_level,
+                    UpdelRoll& updel_roll) override;
+
+  void updateColumns(const Catalog_Namespace::Catalog* catalog,
+                     const TableDescriptor* td,
+                     const int fragmentId,
+                     const std::vector<const ColumnDescriptor*> columnDescriptors,
+                     const RowDataProvider& sourceDataProvider,
+                     const size_t indexOffFragmentOffsetColumn,
+                     const Data_Namespace::MemoryLevel memoryLevel,
+                     UpdelRoll& updelRoll) override;
+
+  void updateColumn(const Catalog_Namespace::Catalog* catalog,
+                    const TableDescriptor* td,
+                    const ColumnDescriptor* cd,
+                    const int fragment_id,
+                    const std::vector<uint64_t>& frag_offsets,
+                    const ScalarTargetValue& rhs_value,
+                    const SQLTypeInfo& rhs_type,
+                    const Data_Namespace::MemoryLevel memory_level,
+                    UpdelRoll& updel_roll) override;
+
+  void updateColumnMetadata(const ColumnDescriptor* cd,
+                            FragmentInfo& fragment,
+                            std::shared_ptr<Chunk_NS::Chunk> chunk,
+                            const bool null,
+                            const double dmax,
+                            const double dmin,
+                            const int64_t lmax,
+                            const int64_t lmin,
                             const SQLTypeInfo& rhs_type,
-                            const Data_Namespace::MemoryLevel memory_level,
-                            UpdelRoll& updel_roll);
+                            UpdelRoll& updel_roll) override;
 
-  virtual void updateColumns(const Catalog_Namespace::Catalog* catalog,
-                             const TableDescriptor* td,
-                             const int fragmentId,
-                             const std::vector<const ColumnDescriptor*> columnDescriptors,
-                             const RowDataProvider& sourceDataProvider,
-                             const size_t indexOffFragmentOffsetColumn,
-                             const Data_Namespace::MemoryLevel memoryLevel,
-                             UpdelRoll& updelRoll);
+  void updateMetadata(const Catalog_Namespace::Catalog* catalog,
+                      const MetaDataKey& key,
+                      UpdelRoll& updel_roll) override;
 
-  virtual void updateColumn(const Catalog_Namespace::Catalog* catalog,
-                            const TableDescriptor* td,
-                            const ColumnDescriptor* cd,
-                            const int fragment_id,
-                            const std::vector<uint64_t>& frag_offsets,
-                            const ScalarTargetValue& rhs_value,
-                            const SQLTypeInfo& rhs_type,
-                            const Data_Namespace::MemoryLevel memory_level,
-                            UpdelRoll& updel_roll);
+  void compactRows(const Catalog_Namespace::Catalog* catalog,
+                   const TableDescriptor* td,
+                   const int fragment_id,
+                   const std::vector<uint64_t>& frag_offsets,
+                   const Data_Namespace::MemoryLevel memory_level,
+                   UpdelRoll& updel_roll) override;
 
-  virtual void updateColumnMetadata(const ColumnDescriptor* cd,
-                                    FragmentInfo& fragment,
-                                    std::shared_ptr<Chunk_NS::Chunk> chunk,
-                                    const bool null,
-                                    const double dmax,
-                                    const double dmin,
-                                    const int64_t lmax,
-                                    const int64_t lmin,
-                                    const SQLTypeInfo& rhs_type,
-                                    UpdelRoll& updel_roll);
-
-  virtual void updateMetadata(const Catalog_Namespace::Catalog* catalog,
-                              const MetaDataKey& key,
-                              UpdelRoll& updel_roll);
-
-  virtual void compactRows(const Catalog_Namespace::Catalog* catalog,
-                           const TableDescriptor* td,
-                           const int fragment_id,
-                           const std::vector<uint64_t>& frag_offsets,
-                           const Data_Namespace::MemoryLevel memory_level,
-                           UpdelRoll& updel_roll);
-
-  virtual const std::vector<uint64_t> getVacuumOffsets(
-      const std::shared_ptr<Chunk_NS::Chunk>& chunk);
+  const std::vector<uint64_t> getVacuumOffsets(
+      const std::shared_ptr<Chunk_NS::Chunk>& chunk) override;
 
   auto getChunksForAllColumns(const TableDescriptor* td,
                               const FragmentInfo& fragment,

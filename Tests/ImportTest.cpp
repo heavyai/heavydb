@@ -202,7 +202,7 @@ bool import_test_s3_parquet(const string& filename, const int64_t cnt, const dou
 #endif  // HAVE_AWS_S3
 class SQLTestEnv : public ::testing::Environment {
  public:
-  virtual void SetUp() override {
+  void SetUp() override {
     g_session.reset(QueryRunner::get_session(BASE_PATH,
                                              "gtest",
                                              "test!test!",
@@ -266,12 +266,12 @@ const char* create_table_mixed_varlen = R"(
 
 class ImportTestMixedVarlen : public ::testing::Test {
  protected:
-  virtual void SetUp() override {
+  void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_mixed_varlen;"));
     ASSERT_NO_THROW(run_ddl_statement(create_table_mixed_varlen););
   }
 
-  virtual void TearDown() override {
+  void TearDown() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_mixed_varlen;"));
   }
 };
@@ -300,12 +300,12 @@ const char* create_table_date = R"(
 
 class ImportTestDate : public ::testing::Test {
  protected:
-  virtual void SetUp() override {
+  void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_date;"));
     ASSERT_NO_THROW(run_ddl_statement(create_table_date));
   }
 
-  virtual void TearDown() override {
+  void TearDown() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_date;"));
   }
 };
@@ -359,13 +359,13 @@ TEST_F(ImportTestDate, ImportMixedDates) {
 
 class ImportTestLegacyDate : public ::testing::Test {
  protected:
-  virtual void SetUp() override {
+  void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_date;"));
     g_use_date_in_days_default_encoding = false;
     ASSERT_NO_THROW(run_ddl_statement(create_table_date));
   }
 
-  virtual void TearDown() override {
+  void TearDown() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_date;"));
     g_use_date_in_days_default_encoding = true;
   }
@@ -386,12 +386,12 @@ const char* create_table_date_arr = R"(
 
 class ImportTestDateArray : public ::testing::Test {
  protected:
-  virtual void SetUp() override {
+  void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_date_arr;"));
     ASSERT_NO_THROW(run_ddl_statement(create_table_date_arr));
   }
 
-  virtual void TearDown() override {
+  void TearDown() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_date_arr;"));
   }
 };
@@ -468,12 +468,12 @@ const char* create_table_trips = R"(
 
 class ImportTest : public ::testing::Test {
  protected:
-  virtual void SetUp() override {
+  void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists trips;"););
     ASSERT_NO_THROW(run_ddl_statement(create_table_trips););
   }
 
-  virtual void TearDown() override {
+  void TearDown() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table trips;"););
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geo;"););
   }
@@ -552,12 +552,12 @@ const char* create_table_trips_sharded = R"(
   )";
 class ImportTestSharded : public ::testing::Test {
  protected:
-  virtual void SetUp() override {
+  void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists trips;"););
     ASSERT_NO_THROW(run_ddl_statement(create_table_trips_sharded););
   }
 
-  virtual void TearDown() override {
+  void TearDown() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table trips;"););
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geo;"););
   }
@@ -661,12 +661,12 @@ void check_geo_gdal_mpoly_tv_import() {
 
 class GeoImportTest : public ::testing::Test {
  protected:
-  virtual void SetUp() override {
+  void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
     ASSERT_NO_THROW(run_ddl_statement(create_table_geo););
   }
 
-  virtual void TearDown() override {
+  void TearDown() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table geospatial;"););
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
   }
@@ -750,11 +750,11 @@ TEST_F(GeoImportTest, Geo_CSV_Local_SRID_Other) {
 
 class GeoGDALImportTest : public ::testing::Test {
  protected:
-  virtual void SetUp() override {
+  void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
   }
 
-  virtual void TearDown() override {
+  void TearDown() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
   }
 };

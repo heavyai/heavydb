@@ -42,14 +42,14 @@ class PosixFileArchive : public Archive {
     init_for_read();
   }
 
-  virtual ~PosixFileArchive() {
+  ~PosixFileArchive() override {
     if (fp)
       fclose(fp);
     if (buf)
       delete[] buf;
   }
 
-  virtual void init_for_read() {
+  void init_for_read() override {
     auto file_path = url_part(5);
     if (plain_text) {
       if (nullptr == (fp = fopen(file_path.c_str(), "r")))
@@ -62,14 +62,14 @@ class PosixFileArchive : public Archive {
     }
   }
 
-  virtual bool read_next_header() {
+  bool read_next_header() override {
     if (plain_text)
       return !feof(fp);
     else
       return Archive::read_next_header();
   }
 
-  virtual bool read_data_block(const void** buff, size_t* size, int64_t* offset) {
+  bool read_data_block(const void** buff, size_t* size, int64_t* offset) override {
     if (plain_text) {
       size_t nread;
       if (0 >= (nread = fread(buf, 1, buf_size, fp)))

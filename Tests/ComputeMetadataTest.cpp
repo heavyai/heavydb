@@ -65,7 +65,7 @@ static const std::string g_table_name{"metadata_test"};
 }  // namespace
 
 class MultiFragMetadataUpdate : public ::testing::Test {
-  virtual void SetUp() override {
+  void SetUp() override {
     EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS " + g_table_name + ";"));
     EXPECT_NO_THROW(run_ddl_statement(
         "CREATE TABLE " + g_table_name +
@@ -127,7 +127,7 @@ class MultiFragMetadataUpdate : public ::testing::Test {
     }
   }
 
-  virtual void TearDown() override {
+  void TearDown() override {
     EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS " + g_table_name + ";"));
   }
 };
@@ -170,7 +170,7 @@ TEST_F(MultiFragMetadataUpdate, NoChanges) {
 }
 
 class MetadataUpdate : public ::testing::Test {
-  virtual void SetUp() override {
+  void SetUp() override {
     EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS " + g_table_name + ";"));
     EXPECT_NO_THROW(
         run_ddl_statement("CREATE TABLE " + g_table_name +
@@ -189,7 +189,7 @@ class MetadataUpdate : public ::testing::Test {
         ExecutorDeviceType::CPU);
   }
 
-  virtual void TearDown() override {
+  void TearDown() override {
     EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS " + g_table_name + ";"));
   }
 };

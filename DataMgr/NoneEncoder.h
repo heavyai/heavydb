@@ -40,7 +40,7 @@ class NoneEncoder : public Encoder {
   ChunkMetadata appendData(int8_t*& srcData,
                            const size_t numAppendElems,
                            const SQLTypeInfo&,
-                           const bool replicating = false) {
+                           const bool replicating = false) override {
     T* unencodedData = reinterpret_cast<T*>(srcData);
     std::unique_ptr<T> encodedData;
     if (replicating)
@@ -68,20 +68,20 @@ class NoneEncoder : public Encoder {
     return chunkMetadata;
   }
 
-  void getMetadata(ChunkMetadata& chunkMetadata) {
+  void getMetadata(ChunkMetadata& chunkMetadata) override {
     Encoder::getMetadata(chunkMetadata);  // call on parent class
     chunkMetadata.fillChunkStats(dataMin, dataMax, has_nulls);
   }
 
   // Only called from the executor for synthesized meta-information.
-  ChunkMetadata getMetadata(const SQLTypeInfo& ti) {
+  ChunkMetadata getMetadata(const SQLTypeInfo& ti) override {
     ChunkMetadata chunk_metadata{ti, 0, 0, ChunkStats{}};
     chunk_metadata.fillChunkStats(dataMin, dataMax, has_nulls);
     return chunk_metadata;
   }
 
   // Only called from the executor for synthesized meta-information.
-  void updateStats(const int64_t val, const bool is_null) {
+  void updateStats(const int64_t val, const bool is_null) override {
     if (is_null) {
       has_nulls = true;
     } else {
@@ -92,7 +92,7 @@ class NoneEncoder : public Encoder {
   }
 
   // Only called from the executor for synthesized meta-information.
-  void updateStats(const double val, const bool is_null) {
+  void updateStats(const double val, const bool is_null) override {
     if (is_null) {
       has_nulls = true;
     } else {
@@ -103,7 +103,7 @@ class NoneEncoder : public Encoder {
   }
 
   // Only called from the executor for synthesized meta-information.
-  void reduceStats(const Encoder& that) {
+  void reduceStats(const Encoder& that) override {
     const auto that_typed = static_cast<const NoneEncoder&>(that);
     if (that_typed.has_nulls) {
       has_nulls = true;
@@ -112,7 +112,7 @@ class NoneEncoder : public Encoder {
     dataMax = std::max(dataMax, that_typed.dataMax);
   }
 
-  void writeMetadata(FILE* f) {
+  void writeMetadata(FILE* f) override {
     // assumes pointer is already in right place
     fwrite((int8_t*)&num_elems_, sizeof(size_t), 1, f);
     fwrite((int8_t*)&dataMin, sizeof(T), 1, f);
@@ -120,7 +120,7 @@ class NoneEncoder : public Encoder {
     fwrite((int8_t*)&has_nulls, sizeof(bool), 1, f);
   }
 
-  void readMetadata(FILE* f) {
+  void readMetadata(FILE* f) override {
     // assumes pointer is already in right place
     fread((int8_t*)&num_elems_, sizeof(size_t), 1, f);
     fread((int8_t*)&dataMin, sizeof(T), 1, f);
@@ -142,7 +142,7 @@ class NoneEncoder : public Encoder {
     return true;
   }
 
-  void copyMetadata(const Encoder* copyFromEncoder) {
+  void copyMetadata(const Encoder* copyFromEncoder) override {
     num_elems_ = copyFromEncoder->getNumElems();
     auto castedEncoder = reinterpret_cast<const NoneEncoder<T>*>(copyFromEncoder);
     dataMin = castedEncoder->dataMin;

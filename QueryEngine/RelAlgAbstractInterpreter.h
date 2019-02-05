@@ -425,7 +425,7 @@ class RexRef : public RexScalar {
 
   size_t getIndex() const { return index_; }
 
-  virtual std::string toString() const {
+  std::string toString() const override {
     return "(RexRef " + std::to_string(index_) + ")";
   }
 

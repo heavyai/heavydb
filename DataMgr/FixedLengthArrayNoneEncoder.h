@@ -56,7 +56,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
   ChunkMetadata appendData(int8_t*& srcData,
                            const size_t numAppendElems,
                            const SQLTypeInfo&,
-                           const bool replicating = false) {
+                           const bool replicating = false) override {
     CHECK(false);  // should never be called for arrays
     return ChunkMetadata{};
   }
@@ -89,24 +89,24 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     return chunkMetadata;
   }
 
-  void getMetadata(ChunkMetadata& chunkMetadata) {
+  void getMetadata(ChunkMetadata& chunkMetadata) override {
     Encoder::getMetadata(chunkMetadata);  // call on parent class
     chunkMetadata.fillChunkStats(elem_min, elem_max, has_nulls);
   }
 
   // Only called from the executor for synthesized meta-information.
-  ChunkMetadata getMetadata(const SQLTypeInfo& ti) {
+  ChunkMetadata getMetadata(const SQLTypeInfo& ti) override {
     ChunkMetadata chunk_metadata{ti, 0, 0, ChunkStats{elem_min, elem_max, has_nulls}};
     return chunk_metadata;
   }
 
-  void updateStats(const int64_t, const bool) { CHECK(false); }
+  void updateStats(const int64_t, const bool) override { CHECK(false); }
 
-  void updateStats(const double, const bool) { CHECK(false); }
+  void updateStats(const double, const bool) override { CHECK(false); }
 
-  void reduceStats(const Encoder&) { CHECK(false); }
+  void reduceStats(const Encoder&) override { CHECK(false); }
 
-  void writeMetadata(FILE* f) {
+  void writeMetadata(FILE* f) override {
     // assumes pointer is already in right place
     fwrite((int8_t*)&num_elems_, sizeof(size_t), 1, f);
     fwrite((int8_t*)&elem_min, sizeof(Datum), 1, f);
@@ -115,7 +115,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     fwrite((int8_t*)&initialized, sizeof(bool), 1, f);
   }
 
-  void readMetadata(FILE* f) {
+  void readMetadata(FILE* f) override {
     // assumes pointer is already in right place
     fread((int8_t*)&num_elems_, sizeof(size_t), 1, f);
     fread((int8_t*)&elem_min, sizeof(Datum), 1, f);
@@ -124,7 +124,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     fread((int8_t*)&initialized, sizeof(bool), 1, f);
   }
 
-  void copyMetadata(const Encoder* copyFromEncoder) {
+  void copyMetadata(const Encoder* copyFromEncoder) override {
     num_elems_ = copyFromEncoder->getNumElems();
     auto array_encoder =
         dynamic_cast<const FixedLengthArrayNoneEncoder*>(copyFromEncoder);

@@ -1,1 +1,1 @@
-Checks: -*,readability-braces-around-statements,modernize-deprecated-headers,modernize-use-using,modernize-use-emplace
+Checks: -*,readability-braces-around-statements,modernize-deprecated-headers,modernize-use-using,modernize-use-emplace,modernize-use-override

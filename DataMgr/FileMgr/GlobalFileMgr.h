@@ -54,16 +54,16 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
                 const size_t defaultPageSize = 2097152);
 
   /// Destructor
-  virtual ~GlobalFileMgr();
+  ~GlobalFileMgr() override;
 
   /// Creates a chunk with the specified key and page size.
-  virtual AbstractBuffer* createBuffer(const ChunkKey& key,
-                                       size_t pageSize = 0,
-                                       const size_t numBytes = 0) {
+  AbstractBuffer* createBuffer(const ChunkKey& key,
+                               size_t pageSize = 0,
+                               const size_t numBytes = 0) override {
     return getFileMgr(key)->createBuffer(key, pageSize, numBytes);
   }
 
-  virtual bool isBufferOnDevice(const ChunkKey& key) {
+  bool isBufferOnDevice(const ChunkKey& key) override {
     return getFileMgr(key)->isBufferOnDevice(key);
   }
 
@@ -71,21 +71,21 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   // Purge == true means delete the data chunks -
   // can't undelete and revert to previous
   // state - reclaims disk space for chunk
-  virtual void deleteBuffer(const ChunkKey& key, const bool purge = true) {
+  void deleteBuffer(const ChunkKey& key, const bool purge = true) override {
     return getFileMgr(key)->deleteBuffer(key, purge);
   }
 
-  virtual void deleteBuffersWithPrefix(const ChunkKey& keyPrefix,
-                                       const bool purge = true);
+  void deleteBuffersWithPrefix(const ChunkKey& keyPrefix,
+                               const bool purge = true) override;
 
   /// Returns the a pointer to the chunk with the specified key.
-  virtual AbstractBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0) {
+  AbstractBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0) override {
     return getFileMgr(key)->getBuffer(key, numBytes);
   }
 
-  virtual void fetchBuffer(const ChunkKey& key,
-                           AbstractBuffer* destBuffer,
-                           const size_t numBytes) {
+  void fetchBuffer(const ChunkKey& key,
+                   AbstractBuffer* destBuffer,
+                   const size_t numBytes) override {
     return getFileMgr(key)->fetchBuffer(key, destBuffer, numBytes);
   }
 
@@ -95,36 +95,36 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
    * @param d - An object representing the source data for the Chunk.
    * @return AbstractBuffer*
    */
-  virtual AbstractBuffer* putBuffer(const ChunkKey& key,
-                                    AbstractBuffer* d,
-                                    const size_t numBytes = 0) {
+  AbstractBuffer* putBuffer(const ChunkKey& key,
+                            AbstractBuffer* d,
+                            const size_t numBytes = 0) override {
     return getFileMgr(key)->putBuffer(key, d, numBytes);
   }
 
   // Buffer API
-  virtual AbstractBuffer* alloc(const size_t numBytes) {
+  AbstractBuffer* alloc(const size_t numBytes) override {
     LOG(FATAL) << "Operation not supported";
   }
 
-  virtual void free(AbstractBuffer* buffer) { LOG(FATAL) << "Operation not supported"; }
+  void free(AbstractBuffer* buffer) override { LOG(FATAL) << "Operation not supported"; }
 
-  virtual inline MgrType getMgrType() { return GLOBAL_FILE_MGR; };
-  virtual inline std::string getStringMgrType() { return ToString(GLOBAL_FILE_MGR); }
-  virtual inline std::string printSlabs() { return "Not Implemented"; }
-  virtual inline void clearSlabs() { /* noop */
+  inline MgrType getMgrType() override { return GLOBAL_FILE_MGR; };
+  inline std::string getStringMgrType() override { return ToString(GLOBAL_FILE_MGR); }
+  inline std::string printSlabs() override { return "Not Implemented"; }
+  inline void clearSlabs() override { /* noop */
   }
-  virtual inline size_t getMaxSize() { return 0; }
-  virtual inline size_t getInUseSize() { return 0; }
-  virtual inline size_t getAllocated() { return 0; }
-  virtual inline bool isAllocationCapped() { return false; }
+  inline size_t getMaxSize() override { return 0; }
+  inline size_t getInUseSize() override { return 0; }
+  inline size_t getAllocated() override { return 0; }
+  inline bool isAllocationCapped() override { return false; }
 
   void init();
 
-  virtual void getChunkMetadataVec(
-      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec);
-  virtual void getChunkMetadataVecForKeyPrefix(
+  void getChunkMetadataVec(
+      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec) override;
+  void getChunkMetadataVecForKeyPrefix(
       std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
-      const ChunkKey& keyPrefix) {
+      const ChunkKey& keyPrefix) override {
     return getFileMgr(keyPrefix)->getChunkMetadataVecForKeyPrefix(chunkMetadataVec,
                                                                   keyPrefix);
   }
@@ -133,8 +133,8 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
    * @brief Fsyncs data files, writes out epoch and
    * fsyncs that
    */
-  void checkpoint();
-  void checkpoint(const int db_id, const int tb_id);
+  void checkpoint() override;
+  void checkpoint(const int db_id, const int tb_id) override;
 
   /**
    * @brief Returns number of threads defined by parameter num-reader-threads
@@ -142,7 +142,7 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
    */
   inline size_t getNumReaderThreads() { return num_reader_threads_; }
 
-  size_t getNumChunks();
+  size_t getNumChunks() override;
 
   FileMgr* findFileMgr(const int db_id,
                        const int tb_id,

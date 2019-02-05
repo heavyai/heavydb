@@ -30,7 +30,7 @@ class RexProjectInputRedirector : public RexDeepCopyVisitor {
   RexProjectInputRedirector(const std::unordered_set<const RelProject*>& crt_inputs)
       : crt_projects_(crt_inputs) {}
 
-  RetType visitInput(const RexInput* input) const {
+  RetType visitInput(const RexInput* input) const override {
     auto source = dynamic_cast<const RelProject*>(input->getSourceNode());
     if (!source || !crt_projects_.count(source)) {
       return input->deepCopy();
@@ -1197,7 +1197,7 @@ class RexInputSinker : public RexDeepCopyVisitor {
                  const RelAlgNode* new_src)
       : old_to_new_in_idx_(old_to_new_idx), target_(new_src) {}
 
-  RetType visitInput(const RexInput* input) const {
+  RetType visitInput(const RexInput* input) const override {
     CHECK_EQ(target_->inputCount(), size_t(1));
     CHECK_EQ(target_->getInput(0), input->getSourceNode());
     auto idx_it = old_to_new_in_idx_.find(input->getIndex());
@@ -1336,7 +1336,7 @@ class RexInputRedirector : public RexDeepCopyVisitor {
   RexInputRedirector(const RelAlgNode* old_src, const RelAlgNode* new_src)
       : old_src_(old_src), new_src_(new_src) {}
 
-  RetType visitInput(const RexInput* input) const {
+  RetType visitInput(const RexInput* input) const override {
     CHECK_EQ(old_src_, input->getSourceNode());
     CHECK_NE(old_src_, new_src_);
     auto actual_new_src = new_src_;

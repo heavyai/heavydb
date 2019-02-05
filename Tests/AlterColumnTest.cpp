@@ -143,7 +143,7 @@ void import_table_file(const string& table, const string& file) {
 
 class SQLTestEnv : public ::testing::Environment {
  public:
-  virtual void SetUp() {
+  void SetUp() override {
     gsession.reset(QueryRunner::get_session(BASE_PATH,
                                             "gtest",
                                             "test!test!",
@@ -189,8 +189,8 @@ void init_table_data(const string& table = "trips",
 
 class AlterColumnTest : public ::testing::Test {
  protected:
-  virtual void SetUp() { ASSERT_NO_THROW(init_table_data();); }
-  virtual void TearDown() { ASSERT_NO_THROW(run_ddl_statement("drop table trips;");); }
+  void SetUp() override { ASSERT_NO_THROW(init_table_data();); }
+  void TearDown() override { ASSERT_NO_THROW(run_ddl_statement("drop table trips;");); }
 };
 
 #define MT std::make_tuple

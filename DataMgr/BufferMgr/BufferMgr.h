@@ -80,39 +80,39 @@ class BufferMgr : public AbstractBufferMgr {  // implements
             AbstractBufferMgr* parentMgr = 0);
 
   /// Destructor
-  virtual ~BufferMgr();
+  ~BufferMgr() override;
   void reinit();
 
   void clear();
 
   std::string printSlab(size_t slabNum);
-  std::string printSlabs();
-  void clearSlabs();
+  std::string printSlabs() override;
+  void clearSlabs() override;
   std::string printMap();
   void printSegs();
   std::string printSeg(BufferList::iterator& segIt);
   std::string keyToString(const ChunkKey& key);
-  size_t getInUseSize();
-  size_t getMaxSize();
-  size_t getAllocated();
+  size_t getInUseSize() override;
+  size_t getMaxSize() override;
+  size_t getAllocated() override;
   size_t getMaxBufferSize();
   size_t getMaxSlabSize();
   size_t getPageSize();
-  bool isAllocationCapped();
+  bool isAllocationCapped() override;
   const std::vector<BufferList>& getSlabSegments();
 
   /// Creates a chunk with the specified key and page size.
-  virtual AbstractBuffer* createBuffer(const ChunkKey& key,
-                                       const size_t pageSize = 0,
-                                       const size_t initialSize = 0);
+  AbstractBuffer* createBuffer(const ChunkKey& key,
+                               const size_t pageSize = 0,
+                               const size_t initialSize = 0) override;
 
   /// Deletes the chunk with the specified key
-  virtual void deleteBuffer(const ChunkKey& key, const bool purge = true);
-  virtual void deleteBuffersWithPrefix(const ChunkKey& keyPrefix,
-                                       const bool purge = true);
+  void deleteBuffer(const ChunkKey& key, const bool purge = true) override;
+  void deleteBuffersWithPrefix(const ChunkKey& keyPrefix,
+                               const bool purge = true) override;
 
   /// Returns the a pointer to the chunk with the specified key.
-  virtual AbstractBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0);
+  AbstractBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0) override;
 
   /**
    * @brief Puts the contents of d into the Buffer with ChunkKey key.
@@ -120,31 +120,31 @@ class BufferMgr : public AbstractBufferMgr {  // implements
    * @param d - An object representing the source data for the Chunk.
    * @return AbstractBuffer*
    */
-  virtual bool isBufferOnDevice(const ChunkKey& key);
-  virtual void fetchBuffer(const ChunkKey& key,
-                           AbstractBuffer* destBuffer,
-                           const size_t numBytes = 0);
-  virtual AbstractBuffer* putBuffer(const ChunkKey& key,
-                                    AbstractBuffer* d,
-                                    const size_t numBytes = 0);
-  void checkpoint();
-  void checkpoint(const int db_id, const int tb_id);
+  bool isBufferOnDevice(const ChunkKey& key) override;
+  void fetchBuffer(const ChunkKey& key,
+                   AbstractBuffer* destBuffer,
+                   const size_t numBytes = 0) override;
+  AbstractBuffer* putBuffer(const ChunkKey& key,
+                            AbstractBuffer* d,
+                            const size_t numBytes = 0) override;
+  void checkpoint() override;
+  void checkpoint(const int db_id, const int tb_id) override;
 
   // Buffer API
-  virtual AbstractBuffer* alloc(const size_t numBytes = 0);
-  virtual void free(AbstractBuffer* buffer);
+  AbstractBuffer* alloc(const size_t numBytes = 0) override;
+  void free(AbstractBuffer* buffer) override;
   // virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
 
   /// Returns the total number of bytes allocated.
   size_t size();
-  size_t getNumChunks();
+  size_t getNumChunks() override;
 
   BufferList::iterator reserveBuffer(BufferList::iterator& segIt, const size_t numBytes);
-  virtual void getChunkMetadataVec(
-      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec);
-  virtual void getChunkMetadataVecForKeyPrefix(
+  void getChunkMetadataVec(
+      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec) override;
+  void getChunkMetadataVecForKeyPrefix(
       std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
-      const ChunkKey& keyPrefix);
+      const ChunkKey& keyPrefix) override;
 
  protected:
   std::vector<int8_t*> slabs_;  /// vector of beginning memory addresses for each

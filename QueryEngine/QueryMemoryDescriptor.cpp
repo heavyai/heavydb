@@ -57,12 +57,12 @@ std::vector<ssize_t> target_expr_group_by_indices(
 
 class UsedColumnsVisitor : public ScalarExprVisitor<std::unordered_set<int>> {
  protected:
-  virtual std::unordered_set<int> visitColumnVar(
+  std::unordered_set<int> visitColumnVar(
       const Analyzer::ColumnVar* column) const override {
     return {column->get_column_id()};
   }
 
-  virtual std::unordered_set<int> aggregateResult(
+  std::unordered_set<int> aggregateResult(
       const std::unordered_set<int>& aggregate,
       const std::unordered_set<int>& next_result) const override {
     auto result = aggregate;

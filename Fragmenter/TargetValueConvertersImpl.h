@@ -48,11 +48,11 @@ struct NumericValueConverter : public TargetValueConverter {
     }
   }
 
-  virtual ~NumericValueConverter() {}
+  ~NumericValueConverter() override {}
 
   auto&& takeColumnarData() { return std::move(column_data_); }
 
-  virtual void allocateColumnarData(size_t num_rows) {
+  void allocateColumnarData(size_t num_rows) override {
     CHECK(num_rows > 0);
     column_data_ = ColumnDataPtr(
         reinterpret_cast<TARGET_TYPE*>(checked_malloc(num_rows * sizeof(TARGET_TYPE))));
@@ -69,13 +69,13 @@ struct NumericValueConverter : public TargetValueConverter {
     }
   }
 
-  virtual void convertToColumnarFormat(size_t row, const TargetValue* value) {
+  void convertToColumnarFormat(size_t row, const TargetValue* value) override {
     auto scalarValue =
         checked_get<ScalarTargetValue>(row, value, SCALAR_TARGET_VALUE_ACCESSOR);
     convertToColumnarFormat(row, scalarValue);
   }
 
-  virtual void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) {
+  void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
     DataBlockPtr dataBlock;
     dataBlock.numbersPtr = reinterpret_cast<int8_t*>(column_data_.get());
     insertData.data.push_back(dataBlock);
@@ -117,7 +117,7 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
     }
   }
 
-  virtual ~DictionaryValueConverter() {}
+  ~DictionaryValueConverter() override {}
 
   void convertToColumnarFormatFromDict(size_t row, const ScalarTargetValue* scalarValue) {
     auto mapd_p = checked_get<int64_t>(row, scalarValue, this->SOURCE_TYPE_ACCESSOR);
@@ -155,7 +155,7 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
     }
   }
 
-  virtual void convertToColumnarFormat(size_t row, const TargetValue* value) {
+  void convertToColumnarFormat(size_t row, const TargetValue* value) override {
     auto scalarValue =
         checked_get<ScalarTargetValue>(row, value, this->SCALAR_TARGET_VALUE_ACCESSOR);
 
@@ -173,14 +173,14 @@ struct StringValueConverter : public TargetValueConverter {
     }
   }
 
-  virtual ~StringValueConverter() {}
+  ~StringValueConverter() override {}
 
-  virtual void allocateColumnarData(size_t num_rows) {
+  void allocateColumnarData(size_t num_rows) override {
     CHECK(num_rows > 0);
     column_data_ = std::make_unique<std::vector<std::string>>(num_rows);
   }
 
-  virtual void convertToColumnarFormat(size_t row, const TargetValue* value) {
+  void convertToColumnarFormat(size_t row, const TargetValue* value) override {
     auto scalarValue =
         checked_get<ScalarTargetValue>(row, value, SCALAR_TARGET_VALUE_ACCESSOR);
     auto mapd_p = checked_get<NullableString>(row, scalarValue, NULLABLE_STRING_ACCESSOR);
@@ -194,7 +194,7 @@ struct StringValueConverter : public TargetValueConverter {
     }
   }
 
-  virtual void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) {
+  void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
     DataBlockPtr dataBlock;
     dataBlock.stringsPtr = column_data_.get();
     insertData.data.push_back(dataBlock);
@@ -214,7 +214,7 @@ struct DateValueConverter : public NumericValueConverter<int64_t, int64_t> {
                                                 nullCheckValue,
                                                 doNullCheck) {}
 
-  virtual ~DateValueConverter() {}
+  ~DateValueConverter() override {}
 
   void convertToColumnarFormat(size_t row, const ScalarTargetValue* scalarValue) {
     auto mapd_p = checked_get<int64_t>(row, scalarValue, this->SOURCE_TYPE_ACCESSOR);
@@ -227,7 +227,7 @@ struct DateValueConverter : public NumericValueConverter<int64_t, int64_t> {
     }
   }
 
-  virtual void convertToColumnarFormat(size_t row, const TargetValue* value) {
+  void convertToColumnarFormat(size_t row, const TargetValue* value) override {
     auto scalarValue =
         checked_get<ScalarTargetValue>(row, value, this->SCALAR_TARGET_VALUE_ACCESSOR);
     convertToColumnarFormat(row, scalarValue);
@@ -256,14 +256,14 @@ struct ArrayValueConverter : public TargetValueConverter {
     }
   }
 
-  virtual ~ArrayValueConverter() {}
+  ~ArrayValueConverter() override {}
 
-  virtual void allocateColumnarData(size_t num_rows) {
+  void allocateColumnarData(size_t num_rows) override {
     CHECK(num_rows > 0);
     column_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
   }
 
-  virtual void convertToColumnarFormat(size_t row, const TargetValue* value) {
+  void convertToColumnarFormat(size_t row, const TargetValue* value) override {
     const auto scalarValueVector =
         checked_get<std::vector<ScalarTargetValue>>(row, value, SCALAR_VECTOR_ACCESSOR);
 
@@ -282,7 +282,7 @@ struct ArrayValueConverter : public TargetValueConverter {
         scalarValueVector->size() * element_type_info_.get_size(), arrayData, is_null);
   }
 
-  virtual void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) {
+  void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
     DataBlockPtr dataBlock;
     dataBlock.arraysPtr = column_data_.get();
     insertData.data.push_back(dataBlock);
@@ -307,9 +307,9 @@ struct GeoPointValueConverter : public TargetValueConverter {
     allocateColumnarData(num_rows);
   }
 
-  virtual ~GeoPointValueConverter() {}
+  ~GeoPointValueConverter() override {}
 
-  virtual void allocateColumnarData(size_t num_rows) {
+  void allocateColumnarData(size_t num_rows) override {
     CHECK(num_rows > 0);
     column_data_ = std::make_unique<std::vector<std::string>>(num_rows);
     signed_compressed_coords_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
@@ -333,7 +333,7 @@ struct GeoPointValueConverter : public TargetValueConverter {
                       false);
   }
 
-  virtual void convertToColumnarFormat(size_t row, const TargetValue* value) {
+  void convertToColumnarFormat(size_t row, const TargetValue* value) override {
     auto geoValue = checked_get<GeoTargetValue>(row, value, GEO_TARGET_VALUE_ACCESSOR);
     auto geoPoint =
         checked_get<GeoPointTargetValue>(row, geoValue, GEO_POINT_VALUE_ACCESSOR);
@@ -342,7 +342,7 @@ struct GeoPointValueConverter : public TargetValueConverter {
     (*signed_compressed_coords_data_)[row] = toCompressedCoords(geoPoint->coords);
   }
 
-  virtual void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) {
+  void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
     DataBlockPtr logical, coords;
 
     logical.stringsPtr = column_data_.get();
@@ -410,9 +410,9 @@ struct GeoLinestringValueConverter : public GeoPointValueConverter {
     allocateColumnarData(num_rows);
   }
 
-  virtual ~GeoLinestringValueConverter() {}
+  ~GeoLinestringValueConverter() override {}
 
-  virtual void allocateColumnarData(size_t num_rows) {
+  void allocateColumnarData(size_t num_rows) override {
     CHECK(num_rows > 0);
     GeoPointValueConverter::allocateColumnarData(num_rows);
     bounds_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
@@ -420,7 +420,7 @@ struct GeoLinestringValueConverter : public GeoPointValueConverter {
 
   boost_variant_accessor<GeoLineStringTargetValue> GEO_LINESTRING_VALUE_ACCESSOR;
 
-  virtual void convertToColumnarFormat(size_t row, const TargetValue* value) {
+  void convertToColumnarFormat(size_t row, const TargetValue* value) override {
     auto geoValue = checked_get<GeoTargetValue>(row, value, GEO_TARGET_VALUE_ACCESSOR);
     auto geoLinestring = checked_get<GeoLineStringTargetValue>(
         row, geoValue, GEO_LINESTRING_VALUE_ACCESSOR);
@@ -431,7 +431,7 @@ struct GeoLinestringValueConverter : public GeoPointValueConverter {
     (*bounds_data_)[row] = to_array_datum(bounds);
   }
 
-  virtual void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) {
+  void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
     GeoPointValueConverter::addDataBlocksToInsertData(insertData);
 
     DataBlockPtr bounds;
@@ -472,9 +472,9 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
     }
   }
 
-  virtual ~GeoPolygonValueConverter() {}
+  ~GeoPolygonValueConverter() override {}
 
-  virtual void allocateColumnarData(size_t num_rows) {
+  void allocateColumnarData(size_t num_rows) override {
     GeoPointValueConverter::allocateColumnarData(num_rows);
     ring_sizes_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
     bounds_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
@@ -483,7 +483,7 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
 
   boost_variant_accessor<GeoPolyTargetValue> GEO_POLY_VALUE_ACCESSOR;
 
-  virtual void convertToColumnarFormat(size_t row, const TargetValue* value) {
+  void convertToColumnarFormat(size_t row, const TargetValue* value) override {
     auto geoValue = checked_get<GeoTargetValue>(row, value, GEO_TARGET_VALUE_ACCESSOR);
     auto geoPoly =
         checked_get<GeoPolyTargetValue>(row, geoValue, GEO_POLY_VALUE_ACCESSOR);
@@ -497,7 +497,7 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
         render_group_analyzer_.insertBoundsAndReturnRenderGroup(bounds);
   }
 
-  virtual void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) {
+  void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
     GeoPointValueConverter::addDataBlocksToInsertData(insertData);
 
     DataBlockPtr ringSizes, bounds, renderGroup;
@@ -551,9 +551,9 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
     }
   }
 
-  virtual ~GeoMultiPolygonValueConverter() {}
+  ~GeoMultiPolygonValueConverter() override {}
 
-  virtual void allocateColumnarData(size_t num_rows) {
+  void allocateColumnarData(size_t num_rows) override {
     GeoPointValueConverter::allocateColumnarData(num_rows);
     ring_sizes_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
     poly_rings_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
@@ -563,7 +563,7 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
 
   boost_variant_accessor<GeoMultiPolyTargetValue> GEO_MULTI_POLY_VALUE_ACCESSOR;
 
-  virtual void convertToColumnarFormat(size_t row, const TargetValue* value) {
+  void convertToColumnarFormat(size_t row, const TargetValue* value) override {
     auto geoValue = checked_get<GeoTargetValue>(row, value, GEO_TARGET_VALUE_ACCESSOR);
     auto geoMultiPoly = checked_get<GeoMultiPolyTargetValue>(
         row, geoValue, GEO_MULTI_POLY_VALUE_ACCESSOR);
@@ -578,7 +578,7 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
         render_group_analyzer_.insertBoundsAndReturnRenderGroup(bounds);
   }
 
-  virtual void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) {
+  void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
     GeoPointValueConverter::addDataBlocksToInsertData(insertData);
 
     DataBlockPtr ringSizes, polyRings, bounds, renderGroup;

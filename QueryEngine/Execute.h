@@ -272,10 +272,10 @@ class UpdateLogForFragment : public RowDataProvider {
                        size_t const,
                        const std::shared_ptr<ResultSet>& rs);
 
-  virtual std::vector<TargetValue> getEntryAt(const size_t index) const;
-  virtual std::vector<TargetValue> getTranslatedEntryAt(const size_t index) const;
+  std::vector<TargetValue> getEntryAt(const size_t index) const override;
+  std::vector<TargetValue> getTranslatedEntryAt(const size_t index) const override;
 
-  virtual size_t count() const;
+  size_t count() const override;
 
   size_t const getEntryCount() const;
   size_t const getFragmentIndex() const;

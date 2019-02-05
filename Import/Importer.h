@@ -732,7 +732,8 @@ class Detector : public DataStreamSink {
   bool detect_headers(const std::vector<SQLTypes>& first_types,
                       const std::vector<SQLTypes>& rest_types);
   void find_best_sqltypes_and_headers();
-  ImportStatus importDelimited(const std::string& file_path, const bool decompressed);
+  ImportStatus importDelimited(const std::string& file_path,
+                               const bool decompressed) override;
   std::string raw_data;
   boost::filesystem::path file_path;
   std::chrono::duration<double> timeout{1};
@@ -801,9 +802,10 @@ class Importer : public DataStreamSink {
            const std::string& f,
            const CopyParams& p);
   Importer(Loader* providedLoader, const std::string& f, const CopyParams& p);
-  ~Importer();
+  ~Importer() override;
   ImportStatus import();
-  ImportStatus importDelimited(const std::string& file_path, const bool decompressed);
+  ImportStatus importDelimited(const std::string& file_path,
+                               const bool decompressed) override;
   ImportStatus importGDAL(std::map<std::string, std::string> colname_to_src);
   const CopyParams& get_copy_params() const { return copy_params; }
   const std::list<const ColumnDescriptor*>& get_column_descs() const {

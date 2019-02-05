@@ -71,7 +71,7 @@ class NumberColumnDescriptor : public TestColumnDescriptor {
   NumberColumnDescriptor(std::string col_type, SQLTypes sql_type, T null)
       : column_definition(col_type), rs_type(sql_type), null_value(null){};
 
-  virtual bool skip_test(std::string name) {
+  bool skip_test(std::string name) override {
     if (kDECIMAL == rs_type) {
       return "Array.UpdateColumnByLiteral" == name;
     }
@@ -81,17 +81,17 @@ class NumberColumnDescriptor : public TestColumnDescriptor {
     return false;
   }
 
-  virtual std::string get_column_definition() { return column_definition; };
-  virtual std::string get_column_value(int row) {
+  std::string get_column_definition() override { return column_definition; };
+  std::string get_column_value(int row) override {
     if (0 == row) {
       return "null";
     }
 
     return std::to_string(row);
   };
-  virtual bool check_column_value(int row,
-                                  const SQLTypeInfo& type,
-                                  const ScalarTargetValue* value) {
+  bool check_column_value(int row,
+                          const SQLTypeInfo& type,
+                          const ScalarTargetValue* value) override {
     if (type.get_type() != rs_type) {
       return false;
     }
@@ -139,22 +139,22 @@ class BooleanColumnDescriptor : public TestColumnDescriptor {
   BooleanColumnDescriptor(std::string col_type, SQLTypes sql_type)
       : column_definition(col_type), rs_type(sql_type){};
 
-  virtual bool skip_test(std::string name) {
+  bool skip_test(std::string name) override {
     return "UpdateColumnByColumn" == name || "UpdateColumnByLiteral" == name ||
            "Array.UpdateColumnByLiteral" == name;
   }
 
-  virtual std::string get_column_definition() { return column_definition; };
-  virtual std::string get_column_value(int row) {
+  std::string get_column_definition() override { return column_definition; };
+  std::string get_column_value(int row) override {
     if (0 == row) {
       return "null";
     }
 
     return (row % 2) ? "'true'" : "'false'";
   };
-  virtual bool check_column_value(int row,
-                                  const SQLTypeInfo& type,
-                                  const ScalarTargetValue* value) {
+  bool check_column_value(int row,
+                          const SQLTypeInfo& type,
+                          const ScalarTargetValue* value) override {
     if (type.get_type() != rs_type) {
       return false;
     }
@@ -191,21 +191,21 @@ class StringColumnDescriptor : public TestColumnDescriptor {
   StringColumnDescriptor(std::string col_type, SQLTypes sql_type, std::string pfix)
       : column_definition(col_type), rs_type(sql_type), prefix(pfix){};
 
-  virtual bool skip_test(std::string name) {
+  bool skip_test(std::string name) override {
     return "Array.UpdateColumnByLiteral" == name;
   }
 
-  virtual std::string get_column_definition() { return column_definition; };
-  virtual std::string get_column_value(int row) {
+  std::string get_column_definition() override { return column_definition; };
+  std::string get_column_value(int row) override {
     if (0 == row) {
       return "null";
     }
 
     return "'" + prefix + "_" + std::to_string(row) + "'";
   };
-  virtual bool check_column_value(int row,
-                                  const SQLTypeInfo& type,
-                                  const ScalarTargetValue* value) {
+  bool check_column_value(int row,
+                          const SQLTypeInfo& type,
+                          const ScalarTargetValue* value) override {
     if (!(type.get_type() == rs_type || type.get_type() == kTEXT)) {
       return false;
     }
@@ -254,21 +254,21 @@ class DateTimeColumnDescriptor : public TestColumnDescriptor {
       , offset(offset)
       , scale(scale){};
 
-  virtual bool skip_test(std::string name) {
+  bool skip_test(std::string name) override {
     return "Array.UpdateColumnByLiteral" == name;
   }
 
-  virtual std::string get_column_definition() { return column_definition; };
-  virtual std::string get_column_value(int row) {
+  std::string get_column_definition() override { return column_definition; };
+  std::string get_column_value(int row) override {
     if (0 == row) {
       return "null";
     }
 
     return "'" + getValueAsString(row) + "'";
   };
-  virtual bool check_column_value(int row,
-                                  const SQLTypeInfo& type,
-                                  const ScalarTargetValue* value) {
+  bool check_column_value(int row,
+                          const SQLTypeInfo& type,
+                          const ScalarTargetValue* value) override {
     if (type.get_type() != rs_type) {
       return false;
     }
@@ -323,11 +323,11 @@ class ArrayColumnDescriptor : public TestColumnDescriptor {
       , element_descriptor(columnDesc)
       , fixed_array_length(fixed_len) {}
 
-  virtual bool skip_test(std::string name) {
+  bool skip_test(std::string name) override {
     return element_descriptor->skip_test("Array." + name);
   }
 
-  virtual std::string get_column_definition() { return column_definition; }
+  std::string get_column_definition() override { return column_definition; }
 
   std::string make_column_value(int row, std::string prefix, std::string suffix) {
     std::string values = prefix;
@@ -347,17 +347,17 @@ class ArrayColumnDescriptor : public TestColumnDescriptor {
     return values;
   }
 
-  virtual std::string get_column_value(int row) {
+  std::string get_column_value(int row) override {
     return make_column_value(row, "{", "}");
   }
 
-  virtual std::string get_update_column_value(int row) {
+  std::string get_update_column_value(int row) override {
     return make_column_value(row, "ARRAY[", "]");
   }
 
-  virtual bool check_column_value(const int row,
-                                  const SQLTypeInfo& type,
-                                  const TargetValue* value) {
+  bool check_column_value(const int row,
+                          const SQLTypeInfo& type,
+                          const TargetValue* value) override {
     auto scalarValueVector = boost::get<std::vector<ScalarTargetValue>>(value);
 
     if (nullptr == scalarValueVector) {
@@ -383,9 +383,9 @@ class ArrayColumnDescriptor : public TestColumnDescriptor {
     return true;
   }
 
-  virtual bool check_column_value(const int row,
-                                  const SQLTypeInfo& type,
-                                  const ScalarTargetValue* scalarValue) {
+  bool check_column_value(const int row,
+                          const SQLTypeInfo& type,
+                          const ScalarTargetValue* scalarValue) override {
     return false;
   }
 };
@@ -397,20 +397,20 @@ class GeoPointColumnDescriptor : public TestColumnDescriptor {
  public:
   GeoPointColumnDescriptor(SQLTypes sql_type = kPOINT) : rs_type(sql_type){};
 
-  virtual bool skip_test(std::string name) { return "CreateTableAsSelect" != name; }
+  bool skip_test(std::string name) override { return "CreateTableAsSelect" != name; }
 
-  virtual std::string get_column_definition() { return "POINT"; };
+  std::string get_column_definition() override { return "POINT"; };
 
   std::string getColumnWktStringValue(int row) {
     return "POINT (" + std::to_string(row) + " 0)";
   }
-  virtual std::string get_column_value(int row) {
+  std::string get_column_value(int row) override {
     return "'" + getColumnWktStringValue(row) + "'";
   };
 
-  virtual bool check_column_value(int row,
-                                  const SQLTypeInfo& type,
-                                  const ScalarTargetValue* value) {
+  bool check_column_value(int row,
+                          const SQLTypeInfo& type,
+                          const ScalarTargetValue* value) override {
     if (!(type.get_type() == rs_type)) {
       return false;
     }
@@ -443,9 +443,9 @@ class GeoLinestringColumnDescriptor : public TestColumnDescriptor {
  public:
   GeoLinestringColumnDescriptor(SQLTypes sql_type = kLINESTRING) : rs_type(sql_type){};
 
-  virtual bool skip_test(std::string name) { return "CreateTableAsSelect" != name; }
+  bool skip_test(std::string name) override { return "CreateTableAsSelect" != name; }
 
-  virtual std::string get_column_definition() { return "LINESTRING"; };
+  std::string get_column_definition() override { return "LINESTRING"; };
 
   std::string getColumnWktStringValue(int row) {
     std::string linestring = "LINESTRING (0 0";
@@ -455,13 +455,13 @@ class GeoLinestringColumnDescriptor : public TestColumnDescriptor {
     linestring += ")";
     return linestring;
   }
-  virtual std::string get_column_value(int row) {
+  std::string get_column_value(int row) override {
     return "'" + getColumnWktStringValue(row) + "'";
   };
 
-  virtual bool check_column_value(int row,
-                                  const SQLTypeInfo& type,
-                                  const ScalarTargetValue* value) {
+  bool check_column_value(int row,
+                          const SQLTypeInfo& type,
+                          const ScalarTargetValue* value) override {
     if (!(type.get_type() == rs_type)) {
       return false;
     }
@@ -495,9 +495,9 @@ class GeoMultiPolygonColumnDescriptor : public TestColumnDescriptor {
   GeoMultiPolygonColumnDescriptor(SQLTypes sql_type = kMULTIPOLYGON)
       : rs_type(sql_type){};
 
-  virtual bool skip_test(std::string name) { return "CreateTableAsSelect" != name; }
+  bool skip_test(std::string name) override { return "CreateTableAsSelect" != name; }
 
-  virtual std::string get_column_definition() { return "MULTIPOLYGON"; };
+  std::string get_column_definition() override { return "MULTIPOLYGON"; };
 
   std::string getColumnWktStringValue(int row) {
     std::string polygon =
@@ -509,13 +509,13 @@ class GeoMultiPolygonColumnDescriptor : public TestColumnDescriptor {
     return polygon;
   }
 
-  virtual std::string get_column_value(int row) {
+  std::string get_column_value(int row) override {
     return "'" + getColumnWktStringValue(row) + "'";
   };
 
-  virtual bool check_column_value(int row,
-                                  const SQLTypeInfo& type,
-                                  const ScalarTargetValue* value) {
+  bool check_column_value(int row,
+                          const SQLTypeInfo& type,
+                          const ScalarTargetValue* value) override {
     if (!(type.get_type() == rs_type)) {
       return false;
     }
@@ -548,9 +548,9 @@ class GeoPolygonColumnDescriptor : public TestColumnDescriptor {
  public:
   GeoPolygonColumnDescriptor(SQLTypes sql_type = kPOLYGON) : rs_type(sql_type){};
 
-  virtual bool skip_test(std::string name) { return "CreateTableAsSelect" != name; }
+  bool skip_test(std::string name) override { return "CreateTableAsSelect" != name; }
 
-  virtual std::string get_column_definition() { return "POLYGON"; };
+  std::string get_column_definition() override { return "POLYGON"; };
 
   std::string getColumnWktStringValue(int row) {
     std::string polygon =
@@ -562,13 +562,13 @@ class GeoPolygonColumnDescriptor : public TestColumnDescriptor {
     return polygon;
   }
 
-  virtual std::string get_column_value(int row) {
+  std::string get_column_value(int row) override {
     return "'" + getColumnWktStringValue(row) + "'";
   };
 
-  virtual bool check_column_value(int row,
-                                  const SQLTypeInfo& type,
-                                  const ScalarTargetValue* value) {
+  bool check_column_value(int row,
+                          const SQLTypeInfo& type,
+                          const ScalarTargetValue* value) override {
     if (!(type.get_type() == rs_type)) {
       return false;
     }

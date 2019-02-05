@@ -2014,11 +2014,11 @@ class UsedColumnsVisitor : public ScalarExprVisitor<SET_TYPE> {
   using ColumnIdSet = SET_TYPE;
 
  protected:
-  virtual ColumnIdSet visitColumnVar(const Analyzer::ColumnVar* col_var) const override {
+  ColumnIdSet visitColumnVar(const Analyzer::ColumnVar* col_var) const override {
     return {col_var->get_column_id()};
   }
 
-  virtual std::unordered_set<int> aggregateResult(
+  std::unordered_set<int> aggregateResult(
       const std::unordered_set<int>& aggregate,
       const std::unordered_set<int>& next_result) const override {
     auto result = aggregate;

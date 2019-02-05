@@ -52,7 +52,7 @@ void register_signal_handler() {
 
 class DBObjectPermissionsEnv : public ::testing::Environment {
  public:
-  virtual void SetUp() {
+  void SetUp() override {
     std::string db_name{MAPD_SYSTEM_DB};
     std::string user_name{MAPD_ROOT_USER};
     boost::filesystem::path base_path{BASE_PATH};
@@ -180,7 +180,7 @@ struct GrantSyntax : testing::Test {
     drop_tables();
     setup_tables();
   }
-  virtual ~GrantSyntax() { drop_tables(); }
+  ~GrantSyntax() override { drop_tables(); }
 };
 
 struct DatabaseObject : testing::Test {
@@ -190,7 +190,7 @@ struct DatabaseObject : testing::Test {
   Roles role_;
 
   explicit DatabaseObject() {}
-  virtual ~DatabaseObject() {}
+  ~DatabaseObject() override {}
 };
 
 struct TableObject : testing::Test {
@@ -220,7 +220,7 @@ struct TableObject : testing::Test {
     drop_tables();
     setup_tables();
   }
-  virtual ~TableObject() { drop_tables(); }
+  ~TableObject() override { drop_tables(); }
 };
 
 struct ViewObject : testing::Test {
@@ -245,7 +245,7 @@ struct ViewObject : testing::Test {
     run_ddl_statement("DROP USER bob;");
   }
   explicit ViewObject() { setup_objects(); }
-  virtual ~ViewObject() { remove_objects(); }
+  ~ViewObject() override { remove_objects(); }
 };
 
 struct DashboardObject : testing::Test {
@@ -285,7 +285,7 @@ struct DashboardObject : testing::Test {
     drop_dashboards();
     setup_dashboards();
   }
-  virtual ~DashboardObject() { drop_dashboards(); }
+  ~DashboardObject() override { drop_dashboards(); }
 };
 
 TEST_F(GrantSyntax, MultiPrivilegeGrantRevoke) {

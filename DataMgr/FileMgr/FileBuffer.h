@@ -75,19 +75,19 @@ class FileBuffer : public AbstractBuffer {
              const std::vector<HeaderInfo>::const_iterator& headerEndIt);
 
   /// Destructor
-  virtual ~FileBuffer();
+  ~FileBuffer() override;
 
   Page addNewMultiPage(const int epoch);
 
-  void reserve(const size_t numBytes);
+  void reserve(const size_t numBytes) override;
 
   void freePages();
 
-  virtual void read(int8_t* const dst,
-                    const size_t numBytes = 0,
-                    const size_t offset = 0,
-                    const MemoryLevel dstMemoryLevel = CPU_LEVEL,
-                    const int deviceId = -1);
+  void read(int8_t* const dst,
+            const size_t numBytes = 0,
+            const size_t offset = 0,
+            const MemoryLevel dstMemoryLevel = CPU_LEVEL,
+            const int deviceId = -1) override;
 
   /**
    * @brief Writes the contents of source (src) into new versions of the affected logical
@@ -97,30 +97,30 @@ class FileBuffer : public AbstractBuffer {
    * logical pages. New pages are only appended if the value of epoch (in FileMgr)
    *
    */
-  virtual void write(int8_t* src,
-                     const size_t numBytes,
-                     const size_t offset = 0,
-                     const MemoryLevel srcMemoryLevel = CPU_LEVEL,
-                     const int deviceId = -1);
+  void write(int8_t* src,
+             const size_t numBytes,
+             const size_t offset = 0,
+             const MemoryLevel srcMemoryLevel = CPU_LEVEL,
+             const int deviceId = -1) override;
 
-  virtual void append(int8_t* src,
-                      const size_t numBytes,
-                      const MemoryLevel srcMemoryLevel = CPU_LEVEL,
-                      const int deviceId = -1);
+  void append(int8_t* src,
+              const size_t numBytes,
+              const MemoryLevel srcMemoryLevel = CPU_LEVEL,
+              const int deviceId = -1) override;
   void copyPage(Page& srcPage,
                 Page& destPage,
                 const size_t numBytes,
                 const size_t offset = 0);
-  virtual inline Data_Namespace::MemoryLevel getType() const { return DISK_LEVEL; }
+  inline Data_Namespace::MemoryLevel getType() const override { return DISK_LEVEL; }
 
   /// Not implemented for FileMgr -- throws a runtime_error
-  virtual int8_t* getMemoryPtr() { LOG(FATAL) << "Operation not supported."; }
+  int8_t* getMemoryPtr() override { LOG(FATAL) << "Operation not supported."; }
 
   /// Returns the number of pages in the FileBuffer.
-  inline virtual size_t pageCount() const { return multiPages_.size(); }
+  inline size_t pageCount() const override { return multiPages_.size(); }
 
   /// Returns the size in bytes of each page in the FileBuffer.
-  inline virtual size_t pageSize() const { return pageSize_; }
+  inline size_t pageSize() const override { return pageSize_; }
 
   /// Returns the size in bytes of the data portion of each page in the FileBuffer.
   inline virtual size_t pageDataSize() const { return pageDataSize_; }
@@ -132,17 +132,17 @@ class FileBuffer : public AbstractBuffer {
   /// Returns vector of MultiPages in the FileBuffer.
   inline virtual std::vector<MultiPage> getMultiPage() const { return multiPages_; }
 
-  inline virtual size_t size() const { return size_; }
+  inline size_t size() const override { return size_; }
 
   /// Returns the total number of bytes allocated for the FileBuffer.
-  inline virtual size_t reservedSize() const { return multiPages_.size() * pageSize_; }
+  inline size_t reservedSize() const override { return multiPages_.size() * pageSize_; }
 
   /// Returns the total number of used bytes in the FileBuffer.
   // inline virtual size_t used() const {
 
   /// Returns whether or not the FileBuffer has been modified since the last
   /// flush/checkpoint.
-  virtual bool isDirty() const { return isDirty_; }
+  bool isDirty() const override { return isDirty_; }
 
  private:
   // FileBuffer(const FileBuffer&);      // private copy constructor

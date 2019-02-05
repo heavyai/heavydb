@@ -562,7 +562,7 @@ bool delete_and_vacuum_varlen_rows(const std::string& table,
 
 class SQLTestEnv : public ::testing::Environment {
  public:
-  virtual void SetUp() {
+  void SetUp() override {
     boost::filesystem::path base_path{BASE_PATH};
     CHECK(boost::filesystem::exists(base_path));
     auto system_db_file = base_path / "mapd_catalogs" / MAPD_SYSTEM_DB;
@@ -681,7 +681,7 @@ void init_table_data(const std::string& table = "trips",
 template <int N = 0>
 class RowVacuumTestWithVarlenAndArraysN : public ::testing::Test {
  protected:
-  virtual void SetUp() {
+  void SetUp() override {
     auto create_varlen_table =
         create_varlen_table1 +
         (UpdelTestConfig::enableVarUpdelPerfTest ? "" : create_varlen_table2) +
@@ -695,7 +695,7 @@ class RowVacuumTestWithVarlenAndArraysN : public ::testing::Test {
     Fragmenter_Namespace::FragmentInfo::setUnconditionalVacuum(N == 0);
   }
 
-  virtual void TearDown() {
+  void TearDown() override {
     Fragmenter_Namespace::FragmentInfo::setUnconditionalVacuum(false);
     ASSERT_NO_THROW(run_ddl_statement("drop table varlen;"););
   }
@@ -773,12 +773,12 @@ TEST_F(RowVacuumTestWithVarlenAndArrays, Vacuum_Interleaved_3) {
 
 class RowVacuumTest : public ::testing::Test {
  protected:
-  virtual void SetUp() {
+  void SetUp() override {
     ASSERT_NO_THROW(init_table_data(););
     Fragmenter_Namespace::FragmentInfo::setUnconditionalVacuum(true);
   }
 
-  virtual void TearDown() {
+  void TearDown() override {
     Fragmenter_Namespace::FragmentInfo::setUnconditionalVacuum(false);
     ASSERT_NO_THROW(run_ddl_statement("drop table trips;"););
   }
@@ -849,9 +849,9 @@ TEST_F(UpdateStorageTest_Temp, Update_temp_rollback) {
 
 class UpdateStorageTest : public ::testing::Test {
  protected:
-  virtual void SetUp() { ASSERT_NO_THROW(init_table_data();); }
+  void SetUp() override { ASSERT_NO_THROW(init_table_data();); }
 
-  virtual void TearDown() { ASSERT_NO_THROW(run_ddl_statement("drop table trips;");); }
+  void TearDown() override { ASSERT_NO_THROW(run_ddl_statement("drop table trips;");); }
 };
 
 TEST_F(UpdateStorageTest, All_fixed_encoded_smallint_rate_code_id_null_8) {

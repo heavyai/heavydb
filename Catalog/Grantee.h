@@ -69,23 +69,23 @@ class Grantee {
 class User : public Grantee {
  public:
   User(const std::string& name) : Grantee(name) {}
-  virtual bool isUser() const { return true; }
+  bool isUser() const override { return true; }
 };
 
 class Role : public Grantee {
  public:
   Role(const std::string& name) : Grantee(name) {}
-  virtual ~Role();
+  ~Role() override;
 
-  virtual bool isUser() const { return false; }
-  virtual void updatePrivileges();
-  virtual void renameDbObject(const DBObject& object);
+  bool isUser() const override { return false; }
+  void updatePrivileges() override;
+  void renameDbObject(const DBObject& object) override;
 
   // NOTE(max): To be used only from Grantee
   virtual void addGrantee(Grantee* grantee);
   virtual void removeGrantee(Grantee* grantee);
 
-  virtual void revokeAllOnDatabase(int32_t dbId);
+  void revokeAllOnDatabase(int32_t dbId) override;
   std::vector<Grantee*> getGrantees() const;
 
  private:

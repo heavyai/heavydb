@@ -5115,7 +5115,7 @@ void MapDHandler::get_license_claims(TLicenseInfo& _return,
                                      const TSessionId& session,
                                      const std::string& nonce) {
   const auto session_info = get_session(session);
-  _return.claims.push_back("");
+  _return.claims.emplace_back("");
 }
 
 void MapDHandler::shutdown() {

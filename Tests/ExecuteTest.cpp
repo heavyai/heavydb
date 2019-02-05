@@ -6484,9 +6484,9 @@ TEST(Select, Joins_OneOuterExpression) {
 
 class JoinTest : public ::testing::Test {
  protected:
-  virtual ~JoinTest() {}
+  ~JoinTest() override {}
 
-  virtual void SetUp() override {
+  void SetUp() override {
     auto create_test_table = [](const std::string& table_name,
                                 const size_t num_records,
                                 const size_t start_index = 0) {
@@ -6512,7 +6512,7 @@ class JoinTest : public ::testing::Test {
     create_test_table("jointest_c", 20, 10);
   }
 
-  virtual void TearDown() override {
+  void TearDown() override {
     if (!g_keep_test_data) {
       auto execute_drop_table = [](const std::string& table_name) {
         const std::string ddl = "DROP TABLE " + table_name;

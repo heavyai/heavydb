@@ -48,7 +48,7 @@ class StringNoneEncoder : public Encoder {
   ChunkMetadata appendData(int8_t*& srcData,
                            const size_t numAppendElems,
                            const SQLTypeInfo&,
-                           const bool replicating = false) {
+                           const bool replicating = false) override {
     CHECK(false);  // should never be called for strings
     return ChunkMetadata{};
   }
@@ -58,7 +58,7 @@ class StringNoneEncoder : public Encoder {
                            const size_t numAppendElems,
                            const bool replicating = false);
 
-  void getMetadata(ChunkMetadata& chunkMetadata) {
+  void getMetadata(ChunkMetadata& chunkMetadata) override {
     Encoder::getMetadata(chunkMetadata);  // call on parent class
     chunkMetadata.chunkStats.min.stringval = nullptr;
     chunkMetadata.chunkStats.max.stringval = nullptr;
@@ -66,7 +66,7 @@ class StringNoneEncoder : public Encoder {
   }
 
   // Only called from the executor for synthesized meta-information.
-  ChunkMetadata getMetadata(const SQLTypeInfo& ti) {
+  ChunkMetadata getMetadata(const SQLTypeInfo& ti) override {
     auto chunk_stats = ChunkStats{};
     chunk_stats.min.stringval = nullptr;
     chunk_stats.max.stringval = nullptr;
@@ -75,25 +75,25 @@ class StringNoneEncoder : public Encoder {
     return chunk_metadata;
   }
 
-  void updateStats(const int64_t, const bool) { CHECK(false); }
+  void updateStats(const int64_t, const bool) override { CHECK(false); }
 
-  void updateStats(const double, const bool) { CHECK(false); }
+  void updateStats(const double, const bool) override { CHECK(false); }
 
-  void reduceStats(const Encoder&) { CHECK(false); }
+  void reduceStats(const Encoder&) override { CHECK(false); }
 
-  void writeMetadata(FILE* f) {
+  void writeMetadata(FILE* f) override {
     // assumes pointer is already in right place
     fwrite((int8_t*)&num_elems_, sizeof(size_t), 1, f);
     fwrite((int8_t*)&has_nulls, sizeof(bool), 1, f);
   }
 
-  void readMetadata(FILE* f) {
+  void readMetadata(FILE* f) override {
     // assumes pointer is already in right place
     CHECK_NE(fread((int8_t*)&num_elems_, sizeof(size_t), size_t(1), f), size_t(0));
     CHECK_NE(fread((int8_t*)&has_nulls, sizeof(bool), size_t(1), f), size_t(0));
   }
 
-  void copyMetadata(const Encoder* copyFromEncoder) {
+  void copyMetadata(const Encoder* copyFromEncoder) override {
     num_elems_ = copyFromEncoder->getNumElems();
     has_nulls = static_cast<const StringNoneEncoder*>(copyFromEncoder)->has_nulls;
   }

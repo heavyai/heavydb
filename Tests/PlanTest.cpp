@@ -77,7 +77,7 @@ void register_signal_handler() {
 
 class SQLTestEnv : public ::testing::Environment {
  public:
-  virtual void SetUp() {
+  void SetUp() override {
     boost::filesystem::path base_path{BASE_PATH};
     CHECK(boost::filesystem::exists(base_path));
     auto system_db_file = base_path / "mapd_catalogs" / MAPD_SYSTEM_DB;

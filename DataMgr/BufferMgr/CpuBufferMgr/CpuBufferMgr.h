@@ -33,16 +33,16 @@ class CpuBufferMgr : public BufferMgr {
                const size_t bufferAllocIncrement = 2147483648,
                const size_t pageSize = 512,
                AbstractBufferMgr* parentMgr = 0);
-  virtual inline MgrType getMgrType() { return CPU_MGR; }
-  virtual inline std::string getStringMgrType() { return ToString(CPU_MGR); }
-  ~CpuBufferMgr();
+  inline MgrType getMgrType() override { return CPU_MGR; }
+  inline std::string getStringMgrType() override { return ToString(CPU_MGR); }
+  ~CpuBufferMgr() override;
 
  private:
-  virtual void addSlab(const size_t slabSize);
-  virtual void freeAllMem();
-  virtual void allocateBuffer(BufferList::iterator segIt,
-                              const size_t pageSize,
-                              const size_t initialSize);
+  void addSlab(const size_t slabSize) override;
+  void freeAllMem() override;
+  void allocateBuffer(BufferList::iterator segIt,
+                      const size_t pageSize,
+                      const size_t initialSize) override;
   CudaMgr_Namespace::CudaMgr* cudaMgr_;
 };
 

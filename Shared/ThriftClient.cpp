@@ -25,11 +25,13 @@ using Decision = AccessManager::Decision;
 
 class InsecureAccessManager : public AccessManager {
  public:
-  Decision verify(const sockaddr_storage& sa) throw() { return ALLOW; };
-  Decision verify(const std::string& host, const char* name, int size) throw() {
+  Decision verify(const sockaddr_storage& sa) throw() override { return ALLOW; };
+  Decision verify(const std::string& host, const char* name, int size) throw() override {
     return ALLOW;
   };
-  Decision verify(const sockaddr_storage& sa, const char* data, int size) throw() {
+  Decision verify(const sockaddr_storage& sa,
+                  const char* data,
+                  int size) throw() override {
     return ALLOW;
   };
 };

@@ -32,7 +32,7 @@ class GpuCudaBuffer : public Buffer {
                 CudaMgr_Namespace::CudaMgr* cudaMgr,
                 const size_t pageSize = 512,
                 const size_t numBytes = 0);
-  virtual inline Data_Namespace::MemoryLevel getType() const { return GPU_LEVEL; }
+  inline Data_Namespace::MemoryLevel getType() const override { return GPU_LEVEL; }
   // virtual inline int getDeviceId() const { return gpuNum_; }
 
  private:
@@ -40,12 +40,12 @@ class GpuCudaBuffer : public Buffer {
                 const size_t numBytes,
                 const size_t offset = 0,
                 const MemoryLevel dstBufferType = CPU_LEVEL,
-                const int dstDeviceId = -1);
+                const int dstDeviceId = -1) override;
   void writeData(int8_t* const src,
                  const size_t numBytes,
                  const size_t offset = 0,
                  const MemoryLevel srcBufferType = CPU_LEVEL,
-                 const int srcDeviceId = -1);
+                 const int srcDeviceId = -1) override;
   // int gpuNum_;
   CudaMgr_Namespace::CudaMgr* cudaMgr_;
 };

@@ -67,7 +67,7 @@ class RebalanceCb : public RdKafka::RebalanceCb {
  public:
   void rebalance_cb(RdKafka::KafkaConsumer* consumer,
                     RdKafka::ErrorCode err,
-                    std::vector<RdKafka::TopicPartition*>& partitions) {
+                    std::vector<RdKafka::TopicPartition*>& partitions) override {
     LOG(INFO) << "RebalanceCb: " << RdKafka::err2str(err) << ": ";
 
     part_list_print(partitions);
@@ -248,7 +248,7 @@ bool msg_consume(RdKafka::Message* message,
 
 class ConsumeCb : public RdKafka::ConsumeCb {
  public:
-  void consume_cb(RdKafka::Message& msg, void* opaque) {
+  void consume_cb(RdKafka::Message& msg, void* opaque) override {
     // reinterpret_cast<KafkaMgr*>(opaque)->
     // msg_consume(&msg, opaque);
   }
@@ -256,7 +256,7 @@ class ConsumeCb : public RdKafka::ConsumeCb {
 
 class EventCb : public RdKafka::EventCb {
  public:
-  void event_cb(RdKafka::Event& event) {
+  void event_cb(RdKafka::Event& event) override {
     switch (event.type()) {
       case RdKafka::Event::EVENT_ERROR:
         LOG(ERROR) << "ERROR (" << RdKafka::err2str(event.err()) << "): " << event.str();

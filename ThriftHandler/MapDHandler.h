@@ -126,7 +126,7 @@ class MapDHandler : public MapDIf {
               const int idle_session_duration,
               const int max_session_duration);
 
-  ~MapDHandler();
+  ~MapDHandler() override;
 
   static inline size_t max_bytes_for_thrift() { return 2 * 1000 * 1000 * 1000L; }
 
@@ -139,48 +139,52 @@ class MapDHandler : public MapDIf {
   void connect(TSessionId& session,
                const std::string& user,
                const std::string& passwd,
-               const std::string& dbname);
-  void disconnect(const TSessionId& session);
-  void get_server_status(TServerStatus& _return, const TSessionId& session);
-  void get_status(std::vector<TServerStatus>& _return, const TSessionId& session);
-  void get_hardware_info(TClusterHardwareInfo& _return, const TSessionId& session);
+               const std::string& dbname) override;
+  void disconnect(const TSessionId& session) override;
+  void get_server_status(TServerStatus& _return, const TSessionId& session) override;
+  void get_status(std::vector<TServerStatus>& _return,
+                  const TSessionId& session) override;
+  void get_hardware_info(TClusterHardwareInfo& _return,
+                         const TSessionId& session) override;
 
   bool hasTableAccessPrivileges(const TableDescriptor* td, const TSessionId& session);
-  void get_tables(std::vector<std::string>& _return, const TSessionId& session);
-  void get_physical_tables(std::vector<std::string>& _return, const TSessionId& session);
-  void get_views(std::vector<std::string>& _return, const TSessionId& session);
-  void get_tables_meta(std::vector<TTableMeta>& _return, const TSessionId& session);
+  void get_tables(std::vector<std::string>& _return, const TSessionId& session) override;
+  void get_physical_tables(std::vector<std::string>& _return,
+                           const TSessionId& session) override;
+  void get_views(std::vector<std::string>& _return, const TSessionId& session) override;
+  void get_tables_meta(std::vector<TTableMeta>& _return,
+                       const TSessionId& session) override;
   void get_table_details(TTableDetails& _return,
                          const TSessionId& session,
-                         const std::string& table_name);
+                         const std::string& table_name) override;
   void get_internal_table_details(TTableDetails& _return,
                                   const TSessionId& session,
-                                  const std::string& table_name);
-  void get_users(std::vector<std::string>& _return, const TSessionId& session);
-  void get_databases(std::vector<TDBInfo>& _return, const TSessionId& session);
+                                  const std::string& table_name) override;
+  void get_users(std::vector<std::string>& _return, const TSessionId& session) override;
+  void get_databases(std::vector<TDBInfo>& _return, const TSessionId& session) override;
 
-  void get_version(std::string& _return);
-  void start_heap_profile(const TSessionId& session);
-  void stop_heap_profile(const TSessionId& session);
-  void get_heap_profile(std::string& _return, const TSessionId& session);
+  void get_version(std::string& _return) override;
+  void start_heap_profile(const TSessionId& session) override;
+  void stop_heap_profile(const TSessionId& session) override;
+  void get_heap_profile(std::string& _return, const TSessionId& session) override;
   void get_memory(std::vector<TNodeMemoryInfo>& _return,
                   const TSessionId& session,
-                  const std::string& memory_level);
-  void clear_cpu_memory(const TSessionId& session);
-  void clear_gpu_memory(const TSessionId& session);
+                  const std::string& memory_level) override;
+  void clear_cpu_memory(const TSessionId& session) override;
+  void clear_gpu_memory(const TSessionId& session) override;
   void set_table_epoch(const TSessionId& session,
                        const int db_id,
                        const int table_id,
-                       const int new_epoch);
+                       const int new_epoch) override;
   void set_table_epoch_by_name(const TSessionId& session,
                                const std::string& table_name,
-                               const int new_epoch);
+                               const int new_epoch) override;
   int32_t get_table_epoch(const TSessionId& session,
                           const int32_t db_id,
-                          const int32_t table_id);
+                          const int32_t table_id) override;
   int32_t get_table_epoch_by_name(const TSessionId& session,
-                                  const std::string& table_name);
-  void get_session_info(TSessionInfo& _return, const TSessionId& session);
+                                  const std::string& table_name) override;
+  void get_session_info(TSessionInfo& _return, const TSessionId& session) override;
   // query, render
   void sql_execute(TQueryResult& _return,
                    const TSessionId& session,
@@ -188,38 +192,39 @@ class MapDHandler : public MapDIf {
                    const bool column_format,
                    const std::string& nonce,
                    const int32_t first_n,
-                   const int32_t at_most_n);
+                   const int32_t at_most_n) override;
   void get_completion_hints(std::vector<TCompletionHint>& hints,
                             const TSessionId& session,
                             const std::string& sql,
-                            const int cursor);
+                            const int cursor) override;
   // TODO(miyu): merge the following two data frame APIs.
   void sql_execute_df(TDataFrame& _return,
                       const TSessionId& session,
                       const std::string& query,
                       const TDeviceType::type device_type,
                       const int32_t device_id,
-                      const int32_t first_n);
+                      const int32_t first_n) override;
   void sql_execute_gdf(TDataFrame& _return,
                        const TSessionId& session,
                        const std::string& query,
                        const int32_t device_id,
-                       const int32_t first_n);
+                       const int32_t first_n) override;
   void deallocate_df(const TSessionId& session,
                      const TDataFrame& df,
                      const TDeviceType::type device_type,
-                     const int32_t device_id);
-  void interrupt(const TSessionId& session);
+                     const int32_t device_id) override;
+  void interrupt(const TSessionId& session) override;
   void sql_validate(TTableDescriptor& _return,
                     const TSessionId& session,
-                    const std::string& query);
-  void set_execution_mode(const TSessionId& session, const TExecuteMode::type mode);
+                    const std::string& query) override;
+  void set_execution_mode(const TSessionId& session,
+                          const TExecuteMode::type mode) override;
   void render_vega(TRenderResult& _return,
                    const TSessionId& session,
                    const int64_t widget_id,
                    const std::string& vega_json,
                    const int32_t compression_level,
-                   const std::string& nonce);
+                   const std::string& nonce) override;
   void get_result_row_for_pixel(
       TPixelTableRowResult& _return,
       const TSessionId& session,
@@ -228,62 +233,65 @@ class MapDHandler : public MapDIf {
       const std::map<std::string, std::vector<std::string>>& table_col_names,
       const bool column_format,
       const int32_t pixel_radius,
-      const std::string& nonce);
+      const std::string& nonce) override;
   // Immerse
   void get_frontend_view(TFrontendView& _return,
                          const TSessionId& session,
-                         const std::string& view_name);
-  void get_frontend_views(std::vector<TFrontendView>& _return, const TSessionId& session);
+                         const std::string& view_name) override;
+  void get_frontend_views(std::vector<TFrontendView>& _return,
+                          const TSessionId& session) override;
   void create_frontend_view(const TSessionId& session,
                             const std::string& view_name,
                             const std::string& view_state,
                             const std::string& image_hash,
-                            const std::string& view_metadata);
-  void delete_frontend_view(const TSessionId& session, const std::string& view_name);
+                            const std::string& view_metadata) override;
+  void delete_frontend_view(const TSessionId& session,
+                            const std::string& view_name) override;
 
   // dashboards
   void get_dashboard(TDashboard& _return,
                      const TSessionId& session,
-                     int32_t dashboard_id);
-  void get_dashboards(std::vector<TDashboard>& _return, const TSessionId& session);
+                     int32_t dashboard_id) override;
+  void get_dashboards(std::vector<TDashboard>& _return,
+                      const TSessionId& session) override;
   int32_t create_dashboard(const TSessionId& session,
                            const std::string& dashboard_name,
                            const std::string& dashboard_state,
                            const std::string& image_hash,
-                           const std::string& dashboard_metadata);
+                           const std::string& dashboard_metadata) override;
   void replace_dashboard(const TSessionId& session,
                          const int32_t dashboard_id,
                          const std::string& dashboard_name,
                          const std::string& dashboard_owner,
                          const std::string& dashboard_state,
                          const std::string& image_hash,
-                         const std::string& dashboard_metadata);
-  void delete_dashboard(const TSessionId& session, const int32_t dashboard_id);
+                         const std::string& dashboard_metadata) override;
+  void delete_dashboard(const TSessionId& session, const int32_t dashboard_id) override;
   void share_dashboard(const TSessionId& session,
                        const int32_t dashboard_id,
                        const std::vector<std::string>& groups,
                        const std::vector<std::string>& objects,
-                       const TDashboardPermissions& permissions);
+                       const TDashboardPermissions& permissions) override;
   void unshare_dashboard(const TSessionId& session,
                          const int32_t dashboard_id,
                          const std::vector<std::string>& groups,
                          const std::vector<std::string>& objects,
-                         const TDashboardPermissions& permissions);
+                         const TDashboardPermissions& permissions) override;
   void get_dashboard_grantees(std::vector<TDashboardGrantees>& _return,
                               const TSessionId& session,
-                              int32_t dashboard_id);
+                              int32_t dashboard_id) override;
 
   void get_link_view(TFrontendView& _return,
                      const TSessionId& session,
-                     const std::string& link);
+                     const std::string& link) override;
   void create_link(std::string& _return,
                    const TSessionId& session,
                    const std::string& view_state,
-                   const std::string& view_metadata);
+                   const std::string& view_metadata) override;
   // import
   void load_table_binary(const TSessionId& session,
                          const std::string& table_name,
-                         const std::vector<TRow>& rows);
+                         const std::vector<TRow>& rows) override;
 
   void prepare_columnar_loader(
       const Catalog_Namespace::SessionInfo& session_info,
@@ -294,93 +302,96 @@ class MapDHandler : public MapDIf {
 
   void load_table_binary_columnar(const TSessionId& session,
                                   const std::string& table_name,
-                                  const std::vector<TColumn>& cols);
+                                  const std::vector<TColumn>& cols) override;
   void load_table_binary_arrow(const TSessionId& session,
                                const std::string& table_name,
-                               const std::string& arrow_stream);
+                               const std::string& arrow_stream) override;
 
   void load_table(const TSessionId& session,
                   const std::string& table_name,
-                  const std::vector<TStringRow>& rows);
+                  const std::vector<TStringRow>& rows) override;
   void detect_column_types(TDetectResult& _return,
                            const TSessionId& session,
                            const std::string& file_name,
-                           const TCopyParams& copy_params);
+                           const TCopyParams& copy_params) override;
   void create_table(const TSessionId& session,
                     const std::string& table_name,
                     const TRowDescriptor& row_desc,
                     const TTableType::type table_type,
-                    const TCreateParams& create_params);
+                    const TCreateParams& create_params) override;
   void import_table(const TSessionId& session,
                     const std::string& table_name,
                     const std::string& file_name,
-                    const TCopyParams& copy_params);
+                    const TCopyParams& copy_params) override;
   void import_geo_table(const TSessionId& session,
                         const std::string& table_name,
                         const std::string& file_name,
                         const TCopyParams& copy_params,
                         const TRowDescriptor& row_desc,
-                        const TCreateParams& create_params);
+                        const TCreateParams& create_params) override;
   void import_table_status(TImportStatus& _return,
                            const TSessionId& session,
-                           const std::string& import_id);
+                           const std::string& import_id) override;
   void get_first_geo_file_in_archive(std::string& _return,
                                      const TSessionId& session,
                                      const std::string& archive_path,
-                                     const TCopyParams& copy_params);
+                                     const TCopyParams& copy_params) override;
   void get_all_files_in_archive(std::vector<std::string>& _return,
                                 const TSessionId& session,
                                 const std::string& archive_path,
-                                const TCopyParams& copy_params);
+                                const TCopyParams& copy_params) override;
   // distributed
   void check_table_consistency(TTableMeta& _return,
                                const TSessionId& session,
-                               const int32_t table_id);
+                               const int32_t table_id) override;
   void start_query(TPendingQuery& _return,
                    const TSessionId& session,
                    const std::string& query_ra,
-                   const bool just_explain);
-  void execute_first_step(TStepResult& _return, const TPendingQuery& pending_query);
+                   const bool just_explain) override;
+  void execute_first_step(TStepResult& _return,
+                          const TPendingQuery& pending_query) override;
   void broadcast_serialized_rows(const std::string& serialized_rows,
                                  const TRowDescriptor& row_desc,
                                  const int64_t result_size,
-                                 const TQueryId query_id);
+                                 const TQueryId query_id) override;
 
   void start_render_query(TPendingRenderQuery& _return,
                           const TSessionId& session,
                           const int64_t widget_id,
                           const int16_t node_idx,
-                          const std::string& vega_json);
+                          const std::string& vega_json) override;
   void execute_next_render_step(TRenderStepResult& _return,
                                 const TPendingRenderQuery& pending_render,
-                                const TRenderAggDataMap& merged_data);
+                                const TRenderAggDataMap& merged_data) override;
 
-  void insert_data(const TSessionId& session, const TInsertData& insert_data);
-  void checkpoint(const TSessionId& session, const int32_t db_id, const int32_t table_id);
+  void insert_data(const TSessionId& session, const TInsertData& insert_data) override;
+  void checkpoint(const TSessionId& session,
+                  const int32_t db_id,
+                  const int32_t table_id) override;
   // deprecated
   void get_table_descriptor(TTableDescriptor& _return,
                             const TSessionId& session,
-                            const std::string& table_name);
+                            const std::string& table_name) override;
   void get_row_descriptor(TRowDescriptor& _return,
                           const TSessionId& session,
-                          const std::string& table_name);
+                          const std::string& table_name) override;
   // DB Object Privileges
-  void get_roles(std::vector<std::string>& _return, const TSessionId& session);
+  void get_roles(std::vector<std::string>& _return, const TSessionId& session) override;
   bool has_object_privilege(const TSessionId& sessionId,
                             const std::string& granteeName,
                             const std::string& objectName,
                             const TDBObjectType::type object_type,
-                            const TDBObjectPermissions& permissions);
+                            const TDBObjectPermissions& permissions) override;
   void get_db_objects_for_grantee(std::vector<TDBObject>& _return,
                                   const TSessionId& session,
-                                  const std::string& roleName);
+                                  const std::string& roleName) override;
   void get_db_object_privs(std::vector<TDBObject>& _return,
                            const TSessionId& session,
                            const std::string& objectName,
-                           const TDBObjectType::type type);
+                           const TDBObjectType::type type) override;
   void get_all_roles_for_user(std::vector<std::string>& _return,
                               const TSessionId& session,
-                              const std::string& granteeName);
+                              const std::string& granteeName) override;
   std::vector<std::string> get_valid_groups(const TSessionId& session,
                                             int32_t dashboard_id,
                                             std::vector<std::string> groups);
@@ -388,10 +399,10 @@ class MapDHandler : public MapDIf {
   void set_license_key(TLicenseInfo& _return,
                        const TSessionId& session,
                        const std::string& key,
-                       const std::string& nonce);
+                       const std::string& nonce) override;
   void get_license_claims(TLicenseInfo& _return,
                           const TSessionId& session,
-                          const std::string& nonce);
+                          const std::string& nonce) override;
   void shutdown();
   // end of sync block for HAHandler and mapd.thrift
 
