@@ -1264,11 +1264,6 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
   if (work_unit.exe_unit.query_features.isCPUOnlyExecutionRequired()) {
     co_project.device_type_ = ExecutorDeviceType::CPU;
   }
-
-  if (is_window_query(work_unit.exe_unit)) {
-    computeWindow(work_unit.exe_unit, co, eo, queue_time_ms);
-  }
-
   if (project->isSimple()) {
     CHECK_EQ(size_t(1), project->inputCount());
     const auto input_ra = project->getInput(0);
@@ -1742,6 +1737,9 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     RenderInfo* render_info,
     const int64_t queue_time_ms) {
   INJECT_TIMER(executeWorkUnit);
+  if (is_window_query(work_unit.exe_unit)) {
+    computeWindow(work_unit.exe_unit, co, eo, queue_time_ms);
+  }
   if (!eo.just_explain && eo.find_push_down_candidates) {
     // find potential candidates:
     auto selected_filters = selectFiltersToBePushedDown(work_unit, co, eo);
