@@ -60,28 +60,23 @@ std::vector<int64_t> index_to_row_number(const int64_t* index, const size_t inde
 }
 
 bool advance_current_rank(
-    const std::vector<WindowFunctionContext::Comparator>& comparators,
+    const std::function<bool(const int64_t lhs, const int64_t rhs)>& comparator,
     const int64_t* index,
     const size_t i) {
   if (i == 0) {
     return false;
   }
-  for (const auto& comparator : comparators) {
-    if (comparator(index[i - 1], index[i])) {
-      return true;
-    }
-  }
-  return false;
+  return comparator(index[i - 1], index[i]);
 }
 
 std::vector<int64_t> index_to_rank(
     const int64_t* index,
     const size_t index_size,
-    const std::vector<WindowFunctionContext::Comparator>& comparators) {
+    const std::function<bool(const int64_t lhs, const int64_t rhs)>& comparator) {
   std::vector<int64_t> rank(index_size);
   size_t crt_rank = 1;
   for (size_t i = 0; i < index_size; ++i) {
-    if (advance_current_rank(comparators, index, i)) {
+    if (advance_current_rank(comparator, index, i)) {
       crt_rank = i + 1;
     }
     rank[index[i]] = crt_rank;
@@ -92,11 +87,11 @@ std::vector<int64_t> index_to_rank(
 std::vector<int64_t> index_to_dense_rank(
     const int64_t* index,
     const size_t index_size,
-    const std::vector<WindowFunctionContext::Comparator>& comparators) {
+    const std::function<bool(const int64_t lhs, const int64_t rhs)>& comparator) {
   std::vector<int64_t> dense_rank(index_size);
   size_t crt_rank = 1;
   for (size_t i = 0; i < index_size; ++i) {
-    if (advance_current_rank(comparators, index, i)) {
+    if (advance_current_rank(comparator, index, i)) {
       ++crt_rank;
     }
     dense_rank[index[i]] = crt_rank;
@@ -107,11 +102,11 @@ std::vector<int64_t> index_to_dense_rank(
 std::vector<double> index_to_percent_rank(
     const int64_t* index,
     const size_t index_size,
-    const std::vector<WindowFunctionContext::Comparator>& comparators) {
+    const std::function<bool(const int64_t lhs, const int64_t rhs)>& comparator) {
   std::vector<double> percent_rank(index_size);
   size_t crt_rank = 1;
   for (size_t i = 0; i < index_size; ++i) {
-    if (advance_current_rank(comparators, index, i)) {
+    if (advance_current_rank(comparator, index, i)) {
       crt_rank = i + 1;
     }
     percent_rank[index[i]] =
@@ -123,13 +118,13 @@ std::vector<double> index_to_percent_rank(
 std::vector<double> index_to_cume_dist(
     const int64_t* index,
     const size_t index_size,
-    const std::vector<WindowFunctionContext::Comparator>& comparators) {
+    const std::function<bool(const int64_t lhs, const int64_t rhs)>& comparator) {
   std::vector<double> cume_dist(index_size);
   size_t start_peer_group = 0;
   while (start_peer_group < index_size) {
     size_t end_peer_group = start_peer_group + 1;
     while (end_peer_group < index_size &&
-           !advance_current_rank(comparators, index, end_peer_group)) {
+           !advance_current_rank(comparator, index, end_peer_group)) {
       ++end_peer_group;
     }
     for (size_t i = start_peer_group; i < end_peer_group; ++i) {
@@ -303,17 +298,29 @@ void WindowFunctionContext::compute() {
                                                  order_col_collation.nulls_first);
       auto comparator = asc_comparator;
       if (order_col_collation.is_desc) {
-        comparator = [&asc_comparator](const int64_t lhs, const int64_t rhs) {
+        comparator = [asc_comparator](const int64_t lhs, const int64_t rhs) {
           return asc_comparator(rhs, lhs);
         };
       }
       comparators.push_back(comparator);
-      std::stable_sort(output_for_partition_buff,
-                       output_for_partition_buff + partition_size,
-                       comparators.back());
     }
-    computePartition(
-        output_for_partition_buff, partition_size, off, window_func_, comparators);
+    const auto col_tuple_comparator = [&comparators](const int64_t lhs,
+                                                     const int64_t rhs) {
+      for (const auto& comparator : comparators) {
+        if (comparator(lhs, rhs)) {
+          return true;
+        }
+      }
+      return false;
+    };
+    std::sort(output_for_partition_buff,
+              output_for_partition_buff + partition_size,
+              col_tuple_comparator);
+    computePartition(output_for_partition_buff,
+                     partition_size,
+                     off,
+                     window_func_,
+                     col_tuple_comparator);
     if (window_func_->getKind() == SqlWindowFunctionKind::LAG ||
         window_func_->getKind() == SqlWindowFunctionKind::LEAD ||
         window_func_->getKind() == SqlWindowFunctionKind::FIRST_VALUE ||
@@ -474,11 +481,12 @@ WindowFunctionContext::makeComparator(const Analyzer::ColumnVar* col_var,
   return nullptr;
 }
 
-void WindowFunctionContext::computePartition(int64_t* output_for_partition_buff,
-                                             const size_t partition_size,
-                                             const size_t off,
-                                             const Analyzer::WindowFunction* window_func,
-                                             const std::vector<Comparator>& comparators) {
+void WindowFunctionContext::computePartition(
+    int64_t* output_for_partition_buff,
+    const size_t partition_size,
+    const size_t off,
+    const Analyzer::WindowFunction* window_func,
+    const std::function<bool(const int64_t lhs, const int64_t rhs)>& comparator) {
   switch (window_func->getKind()) {
     case SqlWindowFunctionKind::ROW_NUMBER: {
       const auto row_numbers =
@@ -488,19 +496,19 @@ void WindowFunctionContext::computePartition(int64_t* output_for_partition_buff,
     }
     case SqlWindowFunctionKind::RANK: {
       const auto rank =
-          index_to_rank(output_for_partition_buff, partition_size, comparators);
+          index_to_rank(output_for_partition_buff, partition_size, comparator);
       std::copy(rank.begin(), rank.end(), output_for_partition_buff);
       break;
     }
     case SqlWindowFunctionKind::DENSE_RANK: {
       const auto dense_rank =
-          index_to_dense_rank(output_for_partition_buff, partition_size, comparators);
+          index_to_dense_rank(output_for_partition_buff, partition_size, comparator);
       std::copy(dense_rank.begin(), dense_rank.end(), output_for_partition_buff);
       break;
     }
     case SqlWindowFunctionKind::PERCENT_RANK: {
       const auto percent_rank =
-          index_to_percent_rank(output_for_partition_buff, partition_size, comparators);
+          index_to_percent_rank(output_for_partition_buff, partition_size, comparator);
       std::copy(percent_rank.begin(),
                 percent_rank.end(),
                 reinterpret_cast<double*>(may_alias_ptr(output_for_partition_buff)));
@@ -508,7 +516,7 @@ void WindowFunctionContext::computePartition(int64_t* output_for_partition_buff,
     }
     case SqlWindowFunctionKind::CUME_DIST: {
       const auto cume_dist =
-          index_to_cume_dist(output_for_partition_buff, partition_size, comparators);
+          index_to_cume_dist(output_for_partition_buff, partition_size, comparator);
       std::copy(cume_dist.begin(),
                 cume_dist.end(),
                 reinterpret_cast<double*>(may_alias_ptr(output_for_partition_buff)));

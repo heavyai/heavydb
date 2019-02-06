@@ -74,11 +74,12 @@ class WindowFunctionContext {
                                    const int32_t* partition_indices,
                                    const bool nulls_first);
 
-  void computePartition(int64_t* output_for_partition_buff,
-                        const size_t partition_size,
-                        const size_t off,
-                        const Analyzer::WindowFunction* window_func,
-                        const std::vector<Comparator>& comparators);
+  void computePartition(
+      int64_t* output_for_partition_buff,
+      const size_t partition_size,
+      const size_t off,
+      const Analyzer::WindowFunction* window_func,
+      const std::function<bool(const int64_t lhs, const int64_t rhs)>& comparator);
 
   void fillPartitionStart();
 
