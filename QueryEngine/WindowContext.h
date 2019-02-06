@@ -71,7 +71,8 @@ class WindowFunctionContext {
 
   static Comparator makeComparator(const Analyzer::ColumnVar* col_var,
                                    const int8_t* partition_values,
-                                   const int32_t* partition_indices);
+                                   const int32_t* partition_indices,
+                                   const bool nulls_first);
 
   void computePartition(int64_t* output_for_partition_buff,
                         const size_t partition_size,

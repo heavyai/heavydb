@@ -19,7 +19,9 @@
 #include "../Shared/checked_alloc.h"
 #include "../Shared/sql_window_function_to_string.h"
 #include "Descriptors/CountDistinctDescriptor.h"
+#include "ResultSetBufferAccessors.h"
 #include "RuntimeFunctions.h"
+#include "SqlTypesLayout.h"
 #include "TypePunning.h"
 
 WindowFunctionContext::WindowFunctionContext(
@@ -295,8 +297,10 @@ void WindowFunctionContext::compute() {
           dynamic_cast<const Analyzer::ColumnVar*>(order_keys[order_column_idx].get());
       CHECK(order_col);
       const auto& order_col_collation = collation[order_column_idx];
-      const auto asc_comparator =
-          makeComparator(order_col, order_column_buffer, payload() + offsets()[i]);
+      const auto asc_comparator = makeComparator(order_col,
+                                                 order_column_buffer,
+                                                 payload() + offsets()[i],
+                                                 order_col_collation.nulls_first);
       auto comparator = asc_comparator;
       if (order_col_collation.is_desc) {
         comparator = [&asc_comparator](const int64_t lhs, const int64_t rhs) {
@@ -362,47 +366,107 @@ llvm::Value* WindowFunctionContext::getRowNumber() const {
   return aggregate_state_.row_number;
 }
 
+namespace {
+
+template <class T>
+bool integer_comparator(const int8_t* order_column_buffer,
+                        const SQLTypeInfo& ti,
+                        const int32_t* partition_indices,
+                        const int64_t lhs,
+                        const int64_t rhs,
+                        const bool nulls_first) {
+  const auto values = reinterpret_cast<const T*>(order_column_buffer);
+  const auto lhs_val = values[partition_indices[lhs]];
+  const auto rhs_val = values[partition_indices[rhs]];
+  const auto null_val = inline_int_null_val(ti);
+  if (lhs_val == null_val && rhs_val == null_val) {
+    return false;
+  }
+  if (lhs_val == null_val && rhs_val != null_val) {
+    return nulls_first;
+  }
+  if (rhs_val == null_val && lhs_val != null_val) {
+    return !nulls_first;
+  }
+  return lhs_val < rhs_val;
+}
+
+template <class T, class NullPatternType>
+bool fp_comparator(const int8_t* order_column_buffer,
+                   const SQLTypeInfo& ti,
+                   const int32_t* partition_indices,
+                   const int64_t lhs,
+                   const int64_t rhs,
+                   const bool nulls_first) {
+  const auto values = reinterpret_cast<const T*>(order_column_buffer);
+  const auto lhs_val = values[partition_indices[lhs]];
+  const auto rhs_val = values[partition_indices[rhs]];
+  const auto null_bit_pattern = null_val_bit_pattern(ti, ti.get_type() == kFLOAT);
+  const auto lhs_bit_pattern =
+      *reinterpret_cast<const NullPatternType*>(may_alias_ptr(&lhs_val));
+  const auto rhs_bit_pattern =
+      *reinterpret_cast<const NullPatternType*>(may_alias_ptr(&rhs_val));
+  if (lhs_bit_pattern == null_bit_pattern && rhs_bit_pattern == null_bit_pattern) {
+    return false;
+  }
+  if (lhs_bit_pattern == null_bit_pattern && rhs_bit_pattern != null_bit_pattern) {
+    return nulls_first;
+  }
+  if (rhs_bit_pattern == null_bit_pattern && lhs_bit_pattern != null_bit_pattern) {
+    return !nulls_first;
+  }
+  return lhs_val < rhs_val;
+}
+
+}  // namespace
+
 std::function<bool(const int64_t lhs, const int64_t rhs)>
 WindowFunctionContext::makeComparator(const Analyzer::ColumnVar* col_var,
                                       const int8_t* order_column_buffer,
-                                      const int32_t* partition_indices) {
+                                      const int32_t* partition_indices,
+                                      const bool nulls_first) {
   const auto& ti = col_var->get_type_info();
   switch (ti.get_type()) {
     case kBIGINT: {
-      const auto values = reinterpret_cast<const int64_t*>(order_column_buffer);
-      return [values, partition_indices](const int64_t lhs, const int64_t rhs) {
-        return values[partition_indices[lhs]] < values[partition_indices[rhs]];
+      return [order_column_buffer, nulls_first, partition_indices, &ti](
+                 const int64_t lhs, const int64_t rhs) {
+        return integer_comparator<int64_t>(
+            order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
       };
     }
     case kINT: {
-      const auto values = reinterpret_cast<const int32_t*>(order_column_buffer);
-      return [values, partition_indices](const int64_t lhs, const int64_t rhs) {
-        return values[partition_indices[lhs]] < values[partition_indices[rhs]];
+      return [order_column_buffer, nulls_first, partition_indices, &ti](
+                 const int64_t lhs, const int64_t rhs) {
+        return integer_comparator<int32_t>(
+            order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
       };
     }
     case kSMALLINT: {
-      const auto values = reinterpret_cast<const int16_t*>(order_column_buffer);
-      return [values, partition_indices](const int64_t lhs, const int64_t rhs) {
-        return values[partition_indices[lhs]] < values[partition_indices[rhs]];
+      return [order_column_buffer, nulls_first, partition_indices, &ti](
+                 const int64_t lhs, const int64_t rhs) {
+        return integer_comparator<int16_t>(
+            order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
       };
     }
     case kTINYINT: {
-      return
-          [order_column_buffer, partition_indices](const int64_t lhs, const int64_t rhs) {
-            return order_column_buffer[partition_indices[lhs]] <
-                   order_column_buffer[partition_indices[rhs]];
-          };
+      return [order_column_buffer, nulls_first, partition_indices, &ti](
+                 const int64_t lhs, const int64_t rhs) {
+        return integer_comparator<int8_t>(
+            order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
+      };
     }
     case kFLOAT: {
-      const auto values = reinterpret_cast<const float*>(order_column_buffer);
-      return [values, partition_indices](const int64_t lhs, const int64_t rhs) {
-        return values[partition_indices[lhs]] < values[partition_indices[rhs]];
+      return [order_column_buffer, nulls_first, partition_indices, &ti](
+                 const int64_t lhs, const int64_t rhs) {
+        return fp_comparator<float, int32_t>(
+            order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
       };
     }
     case kDOUBLE: {
-      const auto values = reinterpret_cast<const double*>(order_column_buffer);
-      return [values, partition_indices](const int64_t lhs, const int64_t rhs) {
-        return values[partition_indices[lhs]] < values[partition_indices[rhs]];
+      return [order_column_buffer, nulls_first, partition_indices, &ti](
+                 const int64_t lhs, const int64_t rhs) {
+        return fp_comparator<double, int64_t>(
+            order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
       };
     }
     default: { LOG(FATAL) << "Type not supported yet"; }
