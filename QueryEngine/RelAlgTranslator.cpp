@@ -1442,10 +1442,45 @@ std::vector<Analyzer::OrderEntry> translate_collation(
   return collation;
 }
 
+bool supported_lower_bound(
+    const RexWindowFunctionOperator::RexWindowBound& window_bound) {
+  return window_bound.unbounded && window_bound.preceding && !window_bound.following &&
+         !window_bound.is_current_row && !window_bound.offset &&
+         window_bound.order_key == 0;
+}
+
+bool supported_upper_bound(const RexWindowFunctionOperator* rex_window_function) {
+  const auto& window_bound = rex_window_function->getUpperBound();
+  const bool to_current_row = !window_bound.unbounded && !window_bound.preceding &&
+                              !window_bound.following && window_bound.is_current_row &&
+                              !window_bound.offset && window_bound.order_key == 1;
+  switch (rex_window_function->getKind()) {
+    case SqlWindowFunctionKind::ROW_NUMBER:
+    case SqlWindowFunctionKind::RANK:
+    case SqlWindowFunctionKind::DENSE_RANK:
+    case SqlWindowFunctionKind::CUME_DIST: {
+      return to_current_row;
+    }
+    default: {
+      return rex_window_function->getOrderKeys().empty()
+                 ? (window_bound.unbounded && !window_bound.preceding &&
+                    window_bound.following && !window_bound.is_current_row &&
+                    !window_bound.offset && window_bound.order_key == 2)
+                 : to_current_row;
+    }
+  }
+}
+
 }  // namespace
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
     const RexWindowFunctionOperator* rex_window_function) const {
+  if (!supported_lower_bound(rex_window_function->getLowerBound()) ||
+      !supported_upper_bound(rex_window_function) ||
+      ((rex_window_function->getKind() == SqlWindowFunctionKind::ROW_NUMBER) !=
+       rex_window_function->isRows())) {
+    throw std::runtime_error("Frame specification not supported");
+  }
   std::vector<std::shared_ptr<Analyzer::Expr>> args;
   for (size_t i = 0; i < rex_window_function->size(); ++i) {
     args.push_back(translateScalarRex(rex_window_function->getOperand(i)));
