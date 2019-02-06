@@ -22,6 +22,11 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
+#ifndef __STDC_FORMAT_MACROS
+#define __STDC_FORMAT_MACROS
+#endif
+#include <cinttypes>
+
 #include <glog/logging.h>
 #include <cassert>
 #include <cmath>
@@ -220,7 +225,7 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
           p++;
           uint64_t frac_num = 0;
           int ntotal = 0;
-          sscanf(p, "%llu%n", &frac_num, &ntotal);
+          sscanf(p, "%" SCNu64 "%n", &frac_num, &ntotal);
           fsc = TimeGM::instance().parse_fractional_seconds(frac_num, ntotal, ti);
         } else if (*p == '\0') {
           fsc = 0;
