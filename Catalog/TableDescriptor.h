@@ -78,4 +78,9 @@ inline bool table_is_replicated(const TableDescriptor* td) {
   return td->partitions == "REPLICATED";
 }
 
+// compare for lowest id
+inline bool compare_td_id(const TableDescriptor* first, const TableDescriptor* second) {
+  return (first->tableId < second->tableId);
+}
+
 #endif  // TABLE_DESCRIPTOR

@@ -313,6 +313,7 @@ struct TTableMeta {
   5: bool is_replicated
   6: i64 shard_count
   7: i64 max_rows
+  8: i64 max_table_id
 }
 
 struct TTableDetails {
