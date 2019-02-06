@@ -43,6 +43,7 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexOver;
 import org.apache.calcite.rex.RexSubQuery;
 import org.apache.calcite.rex.RexWindow;
+import org.apache.calcite.rex.RexWindowBound;
 import org.apache.calcite.sql.SemiJoinType;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlFunction;
@@ -302,6 +303,18 @@ public class MapDRelJson {
     return node.getId();
   }
 
+  private Object toJson(final RexWindowBound window_bound) {
+    final Map<String, Object> map = jsonBuilder.map();
+    map.put("unbounded", toJson(window_bound.isUnbounded()));
+    map.put("preceding", toJson(window_bound.isPreceding()));
+    map.put("following", toJson(window_bound.isFollowing()));
+    map.put("is_current_row", toJson(window_bound.isCurrentRow()));
+    map.put("offset",
+            window_bound.getOffset() != null ? toJson(window_bound.getOffset()) : null);
+    map.put("order_key", toJson(window_bound.getOrderKey()));
+    return map;
+  }
+
   private Object toJson(RexNode node) {
     final Map<String, Object> map;
     switch (node.getKind()) {
@@ -374,6 +387,11 @@ public class MapDRelJson {
               orderKeyList.add(toJson(orderKey));
             }
             map.put("order_keys", orderKeyList);
+            RexWindowBound lower_bound = window.getLowerBound();
+            RexWindowBound upper_bound = window.getUpperBound();
+            map.put("lower_bound", toJson(lower_bound));
+            map.put("upper_bound", toJson(upper_bound));
+            map.put("is_rows", toJson(window.isRows()));
           }
           if (call.getOperator() instanceof SqlFunction) {
             switch (((SqlFunction) call.getOperator()).getFunctionType()) {

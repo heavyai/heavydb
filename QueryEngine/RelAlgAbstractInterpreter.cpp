@@ -623,6 +623,26 @@ std::vector<SortField> parse_window_order_collation(const rapidjson::Value& arr,
   return collation;
 }
 
+RexWindowFunctionOperator::RexWindowBound parse_window_bound(
+    const rapidjson::Value& window_bound_obj,
+    const Catalog_Namespace::Catalog& cat,
+    RelAlgExecutor* ra_executor) {
+  CHECK(window_bound_obj.IsObject());
+  RexWindowFunctionOperator::RexWindowBound window_bound;
+  window_bound.unbounded = json_bool(field(window_bound_obj, "unbounded"));
+  window_bound.preceding = json_bool(field(window_bound_obj, "preceding"));
+  window_bound.following = json_bool(field(window_bound_obj, "following"));
+  window_bound.is_current_row = json_bool(field(window_bound_obj, "is_current_row"));
+  const auto& offset_field = field(window_bound_obj, "offset");
+  if (offset_field.IsObject()) {
+    window_bound.offset = parse_scalar_expr(offset_field, cat, ra_executor);
+  } else {
+    CHECK(offset_field.IsNull());
+  }
+  window_bound.order_key = json_i64(field(window_bound_obj, "order_key"));
+  return window_bound;
+}
+
 std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr,
                                             const Catalog_Namespace::Catalog& cat,
                                             RelAlgExecutor* ra_executor) {
@@ -647,8 +667,20 @@ std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr,
     auto order_keys = parse_window_order_exprs(order_keys_arr, cat, ra_executor);
     const auto collation = parse_window_order_collation(order_keys_arr, cat, ra_executor);
     const auto kind = parse_window_function_kind(op_name);
-    return std::make_unique<RexWindowFunctionOperator>(
-        kind, operands, partition_keys, order_keys, collation, ti);
+    const auto lower_bound =
+        parse_window_bound(field(expr, "lower_bound"), cat, ra_executor);
+    const auto upper_bound =
+        parse_window_bound(field(expr, "upper_bound"), cat, ra_executor);
+    bool is_rows = json_bool(field(expr, "is_rows"));
+    return std::make_unique<RexWindowFunctionOperator>(kind,
+                                                       operands,
+                                                       partition_keys,
+                                                       order_keys,
+                                                       collation,
+                                                       lower_bound,
+                                                       upper_bound,
+                                                       is_rows,
+                                                       ti);
   }
   return std::unique_ptr<RexOperator>(op == kFUNCTION
                                           ? new RexFunctionOperator(op_name, operands, ti)

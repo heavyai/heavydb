@@ -454,17 +454,32 @@ class SortField {
 
 class RexWindowFunctionOperator : public RexFunctionOperator {
  public:
+  struct RexWindowBound {
+    bool unbounded;
+    bool preceding;
+    bool following;
+    bool is_current_row;
+    std::shared_ptr<const RexScalar> offset;
+    int order_key;
+  };
+
   RexWindowFunctionOperator(const SqlWindowFunctionKind kind,
                             ConstRexScalarPtrVector& operands,
                             ConstRexScalarPtrVector& partition_keys,
                             ConstRexScalarPtrVector& order_keys,
                             const std::vector<SortField> collation,
+                            const RexWindowBound& lower_bound,
+                            const RexWindowBound& upper_bound,
+                            const bool is_rows,
                             const SQLTypeInfo& ti)
       : RexFunctionOperator(sql_window_function_to_str(kind), operands, ti)
       , kind_(kind)
       , partition_keys_(std::move(partition_keys))
       , order_keys_(std::move(order_keys))
-      , collation_(collation) {}
+      , collation_(collation)
+      , lower_bound_(lower_bound)
+      , upper_bound_(upper_bound)
+      , is_rows_(is_rows) {}
 
   SqlWindowFunctionKind getKind() const { return kind_; }
 
@@ -482,13 +497,27 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
 
   const std::vector<SortField>& getCollation() const { return collation_; }
 
+  const RexWindowBound& getLowerBound() const { return lower_bound_; }
+
+  const RexWindowBound& getUpperBound() const { return upper_bound_; }
+
+  bool isRows() const { return is_rows_; }
+
   std::unique_ptr<const RexOperator> getDisambiguated(
       ConstRexScalarPtrVector& operands,
       ConstRexScalarPtrVector& partition_keys,
       ConstRexScalarPtrVector& order_keys,
       const std::vector<SortField>& collation) const {
-    return std::unique_ptr<const RexOperator>(new RexWindowFunctionOperator(
-        kind_, operands, partition_keys, order_keys, collation, getType()));
+    return std::unique_ptr<const RexOperator>(
+        new RexWindowFunctionOperator(kind_,
+                                      operands,
+                                      partition_keys,
+                                      order_keys,
+                                      collation,
+                                      getLowerBound(),
+                                      getUpperBound(),
+                                      isRows(),
+                                      getType()));
   }
 
   std::string toString() const override {
@@ -514,6 +543,9 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
   mutable ConstRexScalarPtrVector partition_keys_;
   mutable ConstRexScalarPtrVector order_keys_;
   const std::vector<SortField> collation_;
+  const RexWindowBound lower_bound_;
+  const RexWindowBound upper_bound_;
+  const bool is_rows_;
 };
 
 // Not a real node created by Calcite. Created by us because targets of a query
