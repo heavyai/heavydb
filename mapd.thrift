@@ -58,6 +58,13 @@ enum TPartitionDetail {
   OTHER
 }
 
+enum TGeoFileLayerContents {
+  EMPTY,
+  GEO,
+  NON_GEO,
+  UNSUPPORTED_GEO
+}
+
 /* union */ struct TDatumVal {
   1: i64 int_val,
   2: double real_val,
@@ -187,6 +194,7 @@ struct TCopyParams {
   18: TDatumType geo_coords_type=TDatumType.GEOMETRY
   19: i32 geo_coords_srid=4326
   20: bool sanitize_column_names=true
+  21: string geo_layer_name
 }
 
 struct TCreateParams {
@@ -489,6 +497,11 @@ struct TSessionInfo {
   3: i64 start_time;
 }
 
+struct TGeoFileLayerInfo {
+  1: string name;
+  2: TGeoFileLayerContents contents;
+}
+
 service MapD {
   # connection, admin
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e)
@@ -556,6 +569,7 @@ service MapD {
   TImportStatus import_table_status(1: TSessionId session, 2: string import_id) throws (1: TMapDException e)
   string get_first_geo_file_in_archive(1: TSessionId session, 2: string archive_path, 3: TCopyParams copy_params) throws (1: TMapDException e)
   list<string> get_all_files_in_archive(1: TSessionId session, 2: string archive_path, 3: TCopyParams copy_params) throws (1: TMapDException e)
+  list<TGeoFileLayerInfo> get_layers_in_geo_file(1: TSessionId session, 2: string file_name, 3: TCopyParams copy_params) throws (1: TMapDException e)
   # distributed
   TTableMeta check_table_consistency(1: TSessionId session, 2: i32 table_id) throws (1: TMapDException e)
   TPendingQuery start_query(1: TSessionId session, 2: string query_ra, 3: bool just_explain) throws (1: TMapDException e)

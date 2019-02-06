@@ -341,6 +341,10 @@ class MapDHandler : public MapDIf {
                                 const TSessionId& session,
                                 const std::string& archive_path,
                                 const TCopyParams& copy_params) override;
+  void get_layers_in_geo_file(std::vector<TGeoFileLayerInfo>& _return,
+                              const TSessionId& session,
+                              const std::string& file_name,
+                              const TCopyParams& copy_params) override;
   // distributed
   void check_table_consistency(TTableMeta& _return,
                                const TSessionId& session,

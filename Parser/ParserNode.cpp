@@ -3449,6 +3449,18 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
               "900913): " +
               std::to_string(srid));
         }
+      } else if (boost::iequals(*p->get_name(), "geo_layer_name")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'geo_layer_name' option must be a string");
+        }
+        const std::string* layer_name = str_literal->get_stringval();
+        if (layer_name) {
+          copy_params.geo_layer_name = *layer_name;
+        } else {
+          throw std::runtime_error("Invalid value for 'geo_layer_name' option");
+        }
       } else if (boost::iequals(*p->get_name(), "partitions")) {
         if (copy_params.table_type == Importer_NS::TableType::POLYGON) {
           const auto partitions =

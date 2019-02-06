@@ -2061,21 +2061,15 @@ static ImportStatus import_thread_shapefile(
 
     // get this feature's geometry
     OGRGeometry* pGeometry = features[iFeature]->GetGeometryRef();
-    if (!pGeometry) {
-      // Silently ignoring features with no geometry defined.
-      // TODO: There's an argument to be made that such a case should be considered
-      // NULL instead of ignoring.
-      // Also, should we log a warning here? It seems like this code hit
-      // the same feature several times over the coarse of an import, so we'd want
-      // to minimize the amount of logging if the same feature is referenced many
-      // times or if there can be many such empty geometries.
-      continue;
-    }
+    if (pGeometry) {
+      // for geodatabase, we need to consider features with no geometry
+      // as we still want to create a table, even if it has no geo column
 
-    // transform it
-    // avoid GDAL error if not transformable
-    if (pGeometry->getSpatialReference()) {
-      pGeometry->transformTo(poGeographicSR);
+      // transform it
+      // avoid GDAL error if not transformable
+      if (pGeometry->getSpatialReference()) {
+        pGeometry->transformTo(poGeographicSR);
+      }
     }
 
     size_t col_idx = 0;
@@ -2086,6 +2080,10 @@ static ImportStatus import_thread_shapefile(
         // is this a geo column?
         const auto& col_ti = cd->columnType;
         if (col_ti.is_geometry()) {
+          // if we're here, we MUST have geometry
+          CHECK(pGeometry) << "No geometry for column '" << cd->columnName << "', type "
+                           << cd->columnType.get_type_name();
+
           // Note that this assumes there is one and only one geo column in the table.
           // Currently, the importer only supports reading a single geospatial feature
           // from an input shapefile / geojson file, but this code will need to be
@@ -3779,6 +3777,30 @@ OGRDataSource* Importer::openGDALDataset(const std::string& file_name,
   return poDS;
 }
 
+namespace {
+
+OGRLayer& getLayerWithSpecifiedName(const std::string& geo_layer_name,
+                                    const OGRDataSourceUqPtr& poDS,
+                                    const std::string& file_name) {
+  // get layer with specified name, or default to first layer
+  OGRLayer* poLayer = nullptr;
+  if (geo_layer_name.size()) {
+    poLayer = poDS->GetLayerByName(geo_layer_name.c_str());
+    if (poLayer == nullptr) {
+      throw std::runtime_error("Layer '" + geo_layer_name + "' not found in " +
+                               file_name);
+    }
+  } else {
+    poLayer = poDS->GetLayer(0);
+    if (poLayer == nullptr) {
+      throw std::runtime_error("No layers found in " + file_name);
+    }
+  }
+  return *poLayer;
+}
+
+}  // namespace
+
 /* static */
 void Importer::readMetadataSampleGDAL(
     const std::string& file_name,
@@ -3791,14 +3813,15 @@ void Importer::readMetadataSampleGDAL(
     throw std::runtime_error("openGDALDataset Error: Unable to open geo file " +
                              file_name);
   }
-  OGRLayer* poLayer = poDS->GetLayer(0);
-  if (poLayer == nullptr) {
-    throw std::runtime_error("No layers found in " + file_name);
-  }
-  OGRFeatureDefn* poFDefn = poLayer->GetLayerDefn();
+
+  OGRLayer& layer =
+      getLayerWithSpecifiedName(copy_params.geo_layer_name, poDS, file_name);
+
+  OGRFeatureDefn* poFDefn = layer.GetLayerDefn();
+  CHECK(poFDefn);
 
   // typeof GetFeatureCount() is different between GDAL 1.x (int32_t) and 2.x (int64_t)
-  auto nFeats = poLayer->GetFeatureCount();
+  auto nFeats = layer.GetFeatureCount();
   size_t numFeatures =
       std::max(static_cast<decltype(nFeats)>(0),
                std::min(static_cast<decltype(nFeats)>(rowLimit), nFeats));
@@ -3808,16 +3831,15 @@ void Importer::readMetadataSampleGDAL(
     metadata.emplace(poFieldDefn->GetNameRef(), std::vector<std::string>(numFeatures));
   }
   metadata.emplace(geo_column_name, std::vector<std::string>(numFeatures));
-  poLayer->ResetReading();
+  layer.ResetReading();
   size_t iFeature = 0;
   while (iFeature < numFeatures) {
-    OGRFeatureUqPtr poFeature(poLayer->GetNextFeature());
+    OGRFeatureUqPtr poFeature(layer.GetNextFeature());
     if (!poFeature) {
       break;
     }
 
-    OGRGeometry* poGeometry;
-    poGeometry = poFeature->GetGeometryRef();
+    OGRGeometry* poGeometry = poFeature->GetGeometryRef();
     if (poGeometry != nullptr) {
       // validate geom type (again?)
       switch (wkbFlatten(poGeometry->getGeometryType())) {
@@ -3912,18 +3934,19 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(
     throw std::runtime_error("openGDALDataset Error: Unable to open geo file " +
                              file_name);
   }
-  OGRLayer* poLayer = poDS->GetLayer(0);
-  if (poLayer == nullptr) {
-    throw std::runtime_error("No layers found in " + file_name);
-  }
-  poLayer->ResetReading();
+
+  OGRLayer& layer =
+      getLayerWithSpecifiedName(copy_params.geo_layer_name, poDS, file_name);
+
+  layer.ResetReading();
   // TODO(andrewseidl): support multiple features
-  OGRFeatureUqPtr poFeature(poLayer->GetNextFeature());
+  OGRFeatureUqPtr poFeature(layer.GetNextFeature());
   if (poFeature == nullptr) {
     throw std::runtime_error("No features found in " + file_name);
   }
   // get fields as regular columns
-  OGRFeatureDefn* poFDefn = poLayer->GetLayerDefn();
+  OGRFeatureDefn* poFDefn = layer.GetLayerDefn();
+  CHECK(poFDefn);
   int iField;
   for (iField = 0; iField < poFDefn->GetFieldCount(); iField++) {
     OGRFieldDefn* poFieldDefn = poFDefn->GetFieldDefn(iField);
@@ -4096,6 +4119,67 @@ std::vector<std::string> Importer::gdalGetAllFilesInArchive(
 }
 
 /* static */
+std::vector<Importer::GeoFileLayerInfo> Importer::gdalGetLayersInGeoFile(
+    const std::string& file_name,
+    const CopyParams& copy_params) {
+  // lazy init GDAL
+  initGDAL();
+
+  // set authorization tokens
+  setGDALAuthorizationTokens(copy_params);
+
+  // prepare to gather layer info
+  std::vector<GeoFileLayerInfo> layer_info;
+
+  // open the data set
+  OGRDataSourceUqPtr poDS(openGDALDataset(file_name, copy_params));
+  if (poDS == nullptr) {
+    throw std::runtime_error("openGDALDataset Error: Unable to open geo file " +
+                             file_name);
+  }
+
+  // enumerate the layers
+  for (auto&& poLayer : poDS->GetLayers()) {
+    GeoFileLayerContents contents = GeoFileLayerContents::EMPTY;
+    // prepare to read this layer
+    poLayer->ResetReading();
+    // skip layer if empty
+    if (poLayer->GetFeatureCount() > 0) {
+      // get first feature
+      OGRFeatureUqPtr first_feature(poLayer->GetNextFeature());
+      CHECK(first_feature);
+      // check feature for geometry
+      const OGRGeometry* geometry = first_feature->GetGeometryRef();
+      if (!geometry) {
+        // layer has no geometry
+        contents = GeoFileLayerContents::NON_GEO;
+      } else {
+        // check the geometry type
+        const OGRwkbGeometryType geometry_type = geometry->getGeometryType();
+        switch (wkbFlatten(geometry_type)) {
+          case wkbPoint:
+          case wkbLineString:
+          case wkbPolygon:
+          case wkbMultiPolygon:
+            // layer has supported geo
+            contents = GeoFileLayerContents::GEO;
+            break;
+          default:
+            // layer has unsupported geometry
+            contents = GeoFileLayerContents::UNSUPPORTED_GEO;
+            break;
+        }
+      }
+    }
+    // store info for this layer
+    layer_info.emplace_back(poLayer->GetName(), contents);
+  }
+
+  // done
+  return layer_info;
+}
+
+/* static */
 bool Importer::gdalSupportsNetworkFileAccess() {
 #if (GDAL_VERSION_MAJOR > 2) || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR >= 2)
   return true;
@@ -4116,19 +4200,17 @@ ImportStatus Importer::importGDAL(
                              file_path);
   }
 
-  // get the first layer
-  OGRLayer* poLayer = poDS->GetLayer(0);
-  if (poLayer == nullptr) {
-    throw std::runtime_error("No layers found in " + file_path);
-  }
+  OGRLayer& layer =
+      getLayerWithSpecifiedName(copy_params.geo_layer_name, poDS, file_path);
 
   // get the number of features in this layer
-  size_t numFeatures = poLayer->GetFeatureCount();
+  size_t numFeatures = layer.GetFeatureCount();
 
   // build map of metadata field (additional columns) name to index
   // use shared_ptr since we need to pass it to the worker
   FieldNameToIndexMapType fieldNameToIndexMap;
-  OGRFeatureDefn* poFDefn = poLayer->GetLayerDefn();
+  OGRFeatureDefn* poFDefn = layer.GetLayerDefn();
+  CHECK(poFDefn);
   size_t numFields = poFDefn->GetFieldCount();
   for (size_t iField = 0; iField < numFields; iField++) {
     OGRFieldDefn* poFieldDefn = poFDefn->GetFieldDefn(iField);
@@ -4191,7 +4273,7 @@ ImportStatus Importer::importGDAL(
   auto start_epoch = loader->getTableEpoch();
 
   // reset the layer
-  poLayer->ResetReading();
+  layer.ResetReading();
 
   static const size_t MAX_FEATURES_PER_CHUNK = 1000;
 
@@ -4216,7 +4298,7 @@ ImportStatus Importer::importGDAL(
 
     // fill features buffer for new thread
     for (size_t i = 0; i < numFeaturesThisChunk; i++) {
-      features[thread_id].emplace_back(poLayer->GetNextFeature());
+      features[thread_id].emplace_back(layer.GetNextFeature());
     }
 
 #if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT

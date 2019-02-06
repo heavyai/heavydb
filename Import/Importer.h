@@ -95,6 +95,7 @@ struct CopyParams {
   SQLTypes geo_coords_type;
   int32_t geo_coords_srid;
   bool sanitize_column_names;
+  std::string geo_layer_name;
 
   CopyParams()
       : delimiter(',')
@@ -831,6 +832,16 @@ class Importer : public DataStreamSink {
                                         const CopyParams& copy_params);
   static std::vector<std::string> gdalGetAllFilesInArchive(
       const std::string& archive_path,
+      const CopyParams& copy_params);
+  enum class GeoFileLayerContents { EMPTY, GEO, NON_GEO, UNSUPPORTED_GEO };
+  struct GeoFileLayerInfo {
+    GeoFileLayerInfo(const std::string& name_, GeoFileLayerContents contents_)
+        : name(name_), contents(contents_) {}
+    std::string name;
+    GeoFileLayerContents contents;
+  };
+  static std::vector<GeoFileLayerInfo> gdalGetLayersInGeoFile(
+      const std::string& file_name,
       const CopyParams& copy_params);
   static bool gdalSupportsNetworkFileAccess();
   Catalog_Namespace::Catalog& getCatalog() { return loader->getCatalog(); }

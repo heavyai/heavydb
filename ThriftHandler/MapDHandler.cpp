@@ -2502,6 +2502,7 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
       break;
   }
   copy_params.sanitize_column_names = cp.sanitize_column_names;
+  copy_params.geo_layer_name = cp.geo_layer_name;
   return copy_params;
 }
 
@@ -2551,6 +2552,7 @@ TCopyParams MapDHandler::copyparams_to_thrift(const Importer_NS::CopyParams& cp)
   }
   copy_params.geo_coords_srid = cp.geo_coords_srid;
   copy_params.sanitize_column_names = cp.sanitize_column_names;
+  copy_params.geo_layer_name = cp.geo_layer_name;
   return copy_params;
 }
 
@@ -2633,14 +2635,15 @@ bool is_a_supported_geo_file(const std::string& path, bool include_gz) {
   }
   if (boost::iends_with(path, ".shp") || boost::iends_with(path, ".geojson") ||
       boost::iends_with(path, ".json") || boost::iends_with(path, ".kml") ||
-      boost::iends_with(path, ".kmz")) {
+      boost::iends_with(path, ".kmz") || boost::iends_with(path, ".gdb") ||
+      boost::iends_with(path, ".gdb.zip")) {
     return true;
   }
   return false;
 }
 
 bool is_a_supported_archive_file(const std::string& path) {
-  if (boost::iends_with(path, ".zip")) {
+  if (boost::iends_with(path, ".zip") && !boost::iends_with(path, ".gdb.zip")) {
     return true;
   } else if (boost::iends_with(path, ".tar") || boost::iends_with(path, ".tgz") ||
              boost::iends_with(path, ".tar.gz")) {
@@ -2738,7 +2741,7 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
 
     if (copy_params.table_type == Importer_NS::TableType::POLYGON) {
       // check for geo file
-      if (!Importer_NS::Importer::gdalFileExists(file_name, copy_params)) {
+      if (!Importer_NS::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
         THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
       }
     } else {
@@ -3568,13 +3571,12 @@ void MapDHandler::import_geo_table(const TSessionId& session,
   }
 
   // log what we're about to try to do
-  LOG(INFO) << "import_geo_table: Creating table: " << table_name;
   LOG(INFO) << "import_geo_table: Original filename: " << file_name_in;
   LOG(INFO) << "import_geo_table: Actual filename: " << file_name;
 
   // use GDAL to check the primary file exists (even if on S3 and/or in archive)
   auto file_path = boost::filesystem::path(file_name);
-  if (!Importer_NS::Importer::gdalFileExists(file_name, copy_params)) {
+  if (!Importer_NS::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
     THROW_MAPD_EXCEPTION("File does not exist: " + file_path.filename().string());
   }
 
@@ -3585,185 +3587,369 @@ void MapDHandler::import_geo_table(const TSessionId& session,
     THROW_MAPD_EXCEPTION("import_geo_table error: " + std::string(e.what()));
   }
 
-  TRowDescriptor rd;
-  if (row_desc.size() > 0) {
-    // we have a valid RowDescriptor
-    // this is the case where Immerse has already detected and created
-    // all we need to do is import and trust that the data will match
-    // use the provided row descriptor
-    // table must already exist (we check this below)
-    rd = row_desc;
-  } else {
-    // we don't have a RowDescriptor
-    // we have to detect the file ourselves
-    TDetectResult cds;
-    TCopyParams cp_copy = cp;  // retain S3 auth tokens
-    cp_copy.table_type = TTableType::POLYGON;
-    detect_column_types(cds, session, file_name_in, cp_copy);
-    rd = cds.row_set.row_desc;
+  // get layer info and deconstruct
+  // in general, we will get a combination of layers of these four types:
+  //   EMPTY: no rows, report and skip
+  //   GEO: create a geo table from this
+  //   NON_GEO: create a regular table from this
+  //   UNSUPPORTED_GEO: report and skip
+  auto layer_info = Importer_NS::Importer::gdalGetLayersInGeoFile(file_name, copy_params);
 
-    // then, if the table does NOT already exist, create it
-    const TableDescriptor* td = cat.getMetadataForTable(table_name);
-    if (!td) {
-      create_table(session, table_name, rd, TTableType::POLYGON, create_params);
+  // categorize the results
+  using LayerNameToContentsMap =
+      std::map<std::string, Importer_NS::Importer::GeoFileLayerContents>;
+  LayerNameToContentsMap load_layers;
+  LOG(INFO) << "import_geo_table: Found the following layers in the geo file:";
+  for (const auto& layer : layer_info) {
+    switch (layer.contents) {
+      case Importer_NS::Importer::GeoFileLayerContents::GEO:
+        LOG(INFO) << "import_geo_table:   '" << layer.name
+                  << "' (will import as geo table)";
+        load_layers[layer.name] = layer.contents;
+        break;
+      case Importer_NS::Importer::GeoFileLayerContents::NON_GEO:
+        LOG(INFO) << "import_geo_table:   '" << layer.name
+                  << "' (will import as regular table)";
+        load_layers[layer.name] = layer.contents;
+        break;
+      case Importer_NS::Importer::GeoFileLayerContents::UNSUPPORTED_GEO:
+        LOG(WARNING) << "import_geo_table:   '" << layer.name
+                     << "' (will not import, unsupported geo type)";
+        break;
+      case Importer_NS::Importer::GeoFileLayerContents::EMPTY:
+        LOG(INFO) << "import_geo_table:   '" << layer.name << "' (ignoring, empty)";
+        break;
+      default:
+        break;
     }
   }
 
-  // by this point, the table should exist, one way or another
-  const TableDescriptor* td = cat.getMetadataForTable(table_name);
-  if (!td) {
-    THROW_MAPD_EXCEPTION("Could not import geo file '" + file_path.filename().string() +
-                         "' to table '" + table_name +
-                         "'; table does not exist or failed to create.");
+  // if nothing is loadable, stop now
+  if (load_layers.size() == 0) {
+    THROW_MAPD_EXCEPTION("import_geo_table: No loadable layers found, aborting!");
   }
 
-  // then, we have to verify that the structure matches
-  // get column descriptors (non-system, non-deleted, logical columns only)
-  const auto col_descriptors =
-      cat.getAllColumnMetadataForTable(td->tableId, false, false, false);
-  // compare the column number, names, and types
-  if (col_descriptors.size() != rd.size()) {
-    THROW_MAPD_EXCEPTION("Could not append geo file '" + file_path.filename().string() +
-                         "' to table '" + table_name + "'. Column count mismatch (got " +
-                         std::to_string(rd.size()) + ", expecting " +
-                         std::to_string(col_descriptors.size()) + ")");
-  } else {
-    int rd_index = 0;
-    for (auto cd : col_descriptors) {
-      TColumnType cd_col_type = populateThriftColumnType(&cat, cd);
-      std::string gname = rd[rd_index].col_name;  // got
-      std::string ename = cd->columnName;         // expecting
-#if ENABLE_GEO_IMPORT_COLUMN_MATCHING
-      TTypeInfo gti = rd[rd_index].col_type;  // got
-#endif
-      TTypeInfo eti = cd_col_type.col_type;  // expecting
-      // check for name match
-      if (gname != ename) {
-        if (TTypeInfo_IsGeo(eti.type) && ename == LEGACY_GEO_PREFIX &&
-            gname == OMNISCI_GEO_PREFIX) {
-          // rename incoming geo column to match existing legacy default geo column
-          rd[rd_index].col_name = gname;
-          LOG(INFO) << "import_geo_table: Renaming incoming geo column to match existing "
-                       "legacy default geo column";
-        } else {
-          THROW_COLUMN_ATTR_MISMATCH_EXCEPTION("name", gname, ename);
+  // if we've been given an explicit layer name, check that it exists and is loadable
+  // scan the original list, as it may exist but not have been gathered as loadable
+  if (copy_params.geo_layer_name.size()) {
+    bool found = false;
+    for (const auto& layer : layer_info) {
+      if (copy_params.geo_layer_name == layer.name) {
+        if (layer.contents == Importer_NS::Importer::GeoFileLayerContents::GEO ||
+            layer.contents == Importer_NS::Importer::GeoFileLayerContents::NON_GEO) {
+          // forget all the other layers and just load this one
+          load_layers.clear();
+          load_layers[layer.name] = layer.contents;
+          found = true;
+          break;
+        } else if (layer.contents ==
+                   Importer_NS::Importer::GeoFileLayerContents::UNSUPPORTED_GEO) {
+          THROW_MAPD_EXCEPTION("import_geo_table: Explicit geo layer '" +
+                               copy_params.geo_layer_name +
+                               "' has unsupported geo type!");
+        } else if (layer.contents == Importer_NS::Importer::GeoFileLayerContents::EMPTY) {
+          THROW_MAPD_EXCEPTION("import_geo_table: Explicit geo layer '" +
+                               copy_params.geo_layer_name + "' is empty!");
         }
       }
-#if ENABLE_GEO_IMPORT_COLUMN_MATCHING
-      // check for type attributes match
-      // these attrs must always match regardless of type
-      if (gti.type != eti.type) {
-        THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
-            "type", TTypeInfo_TypeToString(gti.type), TTypeInfo_TypeToString(eti.type));
-      }
-      if (gti.is_array != eti.is_array) {
-        THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
-            "array-ness", std::to_string(gti.is_array), std::to_string(eti.is_array));
-      }
-      if (gti.nullable != eti.nullable) {
-        THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
-            "nullability", std::to_string(gti.nullable), std::to_string(eti.nullable));
-      }
-      if (TTypeInfo_IsGeo(eti.type)) {
-        // for geo, only these other attrs must also match
-        // encoding and comp_param are allowed to differ
-        // this allows appending to existing geo table
-        // without needing to know the existing encoding
-        if (gti.precision != eti.precision) {
-          THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
-              "geo sub-type",
-              TTypeInfo_GeoSubTypeToString(gti.precision),
-              TTypeInfo_GeoSubTypeToString(eti.precision));
-        }
-        if (gti.scale != eti.scale) {
-          THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
-              "SRID", std::to_string(gti.scale), std::to_string(eti.scale));
-        }
-        if (gti.encoding != eti.encoding) {
-          LOG(INFO) << "import_geo_table: Ignoring geo encoding mismatch";
-        }
-        if (gti.comp_param != eti.comp_param) {
-          LOG(INFO) << "import_geo_table: Ignoring geo comp_param mismatch";
-        }
-      } else {
-        // non-geo, all other attrs must also match
-        // @TODO consider relaxing some of these dependent on type
-        // e.g. DECIMAL precision/scale, TEXT dict or non-dict, INTEGER up-sizing
-        if (gti.precision != eti.precision) {
-          THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
-              "precision", std::to_string(gti.precision), std::to_string(eti.precision));
-        }
-        if (gti.scale != eti.scale) {
-          THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
-              "scale", std::to_string(gti.scale), std::to_string(eti.scale));
-        }
-        if (gti.encoding != eti.encoding) {
-          THROW_COLUMN_ATTR_MISMATCH_EXCEPTION("encoding",
-                                               TTypeInfo_EncodingToString(gti.encoding),
-                                               TTypeInfo_EncodingToString(eti.encoding));
-        }
-        if (gti.comp_param != eti.comp_param) {
-          THROW_COLUMN_ATTR_MISMATCH_EXCEPTION("comp param",
-                                               std::to_string(gti.comp_param),
-                                               std::to_string(eti.comp_param));
-        }
-      }
-#endif
-      rd_index++;
+    }
+    if (!found) {
+      THROW_MAPD_EXCEPTION("import_geo_table: Explicit geo layer '" +
+                           copy_params.geo_layer_name + "' not found!");
     }
   }
 
-  std::map<std::string, std::string> colname_to_src;
-  for (auto r : rd) {
-    colname_to_src[r.col_name] =
-        r.src_name.length() > 0 ? r.src_name : ImportHelpers::sanitize_name(r.src_name);
+  // Immerse import of multiple layers is not yet supported
+  // @TODO fix this!
+  if (row_desc.size() > 0 && load_layers.size() > 1) {
+    THROW_MAPD_EXCEPTION(
+        "import_geo_table: Multi-layer geo import not yet supported from Immerse!");
   }
 
-  check_table_load_privileges(session_info, table_name);
+  // one definition of layer table name construction
+  // we append the layer name if we're loading more than one table
+  auto construct_layer_table_name = [&load_layers](const std::string& table_name,
+                                                   const std::string& layer_name) {
+    if (load_layers.size() > 1) {
+      return table_name + "_" + layer_name;
+    }
+    return table_name;
+  };
 
-  // Final check to ensure that we actually have a geo column
-  // of the expected name and type before doing the actual import,
-  // in case the user naively overrode the name or type in Immerse
-  // Preview (which as of 6/8/18 it still allows you to do).
-  // This avoids a fatal assert later when it fails to find the
-  // column. We should make Immerse more robust and disallow this.
-  bool have_geo_column_with_correct_name = false;
-  for (const auto& r : rd) {
-    if (r.col_type.type == TDatumType::POINT ||
-        r.col_type.type == TDatumType::LINESTRING ||
-        r.col_type.type == TDatumType::POLYGON ||
-        r.col_type.type == TDatumType::MULTIPOLYGON) {
-      // TODO(team): allow user to override the geo column name
-      if (r.col_name == OMNISCI_GEO_PREFIX) {
-        have_geo_column_with_correct_name = true;
-      } else if (r.col_name == LEGACY_GEO_PREFIX) {
-        CHECK(colname_to_src.find(r.col_name) != colname_to_src.end());
-        // Normalize column names for geo append with legacy column naming scheme
-        colname_to_src[r.col_name] = r.col_name;
-        have_geo_column_with_correct_name = true;
+  // if we're importing multiple tables, then NONE of them must exist already
+  if (load_layers.size() > 1) {
+    for (const auto& layer : load_layers) {
+      // construct table name
+      auto this_table_name = construct_layer_table_name(table_name, layer.first);
+
+      // table must not exist
+      if (cat.getMetadataForTable(this_table_name)) {
+        THROW_MAPD_EXCEPTION("import_geo_table: Table '" + this_table_name +
+                             "' already exists, aborting!");
       }
     }
   }
-  if (!have_geo_column_with_correct_name) {
-    THROW_MAPD_EXCEPTION("Table " + table_name +
-                         " does not have a geo column with name '" + OMNISCI_GEO_PREFIX +
-                         "'. Import aborted!");
-  }
 
-  try {
-    std::unique_ptr<Importer_NS::Importer> importer;
-    if (leaf_aggregator_.leafCount() > 0) {
-      importer.reset(new Importer_NS::Importer(
-          new DistributedLoader(session_info, td, &leaf_aggregator_),
-          file_path.string(),
-          copy_params));
+  // prepare to gather errors that would otherwise be exceptions, as we can only throw one
+  std::vector<std::string> caught_exception_messages;
+
+  // prepare to time multi-layer import
+  double total_import_ms = 0.0;
+
+  // now we're safe to start importing
+  // we loop over the layers we're going to attempt to load
+  for (const auto& layer : load_layers) {
+    // unpack
+    const auto& layer_name = layer.first;
+    const auto& layer_contents = layer.second;
+    bool is_geo_layer =
+        (layer_contents == Importer_NS::Importer::GeoFileLayerContents::GEO);
+
+    // construct table name again
+    auto this_table_name = construct_layer_table_name(table_name, layer_name);
+
+    // report
+    LOG(INFO) << "import_geo_table: Creating table: " << this_table_name;
+
+    // we need a row descriptor
+    TRowDescriptor rd;
+    if (row_desc.size() > 0) {
+      // we have a valid RowDescriptor
+      // this is the case where Immerse has already detected and created
+      // all we need to do is import and trust that the data will match
+      // use the provided row descriptor
+      // table must already exist (we check this below)
+      rd = row_desc;
     } else {
-      importer.reset(new Importer_NS::Importer(cat, td, file_path.string(), copy_params));
+      // we don't have a RowDescriptor
+      // we have to detect the file ourselves
+      TDetectResult cds;
+      TCopyParams cp_copy = cp;  // retain S3 auth tokens
+      cp_copy.geo_layer_name = layer_name;
+      cp_copy.table_type = TTableType::POLYGON;
+      detect_column_types(cds, session, file_name_in, cp_copy);
+      rd = cds.row_set.row_desc;
+
+      // then, if the table does NOT already exist, create it
+      const TableDescriptor* td = cat.getMetadataForTable(this_table_name);
+      if (!td) {
+        try {
+          create_table(session, this_table_name, rd, TTableType::POLYGON, create_params);
+        } catch (const std::exception& e) {
+          // capture the error and abort this layer
+          caught_exception_messages.emplace_back("Failed to create table for Layer '" +
+                                                 layer_name + "':" + e.what());
+          continue;
+        }
+      }
     }
-    auto ms = measure<>::execution([&]() { importer->importGDAL(colname_to_src); });
-    std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
-  } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string("import_geo_table failed: ") + e.what());
+
+    // by this point, the table should exist, one way or another
+    const TableDescriptor* td = cat.getMetadataForTable(this_table_name);
+    if (!td) {
+      // capture the error and abort this layer
+      std::string exception_message =
+          "Could not import geo file '" + file_path.filename().string() + "' to table '" +
+          this_table_name + "'; table does not exist or failed to create.";
+      caught_exception_messages.emplace_back(exception_message);
+      continue;
+    }
+
+    // then, we have to verify that the structure matches
+    // get column descriptors (non-system, non-deleted, logical columns only)
+    const auto col_descriptors =
+        cat.getAllColumnMetadataForTable(td->tableId, false, false, false);
+
+    // first, compare the column count
+    if (col_descriptors.size() != rd.size()) {
+      // capture the error and abort this layer
+      std::string exception_message =
+          "Could not append geo file '" + file_path.filename().string() + "' to table '" +
+          this_table_name + "'. Column count mismatch (got " + std::to_string(rd.size()) +
+          ", expecting " + std::to_string(col_descriptors.size()) + ")";
+      caught_exception_messages.emplace_back(exception_message);
+      continue;
+    }
+
+    try {
+      // then the names and types
+      int rd_index = 0;
+      for (auto cd : col_descriptors) {
+        TColumnType cd_col_type = populateThriftColumnType(&cat, cd);
+        std::string gname = rd[rd_index].col_name;  // got
+        std::string ename = cd->columnName;         // expecting
+#if ENABLE_GEO_IMPORT_COLUMN_MATCHING
+        TTypeInfo gti = rd[rd_index].col_type;  // got
+#endif
+        TTypeInfo eti = cd_col_type.col_type;  // expecting
+        // check for name match
+        if (gname != ename) {
+          if (TTypeInfo_IsGeo(eti.type) && ename == LEGACY_GEO_PREFIX &&
+              gname == OMNISCI_GEO_PREFIX) {
+            // rename incoming geo column to match existing legacy default geo column
+            rd[rd_index].col_name = gname;
+            LOG(INFO)
+                << "import_geo_table: Renaming incoming geo column to match existing "
+                   "legacy default geo column";
+          } else {
+            THROW_COLUMN_ATTR_MISMATCH_EXCEPTION("name", gname, ename);
+          }
+        }
+#if ENABLE_GEO_IMPORT_COLUMN_MATCHING
+        // check for type attributes match
+        // these attrs must always match regardless of type
+        if (gti.type != eti.type) {
+          THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
+              "type", TTypeInfo_TypeToString(gti.type), TTypeInfo_TypeToString(eti.type));
+        }
+        if (gti.is_array != eti.is_array) {
+          THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
+              "array-ness", std::to_string(gti.is_array), std::to_string(eti.is_array));
+        }
+        if (gti.nullable != eti.nullable) {
+          THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
+              "nullability", std::to_string(gti.nullable), std::to_string(eti.nullable));
+        }
+        if (TTypeInfo_IsGeo(eti.type)) {
+          // for geo, only these other attrs must also match
+          // encoding and comp_param are allowed to differ
+          // this allows appending to existing geo table
+          // without needing to know the existing encoding
+          if (gti.precision != eti.precision) {
+            THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
+                "geo sub-type",
+                TTypeInfo_GeoSubTypeToString(gti.precision),
+                TTypeInfo_GeoSubTypeToString(eti.precision));
+          }
+          if (gti.scale != eti.scale) {
+            THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
+                "SRID", std::to_string(gti.scale), std::to_string(eti.scale));
+          }
+          if (gti.encoding != eti.encoding) {
+            LOG(INFO) << "import_geo_table: Ignoring geo encoding mismatch";
+          }
+          if (gti.comp_param != eti.comp_param) {
+            LOG(INFO) << "import_geo_table: Ignoring geo comp_param mismatch";
+          }
+        } else {
+          // non-geo, all other attrs must also match
+          // @TODO consider relaxing some of these dependent on type
+          // e.g. DECIMAL precision/scale, TEXT dict or non-dict, INTEGER up-sizing
+          if (gti.precision != eti.precision) {
+            THROW_COLUMN_ATTR_MISMATCH_EXCEPTION("precision",
+                                                 std::to_string(gti.precision),
+                                                 std::to_string(eti.precision));
+          }
+          if (gti.scale != eti.scale) {
+            THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
+                "scale", std::to_string(gti.scale), std::to_string(eti.scale));
+          }
+          if (gti.encoding != eti.encoding) {
+            THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
+                "encoding",
+                TTypeInfo_EncodingToString(gti.encoding),
+                TTypeInfo_EncodingToString(eti.encoding));
+          }
+          if (gti.comp_param != eti.comp_param) {
+            THROW_COLUMN_ATTR_MISMATCH_EXCEPTION("comp param",
+                                                 std::to_string(gti.comp_param),
+                                                 std::to_string(eti.comp_param));
+          }
+        }
+#endif
+        rd_index++;
+      }
+    } catch (const std::exception& e) {
+      // capture the error and abort this layer
+      caught_exception_messages.emplace_back(e.what());
+      continue;
+    }
+
+    std::map<std::string, std::string> colname_to_src;
+    for (auto r : rd) {
+      colname_to_src[r.col_name] =
+          r.src_name.length() > 0 ? r.src_name : ImportHelpers::sanitize_name(r.src_name);
+    }
+
+    try {
+      check_table_load_privileges(session_info, this_table_name);
+    } catch (const std::exception& e) {
+      // capture the error and abort this layer
+      caught_exception_messages.emplace_back(e.what());
+      continue;
+    }
+
+    if (is_geo_layer) {
+      // Final check to ensure that we actually have a geo column
+      // of the expected name and type before doing the actual import,
+      // in case the user naively overrode the name or type in Immerse
+      // Preview (which as of 6/8/18 it still allows you to do).
+      // This avoids a fatal assert later when it fails to find the
+      // column. We should make Immerse more robust and disallow this.
+      bool have_geo_column_with_correct_name = false;
+      for (const auto& r : rd) {
+        if (TTypeInfo_IsGeo(r.col_type.type)) {
+          // TODO(team): allow user to override the geo column name
+          if (r.col_name == OMNISCI_GEO_PREFIX) {
+            have_geo_column_with_correct_name = true;
+          } else if (r.col_name == LEGACY_GEO_PREFIX) {
+            CHECK(colname_to_src.find(r.col_name) != colname_to_src.end());
+            // Normalize column names for geo append with legacy column naming scheme
+            colname_to_src[r.col_name] = r.col_name;
+            have_geo_column_with_correct_name = true;
+          }
+        }
+      }
+      if (!have_geo_column_with_correct_name) {
+        std::string exception_message = "Table " + this_table_name +
+                                        " does not have a geo column with name '" +
+                                        OMNISCI_GEO_PREFIX + "'. Import aborted!";
+        caught_exception_messages.emplace_back(exception_message);
+        continue;
+      }
+    }
+
+    try {
+      // import this layer only?
+      copy_params.geo_layer_name = layer_name;
+
+      // create an importer
+      std::unique_ptr<Importer_NS::Importer> importer;
+      if (leaf_aggregator_.leafCount() > 0) {
+        importer.reset(new Importer_NS::Importer(
+            new DistributedLoader(session_info, td, &leaf_aggregator_),
+            file_path.string(),
+            copy_params));
+      } else {
+        importer.reset(
+            new Importer_NS::Importer(cat, td, file_path.string(), copy_params));
+      }
+
+      // import
+      auto ms = measure<>::execution([&]() { importer->importGDAL(colname_to_src); });
+      LOG(INFO) << "Import of Layer '" << layer_name << "' took " << (double)ms / 1000.0
+                << "s";
+      total_import_ms += ms;
+    } catch (const std::exception& e) {
+      std::string exception_message =
+          "Import of Layer '" + this_table_name + "' failed: " + e.what();
+      caught_exception_messages.emplace_back(exception_message);
+      continue;
+    }
+  }
+
+  // did we catch any exceptions?
+  if (caught_exception_messages.size()) {
+    // combine all the strings into one and throw a single Thrift exception
+    std::string combined_exception_message = "Failed to import geo file:\n";
+    for (const auto& message : caught_exception_messages) {
+      combined_exception_message += message + "\n";
+    }
+    THROW_MAPD_EXCEPTION(combined_exception_message);
+  } else {
+    // report success and total time
+    LOG(INFO) << "Import Successful!";
+    LOG(INFO) << "Total Import Time: " << total_import_ms / 1000.0 << "s";
   }
 }
 
@@ -3848,6 +4034,79 @@ void MapDHandler::get_all_files_in_archive(std::vector<std::string>& _return,
     for (auto& s : _return) {
       s = archive_path_in + std::string("/") + s;
     }
+  }
+}
+
+void MapDHandler::get_layers_in_geo_file(std::vector<TGeoFileLayerInfo>& _return,
+                                         const TSessionId& session,
+                                         const std::string& file_name_in,
+                                         const TCopyParams& cp) {
+  LOG(INFO) << "get_layers_in_geo_file " << file_name_in;
+  std::string file_name(file_name_in);
+
+  Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
+
+  // handle relative paths
+  if (path_is_relative(file_name)) {
+    // assume relative paths are relative to data_path / mapd_import / <session>
+    auto file_path = import_path_ / picosha2::hash256_hex_string(session) /
+                     boost::filesystem::path(file_name).filename();
+    file_name = file_path.string();
+  }
+
+  // validate file_name
+  if (is_a_supported_geo_file(file_name, true)) {
+    // prepare to load geo file directly
+    add_vsi_network_prefix(file_name);
+    add_vsi_geo_prefix(file_name);
+  } else if (is_a_supported_archive_file(file_name)) {
+    // find the archive file
+    add_vsi_network_prefix(file_name);
+    if (!Importer_NS::Importer::gdalFileExists(file_name, copy_params)) {
+      THROW_MAPD_EXCEPTION("Archive does not exist: " + file_name_in);
+    }
+    // find geo file in archive
+    add_vsi_archive_prefix(file_name);
+    std::string geo_file = find_first_geo_file_in_archive(file_name, copy_params);
+    // prepare to load that geo file
+    if (geo_file.size()) {
+      file_name = file_name + std::string("/") + geo_file;
+    }
+  } else {
+    THROW_MAPD_EXCEPTION("File is not a supported geo or geo archive file: " +
+                         file_name_in);
+  }
+
+  // check the file actually exists
+  if (!Importer_NS::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
+    THROW_MAPD_EXCEPTION("Geo file/archive does not exist: " + file_name_in);
+  }
+
+  // find all layers
+  auto internal_layer_info =
+      Importer_NS::Importer::gdalGetLayersInGeoFile(file_name, copy_params);
+
+  // convert to Thrift type
+  for (const auto& internal_layer : internal_layer_info) {
+    TGeoFileLayerInfo layer;
+    layer.name = internal_layer.name;
+    switch (internal_layer.contents) {
+      case Importer_NS::Importer::GeoFileLayerContents::EMPTY:
+        layer.contents = TGeoFileLayerContents::EMPTY;
+        break;
+      case Importer_NS::Importer::GeoFileLayerContents::GEO:
+        layer.contents = TGeoFileLayerContents::GEO;
+        break;
+      case Importer_NS::Importer::GeoFileLayerContents::NON_GEO:
+        layer.contents = TGeoFileLayerContents::NON_GEO;
+        break;
+      case Importer_NS::Importer::GeoFileLayerContents::UNSUPPORTED_GEO:
+        layer.contents = TGeoFileLayerContents::UNSUPPORTED_GEO;
+        break;
+      default:
+        CHECK(false);
+    }
+    _return.emplace_back(layer);  // no suitable constructor to just pass parameters
   }
 }
 
