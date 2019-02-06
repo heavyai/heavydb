@@ -60,6 +60,14 @@ void recompute_metadata(const TableDescriptor* td,
   EXPECT_NO_THROW(optimizer.recomputeMetadata());
 }
 
+void vacuum_and_recompute_metadata(const TableDescriptor* td,
+                                   const Catalog_Namespace::Catalog& cat) {
+  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
+  TableOptimizer optimizer(td, executor.get(), cat);
+  EXPECT_NO_THROW(optimizer.vacuumDeletedRows());
+  EXPECT_NO_THROW(optimizer.recomputeMetadata());
+}
+
 static const std::string g_table_name{"metadata_test"};
 
 }  // namespace
@@ -463,6 +471,51 @@ TEST_F(MetadataUpdate, SmallDateNarrowMax) {
           const auto& chunk_metadata = chunk_metadata_itr->second;
           ASSERT_EQ(chunk_metadata.chunkStats.min.timeval, -946771200);
           ASSERT_EQ(chunk_metadata.chunkStats.max.timeval, 1262304000);
+          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, false);
+        }
+      };
+
+  run_op_per_fragment(td, check_recomputed_metadata_values);
+}
+
+TEST_F(MetadataUpdate, DeleteReset) {
+  const auto& cat = g_session->getCatalog();
+  const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
+
+  run_multiple_agg("DELETE FROM  " + g_table_name + " WHERE dd = '12/31/2012';",
+                   ExecutorDeviceType::CPU);
+
+  auto check_initial_metadata_values =
+      [](const Fragmenter_Namespace::FragmentInfo& fragment) {
+        const auto metadata_map = fragment.getChunkMetadataMapPhysical();
+        {
+          // last col should be deleted col
+          auto chunk_metadata_itr = metadata_map.end();
+          chunk_metadata_itr--;
+          CHECK(chunk_metadata_itr != metadata_map.end());
+          CHECK(chunk_metadata_itr->second.sqlType.get_type() == kBOOLEAN);
+          const auto& chunk_metadata = chunk_metadata_itr->second;
+          ASSERT_EQ(chunk_metadata.chunkStats.min.boolval, false);
+          ASSERT_EQ(chunk_metadata.chunkStats.max.boolval, true);
+          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, false);
+        }
+      };
+  run_op_per_fragment(td, check_initial_metadata_values);
+
+  vacuum_and_recompute_metadata(td, cat);
+
+  auto check_recomputed_metadata_values =
+      [](const Fragmenter_Namespace::FragmentInfo& fragment) {
+        const auto metadata_map = fragment.getChunkMetadataMapPhysical();
+        // last col should be deleted col
+        {
+          auto chunk_metadata_itr = metadata_map.end();
+          chunk_metadata_itr--;
+          CHECK(chunk_metadata_itr != metadata_map.end());
+          CHECK(chunk_metadata_itr->second.sqlType.get_type() == kBOOLEAN);
+          const auto& chunk_metadata = chunk_metadata_itr->second;
+          ASSERT_EQ(chunk_metadata.chunkStats.min.boolval, false);
+          ASSERT_EQ(chunk_metadata.chunkStats.max.boolval, false);
           ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, false);
         }
       };

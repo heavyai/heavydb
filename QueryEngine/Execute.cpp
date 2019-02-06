@@ -2788,8 +2788,20 @@ RelAlgExecutionUnit Executor::addDeletedColumn(const RelAlgExecutionUnit& ra_exe
       continue;
     }
     CHECK(deleted_cd->columnType.is_boolean());
-    ra_exe_unit_with_deleted.input_col_descs.emplace_back(new InputColDescriptor(
-        deleted_cd->columnId, deleted_cd->tableId, input_table.getNestLevel()));
+    // check deleted column is not already present
+    bool found = false;
+    for (const auto& input_col : ra_exe_unit_with_deleted.input_col_descs) {
+      if (input_col.get()->getColId() == deleted_cd->columnId &&
+          input_col.get()->getScanDesc().getTableId() == deleted_cd->tableId &&
+          input_col.get()->getScanDesc().getNestLevel() == input_table.getNestLevel()) {
+        found = true;
+      }
+    }
+    if (!found) {
+      // add deleted column
+      ra_exe_unit_with_deleted.input_col_descs.emplace_back(new InputColDescriptor(
+          deleted_cd->columnId, deleted_cd->tableId, input_table.getNestLevel()));
+    }
   }
   return ra_exe_unit_with_deleted;
 }
