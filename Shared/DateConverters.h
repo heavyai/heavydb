@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef SHARED_DATECONVERSIONS_H
-#define SHARED_DATECONVERSIONS_H
+#pragma once
 
 #include <cstdint>
 #include "../QueryEngine/ExtractFromTime.h"
@@ -32,5 +31,3 @@ inline int64_t get_epoch_seconds_from_days(const int64_t days) {
 }
 
 }  // namespace DateConverters
-
-#endif  // SHARED_DATECONVERSIONS_H

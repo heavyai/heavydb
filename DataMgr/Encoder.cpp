@@ -70,7 +70,7 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
         case kTIME:
         case kTIMESTAMP:
         case kDATE:
-          return new NoneEncoder<time_t>(buffer);
+          return new NoneEncoder<int64_t>(buffer);
         case kPOINT:
         case kLINESTRING:
         case kPOLYGON:
@@ -86,10 +86,10 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
           switch (sqlType.get_comp_param()) {
             case 0:
             case 32:
-              return new FixedLengthEncoder<time_t, int32_t>(buffer);
+              return new FixedLengthEncoder<int64_t, int32_t>(buffer);
               break;
             case 16:
-              return new FixedLengthEncoder<time_t, int16_t>(buffer);
+              return new FixedLengthEncoder<int64_t, int16_t>(buffer);
               break;
             default:
               return 0;
@@ -158,7 +158,7 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
         case kTIME:
         case kTIMESTAMP:
         case kDATE:
-          return new FixedLengthEncoder<time_t, int32_t>(buffer);
+          return new FixedLengthEncoder<int64_t, int32_t>(buffer);
           break;
         default: {
           return 0;

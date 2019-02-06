@@ -58,22 +58,23 @@ enum DatetruncField {
   dtINVALID
 };
 
-extern "C" NEVER_INLINE DEVICE time_t DateTruncate(DatetruncField field, time_t timeval);
+extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
+                                                    int64_t timeval);
 
-extern "C" NEVER_INLINE DEVICE time_t DateTruncateHighPrecision(DatetruncField field,
-                                                                time_t timeval,
-                                                                const int64_t scale);
+extern "C" NEVER_INLINE DEVICE int64_t DateTruncateHighPrecision(DatetruncField field,
+                                                                 int64_t timeval,
+                                                                 const int64_t scale);
 
 extern "C" ALWAYS_INLINE inline DEVICE int64_t
 DateTruncateAlterPrecisionScaleUp(DatetruncField field,
-                                  time_t timeval,
+                                  int64_t timeval,
                                   const int64_t scale) {
   return timeval * scale;
 }
 
 extern "C" ALWAYS_INLINE inline DEVICE int64_t
 DateTruncateAlterPrecisionScaleDown(DatetruncField field,
-                                    time_t timeval,
+                                    int64_t timeval,
                                     const int64_t scale) {
   return timeval / scale;
 }

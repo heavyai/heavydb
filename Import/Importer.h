@@ -197,7 +197,7 @@ class TypedImportBuffer : boost::noncopyable {
       case kDATE:
       case kTIME:
       case kTIMESTAMP:
-        time_buffer_ = new std::vector<time_t>();
+        bigint_buffer_ = new std::vector<int64_t>();
         break;
       case kARRAY:
         if (IS_STRING(col_desc->columnType.get_subtype())) {
@@ -264,7 +264,7 @@ class TypedImportBuffer : boost::noncopyable {
       case kDATE:
       case kTIME:
       case kTIMESTAMP:
-        delete time_buffer_;
+        delete bigint_buffer_;
         break;
       case kARRAY:
         if (IS_STRING(column_desc_->columnType.get_subtype())) {
@@ -312,10 +312,6 @@ class TypedImportBuffer : boost::noncopyable {
   void addStringArray(const std::vector<std::string>& arr) {
     string_array_buffer_->push_back(arr);
   }
-
-  void addDate32(const time_t v) { date_i32_buffer_->push_back(v); }
-
-  void addTime(const time_t v) { time_buffer_->push_back(v); }
 
   void addDictEncodedString(const std::vector<std::string>& string_vec) {
     CHECK(string_dict_);
@@ -386,7 +382,7 @@ class TypedImportBuffer : boost::noncopyable {
       case kDATE:
       case kTIME:
       case kTIMESTAMP:
-        return reinterpret_cast<int8_t*>(&((*time_buffer_)[0]));
+        return reinterpret_cast<int8_t*>(&((*bigint_buffer_)[0]));
       default:
         abort();
     }
@@ -413,7 +409,7 @@ class TypedImportBuffer : boost::noncopyable {
       case kDATE:
       case kTIME:
       case kTIMESTAMP:
-        return sizeof((*time_buffer_)[0]);
+        return sizeof((*bigint_buffer_)[0]);
       default:
         abort();
     }
@@ -508,7 +504,7 @@ class TypedImportBuffer : boost::noncopyable {
       case kDATE:
       case kTIME:
       case kTIMESTAMP:
-        time_buffer_->clear();
+        bigint_buffer_->clear();
         break;
       case kARRAY: {
         if (IS_STRING(column_desc_->columnType.get_subtype())) {
@@ -558,8 +554,6 @@ class TypedImportBuffer : boost::noncopyable {
     std::vector<int64_t>* bigint_buffer_;
     std::vector<float>* float_buffer_;
     std::vector<double>* double_buffer_;
-    std::vector<int32_t>* date_i32_buffer_;
-    std::vector<time_t>* time_buffer_;
     std::vector<std::string>* string_buffer_;
     std::vector<std::string>* geo_string_buffer_;
     std::vector<ArrayDatum>* array_buffer_;

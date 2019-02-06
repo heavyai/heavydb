@@ -573,11 +573,7 @@ void MapDHandler::value_to_thrift_column(const TargetValue& tv,
         case kDATE:
         case kINTERVAL_DAY_TIME:
         case kINTERVAL_YEAR_MONTH:
-          if (sizeof(time_t) == 4) {
-            column.nulls.push_back(data == NULL_INT && !ti.get_notnull());
-          } else {
-            column.nulls.push_back(data == NULL_BIGINT && !ti.get_notnull());
-          }
+          column.nulls.push_back(data == NULL_BIGINT && !ti.get_notnull());
           break;
         default:
           column.nulls.push_back(false);
@@ -662,11 +658,7 @@ TDatum MapDHandler::value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti
       case kDATE:
       case kINTERVAL_DAY_TIME:
       case kINTERVAL_YEAR_MONTH:
-        if (sizeof(time_t) == 4) {
-          datum.is_null = (datum.val.int_val == NULL_INT);
-        } else {
-          datum.is_null = (datum.val.int_val == NULL_BIGINT);
-        }
+        datum.is_null = (datum.val.int_val == NULL_BIGINT);
         break;
       default:
         datum.is_null = false;

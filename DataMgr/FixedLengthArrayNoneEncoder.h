@@ -265,16 +265,16 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       case kTIME:
       case kTIMESTAMP:
       case kDATE: {
-        const time_t* tm_array = (time_t*)array.pointer;
-        for (size_t i = 0; i < array.length / sizeof(time_t); i++) {
+        const int64_t* tm_array = reinterpret_cast<int64_t*>(array.pointer);
+        for (size_t i = 0; i < array.length / sizeof(int64_t); i++) {
           if (tm_array[i] == NULL_BIGINT)
             has_nulls = true;
           else if (initialized) {
-            elem_min.timeval = std::min(elem_min.timeval, tm_array[i]);
-            elem_max.timeval = std::max(elem_max.timeval, tm_array[i]);
+            elem_min.bigintval = std::min(elem_min.bigintval, tm_array[i]);
+            elem_max.bigintval = std::max(elem_max.bigintval, tm_array[i]);
           } else {
-            elem_min.timeval = tm_array[i];
-            elem_max.timeval = tm_array[i];
+            elem_min.bigintval = tm_array[i];
+            elem_max.bigintval = tm_array[i];
             initialized = true;
           }
         }

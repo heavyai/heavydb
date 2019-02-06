@@ -47,7 +47,7 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
         case kTIME:
         case kTIMESTAMP:
         case kDATE:
-          return std::make_shared<FixedWidthInt>(sizeof(time_t));
+          return std::make_shared<FixedWidthInt>(8);
         default:
           CHECK(false);
       }

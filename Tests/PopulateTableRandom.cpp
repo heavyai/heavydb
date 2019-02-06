@@ -251,13 +251,8 @@ size_t random_fill(const ColumnDescriptor* cd,
       const int dimen = cd->columnType.get_dimension();
       if (dimen == 0 || dimen == 3 || dimen == 6 ||
           dimen == 9) {  // add timestamp(0,3,6,9) support
-        if (sizeof(time_t) == 4) {
-          hash = random_fill_int32(p.numbersPtr, num_elems);
-          data_volumn += num_elems * sizeof(int32_t);
-        } else {
-          hash = random_fill_int64(p.numbersPtr, num_elems);
-          data_volumn += num_elems * sizeof(int64_t);
-        }
+        hash = random_fill_int64(p.numbersPtr, num_elems);
+        data_volumn += num_elems * sizeof(int64_t);
       } else {
         {
           assert(false);  // not supported yet
@@ -266,19 +261,14 @@ size_t random_fill(const ColumnDescriptor* cd,
       break;
     }
     case kDATE:
-      if (sizeof(time_t) == 4) {
-        hash = random_fill_int32(p.numbersPtr, num_elems);
-        data_volumn += num_elems * sizeof(int32_t);
+      if (cd->columnType.is_date_in_days()) {
+        const int64_t min = INT32_MIN;
+        const int64_t max = INT32_MAX;
+        hash = random_fill_int64(p.numbersPtr, num_elems, min, max);
       } else {
-        if (cd->columnType.is_date_in_days()) {
-          const int64_t min = INT32_MIN;
-          const int64_t max = INT32_MAX;
-          hash = random_fill_int64(p.numbersPtr, num_elems, min, max);
-        } else {
-          hash = random_fill_int64(p.numbersPtr, num_elems);
-        }
-        data_volumn += num_elems * sizeof(int64_t);
+        hash = random_fill_int64(p.numbersPtr, num_elems);
       }
+      data_volumn += num_elems * sizeof(int64_t);
       break;
     default:
       assert(false);

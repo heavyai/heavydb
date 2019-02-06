@@ -232,19 +232,20 @@ class DoubleLiteral : public Literal {
  */
 class TimestampLiteral : public Literal {
  public:
-  explicit TimestampLiteral() { time(&timestampval); }
-  time_t get_timestampval() const { return timestampval; }
+  explicit TimestampLiteral() { time(reinterpret_cast<time_t*>(&timestampval_)); }
   std::shared_ptr<Analyzer::Expr> analyze(
       const Catalog_Namespace::Catalog& catalog,
       Analyzer::Query& query,
       TlistRefType allow_tlist_ref = TLIST_NONE) const override;
-  static std::shared_ptr<Analyzer::Expr> get(const time_t);
+  static std::shared_ptr<Analyzer::Expr> get(const int64_t);
   std::string to_string() const override {
-    return boost::lexical_cast<std::string>(timestampval);
+    // TODO: Should we convert to a datum and use the datum toString converters to pretty
+    // print?
+    return boost::lexical_cast<std::string>(timestampval_);
   }
 
  private:
-  time_t timestampval;
+  int64_t timestampval_;
 };
 
 /*

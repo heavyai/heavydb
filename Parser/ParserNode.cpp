@@ -154,12 +154,12 @@ std::shared_ptr<Analyzer::Expr> TimestampLiteral::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
-  return get(timestampval);
+  return get(timestampval_);
 }
 
-std::shared_ptr<Analyzer::Expr> TimestampLiteral::get(const time_t timestampval) {
+std::shared_ptr<Analyzer::Expr> TimestampLiteral::get(const int64_t timestampval) {
   Datum d;
-  d.timeval = timestampval;
+  d.bigintval = timestampval;
   return makeExpr<Analyzer::Constant>(kTIMESTAMP, false, d);
 }
 
@@ -1030,10 +1030,10 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::get(
     d.bigintval = from_expr->get_type_info().is_high_precision_timestamp()
                       ? ExtractFromTimeHighPrecision(
                             fieldno,
-                            c->get_constval().timeval,
+                            c->get_constval().bigintval,
                             get_timestamp_precision_scale(
                                 from_expr->get_type_info().get_dimension()))
-                      : ExtractFromTime(fieldno, c->get_constval().timeval);
+                      : ExtractFromTime(fieldno, c->get_constval().bigintval);
     c->set_constval(d);
     return c;
   }
@@ -1186,9 +1186,9 @@ std::shared_ptr<Analyzer::Expr> DatetruncExpr::get(
     d.bigintval = date_trunc_ti.is_high_precision_timestamp()
                       ? DateTruncateHighPrecision(
                             fieldno,
-                            c->get_constval().timeval,
+                            c->get_constval().bigintval,
                             get_timestamp_precision_scale(date_trunc_ti.get_dimension()))
-                      : DateTruncate(fieldno, c->get_constval().timeval);
+                      : DateTruncate(fieldno, c->get_constval().bigintval);
     c->set_constval(d);
     return c;
   }
@@ -4098,11 +4098,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           case kTIME:
           case kTIMESTAMP:
           case kDATE:
-            if (sizeof(time_t) == 4) {
-              is_null = (int_val == NULL_INT);
-            } else {
-              is_null = (int_val == NULL_BIGINT);
-            }
+            is_null = (int_val == NULL_BIGINT);
             break;
           default:
             is_null = false;
@@ -4110,7 +4106,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         if (is_null) {
           outfile << copy_params.null_str;
         } else if (ti.get_type() == kTIME) {
-          time_t t = int_val;
+          const auto t = static_cast<time_t>(int_val);
           std::tm tm_struct;
           gmtime_r(&t, &tm_struct);
           char buf[9];

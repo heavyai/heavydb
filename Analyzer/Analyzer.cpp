@@ -29,7 +29,7 @@
 #include <iostream>
 #include <stdexcept>
 #include "../Catalog/Catalog.h"
-#include "../Shared/DateConversions.h"
+#include "../Shared/DateConverters.h"
 #include "../Shared/sql_type_to_string.h"
 #include "../Shared/sqltypes.h"
 #include "../Shared/unreachable.h"
@@ -940,26 +940,25 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
     case kTIMESTAMP:
       switch (new_type_info.get_type()) {
         case kTINYINT:
-          constval.tinyintval = (int8_t)constval.timeval;
+          constval.tinyintval = static_cast<int8_t>(constval.bigintval);
           break;
         case kINT:
-          constval.intval = (int32_t)constval.timeval;
+          constval.intval = static_cast<int32_t>(constval.bigintval);
           break;
         case kSMALLINT:
-          constval.smallintval = (int16_t)constval.timeval;
+          constval.smallintval = static_cast<int16_t>(constval.bigintval);
           break;
         case kBIGINT:
-          constval.bigintval = (int64_t)constval.timeval;
+          constval.bigintval = static_cast<int64_t>(constval.bigintval);
           break;
         case kDOUBLE:
-          constval.doubleval = (double)constval.timeval;
+          constval.doubleval = static_cast<double>(constval.bigintval);
           break;
         case kFLOAT:
-          constval.floatval = (float)constval.timeval;
+          constval.floatval = static_cast<float>(constval.bigintval);
           break;
         case kNUMERIC:
         case kDECIMAL:
-          constval.bigintval = (int64_t)constval.timeval;
           for (int i = 0; i < new_type_info.get_scale(); i++) {
             constval.bigintval *= 10;
           }
@@ -1058,37 +1057,38 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
     cast_to_string(new_type_info);
   } else if (new_type_info.get_type() == kDATE && type_info.get_type() == kDATE) {
     if (new_type_info.is_date_in_days()) {
-      const int64_t val = constval.timeval;
-      constval.timeval = DateConverters::get_epoch_days_from_seconds(val);
+      constval.bigintval =
+          DateConverters::get_epoch_days_from_seconds(constval.bigintval);
     }
     type_info = new_type_info;
   } else if (new_type_info.get_type() == kDATE && type_info.get_type() == kTIMESTAMP) {
     type_info = new_type_info;
-    constval.timeval = type_info.is_high_precision_timestamp()
-                           ? ExtractFromTimeHighPrecision(
-                                 kEPOCH,
-                                 constval.timeval,
-                                 get_timestamp_precision_scale(type_info.get_dimension()))
-                           : DateTruncate(dtDAY, constval.timeval);
+    constval.bigintval =
+        type_info.is_high_precision_timestamp()
+            ? ExtractFromTimeHighPrecision(
+                  kEPOCH,
+                  constval.bigintval,
+                  get_timestamp_precision_scale(type_info.get_dimension()))
+            : DateTruncate(dtDAY, constval.bigintval);
     if (new_type_info.is_date_in_days()) {
-      const int64_t val = constval.timeval;
-      constval.timeval = DateConverters::get_epoch_days_from_seconds(val);
+      constval.bigintval =
+          DateConverters::get_epoch_days_from_seconds(constval.bigintval);
     }
   } else if (type_info.get_type() == kTIMESTAMP &&
              new_type_info.get_type() == kTIMESTAMP) {
     if (type_info.get_dimension() != new_type_info.get_dimension()) {
       const auto result_unit =
           timestamp_precisions_lookup_.find(new_type_info.get_dimension());
-      constval.timeval =
+      constval.bigintval =
           type_info.get_dimension() < new_type_info.get_dimension()
               ? DateTruncateAlterPrecisionScaleUp(
                     result_unit->second,
-                    constval.timeval,
+                    constval.bigintval,
                     get_timestamp_precision_scale(new_type_info.get_dimension() -
                                                   type_info.get_dimension()))
               : DateTruncateAlterPrecisionScaleDown(
                     result_unit->second,
-                    constval.timeval,
+                    constval.bigintval,
                     get_timestamp_precision_scale(type_info.get_dimension() -
                                                   new_type_info.get_dimension()));
     }
@@ -1134,14 +1134,7 @@ void Constant::set_null_value() {
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-// @TODO(alex): store it as 64 bit on ARMv7l and remove the ifdef
-#ifdef __ARM_ARCH_7A__
-      static_assert(sizeof(time_t) == 4, "Unsupported time_t size");
-      constval.timeval = NULL_INT;
-#else
-      static_assert(sizeof(time_t) == 8, "Unsupported time_t size");
-      constval.timeval = NULL_BIGINT;
-#endif
+      constval.bigintval = NULL_BIGINT;
       break;
     case kVARCHAR:
     case kCHAR:
@@ -1969,7 +1962,7 @@ bool Datum_equal(const SQLTypeInfo& ti, Datum val1, Datum val2) {
     case kDATE:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
-      return val1.timeval == val2.timeval;
+      return val1.bigintval == val2.bigintval;
     case kPOINT:
     case kLINESTRING:
     case kPOLYGON:

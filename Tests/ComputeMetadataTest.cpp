@@ -264,8 +264,8 @@ TEST_F(MetadataUpdate, InitialMetadata) {
           const auto chunk_metadata_itr = metadata_map.find(6);
           CHECK(chunk_metadata_itr != metadata_map.end());
           const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.timeval, 1262304000);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.timeval, 1356912000);
+          ASSERT_EQ(chunk_metadata.chunkStats.min.bigintval, 1262304000);
+          ASSERT_EQ(chunk_metadata.chunkStats.max.bigintval, 1356912000);
           ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, true);
         }
 
@@ -274,8 +274,8 @@ TEST_F(MetadataUpdate, InitialMetadata) {
           const auto chunk_metadata_itr = metadata_map.find(7);
           CHECK(chunk_metadata_itr != metadata_map.end());
           const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.timeval, -946771200);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.timeval, 1356912000);
+          ASSERT_EQ(chunk_metadata.chunkStats.min.bigintval, -946771200);
+          ASSERT_EQ(chunk_metadata.chunkStats.max.bigintval, 1356912000);
           ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, false);
         }
       };
@@ -417,8 +417,8 @@ TEST_F(MetadataUpdate, DateNarrowRange) {
           const auto chunk_metadata_itr = metadata_map.find(6);
           CHECK(chunk_metadata_itr != metadata_map.end());
           const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.timeval, 1262304000);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.timeval, 1262304000);
+          ASSERT_EQ(chunk_metadata.chunkStats.min.bigintval, 1262304000);
+          ASSERT_EQ(chunk_metadata.chunkStats.max.bigintval, 1262304000);
           ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, false);
         }
       };
@@ -443,8 +443,8 @@ TEST_F(MetadataUpdate, SmallDateNarrowMin) {
           const auto chunk_metadata_itr = metadata_map.find(7);
           CHECK(chunk_metadata_itr != metadata_map.end());
           const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.timeval, 1262304000);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.timeval, 1356912000);
+          ASSERT_EQ(chunk_metadata.chunkStats.min.bigintval, 1262304000);
+          ASSERT_EQ(chunk_metadata.chunkStats.max.bigintval, 1356912000);
           ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, false);
         }
       };
@@ -469,8 +469,8 @@ TEST_F(MetadataUpdate, SmallDateNarrowMax) {
           const auto chunk_metadata_itr = metadata_map.find(7);
           CHECK(chunk_metadata_itr != metadata_map.end());
           const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.timeval, -946771200);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.timeval, 1262304000);
+          ASSERT_EQ(chunk_metadata.chunkStats.min.bigintval, -946771200);
+          ASSERT_EQ(chunk_metadata.chunkStats.max.bigintval, 1262304000);
           ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, false);
         }
       };

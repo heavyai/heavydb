@@ -263,7 +263,7 @@ inline int64_t get_value_from_datum(const Datum datum,
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      return static_cast<int64_t>(datum.timeval);
+      return datum.bigintval;
     case kNUMERIC:
     case kDECIMAL: {
       return datum.bigintval;

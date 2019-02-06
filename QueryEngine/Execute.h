@@ -305,6 +305,8 @@ using LLVMValueVector = std::vector<llvm::Value*>;
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
+  static_assert(sizeof(time_t) == 8,
+                "Host hardware not supported, 64-bit time support is required.");
 
  public:
   Executor(const int db_id,
@@ -1342,8 +1344,7 @@ class Executor {
         case kINTERVAL_DAY_TIME:
         case kINTERVAL_YEAR_MONTH:
           // TODO(alex): support null
-          return getOrAddLiteral(static_cast<int64_t>(constant->get_constval().timeval),
-                                 device_id);
+          return getOrAddLiteral(constant->get_constval().bigintval, device_id);
         case kARRAY: {
           if (enc_type == kENCODING_NONE) {
             if (ti.get_subtype() == kDOUBLE) {

@@ -242,7 +242,7 @@ void populate_TColumn(TStringValue ts,
           case SQLTypes::kDATE:
           case SQLTypes::kTIME:
           case SQLTypes::kTIMESTAMP:
-            input_col.data.int_col.push_back(d.timeval);
+            input_col.data.int_col.push_back(d.bigintval);
             break;
           default:
             LOG(FATAL) << " trying to process an INT transport type not handled "

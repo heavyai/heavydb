@@ -39,9 +39,10 @@
 
 /* move epoch from 01.01.1970 to 01.03.2000 - this is the first day of new
  * 400-year long cycle, right after additional day of leap year. This adjustment
- * is required only for date calculation, so instead of modifying time_t value
+ * is required only for date calculation, so instead of modifying time value
  * (which would require 64-bit operations to work correctly) it's enough to
  * adjust the calculated number of days since epoch. */
+// TODO(wam): Move these to be constexpr so we can have better type checking
 #define EPOCH_ADJUSTMENT_DAYS 11017
 /* year to which the adjustment was made */
 #define ADJUSTED_EPOCH_YEAR 2000
@@ -86,30 +87,15 @@ enum ExtractField {
 };
 
 // Shared by DateTruncate
-#ifdef __CUDACC__
-__device__
-#endif
-    int
-    extract_dow(const time_t* tim_p);
+DEVICE int extract_dow(const int64_t* tim_p);
 
-#ifdef __CUDACC__
-__device__
-#endif
-    tm*
-    gmtime_r_newlib(const time_t* tim_p, tm* res);
+DEVICE tm* gmtime_r_newlib(const int64_t* tim_p, tm* res);
 
-extern "C" __attribute__((noinline))
-#ifdef __CUDACC__
-__device__
-#endif
-    int64_t
-    ExtractFromTime(ExtractField field, time_t timeval);
+extern "C" DEVICE NEVER_INLINE int64_t ExtractFromTime(ExtractField field,
+                                                       int64_t timeval);
 
-extern "C" __attribute__((noinline))
-#ifdef __CUDACC__
-__device__
-#endif
-    int64_t
-    ExtractFromTimeHighPrecision(ExtractField field, time_t timeval, const int64_t scale);
+extern "C" DEVICE NEVER_INLINE int64_t ExtractFromTimeHighPrecision(ExtractField field,
+                                                                    int64_t timeval,
+                                                                    const int64_t scale);
 
 #endif  // QUERYENGINE_EXTRACTFROMTIME_H

@@ -253,18 +253,18 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH: {
       Datum d;
-      d.timeval = rex_literal->getVal<int64_t>();
+      d.bigintval = rex_literal->getVal<int64_t>();
       return makeExpr<Analyzer::Constant>(rex_literal->getType(), false, d);
     }
     case kTIME:
     case kTIMESTAMP: {
       Datum d;
-      d.timeval = rex_literal->getVal<int64_t>() / 1000;
+      d.bigintval = rex_literal->getVal<int64_t>() / 1000;
       return makeExpr<Analyzer::Constant>(rex_literal->getType(), false, d);
     }
     case kDATE: {
       Datum d;
-      d.timeval = rex_literal->getVal<int64_t>() * 24 * 3600;
+      d.bigintval = rex_literal->getVal<int64_t>() * 24 * 3600;
       return makeExpr<Analyzer::Constant>(rex_literal->getType(), false, d);
     }
     case kNULLT: {
@@ -965,7 +965,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
       std::shared_ptr<Analyzer::Expr> number_sec;
       if (number_lit) {
         number_sec = makeNumericConstant(SQLTypeInfo(kBIGINT, false),
-                                         number_lit->get_constval().timeval / 1000);
+                                         number_lit->get_constval().bigintval / 1000);
       } else {
         number_sec = makeExpr<Analyzer::BinOper>(
             number_ti.get_type(),
@@ -1070,7 +1070,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateminus(
     std::shared_ptr<Analyzer::Expr> neg_interval_sec;
     if (interval_lit) {
       neg_interval_sec =
-          makeNumericConstant(bigint_ti, -interval_lit->get_constval().timeval / 1000);
+          makeNumericConstant(bigint_ti, -interval_lit->get_constval().bigintval / 1000);
     } else {
       auto interval_sec =
           makeExpr<Analyzer::BinOper>(bigint_ti.get_type(),

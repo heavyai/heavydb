@@ -511,20 +511,20 @@ class CalciteAdapter {
       case kINTERVAL_YEAR_MONTH: {
         CHECK(json_val->IsInt64());
         Datum d;
-        d.timeval = json_val->GetInt64();
+        d.bigintval = json_val->GetInt64();
         return makeExpr<Analyzer::Constant>(lit_ti.get_type(), false, d);
       }
       case kTIME:
       case kTIMESTAMP: {
         CHECK(json_val->IsInt64());
         Datum d;
-        d.timeval = json_val->GetInt64() / 1000;
+        d.bigintval = json_val->GetInt64() / 1000;
         return makeExpr<Analyzer::Constant>(lit_ti.get_type(), false, d);
       }
       case kDATE: {
         CHECK(json_val->IsInt64());
         Datum d;
-        d.timeval = json_val->GetInt64() * 24 * 3600;
+        d.bigintval = json_val->GetInt64() * 24 * 3600;
         return makeExpr<Analyzer::Constant>(lit_ti.get_type(), false, d);
       }
       case kTEXT: {

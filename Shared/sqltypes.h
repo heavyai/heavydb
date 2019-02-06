@@ -115,7 +115,6 @@ typedef union {
   int16_t smallintval;
   int32_t intval;
   int64_t bigintval;
-  std::time_t timeval;
   float floatval;
   double doubleval;
   VarlenDatum* arrayval;
@@ -524,21 +523,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
       case kTIME:
       case kTIMESTAMP:
       case kDATE:
-        if (compression == kENCODING_DATE_IN_DAYS) {
-          return d.timeval == NULL_INT;
-        }
-// @TODO(alex): remove the ifdef
-#ifdef __ARM_ARCH_7A__
-#ifndef __CUDACC__
-        static_assert(sizeof(time_t) == 4, "Unsupported time_t size");
-#endif
-        return d.timeval == NULL_INT;
-#else
-#ifndef __CUDACC__
-        static_assert(sizeof(time_t) == 8, "Unsupported time_t size");
-#endif
-        return d.timeval == NULL_BIGINT;
-#endif
+        return d.bigintval == NULL_BIGINT;
       case kTEXT:
       case kVARCHAR:
       case kCHAR:
@@ -679,7 +664,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
       case kDATE:
         switch (compression) {
           case kENCODING_NONE:
-            return sizeof(time_t);
+            return sizeof(int64_t);
           case kENCODING_FIXED:
             if (type == kTIMESTAMP && dimension > 0) {
               assert(false);  // disable compression for timestamp precisions
@@ -693,9 +678,10 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
           case kENCODING_DATE_IN_DAYS:
             switch (comp_param) {
               case 0:
-                return sizeof(int32_t);
+                return 4;  // Default date encoded in days is 32 bits
               case 16:
-                return 2;
+              case 32:
+                return comp_param / 8;
               default:
                 assert(false);
                 break;

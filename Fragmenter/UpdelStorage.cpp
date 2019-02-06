@@ -27,7 +27,7 @@
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "QueryEngine/TargetValue.h"
 #include "Shared/ConfigResolve.h"
-#include "Shared/DateConversions.h"
+#include "Shared/DateConverters.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/thread_count.h"
 #include "TargetValueConvertersFactories.h"
@@ -653,13 +653,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
             if (const auto vp = boost::get<int64_t>(sv)) {
               auto v = *vp;
               if (lhs_type.is_string()) {
-#ifdef ENABLE_STRING_CONVERSION_AT_STORAGE_LAYER
-                v = stringDict->getOrAdd(DatumToString(
-                    rhs_type.is_time() ? Datum{.timeval = v} : Datum{.bigintval = v},
-                    rhs_type));
-#else
                 throw std::runtime_error("UPDATE does not support cast to string.");
-#endif
               }
               put_scalar<int64_t>(data_ptr, lhs_type, v, cd->columnName, &rhs_type);
               if (lhs_type.is_decimal()) {
@@ -704,11 +698,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
             } else if (const auto vp = boost::get<double>(sv)) {
               auto v = *vp;
               if (lhs_type.is_string()) {
-#ifdef ENABLE_STRING_CONVERSION_AT_STORAGE_LAYER
-                v = stringDict->getOrAdd(DatumToString(Datum{.doubleval = v}, rhs_type));
-#else
                 throw std::runtime_error("UPDATE does not support cast to string.");
-#endif
               }
               put_scalar<double>(data_ptr, lhs_type, v, cd->columnName);
               if (lhs_type.is_integer()) {
@@ -720,11 +710,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
             } else if (const auto vp = boost::get<float>(sv)) {
               auto v = *vp;
               if (lhs_type.is_string()) {
-#ifdef ENABLE_STRING_CONVERSION_AT_STORAGE_LAYER
-                v = stringDict->getOrAdd(DatumToString(Datum{.floatval = v}, rhs_type));
-#else
                 throw std::runtime_error("UPDATE does not support cast to string.");
-#endif
               }
               put_scalar<float>(data_ptr, lhs_type, v, cd->columnName);
               if (lhs_type.is_integer()) {

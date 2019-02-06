@@ -92,13 +92,7 @@ llvm::Value* Executor::codegenCast(llvm::Value* operand_lv,
 llvm::Value* Executor::codegenCastTimestampToDate(llvm::Value* ts_lv,
                                                   const int dimen,
                                                   const bool nullable) {
-  static_assert(sizeof(time_t) == 4 || sizeof(time_t) == 8, "Unsupported time_t size");
-  CHECK(ts_lv->getType()->isIntegerTy(32) || ts_lv->getType()->isIntegerTy(64));
-  if (sizeof(time_t) == 4 && ts_lv->getType()->isIntegerTy(64)) {
-    ts_lv = cgen_state_->ir_builder_.CreateCast(llvm::Instruction::CastOps::Trunc,
-                                                ts_lv,
-                                                get_int_type(32, cgen_state_->context_));
-  }
+  CHECK(ts_lv->getType()->isIntegerTy(64));
   std::vector<llvm::Value*> datetrunc_args{ll_int(static_cast<int32_t>(dtDAY)), ts_lv};
   if (dimen > 0) {
     datetrunc_args.push_back(ll_int(static_cast<int32_t>(dimen)));
@@ -121,13 +115,7 @@ llvm::Value* Executor::codegenCastBetweenTimestamps(llvm::Value* ts_lv,
   if (operand_dimen == target_dimen) {
     return ts_lv;
   }
-  static_assert(sizeof(time_t) == 4 || sizeof(time_t) == 8, "Unsupported time_t size");
-  CHECK(ts_lv->getType()->isIntegerTy(32) || ts_lv->getType()->isIntegerTy(64));
-  if (sizeof(time_t) == 4 && ts_lv->getType()->isIntegerTy(64)) {
-    ts_lv = cgen_state_->ir_builder_.CreateCast(llvm::Instruction::CastOps::Trunc,
-                                                ts_lv,
-                                                get_int_type(32, cgen_state_->context_));
-  }
+  CHECK(ts_lv->getType()->isIntegerTy(64));
   std::string fname{"DateTruncateAlterPrecision"};
   const auto result = timestamp_precisions_lookup_.find(target_dimen);
   CHECK(result != timestamp_precisions_lookup_.end());

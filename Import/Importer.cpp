@@ -327,8 +327,8 @@ int8_t* appendDatum(int8_t* buf, Datum d, const SQLTypeInfo& ti) {
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      *(time_t*)buf = d.timeval;
-      return buf + sizeof(time_t);
+      *reinterpret_cast<int64_t*>(buf) = d.bigintval;
+      return buf + sizeof(int64_t);
     default:
       return NULL;
   }
@@ -363,7 +363,7 @@ Datum NullDatum(SQLTypeInfo& ti) {
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      d.timeval = inline_fixed_encoding_null_val(ti);
+      d.bigintval = inline_fixed_encoding_null_val(ti);
       break;
     case kPOINT:
     case kLINESTRING:
@@ -457,7 +457,8 @@ Datum TDatumToDatum(const TDatum& datum, SQLTypeInfo& ti) {
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      d.timeval = datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
+      d.bigintval =
+          datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
       break;
     case kPOINT:
     case kLINESTRING:
@@ -634,12 +635,12 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
         SQLTypeInfo ti = cd->columnType;
         Datum d = StringToDatum(val, ti);
-        addTime(d.timeval);
+        addBigint(d.bigintval);
       } else {
         if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
-        addTime(inline_fixed_encoding_null_val(cd->columnType));
+        addBigint(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
     case kARRAY:
@@ -708,7 +709,7 @@ void TypedImportBuffer::pop_value() {
     case kDATE:
     case kTIME:
     case kTIMESTAMP:
-      time_buffer_->pop_back();
+      bigint_buffer_->pop_back();
       break;
     case kARRAY:
       if (IS_STRING(column_desc_->columnType.get_subtype())) {
@@ -806,8 +807,8 @@ constexpr int32_t kSecondsInDay = 86400;
 
 void append_arrow_time(const ColumnDescriptor* cd,
                        const Array& values,
-                       std::vector<time_t>* buffer) {
-  const time_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
+                       std::vector<int64_t>* buffer) {
+  const int64_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
   if (values.type_id() == Type::TIME32) {
     const auto& typed_values = static_cast<const Time32Array&>(values);
     const auto& type = static_cast<const Time32Type&>(*values.type());
@@ -822,14 +823,15 @@ void append_arrow_time(const ColumnDescriptor* cd,
       } else {
         switch (unit) {
           case TimeUnit::SECOND:
-            buffer->push_back(static_cast<time_t>(raw_values[i]));
+            buffer->push_back(static_cast<int64_t>(raw_values[i]));
             break;
           case TimeUnit::MILLI:
-            buffer->push_back(static_cast<time_t>(raw_values[i] / kMillisecondsInSecond));
+            buffer->push_back(
+                static_cast<int64_t>(raw_values[i] / kMillisecondsInSecond));
             break;
           default:
             // unreachable code
-            CHECK(false);
+            UNREACHABLE();
             break;
         }
       }
@@ -848,14 +850,15 @@ void append_arrow_time(const ColumnDescriptor* cd,
       } else {
         switch (unit) {
           case TimeUnit::MICRO:
-            buffer->push_back(static_cast<time_t>(raw_values[i] / kMicrosecondsInSecond));
+            buffer->push_back(
+                static_cast<int64_t>(raw_values[i] / kMicrosecondsInSecond));
             break;
           case TimeUnit::NANO:
-            buffer->push_back(static_cast<time_t>(raw_values[i] / kNanosecondsinSecond));
+            buffer->push_back(static_cast<int64_t>(raw_values[i] / kNanosecondsinSecond));
             break;
           default:
             // unreachable code
-            CHECK(false);
+            UNREACHABLE();
             break;
         }
       }
@@ -867,10 +870,10 @@ void append_arrow_time(const ColumnDescriptor* cd,
 
 void append_arrow_timestamp(const ColumnDescriptor* cd,
                             const Array& values,
-                            std::vector<time_t>* buffer) {
+                            std::vector<int64_t>* buffer) {
   ARROW_THROW_IF(values.type_id() != Type::TIMESTAMP, "Expected timestamp col");
 
-  const time_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
+  const int64_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
   const auto& typed_values = static_cast<const TimestampArray&>(values);
   const auto& type = static_cast<const TimestampType&>(*values.type());
 
@@ -884,16 +887,16 @@ void append_arrow_timestamp(const ColumnDescriptor* cd,
     } else {
       switch (unit) {
         case TimeUnit::SECOND:
-          buffer->push_back(static_cast<time_t>(raw_values[i]));
+          buffer->push_back(static_cast<int64_t>(raw_values[i]));
           break;
         case TimeUnit::MILLI:
-          buffer->push_back(static_cast<time_t>(raw_values[i] / kMillisecondsInSecond));
+          buffer->push_back(static_cast<int64_t>(raw_values[i] / kMillisecondsInSecond));
           break;
         case TimeUnit::MICRO:
-          buffer->push_back(static_cast<time_t>(raw_values[i] / kMicrosecondsInSecond));
+          buffer->push_back(static_cast<int64_t>(raw_values[i] / kMicrosecondsInSecond));
           break;
         case TimeUnit::NANO:
-          buffer->push_back(static_cast<time_t>(raw_values[i] / kNanosecondsinSecond));
+          buffer->push_back(static_cast<int64_t>(raw_values[i] / kNanosecondsinSecond));
           break;
         default:
           break;
@@ -904,8 +907,8 @@ void append_arrow_timestamp(const ColumnDescriptor* cd,
 
 void append_arrow_date(const ColumnDescriptor* cd,
                        const Array& values,
-                       std::vector<time_t>* buffer) {
-  const time_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
+                       std::vector<int64_t>* buffer) {
+  const int64_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
   if (values.type_id() == Type::DATE32) {
     const auto& typed_values = static_cast<const Date32Array&>(values);
 
@@ -916,7 +919,7 @@ void append_arrow_date(const ColumnDescriptor* cd,
       if (typed_values.IsNull(i)) {
         buffer->push_back(null_sentinel);
       } else {
-        buffer->push_back(static_cast<time_t>(raw_values[i] * kSecondsInDay));
+        buffer->push_back(static_cast<int64_t>(raw_values[i] * kSecondsInDay));
       }
     }
   } else if (values.type_id() == Type::DATE64) {
@@ -930,7 +933,7 @@ void append_arrow_date(const ColumnDescriptor* cd,
       if (typed_values.IsNull(i)) {
         buffer->push_back(null_sentinel);
       } else {
-        buffer->push_back(static_cast<time_t>(raw_values[i] / 1000));
+        buffer->push_back(static_cast<int64_t>(raw_values[i] / 1000));
       }
     }
   } else {
@@ -940,8 +943,8 @@ void append_arrow_date(const ColumnDescriptor* cd,
 
 void append_arrow_date_i32(const ColumnDescriptor* cd,
                            const Array& values,
-                           std::vector<time_t>* buffer) {
-  const time_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
+                           std::vector<int64_t>* buffer) {
+  const int64_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
   if (values.type_id() == Type::DATE32) {
     const auto& typed_values = static_cast<const Date32Array&>(values);
 
@@ -952,7 +955,7 @@ void append_arrow_date_i32(const ColumnDescriptor* cd,
       if (typed_values.IsNull(i)) {
         buffer->push_back(null_sentinel);
       } else {
-        buffer->push_back(static_cast<time_t>(raw_values[i]));
+        buffer->push_back(static_cast<int64_t>(raw_values[i]));
       }
     }
   } else if (values.type_id() == Type::DATE64) {
@@ -1041,17 +1044,17 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
       append_arrow_binary(cd, col, string_buffer_);
       break;
     case kTIME:
-      append_arrow_time(cd, col, time_buffer_);
+      append_arrow_time(cd, col, bigint_buffer_);
       break;
     case kTIMESTAMP:
-      append_arrow_timestamp(cd, col, time_buffer_);
+      append_arrow_timestamp(cd, col, bigint_buffer_);
       break;
     case kDATE:
       if (cd->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
-        append_arrow_date_i32(cd, col, time_buffer_);
+        append_arrow_date_i32(cd, col, bigint_buffer_);
         break;
       }
-      append_arrow_date(cd, col, time_buffer_);
+      append_arrow_date(cd, col, bigint_buffer_);
       break;
     case kARRAY:
       throw std::runtime_error("Arrow array appends not yet supported");
@@ -1176,12 +1179,12 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
     case kTIMESTAMP:
     case kDATE: {
       dataSize = col.data.int_col.size();
-      time_buffer_->reserve(dataSize);
+      bigint_buffer_->reserve(dataSize);
       for (size_t i = 0; i < dataSize; i++) {
         if (col.nulls[i]) {
-          time_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
+          bigint_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
         } else {
-          time_buffer_->push_back((time_t)col.data.int_col[i]);
+          bigint_buffer_->push_back(static_cast<int64_t>(col.data.int_col[i]));
         }
       }
       break;
@@ -1357,13 +1360,14 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
                 addArray(ArrayDatum(0, NULL, true));
               } else {
                 size_t len = col.data.arr_col[i].data.int_col.size();
-                size_t byteWidth = sizeof(time_t);
+                size_t byteWidth = sizeof(int64_t);
                 size_t byteSize = len * byteWidth;
                 int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
                 int8_t* p = buf;
                 for (size_t j = 0; j < len; ++j) {
-                  *(time_t*)p = static_cast<time_t>(col.data.arr_col[i].data.int_col[j]);
-                  p += sizeof(time_t);
+                  *reinterpret_cast<int64_t*>(p) =
+                      static_cast<int64_t>(col.data.arr_col[i].data.int_col[j]);
+                  p += sizeof(int64_t);
                 }
                 addArray(ArrayDatum(byteSize, buf, len == 0));
               }
@@ -1479,12 +1483,12 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     case kTIMESTAMP:
     case kDATE: {
       if (!is_null) {
-        addTime(datum.val.int_val);
+        addBigint(datum.val.int_val);
       } else {
         if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
-        addTime(inline_fixed_encoding_null_val(cd->columnType));
+        addBigint(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
     }
@@ -2450,7 +2454,7 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
         case kTIME:
         case kTIMESTAMP:
         case kDATE:
-          shard_output_buffers[col_idx]->addTime(int_value_at(*input_buffer, i));
+          shard_output_buffers[col_idx]->addBigint(int_value_at(*input_buffer, i));
           break;
         case kARRAY:
           if (IS_STRING(col_ti.get_subtype())) {

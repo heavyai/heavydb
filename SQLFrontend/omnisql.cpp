@@ -430,7 +430,7 @@ std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_in
     case TDatumType::STR:
       return datum.val.str_val;
     case TDatumType::TIME: {
-      time_t t = datum.val.int_val;
+      time_t t = static_cast<time_t>(datum.val.int_val);
       std::tm tm_struct;
       gmtime_r(&t, &tm_struct);
       char buf[9];
@@ -443,7 +443,7 @@ std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_in
         auto scale = static_cast<int64_t>(std::pow(10, type_info.precision));
         auto dv = std::div(datum.val.int_val, scale);
         auto modulus = (dv.rem + scale) % scale;
-        time_t sec = dv.quot - (dv.quot < 0 && modulus > 0);
+        time_t sec = static_cast<time_t>(dv.quot - (dv.quot < 0 && modulus > 0));
         gmtime_r(&sec, &tm_struct);
         char buf[21];
         strftime(buf, 21, "%F %T.", &tm_struct);
@@ -451,7 +451,7 @@ std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_in
         return std::string(buf) +
                std::string(type_info.precision - subsecond.length(), '0') + subsecond;
       } else {
-        time_t sec = datum.val.int_val;
+        time_t sec = static_cast<time_t>(datum.val.int_val);
         gmtime_r(&sec, &tm_struct);
         char buf[20];
         strftime(buf, 20, "%F %T", &tm_struct);
@@ -459,7 +459,7 @@ std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_in
       }
     }
     case TDatumType::DATE: {
-      time_t t = datum.val.int_val;
+      time_t t = static_cast<time_t>(datum.val.int_val);
       std::tm tm_struct;
       gmtime_r(&t, &tm_struct);
       char buf[11];

@@ -170,16 +170,16 @@ ExpressionRange apply_simple_quals(
         // qual
         const auto result =
             timestamp_precisions_lookup_.find(qual_col_ti.get_dimension());
-        const_d.timeval =
+        const_d.bigintval =
             qual_const_ti.get_dimension() < qual_col_ti.get_dimension()
                 ? DateTruncateAlterPrecisionScaleUp(
                       result->second,
-                      const_d.timeval,
+                      const_d.bigintval,
                       get_timestamp_precision_scale(qual_col_ti.get_dimension() -
                                                     qual_const_ti.get_dimension()))
                 : DateTruncateAlterPrecisionScaleDown(
                       result->second,
-                      const_d.timeval,
+                      const_d.bigintval,
                       get_timestamp_precision_scale(qual_const_ti.get_dimension() -
                                                     qual_col_ti.get_dimension()));
       }
@@ -416,7 +416,7 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
     case kTIME:
     case kTIMESTAMP:
     case kDATE: {
-      const int64_t v = datum.timeval;
+      const int64_t v = datum.bigintval;
       return ExpressionRange::makeIntRange(v, v, 0, false);
     }
     case kFLOAT: {

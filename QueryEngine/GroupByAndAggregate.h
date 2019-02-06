@@ -74,8 +74,8 @@ inline std::string datum_to_string(const TargetValue& tv,
   const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
   if (ti.is_time()) {
     Datum datum;
-    datum.timeval = *boost::get<int64_t>(scalar_tv);
-    if (datum.timeval == NULL_BIGINT) {
+    datum.bigintval = *boost::get<int64_t>(scalar_tv);
+    if (datum.bigintval == NULL_BIGINT) {
       return "NULL";
     }
     return DatumToString(datum, ti);
@@ -304,7 +304,7 @@ inline int64_t extract_from_datum(const Datum datum, const SQLTypeInfo& ti) {
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      return datum.timeval;
+      return datum.bigintval;
     default:
       abort();
   }

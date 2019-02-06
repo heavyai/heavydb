@@ -101,7 +101,7 @@ llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant)
     case kDATE:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
-      return ll_int(constant->get_constval().timeval);
+      return ll_int(constant->get_constval().bigintval);
     default:
       abort();
   }

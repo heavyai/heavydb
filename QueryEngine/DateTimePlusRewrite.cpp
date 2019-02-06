@@ -128,7 +128,7 @@ DatetruncField get_dt_field(const Analyzer::Expr* ts, const Analyzer::Expr* off_
     return dtINVALID;
   }
   const auto& datum = interval->get_constval();
-  switch (datum.timeval) {
+  switch (datum.bigintval) {
     case 86400000:
       return get_dt_field(ts, interval_multiplier, false);
     case 3600000:

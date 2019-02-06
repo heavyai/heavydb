@@ -31,7 +31,7 @@
 #include <string>
 #include "StringTransform.h"
 
-#include "DateConversions.h"
+#include "DateConverters.h"
 #include "TimeGM.h"
 #include "sqltypes.h"
 
@@ -138,7 +138,7 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       tm_struct.tm_year = 70;
       tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = tm_struct.tm_gmtoff =
           0;
-      d.timeval = TimeGM::instance().my_timegm(&tm_struct);
+      d.bigintval = static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_struct));
       break;
     }
     case kTIMESTAMP: {
@@ -159,7 +159,7 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       }
       if (!tp) {
         try {
-          d.timeval = std::stoll(s);
+          d.bigintval = static_cast<int64_t>(std::stoll(s));
           break;
         } catch (const std::invalid_argument& ia) {
           throw std::runtime_error("Invalid timestamp string " + s);
@@ -220,7 +220,7 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
           p++;
           uint64_t frac_num = 0;
           int ntotal = 0;
-          sscanf(p, "%lu%n", &frac_num, &ntotal);
+          sscanf(p, "%llu%n", &frac_num, &ntotal);
           fsc = TimeGM::instance().parse_fractional_seconds(frac_num, ntotal, ti);
         } else if (*p == '\0') {
           fsc = 0;
@@ -228,9 +228,10 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
           throw std::runtime_error("Unclear syntax for leading fractional seconds: " +
                                    std::string(p));
         }
-        d.timeval = TimeGM::instance().my_timegm(&tm_struct, fsc, ti);
+        d.bigintval =
+            static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_struct, fsc, ti));
       } else {  // default timestamp(0) precision
-        d.timeval = TimeGM::instance().my_timegm(&tm_struct);
+        d.bigintval = static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_struct));
         if (*p == '.') {
           p++;
         }
@@ -238,7 +239,8 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       if (*p != '\0') {
         uint32_t hour = 0;
         sscanf(tp, "%u", &hour);
-        d.timeval = TimeGM::instance().parse_meridians(d.timeval, p, hour, ti);
+        d.bigintval = static_cast<int64_t>(TimeGM::instance().parse_meridians(
+            static_cast<time_t>(d.bigintval), p, hour, ti));
         break;
       }
       break;
@@ -261,9 +263,9 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       }
       if (!tp) {
         try {
-          d.timeval = ti.is_date_in_days()
-                          ? DateConverters::get_epoch_days_from_seconds(std::stoll(s))
-                          : std::stoll(s);
+          d.bigintval = ti.is_date_in_days()
+                            ? DateConverters::get_epoch_days_from_seconds(std::stoll(s))
+                            : static_cast<int64_t>(std::stoll(s));
           break;
         } catch (const std::invalid_argument& ia) {
           throw std::runtime_error("Invalid date string " + s);
@@ -272,8 +274,10 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       tm_struct.tm_sec = tm_struct.tm_min = tm_struct.tm_hour = 0;
       tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = tm_struct.tm_gmtoff =
           0;
-      d.timeval = ti.is_date_in_days() ? TimeGM::instance().my_timegm_days(&tm_struct)
-                                       : TimeGM::instance().my_timegm(&tm_struct);
+      d.bigintval =
+          ti.is_date_in_days()
+              ? static_cast<int64_t>(TimeGM::instance().my_timegm_days(&tm_struct))
+              : static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_struct));
       break;
     }
     case kPOINT:
@@ -310,7 +314,7 @@ bool DatumEqual(const Datum a, const Datum b, const SQLTypeInfo& ti) {
     case kDATE:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
-      return a.timeval == b.timeval;
+      return a.bigintval == b.bigintval;
     case kTEXT:
     case kVARCHAR:
     case kCHAR:
@@ -355,7 +359,7 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
       return std::to_string(d.doubleval);
     case kTIME: {
       std::tm tm_struct;
-      gmtime_r(&d.timeval, &tm_struct);
+      gmtime_r(reinterpret_cast<time_t*>(&d.bigintval), &tm_struct);
       char buf[9];
       strftime(buf, 9, "%T", &tm_struct);
       return std::string(buf);
@@ -363,7 +367,7 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
     case kTIMESTAMP: {
       std::tm tm_struct{0};
       if (ti.get_dimension() > 0) {
-        std::string t = std::to_string(d.timeval);
+        std::string t = std::to_string(d.bigintval);
         int cp = t.length() - ti.get_dimension();
         time_t sec = std::stoll(t.substr(0, cp));
         t = t.substr(cp);
@@ -372,7 +376,7 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
         strftime(buf, 21, "%F %T.", &tm_struct);
         return std::string(buf) += t;
       } else {
-        time_t sec = d.timeval;
+        time_t sec = static_cast<time_t>(d.bigintval);
         gmtime_r(&sec, &tm_struct);
         char buf[20];
         strftime(buf, 20, "%F %T", &tm_struct);
@@ -381,16 +385,20 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
     }
     case kDATE: {
       std::tm tm_struct;
-      time_t ntimeval = ti.is_date_in_days() ? d.timeval * 86400 : d.timeval;
+      time_t ntimeval =
+          ti.is_date_in_days()
+              ? static_cast<time_t>(
+                    DateConverters::get_epoch_seconds_from_days(d.bigintval))
+              : static_cast<time_t>(d.bigintval);
       gmtime_r(&ntimeval, &tm_struct);
       char buf[11];
       strftime(buf, 11, "%F", &tm_struct);
       return std::string(buf);
     }
     case kINTERVAL_DAY_TIME:
-      return std::to_string(d.timeval) + " ms (day-time interval)";
+      return std::to_string(d.bigintval) + " ms (day-time interval)";
     case kINTERVAL_YEAR_MONTH:
-      return std::to_string(d.timeval) + " month(s) (year-month interval)";
+      return std::to_string(d.bigintval) + " month(s) (year-month interval)";
     case kTEXT:
     case kVARCHAR:
     case kCHAR:
