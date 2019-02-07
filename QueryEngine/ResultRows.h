@@ -24,9 +24,9 @@
 #ifndef QUERYENGINE_RESULTROWS_H
 #define QUERYENGINE_RESULTROWS_H
 
+#include "Descriptors/QueryMemoryDescriptor.h"
 #include "HyperLogLog.h"
 #include "OutputBufferInitialization.h"
-#include "QueryMemoryDescriptor.h"
 #include "TargetValue.h"
 
 #include "../Analyzer/Analyzer.h"

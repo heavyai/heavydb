@@ -33,7 +33,7 @@
 
 #ifndef __CUDACC__
 
-#include "QueryMemoryDescriptor.h"
+#include "Descriptors/QueryMemoryDescriptor.h"
 
 #include <algorithm>
 

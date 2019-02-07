@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
+#include "../../Descriptors/RelAlgExecutionDescriptor.h"
 #include "../../Execute.h"
-#include "../../RelAlgExecutionDescriptor.h"
 
 std::shared_ptr<ResultSet> Executor::renderLinesNonInSitu(
     const std::string& queryStr,

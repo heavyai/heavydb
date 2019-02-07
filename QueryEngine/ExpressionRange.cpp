@@ -19,10 +19,10 @@
 #include <cfenv>
 #include <cmath>
 #include "DateTruncate.h"
+#include "Descriptors/InputDescriptors.h"
 #include "Execute.h"
 #include "ExtractFromTime.h"
 #include "GroupByAndAggregate.h"
-#include "InputDescriptors.h"
 #include "QueryPhysicalInputsCollector.h"
 
 #define DEF_OPERATOR(fname, op)                                                    \

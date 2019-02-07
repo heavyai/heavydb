@@ -19,10 +19,10 @@
 
 #include "CalciteDeserializerUtils.h"
 #include "DateTimePlusRewrite.h"
+#include "Descriptors/RelAlgExecutionDescriptor.h"
 #include "ExpressionRewrite.h"
 #include "ExtensionFunctionsWhitelist.h"
 #include "RelAlgAbstractInterpreter.h"
-#include "RelAlgExecutionDescriptor.h"
 
 #include "../Analyzer/Analyzer.h"
 #include "../Parser/ParserNode.h"

@@ -18,6 +18,7 @@
 
 #include "AggregateUtils.h"
 #include "BaselineJoinHashTable.h"
+#include "Descriptors/QueryFragmentDescriptor.h"
 #include "DynamicWatchdog.h"
 #include "EquiJoinCondition.h"
 #include "ExpressionRewrite.h"
@@ -26,7 +27,6 @@
 #include "JsonAccessors.h"
 #include "OutputBufferInitialization.h"
 #include "OverlapsJoinHashTable.h"
-#include "QueryFragmentDescriptor.h"
 #include "QueryRewrite.h"
 #include "QueryTemplateGenerator.h"
 #include "RuntimeFunctions.h"

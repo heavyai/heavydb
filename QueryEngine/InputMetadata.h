@@ -17,7 +17,7 @@
 #ifndef QUERYENGINE_INPUTMETADATA_H
 #define QUERYENGINE_INPUTMETADATA_H
 
-#include "InputDescriptors.h"
+#include "Descriptors/InputDescriptors.h"
 #include "RelAlgExecutionUnit.h"
 
 #include <unordered_map>

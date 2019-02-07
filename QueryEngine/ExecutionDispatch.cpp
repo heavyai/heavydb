@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
+#include "Descriptors/QueryFragmentDescriptor.h"
 #include "DynamicWatchdog.h"
 #include "Execute.h"
-#include "QueryFragmentDescriptor.h"
 
 #include "DataMgr/BufferMgr/BufferMgr.h"
 

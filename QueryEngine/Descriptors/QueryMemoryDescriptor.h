@@ -25,8 +25,8 @@
 #ifndef QUERYENGINE_QUERYMEMORYDESCRIPTOR_H
 #define QUERYENGINE_QUERYMEMORYDESCRIPTOR_H
 
-#include "CompilationOptions.h"
-#include "CountDistinct.h"
+#include "../CompilationOptions.h"
+#include "../CountDistinct.h"
 
 #include <glog/logging.h>
 

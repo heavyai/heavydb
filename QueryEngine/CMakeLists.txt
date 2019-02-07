@@ -23,6 +23,9 @@ set(query_engine_source_files
     CudaAllocator.cpp
     DateTimeIR.cpp
     DateTimePlusRewrite.cpp
+    Descriptors/QueryFragmentDescriptor.cpp
+    Descriptors/QueryMemoryDescriptor.cpp
+    Descriptors/RelAlgExecutionDescriptor.cpp
     EquiJoinCondition.cpp
     Execute.cpp
     ExecuteUpdate.cpp
@@ -57,12 +60,9 @@ set(query_engine_source_files
     QueryRewrite.cpp
     QueryTemplateGenerator.cpp
     QueryExecutionContext.cpp
-    QueryFragmentDescriptor.cpp
-    QueryMemoryDescriptor.cpp
     QueryMemoryInitializer.cpp
     RelAlgAbstractInterpreter.cpp
     RelLeftDeepInnerJoin.cpp
-    RelAlgExecutionDescriptor.cpp
     RelAlgExecutor.cpp
     RelAlgTranslator.cpp
     RelAlgTranslatorGeo.cpp

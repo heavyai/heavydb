@@ -17,9 +17,9 @@
 #ifndef QUERYENGINE_RELALGEXECUTIONDESCRIPTOR_H
 #define QUERYENGINE_RELALGEXECUTIONDESCRIPTOR_H
 
-#include "GroupByAndAggregate.h"
-#include "JoinFilterPushDown.h"
-#include "RelAlgAbstractInterpreter.h"
+#include "../GroupByAndAggregate.h"
+#include "../JoinFilterPushDown.h"
+#include "../RelAlgAbstractInterpreter.h"
 
 class ResultSet;
 

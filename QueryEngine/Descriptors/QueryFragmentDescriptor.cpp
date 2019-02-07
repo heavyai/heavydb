@@ -17,7 +17,7 @@
 #include "QueryFragmentDescriptor.h"
 
 #include <DataMgr/DataMgr.h>
-#include "Execute.h"
+#include "../Execute.h"
 
 QueryFragmentDescriptor::QueryFragmentDescriptor(
     const RelAlgExecutionUnit& ra_exe_unit,

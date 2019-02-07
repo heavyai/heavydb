@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
+#include "Descriptors/QueryFragmentDescriptor.h"
 #include "Execute.h"
-#include "QueryFragmentDescriptor.h"
 #include "RelAlgExecutor.h"
 
 UpdateLogForFragment::UpdateLogForFragment(FragmentInfoType const& fragment_info,

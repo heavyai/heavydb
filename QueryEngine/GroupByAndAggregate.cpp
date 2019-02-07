@@ -19,6 +19,7 @@
 #include "CudaAllocator.h"
 
 #include "CardinalityEstimator.h"
+#include "Descriptors/QueryMemoryDescriptor.h"
 #include "ExpressionRange.h"
 #include "ExpressionRewrite.h"
 #include "GpuInitGroups.h"
@@ -26,7 +27,6 @@
 #include "LLVMFunctionAttributesUtil.h"
 #include "MaxwellCodegenPatch.h"
 #include "OutputBufferInitialization.h"
-#include "QueryMemoryDescriptor.h"
 
 #include "../CudaMgr/CudaMgr.h"
 #include "../Shared/checked_alloc.h"

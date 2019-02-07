@@ -16,10 +16,10 @@
 
 #include "QueryExecutionContext.h"
 #include "AggregateUtils.h"
+#include "Descriptors/QueryMemoryDescriptor.h"
 #include "Execute.h"
 #include "GpuInitGroups.h"
 #include "InPlaceSort.h"
-#include "QueryMemoryDescriptor.h"
 #include "QueryMemoryInitializer.h"
 #include "RelAlgExecutionUnit.h"
 #include "SpeculativeTopN.h"

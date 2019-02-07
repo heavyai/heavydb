@@ -18,12 +18,12 @@
 #define QUERYENGINE_RELALGEXECUTOR_H
 
 #include "../Shared/scope.h"
+#include "Descriptors/RelAlgExecutionDescriptor.h"
 #include "Distributed/AggregatedResult.h"
 #include "Execute.h"
 #include "InputMetadata.h"
 #include "JoinFilterPushDown.h"
 #include "QueryRewrite.h"
-#include "RelAlgExecutionDescriptor.h"
 #include "SpeculativeTopN.h"
 #include "StreamingTopN.h"
 

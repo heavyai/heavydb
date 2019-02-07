@@ -26,8 +26,8 @@
 #ifndef QUERYENGINE_COUNTDISTINCTDESCRIPTOR_H
 #define QUERYENGINE_COUNTDISTINCTDESCRIPTOR_H
 
-#include "BufferCompaction.h"
-#include "CompilationOptions.h"
+#include "../BufferCompaction.h"
+#include "../CompilationOptions.h"
 
 #include <glog/logging.h>
 

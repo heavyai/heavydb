@@ -27,7 +27,7 @@
 #define QUERYENGINE_RELALGEXECUTIONUNIT_H
 
 #include "../Shared/sqldefs.h"
-#include "InputDescriptors.h"
+#include "Descriptors/InputDescriptors.h"
 #include "QueryFeatures.h"
 
 #include <list>

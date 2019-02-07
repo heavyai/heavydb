@@ -16,8 +16,8 @@
 
 #pragma once
 
+#include "Descriptors/QueryMemoryDescriptor.h"
 #include "GpuMemUtils.h"
-#include "QueryMemoryDescriptor.h"
 #include "ResultSet.h"
 
 #include "Rendering/RenderAllocator.h"

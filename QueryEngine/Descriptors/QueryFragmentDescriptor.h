@@ -30,7 +30,7 @@
 #include <vector>
 
 #include <glog/logging.h>
-#include "CompilationOptions.h"
+#include "../CompilationOptions.h"
 
 namespace Fragmenter_Namespace {
 class FragmentInfo;

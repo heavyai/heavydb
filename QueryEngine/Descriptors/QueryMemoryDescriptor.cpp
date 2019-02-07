@@ -16,11 +16,11 @@
 
 #include "QueryMemoryDescriptor.h"
 
-#include "Execute.h"
-#include "ExpressionRewrite.h"
-#include "GroupByAndAggregate.h"
-#include "ScalarExprVisitor.h"
-#include "StreamingTopN.h"
+#include "../Execute.h"
+#include "../ExpressionRewrite.h"
+#include "../GroupByAndAggregate.h"
+#include "../ScalarExprVisitor.h"
+#include "../StreamingTopN.h"
 
 bool g_enable_smem_group_by{true};
 extern bool g_enable_columnar_output;

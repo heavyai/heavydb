@@ -25,7 +25,7 @@
 #ifndef QUERYENGINE_COUNTDISTINCT_H
 #define QUERYENGINE_COUNTDISTINCT_H
 
-#include "CountDistinctDescriptor.h"
+#include "Descriptors/CountDistinctDescriptor.h"
 #include "HyperLogLog.h"
 
 #include <bitset>

@@ -25,7 +25,7 @@
 #ifndef QUERYENGINE_HYPERLOGLOG_H
 #define QUERYENGINE_HYPERLOGLOG_H
 
-#include "CountDistinctDescriptor.h"
+#include "Descriptors/CountDistinctDescriptor.h"
 
 #include <cmath>
 
