@@ -16,6 +16,7 @@
 
 #include "Execute.h"
 #include "QueryFragmentDescriptor.h"
+#include "RelAlgExecutor.h"
 
 UpdateLogForFragment::UpdateLogForFragment(FragmentInfoType const& fragment_info,
                                            size_t const fragment_index,
@@ -137,6 +138,9 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
     // than CPU
     current_fragment_execution_dispatch.run(
         co.device_type_, 0, eo, {FragmentsPerTable{table_id, {fragment_index}}}, 0, -1);
+    if (error_code) {
+      throw std::runtime_error(RelAlgExecutor::getErrorMessageFromCode(error_code));
+    }
     const auto& proj_fragment_results =
         current_fragment_execution_dispatch.getFragmentResults()[0];
     const auto proj_result_set = proj_fragment_results.first;

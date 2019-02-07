@@ -8898,6 +8898,8 @@ TEST(Update, SmallIntUpdate) {
     run_multiple_agg("update smallint_default set s=-s where s < 0;", dt);
     run_multiple_agg("select s from smallint_default where s > 0 and s < 2;", dt);
     run_multiple_agg("select s from smallint_default where s > 2 and s < 4;", dt);
+    EXPECT_THROW(run_multiple_agg("update smallint_default set s = 32767 + 12;", dt),
+                 std::runtime_error);
 
     run_ddl_statement("drop table smallint_default;");
   }

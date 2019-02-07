@@ -113,6 +113,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
 
   void cleanupPostExecution();
 
+  static std::string getErrorMessageFromCode(const int32_t error_code);
+
  private:
   ExecutionResult executeRelAlgQueryNoRetry(const std::string& query_ra,
                                             const CompilationOptions& co,
@@ -233,8 +235,6 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                               const int64_t queue_time_ms);
 
   static void handlePersistentError(const int32_t error_code);
-
-  static std::string getErrorMessageFromCode(const int32_t error_code);
 
   WorkUnit createWorkUnit(const RelAlgNode*, const SortInfo&, const bool just_explain);
 
