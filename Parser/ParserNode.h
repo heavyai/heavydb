@@ -30,6 +30,7 @@
 #include <string>
 #include "../Analyzer/Analyzer.h"
 #include "../Catalog/Catalog.h"
+#include "../Distributed/AggregatedResult.h"
 #include "../Shared/sqldefs.h"
 #include "../Shared/sqltypes.h"
 
@@ -1053,9 +1054,28 @@ class CreateTableAsSelectStmt : public DDLStmt {
 
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
+  std::string& get_table() { return table_name_; }
+
+  std::string& get_select_query() { return select_query_; }
+
+  struct DistributedConnector {
+    virtual AggregatedResult query(
+        const Catalog_Namespace::SessionInfo& parent_session_info,
+        std::string& sql_query_string) = 0;
+    virtual size_t leafCount() = 0;
+    virtual void insertDataToLeaf(
+        const Catalog_Namespace::SessionInfo& parent_session_info,
+        const size_t leaf_idx,
+        Fragmenter_Namespace::InsertData& insert_data) = 0;
+    virtual void checkpoint(const Catalog_Namespace::SessionInfo& parent_session_info,
+                            int tableId) = 0;
+  };
+
+  DistributedConnector* leafs_connector_ = nullptr;
+
  private:
-  const std::string table_name_;
-  const std::string select_query_;
+  std::string table_name_;
+  std::string select_query_;
   const bool is_temporary_;
   const bool if_not_exists_;
   std::list<std::unique_ptr<NameValueAssign>> storage_options_;

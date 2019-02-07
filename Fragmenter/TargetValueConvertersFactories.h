@@ -26,7 +26,6 @@ struct ConverterCreateParameter {
   const ColumnDescriptor* target;
   const SQLTypeInfo& type;
   bool can_be_null;
-  bool always_expect_strings;
 };
 
 struct TargetValueConverterFactory {

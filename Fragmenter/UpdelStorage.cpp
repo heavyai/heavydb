@@ -350,8 +350,7 @@ void InsertOrderFragmenter::updateColumns(
                                      sourceDescriptor,
                                      targetDescriptor,
                                      targetDescriptor->columnType,
-                                     !targetDescriptor->columnType.get_notnull(),
-                                     true};
+                                     !targetDescriptor->columnType.get_notnull()};
       auto converter = factory.create(param);
       sourceDataConverters[indexOfTargetColumn] = std::move(converter);
 

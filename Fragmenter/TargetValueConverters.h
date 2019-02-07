@@ -67,6 +67,8 @@ struct TargetValueConverter {
 
   virtual void convertToColumnarFormat(size_t row, const TargetValue* value) = 0;
 
+  virtual void finalizeDataBlocksForInsertData() {}
+
   virtual void addDataBlocksToInsertData(
       Fragmenter_Namespace::InsertData& insertData) = 0;
 };

@@ -1126,12 +1126,13 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
     if (target_info.sql_type.is_string()) {
       CHECK(target_info.sql_type.get_compression() == kENCODING_NONE);
       CHECK_LT(static_cast<size_t>(storage_idx.first), serialized_varlen_buffer_.size());
-      const auto varlen_buffer_for_storage = serialized_varlen_buffer_[storage_idx.first];
+      const auto& varlen_buffer_for_storage =
+          serialized_varlen_buffer_[storage_idx.first];
       CHECK_LT(static_cast<size_t>(varlen_ptr), varlen_buffer_for_storage.size());
       return varlen_buffer_for_storage[varlen_ptr];
     } else if (target_info.sql_type.get_type() == kARRAY) {
       CHECK_LT(static_cast<size_t>(storage_idx.first), serialized_varlen_buffer_.size());
-      const auto varlen_buffer = serialized_varlen_buffer_[storage_idx.first];
+      const auto& varlen_buffer = serialized_varlen_buffer_[storage_idx.first];
       CHECK_LT(static_cast<size_t>(varlen_ptr), varlen_buffer.size());
 
       return build_array_target_value(

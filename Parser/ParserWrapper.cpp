@@ -90,7 +90,13 @@ ParserWrapper::ParserWrapper(std::string query_string) {
   for (std::string ddl : ddl_cmd) {
     is_ddl = boost::istarts_with(query_string, ddl);
     if (is_ddl) {
-      if (ddl == "COPY") {
+      if (ddl == "CREATE") {
+        boost::regex copy_to{R"(CREATE\s+TABLE.*AS.*SELECT.*)",
+                             boost::regex::extended | boost::regex::icase};
+        if (boost::regex_match(query_string, copy_to)) {
+          is_ctas = true;
+        }
+      } else if (ddl == "COPY") {
         is_copy = true;
         // now check if it is COPY TO
         boost::regex copy_to{R"(COPY\s*\(([^#])(.+)\)\s+TO\s)",

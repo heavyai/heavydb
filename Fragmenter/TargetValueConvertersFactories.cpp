@@ -96,15 +96,13 @@ struct DictionaryConverterFactory {
         CHECK(false);
     }
 
-    return std::make_unique<DictionaryValueConverter<TARGET_TYPE>>(
-        param.cat,
-        param.source,
-        param.target,
-        param.num_rows,
-        target_null_value,
-        NULL_INT,
-        param.can_be_null,
-        param.always_expect_strings);
+    return std::make_unique<DictionaryValueConverter<TARGET_TYPE>>(param.cat,
+                                                                   param.source,
+                                                                   param.target,
+                                                                   param.num_rows,
+                                                                   target_null_value,
+                                                                   NULL_INT,
+                                                                   param.can_be_null);
   }
 
   std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {
@@ -141,13 +139,8 @@ struct ArrayConverterFactory {
   std::unique_ptr<ArrayValueConverter<typename ELEMENT_FACTORY::ConverterType>> create(
       ConverterCreateParameter param) {
     auto elem_type = param.target->columnType.get_elem_type();
-    ConverterCreateParameter elementConverterFactoryParam{0,
-                                                          param.cat,
-                                                          param.source,
-                                                          param.target,
-                                                          elem_type,
-                                                          false,
-                                                          param.always_expect_strings};
+    ConverterCreateParameter elementConverterFactoryParam{
+        0, param.cat, param.source, param.target, elem_type, false};
 
     auto elementConverter = element_factory_.create(elementConverterFactoryParam);
     return std::make_unique<ArrayValueConverter<typename ELEMENT_FACTORY::ConverterType>>(

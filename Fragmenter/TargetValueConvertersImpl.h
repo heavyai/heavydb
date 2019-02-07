@@ -19,6 +19,10 @@
 
 #include "TargetValueConverters.h"
 
+#include <atomic>
+#include <future>
+#include <thread>
+
 namespace Importer_NS {
 std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeInfo& ti);
 }  // namespace Importer_NS
@@ -26,6 +30,7 @@ std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeI
 template <typename SOURCE_TYPE, typename TARGET_TYPE>
 struct NumericValueConverter : public TargetValueConverter {
   using ColumnDataPtr = std::unique_ptr<TARGET_TYPE, CheckedMallocDeleter<TARGET_TYPE>>;
+  using ElementsBufferColumnPtr = ColumnDataPtr;
 
   ColumnDataPtr column_data_;
   TARGET_TYPE null_value_;
@@ -56,15 +61,16 @@ struct NumericValueConverter : public TargetValueConverter {
         reinterpret_cast<TARGET_TYPE*>(checked_malloc(num_rows * sizeof(TARGET_TYPE))));
   }
 
-  ColumnDataPtr allocateArrayData(size_t num_rows) {
+  ElementsBufferColumnPtr allocateColumnarBuffer(size_t num_rows) {
     CHECK(num_rows > 0);
-    return ColumnDataPtr(
+    return ElementsBufferColumnPtr(
         reinterpret_cast<TARGET_TYPE*>(checked_malloc(num_rows * sizeof(TARGET_TYPE))));
   }
 
-  void convertElementToColumnarFormat(size_t row,
-                                      typename ColumnDataPtr::pointer columnData,
-                                      const ScalarTargetValue* scalarValue) {
+  void convertElementToColumnarFormat(
+      size_t row,
+      typename ElementsBufferColumnPtr::pointer columnData,
+      const ScalarTargetValue* scalarValue) {
     auto mapd_p = checked_get<SOURCE_TYPE>(row, scalarValue, SOURCE_TYPE_ACCESSOR);
     auto val = *mapd_p;
 
@@ -85,6 +91,8 @@ struct NumericValueConverter : public TargetValueConverter {
     convertToColumnarFormat(row, scalarValue);
   }
 
+  auto processArrayBuffer(auto buffer) { return std::move(buffer); }
+
   void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
     DataBlockPtr dataBlock;
     dataBlock.numbersPtr = reinterpret_cast<int8_t*>(column_data_.get());
@@ -98,10 +106,11 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
   using ElementsDataColumnPtr =
       typename NumericValueConverter<int64_t, TARGET_TYPE>::ColumnDataPtr;
 
-  const DictDescriptor* source_dict_desc_;
-  const DictDescriptor* target_dict_desc_;
+  using ElementsBufferColumnPtr = std::unique_ptr<std::vector<std::string>>;
 
-  const StringDictionary* source_dict_;
+  ElementsBufferColumnPtr column_buffer_;
+
+  const DictDescriptor* target_dict_desc_;
 
   DictionaryValueConverter(const Catalog_Namespace::Catalog& cat,
                            const ColumnDescriptor* sourceDescriptor,
@@ -109,73 +118,55 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
                            size_t num_rows,
                            TARGET_TYPE nullValue,
                            int64_t nullCheckValue,
-                           bool doNullCheck,
-                           bool expect_always_strings)
+                           bool doNullCheck)
       : NumericValueConverter<int64_t, TARGET_TYPE>(targetDescriptor,
                                                     num_rows,
                                                     nullValue,
                                                     nullCheckValue,
                                                     doNullCheck) {
-    source_dict_desc_ =
-        cat.getMetadataForDict(sourceDescriptor->columnType.get_comp_param(), true);
     target_dict_desc_ =
         cat.getMetadataForDict(targetDescriptor->columnType.get_comp_param(), true);
+    CHECK(target_dict_desc_);
 
-    source_dict_ = nullptr;
-
-    if (!expect_always_strings) {
-      if (source_dict_desc_) {
-        source_dict_ = source_dict_desc_->stringDict.get();
-      }
+    if (num_rows) {
+      column_buffer_ = allocateColumnarBuffer(num_rows);
     }
   }
 
   ~DictionaryValueConverter() override {}
 
-  void convertToColumnarFormatFromDict(size_t row,
-                                       typename ElementsDataColumnPtr::pointer columnData,
-                                       const ScalarTargetValue* scalarValue) {
-    auto mapd_p = checked_get<int64_t>(row, scalarValue, this->SOURCE_TYPE_ACCESSOR);
-    auto val = *mapd_p;
-
-    if (this->do_null_check_ && this->null_check_value_ == val) {
-      columnData[row] = this->null_value_;
-    } else {
-      std::string strVal = source_dict_->getString(val);
-      auto newVal = target_dict_desc_->stringDict->getOrAdd(strVal);
-      columnData[row] = (TARGET_TYPE)newVal;
-    }
+  ElementsBufferColumnPtr allocateColumnarBuffer(size_t num_rows) {
+    CHECK(num_rows > 0);
+    return std::make_unique<std::vector<std::string>>(num_rows);
   }
 
-  virtual void convertToColumnarFormatFromString(
+  void convertToColumnarFormatFromString(
       size_t row,
-      typename ElementsDataColumnPtr::pointer columnData,
+      typename ElementsBufferColumnPtr::pointer columnBuffer,
       const ScalarTargetValue* scalarValue) {
     auto mapd_p =
         checked_get<NullableString>(row, scalarValue, this->NULLABLE_STRING_ACCESSOR);
 
     const auto mapd_str_p = checked_get<std::string>(row, mapd_p, this->STRING_ACCESSOR);
 
-    if (this->do_null_check_ && (nullptr == mapd_str_p || *mapd_str_p == "")) {
-      columnData[row] = this->null_value_;
+    if (this->do_null_check_ && (nullptr == mapd_str_p)) {
+      // TODO: using empty string for nulls
+      columnBuffer->at(row) = "";
     } else {
-      auto newVal = target_dict_desc_->stringDict->getOrAdd(*mapd_str_p);
-      columnData[row] = (TARGET_TYPE)newVal;
+      CHECK(mapd_str_p);
+      columnBuffer->at(row) = *mapd_str_p;
     }
   }
 
-  void convertElementToColumnarFormat(size_t row,
-                                      typename ElementsDataColumnPtr::pointer columnData,
-                                      const ScalarTargetValue* scalarValue) {
-    if (source_dict_) {
-      convertToColumnarFormatFromDict(row, columnData, scalarValue);
-    } else {
-      convertToColumnarFormatFromString(row, columnData, scalarValue);
-    }
+  void convertElementToColumnarFormat(
+      size_t row,
+      typename ElementsBufferColumnPtr::pointer columnBuffer,
+      const ScalarTargetValue* scalarValue) {
+    convertToColumnarFormatFromString(row, columnBuffer, scalarValue);
   }
 
   void convertToColumnarFormat(size_t row, const ScalarTargetValue* scalarValue) {
-    convertElementToColumnarFormat(row, this->column_data_.get(), scalarValue);
+    convertElementToColumnarFormat(row, this->column_buffer_.get(), scalarValue);
   }
 
   void convertToColumnarFormat(size_t row, const TargetValue* value) override {
@@ -183,6 +174,38 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
         checked_get<ScalarTargetValue>(row, value, this->SCALAR_TARGET_VALUE_ACCESSOR);
 
     convertToColumnarFormat(row, scalarValue);
+  }
+
+  typename NumericValueConverter<int64_t, TARGET_TYPE>::ColumnDataPtr processArrayBuffer(
+      ElementsBufferColumnPtr buffer) {
+    typename NumericValueConverter<int64_t, TARGET_TYPE>::ColumnDataPtr data =
+        typename NumericValueConverter<int64_t, TARGET_TYPE>::ColumnDataPtr(
+            reinterpret_cast<TARGET_TYPE*>(
+                checked_malloc(buffer->size() * sizeof(TARGET_TYPE))));
+
+    TARGET_TYPE* columnDataPtr = reinterpret_cast<TARGET_TYPE*>(data.get());
+    target_dict_desc_->stringDict->getOrAddBulk(
+        *reinterpret_cast<std::vector<std::string>*>(buffer.get()), columnDataPtr);
+    return std::move(data);
+  }
+
+  void finalizeDataBlocksForInsertData() override {
+    if (column_buffer_) {
+      TARGET_TYPE* columnDataPtr =
+          reinterpret_cast<TARGET_TYPE*>(this->column_data_.get());
+      std::vector<std::string>* dataPtr =
+          reinterpret_cast<std::vector<std::string>*>(column_buffer_.get());
+      target_dict_desc_->stringDict->getOrAddBulk(*dataPtr, columnDataPtr);
+      column_buffer_ = nullptr;
+    }
+  }
+
+  void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
+    finalizeDataBlocksForInsertData();
+    DataBlockPtr dataBlock;
+    dataBlock.numbersPtr = reinterpret_cast<int8_t*>(this->column_data_.get());
+    insertData.data.push_back(dataBlock);
+    insertData.columnIds.push_back(this->column_descriptor_->columnId);
   }
 };
 
@@ -227,6 +250,9 @@ struct StringValueConverter : public TargetValueConverter {
 
 template <typename ELEMENT_CONVERTER>
 struct ArrayValueConverter : public TargetValueConverter {
+  std::unique_ptr<
+      std::vector<std::pair<size_t, typename ELEMENT_CONVERTER::ElementsBufferColumnPtr>>>
+      column_buffer_;
   std::unique_ptr<std::vector<ArrayDatum>> column_data_;
   std::unique_ptr<ELEMENT_CONVERTER> element_converter_;
   SQLTypeInfo element_type_info_;
@@ -252,6 +278,9 @@ struct ArrayValueConverter : public TargetValueConverter {
   void allocateColumnarData(size_t num_rows) override {
     CHECK(num_rows > 0);
     column_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
+    column_buffer_ = std::make_unique<std::vector<
+        std::pair<size_t, typename ELEMENT_CONVERTER::ElementsBufferColumnPtr>>>(
+        num_rows);
   }
 
   void convertToColumnarFormat(size_t row, const TargetValue* value) override {
@@ -262,18 +291,17 @@ struct ArrayValueConverter : public TargetValueConverter {
       const auto& vec = arrayValue->get();
       bool is_null = false;
       if (vec.size()) {
-        typename ELEMENT_CONVERTER::ColumnDataPtr elementData =
-            element_converter_->allocateArrayData(vec.size());
+        typename ELEMENT_CONVERTER::ElementsBufferColumnPtr elementBuffer =
+            element_converter_->allocateColumnarBuffer(vec.size());
 
         int elementIndex = 0;
         for (const auto& scalarValue : vec) {
           element_converter_->convertElementToColumnarFormat(
-              elementIndex++, elementData.get(), &scalarValue);
+              elementIndex++, elementBuffer.get(), &scalarValue);
         }
 
-        int8_t* arrayData = reinterpret_cast<int8_t*>(elementData.release());
-        (*column_data_)[row] =
-            ArrayDatum(vec.size() * element_type_info_.get_size(), arrayData, is_null);
+        column_buffer_->at(row) = {vec.size(), std::move(elementBuffer)};
+
       } else {
         // Empty, not NULL
         (*column_data_)[row] = ArrayDatum(0, nullptr, is_null, DoNothingDeleter());
@@ -287,7 +315,49 @@ struct ArrayValueConverter : public TargetValueConverter {
     }
   }
 
+  void finalizeDataBlocksForInsertData() override {
+    if (column_buffer_) {
+      std::atomic<size_t> row_idx{0};
+      auto row_buffer_finalizer = [this, &row_idx](int tid) {
+        auto row = row_idx.fetch_add(1);
+
+        if (row >= column_buffer_->size()) {
+          return;
+        }
+
+        auto& element = (column_buffer_->at(row));
+        bool is_null = false;
+        if (element.second) {
+          typename ELEMENT_CONVERTER::ColumnDataPtr data =
+              element_converter_->processArrayBuffer(std::move(element.second));
+          int8_t* arrayData = reinterpret_cast<int8_t*>(data.release());
+          (*column_data_)[row] = ArrayDatum(
+              element.first * element_type_info_.get_size(), arrayData, is_null);
+        }
+      };
+
+      std::vector<std::future<void>> worker_threads;
+      const int num_worker_threads = std::thread::hardware_concurrency();
+
+      if (column_buffer_->size() / num_worker_threads > 10) {
+        for (int i = 0; i < num_worker_threads; ++i) {
+          worker_threads.push_back(
+              std::async(std::launch::async, row_buffer_finalizer, i));
+        }
+
+        for (auto& child : worker_threads) {
+          child.wait();
+        }
+      } else {
+        row_buffer_finalizer(0);
+      }
+
+      column_buffer_ = nullptr;
+    }
+  }
+
   void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
+    finalizeDataBlocksForInsertData();
     DataBlockPtr dataBlock;
     dataBlock.arraysPtr = column_data_.get();
     insertData.data.push_back(dataBlock);
