@@ -1226,7 +1226,8 @@ bool MapDHandler::has_table_permission(const AccessPrivileges& privs,
       (perms.insert_ && !privs.hasPermission(TablePrivileges::INSERT_INTO_TABLE)) ||
       (perms.update_ && !privs.hasPermission(TablePrivileges::UPDATE_IN_TABLE)) ||
       (perms.delete_ && !privs.hasPermission(TablePrivileges::DELETE_FROM_TABLE)) ||
-      (perms.truncate_ && !privs.hasPermission(TablePrivileges::TRUNCATE_TABLE))) {
+      (perms.truncate_ && !privs.hasPermission(TablePrivileges::TRUNCATE_TABLE)) ||
+      (perms.alter_ && !privs.hasPermission(TablePrivileges::ALTER_TABLE))) {
     return false;
   } else {
     return true;

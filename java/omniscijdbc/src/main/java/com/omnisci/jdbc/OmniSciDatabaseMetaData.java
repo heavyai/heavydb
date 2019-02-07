@@ -1269,7 +1269,8 @@ each row is a column description Throws: SQLException - if a database access err
                 db_object.privs.get(3),
                 db_object.privs.get(4),
                 db_object.privs.get(5),
-                db_object.privs.get(6));
+                db_object.privs.get(6),
+                db_object.privs.get(7));
 
         int ordinal = 1;
         for (TTablePermissions._Fields field = tt.fieldForId(ordinal); field != null;

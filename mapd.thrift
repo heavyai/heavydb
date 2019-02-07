@@ -442,6 +442,7 @@ struct TTablePermissions {
   5: bool update_;
   6: bool delete_;
   7: bool truncate_;
+  8: bool alter_;
 }
 
 struct TDashboardPermissions {

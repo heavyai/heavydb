@@ -32,6 +32,7 @@ public class OmniSciDatabaseMetaDataTest {
       add("UPDATE");
       add("DELETE");
       add("TRUNCATE");
+      add("ALTER");
     }
   };
 
@@ -194,7 +195,7 @@ public class OmniSciDatabaseMetaDataTest {
         D = "%";
         S = "%";
         T = "%";
-        result_count = 21;
+        result_count = 24;
       }
     };
     test_permissons(m_super_conn, qS, default_tables);
@@ -210,7 +211,7 @@ public class OmniSciDatabaseMetaDataTest {
         D = "%";
         S = "%";
         T = PROPERTIES.getProperty("base_t3");
-        result_count = 7;
+        result_count = 8;
       }
     };
     ArrayList<String> possible_tables = default_tables;
@@ -228,7 +229,7 @@ public class OmniSciDatabaseMetaDataTest {
         D = PROPERTIES.getProperty("default_db");
         S = "%";
         T = PROPERTIES.getProperty("base_table_ptrn");
-        result_count = 7;
+        result_count = 8;
       }
     };
     ArrayList<String> possible_tables = default_tables;
@@ -247,7 +248,7 @@ public class OmniSciDatabaseMetaDataTest {
         D = "%";
         S = "%";
         T = "%";
-        result_count = 7;
+        result_count = 8;
       }
     };
     Connection conn = DriverManager.getConnection(user_url, user1, user1_password);
@@ -268,7 +269,7 @@ public class OmniSciDatabaseMetaDataTest {
         D = "%";
         S = "%";
         T = user_table1;
-        result_count = 7;
+        result_count = 8;
       }
     };
     Connection conn = DriverManager.getConnection(user_url, user1, user1_password);
@@ -289,7 +290,7 @@ public class OmniSciDatabaseMetaDataTest {
         D = "%";
         S = "%";
         T = null;
-        result_count = 7;
+        result_count = 8;
       }
     };
     Connection conn = DriverManager.getConnection(user_url, user1, user1_password);
@@ -310,7 +311,7 @@ public class OmniSciDatabaseMetaDataTest {
         D = "%";
         S = "%";
         T = PROPERTIES.getProperty("table_ptrn");
-        result_count = 14;
+        result_count = 16;
       }
     };
     Connection conn = DriverManager.getConnection(user_url, user1, user1_password);
@@ -332,7 +333,7 @@ public class OmniSciDatabaseMetaDataTest {
         D = PROPERTIES.getProperty("user_db");
         S = "%";
         T = PROPERTIES.getProperty("table_ptrn");
-        result_count = 14;
+        result_count = 16;
       }
     };
     ArrayList<String> possible_tables = new ArrayList<String>() {
@@ -355,7 +356,7 @@ public class OmniSciDatabaseMetaDataTest {
         D = PROPERTIES.getProperty("user_db");
         S = "%";
         T = PROPERTIES.getProperty("table_ptrn");
-        result_count = 28; //  rows returned are 2 tables * 7 permissions * 2 users; super
+        result_count = 32; //  rows returned are 2 tables * 8 permissions * 2 users; super
                            //  user and user1
       }
     };
