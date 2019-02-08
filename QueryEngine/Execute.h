@@ -90,6 +90,11 @@ extern double g_overlaps_hashjoin_bucket_threshold;
 extern bool g_strip_join_covered_quals;
 extern size_t g_constrained_by_in_threshold;
 
+class QueryCompilationDescriptor;
+using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;
+class QueryMemoryDescriptor;
+using QueryMemoryDescriptorOwned = std::unique_ptr<QueryMemoryDescriptor>;
+
 class ExecutionResult;
 
 class WatchdogException : public std::runtime_error {
@@ -704,7 +709,6 @@ class Executor {
   struct CompilationResult {
     std::vector<std::pair<void*, void*>> native_functions;
     std::unordered_map<int, LiteralValues> literal_values;
-    QueryMemoryDescriptor query_mem_desc;
     bool output_columnar;
     std::string llvm_ir;
   };
@@ -749,7 +753,6 @@ class Executor {
     const RelAlgExecutionUnit& ra_exe_unit_;
     const std::vector<InputTableInfo>& query_infos_;
     const Catalog_Namespace::Catalog& cat_;
-    std::shared_ptr<QueryCompilationDescriptor> query_comp_desc_;
     mutable std::vector<uint64_t> all_frag_row_offsets_;
     mutable std::mutex all_frag_row_offsets_mutex_;
     std::vector<std::unique_ptr<QueryExecutionContext>> query_contexts_;
@@ -788,6 +791,8 @@ class Executor {
     void runImpl(const ExecutorDeviceType chosen_device_type,
                  int chosen_device_id,
                  const ExecutionOptions& eo,
+                 const QueryCompilationDescriptor* query_comp_desc,
+                 const QueryMemoryDescriptor* query_mem_desc,
                  const FragmentsList& frag_list,
                  const size_t ctx_idx,
                  const int64_t rowid_lookup_key);
@@ -811,15 +816,18 @@ class Executor {
 
     ExecutionDispatch& operator=(ExecutionDispatch&&) = delete;
 
-    int8_t compile(const size_t max_groups_buffer_entry_guess,
-                   const int8_t crt_min_byte_width,
-                   const CompilationOptions& co,
-                   const ExecutionOptions& eo,
-                   const bool has_cardinality_estimation);
+    std::tuple<QueryCompilationDescriptorOwned, QueryMemoryDescriptorOwned> compile(
+        const size_t max_groups_buffer_entry_guess,
+        const int8_t crt_min_byte_width,
+        const CompilationOptions& co,
+        const ExecutionOptions& eo,
+        const bool has_cardinality_estimation);
 
     void run(const ExecutorDeviceType chosen_device_type,
              int chosen_device_id,
              const ExecutionOptions& eo,
+             const QueryCompilationDescriptor* query_comp_desc,
+             const QueryMemoryDescriptor* query_mem_desc,
              const FragmentsList& frag_ids,
              const size_t ctx_idx,
              const int64_t rowid_lookup_key) noexcept;
@@ -853,10 +861,6 @@ class Executor {
                                    Data_Namespace::DataMgr* data_mgr,
                                    const Data_Namespace::MemoryLevel memory_level,
                                    const int device_id);
-
-    std::string getIR() const;
-
-    ExecutorDeviceType getDeviceType() const;
 
     const RelAlgExecutionUnit& getExecutionUnit() const;
 
@@ -919,7 +923,7 @@ class Executor {
                                   const Catalog_Namespace::Catalog& cat,
                                   PerFragmentCB& cb);
 
-  ResultSetPtr executeExplain(const ExecutionDispatch&);
+  ResultSetPtr executeExplain(const QueryCompilationDescriptor*);
 
   // TODO(alex): remove
   ExecutorDeviceType getDeviceTypeForTargets(
@@ -929,7 +933,8 @@ class Executor {
   ResultSetPtr collectAllDeviceResults(
       ExecutionDispatch& execution_dispatch,
       const std::vector<Analyzer::Expr*>& target_exprs,
-      const QueryMemoryDescriptor& query_mem_desc,
+      const QueryMemoryDescriptor* query_mem_desc,
+      const ExecutorDeviceType device_type,
       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
   ResultSetPtr collectAllDeviceShardedTopResults(
@@ -940,6 +945,8 @@ class Executor {
   void dispatchFragments(
       const std::function<void(const ExecutorDeviceType chosen_device_type,
                                int chosen_device_id,
+                               const QueryCompilationDescriptor* query_comp_desc,
+                               const QueryMemoryDescriptor* query_mem_desc,
                                const FragmentsList& frag_list,
                                const size_t ctx_idx,
                                const int64_t rowid_lookup_key)> dispatch,
@@ -947,6 +954,8 @@ class Executor {
       const ExecutionOptions& eo,
       const bool is_agg,
       const size_t context_count,
+      QueryCompilationDescriptor* query_comp_desc,
+      QueryMemoryDescriptor* query_mem_desc,
       QueryFragmentDescriptor& fragment_descriptor,
       std::unordered_set<int>& available_gpus,
       int& available_cpus);
@@ -1066,18 +1075,19 @@ class Executor {
                        std::vector<Analyzer::Expr*>& deferred_quals);
 
   std::vector<llvm::Value*> inlineHoistedLiterals();
-  CompilationResult compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
-                                    const RelAlgExecutionUnit& ra_exe_unit,
-                                    const CompilationOptions& co,
-                                    const ExecutionOptions& eo,
-                                    const CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                                    const bool allow_lazy_fetch,
-                                    std::shared_ptr<RowSetMemoryOwner>,
-                                    const size_t max_groups_buffer_entry_count,
-                                    const int8_t crt_min_byte_width,
-                                    const bool has_cardinality_estimation,
-                                    ColumnCacheMap& column_cache,
-                                    RenderInfo* render_info = nullptr);
+  std::tuple<Executor::CompilationResult, std::unique_ptr<QueryMemoryDescriptor>>
+  compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
+                  const RelAlgExecutionUnit& ra_exe_unit,
+                  const CompilationOptions& co,
+                  const ExecutionOptions& eo,
+                  const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                  const bool allow_lazy_fetch,
+                  std::shared_ptr<RowSetMemoryOwner>,
+                  const size_t max_groups_buffer_entry_count,
+                  const int8_t crt_min_byte_width,
+                  const bool has_cardinality_estimation,
+                  ColumnCacheMap& column_cache,
+                  RenderInfo* render_info = nullptr);
   // Generate code to skip the deleted rows in the outermost table.
   llvm::BasicBlock* codegenSkipDeletedOuterTableRow(
       const RelAlgExecutionUnit& ra_exe_unit,
@@ -1109,10 +1119,12 @@ class Executor {
                         GroupByAndAggregate& group_by_and_aggregate,
                         llvm::Function* query_func,
                         llvm::BasicBlock* entry_bb,
+                        const QueryMemoryDescriptor* query_mem_desc,
                         const CompilationOptions& co,
                         const ExecutionOptions& eo);
   bool compileBody(const RelAlgExecutionUnit& ra_exe_unit,
                    GroupByAndAggregate& group_by_and_aggregate,
+                   const QueryMemoryDescriptor* query_mem_desc,
                    const CompilationOptions& co);
 
   void createErrorCheckControlFlow(llvm::Function* query_func,

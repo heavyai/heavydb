@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "Descriptors/QueryCompilationDescriptor.h"
 #include "Descriptors/QueryFragmentDescriptor.h"
 #include "Execute.h"
 #include "RelAlgExecutor.h"
@@ -95,7 +96,7 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
                                        column_cache,
                                        &error_code,
                                        nullptr);
-  execution_dispatch.compile(0, 8, co, eo, false);
+  const auto execution_descriptors = execution_dispatch.compile(0, 8, co, eo, false);
   CHECK_EQ(size_t(1), ra_exe_unit.input_descs.size());
   const auto table_id = ra_exe_unit.input_descs[0].getTableId();
   const auto& outer_fragments = table_info.info.fragments;
@@ -103,7 +104,15 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
        ++fragment_index) {
     // We may want to consider in the future allowing this to execute on devices other
     // than CPU
-    execution_dispatch.run(co.device_type_, 0, eo, {{table_id, {fragment_index}}}, 0, -1);
+    execution_dispatch.run(
+        co.device_type_,
+        0,
+        eo,
+        std::get<QueryCompilationDescriptorOwned>(execution_descriptors).get(),
+        std::get<QueryMemoryDescriptorOwned>(execution_descriptors).get(),
+        {{table_id, {fragment_index}}},
+        0,
+        -1);
   }
   // Further optimization possible here to skip fragments
   CHECK_EQ(outer_fragments.size(), execution_dispatch.getFragmentResults().size());
@@ -131,11 +140,19 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
                                                           column_cache,
                                                           &error_code,
                                                           nullptr);
-    current_fragment_execution_dispatch.compile(*count_ptr, 8, co, eo, false);
+    const auto execution_descriptors =
+        current_fragment_execution_dispatch.compile(*count_ptr, 8, co, eo, false);
     // We may want to consider in the future allowing this to execute on devices other
     // than CPU
     current_fragment_execution_dispatch.run(
-        co.device_type_, 0, eo, {FragmentsPerTable{table_id, {fragment_index}}}, 0, -1);
+        co.device_type_,
+        0,
+        eo,
+        std::get<QueryCompilationDescriptorOwned>(execution_descriptors).get(),
+        std::get<QueryMemoryDescriptorOwned>(execution_descriptors).get(),
+        {FragmentsPerTable{table_id, {fragment_index}}},
+        0,
+        -1);
     if (error_code) {
       throw std::runtime_error(RelAlgExecutor::getErrorMessageFromCode(error_code));
     }

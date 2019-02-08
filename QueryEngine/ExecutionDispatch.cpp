@@ -146,12 +146,15 @@ bool need_to_hold_chunk(const Chunk_NS::Chunk* chunk,
 
 }  // namespace
 
-void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device_type,
-                                          int chosen_device_id,
-                                          const ExecutionOptions& eo,
-                                          const FragmentsList& frag_list,
-                                          const size_t ctx_idx,
-                                          const int64_t rowid_lookup_key) {
+void Executor::ExecutionDispatch::runImpl(
+    const ExecutorDeviceType chosen_device_type,
+    int chosen_device_id,
+    const ExecutionOptions& eo,
+    const QueryCompilationDescriptor* query_comp_desc,
+    const QueryMemoryDescriptor* query_mem_desc,
+    const FragmentsList& frag_list,
+    const size_t ctx_idx,
+    const int64_t rowid_lookup_key) {
   const auto memory_level = chosen_device_type == ExecutorDeviceType::GPU
                                 ? Data_Namespace::GPU_LEVEL
                                 : Data_Namespace::CPU_LEVEL;
@@ -203,29 +206,30 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
     return;
   }
 
-  CHECK(query_comp_desc_);
-  const CompilationResult& compilation_result = query_comp_desc_->getCompilationResult();
-  CHECK(!compilation_result.query_mem_desc.usesCachedContext() ||
-        !ra_exe_unit_.scan_limit);
+  CHECK(query_comp_desc);
+  CHECK(query_mem_desc);
+
+  // TODO(adb): can likely remove
+  const CompilationResult& compilation_result = query_comp_desc->getCompilationResult();
+  CHECK(!query_mem_desc->usesCachedContext() || !ra_exe_unit_.scan_limit);
   std::unique_ptr<QueryExecutionContext> query_exe_context_owned;
   const bool do_render = render_info_ && render_info_->isPotentialInSituRender();
 
   try {
     OOM_TRACE_PUSH();
-    query_exe_context_owned =
-        compilation_result.query_mem_desc.usesCachedContext()
-            ? nullptr
-            : compilation_result.query_mem_desc.getQueryExecutionContext(
-                  ra_exe_unit_,
-                  executor_,
-                  chosen_device_type,
-                  chosen_device_id,
-                  fetch_result.col_buffers,
-                  fetch_result.frag_offsets,
-                  row_set_mem_owner_,
-                  compilation_result.output_columnar,
-                  compilation_result.query_mem_desc.sortOnGpu(),
-                  do_render ? render_info_ : nullptr);
+    query_exe_context_owned = query_mem_desc->usesCachedContext()
+                                  ? nullptr
+                                  : query_mem_desc->getQueryExecutionContext(
+                                        ra_exe_unit_,
+                                        executor_,
+                                        chosen_device_type,
+                                        chosen_device_id,
+                                        fetch_result.col_buffers,
+                                        fetch_result.frag_offsets,
+                                        row_set_mem_owner_,
+                                        compilation_result.output_columnar,
+                                        query_mem_desc->sortOnGpu(),
+                                        do_render ? render_info_ : nullptr);
   } catch (const OutOfHostMemory& e) {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
     LOG(ERROR) << e.what();
@@ -234,24 +238,23 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
   }
   QueryExecutionContext* query_exe_context{query_exe_context_owned.get()};
   std::unique_ptr<std::lock_guard<std::mutex>> query_ctx_lock;
-  if (compilation_result.query_mem_desc.usesCachedContext()) {
+  if (query_mem_desc->usesCachedContext()) {
     query_ctx_lock.reset(
         new std::lock_guard<std::mutex>(query_context_mutexes_[ctx_idx]));
     if (!query_contexts_[ctx_idx]) {
       try {
         OOM_TRACE_PUSH();
         query_contexts_[ctx_idx] =
-            compilation_result.query_mem_desc.getQueryExecutionContext(
-                ra_exe_unit_,
-                executor_,
-                chosen_device_type,
-                chosen_device_id,
-                fetch_result.col_buffers,
-                fetch_result.frag_offsets,
-                row_set_mem_owner_,
-                compilation_result.output_columnar,
-                compilation_result.query_mem_desc.sortOnGpu(),
-                do_render ? render_info_ : nullptr);
+            query_mem_desc->getQueryExecutionContext(ra_exe_unit_,
+                                                     executor_,
+                                                     chosen_device_type,
+                                                     chosen_device_id,
+                                                     fetch_result.col_buffers,
+                                                     fetch_result.frag_offsets,
+                                                     row_set_mem_owner_,
+                                                     compilation_result.output_columnar,
+                                                     query_mem_desc->sortOnGpu(),
+                                                     do_render ? render_info_ : nullptr);
       } catch (const OutOfHostMemory& e) {
         std::lock_guard<std::mutex> lock(reduce_mutex_);
         LOG(ERROR) << e.what();
@@ -277,7 +280,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
     OOM_TRACE_PUSH();
     err = executor_->executePlanWithoutGroupBy(ra_exe_unit_,
                                                compilation_result,
-                                               query_comp_desc_->hoistLiterals(),
+                                               query_comp_desc->hoistLiterals(),
                                                device_results,
                                                ra_exe_unit_.target_exprs,
                                                chosen_device_type,
@@ -295,7 +298,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
     OOM_TRACE_PUSH();
     err = executor_->executePlanWithGroupBy(ra_exe_unit_,
                                             compilation_result,
-                                            query_comp_desc_->hoistLiterals(),
+                                            query_comp_desc->hoistLiterals(),
                                             device_results,
                                             chosen_device_type,
                                             fetch_result.col_buffers,
@@ -355,68 +358,75 @@ Executor::ExecutionDispatch::ExecutionDispatch(
   all_fragment_results_.reserve(query_infos_.front().info.fragments.size());
 }
 
-int8_t Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry_guess,
-                                            const int8_t crt_min_byte_width,
-                                            const CompilationOptions& co,
-                                            const ExecutionOptions& eo,
-                                            const bool has_cardinality_estimation) {
-  int8_t actual_min_byte_width{MAX_BYTE_WIDTH_SUPPORTED};
+std::tuple<QueryCompilationDescriptorOwned, QueryMemoryDescriptorOwned>
+Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry_guess,
+                                     const int8_t crt_min_byte_width,
+                                     const CompilationOptions& co,
+                                     const ExecutionOptions& eo,
+                                     const bool has_cardinality_estimation) {
+  auto query_comp_desc = std::make_unique<QueryCompilationDescriptor>(row_set_mem_owner_);
 
-  query_comp_desc_ = std::make_shared<QueryCompilationDescriptor>(row_set_mem_owner_);
+  std::unique_ptr<QueryMemoryDescriptor> query_mem_desc;
 
-  auto compile_on_cpu = [&]() {
-    const CompilationOptions co_cpu{ExecutorDeviceType::CPU,
-                                    co.hoist_literals_,
-                                    co.opt_level_,
-                                    co.with_dynamic_watchdog_};
-
-    actual_min_byte_width = query_comp_desc_->compile(max_groups_buffer_entry_guess,
-                                                      crt_min_byte_width,
-                                                      has_cardinality_estimation,
-                                                      ra_exe_unit_,
-                                                      query_infos_,
-                                                      co_cpu,
-                                                      eo,
-                                                      cat_,
-                                                      render_info_,
-                                                      this,
-                                                      executor_);
-  };
-
-  if (co.device_type_ == ExecutorDeviceType::CPU) {
-    compile_on_cpu();
+  switch (co.device_type_) {
+    case ExecutorDeviceType::CPU: {
+      const CompilationOptions co_cpu{ExecutorDeviceType::CPU,
+                                      co.hoist_literals_,
+                                      co.opt_level_,
+                                      co.with_dynamic_watchdog_};
+      query_mem_desc = query_comp_desc->compile(max_groups_buffer_entry_guess,
+                                                crt_min_byte_width,
+                                                has_cardinality_estimation,
+                                                ra_exe_unit_,
+                                                query_infos_,
+                                                co_cpu,
+                                                eo,
+                                                cat_,
+                                                render_info_,
+                                                this,
+                                                executor_);
+    } break;
+    case ExecutorDeviceType::GPU: {
+      const CompilationOptions co_gpu{ExecutorDeviceType::GPU,
+                                      co.hoist_literals_,
+                                      co.opt_level_,
+                                      co.with_dynamic_watchdog_};
+      query_mem_desc = query_comp_desc->compile(max_groups_buffer_entry_guess,
+                                                crt_min_byte_width,
+                                                has_cardinality_estimation,
+                                                ra_exe_unit_,
+                                                query_infos_,
+                                                co_gpu,
+                                                eo,
+                                                cat_,
+                                                render_info_,
+                                                this,
+                                                executor_);
+    } break;
+    default:
+      UNREACHABLE();
   }
 
-  if (co.device_type_ == ExecutorDeviceType::GPU) {
-    const CompilationOptions co_gpu{ExecutorDeviceType::GPU,
-                                    co.hoist_literals_,
-                                    co.opt_level_,
-                                    co.with_dynamic_watchdog_};
-    actual_min_byte_width = query_comp_desc_->compile(max_groups_buffer_entry_guess,
-                                                      crt_min_byte_width,
-                                                      has_cardinality_estimation,
-                                                      ra_exe_unit_,
-                                                      query_infos_,
-                                                      co_gpu,
-                                                      eo,
-                                                      cat_,
-                                                      render_info_,
-                                                      this,
-                                                      executor_);
-  }
-
-  return std::max(actual_min_byte_width, crt_min_byte_width);
+  return std::make_tuple(std::move(query_comp_desc), std::move(query_mem_desc));
 }
 
 void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_type,
                                       int chosen_device_id,
                                       const ExecutionOptions& eo,
+                                      const QueryCompilationDescriptor* query_comp_desc,
+                                      const QueryMemoryDescriptor* query_mem_desc,
                                       const FragmentsList& frag_list,
                                       const size_t ctx_idx,
                                       const int64_t rowid_lookup_key) noexcept {
   try {
-    runImpl(
-        chosen_device_type, chosen_device_id, eo, frag_list, ctx_idx, rowid_lookup_key);
+    runImpl(chosen_device_type,
+            chosen_device_id,
+            eo,
+            query_comp_desc,
+            query_mem_desc,
+            frag_list,
+            ctx_idx,
+            rowid_lookup_key);
   } catch (const std::bad_alloc& e) {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
     LOG(ERROR) << e.what();
@@ -607,16 +617,6 @@ const int8_t* Executor::ExecutionDispatch::getColumn(
   return col_buffers[col_id];
 }
 
-std::string Executor::ExecutionDispatch::getIR() const {
-  CHECK(query_comp_desc_);
-  return query_comp_desc_->getIR();
-}
-
-ExecutorDeviceType Executor::ExecutionDispatch::getDeviceType() const {
-  CHECK(query_comp_desc_);
-  return query_comp_desc_->getDeviceType();
-}
-
 const RelAlgExecutionUnit& Executor::ExecutionDispatch::getExecutionUnit() const {
   return ra_exe_unit_;
 }
@@ -624,8 +624,9 @@ const RelAlgExecutionUnit& Executor::ExecutionDispatch::getExecutionUnit() const
 const QueryMemoryDescriptor& Executor::ExecutionDispatch::getQueryMemoryDescriptor()
     const {
   // TODO(alex): make query_mem_desc easily available
-  CHECK(query_comp_desc_);
-  return query_comp_desc_->getQueryMemoryDescriptor();
+  // CHECK(query_comp_desc_);
+  // return query_comp_desc_->getQueryMemoryDescriptor();
+  CHECK(false) << "TODO(adb)";
 }
 
 const std::vector<uint64_t>& Executor::ExecutionDispatch::getFragOffsets() const {

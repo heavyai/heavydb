@@ -1295,35 +1295,32 @@ bool always_clone_runtime_function(const llvm::Function* func) {
 
 }  // namespace
 
-Executor::CompilationResult Executor::compileWorkUnit(
-    const std::vector<InputTableInfo>& query_infos,
-    const RelAlgExecutionUnit& ra_exe_unit,
-    const CompilationOptions& co,
-    const ExecutionOptions& eo,
-    const CudaMgr_Namespace::CudaMgr* cuda_mgr,
-    const bool allow_lazy_fetch,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const size_t max_groups_buffer_entry_guess,
-    const int8_t crt_min_byte_width,
-    const bool has_cardinality_estimation,
-    ColumnCacheMap& column_cache,
-    RenderInfo* render_info) {
+std::tuple<Executor::CompilationResult, std::unique_ptr<QueryMemoryDescriptor>>
+Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
+                          const RelAlgExecutionUnit& ra_exe_unit,
+                          const CompilationOptions& co,
+                          const ExecutionOptions& eo,
+                          const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                          const bool allow_lazy_fetch,
+                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                          const size_t max_groups_buffer_entry_guess,
+                          const int8_t crt_min_byte_width,
+                          const bool has_cardinality_estimation,
+                          ColumnCacheMap& column_cache,
+                          RenderInfo* render_info) {
   nukeOldState(allow_lazy_fetch, query_infos, ra_exe_unit);
   OOM_TRACE_PUSH(+": " + (co.device_type_ == ExecutorDeviceType::GPU ? "gpu" : "cpu"));
 
-  GroupByAndAggregate group_by_and_aggregate(this,
-                                             co.device_type_,
-                                             ra_exe_unit,
-                                             render_info,
-                                             query_infos,
-                                             row_set_mem_owner,
-                                             max_groups_buffer_entry_guess,
-                                             crt_min_byte_width,
-                                             eo.allow_multifrag,
-                                             eo.output_columnar_hint);
-  const auto& query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
+  GroupByAndAggregate group_by_and_aggregate(
+      this, co.device_type_, ra_exe_unit, query_infos, row_set_mem_owner);
+  auto query_mem_desc =
+      group_by_and_aggregate.initQueryMemoryDescriptor(eo.allow_multifrag,
+                                                       max_groups_buffer_entry_guess,
+                                                       crt_min_byte_width,
+                                                       render_info,
+                                                       eo.output_columnar_hint);
 
-  if (query_mem_desc.getQueryDescriptionType() ==
+  if (query_mem_desc->getQueryDescriptionType() ==
           QueryDescriptionType::GroupByBaselineHash &&
       !has_cardinality_estimation &&
       (!render_info || !render_info->isPotentialInSituRender()) && !eo.just_explain) {
@@ -1334,10 +1331,10 @@ Executor::CompilationResult Executor::compileWorkUnit(
 
   if (co.device_type_ == ExecutorDeviceType::GPU) {
     const size_t num_count_distinct_descs =
-        query_mem_desc.getCountDistinctDescriptorsSize();
+        query_mem_desc->getCountDistinctDescriptorsSize();
     for (size_t i = 0; i < num_count_distinct_descs; i++) {
       const auto& count_distinct_descriptor =
-          query_mem_desc.getCountDistinctDescriptor(i);
+          query_mem_desc->getCountDistinctDescriptor(i);
       if (count_distinct_descriptor.impl_type_ == CountDistinctImplType::StdSet ||
           (count_distinct_descriptor.impl_type_ != CountDistinctImplType::Invalid &&
            !co.hoist_literals_)) {
@@ -1372,11 +1369,11 @@ Executor::CompilationResult Executor::compileWorkUnit(
 
   const auto agg_slot_count = ra_exe_unit.estimator ? size_t(1) : agg_fnames.size();
 
-  const bool is_group_by{query_mem_desc.isGroupBy()};
+  const bool is_group_by{query_mem_desc->isGroupBy()};
   auto query_func = is_group_by ? query_group_by_template(cgen_state_->module_,
                                                           is_nested_,
                                                           co.hoist_literals_,
-                                                          query_mem_desc,
+                                                          *query_mem_desc,
                                                           co.device_type_,
                                                           ra_exe_unit.scan_limit)
                                 : query_template(cgen_state_->module_,
@@ -1420,10 +1417,17 @@ Executor::CompilationResult Executor::compileWorkUnit(
     bb = is_not_deleted_bb;
   }
   if (!join_loops.empty()) {
-    codegenJoinLoops(
-        join_loops, body_execution_unit, group_by_and_aggregate, query_func, bb, co, eo);
+    codegenJoinLoops(join_loops,
+                     body_execution_unit,
+                     group_by_and_aggregate,
+                     query_func,
+                     bb,
+                     query_mem_desc.get(),
+                     co,
+                     eo);
   } else {
-    const bool can_return_error = compileBody(ra_exe_unit, group_by_and_aggregate, co);
+    const bool can_return_error =
+        compileBody(ra_exe_unit, group_by_and_aggregate, query_mem_desc.get(), co);
 
     if (can_return_error || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog) {
       createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog, co.device_type_);
@@ -1471,7 +1475,7 @@ Executor::CompilationResult Executor::compileWorkUnit(
 
   is_nested_ = false;
   plan_state_->init_agg_vals_ =
-      init_agg_val_vec(ra_exe_unit.target_exprs, ra_exe_unit.quals, query_mem_desc);
+      init_agg_val_vec(ra_exe_unit.target_exprs, ra_exe_unit.quals, *query_mem_desc);
 
   auto multifrag_query_func = cgen_state_->module_->getFunction(
       "multifrag_query" + std::string(co.hoist_literals_ ? "_hoisted_literals" : ""));
@@ -1492,21 +1496,25 @@ Executor::CompilationResult Executor::compileWorkUnit(
         serialize_llvm_object(query_func) + serialize_llvm_object(cgen_state_->row_func_);
   }
   verify_function_ir(cgen_state_->row_func_);
-  return Executor::CompilationResult{
-      co.device_type_ == ExecutorDeviceType::CPU
-          ? optimizeAndCodegenCPU(
-                query_func, multifrag_query_func, live_funcs, cgen_state_->module_, co)
-          : optimizeAndCodegenGPU(query_func,
-                                  multifrag_query_func,
-                                  live_funcs,
-                                  cgen_state_->module_,
-                                  is_group_by || ra_exe_unit.estimator,
-                                  cuda_mgr,
-                                  co),
-      cgen_state_->getLiterals(),
-      query_mem_desc,
-      output_columnar,
-      llvm_ir};
+  return std::make_tuple(
+      Executor::CompilationResult{
+          co.device_type_ == ExecutorDeviceType::CPU
+              ? optimizeAndCodegenCPU(query_func,
+                                      multifrag_query_func,
+                                      live_funcs,
+                                      cgen_state_->module_,
+                                      co)
+              : optimizeAndCodegenGPU(query_func,
+                                      multifrag_query_func,
+                                      live_funcs,
+                                      cgen_state_->module_,
+                                      is_group_by || ra_exe_unit.estimator,
+                                      cuda_mgr,
+                                      co),
+          cgen_state_->getLiterals(),
+          output_columnar,
+          llvm_ir},
+      std::move(query_mem_desc));
 }
 
 llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(
@@ -1543,6 +1551,7 @@ llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(
 
 bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
                            GroupByAndAggregate& group_by_and_aggregate,
+                           const QueryMemoryDescriptor* query_mem_desc,
                            const CompilationOptions& co) {
   // generate the code for the filter
   std::vector<Analyzer::Expr*> primary_quals;
@@ -1584,5 +1593,5 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
 
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
-  return group_by_and_aggregate.codegen(filter_lv, sc_false, co);
+  return group_by_and_aggregate.codegen(filter_lv, sc_false, query_mem_desc, co);
 }

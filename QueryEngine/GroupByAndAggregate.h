@@ -117,15 +117,8 @@ class GroupByAndAggregate {
   GroupByAndAggregate(Executor* executor,
                       const ExecutorDeviceType device_type,
                       const RelAlgExecutionUnit& ra_exe_unit,
-                      RenderInfo* render_info,
                       const std::vector<InputTableInfo>& query_infos,
-                      std::shared_ptr<RowSetMemoryOwner>,
-                      const size_t max_groups_buffer_entry_count,
-                      const int8_t crt_min_byte_width,
-                      const bool allow_multifrag,
-                      const bool output_columnar_hint);
-
-  const QueryMemoryDescriptor& getQueryMemoryDescriptor() const;
+                      std::shared_ptr<RowSetMemoryOwner>);
 
   bool outputColumnar() const;
 
@@ -133,6 +126,7 @@ class GroupByAndAggregate {
   // is required -- slow path group by queries for now
   bool codegen(llvm::Value* filter_result,
                llvm::BasicBlock* sc_false,
+               const QueryMemoryDescriptor* query_mem_desc,
                const CompilationOptions& co);
 
   static void addTransientStringLiterals(
@@ -169,13 +163,21 @@ class GroupByAndAggregate {
 
   bool gpuCanHandleOrderEntries(const std::list<Analyzer::OrderEntry>& order_entries);
 
-  void initQueryMemoryDescriptor(const bool allow_multifrag,
-                                 const size_t max_groups_buffer_entry_count,
-                                 const int8_t crt_min_byte_width,
-                                 const bool sort_on_gpu_hint,
-                                 RenderInfo* render_info,
-                                 const bool must_use_baseline_sort,
-                                 const bool output_columnar_hint);
+  std::unique_ptr<QueryMemoryDescriptor> initQueryMemoryDescriptor(
+      const bool allow_multifrag,
+      const size_t max_groups_buffer_entry_count,
+      const int8_t crt_min_byte_width,
+      RenderInfo* render_info,
+      const bool output_columnar_hint);
+
+  std::unique_ptr<QueryMemoryDescriptor> initQueryMemoryDescriptorImpl(
+      const bool allow_multifrag,
+      const size_t max_groups_buffer_entry_count,
+      const int8_t crt_min_byte_width,
+      const bool sort_on_gpu_hint,
+      RenderInfo* render_info,
+      const bool must_use_baseline_sort,
+      const bool output_columnar_hint);
 
   int64_t getShardedTopBucket(const ColRangeInfo& col_range_info,
                               const size_t shard_count) const;
@@ -185,13 +187,17 @@ class GroupByAndAggregate {
   CountDistinctDescriptors initCountDistinctDescriptors();
 
   llvm::Value* codegenOutputSlot(llvm::Value* groups_buffer,
+                                 const QueryMemoryDescriptor* query_mem_desc,
                                  const CompilationOptions& co,
                                  DiamondCodegen& diamond_codegen);
 
-  std::tuple<llvm::Value*, llvm::Value*> codegenGroupBy(const CompilationOptions& co,
-                                                        DiamondCodegen& codegen);
+  std::tuple<llvm::Value*, llvm::Value*> codegenGroupBy(
+      const QueryMemoryDescriptor* query_mem_desc,
+      const CompilationOptions& co,
+      DiamondCodegen& codegen);
 
   std::tuple<llvm::Value*, llvm::Value*> codegenSingleColumnPerfectHash(
+      const QueryMemoryDescriptor* query_mem_desc,
       const CompilationOptions& co,
       llvm::Value* groups_buffer,
       llvm::Value* group_expr_lv_translated,
@@ -202,6 +208,7 @@ class GroupByAndAggregate {
       llvm::Value* groups_buffer,
       llvm::Value* group_key,
       llvm::Value* key_size_lv,
+      const QueryMemoryDescriptor* query_mem_desc,
       const int32_t row_size_quad);
   llvm::Function* codegenPerfectHashFunction();
 
@@ -210,6 +217,7 @@ class GroupByAndAggregate {
       llvm::Value* groups_buffer,
       llvm::Value* group_key,
       llvm::Value* key_size_lv,
+      const QueryMemoryDescriptor* query_mem_desc,
       const size_t key_width,
       const int32_t row_size_quad);
 
@@ -239,24 +247,27 @@ class GroupByAndAggregate {
                                 llvm::Value* target);
   bool codegenAggCalls(const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
                        const std::vector<llvm::Value*>& agg_out_vec,
+                       const QueryMemoryDescriptor* query_mem_desc,
                        const CompilationOptions&);
 
   llvm::Value* codegenAggColumnPtr(
       llvm::Value* output_buffer_byte_stream,
       llvm::Value* out_row_idx,
       const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
+      const QueryMemoryDescriptor* query_mem_desc,
       const size_t chosen_bytes,
       const size_t agg_out_off,
       const size_t target_idx);
 
   void codegenEstimator(std::stack<llvm::BasicBlock*>& array_loops,
                         GroupByAndAggregate::DiamondCodegen& diamond_codegen,
+                        const QueryMemoryDescriptor* query_mem_desc,
                         const CompilationOptions&);
 
   void codegenCountDistinct(const size_t target_idx,
                             const Analyzer::Expr* target_expr,
                             std::vector<llvm::Value*>& agg_args,
-                            const QueryMemoryDescriptor&,
+                            const QueryMemoryDescriptor*,
                             const ExecutorDeviceType);
 
   llvm::Value* getAdditionalLiteral(const int32_t off);
@@ -268,11 +279,11 @@ class GroupByAndAggregate {
 
   bool needsUnnestDoublePatch(llvm::Value* val_ptr,
                               const std::string& agg_base_name,
+                              const bool threads_share_memory,
                               const CompilationOptions& co) const;
 
   void prependForceSync();
 
-  QueryMemoryDescriptor query_mem_desc_;
   Executor* executor_;
   const RelAlgExecutionUnit& ra_exe_unit_;
   const std::vector<InputTableInfo>& query_infos_;

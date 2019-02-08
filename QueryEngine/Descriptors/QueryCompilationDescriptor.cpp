@@ -16,7 +16,7 @@
 
 #include "QueryCompilationDescriptor.h"
 
-int8_t QueryCompilationDescriptor::compile(
+std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
     const size_t max_groups_buffer_entry_guess,
     const int8_t crt_min_byte_width,
     const bool has_cardinality_estimation,
@@ -31,9 +31,10 @@ int8_t QueryCompilationDescriptor::compile(
   compilation_device_type_ = co.device_type_;
   hoist_literals_ = co.hoist_literals_;
   CHECK(executor);
+  std::unique_ptr<QueryMemoryDescriptor> query_mem_desc;
   try {
     OOM_TRACE_PUSH();
-    compilation_result_ = executor->compileWorkUnit(
+    std::tie(compilation_result_, query_mem_desc) = executor->compileWorkUnit(
         table_infos,
         ra_exe_unit,
         co,
@@ -51,7 +52,7 @@ int8_t QueryCompilationDescriptor::compile(
     if (executor->cgen_state_->module_) {
       delete executor->cgen_state_->module_;
     }
-    compilation_result_ =
+    std::tie(compilation_result_, query_mem_desc) =
         executor->compileWorkUnit(table_infos,
                                   ra_exe_unit,
                                   co,
@@ -65,6 +66,8 @@ int8_t QueryCompilationDescriptor::compile(
                                   execution_dispatch->columnarized_table_cache_,
                                   render_info);
   }
-  return compilation_result_.query_mem_desc.updateActualMinByteWidth(
-      MAX_BYTE_WIDTH_SUPPORTED);
+  actual_min_byte_width_ =
+      std::max(query_mem_desc->updateActualMinByteWidth(MAX_BYTE_WIDTH_SUPPORTED),
+               crt_min_byte_width);
+  return query_mem_desc;
 }

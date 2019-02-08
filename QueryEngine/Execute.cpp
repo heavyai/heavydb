@@ -18,6 +18,7 @@
 
 #include "AggregateUtils.h"
 #include "BaselineJoinHashTable.h"
+#include "Descriptors/QueryCompilationDescriptor.h"
 #include "Descriptors/QueryFragmentDescriptor.h"
 #include "DynamicWatchdog.h"
 #include "EquiJoinCondition.h"
@@ -1025,9 +1026,6 @@ ResultSetPtr Executor::executeWorkUnit(
   int8_t crt_min_byte_width{get_min_byte_width()};
   do {
     *error_code = 0;
-    // could use std::thread::hardware_concurrency(), but some
-    // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
-    // Play it POSIX.1 safe instead.
     int available_cpus = cpu_threads();
     auto available_gpus = get_available_gpus(cat);
 
@@ -1043,20 +1041,24 @@ ResultSetPtr Executor::executeWorkUnit(
                                          column_cache,
                                          error_code,
                                          render_info);
+    std::unique_ptr<QueryCompilationDescriptor> query_comp_desc;
+    std::unique_ptr<QueryMemoryDescriptor> query_mem_desc;
     try {
       INJECT_TIMER(execution_dispatch_comp);
-      crt_min_byte_width = execution_dispatch.compile(
+      std::tie(query_comp_desc, query_mem_desc) = execution_dispatch.compile(
           max_groups_buffer_entry_guess,
           crt_min_byte_width,
           {device_type, co.hoist_literals_, co.opt_level_, co.with_dynamic_watchdog_},
           eo,
           has_cardinality_estimation);
+      CHECK(query_comp_desc);
+      crt_min_byte_width = query_comp_desc->getMinByteWidth();
     } catch (CompilationRetryNoCompaction&) {
       crt_min_byte_width = MAX_BYTE_WIDTH_SUPPORTED;
       continue;
     }
     if (eo.just_explain) {
-      return executeExplain(execution_dispatch);
+      return executeExplain(query_comp_desc.get());
     }
 
     for (const auto target_expr : ra_exe_unit.target_exprs) {
@@ -1066,30 +1068,38 @@ ResultSetPtr Executor::executeWorkUnit(
     auto dispatch = [&execution_dispatch, &eo](
                         const ExecutorDeviceType chosen_device_type,
                         int chosen_device_id,
+                        const QueryCompilationDescriptor* query_comp_desc,
+                        const QueryMemoryDescriptor* query_mem_desc,
                         const FragmentsList& frag_list,
                         const size_t ctx_idx,
                         const int64_t rowid_lookup_key) {
       INJECT_TIMER(execution_dispatch_run);
-      execution_dispatch.run(
-          chosen_device_type, chosen_device_id, eo, frag_list, ctx_idx, rowid_lookup_key);
+      execution_dispatch.run(chosen_device_type,
+                             chosen_device_id,
+                             eo,
+                             query_comp_desc,
+                             query_mem_desc,
+                             frag_list,
+                             ctx_idx,
+                             rowid_lookup_key);
     };
 
     QueryFragmentDescriptor fragment_descriptor(
         ra_exe_unit,
         query_infos,
-        execution_dispatch.getDeviceType() == ExecutorDeviceType::GPU
+        query_comp_desc->getDeviceType() == ExecutorDeviceType::GPU
             ? cat.getDataMgr().getMemoryInfo(Data_Namespace::MemoryLevel::GPU_LEVEL)
             : std::vector<Data_Namespace::MemoryInfo>{},
         eo.gpu_input_mem_limit_percent);
 
-    const QueryMemoryDescriptor& query_mem_desc =
-        execution_dispatch.getQueryMemoryDescriptor();
     if (!eo.just_validate) {
       dispatchFragments(dispatch,
                         execution_dispatch,
                         eo,
                         is_agg,
                         context_count,
+                        query_comp_desc.get(),
+                        query_mem_desc.get(),
                         fragment_descriptor,
                         available_gpus,
                         available_cpus);
@@ -1114,7 +1124,8 @@ ResultSetPtr Executor::executeWorkUnit(
         OOM_TRACE_PUSH();
         return collectAllDeviceResults(execution_dispatch,
                                        ra_exe_unit.target_exprs,
-                                       query_mem_desc,
+                                       query_mem_desc.get(),
+                                       query_comp_desc->getDeviceType(),
                                        row_set_mem_owner);
       } catch (ReductionRanOutOfSlots&) {
         *error_code = ERR_OUT_OF_SLOTS;
@@ -1122,8 +1133,9 @@ ResultSetPtr Executor::executeWorkUnit(
         for (const auto target_expr : ra_exe_unit.target_exprs) {
           targets.push_back(target_info(target_expr));
         }
+        // TODO(adb): use move semantics to transfer QMD
         return std::make_shared<ResultSet>(
-            targets, ExecutorDeviceType::CPU, query_mem_desc, nullptr, this);
+            targets, ExecutorDeviceType::CPU, *query_mem_desc, nullptr, this);
       } catch (OverflowOrUnderflow&) {
         crt_min_byte_width <<= 1;
         continue;
@@ -1166,7 +1178,10 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
                                        column_cache,
                                        &error_code,
                                        nullptr);
-  execution_dispatch.compile(0, 8, co, eo, false);
+  std::unique_ptr<QueryCompilationDescriptor> query_comp_desc_owned;
+  std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
+  std::tie(query_comp_desc_owned, query_mem_desc_owned) =
+      execution_dispatch.compile(0, 8, co, eo, false);
   CHECK_EQ(size_t(1), ra_exe_unit.input_descs.size());
   const auto table_id = ra_exe_unit.input_descs[0].getTableId();
   const auto& outer_fragments = table_info.info.fragments;
@@ -1174,7 +1189,14 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
        ++fragment_index) {
     // We may want to consider in the future allowing this to execute on devices other
     // than CPU
-    execution_dispatch.run(co.device_type_, 0, eo, {{table_id, {fragment_index}}}, 0, -1);
+    execution_dispatch.run(co.device_type_,
+                           0,
+                           eo,
+                           query_comp_desc_owned.get(),
+                           query_mem_desc_owned.get(),
+                           {{table_id, {fragment_index}}},
+                           0,
+                           -1);
   }
 
   const auto& all_fragment_results = execution_dispatch.getFragmentResults();
@@ -1186,8 +1208,9 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
   }
 }
 
-ResultSetPtr Executor::executeExplain(const ExecutionDispatch& execution_dispatch) {
-  return std::make_shared<ResultSet>(execution_dispatch.getIR());
+ResultSetPtr Executor::executeExplain(const QueryCompilationDescriptor* query_comp_desc) {
+  CHECK(query_comp_desc);
+  return std::make_shared<ResultSet>(query_comp_desc->getIR());
 }
 
 // Looks at the targets and returns a feasible device type. We only punt
@@ -1324,28 +1347,29 @@ ResultSetPtr build_row_for_empty_input(
 ResultSetPtr Executor::collectAllDeviceResults(
     ExecutionDispatch& execution_dispatch,
     const std::vector<Analyzer::Expr*>& target_exprs,
-    const QueryMemoryDescriptor& query_mem_desc,
+    const QueryMemoryDescriptor* query_mem_desc,
+    const ExecutorDeviceType device_type,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
+  CHECK(query_mem_desc);
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   for (const auto& query_exe_context : execution_dispatch.getQueryContexts()) {
     if (!query_exe_context || query_exe_context->hasNoFragments()) {
       continue;
     }
-    auto rs = query_exe_context->getRowSet(ra_exe_unit, query_mem_desc);
+    auto rs = query_exe_context->getRowSet(ra_exe_unit, *query_mem_desc);
     execution_dispatch.getFragmentResults().emplace_back(rs, std::vector<size_t>{});
   }
   auto& result_per_device = execution_dispatch.getFragmentResults();
-  if (result_per_device.empty() && query_mem_desc.getQueryDescriptionType() ==
+  if (result_per_device.empty() && query_mem_desc->getQueryDescriptionType() ==
                                        QueryDescriptionType::NonGroupedAggregate) {
-    return build_row_for_empty_input(
-        target_exprs, query_mem_desc, execution_dispatch.getDeviceType());
+    return build_row_for_empty_input(target_exprs, *query_mem_desc, device_type);
   }
-  if (use_speculative_top_n(ra_exe_unit, query_mem_desc)) {
+  if (use_speculative_top_n(ra_exe_unit, *query_mem_desc)) {
     return reduceSpeculativeTopN(
-        ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
+        ra_exe_unit, result_per_device, row_set_mem_owner, *query_mem_desc);
   }
   const auto shard_count =
-      execution_dispatch.getDeviceType() == ExecutorDeviceType::GPU
+      device_type == ExecutorDeviceType::GPU
           ? GroupByAndAggregate::shard_count_for_top_groups(ra_exe_unit, *catalog_)
           : 0;
 
@@ -1353,7 +1377,7 @@ ResultSetPtr Executor::collectAllDeviceResults(
     return collectAllDeviceShardedTopResults(execution_dispatch);
   }
   return reduceMultiDeviceResults(
-      ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
+      ra_exe_unit, result_per_device, row_set_mem_owner, *query_mem_desc);
 }
 
 // Collect top results from each device, stitch them together and sort. Partial
@@ -1420,6 +1444,8 @@ std::unordered_map<int, const Analyzer::BinOper*> Executor::getInnerTabIdToJoinC
 void Executor::dispatchFragments(
     const std::function<void(const ExecutorDeviceType chosen_device_type,
                              int chosen_device_id,
+                             const QueryCompilationDescriptor* query_comp_desc,
+                             const QueryMemoryDescriptor* query_mem_desc,
                              const FragmentsList& frag_list,
                              const size_t ctx_idx,
                              const int64_t rowid_lookup_key)> dispatch,
@@ -1427,6 +1453,8 @@ void Executor::dispatchFragments(
     const ExecutionOptions& eo,
     const bool is_agg,
     const size_t context_count,
+    QueryCompilationDescriptor* query_comp_desc,
+    QueryMemoryDescriptor* query_mem_desc,
     QueryFragmentDescriptor& fragment_descriptor,
     std::unordered_set<int>& available_gpus,
     int& available_cpus) {
@@ -1434,17 +1462,17 @@ void Executor::dispatchFragments(
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   CHECK(!ra_exe_unit.input_descs.empty());
 
-  const auto device_type = execution_dispatch.getDeviceType();
+  CHECK(query_comp_desc);
+  const auto device_type = query_comp_desc->getDeviceType();
 
-  const auto& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
-  VLOG(1) << query_mem_desc.toString();
+  VLOG(1) << query_mem_desc->toString();
 
   const bool allow_multifrag =
       eo.allow_multifrag &&
-      (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext() ||
-       query_mem_desc.getQueryDescriptionType() ==
+      (ra_exe_unit.groupby_exprs.empty() || query_mem_desc->usesCachedContext() ||
+       query_mem_desc->getQueryDescriptionType() ==
            QueryDescriptionType::GroupByBaselineHash ||
-       query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection);
+       query_mem_desc->getQueryDescriptionType() == QueryDescriptionType::Projection);
   const bool use_multifrag_kernel =
       (device_type == ExecutorDeviceType::GPU) && allow_multifrag && is_agg;
 
@@ -1466,43 +1494,52 @@ void Executor::dispatchFragments(
     // NB: We should never be on this path when the query is retried because of
     //     running out of group by slots; also, for scan only queries (!agg_plan)
     //     we want the high-granularity, fragment by fragment execution instead.
-    auto multifrag_kernel_dispatch = [&query_threads, &dispatch, &context_count](
-                                         const int device_id,
-                                         const FragmentsList& frag_list,
-                                         const int64_t rowid_lookup_key) {
-      query_threads.push_back(std::async(std::launch::async,
-                                         dispatch,
-                                         ExecutorDeviceType::GPU,
-                                         device_id,
-                                         frag_list,
-                                         device_id % context_count,
-                                         rowid_lookup_key));
-    };
+    auto multifrag_kernel_dispatch =
+        [&query_threads, &dispatch, &context_count, query_comp_desc, query_mem_desc](
+            const int device_id,
+            const FragmentsList& frag_list,
+            const int64_t rowid_lookup_key) {
+          query_threads.push_back(std::async(std::launch::async,
+                                             dispatch,
+                                             ExecutorDeviceType::GPU,
+                                             device_id,
+                                             query_comp_desc,
+                                             query_mem_desc,
+                                             frag_list,
+                                             device_id % context_count,
+                                             rowid_lookup_key));
+        };
     fragment_descriptor.assignFragsToMultiDispatch(multifrag_kernel_dispatch);
 
   } else {
     size_t frag_list_idx{0};
 
-    auto fragment_per_kernel_dispatch =
-        [&query_threads, &dispatch, &context_count, &frag_list_idx, &device_type](
-            const int device_id,
-            const FragmentsList& frag_list,
-            const int64_t rowid_lookup_key) {
-          if (!frag_list.size()) {
-            return;
-          }
-          CHECK_GE(device_id, 0);
+    auto fragment_per_kernel_dispatch = [&query_threads,
+                                         &dispatch,
+                                         &context_count,
+                                         &frag_list_idx,
+                                         &device_type,
+                                         query_comp_desc,
+                                         query_mem_desc](const int device_id,
+                                                         const FragmentsList& frag_list,
+                                                         const int64_t rowid_lookup_key) {
+      if (!frag_list.size()) {
+        return;
+      }
+      CHECK_GE(device_id, 0);
 
-          query_threads.push_back(std::async(std::launch::async,
-                                             dispatch,
-                                             device_type,
-                                             device_id,
-                                             frag_list,
-                                             frag_list_idx % context_count,
-                                             rowid_lookup_key));
+      query_threads.push_back(std::async(std::launch::async,
+                                         dispatch,
+                                         device_type,
+                                         device_id,
+                                         query_comp_desc,
+                                         query_mem_desc,
+                                         frag_list,
+                                         frag_list_idx % context_count,
+                                         rowid_lookup_key));
 
-          ++frag_list_idx;
-        };
+      ++frag_list_idx;
+    };
 
     fragment_descriptor.assignFragsToKernelDispatch(fragment_per_kernel_dispatch,
                                                     ra_exe_unit);

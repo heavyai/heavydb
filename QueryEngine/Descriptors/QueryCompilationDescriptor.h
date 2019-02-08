@@ -30,19 +30,21 @@ class QueryCompilationDescriptor {
   QueryCompilationDescriptor(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
       : row_set_mem_owner_(row_set_mem_owner)
       , compilation_device_type_(ExecutorDeviceType::CPU)
-      , hoist_literals_(false) {}
+      , hoist_literals_(false)
+      , actual_min_byte_width_(MAX_BYTE_WIDTH_SUPPORTED) {}
 
-  int8_t compile(const size_t max_groups_buffer_entry_guess,
-                 const int8_t crt_min_byte_width,
-                 const bool has_cardinality_estimation,
-                 const RelAlgExecutionUnit& ra_exe_unit,
-                 const std::vector<InputTableInfo>& table_infos,
-                 const CompilationOptions& co,
-                 const ExecutionOptions& eo,
-                 const Catalog_Namespace::Catalog& cat,
-                 RenderInfo* render_info,
-                 Executor::ExecutionDispatch* execution_dispatch,
-                 Executor* executor);
+  std::unique_ptr<QueryMemoryDescriptor> compile(
+      const size_t max_groups_buffer_entry_guess,
+      const int8_t crt_min_byte_width,
+      const bool has_cardinality_estimation,
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const std::vector<InputTableInfo>& table_infos,
+      const CompilationOptions& co,
+      const ExecutionOptions& eo,
+      const Catalog_Namespace::Catalog& cat,
+      RenderInfo* render_info,
+      Executor::ExecutionDispatch* execution_dispatch,
+      Executor* executor);
 
   auto getCompilationResult() const { return compilation_result_; }
 
@@ -61,12 +63,9 @@ class QueryCompilationDescriptor {
     return "";
   }
 
-  const QueryMemoryDescriptor& getQueryMemoryDescriptor() {
-    return compilation_result_.query_mem_desc;
-  }
-
   ExecutorDeviceType getDeviceType() const { return compilation_device_type_; }
   bool hoistLiterals() const { return hoist_literals_; }
+  int8_t getMinByteWidth() const { return actual_min_byte_width_; }
 
  private:
   const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
@@ -74,4 +73,5 @@ class QueryCompilationDescriptor {
   Executor::CompilationResult compilation_result_;
   ExecutorDeviceType compilation_device_type_;
   bool hoist_literals_;
+  int8_t actual_min_byte_width_;
 };

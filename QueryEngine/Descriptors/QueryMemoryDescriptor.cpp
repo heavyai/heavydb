@@ -268,6 +268,8 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
         return;
       }
       // single-column group by query:
+      // TODO(adb): should move this logic elsewhere so we don't have this crazy calling
+      // pattern
       const auto keyless_info =
           group_by_and_agg->getKeylessInfo(ra_exe_unit.target_exprs, is_group_by);
       idx_target_as_key_ = keyless_info.target_index;
