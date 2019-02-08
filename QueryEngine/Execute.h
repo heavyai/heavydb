@@ -302,6 +302,8 @@ using PerFragmentCB =
 
 using LLVMValueVector = std::vector<llvm::Value*>;
 
+class QueryCompilationDescriptor;
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
@@ -747,9 +749,7 @@ class Executor {
     const RelAlgExecutionUnit& ra_exe_unit_;
     const std::vector<InputTableInfo>& query_infos_;
     const Catalog_Namespace::Catalog& cat_;
-    CompilationOptions co_;
-    CompilationResult compilation_result_cpu_;
-    CompilationResult compilation_result_gpu_;
+    std::shared_ptr<QueryCompilationDescriptor> query_comp_desc_;
     mutable std::vector<uint64_t> all_frag_row_offsets_;
     mutable std::mutex all_frag_row_offsets_mutex_;
     std::vector<std::unique_ptr<QueryExecutionContext>> query_contexts_;
@@ -761,7 +761,7 @@ class Executor {
     std::atomic_flag dynamic_watchdog_set_ = ATOMIC_FLAG_INIT;
     static std::mutex reduce_mutex_;
 
-    typedef std::vector<int> CacheKey;
+    using CacheKey = std::vector<int>;
     mutable std::mutex columnar_conversion_mutex_;
     mutable ColumnCacheMap columnarized_table_cache_;
     mutable std::unordered_map<
@@ -787,7 +787,7 @@ class Executor {
 
     void runImpl(const ExecutorDeviceType chosen_device_type,
                  int chosen_device_id,
-                 const ExecutionOptions& options,
+                 const ExecutionOptions& eo,
                  const FragmentsList& frag_list,
                  const size_t ctx_idx,
                  const int64_t rowid_lookup_key);
@@ -797,7 +797,6 @@ class Executor {
                       const RelAlgExecutionUnit& ra_exe_unit,
                       const std::vector<InputTableInfo>& query_infos,
                       const Catalog_Namespace::Catalog& cat,
-                      const CompilationOptions& co,
                       const size_t context_count,
                       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                       const ColumnCacheMap& column_cache,
@@ -814,12 +813,13 @@ class Executor {
 
     int8_t compile(const size_t max_groups_buffer_entry_guess,
                    const int8_t crt_min_byte_width,
-                   const ExecutionOptions& options,
+                   const CompilationOptions& co,
+                   const ExecutionOptions& eo,
                    const bool has_cardinality_estimation);
 
     void run(const ExecutorDeviceType chosen_device_type,
              int chosen_device_id,
-             const ExecutionOptions& options,
+             const ExecutionOptions& eo,
              const FragmentsList& frag_ids,
              const size_t ctx_idx,
              const int64_t rowid_lookup_key) noexcept;
@@ -854,7 +854,7 @@ class Executor {
                                    const Data_Namespace::MemoryLevel memory_level,
                                    const int device_id);
 
-    std::string getIR(const ExecutorDeviceType device_type) const;
+    std::string getIR() const;
 
     ExecutorDeviceType getDeviceType() const;
 
@@ -883,6 +883,8 @@ class Executor {
         const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
         std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
         ColumnCacheMap& column_cache);
+
+    friend class QueryCompilationDescriptor;
   };
 
   ResultSetPtr executeWorkUnit(int32_t* error_code,
@@ -1641,6 +1643,7 @@ class Executor {
   friend class BaselineJoinHashTable;
   friend class OverlapsJoinHashTable;
   friend class GroupByAndAggregate;
+  friend class QueryCompilationDescriptor;
   friend class QueryMemoryDescriptor;
   friend class QueryMemoryInitializer;
   friend class QueryFragmentDescriptor;

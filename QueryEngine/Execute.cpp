@@ -1004,7 +1004,7 @@ ResultSetPtr Executor::executeWorkUnit(
     const std::vector<InputTableInfo>& query_infos,
     const RelAlgExecutionUnit& ra_exe_unit_in,
     const CompilationOptions& co,
-    const ExecutionOptions& options,
+    const ExecutionOptions& eo,
     const Catalog_Namespace::Catalog& cat,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     RenderInfo* render_info,
@@ -1034,28 +1034,28 @@ ResultSetPtr Executor::executeWorkUnit(
     const auto context_count =
         get_context_count(device_type, available_cpus, available_gpus.size());
 
-    ExecutionDispatch execution_dispatch(
-        this,
-        ra_exe_unit,
-        query_infos,
-        cat,
-        {device_type, co.hoist_literals_, co.opt_level_, co.with_dynamic_watchdog_},
-        context_count,
-        row_set_mem_owner,
-        column_cache,
-        error_code,
-        render_info);
+    ExecutionDispatch execution_dispatch(this,
+                                         ra_exe_unit,
+                                         query_infos,
+                                         cat,
+                                         context_count,
+                                         row_set_mem_owner,
+                                         column_cache,
+                                         error_code,
+                                         render_info);
     try {
       INJECT_TIMER(execution_dispatch_comp);
-      crt_min_byte_width = execution_dispatch.compile(max_groups_buffer_entry_guess,
-                                                      crt_min_byte_width,
-                                                      options,
-                                                      has_cardinality_estimation);
+      crt_min_byte_width = execution_dispatch.compile(
+          max_groups_buffer_entry_guess,
+          crt_min_byte_width,
+          {device_type, co.hoist_literals_, co.opt_level_, co.with_dynamic_watchdog_},
+          eo,
+          has_cardinality_estimation);
     } catch (CompilationRetryNoCompaction&) {
       crt_min_byte_width = MAX_BYTE_WIDTH_SUPPORTED;
       continue;
     }
-    if (options.just_explain) {
+    if (eo.just_explain) {
       return executeExplain(execution_dispatch);
     }
 
@@ -1063,19 +1063,15 @@ ResultSetPtr Executor::executeWorkUnit(
       plan_state_->target_exprs_.push_back(target_expr);
     }
 
-    auto dispatch = [&execution_dispatch, &options](
+    auto dispatch = [&execution_dispatch, &eo](
                         const ExecutorDeviceType chosen_device_type,
                         int chosen_device_id,
                         const FragmentsList& frag_list,
                         const size_t ctx_idx,
                         const int64_t rowid_lookup_key) {
       INJECT_TIMER(execution_dispatch_run);
-      execution_dispatch.run(chosen_device_type,
-                             chosen_device_id,
-                             options,
-                             frag_list,
-                             ctx_idx,
-                             rowid_lookup_key);
+      execution_dispatch.run(
+          chosen_device_type, chosen_device_id, eo, frag_list, ctx_idx, rowid_lookup_key);
     };
 
     QueryFragmentDescriptor fragment_descriptor(
@@ -1084,21 +1080,21 @@ ResultSetPtr Executor::executeWorkUnit(
         execution_dispatch.getDeviceType() == ExecutorDeviceType::GPU
             ? cat.getDataMgr().getMemoryInfo(Data_Namespace::MemoryLevel::GPU_LEVEL)
             : std::vector<Data_Namespace::MemoryInfo>{},
-        options.gpu_input_mem_limit_percent);
+        eo.gpu_input_mem_limit_percent);
 
     const QueryMemoryDescriptor& query_mem_desc =
         execution_dispatch.getQueryMemoryDescriptor();
-    if (!options.just_validate) {
+    if (!eo.just_validate) {
       dispatchFragments(dispatch,
                         execution_dispatch,
-                        options,
+                        eo,
                         is_agg,
                         context_count,
                         fragment_descriptor,
                         available_gpus,
                         available_cpus);
     }
-    if (options.with_dynamic_watchdog && interrupted_ && *error_code == ERR_OUT_OF_TIME) {
+    if (eo.with_dynamic_watchdog && interrupted_ && *error_code == ERR_OUT_OF_TIME) {
       *error_code = ERR_INTERRUPTED;
     }
     cat.getDataMgr().freeAllBuffers();
@@ -1165,13 +1161,12 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
                                        ra_exe_unit,
                                        table_infos,
                                        cat,
-                                       co,
                                        context_count,
                                        row_set_mem_owner_,
                                        column_cache,
                                        &error_code,
                                        nullptr);
-  execution_dispatch.compile(0, 8, eo, false);
+  execution_dispatch.compile(0, 8, co, eo, false);
   CHECK_EQ(size_t(1), ra_exe_unit.input_descs.size());
   const auto table_id = ra_exe_unit.input_descs[0].getTableId();
   const auto& outer_fragments = table_info.info.fragments;
@@ -1192,17 +1187,7 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
 }
 
 ResultSetPtr Executor::executeExplain(const ExecutionDispatch& execution_dispatch) {
-  std::string explained_plan;
-  const auto llvm_ir_cpu = execution_dispatch.getIR(ExecutorDeviceType::CPU);
-  if (!llvm_ir_cpu.empty()) {
-    explained_plan += ("IR for the CPU:\n===============\n" + llvm_ir_cpu);
-  }
-  const auto llvm_ir_gpu = execution_dispatch.getIR(ExecutorDeviceType::GPU);
-  if (!llvm_ir_gpu.empty()) {
-    explained_plan += (std::string(llvm_ir_cpu.empty() ? "" : "\n") +
-                       "IR for the GPU:\n===============\n" + llvm_ir_gpu);
-  }
-  return std::make_shared<ResultSet>(explained_plan);
+  return std::make_shared<ResultSet>(execution_dispatch.getIR());
 }
 
 // Looks at the targets and returns a feasible device type. We only punt

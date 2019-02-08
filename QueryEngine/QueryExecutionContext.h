@@ -130,7 +130,8 @@ class QueryExecutionContext : boost::noncopyable {
 
   ResultSetPtr groupBufferToDeinterleavedResults(const size_t i) const;
 
-  const QueryMemoryDescriptor& query_mem_desc_;
+  // TODO(adb): convert to shared_ptr
+  const QueryMemoryDescriptor query_mem_desc_;
   const Executor* executor_;
   const ExecutorDeviceType device_type_;
   const int device_id_;

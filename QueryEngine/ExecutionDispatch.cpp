@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "Descriptors/QueryCompilationDescriptor.h"
 #include "Descriptors/QueryFragmentDescriptor.h"
 #include "DynamicWatchdog.h"
 #include "Execute.h"
@@ -147,7 +148,7 @@ bool need_to_hold_chunk(const Chunk_NS::Chunk* chunk,
 
 void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device_type,
                                           int chosen_device_id,
-                                          const ExecutionOptions& options,
+                                          const ExecutionOptions& eo,
                                           const FragmentsList& frag_list,
                                           const size_t ctx_idx,
                                           const int64_t rowid_lookup_key) {
@@ -187,12 +188,12 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
     if (fetch_result.num_rows.empty()) {
       return;
     }
-    if (options.with_dynamic_watchdog &&
+    if (eo.with_dynamic_watchdog &&
         !dynamic_watchdog_set_.test_and_set(std::memory_order_acquire)) {
-      CHECK_GT(options.dynamic_watchdog_time_limit, 0);
-      auto cycle_budget = dynamic_watchdog_init(options.dynamic_watchdog_time_limit);
+      CHECK_GT(eo.dynamic_watchdog_time_limit, 0);
+      auto cycle_budget = dynamic_watchdog_init(eo.dynamic_watchdog_time_limit);
       LOG(INFO) << "Dynamic Watchdog budget: CPU: "
-                << std::to_string(options.dynamic_watchdog_time_limit) << "ms, "
+                << std::to_string(eo.dynamic_watchdog_time_limit) << "ms, "
                 << std::to_string(cycle_budget) << " cycles";
     }
   } catch (const OutOfMemory&) {
@@ -202,9 +203,8 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
     return;
   }
 
-  const CompilationResult& compilation_result =
-      chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu_
-                                                    : compilation_result_cpu_;
+  CHECK(query_comp_desc_);
+  const CompilationResult& compilation_result = query_comp_desc_->getCompilationResult();
   CHECK(!compilation_result.query_mem_desc.usesCachedContext() ||
         !ra_exe_unit_.scan_limit);
   std::unique_ptr<QueryExecutionContext> query_exe_context_owned;
@@ -277,7 +277,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
     OOM_TRACE_PUSH();
     err = executor_->executePlanWithoutGroupBy(ra_exe_unit_,
                                                compilation_result,
-                                               co_.hoist_literals_,
+                                               query_comp_desc_->hoistLiterals(),
                                                device_results,
                                                ra_exe_unit_.target_exprs,
                                                chosen_device_type,
@@ -295,7 +295,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
     OOM_TRACE_PUSH();
     err = executor_->executePlanWithGroupBy(ra_exe_unit_,
                                             compilation_result,
-                                            co_.hoist_literals_,
+                                            query_comp_desc_->hoistLiterals(),
                                             device_results,
                                             chosen_device_type,
                                             fetch_result.col_buffers,
@@ -337,7 +337,6 @@ Executor::ExecutionDispatch::ExecutionDispatch(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos,
     const Catalog_Namespace::Catalog& cat,
-    const CompilationOptions& co,
     const size_t context_count,
     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const ColumnCacheMap& column_cache,
@@ -347,7 +346,6 @@ Executor::ExecutionDispatch::ExecutionDispatch(
     , ra_exe_unit_(ra_exe_unit)
     , query_infos_(query_infos)
     , cat_(cat)
-    , co_(co)
     , query_contexts_(context_count)
     , query_context_mutexes_(context_count)
     , row_set_mem_owner_(row_set_mem_owner)
@@ -359,98 +357,52 @@ Executor::ExecutionDispatch::ExecutionDispatch(
 
 int8_t Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry_guess,
                                             const int8_t crt_min_byte_width,
-                                            const ExecutionOptions& options,
+                                            const CompilationOptions& co,
+                                            const ExecutionOptions& eo,
                                             const bool has_cardinality_estimation) {
   int8_t actual_min_byte_width{MAX_BYTE_WIDTH_SUPPORTED};
+
+  query_comp_desc_ = std::make_shared<QueryCompilationDescriptor>(row_set_mem_owner_);
+
   auto compile_on_cpu = [&]() {
     const CompilationOptions co_cpu{ExecutorDeviceType::CPU,
-                                    co_.hoist_literals_,
-                                    co_.opt_level_,
-                                    co_.with_dynamic_watchdog_};
+                                    co.hoist_literals_,
+                                    co.opt_level_,
+                                    co.with_dynamic_watchdog_};
 
-    try {
-      OOM_TRACE_PUSH();
-      compilation_result_cpu_ = executor_->compileWorkUnit(
-          query_infos_,
-          ra_exe_unit_,
-          co_cpu,
-          options,
-          cat_.getDataMgr().getCudaMgr(),
-          render_info_ && render_info_->isPotentialInSituRender() ? false : true,
-          row_set_mem_owner_,
-          max_groups_buffer_entry_guess,
-          crt_min_byte_width,
-          has_cardinality_estimation,
-          columnarized_table_cache_,
-          render_info_);
-    } catch (const CompilationRetryNoLazyFetch&) {
-      OOM_TRACE_PUSH();
-      if (executor_->cgen_state_->module_) {
-        delete executor_->cgen_state_->module_;
-      }
-      compilation_result_cpu_ = executor_->compileWorkUnit(query_infos_,
-                                                           ra_exe_unit_,
-                                                           co_cpu,
-                                                           options,
-                                                           cat_.getDataMgr().getCudaMgr(),
-                                                           false,
-                                                           row_set_mem_owner_,
-                                                           max_groups_buffer_entry_guess,
-                                                           crt_min_byte_width,
-                                                           has_cardinality_estimation,
-                                                           columnarized_table_cache_,
-                                                           render_info_);
-    }
-    actual_min_byte_width =
-        compilation_result_cpu_.query_mem_desc.updateActualMinByteWidth(
-            actual_min_byte_width);
+    actual_min_byte_width = query_comp_desc_->compile(max_groups_buffer_entry_guess,
+                                                      crt_min_byte_width,
+                                                      has_cardinality_estimation,
+                                                      ra_exe_unit_,
+                                                      query_infos_,
+                                                      co_cpu,
+                                                      eo,
+                                                      cat_,
+                                                      render_info_,
+                                                      this,
+                                                      executor_);
   };
 
-  if (co_.device_type_ == ExecutorDeviceType::CPU) {
+  if (co.device_type_ == ExecutorDeviceType::CPU) {
     compile_on_cpu();
   }
 
-  if (co_.device_type_ == ExecutorDeviceType::GPU) {
+  if (co.device_type_ == ExecutorDeviceType::GPU) {
     const CompilationOptions co_gpu{ExecutorDeviceType::GPU,
-                                    co_.hoist_literals_,
-                                    co_.opt_level_,
-                                    co_.with_dynamic_watchdog_};
-    try {
-      OOM_TRACE_PUSH();
-      compilation_result_gpu_ = executor_->compileWorkUnit(
-          query_infos_,
-          ra_exe_unit_,
-          co_gpu,
-          options,
-          cat_.getDataMgr().getCudaMgr(),
-          render_info_ && render_info_->isPotentialInSituRender() ? false : true,
-          row_set_mem_owner_,
-          max_groups_buffer_entry_guess,
-          crt_min_byte_width,
-          has_cardinality_estimation,
-          columnarized_table_cache_,
-          render_info_);
-    } catch (const CompilationRetryNoLazyFetch&) {
-      OOM_TRACE_PUSH();
-      if (executor_->cgen_state_->module_) {
-        delete executor_->cgen_state_->module_;
-      }
-      compilation_result_gpu_ = executor_->compileWorkUnit(query_infos_,
-                                                           ra_exe_unit_,
-                                                           co_gpu,
-                                                           options,
-                                                           cat_.getDataMgr().getCudaMgr(),
-                                                           false,
-                                                           row_set_mem_owner_,
-                                                           max_groups_buffer_entry_guess,
-                                                           crt_min_byte_width,
-                                                           has_cardinality_estimation,
-                                                           columnarized_table_cache_,
-                                                           render_info_);
-    }
-    actual_min_byte_width =
-        compilation_result_gpu_.query_mem_desc.updateActualMinByteWidth(
-            actual_min_byte_width);
+                                    co.hoist_literals_,
+                                    co.opt_level_,
+                                    co.with_dynamic_watchdog_};
+    actual_min_byte_width = query_comp_desc_->compile(max_groups_buffer_entry_guess,
+                                                      crt_min_byte_width,
+                                                      has_cardinality_estimation,
+                                                      ra_exe_unit_,
+                                                      query_infos_,
+                                                      co_gpu,
+                                                      eo,
+                                                      cat_,
+                                                      render_info_,
+                                                      this,
+                                                      executor_);
   }
 
   return std::max(actual_min_byte_width, crt_min_byte_width);
@@ -458,17 +410,13 @@ int8_t Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry
 
 void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_type,
                                       int chosen_device_id,
-                                      const ExecutionOptions& options,
+                                      const ExecutionOptions& eo,
                                       const FragmentsList& frag_list,
                                       const size_t ctx_idx,
                                       const int64_t rowid_lookup_key) noexcept {
   try {
-    runImpl(chosen_device_type,
-            chosen_device_id,
-            options,
-            frag_list,
-            ctx_idx,
-            rowid_lookup_key);
+    runImpl(
+        chosen_device_type, chosen_device_id, eo, frag_list, ctx_idx, rowid_lookup_key);
   } catch (const std::bad_alloc& e) {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
     LOG(ERROR) << e.what();
@@ -659,17 +607,14 @@ const int8_t* Executor::ExecutionDispatch::getColumn(
   return col_buffers[col_id];
 }
 
-std::string Executor::ExecutionDispatch::getIR(
-    const ExecutorDeviceType device_type) const {
-  CHECK(device_type == ExecutorDeviceType::CPU || device_type == ExecutorDeviceType::GPU);
-  if (device_type == ExecutorDeviceType::CPU) {
-    return compilation_result_cpu_.llvm_ir;
-  }
-  return compilation_result_gpu_.llvm_ir;
+std::string Executor::ExecutionDispatch::getIR() const {
+  CHECK(query_comp_desc_);
+  return query_comp_desc_->getIR();
 }
 
 ExecutorDeviceType Executor::ExecutionDispatch::getDeviceType() const {
-  return co_.device_type_;
+  CHECK(query_comp_desc_);
+  return query_comp_desc_->getDeviceType();
 }
 
 const RelAlgExecutionUnit& Executor::ExecutionDispatch::getExecutionUnit() const {
@@ -679,9 +624,8 @@ const RelAlgExecutionUnit& Executor::ExecutionDispatch::getExecutionUnit() const
 const QueryMemoryDescriptor& Executor::ExecutionDispatch::getQueryMemoryDescriptor()
     const {
   // TODO(alex): make query_mem_desc easily available
-  return compilation_result_cpu_.native_functions.empty()
-             ? compilation_result_gpu_.query_mem_desc
-             : compilation_result_cpu_.query_mem_desc;
+  CHECK(query_comp_desc_);
+  return query_comp_desc_->getQueryMemoryDescriptor();
 }
 
 const std::vector<uint64_t>& Executor::ExecutionDispatch::getFragOffsets() const {

@@ -32,7 +32,7 @@
 #include <algorithm>
 #endif
 
-#define MAX_BYTE_WIDTH_SUPPORTED 8
+constexpr int8_t MAX_BYTE_WIDTH_SUPPORTED = 8;
 
 #ifndef __CUDACC__
 inline unsigned compact_byte_width(unsigned qw, unsigned low_bound) {

@@ -23,6 +23,7 @@ set(query_engine_source_files
     CudaAllocator.cpp
     DateTimeIR.cpp
     DateTimePlusRewrite.cpp
+    Descriptors/QueryCompilationDescriptor.cpp
     Descriptors/QueryFragmentDescriptor.cpp
     Descriptors/QueryMemoryDescriptor.cpp
     Descriptors/RelAlgExecutionDescriptor.cpp

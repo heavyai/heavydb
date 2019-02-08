@@ -90,13 +90,12 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
                                        count_all_exe_unit,
                                        table_infos,
                                        cat,
-                                       co,
                                        context_count,
                                        row_set_mem_owner,
                                        column_cache,
                                        &error_code,
                                        nullptr);
-  execution_dispatch.compile(0, 8, eo, false);
+  execution_dispatch.compile(0, 8, co, eo, false);
   CHECK_EQ(size_t(1), ra_exe_unit.input_descs.size());
   const auto table_id = ra_exe_unit.input_descs[0].getTableId();
   const auto& outer_fragments = table_info.info.fragments;
@@ -127,13 +126,12 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
                                                           ra_exe_unit,
                                                           table_infos,
                                                           cat,
-                                                          co,
                                                           context_count,
                                                           row_set_mem_owner,
                                                           column_cache,
                                                           &error_code,
                                                           nullptr);
-    current_fragment_execution_dispatch.compile(*count_ptr, 8, eo, false);
+    current_fragment_execution_dispatch.compile(*count_ptr, 8, co, eo, false);
     // We may want to consider in the future allowing this to execute on devices other
     // than CPU
     current_fragment_execution_dispatch.run(
