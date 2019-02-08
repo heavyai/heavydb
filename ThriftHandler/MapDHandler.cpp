@@ -3672,7 +3672,12 @@ void MapDHandler::import_geo_table(const TSessionId& session,
   auto construct_layer_table_name = [&load_layers](const std::string& table_name,
                                                    const std::string& layer_name) {
     if (load_layers.size() > 1) {
-      return table_name + "_" + layer_name;
+      auto sanitized_layer_name = ImportHelpers::sanitize_name(layer_name);
+      if (sanitized_layer_name != layer_name) {
+        LOG(INFO) << "import_geo_table: Using sanitized layer name '"
+                  << sanitized_layer_name << "' for table name";
+      }
+      return table_name + "_" + sanitized_layer_name;
     }
     return table_name;
   };
