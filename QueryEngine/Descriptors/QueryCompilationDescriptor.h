@@ -27,9 +27,8 @@
 
 class QueryCompilationDescriptor {
  public:
-  QueryCompilationDescriptor(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
-      : row_set_mem_owner_(row_set_mem_owner)
-      , compilation_device_type_(ExecutorDeviceType::CPU)
+  QueryCompilationDescriptor()
+      : compilation_device_type_(ExecutorDeviceType::CPU)
       , hoist_literals_(false)
       , actual_min_byte_width_(MAX_BYTE_WIDTH_SUPPORTED) {}
 
@@ -68,8 +67,6 @@ class QueryCompilationDescriptor {
   int8_t getMinByteWidth() const { return actual_min_byte_width_; }
 
  private:
-  const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
-
   Executor::CompilationResult compilation_result_;
   ExecutorDeviceType compilation_device_type_;
   bool hoist_literals_;

@@ -364,8 +364,7 @@ Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry_guess,
                                      const CompilationOptions& co,
                                      const ExecutionOptions& eo,
                                      const bool has_cardinality_estimation) {
-  auto query_comp_desc = std::make_unique<QueryCompilationDescriptor>(row_set_mem_owner_);
-
+  auto query_comp_desc = std::make_unique<QueryCompilationDescriptor>();
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc;
 
   switch (co.device_type_) {
