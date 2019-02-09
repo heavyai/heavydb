@@ -245,7 +245,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , render_output_(false)
     , must_use_baseline_sort_(must_use_baseline_sort)
     , force_4byte_float_(false) {
-  // Constructor for group by queries
+  // Constructor for group by and projection queries
   CHECK(!group_col_widths.empty());
 
   CHECK(group_by_and_agg);

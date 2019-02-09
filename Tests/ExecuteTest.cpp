@@ -11883,25 +11883,26 @@ TEST(Select, GeoSpatial_Projection) {
                     dt)),
                 static_cast<double>(0.01));
 
-    SKIP_ON_AGGREGATOR(
-        ASSERT_NEAR(static_cast<double>(5),
-                    v<double>(run_simple_agg(
-                        "SELECT ST_XMax(p) from geospatial_test limit 1 offset 5;", dt)),
-                    static_cast<double>(0.0)));
+    SKIP_ON_AGGREGATOR(ASSERT_NEAR(
+        static_cast<double>(5),
+        v<double>(run_simple_agg(
+            "SELECT ST_XMax(p) from geospatial_test order by id limit 1 offset 5;", dt)),
+        static_cast<double>(0.0)));
     SKIP_ON_AGGREGATOR(ASSERT_NEAR(
         static_cast<double>(1.0),
         v<double>(run_simple_agg(
             "SELECT ST_YMin(gp4326) from geospatial_test limit 1 offset 1;", dt)),
         static_cast<double>(0.001)));
-    SKIP_ON_AGGREGATOR(
-        ASSERT_NEAR(static_cast<double>(2 * 7 + 1),
-                    v<double>(run_simple_agg(
-                        "SELECT ST_XMax(l) from geospatial_test limit 1 offset 7;", dt)),
-                    static_cast<double>(0.0)));
+    SKIP_ON_AGGREGATOR(ASSERT_NEAR(
+        static_cast<double>(2 * 7 + 1),
+        v<double>(run_simple_agg(
+            "SELECT ST_XMax(l) from geospatial_test order by id limit 1 offset 7;", dt)),
+        static_cast<double>(0.0)));
     SKIP_ON_AGGREGATOR(ASSERT_NEAR(
         static_cast<double>(2 + 1),
         v<double>(run_simple_agg(
-            "SELECT ST_YMax(mpoly) from geospatial_test limit 1 offset 2;", dt)),
+            "SELECT ST_YMax(mpoly) from geospatial_test order by id limit 1 offset 2;",
+            dt)),
         static_cast<double>(0.0)));
 
     // Point accessors, Linestring indexing

@@ -1753,11 +1753,18 @@ ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
                                             const bool is_agg,
                                             const CompilationOptions& co,
                                             const ExecutionOptions& eo) {
+#ifdef DISABLED
+  // TODO(adb): disabling this for now as it hides the filtered count path from all our
+  // unit tests. Could conditionally enable, though I think most real uses have more than
+  // 50,000 entries per fragment. Conversely, if there is only one fragment we could just
+  // use that size / tuple count and skip the filtered count (if there are 50,000 entries
+  // in the table, chances are they are all in the same fragment)
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   if (table_infos.size() == 1 &&
       table_infos.front().info.getNumTuplesUpperBound() <= 50000) {
     return table_infos.front().info.getNumTuplesUpperBound();
   }
+#endif
   const auto count =
       makeExpr<Analyzer::AggExpr>(SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, false),
                                   kCOUNT,
@@ -1797,10 +1804,6 @@ ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
   CHECK(count_ptr);
   CHECK_GE(*count_ptr, 0);
   auto count_upper_bound = static_cast<size_t>(*count_ptr);
-  if (table_infos.size() == 1) {
-    count_upper_bound = std::min(
-        table_infos.front().info.getFragmentNumTuplesUpperBound(), count_upper_bound);
-  }
   return std::max(count_upper_bound, size_t(1));
 }
 

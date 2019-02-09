@@ -1039,10 +1039,71 @@ bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos,
          g_trivial_loop_join_threshold;
 }
 
+namespace {
+
+RelAlgExecutionUnit replace_scan_limit(const RelAlgExecutionUnit& ra_exe_unit_in,
+                                       const size_t new_scan_limit) {
+  return {ra_exe_unit_in.input_descs,
+          ra_exe_unit_in.input_col_descs,
+          ra_exe_unit_in.simple_quals,
+          ra_exe_unit_in.quals,
+          ra_exe_unit_in.join_quals,
+          ra_exe_unit_in.groupby_exprs,
+          ra_exe_unit_in.target_exprs,
+          ra_exe_unit_in.estimator,
+          ra_exe_unit_in.sort_info,
+          new_scan_limit,
+          ra_exe_unit_in.query_features};
+}
+
+}  // namespace
+
 ResultSetPtr Executor::executeWorkUnit(
     int32_t* error_code,
     size_t& max_groups_buffer_entry_guess,
     const bool is_agg,
+    const std::vector<InputTableInfo>& query_infos,
+    const RelAlgExecutionUnit& ra_exe_unit_in,
+    const CompilationOptions& co,
+    const ExecutionOptions& eo,
+    const Catalog_Namespace::Catalog& cat,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    RenderInfo* render_info,
+    const bool has_cardinality_estimation) {
+  try {
+    return executeWorkUnitImpl(error_code,
+                               max_groups_buffer_entry_guess,
+                               is_agg,
+                               true,
+                               query_infos,
+                               ra_exe_unit_in,
+                               co,
+                               eo,
+                               cat,
+                               row_set_mem_owner,
+                               render_info,
+                               has_cardinality_estimation);
+  } catch (const CompilationRetryNewScanLimit& e) {
+    return executeWorkUnitImpl(error_code,
+                               max_groups_buffer_entry_guess,
+                               is_agg,
+                               false,
+                               query_infos,
+                               replace_scan_limit(ra_exe_unit_in, e.new_scan_limit_),
+                               co,
+                               eo,
+                               cat,
+                               row_set_mem_owner,
+                               render_info,
+                               has_cardinality_estimation);
+  }
+}
+
+ResultSetPtr Executor::executeWorkUnitImpl(
+    int32_t* error_code,
+    size_t& max_groups_buffer_entry_guess,
+    const bool is_agg,
+    const bool allow_single_frag_table_opt,
     const std::vector<InputTableInfo>& query_infos,
     const RelAlgExecutionUnit& ra_exe_unit_in,
     const CompilationOptions& co,
@@ -1136,8 +1197,10 @@ ResultSetPtr Executor::executeWorkUnit(
     if (!eo.just_validate) {
       dispatchFragments(dispatch,
                         execution_dispatch,
+                        query_infos,
                         eo,
                         is_agg,
+                        allow_single_frag_table_opt,
                         context_count,
                         *query_comp_desc_owned,
                         *query_mem_desc_owned,
@@ -1502,8 +1565,10 @@ void Executor::dispatchFragments(
                              const size_t ctx_idx,
                              const int64_t rowid_lookup_key)> dispatch,
     const ExecutionDispatch& execution_dispatch,
+    const std::vector<InputTableInfo>& table_infos,
     const ExecutionOptions& eo,
     const bool is_agg,
+    const bool allow_single_frag_table_opt,
     const size_t context_count,
     const QueryCompilationDescriptor& query_comp_desc,
     const QueryMemoryDescriptor& query_mem_desc,
@@ -1515,9 +1580,6 @@ void Executor::dispatchFragments(
   CHECK(!ra_exe_unit.input_descs.empty());
 
   const auto device_type = query_comp_desc.getDeviceType();
-
-  VLOG(1) << query_mem_desc.toString();
-
   const bool allow_multifrag =
       eo.allow_multifrag &&
       (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext() ||
@@ -1546,9 +1608,13 @@ void Executor::dispatchFragments(
 
   if (use_multifrag_kernel) {
     VLOG(1) << "Dispatching multifrag kernels";
-    // NB: We should never be on this path when the query is retried because of
-    //     running out of group by slots; also, for scan only queries (!agg_plan)
-    //     we want the high-granularity, fragment by fragment execution instead.
+    VLOG(1) << query_mem_desc.toString();
+
+    // NB: We should never be on this path when the query is retried because of running
+    // out of group by slots; also, for scan only queries on CPU we want the
+    // high-granularity, fragment by fragment execution instead. For scan only queries on
+    // GPU, we want the multifrag kernel path to save the overhead of allocating an output
+    // buffer per fragment.
     auto multifrag_kernel_dispatch =
         [&query_threads, &dispatch, &context_count, query_comp_desc, query_mem_desc](
             const int device_id,
@@ -1568,8 +1634,22 @@ void Executor::dispatchFragments(
 
   } else {
     VLOG(1) << "Dispatching kernel per fragment";
-    size_t frag_list_idx{0};
+    VLOG(1) << query_mem_desc.toString();
 
+    if (allow_single_frag_table_opt &&
+        (query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) &&
+        table_infos.size() == 1 && table_infos.front().table_id > 0) {
+      const auto max_frag_size =
+          table_infos.front().info.getFragmentNumTuplesUpperBound();
+      if (max_frag_size < query_mem_desc.getEntryCount()) {
+        LOG(INFO) << "Lowering scan limit from " << query_mem_desc.getEntryCount()
+                  << " to match max fragment size " << max_frag_size
+                  << " for kernel per fragment execution path.";
+        throw CompilationRetryNewScanLimit(max_frag_size);
+      }
+    }
+
+    size_t frag_list_idx{0};
     auto fragment_per_kernel_dispatch = [&query_threads,
                                          &dispatch,
                                          &context_count,

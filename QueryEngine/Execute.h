@@ -225,6 +225,15 @@ class CompilationRetryNoLazyFetch : public std::runtime_error {
       : std::runtime_error("Retry query compilation with no GPU lazy fetch.") {}
 };
 
+class CompilationRetryNewScanLimit : public std::runtime_error {
+ public:
+  CompilationRetryNewScanLimit(const size_t new_scan_limit)
+      : std::runtime_error("Retry query compilation with new scan limit.")
+      , new_scan_limit_(new_scan_limit) {}
+
+  size_t new_scan_limit_;
+};
+
 class TooManyLiterals : public std::runtime_error {
  public:
   TooManyLiterals() : std::runtime_error("Too many literals in the query") {}
@@ -954,8 +963,10 @@ class Executor {
                                const size_t ctx_idx,
                                const int64_t rowid_lookup_key)> dispatch,
       const ExecutionDispatch& execution_dispatch,
+      const std::vector<InputTableInfo>& table_infos,
       const ExecutionOptions& eo,
       const bool is_agg,
+      const bool allow_single_frag_table_opt,
       const size_t context_count,
       const QueryCompilationDescriptor& query_comp_desc,
       const QueryMemoryDescriptor& query_mem_desc,
@@ -1072,6 +1083,19 @@ class Executor {
       std::shared_ptr<RowSetMemoryOwner>,
       const QueryMemoryDescriptor&) const;
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
+
+  ResultSetPtr executeWorkUnitImpl(int32_t* error_code,
+                                   size_t& max_groups_buffer_entry_guess,
+                                   const bool is_agg,
+                                   const bool allow_single_frag_table_opt,
+                                   const std::vector<InputTableInfo>&,
+                                   const RelAlgExecutionUnit&,
+                                   const CompilationOptions&,
+                                   const ExecutionOptions& options,
+                                   const Catalog_Namespace::Catalog&,
+                                   std::shared_ptr<RowSetMemoryOwner>,
+                                   RenderInfo* render_info,
+                                   const bool has_cardinality_estimation);
 
   bool prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
                        std::vector<Analyzer::Expr*>& primary_quals,
