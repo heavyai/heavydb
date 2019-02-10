@@ -12690,6 +12690,90 @@ TEST(Select, DatesDaysEncodingTest) {
   }
 }
 
+TEST(Select, WindowFunctionTestRank) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  c("SELECT x, y, ROW_NUMBER() OVER (PARTITION BY y ORDER BY x ASC) r1, RANK() OVER "
+    "(PARTITION BY y ORDER BY x ASC) r2, DENSE_RANK() OVER (PARTITION BY y ORDER BY x "
+    "DESC) r3 FROM test_window_func ORDER BY x ASC, y ASC, r1 ASC, r2 ASC, r3 ASC;",
+    dt);
+}
+
+TEST(Select, WindowFunctionTestPercentRank) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  c("SELECT x, y, PERCENT_RANK() OVER (PARTITION BY y ORDER BY x ASC) p FROM "
+    "test_window_func ORDER BY x ASC, y ASC, p ASC;",
+    dt);
+}
+
+TEST(Select, WindowFunctionTestTile) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  c("SELECT x, y, NTILE(2) OVER (PARTITION BY y ORDER BY x ASC) n FROM test_window_func "
+    "ORDER BY x ASC, y ASC, n ASC;",
+    dt);
+}
+
+TEST(Select, WindowFunctionTestCumeDist) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  c("SELECT x, y, CUME_DIST() OVER (PARTITION BY y ORDER BY x ASC) c FROM "
+    "test_window_func ORDER BY x ASC, y ASC, c ASC;",
+    dt);
+}
+
+TEST(Select, WindowFunctionTestLag) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  for (int lag = -5; lag <= 5; ++lag) {
+    const auto query =
+        "SELECT x, y, LAG(x + 5, " + std::to_string(lag) +
+        ") OVER (PARTITION BY y ORDER BY x ASC) l FROM test_window_func ORDER BY x "
+        "ASC, y ASC, l ASC";
+    c(query + " NULLS FIRST;", query + ";", dt);
+  }
+}
+
+TEST(Select, WindowFunctionTestFirst) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  c("SELECT x, y, FIRST_VALUE(x + 5) OVER (PARTITION BY y ORDER BY x ASC) f FROM "
+    "test_window_func ORDER BY x ASC, y ASC, f ASC;",
+    dt);
+}
+
+TEST(Select, WindowFunctionTestLead) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  for (int lead = -5; lead <= 5; ++lead) {
+    const auto query =
+        "SELECT x, y, LEAD(x, " + std::to_string(lead) +
+        ") OVER (PARTITION BY y ORDER BY x DESC) l FROM test_window_func ORDER BY x "
+        "ASC, y ASC, l ASC";
+    c(query + " NULLS FIRST;", query + ";", dt);
+  }
+}
+
+TEST(Select, WindowFunctionTestLast) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  c("SELECT x, y, FIRST_VALUE(x + 5) OVER (PARTITION BY y ORDER BY x ASC) f, "
+    "LAST_VALUE(x) OVER (PARTITION BY y ORDER BY x DESC) l FROM test_window_func ORDER "
+    "BY x ASC, y ASC, f ASC, l ASC;",
+    dt);
+}
+
+TEST(Select, WindowFunctionTestAggregate) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  c("SELECT x, y, AVG(x) OVER (PARTITION BY y ORDER BY x ASC) a, MIN(x) OVER (PARTITION "
+    "BY y ORDER BY x ASC) m1, MAX(x) OVER (PARTITION BY y ORDER BY x DESC) m2, SUM(x) "
+    "OVER (PARTITION BY y ORDER BY x ASC) s, COUNT(x) OVER (PARTITION BY y ORDER BY x "
+    "ASC) c FROM test_window_func ORDER BY x ASC, y ASC, a ASC, m1 ASC, m2 ASC, s ASC;",
+    dt);
+}
+
 namespace {
 
 int create_sharded_join_table(const std::string& table_name,
@@ -12734,6 +12818,72 @@ int create_sharded_join_table(const std::string& table_name,
   } catch (const std::exception& e) {
     LOG(ERROR) << "Failed to (re-)create tables for Inner Join sharded test: "
                << e.what();
+    return -EEXIST;
+  }
+  return 0;
+}
+
+int create_and_populate_window_func_table() {
+  try {
+    const std::string drop_test_table{"DROP TABLE IF EXISTS test_window_func;"};
+    run_ddl_statement(drop_test_table);
+    g_sqlite_comparator.query(drop_test_table);
+    const std::string create_test_table{
+        "CREATE TABLE test_window_func(x INTEGER, y TEXT);"};
+    run_ddl_statement(create_test_table);
+    g_sqlite_comparator.query(create_test_table);
+    {
+      const std::string insert_query{"INSERT INTO test_window_func VALUES(1, 'aaa');"};
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+    {
+      const std::string insert_query{"INSERT INTO test_window_func VALUES(0, 'aaa');"};
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+    {
+      const std::string insert_query{"INSERT INTO test_window_func VALUES(2, 'ccc');"};
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+    {
+      const std::string insert_query{"INSERT INTO test_window_func VALUES(10, 'bbb');"};
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+    {
+      const std::string insert_query{"INSERT INTO test_window_func VALUES(3, 'bbb');"};
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+    {
+      const std::string insert_query{"INSERT INTO test_window_func VALUES(6, 'bbb');"};
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+    {
+      const std::string insert_query{"INSERT INTO test_window_func VALUES(9, 'bbb');"};
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+    {
+      const std::string insert_query{"INSERT INTO test_window_func VALUES(6, 'bbb');"};
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+    {
+      const std::string insert_query{"INSERT INTO test_window_func VALUES(9, 'bbb');"};
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+    {
+      const std::string insert_query{"INSERT INTO test_window_func VALUES(9, 'bbb');"};
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_window_func'";
     return -EEXIST;
   }
   return 0;
@@ -13478,6 +13628,11 @@ int create_and_populate_tables(bool with_delete_support = true) {
     return rc;
   }
 
+  int err = create_and_populate_window_func_table();
+  if (err) {
+    return err;
+  }
+
   return 0;
 }
 
@@ -13650,6 +13805,9 @@ void drop_tables() {
   const std::string drop_test_table_rounding{"DROP TABLE test_rounding;"};
   run_ddl_statement(drop_test_table_rounding);
   g_sqlite_comparator.query(drop_test_table_rounding);
+  const std::string drop_test_window_func{"DROP TABLE test_window_func;"};
+  run_ddl_statement(drop_test_window_func);
+  g_sqlite_comparator.query(drop_test_window_func);
 }
 
 void drop_views() {
