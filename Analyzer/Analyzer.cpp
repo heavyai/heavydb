@@ -1048,6 +1048,11 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
   if (type_info == new_type_info) {
     return;
   }
+  if (is_null) {
+    type_info = new_type_info;
+    set_null_value();
+    return;
+  }
   if (new_type_info.is_number() &&
       (type_info.is_number() || type_info.get_type() == kTIMESTAMP ||
        type_info.get_type() == kBOOLEAN)) {

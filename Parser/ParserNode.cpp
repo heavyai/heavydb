@@ -181,6 +181,11 @@ std::shared_ptr<Analyzer::Expr> ArrayLiteral::analyze(
   for (auto& p : value_list) {
     auto e = p->analyze(catalog, query, allow_tlist_ref);
     CHECK(e);
+    auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
+    if (c != nullptr && c->get_is_null()) {
+      value_exprs.push_back(c);
+      continue;
+    }
     auto subtype = e->get_type_info().get_type();
     if (subtype == kNULLT) {
       // NULL element

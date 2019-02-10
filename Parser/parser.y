@@ -1029,6 +1029,7 @@ select_entry_commalist:
 atom:
 		literal { $<nodeval>$ = $<nodeval>1; }
 	|	USER { $<nodeval>$ = new UserLiteral(); }
+	/* |	NULLX { $<nodeval>$ = new NullLiteral(); } */
 	/* |	parameter_ref { $<nodeval>$ = $<nodeval>1; } */
 	;
 
