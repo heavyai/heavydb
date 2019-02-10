@@ -73,6 +73,8 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       if (len != array_size) {
         throw std::runtime_error("Input length doesn't match fixed-length array length");
       }
+      // NULL arrays have been filled with subtype's NULL sentinels,
+      // should be appended as regular data, same size
       buffer_->append((*srcData)[replicating ? 0 : i].pointer, len);
 
       // keep Chunk statistics with array elements
@@ -148,7 +150,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
   size_t array_size;
 
   void update_elem_stats(const ArrayDatum& array) {
-    if (array.is_null || array.length == 0) {
+    if (array.is_null) {
       has_nulls = true;
       return;
     }

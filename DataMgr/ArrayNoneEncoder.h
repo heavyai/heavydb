@@ -248,7 +248,7 @@ class ArrayNoneEncoder : public Encoder {
   ArrayOffsetT last_offset;
 
   void update_elem_stats(const ArrayDatum& array) {
-    if (array.is_null || array.length == 0) {
+    if (array.is_null) {
       has_nulls = true;
       return;
     }

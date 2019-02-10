@@ -38,6 +38,7 @@
 #include "Parser/ParserNode.h"
 #include "Shared/ExperimentalTypeUtilities.h"
 #include "Shared/MapDParameters.h"
+#include "Shared/TypedDataAccessors.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
@@ -2642,10 +2643,24 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
         break;
       }
       case kARRAY: {
+        const auto is_null = col_cv->get_is_null();
+        const auto size = cd->columnType.get_size();
+        const SQLTypeInfo elem_ti = cd->columnType.get_elem_type();
+        if (is_null) {
+          if (size > 0) {
+            // NULL fixlen array: fill with scalar NULL sentinels
+            int8_t* buf = (int8_t*)checked_malloc(size);
+            for (int8_t* p = buf; (p - buf) < size; p += elem_ti.get_size()) {
+              put_null(static_cast<void*>(p), elem_ti, "");
+            }
+            arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(size, buf, is_null));
+          } else {
+            arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(0, nullptr, is_null));
+          }
+          break;
+        }
         const auto l = col_cv->get_value_list();
-        SQLTypeInfo elem_ti = cd->columnType.get_elem_type();
         size_t len = l.size() * elem_ti.get_size();
-        auto size = cd->columnType.get_size();
         if (size > 0 && static_cast<size_t>(size) != len) {
           throw std::runtime_error("Array column " + cd->columnName + " expects " +
                                    std::to_string(size / elem_ti.get_size()) +
@@ -2668,7 +2683,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
 
             elemIndex++;
           }
-          arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, len == 0));
+          arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, is_null));
 
         } else {
           int8_t* buf = (int8_t*)checked_malloc(len);
@@ -2678,7 +2693,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
             CHECK(c);
             p = Importer_NS::appendDatum(p, c->get_constval(), elem_ti);
           }
-          arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, len == 0));
+          arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, is_null));
         }
         break;
       }

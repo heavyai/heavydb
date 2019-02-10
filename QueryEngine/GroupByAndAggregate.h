@@ -61,15 +61,20 @@ inline std::string datum_to_string(const TargetValue& tv,
                                    const SQLTypeInfo& ti,
                                    const std::string& delim) {
   if (ti.is_array()) {
-    const auto list_tv = boost::get<std::vector<ScalarTargetValue>>(&tv);
-    CHECK(list_tv);
-    std::vector<std::string> elem_strs;
-    elem_strs.reserve(list_tv->size());
-    const auto& elem_ti = ti.get_elem_type();
-    for (const auto& elem_tv : *list_tv) {
-      elem_strs.push_back(datum_to_string(elem_tv, elem_ti, delim));
+    const auto array_tv = boost::get<ArrayTargetValue>(&tv);
+    const auto null_array_tv = boost::get<NullArrayTargetValue>(&tv);
+    if (array_tv) {
+      CHECK(!null_array_tv);
+      std::vector<std::string> elem_strs;
+      elem_strs.reserve(array_tv->size());
+      const auto& elem_ti = ti.get_elem_type();
+      for (const auto& elem_tv : *array_tv) {
+        elem_strs.push_back(datum_to_string(elem_tv, elem_ti, delim));
+      }
+      return "{" + boost::algorithm::join(elem_strs, delim) + "}";
     }
-    return "{" + boost::algorithm::join(elem_strs, delim) + "}";
+    CHECK(null_array_tv);
+    return "NULL";
   }
   const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
   if (ti.is_time()) {

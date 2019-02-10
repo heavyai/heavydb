@@ -546,6 +546,12 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
     return false;
   }
   HOST DEVICE inline bool is_null(const int8_t* val) const {
+    if (type == kFLOAT) {
+      return *(float*)val == NULL_FLOAT;
+    }
+    if (type == kDOUBLE) {
+      return *(double*)val == NULL_DOUBLE;
+    }
     // val can be either compressed or uncompressed
     switch (size) {
       case 1:
