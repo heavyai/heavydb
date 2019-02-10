@@ -268,6 +268,7 @@ class UserLiteral : public Literal {
  */
 class ArrayLiteral : public Literal {
  public:
+  ArrayLiteral() {}
   ArrayLiteral(std::list<Expr*>* v) {
     CHECK(v);
     for (const auto e : *v) {
@@ -459,6 +460,25 @@ class CharLengthExpr : public Expr {
  private:
   std::unique_ptr<Expr> arg;
   bool calc_encoded_length;
+};
+
+/*
+ * @type CardinalityExpr
+ * @brief expression to get cardinality of an array
+ */
+
+class CardinalityExpr : public Expr {
+ public:
+  CardinalityExpr(Expr* a) : arg(a) {}
+  const Expr* get_arg() const { return arg.get(); }
+  virtual std::shared_ptr<Analyzer::Expr> analyze(
+      const Catalog_Namespace::Catalog& catalog,
+      Analyzer::Query& query,
+      TlistRefType allow_tlist_ref = TLIST_NONE) const;
+  virtual std::string to_string() const;
+
+ private:
+  std::unique_ptr<Expr> arg;
 };
 
 /*

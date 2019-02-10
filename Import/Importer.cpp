@@ -393,6 +393,9 @@ ArrayDatum StringToArray(const std::string& s,
                          const SQLTypeInfo& ti,
                          const CopyParams& copy_params) {
   SQLTypeInfo elem_ti = ti.get_elem_type();
+  if (s == copy_params.null_str || s == "NULL" || s.empty()) {
+    return ArrayDatum(0, NULL, true);
+  }
   if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
     LOG(WARNING) << "Malformed array: " << s;
     return ArrayDatum(0, NULL, true);
@@ -413,7 +416,7 @@ ArrayDatum StringToArray(const std::string& s,
     int8_t* p = buf;
     for (auto& es : elem_strs) {
       auto e = trim_space(es.c_str(), es.length());
-      bool is_null = (e == copy_params.null_str);
+      bool is_null = (e == copy_params.null_str) || e == "NULL";
       if (!elem_ti.is_string() && e == "") {
         is_null = true;
       }
@@ -425,10 +428,32 @@ ArrayDatum StringToArray(const std::string& s,
       Datum d = is_null ? NullDatum(elem_ti) : StringToDatum(e, elem_ti);
       p = appendDatum(p, d, elem_ti);
     }
-    return ArrayDatum(len, buf, len == 0);
+    return ArrayDatum(len, buf, false);
   }
   // must not be called for array of strings
   CHECK(false);
+  return ArrayDatum(0, NULL, true);
+}
+
+ArrayDatum NullArray(const SQLTypeInfo& ti) {
+  SQLTypeInfo elem_ti = ti.get_elem_type();
+  auto len = ti.get_size();
+
+  if (elem_ti.is_string()) {
+    // must not be called for array of strings
+    CHECK(false);
+    return ArrayDatum(0, NULL, true);
+  }
+
+  if (len > 0) {
+    // NULL fixlen array: fill with scalar NULL sentinels
+    int8_t* buf = (int8_t*)checked_malloc(len);
+    for (int8_t* p = buf; (p - buf) < len; p += elem_ti.get_size()) {
+      put_null(static_cast<void*>(p), elem_ti, "");
+    }
+    return ArrayDatum(len, buf, true);
+  }
+  // NULL varlen array
   return ArrayDatum(0, NULL, true);
 }
 
@@ -486,14 +511,21 @@ Datum TDatumToDatum(const TDatum& datum, SQLTypeInfo& ti) {
 
 ArrayDatum TDatumToArrayDatum(const TDatum& datum, const SQLTypeInfo& ti) {
   SQLTypeInfo elem_ti = ti.get_elem_type();
+
   CHECK(!elem_ti.is_string());
+
+  if (datum.is_null) {
+    return NullArray(ti);
+  }
+
   size_t len = datum.val.arr_val.size() * elem_ti.get_size();
   int8_t* buf = (int8_t*)checked_malloc(len);
   int8_t* p = buf;
   for (auto& e : datum.val.arr_val) {
     p = appendDatum(p, TDatumToDatum(e, elem_ti), elem_ti);
   }
-  return ArrayDatum(len, buf, len == 0);
+
+  return ArrayDatum(len, buf, false);
 }
 
 static size_t find_beginning(const char* buffer,
@@ -664,16 +696,20 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         std::vector<std::string>& string_vec = addStringArray();
         ImporterUtils::parseStringArray(val, copy_params, string_vec);
       } else {
+        SQLTypeInfo ti = cd->columnType;
         if (!is_null) {
-          SQLTypeInfo ti = cd->columnType;
           ArrayDatum d = StringToArray(val, ti, copy_params);
-          if (ti.get_size() > 0 && static_cast<size_t>(ti.get_size()) != d.length) {
-            throw std::runtime_error("Fixed length array for column " + cd->columnName +
-                                     " has incorrect length: " + val);
+          if (d.is_null) {  // val could be "NULL"
+            addArray(NullArray(ti));
+          } else {
+            if (ti.get_size() > 0 && static_cast<size_t>(ti.get_size()) != d.length) {
+              throw std::runtime_error("Fixed length array for column " + cd->columnName +
+                                       " has incorrect length: " + val);
+            }
+            addArray(d);
           }
-          addArray(d);
         } else {
-          addArray(ArrayDatum(0, NULL, true));
+          addArray(NullArray(ti));
         }
       }
       break;
@@ -979,7 +1015,6 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
       break;
     }
     case kARRAY: {
-      // TODO: add support for nulls inside array
       dataSize = col.data.arr_col.size();
       if (IS_STRING(cd->columnType.get_subtype())) {
         for (size_t i = 0; i < dataSize; i++) {
@@ -997,7 +1032,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
           case kBOOLEAN: {
             for (size_t i = 0; i < dataSize; i++) {
               if (col.nulls[i]) {
-                addArray(ArrayDatum(0, NULL, true));
+                addArray(NullArray(cd->columnType));
               } else {
                 size_t len = col.data.arr_col[i].data.int_col.size();
                 size_t byteSize = len * sizeof(int8_t);
@@ -1007,7 +1042,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
                   *(bool*)p = static_cast<bool>(col.data.arr_col[i].data.int_col[j]);
                   p += sizeof(bool);
                 }
-                addArray(ArrayDatum(byteSize, buf, len == 0));
+                addArray(ArrayDatum(byteSize, buf, false));
               }
             }
             break;
@@ -1015,7 +1050,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
           case kTINYINT: {
             for (size_t i = 0; i < dataSize; i++) {
               if (col.nulls[i]) {
-                addArray(ArrayDatum(0, NULL, true));
+                addArray(NullArray(cd->columnType));
               } else {
                 size_t len = col.data.arr_col[i].data.int_col.size();
                 size_t byteSize = len * sizeof(int8_t);
@@ -1025,7 +1060,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
                   *(int8_t*)p = static_cast<int8_t>(col.data.arr_col[i].data.int_col[j]);
                   p += sizeof(int8_t);
                 }
-                addArray(ArrayDatum(byteSize, buf, len == 0));
+                addArray(ArrayDatum(byteSize, buf, false));
               }
             }
             break;
@@ -1033,7 +1068,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
           case kSMALLINT: {
             for (size_t i = 0; i < dataSize; i++) {
               if (col.nulls[i]) {
-                addArray(ArrayDatum(0, NULL, true));
+                addArray(NullArray(cd->columnType));
               } else {
                 size_t len = col.data.arr_col[i].data.int_col.size();
                 size_t byteSize = len * sizeof(int16_t);
@@ -1044,7 +1079,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
                       static_cast<int16_t>(col.data.arr_col[i].data.int_col[j]);
                   p += sizeof(int16_t);
                 }
-                addArray(ArrayDatum(byteSize, buf, len == 0));
+                addArray(ArrayDatum(byteSize, buf, false));
               }
             }
             break;
@@ -1052,7 +1087,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
           case kINT: {
             for (size_t i = 0; i < dataSize; i++) {
               if (col.nulls[i]) {
-                addArray(ArrayDatum(0, NULL, true));
+                addArray(NullArray(cd->columnType));
               } else {
                 size_t len = col.data.arr_col[i].data.int_col.size();
                 size_t byteSize = len * sizeof(int32_t);
@@ -1063,7 +1098,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
                       static_cast<int32_t>(col.data.arr_col[i].data.int_col[j]);
                   p += sizeof(int32_t);
                 }
-                addArray(ArrayDatum(byteSize, buf, len == 0));
+                addArray(ArrayDatum(byteSize, buf, false));
               }
             }
             break;
@@ -1073,7 +1108,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
           case kDECIMAL: {
             for (size_t i = 0; i < dataSize; i++) {
               if (col.nulls[i]) {
-                addArray(ArrayDatum(0, NULL, true));
+                addArray(NullArray(cd->columnType));
               } else {
                 size_t len = col.data.arr_col[i].data.int_col.size();
                 size_t byteSize = len * sizeof(int64_t);
@@ -1084,7 +1119,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
                       static_cast<int64_t>(col.data.arr_col[j].data.int_col[j]);
                   p += sizeof(int64_t);
                 }
-                addArray(ArrayDatum(byteSize, buf, len == 0));
+                addArray(ArrayDatum(byteSize, buf, false));
               }
             }
             break;
@@ -1092,7 +1127,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
           case kFLOAT: {
             for (size_t i = 0; i < dataSize; i++) {
               if (col.nulls[i]) {
-                addArray(ArrayDatum(0, NULL, true));
+                addArray(NullArray(cd->columnType));
               } else {
                 size_t len = col.data.arr_col[i].data.real_col.size();
                 size_t byteSize = len * sizeof(float);
@@ -1102,7 +1137,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
                   *(float*)p = static_cast<float>(col.data.arr_col[i].data.real_col[j]);
                   p += sizeof(float);
                 }
-                addArray(ArrayDatum(byteSize, buf, len == 0));
+                addArray(ArrayDatum(byteSize, buf, false));
               }
             }
             break;
@@ -1110,7 +1145,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
           case kDOUBLE: {
             for (size_t i = 0; i < dataSize; i++) {
               if (col.nulls[i]) {
-                addArray(ArrayDatum(0, NULL, true));
+                addArray(NullArray(cd->columnType));
               } else {
                 size_t len = col.data.arr_col[i].data.real_col.size();
                 size_t byteSize = len * sizeof(double);
@@ -1120,7 +1155,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
                   *(double*)p = static_cast<double>(col.data.arr_col[i].data.real_col[j]);
                   p += sizeof(double);
                 }
-                addArray(ArrayDatum(byteSize, buf, len == 0));
+                addArray(ArrayDatum(byteSize, buf, false));
               }
             }
             break;
@@ -1130,7 +1165,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
           case kDATE: {
             for (size_t i = 0; i < dataSize; i++) {
               if (col.nulls[i]) {
-                addArray(ArrayDatum(0, NULL, true));
+                addArray(NullArray(cd->columnType));
               } else {
                 size_t len = col.data.arr_col[i].data.int_col.size();
                 size_t byteWidth = sizeof(int64_t);
@@ -1142,7 +1177,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
                       static_cast<int64_t>(col.data.arr_col[i].data.int_col[j]);
                   p += sizeof(int64_t);
                 }
-                addArray(ArrayDatum(byteSize, buf, len == 0));
+                addArray(ArrayDatum(byteSize, buf, false));
               }
             }
             break;
@@ -1276,7 +1311,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         if (!is_null) {
           addArray(TDatumToArrayDatum(datum, cd->columnType));
         } else {
-          addArray(ArrayDatum(0, NULL, true));
+          addArray(NullArray(cd->columnType));
         }
       }
       break;
@@ -1654,7 +1689,15 @@ static ImportStatus import_thread_delimited(
               // not geo
 
               // store the string (possibly null)
-              bool is_null = (row[import_idx] == copy_params.null_str);
+              bool is_null =
+                  (row[import_idx] == copy_params.null_str || row[import_idx] == "NULL");
+              // Note: default copy_params.null_str is "\N", but everyone uses "NULL".
+              // So initially nullness may be missed and not passed to add_value,
+              // which then might also check and still decide it's actually a NULL, e.g.
+              // if kINT doesn't start with a digit or a '-' then it's considered NULL.
+              // So "NULL" is not recognized as NULL but then it's not recognized as
+              // a valid kINT, so it's a NULL after all.
+              // Checking for "NULL" here too, as a widely accepted notation for NULL.
               if (!cd->columnType.is_string() && row[import_idx].empty()) {
                 is_null = true;
               }
