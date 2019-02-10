@@ -76,8 +76,6 @@ class FixedWidthReal : public Decoder {
   const bool is_double_;
 };
 
-#endif  // QUERYENGINE_CODEC_H
-
 class FixedWidthSmallDate : public Decoder {
  public:
   FixedWidthSmallDate(const size_t byte_width);
@@ -90,3 +88,5 @@ class FixedWidthSmallDate : public Decoder {
   const int32_t null_val_;
   static constexpr int64_t ret_null_val_ = NULL_BIGINT;
 };
+
+#endif  // QUERYENGINE_CODEC_H
