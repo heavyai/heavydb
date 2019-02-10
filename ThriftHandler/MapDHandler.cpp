@@ -504,24 +504,34 @@ void MapDHandler::value_to_thrift_column(const TargetValue& tv,
                                          const SQLTypeInfo& ti,
                                          TColumn& column) {
   if (ti.is_array()) {
-    const auto list_tv = boost::get<std::vector<ScalarTargetValue>>(&tv);
-    CHECK(list_tv);
+    const auto array_tv = boost::get<ArrayTargetValue>(&tv);
+    const auto null_array_tv = boost::get<NullArrayTargetValue>(&tv);
     TColumn tColumn;
-    for (const auto& elem_tv : *list_tv) {
-      value_to_thrift_column(elem_tv, ti.get_elem_type(), tColumn);
+    if (array_tv) {
+      CHECK(!null_array_tv);
+      for (const auto& elem_tv : *array_tv) {
+        value_to_thrift_column(elem_tv, ti.get_elem_type(), tColumn);
+      }
     }
     column.data.arr_col.push_back(tColumn);
-    column.nulls.push_back(list_tv->size() == 0 && !ti.get_notnull());
+    column.nulls.push_back(null_array_tv && !ti.get_notnull());
   } else if (ti.is_geometry()) {
-    const auto list_tv = boost::get<std::vector<ScalarTargetValue>>(&tv);
-    if (list_tv) {
+    const auto array_tv = boost::get<ArrayTargetValue>(&tv);
+    const auto null_array_tv = boost::get<NullArrayTargetValue>(&tv);
+    if (array_tv) {
+      CHECK(!null_array_tv);
       auto elem_type = SQLTypeInfo(kDOUBLE, false);
       TColumn tColumn;
-      for (const auto& elem_tv : *list_tv) {
+      for (const auto& elem_tv : *array_tv) {
         value_to_thrift_column(elem_tv, elem_type, tColumn);
       }
       column.data.arr_col.push_back(tColumn);
-      column.nulls.push_back(list_tv->size() == 0 && !ti.get_notnull());
+      column.nulls.push_back(false);
+    } else if (null_array_tv) {
+      CHECK(!array_tv);
+      TColumn tColumn;
+      column.data.arr_col.push_back(tColumn);
+      column.nulls.push_back(!ti.get_notnull());
     } else {
       const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
       CHECK(scalar_tv);
@@ -557,7 +567,7 @@ void MapDHandler::value_to_thrift_column(const TargetValue& tv,
           column.nulls.push_back(data == NULL_BOOLEAN && !ti.get_notnull());
           break;
         case kTINYINT:
-          column.nulls.push_back(data == NULL_TINYINT);
+          column.nulls.push_back(data == NULL_TINYINT && !ti.get_notnull());
           break;
         case kSMALLINT:
           column.nulls.push_back(data == NULL_SMALLINT && !ti.get_notnull());
@@ -614,14 +624,20 @@ TDatum MapDHandler::value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti
   TDatum datum;
   const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
   if (!scalar_tv) {
-    const auto list_tv = boost::get<std::vector<ScalarTargetValue>>(&tv);
-    CHECK(list_tv);
     CHECK(ti.is_array());
-    for (const auto& elem_tv : *list_tv) {
-      const auto scalar_col_val = value_to_thrift(elem_tv, ti.get_elem_type());
-      datum.val.arr_val.push_back(scalar_col_val);
+    const auto array_tv = boost::get<ArrayTargetValue>(&tv);
+    if (array_tv) {
+      for (const auto& elem_tv : *array_tv) {
+        const auto scalar_col_val = value_to_thrift(elem_tv, ti.get_elem_type());
+        datum.val.arr_val.push_back(scalar_col_val);
+      }
+      // Datum is not null, at worst it's an empty array Datum
+      datum.is_null = false;
+    } else {
+      const auto null_array_tv = boost::get<NullArrayTargetValue>(&tv);
+      CHECK(null_array_tv);
+      datum.is_null = true;
     }
-    datum.is_null = datum.val.arr_val.empty();
     return datum;
   }
   if (boost::get<int64_t>(scalar_tv)) {

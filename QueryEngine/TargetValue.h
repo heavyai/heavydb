@@ -130,13 +130,18 @@ struct GeoMultiPolyTargetValue {
       , poly_rings(std::make_shared<std::vector<int32_t>>(poly_rings)) {}
 };
 
+struct NullArrayTargetValue {
+  NullArrayTargetValue() {}
+};
+
 using NullableString = boost::variant<std::string, void*>;
 using ScalarTargetValue = boost::variant<int64_t, double, float, NullableString>;
+using ArrayTargetValue = std::vector<ScalarTargetValue>;
 using GeoTargetValue = boost::variant<GeoPointTargetValue,
                                       GeoLineStringTargetValue,
                                       GeoPolyTargetValue,
                                       GeoMultiPolyTargetValue>;
-using TargetValue =
-    boost::variant<ScalarTargetValue, std::vector<ScalarTargetValue>, GeoTargetValue>;
+using TargetValue = boost::
+    variant<ScalarTargetValue, ArrayTargetValue, NullArrayTargetValue, GeoTargetValue>;
 
 #endif  // QUERYENGINE_TARGETVALUE_H

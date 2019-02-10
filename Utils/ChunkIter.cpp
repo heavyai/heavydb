@@ -21,6 +21,8 @@
 
 #include "ChunkIter.h"
 
+#include <cstdlib>
+
 DEVICE static void decompress(const SQLTypeInfo& ti,
                               int8_t* compressed,
                               VarlenDatum* result,
@@ -233,11 +235,20 @@ DEVICE void ChunkIter_get_nth(ChunkIter* it, int n, ArrayDatum* result, bool* is
     result->pointer = current_pos;
     result->is_null = it->type_info.is_null(result->pointer);
   } else {
-    int8_t* current_pos = it->start_pos + n * sizeof(StringOffsetT);
-    StringOffsetT offset = *(StringOffsetT*)current_pos;
-    result->length = static_cast<size_t>(*((StringOffsetT*)current_pos + 1) - offset);
-    result->pointer = it->second_buf + offset;
-    // @TODO(wei) treat zero length as null for now
-    result->is_null = (result->length == 0);
+    int8_t* current_pos = it->start_pos + n * sizeof(ArrayOffsetT);
+    int8_t* next_pos = current_pos + sizeof(ArrayOffsetT);
+    ArrayOffsetT offset = *(ArrayOffsetT*)current_pos;
+    ArrayOffsetT next_offset = *(ArrayOffsetT*)next_pos;
+    if (next_offset < 0) {  // Encoded NULL array
+      assert(std::abs(offset) == std::abs(next_offset));
+      result->length = 0;
+      result->pointer = NULL;
+      result->is_null = true;
+    } else {
+      offset = std::abs(offset);  // Previous array may have been NULL
+      result->length = static_cast<size_t>(next_offset - offset);
+      result->pointer = it->second_buf + offset;
+      result->is_null = false;
+    }
   }
 }

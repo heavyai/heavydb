@@ -836,7 +836,7 @@ TargetValue build_array_target_value(
   for (size_t i = 0; i < num_elems; ++i) {
     values.push_back(make_scalar_tv<T>(buff_elems[i]));
   }
-  return TargetValue(values);
+  return ArrayTargetValue(values);
 }
 
 TargetValue build_string_array_target_value(
@@ -871,7 +871,7 @@ TargetValue build_string_array_target_value(
       values.emplace_back(static_cast<int64_t>(buff[i]));
     }
   }
-  return values;
+  return ArrayTargetValue(values);
 }
 
 TargetValue build_array_target_value(const SQLTypeInfo& array_ti,
@@ -1020,7 +1020,7 @@ struct GeoTargetValueBuilder {
     switch (return_type) {
       case ResultSet::GeoReturnType::GeoTargetValue: {
         if (ad_arr[0]->is_null) {
-          return TargetValue(std::vector<ScalarTargetValue>{});
+          return NullArrayTargetValue();
         }
         return GeoReturnTypeTraits<ResultSet::GeoReturnType::GeoTargetValue,
                                    GEO_SOURCE_TYPE>::GeoSerializerType::serialize(geo_ti,
@@ -1180,11 +1180,10 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
                           &is_end);
         CHECK(!is_end);
         if (ad.is_null) {
-          std::vector<ScalarTargetValue> empty_array;
-          return TargetValue(empty_array);
+          return NullArrayTargetValue();
         }
         CHECK(ad.pointer);
-        CHECK_GT(ad.length, 0);
+        CHECK_GE(ad.length, 0);
         return build_array_target_value(target_info.sql_type,
                                         ad.pointer,
                                         ad.length,
@@ -1195,7 +1194,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
     }
   }
   if (!varlen_ptr) {
-    return TargetValue(nullptr);
+    return NullArrayTargetValue();
   }
   auto length = read_int_from_buff(ptr2, compact_sz2);
   if (target_info.sql_type.is_array()) {

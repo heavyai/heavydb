@@ -53,6 +53,8 @@ struct TargetValueConverter {
   const ColumnDescriptor* column_descriptor_;
 
   boost_variant_accessor<ScalarTargetValue> SCALAR_TARGET_VALUE_ACCESSOR;
+  boost_variant_accessor<ArrayTargetValue> ARRAY_TARGET_VALUE_ACCESSOR;
+  boost_variant_accessor<NullArrayTargetValue> NULL_ARRAY_TARGET_VALUE_ACCESSOR;
   boost_variant_accessor<GeoTargetValue> GEO_TARGET_VALUE_ACCESSOR;
 
   boost_variant_accessor<NullableString> NULLABLE_STRING_ACCESSOR;

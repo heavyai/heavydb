@@ -506,7 +506,7 @@ TDatum columnar_val_to_datum(const TColumn& col,
   if (col_type.is_array) {
     auto elem_type = col_type;
     elem_type.is_array = false;
-    datum.is_null = false;
+    datum.is_null = col.nulls[row_idx];
     CHECK_LT(row_idx, col.data.arr_col.size());
     const auto& arr_col = col.data.arr_col[row_idx];
     for (size_t elem_idx = 0; elem_idx < arr_col.nulls.size(); ++elem_idx) {

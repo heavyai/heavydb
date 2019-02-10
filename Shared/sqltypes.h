@@ -100,6 +100,12 @@ struct HostArrayDatum : public VarlenDatum {
   HostArrayDatum(size_t const l, int8_t* p, CUSTOM_DELETER custom_deleter)
       : VarlenDatum(l, p, 0 == l), data_ptr(p, custom_deleter) {}
 
+  template <typename CUSTOM_DELETER,
+            typename = std::enable_if_t<
+                std::is_void<std::result_of_t<CUSTOM_DELETER(int8_t*)> >::value> >
+  HostArrayDatum(size_t const l, int8_t* p, bool const n, CUSTOM_DELETER custom_deleter)
+      : VarlenDatum(l, p, n), data_ptr(p, custom_deleter) {}
+
   ManagedPtr data_ptr;
 };
 
@@ -795,5 +801,6 @@ constexpr inline int64_t max_valid_int_value() {
 #include "InlineNullValues.h"
 
 typedef int32_t StringOffsetT;
+typedef int32_t ArrayOffsetT;
 
 #endif  // SQLTYPES_H

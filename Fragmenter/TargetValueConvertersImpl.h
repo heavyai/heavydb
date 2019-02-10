@@ -243,7 +243,8 @@ struct ArrayValueConverter : public TargetValueConverter {
   SQLTypeInfo element_type_info_;
   bool do_check_null_;
 
-  boost_variant_accessor<std::vector<ScalarTargetValue>> SCALAR_VECTOR_ACCESSOR;
+  boost_variant_accessor<ArrayTargetValue> ARRAY_VALUE_ACCESSOR;
+  boost_variant_accessor<NullArrayTargetValue> NULL_ARRAY_VALUE_ACCESSOR;
 
   ArrayValueConverter(const ColumnDescriptor* cd,
                       size_t num_rows,
@@ -266,25 +267,37 @@ struct ArrayValueConverter : public TargetValueConverter {
   }
 
   void convertToColumnarFormat(size_t row, const TargetValue* value) override {
-    const auto scalarValueVector =
-        checked_get<std::vector<ScalarTargetValue>>(row, value, SCALAR_VECTOR_ACCESSOR);
+    const auto arrayValue =
+        checked_get<ArrayTargetValue>(row, value, ARRAY_VALUE_ACCESSOR);
+    const auto nullArrayValue =
+        checked_get<NullArrayTargetValue>(row, value, NULL_ARRAY_VALUE_ACCESSOR);
 
-    if (scalarValueVector->size()) {
-      element_converter_->allocateColumnarData(scalarValueVector->size());
+    if (arrayValue) {
+      CHECK(!nullArrayValue);
+      bool is_null = false;
+      if (arrayValue->size()) {
+        element_converter_->allocateColumnarData(arrayValue->size());
 
-      int elementIndex = 0;
-      for (const auto& scalarValue : *scalarValueVector) {
-        element_converter_->convertToColumnarFormat(elementIndex++, &scalarValue);
+        int elementIndex = 0;
+        for (const auto& scalarValue : *arrayValue) {
+          element_converter_->convertToColumnarFormat(elementIndex++, &scalarValue);
+        }
+
+        typename ELEMENT_CONVERTER::ColumnDataPtr ptr =
+            element_converter_->takeColumnarData();
+        int8_t* arrayData = reinterpret_cast<int8_t*>(ptr.release());
+        (*column_data_)[row] = ArrayDatum(
+          arrayValue->size() * element_type_info_.get_size(), arrayData, is_null);
+      } else {
+        // Empty, not NULL
+        (*column_data_)[row] = ArrayDatum(0, nullptr, is_null, DoNothingDeleter());
       }
-
-      typename ELEMENT_CONVERTER::ColumnDataPtr ptr =
-          element_converter_->takeColumnarData();
-      int8_t* arrayData = reinterpret_cast<int8_t*>(ptr.release());
-      (*column_data_)[row] = ArrayDatum(
-          scalarValueVector->size() * element_type_info_.get_size(), arrayData, false);
     } else {
-      bool is_null = do_check_null_;
-      (*column_data_)[row] = ArrayDatum(0, nullptr, DoNothingDeleter());
+      CHECK(nullArrayValue);
+      // TODO: what does it mean if do_check_null_ is set to false and we get a NULL?
+      // CHECK(do_check_null_);  // May need to check
+      bool is_null = true;  // do_check_null_;
+      (*column_data_)[row] = ArrayDatum(0, nullptr, is_null, DoNothingDeleter());
       (*column_data_)[row].is_null = is_null;
     }
   }

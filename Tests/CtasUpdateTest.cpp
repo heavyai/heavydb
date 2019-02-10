@@ -364,9 +364,9 @@ class ArrayColumnDescriptor : public TestColumnDescriptor {
   bool check_column_value(const int row,
                           const SQLTypeInfo& type,
                           const TargetValue* value) override {
-    auto scalarValueVector = boost::get<std::vector<ScalarTargetValue>>(value);
+    auto arrayValue = boost::get<ArrayTargetValue>(value);
 
-    if (nullptr == scalarValueVector) {
+    if (nullptr == arrayValue) {
       return false;
     }
 
@@ -378,7 +378,7 @@ class ArrayColumnDescriptor : public TestColumnDescriptor {
       elementIndex += row;
     }
 
-    for (auto& scalarValue : *scalarValueVector) {
+    for (auto& scalarValue : *arrayValue) {
       if (!element_descriptor->check_column_value(elementIndex, subtype, &scalarValue)) {
         return false;
       }

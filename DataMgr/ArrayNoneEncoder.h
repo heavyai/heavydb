@@ -76,29 +76,47 @@ class ArrayNoneEncoder : public Encoder {
                            const size_t numAppendElems,
                            const bool replicating) {
     assert(index_buf != nullptr);  // index_buf must be set before this.
-    size_t index_size = numAppendElems * sizeof(StringOffsetT);
+    size_t index_size = numAppendElems * sizeof(ArrayOffsetT);
     if (num_elems_ == 0)
-      index_size += sizeof(StringOffsetT);  // plus one for the initial offset of 0.
+      index_size += sizeof(ArrayOffsetT);  // plus one for the initial offset
     index_buf->reserve(index_size);
-    StringOffsetT offset = 0;
+
+    bool first_elem_is_null = false;
+    ArrayOffsetT initial_offset = 0;
     if (num_elems_ == 0) {
-      index_buf->append((int8_t*)&offset,
-                        sizeof(StringOffsetT));  // write the inital 0 offset
-      last_offset = 0;
+      // If the very first ArrayDatum is NULL, initial offset will be set to 4
+      // so we could negate it and write it out to index buffer to convey NULLness
+      if ((*srcData)[0].is_null) {
+        initial_offset = 4;
+        first_elem_is_null = true;
+      }
+      index_buf->append((int8_t*)&initial_offset,
+                        sizeof(ArrayOffsetT));  // write the inital offset
+      last_offset = initial_offset;
     } else {
-      if (last_offset < 0) {
-        // need to read the last offset from buffer/disk
+      // Valid last_offset is never negative
+      if (last_offset == -1) {
+        // Invalid last offset, need to read a valid last offset from buffer/disk
         index_buf->read((int8_t*)&last_offset,
-                        sizeof(StringOffsetT),
-                        index_buf->size() - sizeof(StringOffsetT),
+                        sizeof(ArrayOffsetT),
+                        index_buf->size() - sizeof(ArrayOffsetT),
                         Data_Namespace::CPU_LEVEL);
-        assert(last_offset >= 0);
+        assert(last_offset != -1);
+        // If the loaded offset is negative it means the last value was a NULL array,
+        // convert to a valid last offset
+        if (last_offset < 0) {
+          last_offset = -last_offset;
+        }
       }
     }
-    size_t data_size = 0;
+    // Need to start data from 4 byte offset if first array encoded is a NULL array
+    size_t data_size = (first_elem_is_null) ? 4 : 0;
     for (size_t n = start_idx; n < start_idx + numAppendElems; n++) {
-      size_t len = (*srcData)[replicating ? 0 : n].length;
-      data_size += len;
+      // NULL arrays don't take any space so don't add to the data size
+      if ((*srcData)[replicating ? 0 : n].is_null) {
+        continue;
+      }
+      data_size += (*srcData)[replicating ? 0 : n].length;
     }
     buffer_->reserve(data_size);
 
@@ -107,22 +125,33 @@ class ArrayNoneEncoder : public Encoder {
     auto inbuf = new int8_t[inbuf_size];
     std::unique_ptr<int8_t[]> gc_inbuf(inbuf);
     for (size_t num_appended = 0; num_appended < numAppendElems;) {
-      StringOffsetT* p = (StringOffsetT*)inbuf;
+      ArrayOffsetT* p = (ArrayOffsetT*)inbuf;
       size_t i;
-      for (i = 0; num_appended < numAppendElems && i < inbuf_size / sizeof(StringOffsetT);
+      for (i = 0; num_appended < numAppendElems && i < inbuf_size / sizeof(ArrayOffsetT);
            i++, num_appended++) {
         p[i] =
             last_offset + (*srcData)[replicating ? 0 : num_appended + start_idx].length;
         last_offset = p[i];
+        if ((*srcData)[replicating ? 0 : num_appended + start_idx].is_null) {
+          // Record array NULLness in the index buffer
+          p[i] = -p[i];
+        }
       }
-      index_buf->append(inbuf, i * sizeof(StringOffsetT));
+      index_buf->append(inbuf, i * sizeof(ArrayOffsetT));
     }
 
+    // Pad buffer_ with 4 bytes if first encoded array is a NULL array
+    if (first_elem_is_null) {
+      buffer_->append(inbuf, 4);
+    }
     for (size_t num_appended = 0; num_appended < numAppendElems;) {
       size_t size = 0;
       for (int i = start_idx + num_appended;
            num_appended < numAppendElems && size < inbuf_size;
            i++, num_appended++) {
+        if ((*srcData)[replicating ? 0 : i].is_null) {
+          continue;  // NULL arrays don't take up any space in the data buffer
+        }
         size_t len = (*srcData)[replicating ? 0 : i].length;
         if (len > inbuf_size) {
           // for large strings, append on its own
@@ -135,9 +164,10 @@ class ArrayNoneEncoder : public Encoder {
         } else if (size + len > inbuf_size)
           break;
         char* dest = (char*)inbuf + size;
-        if (len > 0)
+        if (len > 0) {
           std::memcpy((void*)dest, (void*)(*srcData)[replicating ? 0 : i].pointer, len);
-        size += len;
+          size += len;
+        }
       }
       if (size > 0)
         buffer_->append(inbuf, size);
@@ -215,7 +245,7 @@ class ArrayNoneEncoder : public Encoder {
  private:
   std::mutex EncoderMutex_;
   AbstractBuffer* index_buf;
-  StringOffsetT last_offset;
+  ArrayOffsetT last_offset;
 
   void update_elem_stats(const ArrayDatum& array) {
     if (array.is_null || array.length == 0) {
