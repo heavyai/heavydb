@@ -60,6 +60,10 @@ class ScalarExprVisitor {
     if (char_length) {
       return visitCharLength(char_length);
     }
+    const auto cardinality = dynamic_cast<const Analyzer::CardinalityExpr*>(expr);
+    if (cardinality) {
+      return visitCardinality(cardinality);
+    }
     const auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
     if (like_expr) {
       return visitLikeExpr(like_expr);
@@ -160,6 +164,12 @@ class ScalarExprVisitor {
   virtual T visitCharLength(const Analyzer::CharLengthExpr* char_length) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(char_length->get_arg()));
+    return result;
+  }
+
+  virtual T visitCardinality(const Analyzer::CardinalityExpr* cardinality) const {
+    T result = defaultResult();
+    result = aggregateResult(result, visit(cardinality->get_arg()));
     return result;
   }
 

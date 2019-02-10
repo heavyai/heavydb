@@ -560,6 +560,7 @@ class Executor {
   llvm::Value* codegen(const Analyzer::DatediffExpr*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::DatetruncExpr*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::CharLengthExpr*, const CompilationOptions&);
+  llvm::Value* codegen(const Analyzer::CardinalityExpr*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::LikeExpr*, const CompilationOptions&);
   llvm::Value* codegenDictLike(const std::shared_ptr<Analyzer::Expr> arg,
                                const Analyzer::Constant* pattern,

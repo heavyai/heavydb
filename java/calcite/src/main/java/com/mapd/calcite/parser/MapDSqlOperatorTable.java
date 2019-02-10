@@ -141,6 +141,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new PgDateTrunc());
     opTab.addOperator(new Length());
     opTab.addOperator(new CharLength());
+    opTab.addOperator(new ArrayLength());
     opTab.addOperator(new PgILike());
     opTab.addOperator(new RegexpLike());
     opTab.addOperator(new Likely());
@@ -496,6 +497,23 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
               null,
               null,
               OperandTypes.STRING,
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+    }
+  }
+
+  public static class ArrayLength extends SqlFunction {
+    public ArrayLength() {
+      super("ARRAY_LENGTH",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.ARRAY,
               SqlFunctionCategory.SYSTEM);
     }
 

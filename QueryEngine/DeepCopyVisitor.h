@@ -71,6 +71,10 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
                                               char_length->get_calc_encoded_length());
   }
 
+  RetType visitCardinality(const Analyzer::CardinalityExpr* cardinality) const override {
+    return makeExpr<Analyzer::CardinalityExpr>(visit(cardinality->get_arg()));
+  }
+
   RetType visitLikeExpr(const Analyzer::LikeExpr* like) const override {
     auto escape_expr = like->get_escape_expr();
     return makeExpr<Analyzer::LikeExpr>(visit(like->get_arg()),

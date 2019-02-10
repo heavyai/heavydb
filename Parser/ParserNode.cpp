@@ -437,6 +437,20 @@ std::shared_ptr<Analyzer::Expr> CharLengthExpr::analyze(
   return result;
 }
 
+std::shared_ptr<Analyzer::Expr> CardinalityExpr::analyze(
+    const Catalog_Namespace::Catalog& catalog,
+    Analyzer::Query& query,
+    TlistRefType allow_tlist_ref) const {
+  auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+  if (!arg_expr->get_type_info().is_array()) {
+    throw std::runtime_error(
+        "expression in cardinality clause must be of an array type.");
+  }
+  std::shared_ptr<Analyzer::Expr> result =
+      makeExpr<Analyzer::CardinalityExpr>(arg_expr->decompress());
+  return result;
+}
+
 void LikeExpr::check_like_expr(const std::string& like_str, char escape_char) {
   if (like_str.back() == escape_char) {
     throw std::runtime_error("LIKE pattern must not end with escape character.");
@@ -1682,6 +1696,11 @@ std::string CharLengthExpr::to_string() const {
   } else {
     str = "LENGTH (" + arg->to_string() + ")";
   }
+  return str;
+}
+
+std::string CardinalityExpr::to_string() const {
+  std::string str = "CARDINALITY(" + arg->to_string() + ")";
   return str;
 }
 

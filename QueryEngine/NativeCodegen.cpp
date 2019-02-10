@@ -382,6 +382,7 @@ declare i64 @DateAddHighPrecision(i32, i64, i64, i64);
 declare i64 @DateAddHighPrecisionNullable(i32, i64, i64, i64, i64);
 declare i64 @string_decode(i8*, i64);
 declare i32 @array_size(i8*, i64, i32);
+declare i32 @array_size_nullable(i8*, i64, i32, i32);
 declare i1 @array_is_null(i8*, i64);
 declare i8* @array_buff(i8*, i64);
 declare i8 @array_at_int8_t(i8*, i64, i32);

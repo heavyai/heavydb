@@ -62,6 +62,26 @@ llvm::Value* Executor::codegenArrayAt(const Analyzer::BinOper* array_at,
                        : static_cast<llvm::Value*>(inlineIntNull(elem_ti))});
 }
 
+llvm::Value* Executor::codegen(const Analyzer::CardinalityExpr* expr,
+                               const CompilationOptions& co) {
+  const auto arr_expr = expr->get_arg();
+  const auto& array_ti = arr_expr->get_type_info();
+  CHECK(array_ti.is_array());
+  const auto& elem_ti = array_ti.get_elem_type();
+  auto arr_lv = codegen(arr_expr, true, co);
+  std::string fn_name("array_size");
+
+  std::vector<llvm::Value*> array_size_args{
+      arr_lv.front(), posArg(arr_expr), ll_int(log2_bytes(elem_ti.get_logical_size()))};
+  const bool is_nullable{!arr_expr->get_type_info().get_notnull()};
+  if (is_nullable) {
+    fn_name += "_nullable";
+    array_size_args.push_back(inlineIntNull(expr->get_type_info()));
+  }
+  return cgen_state_->emitExternalCall(
+      fn_name, get_int_type(32, cgen_state_->context_), array_size_args);
+}
+
 std::vector<llvm::Value*> Executor::codegenArrayExpr(
     Analyzer::ArrayExpr const* array_expr,
     CompilationOptions const& co) {

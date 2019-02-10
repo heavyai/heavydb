@@ -1131,6 +1131,33 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLength(
       str_arg->decompress(), rex_function->getName() == std::string("CHAR_LENGTH"));
 }
 
+Analyzer::ExpressionPtr RelAlgTranslator::translateCardinality(
+    const RexFunctionOperator* rex_function) const {
+  const auto ret_ti = rex_function->getType();
+  const auto arg = translateScalarRex(rex_function->getOperand(0));
+  const auto arg_ti = arg->get_type_info();
+  if (!arg_ti.is_array()) {
+    throw std::runtime_error(rex_function->getName() + " expects an array expression.");
+  }
+  if (arg_ti.get_subtype() == kARRAY) {
+    throw std::runtime_error(rex_function->getName() +
+                             " expects one-dimension array expression.");
+  }
+  const auto array_size = arg_ti.get_size();
+  const auto array_elem_size = arg_ti.get_elem_type().get_array_context_logical_size();
+
+  if (array_size > 0) {
+    if (array_elem_size <= 0) {
+      throw std::runtime_error(rex_function->getName() +
+                               ": unexpected array element type.");
+    }
+    // Return size of a fixed length array
+    return makeNumericConstant(ret_ti, array_size / array_elem_size);
+  }
+  // Size will be calculated at runtime
+  return makeExpr<Analyzer::CardinalityExpr>(arg->decompress());
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateItem(
     const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(2), rex_function->size());
@@ -1297,6 +1324,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   if (rex_function->getName() == std::string("LENGTH") ||
       rex_function->getName() == std::string("CHAR_LENGTH")) {
     return translateLength(rex_function);
+  }
+  if (rex_function->getName() == std::string("CARDINALITY") ||
+      rex_function->getName() == std::string("ARRAY_LENGTH")) {
+    return translateCardinality(rex_function);
   }
   if (rex_function->getName() == std::string("ITEM")) {
     return translateItem(rex_function);

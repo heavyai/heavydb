@@ -128,6 +128,10 @@ std::shared_ptr<Analyzer::Expr> CharLengthExpr::deep_copy() const {
   return makeExpr<CharLengthExpr>(arg->deep_copy(), calc_encoded_length);
 }
 
+std::shared_ptr<Analyzer::Expr> CardinalityExpr::deep_copy() const {
+  return makeExpr<CardinalityExpr>(arg->deep_copy());
+}
+
 std::shared_ptr<Analyzer::Expr> LikeExpr::deep_copy() const {
   return makeExpr<LikeExpr>(arg->deep_copy(),
                             like_expr->deep_copy(),
@@ -1162,6 +1166,9 @@ void Constant::set_null_value() {
     case kNULLT:
       constval.bigintval = 0;
       break;
+    case kARRAY:
+      constval.arrayval = nullptr;
+      break;
     default:
       CHECK(false);
   }
@@ -1484,6 +1491,20 @@ InIntegerSet::InIntegerSet(const std::shared_ptr<const Analyzer::Expr> a,
 void CharLengthExpr::group_predicates(std::list<const Expr*>& scan_predicates,
                                       std::list<const Expr*>& join_predicates,
                                       std::list<const Expr*>& const_predicates) const {
+  std::set<int> rte_idx_set;
+  arg->collect_rte_idx(rte_idx_set);
+  if (rte_idx_set.size() > 1) {
+    join_predicates.push_back(this);
+  } else if (rte_idx_set.size() == 1) {
+    scan_predicates.push_back(this);
+  } else {
+    const_predicates.push_back(this);
+  }
+}
+
+void CardinalityExpr::group_predicates(std::list<const Expr*>& scan_predicates,
+                                       std::list<const Expr*>& join_predicates,
+                                       std::list<const Expr*>& const_predicates) const {
   std::set<int> rte_idx_set;
   arg->collect_rte_idx(rte_idx_set);
   if (rte_idx_set.size() > 1) {
@@ -2020,6 +2041,17 @@ bool CharLengthExpr::operator==(const Expr& rhs) const {
   return true;
 }
 
+bool CardinalityExpr::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(CardinalityExpr)) {
+    return false;
+  }
+  const CardinalityExpr& rhs_ca = dynamic_cast<const CardinalityExpr&>(rhs);
+  if (!(*arg == *rhs_ca.get_arg())) {
+    return false;
+  }
+  return true;
+}
+
 bool LikeExpr::operator==(const Expr& rhs) const {
   if (typeid(rhs) != typeid(LikeExpr)) {
     return false;
@@ -2379,6 +2411,13 @@ std::string CharLengthExpr::toString() const {
   return str;
 }
 
+std::string CardinalityExpr::toString() const {
+  std::string str{"CARDINALITY("};
+  str += arg->toString();
+  str += ") ";
+  return str;
+}
+
 std::string LikeExpr::toString() const {
   std::string str{"(LIKE "};
   str += arg->toString();
@@ -2569,6 +2608,15 @@ void InValues::find_expr(bool (*f)(const Expr*),
 
 void CharLengthExpr::find_expr(bool (*f)(const Expr*),
                                std::list<const Expr*>& expr_list) const {
+  if (f(this)) {
+    add_unique(expr_list);
+    return;
+  }
+  arg->find_expr(f, expr_list);
+}
+
+void CardinalityExpr::find_expr(bool (*f)(const Expr*),
+                                std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
     return;
