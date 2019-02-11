@@ -240,12 +240,8 @@ void apply_first_value_to_partition(const int32_t* original_indices,
 void apply_last_value_to_partition(const int32_t* original_indices,
                                    int64_t* output_for_partition_buff,
                                    const size_t partition_size) {
-  CHECK(partition_size);
-  const auto last_value_idx =
-      original_indices[output_for_partition_buff[partition_size - 1]];
-  std::fill(output_for_partition_buff,
-            output_for_partition_buff + partition_size,
-            last_value_idx);
+  std::copy(
+      original_indices, original_indices + partition_size, output_for_partition_buff);
 }
 
 void index_to_multiplicities(
