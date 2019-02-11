@@ -1194,7 +1194,10 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
     }
   }
   if (!varlen_ptr) {
-    return NullArrayTargetValue();
+    if (target_info.sql_type.is_array()) {
+      return NullArrayTargetValue();
+    }
+    return TargetValue(nullptr);
   }
   auto length = read_int_from_buff(ptr2, compact_sz2);
   if (target_info.sql_type.is_array()) {
