@@ -387,8 +387,8 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
     }
     return false;
   }
-  inline void set_type(SQLTypes t) { type = t; }
-  inline void set_subtype(SQLTypes st) { subtype = st; }
+  HOST DEVICE inline void set_type(SQLTypes t) { type = t; }
+  HOST DEVICE inline void set_subtype(SQLTypes st) { subtype = st; }
   inline void set_dimension(int d) { dimension = d; }
   inline void set_precision(int d) { dimension = d; }
   inline void set_input_srid(int d) { dimension = d; }

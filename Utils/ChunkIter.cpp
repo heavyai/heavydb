@@ -233,7 +233,9 @@ DEVICE void ChunkIter_get_nth(ChunkIter* it, int n, ArrayDatum* result, bool* is
     int8_t* current_pos = it->start_pos + n * it->skip_size;
     result->length = static_cast<size_t>(it->skip_size);
     result->pointer = current_pos;
-    SQLTypeInfo elem_ti = it->type_info.get_elem_type();
+    SQLTypeInfo elem_ti{it->type_info};
+    elem_ti.set_type(it->type_info.get_subtype());
+    elem_ti.set_subtype(kNULLT);
     bool is_null = true;
     for (auto p = result->pointer; p < result->pointer + result->length;
          p += elem_ti.get_size()) {
