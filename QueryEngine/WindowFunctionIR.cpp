@@ -116,15 +116,16 @@ llvm::Value* Executor::codegenWindowAggregate(
   } else {
     window_func_init_val = window_func_null_val;
   }
+  const auto pi32_type =
+      llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0);
   switch (window_func_ti.get_type()) {
     case kDOUBLE: {
       cgen_state_->emitCall("agg_id_double", {aggregate_state, window_func_init_val});
       break;
     }
     case kFLOAT: {
-      aggregate_state = cgen_state_->ir_builder_.CreateBitCast(
-          aggregate_state,
-          llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0));
+      aggregate_state =
+          cgen_state_->ir_builder_.CreateBitCast(aggregate_state, pi32_type);
       cgen_state_->emitCall("agg_id_float", {aggregate_state, window_func_init_val});
       break;
     }
@@ -186,19 +187,30 @@ llvm::Value* Executor::codegenWindowAggregate(
     }
     default: { break; }
   }
+  llvm::Value* multiplicity_lv = nullptr;
   if (args.empty()) {
     cgen_state_->emitCall(agg_name, {aggregate_state, crt_val});
   } else {
-    cgen_state_->emitCall(agg_name + "_skip_val",
-                          {aggregate_state, crt_val, window_func_null_val});
+    agg_name += "_skip_val";
+    if (window_function_requires_multiplicity(window_func->getKind())) {
+      const auto multiplicities_lv = cgen_state_->ir_builder_.CreateIntToPtr(
+          ll_int(reinterpret_cast<const uint64_t>(window_func_context->multiplicities())),
+          pi32_type);
+      multiplicity_lv = cgen_state_->ir_builder_.CreateLoad(
+          cgen_state_->ir_builder_.CreateGEP(multiplicities_lv, posArg(nullptr)));
+      agg_name += "_rep";
+    }
+    std::vector<llvm::Value*> args{aggregate_state, crt_val, window_func_null_val};
+    if (window_function_requires_multiplicity(window_func->getKind())) {
+      args.push_back(multiplicity_lv);
+    }
+    cgen_state_->emitCall(agg_name, args);
   }
   if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
     const auto aggregate_state_count_i64 = ll_int(
         reinterpret_cast<const int64_t>(window_func_context->aggregateStateCount()));
     const auto aggregate_state_type =
-        window_func_ti.get_type() == kFLOAT
-            ? llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0)
-            : pi64_type;
+        window_func_ti.get_type() == kFLOAT ? pi32_type : pi64_type;
     auto aggregate_state_count = cgen_state_->ir_builder_.CreateIntToPtr(
         aggregate_state_count_i64, aggregate_state_type);
     std::string agg_count_func_name = "agg_count";
@@ -213,9 +225,10 @@ llvm::Value* Executor::codegenWindowAggregate(
       }
       default: { break; }
     }
-    agg_count_func_name += "_skip_val";
-    cgen_state_->emitCall(agg_count_func_name,
-                          {aggregate_state_count, crt_val, window_func_null_val});
+    agg_count_func_name += "_skip_val_rep";
+    cgen_state_->emitCall(
+        agg_count_func_name,
+        {aggregate_state_count, crt_val, window_func_null_val, multiplicity_lv});
     const auto double_null_lv = inlineFpNull(SQLTypeInfo(kDOUBLE));
     switch (window_func_ti.get_type()) {
       case kFLOAT: {

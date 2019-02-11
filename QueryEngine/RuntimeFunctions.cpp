@@ -1113,6 +1113,60 @@ extern "C" NEVER_INLINE void linear_probabilistic_count(uint8_t* bitmap,
   reinterpret_cast<uint32_t*>(bitmap)[word_idx] |= 1 << bit_idx;
 }
 
+extern "C" ALWAYS_INLINE void agg_sum_skip_val_rep(int64_t* agg,
+                                                   const int64_t val,
+                                                   const int64_t skip_val,
+                                                   const uint32_t rep) {
+  for (uint32_t i = 0; i < rep; ++i) {
+    agg_sum_skip_val(agg, val, skip_val);
+  }
+}
+
+extern "C" ALWAYS_INLINE void agg_sum_double_skip_val_rep(int64_t* agg,
+                                                          const double val,
+                                                          const double skip_val,
+                                                          const uint32_t rep) {
+  for (uint32_t i = 0; i < rep; ++i) {
+    agg_sum_double_skip_val(agg, val, skip_val);
+  }
+}
+
+extern "C" ALWAYS_INLINE void agg_sum_float_skip_val_rep(int32_t* agg,
+                                                         const float val,
+                                                         const float skip_val,
+                                                         const uint32_t rep) {
+  for (uint32_t i = 0; i < rep; ++i) {
+    agg_sum_float_skip_val(agg, val, skip_val);
+  }
+}
+
+extern "C" ALWAYS_INLINE void agg_count_skip_val_rep(uint64_t* agg,
+                                                     const int64_t val,
+                                                     const int64_t skip_val,
+                                                     const uint32_t rep) {
+  for (uint32_t i = 0; i < rep; ++i) {
+    agg_count_skip_val(agg, val, skip_val);
+  }
+}
+
+extern "C" ALWAYS_INLINE void agg_count_double_skip_val_rep(uint64_t* agg,
+                                                            const double val,
+                                                            const double skip_val,
+                                                            const uint32_t rep) {
+  for (uint32_t i = 0; i < rep; ++i) {
+    agg_count_double_skip_val(agg, val, skip_val);
+  }
+}
+
+extern "C" ALWAYS_INLINE void agg_count_float_skip_val_rep(uint32_t* agg,
+                                                           const float val,
+                                                           const float skip_val,
+                                                           const uint32_t rep) {
+  for (uint32_t i = 0; i < rep; ++i) {
+    agg_count_float_skip_val(agg, val, skip_val);
+  }
+}
+
 extern "C" __attribute__((noinline)) void query_stub_hoisted_literals(
     const int8_t** col_buffers,
     const int8_t* literals,

@@ -39,6 +39,7 @@ WindowFunctionContext::WindowFunctionContext(
 WindowFunctionContext::~WindowFunctionContext() {
   free(output_);
   free(partition_start_);
+  decltype(multiplicities_)().swap(multiplicities_);
 }
 
 void WindowFunctionContext::addOrderColumn(
@@ -247,6 +248,25 @@ void apply_last_value_to_partition(const int32_t* original_indices,
             last_value_idx);
 }
 
+void index_to_multiplicities(
+    unsigned* partition_multiplicities,
+    const int64_t* index,
+    const size_t index_size,
+    const std::function<bool(const int64_t lhs, const int64_t rhs)>& comparator) {
+  size_t multiplicity = 0;
+  size_t sequence_start_idx = 0;
+  for (size_t i = 0; i < index_size; ++i) {
+    if (advance_current_rank(comparator, index, i)) {
+      partition_multiplicities[sequence_start_idx] = multiplicity;
+      multiplicity = 1;
+      sequence_start_idx = i;
+    } else {
+      ++multiplicity;
+    }
+  }
+  partition_multiplicities[sequence_start_idx] = multiplicity;
+}
+
 }  // namespace
 
 bool window_function_is_aggregate(const SqlWindowFunctionKind kind) {
@@ -263,12 +283,26 @@ bool window_function_is_aggregate(const SqlWindowFunctionKind kind) {
   }
 }
 
+bool window_function_requires_multiplicity(const SqlWindowFunctionKind kind) {
+  switch (kind) {
+    case SqlWindowFunctionKind::MIN:
+    case SqlWindowFunctionKind::MAX: {
+      return false;
+    }
+    default: { return true; }
+  }
+}
+
 void WindowFunctionContext::compute() {
   CHECK(!output_);
   output_ = static_cast<int8_t*>(checked_malloc(
       elem_count_ * window_function_buffer_element_size(window_func_->getKind())));
   if (window_function_is_aggregate(window_func_->getKind())) {
     fillPartitionStart();
+    CHECK(multiplicities_.empty());
+    if (window_function_requires_multiplicity(window_func_->getKind())) {
+      multiplicities_.resize(elem_count_);
+    }
   }
   std::unique_ptr<int64_t[]> scratchpad(new int64_t[elem_count_]);
   int64_t off = 0;
@@ -345,6 +379,10 @@ const Analyzer::WindowFunction* WindowFunctionContext::getWindowFunction() const
 
 const int8_t* WindowFunctionContext::output() const {
   return output_;
+}
+
+const uint32_t* WindowFunctionContext::multiplicities() const {
+  return multiplicities_.data();
 }
 
 const int64_t* WindowFunctionContext::aggregateState() const {
@@ -556,6 +594,12 @@ void WindowFunctionContext::computePartition(
     case SqlWindowFunctionKind::SUM:
     case SqlWindowFunctionKind::COUNT: {
       const auto partition_row_offsets = payload() + off;
+      if (window_function_requires_multiplicity(window_func->getKind())) {
+        index_to_multiplicities(multiplicities_.data() + off,
+                                output_for_partition_buff,
+                                partition_size,
+                                comparator);
+      }
       apply_permutation_to_partition(
           output_for_partition_buff, partition_row_offsets, partition_size);
       break;

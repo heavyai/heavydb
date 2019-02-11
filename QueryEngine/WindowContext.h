@@ -48,6 +48,8 @@ class WindowFunctionContext {
 
   const int8_t* output() const;
 
+  const uint32_t* multiplicities() const;
+
   const int64_t* aggregateState() const;
 
   const int64_t* aggregateStateCount() const;
@@ -107,6 +109,8 @@ class WindowFunctionContext {
   int8_t* partition_start_;
   // State for aggregate function over a window.
   AggregateState aggregate_state_;
+  // The multiplicities for peers, to be used by aggregate functions.
+  std::vector<unsigned> multiplicities_;
   const ExecutorDeviceType device_type_;
 };
 
@@ -152,3 +156,5 @@ class WindowProjectNodeContext {
 };
 
 bool window_function_is_aggregate(const SqlWindowFunctionKind kind);
+
+bool window_function_requires_multiplicity(const SqlWindowFunctionKind kind);
