@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -501,6 +503,94 @@ func docsHandler(rw http.ResponseWriter, r *http.Request) {
 	h.ServeHTTP(rw, r)
 }
 
+// SAMLResponse represents the minimum number of XML fields required
+// to extract the username from the SAML response
+type SAMLResponse struct {
+	Assertion struct {
+		Subject struct {
+			NameID struct {
+				Text string `xml:",chardata"`
+			} `xml:"NameID"`
+		} `xml:"Subject"`
+	} `xml:"Assertion"`
+}
+
+// samlPostHandler receives a XML SAML payload from a provider (e.g. Okta) and
+// then makes a connect call to Core with the base64'd payload. If the call succeeds
+// we then set a session cookie (`omnisci_session`) for Immerse to use for login, as well
+// as the username (`omnisci_username`) and db name (`omnisci_db`).
+func samlPostHandler(rw http.ResponseWriter, r *http.Request) {
+	var err error
+	ok := false
+
+	defer func() {
+		if ok {
+			http.Redirect(rw, r, "/", 301)
+		} else {
+			var errorString string
+			if err != nil {
+				errorString = err.Error()
+			} else {
+				errorString = "invalid credentials"
+			}
+			rw.Write([]byte("An error has occurred during SAML login. Please contact your administrator."))
+			log.Infoln("Error logging user in via SAML: ", errorString)
+		}
+	}()
+
+	if r.Method == "POST" {
+		var sessionToken string
+
+		requestedDatabase := r.URL.Query().Get("db")
+		b64ResponseXML := r.FormValue("SAMLResponse")
+		decodedResponseXML, err := base64.StdEncoding.DecodeString(b64ResponseXML)
+		if err != nil {
+			return
+		}
+
+		var unmarshalledResponseXML SAMLResponse
+		err = xml.Unmarshal(decodedResponseXML, &unmarshalledResponseXML)
+		if err != nil {
+			return
+		}
+		userName := unmarshalledResponseXML.Assertion.Subject.NameID.Text
+
+		// This is what a Thrift connect call to Core looks like. Note we should generally
+		// never hard code stuff like this, but it's probably fine for this specific use case.
+		// TODO: perhaps add in a real Thrift client to avoid this.
+		var jsonString = []byte(`[1,"connect",1,0,{"2":{"str":"` + b64ResponseXML + `"},"3":{"str":"` + requestedDatabase + `"}}]`)
+
+		resp, err := http.Post(backendUrl.String(), "application/vnd.apache.thrift.json", bytes.NewBuffer(jsonString))
+		if err != nil {
+			return
+		}
+
+		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		jsonParsed, _ := gabs.ParseJSON(bodyBytes)
+		if err != nil {
+			return
+		}
+
+		// We should have one of the two following payloads at this point:
+		// 		Success => [1,"connect",2,0,{"0":{"str":"5h6KW9NTv1ef1kOfOlAGN9q63usKOg0i"}}]
+		// 		Failure => [1,"connect",2,0,{"1":{"rec":{"1":{"str":"Invalid credentials."}}}}]
+		// Only set the cookie if we can parse a success payload.
+		sessionToken, ok = jsonParsed.Index(4).Search("0", "str").Data().(string)
+		if ok {
+			cookie := http.Cookie{Name: "omnisci_session", Value: sessionToken}
+			http.SetCookie(rw, &cookie)
+
+			cookie = http.Cookie{Name: "omnisci_username", Value: userName}
+			http.SetCookie(rw, &cookie)
+
+			cookie = http.Cookie{Name: "omnisci_db", Value: requestedDatabase}
+			http.SetCookie(rw, &cookie)
+		}
+	}
+}
+
 func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 	h := http.StripPrefix("/", http.FileServer(http.Dir(frontend)))
 
@@ -641,6 +731,11 @@ func main() {
 	var alog io.Writer
 	if !verbose {
 		log.SetOutput(lf)
+		log.SetFormatter(&log.TextFormatter{
+			DisableColors: true,
+			FullTimestamp: true,
+		})
+
 		alog = alf
 	} else {
 		log.SetOutput(io.MultiWriter(os.Stdout, lf))
@@ -648,6 +743,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/saml-post", samlPostHandler)
 	mux.HandleFunc("/upload", uploadHandler)
 	mux.HandleFunc("/downloads/", downloadsHandler)
 	mux.HandleFunc("/deleteUpload", deleteUploadHandler)
