@@ -1151,11 +1151,11 @@ Analyzer::ExpressionPtr RelAlgTranslator::translateCardinality(
       throw std::runtime_error(rex_function->getName() +
                                ": unexpected array element type.");
     }
-    // Return size of a fixed length array
+    // Return cardinality of a fixed length array
     return makeNumericConstant(ret_ti, array_size / array_elem_size);
   }
-  // Size will be calculated at runtime
-  return makeExpr<Analyzer::CardinalityExpr>(arg->decompress());
+  // Variable length array cardinality will be calculated at runtime
+  return makeExpr<Analyzer::CardinalityExpr>(arg);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateItem(
