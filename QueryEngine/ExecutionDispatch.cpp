@@ -150,8 +150,8 @@ void Executor::ExecutionDispatch::runImpl(
     const ExecutorDeviceType chosen_device_type,
     int chosen_device_id,
     const ExecutionOptions& eo,
-    const QueryCompilationDescriptor* query_comp_desc,
-    const QueryMemoryDescriptor* query_mem_desc,
+    const QueryCompilationDescriptor& query_comp_desc,
+    const QueryMemoryDescriptor& query_mem_desc,
     const FragmentsList& frag_list,
     const size_t ctx_idx,
     const int64_t rowid_lookup_key) {
@@ -206,30 +206,26 @@ void Executor::ExecutionDispatch::runImpl(
     return;
   }
 
-  CHECK(query_comp_desc);
-  CHECK(query_mem_desc);
-
-  // TODO(adb): can likely remove
-  const CompilationResult& compilation_result = query_comp_desc->getCompilationResult();
-  CHECK(!query_mem_desc->usesCachedContext() || !ra_exe_unit_.scan_limit);
+  const CompilationResult& compilation_result = query_comp_desc.getCompilationResult();
+  CHECK(!query_mem_desc.usesCachedContext() || !ra_exe_unit_.scan_limit);
   std::unique_ptr<QueryExecutionContext> query_exe_context_owned;
   const bool do_render = render_info_ && render_info_->isPotentialInSituRender();
 
   try {
     OOM_TRACE_PUSH();
-    query_exe_context_owned = query_mem_desc->usesCachedContext()
-                                  ? nullptr
-                                  : query_mem_desc->getQueryExecutionContext(
-                                        ra_exe_unit_,
-                                        executor_,
-                                        chosen_device_type,
-                                        chosen_device_id,
-                                        fetch_result.col_buffers,
-                                        fetch_result.frag_offsets,
-                                        row_set_mem_owner_,
-                                        compilation_result.output_columnar,
-                                        query_mem_desc->sortOnGpu(),
-                                        do_render ? render_info_ : nullptr);
+    query_exe_context_owned =
+        query_mem_desc.usesCachedContext()
+            ? nullptr
+            : query_mem_desc.getQueryExecutionContext(ra_exe_unit_,
+                                                      executor_,
+                                                      chosen_device_type,
+                                                      chosen_device_id,
+                                                      fetch_result.col_buffers,
+                                                      fetch_result.frag_offsets,
+                                                      row_set_mem_owner_,
+                                                      compilation_result.output_columnar,
+                                                      query_mem_desc.sortOnGpu(),
+                                                      do_render ? render_info_ : nullptr);
   } catch (const OutOfHostMemory& e) {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
     LOG(ERROR) << e.what();
@@ -238,23 +234,23 @@ void Executor::ExecutionDispatch::runImpl(
   }
   QueryExecutionContext* query_exe_context{query_exe_context_owned.get()};
   std::unique_ptr<std::lock_guard<std::mutex>> query_ctx_lock;
-  if (query_mem_desc->usesCachedContext()) {
+  if (query_mem_desc.usesCachedContext()) {
     query_ctx_lock.reset(
         new std::lock_guard<std::mutex>(query_context_mutexes_[ctx_idx]));
     if (!query_contexts_[ctx_idx]) {
       try {
         OOM_TRACE_PUSH();
         query_contexts_[ctx_idx] =
-            query_mem_desc->getQueryExecutionContext(ra_exe_unit_,
-                                                     executor_,
-                                                     chosen_device_type,
-                                                     chosen_device_id,
-                                                     fetch_result.col_buffers,
-                                                     fetch_result.frag_offsets,
-                                                     row_set_mem_owner_,
-                                                     compilation_result.output_columnar,
-                                                     query_mem_desc->sortOnGpu(),
-                                                     do_render ? render_info_ : nullptr);
+            query_mem_desc.getQueryExecutionContext(ra_exe_unit_,
+                                                    executor_,
+                                                    chosen_device_type,
+                                                    chosen_device_id,
+                                                    fetch_result.col_buffers,
+                                                    fetch_result.frag_offsets,
+                                                    row_set_mem_owner_,
+                                                    compilation_result.output_columnar,
+                                                    query_mem_desc.sortOnGpu(),
+                                                    do_render ? render_info_ : nullptr);
       } catch (const OutOfHostMemory& e) {
         std::lock_guard<std::mutex> lock(reduce_mutex_);
         LOG(ERROR) << e.what();
@@ -280,7 +276,7 @@ void Executor::ExecutionDispatch::runImpl(
     OOM_TRACE_PUSH();
     err = executor_->executePlanWithoutGroupBy(ra_exe_unit_,
                                                compilation_result,
-                                               query_comp_desc->hoistLiterals(),
+                                               query_comp_desc.hoistLiterals(),
                                                device_results,
                                                ra_exe_unit_.target_exprs,
                                                chosen_device_type,
@@ -298,7 +294,7 @@ void Executor::ExecutionDispatch::runImpl(
     OOM_TRACE_PUSH();
     err = executor_->executePlanWithGroupBy(ra_exe_unit_,
                                             compilation_result,
-                                            query_comp_desc->hoistLiterals(),
+                                            query_comp_desc.hoistLiterals(),
                                             device_results,
                                             chosen_device_type,
                                             fetch_result.col_buffers,
@@ -412,8 +408,8 @@ Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry_guess,
 void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_type,
                                       int chosen_device_id,
                                       const ExecutionOptions& eo,
-                                      const QueryCompilationDescriptor* query_comp_desc,
-                                      const QueryMemoryDescriptor* query_mem_desc,
+                                      const QueryCompilationDescriptor& query_comp_desc,
+                                      const QueryMemoryDescriptor& query_mem_desc,
                                       const FragmentsList& frag_list,
                                       const size_t ctx_idx,
                                       const int64_t rowid_lookup_key) noexcept {

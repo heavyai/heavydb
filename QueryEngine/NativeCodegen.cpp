@@ -1422,12 +1422,12 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                      group_by_and_aggregate,
                      query_func,
                      bb,
-                     query_mem_desc.get(),
+                     *query_mem_desc,
                      co,
                      eo);
   } else {
     const bool can_return_error =
-        compileBody(ra_exe_unit, group_by_and_aggregate, query_mem_desc.get(), co);
+        compileBody(ra_exe_unit, group_by_and_aggregate, *query_mem_desc, co);
 
     if (can_return_error || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog) {
       createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog, co.device_type_);
@@ -1551,7 +1551,7 @@ llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(
 
 bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
                            GroupByAndAggregate& group_by_and_aggregate,
-                           const QueryMemoryDescriptor* query_mem_desc,
+                           const QueryMemoryDescriptor& query_mem_desc,
                            const CompilationOptions& co) {
   // generate the code for the filter
   std::vector<Analyzer::Expr*> primary_quals;

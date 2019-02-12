@@ -791,8 +791,8 @@ class Executor {
     void runImpl(const ExecutorDeviceType chosen_device_type,
                  int chosen_device_id,
                  const ExecutionOptions& eo,
-                 const QueryCompilationDescriptor* query_comp_desc,
-                 const QueryMemoryDescriptor* query_mem_desc,
+                 const QueryCompilationDescriptor& query_comp_desc,
+                 const QueryMemoryDescriptor& query_mem_desc,
                  const FragmentsList& frag_list,
                  const size_t ctx_idx,
                  const int64_t rowid_lookup_key);
@@ -826,8 +826,8 @@ class Executor {
     void run(const ExecutorDeviceType chosen_device_type,
              int chosen_device_id,
              const ExecutionOptions& eo,
-             const QueryCompilationDescriptor* query_comp_desc,
-             const QueryMemoryDescriptor* query_mem_desc,
+             const QueryCompilationDescriptor& query_comp_desc,
+             const QueryMemoryDescriptor& query_mem_desc,
              const FragmentsList& frag_ids,
              const size_t ctx_idx,
              const int64_t rowid_lookup_key) noexcept;
@@ -923,7 +923,7 @@ class Executor {
                                   const Catalog_Namespace::Catalog& cat,
                                   PerFragmentCB& cb);
 
-  ResultSetPtr executeExplain(const QueryCompilationDescriptor*);
+  ResultSetPtr executeExplain(const QueryCompilationDescriptor&);
 
   // TODO(alex): remove
   ExecutorDeviceType getDeviceTypeForTargets(
@@ -933,7 +933,7 @@ class Executor {
   ResultSetPtr collectAllDeviceResults(
       ExecutionDispatch& execution_dispatch,
       const std::vector<Analyzer::Expr*>& target_exprs,
-      const QueryMemoryDescriptor* query_mem_desc,
+      const QueryMemoryDescriptor& query_mem_desc,
       const ExecutorDeviceType device_type,
       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
@@ -945,8 +945,8 @@ class Executor {
   void dispatchFragments(
       const std::function<void(const ExecutorDeviceType chosen_device_type,
                                int chosen_device_id,
-                               const QueryCompilationDescriptor* query_comp_desc,
-                               const QueryMemoryDescriptor* query_mem_desc,
+                               const QueryCompilationDescriptor& query_comp_desc,
+                               const QueryMemoryDescriptor& query_mem_desc,
                                const FragmentsList& frag_list,
                                const size_t ctx_idx,
                                const int64_t rowid_lookup_key)> dispatch,
@@ -954,8 +954,8 @@ class Executor {
       const ExecutionOptions& eo,
       const bool is_agg,
       const size_t context_count,
-      QueryCompilationDescriptor* query_comp_desc,
-      QueryMemoryDescriptor* query_mem_desc,
+      const QueryCompilationDescriptor& query_comp_desc,
+      const QueryMemoryDescriptor& query_mem_desc,
       QueryFragmentDescriptor& fragment_descriptor,
       std::unordered_set<int>& available_gpus,
       int& available_cpus);
@@ -1119,12 +1119,12 @@ class Executor {
                         GroupByAndAggregate& group_by_and_aggregate,
                         llvm::Function* query_func,
                         llvm::BasicBlock* entry_bb,
-                        const QueryMemoryDescriptor* query_mem_desc,
+                        const QueryMemoryDescriptor& query_mem_desc,
                         const CompilationOptions& co,
                         const ExecutionOptions& eo);
   bool compileBody(const RelAlgExecutionUnit& ra_exe_unit,
                    GroupByAndAggregate& group_by_and_aggregate,
-                   const QueryMemoryDescriptor* query_mem_desc,
+                   const QueryMemoryDescriptor& query_mem_desc,
                    const CompilationOptions& co);
 
   void createErrorCheckControlFlow(llvm::Function* query_func,

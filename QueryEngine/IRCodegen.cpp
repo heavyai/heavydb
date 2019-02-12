@@ -427,7 +427,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
                                 GroupByAndAggregate& group_by_and_aggregate,
                                 llvm::Function* query_func,
                                 llvm::BasicBlock* entry_bb,
-                                const QueryMemoryDescriptor* query_mem_desc,
+                                const QueryMemoryDescriptor& query_mem_desc,
                                 const CompilationOptions& co,
                                 const ExecutionOptions& eo) {
   const auto exit_bb =

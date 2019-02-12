@@ -1041,24 +1041,24 @@ ResultSetPtr Executor::executeWorkUnit(
                                          column_cache,
                                          error_code,
                                          render_info);
-    std::unique_ptr<QueryCompilationDescriptor> query_comp_desc;
-    std::unique_ptr<QueryMemoryDescriptor> query_mem_desc;
+    std::unique_ptr<QueryCompilationDescriptor> query_comp_desc_owned;
+    std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
     try {
       INJECT_TIMER(execution_dispatch_comp);
-      std::tie(query_comp_desc, query_mem_desc) = execution_dispatch.compile(
+      std::tie(query_comp_desc_owned, query_mem_desc_owned) = execution_dispatch.compile(
           max_groups_buffer_entry_guess,
           crt_min_byte_width,
           {device_type, co.hoist_literals_, co.opt_level_, co.with_dynamic_watchdog_},
           eo,
           has_cardinality_estimation);
-      CHECK(query_comp_desc);
-      crt_min_byte_width = query_comp_desc->getMinByteWidth();
+      CHECK(query_comp_desc_owned);
+      crt_min_byte_width = query_comp_desc_owned->getMinByteWidth();
     } catch (CompilationRetryNoCompaction&) {
       crt_min_byte_width = MAX_BYTE_WIDTH_SUPPORTED;
       continue;
     }
     if (eo.just_explain) {
-      return executeExplain(query_comp_desc.get());
+      return executeExplain(*query_comp_desc_owned);
     }
 
     for (const auto target_expr : ra_exe_unit.target_exprs) {
@@ -1068,8 +1068,8 @@ ResultSetPtr Executor::executeWorkUnit(
     auto dispatch = [&execution_dispatch, &eo](
                         const ExecutorDeviceType chosen_device_type,
                         int chosen_device_id,
-                        const QueryCompilationDescriptor* query_comp_desc,
-                        const QueryMemoryDescriptor* query_mem_desc,
+                        const QueryCompilationDescriptor& query_comp_desc,
+                        const QueryMemoryDescriptor& query_mem_desc,
                         const FragmentsList& frag_list,
                         const size_t ctx_idx,
                         const int64_t rowid_lookup_key) {
@@ -1087,7 +1087,7 @@ ResultSetPtr Executor::executeWorkUnit(
     QueryFragmentDescriptor fragment_descriptor(
         ra_exe_unit,
         query_infos,
-        query_comp_desc->getDeviceType() == ExecutorDeviceType::GPU
+        query_comp_desc_owned->getDeviceType() == ExecutorDeviceType::GPU
             ? cat.getDataMgr().getMemoryInfo(Data_Namespace::MemoryLevel::GPU_LEVEL)
             : std::vector<Data_Namespace::MemoryInfo>{},
         eo.gpu_input_mem_limit_percent);
@@ -1098,8 +1098,8 @@ ResultSetPtr Executor::executeWorkUnit(
                         eo,
                         is_agg,
                         context_count,
-                        query_comp_desc.get(),
-                        query_mem_desc.get(),
+                        *query_comp_desc_owned,
+                        *query_mem_desc_owned,
                         fragment_descriptor,
                         available_gpus,
                         available_cpus);
@@ -1124,8 +1124,8 @@ ResultSetPtr Executor::executeWorkUnit(
         OOM_TRACE_PUSH();
         return collectAllDeviceResults(execution_dispatch,
                                        ra_exe_unit.target_exprs,
-                                       query_mem_desc.get(),
-                                       query_comp_desc->getDeviceType(),
+                                       *query_mem_desc_owned,
+                                       query_comp_desc_owned->getDeviceType(),
                                        row_set_mem_owner);
       } catch (ReductionRanOutOfSlots&) {
         *error_code = ERR_OUT_OF_SLOTS;
@@ -1135,7 +1135,7 @@ ResultSetPtr Executor::executeWorkUnit(
         }
         // TODO(adb): use move semantics to transfer QMD
         return std::make_shared<ResultSet>(
-            targets, ExecutorDeviceType::CPU, *query_mem_desc, nullptr, this);
+            targets, ExecutorDeviceType::CPU, *query_mem_desc_owned, nullptr, this);
       } catch (OverflowOrUnderflow&) {
         crt_min_byte_width <<= 1;
         continue;
@@ -1192,8 +1192,8 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
     execution_dispatch.run(co.device_type_,
                            0,
                            eo,
-                           query_comp_desc_owned.get(),
-                           query_mem_desc_owned.get(),
+                           *query_comp_desc_owned,
+                           *query_mem_desc_owned,
                            {{table_id, {fragment_index}}},
                            0,
                            -1);
@@ -1208,9 +1208,8 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
   }
 }
 
-ResultSetPtr Executor::executeExplain(const QueryCompilationDescriptor* query_comp_desc) {
-  CHECK(query_comp_desc);
-  return std::make_shared<ResultSet>(query_comp_desc->getIR());
+ResultSetPtr Executor::executeExplain(const QueryCompilationDescriptor& query_comp_desc) {
+  return std::make_shared<ResultSet>(query_comp_desc.getIR());
 }
 
 // Looks at the targets and returns a feasible device type. We only punt
@@ -1347,26 +1346,25 @@ ResultSetPtr build_row_for_empty_input(
 ResultSetPtr Executor::collectAllDeviceResults(
     ExecutionDispatch& execution_dispatch,
     const std::vector<Analyzer::Expr*>& target_exprs,
-    const QueryMemoryDescriptor* query_mem_desc,
+    const QueryMemoryDescriptor& query_mem_desc,
     const ExecutorDeviceType device_type,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
-  CHECK(query_mem_desc);
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   for (const auto& query_exe_context : execution_dispatch.getQueryContexts()) {
     if (!query_exe_context || query_exe_context->hasNoFragments()) {
       continue;
     }
-    auto rs = query_exe_context->getRowSet(ra_exe_unit, *query_mem_desc);
+    auto rs = query_exe_context->getRowSet(ra_exe_unit, query_mem_desc);
     execution_dispatch.getFragmentResults().emplace_back(rs, std::vector<size_t>{});
   }
   auto& result_per_device = execution_dispatch.getFragmentResults();
-  if (result_per_device.empty() && query_mem_desc->getQueryDescriptionType() ==
+  if (result_per_device.empty() && query_mem_desc.getQueryDescriptionType() ==
                                        QueryDescriptionType::NonGroupedAggregate) {
-    return build_row_for_empty_input(target_exprs, *query_mem_desc, device_type);
+    return build_row_for_empty_input(target_exprs, query_mem_desc, device_type);
   }
-  if (use_speculative_top_n(ra_exe_unit, *query_mem_desc)) {
+  if (use_speculative_top_n(ra_exe_unit, query_mem_desc)) {
     return reduceSpeculativeTopN(
-        ra_exe_unit, result_per_device, row_set_mem_owner, *query_mem_desc);
+        ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
   }
   const auto shard_count =
       device_type == ExecutorDeviceType::GPU
@@ -1377,7 +1375,7 @@ ResultSetPtr Executor::collectAllDeviceResults(
     return collectAllDeviceShardedTopResults(execution_dispatch);
   }
   return reduceMultiDeviceResults(
-      ra_exe_unit, result_per_device, row_set_mem_owner, *query_mem_desc);
+      ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
 }
 
 // Collect top results from each device, stitch them together and sort. Partial
@@ -1444,8 +1442,8 @@ std::unordered_map<int, const Analyzer::BinOper*> Executor::getInnerTabIdToJoinC
 void Executor::dispatchFragments(
     const std::function<void(const ExecutorDeviceType chosen_device_type,
                              int chosen_device_id,
-                             const QueryCompilationDescriptor* query_comp_desc,
-                             const QueryMemoryDescriptor* query_mem_desc,
+                             const QueryCompilationDescriptor& query_comp_desc,
+                             const QueryMemoryDescriptor& query_mem_desc,
                              const FragmentsList& frag_list,
                              const size_t ctx_idx,
                              const int64_t rowid_lookup_key)> dispatch,
@@ -1453,8 +1451,8 @@ void Executor::dispatchFragments(
     const ExecutionOptions& eo,
     const bool is_agg,
     const size_t context_count,
-    QueryCompilationDescriptor* query_comp_desc,
-    QueryMemoryDescriptor* query_mem_desc,
+    const QueryCompilationDescriptor& query_comp_desc,
+    const QueryMemoryDescriptor& query_mem_desc,
     QueryFragmentDescriptor& fragment_descriptor,
     std::unordered_set<int>& available_gpus,
     int& available_cpus) {
@@ -1462,17 +1460,16 @@ void Executor::dispatchFragments(
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   CHECK(!ra_exe_unit.input_descs.empty());
 
-  CHECK(query_comp_desc);
-  const auto device_type = query_comp_desc->getDeviceType();
+  const auto device_type = query_comp_desc.getDeviceType();
 
-  VLOG(1) << query_mem_desc->toString();
+  VLOG(1) << query_mem_desc.toString();
 
   const bool allow_multifrag =
       eo.allow_multifrag &&
-      (ra_exe_unit.groupby_exprs.empty() || query_mem_desc->usesCachedContext() ||
-       query_mem_desc->getQueryDescriptionType() ==
+      (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext() ||
+       query_mem_desc.getQueryDescriptionType() ==
            QueryDescriptionType::GroupByBaselineHash ||
-       query_mem_desc->getQueryDescriptionType() == QueryDescriptionType::Projection);
+       query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection);
   const bool use_multifrag_kernel =
       (device_type == ExecutorDeviceType::GPU) && allow_multifrag && is_agg;
 
