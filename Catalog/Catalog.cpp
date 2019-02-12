@@ -197,33 +197,35 @@ void SysCatalog::init(const std::string& basePath,
                       bool check_privileges,
                       bool aggregator,
                       const std::vector<LeafHostInfo>& string_dict_hosts) {
-  sys_write_lock write_lock(this);
-  sys_sqlite_lock sqlite_lock(this);
+  {
+    sys_write_lock write_lock(this);
+    sys_sqlite_lock sqlite_lock(this);
 
-  basePath_ = basePath;
-  dataMgr_ = dataMgr;
-  ldap_server_.reset(new LdapServer(authMetadata));
-  rest_server_.reset(new RestServer(authMetadata));
-  calciteMgr_ = calcite;
-  check_privileges_ = check_privileges;
-  string_dict_hosts_ = string_dict_hosts;
-  aggregator_ = aggregator;
-  bool db_exists =
-      boost::filesystem::exists(basePath_ + "/mapd_catalogs/" + MAPD_SYSTEM_CATALOG);
-  sqliteConnector_.reset(
-      new SqliteConnector(MAPD_SYSTEM_CATALOG, basePath_ + "/mapd_catalogs/"));
-  if (is_new_db) {
-    initDB();
-  } else {
-    if (!db_exists) {
-      importDataFromOldMapdDB();
+    basePath_ = basePath;
+    dataMgr_ = dataMgr;
+    ldap_server_.reset(new LdapServer(authMetadata));
+    rest_server_.reset(new RestServer(authMetadata));
+    calciteMgr_ = calcite;
+    check_privileges_ = check_privileges;
+    string_dict_hosts_ = string_dict_hosts;
+    aggregator_ = aggregator;
+    bool db_exists =
+        boost::filesystem::exists(basePath_ + "/mapd_catalogs/" + MAPD_SYSTEM_CATALOG);
+    sqliteConnector_.reset(
+        new SqliteConnector(MAPD_SYSTEM_CATALOG, basePath_ + "/mapd_catalogs/"));
+    if (is_new_db) {
+      initDB();
+    } else {
+      if (!db_exists) {
+        importDataFromOldMapdDB();
+      }
+      checkAndExecuteMigrations();
     }
-    checkAndExecuteMigrations();
-  }
-  if (check_privileges_) {
-    buildRoleMap();
-    buildUserRoleMap();
-    buildObjectDescriptorMap();
+    if (check_privileges_) {
+      buildRoleMap();
+      buildUserRoleMap();
+      buildObjectDescriptorMap();
+    }
   }
   // check if mapd db catalog is loaded in cat_map
   // if not, load mapd-cat here
@@ -2479,43 +2481,50 @@ void Catalog::createDashboardSystemRoles() {
   if (!SysCatalog::instance().arePrivilegesOn()) {
     return;
   }
-  cat_sqlite_lock sqlite_lock(this);
   std::unordered_map<std::string, std::pair<int, std::string>> dashboards;
   std::vector<std::string> dashboard_ids;
   static const std::string migration_name{"dashboard_roles_migration"};
-  sqliteConnector_.query("BEGIN TRANSACTION");
-  try {
-    // migration_history should be present in all catalogs by now
-    // if not then would be created before this migration
-    sqliteConnector_.query("select migration_history from mapd_version_history");
-    if (sqliteConnector_.getNumRows() != 0) {
-      for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
-        const auto mig = sqliteConnector_.getData<std::string>(i, 0);
-        if (mig == migration_name) {
+  {
+    cat_sqlite_lock sqlite_lock(this);
+    sqliteConnector_.query("BEGIN TRANSACTION");
+    try {
+      sqliteConnector_.query(
+          "select name from sqlite_master WHERE type='table' AND "
+          "name='mapd_version_history'");
+      if (sqliteConnector_.getNumRows() == 0) {
+        sqliteConnector_.query(
+            "CREATE TABLE mapd_version_history(version integer, migration_history text "
+            "unique)");
+      } else {
+        sqliteConnector_.query(
+            "select * from mapd_version_history where migration_history = '" +
+            migration_name + "'");
+        if (sqliteConnector_.getNumRows() != 0) {
           // no need for further execution
           sqliteConnector_.query("END TRANSACTION");
           return;
         }
       }
-    }
-    LOG(INFO) << "Performing dashboard internal roles Migration.";
-    sqliteConnector_.query("select id, userid, metadata from mapd_dashboards");
-    for (size_t i = 0; i < sqliteConnector_.getNumRows(); ++i) {
-      if (SysCatalog::instance().getRoleGrantee(generate_dash_system_rolename(
-              std::to_string(currentDB_.dbId), sqliteConnector_.getData<string>(i, 0)))) {
-        // Successfully created roles during previous migration/crash
-        // No need to include them
-        continue;
+      LOG(INFO) << "Performing dashboard internal roles Migration.";
+      sqliteConnector_.query("select id, userid, metadata from mapd_dashboards");
+      for (size_t i = 0; i < sqliteConnector_.getNumRows(); ++i) {
+        if (SysCatalog::instance().getRoleGrantee(
+                generate_dash_system_rolename(std::to_string(currentDB_.dbId),
+                                              sqliteConnector_.getData<string>(i, 0)))) {
+          // Successfully created roles during previous migration/crash
+          // No need to include them
+          continue;
+        }
+        dashboards[sqliteConnector_.getData<string>(i, 0)] = std::make_pair(
+            sqliteConnector_.getData<int>(i, 1), sqliteConnector_.getData<string>(i, 2));
+        dashboard_ids.push_back(sqliteConnector_.getData<string>(i, 0));
       }
-      dashboards[sqliteConnector_.getData<string>(i, 0)] = std::make_pair(
-          sqliteConnector_.getData<int>(i, 1), sqliteConnector_.getData<string>(i, 2));
-      dashboard_ids.push_back(sqliteConnector_.getData<string>(i, 0));
+    } catch (const std::exception& e) {
+      sqliteConnector_.query("ROLLBACK TRANSACTION");
+      throw;
     }
-  } catch (const std::exception& e) {
-    sqliteConnector_.query("ROLLBACK TRANSACTION");
-    throw;
+    sqliteConnector_.query("END TRANSACTION");
   }
-  sqliteConnector_.query("END TRANSACTION");
   // All current grantees with shared dashboards.
   const auto active_grantees =
       SysCatalog::instance().getGranteesOfSharedDashboards(dashboard_ids);
@@ -2720,9 +2729,6 @@ std::string getUserFromId(const int32_t id) {
 }  // namespace
 
 void Catalog::buildMaps() {
-  sys_write_lock write_lock_sys(&SysCatalog::instance());
-  sys_sqlite_lock sqlite_lock_sys(&SysCatalog::instance());
-
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(this);
 
@@ -3071,7 +3077,6 @@ std::vector<DBObject> Catalog::parseDashboardObjects(const std::string& view_met
 void Catalog::createOrUpdateDashboardSystemRole(const std::string& view_meta,
                                                 const int32_t& user_id,
                                                 const std::string& dash_role_name) {
-  cat_write_lock write_lock(this);
   auto objects = parseDashboardObjects(view_meta, user_id);
   Role* rl = SysCatalog::instance().getRoleGrantee(dash_role_name);
   if (!rl) {
@@ -3356,11 +3361,9 @@ void Catalog::deleteMetadataForDashboard(const int32_t id) {
     }
   }
   if (found) {
-    sys_write_lock write_lock_sys(&SysCatalog::instance());
-    cat_write_lock write_lock(this);
     // TODO: transactionally unsafe
     if (SysCatalog::instance().arePrivilegesOn()) {
-      SysCatalog::instance().revokeDBObjectPrivilegesFromAll_unsafe(
+      SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
           DBObject(id, DashboardDBObjectType), this);
     }
     deleteMetadataForFrontendView(userId, name);
@@ -4361,14 +4364,14 @@ void Catalog::removeChunks(const int table_id) {
 }
 
 void Catalog::dropTable(const TableDescriptor* td) {
-  sys_write_lock write_lock_sys(&SysCatalog::instance());
-  sys_sqlite_lock sqlite_lock_sys(&SysCatalog::instance());
+  if (SysCatalog::instance().arePrivilegesOn()) {
+    SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
+        DBObject(td->tableName, td->isView ? ViewDBObjectType : TableDBObjectType), this);
+  }
 
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(this);
   const auto physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
-  SqliteConnector* sys_conn = SysCatalog::instance().getSqliteConnector();
-  sys_conn->query("BEGIN TRANSACTION");
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
@@ -4391,11 +4394,9 @@ void Catalog::dropTable(const TableDescriptor* td) {
     doDropTable(td);
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
-    sys_conn->query("ROLLBACK TRANSACTION");
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
-  sys_conn->query("END TRANSACTION");
 }
 
 void Catalog::doDropTable(const TableDescriptor* td) {
@@ -4425,10 +4426,6 @@ void Catalog::doDropTable(const TableDescriptor* td) {
   if (td->isView) {
     sqliteConnector_.query_with_text_param("DELETE FROM mapd_views WHERE tableid = ?",
                                            std::to_string(tableId));
-  }
-  if (SysCatalog::instance().arePrivilegesOn()) {
-    SysCatalog::instance().revokeDBObjectPrivilegesFromAll_unsafe(
-        DBObject(td->tableName, td->isView ? ViewDBObjectType : TableDBObjectType), this);
   }
   eraseTablePhysicalData(td);
 }
@@ -4880,49 +4877,48 @@ void Catalog::remove(const std::string& dbName) {
   mapd_cat_map_.erase(dbName);
 }
 
-void SysCatalog::createRole(const std::string& roleName, const bool& userPrivateRole) {
-  sys_write_lock write_lock(this);
+template <typename F, typename... Args>
+void SysCatalog::execInTransaction(F&& f, Args&&... args) {
   sys_sqlite_lock sqlite_lock(this);
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    (this->*f)(std::forward<Args>(args)...);
+  } catch (std::exception&) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+}
+
+void SysCatalog::createRole(const std::string& roleName, const bool& userPrivateRole) {
   execInTransaction(&SysCatalog::createRole_unsafe, roleName, userPrivateRole);
 }
 
 void SysCatalog::dropRole(const std::string& roleName) {
-  sys_write_lock write_lock(this);
-  sys_sqlite_lock sqlite_lock(this);
   execInTransaction(&SysCatalog::dropRole_unsafe, roleName);
 }
 
 void SysCatalog::grantRoleBatch(const std::vector<std::string>& roles,
                                 const std::vector<std::string>& grantees) {
-  sys_write_lock write_lock(this);
-  sys_sqlite_lock sqlite_lock(this);
   execInTransaction(&SysCatalog::grantRoleBatch_unsafe, roles, grantees);
 }
 
 void SysCatalog::grantRole(const std::string& role, const std::string& grantee) {
-  sys_write_lock write_lock(this);
-  sys_sqlite_lock sqlite_lock(this);
   execInTransaction(&SysCatalog::grantRole_unsafe, role, grantee);
 }
 
 void SysCatalog::revokeRoleBatch(const std::vector<std::string>& roles,
                                  const std::vector<std::string>& grantees) {
-  sys_write_lock write_lock(this);
-  sys_sqlite_lock sqlite_lock(this);
   execInTransaction(&SysCatalog::revokeRoleBatch_unsafe, roles, grantees);
 }
 
 void SysCatalog::revokeRole(const std::string& role, const std::string& grantee) {
-  sys_write_lock write_lock(this);
-  sys_sqlite_lock sqlite_lock(this);
   execInTransaction(&SysCatalog::revokeRole_unsafe, role, grantee);
 }
 
 void SysCatalog::grantDBObjectPrivileges(const string& grantee,
                                          const DBObject& object,
                                          const Catalog_Namespace::Catalog& catalog) {
-  sys_write_lock write_lock(this);
-  sys_sqlite_lock sqlite_lock(this);
   execInTransaction(
       &SysCatalog::grantDBObjectPrivileges_unsafe, grantee, object, catalog);
 }
@@ -4930,8 +4926,6 @@ void SysCatalog::grantDBObjectPrivileges(const string& grantee,
 void SysCatalog::grantDBObjectPrivilegesBatch(const vector<string>& grantees,
                                               const vector<DBObject>& objects,
                                               const Catalog_Namespace::Catalog& catalog) {
-  sys_write_lock write_lock(this);
-  sys_sqlite_lock sqlite_lock(this);
   execInTransaction(
       &SysCatalog::grantDBObjectPrivilegesBatch_unsafe, grantees, objects, catalog);
 }
@@ -4939,8 +4933,6 @@ void SysCatalog::grantDBObjectPrivilegesBatch(const vector<string>& grantees,
 void SysCatalog::revokeDBObjectPrivileges(const string& grantee,
                                           const DBObject& object,
                                           const Catalog_Namespace::Catalog& catalog) {
-  sys_write_lock write_lock(this);
-  sys_sqlite_lock sqlite_lock(this);
   execInTransaction(
       &SysCatalog::revokeDBObjectPrivileges_unsafe, grantee, object, catalog);
 }
@@ -4949,10 +4941,12 @@ void SysCatalog::revokeDBObjectPrivilegesBatch(
     const vector<string>& grantees,
     const vector<DBObject>& objects,
     const Catalog_Namespace::Catalog& catalog) {
-  sys_write_lock write_lock(this);
-  sys_sqlite_lock sqlite_lock(this);
   execInTransaction(
       &SysCatalog::revokeDBObjectPrivilegesBatch_unsafe, grantees, objects, catalog);
+}
+
+void SysCatalog::revokeDBObjectPrivilegesFromAll(DBObject object, Catalog* catalog) {
+  execInTransaction(&SysCatalog::revokeDBObjectPrivilegesFromAll_unsafe, object, catalog);
 }
 
 SessionInfo::operator std::string() const {

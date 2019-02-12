@@ -465,6 +465,7 @@ class SysCatalog {
   void revokeDBObjectPrivilegesBatch(const std::vector<std::string>& grantees,
                                      const std::vector<DBObject>& objects,
                                      const Catalog_Namespace::Catalog& catalog);
+  void revokeDBObjectPrivilegesFromAll(DBObject object, Catalog* catalog);
   void revokeDBObjectPrivilegesFromAll_unsafe(DBObject object, Catalog* catalog);
   void getDBObjectPrivileges(const std::string& granteeName,
                              DBObject& object,
@@ -584,16 +585,7 @@ class SysCatalog {
   bool isDashboardSystemRole(const std::string& roleName);
 
   template <typename F, typename... Args>
-  void execInTransaction(F&& f, Args&&... args) {
-    sqliteConnector_->query("BEGIN TRANSACTION");
-    try {
-      (this->*f)(std::forward<Args>(args)...);
-    } catch (std::exception&) {
-      sqliteConnector_->query("ROLLBACK TRANSACTION");
-      throw;
-    }
-    sqliteConnector_->query("END TRANSACTION");
-  }
+  void execInTransaction(F&& f, Args&&... args);
 
   bool check_privileges_;
   std::string basePath_;
