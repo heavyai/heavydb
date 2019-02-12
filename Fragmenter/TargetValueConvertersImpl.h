@@ -269,19 +269,24 @@ struct ArrayValueConverter : public TargetValueConverter {
     const auto scalarValueVector =
         checked_get<std::vector<ScalarTargetValue>>(row, value, SCALAR_VECTOR_ACCESSOR);
 
-    element_converter_->allocateColumnarData(scalarValueVector->size());
+    if (scalarValueVector->size()) {
+      element_converter_->allocateColumnarData(scalarValueVector->size());
 
-    int elementIndex = 0;
-    for (const auto& scalarValue : *scalarValueVector) {
-      element_converter_->convertToColumnarFormat(elementIndex++, &scalarValue);
+      int elementIndex = 0;
+      for (const auto& scalarValue : *scalarValueVector) {
+        element_converter_->convertToColumnarFormat(elementIndex++, &scalarValue);
+      }
+
+      typename ELEMENT_CONVERTER::ColumnDataPtr ptr =
+          element_converter_->takeColumnarData();
+      int8_t* arrayData = reinterpret_cast<int8_t*>(ptr.release());
+      (*column_data_)[row] = ArrayDatum(
+          scalarValueVector->size() * element_type_info_.get_size(), arrayData, false);
+    } else {
+      bool is_null = do_check_null_;
+      (*column_data_)[row] = ArrayDatum(0, nullptr, DoNothingDeleter());
+      (*column_data_)[row].is_null = is_null;
     }
-
-    bool is_null = do_check_null_ && 0 == scalarValueVector->size();
-    typename ELEMENT_CONVERTER::ColumnDataPtr ptr =
-        element_converter_->takeColumnarData();
-    int8_t* arrayData = reinterpret_cast<int8_t*>(ptr.release());
-    (*column_data_)[row] = ArrayDatum(
-        scalarValueVector->size() * element_type_info_.get_size(), arrayData, is_null);
   }
 
   void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {

@@ -329,20 +329,26 @@ class ArrayColumnDescriptor : public TestColumnDescriptor {
 
   std::string get_column_definition() override { return column_definition; }
 
-  std::string make_column_value(int row, std::string prefix, std::string suffix) {
+  std::string make_column_value(int rows, std::string prefix, std::string suffix) {
     std::string values = prefix;
 
     int i = 0;
 
     if (fixed_array_length) {
-      i = row;
-      row += fixed_array_length - 1;
+      i = rows;
+      rows += fixed_array_length;
     }
 
-    for (; i < row; i++) {
-      values += element_descriptor->get_column_value(i + 1) + ", ";
+    bool firstElementWritten = false;
+
+    for (; i < rows; i++) {
+      if (firstElementWritten) {
+        values += ", ";
+      }
+      values += element_descriptor->get_column_value(i + 1);
+      firstElementWritten = true;
     }
-    values += element_descriptor->get_column_value(row + 1) + suffix;
+    values += suffix;
 
     return values;
   }

@@ -1056,8 +1056,8 @@ literal:
 	|	FLOAT { $<nodeval>$ = new FloatLiteral($<floatval>1); }
 	|	DOUBLE { $<nodeval>$ = new DoubleLiteral($<doubleval>1); }
 	|	data_type STRING { $<nodeval>$ = new CastExpr(new StringLiteral($<stringval>2), dynamic_cast<SQLType*>($<nodeval>1)); }
-	|	'{' literal_commalist '}' { $<nodeval>$ = new ArrayLiteral(reinterpret_cast<std::list<Expr*>*>($<listval>2)); }
-	|	ARRAY '[' literal_commalist ']' { $<nodeval>$ = new ArrayLiteral(reinterpret_cast<std::list<Expr*>*>($<listval>3)); }
+	|	'{' opt_literal_commalist '}' { $<nodeval>$ = new ArrayLiteral(reinterpret_cast<std::list<Expr*>*>($<listval>2)); }
+	|	ARRAY '[' opt_literal_commalist ']' { $<nodeval>$ = new ArrayLiteral(reinterpret_cast<std::list<Expr*>*>($<listval>3)); }
 	|	NULLX { $<nodeval>$ = new NullLiteral(); }
 	;
 
@@ -1069,6 +1069,11 @@ literal_commalist:
 		$<listval>$->push_back($<nodeval>3);
 	}
 	;
+
+opt_literal_commalist:
+    { $<listval>$ = new std::list<Node*>(0); }
+  | literal_commalist
+  ;
 
 	/* miscellaneous */
 
