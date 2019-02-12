@@ -143,12 +143,9 @@ std::vector<int64_t> index_to_ntile(const int64_t* index,
   if (!n) {
     throw std::runtime_error("NTILE argument cannot be zero");
   }
-  const auto tile_size = index_size / n;
-  for (size_t i = 0; i < n * tile_size; ++i) {
+  const size_t tile_size = (index_size + n - 1) / n;
+  for (size_t i = 0; i < index_size; ++i) {
     row_numbers[index[i]] = i / tile_size + 1;
-  }
-  for (size_t i = n * tile_size; i < index_size; ++i) {
-    row_numbers[index[i]] = n;
   }
   return row_numbers;
 }
