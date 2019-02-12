@@ -111,7 +111,7 @@ std::vector<double> index_to_percent_rank(
       crt_rank = i + 1;
     }
     percent_rank[index[i]] =
-        index_size == 1 ? 1 : static_cast<double>(crt_rank - 1) / (index_size - 1);
+        index_size == 1 ? 0 : static_cast<double>(crt_rank - 1) / (index_size - 1);
   }
   return percent_rank;
 }
