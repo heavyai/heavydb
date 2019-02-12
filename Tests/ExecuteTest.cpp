@@ -508,7 +508,7 @@ TEST(Create, PageSize) {
 //  (page_size=2147483648);"), std::runtime_error);
 //}
 
-TEST(Insert, ArrayNulls) {
+TEST(Insert, NullArrayNulls) {
   const char* create_table_array_with_nulls =
       R"(create table table_array_with_nulls (i smallint, sia smallint[], fa2 float[2]);)";
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -531,6 +531,19 @@ TEST(Insert, ArrayNulls) {
         run_multiple_agg("INSERT INTO table_array_with_nulls "
                          "VALUES(4, {NULL,NULL}, {NULL,NULL});",
                          dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO table_array_with_nulls "
+                         "VALUES(5, NULL, NULL);",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO table_array_with_nulls "
+                         "VALUES(6, {}, NULL);",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO table_array_with_nulls "
+                         "VALUES(7, {NULL,NULL}, {NULL,NULL});",
+                         dt));
+
     ASSERT_EQ(1,
               v<int64_t>(
                   run_simple_agg("SELECT MIN(sia[1]) FROM table_array_with_nulls;", dt)));
@@ -538,7 +551,7 @@ TEST(Insert, ArrayNulls) {
               v<int64_t>(
                   run_simple_agg("SELECT MAX(sia[1]) FROM table_array_with_nulls;", dt)));
     ASSERT_EQ(
-        2,
+        5,
         v<int64_t>(run_simple_agg(
             "SELECT count(*) FROM table_array_with_nulls WHERE sia[2] IS NULL;", dt)));
     ASSERT_EQ(
@@ -551,6 +564,26 @@ TEST(Insert, ArrayNulls) {
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM table_array_with_nulls WHERE fa2[1] IS NOT NULL;",
                   dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM table_array_with_nulls WHERE sia IS NULL;", dt)));
+    ASSERT_EQ(
+        3,
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM table_array_with_nulls WHERE fa2 IS NOT NULL;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM table_array_with_nulls WHERE CARDINALITY(sia)=0;",
+                  dt)));
+    ASSERT_EQ(5,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM table_array_with_nulls WHERE CARDINALITY(sia)=2;",
+                  dt)));
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM table_array_with_nulls WHERE CARDINALITY(sia) IS NULL;",
+            dt)));
   }
 }
 
