@@ -996,11 +996,17 @@ std::string get_table_name(const InputDescriptor& input_desc,
 }
 
 void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
+                           const std::vector<InputTableInfo>& table_infos,
                            const Catalog_Namespace::Catalog& cat) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
       return;
     }
+  }
+  if (!ra_exe_unit.scan_limit && table_infos.size() == 1 &&
+      table_infos.front().info.getPhysicalNumTuples() < Executor::high_scan_limit) {
+    // Allow a query with no scan limit to run on small tables
+    return;
   }
   if (ra_exe_unit.sort_info.algorithm != SortAlgorithm::StreamingTopN &&
       ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front() &&
@@ -1603,7 +1609,7 @@ void Executor::dispatchFragments(
                                              g_inner_join_fragment_skipping,
                                              this);
   if (eo.with_watchdog && fragment_descriptor.shouldCheckWorkUnitWatchdog()) {
-    checkWorkUnitWatchdog(ra_exe_unit, *catalog_);
+    checkWorkUnitWatchdog(ra_exe_unit, table_infos, *catalog_);
   }
 
   if (use_multifrag_kernel) {
