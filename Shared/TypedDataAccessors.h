@@ -18,6 +18,7 @@
 
 #include <math.h>
 #include <string.h>
+#include "Shared/DateConverters.h"
 #include "Shared/sqltypes.h"
 
 #ifndef CHECK  // if not collide with the one in glog/logging.h
@@ -226,7 +227,8 @@ inline void put_scalar(void* ndptr,
                       etype,
                       get_element_size(etype),
                       isnull ? inline_int_null_value<int64_t>()
-                             : static_cast<T>(oval / SECSPERDAY));
+                             : DateConverters::get_epoch_days_from_seconds(
+                                   static_cast<int64_t>(oval)));
       } else {
         put_scalar<T>(ndptr, etype, get_element_size(etype), oval);
       }

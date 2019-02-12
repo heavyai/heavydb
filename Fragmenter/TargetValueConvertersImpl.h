@@ -17,6 +17,7 @@
 #ifndef TARGET_VALUE_CONVERTERS_IMPL_H_
 #define TARGET_VALUE_CONVERTERS_IMPL_H_
 
+#include "../Shared/DateConverters.h"
 #include "TargetValueConverters.h"
 
 namespace Importer_NS {
@@ -223,7 +224,8 @@ struct DateValueConverter : public NumericValueConverter<int64_t, int64_t> {
     if (this->do_null_check_ && this->null_check_value_ == val) {
       this->column_data_.get()[row] = this->null_value_;
     } else {
-      this->column_data_.get()[row] = static_cast<int64_t>(val / SECSPERDAY);
+      this->column_data_.get()[row] =
+          DateConverters::get_epoch_days_from_seconds(static_cast<int64_t>(val));
     }
   }
 
