@@ -3664,7 +3664,7 @@ static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(
           {{"CREATE VIEW"s, DatabaseDBObjectType},
            {AccessPrivileges::CREATE_VIEW, ViewDBObjectType}},
           {{"SELECT VIEW"s, DatabaseDBObjectType},
-           {AccessPrivileges::UPDATE_IN_TABLE, ViewDBObjectType}},
+           {AccessPrivileges::SELECT_FROM_VIEW, ViewDBObjectType}},
           {{"DROP VIEW"s, DatabaseDBObjectType},
            {AccessPrivileges::DROP_VIEW, ViewDBObjectType}},
           {{"SELECT"s, ViewDBObjectType},
