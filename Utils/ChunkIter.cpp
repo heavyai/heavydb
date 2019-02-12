@@ -233,16 +233,7 @@ DEVICE void ChunkIter_get_nth(ChunkIter* it, int n, ArrayDatum* result, bool* is
     int8_t* current_pos = it->start_pos + n * it->skip_size;
     result->length = static_cast<size_t>(it->skip_size);
     result->pointer = current_pos;
-    SQLTypeInfo elem_ti{it->type_info};
-    elem_ti.set_type(it->type_info.get_subtype());
-    elem_ti.set_subtype(kNULLT);
-    bool is_null = true;
-    for (auto p = result->pointer; p < result->pointer + result->length;
-         p += elem_ti.get_size()) {
-      is_null = elem_ti.is_null(p);
-      if (!is_null)
-        break;
-    }
+    bool is_null = it->type_info.is_null(result->pointer, result->length);
     // Fixlen array filled with NULL sentinels is recognized as a NULL array.
     result->is_null = is_null;
   } else {

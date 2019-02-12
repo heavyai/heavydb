@@ -410,6 +410,13 @@ ArrayDatum StringToArray(const std::string& s,
   if (last + 1 <= s.size()) {
     elem_strs.push_back(s.substr(last, s.size() - 1 - last));
   }
+  if (elem_strs.size() == 1) {
+    auto str = elem_strs.front();
+    auto str_trimmed = trim_space(str.c_str(), str.length());
+    if (str_trimmed == "") {
+      elem_strs.clear();  // Empty array
+    }
+  }
   if (!elem_ti.is_string()) {
     size_t len = elem_strs.size() * elem_ti.get_size();
     int8_t* buf = (int8_t*)checked_malloc(len);
@@ -448,8 +455,9 @@ ArrayDatum NullArray(const SQLTypeInfo& ti) {
   if (len > 0) {
     // NULL fixlen array: fill with scalar NULL sentinels
     int8_t* buf = (int8_t*)checked_malloc(len);
-    for (int8_t* p = buf; (p - buf) < len; p += elem_ti.get_size()) {
-      put_null(static_cast<void*>(p), elem_ti, "");
+    Datum d = NullDatum(elem_ti);
+    for (int8_t* p = buf; (p - buf) < len;) {
+      p = appendDatum(p, d, elem_ti);
     }
     return ArrayDatum(len, buf, true);
   }
