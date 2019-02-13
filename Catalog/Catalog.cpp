@@ -2358,15 +2358,29 @@ void Catalog::createDashboardSystemRoles() {
   cat_sqlite_lock sqlite_lock(this);
   std::unordered_map<std::string, std::pair<int, std::string>> dashboards;
   std::vector<std::string> dashboard_ids;
+  static const std::string migration_name{"dashboard_roles_migration"};
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
+    // migration_history should be present in all catalogs by now
+    // if not then would be created before this migration
+    sqliteConnector_.query("select migration_history from mapd_version_history");
+    if (sqliteConnector_.getNumRows() != 0) {
+      for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
+        const auto mig = sqliteConnector_.getData<std::string>(i, 0);
+        if (mig == migration_name) {
+          // no need for further execution
+          sqliteConnector_.query("END TRANSACTION");
+          return;
+        }
+      }
+    }
     sqliteConnector_.query("select id, userid, metadata from mapd_dashboards");
     for (size_t i = 0; i < sqliteConnector_.getNumRows(); ++i) {
       if (SysCatalog::instance().getRoleGrantee(generate_dash_system_rolename(
               std::to_string(currentDB_.dbId), sqliteConnector_.getData<string>(i, 0)))) {
-        // no need for further execution, dashboard roles already exist
-        sqliteConnector_.query("END TRANSACTION");
-        return;
+        // Successfully created roles during previous migration/crash
+        // No need to include them
+        continue;
       }
       dashboards[sqliteConnector_.getData<string>(i, 0)] = std::make_pair(
           sqliteConnector_.getData<int>(i, 1), sqliteConnector_.getData<string>(i, 2));
@@ -2395,6 +2409,9 @@ void Catalog::createDashboardSystemRoles() {
             result->second);
       }
     }
+    sqliteConnector_.query_with_text_params(
+        "INSERT INTO mapd_version_history(version, migration_history) values(?,?)",
+        std::vector<std::string>{std::to_string(MAPD_VERSION), migration_name});
   } catch (const std::exception& e) {
     LOG(ERROR) << "Failed to create dashboard system roles during migration: "
                << e.what();
