@@ -443,6 +443,10 @@ bool ResultSet::isTruncated() const {
   return keep_first_ + drop_first_;
 }
 
+bool ResultSet::isJustExplain() const {
+  return just_explain_;
+}
+
 QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
     const QueryMemoryDescriptor& query_mem_desc) {
   auto query_mem_desc_copy = query_mem_desc;

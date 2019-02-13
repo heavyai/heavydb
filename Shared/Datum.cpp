@@ -409,7 +409,8 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
     case kCHAR:
       return *d.stringval;
     default:
-      throw std::runtime_error("Internal error: invalid type in DatumToString.");
+      throw std::runtime_error("Internal error: invalid type " + ti.get_type_name() +
+                               " in DatumToString.");
   }
   return "";
 }
