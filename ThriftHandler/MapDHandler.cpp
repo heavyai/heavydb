@@ -3594,7 +3594,12 @@ void MapDHandler::import_geo_table(const TSessionId& session,
   //   GEO: create a geo table from this
   //   NON_GEO: create a regular table from this
   //   UNSUPPORTED_GEO: report and skip
-  auto layer_info = Importer_NS::Importer::gdalGetLayersInGeoFile(file_name, copy_params);
+  std::vector<Importer_NS::Importer::GeoFileLayerInfo> layer_info;
+  try {
+    layer_info = Importer_NS::Importer::gdalGetLayersInGeoFile(file_name, copy_params);
+  } catch (const std::exception& e) {
+    THROW_MAPD_EXCEPTION("import_geo_table error: " + std::string(e.what()));
+  }
 
   // categorize the results
   using LayerNameToContentsMap =
