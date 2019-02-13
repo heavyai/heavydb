@@ -6,6 +6,7 @@ import datetime
 import json
 import numpy
 import pymapd
+import re
 from pandas import DataFrame
 from argparse import ArgumentParser
 
@@ -197,6 +198,55 @@ def calculate_query_times(**kwargs):
     }
 
 
+def get_mem_usage(**kwargs):
+    """
+      Calculates memory statistics from mapd_server _client.get_memory call
+
+      Kwargs:
+        con(class 'pymapd.connection.Connection'): Mapd connection
+        mem_type(str): [gpu, cpu] Type of memory to gather metrics for
+
+      Returns:
+        ramusage(dict):::
+          usedram(float): Amount of memory (in MB) used
+          freeram(float): Amount of memory (in MB) free
+          totalallocated(float): Total amount of memory (in MB) allocated
+          errormessage(str): Error if returned by get_memory call
+          rawdata(list): Raw data returned from get_memory call
+    """
+    try:
+        con_mem_data_list = con._client.get_memory(
+            session=kwargs["con"]._session, memory_level=kwargs["mem_type"]
+        )
+        usedram = 0
+        freeram = 0
+        for con_mem_data in con_mem_data_list:
+            page_size = con_mem_data.page_size
+            node_memory_data_list = con_mem_data.node_memory_data
+            for node_memory_data in node_memory_data_list:
+                ram = node_memory_data.num_pages * page_size
+                is_free = node_memory_data.is_free
+                if is_free:
+                    freeram += ram
+                else:
+                    usedram += ram
+        totalallocated = usedram + freeram
+        if totalallocated > 0:
+            totalallocated = round(totalallocated / 1024 / 1024, 1)
+            usedram = round(usedram / 1024 / 1024, 1)
+            freeram = round(freeram / 1024 / 1024, 1)
+        ramusage = {}
+        ramusage["usedram"] = usedram
+        ramusage["freeram"] = freeram
+        ramusage["totalallocated"] = totalallocated
+        ramusage["errormessage"] = ""
+    except Exception as e:
+        errormessage = "Get memory failed with error: " + str(e)
+        logging.error(errormessage)
+        ramusage["errormessage"] = errormessage
+    return ramusage
+
+
 def json_format_handler(x):
     # Function to allow json to deal with datetime and numpy int
     if isinstance(x, datetime.datetime):
@@ -269,8 +319,60 @@ required.add_argument(
     required=True,
     help="Number of iterations per query. Must be > 1",
 )
-required.add_argument(
-    "-g", "--gpus", dest="gpus", required=True, help="Number of GPUs"
+optional.add_argument(
+    "-g",
+    "--gpu-count",
+    dest="gpu_count",
+    type=int,
+    default=None,
+    help="Number of GPUs. Not required when gathering local gpu info",
+)
+optional.add_argument(
+    "-G",
+    "--gpu-name",
+    dest="gpu_name",
+    type=str,
+    default="",
+    help="Name of GPU(s). Not required when gathering local gpu info",
+)
+optional.add_argument(
+    "--no-gather-conn-gpu-info",
+    dest="no_gather_conn_gpu_info",
+    action="store_true",
+    help="Do not gather source database GPU info fields "
+    + "[run_gpu_count, run_gpu_mem_mb] "
+    + "using pymapd connection info. "
+    + "Use when testing a CPU-only server.",
+)
+optional.add_argument(
+    "--no-gather-nvml-gpu-info",
+    dest="no_gather_nvml_gpu_info",
+    action="store_true",
+    help="Do not gather source database GPU info fields "
+    + "[gpu_driver_ver, run_gpu_name] "
+    + "from local GPU using pynvml. "
+    + 'Defaults to True when source server is not "localhost". '
+    + "Use when testing a CPU-only server.",
+)
+optional.add_argument(
+    "--gather-nvml-gpu-info",
+    dest="gather_nvml_gpu_info",
+    action="store_true",
+    help="Gather source database GPU info fields "
+    + "[gpu_driver_ver, run_gpu_name] "
+    + "from local GPU using pynvml. "
+    + 'Defaults to True when source server is "localhost". '
+    + "Only use when benchmarking against same machine that this script is "
+    + "run from.",
+)
+optional.add_argument(
+    "-m", "--machine-name", dest="machine_name", help="Name of source machine"
+)
+optional.add_argument(
+    "-a",
+    "--machine-uname",
+    dest="machine_uname",
+    help="Uname info from " + "source machine",
 )
 optional.add_argument(
     "-e",
@@ -325,6 +427,16 @@ optional.add_argument(
     help="Destination mapd_db table name",
 )
 optional.add_argument(
+    "-C",
+    "--dest-table-schema-file",
+    dest="dest_table_schema_file",
+    default="results_table_schemas/query-results.sql",
+    help="Destination table schema file. This must be an executable CREATE "
+    + "TABLE statement that matches the output of this script. It is "
+    + "required when creating the results table. Default location is in "
+    + '"./results_table_schemas/query-results.sql"',
+)
+optional.add_argument(
     "-j",
     "--output-file-json",
     dest="output_file_json",
@@ -354,7 +466,13 @@ if (iterations > 1) is not True:
     # Need > 1 iteration as first iteration is dropped from calculations
     logging.error("Iterations must be greater than 1")
     exit(1)
-gpus = int(args.gpus)
+gpu_count = args.gpu_count
+gpu_name = args.gpu_name
+no_gather_conn_gpu_info = args.no_gather_conn_gpu_info
+gather_nvml_gpu_info = args.gather_nvml_gpu_info
+no_gather_nvml_gpu_info = args.no_gather_nvml_gpu_info
+machine_name = args.machine_name
+machine_uname = args.machine_uname
 destinations = args.destination.split(",")
 if "mapd_db" in destinations:
     valid_destination_set = True
@@ -369,6 +487,7 @@ if "mapd_db" in destinations:
     dest_db_port = args.dest_port
     dest_db_name = args.dest_name
     dest_table = args.dest_table
+    dest_table_schema_file = args.dest_table_schema_file
 if "file_json" in destinations:
     valid_destination_set = True
     if args.output_file_json is None:
@@ -405,6 +524,87 @@ run_connection = str(con)
 logging.debug("Connection string: " + run_connection)
 run_driver = ""  # TODO
 run_version = con._client.get_version()
+if "-" in run_version:
+    run_version_short = run_version.split("-")[0]
+else:
+    run_version_short = run_version
+conn_machine_name = re.search(r"@(.*?):", run_connection).group(1)
+# Set GPU info fields
+source_db_gpu_count = None
+source_db_gpu_mem = None
+source_db_gpu_driver_ver = ""
+source_db_gpu_name = ""
+if no_gather_conn_gpu_info:
+    logging.debug(
+        "--no-gather-conn-gpu-info passed, "
+        + "using blank values for source database GPU info fields "
+        + "[run_gpu_count, run_gpu_mem_mb] "
+    )
+else:
+    logging.debug(
+        "Gathering source database GPU info fields "
+        + "[run_gpu_count, run_gpu_mem_mb] "
+        + "using pymapd connection info. "
+    )
+    conn_hardware_info = con._client.get_hardware_info(con._session)
+    conn_gpu_count = conn_hardware_info.hardware_info[0].num_gpu_allocated
+if conn_gpu_count == 0:
+    logging.warning(
+        "0 GPUs detected from connection info, "
+        + "using blank values for source database GPU info fields "
+        + "If running against cpu-only server, make sure to set "
+        + "--no-gather-nvml-gpu-info and --no-gather-conn-gpu-info."
+    )
+    no_gather_nvml_gpu_info = True
+else:
+    source_db_gpu_count = conn_gpu_count
+    try:
+        source_db_gpu_mem = int(
+            conn_hardware_info.hardware_info[0].gpu_info[0].memory / 1000000
+        )
+    except IndexError:
+        logging.error("GPU memory info not available from connection.")
+if no_gather_nvml_gpu_info:
+    logging.debug(
+        "--no-gather-nvml-gpu-info passed, "
+        + "using blank values for source database GPU info fields "
+        + "[gpu_driver_ver, run_gpu_name] "
+    )
+elif conn_machine_name == "localhost" or gather_nvml_gpu_info:
+    logging.debug(
+        "Gathering source database GPU info fields "
+        + "[gpu_driver_ver, run_gpu_name] "
+        + "from local GPU using pynvml. "
+    )
+    import pynvml
+
+    pynvml.nvmlInit()
+    source_db_gpu_driver_ver = pynvml.nvmlSystemGetDriverVersion().decode()
+    for i in range(source_db_gpu_count):
+        handle = pynvml.nvmlDeviceGetHandleByIndex(i)
+        # Assume all cards are the same, overwrite name value
+        source_db_gpu_name = pynvml.nvmlDeviceGetName(handle).decode()
+    pynvml.nvmlShutdown()
+# If gpu_count argument passed in, override gathered value
+if gpu_count:
+    source_db_gpu_count = gpu_count
+# Set machine names, using local info if connected to localhost
+if conn_machine_name == "localhost":
+    local_uname = os.uname()
+if machine_name:
+    run_machine_name = machine_name
+else:
+    if conn_machine_name == "localhost":
+        run_machine_name = local_uname.nodename.split(".")[0]
+    else:
+        run_machine_name = conn_machine_name
+if machine_uname:
+    run_machine_uname = machine_uname
+else:
+    if conn_machine_name == "localhost":
+        run_machine_uname = " ".join(local_uname)
+    else:
+        run_machine_uname = ""
 
 # Read query files contents and write to query_list
 query_list = []
@@ -440,6 +640,12 @@ for query in query_list:
     )
     query_total_start_time = timeit.default_timer()
     for iteration in range(iterations):
+        # Gather memory before running query iteration
+        logging.debug("Getting pre-query memory usage on CPU")
+        pre_query_cpu_mem_usage = get_mem_usage(con=con, mem_type="cpu")
+        logging.debug("Getting pre-query memory usage on GPU")
+        pre_query_gpu_mem_usage = get_mem_usage(con=con, mem_type="gpu")
+        # Run query iteration
         logging.debug(
             "Running iteration "
             + str(iteration)
@@ -450,6 +656,22 @@ for query in query_list:
             query_name=query["name"],
             query_mapdql=query["mapdql"],
             iteration=iteration,
+        )
+        # Gather memory after running query iteration
+        logging.debug("Getting post-query memory usage on CPU")
+        post_query_cpu_mem_usage = get_mem_usage(con=con, mem_type="cpu")
+        logging.debug("Getting post-query memory usage on GPU")
+        post_query_gpu_mem_usage = get_mem_usage(con=con, mem_type="gpu")
+        # Calculate total (post minus pre) memory usage after query iteration
+        query_cpu_mem_usage = round(
+            post_query_cpu_mem_usage["usedram"]
+            - pre_query_cpu_mem_usage["usedram"],
+            1,
+        )
+        query_gpu_mem_usage = round(
+            post_query_gpu_mem_usage["usedram"]
+            - pre_query_gpu_mem_usage["usedram"],
+            1,
         )
         if query_result:
             query.update({"succeeded": True})
@@ -466,9 +688,26 @@ for query in query_list:
                     + first_connect_time
                     + first_results_iter_time
                 )
+                first_cpu_mem_usage = query_cpu_mem_usage
+                first_gpu_mem_usage = query_gpu_mem_usage
             else:
                 # Put noninitial iterations into query_result list
                 query_results.append(query_result)
+                # Verify no change in memory for noninitial iterations
+                if query_cpu_mem_usage != 0.0:
+                    logging.error(
+                        (
+                            "Noninitial iteration ({0}) of query ({1}) "
+                            + "shows non-zero CPU memory usage: {2}"
+                        ).format(iteration, query["name"], query_cpu_mem_usage)
+                    )
+                if query_gpu_mem_usage != 0.0:
+                    logging.error(
+                        (
+                            "Noninitial iteration ({0}) of query ({1}) "
+                            + "shows non-zero GPU memory usage: {2}"
+                        ).format(iteration, query["name"], query_gpu_mem_usage)
+                    )
         else:
             query.update({"succeeded": False})
             logging.warning(
@@ -521,38 +760,54 @@ for query in query_list:
                 "run_guid": run_guid,
                 "run_timestamp": run_timestamp,
                 "run_connection": run_connection,
+                "run_machine_name": run_machine_name,
+                "run_machine_uname": run_machine_uname,
                 "run_driver": run_driver,
+                "run_version": run_version,
+                "run_version_short": run_version_short,
                 "run_label": label,
-                "run_gpu_count": gpus,
-                "run_tables": source_table,
+                "run_gpu_count": source_db_gpu_count,
+                "run_gpu_driver_ver": source_db_gpu_driver_ver,
+                "run_gpu_name": source_db_gpu_name,
+                "run_gpu_mem_mb": source_db_gpu_mem,
+                "run_table": source_table,
                 "query_id": query_id,
                 "query_result_set_count": result_count,
                 "query_error_info": query_error_info,
-                "query_avg": query_times["total_time_avg"],
-                "query_min": query_times["total_time_min"],
-                "query_Max": query_times["total_time_max"],
-                "query_85": query_times["total_time_85"],
-                "execute_avg": query_times["execution_time_avg"],
-                "execute_min": query_times["execution_time_min"],
-                "execute_max": query_times["execution_time_max"],
-                "execute_85": query_times["execution_time_85"],
-                "execute_25": query_times["execution_time_25"],
-                "execute_stdd": query_times["execution_time_std"],
-                "jdbc_avg": query_times["connect_time_avg"],
-                "jdbc_min": query_times["connect_time_min"],
-                "jdbc_max": query_times["connect_time_max"],
-                "jdbc_85": query_times["connect_time_85"],
-                "iter_avg": query_times["results_iter_time_avg"],
-                "iter_min": query_times["results_iter_time_min"],
-                "iter_max": query_times["results_iter_time_max"],
-                "iter_85": query_times["results_iter_time_85"],
-                "first_exec": first_execution_time,
-                "first_jdbc": first_connect_time,
-                "iteration_time": first_results_iter_time,
-                "iteration_count": iterations,
-                "total_time": query_total_elapsed_time,
-                "total_time_accounted": first_total_time,
-                "run_version": run_version,
+                "query_conn_first": first_connect_time,
+                "query_conn_avg": query_times["connect_time_avg"],
+                "query_conn_min": query_times["connect_time_min"],
+                "query_conn_max": query_times["connect_time_max"],
+                "query_conn_85": query_times["connect_time_85"],
+                "query_exec_first": first_execution_time,
+                "query_exec_avg": query_times["execution_time_avg"],
+                "query_exec_min": query_times["execution_time_min"],
+                "query_exec_max": query_times["execution_time_max"],
+                "query_exec_85": query_times["execution_time_85"],
+                "query_exec_25": query_times["execution_time_25"],
+                "query_exec_stdd": query_times["execution_time_std"],
+                # Render queries not supported yet
+                "query_render_first": None,
+                "query_render_avg": None,
+                "query_render_min": None,
+                "query_render_max": None,
+                "query_render_85": None,
+                "query_render_25": None,
+                "query_render_stdd": None,
+                "query_total_first": first_total_time,
+                "query_total_avg": query_times["total_time_avg"],
+                "query_total_min": query_times["total_time_min"],
+                "query_total_max": query_times["total_time_max"],
+                "query_total_85": query_times["total_time_85"],
+                "query_total_all": query_total_elapsed_time,
+                "results_iter_count": iterations,
+                "results_iter_first": first_results_iter_time,
+                "results_iter_avg": query_times["results_iter_time_avg"],
+                "results_iter_min": query_times["results_iter_time_min"],
+                "results_iter_max": query_times["results_iter_time_max"],
+                "results_iter_85": query_times["results_iter_time_85"],
+                "cpu_mem_usage_mb": first_cpu_mem_usage,
+                "gpu_mem_usage_mb": first_gpu_mem_usage,
             }
         }
     )
@@ -599,25 +854,25 @@ if "mapd_db" in destinations:
     tables = dest_con.get_tables()
     if dest_table not in tables:
         logging.info("Destination table does not exist. Creating.")
-        dest_con.create_table(dest_table, results_df)
-        # Following steps are a hack around pymapd not supporting DICT enc
-        dest_table_details = dest_con._client.get_table_details(
-            dest_con._session, dest_table
-        )
-        logging.debug("Updating STR datatypes to add DICT encoding")
-        for row in dest_table_details.row_desc:
-            if row.col_type.type == pymapd.MapD.TDatumType.STR:
-                row.col_type.encoding = pymapd.MapD.TEncodingType.DICT
-                row.col_type.comp_param = 32
-        logging.debug("Dropping empty dest table without DICT encoding")
-        dest_con.execute("drop table " + dest_table)
-        logging.debug("Creating new table with DICT encoding")
-        dest_con._client.create_table(
-            dest_con._session,
-            dest_table,
-            dest_table_details.row_desc,
-            pymapd.MapD.TTableType.DELIMITED,
-        )
+        try:
+            with open(dest_table_schema_file, "r") as table_schema:
+                logging.debug(
+                    "Reading table_schema_file: " + dest_table_schema_file
+                )
+                create_table_sql = table_schema.read().replace("\n", " ")
+                create_table_sql = create_table_sql.replace(
+                    "##TAB##", dest_table
+                )
+        except FileNotFoundError:
+            logging.exception("Could not find table_schema_file.")
+            exit(1)
+        try:
+            logging.debug("Executing create destination table query")
+            res = dest_con.execute(create_table_sql)
+            logging.debug("Destination table created.")
+        except (pymapd.exceptions.ProgrammingError, pymapd.exceptions.Error):
+            logging.exception("Error running table creation")
+            exit(1)
     logging.info("Loading results into destination db")
     dest_con.load_table(
         dest_table, results_df, method="columnar", create=False

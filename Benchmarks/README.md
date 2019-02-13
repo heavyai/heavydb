@@ -25,6 +25,10 @@ The required packages can otherwise be installed individually using [conda](http
 
    Install with conda: `conda install -c anaconda numpy` or with pip: `pip install numpy`
 
+4) [nvidia-ml-py3](https://github.com/nicolargo/nvidia-ml-py3) - Python bindings to the NVIDIA Management Library
+
+   Install with conda: `conda install -c fastai nvidia-ml-py3` or with pip: `pip install nvidia-ml-py3`
+
 ## Usage
 
 ### Required components
@@ -44,9 +48,13 @@ Currently, usage is:
 ```
 usage: run-benchmark.py [-h] [-v] [-q] [-u USER] [-p PASSWD] [-s SERVER]
                         [-o PORT] [-n NAME] -t TABLE -l LABEL [-d QUERIES_DIR]
-                        -i ITERATIONS -g GPUS [-e DESTINATION] [-U DEST_USER]
-                        [-P DEST_PASSWD] [-S DEST_SERVER] [-O DEST_PORT]
-                        [-N DEST_NAME] [-T DEST_TABLE] [-j OUTPUT_FILE_JSON]
+                        -i ITERATIONS [-g GPU_COUNT] [-G GPU_NAME]
+                        [--no-gather-conn-gpu-info]
+                        [--no-gather-nvml-gpu-info] [--gather-nvml-gpu-info]
+                        [-m MACHINE_NAME] [-a MACHINE_UNAME] [-e DESTINATION]
+                        [-U DEST_USER] [-P DEST_PASSWD] [-S DEST_SERVER]
+                        [-O DEST_PORT] [-N DEST_NAME] [-T DEST_TABLE]
+                        [-C DEST_TABLE_SCHEMA_FILE] [-j OUTPUT_FILE_JSON]
 
 required arguments:
   -u USER, --user USER  Source database user
@@ -64,13 +72,37 @@ required arguments:
                         "queries" dir in same location as script]
   -i ITERATIONS, --iterations ITERATIONS
                         Number of iterations per query. Must be > 1
-  -g GPUS, --gpus GPUS  Number of GPUs
 
 optional arguments:
   -h, --help            show this help message and exit
   -v, --verbose         Turn on debug logging
   -q, --quiet           Suppress script outuput (except warnings and errors)
   -o PORT, --port PORT  Source database server port
+  -g GPU_COUNT, --gpu-count GPU_COUNT
+                        Number of GPUs. Not required when gathering local gpu
+                        info
+  -G GPU_NAME, --gpu-name GPU_NAME
+                        Name of GPU(s). Not required when gathering local gpu
+                        info
+  --no-gather-conn-gpu-info
+                        Do not gather source database GPU info fields
+                        [run_gpu_count, run_gpu_mem_mb] using pymapd
+                        connection info. Use when testing a CPU-only server.
+  --no-gather-nvml-gpu-info
+                        Do not gather source database GPU info fields
+                        [gpu_driver_ver, run_gpu_name] from local GPU using
+                        pynvml. Defaults to True when source server is not
+                        "localhost". Use when testing a CPU-only server.
+  --gather-nvml-gpu-info
+                        Gather source database GPU info fields
+                        [gpu_driver_ver, run_gpu_name] from local GPU using
+                        pynvml. Defaults to True when source server is
+                        "localhost". Only use when benchmarking against same
+                        machine that this script is run from.
+  -m MACHINE_NAME, --machine-name MACHINE_NAME
+                        Name of source machine
+  -a MACHINE_UNAME, --machine-uname MACHINE_UNAME
+                        Uname info from source machine
   -e DESTINATION, --destination DESTINATION
                         Destination type: [mapd_db, file_json, output]
                         Multiple values can be input seperated by commas, ex:
@@ -88,6 +120,12 @@ optional arguments:
                         Destination mapd_db database name
   -T DEST_TABLE, --dest-table DEST_TABLE
                         Destination mapd_db table name
+  -C DEST_TABLE_SCHEMA_FILE, --dest-table-schema-file DEST_TABLE_SCHEMA_FILE
+                        Destination table schema file. This must be an
+                        executable CREATE TABLE statement that matches the
+                        output of this script. It is required when creating
+                        the results table. Default location is in
+                        "./results_table_schemas/query-results.sql"
   -j OUTPUT_FILE_JSON, --output-file-json OUTPUT_FILE_JSON
                         Absolute path of .json output file (required if
                         destination = "file_json")
