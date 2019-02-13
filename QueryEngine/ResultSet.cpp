@@ -443,7 +443,7 @@ bool ResultSet::isTruncated() const {
   return keep_first_ + drop_first_;
 }
 
-bool ResultSet::isJustExplain() const {
+bool ResultSet::isExplain() const {
   return just_explain_;
 }
 

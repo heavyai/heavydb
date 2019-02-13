@@ -426,7 +426,7 @@ class ResultSet {
 
   bool isTruncated() const;
 
-  bool isJustExplain() const;
+  bool isExplain() const;
 
   // Called from the executor because in the new ResultSet we assume the 'compact' field
   // in ColWidths already contains the padding, whereas in the executor it's computed.
