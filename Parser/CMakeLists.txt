@@ -46,7 +46,10 @@ set(parser_source_files
     ${CMAKE_CURRENT_SOURCE_DIR}/../QueryEngine/DateTruncate.cpp
 )
 
-add_library(Parser ${BisonppOutput} ${FlexppOutput} ${CMAKE_CURRENT_BINARY_DIR}/parser.h ${parser_source_files})
+add_library(ParserGenerated ${BisonppOutput} ${FlexppOutput})
+set_property(TARGET ParserGenerated PROPERTY CXX_STANDARD 14)
+
+add_library(Parser ${CMAKE_CURRENT_BINARY_DIR}/parser.h ${parser_source_files})
 add_dependencies(Parser ParserFiles ScannerFiles)
-target_link_libraries(Parser Shared QueryEngine Catalog DataMgr)
+target_link_libraries(Parser ParserGenerated Shared QueryEngine Catalog DataMgr)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
