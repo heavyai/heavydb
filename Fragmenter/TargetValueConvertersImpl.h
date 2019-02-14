@@ -269,11 +269,7 @@ struct ArrayValueConverter : public TargetValueConverter {
   void convertToColumnarFormat(size_t row, const TargetValue* value) override {
     const auto arrayValue =
         checked_get<ArrayTargetValue>(row, value, ARRAY_VALUE_ACCESSOR);
-    const auto nullArrayValue =
-        checked_get<NullArrayTargetValue>(row, value, NULL_ARRAY_VALUE_ACCESSOR);
-
     if (arrayValue) {
-      CHECK(!nullArrayValue);
       bool is_null = false;
       if (arrayValue->size()) {
         element_converter_->allocateColumnarData(arrayValue->size());
@@ -287,12 +283,14 @@ struct ArrayValueConverter : public TargetValueConverter {
             element_converter_->takeColumnarData();
         int8_t* arrayData = reinterpret_cast<int8_t*>(ptr.release());
         (*column_data_)[row] = ArrayDatum(
-          arrayValue->size() * element_type_info_.get_size(), arrayData, is_null);
+            arrayValue->size() * element_type_info_.get_size(), arrayData, is_null);
       } else {
         // Empty, not NULL
         (*column_data_)[row] = ArrayDatum(0, nullptr, is_null, DoNothingDeleter());
       }
     } else {
+      const auto nullArrayValue =
+          checked_get<NullArrayTargetValue>(row, value, NULL_ARRAY_VALUE_ACCESSOR);
       CHECK(nullArrayValue);
       // TODO: what does it mean if do_check_null_ is set to false and we get a NULL?
       // CHECK(do_check_null_);  // May need to check

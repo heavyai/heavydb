@@ -571,10 +571,14 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
     return false;
   }
   HOST DEVICE inline bool is_null_array(const int8_t* val, int array_size) const {
-    if (type == kARRAY && val && array_size > 0) {
-      // Check if fixed length array is filled with NULL sentinels
-      auto elem_ti = get_elem_type();
-      auto elem_size = elem_ti.get_size();
+    // Check if fixed length array is filled with NULL sentinels
+    if (type == kARRAY && val && array_size > 0 && array_size == size) {
+      // Need to create element type to get the size, but can't call get_elem_type()
+      // since this is a HOST DEVICE function. Going through copy constructor instead.
+      auto elem_ti{*this};
+      elem_ti.set_type(subtype);
+      elem_ti.set_subtype(kNULLT);
+      auto elem_size = elem_ti.get_storage_size();
       if (elem_size < 1)
         return false;
       for (auto p = val; p < val + array_size; p += elem_size) {
@@ -635,7 +639,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
   static std::string type_name[kSQLTYPE_LAST];
   static std::string comp_name[kENCODING_LAST];
 #endif
-  inline int get_storage_size() const {
+  HOST DEVICE inline int get_storage_size() const {
     switch (type) {
       case kBOOLEAN:
         return sizeof(int8_t);
