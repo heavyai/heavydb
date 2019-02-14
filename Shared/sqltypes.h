@@ -570,41 +570,40 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
     }
     return false;
   }
-  HOST DEVICE inline bool is_null(const int8_t* val, int array_size) const {
-    if (type == kARRAY && val && array_size > 0 && compression == kENCODING_NONE) {
+  HOST DEVICE inline bool is_null_array(const int8_t* val, int array_size) const {
+    if (type == kARRAY && val && array_size > 0) {
       // Check if fixed length array is filled with NULL sentinels
-      for (auto p = val; p < val + array_size;) {
-        switch (subtype) {
-          case kBOOLEAN:
-          case kTINYINT:
-            if (*(int8_t*)p != NULL_TINYINT)
+      auto elem_ti = get_elem_type();
+      auto elem_size = elem_ti.get_size();
+      if (elem_size < 1)
+        return false;
+      for (auto p = val; p < val + array_size; p += elem_size) {
+        if (subtype == kFLOAT) {
+          if (*(float*)p != NULL_FLOAT)
+            return false;
+          continue;
+        }
+        if (subtype == kDOUBLE) {
+          if (*(double*)p != NULL_DOUBLE)
+            return false;
+          continue;
+        }
+        switch (elem_size) {
+          case 1:
+            if (*p != NULL_TINYINT)
               return false;
-            p += sizeof(int8_t);
             break;
-          case kSMALLINT:
+          case 2:
             if (*(int16_t*)p != NULL_SMALLINT)
               return false;
-            p += sizeof(int16_t);
             break;
-          case kINT:
+          case 4:
             if (*(int32_t*)p != NULL_INT)
               return false;
-            p += sizeof(int32_t);
             break;
-          case kBIGINT:
+          case 8:
             if (*(int64_t*)p != NULL_BIGINT)
               return false;
-            p += sizeof(int64_t);
-            break;
-          case kFLOAT:
-            if (*(float*)p != NULL_FLOAT)
-              return false;
-            p += sizeof(float);
-            break;
-          case kDOUBLE:
-            if (*(double*)p != NULL_DOUBLE)
-              return false;
-            p += sizeof(double);
             break;
           default:
             return false;

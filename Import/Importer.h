@@ -373,6 +373,7 @@ class TypedImportBuffer : boost::noncopyable {
         }
       }
       string_dict_->getOrAddBulk(p, a);
+      // TODO: distinguish between empty and NULL
       string_array_dict_buffer_->push_back(
           ArrayDatum(len, reinterpret_cast<int8_t*>(a), len == 0));
     }
@@ -770,7 +771,8 @@ class ImporterUtils {
   static void parseStringArray(const std::string& s,
                                const CopyParams& copy_params,
                                std::vector<std::string>& string_vec) {
-    if (s == copy_params.null_str || s.size() < 1) {
+    if (s == copy_params.null_str || s == "NULL" || s.size() < 1 || s.empty()) {
+      string_vec.push_back("NULL");
       return;
     }
     if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
