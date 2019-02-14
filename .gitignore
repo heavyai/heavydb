@@ -40,6 +40,9 @@ Debug/
 # VS code settings files
 .vscode/
 
+# VIM editor files
+.*.swp
+
 # Thrift-generated files
 java/src/gen/
 gen-js/

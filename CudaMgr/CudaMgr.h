@@ -43,7 +43,9 @@ class CudaErrorException : public std::runtime_error {
   std::string processStatus(CUresult status) {
     const char* errorString{nullptr};
     cuGetErrorString(status, &errorString);
-    return errorString ? std::string(errorString) : "Unknown error";
+    return errorString
+               ? std::string(errorString)
+               : std::string("CUDA Driver API error code ") + std::to_string(status);
   }
 };
 #endif

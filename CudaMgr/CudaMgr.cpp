@@ -124,7 +124,11 @@ void CudaMgr::unloadGpuModuleData(CUmodule* module, const int device_id) const {
 
   setContext(device_id);
   try {
-    checkError(cuModuleUnload(*module));
+    auto code = cuModuleUnload(*module);
+    // If the Cuda driver has already shut down, ignore the resulting errors.
+    if (code != CUDA_ERROR_DEINITIALIZED) {
+      checkError(code);
+    }
   } catch (const std::runtime_error& e) {
     LOG(ERROR) << "CUDA Error: " << e.what();
   }
