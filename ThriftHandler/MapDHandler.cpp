@@ -1532,6 +1532,7 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog* cat,
   TColumnType col_type;
   col_type.col_name = cd->columnName;
   col_type.src_name = cd->sourceName;
+  col_type.col_id = cd->columnId;
   col_type.col_type.type = type_to_thrift(cd->columnType);
   col_type.col_type.encoding = encoding_to_thrift(cd->columnType);
   col_type.col_type.nullable = !cd->columnType.get_notnull();
@@ -1794,6 +1795,7 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
     ret.is_replicated = table_is_replicated(td);
     ret.shard_count = td->nShards;
     ret.max_rows = td->maxRows;
+    ret.table_id = td->tableId;
 
     std::set<TDatumType::type> col_datum_types;
     size_t num_cols = 0;
@@ -4587,6 +4589,28 @@ void check_table_not_sharded(const Catalog& cat, const int table_id) {
 
 }  // namespace
 
+// this all should be moved out of here to catalog
+bool MapDHandler::user_can_access_table(
+    const Catalog_Namespace::SessionInfo& session_info,
+    const TableDescriptor* td,
+    const AccessPrivileges access_priv) {
+  CHECK(td);
+  auto& cat = session_info.getCatalog();
+
+  if (SysCatalog::instance().arePrivilegesOn()) {
+    std::vector<DBObject> privObjects;
+    DBObject dbObject(td->tableName, TableDBObjectType);
+    dbObject.loadKey(cat);
+    dbObject.setPrivileges(access_priv);
+    privObjects.push_back(dbObject);
+    if (!SysCatalog::instance().checkPrivileges(session_info.get_currentUser(),
+                                                privObjects)) {
+      return false;
+    }
+  }
+  return true;
+};
+
 void MapDHandler::sql_execute_impl(TQueryResult& _return,
                                    const Catalog_Namespace::SessionInfo& session_info,
                                    const std::string& query_str,
@@ -4711,7 +4735,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         return;
       }
       return;
-    } else if (pw.is_optimize) {
+    } else if (pw.is_optimize || pw.is_validate) {
       // Get the Stmt object
       try {
         num_parse_errors = parser.parse(query_str, parse_trees, last_parsed);
@@ -4722,51 +4746,66 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         throw std::runtime_error("Syntax error at: " + last_parsed);
       }
       CHECK_EQ(parse_trees.size(), 1);
-      const auto optimize_stmt =
-          dynamic_cast<Parser::OptimizeTableStmt*>(parse_trees.front().get());
-      CHECK(optimize_stmt);
 
-      _return.execution_time_ms += measure<>::execution([&]() {
-        const auto td = cat.getMetadataForTable(optimize_stmt->getTableName(),
-                                                /*populateFragmenter=*/true);
+      if (pw.is_optimize) {
+        const auto optimize_stmt =
+            dynamic_cast<Parser::OptimizeTableStmt*>(parse_trees.front().get());
+        CHECK(optimize_stmt);
 
-        auto user_can_access_table = [&](const TableDescriptor* td) -> bool {
-          CHECK(td);
-          if (SysCatalog::instance().arePrivilegesOn()) {
-            std::vector<DBObject> privObjects;
-            DBObject dbObject(td->tableName, TableDBObjectType);
-            dbObject.loadKey(cat);
-            dbObject.setPrivileges(
-                AccessPrivileges::DELETE_FROM_TABLE);  // TODO(adb): right level?
-            privObjects.push_back(dbObject);
-            if (!SysCatalog::instance().checkPrivileges(session_info.get_currentUser(),
-                                                        privObjects)) {
-              return false;
-            }
+        _return.execution_time_ms += measure<>::execution([&]() {
+          const auto td = cat.getMetadataForTable(optimize_stmt->getTableName(),
+                                                  /*populateFragmenter=*/true);
+
+          if (!td || !user_can_access_table(
+                         session_info, td, AccessPrivileges::DELETE_FROM_TABLE)) {
+            throw std::runtime_error("Table " + optimize_stmt->getTableName() +
+                                     " does not exist.");
           }
-          return true;
-        };
 
-        if (!td || !user_can_access_table(td)) {
-          throw std::runtime_error("Table " + optimize_stmt->getTableName() +
-                                   " does not exist.");
+          auto chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+              cat, td->tableName, LockType::CheckpointLock);
+          auto upddelLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+              cat, td->tableName, LockType::UpdateDeleteLock);
+
+          auto executor = Executor::getExecutor(
+              cat.getCurrentDB().dbId, "", "", mapd_parameters_, nullptr);
+          const TableOptimizer optimizer(td, executor.get(), cat);
+          if (optimize_stmt->shouldVacuumDeletedRows()) {
+            optimizer.vacuumDeletedRows();
+          }
+          optimizer.recomputeMetadata();
+        });
+
+        return;
+      }
+      if (pw.is_validate) {
+        // check user is superuser
+        if (!session_info.get_currentUser().isSuper) {
+          throw std::runtime_error("Superuser is required to run VALIDATE");
         }
+        const auto validate_stmt =
+            dynamic_cast<Parser::ValidateStmt*>(parse_trees.front().get());
+        CHECK(validate_stmt);
 
-        auto chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-            cat, td->tableName, LockType::CheckpointLock);
-        auto upddelLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-            cat, td->tableName, LockType::UpdateDeleteLock);
+        executeWriteLock = mapd_unique_lock<mapd_shared_mutex>(
+            *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
 
-        auto executor = Executor::getExecutor(
-            cat.getCurrentDB().dbId, "", "", mapd_parameters_, nullptr);
-        const TableOptimizer optimizer(td, executor.get(), cat);
-        if (optimize_stmt->shouldVacuumDeletedRows()) {
-          optimizer.vacuumDeletedRows();
+        std::string output{"Result for validate"};
+        if (g_cluster && leaf_aggregator_.leafCount()) {
+          _return.execution_time_ms += measure<>::execution([&]() {
+            const DistributedValidate validator(validate_stmt->getType(),
+                                                cat,
+                                                leaf_aggregator_,
+                                                session_info.get_session_id(),
+                                                *this);
+            output = validator.report_differences();
+          });
+        } else {
+          output = "Not running on a cluster nothing to validate";
         }
-        optimizer.recomputeMetadata();
-      });
-
-      return;
+        convert_result(_return, ResultSet(output), true);
+        return;
+      }
     }
     LOG(INFO) << "passing query to legacy processor";
   } catch (std::exception& e) {

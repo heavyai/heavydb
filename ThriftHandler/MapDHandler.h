@@ -63,6 +63,7 @@
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
+#include "ThriftHandler/DistributedValidate.h"
 
 #include <fcntl.h>
 #include <glog/logging.h>
@@ -484,6 +485,10 @@ class MapDHandler : public MapDIf {
                         const ExecutorDeviceType executor_device_type,
                         const int32_t first_n,
                         const int32_t at_most_n);
+
+  bool user_can_access_table(const Catalog_Namespace::SessionInfo&,
+                             const TableDescriptor* td,
+                             const AccessPrivileges acess_priv);
 
   void execute_distributed_copy_statement(
       Parser::CopyTableStmt*,

@@ -1105,6 +1105,29 @@ class OptimizeTableStmt : public DDLStmt {
   std::list<std::unique_ptr<NameValueAssign>> options_;
 };
 
+class ValidateStmt : public DDLStmt {
+ public:
+  ValidateStmt(std::string* type, std::list<NameValueAssign*>* o) : type_(type) {
+    if (!type_) {
+      throw std::runtime_error("Validation Type is required for VALIDATE command.");
+    }
+    if (o) {
+      for (const auto e : *o) {
+        options_.emplace_back(e);
+      }
+      delete o;
+    }
+  }
+
+  const std::string getType() const { return *(type_.get()); }
+
+  void execute(const Catalog_Namespace::SessionInfo& session) override { UNREACHABLE(); }
+
+ private:
+  std::unique_ptr<std::string> type_;
+  std::list<std::unique_ptr<NameValueAssign>> options_;
+};
+
 class RenameTableStmt : public DDLStmt {
  public:
   RenameTableStmt(std::string* tab, std::string* new_tab_name)

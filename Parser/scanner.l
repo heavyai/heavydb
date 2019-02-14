@@ -148,6 +148,7 @@ UNIQUE        TOK(UNIQUE)
 UPDATE        TOK(UPDATE)
 USER          TOK(USER)
 VALUES        TOK(VALUES)
+VALIDATE      TOK(VALIDATE)
 VARCHAR       TOK(CHARACTER)	/* XXX don't distinguish char and varchar for now */
 VIEW          TOK(VIEW)
 WHEN          TOK(WHEN)
@@ -167,6 +168,9 @@ WORK          TOK(WORK)
 [-+*/(),.]	{ return yytext[0]; }
 
 [;] { BEGIN 0; return yytext[0]; }
+
+  /* validate type */
+"CLUSTER"	{ yylval.stringval = new std::string(yytext); TOK(CLUSTER) }
 
 	/* names */
 [A-Za-z_][A-Za-z0-9\$_]*	{ yylval.stringval = new std::string(yytext); TOK(NAME) }

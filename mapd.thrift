@@ -99,7 +99,8 @@ struct TColumnType {
   3: bool is_reserved_keyword,
   4: string src_name,
   5: bool is_system,
-  6: bool is_physical
+  6: bool is_physical,
+  7: i64 col_id
 }
 
 struct TRow {
@@ -313,7 +314,8 @@ struct TTableMeta {
   5: bool is_replicated
   6: i64 shard_count
   7: i64 max_rows
-  8: i64 max_table_id
+  8: i64 table_id
+  9: i64 max_table_id
 }
 
 struct TTableDetails {
