@@ -55,6 +55,7 @@ usage: run-benchmark.py [-h] [-v] [-q] [-u USER] [-p PASSWD] [-s SERVER]
                         [-U DEST_USER] [-P DEST_PASSWD] [-S DEST_SERVER]
                         [-O DEST_PORT] [-N DEST_NAME] [-T DEST_TABLE]
                         [-C DEST_TABLE_SCHEMA_FILE] [-j OUTPUT_FILE_JSON]
+                        [-J OUTPUT_FILE_JENKINS] [-E OUTPUT_TAG_JENKINS]
 
 required arguments:
   -u USER, --user USER  Source database user
@@ -104,9 +105,9 @@ optional arguments:
   -a MACHINE_UNAME, --machine-uname MACHINE_UNAME
                         Uname info from source machine
   -e DESTINATION, --destination DESTINATION
-                        Destination type: [mapd_db, file_json, output]
-                        Multiple values can be input seperated by commas, ex:
-                        "mapd_db,file_json"
+                        Destination type: [mapd_db, file_json, output,
+                        jenkins_bench] Multiple values can be input seperated
+                        by commas, ex: "mapd_db,file_json"
   -U DEST_USER, --dest-user DEST_USER
                         Destination mapd_db database user
   -P DEST_PASSWD, --dest-passwd DEST_PASSWD
@@ -129,6 +130,12 @@ optional arguments:
   -j OUTPUT_FILE_JSON, --output-file-json OUTPUT_FILE_JSON
                         Absolute path of .json output file (required if
                         destination = "file_json")
+  -J OUTPUT_FILE_JENKINS, --output-file-jenkins OUTPUT_FILE_JENKINS
+                        Absolute path of jenkins benchmark .json output file
+                        (required if destination = "jenkins_bench")
+  -E OUTPUT_TAG_JENKINS, --output-tag-jenkins OUTPUT_TAG_JENKINS
+                        Jenkins benchmark result tag. Optional, appended to
+                        table name in "group" field
 ```
 
 Example 1:

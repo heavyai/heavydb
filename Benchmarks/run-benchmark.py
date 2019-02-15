@@ -379,7 +379,7 @@ optional.add_argument(
     "--destination",
     dest="destination",
     default="mapd_db",
-    help="Destination type: [mapd_db, file_json, output] "
+    help="Destination type: [mapd_db, file_json, output, jenkins_bench] "
     + "Multiple values can be input seperated by commas, "
     + 'ex: "mapd_db,file_json"',
 )
@@ -443,6 +443,21 @@ optional.add_argument(
     help="Absolute path of .json output file "
     + '(required if destination = "file_json")',
 )
+optional.add_argument(
+    "-J",
+    "--output-file-jenkins",
+    dest="output_file_jenkins",
+    help="Absolute path of jenkins benchmark .json output file "
+    + '(required if destination = "jenkins_bench")',
+)
+optional.add_argument(
+    "-E",
+    "--output-tag-jenkins",
+    dest="output_tag_jenkins",
+    default="",
+    help="Jenkins benchmark result tag. "
+    + 'Optional, appended to table name in "group" field',
+)
 args = parser.parse_args()
 if args.verbose:
     logging.basicConfig(level=logging.DEBUG)
@@ -500,6 +515,18 @@ if "file_json" in destinations:
         output_file_json = args.output_file_json
 if "output" in destinations:
     valid_destination_set = True
+if "jenkins_bench" in destinations:
+    valid_destination_set = True
+    if args.output_file_jenkins is None:
+        # If output_file_jenkins is not set for jenkins_bench, then exit
+        logging.error(
+            '"output_file_jenkins" is required '
+            + 'when destination = "jenkins_bench"'
+        )
+        exit(1)
+    else:
+        output_file_jenkins = args.output_file_jenkins
+output_tag_jenkins = args.output_tag_jenkins
 if not valid_destination_set:
     logging.error("No valid destination(s) have been set. Exiting.")
     exit(1)
@@ -884,6 +911,43 @@ if "file_json" in destinations:
     file_json_open = open(output_file_json, "w")
     logging.info("Writing to output json file: " + output_file_json)
     file_json_open.write(query_list_json)
+if "jenkins_bench" in destinations:
+    # Write output to file formatted for jenkins benchmark plugin
+    # https://github.com/jenkinsci/benchmark-plugin
+    jenkins_bench_results = []
+    for query_result in query_results:
+        logging.debug("Constructing output for jenkins benchmark plugin")
+        jenkins_bench_results.append(
+            {
+                "name": query_result["query_id"],
+                "description": "",
+                "parameters": [],
+                "results": [
+                    {
+                        "name": query_result["query_id"] + " average",
+                        "description": "",
+                        "unit": "ms",
+                        "dblValue": query_result["query_exec_avg"],
+                    }
+                ],
+            }
+        )
+    jenkins_bench_json = json.dumps(
+        {
+            "groups": [
+                {
+                    "name": source_table + output_tag_jenkins,
+                    "description": "Source table: " + source_table,
+                    "tests": jenkins_bench_results,
+                }
+            ]
+        }
+    )
+    # Write to json file
+    logging.debug("Opening jenkins_bench json output file for writing")
+    file_jenkins_open = open(output_file_jenkins, "w")
+    logging.info("Writing to jenkins_bench json file: " + output_file_jenkins)
+    file_jenkins_open.write(jenkins_bench_json)
 if "output" in destinations:
     logging.info("Printing query results to output")
     print(query_list_json)
