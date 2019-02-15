@@ -2422,7 +2422,12 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
     if (cd.columnType.get_compression() == kENCODING_DICT) {
       // we need to reset the comp param (as this points to the actual dictionary)
-      cd_for_create.columnType.set_comp_param(cd.columnType.get_size() * 8);
+      if (cd.columnType.is_array()) {
+        // for dict encoded arrays, it is always 4 bytes
+        cd_for_create.columnType.set_comp_param(32);
+      } else {
+        cd_for_create.columnType.set_comp_param(cd.columnType.get_size() * 8);
+      }
     }
 
     column_descriptors_for_create.push_back(cd_for_create);
