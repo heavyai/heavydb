@@ -722,25 +722,22 @@ std::shared_ptr<Catalog> SysCatalog::login(const std::string& dbname,
   if (!getMetadataForDB(dbname, db_meta)) {
     throw std::runtime_error("Database " + dbname + " does not exist.");
   }
-
   // NOTE(max): register database in Catalog that early to allow ldap
   // and saml create default user and role privileges on databases
   auto cat =
       Catalog::get(basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
 
-  {
-    if (check_password) {
+  if (!check_password) {
+    if (!getMetadataForUser(username, user_meta)) {
+      throw std::runtime_error("Invalid credentials.");
+    }
+  } else {
+    {
       if (!checkPasswordForUser(password, username, user_meta)) {
-        throw std::runtime_error("Invalid credentials.");
-      }
-    } else {
-      bool userPresent = getMetadataForUser(username, user_meta);
-      if (!userPresent) {
         throw std::runtime_error("Invalid credentials.");
       }
     }
   }
-
   if (!arePrivilegesOn()) {
     // insert privilege is being treated as access allowed for now
     Privileges privs;
@@ -752,7 +749,6 @@ std::shared_ptr<Catalog> SysCatalog::login(const std::string& dbname,
       throw std::runtime_error("Invalid credentials.");
     }
   }
-
   return cat;
 }
 
