@@ -45,7 +45,7 @@ class DistributedValidate {
   /**
    * @brief Compares Aggregators and Leaves metatdata reporting what is different.
    */
-  std::string report_differences() const;
+  std::string report_differences() const { return nullptr; };
 
  private:
   const Catalog_Namespace::Catalog& cat_;

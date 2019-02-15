@@ -79,7 +79,8 @@ struct DictionaryConverterFactory {
   using ConverterType = DictionaryValueConverter<TARGET_TYPE>;
 
   std::unique_ptr<ConverterType> create(ConverterCreateParameter param) {
-    TARGET_TYPE target_null_value = inline_int_null_value<int32_t>();
+    TARGET_TYPE target_null_value =
+        static_cast<TARGET_TYPE>(inline_int_null_value<TARGET_TYPE>());
 
     switch (param.type.get_size()) {
       case 4:
