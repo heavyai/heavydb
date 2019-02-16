@@ -21,6 +21,7 @@
 #include "../GroupByAndAggregate.h"
 #include "../ScalarExprVisitor.h"
 #include "../StreamingTopN.h"
+#include "ColSlotContext.h"
 
 bool g_enable_smem_group_by{true};
 extern bool g_enable_columnar_output;
@@ -140,7 +141,7 @@ int8_t pick_baseline_key_component_width(const ExpressionRange& range) {
     case ExpressionRangeType::Double:
       return sizeof(int64_t);  // No compaction for floating point yet.
     default:
-      CHECK(false);
+      UNREACHABLE();
   }
   return sizeof(int64_t);
 }
@@ -160,62 +161,14 @@ int8_t pick_baseline_key_width(const RelAlgExecutionUnit& ra_exe_unit,
 
 }  // namespace
 
-QueryMemoryDescriptor::QueryMemoryDescriptor(
+std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
     const Executor* executor,
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos,
-    const std::vector<int8_t>& group_col_widths,
-    const bool allow_multifrag,
-    const bool is_group_by,
-    const int8_t crt_min_byte_width,
-    RenderInfo* render_info,
-    const CountDistinctDescriptors count_distinct_descriptors,
-    const bool must_use_baseline_sort)
-    : executor_(executor)
-    , allow_multifrag_(allow_multifrag)
-    , query_desc_type_(ra_exe_unit.estimator ? QueryDescriptionType::Estimator
-                                             : QueryDescriptionType::NonGroupedAggregate)
-    , keyless_hash_(false)
-    , interleaved_bins_on_gpu_(false)
-    , idx_target_as_key_(-1)
-    , init_val_(0)
-    , group_col_widths_(group_col_widths)
-    , group_col_compact_width_(0)
-    , entry_count_(1)
-    , min_val_(0)
-    , max_val_(0)
-    , bucket_(0)
-    , has_nulls_(false)
-    , sharing_(GroupByMemSharing::Shared)
-    , count_distinct_descriptors_(count_distinct_descriptors)
-    , sort_on_gpu_(false)
-    , output_columnar_(false)
-    , render_output_(false)
-    , must_use_baseline_sort_(must_use_baseline_sort)
-    , force_4byte_float_(false) {
-  // Constructor for non-group by queries
-  CHECK(!is_group_by);
-
-  CHECK(!must_use_baseline_sort);
-  CHECK(!render_info || !render_info->isPotentialInSituRender());
-
-  const auto min_byte_width = QueryMemoryDescriptor::pick_target_compact_width(
-      ra_exe_unit, query_infos, crt_min_byte_width);
-
-  for (auto wid : get_col_byte_widths(ra_exe_unit.target_exprs, {})) {
-    addAggColWidth({wid, static_cast<int8_t>(compact_byte_width(wid, min_byte_width))});
-  }
-}
-
-QueryMemoryDescriptor::QueryMemoryDescriptor(
-    const Executor* executor,
-    const RelAlgExecutionUnit& ra_exe_unit,
-    const std::vector<InputTableInfo>& query_infos,
-    const GroupByAndAggregate* group_by_and_agg,
-    const std::vector<int8_t>& group_col_widths,
     const ColRangeInfo& col_range_info,
+    const KeylessInfo& keyless_info,
     const bool allow_multifrag,
-    const bool is_group_by,
+    const ExecutorDeviceType device_type,
     const int8_t crt_min_byte_width,
     const bool sort_on_gpu_hint,
     const size_t shard_count,
@@ -223,203 +176,300 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     RenderInfo* render_info,
     const CountDistinctDescriptors count_distinct_descriptors,
     const bool must_use_baseline_sort,
-    const bool output_columnar_hint)
+    const bool output_columnar_hint) {
+  auto group_col_widths = get_col_byte_widths(ra_exe_unit.groupby_exprs, {});
+  const bool is_group_by{!group_col_widths.empty()};
+
+  auto col_slot_context = ColSlotContext(ra_exe_unit.target_exprs, {});
+
+  const auto min_slot_size = QueryMemoryDescriptor::pick_target_compact_width(
+      ra_exe_unit, query_infos, crt_min_byte_width);
+
+  col_slot_context.setAllSlotsPaddedSize(min_slot_size);
+  col_slot_context.validate();
+
+  if (!is_group_by) {
+    CHECK(!must_use_baseline_sort);
+    CHECK(!render_info || !render_info->isPotentialInSituRender());
+
+    return std::make_unique<QueryMemoryDescriptor>(
+        executor,
+        ra_exe_unit,
+        query_infos,
+        allow_multifrag,
+        false,
+        false,
+        -1,
+        0,
+        ColRangeInfo{ra_exe_unit.estimator ? QueryDescriptionType::Estimator
+                                           : QueryDescriptionType::NonGroupedAggregate,
+                     0,
+                     0,
+                     0,
+                     false},
+        col_slot_context,
+        std::vector<int8_t>{},
+        /*group_col_compact_width*/ 0,
+        std::vector<ssize_t>{},
+        /*entry_count*/ 1,
+        GroupByMemSharing::Shared,
+        false,
+        count_distinct_descriptors,
+        false,
+        false,
+        false,
+        must_use_baseline_sort);
+  }
+
+  size_t entry_count = 1;
+  auto actual_col_range_info = col_range_info;
+  auto sharing = GroupByMemSharing::Shared;
+  bool interleaved_bins_on_gpu = false;
+  bool keyless_hash = false;
+  bool shared_mem_for_group_by = false;
+  bool render_output = false;
+  int8_t group_col_compact_width = 0;
+  int32_t idx_target_as_key = -1;
+  int64_t init_val = 0;
+  std::vector<ssize_t> target_groupby_indices;
+
+  switch (col_range_info.hash_type_) {
+    case QueryDescriptionType::GroupByPerfectHash: {
+      CHECK(!render_info || !render_info->isPotentialInSituRender());
+
+      if (group_col_widths.size() > 1) {
+        // col range info max contains the expected cardinality of the output
+        entry_count = static_cast<size_t>(actual_col_range_info.max);
+        actual_col_range_info.bucket = 0;
+      } else {
+        // single column perfect hash
+        idx_target_as_key = keyless_info.target_index;
+        init_val = keyless_info.init_val;
+
+        keyless_hash =
+            (!sort_on_gpu_hint ||
+             !QueryMemoryDescriptor::many_entries(
+                 col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
+            !col_range_info.bucket && !must_use_baseline_sort && keyless_info.keyless;
+        entry_count = std::max(
+            GroupByAndAggregate::getBucketedCardinality(col_range_info), int64_t(1));
+        const size_t interleaved_max_threshold{512};
+
+        size_t gpu_smem_max_threshold{0};
+        if (device_type == ExecutorDeviceType::GPU) {
+          const auto cuda_mgr = executor->getCatalog()->getDataMgr().getCudaMgr();
+          CHECK(cuda_mgr);
+          /*
+           *  We only use shared memory strategy if GPU hardware provides native shared
+           *memory atomics support. From CUDA Toolkit documentation:
+           *https://docs.nvidia.com/cuda/pascal-tuning-guide/index.html#atomic-ops "Like
+           *Maxwell, Pascal [and Volta] provides native shared memory atomic operations
+           *for 32-bit integer arithmetic, along with native 32 or 64-bit compare-and-swap
+           *(CAS)."
+           *
+           **/
+          if (cuda_mgr->isArchMaxwellOrLaterForAll()) {
+            // TODO(Saman): threshold should be eventually set as an optimized policy per
+            // architecture.
+            gpu_smem_max_threshold =
+                std::min((cuda_mgr->isArchVoltaForAll()) ? 4095LU : 2047LU,
+                         (cuda_mgr->getMaxSharedMemoryForAll() / sizeof(int64_t) - 1));
+          }
+        }
+
+        if (must_use_baseline_sort) {
+          target_groupby_indices = target_expr_group_by_indices(ra_exe_unit.groupby_exprs,
+                                                                ra_exe_unit.target_exprs);
+          col_slot_context =
+              ColSlotContext(ra_exe_unit.target_exprs, target_groupby_indices);
+        }
+
+        const auto group_expr = ra_exe_unit.groupby_exprs.front().get();
+        shared_mem_for_group_by =
+            g_enable_smem_group_by && keyless_hash && keyless_info.shared_mem_support &&
+            (entry_count <= gpu_smem_max_threshold) &&
+            (GroupByAndAggregate::supportedExprForGpuSharedMemUsage(group_expr)) &&
+            QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
+                count_distinct_descriptors) &&
+            !output_columnar_hint;  // TODO(Saman): add columnar support with the new smem
+                                    // support.
+
+        bool has_varlen_sample_agg = false;
+        for (const auto& target_expr : ra_exe_unit.target_exprs) {
+          if (target_expr->get_contains_agg()) {
+            const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
+            CHECK(agg_expr);
+            if (agg_expr->get_aggtype() == kSAMPLE &&
+                agg_expr->get_type_info().is_varlen()) {
+              has_varlen_sample_agg = true;
+              break;
+            }
+          }
+        }
+
+        interleaved_bins_on_gpu = keyless_hash && !has_varlen_sample_agg &&
+                                  (entry_count <= interleaved_max_threshold) &&
+                                  (device_type == ExecutorDeviceType::GPU) &&
+                                  QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
+                                      count_distinct_descriptors);
+      }
+    } break;
+    case QueryDescriptionType::GroupByBaselineHash: {
+      CHECK(!render_info || !render_info->isPotentialInSituRender());
+      entry_count = shard_count
+                        ? (max_groups_buffer_entry_count + shard_count - 1) / shard_count
+                        : max_groups_buffer_entry_count;
+      target_groupby_indices = target_expr_group_by_indices(ra_exe_unit.groupby_exprs,
+                                                            ra_exe_unit.target_exprs);
+      col_slot_context = ColSlotContext(ra_exe_unit.target_exprs, target_groupby_indices);
+
+      group_col_compact_width =
+          output_columnar_hint
+              ? 8
+              : pick_baseline_key_width(ra_exe_unit, query_infos, executor);
+
+      actual_col_range_info =
+          ColRangeInfo{QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
+    } break;
+    case QueryDescriptionType::Projection: {
+      CHECK(!must_use_baseline_sort);
+
+      render_output = render_info && render_info->isPotentialInSituRender();
+
+      if (use_streaming_top_n(ra_exe_unit, output_columnar_hint)) {
+        entry_count = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
+      } else {
+        entry_count = ra_exe_unit.scan_limit ? static_cast<size_t>(ra_exe_unit.scan_limit)
+                                             : max_groups_buffer_entry_count;
+      }
+
+      const auto catalog = executor->getCatalog();
+      CHECK(catalog);
+      target_groupby_indices = executor->plan_state_->allow_lazy_fetch_
+                                   ? target_expr_proj_indices(ra_exe_unit, *catalog)
+                                   : std::vector<ssize_t>{};
+
+      col_slot_context = ColSlotContext(ra_exe_unit.target_exprs, target_groupby_indices);
+    } break;
+    default:
+      UNREACHABLE() << "Unknown query type";
+  }
+  return std::make_unique<QueryMemoryDescriptor>(executor,
+                                                 ra_exe_unit,
+                                                 query_infos,
+                                                 allow_multifrag,
+                                                 keyless_hash,
+                                                 interleaved_bins_on_gpu,
+                                                 idx_target_as_key,
+                                                 init_val,
+                                                 actual_col_range_info,
+                                                 col_slot_context,
+                                                 group_col_widths,
+                                                 group_col_compact_width,
+                                                 target_groupby_indices,
+                                                 entry_count,
+                                                 sharing,
+                                                 shared_mem_for_group_by,
+                                                 count_distinct_descriptors,
+                                                 sort_on_gpu_hint,
+                                                 output_columnar_hint,
+                                                 render_output,
+                                                 must_use_baseline_sort);
+}
+
+QueryMemoryDescriptor::QueryMemoryDescriptor(
+    const Executor* executor,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& query_infos,
+    const bool allow_multifrag,
+    const bool keyless_hash,
+    const bool interleaved_bins_on_gpu,
+    const int32_t idx_target_as_key,
+    const int64_t init_val,
+    const ColRangeInfo& col_range_info,
+    const ColSlotContext& col_slot_context,
+    const std::vector<int8_t>& group_col_widths,
+    const int8_t group_col_compact_width,
+    const std::vector<ssize_t>& target_groupby_indices,
+    const size_t entry_count,
+    const GroupByMemSharing sharing,
+    const bool shared_mem_for_group_by,
+    const CountDistinctDescriptors count_distinct_descriptors,
+    const bool sort_on_gpu_hint,
+    const bool output_columnar_hint,
+    const bool render_output,
+    const bool must_use_baseline_sort)
     : executor_(executor)
     , allow_multifrag_(allow_multifrag)
     , query_desc_type_(col_range_info.hash_type_)
-    , keyless_hash_(false)
-    , interleaved_bins_on_gpu_(false)
-    , idx_target_as_key_(-1)
-    , init_val_(0)
+    , keyless_hash_(keyless_hash)
+    , interleaved_bins_on_gpu_(interleaved_bins_on_gpu)
+    , idx_target_as_key_(idx_target_as_key)
+    , init_val_(init_val)
     , group_col_widths_(group_col_widths)
-    , group_col_compact_width_(0)
-    , entry_count_(1)
+    , group_col_compact_width_(group_col_compact_width)
+    , target_groupby_indices_(target_groupby_indices)
+    , entry_count_(entry_count)
     , min_val_(col_range_info.min)
     , max_val_(col_range_info.max)
     , bucket_(col_range_info.bucket)
     , has_nulls_(col_range_info.has_nulls)
-    , sharing_(GroupByMemSharing::Shared)
+    , sharing_(sharing)
     , count_distinct_descriptors_(count_distinct_descriptors)
-    , sort_on_gpu_(false)
     , output_columnar_(false)
-    , render_output_(false)
+    , render_output_(render_output)
     , must_use_baseline_sort_(must_use_baseline_sort)
-    , force_4byte_float_(false) {
-  // Constructor for group by and projection queries
-  CHECK(!group_col_widths.empty());
+    , force_4byte_float_(false)
+    , col_slot_context_(col_slot_context) {
+  col_slot_context_.setAllUnsetSlotsPaddedSize(8);
+  col_slot_context_.validate();
 
-  CHECK(group_by_and_agg);
-
-  const auto min_byte_width = QueryMemoryDescriptor::pick_target_compact_width(
-      ra_exe_unit, query_infos, crt_min_byte_width);
-
-  for (auto wid : get_col_byte_widths(ra_exe_unit.target_exprs, {})) {
-    addAggColWidth({wid, static_cast<int8_t>(compact_byte_width(wid, min_byte_width))});
+  // TODO(Saman): should remove this after implementing shared memory path
+  // completely through codegen We should not use the current shared memory path if
+  // more than 8 bytes per group is required
+  if (query_desc_type_ == QueryDescriptionType::GroupByPerfectHash &&
+      shared_mem_for_group_by && (getRowSize() <= sizeof(int64_t))) {
+    // TODO(adb / saman): Move this into a different enum so we can remove
+    // GroupByMemSharing
+    sharing_ = GroupByMemSharing::SharedForKeylessOneColumnKnownRange;
+    interleaved_bins_on_gpu_ = false;
   }
 
-  switch (query_desc_type_) {
-    case QueryDescriptionType::GroupByPerfectHash: {
-      CHECK(!render_info || !render_info->isPotentialInSituRender());
-      // multi-column group by query:
-      if (group_col_widths_.size() > 1) {
-        // max_val_ contains the expected cardinality of the output
-        entry_count_ = static_cast<size_t>(max_val_);
-        bucket_ = 0;
-        return;
-      }
-      // single-column group by query:
-      // TODO(adb): should move this logic elsewhere so we don't have this crazy calling
-      // pattern
-      const auto keyless_info =
-          group_by_and_agg->getKeylessInfo(ra_exe_unit.target_exprs, is_group_by);
-      idx_target_as_key_ = keyless_info.target_index;
-      init_val_ = keyless_info.init_val;
+  // Note that output_columnar_ currently defaults to false to avoid issues with
+  // getRowSize above. If output columnar is enable then shared_mem_for_group_by is not,
+  // and the above condition would never be true.
 
-      keyless_hash_ =
-          (!sort_on_gpu_hint ||
-           !QueryMemoryDescriptor::many_entries(
-               col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
-          !col_range_info.bucket && !must_use_baseline_sort && keyless_info.keyless;
+  sort_on_gpu_ = sort_on_gpu_hint && canOutputColumnar() && !keyless_hash_;
 
-      entry_count_ =
-          std::max(group_by_and_agg->getBucketedCardinality(col_range_info), int64_t(1));
-      const size_t interleaved_max_threshold{512};
-
-      size_t gpu_smem_max_threshold{0};
-      if (group_by_and_agg->device_type_ == ExecutorDeviceType::GPU) {
-        const auto cuda_mgr = executor_->getCatalog()->getDataMgr().getCudaMgr();
-        CHECK(cuda_mgr);
-        /*
-         *  We only use shared memory strategy if GPU hardware provides native shared
-         *memory atomics support. From CUDA Toolkit documentation:
-         *https://docs.nvidia.com/cuda/pascal-tuning-guide/index.html#atomic-ops "Like
-         *Maxwell, Pascal [and Volta] provides native shared memory atomic operations for
-         *32-bit integer arithmetic, along with native 32 or 64-bit compare-and-swap
-         *(CAS)."
-         *
-         **/
-        if (cuda_mgr->isArchMaxwellOrLaterForAll()) {
-          // TODO(Saman): threshold should be eventually set as an optimized policy per
-          // architecture.
-          gpu_smem_max_threshold =
-              std::min((cuda_mgr->isArchVoltaForAll()) ? 4095LU : 2047LU,
-                       (cuda_mgr->getMaxSharedMemoryForAll() / sizeof(int64_t) - 1));
-        }
-      }
-
-      if (must_use_baseline_sort) {
-        target_groupby_indices_ = target_expr_group_by_indices(ra_exe_unit.groupby_exprs,
-                                                               ra_exe_unit.target_exprs);
-        clearAggColWidths();
-        for (auto wid :
-             get_col_byte_widths(ra_exe_unit.target_exprs, target_groupby_indices_)) {
-          addAggColWidth({wid, static_cast<int8_t>(wid ? 8 : 0)});
-        }
-      }
-      const auto group_expr = ra_exe_unit.groupby_exprs.front().get();
-      bool shared_mem_for_group_by =
-          g_enable_smem_group_by && keyless_hash_ && keyless_info.shared_mem_support &&
-          (entry_count_ <= gpu_smem_max_threshold) &&
-          (group_by_and_agg->supportedExprForGpuSharedMemUsage(group_expr)) &&
-          QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
-              count_distinct_descriptors) &&
-          !output_columnar_;  // TODO(Saman): add columnar support with the new smem
-                              // support.
-
-      bool has_varlen_sample_agg = false;
-      for (const auto& target_expr : ra_exe_unit.target_exprs) {
-        if (target_expr->get_contains_agg()) {
-          const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
-          CHECK(agg_expr);
-          if (agg_expr->get_aggtype() == kSAMPLE &&
-              agg_expr->get_type_info().is_varlen()) {
-            has_varlen_sample_agg = true;
-            break;
-          }
-        }
-      }
-
-      // TODO(Saman): should remove this after implementing shared memory path completely
-      // through codegen We should not use the current shared memory path if more than 8
-      // bytes per group is required
-      if (shared_mem_for_group_by && (getRowSize() <= sizeof(int64_t))) {
-        // TODO(adb / saman): Move this into a different enum so we can remove
-        // GroupByMemSharing
-        sharing_ = GroupByMemSharing::SharedForKeylessOneColumnKnownRange;
-        interleaved_bins_on_gpu_ = false;
-      } else {
-        interleaved_bins_on_gpu_ = keyless_hash_ && !has_varlen_sample_agg &&
-                                   (entry_count_ <= interleaved_max_threshold) &&
-                                   QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
-                                       count_distinct_descriptors);
-      }
-      return;
+  if (sort_on_gpu_) {
+    output_columnar_ = true;
+  } else {
+    switch (query_desc_type_) {
+      case QueryDescriptionType::Projection:
+        output_columnar_ = output_columnar_hint;
+        break;
+      case QueryDescriptionType::GroupByPerfectHash:
+        output_columnar_ = output_columnar_hint && !keyless_hash_ &&
+                           QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
+                               count_distinct_descriptors_);
+        break;
+      case QueryDescriptionType::GroupByBaselineHash:
+        output_columnar_ = output_columnar_hint;
+        break;
+      default:
+        output_columnar_ = false;
+        break;
     }
-    case QueryDescriptionType::GroupByBaselineHash: {
-      output_columnar_ = output_columnar_hint;
-      CHECK(!render_info || !render_info->isPotentialInSituRender());
-      entry_count_ = shard_count
-                         ? (max_groups_buffer_entry_count + shard_count - 1) / shard_count
-                         : max_groups_buffer_entry_count;
+  }
 
-      target_groupby_indices_ = target_expr_group_by_indices(ra_exe_unit.groupby_exprs,
-                                                             ra_exe_unit.target_exprs);
-
-      group_col_compact_width_ =
-          output_columnar_ ? 8
-                           : pick_baseline_key_width(ra_exe_unit, query_infos, executor);
-
-      clearAggColWidths();
-      for (auto wid :
-           get_col_byte_widths(ra_exe_unit.target_exprs, target_groupby_indices_)) {
-        // Baseline layout goes through new result set and
-        // ResultSetStorage::initializeRowWise assumes everything is padded to 8 bytes,
-        // make it so.
-        addAggColWidth({wid, static_cast<int8_t>(wid ? 8 : 0)});
-      }
-
-      min_val_ = 0;
-      max_val_ = 0;
-      bucket_ = 0;
-      has_nulls_ = false;
-      return;
-    }
-    case QueryDescriptionType::Projection: {
-      CHECK(!must_use_baseline_sort);
-
-      output_columnar_ = output_columnar_hint;
-
-      // Only projection queries support in-situ rendering
-      render_output_ = render_info && render_info->isPotentialInSituRender();
-
-      // TODO(adb): Can we attach this to the QMD as a class member?
-      if (use_streaming_top_n(ra_exe_unit, *this) && !output_columnar_hint) {
-        entry_count_ = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
-      } else {
-        entry_count_ = ra_exe_unit.scan_limit
-                           ? static_cast<size_t>(ra_exe_unit.scan_limit)
-                           : max_groups_buffer_entry_count;
-      }
-
-      const auto catalog = executor_->getCatalog();
-      CHECK(catalog);
-      target_groupby_indices_ = executor_->plan_state_->allow_lazy_fetch_
-                                    ? target_expr_proj_indices(ra_exe_unit, *catalog)
-                                    : std::vector<ssize_t>{};
-      clearAggColWidths();
-      for (auto wid :
-           get_col_byte_widths(ra_exe_unit.target_exprs, target_groupby_indices_)) {
-        // Baseline layout goes through new result set and
-        // ResultSetStorage::initializeRowWise assumes everything is padded to 8 bytes,
-        // make it so.
-        addAggColWidth({wid, static_cast<int8_t>(wid ? 8 : 0)});
-      }
-
-      bucket_ = 0;
-      return;
-    }
-    default:
-      CHECK(false);
+  // For columnar output projection layouts we resize the slots to use the logical size of
+  // the data type instead of the minimum slot width (calculated and set above). In
+  // distributed mode, result sets are serialized using rowwise iterators, so we use
+  // consistent slot widths for now
+  if (output_columnar_ && !g_cluster &&
+      query_desc_type_ == QueryDescriptionType::Projection) {
+    col_slot_context_.setAllSlotsPaddedSizeToLogicalSize();
+    col_slot_context_.validate();
   }
 }
 
@@ -520,12 +570,6 @@ bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const
   if (group_col_compact_width_ != other.group_col_compact_width_) {
     return false;
   }
-  if (agg_col_widths_ != other.agg_col_widths_) {
-    return false;
-  }
-  if (padded_agg_col_widths_ != other.padded_agg_col_widths_) {
-    return false;
-  }
   if (target_groupby_indices_ != other.target_groupby_indices_) {
     return false;
   }
@@ -561,6 +605,9 @@ bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const
     return false;
   }
   if (output_columnar_ != other.output_columnar_) {
+    return false;
+  }
+  if (col_slot_context_ != other.col_slot_context_) {
     return false;
   }
   return true;
@@ -679,15 +726,7 @@ int8_t QueryMemoryDescriptor::pick_target_compact_width(
 }
 
 size_t QueryMemoryDescriptor::getColsSize() const {
-  size_t total_bytes{0};
-  for (size_t col_idx = 0; col_idx < agg_col_widths_.size(); ++col_idx) {
-    auto chosen_bytes = getPaddedColumnWidthBytes(col_idx);
-    if (chosen_bytes == sizeof(int64_t)) {
-      total_bytes = align_to_int64(total_bytes);
-    }
-    total_bytes += chosen_bytes;
-  }
-  return total_bytes;
+  return col_slot_context_.getAllSlotsAlignedPaddedSize();
 }
 
 size_t QueryMemoryDescriptor::getRowSize() const {
@@ -708,92 +747,46 @@ size_t QueryMemoryDescriptor::getWarpCount() const {
 }
 
 size_t QueryMemoryDescriptor::getCompactByteWidth() const {
-  if (agg_col_widths_.empty()) {
-    return 8;
-  }
-  size_t compact_width{0};
-  for (const auto col_width : agg_col_widths_) {
-    if (col_width.compact != 0) {
-      compact_width = col_width.compact;
-      break;
-    }
-  }
-  if (!compact_width) {
-    return 0;
-  }
-  CHECK_GT(compact_width, size_t(0));
-  for (const auto col_width : agg_col_widths_) {
-    if (col_width.compact == 0) {
-      continue;
-    }
-    CHECK_EQ(col_width.compact, compact_width);
-  }
-  return compact_width;
+  return col_slot_context_.getCompactByteWidth();
 }
 
 /**
- * Returns the maximum total number of bytes (including required paddings) to store all
- * non-lazy columns' results for columnar cases.
+ * Returns the maximum total number of bytes (including required paddings) to store
+ * all non-lazy columns' results for columnar cases.
  *
  */
-size_t QueryMemoryDescriptor::getTotalBytesOfColumnarBuffers(
-    const std::vector<ColWidths>& col_widths) const {
+size_t QueryMemoryDescriptor::getTotalBytesOfColumnarBuffers() const {
   CHECK(output_columnar_);
-  size_t total_bytes{0};
-  for (size_t col_idx = 0; col_idx < col_widths.size(); ++col_idx) {
-    total_bytes += align_to_int64(getPaddedColumnWidthBytes(col_idx) * entry_count_);
-  }
-  return align_to_int64(total_bytes);
+  return col_slot_context_.getTotalBytesOfColumnarBuffers(entry_count_);
 }
 
 /**
- * This is a helper function that returns the total number of bytes (including required
- * paddings) to store all non-lazy columns' results for columnar cases.
+ * This is a helper function that returns the total number of bytes (including
+ * required paddings) to store all non-lazy columns' results for columnar cases.
  */
 size_t QueryMemoryDescriptor::getTotalBytesOfColumnarBuffers(
-    const std::vector<ColWidths>& col_widths,
     const size_t num_entries_per_column) const {
-  CHECK(output_columnar_);
-  size_t total_bytes{0};
-  for (size_t col_idx = 0; col_idx < col_widths.size(); ++col_idx) {
-    total_bytes +=
-        align_to_int64(getPaddedColumnWidthBytes(col_idx) * num_entries_per_column);
-  }
-  return align_to_int64(total_bytes);
+  return col_slot_context_.getTotalBytesOfColumnarBuffers(num_entries_per_column);
 }
 
 /**
- * Returns the effective total number of bytes from columnar projections, which includes
- * 1) total number of bytes used to store all non-lazy columns
- * 2) total number of bytes used to store row indices (for lazy fetches, etc.)
+ * Returns the effective total number of bytes from columnar projections, which
+ * includes 1) total number of bytes used to store all non-lazy columns 2) total
+ * number of bytes used to store row indices (for lazy fetches, etc.)
  *
- * NOTE: this function does not represent the buffer sizes dedicated for the results, but
- * the required memory to fill all valid results into a compact new buffer (with no holes
- * in it)
+ * NOTE: this function does not represent the buffer sizes dedicated for the results,
+ * but the required memory to fill all valid results into a compact new buffer (with
+ * no holes in it)
  */
 size_t QueryMemoryDescriptor::getTotalBytesOfColumnarProjections(
     const size_t projection_count) const {
   constexpr size_t row_index_width = sizeof(int64_t);
-  return getTotalBytesOfColumnarBuffers(agg_col_widths_, projection_count) +
+  return getTotalBytesOfColumnarBuffers(projection_count) +
          row_index_width * projection_count;
 }
 
 size_t QueryMemoryDescriptor::getColOnlyOffInBytes(const size_t col_idx) const {
-  CHECK_LT(col_idx, agg_col_widths_.size());
-  size_t offset{0};
-  for (size_t index = 0; index < col_idx; ++index) {
-    const auto chosen_bytes = agg_col_widths_[index].compact;
-    if (chosen_bytes == sizeof(int64_t)) {
-      offset = align_to_int64(offset);
-    }
-    offset += chosen_bytes;
-  }
-
-  if (sizeof(int64_t) == agg_col_widths_[col_idx].compact) {
-    offset = align_to_int64(offset);
-  }
-
-  return offset;
+  return col_slot_context_.getColOnlyOffInBytes(col_idx);
 }
 
 /*
@@ -806,7 +799,6 @@ size_t QueryMemoryDescriptor::getColOnlyOffInBytes(const size_t col_idx) const {
  * 2a. if keyless, there is no prepending group column stored at the beginning
  */
 size_t QueryMemoryDescriptor::getColOffInBytes(const size_t col_idx) const {
-  CHECK_LT(col_idx, agg_col_widths_.size());
   const auto warp_count = getWarpCount();
   if (output_columnar_) {
     CHECK_EQ(size_t(1), warp_count);
@@ -832,8 +824,8 @@ size_t QueryMemoryDescriptor::getColOffInBytes(const size_t col_idx) const {
 }
 
 /*
- * Returns the memory offset for a particular group column in the prepended group columns
- * portion of the memory.
+ * Returns the memory offset for a particular group column in the prepended group
+ * columns portion of the memory.
  */
 size_t QueryMemoryDescriptor::getPrependedGroupColOffInBytes(
     const size_t group_idx) const {
@@ -850,7 +842,8 @@ size_t QueryMemoryDescriptor::getPrependedGroupColOffInBytes(
 }
 
 /*
- * Returns total amount of memory prepended at the beginning of the output memory buffer.
+ * Returns total amount of memory prepended at the beginning of the output memory
+ * buffer.
  */
 size_t QueryMemoryDescriptor::getPrependedGroupBufferSizeInBytes() const {
   CHECK(output_columnar_);
@@ -864,12 +857,11 @@ size_t QueryMemoryDescriptor::getPrependedGroupBufferSizeInBytes() const {
 }
 
 size_t QueryMemoryDescriptor::getColOffInBytesInNextBin(const size_t col_idx) const {
-  CHECK_LT(col_idx, agg_col_widths_.size());
   auto warp_count = getWarpCount();
   if (output_columnar_) {
     CHECK_EQ(size_t(1), group_col_widths_.size());
     CHECK_EQ(size_t(1), warp_count);
-    return agg_col_widths_[col_idx].compact;
+    return getPaddedColumnWidthBytes(col_idx);
   }
 
   return warp_count * getRowSize();
@@ -878,12 +870,12 @@ size_t QueryMemoryDescriptor::getColOffInBytesInNextBin(const size_t col_idx) co
 size_t QueryMemoryDescriptor::getNextColOffInBytes(const int8_t* col_ptr,
                                                    const size_t bin,
                                                    const size_t col_idx) const {
-  CHECK_LT(col_idx, agg_col_widths_.size());
   CHECK(!output_columnar_ || bin < entry_count_);
   size_t offset{0};
   auto warp_count = getWarpCount();
-  const auto chosen_bytes = agg_col_widths_[col_idx].compact;
-  if (col_idx + 1 == agg_col_widths_.size()) {
+  const auto chosen_bytes = getPaddedColumnWidthBytes(col_idx);
+  const auto total_slot_count = getSlotCount();
+  if (col_idx + 1 == total_slot_count) {
     if (output_columnar_) {
       return (entry_count_ - bin) * chosen_bytes;
     } else {
@@ -891,7 +883,7 @@ size_t QueryMemoryDescriptor::getNextColOffInBytes(const int8_t* col_ptr,
     }
   }
 
-  const auto next_chosen_bytes = agg_col_widths_[col_idx + 1].compact;
+  const auto next_chosen_bytes = getPaddedColumnWidthBytes(col_idx + 1);
   if (output_columnar_) {
     CHECK_EQ(size_t(1), group_col_widths_.size());
     CHECK_EQ(size_t(1), warp_count);
@@ -913,7 +905,7 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(
     const RelAlgExecutionUnit& ra_exe_unit,
     const unsigned thread_count,
     const ExecutorDeviceType device_type) const {
-  if (use_streaming_top_n(ra_exe_unit, *this)) {
+  if (use_streaming_top_n(ra_exe_unit, output_columnar_)) {
     const size_t n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
     return streaming_top_n::get_heap_size(getRowSize(), n, thread_count);
   }
@@ -925,8 +917,8 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(
  *
  * Columnar:
  *  if projection: it returns index buffer + columnar buffer (all non-lazy columns)
- *  if group by: it returns the amount required for each group column (assumes 64-bit per
- * group) + columnar buffer (all involved agg columns)
+ *  if group by: it returns the amount required for each group column (assumes 64-bit
+ * per group) + columnar buffer (all involved agg columns)
  *
  * Row-wise:
  *  returns required memory per row multiplied by number of entries
@@ -947,12 +939,31 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(
     total_bytes = (query_desc_type_ == QueryDescriptionType::Projection
                        ? row_index_width * entry_count_
                        : sizeof(int64_t) * group_col_widths_.size() * entry_count_) +
-                  getTotalBytesOfColumnarBuffers(agg_col_widths_);
+                  getTotalBytesOfColumnarBuffers();
   } else {
     total_bytes = getRowSize() * entry_count_;
   }
 
   return total_bytes;
+}
+
+void QueryMemoryDescriptor::setOutputColumnar(const bool val) {
+  output_columnar_ = val;
+  if (output_columnar_ && !g_cluster &&
+      query_desc_type_ == QueryDescriptionType::Projection) {
+    col_slot_context_.setAllSlotsPaddedSizeToLogicalSize();
+  }
+}
+
+size_t QueryMemoryDescriptor::getBufferColSlotCount() const {
+  size_t total_slot_count = col_slot_context_.getSlotCount();
+
+  if (target_groupby_indices_.empty()) {
+    return total_slot_count;
+  }
+  return total_slot_count - std::count_if(target_groupby_indices_.begin(),
+                                          target_groupby_indices_.end(),
+                                          [](const ssize_t i) { return i >= 0; });
 }
 
 bool QueryMemoryDescriptor::usesGetGroupValueFast() const {
@@ -1031,38 +1042,55 @@ bool QueryMemoryDescriptor::isWarpSyncRequired(
   }
 }
 
+size_t QueryMemoryDescriptor::getColCount() const {
+  return col_slot_context_.getColCount();
+}
+
+size_t QueryMemoryDescriptor::getSlotCount() const {
+  return col_slot_context_.getSlotCount();
+}
+
+const int8_t QueryMemoryDescriptor::getPaddedColumnWidthBytes(
+    const size_t slot_idx) const {
+  return col_slot_context_.getSlotInfo(slot_idx).padded_size;
+}
+
+const int8_t QueryMemoryDescriptor::getLogicalColumnWidthBytes(
+    const size_t slot_idx) const {
+  return col_slot_context_.getSlotInfo(slot_idx).logical_size;
+}
+
+void QueryMemoryDescriptor::useConsistentSlotWidthSize(const int8_t slot_width_size) {
+  col_slot_context_.setAllSlotsSize(slot_width_size);
+}
+
+size_t QueryMemoryDescriptor::getRowWidth() const {
+  // Note: Actual row size may include padding (see ResultSetBufferAccessors.h)
+  return col_slot_context_.getAllSlotsPaddedSize();
+}
+
+int8_t QueryMemoryDescriptor::updateActualMinByteWidth(
+    const int8_t actual_min_byte_width) const {
+  return col_slot_context_.getMinPaddedByteSize(actual_min_byte_width);
+}
+
+void QueryMemoryDescriptor::addColSlotInfo(
+    const std::vector<std::tuple<int8_t, int8_t>>& slots_for_col) {
+  col_slot_context_.addColumn(slots_for_col);
+}
+
+void QueryMemoryDescriptor::clearSlotInfo() {
+  col_slot_context_.clear();
+}
+
+void QueryMemoryDescriptor::alignPaddedSlots() {
+  col_slot_context_.alignPaddedSlots(sortOnGpu());
+}
+
 bool QueryMemoryDescriptor::canOutputColumnar() const {
   return usesGetGroupValueFast() && threadsShareMemory() && blocksShareMemory() &&
          !interleavedBins(ExecutorDeviceType::GPU) &&
          countDescriptorsLogicallyEmpty(count_distinct_descriptors_);
-}
-
-bool QueryMemoryDescriptor::shouldOutputColumnar(const bool output_columnar_hint,
-                                                 const bool has_count_distinct_target) {
-  if (sortOnGpu()) {
-    output_columnar_ = true;
-  } else {
-    switch (query_desc_type_) {
-      case QueryDescriptionType::Projection:
-        output_columnar_ = output_columnar_hint;
-        break;
-      case QueryDescriptionType::GroupByPerfectHash:
-        output_columnar_ =
-            output_columnar_hint && !hasKeylessHash() && !has_count_distinct_target;
-        break;
-      case QueryDescriptionType::GroupByBaselineHash:
-        output_columnar_ = output_columnar_hint;
-        break;
-      default:
-        output_columnar_ = false;
-        break;
-    }
-  }
-  if (output_columnar_) {
-    // padded column widths are used for all columnar formats
-    recomputePaddedColumnWidthBytes();
-  }
-  return output_columnar_;
 }
 
 namespace {

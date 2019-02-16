@@ -616,14 +616,6 @@ const RelAlgExecutionUnit& Executor::ExecutionDispatch::getExecutionUnit() const
   return ra_exe_unit_;
 }
 
-const QueryMemoryDescriptor& Executor::ExecutionDispatch::getQueryMemoryDescriptor()
-    const {
-  // TODO(alex): make query_mem_desc easily available
-  // CHECK(query_comp_desc_);
-  // return query_comp_desc_->getQueryMemoryDescriptor();
-  CHECK(false) << "TODO(adb)";
-}
-
 const std::vector<uint64_t>& Executor::ExecutionDispatch::getFragOffsets() const {
   std::lock_guard<std::mutex> lock(all_frag_row_offsets_mutex_);
   if (all_frag_row_offsets_.empty()) {

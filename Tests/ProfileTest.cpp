@@ -1291,7 +1291,7 @@ TEST(Reduction, Baseline) {
   for (const auto& target_info : target_infos) {
     const auto slot_bytes =
         std::max(int8_t(8), static_cast<int8_t>(target_info.sql_type.get_size()));
-    query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
+    query_mem_desc.addColSlotInfo({std::make_tuple(slot_bytes, slot_bytes)});
     row_size += slot_bytes;
   }
 
@@ -1556,7 +1556,7 @@ TEST(Reduction, PerfectHash) {
   for (const auto& target_info : target_infos) {
     const auto slot_bytes =
         std::max(int8_t(8), static_cast<int8_t>(target_info.sql_type.get_size()));
-    query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
+    query_mem_desc.addColSlotInfo({std::make_tuple(slot_bytes, slot_bytes)});
     row_size += slot_bytes;
   }
 

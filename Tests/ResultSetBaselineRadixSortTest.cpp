@@ -57,7 +57,7 @@ QueryMemoryDescriptor baseline_sort_desc(const std::vector<TargetInfo>& target_i
   query_mem_desc.setGroupColCompactWidth(key_bytewidth);
   static const size_t slot_bytes = 8;
   for (size_t i = 0; i < target_infos.size(); ++i) {
-    query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
+    query_mem_desc.addColSlotInfo({std::make_tuple(slot_bytes, slot_bytes)});
   }
   query_mem_desc.setEntryCount(hash_entry_count);
   return query_mem_desc;

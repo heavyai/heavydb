@@ -44,7 +44,7 @@ std::vector<int8_t> get_rows_copy_from_heaps(const int64_t* heaps,
 }  // namespace streaming_top_n
 
 bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
-                         const QueryMemoryDescriptor& query_mem_desc) {
+                         const bool output_columnar) {
   if (g_cluster) {
     return false;  // TODO(miyu)
   }
@@ -55,9 +55,9 @@ bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
     }
   }
 
-  if (!query_mem_desc.canOutputColumnar() &&  // TODO(miyu): relax this limitation
-      !query_mem_desc.didOutputColumnar() &&
-      ra_exe_unit.sort_info.order_entries.size() == 1 && ra_exe_unit.sort_info.limit &&
+  // TODO: Allow streaming top n for columnar output
+  if (!output_columnar && ra_exe_unit.sort_info.order_entries.size() == 1 &&
+      ra_exe_unit.sort_info.limit &&
       ra_exe_unit.sort_info.algorithm == SortAlgorithm::StreamingTopN) {
     const auto only_order_entry = ra_exe_unit.sort_info.order_entries.front();
     CHECK_GT(only_order_entry.tle_no, int(0));
@@ -104,7 +104,7 @@ std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
   GroupByBufferLayoutInfo oe_layout{
       n * thread_count,
       query_mem_desc.getColOffInBytes(key_slot_idx),
-      static_cast<size_t>(query_mem_desc.getColumnWidth(oe_col_idx).compact),
+      static_cast<size_t>(query_mem_desc.getPaddedColumnWidthBytes(oe_col_idx)),
       query_mem_desc.getRowSize(),
       target_info(ra_exe_unit.target_exprs[oe_col_idx]),
       -1};

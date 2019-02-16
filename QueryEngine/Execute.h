@@ -90,6 +90,7 @@ extern bool g_enable_overlaps_hashjoin;
 extern double g_overlaps_hashjoin_bucket_threshold;
 extern bool g_strip_join_covered_quals;
 extern size_t g_constrained_by_in_threshold;
+extern size_t g_big_group_threshold;
 extern bool g_enable_window_functions;
 
 class QueryCompilationDescriptor;
@@ -940,8 +941,6 @@ class Executor {
                                    const int device_id);
 
     const RelAlgExecutionUnit& getExecutionUnit() const;
-
-    const QueryMemoryDescriptor& getQueryMemoryDescriptor() const;
 
     const std::vector<uint64_t>& getFragOffsets() const;
 

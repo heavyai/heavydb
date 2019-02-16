@@ -309,15 +309,10 @@ class SQLiteComparator {
             ASSERT_NE(nullptr, mapd_as_float_p);
             const auto mapd_val = *mapd_as_float_p;
             if (ref_is_null) {
-              if (inline_fp_null_val(SQLTypeInfo(kFLOAT, false)) != mapd_val) {
-                CHECK(false);
-              }
+              ASSERT_EQ(inline_fp_null_val(SQLTypeInfo(kFLOAT, false)), mapd_val);
             } else {
               const auto ref_val = connector_.getData<float>(row_idx, col_idx);
-              if (!approx_eq(ref_val, mapd_val)) {
-                CHECK(false) << ref_val << " not approx equal to omnisci val "
-                             << mapd_val;
-              }
+              ASSERT_TRUE(approx_eq(ref_val, mapd_val));
             }
             break;
           }
@@ -1062,6 +1057,18 @@ TEST(Select, FilterAndMultipleAggregation) {
     c("SELECT str, AVG(x), COUNT(*) as xx, COUNT(*) as countval FROM test GROUP BY str "
       "ORDER BY str;",
       dt);
+  }
+}
+
+TEST(Select, GroupBy) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    const auto big_group_threshold = g_big_group_threshold;
+    ScopeGuard reset_big_group_threshold = [&big_group_threshold] {
+      g_big_group_threshold = big_group_threshold;
+    };
+    g_big_group_threshold = 1;
+    c("SELECT d, COUNT(*) FROM test GROUP BY d ORDER BY d DESC LIMIT 10;", dt);
   }
 }
 

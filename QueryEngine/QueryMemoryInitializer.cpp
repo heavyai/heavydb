@@ -136,7 +136,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
       auto actual_entry_count = query_mem_desc.getEntryCount();
       auto warp_size =
           query_mem_desc.interleavedBins(device_type) ? executor->warpSize() : 1;
-      if (use_streaming_top_n(ra_exe_unit, query_mem_desc)) {
+      if (use_streaming_top_n(ra_exe_unit, query_mem_desc.didOutputColumnar())) {
         const auto node_count_size = thread_count * sizeof(int64_t);
         memset(rows_ptr, 0, node_count_size);
         const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
@@ -278,7 +278,7 @@ void QueryMemoryInitializer::initColumnarGroups(
     const auto agg_info = target_info(target_expr);
     CHECK(!is_distinct_target(agg_info));
   }
-  const int32_t agg_col_count = query_mem_desc.getColCount();
+  const int32_t agg_col_count = query_mem_desc.getSlotCount();
   auto buffer_ptr = reinterpret_cast<int8_t*>(groups_buffer);
 
   const auto groups_buffer_entry_count = query_mem_desc.getEntryCount();
@@ -333,23 +333,23 @@ void QueryMemoryInitializer::initColumnPerRow(const QueryMemoryDescriptor& query
                                               const std::vector<ssize_t>& bitmap_sizes) {
   int8_t* col_ptr = row_ptr;
   size_t init_vec_idx = 0;
-  for (size_t col_idx = 0; col_idx < query_mem_desc.getColCount();
+  for (size_t col_idx = 0; col_idx < query_mem_desc.getSlotCount();
        col_ptr += query_mem_desc.getNextColOffInBytes(col_ptr, bin, col_idx++)) {
     const ssize_t bm_sz{bitmap_sizes[col_idx]};
     int64_t init_val{0};
     if (!bm_sz || !query_mem_desc.isGroupBy()) {
-      if (query_mem_desc.getColumnWidth(col_idx).compact > 0) {
+      if (query_mem_desc.getPaddedColumnWidthBytes(col_idx) > 0) {
         CHECK_LT(init_vec_idx, init_vals.size());
         init_val = init_vals[init_vec_idx++];
       }
     } else {
-      CHECK_EQ(static_cast<size_t>(query_mem_desc.getColumnWidth(col_idx).compact),
+      CHECK_EQ(static_cast<size_t>(query_mem_desc.getPaddedColumnWidthBytes(col_idx)),
                sizeof(int64_t));
       init_val =
           bm_sz > 0 ? allocateCountDistinctBitmap(bm_sz) : allocateCountDistinctSet();
       ++init_vec_idx;
     }
-    switch (query_mem_desc.getColumnWidth(col_idx).compact) {
+    switch (query_mem_desc.getPaddedColumnWidthBytes(col_idx)) {
       case 1:
         *col_ptr = static_cast<int8_t>(init_val);
         break;
@@ -414,7 +414,7 @@ std::vector<ssize_t> QueryMemoryInitializer::allocateCountDistinctBuffers(
     const QueryMemoryDescriptor& query_mem_desc,
     const bool deferred,
     const Executor* executor) {
-  const size_t agg_col_count{query_mem_desc.getColCount()};
+  const size_t agg_col_count{query_mem_desc.getSlotCount()};
   std::vector<ssize_t> agg_bitmap_size(deferred ? agg_col_count : 0);
 
   CHECK_GE(agg_col_count, executor->plan_state_->target_exprs_.size());
@@ -427,8 +427,9 @@ std::vector<ssize_t> QueryMemoryInitializer::allocateCountDistinctBuffers(
     if (is_distinct_target(agg_info)) {
       CHECK(agg_info.is_agg &&
             (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT));
-      CHECK_EQ(static_cast<size_t>(query_mem_desc.getColumnWidth(agg_col_idx).actual),
-               sizeof(int64_t));
+      CHECK_EQ(
+          static_cast<size_t>(query_mem_desc.getLogicalColumnWidthBytes(agg_col_idx)),
+          sizeof(int64_t));
       const auto& count_distinct_desc =
           query_mem_desc.getCountDistinctDescriptor(target_idx);
       CHECK(count_distinct_desc.impl_type_ != CountDistinctImplType::Invalid);
@@ -541,7 +542,7 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     const bool output_columnar,
     const CudaAllocator& cuda_allocator,
     RenderAllocator* render_allocator) {
-  if (use_streaming_top_n(ra_exe_unit, query_mem_desc)) {
+  if (use_streaming_top_n(ra_exe_unit, query_mem_desc.didOutputColumnar())) {
     if (render_allocator) {
       throw StreamingTopNNotSupportedInRenderQuery();
     }
@@ -576,7 +577,7 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     const size_t step{query_mem_desc.threadsShareMemory() ? block_size_x : 1};
     size_t groups_buffer_size{query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU)};
     auto group_by_dev_buffer = dev_group_by_buffers.second;
-    const size_t col_count = query_mem_desc.getColCount();
+    const size_t col_count = query_mem_desc.getSlotCount();
     CUdeviceptr col_widths_dev_ptr{0};
     if (output_columnar) {
       std::vector<int8_t> compact_col_widths(col_count);
@@ -648,7 +649,7 @@ void compact_projection_buffer_for_cpu_columnar(
   constexpr size_t row_index_width = sizeof(int64_t);
   size_t buffer_offset1{projection_count * row_index_width};
   // other columns are actual non-lazy columns for the projection:
-  for (size_t i = 0; i < query_mem_desc.getColCount(); i++) {
+  for (size_t i = 0; i < query_mem_desc.getSlotCount(); i++) {
     if (query_mem_desc.getPaddedColumnWidthBytes(i) > 0) {
       auto column_proj_size =
           projection_count * query_mem_desc.getPaddedColumnWidthBytes(i);

@@ -27,11 +27,11 @@ inline std::vector<int64_t> init_agg_val_vec(
     const std::vector<TargetInfo>& targets,
     const QueryMemoryDescriptor& query_mem_desc) {
   std::vector<int64_t> agg_init_vals;
-  agg_init_vals.reserve(query_mem_desc.getColCount());
+  agg_init_vals.reserve(query_mem_desc.getSlotCount());
   const bool is_group_by{query_mem_desc.isGroupBy()};
   for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size();
        ++target_idx, ++agg_col_idx) {
-    CHECK_LT(agg_col_idx, query_mem_desc.getColCount());
+    CHECK_LT(agg_col_idx, query_mem_desc.getSlotCount());
     const auto agg_info = targets[target_idx];
     if (!agg_info.is_agg || agg_info.agg_kind == kSAMPLE) {
       if (agg_info.agg_kind == kSAMPLE && agg_info.sql_type.is_string() &&
@@ -43,7 +43,7 @@ inline std::vector<int64_t> init_agg_val_vec(
                                 query_mem_desc.getCompactByteWidth()));
         continue;
       }
-      if (query_mem_desc.getColumnWidth(agg_col_idx).compact > 0) {
+      if (query_mem_desc.getPaddedColumnWidthBytes(agg_col_idx) > 0) {
         agg_init_vals.push_back(0);
       }
       if (agg_info.sql_type.is_array() ||
@@ -60,7 +60,7 @@ inline std::vector<int64_t> init_agg_val_vec(
       }
       continue;
     }
-    CHECK_GT(query_mem_desc.getColumnWidth(agg_col_idx).compact, 0);
+    CHECK_GT(query_mem_desc.getPaddedColumnWidthBytes(agg_col_idx), 0);
     const bool float_argument_input = takes_float_argument(agg_info);
     const auto chosen_bytes = query_mem_desc.getCompactByteWidth();
     auto init_ti = get_compact_type(agg_info);
@@ -254,7 +254,7 @@ std::vector<int64_t> init_agg_val_vec(
     const QueryMemoryDescriptor& query_mem_desc) {
   std::vector<TargetInfo> target_infos;
   target_infos.reserve(targets.size());
-  const auto agg_col_count = query_mem_desc.getColCount();
+  const auto agg_col_count = query_mem_desc.getSlotCount();
   for (size_t target_idx = 0, agg_col_idx = 0;
        target_idx < targets.size() && agg_col_idx < agg_col_count;
        ++target_idx, ++agg_col_idx) {

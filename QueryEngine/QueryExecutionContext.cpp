@@ -73,10 +73,7 @@ ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
   auto deinterleaved_query_mem_desc =
       ResultSet::fixupQueryMemoryDescriptor(query_mem_desc_);
   deinterleaved_query_mem_desc.setHasInterleavedBinsOnGpu(false);
-  for (auto& col_widths : deinterleaved_query_mem_desc.agg_col_widths_) {
-    col_widths.actual = col_widths.compact = 8;
-  }
-  deinterleaved_query_mem_desc.recomputePaddedColumnWidthBytes();
+  deinterleaved_query_mem_desc.useConsistentSlotWidthSize(8);
 
   auto deinterleaved_result_set =
       std::make_shared<ResultSet>(result_set->getTargetInfos(),
@@ -95,7 +92,7 @@ ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
       reinterpret_cast<int64_t*>(deinterleaved_storage->getUnderlyingBuffer());
   const auto rows_ptr = result_set->getStorage()->getUnderlyingBuffer();
   size_t deinterleaved_buffer_idx = 0;
-  const size_t agg_col_count{query_mem_desc_.getColCount()};
+  const size_t agg_col_count{query_mem_desc_.getSlotCount()};
   for (size_t bin_base_off = query_mem_desc_.getColOffInBytes(0), bin_idx = 0;
        bin_idx < result_set->entryCount();
        ++bin_idx, bin_base_off += query_mem_desc_.getColOffInBytesInNextBin(0)) {
@@ -340,7 +337,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     }
 
     if (!render_allocator) {
-      if (use_streaming_top_n(ra_exe_unit, query_mem_desc_)) {
+      if (use_streaming_top_n(ra_exe_unit, query_mem_desc_.didOutputColumnar())) {
         query_buffers_->applyStreamingTopNOffsetGpu(data_mgr,
                                                     query_mem_desc_,
                                                     gpu_group_by_buffers,
@@ -686,7 +683,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
     *error_code = 0;
   }
 
-  if (use_streaming_top_n(ra_exe_unit, query_mem_desc_)) {
+  if (use_streaming_top_n(ra_exe_unit, query_mem_desc_.didOutputColumnar())) {
     query_buffers_->applyStreamingTopNOffsetCpu(query_mem_desc_, ra_exe_unit);
   }
 

@@ -154,16 +154,16 @@ inline T advance_target_ptr_row_wise(T target_ptr,
                                      const size_t slot_idx,
                                      const QueryMemoryDescriptor& query_mem_desc,
                                      const bool separate_varlen_storage) {
-  auto result = target_ptr + query_mem_desc.getColumnWidth(slot_idx).compact;
+  auto result = target_ptr + query_mem_desc.getPaddedColumnWidthBytes(slot_idx);
   if ((target_info.is_agg && target_info.agg_kind == kAVG) ||
       ((!separate_varlen_storage || target_info.is_agg) &&
        is_real_str_or_array(target_info))) {
-    return result + query_mem_desc.getColumnWidth(slot_idx + 1).compact;
+    return result + query_mem_desc.getPaddedColumnWidthBytes(slot_idx + 1);
   }
   if (target_info.sql_type.is_geometry() &&
       (!separate_varlen_storage || target_info.is_agg)) {
     for (auto i = 1; i < 2 * target_info.sql_type.get_physical_coord_cols(); ++i) {
-      result += query_mem_desc.getColumnWidth(slot_idx + i).compact;
+      result += query_mem_desc.getPaddedColumnWidthBytes(slot_idx + i);
     }
   }
   return result;

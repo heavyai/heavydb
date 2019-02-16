@@ -81,6 +81,7 @@ bool g_enable_overlaps_hashjoin{false};
 double g_overlaps_hashjoin_bucket_threshold{0.1};
 bool g_strip_join_covered_quals{false};
 size_t g_constrained_by_in_threshold{10};
+size_t g_big_group_threshold{20000};
 bool g_enable_window_functions{false};
 
 Executor::Executor(const int db_id,
@@ -2068,7 +2069,7 @@ class AggregateReductionEgress {
       error_code = 0;
     } else {
       const auto chosen_bytes = static_cast<size_t>(
-          query_exe_context->query_mem_desc_.getColumnWidth(out_vec_idx).compact);
+          query_exe_context->query_mem_desc_.getPaddedColumnWidthBytes(out_vec_idx));
       std::tie(val1, error_code) =
           Executor::reduceResults(agg_info.agg_kind,
                                   agg_info.sql_type,
@@ -2087,7 +2088,7 @@ class AggregateReductionEgress {
         (agg_info.agg_kind == kSAMPLE &&
          (agg_info.sql_type.is_varlen() || agg_info.sql_type.is_geometry()))) {
       const auto chosen_bytes = static_cast<size_t>(
-          query_exe_context->query_mem_desc_.getColumnWidth(out_vec_idx + 1).compact);
+          query_exe_context->query_mem_desc_.getPaddedColumnWidthBytes(out_vec_idx + 1));
       int64_t val2;
       std::tie(val2, error_code) = Executor::reduceResults(
           agg_info.agg_kind == kAVG ? kCOUNT : agg_info.agg_kind,
@@ -2124,7 +2125,7 @@ class AggregateReductionEgress<Experimental::MetaTypeClass<Experimental::Geometr
     for (int i = 0; i < agg_info.sql_type.get_physical_coord_cols() * 2; i++) {
       int64_t val1;
       const auto chosen_bytes = static_cast<size_t>(
-          query_exe_context->query_mem_desc_.getColumnWidth(out_vec_idx).compact);
+          query_exe_context->query_mem_desc_.getPaddedColumnWidthBytes(out_vec_idx));
       std::tie(val1, error_code) =
           Executor::reduceResults(agg_info.agg_kind,
                                   agg_info.sql_type,

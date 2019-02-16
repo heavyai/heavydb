@@ -108,12 +108,23 @@ inline std::string datum_to_string(const TargetValue& tv,
 }
 
 struct ColRangeInfo {
-  const QueryDescriptionType hash_type_;
-  const int64_t min;
-  const int64_t max;
-  const int64_t bucket;
-  const bool has_nulls;
+  QueryDescriptionType hash_type_;
+  int64_t min;
+  int64_t max;
+  int64_t bucket;
+  bool has_nulls;
   bool isEmpty() { return min == 0 && max == -1; }
+};
+
+struct KeylessInfo {
+  const bool keyless;
+  const int32_t target_index;
+  const int64_t init_val;
+  const bool shared_mem_support;  // TODO(Saman) remove, all aggregate operations should
+                                  // eventually be potentially done with shared memory.
+                                  // The decision will be made when the query memory
+                                  // descriptor is created, not here. This member just
+                                  // indicates the possibility.
 };
 
 class GroupByAndAggregate {
@@ -163,7 +174,7 @@ class GroupByAndAggregate {
 
   bool supportedTypeForGpuSharedMemUsage(const SQLTypeInfo& target_type_info) const;
 
-  bool supportedExprForGpuSharedMemUsage(Analyzer::Expr* expr) const;
+  static bool supportedExprForGpuSharedMemUsage(Analyzer::Expr* expr);
 
   bool gpuCanHandleOrderEntries(const std::list<Analyzer::OrderEntry>& order_entries);
 
@@ -230,17 +241,6 @@ class GroupByAndAggregate {
   ColRangeInfo getExprRangeInfo(const Analyzer::Expr* expr) const;
 
   static int64_t getBucketedCardinality(const ColRangeInfo& col_range_info);
-
-  struct KeylessInfo {
-    const bool keyless;
-    const int32_t target_index;
-    const int64_t init_val;
-    const bool shared_mem_support;  // TODO(Saman) remove, all aggregate operations should
-                                    // eventually be potentially done with shared memory.
-                                    // The decision will be made when the query memory
-                                    // descriptor is created, not here. This member just
-                                    // indicates the possibility.
-  };
 
   KeylessInfo getKeylessInfo(const std::vector<Analyzer::Expr*>& target_expr_list,
                              const bool is_group_by) const;
@@ -355,14 +355,17 @@ inline size_t get_count_distinct_sub_bitmap_count(const size_t bitmap_sz_bits,
 template <class T>
 inline std::vector<int8_t> get_col_byte_widths(
     const T& col_expr_list,
-    const std::vector<ssize_t>& target_group_by_indices) {
-  if (!target_group_by_indices.empty()) {
-    CHECK_EQ(col_expr_list.size(), target_group_by_indices.size());
+    const std::vector<ssize_t>& col_exprs_to_not_project) {
+  // Note that non-projected col exprs could be projected cols that we can lazy fetch or
+  // grouped cols with keyless hash
+  if (!col_exprs_to_not_project.empty()) {
+    CHECK_EQ(col_expr_list.size(), col_exprs_to_not_project.size());
   }
   std::vector<int8_t> col_widths;
   size_t col_expr_idx = 0;
   for (const auto col_expr : col_expr_list) {
-    if (!target_group_by_indices.empty() && target_group_by_indices[col_expr_idx] != -1) {
+    if (!col_exprs_to_not_project.empty() &&
+        col_exprs_to_not_project[col_expr_idx] != -1) {
       col_widths.push_back(0);
       ++col_expr_idx;
       continue;

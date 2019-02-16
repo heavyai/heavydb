@@ -113,13 +113,6 @@ GpuGroupByBuffers create_dev_group_by_buffers(
   auto group_by_dev_buffers_mem =
       cuda_allocator.alloc(mem_size + prepended_buff_size, device_id, render_allocator) +
       prepended_buff_size;
-  if (query_mem_desc.getCompactByteWidth() < 8) {
-    // TODO(miyu): Compaction assumes the base ptr to be aligned to int64_t, otherwise
-    // offsetting is wrong.
-    //            Remove this assumption amd make offsetting work in all cases.
-    CHECK_EQ(uint64_t(0),
-             static_cast<int64_t>(group_by_dev_buffers_mem) % sizeof(int64_t));
-  }
   CHECK(query_mem_desc.threadsShareMemory());
   const size_t step{block_size_x};
 
@@ -258,7 +251,7 @@ void copy_projection_buffer_from_gpu_columnar(
                 device_id);
   size_t buffer_offset_cpu{projection_count * row_index_width};
   // other columns are actual non-lazy columns for the projection:
-  for (size_t i = 0; i < query_mem_desc.getColCount(); i++) {
+  for (size_t i = 0; i < query_mem_desc.getSlotCount(); i++) {
     if (query_mem_desc.getPaddedColumnWidthBytes(i) > 0) {
       const auto column_proj_size =
           projection_count * query_mem_desc.getPaddedColumnWidthBytes(i);

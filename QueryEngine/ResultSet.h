@@ -428,8 +428,8 @@ class ResultSet {
 
   bool isExplain() const;
 
-  // Called from the executor because in the new ResultSet we assume the 'compact' field
-  // in ColWidths already contains the padding, whereas in the executor it's computed.
+  // Called from the executor because in the new ResultSet we assume the 'padded' field
+  // in SlotSize already contains the padding, whereas in the executor it's computed.
   // Once the buffer initialization moves to ResultSet we can remove this method.
   static QueryMemoryDescriptor fixupQueryMemoryDescriptor(const QueryMemoryDescriptor&);
 

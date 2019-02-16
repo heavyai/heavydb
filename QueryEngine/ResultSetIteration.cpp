@@ -74,11 +74,7 @@ TargetValue make_avg_target_value(const int8_t* ptr1,
 // the value in position slot_idx (only makes sense for row-wise representation).
 size_t get_byteoff_of_slot(const size_t slot_idx,
                            const QueryMemoryDescriptor& query_mem_desc) {
-  size_t result = 0;
-  for (size_t i = 0; i < slot_idx; ++i) {
-    result += query_mem_desc.getColumnWidth(i).compact;
-  }
-  return result;
+  return query_mem_desc.getPaddedColWidthForRange(0, slot_idx);
 }
 
 // Given the entire buffer for the result set, buff, finds the beginning of the
@@ -368,8 +364,8 @@ void ResultSet::RowWiseTargetAccessor::initializeOffsetsForStorage() {
 
       auto ptr1 = rowwise_target_ptr;
       const auto compact_sz1 =
-          result_set_->query_mem_desc_.getColumnWidth(agg_col_idx).compact
-              ? result_set_->query_mem_desc_.getColumnWidth(agg_col_idx).compact
+          result_set_->query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx)
+              ? result_set_->query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx)
               : key_width_;
 
       const int8_t* ptr2{nullptr};
@@ -377,14 +373,14 @@ void ResultSet::RowWiseTargetAccessor::initializeOffsetsForStorage() {
       if ((agg_info.is_agg && agg_info.agg_kind == kAVG)) {
         ptr2 = ptr1 + compact_sz1;
         compact_sz2 =
-            result_set_->query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact;
+            result_set_->query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx + 1);
       } else if (is_real_str_or_array(agg_info)) {
         ptr2 = ptr1 + compact_sz1;
         if (!result_set_->separate_varlen_storage_valid_) {
           // None encoded strings explicitly attached to ResultSetStorage do not have a
           // second slot in the QueryMemoryDescriptor col width vector
           compact_sz2 =
-              result_set_->query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact;
+              result_set_->query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx + 1);
         }
       }
       offsets_for_storage_[storage_idx].push_back(
@@ -506,7 +502,7 @@ void ResultSet::ColumnWiseTargetAccessor::initializeOffsetsForStorage() {
       const auto& agg_info = result_set_->storage_->targets_[target_idx];
 
       const auto compact_sz1 =
-          crt_query_mem_desc.getColumnWidth(agg_col_idx).compact
+          crt_query_mem_desc.getPaddedColumnWidthBytes(agg_col_idx)
               ? crt_query_mem_desc.getPaddedColumnWidthBytes(agg_col_idx)
               : key_width;
 
@@ -1075,7 +1071,7 @@ void ResultSet::copyColumnIntoBuffer(const size_t column_idx,
                                      int8_t* output_buffer,
                                      const size_t output_buffer_size) const {
   CHECK(isFastColumnarConversionPossible());
-  CHECK_LT(column_idx, query_mem_desc_.getColCount());
+  CHECK_LT(column_idx, query_mem_desc_.getSlotCount());
   CHECK(output_buffer_size > 0);
   CHECK(output_buffer);
   const auto column_width_size = query_mem_desc_.getPaddedColumnWidthBytes(column_idx);
@@ -1748,20 +1744,20 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
   }
 
   auto ptr1 = rowwise_target_ptr;
-  int8_t compact_sz1 = query_mem_desc_.getColumnWidth(slot_idx).compact;
+  int8_t compact_sz1 = query_mem_desc_.getPaddedColumnWidthBytes(slot_idx);
   if (query_mem_desc_.isSingleColumnGroupByWithPerfectHash() &&
       !query_mem_desc_.hasKeylessHash() && !target_info.is_agg) {
     // Single column perfect hash group by can utilize one slot for both the key and the
     // target value if both values fit in 8 bytes. Use the target value actual size for
     // this case. If they don't, the target value should be 8 bytes, so we can still use
     // the actual size rather than the compact size.
-    compact_sz1 = query_mem_desc_.getColumnWidth(slot_idx).actual;
+    compact_sz1 = query_mem_desc_.getLogicalColumnWidthBytes(slot_idx);
   }
 
   // logic for deciding width of column
   if (target_info.agg_kind == kAVG || is_real_str_or_array(target_info)) {
     const auto ptr2 =
-        rowwise_target_ptr + query_mem_desc_.getColumnWidth(slot_idx).compact;
+        rowwise_target_ptr + query_mem_desc_.getPaddedColumnWidthBytes(slot_idx);
     int8_t compact_sz2 = 0;
     // Skip reading the second slot if we have a none encoded string and are using
     // the none encoded strings buffer attached to ResultSetStorage
@@ -1769,7 +1765,7 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
           (target_info.sql_type.is_array() ||
            (target_info.sql_type.is_string() &&
             target_info.sql_type.get_compression() == kENCODING_NONE)))) {
-      compact_sz2 = query_mem_desc_.getColumnWidth(slot_idx + 1).compact;
+      compact_sz2 = query_mem_desc_.getPaddedColumnWidthBytes(slot_idx + 1);
     }
     if (separate_varlen_storage_valid_ && target_info.is_agg) {
       compact_sz2 = 8;  // TODO(adb): is there a better way to do this?
@@ -1828,10 +1824,10 @@ bool ResultSetStorage::isEmptyEntry(const size_t entry_idx, const int8_t* buff) 
         row_ptr_rowwise(buff, query_mem_desc_, entry_idx) + key_bytes_with_padding;
     const auto target_slot_off =
         get_byteoff_of_slot(query_mem_desc_.getTargetIdxForKey(), query_mem_desc_);
-    return read_int_from_buff(
-               rowwise_target_ptr + target_slot_off,
-               query_mem_desc_.getColumnWidth(query_mem_desc_.getTargetIdxForKey())
-                   .compact) == target_init_vals_[query_mem_desc_.getTargetIdxForKey()];
+    return read_int_from_buff(rowwise_target_ptr + target_slot_off,
+                              query_mem_desc_.getPaddedColumnWidthBytes(
+                                  query_mem_desc_.getTargetIdxForKey())) ==
+           target_init_vals_[query_mem_desc_.getTargetIdxForKey()];
   } else {
     const auto keys_ptr = row_ptr_rowwise(buff, query_mem_desc_, entry_idx);
     switch (query_mem_desc_.getEffectiveKeyWidth()) {

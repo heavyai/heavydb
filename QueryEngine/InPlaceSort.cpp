@@ -110,7 +110,7 @@ void inplace_sort_gpu(const std::list<Analyzer::OrderEntry>& order_entries,
     const auto target_idx = order_entry.tle_no - 1;
     const auto val_buff =
         group_by_buffers.second + query_mem_desc.getColOffInBytes(target_idx);
-    const auto chosen_bytes = query_mem_desc.getColumnWidth(target_idx).compact;
+    const auto chosen_bytes = query_mem_desc.getPaddedColumnWidthBytes(target_idx);
     sort_groups_gpu(reinterpret_cast<int64_t*>(val_buff),
                     reinterpret_cast<int32_t*>(idx_buff),
                     query_mem_desc.getEntryCount(),
@@ -124,11 +124,12 @@ void inplace_sort_gpu(const std::list<Analyzer::OrderEntry>& order_entries,
                             sizeof(int64_t),
                             alloc);
     }
-    for (size_t target_idx = 0; target_idx < query_mem_desc.getColCount(); ++target_idx) {
+    for (size_t target_idx = 0; target_idx < query_mem_desc.getSlotCount();
+         ++target_idx) {
       if (static_cast<int>(target_idx) == order_entry.tle_no - 1) {
         continue;
       }
-      const auto chosen_bytes = query_mem_desc.getColumnWidth(target_idx).compact;
+      const auto chosen_bytes = query_mem_desc.getPaddedColumnWidthBytes(target_idx);
       const auto val_buff =
           group_by_buffers.second + query_mem_desc.getColOffInBytes(target_idx);
       apply_permutation_gpu(reinterpret_cast<int64_t*>(val_buff),

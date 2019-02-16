@@ -298,17 +298,8 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                                                    must_use_baseline_sort,
                                                    output_columnar_hint);
     CHECK(query_mem_desc);
-    if (device_type_ != ExecutorDeviceType::GPU) {
-      // TODO(miyu): remove w/ interleaving
-      query_mem_desc->setHasInterleavedBinsOnGpu(false);
-    }
 
-    query_mem_desc->setSortOnGpu(sort_on_gpu_hint &&
-                                 query_mem_desc->canOutputColumnar() &&
-                                 !query_mem_desc->hasKeylessHash());
-
-    output_columnar_ = query_mem_desc->shouldOutputColumnar(
-        output_columnar_hint, has_count_distinct(ra_exe_unit_));
+    output_columnar_ = query_mem_desc->didOutputColumnar();
 
     if (query_mem_desc->sortOnGpu() &&
         (query_mem_desc->getBufferSizeBytes(device_type_) +
@@ -337,21 +328,7 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
 
   auto group_col_widths = get_col_byte_widths(ra_exe_unit_.groupby_exprs, {});
 
-  const bool is_group_by{!group_col_widths.empty()};
-  if (!is_group_by) {
-    CHECK(!must_use_baseline_sort);
-    CHECK(!render_info || !render_info->isPotentialInSituRender());
-    return std::make_unique<QueryMemoryDescriptor>(executor_,
-                                                   ra_exe_unit_,
-                                                   query_infos_,
-                                                   group_col_widths,
-                                                   allow_multifrag,
-                                                   is_group_by,
-                                                   crt_min_byte_width,
-                                                   render_info,
-                                                   count_distinct_descriptors,
-                                                   must_use_baseline_sort);
-  }
+  const bool is_group_by{!ra_exe_unit_.groupby_exprs.empty()};
 
   auto col_range_info_nosharding = getColRangeInfo();
 
@@ -367,6 +344,11 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                    getShardedTopBucket(col_range_info_nosharding, shard_count),
                    col_range_info_nosharding.has_nulls};
 
+  // Non-grouped aggregates do not support accessing aggregated ranges
+  const auto keyless_info = !is_group_by
+                                ? KeylessInfo{false, -1, 0, false}
+                                : getKeylessInfo(ra_exe_unit_.target_exprs, is_group_by);
+
   if (g_enable_watchdog &&
       ((col_range_info.hash_type_ == QueryDescriptionType::GroupByBaselineHash &&
         max_groups_buffer_entry_count > 120000000) ||
@@ -377,22 +359,21 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
             130000000))) {
     throw WatchdogException("Query would use too much memory");
   }
-  return std::make_unique<QueryMemoryDescriptor>(executor_,
-                                                 ra_exe_unit_,
-                                                 query_infos_,
-                                                 this,
-                                                 group_col_widths,
-                                                 col_range_info,
-                                                 allow_multifrag,
-                                                 is_group_by,
-                                                 crt_min_byte_width,
-                                                 sort_on_gpu_hint,
-                                                 shard_count,
-                                                 max_groups_buffer_entry_count,
-                                                 render_info,
-                                                 count_distinct_descriptors,
-                                                 must_use_baseline_sort,
-                                                 output_columnar_hint);
+  return QueryMemoryDescriptor::init(executor_,
+                                     ra_exe_unit_,
+                                     query_infos_,
+                                     col_range_info,
+                                     keyless_info,
+                                     allow_multifrag,
+                                     device_type_,
+                                     crt_min_byte_width,
+                                     sort_on_gpu_hint,
+                                     shard_count,
+                                     max_groups_buffer_entry_count,
+                                     render_info,
+                                     count_distinct_descriptors,
+                                     must_use_baseline_sort,
+                                     output_columnar_hint);
 }
 
 void GroupByAndAggregate::addTransientStringLiterals() {
@@ -578,7 +559,7 @@ bool GroupByAndAggregate::outputColumnar() const {
   return output_columnar_;
 }
 
-GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
+KeylessInfo GroupByAndAggregate::getKeylessInfo(
     const std::vector<Analyzer::Expr*>& target_expr_list,
     const bool is_group_by) const {
   bool keyless{true}, found{false}, shared_mem_support{false},
@@ -794,7 +775,7 @@ bool GroupByAndAggregate::supportedTypeForGpuSharedMemUsage(
 
 // TODO(Saman): this function is temporary and all these limitations should eventually
 // be removed.
-bool GroupByAndAggregate::supportedExprForGpuSharedMemUsage(Analyzer::Expr* expr) const {
+bool GroupByAndAggregate::supportedExprForGpuSharedMemUsage(Analyzer::Expr* expr) {
   /*
   UNNEST operations follow a slightly different internal memory layout compared to other
   keyless aggregates Currently, we opt out of using shared memory if there is any UNNEST
@@ -919,7 +900,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
 
     if (is_group_by) {
       if (query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection &&
-          !use_streaming_top_n(ra_exe_unit_, query_mem_desc)) {
+          !use_streaming_top_n(ra_exe_unit_, query_mem_desc.didOutputColumnar())) {
         const auto crt_match = get_arg_by_name(ROW_FUNC, "crt_match");
         LL_BUILDER.CreateStore(LL_INT(int32_t(1)), crt_match);
         auto total_matched_ptr = get_arg_by_name(ROW_FUNC, "total_matched");
@@ -970,7 +951,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
         can_return_error = true;
         if (query_mem_desc.getQueryDescriptionType() ==
                 QueryDescriptionType::Projection &&
-            use_streaming_top_n(ra_exe_unit_, query_mem_desc)) {
+            use_streaming_top_n(ra_exe_unit_, query_mem_desc.didOutputColumnar())) {
           // Ignore rejection on pushing current row to top-K heap.
           LL_BUILDER.CreateRet(LL_INT(int32_t(0)));
         } else {
@@ -1025,14 +1006,14 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
   }
   const int32_t row_size_quad =
       outputColumnar() ? 0 : query_mem_desc.getRowSize() / sizeof(int64_t);
-  if (use_streaming_top_n(ra_exe_unit_, query_mem_desc)) {
+  if (use_streaming_top_n(ra_exe_unit_, query_mem_desc.didOutputColumnar())) {
     const auto& only_order_entry = ra_exe_unit_.sort_info.order_entries.front();
     CHECK_GE(only_order_entry.tle_no, int(1));
     const size_t target_idx = only_order_entry.tle_no - 1;
     CHECK_LT(target_idx, ra_exe_unit_.target_exprs.size());
     const auto order_entry_expr = ra_exe_unit_.target_exprs[target_idx];
     const auto chosen_bytes =
-        static_cast<size_t>(query_mem_desc.getColumnWidth(target_idx).compact);
+        static_cast<size_t>(query_mem_desc.getPaddedColumnWidthBytes(target_idx));
     auto order_entry_lv = executor_->castToTypeIn(
         executor_->codegen(order_entry_expr, true, co).front(), chosen_bytes * 8);
     const uint32_t n = ra_exe_unit_.sort_info.offset + ra_exe_unit_.sort_info.limit;
@@ -1498,6 +1479,15 @@ llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
   return codegenOutputSlot(&*groups_buffer, query_mem_desc, co, diamond_codegen);
 }
 
+namespace {
+
+bool is_columnar_projection(const QueryMemoryDescriptor& query_mem_desc) {
+  return query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection &&
+         query_mem_desc.didOutputColumnar();
+}
+
+}  // namespace
+
 bool GroupByAndAggregate::codegenAggCalls(
     const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx_in,
     const std::vector<llvm::Value*>& agg_out_vec,
@@ -1525,6 +1515,7 @@ bool GroupByAndAggregate::codegenAggCalls(
         std::get<0>(agg_out_ptr_w_idx),
         llvm::PointerType::get(llvm::Type::getInt8Ty(LL_CONTEXT), 0));
     output_buffer_byte_stream->setName("out_buff_b_stream");
+    CHECK(std::get<1>(agg_out_ptr_w_idx));
     out_row_idx = LL_BUILDER.CreateZExt(std::get<1>(agg_out_ptr_w_idx),
                                         llvm::Type::getInt64Ty(LL_CONTEXT));
     out_row_idx->setName("out_row_idx");
@@ -1535,7 +1526,7 @@ bool GroupByAndAggregate::codegenAggCalls(
        ++target_idx) {
     auto target_expr = ra_exe_unit_.target_exprs[target_idx];
     CHECK(target_expr);
-    if (query_mem_desc.getColumnWidth(agg_out_off).compact == 0) {
+    if (query_mem_desc.getPaddedColumnWidthBytes(agg_out_off) == 0) {
       CHECK(!dynamic_cast<const Analyzer::AggExpr*>(target_expr));
       ++agg_out_off;
       continue;
@@ -1575,8 +1566,9 @@ bool GroupByAndAggregate::codegenAggCalls(
       }
     }
     if ((executor_->plan_state_->isLazyFetchColumn(target_expr) || !is_group_by) &&
-        static_cast<size_t>(query_mem_desc.getColumnWidth(agg_out_off).compact) <
-            sizeof(int64_t)) {
+        (static_cast<size_t>(query_mem_desc.getPaddedColumnWidthBytes(agg_out_off)) <
+         sizeof(int64_t)) &&
+        !is_columnar_projection(query_mem_desc)) {
       // TODO(miyu): enable different byte width in the layout w/o padding
       throw CompilationRetryNoCompaction();
     }
@@ -1630,7 +1622,7 @@ bool GroupByAndAggregate::codegenAggCalls(
         query_mem_desc.threadsShareMemory() && is_simple_count &&
         (!arg_expr || arg_expr->get_type_info().get_notnull())) {
       CHECK_EQ(size_t(1), agg_fn_names.size());
-      const auto chosen_bytes = query_mem_desc.getColumnWidth(agg_out_off).compact;
+      const auto chosen_bytes = query_mem_desc.getPaddedColumnWidthBytes(agg_out_off);
       llvm::Value* agg_col_ptr{nullptr};
       if (is_group_by) {
         if (outputColumnar()) {
@@ -1703,8 +1695,9 @@ bool GroupByAndAggregate::codegenAggCalls(
     const bool lazy_fetched{executor_->plan_state_->isLazyFetchColumn(target_expr)};
     for (const auto& agg_base_name : agg_fn_names) {
       if (agg_info.is_distinct && arg_expr->get_type_info().is_array()) {
-        CHECK_EQ(static_cast<size_t>(query_mem_desc.getColumnWidth(agg_out_off).actual),
-                 sizeof(int64_t));
+        CHECK_EQ(
+            static_cast<size_t>(query_mem_desc.getLogicalColumnWidthBytes(agg_out_off)),
+            sizeof(int64_t));
         // TODO(miyu): check if buffer may be columnar here
         CHECK(!outputColumnar());
         const auto& elem_ti = arg_expr->get_type_info().get_elem_type();
@@ -1731,9 +1724,7 @@ bool GroupByAndAggregate::codegenAggCalls(
 
       llvm::Value* agg_col_ptr{nullptr};
       const auto chosen_bytes =
-          outputColumnar()
-              ? static_cast<size_t>(query_mem_desc.getPaddedColumnWidthBytes(agg_out_off))
-              : static_cast<size_t>(query_mem_desc.getColumnWidth(agg_out_off).compact);
+          static_cast<size_t>(query_mem_desc.getPaddedColumnWidthBytes(agg_out_off));
       const auto& chosen_type = get_compact_type(agg_info);
       const auto& arg_type =
           ((arg_expr && arg_expr->get_type_info().get_type() != kNULLT) &&

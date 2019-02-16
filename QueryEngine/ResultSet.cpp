@@ -452,29 +452,10 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
   auto query_mem_desc_copy = query_mem_desc;
   query_mem_desc_copy.resetGroupColWidths(
       std::vector<int8_t>(query_mem_desc_copy.groupColWidthsSize(), 8));
-  size_t total_bytes{0};
-  size_t col_idx = 0;
-  for (; col_idx < query_mem_desc_copy.getColCount(); ++col_idx) {
-    auto chosen_bytes = query_mem_desc_copy.getColumnWidth(col_idx).compact;
-    if (chosen_bytes == sizeof(int64_t)) {
-      const auto aligned_total_bytes = align_to_int64(total_bytes);
-      CHECK_GE(aligned_total_bytes, total_bytes);
-      if (col_idx >= 1) {
-        const auto padding = aligned_total_bytes - total_bytes;
-        CHECK(padding == 0 || padding == 4);
-        query_mem_desc_copy.agg_col_widths_[col_idx - 1].compact += padding;
-      }
-      total_bytes = aligned_total_bytes;
-    }
-    total_bytes += chosen_bytes;
+  if (query_mem_desc.didOutputColumnar()) {
+    return query_mem_desc_copy;
   }
-  if (!query_mem_desc.sortOnGpu()) {
-    const auto aligned_total_bytes = align_to_int64(total_bytes);
-    CHECK_GE(aligned_total_bytes, total_bytes);
-    const auto padding = aligned_total_bytes - total_bytes;
-    CHECK(padding == 0 || padding == 4);
-    query_mem_desc_copy.agg_col_widths_[col_idx - 1].compact += padding;
-  }
+  query_mem_desc_copy.alignPaddedSlots();
   return query_mem_desc_copy;
 }
 
@@ -666,12 +647,10 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
       const auto is_col_lazy =
           !result_set_->lazy_fetch_info_.empty() &&
           result_set_->lazy_fetch_info_[order_entry.tle_no - 1].is_lazily_fetched;
-      if (result_set_->query_mem_desc_.getColumnWidth(order_entry.tle_no - 1).compact ==
-              sizeof(float) ||
-          (result_set_->query_mem_desc_.didOutputColumnar() && !is_col_lazy &&
-           result_set_->query_mem_desc_.getPaddedColumnWidthBytes(order_entry.tle_no -
-                                                                  1) == sizeof(float))) {
-        float_argument_input = true;
+      if (result_set_->query_mem_desc_.getPaddedColumnWidthBytes(order_entry.tle_no -
+                                                                 1) == sizeof(float)) {
+        float_argument_input =
+            result_set_->query_mem_desc_.didOutputColumnar() ? !is_col_lazy : true;
       }
     }
     const auto lhs_v = buffer_itr_.getColumnInternal(lhs_storage->buff_,
@@ -826,7 +805,7 @@ void ResultSet::radixSortOnCpu(
     const auto target_idx = order_entry.tle_no - 1;
     const auto sortkey_val_buff = reinterpret_cast<int64_t*>(
         buffer_ptr + query_mem_desc_.getColOffInBytes(target_idx));
-    const auto chosen_bytes = query_mem_desc_.getColumnWidth(target_idx).compact;
+    const auto chosen_bytes = query_mem_desc_.getPaddedColumnWidthBytes(target_idx);
     sort_groups_cpu(sortkey_val_buff,
                     &idx_buff[0],
                     query_mem_desc_.getEntryCount(),
@@ -837,12 +816,12 @@ void ResultSet::radixSortOnCpu(
                           query_mem_desc_.getEntryCount(),
                           &tmp_buff[0],
                           sizeof(int64_t));
-    for (size_t target_idx = 0; target_idx < query_mem_desc_.getColCount();
+    for (size_t target_idx = 0; target_idx < query_mem_desc_.getSlotCount();
          ++target_idx) {
       if (static_cast<int>(target_idx) == order_entry.tle_no - 1) {
         continue;
       }
-      const auto chosen_bytes = query_mem_desc_.getColumnWidth(target_idx).compact;
+      const auto chosen_bytes = query_mem_desc_.getPaddedColumnWidthBytes(target_idx);
       const auto satellite_val_buff = reinterpret_cast<int64_t*>(
           buffer_ptr + query_mem_desc_.getColOffInBytes(target_idx));
       apply_permutation_cpu(satellite_val_buff,

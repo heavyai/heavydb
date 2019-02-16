@@ -43,9 +43,8 @@ std::vector<int8_t> get_rows_copy_from_heaps(const int64_t* heaps,
 }  // namespace streaming_top_n
 
 struct RelAlgExecutionUnit;
-class QueryMemoryDescriptor;
 bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
-                         const QueryMemoryDescriptor& query_mem_desc);
+                         const bool output_columnar);
 
 namespace Analyzer {
 class Expr;
@@ -63,6 +62,7 @@ class DataMgr;
 
 }  // namespace Data_Namespace
 
+class QueryMemoryDescriptor;
 std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
     Data_Namespace::DataMgr* data_mgr,
     const int64_t* dev_heaps,

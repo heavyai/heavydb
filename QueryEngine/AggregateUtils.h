@@ -71,7 +71,7 @@ inline std::vector<int64_t> compact_init_vals(
     const QueryMemoryDescriptor& query_mem_desc) {
   std::vector<int64_t> cmpt_res(cmpt_size, 0);
   int8_t* buffer_ptr = reinterpret_cast<int8_t*>(&cmpt_res[0]);
-  for (size_t col_idx = 0, init_vec_idx = 0, col_count = query_mem_desc.getColCount();
+  for (size_t col_idx = 0, init_vec_idx = 0, col_count = query_mem_desc.getSlotCount();
        col_idx < col_count;
        ++col_idx) {
     const auto chosen_bytes =

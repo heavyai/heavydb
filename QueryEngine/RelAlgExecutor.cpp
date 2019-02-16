@@ -1440,7 +1440,7 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
 
   const auto& tuple_type = logical_values->getTupleType();
   for (size_t i = 0; i < tuple_type.size(); ++i) {
-    query_mem_desc.addAggColWidth(ColWidths{8, 8});
+    query_mem_desc.addColSlotInfo({std::make_tuple(8, 8)});
   }
   logical_values->setOutputMetainfo(tuple_type);
   std::vector<std::unique_ptr<Analyzer::ColumnVar>> owned_column_expressions;
@@ -1802,8 +1802,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     }
   }
 
-  static const size_t big_group_threshold{20000};
-
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      co.device_type_,
                                                      QueryMemoryDescriptor(),
@@ -1823,7 +1821,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                   cat_,
                   executor_->row_set_mem_owner_,
                   render_info,
-                  groups_approx_upper_bound(table_infos) <= big_group_threshold),
+                  groups_approx_upper_bound(table_infos) <= g_big_group_threshold),
               targets_meta};
   } catch (const CardinalityEstimationRequired&) {
     max_groups_buffer_entry_guess =
@@ -1851,8 +1849,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     render_info->targets.clear();
     for (size_t i = 0; i < targets_meta.size(); ++i) {
       // TODO(croot): find a better way to iterate through these or a better data
-      // structure for faster lookup to avoid the double for-loop. These vectors should be
-      // small tho and have no impact on overall performance.
+      // structure for faster lookup to avoid the double for-loop. These vectors should
+      // be small tho and have no impact on overall performance.
       size_t j{0};
       for (j = 0; j < target_exprs_owned_.size(); ++j) {
         if (target_exprs_owned_[j].get() == target_exprs[i]) {

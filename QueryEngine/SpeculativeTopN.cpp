@@ -117,9 +117,9 @@ std::shared_ptr<ResultSet> SpeculativeTopNMap::asRows(
   query_mem_desc_rs.setQueryDescriptionType(QueryDescriptionType::GroupByBaselineHash);
   query_mem_desc_rs.setOutputColumnar(false);
   query_mem_desc_rs.setEntryCount(num_rows);
-  query_mem_desc_rs.clearAggColWidths();
-  query_mem_desc_rs.addAggColWidth({8, 8});
-  query_mem_desc_rs.addAggColWidth({8, 8});
+  query_mem_desc_rs.clearSlotInfo();
+  query_mem_desc_rs.addColSlotInfo({std::make_tuple(8, 8)});
+  query_mem_desc_rs.addColSlotInfo({std::make_tuple(8, 8)});
   auto rs = std::make_shared<ResultSet>(
       target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc_rs),
       ExecutorDeviceType::CPU,

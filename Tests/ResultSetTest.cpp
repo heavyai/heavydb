@@ -130,7 +130,7 @@ int8_t* fill_one_entry_no_collisions(int8_t* buff,
   int8_t* slot_ptr = buff;
   int64_t vv = 0;
   for (const auto& target_info : target_infos) {
-    const auto slot_bytes = query_mem_desc.getColumnWidth(target_idx).actual;
+    const auto slot_bytes = query_mem_desc.getLogicalColumnWidthBytes(target_idx);
     CHECK_LE(target_info.sql_type.get_size(), slot_bytes);
     bool isNullable = !target_info.sql_type.get_notnull();
     if (target_info.agg_kind == kCOUNT) {
@@ -160,7 +160,8 @@ int8_t* fill_one_entry_no_collisions(int8_t* buff,
     }
     slot_ptr += slot_bytes;
     if (target_info.agg_kind == kAVG) {
-      const auto count_slot_bytes = query_mem_desc.getColumnWidth(target_idx + 1).actual;
+      const auto count_slot_bytes =
+          query_mem_desc.getLogicalColumnWidthBytes(target_idx + 1);
       if (empty) {
         write_int(slot_ptr, query_mem_desc.hasKeylessHash() ? 0 : 0, count_slot_bytes);
       } else {
@@ -306,7 +307,7 @@ void fill_storage_buffer_perfect_hash_colwise(int8_t* buff,
   size_t slot_idx = 0;
   for (const auto& target_info : target_infos) {
     auto col_entry_ptr = col_ptr;
-    const auto col_bytes = query_mem_desc.getColumnWidth(slot_idx).compact;
+    const auto col_bytes = query_mem_desc.getPaddedColumnWidthBytes(slot_idx);
     for (size_t i = 0; i < query_mem_desc.getEntryCount(); ++i) {
       int8_t* ptr2{nullptr};
       const bool read_secondary_buffer{target_info.is_agg &&
@@ -317,25 +318,25 @@ void fill_storage_buffer_perfect_hash_colwise(int8_t* buff,
       if (i % 2 == 0) {
         const auto gen_val = generator.getNextValue();
         const auto val = target_info.sql_type.is_string() ? -(gen_val + 2) : gen_val;
-        fill_one_entry_one_col(col_entry_ptr,
-                               col_bytes,
-                               ptr2,
-                               read_secondary_buffer
-                                   ? query_mem_desc.getColumnWidth(slot_idx + 1).compact
-                                   : -1,
-                               val,
-                               target_info,
-                               false);
+        fill_one_entry_one_col(
+            col_entry_ptr,
+            col_bytes,
+            ptr2,
+            read_secondary_buffer ? query_mem_desc.getPaddedColumnWidthBytes(slot_idx + 1)
+                                  : -1,
+            val,
+            target_info,
+            false);
       } else {
-        fill_one_entry_one_col(col_entry_ptr,
-                               col_bytes,
-                               ptr2,
-                               read_secondary_buffer
-                                   ? query_mem_desc.getColumnWidth(slot_idx + 1).compact
-                                   : -1,
-                               query_mem_desc.hasKeylessHash() ? 0 : 0xdeadbeef,
-                               target_info,
-                               true);
+        fill_one_entry_one_col(
+            col_entry_ptr,
+            col_bytes,
+            ptr2,
+            read_secondary_buffer ? query_mem_desc.getPaddedColumnWidthBytes(slot_idx + 1)
+                                  : -1,
+            query_mem_desc.hasKeylessHash() ? 0 : 0xdeadbeef,
+            target_info,
+            true);
       }
       col_entry_ptr += col_bytes;
     }
@@ -502,11 +503,13 @@ QueryMemoryDescriptor perfect_hash_one_col_desc_small(
   for (const auto& target_info : target_infos) {
     const auto slot_bytes =
         std::max(num_bytes, static_cast<int8_t>(target_info.sql_type.get_size()));
+    std::vector<std::tuple<int8_t, int8_t>> slots_for_target;
     if (target_info.agg_kind == kAVG) {
       CHECK(target_info.is_agg);
-      query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
+      slots_for_target.emplace_back(std::make_tuple(slot_bytes, slot_bytes));
     }
-    query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
+    slots_for_target.emplace_back(std::make_tuple(slot_bytes, slot_bytes));
+    query_mem_desc.addColSlotInfo(slots_for_target);
   }
   query_mem_desc.setEntryCount(query_mem_desc.getMaxVal() - query_mem_desc.getMinVal() +
                                1);
@@ -523,18 +526,20 @@ QueryMemoryDescriptor perfect_hash_one_col_desc(
   for (const auto& target_info : target_infos) {
     const auto slot_bytes =
         std::max(num_bytes, static_cast<int8_t>(target_info.sql_type.get_size()));
+    std::vector<std::tuple<int8_t, int8_t>> slots_for_target;
     if (target_info.agg_kind == kAVG) {
       CHECK(target_info.is_agg);
-      query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
+      slots_for_target.emplace_back(std::make_tuple(slot_bytes, slot_bytes));
     }
-    query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
+    slots_for_target.emplace_back(std::make_tuple(slot_bytes, slot_bytes));
     if (target_info.sql_type.is_geometry()) {
       for (int i = 1; i < 2 * target_info.sql_type.get_physical_coord_cols(); i++) {
-        query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
+        slots_for_target.emplace_back(std::make_tuple(slot_bytes, slot_bytes));
       }
     } else if (target_info.sql_type.is_varlen()) {
-      query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
+      slots_for_target.emplace_back(std::make_tuple(slot_bytes, slot_bytes));
     }
+    query_mem_desc.addColSlotInfo(slots_for_target);
   }
   query_mem_desc.setEntryCount(query_mem_desc.getMaxVal() - query_mem_desc.getMinVal() +
                                1);
@@ -549,11 +554,13 @@ QueryMemoryDescriptor perfect_hash_two_col_desc(
   for (const auto& target_info : target_infos) {
     const auto slot_bytes =
         std::max(num_bytes, static_cast<int8_t>(target_info.sql_type.get_size()));
+    std::vector<std::tuple<int8_t, int8_t>> slots_for_target;
     if (target_info.agg_kind == kAVG) {
       CHECK(target_info.is_agg);
-      query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
+      slots_for_target.emplace_back(std::make_tuple(slot_bytes, slot_bytes));
     }
-    query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
+    slots_for_target.emplace_back(std::make_tuple(slot_bytes, slot_bytes));
+    query_mem_desc.addColSlotInfo(slots_for_target);
   }
   query_mem_desc.setEntryCount(query_mem_desc.getMaxVal());
   return query_mem_desc;
@@ -567,11 +574,13 @@ QueryMemoryDescriptor baseline_hash_two_col_desc_large(
   for (const auto& target_info : target_infos) {
     const auto slot_bytes =
         std::max(num_bytes, static_cast<int8_t>(target_info.sql_type.get_size()));
+    std::vector<std::tuple<int8_t, int8_t>> slots_for_target;
     if (target_info.agg_kind == kAVG) {
       CHECK(target_info.is_agg);
-      query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
+      slots_for_target.emplace_back(std::make_tuple(slot_bytes, slot_bytes));
     }
-    query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
+    slots_for_target.emplace_back(std::make_tuple(slot_bytes, slot_bytes));
+    query_mem_desc.addColSlotInfo(slots_for_target);
   }
   query_mem_desc.setEntryCount(query_mem_desc.getMaxVal() - query_mem_desc.getMinVal() +
                                1);
@@ -586,11 +595,13 @@ QueryMemoryDescriptor baseline_hash_two_col_desc(
   for (const auto& target_info : target_infos) {
     const auto slot_bytes =
         std::max(num_bytes, static_cast<int8_t>(target_info.sql_type.get_size()));
+    std::vector<std::tuple<int8_t, int8_t>> slots_for_target;
     if (target_info.agg_kind == kAVG) {
       CHECK(target_info.is_agg);
-      query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
+      slots_for_target.emplace_back(std::make_tuple(slot_bytes, slot_bytes));
     }
-    query_mem_desc.addAggColWidth(ColWidths{slot_bytes, slot_bytes});
+    slots_for_target.emplace_back(std::make_tuple(slot_bytes, slot_bytes));
+    query_mem_desc.addColSlotInfo(slots_for_target);
   }
   query_mem_desc.setEntryCount(query_mem_desc.getMaxVal() - query_mem_desc.getMinVal() +
                                1);
@@ -865,7 +876,7 @@ void ResultSetEmulator::rse_fill_storage_buffer_perfect_hash_colwise(
   size_t slot_idx = 0;
   for (const auto& target_info : rs_target_infos) {
     auto col_entry_ptr = col_ptr;
-    const auto col_bytes = rs_query_mem_desc.getColumnWidth(slot_idx).compact;
+    const auto col_bytes = rs_query_mem_desc.getPaddedColumnWidthBytes(slot_idx);
     for (size_t i = 0; i < rs_entry_count; i++) {
       int8_t* ptr2{nullptr};
       if (target_info.agg_kind == kAVG) {
@@ -879,33 +890,36 @@ void ResultSetEmulator::rse_fill_storage_buffer_perfect_hash_colwise(
           if (i >= rs_entry_count - 4) {  // only the last four rows of RS #1 and RS #2
                                           // exersized for null_val test
             rs_values[i] = -1;
-            fill_one_entry_one_col(col_entry_ptr,
-                                   col_bytes,
-                                   ptr2,
-                                   rs_query_mem_desc.getColumnWidth(slot_idx + 1).compact,
-                                   v,
-                                   target_info,
-                                   false,
-                                   true);
+            fill_one_entry_one_col(
+                col_entry_ptr,
+                col_bytes,
+                ptr2,
+                rs_query_mem_desc.getPaddedColumnWidthBytes(slot_idx + 1),
+                v,
+                target_info,
+                false,
+                true);
           } else {
-            fill_one_entry_one_col(col_entry_ptr,
-                                   col_bytes,
-                                   ptr2,
-                                   rs_query_mem_desc.getColumnWidth(slot_idx + 1).compact,
-                                   v,
-                                   target_info,
-                                   false,
-                                   false);
+            fill_one_entry_one_col(
+                col_entry_ptr,
+                col_bytes,
+                ptr2,
+                rs_query_mem_desc.getPaddedColumnWidthBytes(slot_idx + 1),
+                v,
+                target_info,
+                false,
+                false);
           }
         } else {
-          fill_one_entry_one_col(col_entry_ptr,
-                                 col_bytes,
-                                 ptr2,
-                                 rs_query_mem_desc.getColumnWidth(slot_idx + 1).compact,
-                                 v,
-                                 target_info,
-                                 false,
-                                 false);
+          fill_one_entry_one_col(
+              col_entry_ptr,
+              col_bytes,
+              ptr2,
+              rs_query_mem_desc.getPaddedColumnWidthBytes(slot_idx + 1),
+              v,
+              target_info,
+              false,
+              false);
         }
       } else {
         if (rs_flow == 2) {               // null_val test-cases
@@ -913,23 +927,25 @@ void ResultSetEmulator::rse_fill_storage_buffer_perfect_hash_colwise(
                                           // exersized for null_val test
             rs_values[i] = -1;
           }
-          fill_one_entry_one_col(col_entry_ptr,
-                                 col_bytes,
-                                 ptr2,
-                                 rs_query_mem_desc.getColumnWidth(slot_idx + 1).compact,
-                                 rs_query_mem_desc.hasKeylessHash() ? 0 : 0xdeadbeef,
-                                 target_info,
-                                 true,
-                                 true);
+          fill_one_entry_one_col(
+              col_entry_ptr,
+              col_bytes,
+              ptr2,
+              rs_query_mem_desc.getPaddedColumnWidthBytes(slot_idx + 1),
+              rs_query_mem_desc.hasKeylessHash() ? 0 : 0xdeadbeef,
+              target_info,
+              true,
+              true);
         } else {
-          fill_one_entry_one_col(col_entry_ptr,
-                                 col_bytes,
-                                 ptr2,
-                                 rs_query_mem_desc.getColumnWidth(slot_idx + 1).compact,
-                                 rs_query_mem_desc.hasKeylessHash() ? 0 : 0xdeadbeef,
-                                 target_info,
-                                 true,
-                                 false);
+          fill_one_entry_one_col(
+              col_entry_ptr,
+              col_bytes,
+              ptr2,
+              rs_query_mem_desc.getPaddedColumnWidthBytes(slot_idx + 1),
+              rs_query_mem_desc.hasKeylessHash() ? 0 : 0xdeadbeef,
+              target_info,
+              true,
+              false);
         }
       }
       col_entry_ptr += col_bytes;
