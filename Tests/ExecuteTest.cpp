@@ -54,6 +54,8 @@ extern unsigned g_trivial_loop_join_threshold;
 extern bool g_enable_overlaps_hashjoin;
 extern double g_gpu_mem_limit_percent;
 
+extern bool g_enable_window_functions;
+
 namespace {
 
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
@@ -13742,6 +13744,8 @@ int main(int argc, char** argv) {
   if (vm.count("disable-literal-hoisting")) {
     g_hoist_literals = false;
   }
+
+  g_enable_window_functions = true;
 
   g_session.reset(QueryRunner::get_session(BASE_PATH));
 

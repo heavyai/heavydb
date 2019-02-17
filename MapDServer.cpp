@@ -452,6 +452,11 @@ void MapDProgramOptions::fillAdvancedOptions(po::options_description& desc_adv) 
                              ->implicit_value(true),
                          "Remove quals from the filtered count if they are covered by a "
                          "join condition (currently only ST_Contains)");
+  desc_adv.add_options()("enable-window-functions",
+                         po::value<bool>(&g_enable_window_functions)
+                             ->default_value(g_enable_window_functions)
+                             ->implicit_value(true),
+                         "Enable experimental window function support");
 };
 
 namespace {

@@ -80,6 +80,7 @@ bool g_enable_overlaps_hashjoin{false};
 double g_overlaps_hashjoin_bucket_threshold{0.1};
 bool g_strip_join_covered_quals{false};
 size_t g_constrained_by_in_threshold{10};
+bool g_enable_window_functions{false};
 
 Executor::Executor(const int db_id,
                    const size_t block_size_x,

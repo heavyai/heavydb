@@ -1757,6 +1757,13 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   INJECT_TIMER(executeWorkUnit);
   auto co = co_in;
   if (is_window_execution_unit(work_unit.exe_unit)) {
+    if (g_cluster) {
+      throw std::runtime_error(
+          "Window functions support not supported in distributed mode");
+    }
+    if (!g_enable_window_functions) {
+      throw std::runtime_error("Window functions support is disabled");
+    }
     co.device_type_ = ExecutorDeviceType::CPU;
     computeWindow(work_unit.exe_unit, co, eo, queue_time_ms);
   }
