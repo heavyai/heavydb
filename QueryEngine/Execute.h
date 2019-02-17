@@ -504,6 +504,16 @@ class Executor {
   llvm::Value* codegenFixedLengthColVar(const Analyzer::ColumnVar* col_var,
                                         llvm::Value* col_byte_stream,
                                         llvm::Value* pos_arg);
+
+  // Generates code for a fixed length column when a window function is active.
+  llvm::Value* codegenFixedLengthColVarInWindow(const Analyzer::ColumnVar* col_var,
+                                                llvm::Value* col_byte_stream,
+                                                llvm::Value* pos_arg);
+
+  // Generate the position for the given window function and the query iteration position.
+  llvm::Value* codegenWindowPosition(WindowFunctionContext* window_func_context,
+                                     llvm::Value* pos_arg);
+
   std::vector<llvm::Value*> codegenVariableLengthStringColVar(
       llvm::Value* col_byte_stream,
       llvm::Value* pos_arg);
