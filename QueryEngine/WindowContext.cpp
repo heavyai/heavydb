@@ -52,6 +52,7 @@ void WindowFunctionContext::addOrderColumn(
 
 namespace {
 
+// Converts the sorted indices to a mapping from row position to row number.
 std::vector<int64_t> index_to_row_number(const int64_t* index, const size_t index_size) {
   std::vector<int64_t> row_numbers(index_size);
   for (size_t i = 0; i < index_size; ++i) {
@@ -60,6 +61,8 @@ std::vector<int64_t> index_to_row_number(const int64_t* index, const size_t inde
   return row_numbers;
 }
 
+// Returns true iff the current element is greater than the previous, according to the
+// comparator. This is needed because peer rows have to have the same rank.
 bool advance_current_rank(
     const std::function<bool(const int64_t lhs, const int64_t rhs)>& comparator,
     const int64_t* index,
@@ -70,6 +73,7 @@ bool advance_current_rank(
   return comparator(index[i - 1], index[i]);
 }
 
+// Computes the mapping from row position to rank.
 std::vector<int64_t> index_to_rank(
     const int64_t* index,
     const size_t index_size,
@@ -85,6 +89,7 @@ std::vector<int64_t> index_to_rank(
   return rank;
 }
 
+// Computes the mapping from row position to dense rank.
 std::vector<int64_t> index_to_dense_rank(
     const int64_t* index,
     const size_t index_size,
@@ -100,6 +105,7 @@ std::vector<int64_t> index_to_dense_rank(
   return dense_rank;
 }
 
+// Computes the mapping from row position to percent rank.
 std::vector<double> index_to_percent_rank(
     const int64_t* index,
     const size_t index_size,
@@ -116,6 +122,7 @@ std::vector<double> index_to_percent_rank(
   return percent_rank;
 }
 
+// Computes the mapping from row position to cumulative distribution.
 std::vector<double> index_to_cume_dist(
     const int64_t* index,
     const size_t index_size,
@@ -136,6 +143,7 @@ std::vector<double> index_to_cume_dist(
   return cume_dist;
 }
 
+// Computes the mapping from row position to the n-tile statistic.
 std::vector<int64_t> index_to_ntile(const int64_t* index,
                                     const size_t index_size,
                                     const size_t n) {
@@ -150,10 +158,13 @@ std::vector<int64_t> index_to_ntile(const int64_t* index,
   return row_numbers;
 }
 
+// The element size in the result buffer for the given window function kind. Currently
+// it's always 8.
 size_t window_function_buffer_element_size(const SqlWindowFunctionKind /*kind*/) {
   return 8;
 }
 
+// Extracts the integer constant from a constant expression.
 size_t get_int_constant_from_expr(const Analyzer::Expr* expr) {
   const auto lag_constant = dynamic_cast<const Analyzer::Constant*>(expr);
   if (!lag_constant) {
@@ -192,6 +203,8 @@ ssize_t get_lag_or_lead_argument(const Analyzer::WindowFunction* window_func) {
   return 1;
 }
 
+// Redistributes the original_indices according to the permutation given by
+// output_for_partition_buff, reusing it as an output buffer.
 void apply_permutation_to_partition(int64_t* output_for_partition_buff,
                                     const int32_t* original_indices,
                                     const size_t partition_size) {
@@ -204,6 +217,7 @@ void apply_permutation_to_partition(int64_t* output_for_partition_buff,
             output_for_partition_buff);
 }
 
+// Applies a lag to the given sorted_indices, reusing it as an output buffer.
 void apply_lag_to_partition(const ssize_t lag,
                             const int32_t* original_indices,
                             int64_t* sorted_indices,
@@ -225,6 +239,8 @@ void apply_lag_to_partition(const ssize_t lag,
   std::copy(lag_original_indices.begin(), lag_original_indices.end(), sorted_indices);
 }
 
+// Computes first value function for the given output_for_partition_buff, reusing it as an
+// output buffer.
 void apply_first_value_to_partition(const int32_t* original_indices,
                                     int64_t* output_for_partition_buff,
                                     const size_t partition_size) {
@@ -234,6 +250,8 @@ void apply_first_value_to_partition(const int32_t* original_indices,
             first_value_idx);
 }
 
+// Computes last value function for the given output_for_partition_buff, reusing it as an
+// output buffer.
 void apply_last_value_to_partition(const int32_t* original_indices,
                                    int64_t* output_for_partition_buff,
                                    const size_t partition_size) {
@@ -241,6 +259,8 @@ void apply_last_value_to_partition(const int32_t* original_indices,
       original_indices, original_indices + partition_size, output_for_partition_buff);
 }
 
+// Computes the multiplicities for an order by column. The first element in a peer group
+// gets a multiplicity equal to the size of the group, the remaining ones get 0.
 void index_to_multiplicities(
     unsigned* partition_multiplicities,
     const int64_t* index,
@@ -262,6 +282,7 @@ void index_to_multiplicities(
 
 }  // namespace
 
+// Returns true for aggregate window functions, false otherwise.
 bool window_function_is_aggregate(const SqlWindowFunctionKind kind) {
   switch (kind) {
     case SqlWindowFunctionKind::AVG:
@@ -276,6 +297,8 @@ bool window_function_is_aggregate(const SqlWindowFunctionKind kind) {
   }
 }
 
+// Returns true iff the aggregate window function requires special multiplicity handling
+// to ensure that peer rows have the same value for the window function.
 bool window_function_requires_multiplicity(const SqlWindowFunctionKind kind) {
   switch (kind) {
     case SqlWindowFunctionKind::MIN:

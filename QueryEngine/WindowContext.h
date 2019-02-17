@@ -38,33 +38,45 @@ class WindowFunctionContext {
 
   ~WindowFunctionContext();
 
+  // Adds the order column buffer to the context and keeps ownership of it.
   void addOrderColumn(const int8_t* column,
                       const Analyzer::ColumnVar* col_var,
                       const std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner);
 
+  // Computes the window function result to be used during the actual projection query.
   void compute();
 
+  // Returns a pointer to the window function associated with this context.
   const Analyzer::WindowFunction* getWindowFunction() const;
 
+  // Returns a pointer to the output buffer of the window function result.
   const int8_t* output() const;
 
+  // Returns a pointer to the multiplicities buffer used to store peer rows information.
   const uint32_t* multiplicities() const;
 
+  // Returns a pointer to the value field of the aggregation state.
   const int64_t* aggregateState() const;
 
+  // Returns a pointer to the count field of the aggregation state.
   const int64_t* aggregateStateCount() const;
 
+  // Returns a pointer to the partition start bitmap.
   const int8_t* partitionStart() const;
 
+  // Returns the element count in the columns used by the window function.
   size_t elementCount() const;
 
+  // Sets the row number expression for this window function.
   void setRowNumber(llvm::Value* row_number);
 
+  // Gets the row number expression for this window function.
   llvm::Value* getRowNumber() const;
 
   using Comparator = std::function<bool(const int64_t lhs, const int64_t rhs)>;
 
  private:
+  // State for a window aggregate. The count field is only used for average.
   struct AggregateState {
     int64_t val;
     int64_t count;
