@@ -55,14 +55,14 @@ llvm::Value* Executor::codegenWindowFunction(const Analyzer::WindowFunction* win
     case SqlWindowFunctionKind::MAX:
     case SqlWindowFunctionKind::SUM:
     case SqlWindowFunctionKind::COUNT: {
-      return codegenWindowAggregate(window_func, window_func_context, co);
+      return codegenWindowFunctionAggregate(window_func, window_func_context, co);
     }
     default: { LOG(FATAL) << "Invalid window function kind"; }
   }
   return nullptr;
 }
 
-llvm::Value* Executor::codegenWindowAggregate(
+llvm::Value* Executor::codegenWindowFunctionAggregate(
     const Analyzer::WindowFunction* window_func,
     const WindowFunctionContext* window_func_context,
     const CompilationOptions& co) {

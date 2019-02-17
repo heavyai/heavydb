@@ -693,9 +693,10 @@ class Executor {
                                      const size_t target_index,
                                      const CompilationOptions& co);
 
-  llvm::Value* codegenWindowAggregate(const Analyzer::WindowFunction* window_func,
-                                      const WindowFunctionContext* window_func_context,
-                                      const CompilationOptions& co);
+  llvm::Value* codegenWindowFunctionAggregate(
+      const Analyzer::WindowFunction* window_func,
+      const WindowFunctionContext* window_func_context,
+      const CompilationOptions& co);
 
   struct ArgNullcheckBBs {
     llvm::BasicBlock* args_null_bb;
