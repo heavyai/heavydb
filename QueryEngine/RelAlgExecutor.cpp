@@ -1749,12 +1749,14 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     const RelAlgExecutor::WorkUnit& work_unit,
     const std::vector<TargetMetaInfo>& targets_meta,
     const bool is_agg,
-    const CompilationOptions& co,
+    const CompilationOptions& co_in,
     const ExecutionOptions& eo,
     RenderInfo* render_info,
     const int64_t queue_time_ms) {
   INJECT_TIMER(executeWorkUnit);
+  auto co = co_in;
   if (is_window_query(work_unit.exe_unit)) {
+    co.device_type_ = ExecutorDeviceType::CPU;
     computeWindow(work_unit.exe_unit, co, eo, queue_time_ms);
   }
   if (!eo.just_explain && eo.find_push_down_candidates) {

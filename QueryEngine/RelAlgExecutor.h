@@ -213,7 +213,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
   ExecutionResult executeWorkUnit(const WorkUnit& work_unit,
                                   const std::vector<TargetMetaInfo>& targets_meta,
                                   const bool is_agg,
-                                  const CompilationOptions& co,
+                                  const CompilationOptions& co_in,
                                   const ExecutionOptions& eo,
                                   RenderInfo*,
                                   const int64_t queue_time_ms);
