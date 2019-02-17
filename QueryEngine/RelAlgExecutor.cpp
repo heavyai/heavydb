@@ -1243,7 +1243,8 @@ ExecutionResult RelAlgExecutor::executeAggregate(const RelAggregate* aggregate,
 
 namespace {
 
-bool is_window_query(const RelAlgExecutionUnit& ra_exe_unit) {
+// Returns true iff the execution unit contains window functions.
+bool is_window_execution_unit(const RelAlgExecutionUnit& ra_exe_unit) {
   return std::any_of(ra_exe_unit.target_exprs.begin(),
                      ra_exe_unit.target_exprs.end(),
                      [](const Analyzer::Expr* expr) {
@@ -1755,7 +1756,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     const int64_t queue_time_ms) {
   INJECT_TIMER(executeWorkUnit);
   auto co = co_in;
-  if (is_window_query(work_unit.exe_unit)) {
+  if (is_window_execution_unit(work_unit.exe_unit)) {
     co.device_type_ = ExecutorDeviceType::CPU;
     computeWindow(work_unit.exe_unit, co, eo, queue_time_ms);
   }
