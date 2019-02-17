@@ -1924,25 +1924,6 @@ bool ColumnVar::operator==(const Expr& rhs) const {
          (v->get_varno() == rv->get_varno());
 }
 
-namespace {
-
-// Returns true iff the two expression lists are equal (same size and each element are
-// equal).
-bool expr_list_match(const std::vector<std::shared_ptr<Analyzer::Expr>>& lhs,
-                     const std::vector<std::shared_ptr<Analyzer::Expr>>& rhs) {
-  if (lhs.size() != rhs.size()) {
-    return false;
-  }
-  for (size_t i = 0; i < lhs.size(); ++i) {
-    if (!(*lhs[i] == *rhs[i])) {
-      return false;
-    }
-  }
-  return true;
-}
-
-}  // namespace
-
 bool ExpressionTuple::operator==(const Expr& rhs) const {
   const auto rhs_tuple = dynamic_cast<const ExpressionTuple*>(&rhs);
   if (!rhs_tuple) {
@@ -2923,3 +2904,16 @@ bool FunctionOperWithCustomTypeHandling::operator==(const Expr& rhs) const {
 }
 
 }  // namespace Analyzer
+
+bool expr_list_match(const std::vector<std::shared_ptr<Analyzer::Expr>>& lhs,
+                     const std::vector<std::shared_ptr<Analyzer::Expr>>& rhs) {
+  if (lhs.size() != rhs.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < lhs.size(); ++i) {
+    if (!(*lhs[i] == *rhs[i])) {
+      return false;
+    }
+  }
+  return true;
+}

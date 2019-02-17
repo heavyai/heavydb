@@ -88,6 +88,7 @@ set(query_engine_source_files
     JoinHashTable.cpp
     HashJoinRuntime.cpp
     WindowContext.cpp
+    WindowExpressionRewrite.cpp
     WindowFunctionIR.cpp
     
     Codec.h

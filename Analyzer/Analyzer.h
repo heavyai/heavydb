@@ -1457,4 +1457,9 @@ inline std::shared_ptr<Analyzer::Var> var_ref(const Analyzer::Expr* expr,
       expr->get_type_info(), table_id, column_id, rte_idx, which_row, varno);
 }
 
+// Returns true iff the two expression lists are equal (same size and each element are
+// equal).
+bool expr_list_match(const std::vector<std::shared_ptr<Analyzer::Expr>>& lhs,
+                     const std::vector<std::shared_ptr<Analyzer::Expr>>& rhs);
+
 #endif  // ANALYZER_H
