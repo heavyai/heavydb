@@ -503,7 +503,7 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
 
   bool isRows() const { return is_rows_; }
 
-  std::unique_ptr<const RexOperator> getDisambiguated(
+  std::unique_ptr<const RexOperator> disambiguatedOperands(
       ConstRexScalarPtrVector& operands,
       ConstRexScalarPtrVector& partition_keys,
       ConstRexScalarPtrVector& order_keys,

@@ -814,7 +814,7 @@ std::unique_ptr<const RexOperator> disambiguate_operator(
     for (const auto& order_key : order_keys) {
       disambiguated_order_keys.emplace_back(disambiguate_rex(order_key.get(), ra_output));
     }
-    return rex_window_function_operator->getDisambiguated(
+    return rex_window_function_operator->disambiguatedOperands(
         disambiguated_operands,
         disambiguated_partition_keys,
         disambiguated_order_keys,
