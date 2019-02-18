@@ -1489,7 +1489,7 @@ llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
     if (query_mem_desc.didOutputColumnar()) {
       const auto columnar_output_offset =
           emitCall("get_columnar_scan_output_offset", args);
-      return columnar_output_offset;
+      return LL_BUILDER.CreateSExt(columnar_output_offset, get_int_type(64, LL_CONTEXT));
     }
     args.push_back(LL_INT(row_size_quad));
     return emitCall("get_scan_output_slot", args);
@@ -1570,6 +1570,9 @@ bool GroupByAndAggregate::codegenAggCalls(
             : nullptr;
     if (window_row_ptr) {
       agg_out_ptr_w_idx = {window_row_ptr, std::get<1>(agg_out_ptr_w_idx_in)};
+      if (window_function_is_aggregate(window_func->getKind())) {
+        out_row_idx = window_row_ptr;
+      }
     }
     if ((executor_->plan_state_->isLazyFetchColumn(target_expr) || !is_group_by) &&
         static_cast<size_t>(query_mem_desc.getColumnWidth(agg_out_off).compact) <
