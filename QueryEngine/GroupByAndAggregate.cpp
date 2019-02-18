@@ -1481,11 +1481,10 @@ llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
     }
     const auto pos_in_window = LL_BUILDER.CreateTrunc(window_func_context->getRowNumber(),
                                                       get_int_type(32, LL_CONTEXT));
+    llvm::Value* entry_count_lv =
+        LL_INT(static_cast<int32_t>(query_mem_desc.getEntryCount()));
     std::vector<llvm::Value*> args{
-        groups_buffer,
-        LL_INT(static_cast<int32_t>(query_mem_desc.getEntryCount())),
-        pos_in_window,
-        executor_->posArg(nullptr)};
+        &*groups_buffer, entry_count_lv, pos_in_window, executor_->posArg(nullptr)};
     if (query_mem_desc.didOutputColumnar()) {
       const auto columnar_output_offset =
           emitCall("get_columnar_scan_output_offset", args);
@@ -1569,7 +1568,8 @@ bool GroupByAndAggregate::codegenAggCalls(
             ? codegenWindowRowPointer(window_func, query_mem_desc, co, diamond_codegen)
             : nullptr;
     if (window_row_ptr) {
-      agg_out_ptr_w_idx = {window_row_ptr, std::get<1>(agg_out_ptr_w_idx_in)};
+      agg_out_ptr_w_idx =
+          std::make_tuple(window_row_ptr, std::get<1>(agg_out_ptr_w_idx_in));
       if (window_function_is_aggregate(window_func->getKind())) {
         out_row_idx = window_row_ptr;
       }

@@ -1398,7 +1398,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
     CHECK_EQ(join_col_elem_count, elem_count);
     context->addOrderColumn(column, order_col.get(), chunks_owner);
   }
-  return std::move(context);
+  return context;
 }
 
 ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
