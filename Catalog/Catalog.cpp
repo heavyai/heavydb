@@ -1767,9 +1767,7 @@ Catalog::Catalog(const string& basePath,
   }
   buildMaps();
   if (!is_new_db) {
-    //  we need to buildMaps first in order to create and grant roles for
-    // dashboard systemroles.
-    createDashboardSystemRoles();
+    CheckAndExecuteMigrationsPostBuildMaps();
   }
 }
 
@@ -2370,6 +2368,7 @@ void Catalog::createDashboardSystemRoles() {
         }
       }
     }
+    LOG(INFO) << "Performing dashboard internal roles Migration.";
     sqliteConnector_.query("select id, userid, metadata from mapd_dashboards");
     for (size_t i = 0; i < sqliteConnector_.getNumRows(); ++i) {
       if (SysCatalog::instance().getRoleGrantee(generate_dash_system_rolename(
@@ -2432,6 +2431,7 @@ void Catalog::CheckAndExecuteMigrations() {
 
 void Catalog::CheckAndExecuteMigrationsPostBuildMaps() {
   checkDateInDaysColumnMigration();
+  createDashboardSystemRoles();
 }
 
 void SysCatalog::buildRoleMap() {
