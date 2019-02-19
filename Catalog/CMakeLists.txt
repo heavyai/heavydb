@@ -4,7 +4,10 @@ set(catalog_source_files
     DBObject.cpp
     Grantee.cpp
     Grantee.h
+    SessionInfo.cpp
     SharedDictionaryValidator.cpp
+    SysCatalog.cpp
+    SysCatalog.h
 )
 
 get_target_property(StringDictionary_BINARY_DIR StringDictionary BINARY_DIR)

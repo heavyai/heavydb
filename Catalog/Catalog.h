@@ -21,11 +21,8 @@
  * Catalog.
  *
  * This file contains the Catalog class specification. The Catalog class is responsible
- * for storing metadata about stored objects in the system (currently just relations).  At
- * this point it does not take advantage of the database storage infrastructure; this
- * likely will change in the future as the buildout continues. Although it persists the
- * metainfo on disk, at database startup it reads everything into in-memory dictionaries
- * for fast access.
+ * for storing, accessing and caching metadata for a single database. A global metadata
+ * could be accessed with SysCatalog class.
  *
  */
 
@@ -46,11 +43,7 @@
 #include "ColumnDescriptor.h"
 #include "DictDescriptor.h"
 #include "FrontendViewDescriptor.h"
-#include "Grantee.h"
-#include "LdapServer.h"
 #include "LinkDescriptor.h"
-#include "ObjectRoleDescriptor.h"
-#include "RestServer.h"
 #include "TableDescriptor.h"
 
 #include "../DataMgr/DataMgr.h"
@@ -61,22 +54,14 @@
 #include "../Calcite/Calcite.h"
 #include "../Shared/mapd_shared_mutex.h"
 
-struct Privileges {
-  bool super_;
-  bool select_;
-  bool insert_;
-};
+#include "SessionInfo.h"
+#include "SysCatalog.h"
 
 namespace Parser {
 
 class SharedDictionaryDef;
 
 }  // namespace Parser
-
-namespace Importer_NS {
-class Loader;
-class TypedImportBuffer;
-}  // namespace Importer_NS
 
 // SPI means Sequential Positional Index which is equivalent to the input index in a
 // RexInput node
@@ -86,45 +71,6 @@ class TypedImportBuffer;
   (SPIMAP_MAGIC1 + (unsigned)(SPIMAP_MAGIC2 * ((c) + 1) + (i)))
 
 namespace Catalog_Namespace {
-
-/*
- * @type UserMetadata
- * @brief metadata for a mapd user
- */
-struct UserMetadata {
-  UserMetadata(int32_t u, const std::string& n, const std::string& p, bool s, int32_t d)
-      : userId(u)
-      , userName(n)
-      , passwd_hash(p)
-      , isSuper(s)
-      , isReallySuper(s)
-      , defaultDbId(d) {}
-  UserMetadata() {}
-  int32_t userId;
-  std::string userName;
-  std::string passwd_hash;
-  bool isSuper;
-  bool isReallySuper;
-  int32_t defaultDbId;
-};
-
-/*
- * @type DBMetadata
- * @brief metadata for a mapd database
- */
-struct DBMetadata {
-  DBMetadata() : dbId(0), dbOwner(0) {}
-  int32_t dbId;
-  std::string dbName;
-  int32_t dbOwner;
-};
-
-/* system database with global metadata */
-#define MAPD_SYSTEM_CATALOG "omnisci_system_catalog"
-/* database name for the default database */
-#define MAPD_DEFAULT_DB "mapd"
-/* the mapd root user */
-#define MAPD_ROOT_USER "mapd"
 
 /**
  * @type Catalog
@@ -392,296 +338,6 @@ class Catalog {
   static thread_local bool thread_holds_read_lock;
 };
 
-/*
- * @type SysCatalog
- * @brief class for the system-wide catalog, currently containing user and database
- * metadata
- */
-class SysCatalog {
- public:
-  void init(const std::string& basePath,
-            std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-            AuthMetadata authMetadata,
-            std::shared_ptr<Calcite> calcite,
-            bool is_new_db,
-            bool check_privileges,
-            bool aggregator,
-            const std::vector<LeafHostInfo>& string_dict_hosts);
-
-  /**
-   * logins (connects) a user against a database.
-   *
-   * throws a std::exception in all error cases! (including wrong password)
-   */
-  std::shared_ptr<Catalog> login(std::string& dbname,
-                                 std::string& username,
-                                 const std::string& password,
-                                 UserMetadata& user_meta,
-                                 bool check_password = true);
-  void createUser(const std::string& name,
-                  const std::string& passwd,
-                  bool issuper,
-                  const std::string& dbname);
-  void dropUser(const std::string& name);
-  void alterUser(const int32_t userid,
-                 const std::string* passwd,
-                 bool* issuper,
-                 const std::string* dbname);
-  void grantPrivileges(const int32_t userid, const int32_t dbid, const Privileges& privs);
-  bool checkPrivileges(UserMetadata& user, DBMetadata& db, const Privileges& wants_privs);
-  void createDatabase(const std::string& dbname, int owner);
-  void dropDatabase(const DBMetadata& db);
-  bool getMetadataForUser(const std::string& name, UserMetadata& user);
-  bool getMetadataForUserById(const int32_t idIn, UserMetadata& user);
-  bool checkPasswordForUser(const std::string& passwd,
-                            std::string& name,
-                            UserMetadata& user);
-  bool getMetadataForDB(const std::string& name, DBMetadata& db);
-  bool getMetadataForDBById(const int32_t idIn, DBMetadata& db);
-  Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
-  Calcite& getCalciteMgr() const { return *calciteMgr_; }
-  const std::string& getBasePath() const { return basePath_; }
-  SqliteConnector* getSqliteConnector() { return sqliteConnector_.get(); }
-  std::list<DBMetadata> getAllDBMetadata();
-  std::list<UserMetadata> getAllUserMetadata();
-  /**
-   * return the users associated with the given DB
-   */
-  std::list<UserMetadata> getAllUserMetadata(long dbId);
-  void createDBObject(const UserMetadata& user,
-                      const std::string& objectName,
-                      DBObjectType type,
-                      const Catalog_Namespace::Catalog& catalog,
-                      int32_t objectId = -1);
-  void grantDBObjectPrivileges(const std::string& grantee,
-                               const DBObject& object,
-                               const Catalog_Namespace::Catalog& catalog);
-  void grantDBObjectPrivilegesBatch(const std::vector<std::string>& grantees,
-                                    const std::vector<DBObject>& objects,
-                                    const Catalog_Namespace::Catalog& catalog);
-  void revokeDBObjectPrivileges(const std::string& grantee,
-                                const DBObject& object,
-                                const Catalog_Namespace::Catalog& catalog);
-  void revokeDBObjectPrivilegesBatch(const std::vector<std::string>& grantees,
-                                     const std::vector<DBObject>& objects,
-                                     const Catalog_Namespace::Catalog& catalog);
-  void revokeDBObjectPrivilegesFromAll(DBObject object, Catalog* catalog);
-  void revokeDBObjectPrivilegesFromAll_unsafe(DBObject object, Catalog* catalog);
-  void getDBObjectPrivileges(const std::string& granteeName,
-                             DBObject& object,
-                             const Catalog_Namespace::Catalog& catalog) const;
-  bool verifyDBObjectOwnership(const UserMetadata& user,
-                               DBObject object,
-                               const Catalog_Namespace::Catalog& catalog);
-  void createRole(const std::string& roleName, const bool& userPrivateRole = false);
-  void dropRole(const std::string& roleName);
-  void grantRoleBatch(const std::vector<std::string>& roles,
-                      const std::vector<std::string>& grantees);
-  void grantRole(const std::string& role, const std::string& grantee);
-  void revokeRoleBatch(const std::vector<std::string>& roles,
-                       const std::vector<std::string>& grantees);
-  void revokeRole(const std::string& role, const std::string& grantee);
-  // check if the user has any permissions on all the given objects
-  bool hasAnyPrivileges(const UserMetadata& user, std::vector<DBObject>& privObjects);
-  // check if the user has the requested permissions on all the given objects
-  bool checkPrivileges(const UserMetadata& user,
-                       const std::vector<DBObject>& privObjects) const;
-  bool checkPrivileges(const std::string& userName,
-                       const std::vector<DBObject>& privObjects) const;
-  Grantee* getGrantee(const std::string& name) const;
-  Role* getRoleGrantee(const std::string& name) const;
-  User* getUserGrantee(const std::string& name) const;
-  std::vector<ObjectRoleDescriptor*> getMetadataForObject(int32_t dbId,
-                                                          int32_t dbType,
-                                                          int32_t objectId) const;
-  bool isRoleGrantedToGrantee(const std::string& granteeName,
-                              const std::string& roleName,
-                              bool only_direct) const;
-  std::vector<std::string> getRoles(bool userPrivateRole,
-                                    bool isSuper,
-                                    const std::string& userName);
-  std::vector<std::string> getRoles(const std::string& userName, const int32_t dbId);
-  void revokeDashboardSystemRole(const std::string roleName,
-                                 const std::vector<std::string> grantees);
-  bool arePrivilegesOn() const { return check_privileges_; }
-  bool isAggregator() const { return aggregator_; }
-  static SysCatalog& instance() {
-    static SysCatalog sys_cat{};
-    return sys_cat;
-  }
-
-  void populateRoleDbObjects(const std::vector<DBObject>& objects);
-  std::string name() const { return MAPD_DEFAULT_DB; }
-  void renameObjectsInDescriptorMap(DBObject& object,
-                                    const Catalog_Namespace::Catalog& cat);
-  void syncUserWithRemoteProvider(const std::string& user_name,
-                                  const std::vector<std::string>& roles,
-                                  bool* issuper);
-  std::unordered_map<std::string, std::vector<std::string>> getGranteesOfSharedDashboards(
-      const std::vector<std::string>& dashboard_ids);
-
- private:
-  typedef std::map<std::string, Grantee*> GranteeMap;
-  typedef std::multimap<std::string, ObjectRoleDescriptor*> ObjectRoleDescriptorMap;
-
-  SysCatalog()
-      : aggregator_(false)
-      , sqliteMutex_()
-      , sharedMutex_()
-      , thread_holding_sqlite_lock(std::thread::id())
-      , thread_holding_write_lock(std::thread::id()) {}
-  virtual ~SysCatalog();
-
-  void initDB();
-  void buildRoleMap();
-  void buildUserRoleMap();
-  void buildObjectDescriptorMap();
-  void checkAndExecuteMigrations();
-  void importDataFromOldMapdDB();
-  void createUserRoles();
-  void migratePrivileges();
-  void migratePrivileged_old();
-  void updateUserSchema();
-  void updatePasswordsToHashes();
-  void migrateDBAccessPrivileges();
-
-  // Here go functions not wrapped into transactions (necessary for nested calls)
-  void grantDefaultPrivilegesToRole_unsafe(const std::string& name, bool issuper);
-  void createRole_unsafe(const std::string& roleName,
-                         const bool& userPrivateRole = false);
-  void dropRole_unsafe(const std::string& roleName);
-  void grantRoleBatch_unsafe(const std::vector<std::string>& roles,
-                             const std::vector<std::string>& grantees);
-  void grantRole_unsafe(const std::string& roleName, const std::string& granteeName);
-  void revokeRoleBatch_unsafe(const std::vector<std::string>& roles,
-                              const std::vector<std::string>& grantees);
-  void revokeRole_unsafe(const std::string& roleName, const std::string& granteeName);
-  void updateObjectDescriptorMap(const std::string& roleName,
-                                 DBObject& object,
-                                 bool roleType,
-                                 const Catalog_Namespace::Catalog& cat);
-  void deleteObjectDescriptorMap(const std::string& roleName);
-  void deleteObjectDescriptorMap(const std::string& roleName,
-                                 DBObject& object,
-                                 const Catalog_Namespace::Catalog& cat);
-  void grantDBObjectPrivilegesBatch_unsafe(const std::vector<std::string>& grantees,
-                                           const std::vector<DBObject>& objects,
-                                           const Catalog_Namespace::Catalog& catalog);
-  void grantDBObjectPrivileges_unsafe(const std::string& granteeName,
-                                      const DBObject object,
-                                      const Catalog_Namespace::Catalog& catalog);
-  void revokeDBObjectPrivilegesBatch_unsafe(const std::vector<std::string>& grantees,
-                                            const std::vector<DBObject>& objects,
-                                            const Catalog_Namespace::Catalog& catalog);
-  void revokeDBObjectPrivileges_unsafe(const std::string& granteeName,
-                                       DBObject object,
-                                       const Catalog_Namespace::Catalog& catalog);
-  void grantAllOnDatabase_unsafe(const std::string& roleName,
-                                 DBObject& object,
-                                 const Catalog_Namespace::Catalog& catalog);
-  void revokeAllOnDatabase_unsafe(const std::string& roleName,
-                                  int32_t dbId,
-                                  Grantee* grantee);
-  bool isDashboardSystemRole(const std::string& roleName);
-
-  template <typename F, typename... Args>
-  void execInTransaction(F&& f, Args&&... args);
-
-  bool check_privileges_;
-  std::string basePath_;
-  GranteeMap granteeMap_;
-  ObjectRoleDescriptorMap objectDescriptorMap_;
-  std::unique_ptr<SqliteConnector> sqliteConnector_;
-
-  std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
-  std::unique_ptr<LdapServer> ldap_server_;
-  std::unique_ptr<RestServer> rest_server_;
-  std::shared_ptr<Calcite> calciteMgr_;
-  std::vector<LeafHostInfo> string_dict_hosts_;
-  bool aggregator_;
-
- public:
-  mutable std::mutex sqliteMutex_;
-  mutable mapd_shared_mutex sharedMutex_;
-  mutable std::atomic<std::thread::id> thread_holding_sqlite_lock;
-  mutable std::atomic<std::thread::id> thread_holding_write_lock;
-  static thread_local bool thread_holds_read_lock;
-};
-
-// this class is defined to accommodate both Thrift and non-Thrift builds.
-class MapDHandler {
- public:
-  virtual void prepare_columnar_loader(
-      const std::string& session,
-      const std::string& table_name,
-      size_t num_cols,
-      std::unique_ptr<Importer_NS::Loader>* loader,
-      std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>* import_buffers);
-  virtual ~MapDHandler() {}
-};
-
-/*
- * @type SessionInfo
- * @brief a user session
- */
-class SessionInfo {
- public:
-  SessionInfo(std::shared_ptr<MapDHandler> mapdHandler,
-              std::shared_ptr<Catalog> cat,
-              const UserMetadata& user,
-              const ExecutorDeviceType t,
-              const std::string& sid)
-      : mapdHandler_(mapdHandler)
-      , catalog_(cat)
-      , currentUser_(user)
-      , executor_device_type_(t)
-      , session_id(sid)
-      , last_used_time(time(0))
-      , start_time(time(0)) {}
-  SessionInfo(std::shared_ptr<Catalog> cat,
-              const UserMetadata& user,
-              const ExecutorDeviceType t,
-              const std::string& sid)
-      : SessionInfo(std::make_shared<MapDHandler>(), cat, user, t, sid) {}
-  SessionInfo(const SessionInfo& s)
-      : mapdHandler_(s.mapdHandler_)
-      , catalog_(s.catalog_)
-      , currentUser_(s.currentUser_)
-      , executor_device_type_(static_cast<ExecutorDeviceType>(s.executor_device_type_))
-      , session_id(s.session_id) {}
-  MapDHandler* get_mapdHandler() const { return mapdHandler_.get(); };
-  Catalog& getCatalog() const { return *catalog_; }
-  std::shared_ptr<Catalog> get_catalog_ptr() const { return catalog_; }
-  const UserMetadata& get_currentUser() const { return currentUser_; }
-  const ExecutorDeviceType get_executor_device_type() const {
-    return executor_device_type_;
-  }
-  void set_executor_device_type(ExecutorDeviceType t) { executor_device_type_ = t; }
-  std::string get_session_id() const { return session_id; }
-  time_t get_last_used_time() const { return last_used_time; }
-  void update_last_used_time() { last_used_time = time(0); }
-  void reset_superuser() { currentUser_.isSuper = currentUser_.isReallySuper; }
-  void make_superuser() { currentUser_.isSuper = true; }
-  bool checkDBAccessPrivileges(const DBObjectType& permissionType,
-                               const AccessPrivileges& privs,
-                               const std::string& objectName = "") const;
-  time_t get_start_time() const { return start_time; }
-
-  operator std::string() const;
-
- private:
-  std::shared_ptr<MapDHandler> mapdHandler_;
-  std::shared_ptr<Catalog> catalog_;
-  UserMetadata currentUser_;
-  std::atomic<ExecutorDeviceType> executor_device_type_;
-  const std::string session_id;
-  std::atomic<time_t> last_used_time;  // for cleaning up SessionInfo after client dies
-  std::atomic<time_t> start_time;      // for invalidating session after tolerance period
-};
-
 }  // namespace Catalog_Namespace
-
-std::ostream& operator<<(std::ostream& os,
-                         const Catalog_Namespace::SessionInfo& session_info);
 
 #endif  // CATALOG_H
