@@ -258,24 +258,21 @@ llvm::Value* Executor::codegenCastBetweenIntTypes(llvm::Value* operand_lv,
     }
   } else if (operand_ti.is_decimal()) {
     // rounded scale down
-    auto scale = exp_to_scale(operand_ti.get_scale() - ti.get_scale());
-    auto scale_half = scale / 2;
+    auto scale = (int64_t)exp_to_scale(operand_ti.get_scale() - ti.get_scale());
     const auto scale_lv =
         llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_), scale);
-    const auto scale_half_lv =
-        llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_), scale_half);
 
     const auto operand_width =
         static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
 
+    std::string method_name = "scale_decimal_down_nullable";
+    if (operand_ti.get_notnull()) {
+      method_name = "scale_decimal_down_not_nullable";
+    }
+
     CHECK(operand_width == 64);
-    operand_lv = cgen_state_->emitCall("scale_decimal_down",
-                                       {operand_lv,
-                                        scale_lv,
-                                        scale_half_lv,
-                                        ll_bool(!operand_ti.get_notnull()),
-                                        ll_int(inline_int_null_val(operand_ti)),
-                                        inlineIntNull(SQLTypeInfo(kBIGINT, false))});
+    operand_lv = cgen_state_->emitCall(
+        method_name, {operand_lv, scale_lv, ll_int(inline_int_null_val(operand_ti))});
   }
 
   const auto operand_width =
