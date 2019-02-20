@@ -5250,6 +5250,14 @@ TEST(Select, ArrayUnsupported) {
   }
 }
 
+TEST(Select, ExpressionRewrite) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT count(*) from test where f/2.0 >= 0.6;", dt);
+    c("SELECT count(*) from test where d/0.5 < 5.0;", dt);
+  }
+}
+
 TEST(Select, OrRewrite) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

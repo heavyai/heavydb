@@ -462,7 +462,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
           //    update dectest set d=cast( 1234.0 as float );
           // which is expected to throw in Update.ImplicitCastToNumericTypes
           // due to cast codegen currently not supporting these casts
-          if (operand_ti.is_fp()) {
+          if (ti.is_decimal() && operand_ti.is_fp()) {
             break;
           }
           auto operand_copy = const_operand->deep_copy();
@@ -599,6 +599,38 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
       if (optype == kMINUS) {
         Datum d = {};
         return makeExpr<Analyzer::Constant>(lhs_type, false, d);
+      }
+    }
+    // Convert fp division by a constant to multiplication by 1/constant
+    if (optype == kDIVIDE && const_rhs && rhs_ti.is_fp()) {
+      auto rhs_datum = const_rhs->get_constval();
+      std::shared_ptr<Analyzer::Expr> recip_rhs = nullptr;
+      if (rhs_ti.get_type() == kFLOAT) {
+        if (rhs_datum.floatval == 1.0) {
+          return lhs;
+        }
+        auto f = std::fabs(rhs_datum.floatval);
+        if (f > 1.0 || (f != 0.0 && 1.0 < f * std::numeric_limits<float>::max())) {
+          rhs_datum.floatval = 1.0 / rhs_datum.floatval;
+          recip_rhs = makeExpr<Analyzer::Constant>(rhs_type, false, rhs_datum);
+        }
+      } else if (rhs_ti.get_type() == kDOUBLE) {
+        if (rhs_datum.doubleval == 1.0) {
+          return lhs;
+        }
+        auto d = std::fabs(rhs_datum.doubleval);
+        if (d > 1.0 || (d != 0.0 && 1.0 < d * std::numeric_limits<double>::max())) {
+          rhs_datum.doubleval = 1.0 / rhs_datum.doubleval;
+          recip_rhs = makeExpr<Analyzer::Constant>(rhs_type, false, rhs_datum);
+        }
+      }
+      if (recip_rhs) {
+        return makeExpr<Analyzer::BinOper>(ti,
+                                           bin_oper->get_contains_agg(),
+                                           kMULTIPLY,
+                                           bin_oper->get_qualifier(),
+                                           lhs,
+                                           recip_rhs);
       }
     }
 
