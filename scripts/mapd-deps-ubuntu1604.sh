@@ -21,6 +21,7 @@ sudo apt install -y \
     wget \
     curl \
     clang \
+    libclang-dev \
     llvm \
     llvm-dev \
     clang-format \

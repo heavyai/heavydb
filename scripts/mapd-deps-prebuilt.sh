@@ -71,6 +71,7 @@ if [ "$DISTRO" = "u18.04" ] ; then
       wget \
       curl \
       clang \
+      libclang-dev \
       llvm \
       llvm-dev \
       clang-format \
