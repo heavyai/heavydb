@@ -17,8 +17,8 @@
 #ifndef QUERYENGINE_HASHJOINKEYHANDLERS_H
 #define QUERYENGINE_HASHJOINKEYHANDLERS_H
 
+#include "../Shared/SqlTypesLayout.h"
 #include "HashJoinRuntime.h"
-#include "SqlTypesLayout.h"
 
 #ifdef __CUDACC__
 #include "DecodersImpl.h"

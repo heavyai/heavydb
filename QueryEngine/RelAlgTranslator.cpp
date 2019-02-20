@@ -15,7 +15,7 @@
  */
 
 #include "RelAlgTranslator.h"
-#include "SqlTypesLayout.h"
+#include "Shared/SqlTypesLayout.h"
 
 #include "CalciteDeserializerUtils.h"
 #include "DateTimePlusRewrite.h"

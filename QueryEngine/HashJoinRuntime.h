@@ -27,8 +27,8 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <vector>
+#include "../Shared/SqlTypesLayout.h"
 #include "../Shared/sqltypes.h"
-#include "SqlTypesLayout.h"
 
 struct GenericKeyHandler;
 struct OverlapsKeyHandler;

@@ -501,6 +501,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
     else
       return false;
   }
+
   HOST DEVICE inline bool is_null(const Datum& d) const {
     // assuming Datum is always uncompressed
     switch (type) {
@@ -780,29 +781,18 @@ inline SQLTypeInfo get_logical_type_info(const SQLTypeInfo& type_info) {
 }
 
 template <class T>
-inline int64_t inline_int_null_value() {
+constexpr inline int64_t inline_int_null_value() {
   return std::is_signed<T>::value ? std::numeric_limits<T>::min()
                                   : std::numeric_limits<T>::max();
 }
 
 template <class T>
-inline int64_t max_valid_int_value() {
+constexpr inline int64_t max_valid_int_value() {
   return std::is_signed<T>::value ? std::numeric_limits<T>::max()
                                   : std::numeric_limits<T>::max() - 1;
 }
 
-template <typename T>
-T inline_fp_null_value();
-
-template <>
-inline float inline_fp_null_value<float>() {
-  return NULL_FLOAT;
-}
-
-template <>
-inline double inline_fp_null_value<double>() {
-  return NULL_DOUBLE;
-}
+#include "InlineNullValues.h"
 
 typedef int32_t StringOffsetT;
 

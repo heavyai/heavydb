@@ -26,7 +26,7 @@
 #include "ResultRows.h"
 #include "ResultSet.h"
 #include "RuntimeFunctions.h"
-#include "SqlTypesLayout.h"
+#include "Shared/SqlTypesLayout.h"
 
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"

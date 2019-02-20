@@ -42,7 +42,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include "../QueryEngine/SqlTypesLayout.h"
 #include "../QueryEngine/TypePunning.h"
 #include "../Shared/geo_compression.h"
 #include "../Shared/geo_types.h"
@@ -54,6 +53,7 @@
 #include "../Shared/scope.h"
 #include "../Shared/shard_key.h"
 #include "../Shared/unreachable.h"
+#include "Shared/SqlTypesLayout.h"
 
 #include <iostream>
 #include <vector>

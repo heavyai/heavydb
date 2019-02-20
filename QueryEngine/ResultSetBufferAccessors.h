@@ -25,8 +25,8 @@
 #ifndef QUERYENGINE_RESULTSETBUFFERACCESSORS_H
 #define QUERYENGINE_RESULTSETBUFFERACCESSORS_H
 
+#include "../Shared/SqlTypesLayout.h"
 #include "BufferCompaction.h"
-#include "SqlTypesLayout.h"
 #include "TypePunning.h"
 
 #include "../Shared/unreachable.h"

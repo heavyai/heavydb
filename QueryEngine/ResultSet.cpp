@@ -31,10 +31,10 @@
 #include "InPlaceSort.h"
 #include "OutputBufferInitialization.h"
 #include "RuntimeFunctions.h"
+#include "Shared/SqlTypesLayout.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"
-#include "SqlTypesLayout.h"
 
 #include <algorithm>
 #include <bitset>

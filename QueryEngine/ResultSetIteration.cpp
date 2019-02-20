@@ -29,7 +29,7 @@
 #include "ResultSet.h"
 #include "ResultSetGeoSerialization.h"
 #include "RuntimeFunctions.h"
-#include "SqlTypesLayout.h"
+#include "Shared/SqlTypesLayout.h"
 #include "TypePunning.h"
 
 #include <utility>

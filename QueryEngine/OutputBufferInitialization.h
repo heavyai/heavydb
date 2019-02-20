@@ -22,7 +22,7 @@
 #ifndef QUERYENGINE_OUTPUTBUFFERINITIALIZATION_H
 #define QUERYENGINE_OUTPUTBUFFERINITIALIZATION_H
 
-#include "SqlTypesLayout.h"
+#include "Shared/SqlTypesLayout.h"
 
 #include <list>
 #include <memory>

@@ -145,7 +145,7 @@ bool compare_agg(const std::string& table,
   auto r_cnt = v<int64_t>(crt_row[0]);
   auto r_avg = v<double>(crt_row[1]);
   // VLOG(1) << "r_avg: " << std::to_string(r_avg) << ", avg: " << std::to_string(avg);
-  return r_cnt == cnt && fabs(r_avg - avg) < 1E-6;
+  return r_cnt == cnt && std::abs(r_avg - avg) < 1E-6;
 }
 
 template <typename T>
@@ -366,7 +366,7 @@ bool update_column_from_decimal(const std::string& table,
     l_decimal *= pow(10, rhsType.get_scale());
   }
 
-  auto r_loss = fabs(l_decimal - r_decimal) / r_decimal;
+  auto r_loss = std::abs(l_decimal - r_decimal) / r_decimal;
   if (!(r_loss <= max_loss)) {
     VLOG(1) << "l_decimal: " << l_decimal << ", r_decimal: " << r_decimal
             << ", r_loss: " << r_loss << ", max_loss: " << max_loss;
@@ -1080,62 +1080,6 @@ TEST_F(UpdateStorageTest, Half_float_trip_distance_x2) {
 TEST_F(UpdateStorageTest, Half_float_trip_distance_x2_rollback) {
   EXPECT_TRUE(update_a_numeric_column(
       "trips", "trip_distance", UpdelTestConfig::fixNumRows, 2, 1 * 2, 1. * 1.0, false));
-}
-
-TEST_F(UpdateStorageTest, All_decimal_pickup_longitude_x2) {
-  EXPECT_TRUE(update_a_numeric_column("trips",
-                                      "pickup_longitude",
-                                      UpdelTestConfig::fixNumRows,
-                                      1,
-                                      -73.978165 * 2,
-                                      -73.978165 * 2.0));
-}
-TEST_F(UpdateStorageTest, All_decimal_pickup_longitude_x2_rollback) {
-  EXPECT_TRUE(update_a_numeric_column("trips",
-                                      "pickup_longitude",
-                                      UpdelTestConfig::fixNumRows,
-                                      1,
-                                      -73.978165 * 2,
-                                      -73.978165 * 1.0,
-                                      false));
-}
-
-TEST_F(UpdateStorageTest, Half_decimal_pickup_longitude_x2) {
-  EXPECT_TRUE(update_a_numeric_column("trips",
-                                      "pickup_longitude",
-                                      UpdelTestConfig::fixNumRows,
-                                      2,
-                                      -73.978165 * 2,
-                                      -73.978165 * 1.5));
-}
-TEST_F(UpdateStorageTest, Half_decimal_pickup_longitude_x2_rollback) {
-  EXPECT_TRUE(update_a_numeric_column("trips",
-                                      "pickup_longitude",
-                                      UpdelTestConfig::fixNumRows,
-                                      2,
-                                      -73.978165 * 2,
-                                      -73.978165 * 1.0,
-                                      false));
-}
-TEST_F(UpdateStorageTest, Half_decimal_pickup_longitude_x2_by_string) {
-  EXPECT_TRUE(update_a_numeric_column("trips",
-                                      "pickup_longitude",
-                                      UpdelTestConfig::fixNumRows,
-                                      2,
-                                      -73.978165 * 2,
-                                      -73.978165 * 1.5,
-                                      true,
-                                      true));
-}
-TEST_F(UpdateStorageTest, Half_decimal_pickup_longitude_x2_rollback_by_string) {
-  EXPECT_TRUE(update_a_numeric_column("trips",
-                                      "pickup_longitude",
-                                      UpdelTestConfig::fixNumRows,
-                                      2,
-                                      -73.978165 * 2,
-                                      -73.978165 * 1.0,
-                                      false,
-                                      true));
 }
 
 TEST_F(UpdateStorageTest, All_string_vendor_id) {

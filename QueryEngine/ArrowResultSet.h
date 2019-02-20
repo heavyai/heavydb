@@ -19,7 +19,7 @@
 
 #include "../Shared/sqltypes.h"
 #include "ResultSet.h"
-#include "SqlTypesLayout.h"
+#include "Shared/SqlTypesLayout.h"
 #include "TargetMetaInfo.h"
 #include "TargetValue.h"
 

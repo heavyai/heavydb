@@ -331,11 +331,67 @@ inline bool get_scalar(void* ndptr, const SQLTypeInfo& ntype, T& v) {
 }
 
 template <typename T>
-inline void set_minmax(T& min, T& max, const T val) {
-  if (val < min)
+inline T get_null_sentinel_for_type(SQLTypeInfo const& ti, T const& tag);
+
+template <>
+inline int64_t get_null_sentinel_for_type<int64_t>(SQLTypeInfo const& ti,
+                                                   int64_t const& tag) {
+  if (ti.is_string()) {
+    if (ti.get_compression() == kENCODING_DICT) {
+      return inline_fixed_encoding_null_val(ti);
+    } else {
+      return 0;  // For NONE-Encoded strings
+    }
+  } else {
+    return inline_fixed_encoding_null_val(ti);
+  }
+}
+
+template <>
+inline double get_null_sentinel_for_type<double>(SQLTypeInfo const& ti,
+                                                 double const& tag) {
+  return inline_fp_null_val(ti);
+}
+
+template <typename T>
+inline void set_minmax(T& min, T& max, T const val) {
+  if (val < min) {
     min = val;
-  if (val > max)
+  }
+  if (val > max) {
     max = val;
+  }
+}
+
+template <typename T>
+inline void set_minmax(T& min, T& max, int8_t& null_flag, T const val, T null_sentinel) {
+  if (val == null_sentinel) {
+    null_flag |= true;
+  } else {
+    if (val < min) {
+      min = val;
+    }
+    if (val > max) {
+      max = val;
+    }
+  }
+}
+
+template <typename TYPE_INFO, typename T>
+inline void tabulate_metadata(TYPE_INFO const& ti,
+                              T& min,
+                              T& max,
+                              int8_t& null_flag,
+                              T const val) {
+  if (ti.get_notnull()) {
+    set_minmax(min, max, val);
+  } else {
+    set_minmax(min,
+               max,
+               null_flag,
+               val,
+               get_null_sentinel_for_type(ti.get_type(), std::decay_t<T>()));
+  }
 }
 
 }  // namespace

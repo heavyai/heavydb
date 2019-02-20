@@ -30,6 +30,7 @@
 #include "Shared/DateConverters.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/thread_count.h"
+#include "Shared/unreachable.h"
 #include "TargetValueConvertersFactories.h"
 
 namespace Fragmenter_Namespace {
@@ -559,7 +560,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                                          chunk_meta_it->second.numElements);
 
   std::vector<int8_t> has_null_per_thread(ncore, 0);
-  std::vector<double> max_double_per_thread(ncore, std::numeric_limits<double>::min());
+  std::vector<double> max_double_per_thread(ncore, std::numeric_limits<double>::lowest());
   std::vector<double> min_double_per_thread(ncore, std::numeric_limits<double>::max());
   std::vector<int64_t> max_int64t_per_thread(ncore, std::numeric_limits<int64_t>::min());
   std::vector<int64_t> min_int64t_per_thread(ncore, std::numeric_limits<int64_t>::max());
@@ -658,11 +659,19 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
               put_scalar<int64_t>(data_ptr, lhs_type, v, cd->columnName, &rhs_type);
               if (lhs_type.is_decimal()) {
                 nullAwareDecimalOverflowValidator.validate<int64_t>(v);
-                int64_t decimal;
-                get_scalar<int64_t>(data_ptr, lhs_type, decimal);
-                set_minmax<int64_t>(
-                    min_int64t_per_thread[c], max_int64t_per_thread[c], decimal);
-                if (!((v >= 0) ^ (decimal < 0))) {
+                int64_t decimal_val;
+                get_scalar<int64_t>(data_ptr, lhs_type, decimal_val);
+                tabulate_metadata(lhs_type,
+                                  min_int64t_per_thread[c],
+                                  max_int64t_per_thread[c],
+                                  has_null_per_thread[c],
+                                  (v == inline_int_null_value<int64_t>() &&
+                                   lhs_type.get_notnull() == false)
+                                      ? v
+                                      : decimal_val);
+                auto const positive_v_and_negative_d = (v >= 0) && (decimal_val < 0);
+                auto const negative_v_and_positive_d = (v < 0) && (decimal_val >= 0);
+                if (positive_v_and_negative_d || negative_v_and_positive_d) {
                   throw std::runtime_error(
                       "Data conversion overflow on " + std::to_string(v) +
                       " from DECIMAL(" + std::to_string(rhs_type.get_dimension()) + ", " +
@@ -676,8 +685,14 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                   int64_t days;
                   get_scalar<int64_t>(data_ptr, lhs_type, days);
                   const auto seconds = DateConverters::get_epoch_seconds_from_days(days);
-                  set_minmax<int64_t>(
-                      min_int64t_per_thread[c], max_int64t_per_thread[c], seconds);
+                  tabulate_metadata(lhs_type,
+                                    min_int64t_per_thread[c],
+                                    max_int64t_per_thread[c],
+                                    has_null_per_thread[c],
+                                    (v == inline_int_null_value<int64_t>() &&
+                                     lhs_type.get_notnull() == false)
+                                        ? v
+                                        : seconds);
                 } else {
                   int64_t target_value;
                   if (rhs_type.is_decimal()) {
@@ -685,14 +700,18 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                   } else {
                     target_value = v;
                   }
-
-                  set_minmax<int64_t>(
-                      min_int64t_per_thread[c], max_int64t_per_thread[c], target_value);
+                  tabulate_metadata(lhs_type,
+                                    min_int64t_per_thread[c],
+                                    max_int64t_per_thread[c],
+                                    has_null_per_thread[c],
+                                    target_value);
                 }
               } else {
-                set_minmax<double>(
+                tabulate_metadata(
+                    lhs_type,
                     min_double_per_thread[c],
                     max_double_per_thread[c],
+                    has_null_per_thread[c],
                     rhs_type.is_decimal() ? decimal_to_double(rhs_type, v) : v);
               }
             } else if (const auto vp = boost::get<double>(sv)) {
@@ -702,10 +721,20 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
               }
               put_scalar<double>(data_ptr, lhs_type, v, cd->columnName);
               if (lhs_type.is_integer()) {
-                set_minmax<int64_t>(
-                    min_int64t_per_thread[c], max_int64t_per_thread[c], v);
+                tabulate_metadata(lhs_type,
+                                  min_int64t_per_thread[c],
+                                  max_int64t_per_thread[c],
+                                  has_null_per_thread[c],
+                                  int64_t(v));
+              } else if (lhs_type.is_fp()) {
+                tabulate_metadata(lhs_type,
+                                  min_double_per_thread[c],
+                                  max_double_per_thread[c],
+                                  has_null_per_thread[c],
+                                  double(v));
               } else {
-                set_minmax<double>(min_double_per_thread[c], max_double_per_thread[c], v);
+                UNREACHABLE() << "Unexpected combination of a non-floating or integer "
+                                 "LHS with a floating RHS.";
               }
             } else if (const auto vp = boost::get<float>(sv)) {
               auto v = *vp;
@@ -714,10 +743,17 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
               }
               put_scalar<float>(data_ptr, lhs_type, v, cd->columnName);
               if (lhs_type.is_integer()) {
-                set_minmax<int64_t>(
-                    min_int64t_per_thread[c], max_int64t_per_thread[c], v);
+                tabulate_metadata(lhs_type,
+                                  min_int64t_per_thread[c],
+                                  max_int64t_per_thread[c],
+                                  has_null_per_thread[c],
+                                  int64_t(v));
               } else {
-                set_minmax<double>(min_double_per_thread[c], max_double_per_thread[c], v);
+                tabulate_metadata(lhs_type,
+                                  min_double_per_thread[c],
+                                  max_double_per_thread[c],
+                                  has_null_per_thread[c],
+                                  double(v));
               }
             } else if (const auto vp = boost::get<NullableString>(sv)) {
               const auto s = boost::get<std::string>(vp);
@@ -729,8 +765,11 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                   sidx = stringDict->getOrAdd(sval);
                 }
                 put_scalar<int32_t>(data_ptr, lhs_type, sidx, cd->columnName);
-                set_minmax<int64_t>(
-                    min_int64t_per_thread[c], max_int64t_per_thread[c], sidx);
+                tabulate_metadata(lhs_type,
+                                  min_int64t_per_thread[c],
+                                  max_int64t_per_thread[c],
+                                  has_null_per_thread[c],
+                                  int64_t(sidx));
               } else if (sval.size() > 0) {
                 auto dval = std::atof(sval.data());
                 if (lhs_type.is_boolean()) {
@@ -742,12 +781,18 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                 }
                 if (lhs_type.is_fp() || lhs_type.is_decimal()) {
                   put_scalar<double>(data_ptr, lhs_type, dval, cd->columnName);
-                  set_minmax<double>(
-                      min_double_per_thread[c], max_double_per_thread[c], dval);
+                  tabulate_metadata(lhs_type,
+                                    min_double_per_thread[c],
+                                    max_double_per_thread[c],
+                                    has_null_per_thread[c],
+                                    double(dval));
                 } else {
                   put_scalar<int64_t>(data_ptr, lhs_type, dval, cd->columnName);
-                  set_minmax<int64_t>(
-                      min_int64t_per_thread[c], max_int64t_per_thread[c], dval);
+                  tabulate_metadata(lhs_type,
+                                    min_int64t_per_thread[c],
+                                    max_int64t_per_thread[c],
+                                    has_null_per_thread[c],
+                                    int64_t(dval));
                 }
               } else {
                 put_null(data_ptr, lhs_type, cd->columnName);

@@ -17,7 +17,7 @@
 #ifndef COLUMNAR_RESULTS_H
 #define COLUMNAR_RESULTS_H
 #include "ResultSet.h"
-#include "SqlTypesLayout.h"
+#include "Shared/SqlTypesLayout.h"
 
 #include "../Shared/checked_alloc.h"
 
