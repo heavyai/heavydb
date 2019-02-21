@@ -1614,7 +1614,7 @@ void Importer::set_geo_physical_import_buffer_columnar(
 static ImportStatus import_thread_delimited(
     int thread_id,
     Importer* importer,
-    std::shared_ptr<const char> sbuffer,
+    std::shared_ptr<const char[]> sbuffer,
     size_t begin_pos,
     size_t end_pos,
     size_t total_size,
@@ -3405,7 +3405,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
     }
   }
 
-  std::shared_ptr<char> sbuffer(new char[alloc_size]);
+  std::shared_ptr<char[]> sbuffer(new char[alloc_size]);
   size_t current_pos = 0;
   size_t end_pos;
   bool eof_reached = false;
@@ -3450,7 +3450,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
       }
       // unput residual
       int nresidual = size - end_pos;
-      std::unique_ptr<char> unbuf(nresidual > 0 ? new char[nresidual] : nullptr);
+      std::unique_ptr<char[]> unbuf(nresidual > 0 ? new char[nresidual] : nullptr);
       if (unbuf) {
         memcpy(unbuf.get(), sbuffer.get() + end_pos, nresidual);
       }
