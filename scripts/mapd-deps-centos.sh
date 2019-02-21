@@ -167,46 +167,8 @@ popd
 # llvm
 # http://thrysoee.dk/editline/libedit-20170329-3.1.tar.gz
 download_make_install ${HTTP_DEPS}/libedit-20170329-3.1.tar.gz
-VERS=7.0.1
-# http://releases.llvm.org
-download ${HTTP_DEPS}/llvm/$VERS/llvm-$VERS.src.tar.xz
-download ${HTTP_DEPS}/llvm/$VERS/cfe-$VERS.src.tar.xz
-download ${HTTP_DEPS}/llvm/$VERS/compiler-rt-$VERS.src.tar.xz
-download ${HTTP_DEPS}/llvm/$VERS/lldb-$VERS.src.tar.xz
-download ${HTTP_DEPS}/llvm/$VERS/lld-$VERS.src.tar.xz
-download ${HTTP_DEPS}/llvm/$VERS/libcxx-$VERS.src.tar.xz
-download ${HTTP_DEPS}/llvm/$VERS/libcxxabi-$VERS.src.tar.xz
-download ${HTTP_DEPS}/llvm/$VERS/clang-tools-extra-$VERS.src.tar.xz
-rm -rf llvm-$VERS.src
-extract llvm-$VERS.src.tar.xz
-extract cfe-$VERS.src.tar.xz
-extract compiler-rt-$VERS.src.tar.xz
-extract lld-$VERS.src.tar.xz
-extract lldb-$VERS.src.tar.xz
-extract libcxx-$VERS.src.tar.xz
-extract libcxxabi-$VERS.src.tar.xz
-extract clang-tools-extra-$VERS.src.tar.xz
-mv cfe-$VERS.src llvm-$VERS.src/tools/clang
-mv compiler-rt-$VERS.src llvm-$VERS.src/projects/compiler-rt
-mv lld-$VERS.src llvm-$VERS.src/tools/lld
-mv lldb-$VERS.src llvm-$VERS.src/tools/lldb
-mv libcxx-$VERS.src llvm-$VERS.src/projects/libcxx
-mv libcxxabi-$VERS.src llvm-$VERS.src/projects/libcxxabi
-mkdir -p llvm-$VERS.src/tools/clang/tools
-mv clang-tools-extra-$VERS.src llvm-$VERS.src/tools/clang/tools/extra
-pushd llvm-$VERS.src
-patch -p0 < ${SCRIPTS_DIR}/llvm-D50710.patch
-popd
-rm -rf build.llvm-$VERS
-mkdir build.llvm-$VERS
-pushd build.llvm-$VERS
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX -DLLVM_ENABLE_RTTI=on ../llvm-$VERS.src
-makej
-if [ ! -d "lib/python2.7" ]; then
-    cp -R lib64/python2.7 lib/python2.7
-fi
-make install
-popd
+# (see common-functions.sh)
+install_llvm
 
 VERS=7.60.0
 # https://curl.haxx.se/download/curl-$VERS.tar.xz

@@ -16,6 +16,7 @@ sudo chown -R $(id -u) $PREFIX
 
 sudo apt update
 sudo apt install -y \
+    software-properties-common \
     build-essential \
     ccache \
     cmake \
@@ -23,11 +24,6 @@ sudo apt install -y \
     git \
     wget \
     curl \
-    clang \
-    libclang-dev \
-    llvm \
-    llvm-dev \
-    clang-format \
     gcc \
     g++ \
     libboost-all-dev \
@@ -56,6 +52,7 @@ sudo apt install -y \
     libbz2-dev \
     libarchive-dev \
     libcurl4-openssl-dev \
+    libedit-dev \
     uuid-dev \
     libsnappy-dev \
     zlib1g-dev \
@@ -68,12 +65,18 @@ sudo apt install -y \
     rsync \
     unzip \
     jq \
+    python-dev \
     python-yaml \
+    swig \
     libxerces-c-dev \
     libxmlsec1-dev
 
 # Needed to find xmltooling and xml_security_c
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG_PATH
+
+# llvm
+# (see common-functions.sh)
+install_llvm
 
 # GEO STUFF
 # expat

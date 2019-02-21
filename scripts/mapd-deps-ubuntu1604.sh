@@ -22,11 +22,6 @@ sudo apt install -y \
     git \
     wget \
     curl \
-    clang \
-    libclang-dev \
-    llvm \
-    llvm-dev \
-    clang-format \
     libgoogle-glog-dev \
     golang \
     libssl-dev \
@@ -42,7 +37,6 @@ sudo apt install -y \
     google-perftools \
     libdouble-conversion-dev \
     libevent-dev \
-    libgdal-dev \
     libgflags-dev \
     libgoogle-perftools-dev \
     libiberty-dev \
@@ -53,6 +47,7 @@ sudo apt install -y \
     libbz2-dev \
     libarchive-dev \
     libcurl4-openssl-dev \
+    libedit-dev \
     uuid-dev \
     libsnappy-dev \
     zlib1g-dev \
@@ -108,6 +103,10 @@ pushd boost_$VERS
 popd
  # Needed for folly to find boost
 export LIBRARY_PATH=$PREFIX/lib:$LIBRARY_PATH
+
+# llvm
+# (see common-functions.sh)
+install_llvm
 
 # install AWS core and s3 sdk
 install_awscpp -j $(nproc)
