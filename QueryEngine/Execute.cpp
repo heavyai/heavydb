@@ -2653,9 +2653,9 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
             for (int8_t* p = buf; (p - buf) < size; p += elem_ti.get_size()) {
               put_null(static_cast<void*>(p), elem_ti, "");
             }
-            arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(size, buf, is_null));
+            arr_col_buffers[col_ids[col_idx]].emplace_back(size, buf, is_null);
           } else {
-            arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(0, nullptr, is_null));
+            arr_col_buffers[col_ids[col_idx]].emplace_back(0, nullptr, is_null);
           }
           break;
         }

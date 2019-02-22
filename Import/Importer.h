@@ -772,7 +772,7 @@ class ImporterUtils {
                                const CopyParams& copy_params,
                                std::vector<std::string>& string_vec) {
     if (s == copy_params.null_str || s == "NULL" || s.size() < 1 || s.empty()) {
-      string_vec.push_back("NULL");
+      string_vec.emplace_back("NULL");
       return;
     }
     if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
