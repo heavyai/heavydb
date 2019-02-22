@@ -18,6 +18,7 @@
 
 #include <cstdlib>
 #include <ctime>
+#include <map>
 #include <mutex>
 
 #include <arrow/api.h>
@@ -152,15 +153,11 @@ inline void data_conversion_error(const std::string& v,
 struct DataBufferBase {
   const ColumnDescriptor* cd;
   const Array& array;
-  const int64_t resolution;
   Importer_NS::BadRowsTracker* const bad_rows_tracker;
   DataBufferBase(const ColumnDescriptor* cd,
                  const Array& array,
                  Importer_NS::BadRowsTracker* const bad_rows_tracker)
-      : cd(cd)
-      , array(array)
-      , resolution(pow(10, cd->columnType.get_dimension()))
-      , bad_rows_tracker(bad_rows_tracker) {}
+      : cd(cd), array(array), bad_rows_tracker(bad_rows_tracker) {}
 };
 
 template <typename DATA_TYPE>
@@ -178,43 +175,58 @@ constexpr int64_t kMicrosecondsInSecond = 1000L * 1000L;
 constexpr int64_t kNanosecondsinSecond = 1000L * 1000L * 1000L;
 constexpr int32_t kSecondsInDay = 86400;
 
+static const std::map<std::pair<int32_t, arrow::TimeUnit::type>,
+                      std::pair<SQLOps, int64_t>>
+    _precision_scale_lookup{{{0, TimeUnit::MILLI}, {kDIVIDE, kMillisecondsInSecond}},
+                            {{0, TimeUnit::MICRO}, {kDIVIDE, kMicrosecondsInSecond}},
+                            {{0, TimeUnit::NANO}, {kDIVIDE, kNanosecondsinSecond}},
+                            {{3, TimeUnit::SECOND}, {kMULTIPLY, kMicrosecondsInSecond}},
+                            {{3, TimeUnit::MICRO}, {kDIVIDE, kMillisecondsInSecond}},
+                            {{3, TimeUnit::NANO}, {kDIVIDE, kMicrosecondsInSecond}},
+                            {{6, TimeUnit::SECOND}, {kMULTIPLY, kMicrosecondsInSecond}},
+                            {{6, TimeUnit::MILLI}, {kMULTIPLY, kMillisecondsInSecond}},
+                            {{6, TimeUnit::NANO}, {kDIVIDE, kMillisecondsInSecond}},
+                            {{9, TimeUnit::SECOND}, {kMULTIPLY, kNanosecondsinSecond}},
+                            {{9, TimeUnit::MILLI}, {kMULTIPLY, kMicrosecondsInSecond}},
+                            {{9, TimeUnit::MICRO}, {kMULTIPLY, kMillisecondsInSecond}}};
+
 // models the variant values of Arrow Array (RHS)
 template <typename VALUE_TYPE>
 struct ArrowValueBase {
   const DataBufferBase& data;
   const VALUE_TYPE v;
-  const int64_t day_divider;
+  const bool date_in_days;
+  const int32_t dimension;
   ArrowValueBase(const DataBufferBase& data, const VALUE_TYPE& v)
       : data(data)
       , v(v)
-      , day_divider(data.cd->columnType.get_compression() == kENCODING_DATE_IN_DAYS
-                        ? kSecondsInDay
-                        : 1) {}
+      , date_in_days(data.cd->columnType.is_date_in_days())
+      , dimension(data.cd->columnType.is_high_precision_timestamp()
+                      ? data.cd->columnType.get_dimension()
+                      : 0) {}
   template <bool enabled = std::is_integral<VALUE_TYPE>::value>
   int64_t resolve_time(const VALUE_TYPE& v, std::enable_if_t<enabled>* = 0) const {
     const auto& type = *data.array.type();
     const auto& type_id = type.id();
-    int64_t tv = v * data.resolution;
     if (type_id == Type::DATE32 || type_id == Type::DATE64) {
       auto& date_type = static_cast<const DateType&>(type);
       switch (date_type.unit()) {
         case DateUnit::DAY:
-          return tv * kSecondsInDay / day_divider;
+          return date_in_days ? v : v * kSecondsInDay;
         case DateUnit::MILLI:
-          return tv / kMillisecondsInSecond / day_divider;
+          return date_in_days ? (v / kMillisecondsInSecond) / kSecondsInDay
+                              : v / kMillisecondsInSecond;
       }
     } else if (type_id == Type::TIME32 || type_id == Type::TIME64 ||
                type_id == Type::TIMESTAMP) {
       auto& time_type = static_cast<const TimeType&>(type);
-      switch (time_type.unit()) {
-        case TimeUnit::SECOND:
-          return tv / day_divider;
-        case TimeUnit::MILLI:
-          return tv / kMillisecondsInSecond / day_divider;
-        case TimeUnit::MICRO:
-          return tv / kMicrosecondsInSecond / day_divider;
-        case TimeUnit::NANO:
-          return tv / kNanosecondsinSecond / day_divider;
+      const auto result =
+          _precision_scale_lookup.find(std::make_pair(dimension, time_type.unit()));
+      if (result != _precision_scale_lookup.end()) {
+        const auto scale = result->second;
+        return scale.first == kMULTIPLY ? v * scale.second : v / scale.second;
+      } else {
+        return v;
       }
     }
     UNREACHABLE() << type << " is not a valid Arrow time or date type";
@@ -367,8 +379,7 @@ struct ArrowValue<std::string> : ArrowValueBase<std::string> {
     try {
       auto ti = data.cd->columnType;
       auto datum = StringToDatum(v, ti);
-      return data.cd->columnType.is_time() ? datum.bigintval * data.resolution
-                                           : datum.bigintval;
+      return datum.bigintval;
     } catch (...) {
       data_conversion_error(v, data.cd, data.bad_rows_tracker);
       return 0;
