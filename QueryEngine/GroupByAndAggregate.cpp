@@ -1197,10 +1197,9 @@ GroupByAndAggregate::codegenSingleColumnPerfectHash(
     llvm::Value* group_expr_lv_original,
     const int32_t row_size_quad) {
   CHECK(query_mem_desc.usesGetGroupValueFast());
-  std::string get_group_fn_name{outputColumnar() && !query_mem_desc.hasKeylessHash()
-                                    ? "get_columnar_group_bin_offset"
-                                    : "get_group_value_fast"};
-  if (query_mem_desc.hasKeylessHash()) {
+  std::string get_group_fn_name{outputColumnar() ? "get_columnar_group_bin_offset"
+                                                 : "get_group_value_fast"};
+  if (!outputColumnar() && query_mem_desc.hasKeylessHash()) {
     get_group_fn_name += "_keyless";
   }
   if (query_mem_desc.interleavedBins(co.device_type_)) {
@@ -1222,8 +1221,9 @@ GroupByAndAggregate::codegenSingleColumnPerfectHash(
       get_group_fn_args.push_back(LL_INT(row_size_quad));
     }
   } else {
-    CHECK(!outputColumnar());
-    get_group_fn_args.push_back(LL_INT(row_size_quad));
+    if (!outputColumnar()) {
+      get_group_fn_args.push_back(LL_INT(row_size_quad));
+    }
     if (query_mem_desc.interleavedBins(co.device_type_)) {
       auto warp_idx = emitCall("thread_warp_idx", {LL_INT(executor_->warpSize())});
       get_group_fn_args.push_back(warp_idx);

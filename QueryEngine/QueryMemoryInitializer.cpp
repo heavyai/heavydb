@@ -171,6 +171,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
                                    : size_t(0);
   const auto actual_group_buffer_size =
       group_buffer_size + index_buffer_qw * sizeof(int64_t);
+  CHECK_GE(actual_group_buffer_size, group_buffer_size);
   const auto group_buffers_count = !query_mem_desc.isGroupBy() ? 1 : num_buffers_;
 
   for (size_t i = 0; i < group_buffers_count; i += step) {

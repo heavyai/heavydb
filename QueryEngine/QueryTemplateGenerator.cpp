@@ -655,6 +655,7 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
       "",
       bb_entry);
   LoadInst* col_buffer = new LoadInst(group_by_buffers_gep, "", false, bb_entry);
+  col_buffer->setName("col_buffer");
   col_buffer->setAlignment(8);
 
   llvm::ConstantInt* shared_mem_num_elements_lv = nullptr;
@@ -680,6 +681,7 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
                          "",
                          bb_entry);
   }
+  result_buffer->setName("result_buffer");
 
   ICmpInst* enter_or_not =
       new ICmpInst(*bb_entry, ICmpInst::ICMP_SLT, pos_start_i64, row_count, "");
@@ -770,6 +772,8 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   // Block .exit
   if (query_mem_desc.getGpuMemSharing() ==
       GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
+    result_buffer->setName("shared_mem_result");
+    col_buffer->setName("col_buffer_global");
     CHECK_LT(query_mem_desc.getTargetIdxForKey(),
              2);  // Saman: not expected for the shared memory design if more than 1
     // Depending on the aggregate's target expression index, we choose different memory

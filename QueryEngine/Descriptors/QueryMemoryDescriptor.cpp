@@ -311,7 +311,8 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
                                   (entry_count <= interleaved_max_threshold) &&
                                   (device_type == ExecutorDeviceType::GPU) &&
                                   QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
-                                      count_distinct_descriptors);
+                                      count_distinct_descriptors) &&
+                                  !output_columnar_hint;
       }
     } break;
     case QueryDescriptionType::GroupByBaselineHash: {
@@ -449,9 +450,9 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
         output_columnar_ = output_columnar_hint;
         break;
       case QueryDescriptionType::GroupByPerfectHash:
-        output_columnar_ = output_columnar_hint && !keyless_hash_ &&
-                           QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
-                               count_distinct_descriptors_);
+        output_columnar_ =
+            output_columnar_hint && QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
+                                        count_distinct_descriptors_);
         break;
       case QueryDescriptionType::GroupByBaselineHash:
         output_columnar_ = output_columnar_hint;
@@ -925,7 +926,7 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(
  */
 size_t QueryMemoryDescriptor::getBufferSizeBytes(
     const ExecutorDeviceType device_type) const {
-  if (keyless_hash_) {
+  if (keyless_hash_ && !output_columnar_) {
     CHECK_GE(group_col_widths_.size(), size_t(1));
     auto total_bytes = align_to_int64(getColsSize());
 
