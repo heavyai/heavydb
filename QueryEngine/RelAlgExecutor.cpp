@@ -1371,7 +1371,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
   }
   if (join_table_or_err.hash_table->getHashType() !=
       JoinHashTableInterface::HashType::OneToMany) {
-    throw std::runtime_error("One row partitions only not supported");
+    throw std::runtime_error("One row only partitions not supported");
   }
   const auto& order_keys = window_func->getOrderKeys();
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
