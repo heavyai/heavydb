@@ -19,9 +19,9 @@
 #include "../Shared/checked_alloc.h"
 #include "../Shared/sql_window_function_to_string.h"
 #include "Descriptors/CountDistinctDescriptor.h"
+#include "OutputBufferInitialization.h"
 #include "ResultSetBufferAccessors.h"
 #include "RuntimeFunctions.h"
-#include "SqlTypesLayout.h"
 #include "TypePunning.h"
 
 WindowFunctionContext::WindowFunctionContext(
