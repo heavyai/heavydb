@@ -11,7 +11,7 @@ class ApacheArrow < Formula
   depends_on "python" => :optional
   depends_on "python@2" => :optional
 
-  needs :cxx11
+  # needs :cxx11
 
   def install
     ENV.cxx11
