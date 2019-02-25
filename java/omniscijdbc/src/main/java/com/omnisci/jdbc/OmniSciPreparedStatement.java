@@ -355,9 +355,9 @@ class OmniSciPreparedStatement implements PreparedStatement {
         Matcher matcher = REGEX_LOF_PATTERN.matcher(currentSQL);
         if (matcher.find()) {
           String listOfFields[] = matcher.group(1).trim().split("\\s*,+\\s*,*\\s*");
-          if (listOfFieds.length != parmCount) throw new SQLException("Exception: too many or too few values");
-          else if (Arrays.stream(listOfFieds).distinct().toArray().length != listOfFieds.length) throw new SQLException("Exception: duplicated column name");
-          fieldsOrder = new int[listOfFieds.length];
+          if (listOfFields.length != parmCount) throw new SQLException("Exception: too many or too few values");
+          else if (Arrays.stream(listOfFields).distinct().toArray().length != listOfFields.length) throw new SQLException("Exception: duplicated column name");
+          fieldsOrder = new int[listOfFields.length];
           List<String> listOfColumns = new ArrayList<String>();
           try {
             TTableDetails tableDetails = client.get_table_details(session, insertTableName);
@@ -369,8 +369,8 @@ class OmniSciPreparedStatement implements PreparedStatement {
             throw new SQLException(ex.toString());
           }
           for (int i=0; i<fieldsOrder.length; i++) {
-            fieldsOrder[i]=listOfColumns.indexOf(listOfFieds[i].toLowerCase());
-            if (fieldsOrder[i] == -1) throw new SQLException("Exception: column "+listOfFieds[i].toLowerCase()+" does not exist");
+            fieldsOrder[i]=listOfColumns.indexOf(listOfFields[i].toLowerCase());
+            if (fieldsOrder[i] == -1) throw new SQLException("Exception: column "+listOfFields[i].toLowerCase()+" does not exist");
           }
         }
 
