@@ -122,6 +122,10 @@ DEVICE ALWAYS_INLINE double hypotenuse(double x, double y) {
     x = y;
     y = t;
   }
+  // x >= y
+  if (tol_zero(x)) {
+    return 0.0;
+  }
   if (tol_zero(y)) {
     return x;
   }
@@ -1239,6 +1243,18 @@ double ST_Distance_Point_LineString(int8_t* p,
                                     int32_t ic2,
                                     int32_t isr2,
                                     int32_t osr) {
+  if (lindex != 0) {  // Statically indexed linestring
+    auto l_num_coords = lsize / compression_unit_size(ic2);
+    auto l_num_points = l_num_coords / 2;
+    if (lindex < 0 || lindex > l_num_points)
+      lindex = l_num_points;  // Endpoint
+    double px = coord_x(p, 0, ic1, isr1, osr);
+    double py = coord_y(p, 1, ic1, isr1, osr);
+    double lx = coord_x(l, 2 * (lindex - 1), ic2, isr2, osr);
+    double ly = coord_y(l, 2 * (lindex - 1) + 1, ic2, isr2, osr);
+    return distance_point_point(px, py, lx, ly);
+  }
+
   return distance_point_linestring(
       p, psize, l, lsize, lindex, ic1, isr1, ic2, isr2, osr, false);
 }
@@ -1370,21 +1386,27 @@ double ST_Distance_LineString_LineString(int8_t* l1,
                                          int32_t isr2,
                                          int32_t osr) {
   auto l1_num_coords = l1size / compression_unit_size(ic1);
-  auto l1_num_points = l1_num_coords / 2;
-  auto l2_num_coords = l2size / compression_unit_size(ic2);
-  auto l2_num_points = l2_num_coords / 2;
-
-  if (l1index != 0 && l2index != 0) {  // Statically indexed linestrings
-    // TODO: distance between a linestring and an indexed linestring, i.e. point
+  if (l1index != 0) {
+    // l1 is a statically indexed linestring
+    auto l1_num_points = l1_num_coords / 2;
     if (l1index < 0 || l1index > l1_num_points)
       l1index = l1_num_points;
-    double l1x = coord_x(l1, 2 * (l1index - 1), ic1, isr1, osr);
-    double l1y = coord_y(l1, 2 * (l1index - 1) + 1, ic1, isr1, osr);
+    int8_t* p = l1 + 2 * (l1index - 1) * compression_unit_size(ic1);
+    int64_t psize = 2 * compression_unit_size(ic1);
+    return ST_Distance_Point_LineString(
+        p, psize, l2, l2size, l2index, ic1, isr1, ic2, isr2, osr);
+  }
+
+  auto l2_num_coords = l2size / compression_unit_size(ic2);
+  if (l2index != 0) {
+    // l2 is a statically indexed linestring
+    auto l2_num_points = l2_num_coords / 2;
     if (l2index < 0 || l2index > l2_num_points)
       l2index = l2_num_points;
-    double l2x = coord_x(l2, 2 * (l2index - 1), ic2, isr2, osr);
-    double l2y = coord_y(l2, 2 * (l2index - 1) + 1, ic2, isr2, osr);
-    return distance_point_point(l1x, l1y, l2x, l2y);
+    int8_t* p = l2 + 2 * (l2index - 1) * compression_unit_size(ic2);
+    int64_t psize = 2 * compression_unit_size(ic2);
+    return ST_Distance_Point_LineString(
+        p, psize, l1, l1size, l1index, ic2, isr2, ic1, isr1, osr);
   }
 
   double dist = 0.0;
@@ -2133,6 +2155,12 @@ bool ST_Contains_LineString_LineString(int8_t* l1,
                                        int32_t ic2,
                                        int32_t isr2,
                                        int32_t osr) {
+  if (l1i != 0 || l2i != 0) {
+    // At least one linestring is indexed, can rely on distance
+    return tol_zero(ST_Distance_LineString_LineString(
+        l1, l1size, l1i, l2, l2size, l2i, ic1, isr1, ic2, isr2, osr));
+  }
+
   // TODO: sublinestring
   // For each line segment in l2 check if there is a segment in l1
   // that it's colinear with and both l2 vertices are on l1 segment.

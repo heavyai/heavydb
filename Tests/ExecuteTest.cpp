@@ -12052,6 +12052,29 @@ TEST(Select, GeoSpatial_Projection) {
             "from geospatial_test limit 1;",
             dt)),
         static_cast<double>(0.01));
+    // Check linestring indexing on ST_Contains(LINESTRING,LINESTRING) and ST_Distance
+    ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(l,ST_StartPoint(l));",
+            dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(l,ST_EndPoint(l));",
+            dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
+                                        "ST_Contains(ST_PointN(l,1),ST_EndPoint(l));",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
+                                        "ST_Distance(l,ST_StartPoint(l))=0.0;",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
+                                        "ST_Distance(ST_EndPoint(l),l)=0.0;",
+                                        dt)));
 
     // Point geometries, literals in different spatial references, transforms
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
