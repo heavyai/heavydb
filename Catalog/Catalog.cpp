@@ -284,9 +284,10 @@ void SysCatalog::initDB() {
   try {
     sqliteConnector_->query(
         "CREATE TABLE mapd_users (userid integer primary key, name text unique, "
-        "passwd_hash text, issuper boolean)");
+        "passwd_hash text, issuper boolean, default_db integer references "
+        "mapd_databases)");
     sqliteConnector_->query_with_text_params(
-        "INSERT INTO mapd_users VALUES (?, ?, ?, 1)",
+        "INSERT INTO mapd_users VALUES (?, ?, ?, 1, NULL)",
         std::vector<std::string>{MAPD_ROOT_USER_ID_STR,
                                  MAPD_ROOT_USER,
                                  hash_with_bcrypt(MAPD_ROOT_PASSWD_DEFAULT)});
@@ -328,6 +329,7 @@ void SysCatalog::checkAndExecuteMigrations() {
     migratePrivileges();
     migrateDBAccessPrivileges();
   }
+  updateUserSchema();  // must come before updatePasswordsToHashes()
   updatePasswordsToHashes();
 }
 
@@ -526,6 +528,30 @@ void SysCatalog::migratePrivileges() {
   sqliteConnector_->query("END TRANSACTION");
 }
 
+void SysCatalog::updateUserSchema() {
+  sys_sqlite_lock sqlite_lock(this);
+
+  // check to see if the new column already exists
+  sqliteConnector_->query("PRAGMA TABLE_INFO(mapd_users)");
+  for (size_t i = 0; i < sqliteConnector_->getNumRows(); i++) {
+    const auto& col_name = sqliteConnector_->getData<std::string>(i, 1);
+    if (col_name == "default_db") {
+      return;  // new column already exists
+    }
+  }
+
+  // create the new column
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_->query(
+        "ALTER TABLE mapd_users ADD COLUMN default_db INTEGER REFERENCES mapd_databases");
+  } catch (const std::exception& e) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+}
+
 void SysCatalog::updatePasswordsToHashes() {
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
@@ -555,12 +581,11 @@ void SysCatalog::updatePasswordsToHashes() {
     }
     sqliteConnector_->query(
         "CREATE TABLE mapd_users_tmp (userid integer primary key, name text unique, "
-        "passwd_hash text, issuper "
-        "boolean)");
+        "passwd_hash text, issuper boolean, default_db integer references "
+        "mapd_databases)");
     sqliteConnector_->query(
-        "INSERT INTO mapd_users_tmp(userid, name, passwd_hash, issuper) SELECT userid, "
-        "name, null, issuper FROM "
-        "mapd_users");
+        "INSERT INTO mapd_users_tmp(userid, name, passwd_hash, issuper, default_db) "
+        "SELECT userid, name, null, issuper, default_db FROM mapd_users");
     for (size_t i = 0; i < users.size(); ++i) {
       sqliteConnector_->query_with_text_params(
           "UPDATE mapd_users_tmp SET passwd_hash = ? WHERE userid = ?",
@@ -711,7 +736,7 @@ void SysCatalog::migratePrivileged_old() {
   sqliteConnector_->query("END TRANSACTION");
 }
 
-std::shared_ptr<Catalog> SysCatalog::login(const std::string& dbname,
+std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
                                            std::string& username,
                                            const std::string& password,
                                            UserMetadata& user_meta,
@@ -719,8 +744,29 @@ std::shared_ptr<Catalog> SysCatalog::login(const std::string& dbname,
   sys_write_lock write_lock(this);
 
   Catalog_Namespace::DBMetadata db_meta;
-  if (!getMetadataForDB(dbname, db_meta)) {
-    throw std::runtime_error("Database " + dbname + " does not exist.");
+  if (!dbname.empty()) {
+    if (!getMetadataForDB(dbname, db_meta)) {
+      throw std::runtime_error("Database name " + dbname + " does not exist.");
+    }
+    // loaded the requested database
+  } else {
+    if (getMetadataForUser(username, user_meta) && user_meta.defaultDbId != -1) {
+      if (!getMetadataForDBById(user_meta.defaultDbId, db_meta)) {
+        throw std::runtime_error(
+            "Server error: User #" + std::to_string(user_meta.userId) + " " +
+            user_meta.userName + " has invalid default_db #" +
+            std::to_string(user_meta.defaultDbId) + " which does not exist.");
+      }
+      dbname = db_meta.dbName;
+      // loaded the user's default database
+    } else {
+      if (!getMetadataForDB(MAPD_SYSTEM_DB, db_meta)) {
+        throw std::runtime_error(std::string("Database ") + MAPD_SYSTEM_DB +
+                                 " does not exist.");
+      }
+      dbname = MAPD_SYSTEM_DB;
+      // loaded the mapd database by default
+    }
   }
   // NOTE(max): register database in Catalog that early to allow ldap
   // and saml create default user and role privileges on databases
@@ -752,7 +798,10 @@ std::shared_ptr<Catalog> SysCatalog::login(const std::string& dbname,
   return cat;
 }
 
-void SysCatalog::createUser(const string& name, const string& passwd, bool issuper) {
+void SysCatalog::createUser(const string& name,
+                            const string& passwd,
+                            bool issuper,
+                            const string& dbname) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
 
@@ -767,10 +816,26 @@ void SysCatalog::createUser(const string& name, const string& passwd, bool issup
   }
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_->query_with_text_params(
-        "INSERT INTO mapd_users (name, passwd_hash, issuper) VALUES (?, ?, ?)",
-        std::vector<std::string>{
-            name, hash_with_bcrypt(passwd), std::to_string(issuper)});
+    std::vector<std::string> vals;
+    if (!dbname.empty()) {
+      DBMetadata db;
+      if (!SysCatalog::instance().getMetadataForDB(dbname, db)) {
+        throw runtime_error("DEFAULT_DB " + dbname + " not found.");
+      }
+      vals = {name,
+              hash_with_bcrypt(passwd),
+              std::to_string(issuper),
+              std::to_string(db.dbId)};
+      sqliteConnector_->query_with_text_params(
+          "INSERT INTO mapd_users (name, passwd_hash, issuper, default_db) VALUES (?, ?, "
+          "?, ?)",
+          vals);
+    } else {
+      vals = {name, hash_with_bcrypt(passwd), std::to_string(issuper)};
+      sqliteConnector_->query_with_text_params(
+          "INSERT INTO mapd_users (name, passwd_hash, issuper) VALUES (?, ?, ?)", vals);
+    }
+
     if (arePrivilegesOn()) {
       createRole_unsafe(name, true);
 
@@ -815,22 +880,59 @@ void SysCatalog::dropUser(const string& name) {
   sqliteConnector_->query("END TRANSACTION");
 }
 
-void SysCatalog::alterUser(const int32_t userid, const string* passwd, bool* issuper) {
-  sys_sqlite_lock sqlite_lock(this);
-  if (passwd != nullptr && issuper != nullptr) {
-    sqliteConnector_->query_with_text_params(
-        "UPDATE mapd_users SET passwd_hash = ?, issuper = ? WHERE userid = ?",
-        std::vector<std::string>{
-            hash_with_bcrypt(*passwd), std::to_string(*issuper), std::to_string(userid)});
-  } else if (passwd != nullptr) {
-    sqliteConnector_->query_with_text_params(
-        "UPDATE mapd_users SET passwd_hash = ? WHERE userid = ?",
-        std::vector<std::string>{hash_with_bcrypt(*passwd), std::to_string(userid)});
-  } else if (issuper != nullptr) {
-    sqliteConnector_->query_with_text_params(
-        "UPDATE mapd_users SET issuper = ? WHERE userid = ?",
-        std::vector<std::string>{std::to_string(*issuper), std::to_string(userid)});
+namespace {  // anonymous namespace
+
+auto append_with_commas = [](string& s, const string& t) {
+  if (!s.empty()) {
+    s += ", ";
   }
+  s += t;
+};
+
+}  // anonymous namespace
+
+void SysCatalog::alterUser(const int32_t userid,
+                           const string* passwd,
+                           bool* issuper,
+                           const string* dbname) {
+  sys_sqlite_lock sqlite_lock(this);
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    string sql;
+    std::vector<std::string> values;
+
+    if (passwd != nullptr) {
+      append_with_commas(sql, "passwd_hash = ?");
+      values.push_back(hash_with_bcrypt(*passwd));
+    }
+
+    if (issuper != nullptr) {
+      append_with_commas(sql, "issuper = ?");
+      values.push_back(std::to_string(*issuper));
+    }
+
+    if (dbname != nullptr) {
+      if (!dbname->empty()) {
+        append_with_commas(sql, "default_db = ?");
+        DBMetadata db;
+        if (!SysCatalog::instance().getMetadataForDB(*dbname, db)) {
+          throw runtime_error(string("DEFAULT_DB ") + *dbname + " not found.");
+        }
+        values.push_back(*dbname);
+      } else {
+        append_with_commas(sql, "default_db = NULL");
+      }
+    }
+
+    sql = "UPDATE mapd_users SET " + sql + " WHERE userid = ?";
+    values.push_back(std::to_string(userid));
+
+    sqliteConnector_->query_with_text_params(sql, values);
+  } catch (const std::exception& e) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
 }
 
 void SysCatalog::grantPrivileges(const int32_t userid,
@@ -989,6 +1091,10 @@ void SysCatalog::dropDatabase(const DBMetadata& db) {
       Catalog::get(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, false);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
+    // remove this database ID from any users that have it set as their default database
+    sqliteConnector_->query_with_text_param(
+        "UPDATE mapd_users SET default_db = NULL WHERE default_db = ?",
+        std::to_string(db.dbId));
     if (arePrivilegesOn()) {
       /* revoke object privileges to all tables of the database being dropped */
       const auto tables = cat->getAllTableMetadata();
@@ -1049,7 +1155,9 @@ bool SysCatalog::checkPasswordForUser(const std::string& passwd,
 bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
-      "SELECT userid, name, passwd_hash, issuper FROM mapd_users WHERE name = ?", name);
+      "SELECT userid, name, passwd_hash, issuper, default_db FROM mapd_users WHERE name "
+      "= ?",
+      name);
   int numRows = sqliteConnector_->getNumRows();
   if (numRows == 0) {
     return false;
@@ -1059,13 +1167,16 @@ bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
   user.passwd_hash = sqliteConnector_->getData<string>(0, 2);
   user.isSuper = sqliteConnector_->getData<bool>(0, 3);
   user.isReallySuper = user.isSuper;
+  user.defaultDbId =
+      sqliteConnector_->isNull(0, 4) ? -1 : sqliteConnector_->getData<int>(0, 4);
   return true;
 }
 
 bool SysCatalog::getMetadataForUserById(const int32_t idIn, UserMetadata& user) {
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
-      "SELECT userid, name, passwd_hash, issuper FROM mapd_users WHERE userid = ?",
+      "SELECT userid, name, passwd_hash, issuper, default_db FROM mapd_users WHERE "
+      "userid = ?",
       std::to_string(idIn));
   int numRows = sqliteConnector_->getNumRows();
   if (numRows == 0) {
@@ -1076,6 +1187,8 @@ bool SysCatalog::getMetadataForUserById(const int32_t idIn, UserMetadata& user) 
   user.passwd_hash = sqliteConnector_->getData<string>(0, 2);
   user.isSuper = sqliteConnector_->getData<bool>(0, 3);
   user.isReallySuper = user.isSuper;
+  user.defaultDbId =
+      sqliteConnector_->isNull(0, 4) ? -1 : sqliteConnector_->getData<int>(0, 4);
   return true;
 }
 
@@ -1128,6 +1241,21 @@ bool SysCatalog::getMetadataForDB(const string& name, DBMetadata& db) {
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
       "SELECT dbid, name, owner FROM mapd_databases WHERE name = ?", name);
+  int numRows = sqliteConnector_->getNumRows();
+  if (numRows == 0) {
+    return false;
+  }
+  db.dbId = sqliteConnector_->getData<int>(0, 0);
+  db.dbName = sqliteConnector_->getData<string>(0, 1);
+  db.dbOwner = sqliteConnector_->getData<int>(0, 2);
+  return true;
+}
+
+bool SysCatalog::getMetadataForDBById(const int32_t idIn, DBMetadata& db) {
+  sys_sqlite_lock sqlite_lock(this);
+  sqliteConnector_->query_with_text_param(
+      "SELECT dbid, name, owner FROM mapd_databases WHERE dbid = ?",
+      std::to_string(idIn));
   int numRows = sqliteConnector_->getNumRows();
   if (numRows == 0) {
     return false;
@@ -4882,9 +5010,9 @@ void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,
                                             bool* is_super) {
   UserMetadata user_meta;
   if (!getMetadataForUser(user_name, user_meta)) {
-    createUser(user_name, "", is_super ? *is_super : false);
+    createUser(user_name, "", is_super ? *is_super : false, "");
   } else if (is_super && *is_super != user_meta.isSuper) {
-    alterUser(user_meta.userId, nullptr, is_super);
+    alterUser(user_meta.userId, nullptr, is_super, nullptr);
   }
   std::vector<std::string> current_roles = {};
   auto* user_rl = getUserGrantee(user_name);

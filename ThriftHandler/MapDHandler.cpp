@@ -286,59 +286,61 @@ std::string generate_random_string(const size_t len) {
 
 // internal connection for connections with no password
 void MapDHandler::internal_connect(TSessionId& session,
-                                   const std::string& user,
+                                   const std::string& username,
                                    const std::string& dbname) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
-  std::string username = user;  // login() may reset username given as argument
-  Catalog_Namespace::UserMetadata user_meta;
-  std::shared_ptr<Catalog> cat = nullptr;
-  try {
-    cat =
-        SysCatalog::instance().login(dbname, username, std::string(""), user_meta, false);
-  } catch (std::exception& e) {
-    THROW_MAPD_EXCEPTION(e.what());
-  }
-
-  if (SysCatalog::instance().arePrivilegesOn()) {
-    DBObject dbObject(dbname, DatabaseDBObjectType);
-    dbObject.loadKey(*cat);
-    dbObject.setPrivileges(AccessPrivileges::ACCESS);
-    std::vector<DBObject> dbObjects;
-    dbObjects.push_back(dbObject);
-    if (!SysCatalog::instance().checkPrivileges(user_meta, dbObjects)) {
-      THROW_MAPD_EXCEPTION("Unauthorized Access: user " + username +
-                           " is not allowed to access database " + dbname + ".");
-    }
-  }
-  connect_impl(session, std::string(""), dbname, user_meta, cat);
-}
-
-void MapDHandler::connect(TSessionId& session,
-                          const std::string& user,
-                          const std::string& passwd,
-                          const std::string& dbname) {
-  mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
-  std::string username = user;  // login() may reset username given as argument
+  std::string username2 = username;  // login() may reset username given as argument
+  std::string dbname2 = dbname;      // login() may reset dbname given as argument
   Catalog_Namespace::UserMetadata user_meta;
   std::shared_ptr<Catalog> cat = nullptr;
   try {
     cat = SysCatalog::instance().login(
-        dbname, username, passwd, user_meta, !super_user_rights_);
+        dbname2, username2, std::string(""), user_meta, false);
   } catch (std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }
+
   if (SysCatalog::instance().arePrivilegesOn()) {
-    DBObject dbObject(dbname, DatabaseDBObjectType);
+    DBObject dbObject(dbname2, DatabaseDBObjectType);
     dbObject.loadKey(*cat);
     dbObject.setPrivileges(AccessPrivileges::ACCESS);
     std::vector<DBObject> dbObjects;
     dbObjects.push_back(dbObject);
     if (!SysCatalog::instance().checkPrivileges(user_meta, dbObjects)) {
       THROW_MAPD_EXCEPTION("Unauthorized Access: user " + username +
-                           " is not allowed to access database " + dbname + ".");
+                           " is not allowed to access database " + dbname2 + ".");
     }
   }
-  connect_impl(session, passwd, dbname, user_meta, cat);
+  connect_impl(session, std::string(""), dbname2, user_meta, cat);
+}
+
+void MapDHandler::connect(TSessionId& session,
+                          const std::string& username,
+                          const std::string& passwd,
+                          const std::string& dbname) {
+  mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+  std::string username2 = username;  // login() may reset username given as argument
+  std::string dbname2 = dbname;      // login() may reset dbname given as argument
+  Catalog_Namespace::UserMetadata user_meta;
+  std::shared_ptr<Catalog> cat = nullptr;
+  try {
+    cat = SysCatalog::instance().login(
+        dbname2, username2, passwd, user_meta, !super_user_rights_);
+  } catch (std::exception& e) {
+    THROW_MAPD_EXCEPTION(e.what());
+  }
+  if (SysCatalog::instance().arePrivilegesOn()) {
+    DBObject dbObject(dbname2, DatabaseDBObjectType);
+    dbObject.loadKey(*cat);
+    dbObject.setPrivileges(AccessPrivileges::ACCESS);
+    std::vector<DBObject> dbObjects;
+    dbObjects.push_back(dbObject);
+    if (!SysCatalog::instance().checkPrivileges(user_meta, dbObjects)) {
+      THROW_MAPD_EXCEPTION("Unauthorized Access: user " + username +
+                           " is not allowed to access database " + dbname2 + ".");
+    }
+  }
+  connect_impl(session, passwd, dbname2, user_meta, cat);
 }
 
 void MapDHandler::connect_impl(TSessionId& session,

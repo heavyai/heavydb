@@ -92,14 +92,20 @@ namespace Catalog_Namespace {
  * @brief metadata for a mapd user
  */
 struct UserMetadata {
-  UserMetadata(int32_t u, const std::string& n, const std::string& p, bool s)
-      : userId(u), userName(n), passwd_hash(p), isSuper(s), isReallySuper(s) {}
+  UserMetadata(int32_t u, const std::string& n, const std::string& p, bool s, int32_t d)
+      : userId(u)
+      , userName(n)
+      , passwd_hash(p)
+      , isSuper(s)
+      , isReallySuper(s)
+      , defaultDbId(d) {}
   UserMetadata() {}
   int32_t userId;
   std::string userName;
   std::string passwd_hash;
   bool isSuper;
   bool isReallySuper;
+  int32_t defaultDbId;
 };
 
 /*
@@ -405,14 +411,20 @@ class SysCatalog {
    *
    * throws a std::exception in all error cases! (including wrong password)
    */
-  std::shared_ptr<Catalog> login(const std::string& db,
+  std::shared_ptr<Catalog> login(std::string& dbname,
                                  std::string& username,
                                  const std::string& password,
                                  UserMetadata& user_meta,
                                  bool check_password = true);
-  void createUser(const std::string& name, const std::string& passwd, bool issuper);
+  void createUser(const std::string& name,
+                  const std::string& passwd,
+                  bool issuper,
+                  const std::string& dbname);
   void dropUser(const std::string& name);
-  void alterUser(const int32_t userid, const std::string* passwd, bool* issuper);
+  void alterUser(const int32_t userid,
+                 const std::string* passwd,
+                 bool* issuper,
+                 const std::string* dbname);
   void grantPrivileges(const int32_t userid, const int32_t dbid, const Privileges& privs);
   bool checkPrivileges(UserMetadata& user, DBMetadata& db, const Privileges& wants_privs);
   void createDatabase(const std::string& dbname, int owner);
@@ -423,6 +435,7 @@ class SysCatalog {
                             std::string& name,
                             UserMetadata& user);
   bool getMetadataForDB(const std::string& name, DBMetadata& db);
+  bool getMetadataForDBById(const int32_t idIn, DBMetadata& db);
   const DBMetadata& getCurrentDB() const { return currentDB_; }
   Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
   Calcite& getCalciteMgr() const { return *calciteMgr_; }
@@ -525,6 +538,7 @@ class SysCatalog {
   void createUserRoles();
   void migratePrivileges();
   void migratePrivileged_old();
+  void updateUserSchema();
   void updatePasswordsToHashes();
   void migrateDBAccessPrivileges();
 

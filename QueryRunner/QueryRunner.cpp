@@ -174,7 +174,7 @@ Catalog_Namespace::SessionInfo* get_session(
 
   if (create_user) {
     if (!sys_cat.getMetadataForUser(user_name, user)) {
-      sys_cat.createUser(user_name, passwd, false);
+      sys_cat.createUser(user_name, passwd, false, "");
     }
   }
   CHECK(sys_cat.getMetadataForUser(user_name, user));

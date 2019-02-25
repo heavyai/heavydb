@@ -99,19 +99,19 @@ inline void run_ddl_statement(const std::string& query) {
 struct Users {
   void setup_users() {
     if (!sys_cat.getMetadataForUser("Chelsea", user)) {
-      sys_cat.createUser("Chelsea", "password", true);
+      sys_cat.createUser("Chelsea", "password", true, "");
       CHECK(sys_cat.getMetadataForUser("Chelsea", user));
     }
     if (!sys_cat.getMetadataForUser("Arsenal", user)) {
-      sys_cat.createUser("Arsenal", "password", false);
+      sys_cat.createUser("Arsenal", "password", false, "");
       CHECK(sys_cat.getMetadataForUser("Arsenal", user));
     }
     if (!sys_cat.getMetadataForUser("Juventus", user)) {
-      sys_cat.createUser("Juventus", "password", false);
+      sys_cat.createUser("Juventus", "password", false, "");
       CHECK(sys_cat.getMetadataForUser("Juventus", user));
     }
     if (!sys_cat.getMetadataForUser("Bayern", user)) {
-      sys_cat.createUser("Bayern", "password", false);
+      sys_cat.createUser("Bayern", "password", false, "");
       CHECK(sys_cat.getMetadataForUser("Bayern", user));
     }
   }
@@ -1477,6 +1477,36 @@ TEST(Catalog, Concurrency) {
   }
 
   run_ddl_statement("DROP USER bob;");
+}
+
+TEST(SysCatalog, LoginWithDefaultDatabase) {
+  const std::string username{"test_user"};
+  const std::string dbname{"test_db"};
+  const std::string dbnamex{dbname + "x"};
+
+  // setup
+  ASSERT_NO_THROW(run_ddl_statement("CREATE DATABASE " + dbname + ";"));
+  ASSERT_NO_THROW(run_ddl_statement("CREATE DATABASE " + dbnamex + ";"));
+  ASSERT_NO_THROW(run_ddl_statement("CREATE USER " + username +
+                                    " (password = 'password', default_db = '" + dbnamex +
+                                    "');"));
+  Catalog_Namespace::UserMetadata user_meta;
+
+  // test the user's default database
+  std::string username2{username};
+  std::string dbname2{dbname};
+  ASSERT_NO_THROW(sys_cat.login(dbname2, username2, "password", user_meta, false));
+  EXPECT_EQ(dbname2, dbname);  // correctly ignored user's default of dbnamex
+
+  username2 = username;
+  dbname2.clear();
+  ASSERT_NO_THROW(sys_cat.login(dbname2, username2, "password", user_meta, false));
+  EXPECT_EQ(dbname2, dbnamex);  // correctly used user's default of dbnamex
+
+  // cleanup
+  ASSERT_NO_THROW(run_ddl_statement("DROP DATABASE " + dbname + ";"));
+  ASSERT_NO_THROW(run_ddl_statement("DROP DATABASE " + dbnamex + ";"));
+  ASSERT_NO_THROW(run_ddl_statement("DROP USER " + username + ";"));
 }
 
 int main(int argc, char* argv[]) {

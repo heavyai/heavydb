@@ -138,7 +138,7 @@ class MapDHandler : public MapDIf {
 
   // connection, admin
   void connect(TSessionId& session,
-               const std::string& user,
+               const std::string& username,
                const std::string& passwd,
                const std::string& dbname) override;
   void disconnect(const TSessionId& session) override;
@@ -415,7 +415,7 @@ class MapDHandler : public MapDIf {
   TSessionId getInvalidSessionId() const;
 
   void internal_connect(TSessionId& session,
-                        const std::string& user,
+                        const std::string& username,
                         const std::string& dbname);
 
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;

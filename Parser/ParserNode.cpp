@@ -4306,6 +4306,7 @@ void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   std::string passwd;
   bool is_super = false;
+  std::string default_db;
   for (auto& p : name_value_list) {
     if (boost::iequals(*p->get_name(), "password")) {
       if (!dynamic_cast<const StringLiteral*>(p->get_value())) {
@@ -4325,9 +4326,14 @@ void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       } else {
         throw std::runtime_error("Value to IS_SUPER must be TRUE or FALSE.");
       }
+    } else if (boost::iequals(*p->get_name(), "default_db")) {
+      if (!dynamic_cast<const StringLiteral*>(p->get_value())) {
+        throw std::runtime_error("DEFAULT_DB option must be a string literal.");
+      }
+      default_db = *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
     } else {
       throw std::runtime_error("Invalid CREATE USER option " + *p->get_name() +
-                               ".  Should be PASSWORD or IS_SUPER.");
+                               ".  Should be PASSWORD, IS_SUPER, or DEFAULT_DB.");
     }
   }
   if (passwd.empty()) {
@@ -4336,7 +4342,7 @@ void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error("Only super user can create new users.");
   }
-  SysCatalog::instance().createUser(*user_name, passwd, is_super);
+  SysCatalog::instance().createUser(*user_name, passwd, is_super, default_db);
 }
 
 void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -4345,6 +4351,7 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   const std::string* insertaccessDB = nullptr;
   bool is_super = false;
   bool* is_superp = nullptr;
+  const std::string* default_db = nullptr;
   for (auto& p : name_value_list) {
     if (boost::iequals(*p->get_name(), "password")) {
       if (!dynamic_cast<const StringLiteral*>(p->get_value())) {
@@ -4371,6 +4378,11 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       } else {
         throw std::runtime_error("Value to IS_SUPER must be TRUE or FALSE.");
       }
+    } else if (boost::iequals(*p->get_name(), "default_db")) {
+      if (!dynamic_cast<const StringLiteral*>(p->get_value())) {
+        throw std::runtime_error("DEFAULT_DB option must be a string literal.");
+      }
+      default_db = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
     } else {
       throw std::runtime_error("Invalid ALTER USER option " + *p->get_name() +
                                ". Should be PASSWORD, INSERTACCESS or IS_SUPER.");
@@ -4404,7 +4416,7 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     SysCatalog::instance().grantPrivileges(user.userId, db.dbId, privs);
   }
   if (passwd || is_superp) {
-    SysCatalog::instance().alterUser(user.userId, passwd, is_superp);
+    SysCatalog::instance().alterUser(user.userId, passwd, is_superp, default_db);
   }
 }
 

@@ -114,7 +114,7 @@ class SQLTestEnv : public ::testing::Environment {
                    {});
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
       if (!sys_cat.getMetadataForUser("gtest", user)) {
-        sys_cat.createUser("gtest", "test!test!", false);
+        sys_cat.createUser("gtest", "test!test!", false, "");
         CHECK(sys_cat.getMetadataForUser("gtest", user));
       }
       if (!sys_cat.getMetadataForDB("gtest_db", db)) {

@@ -1014,7 +1014,7 @@ int main(int argc, char** argv) {
   bool https = false;
   bool skip_host_verify = false;
   TQueryResult _return;
-  std::string db_name{"mapd"};
+  std::string db_name;
   std::string user_name{"mapd"};
   std::string ca_cert_name{""};
   std::string passwd;
@@ -1033,7 +1033,7 @@ int main(int argc, char** argv) {
                      po::value<std::string>(&delimiter)->default_value(delimiter),
                      "Field delimiter in row output");
   desc.add_options()(
-      "db", po::value<std::string>(&db_name)->default_value(db_name), "Database name");
+      "db", po::value<std::string>(&db_name), "Database name (server default is mapd)");
   desc.add_options()("user,u",
                      po::value<std::string>(&user_name)->default_value(user_name),
                      "User name");
@@ -1135,17 +1135,16 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  if (thrift_with_retry(kCONNECT, context, nullptr)) {
+    if (print_connection) {
+      std::cout << "User " << context.user_name << " connected to database "
+                << context.db_name << std::endl;
+    }
+  }
   if (context.db_name.empty()) {
     std::cout << "Not connected to any database.  Only \\u and \\l commands are allowed "
                  "in this state.  See \\h for help."
               << std::endl;
-  } else {
-    if (thrift_with_retry(kCONNECT, context, nullptr)) {
-      if (print_connection) {
-        std::cout << "User " << context.user_name << " connected to database "
-                  << context.db_name << std::endl;
-      }
-    }
   }
 
   register_signal_handler();
