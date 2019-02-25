@@ -354,7 +354,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
         // check for columns names 
         Matcher matcher = REGEX_LOF_PATTERN.matcher(currentSQL);
         if (matcher.find()) {
-          String listOfFieds[] = matcher.group(1).trim().split("\\s*,+\\s*,*\\s*");
+          String listOfFields[] = matcher.group(1).trim().split("\\s*,+\\s*,*\\s*");
           if (listOfFieds.length != parmCount) throw new SQLException("Exception: too many or too few values");
           else if (Arrays.stream(listOfFieds).distinct().toArray().length != listOfFieds.length) throw new SQLException("Exception: duplicated column name");
           fieldsOrder = new int[listOfFieds.length];
