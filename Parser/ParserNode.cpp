@@ -3264,19 +3264,21 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         } else {
           throw std::runtime_error("Invalid string for boolean " + *s);
         }
-#ifdef ENABLE_IMPORT_PARQUET  // for now skeleton only
+#ifdef ENABLE_IMPORT_PARQUET
       } else if (boost::iequals(*p->get_name(), "parquet")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr)
+        if (str_literal == nullptr) {
           throw std::runtime_error("Parquet option must be a boolean.");
+        }
         const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True")
+        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
           copy_params.is_parquet = true;
-        else if (*s == "f" || *s == "false" || *s == "F" || *s == "False")
+        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
           copy_params.is_parquet = false;
-        else
+        } else {
           throw std::runtime_error("Invalid string for boolean " + *s);
+        }
 #endif  // ENABLE_IMPORT_PARQUET
       } else if (boost::iequals(*p->get_name(), "s3_access_key")) {
         const StringLiteral* str_literal =

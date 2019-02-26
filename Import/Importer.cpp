@@ -27,6 +27,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/dynamic_bitset.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/variant.hpp>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -35,12 +36,15 @@
 #include <iomanip>
 #include <iostream>
 #include <list>
+#include <memory>
 #include <mutex>
 #include <stack>
 #include <stdexcept>
 #include <thread>
+#include <typeinfo>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 #include "../QueryEngine/TypePunning.h"
 #include "../Shared/geo_compression.h"
@@ -52,6 +56,7 @@
 #include "../Shared/measure.h"
 #include "../Shared/scope.h"
 #include "../Shared/shard_key.h"
+#include "../Shared/thread_count.h"
 #include "../Shared/unreachable.h"
 #include "Shared/SqlTypesLayout.h"
 
@@ -64,12 +69,20 @@
 #include "gen-cpp/MapD.h"
 
 #include <arrow/api.h>
+#include <arrow/io/api.h>
 
 #include "../Archive/PosixFileArchive.h"
-
 #include "../Archive/S3Archive.h"
+#include "ArrowImporter.h"
 
 using std::ostream;
+
+inline auto get_filesize(const std::string& file_path) {
+  boost::filesystem::path boost_file_path{file_path};
+  boost::system::error_code ec;
+  const auto filesize = boost::filesystem::file_size(boost_file_path, ec);
+  return ec ? 0 : filesize;
+}
 
 namespace {
 
@@ -729,280 +742,10 @@ void TypedImportBuffer::pop_value() {
   }
 }
 
-namespace {
-
-using namespace arrow;
-
-#define ARROW_THROW_IF(cond, message)  \
-  if ((cond)) {                        \
-    LOG(ERROR) << message;             \
-    throw std::runtime_error(message); \
-  }
-
-template <typename ArrayType, typename T>
-inline void append_arrow_primitive(const Array& values,
-                                   const T null_sentinel,
-                                   std::vector<T>* buffer) {
-  const auto& typed_values = static_cast<const ArrayType&>(values);
-  buffer->reserve(typed_values.length());
-  const T* raw_values = typed_values.raw_values();
-  if (typed_values.null_count() > 0) {
-    for (int64_t i = 0; i < typed_values.length(); i++) {
-      if (typed_values.IsNull(i)) {
-        buffer->push_back(null_sentinel);
-      } else {
-        buffer->push_back(raw_values[i]);
-      }
-    }
-  } else {
-    for (int64_t i = 0; i < typed_values.length(); i++) {
-      buffer->push_back(raw_values[i]);
-    }
-  }
-}
-
-void append_arrow_boolean(const ColumnDescriptor* cd,
-                          const Array& values,
-                          std::vector<int8_t>* buffer) {
-  ARROW_THROW_IF(values.type_id() != Type::BOOL, "Expected boolean col");
-  const int8_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
-  const auto& typed_values = static_cast<const BooleanArray&>(values);
-  buffer->reserve(typed_values.length());
-  for (int64_t i = 0; i < typed_values.length(); i++) {
-    if (typed_values.IsNull(i)) {
-      buffer->push_back(null_sentinel);
-    } else {
-      buffer->push_back(static_cast<int8_t>(typed_values.Value(i)));
-    }
-  }
-}
-
-template <typename ArrowType, typename T>
-void append_arrow_integer(const ColumnDescriptor* cd,
-                          const Array& values,
-                          std::vector<T>* buffer) {
-  using ArrayType = typename TypeTraits<ArrowType>::ArrayType;
-  const T null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
-  append_arrow_primitive<ArrayType, T>(values, null_sentinel, buffer);
-}
-
-void append_arrow_float(const ColumnDescriptor* cd,
-                        const Array& values,
-                        std::vector<float>* buffer) {
-  ARROW_THROW_IF(values.type_id() != Type::FLOAT, "Expected float col");
-  append_arrow_primitive<FloatArray, float>(values, NULL_FLOAT, buffer);
-}
-
-void append_arrow_double(const ColumnDescriptor* cd,
-                         const Array& values,
-                         std::vector<double>* buffer) {
-  ARROW_THROW_IF(values.type_id() != Type::DOUBLE, "Expected double col");
-  append_arrow_primitive<DoubleArray, double>(values, NULL_DOUBLE, buffer);
-}
-
-constexpr int64_t kMillisecondsInSecond = 1000L;
-constexpr int64_t kMicrosecondsInSecond = 1000L * 1000L;
-constexpr int64_t kNanosecondsinSecond = 1000L * 1000L * 1000L;
-constexpr int32_t kSecondsInDay = 86400;
-
-void append_arrow_time(const ColumnDescriptor* cd,
-                       const Array& values,
-                       std::vector<int64_t>* buffer) {
-  const int64_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
-  if (values.type_id() == Type::TIME32) {
-    const auto& typed_values = static_cast<const Time32Array&>(values);
-    const auto& type = static_cast<const Time32Type&>(*values.type());
-
-    buffer->reserve(typed_values.length());
-    const int32_t* raw_values = typed_values.raw_values();
-    const TimeUnit::type unit = type.unit();
-
-    for (int64_t i = 0; i < typed_values.length(); i++) {
-      if (typed_values.IsNull(i)) {
-        buffer->push_back(null_sentinel);
-      } else {
-        switch (unit) {
-          case TimeUnit::SECOND:
-            buffer->push_back(static_cast<int64_t>(raw_values[i]));
-            break;
-          case TimeUnit::MILLI:
-            buffer->push_back(
-                static_cast<int64_t>(raw_values[i] / kMillisecondsInSecond));
-            break;
-          default:
-            // unreachable code
-            UNREACHABLE();
-            break;
-        }
-      }
-    }
-  } else if (values.type_id() == Type::TIME64) {
-    const auto& typed_values = static_cast<const Time64Array&>(values);
-    const auto& type = static_cast<const Time64Type&>(*values.type());
-
-    buffer->reserve(typed_values.length());
-    const int64_t* raw_values = typed_values.raw_values();
-    const TimeUnit::type unit = type.unit();
-
-    for (int64_t i = 0; i < typed_values.length(); i++) {
-      if (typed_values.IsNull(i)) {
-        buffer->push_back(null_sentinel);
-      } else {
-        switch (unit) {
-          case TimeUnit::MICRO:
-            buffer->push_back(
-                static_cast<int64_t>(raw_values[i] / kMicrosecondsInSecond));
-            break;
-          case TimeUnit::NANO:
-            buffer->push_back(static_cast<int64_t>(raw_values[i] / kNanosecondsinSecond));
-            break;
-          default:
-            // unreachable code
-            UNREACHABLE();
-            break;
-        }
-      }
-    }
-  } else {
-    ARROW_THROW_IF(true, "Column was not time32 or time64");
-  }
-}
-
-void append_arrow_timestamp(const ColumnDescriptor* cd,
-                            const Array& values,
-                            std::vector<int64_t>* buffer) {
-  ARROW_THROW_IF(values.type_id() != Type::TIMESTAMP, "Expected timestamp col");
-
-  const int64_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
-  const auto& typed_values = static_cast<const TimestampArray&>(values);
-  const auto& type = static_cast<const TimestampType&>(*values.type());
-
-  buffer->reserve(typed_values.length());
-  const int64_t* raw_values = typed_values.raw_values();
-  const TimeUnit::type unit = type.unit();
-
-  for (int64_t i = 0; i < typed_values.length(); i++) {
-    if (typed_values.IsNull(i)) {
-      buffer->push_back(null_sentinel);
-    } else {
-      switch (unit) {
-        case TimeUnit::SECOND:
-          buffer->push_back(static_cast<int64_t>(raw_values[i]));
-          break;
-        case TimeUnit::MILLI:
-          buffer->push_back(static_cast<int64_t>(raw_values[i] / kMillisecondsInSecond));
-          break;
-        case TimeUnit::MICRO:
-          buffer->push_back(static_cast<int64_t>(raw_values[i] / kMicrosecondsInSecond));
-          break;
-        case TimeUnit::NANO:
-          buffer->push_back(static_cast<int64_t>(raw_values[i] / kNanosecondsinSecond));
-          break;
-        default:
-          break;
-      }
-    }
-  }
-}
-
-void append_arrow_date(const ColumnDescriptor* cd,
-                       const Array& values,
-                       std::vector<int64_t>* buffer) {
-  const int64_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
-  if (values.type_id() == Type::DATE32) {
-    const auto& typed_values = static_cast<const Date32Array&>(values);
-
-    buffer->reserve(typed_values.length());
-    const int32_t* raw_values = typed_values.raw_values();
-
-    for (int64_t i = 0; i < typed_values.length(); i++) {
-      if (typed_values.IsNull(i)) {
-        buffer->push_back(null_sentinel);
-      } else {
-        buffer->push_back(static_cast<int64_t>(raw_values[i] * kSecondsInDay));
-      }
-    }
-  } else if (values.type_id() == Type::DATE64) {
-    const auto& typed_values = static_cast<const Date64Array&>(values);
-
-    buffer->reserve(typed_values.length());
-    const int64_t* raw_values = typed_values.raw_values();
-
-    // Convert from milliseconds since UNIX epoch
-    for (int64_t i = 0; i < typed_values.length(); i++) {
-      if (typed_values.IsNull(i)) {
-        buffer->push_back(null_sentinel);
-      } else {
-        buffer->push_back(static_cast<int64_t>(raw_values[i] / 1000));
-      }
-    }
-  } else {
-    ARROW_THROW_IF(true, "Column was not date32 or date64");
-  }
-}
-
-void append_arrow_date_i32(const ColumnDescriptor* cd,
-                           const Array& values,
-                           std::vector<int64_t>* buffer) {
-  const int64_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
-  if (values.type_id() == Type::DATE32) {
-    const auto& typed_values = static_cast<const Date32Array&>(values);
-
-    buffer->reserve(typed_values.length());
-    const int32_t* raw_values = typed_values.raw_values();
-
-    for (int64_t i = 0; i < typed_values.length(); i++) {
-      if (typed_values.IsNull(i)) {
-        buffer->push_back(null_sentinel);
-      } else {
-        buffer->push_back(static_cast<int64_t>(raw_values[i]));
-      }
-    }
-  } else if (values.type_id() == Type::DATE64) {
-    const auto& typed_values = static_cast<const Date64Array&>(values);
-
-    buffer->reserve(typed_values.length());
-    const int64_t* raw_values = typed_values.raw_values();
-
-    // Convert from milliseconds since UNIX epoch into days since UNIX epoch
-    for (int64_t i = 0; i < typed_values.length(); i++) {
-      if (typed_values.IsNull(i)) {
-        buffer->push_back(null_sentinel);
-      } else {
-        buffer->push_back(static_cast<int32_t>((raw_values[i] / 1000) / kSecondsInDay));
-      }
-    }
-  } else {
-    ARROW_THROW_IF(true, "Column was not date32 or date64");
-  }
-}
-
-void append_arrow_binary(const ColumnDescriptor* cd,
-                         const Array& values,
-                         std::vector<std::string>* buffer) {
-  ARROW_THROW_IF(values.type_id() != Type::BINARY && values.type_id() != Type::STRING,
-                 "Expected binary col");
-
-  const auto& typed_values = static_cast<const BinaryArray&>(values);
-  buffer->reserve(typed_values.length());
-
-  const char* bytes;
-  int32_t bytes_length = 0;
-  for (int64_t i = 0; i < typed_values.length(); i++) {
-    if (typed_values.IsNull(i)) {
-      // TODO(wesm): How are nulls handled for strings?
-      buffer->push_back(std::string());
-    } else {
-      bytes = reinterpret_cast<const char*>(typed_values.GetValue(i, &bytes_length));
-      buffer->push_back(std::string(bytes, bytes_length));
-    }
-  }
-}
-
-}  // namespace
-
 size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
-                                           const arrow::Array& col) {
+                                           const Array& col,
+                                           const bool exact_type_match,
+                                           BadRowsTracker* const bad_rows_tracker) {
   const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType)
                                                 : cd->columnType.get_type();
   if (cd->columnType.get_notnull()) {
@@ -1014,54 +757,84 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
 
   switch (type) {
     case kBOOLEAN:
-      append_arrow_boolean(cd, col, bool_buffer_);
-      break;
+      if (exact_type_match) {
+        arrow_throw_if(col.type_id() != Type::BOOL, "Expected boolean type");
+      }
+      return convert_arrow_val_to_import_buffer(cd, col, *bool_buffer_, bad_rows_tracker);
     case kTINYINT:
-      ARROW_THROW_IF(col.type_id() != arrow::Type::INT8, "Expected int8 type");
-      append_arrow_integer<arrow::Int8Type, int8_t>(cd, col, tinyint_buffer_);
-      break;
+      if (exact_type_match) {
+        arrow_throw_if(col.type_id() != Type::INT8, "Expected int8 type");
+      }
+      return convert_arrow_val_to_import_buffer(
+          cd, col, *tinyint_buffer_, bad_rows_tracker);
     case kSMALLINT:
-      ARROW_THROW_IF(col.type_id() != arrow::Type::INT16, "Expected int16 type");
-      append_arrow_integer<arrow::Int16Type, int16_t>(cd, col, smallint_buffer_);
-      break;
+      if (exact_type_match) {
+        arrow_throw_if(col.type_id() != Type::INT16, "Expected int16 type");
+      }
+      return convert_arrow_val_to_import_buffer(
+          cd, col, *smallint_buffer_, bad_rows_tracker);
     case kINT:
-      ARROW_THROW_IF(col.type_id() != arrow::Type::INT32, "Expected int32 type");
-      append_arrow_integer<arrow::Int32Type, int32_t>(cd, col, int_buffer_);
-      break;
+      if (exact_type_match) {
+        arrow_throw_if(col.type_id() != Type::INT32, "Expected int32 type");
+      }
+      return convert_arrow_val_to_import_buffer(cd, col, *int_buffer_, bad_rows_tracker);
     case kBIGINT:
-      ARROW_THROW_IF(col.type_id() != arrow::Type::INT64, "Expected int64 type");
-      append_arrow_integer<arrow::Int64Type, int64_t>(cd, col, bigint_buffer_);
-      break;
+      if (exact_type_match) {
+        arrow_throw_if(col.type_id() != Type::INT64, "Expected int64 type");
+      }
+      return convert_arrow_val_to_import_buffer(
+          cd, col, *bigint_buffer_, bad_rows_tracker);
     case kFLOAT:
-      append_arrow_float(cd, col, float_buffer_);
-      break;
+      if (exact_type_match) {
+        arrow_throw_if(col.type_id() != Type::FLOAT, "Expected float type");
+      }
+      return convert_arrow_val_to_import_buffer(
+          cd, col, *float_buffer_, bad_rows_tracker);
     case kDOUBLE:
-      append_arrow_double(cd, col, double_buffer_);
-      break;
+      if (exact_type_match) {
+        arrow_throw_if(col.type_id() != Type::DOUBLE, "Expected double type");
+      }
+      return convert_arrow_val_to_import_buffer(
+          cd, col, *double_buffer_, bad_rows_tracker);
     case kTEXT:
     case kVARCHAR:
     case kCHAR:
-      append_arrow_binary(cd, col, string_buffer_);
-      break;
-    case kTIME:
-      append_arrow_time(cd, col, bigint_buffer_);
-      break;
-    case kTIMESTAMP:
-      append_arrow_timestamp(cd, col, bigint_buffer_);
-      break;
-    case kDATE:
-      if (cd->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
-        append_arrow_date_i32(cd, col, bigint_buffer_);
-        break;
+      if (exact_type_match) {
+        arrow_throw_if(col.type_id() != Type::BINARY && col.type_id() != Type::STRING,
+                       "Expected string type");
       }
-      append_arrow_date(cd, col, bigint_buffer_);
-      break;
+      return convert_arrow_val_to_import_buffer(
+          cd, col, *string_buffer_, bad_rows_tracker);
+    case kTIME:
+      if (exact_type_match) {
+        arrow_throw_if(col.type_id() != Type::TIME32 && col.type_id() != Type::TIME64,
+                       "Expected time32 or time64 type");
+      }
+      return convert_arrow_val_to_import_buffer(
+          cd, col, *bigint_buffer_, bad_rows_tracker);
+    case kTIMESTAMP:
+      if (exact_type_match) {
+        arrow_throw_if(col.type_id() != Type::TIMESTAMP, "Expected timestamp type");
+      }
+      return convert_arrow_val_to_import_buffer(
+          cd, col, *bigint_buffer_, bad_rows_tracker);
+    case kDATE:
+      if (exact_type_match) {
+        arrow_throw_if(col.type_id() != Type::DATE32 && col.type_id() != Type::DATE64,
+                       "Expected date32 or date64 type");
+      }
+      if (cd->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
+        return convert_arrow_val_to_import_buffer(
+            cd, col, *bigint_buffer_, bad_rows_tracker);
+      } else {
+        return convert_arrow_val_to_import_buffer(
+            cd, col, *bigint_buffer_, bad_rows_tracker);
+      }
     case kARRAY:
       throw std::runtime_error("Arrow array appends not yet supported");
     default:
       throw std::runtime_error("Invalid Type");
   }
-  return col.length();
 }
 
 size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& col) {
@@ -3012,6 +2785,35 @@ void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& impor
   }
 }
 
+void Importer::checkpoint(const int32_t start_epoch) {
+  if (load_failed) {
+    // rollback to starting epoch - undo all the added records
+    loader->setTableEpoch(start_epoch);
+  } else {
+    loader->checkpoint();
+  }
+
+  if (loader->get_table_desc()->persistenceLevel ==
+      Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
+    auto ms = measure<>::execution([&]() {
+      if (!load_failed) {
+        for (auto& p : import_buffers_vec[0]) {
+          if (!p->stringDictCheckpoint()) {
+            LOG(ERROR) << "Checkpointing Dictionary for Column "
+                       << p->getColumnDesc()->columnName << " failed.";
+            load_failed = true;
+            break;
+          }
+        }
+      }
+    });
+    if (DEBUG_TIMING) {
+      LOG(INFO) << "Dictionary Checkpointing took " << (double)ms / 1000.0 << " Seconds."
+                << std::endl;
+    }
+  }
+}
+
 ImportStatus DataStreamSink::archivePlumber() {
   // in generalized importing scheme, reaching here file_path may
   // contain a file path, a url or a wildcard of file paths.
@@ -3024,87 +2826,244 @@ ImportStatus DataStreamSink::archivePlumber() {
   // sum up sizes of all local files -- only for local files. if
   // file_path is a s3 url, sizes will be obtained via S3Archive.
   for (const auto& file_path : file_paths) {
-    boost::filesystem::path boost_file_path{file_path};
-    boost::system::error_code ec;
-    const auto filesize = boost::filesystem::file_size(boost_file_path, ec);
-    if (!ec) {
-      total_file_size += filesize;
-    }
+    total_file_size += get_filesize(file_path);
   }
 
+#ifdef ENABLE_IMPORT_PARQUET
   // s3 parquet goes different route because the files do not use libarchive
   // but parquet api, and they need to landed like .7z files.
   //
-  // note: parquet must be explicitly specified by a WITH parameter "parquet='true'".
+  // note: parquet must be explicitly specified by a WITH parameter "parquet='true'",
+  //       because for example spark sql users may specify a output url w/o file
+  //       extension like this:
+  //                df.write
+  //                  .mode("overwrite")
+  //                  .parquet("s3://bucket/folder/parquet/mydata")
   //       without the parameter, it means plain or compressed csv files.
   // note: .ORC and AVRO files should follow a similar path to Parquet?
   if (copy_params.is_parquet) {
     import_parquet(file_paths);
-  } else {
+  } else
+#endif
+  {
     import_compressed(file_paths);
   }
   return import_status;
 }
 
-void DataStreamSink::import_local_parquet(const std::string& file_path) {
-  // TODO: for now, this is skeleton only
-  // note: for 'early-stop' purpose like that of Detector, this function
-  // needs extra parameters, eg. timeout or maximum rows to scan, ...
+#ifdef ENABLE_IMPORT_PARQUET
+void Detector::import_local_parquet(const std::string& file_path) {
+  // TODO: support detect on local parquet files
+  CHECK(false);
 }
-void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {
-  std::exception_ptr teptr;
-  // file_paths may contain one local file path, a list of local file paths
-  // or a s3/hdfs/... url that may translate to 1 or 1+ remote object keys.
-  for (auto const& file_path : file_paths) {
-    std::map<int, std::string> url_parts;
-    Archive::parse_url(file_path, url_parts);
 
-    // for a s3 url we need to know the obj keys that it comprises
-    std::vector<std::string> objkeys;
-    std::unique_ptr<S3ParquetArchive> us3arch;
-    if ("s3" == url_parts[2]) {
-#ifdef HAVE_AWS_S3
-      us3arch.reset(new S3ParquetArchive(file_path,
-                                         copy_params.s3_access_key,
-                                         copy_params.s3_secret_key,
-                                         copy_params.s3_region,
-                                         copy_params.plain_text));
-      us3arch->init_for_read();
-      objkeys = us3arch->get_objkeys();
-#else
-      throw std::runtime_error("AWS S3 support not available");
-#endif  // HAVE_AWS_S3
-    } else {
-      objkeys.emplace_back(file_path);
+void Importer::import_local_parquet(const std::string& file_path) {
+  const auto& column_list = get_column_descs();
+  max_threads = copy_params.threads ? copy_params.threads : cpu_threads();
+
+  std::shared_ptr<arrow::io::ReadableFile> infile;
+  PARQUET_THROW_NOT_OK(
+      arrow::io::ReadableFile::Open(file_path, arrow::default_memory_pool(), &infile));
+  std::unique_ptr<parquet::arrow::FileReader> reader;
+  PARQUET_THROW_NOT_OK(
+      parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader));
+  std::shared_ptr<arrow::Table> table;
+  PARQUET_THROW_NOT_OK(reader->ReadTable(&table));
+
+  const auto metadata = reader->parquet_reader()->metadata();
+  const auto num_row_groups = reader->num_row_groups();
+  const auto num_columns = table->num_columns();
+  const auto num_rows = table->num_rows();
+  LOG(INFO) << "File " << file_path << " has " << num_rows << " rows and " << num_columns
+            << " columns in " << num_row_groups << " groups.";
+  // column_list has no $deleted
+  CHECK_EQ(num_columns, column_list.size());
+  std::vector<const ColumnDescriptor*> cds;
+  for (auto& cd : column_list) {
+    cds.push_back(cd);
+  }
+
+  std::vector<std::vector<size_t>> nrow(num_row_groups, std::vector<size_t>(num_columns));
+  std::vector<std::unique_ptr<std::atomic<exprtype(num_columns)>>> ncol(num_row_groups);
+  for (auto& p : ncol) {
+    p = std::make_unique<std::atomic<exprtype(num_columns)>>(0);
+  }
+
+  // orient import_buffers_vec in rowgroup wise not thread wise
+  import_buffers_vec.resize(num_row_groups);
+  for (auto g = 0; g < num_row_groups; g++) {
+    // unlike csv import that acts as one single stream and initialize this only once,
+    // parquet import initialize this for each file, so must clear this
+    import_buffers_vec[g].clear();
+    for (const auto cd : cds) {
+      import_buffers_vec[g].emplace_back(
+          new TypedImportBuffer(cd, loader->get_string_dict(cd)));
     }
+  }
 
-    // for each obj key of a s3 url we need to land it before
-    // importing it like doing with a 'local file'.
-    for (auto const& objkey : objkeys) {
-      try {
-        auto file_path =
-            us3arch
-                ? us3arch->land(objkey, teptr, nullptr != dynamic_cast<Detector*>(this))
-                : objkey;
-        if (boost::filesystem::exists(file_path)) {
-          import_local_parquet(file_path);
-        }
-        if (us3arch) {
-          us3arch->vacuum(objkey);
-        }
-      } catch (...) {
-        if (us3arch) {
-          us3arch->vacuum(objkey);
-        }
-        throw;
+  auto flush_row_groups = [&]() {
+    for (auto g = 0; g < num_row_groups; ++g) {
+      if (num_columns == *ncol[g]) {
+        *ncol[g] = 0;
+        load(import_buffers_vec[g], nrow[g][0]);
       }
     }
+  };
+
+  ThreadController_NS::SimpleRunningThreadController<void> running_thread_controller(
+      max_threads);
+  std::vector<BadRowsTracker> bad_rows_trackers(num_row_groups);
+  for (size_t row_group = 0; row_group < bad_rows_trackers.size(); ++row_group) {
+    auto& bad_rows_tracker = bad_rows_trackers[row_group];
+    bad_rows_tracker.ncol = num_columns;
+    bad_rows_tracker.file_name = file_path;
+    bad_rows_tracker.row_group = row_group;
+    bad_rows_tracker.running_thread_controller = &running_thread_controller;
   }
-  // rethrow any exception happened herebefore
-  if (teptr) {
-    std::rethrow_exception(teptr);
+
+  const auto filesize = get_filesize(file_path);
+  size_t rows_completed{0};
+  file_offsets.push_back(0);
+
+  auto ms_load_a_file = measure<>::execution([&]() {
+    const auto work_for_all = num_row_groups * num_columns;
+    for (auto iwork = 0; iwork < work_for_all && !load_failed; ++iwork) {
+      const auto row_group = iwork / num_columns;
+      const auto column = iwork % num_columns;
+      const auto cd = cds[column];
+      running_thread_controller.startThread([=,
+                                             &ncol,
+                                             &nrow,
+                                             &reader,
+                                             &bad_rows_trackers,
+                                             &rows_completed,
+                                             &running_thread_controller] {
+        std::shared_ptr<arrow::Array> array;
+        PARQUET_THROW_NOT_OK(reader->RowGroup(row_group)->Column(column)->Read(&array));
+        /*
+         * A caveat here is: Parquet files or arrow data is imported column wise.
+         * Unlike importing row-wise csv files, a error on any row of any column
+         * forces to give up entire row group of all columns, unless there is a
+         * sophisticated method to trace erroneous rows in individual columns so that
+         * we can union bad rows and drop them from corresponding import_buffers_vec;
+         * otherwise, we may exceed maximum number of truncated rows easily even with
+         * very sparse errors in the files.
+         */
+        auto& bad_rows_tracker = bad_rows_trackers[row_group];
+        nrow[row_group][column] = import_buffers_vec[row_group][column]->add_arrow_values(
+            cd, *array, false, &bad_rows_tracker);
+        ++*ncol[row_group];
+        if (0 == column) {
+          const auto ndrop = array->length() - nrow[row_group][0];
+          LOG(INFO) << "row group " << row_group << ": add " << nrow[row_group][0]
+                    << " rows, drop " << ndrop << " rows.";
+          mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
+          import_status.rows_completed += nrow[row_group][0];
+          import_status.rows_rejected += ndrop;
+          if (import_status.rows_rejected > copy_params.max_reject) {
+            import_status.load_truncated = true;
+            load_failed = true;
+            LOG(ERROR) << "Maximum (" << copy_params.max_reject
+                       << ") rows rejected exceeded. Halting load.";
+          }
+          // row estimate
+          std::unique_lock<std::mutex> lock(file_offsets_mutex);
+          rows_completed += nrow[row_group][0];
+          file_offsets.back() =
+              num_rows ? (float)filesize * rows_completed / num_rows : 0;
+          // sum up current total file offsets
+          size_t total_file_offset{0};
+          for (const auto file_offset : file_offsets) {
+            total_file_offset += file_offset;
+          }
+          // estimate number of rows per current total file offset
+          if (total_file_offset) {
+            import_status.rows_estimated =
+                (float)total_file_size / total_file_offset * import_status.rows_completed;
+            VLOG(3) << "rows_completed " << import_status.rows_completed
+                    << ", rows_estimated " << import_status.rows_estimated
+                    << ", total_file_size " << total_file_size << ", total_file_offset "
+                    << total_file_offset;
+          }
+        }
+      });
+      running_thread_controller.checkThreadsStatus();
+      flush_row_groups();
+    }
+    running_thread_controller.finish();
+    flush_row_groups();
+  });
+  LOG(INFO) << "Import " << num_rows << " rows of parquet file " << file_path << " took "
+            << (double)ms_load_a_file / 1000.0 << " secs";
+}
+
+void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {
+  auto importer = dynamic_cast<Importer*>(this);
+  auto start_epoch = importer ? importer->getLoader()->getTableEpoch() : 0;
+  try {
+    std::exception_ptr teptr;
+    // file_paths may contain one local file path, a list of local file paths
+    // or a s3/hdfs/... url that may translate to 1 or 1+ remote object keys.
+    for (auto const& file_path : file_paths) {
+      std::map<int, std::string> url_parts;
+      Archive::parse_url(file_path, url_parts);
+
+      // for a s3 url we need to know the obj keys that it comprises
+      std::vector<std::string> objkeys;
+      std::unique_ptr<S3ParquetArchive> us3arch;
+      if ("s3" == url_parts[2]) {
+#ifdef HAVE_AWS_S3
+        us3arch.reset(new S3ParquetArchive(file_path,
+                                           copy_params.s3_access_key,
+                                           copy_params.s3_secret_key,
+                                           copy_params.s3_region,
+                                           copy_params.plain_text));
+        us3arch->init_for_read();
+        total_file_size += us3arch->get_total_file_size();
+        objkeys = us3arch->get_objkeys();
+#else
+        throw std::runtime_error("AWS S3 support not available");
+#endif  // HAVE_AWS_S3
+      } else {
+        objkeys.emplace_back(file_path);
+      }
+
+      // for each obj key of a s3 url we need to land it before
+      // importing it like doing with a 'local file'.
+      for (auto const& objkey : objkeys) {
+        try {
+          auto file_path =
+              us3arch
+                  ? us3arch->land(objkey, teptr, nullptr != dynamic_cast<Detector*>(this))
+                  : objkey;
+          import_local_parquet(file_path);
+          if (us3arch) {
+            us3arch->vacuum(objkey);
+          }
+        } catch (...) {
+          if (us3arch) {
+            us3arch->vacuum(objkey);
+          }
+          throw;
+        }
+      }
+    }
+    // rethrow any exception happened herebefore
+    if (teptr) {
+      std::rethrow_exception(teptr);
+    }
+  } catch (...) {
+    load_failed = true;
+    if (!import_status.load_truncated) {
+      throw;
+    }
+  }
+
+  if (importer) {
+    importer->checkpoint(start_epoch);
   }
 }
+#endif  // ENABLE_IMPORT_PARQUET
 
 void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
   // a new requirement is to have one single input stream into
@@ -3419,6 +3378,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
 
   ChunkKey chunkKey = {loader->getCatalog().getCurrentDB().dbId,
                        loader->get_table_desc()->tableId};
+  auto start_epoch = loader->getTableEpoch();
   {
     std::list<std::future<ImportStatus>> threads;
 
@@ -3431,7 +3391,6 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
 
     size_t first_row_index_this_buffer = 0;
 
-    auto start_epoch = loader->getTableEpoch();
     while (size > 0) {
       if (eof_reached) {
         end_pos = size;
@@ -3566,34 +3525,10 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
     for (auto& p : threads) {
       p.wait();
     }
-
-    if (load_failed) {
-      // rollback to starting epoch - undo all the added records
-      loader->setTableEpoch(start_epoch);
-    } else {
-      loader->checkpoint();
-    }
   }
 
-  if (loader->get_table_desc()->persistenceLevel ==
-      Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
-    auto ms = measure<>::execution([&]() {
-      if (!load_failed) {
-        for (auto& p : import_buffers_vec[0]) {
-          if (!p->stringDictCheckpoint()) {
-            LOG(ERROR) << "Checkpointing Dictionary for Column "
-                       << p->getColumnDesc()->columnName << " failed.";
-            load_failed = true;
-            break;
-          }
-        }
-      }
-    });
-    if (DEBUG_TIMING) {
-      LOG(INFO) << "Dictionary Checkpointing took " << (double)ms / 1000.0 << " Seconds."
-                << std::endl;
-    }
-  }
+  checkpoint(start_epoch);
+
   // must set import_status.load_truncated before closing this end of pipe
   // otherwise, the thread on the other end would throw an unwanted 'write()'
   // exception
@@ -4402,26 +4337,7 @@ ImportStatus Importer::importGDAL(
   }
 #endif
 
-  if (load_failed) {
-    // rollback to starting epoch - undo all the added records
-    loader->setTableEpoch(start_epoch);
-  } else {
-    loader->checkpoint();
-  }
-
-  if (!load_failed &&
-      loader->get_table_desc()->persistenceLevel ==
-          Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident
-                                                      // tables
-    for (auto& p : import_buffers_vec[0]) {
-      if (!p->stringDictCheckpoint()) {
-        LOG(ERROR) << "Checkpointing Dictionary for Column "
-                   << p->getColumnDesc()->columnName << " failed.";
-        load_failed = true;
-        break;
-      }
-    }
-  }
+  checkpoint(start_epoch);
 
   // must set import_status.load_truncated before closing this end of pipe
   // otherwise, the thread on the other end would throw an unwanted 'write()'

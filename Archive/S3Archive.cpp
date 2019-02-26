@@ -170,6 +170,9 @@ const std::string S3Archive::land(const std::string& objkey,
 
   auto ext = strrchr(objkey.c_str(), '.');
   auto use_pipe = (0 == ext || 0 != strcmp(ext, ".7z"));
+#ifdef ENABLE_IMPORT_PARQUET
+  use_pipe = use_pipe && (0 != strcmp(ext, ".parquet"));
+#endif
   if (use_pipe) {
     if (mkfifo(file_path.c_str(), 0660) < 0) {
       throw std::runtime_error("failed to create named pipe '" + file_path +

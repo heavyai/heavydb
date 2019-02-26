@@ -2275,7 +2275,8 @@ void MapDHandler::load_table_binary_arrow(const TSessionId& session,
   size_t col_idx = 0;
   try {
     for (auto cd : loader->get_column_descs()) {
-      numRows = import_buffers[col_idx]->add_arrow_values(cd, *batch->column(col_idx));
+      numRows = import_buffers[col_idx]->add_arrow_values(
+          cd, *batch->column(col_idx), true, nullptr);
       col_idx++;
     }
   } catch (const std::exception& e) {

@@ -30,20 +30,26 @@
 
 #include "../Shared/fixautotools.h"
 
+#include <atomic>
 #include <boost/filesystem.hpp>
 #include <boost/noncopyable.hpp>
 #include <boost/tokenizer.hpp>
+#include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <list>
 #include <map>
 #include <memory>
+#include <mutex>
+#include <set>
 #include <string>
+
 #include "../Catalog/Catalog.h"
 #include "../Catalog/TableDescriptor.h"
 #include "../Chunk/Chunk.h"
 #include "../Fragmenter/Fragmenter.h"
+#include "../Shared/ThreadController.h"
 #include "../Shared/checked_alloc.h"
 
 // Some builds of boost::geometry require iostream, but don't explicitly include it.
@@ -60,6 +66,17 @@ class Array;
 }  // namespace arrow
 
 namespace Importer_NS {
+
+struct BadRowsTracker {
+  std::mutex mutex;
+  std::condition_variable condv;
+  std::set<int64_t> rows;
+  std::atomic<int> ncol;
+  std::atomic<int> nerrors;
+  std::string file_name;
+  int row_group;
+  ThreadController_NS::SimpleRunningThreadController<void>* running_thread_controller;
+};
 
 enum class TableType { DELIMITED, POLYGON };
 
@@ -80,7 +97,9 @@ struct CopyParams {
   TableType table_type;
   bool plain_text = false;
   // s3/parquet related params
+#ifdef ENABLE_IMPORT_PARQUET
   bool is_parquet;
+#endif
   std::string s3_access_key;  // per-query credentials to override the
   std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
   std::string s3_region;
@@ -111,7 +130,9 @@ struct CopyParams {
       , threads(0)
       , max_reject(100000)
       , table_type(TableType::DELIMITED)
+#ifdef ENABLE_IMPORT_PARQUET
       , is_parquet(false)
+#endif
       , retry_count(100)
       , retry_wait(5)
       , batch_size(1000)
@@ -120,7 +141,8 @@ struct CopyParams {
       , geo_coords_comp_param(32)
       , geo_coords_type(kGEOMETRY)
       , geo_coords_srid(4326)
-      , sanitize_column_names(true) {}
+      , sanitize_column_names(true) {
+  }
 
   CopyParams(char d, const std::string& n, char l, size_t b, size_t retries, size_t wait)
       : delimiter(d)
@@ -528,7 +550,10 @@ class TypedImportBuffer : boost::noncopyable {
 
   size_t add_values(const ColumnDescriptor* cd, const TColumn& data);
 
-  size_t add_arrow_values(const ColumnDescriptor* cd, const arrow::Array& data);
+  size_t add_arrow_values(const ColumnDescriptor* cd,
+                          const arrow::Array& data,
+                          const bool exact_type_match,
+                          BadRowsTracker* bad_rows_tracker);
 
   void add_value(const ColumnDescriptor* cd,
                  const std::string& val,
@@ -541,8 +566,8 @@ class TypedImportBuffer : boost::noncopyable {
                  const int64_t replicate_count = 0);
   void pop_value();
 
-  inline int64_t get_replicate_count() const { return replicate_count_; }
-  inline void set_replicate_count(const int64_t replicate_count) {
+  int64_t get_replicate_count() const { return replicate_count_; }
+  void set_replicate_count(const int64_t replicate_count) {
     replicate_count_ = replicate_count;
   }
 
@@ -668,9 +693,11 @@ class DataStreamSink {
   virtual ~DataStreamSink() {}
   virtual ImportStatus importDelimited(const std::string& file_path,
                                        const bool decompressed) = 0;
+#ifdef ENABLE_IMPORT_PARQUET
+  virtual void import_parquet(std::vector<std::string>& file_paths);
+  virtual void import_local_parquet(const std::string& file_path) = 0;
+#endif
   const CopyParams& get_copy_params() const { return copy_params; }
-  void import_local_parquet(const std::string& file_path);
-  void import_parquet(std::vector<std::string>& file_paths);
   void import_compressed(std::vector<std::string>& file_paths);
 
  protected:
@@ -693,6 +720,9 @@ class Detector : public DataStreamSink {
     read_file();
     init();
   };
+#ifdef ENABLE_IMPORT_PARQUET
+  void import_local_parquet(const std::string& file_path) override;
+#endif
   static SQLTypes detect_sqltype(const std::string& str);
   std::vector<std::string> get_headers();
   std::vector<std::vector<std::string>> raw_rows;
@@ -815,6 +845,9 @@ class Importer : public DataStreamSink {
     return import_buffers_vec[i];
   }
   const bool* get_is_array() const { return is_array_a.get(); }
+#ifdef ENABLE_IMPORT_PARQUET
+  void import_local_parquet(const std::string& file_path) override;
+#endif
   static ImportStatus get_import_status(const std::string& id);
   static void set_import_status(const std::string& id, const ImportStatus is);
   static const std::list<ColumnDescriptor> gdalToColumnDescriptors(
@@ -867,6 +900,8 @@ class Importer : public DataStreamSink {
       std::vector<std::vector<int>>& poly_rings_column,
       int render_group,
       const int64_t replicate_count = 0);
+  void checkpoint(const int32_t start_epoch);
+  auto getLoader() const { return loader.get(); }
 
  private:
   static void initGDAL();

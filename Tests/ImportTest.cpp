@@ -66,8 +66,22 @@ bool compare_agg(const int64_t cnt, const double avg) {
   CHECK_EQ(size_t(2), crt_row.size());
   auto r_cnt = v<int64_t>(crt_row[0]);
   auto r_avg = v<double>(crt_row[1]);
+  if (!(r_cnt == cnt && fabs(r_avg - avg) < 1E-9)) {
+    LOG(ERROR) << "error: " << r_cnt << ":" << cnt << ", " << r_avg << ":" << avg;
+  }
   return r_cnt == cnt && fabs(r_avg - avg) < 1E-9;
 }
+
+#ifdef ENABLE_IMPORT_PARQUET
+bool import_test_parquet_with_null(const int64_t cnt) {
+  std::string query_str = "select count() from trips where rate_code_id is null;";
+  auto rows = run_query(query_str);
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(1), crt_row.size());
+  auto r_cnt = v<int64_t>(crt_row[0]);
+  return r_cnt == cnt;
+}
+#endif
 
 bool import_test_common(const string& query_str, const int64_t cnt, const double avg) {
   run_ddl_statement(query_str);
@@ -138,11 +152,13 @@ void import_test_geofile_importer(const std::string& file_str,
 }
 
 bool import_test_local(const string& filename, const int64_t cnt, const double avg) {
-  return import_test_common(string("COPY trips FROM '") +
-                                "../../Tests/Import/datafiles/" + filename +
-                                "' WITH (header='true');",
-                            cnt,
-                            avg);
+  return import_test_common(
+      string("COPY trips FROM '") + "../../Tests/Import/datafiles/" + filename +
+          "' WITH (header='true'" +
+          (filename.find(".parquet") != std::string::npos ? ",parquet='true'" : "") +
+          ");",
+      cnt,
+      avg);
 }
 
 bool import_test_local_geo(const string& filename,
@@ -184,7 +200,12 @@ bool import_test_s3(const string& prefix,
           filename + "' WITH (header='true'" +
           (s3_access_key.size() ? ",s3_access_key='" + s3_access_key + "'" : "") +
           (s3_secret_key.size() ? ",s3_secret_key='" + s3_secret_key + "'" : "") +
-          (s3_region.size() ? ",s3_region='" + s3_region + "'" : "") + ");",
+          (s3_region.size() ? ",s3_region='" + s3_region + "'" : "") +
+          (prefix.find(".parquet") != std::string::npos ||
+                   filename.find(".parquet") != std::string::npos
+               ? ",parquet='true'"
+               : "") +
+          ");",
       cnt,
       avg);
 }
@@ -194,12 +215,25 @@ bool import_test_s3_compressed(const string& filename,
                                const double avg) {
   return import_test_s3("trip.compressed", filename, cnt, avg);
 }
-#if 0
-bool import_test_s3_parquet(const string& filename, const int64_t cnt, const double avg) {
-  return import_test_s3("trip.parquet", filename, cnt, avg);
-}
-#endif
 #endif  // HAVE_AWS_S3
+
+#ifdef ENABLE_IMPORT_PARQUET
+bool import_test_local_parquet(const string& prefix,
+                               const string& filename,
+                               const int64_t cnt,
+                               const double avg) {
+  return import_test_local(prefix + "/" + filename, cnt, avg);
+}
+#ifdef HAVE_AWS_S3
+bool import_test_s3_parquet(const string& prefix,
+                            const string& filename,
+                            const int64_t cnt,
+                            const double avg) {
+  return import_test_s3(prefix, filename, cnt, avg);
+}
+#endif  // HAVE_AWS_S3
+#endif  // ENABLE_IMPORT_PARQUET
+
 class SQLTestEnv : public ::testing::Environment {
  public:
   void SetUp() override {
@@ -478,6 +512,55 @@ class ImportTest : public ::testing::Test {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geo;"););
   }
 };
+
+#ifdef ENABLE_IMPORT_PARQUET
+// parquet test cases
+TEST_F(ImportTest, One_parquet_file) {
+  EXPECT_TRUE(import_test_local_parquet(
+      "trip.parquet",
+      "part-00000-17c77b5c-93e7-4456-bf6c-ac63f180653c-c000.snappy.parquet",
+      100,
+      1.0));
+  EXPECT_TRUE(import_test_parquet_with_null(100));
+}
+TEST_F(ImportTest, One_parquet_file_drop) {
+  EXPECT_TRUE(import_test_local_parquet(
+      "trip+1.parquet",
+      "part-00000-00496d78-a271-4067-b637-cf955cc1cece-c000.snappy.parquet",
+      100,
+      1.0));
+}
+TEST_F(ImportTest, All_parquet_file) {
+  EXPECT_TRUE(import_test_local_parquet("trip.parquet", "*.parquet", 1200, 1.0));
+  EXPECT_TRUE(import_test_parquet_with_null(1200));
+}
+TEST_F(ImportTest, All_parquet_file_drop) {
+  EXPECT_TRUE(import_test_local_parquet("trip+1.parquet", "*.parquet", 1200, 1.0));
+}
+#ifdef HAVE_AWS_S3
+// s3 parquet test cases
+TEST_F(ImportTest, S3_One_parquet_file) {
+  EXPECT_TRUE(import_test_s3_parquet(
+      "trip.parquet",
+      "part-00000-0284f745-1595-4743-b5c4-3aa0262e4de3-c000.snappy.parquet",
+      100,
+      1.0));
+}
+TEST_F(ImportTest, S3_One_parquet_file_drop) {
+  EXPECT_TRUE(import_test_s3_parquet(
+      "trip+1.parquet",
+      "part-00000-00496d78-a271-4067-b637-cf955cc1cece-c000.snappy.parquet",
+      100,
+      1.0));
+}
+TEST_F(ImportTest, S3_All_parquet_file) {
+  EXPECT_TRUE(import_test_s3_parquet("trip.parquet", "", 1200, 1.0));
+}
+TEST_F(ImportTest, S3_All_parquet_file_drop) {
+  EXPECT_TRUE(import_test_s3_parquet("trip+1.parquet", "", 1200, 1.0));
+}
+#endif  // HAVE_AWS_S3
+#endif  // ENABLE_IMPORT_PARQUET
 
 TEST_F(ImportTest, One_csv_file) {
   EXPECT_TRUE(import_test_local("trip_data_9.csv", 100, 1.0));
