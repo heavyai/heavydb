@@ -480,6 +480,7 @@ class RelAlgNode {
   virtual ~RelAlgNode() {}
 
   void setContextData(const void* context_data) const {
+    CHECK(!context_data_);
     context_data_ = context_data;
   }
 
