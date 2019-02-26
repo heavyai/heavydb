@@ -126,7 +126,9 @@ void ResultSetStorage::reduce(
     CHECK(query_mem_desc_.getQueryDescriptionType() ==
               QueryDescriptionType::GroupByPerfectHash ||
           query_mem_desc_.getQueryDescriptionType() ==
-              QueryDescriptionType::GroupByBaselineHash);
+              QueryDescriptionType::GroupByBaselineHash ||
+          query_mem_desc_.getQueryDescriptionType() ==
+              QueryDescriptionType::NonGroupedAggregate);
   }
   switch (query_mem_desc_.getQueryDescriptionType()) {
     case QueryDescriptionType::GroupByBaselineHash:

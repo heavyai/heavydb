@@ -216,7 +216,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
         false,
         count_distinct_descriptors,
         false,
-        false,
+        output_columnar_hint,
         false,
         must_use_baseline_sort);
   }
@@ -456,6 +456,11 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
         break;
       case QueryDescriptionType::GroupByBaselineHash:
         output_columnar_ = output_columnar_hint;
+        break;
+      case QueryDescriptionType::NonGroupedAggregate:
+        output_columnar_ =
+            output_columnar_hint && QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
+                                        count_distinct_descriptors_);
         break;
       default:
         output_columnar_ = false;
