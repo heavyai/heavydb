@@ -918,7 +918,7 @@ void SysCatalog::alterUser(const int32_t userid,
         if (!SysCatalog::instance().getMetadataForDB(*dbname, db)) {
           throw runtime_error(string("DEFAULT_DB ") + *dbname + " not found.");
         }
-        values.push_back(*dbname);
+        values.push_back(std::to_string(db.dbId));
       } else {
         append_with_commas(sql, "default_db = NULL");
       }

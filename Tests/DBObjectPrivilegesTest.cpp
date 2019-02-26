@@ -1503,6 +1503,25 @@ TEST(SysCatalog, LoginWithDefaultDatabase) {
   ASSERT_NO_THROW(sys_cat.login(dbname2, username2, "password", user_meta, false));
   EXPECT_EQ(dbname2, dbnamex);  // correctly used user's default of dbnamex
 
+  // change the user's default database
+  ASSERT_NO_THROW(
+      run_ddl_statement("ALTER USER " + username + " (default_db = '" + dbname + "');"));
+
+  // test the user's default database
+  username2 = username;
+  dbname2.clear();
+  ASSERT_NO_THROW(sys_cat.login(dbname2, username2, "password", user_meta, false));
+  EXPECT_EQ(dbname2, dbname);  // correctly used user's default of dbname
+
+  // remove the user's default database
+  ASSERT_NO_THROW(run_ddl_statement("ALTER USER " + username + " (default_db = NULL);"));
+
+  // test the user's default database
+  username2 = username;
+  dbname2.clear();
+  ASSERT_NO_THROW(sys_cat.login(dbname2, username2, "password", user_meta, false));
+  EXPECT_EQ(dbname2, MAPD_SYSTEM_DB);  // correctly fell back to system default database
+
   // cleanup
   ASSERT_NO_THROW(run_ddl_statement("DROP DATABASE " + dbname + ";"));
   ASSERT_NO_THROW(run_ddl_statement("DROP DATABASE " + dbnamex + ";"));
