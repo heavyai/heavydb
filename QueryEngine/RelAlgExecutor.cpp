@@ -371,7 +371,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
   // subqueries are available throughout the execution of the sequence.
   for (auto subquery : subqueries_) {
     auto temp_table = subquery->getExecutionResult();
-    if (temp_table.get() && temporary_tables_.find(-(subquery->getRelAlg()->getId())) == temporary_tables_.end()) {
+    if (temp_table.get() && temporary_tables_.find(-(subquery->getRelAlg()->getId())) ==
+                                temporary_tables_.end()) {
       addTemporaryTable(-(subquery->getRelAlg()->getId()), temp_table->getDataPtr());
     }
   }
