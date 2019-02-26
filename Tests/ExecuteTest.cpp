@@ -12772,6 +12772,9 @@ TEST(Select, WindowFunctionTestAggregate) {
     "OVER (PARTITION BY y ORDER BY x ASC) s, COUNT(x) OVER (PARTITION BY y ORDER BY x "
     "ASC) c FROM test_window_func ORDER BY x ASC, y ASC, a ASC, m1 ASC, m2 ASC, s ASC;",
     dt);
+  c("SELECT y, COUNT(t) OVER (PARTITION BY y ORDER BY x ASC) s FROM test_window_func "
+    "ORDER BY y ASC, s ASC;",
+    dt);
 }
 
 namespace {
@@ -12829,56 +12832,61 @@ int create_and_populate_window_func_table() {
     run_ddl_statement(drop_test_table);
     g_sqlite_comparator.query(drop_test_table);
     const std::string create_test_table{
-        "CREATE TABLE test_window_func(x INTEGER, y TEXT);"};
+        "CREATE TABLE test_window_func(x INTEGER, y TEXT, t INTEGER);"};
     run_ddl_statement(create_test_table);
     g_sqlite_comparator.query(create_test_table);
     {
-      const std::string insert_query{"INSERT INTO test_window_func VALUES(1, 'aaa');"};
+      const std::string insert_query{"INSERT INTO test_window_func VALUES(1, 'aaa', 4);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
-      const std::string insert_query{"INSERT INTO test_window_func VALUES(0, 'aaa');"};
+      const std::string insert_query{"INSERT INTO test_window_func VALUES(0, 'aaa', 5);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
-      const std::string insert_query{"INSERT INTO test_window_func VALUES(2, 'ccc');"};
+      const std::string insert_query{"INSERT INTO test_window_func VALUES(2, 'ccc', 6);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
-      const std::string insert_query{"INSERT INTO test_window_func VALUES(10, 'bbb');"};
+      const std::string insert_query{
+          "INSERT INTO test_window_func VALUES(10, 'bbb', 7);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
-      const std::string insert_query{"INSERT INTO test_window_func VALUES(3, 'bbb');"};
+      const std::string insert_query{"INSERT INTO test_window_func VALUES(3, 'bbb', 8);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
-      const std::string insert_query{"INSERT INTO test_window_func VALUES(6, 'bbb');"};
+      const std::string insert_query{"INSERT INTO test_window_func VALUES(6, 'bbb', 9);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
-      const std::string insert_query{"INSERT INTO test_window_func VALUES(9, 'bbb');"};
+      const std::string insert_query{
+          "INSERT INTO test_window_func VALUES(9, 'bbb', 10);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
-      const std::string insert_query{"INSERT INTO test_window_func VALUES(6, 'bbb');"};
+      const std::string insert_query{
+          "INSERT INTO test_window_func VALUES(6, 'bbb', 11);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
-      const std::string insert_query{"INSERT INTO test_window_func VALUES(9, 'bbb');"};
+      const std::string insert_query{
+          "INSERT INTO test_window_func VALUES(9, 'bbb', 12);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
-      const std::string insert_query{"INSERT INTO test_window_func VALUES(9, 'bbb');"};
+      const std::string insert_query{
+          "INSERT INTO test_window_func VALUES(9, 'bbb', 13);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }

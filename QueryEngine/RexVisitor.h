@@ -91,7 +91,7 @@ class RexVisitor : public RexVisitorBase<T> {
     const auto rex_window_func_operator =
         dynamic_cast<const RexWindowFunctionOperator*>(rex_operator);
     if (rex_window_func_operator) {
-      return visitWindowFunctionOperator(rex_window_func_operator);
+      return visitWindowFunctionOperator(rex_window_func_operator, result);
     }
     return result;
   }
@@ -118,9 +118,9 @@ class RexVisitor : public RexVisitorBase<T> {
   T defaultResult() const override { return T{}; }
 
  private:
-  T visitWindowFunctionOperator(
-      const RexWindowFunctionOperator* rex_window_func_operator) const {
-    T result = defaultResult();
+  T visitWindowFunctionOperator(const RexWindowFunctionOperator* rex_window_func_operator,
+                                const T operands_visit_result) const {
+    T result = operands_visit_result;
     for (const auto& key : rex_window_func_operator->getPartitionKeys()) {
       T partial_result = RexVisitorBase<T>::visit(key.get());
       result = aggregateResult(result, partial_result);
