@@ -1020,7 +1020,7 @@ struct GeoTargetValueBuilder {
     switch (return_type) {
       case ResultSet::GeoReturnType::GeoTargetValue: {
         if (ad_arr[0]->is_null) {
-          return NullArrayTargetValue();
+          return ArrayTargetValue(boost::optional<std::vector<ScalarTargetValue>>{});
         }
         return GeoReturnTypeTraits<ResultSet::GeoReturnType::GeoTargetValue,
                                    GEO_SOURCE_TYPE>::GeoSerializerType::serialize(geo_ti,
@@ -1180,7 +1180,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
                           &is_end);
         CHECK(!is_end);
         if (ad.is_null) {
-          return NullArrayTargetValue();
+          return ArrayTargetValue(boost::optional<std::vector<ScalarTargetValue>>{});
         }
         CHECK(ad.pointer);
         CHECK_GE(ad.length, 0);
@@ -1195,7 +1195,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
   }
   if (!varlen_ptr) {
     if (target_info.sql_type.is_array()) {
-      return NullArrayTargetValue();
+      return ArrayTargetValue(boost::optional<std::vector<ScalarTargetValue>>{});
     }
     return TargetValue(nullptr);
   }

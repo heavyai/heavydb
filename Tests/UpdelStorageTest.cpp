@@ -261,9 +261,10 @@ const std::string dumpv(const TargetValue& tv) {
   std::ostringstream os;
   if (const auto svp = boost::get<ScalarTargetValue>(&tv)) {
     os << *svp;
-  } else if (const auto svp = boost::get<std::vector<ScalarTargetValue>>(&tv)) {
+  } else if (const auto avp = boost::get<ArrayTargetValue>(&tv)) {
+    const auto& svp = avp->get();
     os << boost::algorithm::join(
-        *svp | boost::adaptors::transformed(ScalarTargetValueExtractor()), ",");
+        svp | boost::adaptors::transformed(ScalarTargetValueExtractor()), ",");
   }
   return os.str();
 }
@@ -273,12 +274,24 @@ inline bool is_equal(const TargetValue& lhs, const TargetValue& rhs) {
   if (lhs.which() == rhs.which()) {
     const auto l = boost::get<ScalarTargetValue>(&lhs);
     const auto r = boost::get<ScalarTargetValue>(&rhs);
-    return l && r ? *l == *r
-                  : *boost::get<std::vector<ScalarTargetValue>>(&lhs) ==
-                        *boost::get<std::vector<ScalarTargetValue>>(&rhs);
-  } else {
-    return false;
+    if (l && r) {
+      return *l == *r;
+    }
+    const auto la = boost::get<ArrayTargetValue>(&lhs);
+    const auto ra = boost::get<ArrayTargetValue>(&rhs);
+    if (la && ra) {
+      if (la->is_initialized() && ra->is_initialized()) {
+        const auto& lvec = la->get();
+        const auto& rvec = ra->get();
+        return lvec == rvec;
+      }
+      if (!la->is_initialized() && !ra->is_initialized()) {
+        // NULL arrays: consider them equal
+        return true;
+      }
+    }
   }
+  return false;
 }
 
 bool compare_row(const std::string& table,

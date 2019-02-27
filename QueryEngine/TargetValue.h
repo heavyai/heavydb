@@ -26,6 +26,7 @@
 #define QUERYENGINE_TARGETVALUE_H
 
 #include <glog/logging.h>
+#include <boost/optional.hpp>
 #include <boost/variant.hpp>
 
 #include <cstdint>
@@ -130,18 +131,13 @@ struct GeoMultiPolyTargetValue {
       , poly_rings(std::make_shared<std::vector<int32_t>>(poly_rings)) {}
 };
 
-struct NullArrayTargetValue {
-  NullArrayTargetValue() {}
-};
-
 using NullableString = boost::variant<std::string, void*>;
 using ScalarTargetValue = boost::variant<int64_t, double, float, NullableString>;
-using ArrayTargetValue = std::vector<ScalarTargetValue>;
+using ArrayTargetValue = boost::optional<std::vector<ScalarTargetValue>>;
 using GeoTargetValue = boost::variant<GeoPointTargetValue,
                                       GeoLineStringTargetValue,
                                       GeoPolyTargetValue,
                                       GeoMultiPolyTargetValue>;
-using TargetValue = boost::
-    variant<ScalarTargetValue, ArrayTargetValue, NullArrayTargetValue, GeoTargetValue>;
+using TargetValue = boost::variant<ScalarTargetValue, ArrayTargetValue, GeoTargetValue>;
 
 #endif  // QUERYENGINE_TARGETVALUE_H

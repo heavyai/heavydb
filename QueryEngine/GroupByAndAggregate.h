@@ -62,18 +62,17 @@ inline std::string datum_to_string(const TargetValue& tv,
                                    const std::string& delim) {
   if (ti.is_array()) {
     const auto array_tv = boost::get<ArrayTargetValue>(&tv);
-    const auto null_array_tv = boost::get<NullArrayTargetValue>(&tv);
-    if (array_tv) {
-      CHECK(!null_array_tv);
+    CHECK(array_tv);
+    if (array_tv->is_initialized()) {
+      const auto& vec = array_tv->get();
       std::vector<std::string> elem_strs;
-      elem_strs.reserve(array_tv->size());
+      elem_strs.reserve(vec.size());
       const auto& elem_ti = ti.get_elem_type();
-      for (const auto& elem_tv : *array_tv) {
+      for (const auto& elem_tv : vec) {
         elem_strs.push_back(datum_to_string(elem_tv, elem_ti, delim));
       }
       return "{" + boost::algorithm::join(elem_strs, delim) + "}";
     }
-    CHECK(null_array_tv);
     return "NULL";
   }
   const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);

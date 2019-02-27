@@ -29,11 +29,15 @@ template <class T>
 void compare_array(const TargetValue& r,
                    const std::vector<T>& arr,
                    const double tol = -1.) {
-  auto scalar_tv_vector = boost::get<std::vector<ScalarTargetValue>>(&r);
-  CHECK(scalar_tv_vector);
-  ASSERT_EQ(scalar_tv_vector->size(), arr.size());
+  auto array_tv = boost::get<ArrayTargetValue>(&r);
+  CHECK(array_tv);
+  if (!array_tv->is_initialized()) {
+    ASSERT_EQ(0, arr.size());
+  }
+  const auto& scalar_tv_vector = array_tv->get();
+  ASSERT_EQ(scalar_tv_vector.size(), arr.size());
   size_t ctr = 0;
-  for (const ScalarTargetValue scalar_tv : *scalar_tv_vector) {
+  for (const ScalarTargetValue scalar_tv : scalar_tv_vector) {
     auto p = boost::get<T>(&scalar_tv);
     if (tol < 0.) {
       ASSERT_EQ(*p, arr[ctr++]);
@@ -47,11 +51,15 @@ template <>
 void compare_array(const TargetValue& r,
                    const std::vector<std::string>& arr,
                    const double tol) {
-  auto scalar_tv_vector = boost::get<std::vector<ScalarTargetValue>>(&r);
-  CHECK(scalar_tv_vector);
-  ASSERT_EQ(scalar_tv_vector->size(), arr.size());
+  auto array_tv = boost::get<ArrayTargetValue>(&r);
+  CHECK(array_tv);
+  if (!array_tv->is_initialized()) {
+    ASSERT_EQ(0, arr.size());
+  }
+  const auto& scalar_tv_vector = array_tv->get();
+  ASSERT_EQ(scalar_tv_vector.size(), arr.size());
   size_t ctr = 0;
-  for (const ScalarTargetValue scalar_tv : *scalar_tv_vector) {
+  for (const ScalarTargetValue scalar_tv : scalar_tv_vector) {
     auto ns = boost::get<NullableString>(&scalar_tv);
     CHECK(ns);
     auto str = boost::get<std::string>(ns);

@@ -366,8 +366,11 @@ class ArrayColumnDescriptor : public TestColumnDescriptor {
                           const TargetValue* value) override {
     auto arrayValue = boost::get<ArrayTargetValue>(value);
 
-    if (nullptr == arrayValue) {
+    if (!arrayValue) {
       return false;
+    }
+    if (!arrayValue->is_initialized()) {
+      return true;  // NULL array, nothing to check
     }
 
     const SQLTypeInfo subtype = type.get_elem_type();
@@ -378,7 +381,8 @@ class ArrayColumnDescriptor : public TestColumnDescriptor {
       elementIndex += row;
     }
 
-    for (auto& scalarValue : *arrayValue) {
+    const auto& vec = arrayValue->get();
+    for (auto& scalarValue : vec) {
       if (!element_descriptor->check_column_value(elementIndex, subtype, &scalarValue)) {
         return false;
       }

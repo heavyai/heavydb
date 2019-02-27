@@ -433,13 +433,17 @@ class ImportTestDateArray : public ::testing::Test {
 void decode_str_array(const TargetValue& r, std::vector<std::string>& arr) {
   const auto atv = boost::get<ArrayTargetValue>(&r);
   CHECK(atv);
-  for (const auto& stv : *atv) {
+  if (!atv->is_initialized()) {
+    return;
+  }
+  const auto& vec = atv->get();
+  for (const auto& stv : vec) {
     const auto ns = v<NullableString>(stv);
     const auto str = boost::get<std::string>(&ns);
     CHECK(str);
     arr.push_back(*str);
   }
-  CHECK_EQ(arr.size(), atv->size());
+  CHECK_EQ(arr.size(), vec.size());
 }
 
 TEST_F(ImportTestDateArray, ImportMixedDateArrays) {
@@ -456,9 +460,10 @@ TEST_F(ImportTestDateArray, ImportMixedDateArrays) {
     decode_str_array(crt_row[0], truth_arr);
     for (size_t j = 1; j < crt_row.size(); j++) {
       const auto date_arr = boost::get<ArrayTargetValue>(&crt_row[j]);
-      CHECK(date_arr);
-      for (size_t k = 0; k < date_arr->size(); k++) {
-        const auto date = v<int64_t>((*date_arr)[k]);
+      CHECK(date_arr && date_arr->is_initialized());
+      const auto& vec = date_arr->get();
+      for (size_t k = 0; k < vec.size(); k++) {
+        const auto date = v<int64_t>(vec[k]);
         const auto date_str = convert_date_to_string(static_cast<int64_t>(date));
         ASSERT_EQ(truth_arr[k], date_str);
       }
@@ -472,9 +477,10 @@ TEST_F(ImportTestDateArray, ImportMixedDateArrays) {
     decode_str_array(crt_row[0], truth_arr);
     for (size_t j = 1; j < crt_row.size() - 1; j++) {
       const auto date_arr = boost::get<ArrayTargetValue>(&crt_row[j]);
-      CHECK(date_arr);
-      for (size_t k = 0; k < date_arr->size(); k++) {
-        const auto date = v<int64_t>((*date_arr)[k]);
+      CHECK(date_arr && date_arr->is_initialized());
+      const auto& vec = date_arr->get();
+      for (size_t k = 0; k < vec.size(); k++) {
+        const auto date = v<int64_t>(vec[k]);
         const auto date_str = convert_date_to_string(static_cast<int64_t>(date));
         ASSERT_EQ(truth_arr[k], date_str);
       }
@@ -485,19 +491,18 @@ TEST_F(ImportTestDateArray, ImportMixedDateArrays) {
     const auto crt_row = rows->getNextRow(true, true);
     ASSERT_EQ(size_t(4), crt_row.size());
     const auto date_arr1 = boost::get<ArrayTargetValue>(&crt_row[1]);
-    const auto null_date_arr1 = boost::get<NullArrayTargetValue>(&crt_row[1]);
-    if (i == 9) {  // Empty date array
-      CHECK(!null_date_arr1);
-      CHECK(date_arr1);
-      ASSERT_EQ(size_t(0), date_arr1->size());
+    CHECK(date_arr1);
+    if (i == 9) {
+      // Empty date array
+      CHECK(date_arr1->is_initialized());
+      const auto& vec = date_arr1->get();
+      ASSERT_EQ(size_t(0), vec.size());
     } else {
-      CHECK(!date_arr1);
-      CHECK(null_date_arr1);
+      // NULL array
+      CHECK(!date_arr1->is_initialized());
     }
     const auto date_arr2 = boost::get<ArrayTargetValue>(&crt_row[2]);
-    CHECK(!date_arr2);
-    const auto null_date_arr2 = boost::get<NullArrayTargetValue>(&crt_row[2]);
-    CHECK(null_date_arr2);
+    CHECK(date_arr2 && !date_arr2->is_initialized());
   }
 }
 
