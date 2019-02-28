@@ -1142,9 +1142,7 @@ int main(int argc, char** argv) {
     }
   }
   if (context.db_name.empty()) {
-    std::cout << "Not connected to any database.  Only \\u and \\l commands are allowed "
-                 "in this state.  See \\h for help."
-              << std::endl;
+    std::cout << "Not connected to any database. See \\h for help." << std::endl;
   }
 
   register_signal_handler();
