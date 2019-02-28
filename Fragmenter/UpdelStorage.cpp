@@ -820,7 +820,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
     }
   }
   bool has_null_per_chunk{false};
-  double max_double_per_chunk{std::numeric_limits<double>::min()};
+  double max_double_per_chunk{std::numeric_limits<double>::lowest()};
   double min_double_per_chunk{std::numeric_limits<double>::max()};
   int64_t max_int64t_per_chunk{std::numeric_limits<int64_t>::min()};
   int64_t min_int64t_per_chunk{std::numeric_limits<int64_t>::max()};
@@ -1119,7 +1119,7 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
   const auto ncol = chunks.size();
 
   std::vector<int8_t> has_null_per_thread(ncol, 0);
-  std::vector<double> max_double_per_thread(ncol, std::numeric_limits<double>::min());
+  std::vector<double> max_double_per_thread(ncol, std::numeric_limits<double>::lowest());
   std::vector<double> min_double_per_thread(ncol, std::numeric_limits<double>::max());
   std::vector<int64_t> max_int64t_per_thread(ncol, std::numeric_limits<uint64_t>::min());
   std::vector<int64_t> min_int64t_per_thread(ncol, std::numeric_limits<uint64_t>::max());
