@@ -41,6 +41,7 @@ import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -156,8 +157,9 @@ class OmniSciResultSet implements java.sql.ResultSet {
       case TINYINT:
       case SMALLINT:
       case INT:
-      case BIGINT:
         return String.valueOf(getInt(columnIndex));
+      case BIGINT:
+        return String.valueOf(getLong(columnIndex));
       case FLOAT:
         return String.valueOf(getFloat(columnIndex));
       case DECIMAL:
@@ -292,8 +294,9 @@ class OmniSciResultSet implements java.sql.ResultSet {
       case TINYINT:
       case SMALLINT:
       case INT:
-      case BIGINT:
         return (double) getInt(columnIndex);
+      case BIGINT:
+        return (double) getLong(columnIndex);
       case FLOAT:
         return (double) getFloat(columnIndex);
       case DECIMAL:
@@ -341,64 +344,21 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public Date getDate(int columnIndex)
           throws SQLException { // logger.debug("Entered "+ sql );
-    // logger.info("Dump result columns
-    // "+rowSet.columns.get(columnIndex-1).data.toString()); logger.info("Dump offset::"
-    // +offset);
-    if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
-      wasNull = true;
-      return null;
-    } else {
-      // assume column is str already for now
-      wasNull = false;
-      long val = rowSet.columns.get(columnIndex - 1).data.int_col.get(offset);
-      Date d = new Date(val * 1000);
-      return d;
-    }
+    return getDate(columnIndex, null);
   }
 
   @Override
   public Time getTime(int columnIndex)
           throws SQLException { // logger.debug("Entered "+ sql );
-    if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
-      wasNull = true;
-      return null;
-    } else {
-      // assume column is str already for now
-      wasNull = false;
-      long val = rowSet.columns.get(columnIndex - 1).data.int_col.get(offset);
-      return new Time(val * 1000);
-    }
+    return getTime(columnIndex, null);
   }
 
   @Override
   public Timestamp getTimestamp(int columnIndex)
           throws SQLException { // logger.debug("Entered "+ sql );
-    if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
-      wasNull = true;
-      return null;
-    } else {
-      // assume column is str already for now
-      wasNull = false;
-      long val = rowSet.columns.get(columnIndex - 1).data.int_col.get(offset);
-      Timestamp tm = null;
-      int precision = rowSet.row_desc.get(columnIndex - 1).col_type.getPrecision();
-      boolean negative = (val < 0);
-      long scale;
-      switch (precision) {
-        case 0:
-          return new Timestamp(val * 1000);
-        case 3:
-          return new Timestamp(val);
-        case 6:
-          return extract_complex_time(val, precision);
-        case 9:
-          return extract_complex_time(val, precision);
-        default:
-          throw new RuntimeException("Invalid precision [" + Integer.toString(precision)
-                  + "] returned. Valid values 0,3,6,9");
-      }
-    }
+    return getTimestamp(columnIndex, null);
   }
+
   private Timestamp extract_complex_time(long val, int precision) {
     long scale = (long) Math.pow(10, precision);
     double nano_part = Math.abs(val) % scale;
@@ -541,31 +501,19 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public Date getDate(String columnLabel)
           throws SQLException { // logger.debug("Entered "+ sql );
-    Integer colNum = columnMap.get(columnLabel);
-    if (colNum == null) {
-      throw new SQLException("Could not find column " + columnLabel);
-    }
-    return getDate(colNum);
+    return getDate(columnLabel,null);
   }
 
   @Override
   public Time getTime(String columnLabel)
           throws SQLException { // logger.debug("Entered "+ sql );
-    Integer colNum = columnMap.get(columnLabel);
-    if (colNum == null) {
-      throw new SQLException("Could not find column " + columnLabel);
-    }
-    return getTime(colNum);
+    return getTime(columnLabel,null);
   }
 
   @Override
   public Timestamp getTimestamp(String columnLabel)
           throws SQLException { // logger.debug("Entered "+ sql );
-    Integer colNum = columnMap.get(columnLabel);
-    if (colNum == null) {
-      throw new SQLException("Could not find column " + columnLabel);
-    }
-    return getTimestamp(colNum);
+    return getTimestamp(columnLabel,null);
   }
 
   @Override
@@ -1375,58 +1323,129 @@ class OmniSciResultSet implements java.sql.ResultSet {
             + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
+  // this method is used to add a TZ from Calendar; is TimeZone in the calendar isn't specified it uses the local TZ
+  private long getOffsetFromTZ(long actualmillis, Calendar cal, int precision ) {
+    long offset;
+    if (cal.getTimeZone() != null) {
+        offset = cal.getTimeZone().getOffset(actualmillis);
+      }
+      else {
+        offset = Calendar.getInstance().getTimeZone().getOffset(actualmillis);
+      }
+      switch (precision)
+      {
+         case 0:
+           return offset/1000;
+         case 3:
+           return offset;
+         case 6:
+           return offset*1000;
+         case 9:
+           return offset*1000000;
+         default:
+           throw new RuntimeException("Invalid precision [" + Integer.toString(precision)
+                  + "] returned. Valid values 0,3,6,9");
+
+      }
+  }
+
   @Override
   public Date getDate(int columnIndex, Calendar cal)
-          throws SQLException { // logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+            throws SQLException {
+    if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
+      wasNull = true;
+      return null;
+    } else {
+      // assume column is str already for now
+      wasNull = false;
+      long val = rowSet.columns.get(columnIndex - 1).data.int_col.get(offset);
+      if (cal != null) {
+        val += getOffsetFromTZ(val, cal, 0);
+      }
+      Date d = new Date(val * 1000);
+      return d;
+    }
   }
 
   @Override
   public Date getDate(String columnLabel, Calendar cal)
-          throws SQLException { // logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+          throws SQLException {
+    Integer colNum = columnMap.get(columnLabel);
+    if (colNum == null) {
+      throw new SQLException("Could not find column " + columnLabel);
+    }
+    return getDate(colNum,cal);
   }
 
   @Override
   public Time getTime(int columnIndex, Calendar cal)
-          throws SQLException { // logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+        throws SQLException { // logger.debug("Entered "+ sql );
+    if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
+      wasNull = true;
+      return null;
+    } else {
+      // assume column is str already for now
+      wasNull = false;
+      long val = rowSet.columns.get(columnIndex - 1).data.int_col.get(offset);
+      if (cal != null) {
+        val += getOffsetFromTZ(val, cal, 0);
+      }
+      return new Time(val * 1000);
+    }
   }
+
 
   @Override
   public Time getTime(String columnLabel, Calendar cal)
           throws SQLException { // logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    Integer colNum = columnMap.get(columnLabel);
+    if (colNum == null) {
+      throw new SQLException("Could not find column " + columnLabel);
+    }
+    return getTime(colNum,cal);
   }
 
   @Override
   public Timestamp getTimestamp(int columnIndex, Calendar cal)
           throws SQLException { // logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
+      wasNull = true;
+      return null;
+    } else {
+      // assume column is str already for now
+      wasNull = false;
+      long val = rowSet.columns.get(columnIndex - 1).data.int_col.get(offset);
+      Timestamp tm = null;
+      int precision = rowSet.row_desc.get(columnIndex - 1).col_type.getPrecision();
+      if (cal != null) {
+        val += getOffsetFromTZ(val, cal, precision);
+      }
+      boolean negative = (val < 0);
+      long scale;
+      switch (precision) {
+        case 0:
+          return new Timestamp(val * 1000);
+        case 3:
+          return new Timestamp(val);
+        case 6:
+          return extract_complex_time(val, precision);
+        case 9:
+          return extract_complex_time(val, precision);
+        default:
+          throw new RuntimeException("Invalid precision [" + Integer.toString(precision)
+                  + "] returned. Valid values 0,3,6,9");
+      }
+    }
   }
 
   @Override
   public Timestamp getTimestamp(String columnLabel, Calendar cal)
           throws SQLException { // logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    Integer colNum = columnMap.get(columnLabel);
+    if (colNum == null) {
+      throw new SQLException("Could not find column " + columnLabel);
+    }
+    return getTimestamp(colNum,cal);
   }
 
   @Override
