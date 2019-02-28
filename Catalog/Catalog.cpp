@@ -2594,23 +2594,35 @@ void Catalog::renameColumn(const TableDescriptor* td,
   cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_.query_with_text_params(
-        "UPDATE mapd_columns SET name = ? WHERE tableid = ? AND columnid = ?",
-        std::vector<std::string>{
-            newColumnName, std::to_string(td->tableId), std::to_string(cd->columnId)});
+    for (int i = 0; i <= cd->columnType.get_physical_cols(); ++i) {
+      auto cdx = getMetadataForColumn(td->tableId, cd->columnId + i);
+      CHECK(cdx);
+      std::string new_column_name = cdx->columnName;
+      new_column_name.replace(0, cd->columnName.size(), newColumnName);
+      sqliteConnector_.query_with_text_params(
+          "UPDATE mapd_columns SET name = ? WHERE tableid = ? AND columnid = ?",
+          std::vector<std::string>{new_column_name,
+                                   std::to_string(td->tableId),
+                                   std::to_string(cdx->columnId)});
+    }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
-  ColumnDescriptorMap::iterator columnDescIt =
-      columnDescriptorMap_.find(std::make_tuple(td->tableId, to_upper(cd->columnName)));
-  CHECK(columnDescIt != columnDescriptorMap_.end());
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
-  ColumnDescriptor* changeCd = columnDescIt->second;
-  changeCd->columnName = newColumnName;
-  columnDescriptorMap_.erase(columnDescIt);  // erase entry under old name
-  columnDescriptorMap_[std::make_tuple(td->tableId, to_upper(newColumnName))] = changeCd;
+  for (int i = 0; i <= cd->columnType.get_physical_cols(); ++i) {
+    auto cdx = getMetadataForColumn(td->tableId, cd->columnId + i);
+    CHECK(cdx);
+    ColumnDescriptorMap::iterator columnDescIt = columnDescriptorMap_.find(
+        std::make_tuple(td->tableId, to_upper(cdx->columnName)));
+    CHECK(columnDescIt != columnDescriptorMap_.end());
+    ColumnDescriptor* changeCd = columnDescIt->second;
+    changeCd->columnName.replace(0, cd->columnName.size(), newColumnName);
+    columnDescriptorMap_.erase(columnDescIt);  // erase entry under old name
+    columnDescriptorMap_[std::make_tuple(td->tableId, to_upper(changeCd->columnName))] =
+        changeCd;
+  }
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
 }
 

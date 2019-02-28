@@ -5504,6 +5504,30 @@ TEST(Alter, AfterAlterColumnName) {
   run_ddl_statement("drop table alter_column_test;");
 }
 
+TEST(Alter, AfterAlterGeoColumnName) {
+  static const std::vector<std::string> geo_types = {
+      "point", "linestring", "polygon", "multipolygon"};
+  for (auto& geo_type : geo_types) {
+    run_ddl_statement("create table alter_geo_column_test (abc " + geo_type + ");");
+    auto& cat = g_session->getCatalog();
+    const auto td = cat.getMetadataForTable("alter_geo_column_test");
+    CHECK(td);
+    const auto cd = cat.getMetadataForColumn(td->tableId, "abc");
+    CHECK(cd);
+    run_ddl_statement("alter table alter_geo_column_test rename column abc to xyz;");
+    auto& sqlite = cat.getSqliteConnector();
+    sqlite.query_with_text_params(
+        "select count() from mapd_columns where tableid=? and columnid > ? and columnid "
+        "<= ? and name like 'xyz_%';",
+        std::vector<std::string>{
+            std::to_string(td->tableId),
+            std::to_string(cd->columnId),
+            std::to_string(cd->columnId + cd->columnType.get_physical_cols())});
+    ASSERT_EQ(cd->columnType.get_physical_cols(), sqlite.getData<int>(0, 0));
+    run_ddl_statement("drop table alter_geo_column_test;");
+  }
+}
+
 TEST(Select, Empty) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
