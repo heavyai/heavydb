@@ -4815,11 +4815,12 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         if (g_cluster && leaf_aggregator_.leafCount()) {
           _return.execution_time_ms += measure<>::execution([&]() {
             const DistributedValidate validator(validate_stmt->getType(),
+                                                validate_stmt->isRepairTypeRemove(),
                                                 cat,
                                                 leaf_aggregator_,
-                                                session_info.get_session_id(),
+                                                session_info,
                                                 *this);
-            output = validator.report_differences();
+            output = validator.validate();
           });
         } else {
           output = "Not running on a cluster nothing to validate";

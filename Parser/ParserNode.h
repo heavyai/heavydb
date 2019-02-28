@@ -1127,17 +1127,35 @@ class OptimizeTableStmt : public DDLStmt {
 
 class ValidateStmt : public DDLStmt {
  public:
-  ValidateStmt(std::string* type, std::list<NameValueAssign*>* o) : type_(type) {
+  ValidateStmt(std::string* type, std::list<NameValueAssign*>* with_opts) : type_(type) {
     if (!type_) {
       throw std::runtime_error("Validation Type is required for VALIDATE command.");
     }
-    if (o) {
-      for (const auto e : *o) {
-        options_.emplace_back(e);
+    std::list<std::unique_ptr<NameValueAssign>> options;
+    if (with_opts) {
+      for (const auto e : *with_opts) {
+        options.emplace_back(e);
       }
-      delete o;
+      delete with_opts;
+
+      for (const auto& opt : options) {
+        if (boost::iequals(*opt->get_name(), "REPAIR_TYPE")) {
+          const auto repair_type =
+              static_cast<const StringLiteral*>(opt->get_value())->get_stringval();
+          CHECK(repair_type);
+          if (boost::iequals(*repair_type, "REMOVE")) {
+            isRepairTypeRemove_ = true;
+          } else {
+            throw std::runtime_error("REPAIR_TYPE must be REMOVE.");
+          }
+        } else {
+          throw std::runtime_error("The only VALIDATE WITH options is REPAIR_TYPE.");
+        }
+      }
     }
   }
+
+  bool isRepairTypeRemove() const { return isRepairTypeRemove_; }
 
   const std::string getType() const { return *(type_.get()); }
 
@@ -1145,7 +1163,7 @@ class ValidateStmt : public DDLStmt {
 
  private:
   std::unique_ptr<std::string> type_;
-  std::list<std::unique_ptr<NameValueAssign>> options_;
+  bool isRepairTypeRemove_ = false;
 };
 
 class RenameTableStmt : public DDLStmt {

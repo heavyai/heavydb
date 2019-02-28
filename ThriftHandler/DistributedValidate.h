@@ -32,25 +32,28 @@ class MapDHandler;
  */
 class DistributedValidate {
  public:
-  DistributedValidate(std::string type,
-                      const Catalog_Namespace::Catalog& cat,
+  DistributedValidate(const std::string type,
+                      const bool is_repair_type_remove,
+                      Catalog_Namespace::Catalog& cat,
                       LeafAggregator& leaf_aggregator,
-                      const TSessionId session,
+                      const Catalog_Namespace::SessionInfo session_info,
                       MapDHandler& mapd_handler)
       : cat_(cat)
       , type_(type)
+      , is_repair_type_remove_(is_repair_type_remove)
       , leaf_aggregator_(leaf_aggregator)
-      , session_(session)
+      , session_info_(session_info)
       , mapd_handler_(mapd_handler) {}
   /**
    * @brief Compares Aggregators and Leaves metatdata reporting what is different.
    */
-  std::string report_differences() const { return nullptr; };
+  std::string validate() const { return nullptr; };
 
  private:
-  const Catalog_Namespace::Catalog& cat_;
+  Catalog_Namespace::Catalog& cat_;
   const std::string type_;
+  const bool is_repair_type_remove_;
   LeafAggregator& leaf_aggregator_;
-  const TSessionId session_;
+  const Catalog_Namespace::SessionInfo session_info_;
   MapDHandler& mapd_handler_;
 };
