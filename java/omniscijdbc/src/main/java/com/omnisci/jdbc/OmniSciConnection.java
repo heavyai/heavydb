@@ -270,6 +270,7 @@ public class OmniSciConnection implements java.sql.Connection {
               (String) this.cP.get(Connection_enums.user_passwd),
               (String) this.cP.get(Connection_enums.db_name));
 
+      catalog = (String) this.cP.get(Connection_enums.db_name);
       logger.debug("Connected session is " + session);
 
     } catch (TTransportException ex) {

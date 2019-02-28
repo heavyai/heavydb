@@ -865,6 +865,14 @@ SQLException - if a database access error occurs
       throw new SQLException("get_tables failed " + ex.toString());
     }
 
+    List<String> views;
+    try {
+      views = con.client.get_views(con.session);
+    } catch (TException ex) {
+      throw new SQLException("get_views failed " + ex.toString());
+    }
+
+
     TTypeInfo strTTI =
             new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
     TColumnType columns[] = {createTColumnType("TABLE_CAT", new TTypeInfo(strTTI)),
@@ -889,23 +897,31 @@ SQLException - if a database access error occurs
       dataMap.put(col.col_name, new ArrayList());
       nullMap.put(col.col_name, new ArrayList());
     }
-
-    // Now add some actual details for table name
-    for (String x : tables) {
-      dataMap.get("TABLE_NAME").add(x);
-      nullMap.get("TABLE_NAME").add(false);
-      nullMap.get("TABLE_SCHEM").add(true);
-      nullMap.get("TABLE_CAT").add(true);
-      dataMap.get("TABLE_TYPE").add("TABLE");
-      nullMap.get("TABLE_TYPE").add(false);
-      nullMap.get("REMARKS").add(true);
-      nullMap.get("TYPE_CAT").add(true);
-      nullMap.get("TYPE_SCHEM").add(true);
-      nullMap.get("TYPE_NAME").add(true);
-      nullMap.get("SELF_REFERENCING_COL_NAME").add(true);
-      nullMap.get("REF_GENERATION").add(true);
+    if (schemaPattern == null || schemaPattern.toLowerCase().equals(con.getCatalog().toLowerCase()))
+    {
+      // Now add some actual details for table name
+      for (String x : tables) {
+        dataMap.get("TABLE_NAME").add(x);
+        nullMap.get("TABLE_NAME").add(false);
+        nullMap.get("TABLE_SCHEM").add(true);
+        nullMap.get("TABLE_CAT").add(true);
+        if ( views.contains(x) == true )
+        {
+          dataMap.get("TABLE_TYPE").add("VIEW");
+        }
+        else
+        {
+          dataMap.get("TABLE_TYPE").add("TABLE");
+        }
+        nullMap.get("TABLE_TYPE").add(false);
+        nullMap.get("REMARKS").add(true);
+        nullMap.get("TYPE_CAT").add(true);
+        nullMap.get("TYPE_SCHEM").add(true);
+        nullMap.get("TYPE_NAME").add(true);
+        nullMap.get("SELF_REFERENCING_COL_NAME").add(true);
+        nullMap.get("REF_GENERATION").add(true);
+      }
     }
-
     List<TColumn> columnsList = new ArrayList(columns.length);
 
     for (TColumnType col : columns) {
@@ -1012,6 +1028,7 @@ SQLException - if a database access error occurs
 
     // Now add some actual details for table name
     dataMap.get("TABLE_TYPE").add("TABLE");
+    dataMap.get("TABLE_TYPE").add("VIEW");
 
     List<TColumn> columnsList = new ArrayList(columns.length);
 
@@ -1239,6 +1256,26 @@ each row is a column description Throws: SQLException - if a database access err
     return new OmniSciResultSet();
   }
 
+  // this method is needed to build an empty resultset with columns names and datatypes
+  public ResultSet getEmptyResultSetWithDesc(TColumnType columns[] ) throws SQLException { // for compatibility and future
+    Map<String, OmniSciData> dataMap = new HashMap(columns.length);
+    List<TColumnType> rowDesc = new ArrayList(columns.length);
+    for (TColumnType col : columns) {
+      rowDesc.add(col);
+      dataMap.put(col.col_name, new OmniSciData(col.col_type.type));
+    }
+    List<TColumn> columnsList = new ArrayList(columns.length);
+    for (TColumnType col : columns) {
+      TColumn schemaCol = dataMap.get(col.col_name).getTColumn();
+      columnsList.add(schemaCol);
+    }
+    TRowSet rowSet = new TRowSet(rowDesc, null, columnsList, true);
+    TQueryResult result = new TQueryResult(rowSet, 0, 0, null);
+    OmniSciResultSet cols = new OmniSciResultSet(result, "getColumns");
+    return cols;
+  }
+
+
   private void tablePermProcess(
           List<String> tables, Map<String, OmniSciData> dataMap, String tableNamePattern)
           throws TException {
@@ -1377,27 +1414,76 @@ each row is a column description Throws: SQLException - if a database access err
   public ResultSet getPrimaryKeys(String catalog, String schema, String table)
           throws SQLException {
     MAPDLOGGER.debug("Entered");
-    return getEmptyResultSet();
+
+      TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
+      TTypeInfo intTTI = new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false, 0, 0, 0);
+      TTypeInfo smallIntTTI = new TTypeInfo(TDatumType.SMALLINT, TEncodingType.NONE, false, false, 0, 0, 0);
+      TColumnType columns[] = {
+      createTColumnType("TABLE_CAT", new TTypeInfo(strTTI)),
+      createTColumnType("TABLE_SCHEM", new TTypeInfo(strTTI)),
+      createTColumnType("TABLE_NAME", new TTypeInfo(strTTI)),
+      createTColumnType("COLUMN_NAME", new TTypeInfo(strTTI)),
+      createTColumnType("KEY_SEQ", new TTypeInfo(smallIntTTI)),
+      createTColumnType("PK_NAME", new TTypeInfo(strTTI))
+    };
+
+    return getEmptyResultSetWithDesc(columns);
   }
 
   @Override
   public ResultSet getImportedKeys(String catalog, String schema, String table)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+      MAPDLOGGER.debug("Entered");
+
+      TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
+      TTypeInfo intTTI = new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false, 0, 0, 0);
+      TTypeInfo smallIntTTI = new TTypeInfo(TDatumType.SMALLINT, TEncodingType.NONE, false, false, 0, 0, 0);
+      TColumnType columns[] = {
+      createTColumnType("PKTABLE_CAT", new TTypeInfo(strTTI)),
+      createTColumnType("PKTABLE_SCHEM", new TTypeInfo(strTTI)),
+      createTColumnType("PKTABLE_NAME", new TTypeInfo(strTTI)),
+      createTColumnType("PKCOLUMN_NAME", new TTypeInfo(strTTI)),
+      createTColumnType("FKTABLE_CAT", new TTypeInfo(strTTI)),
+      createTColumnType("FKTABLE_SCHEM", new TTypeInfo(strTTI)),
+      createTColumnType("FKTABLE_NAME", new TTypeInfo(strTTI)),
+      createTColumnType("FKCOLUMN_NAME", new TTypeInfo(strTTI)),
+      createTColumnType("KEY_SEQ", new TTypeInfo(smallIntTTI)),
+      createTColumnType("UPDATE_RULE", new TTypeInfo(smallIntTTI)),
+      createTColumnType("DELETE_RULE", new TTypeInfo(smallIntTTI)),
+      createTColumnType("FK_NAME", new TTypeInfo(strTTI)),
+      createTColumnType("PK_NAME", new TTypeInfo(strTTI)),
+      createTColumnType("DEFERRABILITY", new TTypeInfo(smallIntTTI))
+    };
+
+    return getEmptyResultSetWithDesc(columns);
   }
 
   @Override
   public ResultSet getExportedKeys(String catalog, String schema, String table)
           throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+
+      TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
+      TTypeInfo intTTI = new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false, 0, 0, 0);
+      TTypeInfo smallIntTTI = new TTypeInfo(TDatumType.SMALLINT, TEncodingType.NONE, false, false, 0, 0, 0);
+      TColumnType columns[] = {
+      createTColumnType("FKTABLE_CAT", new TTypeInfo(strTTI)),
+      createTColumnType("FKTABLE_SCHEM", new TTypeInfo(strTTI)),
+      createTColumnType("FKTABLE_NAME", new TTypeInfo(strTTI)),
+      createTColumnType("FKCOLUMN_NAME", new TTypeInfo(strTTI)),
+      createTColumnType("PKTABLE_CAT", new TTypeInfo(strTTI)),
+      createTColumnType("PKTABLE_SCHEM", new TTypeInfo(strTTI)),
+      createTColumnType("PKTABLE_NAME", new TTypeInfo(strTTI)),
+      createTColumnType("PKCOLUMN_NAME", new TTypeInfo(strTTI)),
+      createTColumnType("KEY_SEQ", new TTypeInfo(smallIntTTI)),
+      createTColumnType("UPDATE_RULE", new TTypeInfo(smallIntTTI)),
+      createTColumnType("DELETE_RULE", new TTypeInfo(smallIntTTI)),
+      createTColumnType("PK_NAME", new TTypeInfo(strTTI)),
+      createTColumnType("FK_NAME", new TTypeInfo(strTTI)),
+      createTColumnType("DEFERRABILITY", new TTypeInfo(smallIntTTI))
+    };
+
+    return getEmptyResultSetWithDesc(columns);
   }
 
   @Override
