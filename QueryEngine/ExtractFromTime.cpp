@@ -24,61 +24,61 @@
 extern "C" NEVER_INLINE DEVICE int32_t extract_hour(const int64_t* tim_p) {
   int64_t days, rem;
   const int64_t lcltime = *tim_p;
-  days = lcltime / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
-  rem = lcltime % SECSPERDAY;
+  days = lcltime / kSecsPerDay - kEpochAdjustedDays;
+  rem = lcltime % kSecsPerDay;
   if (rem < 0) {
-    rem += SECSPERDAY;
+    rem += kSecsPerDay;
     --days;
   }
-  return static_cast<int32_t>(rem / SECSPERHOUR);
+  return static_cast<int32_t>(rem / kSecPerHour);
 }
 
 DEVICE int32_t extract_minute(const int64_t* tim_p) {
   int64_t days, rem;
   const int64_t lcltime = *tim_p;
-  days = lcltime / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
-  rem = lcltime % SECSPERDAY;
+  days = lcltime / kSecsPerDay - kEpochAdjustedDays;
+  rem = lcltime % kSecsPerDay;
   if (rem < 0) {
-    rem += SECSPERDAY;
+    rem += kSecsPerDay;
     --days;
   }
-  rem %= SECSPERHOUR;
-  return static_cast<int32_t>(rem / SECSPERMIN);
+  rem %= kSecPerHour;
+  return static_cast<int32_t>(rem / kSecsPerMin);
 }
 
 DEVICE int32_t extract_second(const int64_t* tim_p) {
   const int64_t lcltime = *tim_p;
-  return static_cast<int32_t>(lcltime % SECSPERMIN);
+  return static_cast<int32_t>(lcltime % kSecsPerMin);
 }
 
 DEVICE int32_t extract_millisecond(const int64_t* tim_p) {
   const int64_t lcltime = *tim_p;
-  return static_cast<int32_t>(lcltime % MILLISECSPERSEC);
+  return static_cast<int32_t>(lcltime % kMilliSecsPerSec);
 }
 
 DEVICE int32_t extract_microsecond(const int64_t* tim_p) {
   const int64_t lcltime = *tim_p;
-  return static_cast<int32_t>(lcltime % MICROSECSPERSEC);
+  return static_cast<int32_t>(lcltime % kMicroSecsPerSec);
 }
 
 DEVICE int32_t extract_nanosecond(const int64_t* tim_p) {
   const int64_t lcltime = *tim_p;
-  return static_cast<int32_t>(lcltime % NANOSECSPERSEC);
+  return static_cast<int32_t>(lcltime % kNanoSecsPerSec);
 }
 
 DEVICE int32_t extract_dow(const int64_t* tim_p) {
   int64_t days, rem;
   int32_t weekday;
   const int64_t lcltime = *tim_p;
-  days = lcltime / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
-  rem = lcltime % SECSPERDAY;
+  days = lcltime / kSecsPerDay - kEpochAdjustedDays;
+  rem = lcltime % kSecsPerDay;
   if (rem < 0) {
-    rem += SECSPERDAY;
+    rem += kSecsPerDay;
     --days;
   }
 
-  if ((weekday = ((ADJUSTED_EPOCH_WDAY + days) % DAYSPERWEEK)) < 0) {
-    weekday += DAYSPERWEEK;
+  if ((weekday = ((kEpochAdjustedWDay + days) % kDaysPerWeek)) < 0) {
+    weekday += kDaysPerWeek;
   }
   return weekday;
 }
@@ -86,38 +86,37 @@ DEVICE int32_t extract_dow(const int64_t* tim_p) {
 DEVICE int32_t extract_quarterday(const int64_t* tim_p) {
   int64_t quarterdays;
   const int64_t lcltime = *tim_p;
-  quarterdays = lcltime / SECSPERQUARTERDAY;
+  quarterdays = lcltime / kSecsPerQuarterDay;
   return static_cast<int32_t>(quarterdays % 4) + 1;
 }
 
 DEVICE int32_t extract_month_fast(const int64_t* tim_p) {
-  STATIC_QUAL const uint32_t cumulative_month_epoch_starts[MONSPERYEAR] = {0,
-                                                                           2678400,
-                                                                           5270400,
-                                                                           7948800,
-                                                                           10540800,
-                                                                           13219200,
-                                                                           15897600,
-                                                                           18489600,
-                                                                           21168000,
-                                                                           23760000,
-                                                                           26438400,
-                                                                           29116800};
+  STATIC_QUAL const uint32_t cumulative_month_epoch_starts[kMonsPerYear] = {0,
+                                                                            2678400,
+                                                                            5270400,
+                                                                            7948800,
+                                                                            10540800,
+                                                                            13219200,
+                                                                            15897600,
+                                                                            18489600,
+                                                                            21168000,
+                                                                            23760000,
+                                                                            26438400,
+                                                                            29116800};
   const int64_t lcltime = *tim_p;
-  uint32_t seconds_march_1900 =
-      lcltime + EPOCH_OFFSET_YEAR_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900;
-  uint32_t seconds_past_4year_period = seconds_march_1900 % SECONDS_PER_4_YEAR_CYCLE;
+  uint32_t seconds_march_1900 = lcltime + kEpochOffsetYear1900 - kSecsJanToMar1900;
+  uint32_t seconds_past_4year_period = seconds_march_1900 % kSecondsPer4YearCycle;
   uint32_t year_seconds_past_4year_period =
-      (seconds_past_4year_period / SECONDS_PER_NON_LEAP_YEAR) * SECONDS_PER_NON_LEAP_YEAR;
+      (seconds_past_4year_period / kSecondsPerNonLeapYear) * kSecondsPerNonLeapYear;
   if (seconds_past_4year_period >=
-      SECONDS_PER_4_YEAR_CYCLE - SECONDS_PER_DAY) {  // if we are in Feb 29th
-    year_seconds_past_4year_period -= SECONDS_PER_NON_LEAP_YEAR;
+      kSecondsPer4YearCycle - kSecsPerDay) {  // if we are in Feb 29th
+    year_seconds_past_4year_period -= kSecondsPerNonLeapYear;
   }
   uint32_t seconds_past_march =
       seconds_past_4year_period - year_seconds_past_4year_period;
-  uint32_t month = seconds_past_march /
-                   (30 * SECONDS_PER_DAY);  // Will make the correct month either be the
-                                            // guessed month or month before
+  uint32_t month =
+      seconds_past_march / (30 * kSecsPerDay);  // Will make the correct month either be
+                                                // the guessed month or month before
   month = month <= 11 ? month : 11;
   if (cumulative_month_epoch_starts[month] > seconds_past_march) {
     month--;
@@ -131,20 +130,18 @@ DEVICE int32_t extract_quarter_fast(const int64_t* tim_p) {
   STATIC_QUAL const uint32_t cumulative_quarter_epoch_starts_leap_year[4] = {
       0, 7862400, 15724800, 23673600};
   const int64_t lcltime = *tim_p;
-  uint32_t seconds_1900 = lcltime + EPOCH_OFFSET_YEAR_1900;
-  uint32_t leap_years =
-      (seconds_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900) / SECONDS_PER_4_YEAR_CYCLE;
-  uint32_t year =
-      (seconds_1900 - leap_years * SECONDS_PER_DAY) / SECONDS_PER_NON_LEAP_YEAR;
+  uint32_t seconds_1900 = lcltime + kEpochOffsetYear1900;
+  uint32_t leap_years = (seconds_1900 - kSecsJanToMar1900) / kSecondsPer4YearCycle;
+  uint32_t year = (seconds_1900 - leap_years * kSecsPerDay) / kSecondsPerNonLeapYear;
   uint32_t base_year_leap_years = (year - 1) / 4;
   uint32_t base_year_seconds =
-      year * SECONDS_PER_NON_LEAP_YEAR + base_year_leap_years * SECONDS_PER_DAY;
+      year * kSecondsPerNonLeapYear + base_year_leap_years * kSecsPerDay;
   bool is_leap_year = year % 4 == 0 && year != 0;
   const uint32_t* quarter_offsets = is_leap_year
                                         ? cumulative_quarter_epoch_starts_leap_year
                                         : cumulative_quarter_epoch_starts;
   uint32_t partial_year_seconds = seconds_1900 % base_year_seconds;
-  uint32_t quarter = partial_year_seconds / (90 * SECONDS_PER_DAY);
+  uint32_t quarter = partial_year_seconds / (90 * kSecsPerDay);
   quarter = quarter <= 3 ? quarter : 3;
   if (quarter_offsets[quarter] > partial_year_seconds) {
     quarter--;
@@ -154,16 +151,15 @@ DEVICE int32_t extract_quarter_fast(const int64_t* tim_p) {
 
 DEVICE int32_t extract_year_fast(const int64_t* tim_p) {
   const int64_t lcltime = *tim_p;
-  uint32_t seconds_1900 = lcltime + EPOCH_OFFSET_YEAR_1900;
-  uint32_t leap_years =
-      (seconds_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900) / SECONDS_PER_4_YEAR_CYCLE;
+  uint32_t seconds_1900 = lcltime + kEpochOffsetYear1900;
+  uint32_t leap_years = (seconds_1900 - kSecsJanToMar1900) / kSecondsPer4YearCycle;
   uint32_t year =
-      (seconds_1900 - leap_years * SECONDS_PER_DAY) / SECONDS_PER_NON_LEAP_YEAR + 1900;
+      (seconds_1900 - leap_years * kSecsPerDay) / kSecondsPerNonLeapYear + 1900;
   return year;
 }
 
 DEVICE tm* gmtime_r_newlib(const int64_t* tim_p, tm* res) {
-  const int32_t month_lengths[2][MONSPERYEAR] = {
+  const int32_t month_lengths[2][kMonsPerYear] = {
       {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
       {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
   int64_t days, rem;
@@ -173,49 +169,49 @@ DEVICE tm* gmtime_r_newlib(const int64_t* tim_p, tm* res) {
   int32_t yearleap;
   const int32_t* ip;
 
-  days = lcltime / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
-  rem = lcltime % SECSPERDAY;
+  days = lcltime / kSecsPerDay - kEpochAdjustedDays;
+  rem = lcltime % kSecsPerDay;
   if (rem < 0) {
-    rem += SECSPERDAY;
+    rem += kSecsPerDay;
     --days;
   }
 
   /* compute hour, min, and sec */
-  res->tm_hour = static_cast<int32_t>(rem / SECSPERHOUR);
-  rem %= SECSPERHOUR;
-  res->tm_min = static_cast<int32_t>(rem / SECSPERMIN);
-  res->tm_sec = static_cast<int32_t>(rem % SECSPERMIN);
+  res->tm_hour = static_cast<int32_t>(rem / kSecPerHour);
+  rem %= kSecPerHour;
+  res->tm_min = static_cast<int32_t>(rem / kSecsPerMin);
+  res->tm_sec = static_cast<int32_t>(rem % kSecsPerMin);
 
   /* compute day of week */
-  if ((weekday = ((ADJUSTED_EPOCH_WDAY + days) % DAYSPERWEEK)) < 0) {
-    weekday += DAYSPERWEEK;
+  if ((weekday = ((kEpochAdjustedWDay + days) % kDaysPerWeek)) < 0) {
+    weekday += kDaysPerWeek;
   }
   res->tm_wday = weekday;
 
   /* compute year & day of year */
-  years400 = days / DAYS_PER_400_YEARS;
-  days -= years400 * DAYS_PER_400_YEARS;
+  years400 = days / kDaysPer400Years;
+  days -= years400 * kDaysPer400Years;
   /* simplify by making the values positive */
   if (days < 0) {
-    days += DAYS_PER_400_YEARS;
+    days += kDaysPer400Years;
     --years400;
   }
 
-  years100 = days / DAYS_PER_100_YEARS;
+  years100 = days / kDaysPer100Years;
   if (years100 == 4) { /* required for proper day of year calculation */
     --years100;
   }
-  days -= years100 * DAYS_PER_100_YEARS;
-  years4 = days / DAYS_PER_4_YEARS;
-  days -= years4 * DAYS_PER_4_YEARS;
-  remainingyears = days / DAYS_PER_YEAR;
+  days -= years100 * kDaysPer100Years;
+  years4 = days / kDaysPer4Years;
+  days -= years4 * kDaysPer4Years;
+  remainingyears = days / kDaysPerYear;
   if (remainingyears == 4) { /* required for proper day of year calculation */
     --remainingyears;
   }
-  days -= remainingyears * DAYS_PER_YEAR;
+  days -= remainingyears * kDaysPerYear;
 
   year =
-      ADJUSTED_EPOCH_YEAR + years400 * 400 + years100 * 100 + years4 * 4 + remainingyears;
+      kEpochAdjustedYears + years400 * 400 + years100 * 100 + years4 * 4 + remainingyears;
 
   /* If remainingyears is zero, it means that the years were completely
    * "consumed" by modulo calculations by 400, 100 and 4, so the year is:
@@ -230,13 +226,13 @@ DEVICE tm* gmtime_r_newlib(const int64_t* tim_p, tm* res) {
   yearleap = remainingyears == 0 && (years4 != 0 || years100 == 0);
 
   /* adjust back to 1st January */
-  yearday = days + DAYS_IN_JANUARY + DAYS_IN_FEBRUARY + yearleap;
-  if (yearday >= DAYS_PER_YEAR + yearleap) {
-    yearday -= DAYS_PER_YEAR + yearleap;
+  yearday = days + kDaysInJanuary + kDaysInFebruary + yearleap;
+  if (yearday >= kDaysPerYear + yearleap) {
+    yearday -= kDaysPerYear + yearleap;
     ++year;
   }
   res->tm_yday = yearday;
-  res->tm_year = year - YEAR_BASE;
+  res->tm_year = year - kYearBase;
 
   /* Because "days" is the number of days since 1st March, the additional leap
    * day (29th of February) is the last possible day, so it doesn't matter much
@@ -245,7 +241,7 @@ DEVICE tm* gmtime_r_newlib(const int64_t* tim_p, tm* res) {
   month = 2;
   while (days >= ip[month]) {
     days -= ip[month];
-    if (++month >= MONSPERYEAR) {
+    if (++month >= kMonsPerYear) {
       month = 0;
     }
   }
@@ -285,19 +281,19 @@ extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field,
       return (dow == 0 ? 7 : dow);
     }
     case kMONTH: {
-      if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
+      if (timeval >= 0L && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
         return extract_month_fast(&timeval);
       }
       break;
     }
     case kQUARTER: {
-      if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
+      if (timeval >= 0L && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
         return extract_quarter_fast(&timeval);
       }
       break;
     }
     case kYEAR: {
-      if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
+      if (timeval >= 0L && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
         return extract_year_fast(&timeval);
       }
       break;
@@ -350,24 +346,24 @@ extern "C" DEVICE int64_t ExtractFromTimeHighPrecision(ExtractField field,
   switch (field) {
     case kMILLISECOND: {
       int64_t mtime = timeval;
-      if (scale == MICROSECSPERSEC) {
-        mtime /= MILLISECSPERSEC;
-      } else if (scale == NANOSECSPERSEC) {
-        mtime /= MICROSECSPERSEC;
+      if (scale == kMicroSecsPerSec) {
+        mtime /= kMilliSecsPerSec;
+      } else if (scale == kNanoSecsPerSec) {
+        mtime /= kMicroSecsPerSec;
       }
       return extract_millisecond(&mtime);
     }
     case kMICROSECOND: {
       int64_t mtime = timeval;
-      if (scale == NANOSECSPERSEC) {
-        mtime /= MILLISECSPERSEC;
-      } else if (scale == MILLISECSPERSEC) {
+      if (scale == kNanoSecsPerSec) {
+        mtime /= kMilliSecsPerSec;
+      } else if (scale == kMilliSecsPerSec) {
         return 0;
       }
       return extract_microsecond(&mtime);
     }
     case kNANOSECOND: {
-      if (scale == MILLISECSPERSEC || scale == MICROSECSPERSEC) {
+      if (scale == kMilliSecsPerSec || scale == kMicroSecsPerSec) {
         return 0;
       } else {
         return extract_nanosecond(&timeval);

@@ -1044,7 +1044,7 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::get(
                       ? ExtractFromTimeHighPrecision(
                             fieldno,
                             c->get_constval().bigintval,
-                            get_timestamp_precision_scale(
+                            DateTimeUtils::get_timestamp_precision_scale(
                                 from_expr->get_type_info().get_dimension()))
                       : ExtractFromTime(fieldno, c->get_constval().bigintval);
     c->set_constval(d);
@@ -1191,12 +1191,13 @@ std::shared_ptr<Analyzer::Expr> DatetruncExpr::get(
   const auto date_trunc_ti = from_expr->get_type_info();
   if (c != nullptr) {
     Datum d;
-    d.bigintval = date_trunc_ti.is_high_precision_timestamp()
-                      ? DateTruncateHighPrecision(
-                            fieldno,
-                            c->get_constval().bigintval,
-                            get_timestamp_precision_scale(date_trunc_ti.get_dimension()))
-                      : DateTruncate(fieldno, c->get_constval().bigintval);
+    d.bigintval =
+        date_trunc_ti.is_high_precision_timestamp()
+            ? DateTruncateHighPrecision(fieldno,
+                                        c->get_constval().bigintval,
+                                        DateTimeUtils::get_timestamp_precision_scale(
+                                            date_trunc_ti.get_dimension()))
+            : DateTruncate(fieldno, c->get_constval().bigintval);
     c->set_constval(d);
     c->set_type_info(ti);
     return c;

@@ -98,7 +98,7 @@ llvm::Value* Executor::codegenCastTimestampToDate(llvm::Value* ts_lv,
     static const std::string hptodate_fname = "DateTruncateHighPrecisionToDate";
     static const std::string hptodate_null_fname =
         "DateTruncateHighPrecisionToDateNullable";
-    datetrunc_args.push_back(ll_int(get_timestamp_precision_scale(dimen)));
+    datetrunc_args.push_back(ll_int(DateTimeUtils::get_timestamp_precision_scale(dimen)));
     if (nullable) {
       datetrunc_args.push_back(inlineIntNull(SQLTypeInfo(kBIGINT, false)));
     }
@@ -130,8 +130,8 @@ llvm::Value* Executor::codegenCastBetweenTimestamps(llvm::Value* ts_lv,
   static const std::string sdn_null_fname{"DateTruncateAlterPrecisionScaleDownNullable"};
   std::vector<llvm::Value*> f_args{
       ts_lv,
-      ll_int(static_cast<int64_t>(
-          get_timestamp_precision_scale(abs(operand_dimen - target_dimen))))};
+      ll_int(static_cast<int64_t>(DateTimeUtils::get_timestamp_precision_scale(
+          abs(operand_dimen - target_dimen))))};
   if (nullable) {
     f_args.push_back(inlineIntNull(SQLTypeInfo(kBIGINT, false)));
   }

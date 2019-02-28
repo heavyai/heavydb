@@ -79,12 +79,12 @@ time_t TimeGM::parse_meridians(const time_t& timeval,
       boost::iequals(std::string(meridies), "p.m.") ||
       boost::iequals(std::string(meridies), "p.m")) {
     return hour == 12 ? timeval
-                      : timeval + SECSPERHALFDAY *
+                      : timeval + kSecsPerHalfDay *
                                       static_cast<int64_t>(pow(10, ti.get_dimension()));
   } else if (boost::iequals(std::string(meridies), "am") ||
              boost::iequals(std::string(meridies), "a.m.") ||
              boost::iequals(std::string(meridies), "a.m")) {
-    return hour == 12 ? timeval - SECSPERHALFDAY *
+    return hour == 12 ? timeval - kSecsPerHalfDay *
                                       static_cast<int64_t>(pow(10, ti.get_dimension()))
                       : timeval;
   } else {

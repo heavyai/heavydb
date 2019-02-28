@@ -1009,7 +1009,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
     throw std::runtime_error("DateAdd operation not supported for TIME.");
   }
   const auto& field = to_dateadd_field(*timeunit_lit->get_constval().stringval);
-  if (!datetime_ti.is_high_precision_timestamp() && is_subsecond_dateadd_field(field)) {
+  if (!datetime_ti.is_high_precision_timestamp() &&
+      DateTimeUtils::is_subsecond_dateadd_field(field)) {
     // Scale the number to get value in seconds
     const auto bigint_ti = SQLTypeInfo(kBIGINT, false);
     cast_number_units = makeExpr<Analyzer::BinOper>(
@@ -1017,12 +1018,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
         kDIVIDE,
         kONE,
         cast_number_units,
-        makeNumericConstant(bigint_ti, get_dateadd_timestamp_precision_scale(field)));
+        makeNumericConstant(bigint_ti,
+                            DateTimeUtils::get_dateadd_timestamp_precision_scale(field)));
     cast_number_units = fold_expr(cast_number_units.get());
   }
-  if (datetime_ti.is_high_precision_timestamp() && is_subsecond_dateadd_field(field)) {
-    const auto oper_scale =
-        get_dateadd_high_precision_adjusted_scale(field, datetime_ti.get_dimension());
+  if (datetime_ti.is_high_precision_timestamp() &&
+      DateTimeUtils::is_subsecond_dateadd_field(field)) {
+    const auto oper_scale = DateTimeUtils::get_dateadd_high_precision_adjusted_scale(
+        field, datetime_ti.get_dimension());
     if (oper_scale.first) {
       // scale number to desired precision
       const auto bigint_ti = SQLTypeInfo(kBIGINT, false);

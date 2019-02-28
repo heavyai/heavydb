@@ -39,7 +39,7 @@ llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr,
   if (extract_expr_ti.get_dimension() > 0) {
     extract_fname += "HighPrecision";
     extract_args.push_back(ll_int(static_cast<int64_t>(
-        get_timestamp_precision_scale(extract_expr_ti.get_dimension()))));
+        DateTimeUtils::get_timestamp_precision_scale(extract_expr_ti.get_dimension()))));
   }
   if (!extract_expr_ti.get_notnull()) {
     extract_args.push_back(inlineIntNull(extract_expr_ti));
@@ -64,7 +64,7 @@ llvm::Value* Executor::codegen(const Analyzer::DateaddExpr* dateadd_expr,
   if (dateadd_expr_ti.is_high_precision_timestamp()) {
     dateadd_fname += "HighPrecision";
     dateadd_args.push_back(ll_int(static_cast<int64_t>(
-        get_timestamp_precision_scale(dateadd_expr_ti.get_dimension()))));
+        DateTimeUtils::get_timestamp_precision_scale(dateadd_expr_ti.get_dimension()))));
   }
   if (!datetime_ti.get_notnull()) {
     dateadd_args.push_back(inlineIntNull(datetime_ti));
@@ -89,12 +89,14 @@ llvm::Value* Executor::codegen(const Analyzer::DatediffExpr* datediff_expr,
     const auto adj_dimen = end_ti.get_dimension() - start_ti.get_dimension();
     datediff_fname += "HighPrecision";
     datediff_args.push_back(ll_int(static_cast<int32_t>(adj_dimen)));
+    datediff_args.push_back(ll_int(static_cast<int64_t>(
+        DateTimeUtils::get_timestamp_precision_scale(abs(adj_dimen)))));
     datediff_args.push_back(
-        ll_int(static_cast<int64_t>(get_timestamp_precision_scale(abs(adj_dimen)))));
-    datediff_args.push_back(ll_int(static_cast<int64_t>(get_timestamp_precision_scale(
-        adj_dimen < 0 ? end_ti.get_dimension() : start_ti.get_dimension()))));
-    datediff_args.push_back(ll_int(static_cast<int64_t>(get_timestamp_precision_scale(
-        adj_dimen > 0 ? end_ti.get_dimension() : start_ti.get_dimension()))));
+        ll_int(static_cast<int64_t>(DateTimeUtils::get_timestamp_precision_scale(
+            adj_dimen < 0 ? end_ti.get_dimension() : start_ti.get_dimension()))));
+    datediff_args.push_back(
+        ll_int(static_cast<int64_t>(DateTimeUtils::get_timestamp_precision_scale(
+            adj_dimen > 0 ? end_ti.get_dimension() : start_ti.get_dimension()))));
   }
   const auto& ret_ti = datediff_expr->get_type_info();
   if (!start_ti.get_notnull() || !end_ti.get_notnull()) {
@@ -114,8 +116,9 @@ llvm::Value* Executor::codegen(const Analyzer::DatetruncExpr* datetrunc_expr,
       ll_int(static_cast<int32_t>(datetrunc_expr->get_field())), from_expr};
   std::string datetrunc_fname{"DateTruncate"};
   if (datetrunc_expr_ti.get_dimension() > 0) {
-    datetrunc_args.push_back(ll_int(static_cast<int64_t>(
-        get_timestamp_precision_scale(datetrunc_expr_ti.get_dimension()))));
+    datetrunc_args.push_back(
+        ll_int(static_cast<int64_t>(DateTimeUtils::get_timestamp_precision_scale(
+            datetrunc_expr_ti.get_dimension()))));
     datetrunc_fname += "HighPrecision";
   }
   if (!datetrunc_expr_ti.get_notnull()) {

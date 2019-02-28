@@ -22,12 +22,12 @@
 namespace DateConverters {
 
 inline int64_t get_epoch_days_from_seconds(const int64_t seconds) {
-  return (seconds < 0 && seconds % SECSPERDAY != 0) ? (seconds / SECSPERDAY) - 1
-                                                    : seconds / SECSPERDAY;
+  return (seconds < 0 && seconds % kSecsPerDay != 0) ? (seconds / kSecsPerDay) - 1
+                                                     : seconds / kSecsPerDay;
 }
 
 inline int64_t get_epoch_seconds_from_days(const int64_t days) {
-  return days * SECSPERDAY;
+  return days * kSecsPerDay;
 }
 
 }  // namespace DateConverters

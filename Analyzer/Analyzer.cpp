@@ -1077,21 +1077,22 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
         type_info.is_high_precision_timestamp()
             ? DateTruncateHighPrecisionToDate(
                   constval.bigintval,
-                  get_timestamp_precision_scale(type_info.get_dimension()))
+                  DateTimeUtils::get_timestamp_precision_scale(type_info.get_dimension()))
             : DateTruncate(dtDAY, constval.bigintval);
     type_info = new_type_info;
   } else if ((type_info.get_type() == kTIMESTAMP || type_info.get_type() == kDATE) &&
              new_type_info.get_type() == kTIMESTAMP) {
     const auto dimen = (type_info.get_type() == kDATE) ? 0 : type_info.get_dimension();
     if (dimen != new_type_info.get_dimension()) {
-      constval.bigintval =
-          dimen < new_type_info.get_dimension()
-              ? DateTruncateAlterPrecisionScaleUp(
-                    constval.bigintval,
-                    get_timestamp_precision_scale(new_type_info.get_dimension() - dimen))
-              : DateTruncateAlterPrecisionScaleDown(
-                    constval.bigintval,
-                    get_timestamp_precision_scale(dimen - new_type_info.get_dimension()));
+      constval.bigintval = dimen < new_type_info.get_dimension()
+                               ? DateTruncateAlterPrecisionScaleUp(
+                                     constval.bigintval,
+                                     DateTimeUtils::get_timestamp_precision_scale(
+                                         new_type_info.get_dimension() - dimen))
+                               : DateTruncateAlterPrecisionScaleDown(
+                                     constval.bigintval,
+                                     DateTimeUtils::get_timestamp_precision_scale(
+                                         dimen - new_type_info.get_dimension()));
     }
     type_info = new_type_info;
   } else if (new_type_info.is_array() && type_info.is_array()) {

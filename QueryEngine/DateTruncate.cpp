@@ -31,9 +31,9 @@ extern "C" NEVER_INLINE DEVICE int64_t create_epoch(int64_t year) {
   // year
   // use 2001 epoch time 31 March as start
 
-  int64_t new_time = EPOCH_ADJUSTMENT_DAYS * SECSPERDAY;
+  int64_t new_time = kEpochAdjustedDays * kSecsPerDay;
   bool forward = true;
-  int32_t years_offset = year - ADJUSTED_EPOCH_YEAR;
+  int32_t years_offset = year - kEpochAdjustedYears;
   // convert year_offset to positive
   if (years_offset < 0) {
     forward = false;
@@ -50,16 +50,16 @@ extern "C" NEVER_INLINE DEVICE int64_t create_epoch(int64_t year) {
 
   // get new date I know the final year will never be a leap year
   if (forward) {
-    new_time += (year400 * DAYS_PER_400_YEARS + year100 * DAYS_PER_100_YEARS +
-                 year4 * DAYS_PER_4_YEARS + years_remaining * DAYS_PER_YEAR -
-                 DAYS_IN_JANUARY - DAYS_IN_FEBRUARY) *
-                SECSPERDAY;
+    new_time += (year400 * kDaysPer400Years + year100 * kDaysPer100Years +
+                 year4 * kDaysPer4Years + years_remaining * kDaysPerYear -
+                 kDaysInJanuary - kDaysInFebruary) *
+                kSecsPerDay;
   } else {
-    new_time -= (year400 * DAYS_PER_400_YEARS + year100 * DAYS_PER_100_YEARS +
-                 year4 * DAYS_PER_4_YEARS + years_remaining * DAYS_PER_YEAR +
+    new_time -= (year400 * kDaysPer400Years + year100 * kDaysPer100Years +
+                 year4 * kDaysPer4Years + years_remaining * kDaysPerYear +
                  // one more day for leap year of 2000 when going backward;
-                 1 + DAYS_IN_JANUARY + DAYS_IN_FEBRUARY) *
-                SECSPERDAY;
+                 1 + kDaysInJanuary + kDaysInFebruary) *
+                kSecsPerDay;
   };
 
   return new_time;
@@ -70,22 +70,22 @@ extern "C" NEVER_INLINE DEVICE int64_t create_epoch(int64_t year) {
  */
 extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
                                                     const int64_t timeval) {
-  STATIC_QUAL const int32_t month_lengths[2][MONSPERYEAR] = {
+  STATIC_QUAL const int32_t month_lengths[2][kMonsPerYear] = {
       {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
       {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
 
-  STATIC_QUAL const uint32_t cumulative_month_epoch_starts[MONSPERYEAR] = {0,
-                                                                           2678400,
-                                                                           5270400,
-                                                                           7948800,
-                                                                           10540800,
-                                                                           13219200,
-                                                                           15897600,
-                                                                           18489600,
-                                                                           21168000,
-                                                                           23760000,
-                                                                           26438400,
-                                                                           29116800};
+  STATIC_QUAL const uint32_t cumulative_month_epoch_starts[kMonsPerYear] = {0,
+                                                                            2678400,
+                                                                            5270400,
+                                                                            7948800,
+                                                                            10540800,
+                                                                            13219200,
+                                                                            15897600,
+                                                                            18489600,
+                                                                            21168000,
+                                                                            23760000,
+                                                                            26438400,
+                                                                            29116800};
   STATIC_QUAL const uint32_t cumulative_quarter_epoch_starts[4] = {
       0, 7776000, 15638400, 23587200};
   STATIC_QUAL const uint32_t cumulative_quarter_epoch_starts_leap_year[4] = {
@@ -98,128 +98,123 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
       // precision in seconds
       return timeval;
     case dtMINUTE: {
-      int64_t ret = (timeval / SECSPERMIN) * SECSPERMIN;
+      int64_t ret = (timeval / kSecsPerMin) * kSecsPerMin;
       // in the case of a negative time we still want to push down so need to push
       // one
       // more
       if (ret < 0) {
         {
-          ret -= SECSPERMIN;
+          ret -= kSecsPerMin;
         }
       }
       return ret;
     }
     case dtHOUR: {
-      int64_t ret = (timeval / SECSPERHOUR) * SECSPERHOUR;
+      int64_t ret = (timeval / kSecPerHour) * kSecPerHour;
       // in the case of a negative time we still want to push down so need to push
       // one
       // more
       if (ret < 0) {
         {
-          ret -= SECSPERHOUR;
+          ret -= kSecPerHour;
         }
       }
       return ret;
     }
     case dtQUARTERDAY: {
-      int64_t ret = (timeval / SECSPERQUARTERDAY) * SECSPERQUARTERDAY;
+      int64_t ret = (timeval / kSecsPerQuarterDay) * kSecsPerQuarterDay;
       // in the case of a negative time we still want to push down so need to push
       // one
       // more
       if (ret < 0) {
         {
-          ret -= SECSPERQUARTERDAY;
+          ret -= kSecsPerQuarterDay;
         }
       }
       return ret;
     }
     case dtDAY: {
-      int64_t ret = (timeval / SECSPERDAY) * SECSPERDAY;
+      int64_t ret = (timeval / kSecsPerDay) * kSecsPerDay;
       // in the case of a negative time we still want to push down so need to push
       // one
       // more
       if (ret < 0) {
         {
-          ret -= SECSPERDAY;
+          ret -= kSecsPerDay;
         }
       }
       return ret;
     }
     case dtWEEK: {
-      int64_t day = (timeval / SECSPERDAY) * SECSPERDAY;
+      int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
       if (day < 0) {
         {
-          day -= SECSPERDAY;
+          day -= kSecsPerDay;
         }
       }
       int32_t dow = extract_dow(&day);
-      return day - (dow * SECSPERDAY);
+      return day - (dow * kSecsPerDay);
     }
     case dtMONTH: {
-      if (timeval >= 0L && timeval <= UINT32_MAX - (EPOCH_OFFSET_YEAR_1900)) {
-        uint32_t seconds_march_1900 =
-            timeval + EPOCH_OFFSET_YEAR_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900;
-        uint32_t seconds_past_4year_period =
-            seconds_march_1900 % SECONDS_PER_4_YEAR_CYCLE;
+      if (timeval >= 0L && timeval <= UINT32_MAX - (kEpochOffsetYear1900)) {
+        uint32_t seconds_march_1900 = timeval + kEpochOffsetYear1900 - kSecsJanToMar1900;
+        uint32_t seconds_past_4year_period = seconds_march_1900 % kSecondsPer4YearCycle;
         uint32_t four_year_period_seconds =
-            (seconds_march_1900 / SECONDS_PER_4_YEAR_CYCLE) * SECONDS_PER_4_YEAR_CYCLE;
+            (seconds_march_1900 / kSecondsPer4YearCycle) * kSecondsPer4YearCycle;
         uint32_t year_seconds_past_4year_period =
-            (seconds_past_4year_period / SECONDS_PER_NON_LEAP_YEAR) *
-            SECONDS_PER_NON_LEAP_YEAR;
+            (seconds_past_4year_period / kSecondsPerNonLeapYear) * kSecondsPerNonLeapYear;
         if (seconds_past_4year_period >=
-            SECONDS_PER_4_YEAR_CYCLE - SECONDS_PER_DAY) {  // if we are in Feb 29th
-          year_seconds_past_4year_period -= SECONDS_PER_NON_LEAP_YEAR;
+            kSecondsPer4YearCycle - kSecsPerDay) {  // if we are in Feb 29th
+          year_seconds_past_4year_period -= kSecondsPerNonLeapYear;
         }
         uint32_t seconds_past_march =
             seconds_past_4year_period - year_seconds_past_4year_period;
         uint32_t month = seconds_past_march /
-                         (30 * SECONDS_PER_DAY);  // Will make the correct month either be
-                                                  // the guessed month or month before
+                         (30 * kSecsPerDay);  // Will make the correct month either be
+                                              // the guessed month or month before
         month = month <= 11 ? month : 11;
         if (cumulative_month_epoch_starts[month] > seconds_past_march) {
           month--;
         }
         return (four_year_period_seconds + year_seconds_past_4year_period +
-                cumulative_month_epoch_starts[month] - EPOCH_OFFSET_YEAR_1900 +
-                SECONDS_FROM_JAN_1900_TO_MARCH_1900);
+                cumulative_month_epoch_starts[month] - kEpochOffsetYear1900 +
+                kSecsJanToMar1900);
       }
       break;
     }
     case dtQUARTER: {
-      if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
-        uint32_t seconds_1900 = timeval + EPOCH_OFFSET_YEAR_1900;
-        uint32_t leap_years = (seconds_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900) /
-                              SECONDS_PER_4_YEAR_CYCLE;
+      if (timeval >= 0L && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
+        uint32_t seconds_1900 = timeval + kEpochOffsetYear1900;
+        uint32_t leap_years = (seconds_1900 - kSecsJanToMar1900) / kSecondsPer4YearCycle;
         uint32_t year =
-            (seconds_1900 - leap_years * SECONDS_PER_DAY) / SECONDS_PER_NON_LEAP_YEAR;
+            (seconds_1900 - leap_years * kSecsPerDay) / kSecondsPerNonLeapYear;
         uint32_t base_year_leap_years = (year - 1) / 4;
         uint32_t base_year_seconds =
-            year * SECONDS_PER_NON_LEAP_YEAR + base_year_leap_years * SECONDS_PER_DAY;
+            year * kSecondsPerNonLeapYear + base_year_leap_years * kSecsPerDay;
         bool is_leap_year = year % 4 == 0 && year != 0;
         const uint32_t* quarter_offsets = is_leap_year
                                               ? cumulative_quarter_epoch_starts_leap_year
                                               : cumulative_quarter_epoch_starts;
         uint32_t partial_year_seconds = seconds_1900 % base_year_seconds;
-        uint32_t quarter = partial_year_seconds / (90 * SECONDS_PER_DAY);
+        uint32_t quarter = partial_year_seconds / (90 * kSecsPerDay);
         quarter = quarter <= 3 ? quarter : 3;
         if (quarter_offsets[quarter] > partial_year_seconds) {
           quarter--;
         }
         return (static_cast<int64_t>(base_year_seconds) + quarter_offsets[quarter] -
-                EPOCH_OFFSET_YEAR_1900);
+                kEpochOffsetYear1900);
       }
       break;
     }
     case dtYEAR: {
-      if (timeval >= 0L && timeval <= UINT32_MAX - EPOCH_OFFSET_YEAR_1900) {
-        uint32_t seconds_1900 = static_cast<int64_t>(timeval) + EPOCH_OFFSET_YEAR_1900;
-        uint32_t leap_years = (seconds_1900 - SECONDS_FROM_JAN_1900_TO_MARCH_1900) /
-                              SECONDS_PER_4_YEAR_CYCLE;
+      if (timeval >= 0L && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
+        uint32_t seconds_1900 = static_cast<int64_t>(timeval) + kEpochOffsetYear1900;
+        uint32_t leap_years = (seconds_1900 - kSecsJanToMar1900) / kSecondsPer4YearCycle;
         uint32_t year =
-            (seconds_1900 - leap_years * SECONDS_PER_DAY) / SECONDS_PER_NON_LEAP_YEAR;
+            (seconds_1900 - leap_years * kSecsPerDay) / kSecondsPerNonLeapYear;
         uint32_t base_year_leap_years = (year - 1) / 4;
-        return (static_cast<int64_t>(year) * SECONDS_PER_NON_LEAP_YEAR +
-                base_year_leap_years * SECONDS_PER_DAY - EPOCH_OFFSET_YEAR_1900);
+        return (static_cast<int64_t>(year) * kSecondsPerNonLeapYear +
+                base_year_leap_years * kSecsPerDay - kEpochOffsetYear1900);
       }
       break;
     }
@@ -234,33 +229,33 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
   switch (field) {
     case dtMONTH: {
       // clear the time
-      int64_t day = (timeval / SECSPERDAY) * SECSPERDAY;
+      int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
       if (day < 0) {
         {
-          day -= SECSPERDAY;
+          day -= kSecsPerDay;
         }
       }
       // calculate the day of month offset
       int32_t dom = tm_struct.tm_mday;
-      return (day - (static_cast<int64_t>(dom - 1) * SECSPERDAY));
+      return (day - (static_cast<int64_t>(dom - 1) * kSecsPerDay));
     }
     case dtQUARTER: {
       // clear the time
-      int64_t day = (timeval / SECSPERDAY) * SECSPERDAY;
+      int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
       if (day < 0) {
         {
-          day -= SECSPERDAY;
+          day -= kSecsPerDay;
         }
       }
       // calculate the day of month offset
       int32_t dom = tm_struct.tm_mday;
       // go to the start of the current month
-      day = day - ((dom - 1) * SECSPERDAY);
+      day = day - ((dom - 1) * kSecsPerDay);
       // find what month we are
       int32_t mon = tm_struct.tm_mon;
       // find start of quarter
       int32_t start_of_quarter = tm_struct.tm_mon / 3 * 3;
-      int32_t year = tm_struct.tm_year + YEAR_BASE;
+      int32_t year = tm_struct.tm_year + kYearBase;
       // are we in a leap year
       int32_t leap_year = 0;
       // only matters if month is March so save some mod operations
@@ -271,34 +266,34 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
       }
       // now walk back until at correct quarter start
       for (; mon > start_of_quarter; mon--) {
-        day = day - (month_lengths[0 + leap_year][mon - 1] * SECSPERDAY);
+        day = day - (month_lengths[0 + leap_year][mon - 1] * kSecsPerDay);
       }
       return day;
     }
     case dtYEAR: {
       // clear the time
-      int64_t day = (timeval / SECSPERDAY) * SECSPERDAY;
+      int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
       if (day < 0) {
         {
-          day -= SECSPERDAY;
+          day -= kSecsPerDay;
         }
       }
       // calculate the day of year offset
       int32_t doy = tm_struct.tm_yday;
-      return day - ((doy)*SECSPERDAY);
+      return day - ((doy)*kSecsPerDay);
     }
     case dtDECADE: {
-      int32_t year = tm_struct.tm_year + YEAR_BASE;
+      int32_t year = tm_struct.tm_year + kYearBase;
       int32_t decade_start = ((year - 1) / 10) * 10 + 1;
       return create_epoch(decade_start);
     }
     case dtCENTURY: {
-      int32_t year = tm_struct.tm_year + YEAR_BASE;
+      int32_t year = tm_struct.tm_year + kYearBase;
       int32_t century_start = ((year - 1) / 100) * 100 + 1;
       return create_epoch(century_start);
     }
     case dtMILLENNIUM: {
-      int32_t year = tm_struct.tm_year + YEAR_BASE;
+      int32_t year = tm_struct.tm_year + kYearBase;
       int32_t millennium_start = ((year - 1) / 1000) * 1000 + 1;
       return create_epoch(millennium_start);
     }
@@ -321,22 +316,22 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncateHighPrecision(DatetruncField 
       return timeval;
     case dtMICROSECOND: {
       // precision in microseconds
-      if (scale == MILLISECSPERSEC || scale == MICROSECSPERSEC) {
+      if (scale == kMilliSecsPerSec || scale == kMicroSecsPerSec) {
         return timeval;
-      } else if (scale == NANOSECSPERSEC) {
-        return (timeval / MILLISECSPERSEC) * MILLISECSPERSEC;
+      } else if (scale == kNanoSecsPerSec) {
+        return (timeval / kMilliSecsPerSec) * kMilliSecsPerSec;
       } else {
         return timeval;
       }
     }
     case dtMILLISECOND: {
       // precision in millisonds
-      if (scale == MILLISECSPERSEC) {
+      if (scale == kMilliSecsPerSec) {
         return timeval;
-      } else if (scale == MICROSECSPERSEC) {
-        return (timeval / MILLISECSPERSEC) * MILLISECSPERSEC;
-      } else if (scale == NANOSECSPERSEC) {
-        return (timeval / MICROSECSPERSEC) * MICROSECSPERSEC;
+      } else if (scale == kMicroSecsPerSec) {
+        return (timeval / kMilliSecsPerSec) * kMilliSecsPerSec;
+      } else if (scale == kNanoSecsPerSec) {
+        return (timeval / kMicroSecsPerSec) * kMicroSecsPerSec;
       } else {
         return timeval;
       }
@@ -368,8 +363,8 @@ extern "C" DEVICE int64_t DateTruncateHighPrecisionNullable(DatetruncField field
 
 extern "C" DEVICE int64_t DateTruncateHighPrecisionToDate(const int64_t timeval,
                                                           const int64_t scale) {
-  const int64_t retval = (timeval / (scale * SECSPERDAY)) * SECSPERDAY;
-  return retval < 0 ? retval - SECSPERDAY : retval;
+  const int64_t retval = (timeval / (scale * kSecsPerDay)) * kSecsPerDay;
+  return retval < 0 ? retval - kSecsPerDay : retval;
 }
 
 extern "C" DEVICE int64_t
@@ -418,23 +413,23 @@ extern "C" DEVICE int64_t DateDiff(const DatetruncField datepart,
   int64_t res = enddate - startdate;
   switch (datepart) {
     case dtNANOSECOND:
-      return res * NANOSECSPERSEC;
+      return res * kNanoSecsPerSec;
     case dtMICROSECOND:
-      return res * MICROSECSPERSEC;
+      return res * kMicroSecsPerSec;
     case dtMILLISECOND:
-      return res * MILLISECSPERSEC;
+      return res * kMilliSecsPerSec;
     case dtSECOND:
       return res;
     case dtMINUTE:
-      return res / SECSPERMIN;
+      return res / kSecsPerMin;
     case dtHOUR:
-      return res / SECSPERHOUR;
+      return res / kSecPerHour;
     case dtQUARTERDAY:
-      return res / SECSPERQUARTERDAY;
+      return res / kSecsPerQuarterDay;
     case dtDAY:
-      return res / SECSPERDAY;
+      return res / kSecsPerDay;
     case dtWEEK:
-      return res / (SECSPERDAY * DAYSPERWEEK);
+      return res / (kSecsPerDay * kDaysPerWeek);
     default:
       break;
   }
@@ -472,17 +467,17 @@ extern "C" DEVICE int64_t DateDiffHighPrecision(const DatetruncField datepart,
       // limit of current granularity
       return res;
     case dtMICROSECOND: {
-      if (scale == NANOSECSPERSEC) {
-        return res / MILLISECSPERSEC;
+      if (scale == kNanoSecsPerSec) {
+        return res / kMilliSecsPerSec;
       } else {
         { return res; }
       }
     }
     case dtMILLISECOND: {
-      if (scale == NANOSECSPERSEC) {
-        return res / MICROSECSPERSEC;
-      } else if (scale == MICROSECSPERSEC) {
-        return res / MILLISECSPERSEC;
+      if (scale == kNanoSecsPerSec) {
+        return res / kMicroSecsPerSec;
+      } else if (scale == kMicroSecsPerSec) {
+        return res / kMilliSecsPerSec;
       } else {
         { return res; }
       }

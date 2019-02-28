@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef QUERYENGINE_DATETIMEUTILS_H
-#define QUERYENGINE_DATETIMEUTILS_H
+#pragma once
 
 #include "DateAdd.h"
 #include "DateTruncate.h"
@@ -27,16 +26,18 @@
 #include "../Shared/sqldefs.h"
 #include "../Shared/unreachable.h"
 
+namespace DateTimeUtils {
+
 inline int64_t get_timestamp_precision_scale(const int32_t dimen) {
   switch (dimen) {
     case 0:
       return 1;
     case 3:
-      return MILLISECSPERSEC;
+      return kMilliSecsPerSec;
     case 6:
-      return MICROSECSPERSEC;
+      return kMicroSecsPerSec;
     case 9:
-      return NANOSECSPERSEC;
+      return kNanoSecsPerSec;
     default:
       UNREACHABLE();
   }
@@ -46,11 +47,11 @@ inline int64_t get_timestamp_precision_scale(const int32_t dimen) {
 inline int64_t get_dateadd_timestamp_precision_scale(const DateaddField field) {
   switch (field) {
     case daMILLISECOND:
-      return MILLISECSPERSEC;
+      return kMilliSecsPerSec;
     case daMICROSECOND:
-      return MICROSECSPERSEC;
+      return kMicroSecsPerSec;
     case daNANOSECOND:
-      return NANOSECSPERSEC;
+      return kNanoSecsPerSec;
     default:
       UNREACHABLE();
   }
@@ -74,29 +75,29 @@ inline std::pair<SQLOps, int64_t> get_dateadd_high_precision_adjusted_scale(
         case 9:
           return {};
         case 6:
-          return {kDIVIDE, MILLISECSPERSEC};
+          return {kDIVIDE, kMilliSecsPerSec};
         case 3:
-          return {kDIVIDE, MICROSECSPERSEC};
+          return {kDIVIDE, kMicroSecsPerSec};
         default:
           UNREACHABLE();
       }
     case daMICROSECOND:
       switch (dimen) {
         case 9:
-          return {kMULTIPLY, MILLISECSPERSEC};
+          return {kMULTIPLY, kMilliSecsPerSec};
         case 6:
           return {};
         case 3:
-          return {kDIVIDE, MILLISECSPERSEC};
+          return {kDIVIDE, kMilliSecsPerSec};
         default:
           UNREACHABLE();
       }
     case daMILLISECOND:
       switch (dimen) {
         case 9:
-          return {kMULTIPLY, MICROSECSPERSEC};
+          return {kMULTIPLY, kMicroSecsPerSec};
         case 6:
-          return {kMULTIPLY, MILLISECSPERSEC};
+          return {kMULTIPLY, kMilliSecsPerSec};
         case 3:
           return {};
         default:
@@ -108,4 +109,4 @@ inline std::pair<SQLOps, int64_t> get_dateadd_high_precision_adjusted_scale(
   return {};
 }
 
-#endif  // QUERYENGINE_DATETIMEUTILS_H
+}  // namespace DateTimeUtils

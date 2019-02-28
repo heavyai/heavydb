@@ -60,9 +60,9 @@ class MapDProgramOptions : public boost::program_options::options_description {
   size_t num_reader_threads = 0;     // number of threads used when loading data
   std::string db_query_file = {""};  // path to file containing warmup queries list
   int idle_session_duration =
-      MINSPERHOUR;  // Inactive session tolerance in mins (60 mins)
+      kMinsPerHour;  // Inactive session tolerance in mins (60 mins)
   int max_session_duration =
-      MINSPERMONTH;  // maximum session life in days (30 Days)
+      kMinsPerMonth;  // maximum session life in days (30 Days)
                      // (https://pages.nist.gov/800-63-3/sp800-63b.html#aal3reauth)
   std::string udf_file_name = {""};
 

@@ -30,53 +30,54 @@ int32_t is_leap(int64_t year) {
 
 DEVICE
 int64_t skip_months(int64_t timeval, int64_t months_to_go) {
-  const int32_t month_lengths[2][MONSPERYEAR] = {
+  const int32_t month_lengths[2][kMonsPerYear] = {
       {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
       {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
   tm tm_struct;
   gmtime_r_newlib(&timeval, &tm_struct);
-  auto tod = timeval % SECSPERDAY;
-  auto day = (timeval / SECSPERDAY) * SECSPERDAY;
+  auto tod = timeval % kSecsPerDay;
+  auto day = (timeval / kSecsPerDay) * kSecsPerDay;
   // calculate the day of month offset
   int32_t dom = tm_struct.tm_mday;
-  int64_t month = day - (dom * SECSPERDAY);
+  int64_t month = day - (dom * kSecsPerDay);
   // find what month we are
   int32_t mon = tm_struct.tm_mon;
   int64_t months_covered = 0;
   while (months_to_go != 0) {
     int32_t leap_year = 0;
     if (months_to_go >= 48) {
-      month += (months_to_go / 48) * DAYS_PER_4_YEARS * SECSPERDAY;
+      month += (months_to_go / 48) * kDaysPer4Years * kSecsPerDay;
       months_to_go = months_to_go % 48;
       months_covered += 48 * (months_to_go / 48);
       continue;
     }
     if (months_to_go > 0) {
-      auto m = (mon + months_covered) % MONSPERYEAR;
+      auto m = (mon + months_covered) % kMonsPerYear;
       if (m == 1)
         leap_year = is_leap(ExtractFromTime(kYEAR, month));
-      month += (month_lengths[0 + leap_year][m] * SECSPERDAY);
+      month += (month_lengths[0 + leap_year][m] * kSecsPerDay);
       months_to_go--;
       months_covered++;
       continue;
     }
     if (months_to_go <= -48) {
-      month -= ((-months_to_go) / 48) * DAYS_PER_4_YEARS * SECSPERDAY;
+      month -= ((-months_to_go) / 48) * kDaysPer4Years * kSecsPerDay;
       months_to_go = -((-months_to_go) % 48);
       months_covered += 48 * ((-months_to_go) / 48);
       continue;
     }
     if (months_to_go < 0) {
-      auto m = (((mon - 1 - months_covered) % MONSPERYEAR) + MONSPERYEAR) % MONSPERYEAR;
+      auto m =
+          (((mon - 1 - months_covered) % kMonsPerYear) + kMonsPerYear) % kMonsPerYear;
       if (m == 1)
         leap_year = is_leap(ExtractFromTime(kYEAR, month));
-      month -= (month_lengths[0 + leap_year][m] * SECSPERDAY);
+      month -= (month_lengths[0 + leap_year][m] * kSecsPerDay);
       months_to_go++;
       months_covered++;
     }
   }
 
-  int64_t new_timeval = month + dom * SECSPERDAY + tod;
+  int64_t new_timeval = month + dom * kSecsPerDay + tod;
   tm new_tm_struct;
   gmtime_r_newlib(&new_timeval, &new_tm_struct);
   int32_t new_dom = new_tm_struct.tm_mday;
@@ -85,7 +86,7 @@ int64_t skip_months(int64_t timeval, int64_t months_to_go) {
     // e.g. 2008-1-31 + INTERVAL '1' MONTH should yield 2008-2-29 and
     // e.g. 2009-1-31 + INTERVAL '1' MONTH should yield 2008-2-28
     // Go to the last day of preceeding month
-    new_timeval -= new_dom * SECSPERDAY;
+    new_timeval -= new_dom * kSecsPerDay;
   }
   return new_timeval;
 }
@@ -101,15 +102,15 @@ extern "C" NEVER_INLINE DEVICE int64_t DateAdd(DateaddField field,
       /* this is the limit of current granularity */
       return timeval + number;
     case daMINUTE:
-      return timeval + number * SECSPERMIN;
+      return timeval + number * kSecsPerMin;
     case daHOUR:
-      return timeval + number * SECSPERHOUR;
+      return timeval + number * kSecPerHour;
     case daWEEKDAY:
     case daDAYOFYEAR:
     case daDAY:
-      return timeval + number * SECSPERDAY;
+      return timeval + number * kSecsPerDay;
     case daWEEK:
-      return timeval + number * DAYSPERWEEK * SECSPERDAY;
+      return timeval + number * kDaysPerWeek * kSecsPerDay;
     default:
       break;
   }
