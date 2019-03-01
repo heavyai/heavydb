@@ -208,7 +208,7 @@ MapD has the following dependencies:
 | [OpenJDK](http://openjdk.java.net/) | 1.7 | yes |
 | [CUDA](http://nvidia.com/cuda) | 10.0 | yes, if compiling with GPU support |
 | [gperftools](https://github.com/gperftools/gperftools) | | yes |
-| [gdal](http://gdal.org/) | | yes |
+| [gdal](http://gdal.org/) | 2.3 | yes |
 | [Arrow](https://arrow.apache.org/) | 0.11.0 | yes |
 
 Dependencies for `omnisci_web_server` and other Go utils are in [`ThirdParty/go`](ThirdParty/go). See [`ThirdParty/go/src/mapd/vendor/README.md`](ThirdParty/go/src/mapd/vendor/README.md) for instructions on how to add new deps.
