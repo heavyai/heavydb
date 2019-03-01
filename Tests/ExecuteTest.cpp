@@ -7001,6 +7001,11 @@ TEST(Select, PuntToCPU) {
                std::runtime_error);
   EXPECT_THROW(run_multiple_agg("SELECT str, COUNT(*) FROM test GROUP BY str;", dt),
                std::runtime_error);
+
+  g_allow_cpu_retry = true;
+  EXPECT_NO_THROW(run_multiple_agg("SELECT x, COUNT(*) FROM test GROUP BY x;", dt));
+  EXPECT_NO_THROW(run_multiple_agg(
+      "SELECT COUNT(*) FROM test WHERE x IN (SELECT y FROM test WHERE y > 3);", dt));
 }
 
 TEST(Select, TimestampMeridiesEncoding) {
