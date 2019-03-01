@@ -3761,7 +3761,14 @@ void MapDHandler::import_geo_table(const TSessionId& session,
       TCopyParams cp_copy = cp;  // retain S3 auth tokens
       cp_copy.geo_layer_name = layer_name;
       cp_copy.table_type = TTableType::POLYGON;
-      detect_column_types(cds, session, file_name_in, cp_copy);
+      try {
+        detect_column_types(cds, session, file_name_in, cp_copy);
+      } catch (const std::exception& e) {
+        // capture the error and abort this layer
+        caught_exception_messages.emplace_back(
+            "Invalid/Unsupported Column Types in Layer '" + layer_name + "':" + e.what());
+        continue;
+      }
       rd = cds.row_set.row_desc;
 
       // then, if the table does NOT already exist, create it
