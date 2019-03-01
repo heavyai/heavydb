@@ -867,13 +867,8 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
         arrow_throw_if(col.type_id() != Type::DATE32 && col.type_id() != Type::DATE64,
                        "Expected date32 or date64 type");
       }
-      if (cd->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
-        return convert_arrow_val_to_import_buffer(
-            cd, col, *bigint_buffer_, bad_rows_tracker);
-      } else {
-        return convert_arrow_val_to_import_buffer(
-            cd, col, *bigint_buffer_, bad_rows_tracker);
-      }
+      return convert_arrow_val_to_import_buffer(
+          cd, col, *bigint_buffer_, bad_rows_tracker);
     case kARRAY:
       throw std::runtime_error("Arrow array appends not yet supported");
     default:
