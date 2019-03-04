@@ -502,6 +502,7 @@ WindowFunctionContext::makeComparator(const Analyzer::ColumnVar* col_var,
                                       const bool nulls_first) {
   const auto& ti = col_var->get_type_info();
   switch (ti.get_type()) {
+    case kTIMESTAMP:
     case kBIGINT: {
       return [order_column_buffer, nulls_first, partition_indices, &ti](
                  const int64_t lhs, const int64_t rhs) {
