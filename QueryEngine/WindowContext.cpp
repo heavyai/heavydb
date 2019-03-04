@@ -282,6 +282,19 @@ void index_to_multiplicities(
 
 }  // namespace
 
+// Returns true for value window functions, false otherwise.
+bool window_function_is_value(const SqlWindowFunctionKind kind) {
+  switch (kind) {
+    case SqlWindowFunctionKind::LAG:
+    case SqlWindowFunctionKind::LEAD:
+    case SqlWindowFunctionKind::FIRST_VALUE:
+    case SqlWindowFunctionKind::LAST_VALUE: {
+      return true;
+    }
+    default: { return false; }
+  }
+}
+
 // Returns true for aggregate window functions, false otherwise.
 bool window_function_is_aggregate(const SqlWindowFunctionKind kind) {
   switch (kind) {
@@ -371,13 +384,14 @@ void WindowFunctionContext::compute() {
                      off,
                      window_func_,
                      col_tuple_comparator);
-    if (window_func_->getKind() == SqlWindowFunctionKind::LAG ||
-        window_func_->getKind() == SqlWindowFunctionKind::LEAD ||
-        window_func_->getKind() == SqlWindowFunctionKind::FIRST_VALUE ||
-        window_func_->getKind() == SqlWindowFunctionKind::LAST_VALUE ||
+    if (window_function_is_value(window_func_->getKind()) ||
         window_function_is_aggregate(window_func_->getKind())) {
       off += partition_size;
     }
+  }
+  if (window_function_is_value(window_func_->getKind()) ||
+      window_function_is_aggregate(window_func_->getKind())) {
+    CHECK_EQ(off, elem_count_);
   }
   auto output_i64 = reinterpret_cast<int64_t*>(output_);
   if (window_function_is_aggregate(window_func_->getKind())) {

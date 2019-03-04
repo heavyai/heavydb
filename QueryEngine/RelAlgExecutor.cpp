@@ -1255,7 +1255,7 @@ void RelAlgExecutor::computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
     // Creates a tautology equality with the partition expression on both sides.
     const auto partition_key_cond =
         makeExpr<Analyzer::BinOper>(kBOOLEAN,
-                                    kEQ,
+                                    kBW_EQ,
                                     kONE,
                                     partition_key_tuple,
                                     transform_to_inner(partition_key_tuple.get()));
