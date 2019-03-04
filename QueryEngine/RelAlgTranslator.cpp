@@ -967,6 +967,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
     const RexFunctionOperator* rex_function) const {
   if (rex_function->getName() == std::string("DATETIME_PLUS")) {
     const auto datetime = translateScalarRex(rex_function->getOperand(0));
+    if (datetime->get_type_info().get_type() == kTIME) {
+      throw std::runtime_error("Interval addition/subtraction not supported for TIME.");
+    }
     const auto unfolded_number = translateScalarRex(rex_function->getOperand(1));
     const auto number = fold_expr(unfolded_number.get());
     const auto number_lit = std::dynamic_pointer_cast<Analyzer::Constant>(number);
@@ -1002,6 +1005,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
   auto cast_number_units = number_units->add_cast(SQLTypeInfo(kBIGINT, false));
   const auto datetime = translateScalarRex(rex_function->getOperand(2));
   const auto& datetime_ti = datetime->get_type_info();
+  if (datetime_ti.get_type() == kTIME) {
+    throw std::runtime_error("DateAdd operation not supported for TIME.");
+  }
   const auto& field = to_dateadd_field(*timeunit_lit->get_constval().stringval);
   if (!datetime_ti.is_high_precision_timestamp() && is_subsecond_dateadd_field(field)) {
     // Scale the number to get value in seconds

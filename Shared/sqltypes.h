@@ -435,9 +435,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
   inline bool is_array() const { return type == kARRAY; }
   inline bool is_varlen_array() const { return type == kARRAY && size <= 0; }
   inline bool is_fixlen_array() const { return type == kARRAY && size > 0; }
-  inline bool is_timeinterval() const {
-    return type == kINTERVAL_DAY_TIME || type == kINTERVAL_YEAR_MONTH;
-  }
+  inline bool is_timeinterval() const { return IS_INTERVAL(type); }
   inline bool is_geometry() const { return IS_GEO(type); }
 
   inline bool is_varlen() const {  // TODO: logically this should ignore fixlen arrays

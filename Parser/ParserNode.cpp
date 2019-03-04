@@ -1031,15 +1031,10 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::get(
     throw std::runtime_error(
         "Only TIME, TIMESTAMP and DATE types can be in EXTRACT function.");
   }
-  switch (from_expr->get_type_info().get_type()) {
-    case kTIME:
-      if (fieldno != kHOUR && fieldno != kMINUTE && fieldno != kSECOND) {
-        throw std::runtime_error("Cannot EXTRACT " + extract_field_name(fieldno) +
-                                 " from TIME.");
-      }
-      break;
-    default:
-      break;
+  if (from_expr->get_type_info().get_type() == kTIME && fieldno != kHOUR &&
+      fieldno != kMINUTE && fieldno != kSECOND) {
+    throw std::runtime_error("Cannot EXTRACT " + extract_field_name(fieldno) +
+                             " from TIME.");
   }
   SQLTypeInfo ti(kBIGINT, 0, 0, from_expr->get_type_info().get_notnull());
   auto c = std::dynamic_pointer_cast<Analyzer::Constant>(from_expr);
@@ -1182,15 +1177,10 @@ std::shared_ptr<Analyzer::Expr> DatetruncExpr::get(
     throw std::runtime_error(
         "Only TIME, TIMESTAMP and DATE types can be in DATE_TRUNC function.");
   }
-  switch (from_expr->get_type_info().get_type()) {
-    case kTIME:
-      if (fieldno != dtHOUR && fieldno != dtMINUTE && fieldno != dtSECOND) {
-        throw std::runtime_error("Cannot DATE_TRUNC " + dt_field_name(fieldno) +
-                                 " from TIME.");
-      }
-      break;
-    default:
-      break;
+  if (from_expr->get_type_info().get_type() == kTIME && fieldno != dtHOUR &&
+      fieldno != dtMINUTE && fieldno != dtSECOND) {
+    throw std::runtime_error("Cannot DATE_TRUNC " + dt_field_name(fieldno) +
+                             " from TIME.");
   }
   // update new datatype according to the input dimension
   SQLTypeInfo ti(kTIMESTAMP,

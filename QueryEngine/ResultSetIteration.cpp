@@ -753,6 +753,9 @@ int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch,
                     const int64_t pos) {
   CHECK(col_lazy_fetch.is_lazily_fetched);
   const auto& type_info = col_lazy_fetch.type;
+  if (type_info.is_timeinterval()) {
+    throw std::runtime_error("Unsupported operation with INTERVAL type.");
+  }
   if (type_info.is_fp()) {
     if (type_info.get_type() == kFLOAT) {
       double fval = fixed_width_float_decode_noinline(byte_stream, pos);
