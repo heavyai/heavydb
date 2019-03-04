@@ -58,6 +58,10 @@ inline int64_t get_dateadd_timestamp_precision_scale(const DateaddField field) {
   return -1;
 }
 
+inline bool is_subsecond_extract_field(const ExtractField& field) {
+  return field == kMILLISECOND || field == kMICROSECOND || field == kNANOSECOND;
+}
+
 inline bool is_subsecond_dateadd_field(const DateaddField field) {
   return field == daMILLISECOND || field == daMICROSECOND || field == daNANOSECOND;
 }

@@ -17,8 +17,10 @@
 #include "RelAlgTranslator.h"
 #include "Shared/SqlTypesLayout.h"
 
+#include "CalciteAdapter.h"
 #include "CalciteDeserializerUtils.h"
 #include "DateTimePlusRewrite.h"
+#include "DateTimeTranslate.h"
 #include "Descriptors/RelAlgExecutionDescriptor.h"
 #include "ExpressionRewrite.h"
 #include "ExtensionFunctionsWhitelist.h"
@@ -913,10 +915,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(
   }
   const auto from_expr = translateScalarRex(rex_function->getOperand(1));
   const bool is_date_trunc = rex_function->getName() == std::string("PG_DATE_TRUNC");
-  return is_date_trunc ? Parser::DatetruncExpr::get(
-                             from_expr, *timeunit_lit->get_constval().stringval)
-                       : Parser::ExtractExpr::get(
-                             from_expr, *timeunit_lit->get_constval().stringval);
+  return is_date_trunc
+             ? make_datetrunc_expr(
+                   from_expr, to_datetrunc_field(*timeunit_lit->get_constval().stringval))
+             : make_extract_expr(
+                   from_expr, to_extract_field(*timeunit_lit->get_constval().stringval));
 }
 
 namespace {
@@ -1134,8 +1137,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatepart(
     throw std::runtime_error("The time unit parameter must be a literal.");
   }
   const auto from_expr = translateScalarRex(rex_function->getOperand(1));
-  return Parser::ExtractExpr::get(
-      from_expr, to_datepart_field(*timeunit_lit->get_constval().stringval));
+  return make_extract_expr(from_expr,
+                           to_datepart_field(*timeunit_lit->get_constval().stringval));
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLength(
@@ -1607,7 +1610,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> qual_to_disjunctive_form(
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateHPTLiteral(
     const RexFunctionOperator* rex_function) const {
-  /* since calcite uses Aviatica package called DateTimeUtils to parse timestamp strings.
+  /* since calcite uses Avatica package called DateTimeUtils to parse timestamp strings.
      Therefore any string having fractional seconds more 3 places after the decimal
      (milliseconds) will get truncated to 3 decimal places, therefore we lose precision
      (us|ns). Issue: [BE-2461] Here we are hijacking literal cast to Timestamp(6|9) from

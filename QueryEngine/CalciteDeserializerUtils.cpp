@@ -168,6 +168,84 @@ DatetruncField to_datediff_field(const std::string& field) {
   return fieldno;
 }
 
+ExtractField to_extract_field(const std::string& field) {
+  ExtractField fieldno;
+  if (boost::iequals(field, "year")) {
+    fieldno = kYEAR;
+  } else if (boost::iequals(field, "quarter")) {
+    fieldno = kQUARTER;
+  } else if (boost::iequals(field, "month")) {
+    fieldno = kMONTH;
+  } else if (boost::iequals(field, "day")) {
+    fieldno = kDAY;
+  } else if (boost::iequals(field, "quarterday")) {
+    fieldno = kQUARTERDAY;
+  } else if (boost::iequals(field, "hour")) {
+    fieldno = kHOUR;
+  } else if (boost::iequals(field, "minute")) {
+    fieldno = kMINUTE;
+  } else if (boost::iequals(field, "second")) {
+    fieldno = kSECOND;
+  } else if (boost::iequals(field, "millisecond")) {
+    fieldno = kMILLISECOND;
+  } else if (boost::iequals(field, "microsecond")) {
+    fieldno = kMICROSECOND;
+  } else if (boost::iequals(field, "nanosecond")) {
+    fieldno = kNANOSECOND;
+  } else if (boost::iequals(field, "dow")) {
+    fieldno = kDOW;
+  } else if (boost::iequals(field, "isodow")) {
+    fieldno = kISODOW;
+  } else if (boost::iequals(field, "doy")) {
+    fieldno = kDOY;
+  } else if (boost::iequals(field, "epoch")) {
+    fieldno = kEPOCH;
+  } else if (boost::iequals(field, "week")) {
+    fieldno = kWEEK;
+  } else {
+    throw std::runtime_error("Unsupported field in EXTRACT function " + field);
+  }
+  return fieldno;
+}
+
+DatetruncField to_datetrunc_field(const std::string& field) {
+  DatetruncField fieldno;
+  if (boost::iequals(field, "year")) {
+    fieldno = dtYEAR;
+  } else if (boost::iequals(field, "quarter")) {
+    fieldno = dtQUARTER;
+  } else if (boost::iequals(field, "month")) {
+    fieldno = dtMONTH;
+  } else if (boost::iequals(field, "quarterday")) {
+    fieldno = dtQUARTERDAY;
+  } else if (boost::iequals(field, "day")) {
+    fieldno = dtDAY;
+  } else if (boost::iequals(field, "hour")) {
+    fieldno = dtHOUR;
+  } else if (boost::iequals(field, "minute")) {
+    fieldno = dtMINUTE;
+  } else if (boost::iequals(field, "second")) {
+    fieldno = dtSECOND;
+  } else if (boost::iequals(field, "millennium")) {
+    fieldno = dtMILLENNIUM;
+  } else if (boost::iequals(field, "century")) {
+    fieldno = dtCENTURY;
+  } else if (boost::iequals(field, "decade")) {
+    fieldno = dtDECADE;
+  } else if (boost::iequals(field, "millisecond")) {
+    fieldno = dtMILLISECOND;
+  } else if (boost::iequals(field, "microsecond")) {
+    fieldno = dtMICROSECOND;
+  } else if (boost::iequals(field, "nanosecond")) {
+    fieldno = dtNANOSECOND;
+  } else if (boost::iequals(field, "week")) {
+    fieldno = dtWEEK;
+  } else {
+    throw std::runtime_error("Invalid field in DATE_TRUNC function " + field);
+  }
+  return fieldno;
+}
+
 std::shared_ptr<Analyzer::Constant> make_fp_constant(const int64_t val,
                                                      const SQLTypeInfo& ti) {
   Datum d;

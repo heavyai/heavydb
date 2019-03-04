@@ -688,49 +688,6 @@ class CaseExpr : public Expr {
   std::unique_ptr<Expr> else_expr;
 };
 
-class ExtractExpr : public Expr {
- public:
-  ExtractExpr(std::string* f, Expr* a) : field(f), from_arg(a) {}
-  std::shared_ptr<Analyzer::Expr> analyze(
-      const Catalog_Namespace::Catalog& catalog,
-      Analyzer::Query& query,
-      TlistRefType allow_tlist_ref = TLIST_NONE) const override;
-  static std::shared_ptr<Analyzer::Expr> get(const std::shared_ptr<Analyzer::Expr>,
-                                             const std::string&);
-  static std::shared_ptr<Analyzer::Expr> get(const std::shared_ptr<Analyzer::Expr>,
-                                             const ExtractField);
-  std::string to_string() const override;
-
- private:
-  static ExtractField to_extract_field(const std::string&);
-
-  std::unique_ptr<std::string> field;
-  std::unique_ptr<Expr> from_arg;
-};
-
-/*
- * DATE_TRUNC node
- */
-class DatetruncExpr : public Expr {
- public:
-  DatetruncExpr(std::string* f, Expr* a) : field(f), from_arg(a) {}
-  std::shared_ptr<Analyzer::Expr> analyze(
-      const Catalog_Namespace::Catalog& catalog,
-      Analyzer::Query& query,
-      TlistRefType allow_tlist_ref = TLIST_NONE) const override;
-  static std::shared_ptr<Analyzer::Expr> get(const std::shared_ptr<Analyzer::Expr>,
-                                             const std::string&);
-  static std::shared_ptr<Analyzer::Expr> get(const std::shared_ptr<Analyzer::Expr>,
-                                             const DatetruncField);
-  std::string to_string() const override;
-
- private:
-  static DatetruncField to_date_trunc_field(const std::string&);
-
-  std::unique_ptr<std::string> field;
-  std::unique_ptr<Expr> from_arg;
-};
-
 /*
  * @type TableRef
  * @brief table reference in FROM clause

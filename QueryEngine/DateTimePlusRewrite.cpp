@@ -20,6 +20,8 @@
 #include "../Analyzer/Analyzer.h"
 #include "../Parser/ParserNode.h"
 
+#include "DateTimeTranslate.h"
+
 #include <glog/logging.h>
 
 namespace {
@@ -170,5 +172,5 @@ std::shared_ptr<Analyzer::Expr> rewrite_to_date_trunc(
   if (dt_field == dtINVALID) {
     return nullptr;
   }
-  return Parser::DatetruncExpr::get(ts, dt_field);
+  return make_datetrunc_expr(ts, dt_field);
 }

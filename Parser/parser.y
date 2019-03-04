@@ -960,18 +960,6 @@ case_exp: CASE when_then_list opt_else_expr END
   }
 	;
 
-extract_exp: EXTRACT '(' NAME FROM scalar_exp ')'
-  {
-    $<nodeval>$ = new ExtractExpr($<stringval>3, dynamic_cast<Expr*>($<nodeval>5));
-  }
-  ;
-
-datetrunc_exp: DATE_TRUNC '(' NAME ',' scalar_exp ')'
-  {
-    $<nodeval>$ = new DatetruncExpr($<stringval>3, dynamic_cast<Expr*>($<nodeval>5));
-  }
-  ;
-
  charlength_exp:
 	      CHAR_LENGTH '(' scalar_exp ')' { $<nodeval>$ = new CharLengthExpr(dynamic_cast<Expr*>($<nodeval>3),true); }
 	    | LENGTH '(' scalar_exp ')'	{ $<nodeval>$ = new CharLengthExpr(dynamic_cast<Expr*>($<nodeval>3),false); }
@@ -1003,8 +991,6 @@ scalar_exp:
 	| CAST '(' general_exp AS data_type ')'
 	{ $<nodeval>$ = new CastExpr(dynamic_cast<Expr*>($<nodeval>3), dynamic_cast<SQLType*>($<nodeval>5)); }
 	| case_exp { $<nodeval>$ = $<nodeval>1; }
-  | extract_exp { $<nodeval>$ = $<nodeval>1; }
-  | datetrunc_exp { $<nodeval>$ = $<nodeval>1; }
   | charlength_exp { $<nodeval>$ = $<nodeval>1; }
   | array_at_exp { $<nodeval>$ = $<nodeval>1; }
 	;
