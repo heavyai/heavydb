@@ -31,6 +31,8 @@
 #define BASE_PATH "./tmp"
 #endif
 
+using namespace std::literals::string_literals;
+
 namespace {
 
 bool g_keep_test_data{false};
@@ -96,8 +98,6 @@ class TableCycler {
 };
 
 auto make_table_cycler(char const* table_name, char const* column_type) {
-  using namespace std::literals::string_literals;
-
   auto drop_if_stmt = "drop table if exists "s + std::string(table_name) + ";"s;
   auto create_stmt = "create table "s + std::string(table_name) + "( x "s +
                      std::string(column_type) + " );"s;
@@ -110,12 +110,13 @@ auto query = [](std::string query_str) {
   run_multiple_agg(query_str.c_str(), ExecutorDeviceType::CPU);
 };
 
-auto get_metadata_vec = [](std::string table_name) -> auto {
+auto get_metadata_vec =
+    [](std::string table_name, std::string column_name = "x"s) -> auto {
   auto& cat = g_session->getCatalog();
   auto& data_manager = cat.getDataMgr();
 
   auto table_desc = cat.getMetadataForTable(table_name);
-  auto column_desc = cat.getMetadataForColumn(table_desc->tableId, std::string("x"));
+  auto column_desc = cat.getMetadataForColumn(table_desc->tableId, column_name);
   ChunkKey timestamp_ck{
       cat.getCurrentDB().dbId, table_desc->tableId, column_desc->columnId};
 
@@ -1241,6 +1242,96 @@ TEST_F(MetadataUpdate, MetadataDoubleNotNull) {
               pre_metadata_chunk.chunkStats.max.doubleval);
     ASSERT_DOUBLE_EQ(post_metadata_chunk.chunkStats.min.doubleval,
                      pre_metadata_chunk.chunkStats.min.doubleval);
+  });
+}
+
+TEST_F(MetadataUpdate, MetadataStringDict8Null) {
+  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
+    return;
+  }
+
+  make_table_cycler("presidents", "text encoding dict(8)")([&] {
+    query("insert into presidents values ('Ronald Reagan');");
+    query("insert into presidents values ('Donald Trump');");
+    query("insert into presidents values ('Dwight Eisenhower');");
+    query("insert into presidents values ('Teddy Roosevelt');");
+    query("insert into presidents values (NULL);");
+
+    run_ddl_statement(
+        "alter table presidents add column presidents_copy text encoding dict(8);");
+
+    auto pre_metadata = get_metadata_vec("presidents", "presidents_copy"s);
+    auto pre_metadata_chunk = pre_metadata[0].second;
+    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, true);
+
+    query("update presidents set presidents_copy=x;");
+    auto post_metadata = get_metadata_vec("presidents", "presidents_copy"s);
+    ASSERT_EQ(post_metadata.size(), 1U);
+    auto post_metadata_chunk = post_metadata[0].second;
+
+    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(post_metadata_chunk.chunkStats.min.intval, 0);
+    ASSERT_EQ(post_metadata_chunk.chunkStats.max.intval, 3);
+  });
+}
+
+TEST_F(MetadataUpdate, MetadataStringDict16Null) {
+  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
+    return;
+  }
+
+  make_table_cycler("safe_cities", "text encoding dict(16)")([&] {
+    query("insert into safe_cities values ('El Paso');");
+    query("insert into safe_cities values ('Pingyao');");
+    query("insert into safe_cities values ('Veliky Novgorod');");
+    query("insert into safe_cities values (NULL);");
+
+    run_ddl_statement(
+        "alter table safe_cities add column safe_cities_copy text encoding dict(16);");
+
+    auto pre_metadata = get_metadata_vec("safe_cities", "safe_cities_copy"s);
+    auto pre_metadata_chunk = pre_metadata[0].second;
+    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, true);
+
+    query("update safe_cities set safe_cities_copy=x;");
+    auto post_metadata = get_metadata_vec("safe_cities", "safe_cities_copy"s);
+    ASSERT_EQ(post_metadata.size(), 1U);
+    auto post_metadata_chunk = post_metadata[0].second;
+
+    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(post_metadata_chunk.chunkStats.min.intval, 0);
+    ASSERT_EQ(post_metadata_chunk.chunkStats.max.intval, 2);
+  });
+}
+
+TEST_F(MetadataUpdate, MetadataStringDict32Null) {
+  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
+    return;
+  }
+
+  make_table_cycler("candidates", "text encoding dict(32)")([&] {
+    query("insert into candidates values ('Lightfoot');");
+    query("insert into candidates values ('Wilson');");
+    query("insert into candidates values ('Chico');");
+    query("insert into candidates values ('Preckwinkle');");
+    query("insert into candidates values ('Mendoza');");
+    query("insert into candidates values (NULL);");
+
+    run_ddl_statement(
+        "alter table candidates add column candidates_copy text encoding dict(16);");
+
+    auto pre_metadata = get_metadata_vec("candidates", "candidates_copy"s);
+    auto pre_metadata_chunk = pre_metadata[0].second;
+    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, true);
+
+    query("update candidates set candidates_copy=x;");
+    auto post_metadata = get_metadata_vec("candidates", "candidates_copy"s);
+    ASSERT_EQ(post_metadata.size(), 1U);
+    auto post_metadata_chunk = post_metadata[0].second;
+
+    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(post_metadata_chunk.chunkStats.min.intval, 0);
+    ASSERT_EQ(post_metadata_chunk.chunkStats.max.intval, 4);
   });
 }
 

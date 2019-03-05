@@ -691,7 +691,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                                     has_null_per_thread[c],
                                     (v == inline_int_null_value<int64_t>() &&
                                      lhs_type.get_notnull() == false)
-                                        ? v
+                                        ? NullSentinelSupplier()(lhs_type, v)
                                         : seconds);
                 } else {
                   int64_t target_value;
@@ -870,23 +870,31 @@ void InsertOrderFragmenter::updateColumnMetadata(const ColumnDescriptor* cd,
 
   auto buffer = chunk->get_buffer();
   const auto& lhs_type = cd->columnType;
+
+  auto update_stats = [& encoder = buffer->encoder](auto min, auto max, auto has_null) {
+    static_assert(std::is_same<decltype(min), decltype(max)>::value,
+                  "Type mismatch on min/max");
+    if (has_null) {
+      encoder->updateStats(decltype(min)(), true);
+    }
+    if (max < min) {
+      return;
+    }
+    encoder->updateStats(min, false);
+    encoder->updateStats(max, false);
+  };
+
   if (is_integral(lhs_type) || (lhs_type.is_decimal() && rhs_type.is_decimal())) {
-    buffer->encoder->updateStats(max_int64t_per_chunk, has_null_per_chunk);
-    buffer->encoder->updateStats(min_int64t_per_chunk, has_null_per_chunk);
+    update_stats(min_int64t_per_chunk, max_int64t_per_chunk, has_null_per_chunk);
   } else if (lhs_type.is_fp()) {
-    buffer->encoder->updateStats(max_double_per_chunk, has_null_per_chunk);
-    buffer->encoder->updateStats(min_double_per_chunk, has_null_per_chunk);
+    update_stats(min_double_per_chunk, max_double_per_chunk, has_null_per_chunk);
   } else if (lhs_type.is_decimal()) {
-    buffer->encoder->updateStats(
-        (int64_t)(max_double_per_chunk * pow(10, lhs_type.get_scale())),
-        has_null_per_chunk);
-    buffer->encoder->updateStats(
-        (int64_t)(min_double_per_chunk * pow(10, lhs_type.get_scale())),
-        has_null_per_chunk);
+    update_stats((int64_t)(min_double_per_chunk * pow(10, lhs_type.get_scale())),
+                 (int64_t)(max_double_per_chunk * pow(10, lhs_type.get_scale())),
+                 has_null_per_chunk);
   } else if (!lhs_type.is_array() && !lhs_type.is_geometry() &&
              !(lhs_type.is_string() && kENCODING_DICT != lhs_type.get_compression())) {
-    buffer->encoder->updateStats(max_int64t_per_chunk, has_null_per_chunk);
-    buffer->encoder->updateStats(min_int64t_per_chunk, has_null_per_chunk);
+    update_stats(min_int64t_per_chunk, max_int64t_per_chunk, has_null_per_chunk);
   }
   buffer->encoder->getMetadata(chunkMetadata[cd->columnId]);
 

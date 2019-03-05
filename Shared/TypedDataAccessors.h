@@ -19,7 +19,9 @@
 #include <math.h>
 #include <string.h>
 #include "Shared/DateConverters.h"
+#include "Shared/InlineNullValues.h"
 #include "Shared/sqltypes.h"
+#include "Shared/unreachable.h"
 
 #ifndef CHECK  // if not collide with the one in glog/logging.h
 #include "always_assert.h"
@@ -330,28 +332,31 @@ inline bool get_scalar(void* ndptr, const SQLTypeInfo& ntype, T& v) {
   }
 }
 
-template <typename T>
-inline T get_null_sentinel_for_type(SQLTypeInfo const& ti, T const& tag);
-
-template <>
-inline int64_t get_null_sentinel_for_type<int64_t>(SQLTypeInfo const& ti,
-                                                   int64_t const& tag) {
-  if (ti.is_string()) {
-    if (ti.get_compression() == kENCODING_DICT) {
-      return inline_fixed_encoding_null_val(ti);
-    } else {
-      return 0;  // For NONE-Encoded strings
-    }
-  } else {
-    return inline_fixed_encoding_null_val(ti);
+class NullSentinelSupplier {
+ public:
+  template <typename TYPE_INFO, typename VAL>
+  auto operator()(TYPE_INFO const& ti, VAL const&) const {
+    using FloatOrIntSelector =
+        typename std::conditional<std::is_floating_point<std::decay_t<VAL> >::value,
+                                  FPSelector,
+                                  IntSelector>::type;
+    return get_null_sentinel_for_type(ti, FloatOrIntSelector());
   }
-}
 
-template <>
-inline double get_null_sentinel_for_type<double>(SQLTypeInfo const& ti,
-                                                 double const& tag) {
-  return inline_fp_null_val(ti);
-}
+ private:
+  struct IntSelector {};
+  struct FPSelector {};
+
+  template <typename TYPE_INFO>
+  int64_t get_null_sentinel_for_type(TYPE_INFO const& ti, IntSelector const&) const {
+    return inline_int_null_val(get_logical_type_info(ti));
+  }
+
+  template <typename TYPE_INFO>
+  double get_null_sentinel_for_type(TYPE_INFO const& ti, FPSelector const&) const {
+    return inline_fp_null_val(ti);
+  }
+};
 
 template <typename T>
 inline void set_minmax(T& min, T& max, T const val) {
@@ -377,20 +382,19 @@ inline void set_minmax(T& min, T& max, int8_t& null_flag, T const val, T null_se
   }
 }
 
-template <typename TYPE_INFO, typename T>
+template <typename TYPE_INFO,
+          typename T,
+          typename SENTINEL_SUPPLIER = NullSentinelSupplier>
 inline void tabulate_metadata(TYPE_INFO const& ti,
                               T& min,
                               T& max,
                               int8_t& null_flag,
-                              T const val) {
+                              T const val,
+                              SENTINEL_SUPPLIER s = SENTINEL_SUPPLIER()) {
   if (ti.get_notnull()) {
     set_minmax(min, max, val);
   } else {
-    set_minmax(min,
-               max,
-               null_flag,
-               val,
-               get_null_sentinel_for_type(ti.get_type(), std::decay_t<T>()));
+    set_minmax(min, max, null_flag, val, s(ti, val));
   }
 }
 
