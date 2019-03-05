@@ -193,6 +193,18 @@ void renameForDelete(const std::string directoryName) {
     boost::filesystem::rename(directoryPath, newDirectoryPath, ec);
 
     if (ec.value() == boost::system::errc::success) {
+      std::thread th([newDirectoryPath]() {
+        boost::system::error_code ec;
+        boost::filesystem::remove_all(newDirectoryPath, ec);
+        if (ec.value() != boost::system::errc::success) {
+          LOG(ERROR) << "Failed to remove directory " << newDirectoryPath << " error was "
+                     << ec;
+        }
+      });
+      // let it run free so we can return
+      // if it fails the file_delete_thread in MapDHandler will clean up
+      th.detach();
+
       return;
     }
 
