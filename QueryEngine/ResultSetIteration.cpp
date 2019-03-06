@@ -753,9 +753,6 @@ int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch,
                     const int64_t pos) {
   CHECK(col_lazy_fetch.is_lazily_fetched);
   const auto& type_info = col_lazy_fetch.type;
-  if (type_info.is_timeinterval()) {
-    throw std::runtime_error("Unsupported operation with INTERVAL type.");
-  }
   if (type_info.is_fp()) {
     if (type_info.get_type() == kFLOAT) {
       double fval = fixed_width_float_decode_noinline(byte_stream, pos);
@@ -766,7 +763,8 @@ int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch,
     }
   }
   CHECK(type_info.is_integer() || type_info.is_decimal() || type_info.is_time() ||
-        type_info.is_boolean() || type_info.is_string() || type_info.is_array());
+        type_info.is_timeinterval() || type_info.is_boolean() || type_info.is_string() ||
+        type_info.is_array());
   size_t type_bitwidth = get_bit_width(type_info);
   if (type_info.get_compression() == kENCODING_FIXED) {
     type_bitwidth = type_info.get_comp_param();

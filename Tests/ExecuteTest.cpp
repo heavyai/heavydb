@@ -4150,6 +4150,13 @@ TEST(Select, TimeInterval) {
     ASSERT_EQ(
         24 * 60 * 60 * 1000L,
         v<int64_t>(run_simple_agg("SELECT INTERVAL '1' DAY FROM test LIMIT 1;", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (INTERVAL '1' YEAR)/12 FROM test order by o LIMIT 1;", dt)));
+    ASSERT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT INTERVAL '1' MONTH FROM test group by m order by m LIMIT 1;", dt)));
     ASSERT_EQ(
         2 * g_num_rows,
         v<int64_t>(run_simple_agg(
