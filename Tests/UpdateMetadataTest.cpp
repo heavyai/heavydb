@@ -110,8 +110,8 @@ auto query = [](std::string query_str) {
   run_multiple_agg(query_str.c_str(), ExecutorDeviceType::CPU);
 };
 
-auto get_metadata_vec =
-    [](std::string table_name, std::string column_name = "x"s) -> auto {
+auto get_metadata_vec = [](std::string table_name,
+                           std::string column_name = "x"s) -> auto {
   auto& cat = g_session->getCatalog();
   auto& data_manager = cat.getDataMgr();
 

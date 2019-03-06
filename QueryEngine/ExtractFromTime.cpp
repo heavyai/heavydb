@@ -271,9 +271,11 @@ extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field,
     case kSECOND:
       return extract_second(&timeval);
     case kMILLISECOND:
+      return extract_millisecond(&timeval);
     case kMICROSECOND:
+      return extract_microsecond(&timeval);
     case kNANOSECOND:
-      return 0;
+      return extract_nanosecond(&timeval);
     case kDOW:
       return extract_dow(&timeval);
     case kISODOW: {
@@ -340,41 +342,6 @@ extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field,
   }
 }
 
-extern "C" DEVICE int64_t ExtractFromTimeHighPrecision(ExtractField field,
-                                                       const int64_t timeval,
-                                                       const int64_t scale) {
-  switch (field) {
-    case kMILLISECOND: {
-      int64_t mtime = timeval;
-      if (scale == kMicroSecsPerSec) {
-        mtime /= kMilliSecsPerSec;
-      } else if (scale == kNanoSecsPerSec) {
-        mtime /= kMicroSecsPerSec;
-      }
-      return extract_millisecond(&mtime);
-    }
-    case kMICROSECOND: {
-      int64_t mtime = timeval;
-      if (scale == kNanoSecsPerSec) {
-        mtime /= kMilliSecsPerSec;
-      } else if (scale == kMilliSecsPerSec) {
-        return 0;
-      }
-      return extract_microsecond(&mtime);
-    }
-    case kNANOSECOND: {
-      if (scale == kMilliSecsPerSec || scale == kMicroSecsPerSec) {
-        return 0;
-      } else {
-        return extract_nanosecond(&timeval);
-      }
-    }
-    default:
-      break;
-  }
-  return ExtractFromTime(field, timeval / scale);
-}
-
 extern "C" DEVICE int64_t ExtractFromTimeNullable(ExtractField field,
                                                   const int64_t timeval,
                                                   const int64_t null_val) {
@@ -382,14 +349,4 @@ extern "C" DEVICE int64_t ExtractFromTimeNullable(ExtractField field,
     return null_val;
   }
   return ExtractFromTime(field, timeval);
-}
-
-extern "C" DEVICE int64_t ExtractFromTimeHighPrecisionNullable(ExtractField field,
-                                                               const int64_t timeval,
-                                                               const int64_t scale,
-                                                               const int64_t null_val) {
-  if (timeval == null_val) {
-    return null_val;
-  }
-  return ExtractFromTimeHighPrecision(field, timeval, scale);
 }

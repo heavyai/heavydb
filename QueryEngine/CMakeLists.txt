@@ -23,7 +23,7 @@ set(query_engine_source_files
     CudaAllocator.cpp
     DateTimeIR.cpp
     DateTimePlusRewrite.cpp
-    DateTimeTranslate.cpp
+    DateTimeTranslator.cpp
     Descriptors/ColSlotContext.cpp
     Descriptors/QueryCompilationDescriptor.cpp
     Descriptors/QueryFragmentDescriptor.cpp

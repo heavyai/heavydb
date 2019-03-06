@@ -16,7 +16,7 @@
 
 #include "CalciteAdapter.h"
 #include "CalciteDeserializerUtils.h"
-#include "DateTimeTranslate.h"
+#include "DateTimeTranslator.h"
 
 #include "../Parser/ParserNode.h"
 #include "../Shared/StringTransform.h"
@@ -385,13 +385,13 @@ class CalciteAdapter {
     const auto timeunit_lit_expr = std::dynamic_pointer_cast<const Analyzer::Constant>(
         translateTypedLiteral(timeunit_lit));
     const auto from_expr = getExprFromNode(operands[1], scan_targets);
-    return is_date_trunc
-               ? make_datetrunc_expr(
-                     from_expr,
-                     to_datetrunc_field(*timeunit_lit_expr->get_constval().stringval))
-               : make_extract_expr(
-                     from_expr,
-                     to_extract_field(*timeunit_lit_expr->get_constval().stringval));
+    if (is_date_trunc) {
+      return DateTruncExpr::generateDatetruncExpr(
+          from_expr, *timeunit_lit_expr->get_constval().stringval);
+    } else {
+      return ExtractExpr::generateExtractExpr(
+          from_expr, *timeunit_lit_expr->get_constval().stringval);
+    }
   }
 
   std::shared_ptr<Analyzer::Expr> translateDateadd(
@@ -446,7 +446,7 @@ class CalciteAdapter {
     const auto timeunit_lit_expr = std::dynamic_pointer_cast<const Analyzer::Constant>(
         translateTypedLiteral(timeunit_lit));
     const auto from_expr = getExprFromNode(operands[1], scan_targets);
-    return make_extract_expr(
+    return ExtractExpr::generateExtractExpr(
         from_expr, to_datepart_field(*timeunit_lit_expr->get_constval().stringval));
   }
 

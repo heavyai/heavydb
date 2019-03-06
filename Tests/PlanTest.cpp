@@ -365,17 +365,6 @@ TEST(ParseAnalyzePlan, Select) {
   });
   EXPECT_NO_THROW({
     unique_ptr<RootPlan> plan_ptr(plan_dml(
-        "select extract(year from date '2015-02-28'), extract(month from date "
-        "'2014-12-13'), "
-        "extract(day from timestamp(0) '1998-10-24 03:14:55'), extract(dow from date "
-        "'1936-02-09'), extract(doy from timestamp(0) '2015-02-18 01:02:11'), "
-        "extract(hour from "
-        "time(0) '111233'), extract(minute from m), extract(second from n), "
-        "extract(epoch from o) "
-        "from fat where cast(timestamp(0) '2015-02-18 12:13:14' as int) > 1000;"));
-  });
-  EXPECT_NO_THROW({
-    unique_ptr<RootPlan> plan_ptr(plan_dml(
         "select * from fat where m >= '1999-09-09T111111' and n <= '222222' and o = "
         "'1996-02-23';"));
   });

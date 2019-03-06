@@ -20,7 +20,7 @@
 #include "CalciteAdapter.h"
 #include "CalciteDeserializerUtils.h"
 #include "DateTimePlusRewrite.h"
-#include "DateTimeTranslate.h"
+#include "DateTimeTranslator.h"
 #include "Descriptors/RelAlgExecutionDescriptor.h"
 #include "ExpressionRewrite.h"
 #include "ExtensionFunctionsWhitelist.h"
@@ -915,11 +915,13 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(
   }
   const auto from_expr = translateScalarRex(rex_function->getOperand(1));
   const bool is_date_trunc = rex_function->getName() == std::string("PG_DATE_TRUNC");
-  return is_date_trunc
-             ? make_datetrunc_expr(
-                   from_expr, to_datetrunc_field(*timeunit_lit->get_constval().stringval))
-             : make_extract_expr(
-                   from_expr, to_extract_field(*timeunit_lit->get_constval().stringval));
+  if (is_date_trunc) {
+    return DateTruncExpr::generateDatetruncExpr(from_expr,
+                                                *timeunit_lit->get_constval().stringval);
+  } else {
+    return ExtractExpr::generateExtractExpr(from_expr,
+                                            *timeunit_lit->get_constval().stringval);
+  }
 }
 
 namespace {
@@ -1137,8 +1139,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatepart(
     throw std::runtime_error("The time unit parameter must be a literal.");
   }
   const auto from_expr = translateScalarRex(rex_function->getOperand(1));
-  return make_extract_expr(from_expr,
-                           to_datepart_field(*timeunit_lit->get_constval().stringval));
+  return ExtractExpr::generateExtractExpr(
+      from_expr, to_datepart_field(*timeunit_lit->get_constval().stringval));
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLength(
@@ -1623,11 +1625,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateHPTLiteral(
   if (!operand_ti.is_string()) {
     throw std::runtime_error(
         "High precision timestamp cast argument must be a string. Input type is: " +
-        operand_ti.get_type());
+        operand_ti.get_type_name());
   } else if (!target_ti.is_high_precision_timestamp()) {
     throw std::runtime_error(
         "Cast target type should be high precision timestamp. Input type is: " +
-        target_ti.get_type());
+        target_ti.get_type_name());
   } else if (target_ti.get_dimension() != 6 && target_ti.get_dimension() != 9) {
     throw std::runtime_error(
         "Cast target type should be TIMESTAMP(6|9). Input type is: TIMESTAMP(" +

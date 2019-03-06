@@ -7409,7 +7409,7 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(931701773874533L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(epoch from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(874533000L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(nanosecond from m_6) FROM test limit 1;", dt)));
     ASSERT_EQ(874533L,
@@ -7457,10 +7457,10 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(1418509395323L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(epoch from m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(323000000L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(nanosecond from m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(323000L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(microsecond from m_3) FROM test limit 1;", dt)));
     ASSERT_EQ(323L,
@@ -7531,10 +7531,10 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(323L,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('millisecond', m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(323000L,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('microsecond', m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(323000000L,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('nanosecond', m_3) FROM test limit 1;", dt)));
     ASSERT_EQ(1999L,
@@ -7567,7 +7567,7 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(874533L,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('microsecond', m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(874533000L,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('nanosecond', m_6) FROM test limit 1;", dt)));
     ASSERT_EQ(2006L,

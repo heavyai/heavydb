@@ -92,8 +92,4 @@ DEVICE tm* gmtime_r_newlib(const int64_t* tim_p, tm* res);
 extern "C" DEVICE NEVER_INLINE int64_t ExtractFromTime(ExtractField field,
                                                        const int64_t timeval);
 
-extern "C" DEVICE NEVER_INLINE int64_t ExtractFromTimeHighPrecision(ExtractField field,
-                                                                    const int64_t timeval,
-                                                                    const int64_t scale);
-
 #endif  // QUERYENGINE_EXTRACTFROMTIME_H

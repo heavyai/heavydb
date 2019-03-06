@@ -212,7 +212,7 @@ class ArrayContextTypeSizer {
 template <typename CORE_TYPE>
 class DateTimeFacilities {
  public:
-  inline auto is_date_in_days() const {
+  constexpr auto is_date_in_days() const {
     CORE_TYPE const* derived(static_cast<CORE_TYPE const*>(this));
     if (is_member_of_typeset<kDATE>(*derived)) {
       auto comp_type(derived->get_compression());
@@ -223,7 +223,7 @@ class DateTimeFacilities {
     return false;
   }
 
-  inline auto is_high_precision_timestamp() const {
+  constexpr auto is_high_precision_timestamp() const {
     CORE_TYPE const* derived(static_cast<CORE_TYPE const*>(this));
     if (is_member_of_typeset<kTIMESTAMP>(*derived)) {
       auto dimension(derived->get_dimension());
@@ -234,7 +234,7 @@ class DateTimeFacilities {
     return false;
   }
 
-  inline auto is_timestamp() const {
+  constexpr auto is_timestamp() const {
     CORE_TYPE const* derived(static_cast<CORE_TYPE const*>(this));
     if (is_member_of_typeset<kTIMESTAMP>(*derived)) {
       return true;

@@ -306,42 +306,6 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
   }
 }
 
-extern "C" NEVER_INLINE DEVICE int64_t DateTruncateHighPrecision(DatetruncField field,
-                                                                 const int64_t timeval,
-                                                                 const int64_t scale) {
-  switch (field) {
-    case dtNANOSECOND:
-      /* this is the limit of current granularity*/
-      // precision in nanoseconds
-      return timeval;
-    case dtMICROSECOND: {
-      // precision in microseconds
-      if (scale == kMilliSecsPerSec || scale == kMicroSecsPerSec) {
-        return timeval;
-      } else if (scale == kNanoSecsPerSec) {
-        return (timeval / kMilliSecsPerSec) * kMilliSecsPerSec;
-      } else {
-        return timeval;
-      }
-    }
-    case dtMILLISECOND: {
-      // precision in millisonds
-      if (scale == kMilliSecsPerSec) {
-        return timeval;
-      } else if (scale == kMicroSecsPerSec) {
-        return (timeval / kMilliSecsPerSec) * kMilliSecsPerSec;
-      } else if (scale == kNanoSecsPerSec) {
-        return (timeval / kMicroSecsPerSec) * kMicroSecsPerSec;
-      } else {
-        return timeval;
-      }
-    }
-    default:
-      break;
-  }
-  return DateTruncate(field, timeval / scale) * scale;
-}
-
 extern "C" DEVICE int64_t DateTruncateNullable(DatetruncField field,
                                                const int64_t timeval,
                                                const int64_t null_val) {
@@ -349,16 +313,6 @@ extern "C" DEVICE int64_t DateTruncateNullable(DatetruncField field,
     return null_val;
   }
   return DateTruncate(field, timeval);
-}
-
-extern "C" DEVICE int64_t DateTruncateHighPrecisionNullable(DatetruncField field,
-                                                            const int64_t timeval,
-                                                            const int64_t scale,
-                                                            const int64_t null_val) {
-  if (timeval == null_val) {
-    return null_val;
-  }
-  return DateTruncateHighPrecision(field, timeval, scale);
 }
 
 extern "C" DEVICE int64_t DateTruncateHighPrecisionToDate(const int64_t timeval,

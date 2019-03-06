@@ -26,9 +26,26 @@
 #include "../Shared/sqldefs.h"
 #include "../Shared/unreachable.h"
 
+namespace {
+
+static const std::map<std::pair<int32_t, ExtractField>, std::pair<SQLOps, int64_t>>
+    _extract_precision_lookup = {{{3, kMICROSECOND}, {kMULTIPLY, kMilliSecsPerSec}},
+                                 {{3, kNANOSECOND}, {kMULTIPLY, kMicroSecsPerSec}},
+                                 {{6, kMILLISECOND}, {kDIVIDE, kMilliSecsPerSec}},
+                                 {{6, kNANOSECOND}, {kMULTIPLY, kMilliSecsPerSec}},
+                                 {{9, kMILLISECOND}, {kDIVIDE, kMicroSecsPerSec}},
+                                 {{9, kMICROSECOND}, {kDIVIDE, kMilliSecsPerSec}}};
+
+static const std::map<std::pair<int32_t, DatetruncField>, int64_t>
+    _datetrunc_precision_lookup = {{{6, dtMILLISECOND}, kMilliSecsPerSec},
+                                   {{9, dtMICROSECOND}, kMilliSecsPerSec},
+                                   {{9, dtMILLISECOND}, kMicroSecsPerSec}};
+
+}  // namespace
+
 namespace DateTimeUtils {
 
-inline int64_t get_timestamp_precision_scale(const int32_t dimen) {
+constexpr inline int64_t get_timestamp_precision_scale(const int32_t dimen) {
   switch (dimen) {
     case 0:
       return 1;
@@ -44,7 +61,7 @@ inline int64_t get_timestamp_precision_scale(const int32_t dimen) {
   return -1;
 }
 
-inline int64_t get_dateadd_timestamp_precision_scale(const DateaddField field) {
+constexpr inline int64_t get_dateadd_timestamp_precision_scale(const DateaddField field) {
   switch (field) {
     case daMILLISECOND:
       return kMilliSecsPerSec;
@@ -58,19 +75,33 @@ inline int64_t get_dateadd_timestamp_precision_scale(const DateaddField field) {
   return -1;
 }
 
-inline bool is_subsecond_extract_field(const ExtractField& field) {
+constexpr inline int64_t get_extract_timestamp_precision_scale(const ExtractField field) {
+  switch (field) {
+    case kMILLISECOND:
+      return kMilliSecsPerSec;
+    case kMICROSECOND:
+      return kMicroSecsPerSec;
+    case kNANOSECOND:
+      return kNanoSecsPerSec;
+    default:
+      UNREACHABLE();
+  }
+  return -1;
+}
+
+constexpr inline bool is_subsecond_extract_field(const ExtractField& field) {
   return field == kMILLISECOND || field == kMICROSECOND || field == kNANOSECOND;
 }
 
-inline bool is_subsecond_dateadd_field(const DateaddField field) {
+constexpr inline bool is_subsecond_dateadd_field(const DateaddField field) {
   return field == daMILLISECOND || field == daMICROSECOND || field == daNANOSECOND;
 }
 
-inline bool is_subsecond_datetrunc_field(const DatetruncField field) {
+constexpr inline bool is_subsecond_datetrunc_field(const DatetruncField field) {
   return field == dtMILLISECOND || field == dtMICROSECOND || field == dtNANOSECOND;
 }
 
-inline std::pair<SQLOps, int64_t> get_dateadd_high_precision_adjusted_scale(
+const inline std::pair<SQLOps, int64_t> get_dateadd_high_precision_adjusted_scale(
     const DateaddField field,
     int32_t dimen) {
   switch (field) {
@@ -111,6 +142,25 @@ inline std::pair<SQLOps, int64_t> get_dateadd_high_precision_adjusted_scale(
       UNREACHABLE();
   }
   return {};
+}
+
+const inline std::pair<SQLOps, int64_t> get_extract_high_precision_adjusted_scale(
+    const ExtractField& field,
+    const int32_t dimen) {
+  const auto result = _extract_precision_lookup.find(std::make_pair(dimen, field));
+  if (result != _extract_precision_lookup.end()) {
+    return result->second;
+  }
+  return {};
+}
+
+const inline int64_t get_datetrunc_high_precision_scale(const DatetruncField& field,
+                                                        const int32_t dimen) {
+  const auto result = _datetrunc_precision_lookup.find(std::make_pair(dimen, field));
+  if (result != _datetrunc_precision_lookup.end()) {
+    return result->second;
+  }
+  return -1;
 }
 
 }  // namespace DateTimeUtils
